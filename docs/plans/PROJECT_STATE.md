@@ -1,24 +1,24 @@
 # Project State
 
-Last updated: 2026-08-20
+Last updated: 2026-08-21
 
 ## Current phase
 
-Slice 001 merged to `main` (`587a087`, pushed). A small follow-up
-(dual-hostname CORS/cookie-domain support for the Cloudflare tunnel) is
-implemented and self-verified on its own branch, awaiting commit
-approval.
+Slice 001 merged (`587a087`). The dual-hostname Cloudflare tunnel
+follow-up is also merged and pushed (`3b6df76`), live-verified end to
+end — the user logged in through `https://app.tarams.org` successfully.
+Ready to plan Slice 002.
 
 ## Current slice
 
-None active (between Slice 001 and Slice 002). The in-flight work is
-infrastructure config, not a product slice: `app.tarams.org` /
-`api.tarams.org` dual-hostname tunnel support on `tunnel-cors-config`.
+None active. Next up: Slice 002 (lead intake — Person, Inquiry, the four
+D-015 fact tables), per `docs/specs/SLICE_000.md` §11 /
+`docs/specs/SLICE_001.md` §12.
 
 ## Current branch
 
-`tunnel-cors-config` (single writer, off `main` at `587a087`; no
-worktrees active). Not yet committed.
+`main` (single writer; no worktrees active). Both
+`slice-001-identity` and `tunnel-cors-config` are merged and deleted.
 
 ## Last accepted decision
 
@@ -297,10 +297,10 @@ slice:
 
 ## Next recommended action
 
-Request commit approval for `tunnel-cors-config`, then merge approval.
-Then hand off the Cloudflare dashboard steps (item 2 above) to the user.
+Plan Slice 002 (lead intake) with the `crm-planner` subagent, following
+the same plan → review → spec → review → approve → implement → review →
+test → commit → merge flow used for Slices 000 and 001.
 
 ## Approval currently required
 
-Commit approval for the dual-hostname tunnel support on
-`tunnel-cors-config`.
+None right now. Next gate: approval of the Slice 002 scope/plan.

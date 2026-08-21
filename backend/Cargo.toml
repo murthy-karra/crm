@@ -8,6 +8,7 @@ rust-version = "1.98.0"
 
 [workspace.dependencies]
 axum = "0.8"
+axum-extra = { version = "0.12", features = ["cookie"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal"] }
 tower = "0.5"
 tower-http = { version = "0.6", features = ["request-id", "trace"] }
@@ -19,9 +20,20 @@ sqlx = { version = "0.8", default-features = false, features = [
     "runtime-tokio",
     "tls-rustls",
     "postgres",
+    "macros",
+    "migrate",
+    "chrono",
+    "uuid",
 ] }
 dotenvy = "0.15"
-uuid = { version = "1", features = ["v4"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
+argon2 = "0.5"
+hmac = "0.13"
+sha2 = "0.11"
+rand = "0.10"
+base64 = "0.23"
+time = "0.3"
 
 [workspace.lints.clippy]
 all = { level = "deny", priority = -1 }

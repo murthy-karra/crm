@@ -4,28 +4,31 @@ Last updated: 2026-08-20
 
 ## Current phase
 
-Slice 000 merged to `main` (`e5182d1`, pushed) with user approval;
-Slice 001 planning in progress.
+Slice 001 implemented, independently reviewed, adversarially tested, and
+fixed on its branch; awaiting user approval before merge to `main`.
 
 ## Current slice
 
 Slice 001: identity, tenancy, and database foundation — narrow cut, no
-lead intake. `docs/specs/SLICE_001.md` ACCEPTED 2026-08-20 (independently
-reviewed, 14 findings applied, user-approved). Awaiting the
-implementation gate.
+lead intake. `docs/specs/SLICE_001.md` ACCEPTED 2026-08-20. Implementation
+complete on `slice-001-identity`: migrations harness with `crm_migrator`/
+`crm_app` roles, session/auth core, four HTTP endpoints, seed binary, web
+login UI, 25 service-free tests, 15 DB-backed tests — all passing, after
+two independent reviews found and fixed two real security bugs (see
+Completed work).
 
 ## Current branch
 
-`main` (single writer; no worktrees active). The merged
-`slice-000-foundation` branch has been deleted.
+`slice-001-identity` (single writer, off `main` at `b6e8764`; no
+worktrees active). Not yet merged.
 
 ## Last accepted decision
 
-D-016 (2026-08-20): development environment is the developer's Mac (M1
-Max) — API and Vite as local services, PostgreSQL and Centrifugo in
-Docker, local username/password auth behind the production auth
-abstraction, Cloudflare tunnel on tarams.org protected by Cloudflare
-Access. Production remains Kubernetes per D-001.
+Slice 001 scope and abstraction decisions (2026-08-20, user-accepted):
+narrow cut — no lead intake, all four D-015 fact tables deferred to
+Slice 002; no `IdentityProvider` trait — the D-016 §3 seam is the
+`local_credential` table + one session mechanism + one `AuthContext`
+extractor.
 
 ## Completed work
 
@@ -62,13 +65,55 @@ Access. Production remains Kubernetes per D-001.
   handshake but never responds (previously only "connection refused" was
   tested); corrected a test comment that mischaracterized sqlx's
   connect-refused retry/backoff as "failing fast."
+- 2026-08-20: Slice 000 merged to `main` (`e5182d1`, pushed);
+  `slice-000-foundation` deleted.
+- 2026-08-20: Slice 001 planned (narrow-cut and no-trait decisions
+  user-accepted), spec drafted, independently reviewed (14 findings
+  applied — notably: DB-backed tests now exercise the router as `crm_app`
+  not the schema owner; `crm_migrator` made the dev database's owner so
+  the first migration doesn't fail; login always mints a fresh token
+  against session fixation; logout leaves the cookie in place on a
+  persistence failure), and user-approved (`b6e8764`).
+- 2026-08-20: Slice 001 implemented on `slice-001-identity`: migrations
+  harness (`sqlx::migrate!`, hand-authored SQL, embedded `migrate`
+  binary) with the `crm_migrator`/`crm_app` role split provisioned by
+  `dev-services up`; `organization`/`app_user`/`local_credential`/
+  `organization_membership`/`user_session` schema; session/auth core
+  (Argon2id, HMAC-SHA256 session tokens, `AuthContext` extractor
+  re-verifying membership every request); `POST`/`DELETE /api/session`,
+  `GET /api/me`, `GET /api/organization/members`; `seed` binary +
+  `scripts/dev-seed` (two Organizations, idempotent); web login UI
+  (conditional rendering, no router/Pinia); `scripts/db-migrate`,
+  `check-db`.
+- 2026-08-20: Independent review (`crm-reviewer`) and adversarial test
+  analysis (`crm-tester`) run in parallel against the implementation;
+  both independently found the same two real security bugs. Fixed:
+  Argon2id password verification now runs under `tokio::task::
+  spawn_blocking` (it was running synchronously on the async runtime,
+  so a burst of login attempts — including the dummy-hash path, which
+  needs no valid account — could stall every other concurrent request
+  on that worker thread); the session-fixation revoke-on-relogin now
+  fires only after login has actually succeeded and only when the
+  presented cookie belongs to the same user who just authenticated
+  (previously, presenting *any* leaked session token — even a different
+  account's — during one's own login would silently revoke it with no
+  ownership check; manually verified fixed by having one seeded user
+  log in while presenting a second seeded user's real cookie and
+  confirming the second user's session survives). Also strengthened the
+  `crm_app`-grants test to check all four read-only tables (previously
+  only spot-checked one) and added the members-list assertion a
+  differently-named test had promised but not made, a body-based
+  org-id-ignored probe, and a real second-logout-call idempotency test —
+  15 DB-backed tests total, all passing after the fixes.
 
 ## Pending work
 
-1. Implementation gate approval for Slice 001.
+1. User verification of the Slice 001 walkthrough and commit/merge
+   approval for `slice-001-identity` → `main`.
 2. User-side (whenever convenient, not blocking): fresh-clone walkthrough
    of Slice 000, and the Cloudflare tunnel one-time dashboard setup with
-   its negative-Access check.
+   its negative-Access check (now also covering login with
+   `CRM_SESSION_COOKIE_SECURE=true`).
 
 ## Blocking decisions
 
@@ -97,25 +142,72 @@ the SMS slice; O-002 (recording consent) blocks recording features.
 
 ## Latest verification
 
-2026-08-20, on `slice-000-foundation`, after review fixes, all local (no
-CI yet):
+2026-08-20, on `slice-001-identity`, after both reviews' fixes, all local
+(no CI yet):
 - `./scripts/check` — cargo fmt, clippy (`deny`, `-D warnings`), cargo test
-  (11/11 passing), web lint, typecheck, build — all green with zero
+  (25 unit + 15 integration passing, 15 DB-backed tests correctly
+  `#[ignore]`d), web lint, typecheck, build — all green with zero
   services running.
-- `./scripts/dev-services up` + `./scripts/check-services` — PostgreSQL and
-  Centrifugo healthy; pg_isready, `SELECT 1`, and the Centrifugo health
-  endpoint all pass.
-- Manual: `/api/health` (200, request-id, JSON body), `/internal/ready`
-  against the real database (200 `{"status":"ready"}`) and without one (503
-  `{"status":"not_ready"}`, now with a logged reason), unknown route (404
-  with request-id), per-request tracing visible under the default
-  `RUST_LOG`, the Vite dev server serving the shell and proxying
-  `/api/health` correctly, and graceful shutdown on SIGTERM.
-- Not yet performed: the fresh-clone walkthrough and the Cloudflare tunnel
-  negative-Access check (spec §8) — both require the user's machine/dashboard
-  and are called out as pending work above.
+- `./scripts/check-db` — all 15 DB-backed tests pass against fresh
+  ephemeral databases: full login→me→members→logout→replay lifecycle;
+  wrong-password/unknown-user/no-local-credential all return identical
+  401; expired session, tampered token, revoked membership all 401;
+  re-login rotates the token and revokes the old one; logout is
+  idempotent against an already-revoked session; zero-membership login
+  is 403 with no session row created; two-Organization isolation in
+  both directions; client-supplied Organization ID (query string,
+  header, and login-request body) ignored; multi-membership picks the
+  earliest deterministically and its members list is provably scoped to
+  only that Organization (a second, later-org-only person does not
+  leak in); `crm_app`/`crm_migrator` `current_user` checks; `crm_app`
+  denied DDL and INSERT/UPDATE on all four read-only tables, has
+  exactly its `user_session` grants (SELECT/INSERT/UPDATE, DELETE
+  denied); the real `seed` binary run twice via subprocess produces no
+  duplicates.
+- Manual, against the real dev database through the real Vite proxy:
+  login sets a correctly-attributed cookie (`HttpOnly`, `SameSite=Lax`,
+  `Path=/`, `Max-Age=604800`); `/api/me` and `/api/organization/members`
+  return correctly-scoped data; a second Organization's members are
+  invisible; logout returns a matching clearing cookie and the old
+  cookie is rejected afterward; wrong-password and unknown-user timing
+  are comparable (~350–550ms, both dominated by Argon2id), confirming no
+  enumeration oracle; the cross-account revoke exploit found by review
+  (finding: presenting a leaked session cookie during an unrelated
+  login silently revoked it) is confirmed fixed — a second seeded user
+  logging in while presenting the first user's real cookie no longer
+  disturbs the first user's session.
+- Not yet performed: the fresh-clone walkthroughs and the Cloudflare
+  tunnel negative-Access check (both Slices' spec §8/§9) — require the
+  user's machine/dashboard, called out as pending work above.
 
-## Backlog (deferred from Slice 000 review, not blocking)
+## Backlog (deferred, not blocking)
+
+From the Slice 001 reviews — appropriately low priority per both
+reviewers' own framing (dev-only script, latent/library-internal, or
+requires a self-registration flow that doesn't exist yet):
+- `seed.rs`'s `find_or_create_organization` is not race-safe (no unique
+  constraint on `organization.name`); two concurrent `dev-seed` runs
+  could create duplicate Organizations. Local dev-bootstrap script only,
+  recoverable by hand; fix is a one-line unique index whenever it's
+  next convenient.
+- Cookie-parsing edge cases (duplicate same-name cookies, percent-encoded
+  values) are handled correctly today per `axum-extra`/`cookie`'s
+  internals, but pinned only by library behavior, not an explicit test —
+  latent risk on a future dependency bump.
+- No trimming/Unicode-normalization on login email input; will matter
+  once a registration flow exists (none does yet — all emails today are
+  fixed seed literals).
+- `migrate`/`seed` binaries propagate connection errors via `Debug`,
+  which doesn't currently echo a DSN/password in practice but isn't
+  provably safe for every error variant; a generic-message wrapper on
+  connect failure would close this defensively.
+- `logout()` doesn't format-check the cookie before its DB call (unlike
+  `AuthContext`); spec-compliant since logout must accept even invalid
+  sessions to stay idempotent, just a possible-but-optional round-trip
+  saving for obviously-garbage cookies.
+
+From the Slice 000 review — deferred until `/internal/ready` carries
+real operational weight:
 
 Raised by the `crm-tester` adversarial pass; reasonable to defer until
 `/internal/ready` carries real operational weight, since a proper fix
@@ -142,9 +234,8 @@ slice:
 
 ## Next recommended action
 
-Implementation gate for Slice 001, then implement on
-`slice-001-identity`.
+Request commit approval for `slice-001-identity`, then merge approval.
 
 ## Approval currently required
 
-Implementation gate for Slice 001 ("Proceed with implementation?").
+Commit approval for the Slice 001 implementation on `slice-001-identity`.

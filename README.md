@@ -46,7 +46,7 @@ The two primary product goals are:
 
 ## Current State
 
-Slice 000 (executable repository foundation) is implemented: a Rust/Axum API with health and readiness endpoints, a Vue 3 + Vite web shell, Docker Compose for local PostgreSQL and Centrifugo, and the development scripts below. There is no product schema, authentication, or CRM behavior yet — see `docs/specs/SLICE_000.md`.
+Slice 000 (executable repository foundation) and Slice 001 (identity, tenancy, and database foundation) are implemented: a Rust/Axum API with health/readiness endpoints and local-username/password session authentication, a Vue 3 + Vite web shell with a login flow, Docker Compose for local PostgreSQL and Centrifugo, a migrations harness with distinct application/schema-owner database roles, and the development scripts below. There is no CRM product behavior (Person, Inquiry, and the rest) yet — see `docs/specs/SLICE_000.md` and `docs/specs/SLICE_001.md`.
 
 Current operational status and the next approval gate are recorded in `docs/plans/PROJECT_STATE.md`.
 
@@ -81,8 +81,14 @@ Notable defaults and constraints, applied in code:
 | Variable | Default | Constraint |
 |---|---|---|
 | `CRM_API_BIND_ADDR` | `127.0.0.1:3000` | Must be a loopback socket address |
-| `DATABASE_URL` | Unset; optional for startup and liveness | Required only for a successful `/internal/ready` |
-| `CRM_DATABASE_CONNECT_TIMEOUT_MS` | `2000`, bounded to 1–30000 ms | Bounds how long readiness waits on an unreachable database |
+| `DATABASE_URL` | Unset; optional for startup and liveness | The `crm_app` (DML-only) connection; required only for a successful `/internal/ready` and authenticated endpoints |
+| `MIGRATION_DATABASE_URL` | Unset | The `crm_migrator` (schema-owner) connection; used only by `db-migrate`, `dev-seed`, and `check-db` |
+| `CRM_DATABASE_CONNECT_TIMEOUT_MS` | `2000`, bounded to 1–30000 ms | Bounds how long readiness/auth queries wait on an unreachable database |
+| `CRM_DB_APP_PASSWORD` / `CRM_DB_MIGRATOR_PASSWORD` | Unset | Role passwords `dev-services up` provisions into the local Postgres container |
+| `CRM_SESSION_SECRET` | Required, no default | HMAC pepper for session tokens; must be at least 32 bytes; rotating it invalidates every session |
+| `CRM_SESSION_TTL_HOURS` | `168`, bounded 1–720 | Absolute session expiry |
+| `CRM_SESSION_COOKIE_SECURE` | `false` | Set `true` when using the tunnel; Safari rejects `Secure` cookies over plain `http://127.0.0.1`, so keep it `false` for loopback work in Safari |
+| `CRM_DEV_SEED_PASSWORD` | Required for `dev-seed` | One password for every seeded user; re-hashed on every run, so changing it rotates seeded credentials |
 | `CRM_WEB_BIND_ADDR` | `127.0.0.1` | Loopback only |
 | `CRM_WEB_PORT` | `5173` | |
 | `CRM_WEB_API_PROXY_TARGET` | `http://127.0.0.1:3000` | Loopback HTTP only |
@@ -107,6 +113,22 @@ Verify both are healthy (outside the main repository gate, since it must stay se
 ./scripts/check-services
 ```
 
+`dev-services up` also (re-)provisions two database roles inside the container: `crm_migrator` (schema owner, runs DDL) and `crm_app` (DML only, exactly the grants each migration adds). Application code always connects as `crm_app`; nothing except migrations, seeding, and `check-db` ever uses the migrator role.
+
+### Database schema
+
+Apply pending migrations (idempotent — safe to run repeatedly):
+
+```sh
+./scripts/db-migrate
+```
+
+Seed two Organizations, each with one local-auth User (idempotent; re-running rotates the seeded password to match `CRM_DEV_SEED_PASSWORD`):
+
+```sh
+./scripts/dev-seed
+```
+
 ### Start the applications
 
 Start the API and web application in separate terminals from the repository root:
@@ -119,7 +141,9 @@ Start the API and web application in separate terminals from the repository root
 ./scripts/dev-web
 ```
 
-The API starts without PostgreSQL or a telemetry collector; it logs to the console. The web shell fetches `/api/health` through the Vite proxy on load. Vite proxies only `/api` to the loopback API; it does not proxy `/internal/ready`.
+The API starts without PostgreSQL or a telemetry collector; it logs to the console. The web shell checks for an existing session on load, then shows a login form or the signed-in view. Vite proxies only `/api` to the loopback API; it does not proxy `/internal/ready`.
+
+Log in at `http://127.0.0.1:5173` with a seeded account, e.g. `alice@acme.test` / the value of `CRM_DEV_SEED_PASSWORD`. A successful login shows the Organization name and its member list; logout revokes the session server-side.
 
 Verify liveness:
 
@@ -137,7 +161,15 @@ Run the complete repository gate with no services running:
 ./scripts/check
 ```
 
-This runs, in order: `cargo fmt --check`, `cargo clippy` (warnings denied), `cargo test`, web lint, web typecheck, and web build.
+This runs, in order: `cargo fmt --check`, `cargo clippy` (warnings denied), `cargo test`, web lint, web typecheck, and web build. Database-backed tests are compiled here (so fmt/clippy cover them) but `#[ignore]`d, so this stays service-free.
+
+Run the database-backed suite against the running local container (requires `dev-services up`; never prints a credential value):
+
+```sh
+./scripts/check-db
+```
+
+This exercises the full session lifecycle, tenant isolation between two Organizations, session/membership revocation, and the `crm_migrator`/`crm_app` role boundary, each against its own fresh ephemeral database with migrations applied from scratch.
 
 ### External connectivity (Cloudflare tunnel)
 
@@ -154,5 +186,7 @@ Then run:
 ```
 
 Before trusting the dev hostname, verify Access is actually in front of it: from a fresh private browser window (or `curl` with no session cookie), a request to the dev hostname must land on the Cloudflare Access challenge, not the application. Only after that negative check passes is the tunnel considered verified.
+
+Set `CRM_SESSION_COOKIE_SECURE=true` before logging in through the tunnel, and confirm the app's own login still works once you're past Access — the two are independent layers.
 
 A future webhook-receiving hostname will bypass Access (webhooks cannot complete a login challenge) and instead verify requests itself, e.g. via provider signatures.

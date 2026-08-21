@@ -7,11 +7,37 @@ const DEFAULT_CONNECT_TIMEOUT_MS: u64 = 2000;
 const MIN_CONNECT_TIMEOUT_MS: u64 = 1;
 const MAX_CONNECT_TIMEOUT_MS: u64 = 30_000;
 
+const MIN_SESSION_SECRET_BYTES: usize = 32;
+const DEFAULT_SESSION_TTL_HOURS: u64 = 168;
+const MIN_SESSION_TTL_HOURS: u64 = 1;
+const MAX_SESSION_TTL_HOURS: u64 = 720;
+
+/// The session-token HMAC pepper. `Debug` is redacted so an accidental
+/// `{:?}` of `Config` (or anything holding this) never leaks it (AGENTS.md
+/// §9).
+#[derive(Clone)]
+pub struct SessionSecret(Vec<u8>);
+
+impl SessionSecret {
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl fmt::Debug for SessionSecret {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "SessionSecret(REDACTED)")
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Config {
     pub bind_addr: SocketAddr,
     pub database_url: Option<String>,
     pub database_connect_timeout: Duration,
+    pub session_secret: SessionSecret,
+    pub session_ttl: Duration,
+    pub session_cookie_secure: bool,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -20,6 +46,11 @@ pub enum ConfigError {
     NonLoopbackBindAddr(SocketAddr),
     InvalidConnectTimeout(String),
     ConnectTimeoutOutOfBounds(u64),
+    MissingSessionSecret,
+    SessionSecretTooShort(usize),
+    InvalidSessionTtl(String),
+    SessionTtlOutOfBounds(u64),
+    InvalidCookieSecure(String),
 }
 
 impl fmt::Display for ConfigError {
@@ -39,6 +70,22 @@ impl fmt::Display for ConfigError {
             ConfigError::ConnectTimeoutOutOfBounds(value) => write!(
                 f,
                 "CRM_DATABASE_CONNECT_TIMEOUT_MS must be between {MIN_CONNECT_TIMEOUT_MS} and {MAX_CONNECT_TIMEOUT_MS}, got {value}"
+            ),
+            ConfigError::MissingSessionSecret => write!(f, "CRM_SESSION_SECRET is required"),
+            ConfigError::SessionSecretTooShort(len) => write!(
+                f,
+                "CRM_SESSION_SECRET must be at least {MIN_SESSION_SECRET_BYTES} bytes, got {len}"
+            ),
+            ConfigError::InvalidSessionTtl(value) => {
+                write!(f, "CRM_SESSION_TTL_HOURS is not a valid integer: {value}")
+            }
+            ConfigError::SessionTtlOutOfBounds(value) => write!(
+                f,
+                "CRM_SESSION_TTL_HOURS must be between {MIN_SESSION_TTL_HOURS} and {MAX_SESSION_TTL_HOURS}, got {value}"
+            ),
+            ConfigError::InvalidCookieSecure(value) => write!(
+                f,
+                "CRM_SESSION_COOKIE_SECURE must be \"true\" or \"false\", got {value}"
             ),
         }
     }
@@ -77,10 +124,40 @@ impl Config {
             return Err(ConfigError::ConnectTimeoutOutOfBounds(timeout_ms));
         }
 
+        let session_secret_raw =
+            get("CRM_SESSION_SECRET").ok_or(ConfigError::MissingSessionSecret)?;
+        if session_secret_raw.len() < MIN_SESSION_SECRET_BYTES {
+            return Err(ConfigError::SessionSecretTooShort(session_secret_raw.len()));
+        }
+        let session_secret = SessionSecret(session_secret_raw.into_bytes());
+
+        let ttl_hours = match get("CRM_SESSION_TTL_HOURS") {
+            Some(value) => value
+                .parse::<u64>()
+                .map_err(|_| ConfigError::InvalidSessionTtl(value.clone()))?,
+            None => DEFAULT_SESSION_TTL_HOURS,
+        };
+        if !(MIN_SESSION_TTL_HOURS..=MAX_SESSION_TTL_HOURS).contains(&ttl_hours) {
+            return Err(ConfigError::SessionTtlOutOfBounds(ttl_hours));
+        }
+        let session_ttl = Duration::from_secs(ttl_hours * 3600);
+
+        let session_cookie_secure = match get("CRM_SESSION_COOKIE_SECURE") {
+            Some(value) => match value.as_str() {
+                "true" => true,
+                "false" => false,
+                _ => return Err(ConfigError::InvalidCookieSecure(value.clone())),
+            },
+            None => false,
+        };
+
         Ok(Config {
             bind_addr,
             database_url,
             database_connect_timeout: Duration::from_millis(timeout_ms),
+            session_secret,
+            session_ttl,
+            session_cookie_secure,
         })
     }
 }
@@ -90,11 +167,28 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
 
-    fn source(vars: &[(&str, &str)]) -> impl Fn(&str) -> Option<String> {
+    /// Exact-map source with no defaults, for tests that need full control
+    /// (e.g. asserting behavior when a required variable is truly absent).
+    fn raw_source(vars: &[(&str, &str)]) -> impl Fn(&str) -> Option<String> {
         let map: HashMap<String, String> = vars
             .iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect();
+        move |key: &str| map.get(key).cloned()
+    }
+
+    /// A valid baseline (including a valid session secret) overlaid with
+    /// per-test overrides, so existing tests don't all need updating for
+    /// every newly-required variable.
+    fn source(overrides: &[(&str, &str)]) -> impl Fn(&str) -> Option<String> {
+        let mut map: HashMap<String, String> = HashMap::new();
+        map.insert(
+            "CRM_SESSION_SECRET".to_string(),
+            "a".repeat(MIN_SESSION_SECRET_BYTES),
+        );
+        for (k, v) in overrides {
+            map.insert((*k).to_string(), (*v).to_string());
+        }
         move |key: &str| map.get(key).cloned()
     }
 
@@ -104,6 +198,8 @@ mod tests {
         assert_eq!(config.bind_addr, "127.0.0.1:3000".parse().unwrap());
         assert_eq!(config.database_url, None);
         assert_eq!(config.database_connect_timeout, Duration::from_millis(2000));
+        assert_eq!(config.session_ttl, Duration::from_secs(168 * 3600));
+        assert!(!config.session_cookie_secure);
     }
 
     #[test]
@@ -147,5 +243,53 @@ mod tests {
             Some("postgres://localhost/test")
         );
         assert_eq!(config.database_connect_timeout, Duration::from_millis(500));
+    }
+
+    #[test]
+    fn rejects_missing_session_secret() {
+        let err = Config::from_source(raw_source(&[])).unwrap_err();
+        assert_eq!(err, ConfigError::MissingSessionSecret);
+    }
+
+    #[test]
+    fn rejects_short_session_secret() {
+        let err = Config::from_source(source(&[("CRM_SESSION_SECRET", "too-short")])).unwrap_err();
+        assert_eq!(err, ConfigError::SessionSecretTooShort(9));
+    }
+
+    #[test]
+    fn session_secret_is_redacted_in_debug() {
+        let config = Config::from_source(source(&[(
+            "CRM_SESSION_SECRET",
+            "super-secret-value-that-must-never-print",
+        )]))
+        .unwrap();
+        let debug_output = format!("{config:?}");
+        assert!(!debug_output.contains("super-secret-value-that-must-never-print"));
+        assert!(debug_output.contains("REDACTED"));
+    }
+
+    #[test]
+    fn rejects_session_ttl_below_bounds() {
+        let err = Config::from_source(source(&[("CRM_SESSION_TTL_HOURS", "0")])).unwrap_err();
+        assert_eq!(err, ConfigError::SessionTtlOutOfBounds(0));
+    }
+
+    #[test]
+    fn rejects_session_ttl_above_bounds() {
+        let err = Config::from_source(source(&[("CRM_SESSION_TTL_HOURS", "721")])).unwrap_err();
+        assert_eq!(err, ConfigError::SessionTtlOutOfBounds(721));
+    }
+
+    #[test]
+    fn rejects_invalid_cookie_secure() {
+        let err = Config::from_source(source(&[("CRM_SESSION_COOKIE_SECURE", "yes")])).unwrap_err();
+        assert!(matches!(err, ConfigError::InvalidCookieSecure(_)));
+    }
+
+    #[test]
+    fn accepts_cookie_secure_true() {
+        let config = Config::from_source(source(&[("CRM_SESSION_COOKIE_SECURE", "true")])).unwrap();
+        assert!(config.session_cookie_secure);
     }
 }

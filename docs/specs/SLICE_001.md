@@ -222,8 +222,8 @@ contain **two** Organizations. Required properties, tested over HTTP:
   value), expired session, and revoked-after-logout replay are all 401.
 - Membership deleted → 401 on the very next request (per-request
   re-verification).
-- Role privileges: connected as `crm_app`, DDL is denied (psql assertion
-  in `check-db`).
+- Role privileges: connected as `crm_app`, DDL is denied (ignored Rust
+  test in `check-db`; see §9).
 
 `PersonVisibilityScope` (D-005) does not appear: it is Person-specific and
 arrives with Person in Slice 002.

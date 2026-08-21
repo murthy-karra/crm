@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Applies pending migrations as crm_migrator (Slice 001).
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "$script_dir/.." && pwd)"
+
+cd "$repo_root"
+exec cargo run --manifest-path backend/Cargo.toml -p crm-api --bin migrate

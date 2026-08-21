@@ -11,6 +11,10 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+      # Read by scripts/dev-services' role-provisioning SQL via \getenv,
+      # never passed on argv (Slice 001).
+      CRM_DB_APP_PASSWORD: ${CRM_DB_APP_PASSWORD}
+      CRM_DB_MIGRATOR_PASSWORD: ${CRM_DB_MIGRATOR_PASSWORD}
     volumes:
       # Postgres 18+ images store data in a major-version-specific
       # subdirectory under a single /var/lib/postgresql mount, not the

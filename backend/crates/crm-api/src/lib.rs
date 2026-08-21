@@ -1,4 +1,6 @@
+pub mod auth;
 pub mod config;
+pub mod error;
 pub mod routes;
 pub mod state;
 pub mod telemetry;
@@ -31,6 +33,8 @@ pub fn build_app(state: AppState) -> Router {
 
     Router::new()
         .merge(routes::health::router())
+        .merge(routes::session::router())
+        .merge(routes::organization::router())
         .with_state(state)
         .layer(
             ServiceBuilder::new()

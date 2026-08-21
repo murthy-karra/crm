@@ -1,0 +1,835 @@
+//! DB-backed tests for Slice 001 (docs/specs/SLICE_001.md §9). Run only
+//! via ./scripts/check-db: every test is `#[ignore]`d so the service-free
+//! main gate (`cargo test --workspace --locked`) never touches a database.
+//! `DATABASE_URL` must be the crm_migrator URL for the `#[sqlx::test]`
+//! harness; `CRM_DB_APP_PASSWORD`/`CRM_DB_MIGRATOR_PASSWORD` let each test
+//! build a same-database connection under a different role.
+use std::time::Duration;
+
+use axum::body::Body;
+use axum::http::{Request, StatusCode};
+use axum::response::Response;
+use axum::Router;
+use http_body_util::BodyExt;
+use sqlx::postgres::PgPoolOptions;
+use sqlx::PgPool;
+use tower::ServiceExt;
+use uuid::Uuid;
+
+use crm_api::auth::password;
+use crm_api::config::Config;
+use crm_api::state::AppState;
+
+fn app_password() -> String {
+    std::env::var("CRM_DB_APP_PASSWORD").expect("CRM_DB_APP_PASSWORD must be set for check-db")
+}
+
+fn migrator_password() -> String {
+    std::env::var("CRM_DB_MIGRATOR_PASSWORD")
+        .expect("CRM_DB_MIGRATOR_PASSWORD must be set for check-db")
+}
+
+async fn connect_as(migrator_pool: &PgPool, username: &str, password: &str) -> PgPool {
+    let options = migrator_pool
+        .connect_options()
+        .as_ref()
+        .clone()
+        .username(username)
+        .password(password);
+    PgPoolOptions::new()
+        .connect_with(options)
+        .await
+        .expect("connect with swapped credentials")
+}
+
+async fn connect_as_app(migrator_pool: &PgPool) -> PgPool {
+    connect_as(migrator_pool, "crm_app", &app_password()).await
+}
+
+/// A connection URL for the same ephemeral database `#[sqlx::test]`
+/// created, usable to run the real `seed` binary as a subprocess against
+/// it (docs/specs/SLICE_001.md §9: seed idempotency).
+fn migrator_url_for(migrator_pool: &PgPool) -> String {
+    let opts = migrator_pool.connect_options();
+    format!(
+        "postgres://{}:{}@{}:{}/{}",
+        opts.get_username(),
+        migrator_password(),
+        opts.get_host(),
+        opts.get_port(),
+        opts.get_database()
+            .expect("ephemeral test database has a name"),
+    )
+}
+
+fn test_config() -> Config {
+    Config::from_source(|key| match key {
+        "CRM_SESSION_SECRET" => Some("a".repeat(32)),
+        _ => None,
+    })
+    .unwrap()
+}
+
+async fn build_router(migrator_pool: &PgPool) -> Router {
+    let app_pool = connect_as_app(migrator_pool).await;
+    let config = test_config();
+    let state = AppState {
+        db: Some(app_pool),
+        database_connect_timeout: config.database_connect_timeout,
+        session_secret: config.session_secret,
+        session_ttl: config.session_ttl,
+        session_cookie_secure: config.session_cookie_secure,
+    };
+    crm_api::build_app(state)
+}
+
+async fn create_org(pool: &PgPool, name: &str) -> Uuid {
+    let (id,): (Uuid,) = sqlx::query_as("INSERT INTO organization (name) VALUES ($1) RETURNING id")
+        .bind(name)
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    id
+}
+
+async fn create_user(pool: &PgPool, email: &str, display_name: &str, password_plain: &str) -> Uuid {
+    let (id,): (Uuid,) =
+        sqlx::query_as("INSERT INTO app_user (email, display_name) VALUES ($1, $2) RETURNING id")
+            .bind(email)
+            .bind(display_name)
+            .fetch_one(pool)
+            .await
+            .unwrap();
+    let hash = password::hash_password(password_plain).unwrap();
+    sqlx::query("INSERT INTO local_credential (user_id, password_hash) VALUES ($1, $2)")
+        .bind(id)
+        .bind(hash)
+        .execute(pool)
+        .await
+        .unwrap();
+    id
+}
+
+async fn create_user_without_password(pool: &PgPool, email: &str, display_name: &str) -> Uuid {
+    let (id,): (Uuid,) =
+        sqlx::query_as("INSERT INTO app_user (email, display_name) VALUES ($1, $2) RETURNING id")
+            .bind(email)
+            .bind(display_name)
+            .fetch_one(pool)
+            .await
+            .unwrap();
+    id
+}
+
+async fn add_membership(pool: &PgPool, org_id: Uuid, user_id: Uuid) {
+    sqlx::query("INSERT INTO organization_membership (organization_id, user_id) VALUES ($1, $2)")
+        .bind(org_id)
+        .bind(user_id)
+        .execute(pool)
+        .await
+        .unwrap();
+}
+
+async fn body_json(response: Response) -> serde_json::Value {
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    serde_json::from_slice(&bytes).unwrap()
+}
+
+fn extract_cookie(response: &Response) -> String {
+    let set_cookie = response
+        .headers()
+        .get("set-cookie")
+        .expect("must set a cookie")
+        .to_str()
+        .unwrap();
+    set_cookie.split(';').next().unwrap().to_string()
+}
+
+async fn login(router: &Router, email: &str, password: &str) -> Response {
+    router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/session")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({ "email": email, "password": password }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap()
+}
+
+async fn login_with_cookie(router: &Router, email: &str, password: &str, cookie: &str) -> Response {
+    router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/session")
+                .header("content-type", "application/json")
+                .header("cookie", cookie)
+                .body(Body::from(
+                    serde_json::json!({ "email": email, "password": password }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap()
+}
+
+async fn get_with_cookie(router: &Router, uri: &str, cookie: &str) -> Response {
+    router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(uri)
+                .header("cookie", cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap()
+}
+
+async fn delete_with_cookie(router: &Router, uri: &str, cookie: &str) -> Response {
+    router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri(uri)
+                .header("cookie", cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap()
+}
+
+// --- Full lifecycle -------------------------------------------------
+
+#[sqlx::test]
+#[ignore]
+async fn full_lifecycle_login_me_members_logout_replay(migrator_pool: PgPool) {
+    let org = create_org(&migrator_pool, "Acme Realty").await;
+    let user = create_user(
+        &migrator_pool,
+        "alice@acme.test",
+        "Alice Anderson",
+        "correct horse battery staple",
+    )
+    .await;
+    add_membership(&migrator_pool, org, user).await;
+
+    let router = build_router(&migrator_pool).await;
+
+    let login_response = login(&router, "alice@acme.test", "correct horse battery staple").await;
+    assert_eq!(login_response.status(), StatusCode::OK);
+    let cookie = extract_cookie(&login_response);
+    let login_body = body_json(login_response).await;
+    assert_eq!(login_body["user"]["email"], "alice@acme.test");
+    assert_eq!(login_body["organization"]["name"], "Acme Realty");
+
+    let me_response = get_with_cookie(&router, "/api/me", &cookie).await;
+    assert_eq!(me_response.status(), StatusCode::OK);
+    let me_body = body_json(me_response).await;
+    assert_eq!(me_body, login_body);
+
+    let members_response = get_with_cookie(&router, "/api/organization/members", &cookie).await;
+    assert_eq!(members_response.status(), StatusCode::OK);
+    let members_body = body_json(members_response).await;
+    assert_eq!(members_body["members"].as_array().unwrap().len(), 1);
+    assert_eq!(members_body["members"][0]["email"], "alice@acme.test");
+
+    let logout_response = delete_with_cookie(&router, "/api/session", &cookie).await;
+    assert_eq!(logout_response.status(), StatusCode::NO_CONTENT);
+
+    let replay_response = get_with_cookie(&router, "/api/me", &cookie).await;
+    assert_eq!(replay_response.status(), StatusCode::UNAUTHORIZED);
+}
+
+// --- Credential failures ---------------------------------------------
+
+#[sqlx::test]
+#[ignore]
+async fn wrong_password_and_unknown_user_return_identical_401(migrator_pool: PgPool) {
+    create_user(
+        &migrator_pool,
+        "alice@acme.test",
+        "Alice Anderson",
+        "correct password",
+    )
+    .await;
+    let router = build_router(&migrator_pool).await;
+
+    let wrong_password = login(&router, "alice@acme.test", "wrong password").await;
+    assert_eq!(wrong_password.status(), StatusCode::UNAUTHORIZED);
+    let wrong_password_body = body_json(wrong_password).await;
+
+    let unknown_user = login(&router, "nobody@nowhere.test", "whatever").await;
+    assert_eq!(unknown_user.status(), StatusCode::UNAUTHORIZED);
+    let unknown_user_body = body_json(unknown_user).await;
+
+    assert_eq!(wrong_password_body, unknown_user_body);
+    assert_eq!(
+        wrong_password_body,
+        serde_json::json!({ "error": "invalid_credentials" })
+    );
+}
+
+#[sqlx::test]
+#[ignore]
+async fn user_without_local_credential_gets_same_invalid_credentials_error(migrator_pool: PgPool) {
+    create_user_without_password(&migrator_pool, "nopassword@acme.test", "No Password").await;
+    let router = build_router(&migrator_pool).await;
+
+    let response = login(&router, "nopassword@acme.test", "anything").await;
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    let body = body_json(response).await;
+    assert_eq!(body, serde_json::json!({ "error": "invalid_credentials" }));
+}
+
+// --- Session validity --------------------------------------------------
+
+#[sqlx::test]
+#[ignore]
+async fn expired_session_returns_401(migrator_pool: PgPool) {
+    let org = create_org(&migrator_pool, "Acme Realty").await;
+    let user = create_user(
+        &migrator_pool,
+        "alice@acme.test",
+        "Alice Anderson",
+        "password123",
+    )
+    .await;
+    add_membership(&migrator_pool, org, user).await;
+
+    let app_pool = connect_as_app(&migrator_pool).await;
+    let config = test_config();
+    let (token, _expires_at) = crm_api::auth::session::create(
+        &app_pool,
+        &config.session_secret,
+        user,
+        org,
+        Duration::from_secs(3600),
+    )
+    .await
+    .unwrap();
+
+    sqlx::query("UPDATE user_session SET expires_at = now() - interval '1 hour'")
+        .execute(&migrator_pool)
+        .await
+        .unwrap();
+
+    let router = build_router(&migrator_pool).await;
+    let response = get_with_cookie(&router, "/api/me", &format!("crm_session={token}")).await;
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[sqlx::test]
+#[ignore]
+async fn tampered_token_returns_401(migrator_pool: PgPool) {
+    let org = create_org(&migrator_pool, "Acme Realty").await;
+    create_user(
+        &migrator_pool,
+        "alice@acme.test",
+        "Alice Anderson",
+        "password123",
+    )
+    .await;
+    add_membership(&migrator_pool, org, {
+        let (id,): (Uuid,) =
+            sqlx::query_as("SELECT id FROM app_user WHERE email = 'alice@acme.test'")
+                .fetch_one(&migrator_pool)
+                .await
+                .unwrap();
+        id
+    })
+    .await;
+
+    let router = build_router(&migrator_pool).await;
+    let login_response = login(&router, "alice@acme.test", "password123").await;
+    let cookie = extract_cookie(&login_response);
+
+    // Flip the first character of the token value; same length and
+    // alphabet, so this exercises "right format, wrong value".
+    let flip_at = cookie.find('=').unwrap() + 1;
+    let tampered: String = cookie
+        .char_indices()
+        .map(|(i, ch)| {
+            if i == flip_at {
+                if ch == 'a' {
+                    'b'
+                } else {
+                    'a'
+                }
+            } else {
+                ch
+            }
+        })
+        .collect();
+    assert_ne!(tampered, cookie);
+
+    let response = get_with_cookie(&router, "/api/me", &tampered).await;
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[sqlx::test]
+#[ignore]
+async fn membership_revoked_returns_401_on_next_request(migrator_pool: PgPool) {
+    let org = create_org(&migrator_pool, "Acme Realty").await;
+    let user = create_user(
+        &migrator_pool,
+        "alice@acme.test",
+        "Alice Anderson",
+        "password123",
+    )
+    .await;
+    add_membership(&migrator_pool, org, user).await;
+
+    let router = build_router(&migrator_pool).await;
+    let login_response = login(&router, "alice@acme.test", "password123").await;
+    let cookie = extract_cookie(&login_response);
+
+    let first = get_with_cookie(&router, "/api/me", &cookie).await;
+    assert_eq!(first.status(), StatusCode::OK);
+
+    sqlx::query("DELETE FROM organization_membership WHERE organization_id = $1 AND user_id = $2")
+        .bind(org)
+        .bind(user)
+        .execute(&migrator_pool)
+        .await
+        .unwrap();
+
+    let second = get_with_cookie(&router, "/api/me", &cookie).await;
+    assert_eq!(second.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[sqlx::test]
+#[ignore]
+async fn relogin_mints_new_token_and_revokes_previous(migrator_pool: PgPool) {
+    let org = create_org(&migrator_pool, "Acme Realty").await;
+    let user = create_user(
+        &migrator_pool,
+        "alice@acme.test",
+        "Alice Anderson",
+        "password123",
+    )
+    .await;
+    add_membership(&migrator_pool, org, user).await;
+
+    let router = build_router(&migrator_pool).await;
+    let first_login = login(&router, "alice@acme.test", "password123").await;
+    let first_cookie = extract_cookie(&first_login);
+
+    // Present the first cookie on the second login so the best-effort
+    // revoke-on-relogin path actually has something to revoke.
+    let second_login =
+        login_with_cookie(&router, "alice@acme.test", "password123", &first_cookie).await;
+    let second_cookie = extract_cookie(&second_login);
+    assert_ne!(
+        first_cookie, second_cookie,
+        "re-login must mint a fresh token"
+    );
+
+    let with_old_cookie = get_with_cookie(&router, "/api/me", &first_cookie).await;
+    assert_eq!(
+        with_old_cookie.status(),
+        StatusCode::UNAUTHORIZED,
+        "the previous session must be revoked"
+    );
+
+    let with_new_cookie = get_with_cookie(&router, "/api/me", &second_cookie).await;
+    assert_eq!(with_new_cookie.status(), StatusCode::OK);
+}
+
+#[sqlx::test]
+#[ignore]
+async fn zero_membership_login_returns_403_and_creates_no_session(migrator_pool: PgPool) {
+    let user = create_user(
+        &migrator_pool,
+        "orphan@nowhere.test",
+        "Orphan User",
+        "password123",
+    )
+    .await;
+    let router = build_router(&migrator_pool).await;
+
+    let response = login(&router, "orphan@nowhere.test", "password123").await;
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    let body = body_json(response).await;
+    assert_eq!(body, serde_json::json!({ "error": "no_membership" }));
+
+    let (count,): (i64,) = sqlx::query_as("SELECT count(*) FROM user_session WHERE user_id = $1")
+        .bind(user)
+        .fetch_one(&migrator_pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 0);
+}
+
+// --- Tenant isolation ----------------------------------------------------
+
+#[sqlx::test]
+#[ignore]
+async fn two_organizations_are_isolated_in_both_directions(migrator_pool: PgPool) {
+    let org_a = create_org(&migrator_pool, "Acme Realty").await;
+    let org_b = create_org(&migrator_pool, "Best Realty").await;
+    let alice = create_user(
+        &migrator_pool,
+        "alice@acme.test",
+        "Alice Anderson",
+        "password123",
+    )
+    .await;
+    let bob = create_user(&migrator_pool, "bob@best.test", "Bob Baker", "password123").await;
+    add_membership(&migrator_pool, org_a, alice).await;
+    add_membership(&migrator_pool, org_b, bob).await;
+
+    let router = build_router(&migrator_pool).await;
+
+    let alice_login = login(&router, "alice@acme.test", "password123").await;
+    let alice_cookie = extract_cookie(&alice_login);
+    let alice_members =
+        body_json(get_with_cookie(&router, "/api/organization/members", &alice_cookie).await).await;
+    let alice_emails: Vec<&str> = alice_members["members"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|m| m["email"].as_str().unwrap())
+        .collect();
+    assert_eq!(alice_emails, vec!["alice@acme.test"]);
+    assert!(!alice_emails.contains(&"bob@best.test"));
+
+    let bob_login = login(&router, "bob@best.test", "password123").await;
+    let bob_cookie = extract_cookie(&bob_login);
+    let bob_members =
+        body_json(get_with_cookie(&router, "/api/organization/members", &bob_cookie).await).await;
+    let bob_emails: Vec<&str> = bob_members["members"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|m| m["email"].as_str().unwrap())
+        .collect();
+    assert_eq!(bob_emails, vec!["bob@best.test"]);
+    assert!(!bob_emails.contains(&"alice@acme.test"));
+}
+
+#[sqlx::test]
+#[ignore]
+async fn client_supplied_organization_id_is_ignored(migrator_pool: PgPool) {
+    let org_a = create_org(&migrator_pool, "Acme Realty").await;
+    let org_b = create_org(&migrator_pool, "Best Realty").await;
+    let alice = create_user(
+        &migrator_pool,
+        "alice@acme.test",
+        "Alice Anderson",
+        "password123",
+    )
+    .await;
+    let bob = create_user(&migrator_pool, "bob@best.test", "Bob Baker", "password123").await;
+    add_membership(&migrator_pool, org_a, alice).await;
+    add_membership(&migrator_pool, org_b, bob).await;
+
+    let router = build_router(&migrator_pool).await;
+    let alice_login = login(&router, "alice@acme.test", "password123").await;
+    let alice_cookie = extract_cookie(&alice_login);
+
+    // Query-string probe.
+    let query_probe = router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/api/organization/members?organization_id={org_b}"))
+                .header("cookie", &alice_cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let query_body = body_json(query_probe).await;
+    assert_eq!(query_body["members"].as_array().unwrap().len(), 1);
+    assert_eq!(query_body["members"][0]["email"], "alice@acme.test");
+
+    // Header probe.
+    let header_probe = router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/organization/members")
+                .header("cookie", &alice_cookie)
+                .header("x-organization-id", org_b.to_string())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let header_body = body_json(header_probe).await;
+    assert_eq!(header_body["members"].as_array().unwrap().len(), 1);
+    assert_eq!(header_body["members"][0]["email"], "alice@acme.test");
+
+    // Body probe: a spurious organization_id in the login request body
+    // must not influence which Organization the session is scoped to.
+    let body_probe = router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/session")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({ "email": "alice@acme.test", "password": "password123", "organization_id": org_b.to_string() }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(body_probe.status(), StatusCode::OK);
+    let body_probe_body = body_json(body_probe).await;
+    assert_eq!(body_probe_body["organization"]["name"], "Acme Realty");
+}
+
+#[sqlx::test]
+#[ignore]
+async fn logout_is_idempotent_against_an_already_revoked_session(migrator_pool: PgPool) {
+    let org = create_org(&migrator_pool, "Acme Realty").await;
+    let user = create_user(
+        &migrator_pool,
+        "alice@acme.test",
+        "Alice Anderson",
+        "password123",
+    )
+    .await;
+    add_membership(&migrator_pool, org, user).await;
+
+    let router = build_router(&migrator_pool).await;
+    let login_response = login(&router, "alice@acme.test", "password123").await;
+    let cookie = extract_cookie(&login_response);
+
+    let first_logout = delete_with_cookie(&router, "/api/session", &cookie).await;
+    assert_eq!(first_logout.status(), StatusCode::NO_CONTENT);
+
+    let second_logout = delete_with_cookie(&router, "/api/session", &cookie).await;
+    assert_eq!(
+        second_logout.status(),
+        StatusCode::NO_CONTENT,
+        "logging out an already-revoked session must still succeed"
+    );
+}
+
+#[sqlx::test]
+#[ignore]
+async fn multi_membership_picks_earliest_and_scopes_members_to_it(migrator_pool: PgPool) {
+    let user = create_user(
+        &migrator_pool,
+        "alice@acme.test",
+        "Alice Anderson",
+        "password123",
+    )
+    .await;
+    let earlier_org = create_org(&migrator_pool, "Earlier Realty").await;
+    // Force a strictly later created_at on the second membership so the
+    // ordering isn't relying on same-instant timestamps.
+    sqlx::query("INSERT INTO organization_membership (organization_id, user_id, created_at) VALUES ($1, $2, now() - interval '1 day')")
+        .bind(earlier_org)
+        .bind(user)
+        .execute(&migrator_pool)
+        .await
+        .unwrap();
+
+    // A second person, member of the later Organization only, so the
+    // members-scoping assertion below is discriminating: if scoping were
+    // broken (e.g. matched on user_id alone instead of the active
+    // Organization), this person would leak into Alice's list.
+    let later_org = create_org(&migrator_pool, "Later Realty").await;
+    add_membership(&migrator_pool, later_org, user).await;
+    let later_org_only_user = create_user(
+        &migrator_pool,
+        "carol@later.test",
+        "Carol Carpenter",
+        "password123",
+    )
+    .await;
+    add_membership(&migrator_pool, later_org, later_org_only_user).await;
+
+    let router = build_router(&migrator_pool).await;
+    let login_response = login(&router, "alice@acme.test", "password123").await;
+    let cookie = extract_cookie(&login_response);
+    let login_body = body_json(login_response).await;
+    assert_eq!(login_body["organization"]["name"], "Earlier Realty");
+
+    let members_body =
+        body_json(get_with_cookie(&router, "/api/organization/members", &cookie).await).await;
+    let emails: Vec<&str> = members_body["members"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|m| m["email"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        emails,
+        vec!["alice@acme.test"],
+        "members must be scoped to the active (earlier) Organization only"
+    );
+}
+
+// --- Role privileges -----------------------------------------------------
+
+#[sqlx::test]
+#[ignore]
+async fn current_user_matches_each_role(migrator_pool: PgPool) {
+    let (migrator_user,): (String,) = sqlx::query_as("SELECT current_user")
+        .fetch_one(&migrator_pool)
+        .await
+        .unwrap();
+    assert_eq!(migrator_user, "crm_migrator");
+
+    let app_pool = connect_as_app(&migrator_pool).await;
+    let (app_user,): (String,) = sqlx::query_as("SELECT current_user")
+        .fetch_one(&app_pool)
+        .await
+        .unwrap();
+    assert_eq!(app_user, "crm_app");
+}
+
+#[sqlx::test]
+#[ignore]
+async fn crm_app_has_exactly_the_specified_grants(migrator_pool: PgPool) {
+    let app_pool = connect_as_app(&migrator_pool).await;
+
+    // Cannot DDL at all.
+    let ddl = sqlx::query("CREATE TABLE should_fail (id INT)")
+        .execute(&app_pool)
+        .await;
+    assert!(ddl.is_err(), "crm_app must not be able to run DDL");
+
+    // Every table but user_session is SELECT-only: INSERT and UPDATE must
+    // both be denied on all four, not just spot-checked on one (spec §2's
+    // "exactly the specified grants"). Postgres checks table-level
+    // privilege before evaluating constraints or column references, so
+    // `.is_err()` here is a genuine permission-denied failure regardless
+    // of each table's differing column set.
+    for (table, update_column) in [
+        ("organization", "name"),
+        ("app_user", "display_name"),
+        ("local_credential", "password_hash"),
+        ("organization_membership", "created_at"),
+    ] {
+        let select = sqlx::query(&format!("SELECT * FROM {table}"))
+            .fetch_all(&app_pool)
+            .await;
+        assert!(
+            select.is_ok(),
+            "crm_app must be able to SELECT from {table}"
+        );
+
+        let insert = sqlx::query(&format!("INSERT INTO {table} DEFAULT VALUES"))
+            .execute(&app_pool)
+            .await;
+        assert!(
+            insert.is_err(),
+            "crm_app must not be able to INSERT into {table}"
+        );
+
+        let update = sqlx::query(&format!(
+            "UPDATE {table} SET {update_column} = {update_column} WHERE false"
+        ))
+        .execute(&app_pool)
+        .await;
+        assert!(
+            update.is_err(),
+            "crm_app must not be able to UPDATE {table}"
+        );
+    }
+
+    // user_session: SELECT, INSERT, UPDATE granted; DELETE denied.
+    let session_select = sqlx::query("SELECT * FROM user_session")
+        .fetch_all(&app_pool)
+        .await;
+    assert!(
+        session_select.is_ok(),
+        "crm_app must be able to SELECT from user_session"
+    );
+
+    let session_insert = sqlx::query(
+        "INSERT INTO user_session (token_hash, user_id, active_organization_id, expires_at)
+         SELECT 'grant-check', id, id, now() + interval '1 hour' FROM app_user LIMIT 0",
+    )
+    .execute(&app_pool)
+    .await;
+    assert!(
+        session_insert.is_ok(),
+        "crm_app must be able to INSERT into user_session"
+    );
+
+    let session_update = sqlx::query("UPDATE user_session SET revoked_at = now() WHERE false")
+        .execute(&app_pool)
+        .await;
+    assert!(
+        session_update.is_ok(),
+        "crm_app must be able to UPDATE user_session"
+    );
+
+    let session_delete = sqlx::query("DELETE FROM user_session")
+        .execute(&app_pool)
+        .await;
+    assert!(
+        session_delete.is_err(),
+        "crm_app must not be able to DELETE from user_session"
+    );
+}
+
+// --- Seed idempotency ------------------------------------------------
+
+#[sqlx::test]
+#[ignore]
+async fn seed_binary_is_idempotent(migrator_pool: PgPool) {
+    let migration_url = migrator_url_for(&migrator_pool);
+    let seed_bin = env!("CARGO_BIN_EXE_seed");
+
+    let run = |n: u32| {
+        let output = std::process::Command::new(seed_bin)
+            .env("MIGRATION_DATABASE_URL", &migration_url)
+            .env("CRM_DEV_SEED_PASSWORD", "test-seed-password")
+            .env_remove("DATABASE_URL")
+            .output()
+            .unwrap_or_else(|e| panic!("seed run {n} failed to start: {e}"));
+        assert!(
+            output.status.success(),
+            "seed run {n} failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    };
+
+    run(1);
+    let (orgs_1, users_1): (i64, i64) = sqlx::query_as(
+        "SELECT (SELECT count(*) FROM organization), (SELECT count(*) FROM app_user)",
+    )
+    .fetch_one(&migrator_pool)
+    .await
+    .unwrap();
+
+    run(2);
+    let (orgs_2, users_2): (i64, i64) = sqlx::query_as(
+        "SELECT (SELECT count(*) FROM organization), (SELECT count(*) FROM app_user)",
+    )
+    .fetch_one(&migrator_pool)
+    .await
+    .unwrap();
+
+    assert_eq!(
+        orgs_1, orgs_2,
+        "re-running seed must not create duplicate organizations"
+    );
+    assert_eq!(
+        users_1, users_2,
+        "re-running seed must not create duplicate users"
+    );
+    assert!(orgs_1 > 0 && users_1 > 0);
+}

@@ -4,12 +4,14 @@ version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 publish = false
+default-run = "crm-api"
 
 [lints]
 workspace = true
 
 [dependencies]
 axum = { workspace = true }
+axum-extra = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true }
@@ -20,6 +22,13 @@ serde_json = { workspace = true }
 sqlx = { workspace = true }
 dotenvy = { workspace = true }
 uuid = { workspace = true }
+chrono = { workspace = true }
+argon2 = { workspace = true }
+hmac = { workspace = true }
+sha2 = { workspace = true }
+rand = { workspace = true }
+base64 = { workspace = true }
+time = { workspace = true }
 
 [dev-dependencies]
 tower = { workspace = true, features = ["util"] }

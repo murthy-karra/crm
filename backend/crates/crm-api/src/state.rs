@@ -2,12 +2,15 @@ use std::time::Duration;
 
 use sqlx::postgres::{PgPool, PgPoolOptions};
 
-use crate::config::Config;
+use crate::config::{Config, SessionSecret};
 
 #[derive(Clone)]
 pub struct AppState {
     pub db: Option<PgPool>,
     pub database_connect_timeout: Duration,
+    pub session_secret: SessionSecret,
+    pub session_ttl: Duration,
+    pub session_cookie_secure: bool,
 }
 
 impl AppState {
@@ -27,6 +30,9 @@ impl AppState {
         Ok(Self {
             db,
             database_connect_timeout: config.database_connect_timeout,
+            session_secret: config.session_secret.clone(),
+            session_ttl: config.session_ttl,
+            session_cookie_secure: config.session_cookie_secure,
         })
     }
 }

@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Runs the API from the repo root so dotenvy finds ./.env (D-013).
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "$script_dir/.." && pwd)"
+
+cd "$repo_root"
+exec cargo run --manifest-path backend/Cargo.toml -p crm-api

@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# vite.config.ts sets envDir to the repo root, so it finds ../.env
+# regardless of this script's working directory (D-013).
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "$script_dir/.." && pwd)"
+
+cd "$repo_root/web"
+exec pnpm run dev

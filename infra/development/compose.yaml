@@ -1,0 +1,46 @@
+# Local development services only (D-016). Loopback-only port bindings;
+# never expose these publicly. Run via ./scripts/dev-services, which passes
+# only the specific variables each service needs — never the full .env.
+services:
+  postgres:
+    image: postgres:18.6
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      # Postgres 18+ images store data in a major-version-specific
+      # subdirectory under a single /var/lib/postgresql mount, not the
+      # older .../data convention.
+      - crm_postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  centrifugo:
+    # Container only in this slice; no application integration yet (§3).
+    image: centrifugo/centrifugo:v6.9.2
+    restart: unless-stopped
+    command: centrifugo --config=/centrifugo/config.json
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      # Centrifugo's native env var names differ from the repo's inventory
+      # (.env.example); map explicitly rather than passing .env through.
+      CENTRIFUGO_HTTP_API_KEY: ${CENTRIFUGO_HTTP_API_KEY}
+      CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY: ${CENTRIFUGO_TOKEN_HMAC_SECRET}
+    volumes:
+      - ./centrifugo/config.json:/centrifugo/config.json:ro
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  crm_postgres_data:

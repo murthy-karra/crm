@@ -1,0 +1,6 @@
+{
+  "health": {
+    "enabled": true
+  },
+  "log_level": "info"
+}

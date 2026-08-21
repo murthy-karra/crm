@@ -3,5 +3,10 @@
 .env.*
 !.env.example
 
+# Build artifacts
+target/
+node_modules/
+web/dist/
+
 # OS noise
 .DS_Store

@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# Verifies pinned toolchains and fetches locked dependencies. Does not
+# install system toolchains or start services (D-016).
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "$script_dir/.." && pwd)"
+
+echo "==> checking Rust toolchain"
+if ! command -v rustup >/dev/null 2>&1; then
+  echo "rustup is required: https://rustup.rs" >&2
+  exit 1
+fi
+pinned_rust="$(grep '^channel' "$repo_root/rust-toolchain.toml" | sed -E 's/.*"(.+)".*/\1/')"
+rustup toolchain install "$pinned_rust" --profile minimal --component rustfmt --component clippy >/dev/null
+echo "    rust $pinned_rust ready"
+
+echo "==> checking Node"
+if ! command -v node >/dev/null 2>&1; then
+  echo "node is required (see .node-version): https://nodejs.org" >&2
+  exit 1
+fi
+pinned_node="$(cat "$repo_root/.node-version")"
+actual_node="$(node --version | sed 's/^v//')"
+if [ "$actual_node" != "$pinned_node" ]; then
+  echo "node $pinned_node is required (found $actual_node). Use nvm/fnm to install and select it." >&2
+  exit 1
+fi
+echo "    node $pinned_node ready"
+
+echo "==> checking corepack/pnpm"
+if ! command -v corepack >/dev/null 2>&1; then
+  echo "corepack is required (ships with Node; run 'corepack enable')." >&2
+  exit 1
+fi
+corepack enable >/dev/null 2>&1 || true
+echo "    corepack ready"
+
+echo "==> checking Docker"
+if ! command -v docker >/dev/null 2>&1; then
+  echo "Docker is required for PostgreSQL and Centrifugo in development." >&2
+  exit 1
+fi
+echo "    docker ready"
+
+echo "==> fetching Cargo dependencies"
+(cd "$repo_root/backend" && cargo fetch --locked)
+
+echo "==> installing web dependencies"
+(cd "$repo_root/web" && pnpm install --frozen-lockfile)
+
+echo "==> bootstrap complete"

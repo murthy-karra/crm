@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Full repository gate. Must pass with no services running (D-016).
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "$script_dir/.." && pwd)"
+
+echo "==> cargo fmt --check"
+(cd "$repo_root/backend" && cargo fmt --all --check)
+
+echo "==> cargo clippy"
+(cd "$repo_root/backend" && cargo clippy --workspace --all-targets --locked -- -D warnings)
+
+echo "==> cargo test"
+(cd "$repo_root/backend" && cargo test --workspace --locked)
+
+echo "==> web lint"
+(cd "$repo_root/web" && pnpm run lint)
+
+echo "==> web typecheck"
+(cd "$repo_root/web" && pnpm run typecheck)
+
+echo "==> web build"
+(cd "$repo_root/web" && pnpm run build)
+
+echo "==> all checks passed"

@@ -26,8 +26,8 @@ metal with Talos/Kubernetes/Cilium, Cloudflare tunnels, provider-neutral AI
 inference with Groq as initial preferred provider) are accepted and must not
 be replaced during ordinary implementation work.
 
-Note: the secrets-manager choice is OPEN (see O-001); do not treat either
-candidate as accepted.
+Note: secrets are a local `.env` file in development (D-013) and OpenBao in
+production (D-014).
 
 ### D-002 — Modular application, not microservices
 
@@ -99,17 +99,83 @@ are rerunnable and idempotent, produce reconciliation results, support delta
 import, avoid silent data loss, and report inaccessible source data.
 (`AGENTS.md` §8)
 
+### D-013 — Development secrets use a local .env file (2026-08-20)
+
+Accepted. Development secrets are stored in a local, gitignored `.env` file
+loaded by the development workflow. No secrets-manager product is integrated
+for development. `.env` files must never be committed; a names-only
+`.env.example` may be committed.
+
+### D-014 — Production secrets manager is OpenBao (2026-08-20)
+
+Accepted. OpenBao is the production secrets and key authority. Infisical is
+not used. Integration happens in a future production-deployment slice; no
+secrets-manager integration exists before that slice. Together with D-013,
+this resolves former open decision O-001 (the OpenBao-vs-Infisical
+documentation conflict).
+
+### D-015 — Event-sourcing scope and PII handling (2026-08-20)
+
+Accepted; resolves O-005. Reconciles the event-sourcing research with D-007
+hybrid persistence:
+
+1. The research document's ten transaction/compliance aggregates (Escrow/
+   TrustLedger, Offer/PurchaseContract, DisclosurePackage, Property/Listing,
+   Licensee/Brokerage, AgencyRelationship, ComplianceCase, CommissionOr
+   Referral, FairHousingReview, RetentionPolicy/LegalHold) are deferred.
+   They regulate activities the product does not perform. Compliance that
+   attaches to activities the product does perform stays in scope at the
+   slice where the activity ships (messaging consent, recording consent,
+   privacy erasure).
+2. Day-one disciplines for all immutable-history tables: standard envelope
+   (actor, on-whose-behalf, origin, occurred_at and recorded_at,
+   correlation IDs); append-only enforced at the database; corrections are
+   fix-forward rows referencing the corrected row, never edits.
+3. History rows are PII-free: they carry person/inquiry IDs only. The
+   Person table (ordinary CRUD, plaintext, searchable per D-007) is the
+   sole correlation of ID to name/contact PII.
+4. Where content inherently is PII (raw lead webhook payloads, migration
+   exports, recordings, future transcripts), it is stored as an encrypted,
+   deletable blob; the immutable record keeps pointer plus content hash.
+   Raw payloads live in a dedicated encrypted `raw_payload` table in
+   PostgreSQL (large media moves to object storage when recordings ship).
+   A payload is stored before parsing, then correlated to its Person/
+   Inquiry; payloads that fail to resolve stay in a visible unresolved
+   queue — never silently unlinked, since unlinked PII cannot be erased.
+5. Erasure: delete the Person correlation row, delete/shred the person's
+   payload and content blobs, and write a redaction event so read models,
+   search indexes, and rebuilds never resurrect the data. History remains
+   intact with orphaned IDs. Deletable-by-design raw payloads are the
+   accepted reconciliation of D-012 raw-source preservation with privacy
+   erasure; the deletion is itself recorded, so there is no silent loss.
+6. No per-person field encryption on the Person table. This is reversible:
+   CRUD columns can be migrated to encrypted-with-blind-index later if
+   compliance demands it.
+7. A written erasure runbook (CRUD rows, blobs, read models, search
+   indexes, logs, backup expiry) is required before the first real
+   design-partner data enters the system.
+8. First history-bearing slice implements exactly four typed fact tables —
+   InquiryReceived, RoutingDecision, AssignmentChanged, StageChanged — not
+   a generic event store or replay framework.
+
 ---
 
 ## Open decisions
 
-### O-001 — Secrets manager (OPEN — documented conflict)
+### O-001 — RESOLVED
 
-`AGENTS.md` §3 names "Local (dev) / OpenBao (prod)" for secrets and keys,
-while `AGENTS.md` §10 and the root README name Infisical as the central
-secret authority. These conflict. Until resolved, implementation work must
-not integrate either product; development uses process-injected environment
-values only. Blocks: any secrets-integration slice.
+Resolved by D-013 (development: local `.env`) and D-014 (production:
+OpenBao).
+
+### O-005 — RESOLVED
+
+Resolved by D-015.
+
+### O-006 — Outbound messaging consent policy (OPEN)
+
+O-002 covers call-recording consent only. Consent policy for outbound SMS/
+email (TCPA, Do-Not-Call scrubbing, quiet hours, opt-out handling) is
+covered by no decision. Blocks: the SMS/outbound-messaging slice.
 
 ### O-002 — Call recording consent policy (OPEN)
 

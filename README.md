@@ -17,7 +17,7 @@ The two primary product goals are:
 - iOS: Swift and SwiftUI
 - Android: Kotlin and Jetpack Compose
 - Authentication: ZITADEL
-- Secrets: unresolved (open decision O-001: OpenBao vs Infisical)
+- Secrets: local `.env` file in development (D-013); OpenBao in production (D-014)
 - Realtime: Centrifugo OSS
 - Mobile push: APNs and FCM
 - Calls and media: LiveKit and Telnyx SIP
@@ -92,7 +92,7 @@ Configuration is injected through the process environment. Root `.env.example` i
 | `CRM_WEB_ALLOWED_HOSTS` | Unset locally | Server-only; one exact active-slot Caddy hostname, never a wildcard |
 | `VITE_API_BASE_URL` | `/api` | Browser-visible, root-relative path |
 
-Never commit a local environment file, secret, token, private key, or realistic credential. Use synthetic development data only. Until a later approved Infisical integration exists, inject sensitive values through an approved process-scoped mechanism. Direct remote database access must use a private path such as SSH port forwarding; do not expose PostgreSQL publicly or place its connection URL in shell history.
+Development secrets are stored in a local, gitignored `.env` file (D-013). Never commit a local environment file, secret, token, private key, or realistic credential. Use synthetic development data only. Direct remote database access must use a private path such as SSH port forwarding; do not expose PostgreSQL publicly or place its connection URL in shell history.
 
 ### Start the applications
 

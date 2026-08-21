@@ -46,7 +46,7 @@ Unless an accepted decision explicitly changes them, use:
 - iOS: Swift and SwiftUI
 - Android: Kotlin and Jetpack Compose
 - Identity provider: ZITADEL
-- Secrets and keys: Local (dev) Openbao(prod)
+- Secrets and keys: local gitignored `.env` file in development (D-013); OpenBao in production (D-014)
 - Realtime delivery: Centrifugo OSS
 - Mobile push: application-owned APNs and FCM integration
 - Calls and media: self-hosted LiveKit with Telnyx SIP
@@ -362,7 +362,11 @@ Do not make routine untracked root SSH mutation the production operating model.
 
 ## 10. Secrets and observability
 
-Use Infisical as the central secret authority.
+Development secrets live in a local, gitignored `.env` file (D-013). A
+names-only `.env.example` may be committed. OpenBao is the production
+secret authority (D-014); its integration belongs to a future
+production-deployment slice, so do not integrate a secrets-manager product
+before then.
 
 Do not commit secrets to Git.
 

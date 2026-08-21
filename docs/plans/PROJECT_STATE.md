@@ -18,22 +18,26 @@ product thesis §16.
 
 ## Last accepted decision
 
-D-001 through D-012 carried forward from the pre-reset iteration and
-recorded in `docs/decisions/DECISION_LOG.md` on 2026-08-20.
+D-015 (2026-08-20): event-sourcing scope resolved — ten transaction/
+compliance aggregates deferred; PII-free history with envelope/append-only/
+fix-forward disciplines; encrypted deletable blobs for inherently personal
+content; erasure via correlation-row deletion plus redaction event. New
+open decision O-006 (outbound messaging consent) registered.
 
 ## Completed work
 
 - 2026-08-20: Repository initialized; initial commit of carried-over
   documents (AGENTS.md, CLAUDE.md, README.md, product thesis, event-sourcing
   research).
-- 2026-08-20: Canonical `docs/` structure created; product thesis moved to
-  `docs/product/`; event-sourcing document classified as research; decision
-  log seeded (accepted D-001–D-012, open O-001–O-005); architecture baseline
-  written; this state file created.
+- 2026-08-20: Documentation bootstrap committed (`e5af54c`): canonical
+  `docs/` structure, decision log (D-001–D-012, O-001–O-005), architecture
+  baseline, this state file.
+- 2026-08-20: D-013 accepted and recorded; AGENTS.md/README secrets
+  statements reconciled; `.gitignore` added.
 
 ## Pending work
 
-1. Commit the documentation bootstrap (awaiting approval).
+1. Commit the D-013/D-014/D-015 decision recordings (awaiting approval).
 2. Plan Slice 000 (repository foundation) with the planner; produce
    `docs/specs/SLICE_000.md`.
 3. Independent review of the Slice 000 plan.
@@ -41,9 +45,8 @@ recorded in `docs/decisions/DECISION_LOG.md` on 2026-08-20.
 
 ## Blocking decisions
 
-None for Slice 000 planning. O-001 (secrets manager conflict:
-OpenBao vs Infisical) blocks any secrets-integration work and should be
-resolved when convenient.
+None for Slice 000. O-006 (outbound messaging consent) blocks the SMS
+slice; O-002 (recording consent) blocks recording features.
 
 ## Safe defaults adopted
 
@@ -61,9 +64,8 @@ Not applicable — no code exists. Documentation-only phase.
 
 ## Next recommended action
 
-Approve the documentation-bootstrap commit, then plan Slice 000 using the
-`crm-planner` subagent.
+Commit the decision recordings, then plan Slice 000.
 
 ## Approval currently required
 
-Commit approval for the documentation bootstrap on `main`.
+Commit approval for the D-013/D-014/D-015 recordings on `main`.

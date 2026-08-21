@@ -41,11 +41,18 @@ Hybrid (D-007):
 - Purpose-built read models for user-facing screens (Person summary, Today,
   timeline, inbox, call history); PostgreSQL remains authoritative.
 
-The event-sourced aggregate research in
-`docs/research/event-sourced-crm-aggregates-and-events.md` informs the
-design of the immutable-history areas (event envelope metadata, two clocks,
-fix-forward corrections, crypto-shredding for erasure) but is not accepted
-architecture; its adoption scope is open decision O-005.
+D-015 settles how the event-sourced research applies: history tables carry
+a standard envelope (actor, on-whose-behalf, origin, occurred_at/
+recorded_at, correlation IDs), are database-enforced append-only with
+fix-forward corrections, and are PII-free — they hold IDs whose only
+correlation to personal data is the CRUD Person table. Inherently personal
+content (raw lead payloads, migration exports, recordings) lives in
+encrypted deletable blobs referenced by pointer + hash. Erasure deletes the
+correlation row and blobs and writes a redaction event; history keeps
+orphaned IDs. The research document's transaction/compliance aggregates are
+deferred. The first history-bearing slice uses four typed fact tables
+(InquiryReceived, RoutingDecision, AssignmentChanged, StageChanged), not a
+generic event store.
 
 ## Realtime and notifications
 
@@ -67,8 +74,9 @@ open (O-002).
 OpenTelemetry instrumentation to OpenObserve. Propagate trace/request/
 correlation IDs and safe actor/Organization/domain IDs. Never log secrets,
 tokens, or unnecessary customer content. Build toward SOC 2 readiness from
-the start (`AGENTS.md` §9). The secrets-manager product is open (O-001);
-until resolved, configuration is process-injected.
+the start (`AGENTS.md` §9). Secrets are a local gitignored `.env` file in
+development (D-013) and OpenBao in production (D-014); OpenBao integration
+belongs to a future production-deployment slice.
 
 ## Contracts
 

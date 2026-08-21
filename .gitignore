@@ -1,0 +1,7 @@
+# Local environment files hold secrets (D-013) and must never be committed.
+.env
+.env.*
+!.env.example
+
+# OS noise
+.DS_Store

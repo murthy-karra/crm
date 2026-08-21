@@ -1,7 +1,20 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api'
+// Loopback dev (and a single-hostname tunnel) use the relative Vite-proxied
+// path. When viewed from an "app.<domain>" tunnel hostname, the API lives
+// on its own "api.<domain>" hostname and must be called directly — the API
+// side must have CRM_CORS_ALLOWED_ORIGIN and CRM_SESSION_COOKIE_DOMAIN set
+// to match (see .env.example).
+function resolveApiBaseUrl(): string {
+  const { hostname, protocol } = window.location
+  if (hostname.startsWith('app.')) {
+    return `${protocol}//api.${hostname.slice('app.'.length)}/api`
+  }
+  return import.meta.env.VITE_API_BASE_URL ?? '/api'
+}
+
+const apiBaseUrl = resolveApiBaseUrl()
 
 interface UserInfo {
   id: string
@@ -31,7 +44,7 @@ const loading = ref(false)
 const checkingSession = ref(true)
 
 async function fetchMembers() {
-  const response = await fetch(`${apiBaseUrl}/organization/members`, { credentials: 'same-origin' })
+  const response = await fetch(`${apiBaseUrl}/organization/members`, { credentials: 'include' })
   if (response.ok) {
     const body = await response.json()
     members.value = body.members
@@ -40,7 +53,7 @@ async function fetchMembers() {
 
 async function loadSession() {
   try {
-    const response = await fetch(`${apiBaseUrl}/me`, { credentials: 'same-origin' })
+    const response = await fetch(`${apiBaseUrl}/me`, { credentials: 'include' })
     if (response.ok) {
       const body = await response.json()
       user.value = body.user
@@ -60,7 +73,7 @@ async function login() {
   try {
     const response = await fetch(`${apiBaseUrl}/session`, {
       method: 'POST',
-      credentials: 'same-origin',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: email.value, password: password.value }),
     })
@@ -82,7 +95,7 @@ async function login() {
 }
 
 async function logout() {
-  await fetch(`${apiBaseUrl}/session`, { method: 'DELETE', credentials: 'same-origin' })
+  await fetch(`${apiBaseUrl}/session`, { method: 'DELETE', credentials: 'include' })
   user.value = null
   organization.value = null
   members.value = []

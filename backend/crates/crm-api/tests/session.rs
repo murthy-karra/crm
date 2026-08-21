@@ -258,3 +258,75 @@ async fn logout_with_cookie_returns_503_and_leaves_cookie_when_database_unreacha
     // stays valid server-side (docs/specs/SLICE_001.md §4).
     assert!(response.headers().get("set-cookie").is_none());
 }
+
+#[tokio::test]
+async fn no_cors_header_when_unconfigured() {
+    // Same-origin loopback dev: no CRM_CORS_ALLOWED_ORIGIN set, so the
+    // response must carry no CORS header at all, even when a browser-like
+    // Origin header is present on the request.
+    let state = AppState::new(&test_config(&[])).unwrap();
+    let app = crm_api::build_app(state);
+
+    let response = app
+        .oneshot(
+            request("GET", "/api/health")
+                .header("origin", "https://app.tarams.org")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert!(response
+        .headers()
+        .get("access-control-allow-origin")
+        .is_none());
+}
+
+#[tokio::test]
+async fn cors_header_present_for_configured_origin_only() {
+    let state = AppState::new(&test_config(&[(
+        "CRM_CORS_ALLOWED_ORIGIN",
+        "https://app.tarams.org",
+    )]))
+    .unwrap();
+    let app = crm_api::build_app(state);
+
+    let allowed = app
+        .clone()
+        .oneshot(
+            request("GET", "/api/health")
+                .header("origin", "https://app.tarams.org")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        allowed
+            .headers()
+            .get("access-control-allow-origin")
+            .unwrap(),
+        "https://app.tarams.org"
+    );
+    assert_eq!(
+        allowed
+            .headers()
+            .get("access-control-allow-credentials")
+            .unwrap(),
+        "true"
+    );
+
+    // A different Origin must not be reflected — CORS must not degrade
+    // into an open allow-any-origin policy.
+    let other = app
+        .oneshot(
+            request("GET", "/api/health")
+                .header("origin", "https://evil.example.com")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert!(other.headers().get("access-control-allow-origin").is_none());
+}

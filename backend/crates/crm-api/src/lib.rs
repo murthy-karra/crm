@@ -5,10 +5,11 @@ pub mod routes;
 pub mod state;
 pub mod telemetry;
 
-use axum::http::HeaderName;
+use axum::http::{HeaderName, HeaderValue, Method};
 use axum::Router;
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
+use tower_http::cors::CorsLayer;
 use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
 use tower_http::trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer};
 use tracing::Level;
@@ -31,7 +32,10 @@ pub fn build_app(state: AppState) -> Router {
         .on_request(DefaultOnRequest::new().level(Level::INFO))
         .on_response(DefaultOnResponse::new().level(Level::INFO));
 
-    Router::new()
+    // Read before `state` moves into `.with_state` below.
+    let cors_allowed_origin = state.cors_allowed_origin.clone();
+
+    let app = Router::new()
         .merge(routes::health::router())
         .merge(routes::session::router())
         .merge(routes::organization::router())
@@ -44,7 +48,29 @@ pub fn build_app(state: AppState) -> Router {
                 ))
                 .layer(trace_layer)
                 .layer(PropagateRequestIdLayer::new(request_id_header)),
-        )
+        );
+
+    // Only present for the cross-subdomain tunnel case (config::Config::
+    // cors_allowed_origin doc comment); same-origin loopback dev adds no
+    // CORS layer at all — no behavior change, not even OPTIONS-preflight
+    // interception — from Slice 001's original posture.
+    match cors_allowed_origin {
+        Some(origin) => {
+            let origin_value = HeaderValue::from_str(&origin)
+                .expect("cors_allowed_origin was already validated by Config::from_source");
+            // AllowOrigin::list (not a bare HeaderValue, which uses
+            // AllowOrigin::exact and echoes the configured origin back
+            // unconditionally) so the header is present only when the
+            // request's own Origin actually matches.
+            let cors_layer = CorsLayer::new()
+                .allow_origin(tower_http::cors::AllowOrigin::list([origin_value]))
+                .allow_credentials(true)
+                .allow_methods([Method::GET, Method::POST, Method::DELETE])
+                .allow_headers([axum::http::header::CONTENT_TYPE]);
+            app.layer(cors_layer)
+        }
+        None => app,
+    }
 }
 
 pub async fn run(config: Config) -> Result<(), BoxError> {

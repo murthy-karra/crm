@@ -1,0 +1,14 @@
+# Local (not dashboard-managed) ingress for the crm-dev tunnel. Contains
+# no secret — the private key lives only in the credentials file below,
+# outside the repo. Two hostnames on one tunnel: app.tarams.org (web dev
+# server) and api.tarams.org (API, called directly by the browser app —
+# see CRM_CORS_ALLOWED_ORIGIN / CRM_SESSION_COOKIE_DOMAIN in .env.example).
+tunnel: 2c5ab577-46b3-4b71-b9bd-610d3894eaaf
+credentials-file: /Users/karrad/.cloudflared/2c5ab577-46b3-4b71-b9bd-610d3894eaaf.json
+
+ingress:
+  - hostname: app.tarams.org
+    service: http://localhost:5173
+  - hostname: api.tarams.org
+    service: http://localhost:3000
+  - service: http_status:404

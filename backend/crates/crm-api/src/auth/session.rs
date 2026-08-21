@@ -122,27 +122,42 @@ pub async fn revoke_by_token(
     Ok(())
 }
 
-pub fn build_cookie(token: String, ttl: Duration, secure: bool) -> Cookie<'static> {
-    Cookie::build((COOKIE_NAME, token))
+/// `domain` is `None` by default (host-only cookie). It is set only for
+/// the cross-subdomain tunnel case (e.g. app.tarams.org's browser calling
+/// api.tarams.org directly), alongside CORS — see `config::Config::
+/// cors_allowed_origin`.
+pub fn build_cookie(
+    token: String,
+    ttl: Duration,
+    secure: bool,
+    domain: Option<&str>,
+) -> Cookie<'static> {
+    let mut builder = Cookie::build((COOKIE_NAME, token))
         .path("/")
         .http_only(true)
         .same_site(SameSite::Lax)
         .secure(secure)
-        .max_age(time::Duration::seconds(ttl.as_secs() as i64))
-        .build()
+        .max_age(time::Duration::seconds(ttl.as_secs() as i64));
+    if let Some(domain) = domain {
+        builder = builder.domain(domain.to_string());
+    }
+    builder.build()
 }
 
-/// A `Set-Cookie` with identical attributes to `build_cookie` and
-/// `Max-Age=0`, so browsers actually match and clear the original cookie
-/// (docs/specs/SLICE_001.md §4).
-pub fn build_clearing_cookie(secure: bool) -> Cookie<'static> {
-    Cookie::build((COOKIE_NAME, ""))
+/// A `Set-Cookie` with identical attributes to `build_cookie` (including
+/// `domain`) and `Max-Age=0`, so browsers actually match and clear the
+/// original cookie (docs/specs/SLICE_001.md §4).
+pub fn build_clearing_cookie(secure: bool, domain: Option<&str>) -> Cookie<'static> {
+    let mut builder = Cookie::build((COOKIE_NAME, ""))
         .path("/")
         .http_only(true)
         .same_site(SameSite::Lax)
         .secure(secure)
-        .max_age(time::Duration::ZERO)
-        .build()
+        .max_age(time::Duration::ZERO);
+    if let Some(domain) = domain {
+        builder = builder.domain(domain.to_string());
+    }
+    builder.build()
 }
 
 #[cfg(test)]
@@ -210,7 +225,12 @@ mod tests {
 
     #[test]
     fn cookie_has_expected_attributes() {
-        let cookie = build_cookie("token-value".to_string(), Duration::from_secs(3600), true);
+        let cookie = build_cookie(
+            "token-value".to_string(),
+            Duration::from_secs(3600),
+            true,
+            None,
+        );
         assert_eq!(cookie.name(), COOKIE_NAME);
         assert_eq!(cookie.path(), Some("/"));
         assert_eq!(cookie.http_only(), Some(true));
@@ -222,13 +242,33 @@ mod tests {
 
     #[test]
     fn cookie_secure_flag_follows_config() {
-        let cookie = build_cookie("token-value".to_string(), Duration::from_secs(3600), false);
+        let cookie = build_cookie(
+            "token-value".to_string(),
+            Duration::from_secs(3600),
+            false,
+            None,
+        );
         assert_eq!(cookie.secure(), Some(false));
     }
 
     #[test]
+    fn cookie_domain_set_when_configured() {
+        // No leading dot: RFC 6265 already implies subdomain matching for
+        // any Domain attribute, and the cookie crate normalizes a leading
+        // dot away, so ".tarams.org" and "tarams.org" are equivalent —
+        // use the modern form to avoid confusing round-trip mismatches.
+        let cookie = build_cookie(
+            "token-value".to_string(),
+            Duration::from_secs(3600),
+            true,
+            Some("tarams.org"),
+        );
+        assert_eq!(cookie.domain(), Some("tarams.org"));
+    }
+
+    #[test]
     fn clearing_cookie_matches_attributes_and_expires_immediately() {
-        let cookie = build_clearing_cookie(true);
+        let cookie = build_clearing_cookie(true, None);
         assert_eq!(cookie.name(), COOKIE_NAME);
         assert_eq!(cookie.path(), Some("/"));
         assert_eq!(cookie.http_only(), Some(true));
@@ -236,5 +276,11 @@ mod tests {
         assert_eq!(cookie.secure(), Some(true));
         assert_eq!(cookie.domain(), None);
         assert_eq!(cookie.max_age(), Some(time::Duration::ZERO));
+    }
+
+    #[test]
+    fn clearing_cookie_domain_matches_when_configured() {
+        let cookie = build_clearing_cookie(true, Some("tarams.org"));
+        assert_eq!(cookie.domain(), Some("tarams.org"));
     }
 }

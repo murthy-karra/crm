@@ -79,6 +79,8 @@ async fn build_router(migrator_pool: &PgPool) -> Router {
         session_secret: config.session_secret,
         session_ttl: config.session_ttl,
         session_cookie_secure: config.session_cookie_secure,
+        session_cookie_domain: config.session_cookie_domain,
+        cors_allowed_origin: config.cors_allowed_origin,
     };
     crm_api::build_app(state)
 }

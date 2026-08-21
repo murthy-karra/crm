@@ -38,6 +38,16 @@ pub struct Config {
     pub session_secret: SessionSecret,
     pub session_ttl: Duration,
     pub session_cookie_secure: bool,
+    /// When set, adds a CORS layer permitting exactly this origin (with
+    /// credentials) — needed only when the browser app and API are served
+    /// from different hostnames (e.g. app.tarams.org calling
+    /// api.tarams.org through the tunnel). Unset means no CORS layer at
+    /// all, which is the same-origin default for loopback dev.
+    pub cors_allowed_origin: Option<String>,
+    /// When set, scopes the session cookie's `Domain` attribute to this
+    /// value instead of leaving it host-only. Only needed alongside
+    /// `cors_allowed_origin` for the same cross-subdomain case.
+    pub session_cookie_domain: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -51,6 +61,8 @@ pub enum ConfigError {
     InvalidSessionTtl(String),
     SessionTtlOutOfBounds(u64),
     InvalidCookieSecure(String),
+    InvalidCorsOrigin(String),
+    InvalidCookieDomain(String),
 }
 
 impl fmt::Display for ConfigError {
@@ -87,6 +99,13 @@ impl fmt::Display for ConfigError {
                 f,
                 "CRM_SESSION_COOKIE_SECURE must be \"true\" or \"false\", got {value}"
             ),
+            ConfigError::InvalidCorsOrigin(value) => write!(
+                f,
+                "CRM_CORS_ALLOWED_ORIGIN must be a bare http(s) origin with no path or trailing slash, got {value}"
+            ),
+            ConfigError::InvalidCookieDomain(value) => {
+                write!(f, "CRM_SESSION_COOKIE_DOMAIN must not be empty or contain whitespace, got {value}")
+            }
         }
     }
 }
@@ -151,6 +170,19 @@ impl Config {
             None => false,
         };
 
+        let cors_allowed_origin = match get("CRM_CORS_ALLOWED_ORIGIN").filter(|v| !v.is_empty()) {
+            Some(value) if is_plausible_origin(&value) => Some(value),
+            Some(value) => return Err(ConfigError::InvalidCorsOrigin(value)),
+            None => None,
+        };
+
+        let session_cookie_domain = match get("CRM_SESSION_COOKIE_DOMAIN").filter(|v| !v.is_empty())
+        {
+            Some(value) if !value.contains(char::is_whitespace) => Some(value),
+            Some(value) => return Err(ConfigError::InvalidCookieDomain(value)),
+            None => None,
+        };
+
         Ok(Config {
             bind_addr,
             database_url,
@@ -158,8 +190,16 @@ impl Config {
             session_secret,
             session_ttl,
             session_cookie_secure,
+            cors_allowed_origin,
+            session_cookie_domain,
         })
     }
+}
+
+fn is_plausible_origin(value: &str) -> bool {
+    (value.starts_with("http://") || value.starts_with("https://"))
+        && !value.contains(char::is_whitespace)
+        && !value.ends_with('/')
 }
 
 #[cfg(test)]
@@ -200,6 +240,52 @@ mod tests {
         assert_eq!(config.database_connect_timeout, Duration::from_millis(2000));
         assert_eq!(config.session_ttl, Duration::from_secs(168 * 3600));
         assert!(!config.session_cookie_secure);
+        assert_eq!(config.cors_allowed_origin, None);
+        assert_eq!(config.session_cookie_domain, None);
+    }
+
+    #[test]
+    fn accepts_valid_cors_origin() {
+        let config = Config::from_source(source(&[(
+            "CRM_CORS_ALLOWED_ORIGIN",
+            "https://app.tarams.org",
+        )]))
+        .unwrap();
+        assert_eq!(
+            config.cors_allowed_origin.as_deref(),
+            Some("https://app.tarams.org")
+        );
+    }
+
+    #[test]
+    fn rejects_cors_origin_with_trailing_slash() {
+        let err = Config::from_source(source(&[(
+            "CRM_CORS_ALLOWED_ORIGIN",
+            "https://app.tarams.org/",
+        )]))
+        .unwrap_err();
+        assert!(matches!(err, ConfigError::InvalidCorsOrigin(_)));
+    }
+
+    #[test]
+    fn rejects_cors_origin_without_scheme() {
+        let err = Config::from_source(source(&[("CRM_CORS_ALLOWED_ORIGIN", "app.tarams.org")]))
+            .unwrap_err();
+        assert!(matches!(err, ConfigError::InvalidCorsOrigin(_)));
+    }
+
+    #[test]
+    fn accepts_valid_cookie_domain() {
+        let config =
+            Config::from_source(source(&[("CRM_SESSION_COOKIE_DOMAIN", ".tarams.org")])).unwrap();
+        assert_eq!(config.session_cookie_domain.as_deref(), Some(".tarams.org"));
+    }
+
+    #[test]
+    fn rejects_cookie_domain_with_whitespace() {
+        let err = Config::from_source(source(&[("CRM_SESSION_COOKIE_DOMAIN", "tarams .org")]))
+            .unwrap_err();
+        assert!(matches!(err, ConfigError::InvalidCookieDomain(_)));
     }
 
     #[test]

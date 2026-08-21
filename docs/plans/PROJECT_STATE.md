@@ -4,23 +4,21 @@ Last updated: 2026-08-20
 
 ## Current phase
 
-Slice 001 implemented, independently reviewed, adversarially tested, and
-fixed on its branch; awaiting user approval before merge to `main`.
+Slice 001 merged to `main` (`587a087`, pushed). A small follow-up
+(dual-hostname CORS/cookie-domain support for the Cloudflare tunnel) is
+implemented and self-verified on its own branch, awaiting commit
+approval.
 
 ## Current slice
 
-Slice 001: identity, tenancy, and database foundation — narrow cut, no
-lead intake. `docs/specs/SLICE_001.md` ACCEPTED 2026-08-20. Implementation
-complete on `slice-001-identity`: migrations harness with `crm_migrator`/
-`crm_app` roles, session/auth core, four HTTP endpoints, seed binary, web
-login UI, 25 service-free tests, 15 DB-backed tests — all passing, after
-two independent reviews found and fixed two real security bugs (see
-Completed work).
+None active (between Slice 001 and Slice 002). The in-flight work is
+infrastructure config, not a product slice: `app.tarams.org` /
+`api.tarams.org` dual-hostname tunnel support on `tunnel-cors-config`.
 
 ## Current branch
 
-`slice-001-identity` (single writer, off `main` at `b6e8764`; no
-worktrees active). Not yet merged.
+`tunnel-cors-config` (single writer, off `main` at `587a087`; no
+worktrees active). Not yet committed.
 
 ## Last accepted decision
 
@@ -105,15 +103,80 @@ extractor.
   differently-named test had promised but not made, a body-based
   org-id-ignored probe, and a real second-logout-call idempotency test —
   15 DB-backed tests total, all passing after the fixes.
+- 2026-08-20: Slice 001 merged to `main` (`587a087`, pushed);
+  `slice-001-identity` deleted.
+- 2026-08-20: Created a dedicated `crm-dev` Cloudflare tunnel (separate
+  from the account's other tunnels — notably an existing `k8s-crm`
+  tunnel with live traffic, deliberately left untouched) after the user
+  chose `app.tarams.org` (browser) / `api.tarams.org` (API) as two
+  separate hostnames with the browser calling the API directly. Added,
+  on `tunnel-cors-config`: two new optional config variables
+  (`CRM_CORS_ALLOWED_ORIGIN`, `CRM_SESSION_COOKIE_DOMAIN`; both unset by
+  default, preserving Slice 001's exact original no-CORS/host-only-cookie
+  behavior for loopback dev and any single-hostname tunnel); a CORS layer
+  added to the API only when configured, using `AllowOrigin::list` (not
+  the single-`HeaderValue` form, which — caught by a new test —
+  unconditionally echoes the configured origin regardless of the
+  request's actual `Origin`, rather than only when it matches); the
+  session cookie's `Domain` attribute now configurable; the web shell
+  now detects an `app.*` hostname at runtime and calls `api.*` directly,
+  leaving loopback/Vite-proxy behavior untouched. 9 new tests (2 config
+  parsing, 2 cookie-domain, 3 CORS behavior at the HTTP level, plus
+  fixing 2 pre-existing cookie tests whose expectations didn't account
+  for the `cookie` crate's RFC 6265 leading-dot normalization). Full
+  suite green (34 unit + 17 integration + 15 DB-backed).
+- 2026-08-21: Live tunnel setup and end-to-end verification, working
+  through real obstacles rather than the originally-planned dashboard
+  flow:
+  - `crm-dev` turned out to be a **locally-managed** tunnel (Cloudflare's
+    dashboard Public Hostname UI only works for dashboard-managed
+    tunnels, and migrating is irreversible); pivoted to a committed
+    `infra/development/cloudflared/config.yml` declaring both ingress
+    rules instead, authenticating via the credentials file `cloudflared
+    tunnel create` already wrote outside the repo — no token needed.
+    `scripts/dev-tunnel` and `.env.example` updated accordingly
+    (`CLOUDFLARED_TUNNEL_TOKEN` removed as unused).
+  - The Access application was created via the Cloudflare API (a
+    dashboard token with "Access: Apps and Policies" Edit scope could
+    create the application but got `auth.forbidden` on both the nested
+    and top-level policy-creation endpoints; the policy was ultimately
+    attached by including it inline in the same `PUT` that updates the
+    application, which the same token *could* do).
+  - **Cloudflare Access scopes its login session per hostname, not per
+    Application** — authenticating at `app.tarams.org` does not also
+    authenticate `api.tarams.org`, even under one Application with one
+    policy, contrary to the original assumption when this design was
+    chosen. Visiting each Access-protected hostname once directly
+    (a real top-level page load) establishes a session for that
+    hostname; only after both are established does the browser's
+    background `fetch()` from `app.*` to `api.*` carry a valid session.
+    Documented for anyone extending this pattern later.
+  - CORS preflight (`OPTIONS`) requests were being intercepted by Access
+    itself (redirected to its login page) before ever reaching the
+    API's own CORS layer; fixed via the Access application's
+    `options_preflight_bypass: true` setting, which lets preflight
+    requests through to the origin.
+  - Found and fixed a real bug while wiring this up: `web/src/App.vue`'s
+    `fetch()` calls all used `credentials: 'same-origin'`, which does
+    not send or store cookies on the genuinely cross-origin `app.*` →
+    `api.*` calls this design requires. Changed to `credentials:
+    'include'` (correct and harmless for the same-origin/loopback case
+    too).
+  - End-to-end login through the tunnel confirmed working by the user
+    after these fixes.
 
 ## Pending work
 
-1. User verification of the Slice 001 walkthrough and commit/merge
-   approval for `slice-001-identity` → `main`.
-2. User-side (whenever convenient, not blocking): fresh-clone walkthrough
-   of Slice 000, and the Cloudflare tunnel one-time dashboard setup with
-   its negative-Access check (now also covering login with
-   `CRM_SESSION_COOKIE_SECURE=true`).
+1. Commit approval for `tunnel-cors-config`, then merge to `main`.
+2. User-side, whenever convenient, not blocking: the Access application's
+   configuration (two hostnames, one policy, `options_preflight_bypass:
+   true`) was created via a series of API calls rather than a
+   reproducible dashboard/IaC flow and isn't visible from the repo —
+   worth documenting more durably (e.g. a short note in the README) or
+   recreating via Terraform/dashboard if this needs to survive account
+   changes.
+3. User-side (whenever convenient, not blocking): fresh-clone walkthrough
+   of Slice 000.
 
 ## Blocking decisions
 
@@ -234,8 +297,10 @@ slice:
 
 ## Next recommended action
 
-Request commit approval for `slice-001-identity`, then merge approval.
+Request commit approval for `tunnel-cors-config`, then merge approval.
+Then hand off the Cloudflare dashboard steps (item 2 above) to the user.
 
 ## Approval currently required
 
-Commit approval for the Slice 001 implementation on `slice-001-identity`.
+Commit approval for the dual-hostname tunnel support on
+`tunnel-cors-config`.

@@ -141,7 +141,12 @@ async fn login(
         }
     }
 
-    let cookie = session::build_cookie(token, state.session_ttl, state.session_cookie_secure);
+    let cookie = session::build_cookie(
+        token,
+        state.session_ttl,
+        state.session_cookie_secure,
+        state.session_cookie_domain.as_deref(),
+    );
     let response_jar = CookieJar::new().add(cookie);
 
     let body = SessionResponse {
@@ -169,7 +174,10 @@ async fn logout(State(state): State<AppState>, jar: CookieJar) -> Result<Respons
             .map_err(|_| ApiError::Unavailable)?;
     }
 
-    let clearing = session::build_clearing_cookie(state.session_cookie_secure);
+    let clearing = session::build_clearing_cookie(
+        state.session_cookie_secure,
+        state.session_cookie_domain.as_deref(),
+    );
     let response_jar = CookieJar::new().add(clearing);
     Ok((StatusCode::NO_CONTENT, response_jar).into_response())
 }

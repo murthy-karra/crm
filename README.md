@@ -89,6 +89,8 @@ Notable defaults and constraints, applied in code:
 | `CRM_SESSION_TTL_HOURS` | `168`, bounded 1–720 | Absolute session expiry |
 | `CRM_SESSION_COOKIE_SECURE` | `false` | Set `true` when using the tunnel; Safari rejects `Secure` cookies over plain `http://127.0.0.1`, so keep it `false` for loopback work in Safari |
 | `CRM_DEV_SEED_PASSWORD` | Required for `dev-seed` | One password for every seeded user; re-hashed on every run, so changing it rotates seeded credentials |
+| `CRM_CORS_ALLOWED_ORIGIN` | Unset (no CORS layer) | Set only for the two-hostname tunnel setup (e.g. `https://app.tarams.org`); the API and browser app are on different hostnames, so the browser's cross-origin fetch needs an explicit allow-list entry |
+| `CRM_SESSION_COOKIE_DOMAIN` | Unset (host-only cookie) | Set alongside `CRM_CORS_ALLOWED_ORIGIN` (e.g. `tarams.org`) so the session cookie is sent to both hostnames |
 | `CRM_WEB_BIND_ADDR` | `127.0.0.1` | Loopback only |
 | `CRM_WEB_PORT` | `5173` | |
 | `CRM_WEB_API_PROXY_TARGET` | `http://127.0.0.1:3000` | Loopback HTTP only |
@@ -173,11 +175,21 @@ This exercises the full session lifecycle, tenant isolation between two Organiza
 
 ### External connectivity (Cloudflare tunnel)
 
-One-time setup in the Cloudflare dashboard for `tarams.org` (Zero Trust):
+This project uses a dedicated tunnel, `crm-dev`, separate from any other tunnel on the account (e.g. a production `k8s-crm` tunnel) — never point dev traffic at a tunnel you don't know the purpose of.
 
-1. Create a tunnel and copy its token into `CLOUDFLARED_TUNNEL_TOKEN` in `.env`.
-2. Add a Public Hostname on the tunnel pointing at `http://127.0.0.1:5173` (the web dev server; the API is reached only through its `/api` proxy).
-3. Create a Cloudflare Access application protecting that hostname, with a long-lived session duration.
+`crm-dev` is a **locally-managed** tunnel: its ingress rules live in the committed `infra/development/cloudflared/config.yml`, not the Cloudflare dashboard. (Dashboard-managed ingress is a one-way migration Cloudflare warns is irreversible; a local config file is simpler and keeps the setup reproducible from the repo, consistent with how Centrifugo and the Postgres roles are configured.) It authenticates via the credentials file `cloudflared tunnel create` writes outside the repo (`~/.cloudflared/<tunnel-id>.json`) — no token in `.env`.
+
+One-time setup:
+
+1. `cloudflared tunnel create crm-dev` (already done for this repo's dev environment; skip if `cloudflared tunnel list` already shows it).
+2. Route DNS for both hostnames to the tunnel:
+   ```sh
+   cloudflared tunnel route dns crm-dev app.tarams.org
+   cloudflared tunnel route dns crm-dev api.tarams.org
+   ```
+3. `infra/development/cloudflared/config.yml` already declares the ingress: `app.tarams.org` → `localhost:5173` (web dev server), `api.tarams.org` → `localhost:3000` (API, called directly from the browser — see `CRM_CORS_ALLOWED_ORIGIN` above). If the tunnel ID or your username differ, update the `tunnel:` and `credentials-file:` lines to match `cloudflared tunnel list` and your `~/.cloudflared/` path.
+4. In the Cloudflare Zero Trust dashboard (**Access → Applications**), create **one** Access application covering **both** `app.tarams.org` and `api.tarams.org`, with a long-lived session duration and an Allow policy for your email. Enable **`options_preflight_bypass`** on the application — without it, Access intercepts the browser's CORS preflight (`OPTIONS`) requests to `api.tarams.org` before they ever reach the API, and the login form fails with a CORS error.
+5. Set `CRM_CORS_ALLOWED_ORIGIN=https://app.tarams.org`, `CRM_SESSION_COOKIE_DOMAIN=tarams.org`, and `CRM_WEB_ALLOWED_HOSTS=app.tarams.org` in `.env`.
 
 Then run:
 
@@ -185,7 +197,9 @@ Then run:
 ./scripts/dev-tunnel
 ```
 
-Before trusting the dev hostname, verify Access is actually in front of it: from a fresh private browser window (or `curl` with no session cookie), a request to the dev hostname must land on the Cloudflare Access challenge, not the application. Only after that negative check passes is the tunnel considered verified.
+Before trusting either hostname, verify Access is actually in front of both: from a fresh private browser window (or `curl` with no session cookie), a request to `app.tarams.org` **and** to `api.tarams.org` must each land on the Cloudflare Access challenge, not the application. Only after both negative checks pass is the tunnel considered verified.
+
+**Access sessions are scoped per hostname, not per Application** — logging in at `app.tarams.org` does not also authenticate `api.tarams.org`, even though they share one Application and one policy. Visit each hostname directly once (a real top-level page load, e.g. `https://api.tarams.org/api/health`) to establish its own session; only then will the browser's background `fetch()` calls from `app.*` to `api.*` carry a valid session and succeed.
 
 Set `CRM_SESSION_COOKIE_SECURE=true` before logging in through the tunnel, and confirm the app's own login still works once you're past Access — the two are independent layers.
 

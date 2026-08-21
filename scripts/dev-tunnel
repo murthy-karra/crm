@@ -1,26 +1,19 @@
 #!/usr/bin/env bash
-# Runs the Cloudflare tunnel for the web dev server (D-016). The tunnel,
-# DNS route, and Access application are one-time Cloudflare dashboard
-# steps documented in the README — this script only runs `cloudflared`.
+# Runs the Cloudflare tunnel for the web dev server and API (D-016).
+# crm-dev is a locally-managed tunnel: its ingress lives in
+# infra/development/cloudflared/config.yml (no secret — auth is the
+# credentials file cloudflared already wrote outside the repo at tunnel
+# creation time), not the Cloudflare dashboard or a token. The DNS route,
+# and the Access application, are one-time Cloudflare steps documented in
+# the README.
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/.." && pwd)"
-env_file="$repo_root/.env"
+config_file="$repo_root/infra/development/cloudflared/config.yml"
 
-if [ ! -f "$env_file" ]; then
-  echo ".env not found at repo root. Copy .env.example to .env and fill in values first." >&2
-  exit 1
-fi
-
-# Read only the one variable this script needs, in a subshell, so the
-# rest of .env (database password, API keys, session secret, ...) is
-# never exported into cloudflared's process environment.
-tunnel_token="$(set -a && source "$env_file" && set +a && printf '%s' "${CLOUDFLARED_TUNNEL_TOKEN:-}")"
-
-if [ -z "$tunnel_token" ]; then
-  echo "CLOUDFLARED_TUNNEL_TOKEN is not set in .env." >&2
-  echo "Create the tunnel, DNS route, and Access application in the Cloudflare dashboard first (see README)." >&2
+if [ ! -f "$config_file" ]; then
+  echo "Missing $config_file — see README 'External connectivity' for setup." >&2
   exit 1
 fi
 
@@ -29,10 +22,7 @@ if ! command -v cloudflared >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "==> starting cloudflared tunnel"
-echo "==> before trusting the dev hostname, verify an unauthenticated request hits the Cloudflare Access challenge, not the app"
+echo "==> starting cloudflared tunnel (crm-dev)"
+echo "==> before trusting either hostname, verify an unauthenticated request to BOTH app.tarams.org and api.tarams.org hits the Cloudflare Access challenge, not the app"
 
-# The token travels via one scoped environment variable, never argv, so
-# it never appears in the process list (ps).
-export TUNNEL_TOKEN="$tunnel_token"
-exec cloudflared tunnel run
+exec cloudflared tunnel --config "$config_file" run

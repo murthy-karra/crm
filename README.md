@@ -17,7 +17,7 @@ The two primary product goals are:
 - iOS: Swift and SwiftUI
 - Android: Kotlin and Jetpack Compose
 - Authentication: ZITADEL
-- Secrets: Infisical
+- Secrets: unresolved (open decision O-001: OpenBao vs Infisical)
 - Realtime: Centrifugo OSS
 - Mobile push: APNs and FCM
 - Calls and media: LiveKit and Telnyx SIP
@@ -46,7 +46,7 @@ The two primary product goals are:
 
 ## Current State
 
-The repository was intentionally reset and rebuilt with an initial decision log, product thesis, architecture baseline, and project-lead workflow. Slice 000 adds the first executable repository foundation without CRM product behavior.
+The repository was reset again on 2026-08-20 and currently contains documentation only: the decision log, product thesis, architecture baseline, event-sourcing research, and project-lead workflow. No application code, scripts, or contracts exist yet; the Development sections below describe the target foundation that Slice 000 will rebuild and do not work in this repository today.
 
 Current operational status and the next approval gate are recorded in `docs/plans/PROJECT_STATE.md`.
 

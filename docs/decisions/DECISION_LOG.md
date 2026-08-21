@@ -158,6 +158,39 @@ hybrid persistence:
    InquiryReceived, RoutingDecision, AssignmentChanged, StageChanged — not
    a generic event store or replay framework.
 
+### D-016 — Development environment (2026-08-20)
+
+Accepted. All development happens on the developer's MacBook Pro (M1 Max,
+64 GB, macOS/Apple Silicon), replacing the previous shared-Linux-server/
+Caddy model:
+
+1. The Rust/Axum API and the Vite/Vue dev server run as local services.
+2. PostgreSQL and Centrifugo run as local Docker containers.
+3. Development authentication is locally stored username/password — no
+   ZITADEL in dev. It must sit behind the same session/identity
+   abstraction that ZITADEL fills in production; no second auth or
+   mutation path may be baked in.
+4. External connectivity uses a Cloudflare tunnel on `tarams.org` with
+   real certificates. Cloudflare Access (long-lived sessions) protects the
+   dev hostname. Future webhook endpoints get a separate hostname that
+   bypasses Access and is verified by the application (signatures/tokens).
+   Access is dev scaffolding for the customer-facing surface; keeping it
+   for internal/admin surfaces in production is a later decision.
+5. LiveKit SFU and Egress run on separate boxes with public IPs and full
+   UDP access when the calling slice arrives; media never routes through
+   the tunnel (consistent with AGENTS.md §7).
+6. APNs and FCM developer accounts exist and are used at the mobile
+   slices.
+7. `.env.example` carries a names-only inventory of every required key
+   (Groq, tunnel token, etc.) per D-013.
+8. Production remains the Kubernetes cluster per D-001; no development
+   choice here constrains production topology.
+9. No CI for now; checks run locally. No OpenObserve for now; development
+   uses console logging (OpenTelemetry instrumentation still lands in code
+   per AGENTS.md §10 so a collector can be added without rework).
+10. A committed names-only `.env.example` is the single inventory of every
+    required environment variable.
+
 ---
 
 ## Open decisions

@@ -54,7 +54,7 @@ Current operational status and the next approval gate are recorded in `docs/plan
 
 ### Supported environment and prerequisites
 
-Development assumes a Linux or macOS environment with Git, curl, a POSIX shell, and standard Unix utilities. Application processes bind only to loopback addresses. On the shared Linux development server, Caddy is the public HTTPS/WSS entry point; PostgreSQL and internal administration endpoints remain private.
+Development happens on a local macOS (Apple Silicon) machine per D-016: the API and web dev server run as local services; PostgreSQL and Centrifugo run in Docker; authentication is local username/password behind the production auth abstraction; external connectivity uses a Cloudflare tunnel on `tarams.org` protected by Cloudflare Access. Sections below that reference the former shared Linux server, Caddy, or worktree slots predate D-016 and will be rewritten by Slice 000.
 
 Install the pinned prerequisites before bootstrapping:
 

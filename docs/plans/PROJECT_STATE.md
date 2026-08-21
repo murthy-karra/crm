@@ -18,11 +18,11 @@ product thesis §16.
 
 ## Last accepted decision
 
-D-015 (2026-08-20): event-sourcing scope resolved — ten transaction/
-compliance aggregates deferred; PII-free history with envelope/append-only/
-fix-forward disciplines; encrypted deletable blobs for inherently personal
-content; erasure via correlation-row deletion plus redaction event. New
-open decision O-006 (outbound messaging consent) registered.
+D-016 (2026-08-20): development environment is the developer's Mac (M1
+Max) — API and Vite as local services, PostgreSQL and Centrifugo in
+Docker, local username/password auth behind the production auth
+abstraction, Cloudflare tunnel on tarams.org protected by Cloudflare
+Access. Production remains Kubernetes per D-001.
 
 ## Completed work
 
@@ -37,9 +37,8 @@ open decision O-006 (outbound messaging consent) registered.
 
 ## Pending work
 
-1. Commit the D-013/D-014/D-015 decision recordings (awaiting approval).
-2. Plan Slice 000 (repository foundation) with the planner; produce
-   `docs/specs/SLICE_000.md`.
+1. Plan Slice 000 (repository foundation, targeting the D-016 dev
+   environment) with the planner; produce `docs/specs/SLICE_000.md`.
 3. Independent review of the Slice 000 plan.
 4. Implementation gate approval for Slice 000.
 
@@ -68,4 +67,4 @@ Commit the decision recordings, then plan Slice 000.
 
 ## Approval currently required
 
-Commit approval for the D-013/D-014/D-015 recordings on `main`.
+None. Next gate: approval of the Slice 000 specification.

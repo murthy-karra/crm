@@ -4,29 +4,38 @@ Last updated: 2026-08-21
 
 ## Current phase
 
-Slice 001 merged (`587a087`). The dual-hostname Cloudflare tunnel
-follow-up is also merged and pushed (`3b6df76`), live-verified end to
-end — the user logged in through `https://app.tarams.org` successfully.
-Ready to plan Slice 002.
+Slice 002 (lead intake) specified and **user-approved** 2026-08-21
+(`docs/specs/SLICE_002.md`, ACCEPTED). UI style reference accepted
+(`docs/design/UI_STYLE.md`). At the implementation gate; no code
+written yet.
 
 ## Current slice
 
-None active. Next up: Slice 002 (lead intake — Person, Inquiry, the four
-D-015 fact tables), per `docs/specs/SLICE_000.md` §11 /
-`docs/specs/SLICE_001.md` §12.
+Slice 002 — lead intake: Person + contact methods, Inquiry with preserved
+source attribution, encrypted `raw_payload` + visible unresolved queue,
+the four D-015 fact tables (append-only via grants + trigger), the three
+typed commands (`ReceiveInquiry`, `AssignPerson`, `ChangePersonStage`),
+`PersonVisibilityScope`, the D-017 frontend stack with five screens, and
+sqlx offline mode. Not yet implemented.
 
 ## Current branch
 
-`main` (single writer; no worktrees active). Both
-`slice-001-identity` and `tunnel-cors-config` are merged and deleted.
+`main` (single writer; no worktrees active). Uncommitted: D-017/D-018/
+D-019 in `DECISION_LOG.md`, `docs/specs/SLICE_002.md`, this file.
 
 ## Last accepted decision
 
-Slice 001 scope and abstraction decisions (2026-08-20, user-accepted):
-narrow cut — no lead intake, all four D-015 fact tables deferred to
-Slice 002; no `IdentityProvider` trait — the D-016 §3 seam is the
-`local_credential` table + one session mechanism + one `AuthContext`
-extractor.
+2026-08-21, user-accepted:
+- D-017 — web frontend stack: Tailwind, PrimeVue (unstyled), TanStack
+  Table, TanStack Query; Centrifugo events drive Query invalidation.
+- D-018 — production ingress: in-cluster `cloudflared` → Cilium Gateway
+  API, `HTTPRoute` per hostname, no separate ingress controller.
+- D-019 — Person stages are an Organization-scoped table seeded with
+  Follow Up Boss's nine defaults, not a fixed enum.
+- Slice 002 scope (not log entries): raw-payload key is one `.env`
+  value, no DEKs/rotation; routing is "assign to a named member", no
+  rules engine; list view + frontend stack + Vue Router land in 002;
+  sqlx offline mode adopted in 002.
 
 ## Completed work
 
@@ -164,11 +173,37 @@ extractor.
     too).
   - End-to-end login through the tunnel confirmed working by the user
     after these fixes.
+- 2026-08-21: Tunnel work merged to `main` (`3b6df76`, `122c7e4`).
+- 2026-08-21: Frontend stack (D-017), production ingress (D-018), and
+  stage model (D-019) decided with the user and logged.
+- 2026-08-21: Slice 002 planned with `crm-planner` (scope decisions
+  fixed by the user first), plan independently reviewed by
+  `crm-reviewer` (17 findings — notably: a per-contact-value advisory
+  lock would miss mixed email+phone payloads, so intake takes one
+  per-Organization lock; sqlx macros would silently compile online
+  against the drifted dev DB via dotenvy's parent-directory walk, so
+  `SQLX_OFFLINE` is defaulted through a cargo config; a plain SHA-256 of
+  a tiny PII payload in an immutable row is a dictionary oracle after
+  erasure, so the content hash is a keyed HMAC; the planner's
+  Organization-wide `/inquiries` list was scope creep and is cut),
+  spec drafted, spec re-reviewed by the same reviewer (12 further
+  items — notably: the cargo config must live at the repo root because
+  cargo walks from cwd not `--manifest-path`; the `sqlx-prepare` script
+  as first written was circular and now migrates the throwaway DB with
+  the CLI; intake's four facts share both `occurred_at` and
+  `recorded_at` so history ordering needs an explicit `kind_rank`; the
+  trigger test must hit a real row or passes vacuously; history `detail`
+  shapes and `display_name` derivation were unspecified for the
+  frontend lane). All findings applied as safe defaults; the reviewer
+  classified zero items as blocking decisions.
 
 ## Pending work
 
-1. Commit approval for `tunnel-cors-config`, then merge to `main`.
-2. User-side, whenever convenient, not blocking: the Access application's
+1. Implementation-gate approval for Slice 002 (spec §15 lanes).
+2. User-side, before Lane A step 2: `cargo install sqlx-cli --version
+   0.8.6 --locked --no-default-features --features postgres,rustls`
+   (machine currently has 0.9.0; spec §11).
+3. User-side, whenever convenient, not blocking: the Access application's
    configuration (two hostnames, one policy, `options_preflight_bypass:
    true`) was created via a series of API calls rather than a
    reproducible dashboard/IaC flow and isn't visible from the repo —
@@ -297,10 +332,11 @@ slice:
 
 ## Next recommended action
 
-Plan Slice 002 (lead intake) with the `crm-planner` subagent, following
-the same plan → review → spec → review → approve → implement → review →
-test → commit → merge flow used for Slices 000 and 001.
+Implement Slice 002 per spec §15: Lane A (backend) on `slice-002-intake`
+first through step 2 (migrations, offline-mode tooling), then Lane B
+(frontend) on `slice-002-web` as a worktree for the shell restyle;
+screens after endpoints land. Migrations owned by Lane A only.
 
 ## Approval currently required
 
-None right now. Next gate: approval of the Slice 002 scope/plan.
+Implementation gate: "Proceed with implementation?" for Slice 002.

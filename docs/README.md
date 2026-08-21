@@ -23,6 +23,8 @@ If two authoritative files still conflict, stop and report the conflict before i
 - `decisions/` — accepted decisions and unresolved decision register
 - `plans/` — implementation plans and `PROJECT_STATE.md` (current operational status)
 - `specs/` — vertical-slice specifications
+- `design/` — accepted UI style reference (`UI_STYLE.md`) and the sample
+  screens it was derived from; binds the web client, subordinate to specs
 - `tasks/` — bounded implementation task briefs
 - `research/` — competitor and technical research; not accepted policy
 

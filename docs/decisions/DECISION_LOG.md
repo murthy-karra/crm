@@ -191,6 +191,66 @@ Caddy model:
 10. A committed names-only `.env.example` is the single inventory of every
     required environment variable.
 
+### D-017 — Web frontend styling and data stack (2026-08-21)
+
+Accepted. The Vue 3 web client (D-001) uses:
+
+1. Tailwind CSS for styling.
+2. PrimeVue in unstyled mode (Tailwind pass-through) for standard interactive
+   components: forms, modals, overlays, date pickers, autocomplete.
+3. TanStack Table (headless) for CRM data grids, rather than PrimeVue's
+   built-in DataTable. CRM tables need heavy per-view customization (inline
+   edit, bulk actions, saved/custom views) that a headless table supports
+   more directly than a fixed component.
+4. TanStack Query owns all server state (fetching, caching, invalidation),
+   replacing ad hoc `fetch` + `ref` calls.
+5. Centrifugo realtime events (D-011) trigger TanStack Query cache
+   invalidation/updates and never carry authoritative state themselves.
+   Reconnect recovery is a TanStack Query refetch, consistent with D-011 and
+   `AGENTS.md` §6.1.
+
+### D-018 — Production ingress: Cloudflare Tunnel to Cilium Gateway (2026-08-21)
+
+Accepted. In the OVH/Talos/Kubernetes/Cilium production cluster (D-001):
+
+1. `cloudflared` runs in-cluster as a Deployment (2+ replicas), not a single
+   local process; Cloudflare's edge load-balances and fails over across
+   whichever replicas are connected.
+2. Credentials are a Kubernetes Secret sourced from OpenBao (D-014), using
+   token-based `cloudflared tunnel run --token`, not a mounted credentials
+   file (the model the locally-managed dev tunnel uses).
+3. cloudflared's tunnel ingress routes every hostname to a single Cilium
+   Gateway API entry point (a `Gateway` Service), rather than one ingress
+   rule per backend Service. No separate nginx/Traefik ingress controller is
+   introduced.
+4. Host-based routing (app hostname, api hostname, future webhook hostname)
+   is implemented as `HTTPRoute` resources against that `Gateway`, not in
+   cloudflared's own config.
+5. TLS terminates at Cloudflare's edge; cloudflared-to-Gateway traffic is
+   internal and does not require its own public certificate. Origin mTLS is
+   a possible later hardening step, not required now.
+6. Prerequisite: Cilium's Gateway API support (Gateway API CRDs,
+   `gatewayAPI.enabled=true`) must be enabled during cluster bootstrap.
+7. LiveKit media continues to bypass this path entirely (D-016 item 5,
+   `AGENTS.md` §7); it is unaffected by this decision.
+
+### D-019 — Person stages are a per-Organization list, not a fixed enum (2026-08-21)
+
+Accepted. Person stages are rows in an Organization-scoped `stage` table,
+not a hardcoded Rust enum. `StageChanged` facts (D-015 §8) reference a
+`stage_id`; the application validates that the stage belongs to the actor's
+Organization (D-004).
+
+Rationale: Follow Up Boss — the reference product and the initial
+customer's current system — lets teams rename, reorder, and add stages, so a
+fixed vocabulary would lose migrated data (D-012) and force a rewrite of
+immutable history (D-015 §2) the first time a custom stage appears.
+
+Each Organization is seeded with Follow Up Boss's nine defaults, in order:
+Lead, Hot Prospect, Nurture, Active Client, Pending, Closed, Past Client,
+Sphere, Trash. No stage-administration UI ships with the first slice;
+editing stages is a later broker-administration feature.
+
 ---
 
 ## Open decisions

@@ -37,10 +37,7 @@ Access. Production remains Kubernetes per D-001.
 
 ## Pending work
 
-1. Plan Slice 000 (repository foundation, targeting the D-016 dev
-   environment) with the planner; produce `docs/specs/SLICE_000.md`.
-3. Independent review of the Slice 000 plan.
-4. Implementation gate approval for Slice 000.
+1. Implementation gate approval for Slice 000 (spec ACCEPTED 2026-08-20).
 
 ## Blocking decisions
 
@@ -67,4 +64,4 @@ Commit the decision recordings, then plan Slice 000.
 
 ## Approval currently required
 
-None. Next gate: approval of the Slice 000 specification.
+Implementation gate for Slice 000 ("Proceed with implementation?").

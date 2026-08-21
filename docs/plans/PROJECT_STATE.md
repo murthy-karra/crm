@@ -4,20 +4,20 @@ Last updated: 2026-08-20
 
 ## Current phase
 
-Slice 000 implemented and self-verified on its branch; awaiting user
-verification/approval before merge to `main`.
+Slice 000 merged to `main` (`e5182d1`, pushed) with user approval;
+Slice 001 planning in progress.
 
 ## Current slice
 
-Slice 000: executable repository foundation (workspace layout, scripts,
-checks), no CRM product behavior, per the product thesis §16 and
-`docs/specs/SLICE_000.md`. Implementation complete; all spec-required
-checks pass locally.
+Slice 001: identity, tenancy, and database foundation — narrow cut, no
+lead intake. `docs/specs/SLICE_001.md` ACCEPTED 2026-08-20 (independently
+reviewed, 14 findings applied, user-approved). Awaiting the
+implementation gate.
 
 ## Current branch
 
-`slice-000-foundation` (single writer, off `main` at `b3bd051`; no
-worktrees active). Not yet merged.
+`main` (single writer; no worktrees active). The merged
+`slice-000-foundation` branch has been deleted.
 
 ## Last accepted decision
 
@@ -65,10 +65,10 @@ Access. Production remains Kubernetes per D-001.
 
 ## Pending work
 
-1. User verification of the Slice 000 walkthrough (§1 of the spec) and
-   merge approval for `slice-000-foundation` → `main`.
-2. Plan Slice 001 (database foundation, session/identity abstraction,
-   lead-intake substrate per spec §11) after merge.
+1. Implementation gate approval for Slice 001.
+2. User-side (whenever convenient, not blocking): fresh-clone walkthrough
+   of Slice 000, and the Cloudflare tunnel one-time dashboard setup with
+   its negative-Access check.
 
 ## Blocking decisions
 
@@ -142,10 +142,9 @@ slice:
 
 ## Next recommended action
 
-User runs (or asks for a walked-through) the fresh-clone verification and
-the tunnel negative-Access check, then approves merging
-`slice-000-foundation` into `main`.
+Implementation gate for Slice 001, then implement on
+`slice-001-identity`.
 
 ## Approval currently required
 
-Merge approval for `slice-000-foundation` → `main`.
+Implementation gate for Slice 001 ("Proceed with implementation?").

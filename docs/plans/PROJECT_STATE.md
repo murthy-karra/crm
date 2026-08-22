@@ -4,18 +4,19 @@ Last updated: 2026-08-22
 
 ## Current phase
 
-Slice 004 (Administration) **planned; spec awaiting user approval**
-(2026-08-22). `docs/specs/SLICE_004.md` is DRAFT: `crm-planner` pass →
-D-026/D-027/O-009 recorded → spec drafted → `crm-reviewer` pass (19
-findings, all applied; verdict "ready with amendments", none needing a
-user decision). Next: user approval of SLICE_004 (including its §14
-safe defaults and §5 declared contract changes to SLICE_001/002), then
-lane briefs `docs/tasks/SLICE_004_LANE_A.md` / `_LANE_B.md` and the
-implementation gate.
+Slice 004 (Administration) **approved; awaiting the implementation
+gate** (2026-08-22). `docs/specs/SLICE_004.md` is APPROVED; lane briefs
+`docs/tasks/SLICE_004_LANE_A.md` (backend, owns the migration; branch
+`slice-004-admin`) and `docs/tasks/SLICE_004_LANE_B.md` (web; branch
+`slice-004-web` in a worktree) are written. Pointer lines added to
+SLICE_001 §3/§4 and SLICE_002 §2 for the declared contract changes.
+Next: the user's "Proceed with implementation?" approval, then run the
+two lanes (the user intends a separate session with a faster model —
+the handoff is entirely in the repository).
 
 ## Current slice
 
-Slice 004 — Administration — `docs/specs/SLICE_004.md` (DRAFT, reviewed).
+Slice 004 — Administration — `docs/specs/SLICE_004.md` (APPROVED).
 Platform admin (membership-free, CLI-bootstrapped allowlist), membership
 role + status, one invitation mechanism (token in body, never a URL),
 last-active-admin invariant under a keyed advisory lock, member
@@ -580,9 +581,38 @@ slice:
 
 ## Next recommended action
 
-**Approve SLICE_004** (read §14 safe defaults and §5 declared contract
-changes), then the coordinator writes the two lane briefs and presents
-the implementation gate.
+Implement Slice 004. Handoff lives in the repository: SLICE_004
+(APPROVED) plus `docs/tasks/SLICE_004_LANE_A.md` and `_LANE_B.md`.
+
+Implementation gate (AGENTS.md §13):
+- Outcome: SLICE_004 §1 steps 1–10.
+- Changes: one migration `20260823000001_administration.sql`;
+  `auth/{session,context}.rs`, `routes/{session,organization}.rs`, new
+  `routes/{invitations,platform}.rs`, `domain/admin/*`, `domain/stage.rs`
+  doc, `domain/envelope.rs` (`Origin::{Platform,Cli}`), `error.rs`,
+  `realtime/publisher.rs` (+ `disconnect_user`, `Disabled`), `config.rs`,
+  `lib.rs` (CORS `PUT`), new `bin/crm-admin.rs`, delete `bin/seed.rs`,
+  `tests/common/mod.rs` rewrite, new tests, `.sqlx/`;
+  `scripts/dev-bootstrap` (replaces `dev-seed`), `check-db`,
+  `.env.example`, README; `web/src/{router,App}`, `AppShell`, `api/*`,
+  new views `InviteView`, `MembersView`, `PlatformOrganizationsView`,
+  `PlatformOrganizationView`, Vitest tests.
+- Exclusions: SLICE_004 §12.
+- Branches: `slice-004-admin` (main checkout) and `slice-004-web`
+  (worktree `../crm-web`); B merges after A.
+- Migration ownership: Lane A only.
+- Checks: `./scripts/check`; `./scripts/check-db` with `dev-services up`;
+  web lint/typecheck/test/build; `dev-bootstrap` ×3 + `demo-leads`; the
+  §1 browser walkthrough through the tunnel.
+- Risks: the `session::verify` rewrite (every route's security; the
+  existing SLICE_001 session tests must stay green); the
+  `tests/common` fixture rewrite touching every DB test; the
+  last-admin advisory-lock race; Centrifugo `disconnect` API shape;
+  `organization_name_lower_idx` failing on a dev DB with duplicate names
+  (reset with `dev-services down && up`).
+- Environment: local dev DB has Slice-002/003 test rows; `dev-bootstrap`
+  is idempotent over the seeded identities but the new unique name
+  index needs no duplicate Organization names.
 
 Previous (Slice 003): Implement Slice 003. The user intends to run implementation in a
 separate session with a faster model, so the handoff lives entirely in

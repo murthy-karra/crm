@@ -1,8 +1,9 @@
 # Slice 004 — Administration
 
-Status: DRAFT — planner pass and independent review complete (19
-findings, all applied as safe defaults or implementation notes; none
-blocking); pending user approval.
+Status: APPROVED (user, 2026-08-22; planner pass, then independent
+review — 19 findings, all applied as safe defaults or implementation
+notes, none blocking; §14 safe defaults and §5 declared contract changes
+accepted as written).
 Builds on: Slice 003 (`main` at `50bcd04` + D-027 docs commit `9f3b9b4`).
 Targets: D-003 (roles are application-enforced facts), D-016 §3 (local
 auth is a seam, identity federation parked), D-021 (administration

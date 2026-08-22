@@ -103,6 +103,11 @@ concerns customer data, which does not exist yet).
 
 ## 3. Session and identity
 
+> Amended by SLICE_004 §3/§5 (declared change, AGENTS.md §11): a platform
+> admin with zero active memberships logs in with no active Organization
+> (`user_session.active_organization_id` nullable); an inactive
+> membership is not a membership for login or session verification.
+
 **No `IdentityProvider` trait** (user-accepted). The durable seam is:
 
 1. **First-party server-side sessions**, provider-neutral. Any
@@ -187,6 +192,13 @@ for all seeded users from `CRM_DEV_SEED_PASSWORD` (required; re-hashed on
 every run so rotation works) — never argv, never printed.
 
 ## 4. HTTP contracts
+
+> Amended by SLICE_004 §5 (declared change, AGENTS.md §11): the
+> `POST /api/session` / `GET /api/me` body's `organization` is nullable
+> and gains `role`, and a top-level `platform_admin: bool` is added;
+> `GET /api/organization/members` items gain `role`, `status`,
+> `joined_at`, `assigned_people_count`. SLICE_004 is the contract of
+> record for those fields.
 
 All JSON; every response carries `x-request-id` via existing middleware;
 unknown routes stay 404. Error envelope: `{"error": "<code>"}` with the

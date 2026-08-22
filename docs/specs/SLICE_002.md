@@ -60,6 +60,11 @@ On the D-016 Mac (and through the tunnel):
 
 ## 2. Domain and schema
 
+> Amended by SLICE_004 §2 (declared change, AGENTS.md §11): default
+> `stage` rows are seeded through the application path
+> (`CreateOrganization` → `stage::seed_defaults`, `crm_app` INSERT
+> granted); "never by the application" below is superseded.
+
 ### Classification (D-007, D-015)
 
 - **Erasable CRUD set** (plaintext, D-015 §3/§6): `person`,

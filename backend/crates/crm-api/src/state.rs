@@ -1,8 +1,10 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use sqlx::postgres::{PgPool, PgPoolOptions};
 
 use crate::config::{Config, RawPayloadKey, RealtimeTokenSecret, SessionSecret};
+use crate::operator::OperatorRuntime;
 use crate::realtime::{CentrifugoTransport, Publisher};
 
 #[derive(Clone)]
@@ -19,6 +21,10 @@ pub struct AppState {
     pub realtime_token_ttl: Duration,
     pub invitation_ttl: Duration,
     pub publisher: Publisher,
+    /// `None` when no provider is configured: `POST /api/operator/turns`
+    /// answers 503 `operator_disabled` and nothing else changes
+    /// (docs/specs/SLICE_005.md §9).
+    pub operator: Option<Arc<OperatorRuntime>>,
 }
 
 impl AppState {
@@ -40,6 +46,16 @@ impl AppState {
             &config.centrifugo_api_key,
         ));
 
+        let operator = OperatorRuntime::from_config(config).map(Arc::new);
+        match &operator {
+            Some(runtime) => tracing::info!(
+                provider = runtime.service.provider().name(),
+                model = runtime.service.provider().model(),
+                "operator enabled"
+            ),
+            None => tracing::info!("operator disabled: GROQ_API_KEY is not set"),
+        }
+
         Ok(Self {
             db,
             database_connect_timeout: config.database_connect_timeout,
@@ -53,6 +69,7 @@ impl AppState {
             realtime_token_ttl: config.realtime_token_ttl,
             invitation_ttl: config.invitation_ttl,
             publisher,
+            operator,
         })
     }
 
@@ -77,6 +94,14 @@ impl AppState {
             realtime_token_ttl: config.realtime_token_ttl,
             invitation_ttl: config.invitation_ttl,
             publisher,
+            operator: None,
         }
+    }
+
+    /// Test-support: attach an Operator runtime (almost always one built
+    /// over a `ScriptedProvider`).
+    pub fn with_operator(mut self, runtime: OperatorRuntime) -> Self {
+        self.operator = Some(Arc::new(runtime));
+        self
     }
 }

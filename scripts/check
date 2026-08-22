@@ -20,6 +20,9 @@ echo "==> web lint"
 echo "==> web typecheck"
 (cd "$repo_root/web" && pnpm run typecheck)
 
+echo "==> web test"
+(cd "$repo_root/web" && pnpm run test)
+
 echo "==> web build"
 (cd "$repo_root/web" && pnpm run build)
 

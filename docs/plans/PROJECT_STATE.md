@@ -4,18 +4,32 @@ Last updated: 2026-08-22
 
 ## Current phase
 
-**Slice 005 (Operator retrieval) — spec APPROVED 2026-08-22; awaiting
-the implementation gate.** Slice 004 is merged to `main` (`1ed84b0`), fully closed out,
-**not yet pushed** to `origin/main`. On 2026-08-22 the user started
-Slice 005 planning: D-028 (Operator as an in-process crate, with the
-§5 inverted-dependency refinement) and D-029 (PII-free ledger, no
-transcripts) were accepted; `docs/specs/SLICE_005.md` was drafted by the
-coordinator from a `crm-planner` pass and then independently reviewed
-(`crm-reviewer`: 15 findings — none blocking; all applied as safe
-defaults / implementation notes). Lane briefs
-`docs/tasks/SLICE_005_LANE_A.md` (backend) and `_LANE_B.md` (web) are
-written. The user approved the spec and the planning commit + push.
-Nothing implemented.
+**Slice 005 (Operator retrieval) — Lane A (backend) IMPLEMENTED on
+`slice-005-operator`, verified, UNCOMMITTED; awaiting commit approval.**
+Lane B (web) can integrate now: the §5 HTTP contract is live on this
+branch. Implemented 2026-08-22 in the main checkout (one writer): the
+`crm-operator` crate, `search_summaries`, the `crm-api` adapter /
+explanation builder / ledger writer, config + `AppState.operator`, the
+three `ApiError` variants, `POST /api/operator/turns`, migration
+`20260824000001_operator_ledger.sql`, §13 tests 1–4, `scripts/check`
+(+`pnpm run test`), `.env.example`, README Operator subsection.
+Independent review (`crm-reviewer`: no blocking findings) and
+adversarial analysis (`crm-tester`: three low-severity bugs with repros)
+both run; every finding applied (see Completed work).
+
+Safe defaults / declared deviations for the coordinator to sync into
+`docs/specs/SLICE_005.md` (code is authoritative until then):
+- §3: `PriorityExplanation::{OnToday,NotOnToday}` carry `person:
+  PersonCard` so the §4 reference card can come from `explain_priority`
+  without a second call.
+- §11/§14: default model is `openai/gpt-oss-120b` — Groq retired
+  `llama-3.3-70b-versatile` (404 `model_not_found`) before the
+  walkthrough; §14 item 3 pre-authorised the switch.
+- §4: the malformed-call canned reply is "I had trouble looking that up —
+  try asking more specifically." (unspecified in the spec); a round that
+  asks for more than `max_calls_per_round` tools is a malformed round
+  (two in a row end the turn); a tool in flight when the turn deadline
+  fires is recorded as `error` in the ledger.
 
 ## Current slice
 
@@ -29,8 +43,8 @@ proof chain. Slice 004 is complete and merged (see History).
 
 ## Current branch
 
-`main`, clean after the Slice 005 planning commit, pushed to
-`origin/main` (the first push since before Slice 004).
+`slice-005-operator` (from `main` at `93db87c`), Lane A work
+uncommitted in the main checkout. `main` is pushed to `origin/main`.
 
 ## Last accepted decision
 
@@ -106,6 +120,34 @@ Earlier the same day, user-accepted:
   sqlx offline mode adopted in 002.
 
 ## Completed work
+
+- 2026-08-22: Slice 005 Lane A implemented and verified on
+  `slice-005-operator`. `./scripts/check` green (fmt, clippy `-D
+  warnings`, 244 service-free Rust tests incl. 52 in `crm-operator`,
+  web lint/typecheck/57 Vitest/build — note: `pnpm` needs
+  `~/.nvm/nvm.sh` sourced in a non-interactive shell). `./scripts/check-db`
+  green (sqlx `prepare --check`, 116 DB-backed tests incl. 21 new in
+  `tests/db_operator.rs`). Live walkthrough §1 steps 1–7 on loopback
+  against real Groq, model `openai/gpt-oss-120b`, 0.3–2.0 s per turn
+  (1–3 tool calls): next-call answer with card matching `GET /api/today`,
+  "why is she first?" citing tier/reasons/rule/ahead counts, find/tell-me
+  with cards, bob's cross-Organization ask → "couldn't find" with a
+  `search_people → ok`, zero-id ledger row, a polite refusal to "call her",
+  dead provider port → 503 `operator_unavailable` in ~100 ms with a
+  `provider_error` row (one retry, `model_call_count = 2`).
+  Review/tester findings applied: `Usage::add` now saturates (a hostile
+  endpoint could panic the spawned turn → 500 and no ledger row); a
+  tool in flight at the turn deadline is recorded; NUL/invisible
+  characters are stripped from the model's search query (was a fake
+  `tool_error` outage via Postgres 22021) and from `UntrustedText`
+  (bidi/zero-width); `TodayView.truncated` honours the tool `limit`;
+  request body limit 256 KiB; redacting `Debug` on `TurnInput` /
+  `TurnOutput` / `ChatRequest`; Groq response body capped at 1 MiB;
+  mutex poisoning no longer wedges the in-flight set; the crate fence
+  test also catches `package = "sqlx"` / `[dependencies.sqlx]`; new
+  DB tests for ledger-insert failure (200 + no row, one transaction),
+  LIKE escaping + contact match + foreign contact values, the
+  append-only triggers against the owner, and validation boundaries.
 
 - 2026-08-20: Repository initialized; initial commit of carried-over
   documents (AGENTS.md, CLAUDE.md, README.md, product thesis, event-sourcing

@@ -1,0 +1,92 @@
+[
+  {
+    "name": "search_people",
+    "description": "Find People in the user's Organization whose first or last name contains the query (case-insensitive), or whose email or phone exactly matches it. Returns up to `limit` Person cards.",
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "limit": {
+          "default": 10,
+          "description": "Maximum number of matches to return.",
+          "maximum": 10,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "query": {
+          "description": "A name fragment, an email address, or a phone number.",
+          "maxLength": 100,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_person",
+    "description": "Get one Person's card, contact methods, latest inquiries, recent history, and whether they are on the user's Today list. Use an id from a previous tool result.",
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "person_id": {
+          "description": "The Person's id.",
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "person_id"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_today",
+    "description": "The user's Today list: People assigned to them who are waiting for a contact attempt, in the exact order the CRM shows them. Report the order as given; never reorder.",
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "limit": {
+          "default": 20,
+          "description": "Maximum number of items to return.",
+          "maximum": 20,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_next_work_item",
+    "description": "The first item on the user's Today list (who to contact next) and the total number of items.",
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {},
+      "required": [],
+      "type": "object"
+    }
+  },
+  {
+    "name": "explain_priority",
+    "description": "Why a Person is (or is not) on the user's Today list and at what position: priority tier, reasons, the ordering rule, and how many People are ahead in each tier.",
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "person_id": {
+          "description": "The Person's id.",
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "person_id"
+      ],
+      "type": "object"
+    }
+  }
+]

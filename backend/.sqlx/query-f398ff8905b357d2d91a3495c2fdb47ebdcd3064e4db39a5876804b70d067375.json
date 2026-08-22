@@ -1,0 +1,92 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n             p.id, p.first_name, p.last_name, p.created_at,\n             s.id as stage_id, s.name as stage_name,\n             u.id as \"assigned_user_id?\", u.display_name as \"assigned_user_display_name?\",\n             (SELECT cm.value FROM contact_method cm\n                WHERE cm.person_id = p.id AND cm.kind = 'email'\n                ORDER BY cm.created_at ASC LIMIT 1) as \"primary_email?\",\n             (SELECT cm.value FROM contact_method cm\n                WHERE cm.person_id = p.id AND cm.kind = 'phone'\n                ORDER BY cm.created_at ASC LIMIT 1) as \"primary_phone?\",\n             (SELECT count(*) FROM inquiry i WHERE i.person_id = p.id) as \"inquiry_count!\",\n             (SELECT max(i.received_at) FROM inquiry i WHERE i.person_id = p.id) as \"last_inquiry_at?\"\n           FROM person p\n           JOIN stage s ON s.id = p.stage_id\n           LEFT JOIN app_user u ON u.id = p.assigned_user_id\n           WHERE p.organization_id = $1\n             AND (\n               p.first_name ILIKE $2 ESCAPE '\\'\n               OR p.last_name ILIKE $2 ESCAPE '\\'\n               OR concat_ws(' ', p.first_name, p.last_name) ILIKE $2 ESCAPE '\\'\n               OR EXISTS (\n                 SELECT 1 FROM contact_method cm2\n                 WHERE cm2.person_id = p.id\n                   AND cm2.organization_id = p.organization_id\n                   AND (\n                     (cm2.kind = 'email' AND cm2.normalized_value = $3)\n                     OR (cm2.kind = 'phone' AND cm2.normalized_value = $4)\n                   )\n               )\n             )\n           ORDER BY p.last_name ASC NULLS LAST, p.first_name ASC NULLS LAST, p.id ASC\n           LIMIT $5",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "first_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "last_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "stage_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "stage_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "assigned_user_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "assigned_user_display_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "primary_email?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "primary_phone?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "inquiry_count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 11,
+        "name": "last_inquiry_at?",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "f398ff8905b357d2d91a3495c2fdb47ebdcd3064e4db39a5876804b70d067375"
+}

@@ -6,6 +6,7 @@ use serde::Serialize;
 use sqlx::PgConnection;
 use uuid::Uuid;
 
+use crate::domain::contact::{normalize_email, normalize_phone};
 use crate::domain::inquiry::parse::ParsedLead;
 use crate::domain::person::model::{compute_display_name, PersonSummary, StageRef, UserRef};
 use crate::domain::person::visibility::PersonVisibilityScope;
@@ -252,6 +253,91 @@ pub async fn list_summaries(
 
     let truncated = rows.len() > 500;
     rows.truncate(500);
+    Ok((
+        rows.into_iter().map(PersonSummary::from).collect(),
+        truncated,
+    ))
+}
+
+/// Escapes `%`, `_`, and `\` so a search term is matched literally by
+/// `ILIKE ... ESCAPE '\'` (docs/specs/SLICE_005.md §2).
+pub fn escape_like(term: &str) -> String {
+    let mut out = String::with_capacity(term.len() + 4);
+    for ch in term.chars() {
+        if matches!(ch, '%' | '_' | '\\') {
+            out.push('\\');
+        }
+        out.push(ch);
+    }
+    out
+}
+
+/// Operator `search_people` (docs/specs/SLICE_005.md §2; tool-only in this
+/// slice — not `GET /api/people?q=`). Same projection and Organization
+/// predicate as `list_summaries`. Matches a case-insensitive substring of
+/// `first_name`, `last_name`, or `concat_ws(' ', first_name, last_name)`
+/// (the term is LIKE-escaped), **or** an exact `contact_method.
+/// normalized_value` when the term normalizes as an email or phone.
+/// Ordered `last_name, first_name, id`; `limit + 1` rows are fetched so
+/// `truncated` is exact.
+pub async fn search_summaries(
+    conn: &mut PgConnection,
+    scope: &PersonVisibilityScope,
+    term: &str,
+    limit: i64,
+) -> Result<(Vec<PersonSummary>, bool), sqlx::Error> {
+    let organization_id = scope.organization_id();
+    let pattern = format!("%{}%", escape_like(term.trim()));
+    let normalized_email = normalize_email(term);
+    let normalized_phone = normalize_phone(term);
+    let fetch = limit.max(0) + 1;
+
+    let mut rows = sqlx::query_as!(
+        PersonSummaryRow,
+        r#"SELECT
+             p.id, p.first_name, p.last_name, p.created_at,
+             s.id as stage_id, s.name as stage_name,
+             u.id as "assigned_user_id?", u.display_name as "assigned_user_display_name?",
+             (SELECT cm.value FROM contact_method cm
+                WHERE cm.person_id = p.id AND cm.kind = 'email'
+                ORDER BY cm.created_at ASC LIMIT 1) as "primary_email?",
+             (SELECT cm.value FROM contact_method cm
+                WHERE cm.person_id = p.id AND cm.kind = 'phone'
+                ORDER BY cm.created_at ASC LIMIT 1) as "primary_phone?",
+             (SELECT count(*) FROM inquiry i WHERE i.person_id = p.id) as "inquiry_count!",
+             (SELECT max(i.received_at) FROM inquiry i WHERE i.person_id = p.id) as "last_inquiry_at?"
+           FROM person p
+           JOIN stage s ON s.id = p.stage_id
+           LEFT JOIN app_user u ON u.id = p.assigned_user_id
+           WHERE p.organization_id = $1
+             AND (
+               p.first_name ILIKE $2 ESCAPE '\'
+               OR p.last_name ILIKE $2 ESCAPE '\'
+               OR concat_ws(' ', p.first_name, p.last_name) ILIKE $2 ESCAPE '\'
+               OR EXISTS (
+                 SELECT 1 FROM contact_method cm2
+                 WHERE cm2.person_id = p.id
+                   AND cm2.organization_id = p.organization_id
+                   AND (
+                     (cm2.kind = 'email' AND cm2.normalized_value = $3)
+                     OR (cm2.kind = 'phone' AND cm2.normalized_value = $4)
+                   )
+               )
+             )
+           ORDER BY p.last_name ASC NULLS LAST, p.first_name ASC NULLS LAST, p.id ASC
+           LIMIT $5"#,
+        organization_id,
+        pattern,
+        normalized_email,
+        normalized_phone,
+        fetch,
+    )
+    .fetch_all(conn)
+    .await?;
+
+    let limit = usize::try_from(limit.max(0)).unwrap_or(0);
+    let truncated = rows.len() > limit;
+    rows.truncate(limit);
     Ok((
         rows.into_iter().map(PersonSummary::from).collect(),
         truncated,
@@ -654,4 +740,15 @@ pub async fn history_for_person(
 
     entries.sort_by_key(|e| (e.occurred_at, e.recorded_at, e.kind_rank, e.id));
     Ok(entries)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::escape_like;
+
+    #[test]
+    fn escape_like_escapes_wildcards_and_backslash() {
+        assert_eq!(escape_like("100%_done\\"), "100\\%\\_done\\\\");
+        assert_eq!(escape_like("grace"), "grace");
+    }
 }

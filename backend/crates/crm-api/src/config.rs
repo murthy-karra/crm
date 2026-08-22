@@ -2,6 +2,8 @@ use std::fmt;
 use std::net::SocketAddr;
 use std::time::Duration;
 
+use crm_operator::GroqApiKey;
+
 const DEFAULT_BIND_ADDR: &str = "127.0.0.1:3000";
 const DEFAULT_CONNECT_TIMEOUT_MS: u64 = 2000;
 const MIN_CONNECT_TIMEOUT_MS: u64 = 1;
@@ -41,6 +43,37 @@ const MIN_INVITATION_TTL_HOURS: u64 = 1;
 const MAX_INVITATION_TTL_HOURS: u64 = 720;
 
 const RAW_PAYLOAD_KEY_HEX_LEN: usize = 64;
+
+// --- Operator (docs/specs/SLICE_005.md §11) -----------------------------
+const DEFAULT_OPERATOR_BASE_URL: &str = "https://api.groq.com/openai/v1";
+// `llama-3.3-70b-versatile` (the spec's original default) was retired by
+// Groq before the Slice 005 walkthrough; docs/specs/SLICE_005.md §14 item 3
+// pre-authorises this switch as a config change, not a contract change.
+const DEFAULT_OPERATOR_MODEL: &str = "openai/gpt-oss-120b";
+const DEFAULT_OPERATOR_TURN_TIMEOUT_MS: u64 = 20_000;
+const MIN_OPERATOR_TURN_TIMEOUT_MS: u64 = 2_000;
+const MAX_OPERATOR_TURN_TIMEOUT_MS: u64 = 60_000;
+const DEFAULT_OPERATOR_CALL_TIMEOUT_MS: u64 = 10_000;
+const MIN_OPERATOR_CALL_TIMEOUT_MS: u64 = 1_000;
+const MAX_OPERATOR_CALL_TIMEOUT_MS: u64 = 30_000;
+const DEFAULT_OPERATOR_MAX_CONCURRENT: usize = 4;
+const MIN_OPERATOR_MAX_CONCURRENT: usize = 1;
+const MAX_OPERATOR_MAX_CONCURRENT: usize = 64;
+
+/// Operator settings (docs/specs/SLICE_005.md §11). Validated even when no
+/// `GROQ_API_KEY` is present, so a keyless dev box still fails fast on a
+/// bad value.
+#[derive(Debug, Clone)]
+pub struct OperatorConfig {
+    /// Any OpenAI-compatible endpoint; `https://` required except for
+    /// loopback hosts; no trailing slash.
+    pub base_url: String,
+    pub model: String,
+    pub turn_timeout: Duration,
+    /// Per provider call; must be ≤ `turn_timeout`.
+    pub call_timeout: Duration,
+    pub max_concurrent: usize,
+}
 
 /// The raw-payload encryption key (docs/specs/SLICE_002.md §7): exactly 64
 /// hex characters (32 bytes), decoded once at startup. `Debug` is redacted
@@ -150,6 +183,11 @@ pub struct Config {
     /// Invitation expiry, bounds 1–720 hours, default 168 (7 days)
     /// (docs/specs/SLICE_004.md §11).
     pub invitation_ttl: Duration,
+    /// Operator settings (docs/specs/SLICE_005.md §11); always validated.
+    pub operator: OperatorConfig,
+    /// `GROQ_API_KEY`; `None` (unset or empty) disables the Operator
+    /// without failing startup (docs/specs/SLICE_005.md §9, §14 item 5).
+    pub groq_api_key: Option<GroqApiKey>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -176,6 +214,14 @@ pub enum ConfigError {
     RealtimeTokenTtlOutOfBounds(u64),
     InvalidInvitationTtl(String),
     InvitationTtlOutOfBounds(u64),
+    InvalidOperatorBaseUrl(String),
+    InvalidOperatorTurnTimeout(String),
+    OperatorTurnTimeoutOutOfBounds(u64),
+    InvalidOperatorCallTimeout(String),
+    OperatorCallTimeoutOutOfBounds(u64),
+    OperatorCallTimeoutExceedsTurnTimeout { call_ms: u64, turn_ms: u64 },
+    InvalidOperatorMaxConcurrent(String),
+    OperatorMaxConcurrentOutOfBounds(usize),
 }
 
 impl fmt::Display for ConfigError {
@@ -256,6 +302,38 @@ impl fmt::Display for ConfigError {
             ConfigError::InvitationTtlOutOfBounds(value) => write!(
                 f,
                 "CRM_INVITATION_TTL_HOURS must be between {MIN_INVITATION_TTL_HOURS} and {MAX_INVITATION_TTL_HOURS}, got {value}"
+            ),
+            ConfigError::InvalidOperatorBaseUrl(value) => write!(
+                f,
+                "CRM_OPERATOR_BASE_URL must be an https:// URL (http:// only for loopback) with no trailing slash, got {value}"
+            ),
+            ConfigError::InvalidOperatorTurnTimeout(value) => write!(
+                f,
+                "CRM_OPERATOR_TURN_TIMEOUT_MS is not a valid integer: {value}"
+            ),
+            ConfigError::OperatorTurnTimeoutOutOfBounds(value) => write!(
+                f,
+                "CRM_OPERATOR_TURN_TIMEOUT_MS must be between {MIN_OPERATOR_TURN_TIMEOUT_MS} and {MAX_OPERATOR_TURN_TIMEOUT_MS}, got {value}"
+            ),
+            ConfigError::InvalidOperatorCallTimeout(value) => write!(
+                f,
+                "CRM_OPERATOR_CALL_TIMEOUT_MS is not a valid integer: {value}"
+            ),
+            ConfigError::OperatorCallTimeoutOutOfBounds(value) => write!(
+                f,
+                "CRM_OPERATOR_CALL_TIMEOUT_MS must be between {MIN_OPERATOR_CALL_TIMEOUT_MS} and {MAX_OPERATOR_CALL_TIMEOUT_MS}, got {value}"
+            ),
+            ConfigError::OperatorCallTimeoutExceedsTurnTimeout { call_ms, turn_ms } => write!(
+                f,
+                "CRM_OPERATOR_CALL_TIMEOUT_MS ({call_ms}) must not exceed CRM_OPERATOR_TURN_TIMEOUT_MS ({turn_ms})"
+            ),
+            ConfigError::InvalidOperatorMaxConcurrent(value) => write!(
+                f,
+                "CRM_OPERATOR_MAX_CONCURRENT is not a valid integer: {value}"
+            ),
+            ConfigError::OperatorMaxConcurrentOutOfBounds(value) => write!(
+                f,
+                "CRM_OPERATOR_MAX_CONCURRENT must be between {MIN_OPERATOR_MAX_CONCURRENT} and {MAX_OPERATOR_MAX_CONCURRENT}, got {value}"
             ),
         }
     }
@@ -389,6 +467,11 @@ impl Config {
         }
         let invitation_ttl = Duration::from_secs(invitation_ttl_hours * 3600);
 
+        let operator = operator_config(&get)?;
+        let groq_api_key = get("GROQ_API_KEY")
+            .filter(|v| !v.trim().is_empty())
+            .map(GroqApiKey::new);
+
         Ok(Config {
             bind_addr,
             database_url,
@@ -404,8 +487,92 @@ impl Config {
             centrifugo_api_url,
             realtime_token_ttl,
             invitation_ttl,
+            operator,
+            groq_api_key,
         })
     }
+}
+
+/// `CRM_OPERATOR_*` (docs/specs/SLICE_005.md §11).
+fn operator_config(get: &impl Fn(&str) -> Option<String>) -> Result<OperatorConfig, ConfigError> {
+    let base_url = match get("CRM_OPERATOR_BASE_URL").filter(|v| !v.is_empty()) {
+        Some(value) if is_plausible_operator_url(&value) => value,
+        Some(value) => return Err(ConfigError::InvalidOperatorBaseUrl(value)),
+        None => DEFAULT_OPERATOR_BASE_URL.to_string(),
+    };
+
+    let model = get("CRM_OPERATOR_MODEL")
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+        .unwrap_or_else(|| DEFAULT_OPERATOR_MODEL.to_string());
+
+    let turn_ms = match get("CRM_OPERATOR_TURN_TIMEOUT_MS") {
+        Some(value) => value
+            .parse::<u64>()
+            .map_err(|_| ConfigError::InvalidOperatorTurnTimeout(value.clone()))?,
+        None => DEFAULT_OPERATOR_TURN_TIMEOUT_MS,
+    };
+    if !(MIN_OPERATOR_TURN_TIMEOUT_MS..=MAX_OPERATOR_TURN_TIMEOUT_MS).contains(&turn_ms) {
+        return Err(ConfigError::OperatorTurnTimeoutOutOfBounds(turn_ms));
+    }
+
+    let call_ms = match get("CRM_OPERATOR_CALL_TIMEOUT_MS") {
+        Some(value) => value
+            .parse::<u64>()
+            .map_err(|_| ConfigError::InvalidOperatorCallTimeout(value.clone()))?,
+        None => DEFAULT_OPERATOR_CALL_TIMEOUT_MS,
+    };
+    if !(MIN_OPERATOR_CALL_TIMEOUT_MS..=MAX_OPERATOR_CALL_TIMEOUT_MS).contains(&call_ms) {
+        return Err(ConfigError::OperatorCallTimeoutOutOfBounds(call_ms));
+    }
+    if call_ms > turn_ms {
+        return Err(ConfigError::OperatorCallTimeoutExceedsTurnTimeout { call_ms, turn_ms });
+    }
+
+    let max_concurrent = match get("CRM_OPERATOR_MAX_CONCURRENT") {
+        Some(value) => value
+            .parse::<usize>()
+            .map_err(|_| ConfigError::InvalidOperatorMaxConcurrent(value.clone()))?,
+        None => DEFAULT_OPERATOR_MAX_CONCURRENT,
+    };
+    if !(MIN_OPERATOR_MAX_CONCURRENT..=MAX_OPERATOR_MAX_CONCURRENT).contains(&max_concurrent) {
+        return Err(ConfigError::OperatorMaxConcurrentOutOfBounds(
+            max_concurrent,
+        ));
+    }
+
+    Ok(OperatorConfig {
+        base_url,
+        model,
+        turn_timeout: Duration::from_millis(turn_ms),
+        call_timeout: Duration::from_millis(call_ms),
+        max_concurrent,
+    })
+}
+
+/// `CRM_OPERATOR_BASE_URL` (docs/specs/SLICE_005.md §11): `https://`
+/// required because the key travels as a bearer header; `http://` only for
+/// loopback hosts (the same exception `centrifugo_api_url` relies on); no
+/// trailing slash, no whitespace.
+fn is_plausible_operator_url(value: &str) -> bool {
+    if value.contains(char::is_whitespace) || value.ends_with('/') {
+        return false;
+    }
+    if value.starts_with("https://") {
+        return value.len() > "https://".len();
+    }
+    if let Some(rest) = value.strip_prefix("http://") {
+        let authority = rest.split('/').next().unwrap_or("");
+        let host = authority
+            .strip_prefix('[')
+            .and_then(|s| s.split(']').next())
+            .unwrap_or_else(|| authority.rsplit_once(':').map_or(authority, |(h, _)| h));
+        return matches!(host, "127.0.0.1" | "localhost" | "::1")
+            || host
+                .parse::<std::net::IpAddr>()
+                .is_ok_and(|ip| ip.is_loopback());
+    }
+    false
 }
 
 fn is_plausible_origin(value: &str) -> bool {
@@ -868,6 +1035,117 @@ mod tests {
     fn accepts_custom_invitation_ttl() {
         let config = Config::from_source(source(&[("CRM_INVITATION_TTL_HOURS", "24")])).unwrap();
         assert_eq!(config.invitation_ttl, Duration::from_secs(24 * 3600));
+    }
+
+    // --- CRM_OPERATOR_* / GROQ_API_KEY (docs/specs/SLICE_005.md §11) -------
+
+    #[test]
+    fn operator_defaults_and_disabled_without_key() {
+        let config = Config::from_source(source(&[])).unwrap();
+        assert!(config.groq_api_key.is_none());
+        assert_eq!(config.operator.base_url, "https://api.groq.com/openai/v1");
+        assert_eq!(config.operator.model, "openai/gpt-oss-120b");
+        assert_eq!(config.operator.turn_timeout, Duration::from_millis(20_000));
+        assert_eq!(config.operator.call_timeout, Duration::from_millis(10_000));
+        assert_eq!(config.operator.max_concurrent, 4);
+    }
+
+    #[test]
+    fn empty_groq_key_is_disabled_not_an_error() {
+        let config = Config::from_source(source(&[("GROQ_API_KEY", "   ")])).unwrap();
+        assert!(config.groq_api_key.is_none());
+    }
+
+    #[test]
+    fn groq_key_is_redacted_in_debug() {
+        let config =
+            Config::from_source(source(&[("GROQ_API_KEY", "gsk_live_super_secret_key")])).unwrap();
+        assert!(config.groq_api_key.is_some());
+        let debug_output = format!("{config:?}");
+        assert!(!debug_output.contains("gsk_live_super_secret_key"));
+        assert!(debug_output.contains("GroqApiKey(REDACTED)"));
+    }
+
+    #[test]
+    fn operator_bounds_are_validated_even_without_a_key() {
+        let err =
+            Config::from_source(source(&[("CRM_OPERATOR_TURN_TIMEOUT_MS", "1999")])).unwrap_err();
+        assert_eq!(err, ConfigError::OperatorTurnTimeoutOutOfBounds(1999));
+        let err =
+            Config::from_source(source(&[("CRM_OPERATOR_TURN_TIMEOUT_MS", "60001")])).unwrap_err();
+        assert_eq!(err, ConfigError::OperatorTurnTimeoutOutOfBounds(60001));
+        let err =
+            Config::from_source(source(&[("CRM_OPERATOR_CALL_TIMEOUT_MS", "999")])).unwrap_err();
+        assert_eq!(err, ConfigError::OperatorCallTimeoutOutOfBounds(999));
+        let err =
+            Config::from_source(source(&[("CRM_OPERATOR_CALL_TIMEOUT_MS", "30001")])).unwrap_err();
+        assert_eq!(err, ConfigError::OperatorCallTimeoutOutOfBounds(30001));
+        let err = Config::from_source(source(&[("CRM_OPERATOR_MAX_CONCURRENT", "0")])).unwrap_err();
+        assert_eq!(err, ConfigError::OperatorMaxConcurrentOutOfBounds(0));
+        let err =
+            Config::from_source(source(&[("CRM_OPERATOR_MAX_CONCURRENT", "65")])).unwrap_err();
+        assert_eq!(err, ConfigError::OperatorMaxConcurrentOutOfBounds(65));
+        let err =
+            Config::from_source(source(&[("CRM_OPERATOR_MAX_CONCURRENT", "four")])).unwrap_err();
+        assert!(matches!(err, ConfigError::InvalidOperatorMaxConcurrent(_)));
+    }
+
+    #[test]
+    fn operator_call_timeout_must_not_exceed_turn_timeout() {
+        let err = Config::from_source(source(&[
+            ("CRM_OPERATOR_TURN_TIMEOUT_MS", "5000"),
+            ("CRM_OPERATOR_CALL_TIMEOUT_MS", "6000"),
+        ]))
+        .unwrap_err();
+        assert_eq!(
+            err,
+            ConfigError::OperatorCallTimeoutExceedsTurnTimeout {
+                call_ms: 6000,
+                turn_ms: 5000
+            }
+        );
+        let config = Config::from_source(source(&[
+            ("CRM_OPERATOR_TURN_TIMEOUT_MS", "5000"),
+            ("CRM_OPERATOR_CALL_TIMEOUT_MS", "5000"),
+        ]))
+        .unwrap();
+        assert_eq!(config.operator.call_timeout, config.operator.turn_timeout);
+    }
+
+    #[test]
+    fn operator_base_url_requires_https_except_loopback() {
+        for ok in [
+            "https://api.groq.com/openai/v1",
+            "http://127.0.0.1:11434/v1",
+            "http://localhost:8080/v1",
+            "http://[::1]:8080/v1",
+        ] {
+            let config = Config::from_source(source(&[("CRM_OPERATOR_BASE_URL", ok)])).unwrap();
+            assert_eq!(config.operator.base_url, ok);
+        }
+        for bad in [
+            "http://api.groq.com/openai/v1",
+            "http://10.0.0.5/v1",
+            "https://api.groq.com/openai/v1/",
+            "api.groq.com/openai/v1",
+            "https://api.groq.com/open ai/v1",
+            "https://",
+        ] {
+            let err = Config::from_source(source(&[("CRM_OPERATOR_BASE_URL", bad)])).unwrap_err();
+            assert!(
+                matches!(err, ConfigError::InvalidOperatorBaseUrl(_)),
+                "{bad}: {err:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn operator_model_override_and_empty_falls_back() {
+        let config =
+            Config::from_source(source(&[("CRM_OPERATOR_MODEL", " openai/gpt-oss-20b ")])).unwrap();
+        assert_eq!(config.operator.model, "openai/gpt-oss-20b");
+        let config = Config::from_source(source(&[("CRM_OPERATOR_MODEL", "")])).unwrap();
+        assert_eq!(config.operator.model, "openai/gpt-oss-120b");
     }
 
     #[test]

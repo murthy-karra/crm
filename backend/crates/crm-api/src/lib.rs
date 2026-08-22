@@ -2,6 +2,7 @@ pub mod auth;
 pub mod config;
 pub mod domain;
 pub mod error;
+pub mod operator;
 pub mod realtime;
 pub mod routes;
 pub mod state;
@@ -48,6 +49,7 @@ pub fn build_app(state: AppState) -> Router {
         .merge(routes::today::router())
         .merge(routes::invitations::router())
         .merge(routes::platform::router())
+        .merge(routes::operator::router())
         .with_state(state)
         .layer(
             ServiceBuilder::new()

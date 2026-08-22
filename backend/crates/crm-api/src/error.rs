@@ -35,6 +35,15 @@ pub enum ApiError {
     WeakPassword,
     InvalidEmail,
     AlreadyMember,
+    // --- Slice 005 (docs/specs/SLICE_005.md §5) -------------------------
+    /// Server concurrency cap reached or the same user already has a turn
+    /// in flight; carries `Retry-After: 2`.
+    OperatorBusy,
+    /// No inference provider configured (`GROQ_API_KEY` unset).
+    OperatorDisabled,
+    /// Provider timeout/error/rate-limit, the turn deadline, or a tool
+    /// backend failure.
+    OperatorUnavailable,
 }
 
 impl IntoResponse for ApiError {
@@ -65,6 +74,15 @@ impl IntoResponse for ApiError {
             ApiError::WeakPassword => (StatusCode::UNPROCESSABLE_ENTITY, "weak_password", None),
             ApiError::InvalidEmail => (StatusCode::BAD_REQUEST, "invalid_email", None),
             ApiError::AlreadyMember => (StatusCode::CONFLICT, "already_member", None),
+            ApiError::OperatorBusy => (StatusCode::TOO_MANY_REQUESTS, "operator_busy", Some(2u64)),
+            ApiError::OperatorDisabled => {
+                (StatusCode::SERVICE_UNAVAILABLE, "operator_disabled", None)
+            }
+            ApiError::OperatorUnavailable => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "operator_unavailable",
+                None,
+            ),
         };
 
         let body = Json(json!({ "error": code }));

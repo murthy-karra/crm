@@ -31,8 +31,11 @@ base64 = { workspace = true }
 time = { workspace = true }
 chacha20poly1305 = { workspace = true }
 reqwest = { workspace = true }
+crm-operator = { path = "../crm-operator" }
+async-trait = { workspace = true }
 
 [dev-dependencies]
+crm-operator = { path = "../crm-operator", features = ["test-support"] }
 tower = { workspace = true, features = ["util"] }
 http-body-util = "0.1"
 tokio-tungstenite = { workspace = true }

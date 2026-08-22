@@ -1,0 +1,30 @@
+[package]
+name = "crm-operator"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[features]
+# `ScriptedProvider` for tests in dependent crates (docs/specs/SLICE_005.md
+# §3, §14 item 8).
+test-support = []
+
+[dependencies]
+# D-028 §5: this crate must never depend on sqlx, axum, or crm-api
+# (crm-api/tests/operator_deps.rs enforces it).
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+tokio = { workspace = true, features = ["time", "sync"] }
+reqwest = { workspace = true, features = ["rustls-tls"] }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "sync"] }

@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO operator_tool_call (turn_id, seq, tool_name, outcome, duration_ms, person_ids)\n               VALUES ($1, $2, $3, $4, $5, $6)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int2",
+        "Text",
+        "Text",
+        "Int4",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f34a91127864f3cbeb689a14027e4dd2f04c3c980c21675b89689ad76510f6bc"
+}

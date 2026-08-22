@@ -83,14 +83,28 @@ export interface UseRealtimeResult {
 }
 
 // disconnectedCodes.unauthorized (1) and the server-pushed non-reconnectable
-// range 3500–3999 (SLICE_003 §10) — verified against centrifuge@5.7.1's
-// `codes.d.ts` and the `_handleDisconnect` source, which also treats
-// 4500–4999 as non-reconnectable; that second range is not in the frozen
-// §10 wording, so it is intentionally not applied here (see the report's
-// contract-discrepancy note) rather than silently widening the contract.
+// ranges 3500–3999 and 4500–4999 — verified against centrifuge@5.7.1's
+// `codes.d.ts` and the `_handleDisconnect` source directly:
+//   let reconnect = true;
+//   if ((code >= 3500 && code < 4000) || (code >= 4500 && code < 5000)) {
+//     reconnect = false;
+//   }
+// SLICE_003 §10's wording only named the first range; the second is a real
+// terminal case the SDK produces (a fixed spec typo/omission, corrected
+// here — not a contract widening, since this classification is purely
+// client-internal and never observed by the backend or on the wire).
+// Getting this wrong is not benign: a reconnectable drop never reaches this
+// function at all (the SDK goes straight to a `connecting` event, no
+// `disconnected`), so a 4500–4999 code that fell through here uncaught
+// would leave `status` frozen at whatever it last was — typically
+// `'connected'` — forever, since the SDK is genuinely done and emits
+// nothing further. The pill would then never show, silently misreporting a
+// dead connection as healthy.
 const UNAUTHORIZED_CODE = 1
-const TERMINAL_CODE_MIN = 3500
-const TERMINAL_CODE_MAX = 3999
+const TERMINAL_CODE_RANGES: ReadonlyArray<readonly [number, number]> = [
+  [3500, 3999],
+  [4500, 4999],
+]
 // disconnectedCodes.disconnectCalled — the code the SDK's own `.disconnect()`
 // reports back on its `disconnected` event (verified against the installed
 // package's source: `disconnect() { this._disconnect(disconnectedCodes
@@ -98,7 +112,8 @@ const TERMINAL_CODE_MAX = 3999
 const DISCONNECT_CALLED_CODE = 0
 
 function isTerminalDisconnect(code: number): boolean {
-  return code === UNAUTHORIZED_CODE || (code >= TERMINAL_CODE_MIN && code <= TERMINAL_CODE_MAX)
+  if (code === UNAUTHORIZED_CODE) return true
+  return TERMINAL_CODE_RANGES.some(([min, max]) => code >= min && code <= max)
 }
 
 export function useRealtime(options: UseRealtimeOptions): UseRealtimeResult {
@@ -189,10 +204,13 @@ export function useRealtime(options: UseRealtimeOptions): UseRealtimeResult {
       } else if (isTerminalDisconnect(ctx.code)) {
         status.value = 'unavailable'
       }
-      // Any other code: the SDK is already reconnecting on its own and will
-      // emit `connecting` next (see the source note above `codes.d.ts`
-      // reference in the contract-discrepancy report) — leaving `status`
-      // alone here avoids a one-tick flicker back to a stale value.
+      // Any other code: per `_handleDisconnect`'s own `reconnect` decision
+      // (see the note above `isTerminalDisconnect`), every reconnectable
+      // code skips a `disconnected` event entirely and goes straight to
+      // `connecting` — so a non-terminal, non-disconnectCalled code should
+      // not reach here in practice. Defensive no-op rather than guessing a
+      // status, so a code neither this composable nor the SDK's own source
+      // anticipates cannot mislabel the connection.
     })
 
     newClient.on('publication', (ctx) => {

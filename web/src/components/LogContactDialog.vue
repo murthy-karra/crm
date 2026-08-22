@@ -68,6 +68,11 @@ function close() {
 }
 
 function submit() {
+  // Defense in depth beyond the button's `:disabled` binding (which relies
+  // on Vue having already patched the DOM before a second click/submit
+  // fires) — a fast synthetic double-fire must not log two facts for one
+  // click (LogContactAttempt is not idempotent by design, SLICE_003 §4).
+  if (mutation.isPending.value) return
   mutation.mutate(
     { personId: props.personId, channel: channel.value, outcome: outcome.value },
     { onSuccess: () => emit('update:visible', false) },

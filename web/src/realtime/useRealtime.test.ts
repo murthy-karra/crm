@@ -178,6 +178,24 @@ describe('useRealtime', () => {
     scope.stop()
   })
 
+  // Regression: a 4500-4999 disconnect used to fall through to the "leave
+  // status alone" branch, freezing `status` at 'connected' forever (the SDK
+  // never emits another event once it has genuinely given up) — the pill
+  // would then never show a dead connection as anything but healthy.
+  // Verified against centrifuge@5.7.1's `_handleDisconnect` source: this
+  // range is non-reconnectable exactly like 3500-3999.
+  it('maps a terminal server disconnect code in 4500-4999 to "unavailable" from "connected"', async () => {
+    const h = harness()
+    h.orgId.value = ORG_ID
+    const { status, scope } = run(h)
+    await nextTick()
+    h.clients[0]!.emit('connected', { client: 'c1', transport: 'websocket' })
+    expect(status.value).toBe('connected')
+    h.clients[0]!.emit('disconnected', { code: 4600, reason: 'fatal' })
+    expect(status.value).toBe('unavailable')
+    scope.stop()
+  })
+
   it('leaves status alone for a non-terminal, non-self-initiated disconnect', async () => {
     const h = harness()
     h.orgId.value = ORG_ID

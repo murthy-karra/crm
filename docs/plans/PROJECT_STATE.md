@@ -4,33 +4,25 @@ Last updated: 2026-08-22
 
 ## Current phase
 
-Slice 003 (Today + realtime) **implemented, verified, merged, and
-pushed** (2026-08-22). `main` is up to date with `origin/main`. Next:
-plan Slice 004 administration (D-021, refined by D-026). No
-`SLICE_004.md` or lane briefs exist yet.
+Slice 004 (Administration) **planned; spec awaiting user approval**
+(2026-08-22). `docs/specs/SLICE_004.md` is DRAFT: `crm-planner` pass →
+D-026/D-027/O-009 recorded → spec drafted → `crm-reviewer` pass (19
+findings, all applied; verdict "ready with amendments", none needing a
+user decision). Next: user approval of SLICE_004 (including its §14
+safe defaults and §5 declared contract changes to SLICE_001/002), then
+lane briefs `docs/tasks/SLICE_004_LANE_A.md` / `_LANE_B.md` and the
+implementation gate.
 
 ## Current slice
 
-None open. Slice 003 — Today + realtime — is complete.
-`docs/specs/SLICE_003.md` (APPROVED, implemented as specified with one
-pre-approved additive contract change to SLICE_002 §5). Flow:
-`crm-planner` plan (nine scope questions) → `crm-reviewer` review (17
-findings applied) → D-022 (contact attempt as the unit of response) →
-spec drafted → second reviewer pass (13 amendments applied) → D-023
-(realtime model) → user approval → two parallel lanes (backend on
-`slice-003-realtime`, web on `slice-003-web` worktree) → independent
-review (`crm-reviewer`: ready to merge, no blocking findings) →
-adversarial testing (`crm-tester`: one real bug found — a realtime
-disconnect-code gap that could silently freeze the status indicator at
-"connected" — and one test-coverage gap, both closed) → live browser
-walkthrough (all 8 scenarios pass) → merged. Along the way, two
-dev-environment decisions were made and executed: D-024 (Cloudflare
-Access removed from the dev tunnel) and D-025 (the dev tunnel turned
-out to be dashboard-managed, not file-managed; the Slice 003 realtime
-WebSocket route was fixed live in the Cloudflare dashboard and verified
-working through the actual public tunnel with a real two-browser
-cross-session walkthrough). After 003: Slice 004 administration
-(D-021), 005 Operator retrieval, 006 calling.
+Slice 004 — Administration — `docs/specs/SLICE_004.md` (DRAFT, reviewed).
+Platform admin (membership-free, CLI-bootstrapped allowlist), membership
+role + status, one invitation mechanism (token in body, never a URL),
+last-active-admin invariant under a keyed advisory lock, member
+deactivation with session revocation + realtime disconnect, `crm-admin`
+CLI replacing `seed.rs` and the raw-INSERT test fixtures, web `Manage →
+Members`, `/invite/:token`, `/platform`. Slice 003 is complete and
+merged (see History).
 
 ## Current branch
 
@@ -588,7 +580,11 @@ slice:
 
 ## Next recommended action
 
-Implement Slice 003. The user intends to run implementation in a
+**Approve SLICE_004** (read §14 safe defaults and §5 declared contract
+changes), then the coordinator writes the two lane briefs and presents
+the implementation gate.
+
+Previous (Slice 003): Implement Slice 003. The user intends to run implementation in a
 separate session with a faster model, so the handoff lives entirely in
 the repository: `docs/specs/SLICE_003.md` (APPROVED) plus the two lane
 briefs `docs/tasks/SLICE_003_LANE_A.md` (backend; owns the migration,

@@ -312,6 +312,63 @@ same style as D-015 §8, per product thesis §12.8.
 The remaining design choices are listed as safe defaults in O-007 and are
 confirmed or changed when Slice 004 is planned.
 
+### D-022 — A contact attempt is a recorded fact and the unit of response for Today (2026-08-21)
+
+Accepted (user choice among three options during Slice 003 planning).
+Slice 003 adds one typed fact table, `contact_attempted` — the fifth,
+in the same envelope and append-only discipline as the four D-015 §8
+prescribed for the *first* history-bearing slice — written by a typed
+command `LogContactAttempt` (channel: call / text / email / other;
+outcome: reached / no answer / left message / sent). It is PII-free and
+carries no free text.
+
+Today (D-010) uses it as the unit of response: a Person assigned to the
+viewer is on Today while their latest Inquiry has no contact attempt at
+or after it. A contact attempt by **any** member of the Organization
+counts as the response; a later Inquiry puts the Person back. Stage does
+not remove a Person from Today (D-019 stages have no semantic key and
+D-020 forbids a second name-based hinge), and there is no done / snooze /
+dismiss — the product thesis §8 defers those semantics and this decision
+does not pre-decide them. Until they are specified, a junk lead leaves
+Today only by logging a contact attempt, which is itself recorded.
+
+Rationale: the alternatives were a pure read model with no exit other
+than stage change, reassignment, or time decay (which conflates "I
+contacted them" with "their stage changed" and silently drops work), and
+an explicit per-item done/snooze/dismiss state (which pre-decides the
+deferred semantics and creates a second truth the Operator would have to
+explain). A contact attempt is a real-world event with historical
+meaning — first-response time is the broker's metric — and is exactly
+what the calling slice (Slice 006, D-021) will record automatically.
+
+### D-023 — Realtime model: Organization channel, server-side subscriptions, ids-only events (2026-08-21)
+
+Accepted with the Slice 003 specification (`docs/specs/SLICE_003.md` §6,
+§7, §9, §11). Applies D-011 and D-017 §5 concretely:
+
+1. One Centrifugo channel per Organization (`org:<organization_id>`).
+   The application mints short-lived HS256 connection tokens whose
+   `channels` claim subscribes the connection server-side to exactly the
+   session's active Organization; clients never choose channels and the
+   namespace denies client-initiated subscriptions. Token refresh goes
+   through the application, which re-verifies membership (401 ends the
+   connection).
+2. Events are ids-only invalidation hints (`person.changed`,
+   `intake.unresolved_changed`) — never state, never PII. Clients respond
+   by re-fetching authoritative data over the normal authenticated API.
+3. Publishing is best-effort after commit, off the request path; a failed
+   publish is logged, never a failed command. Recovery is by refetch:
+   reconnect invalidates everything, plus interval and focus refetches.
+   No transactional outbox, no Centrifugo history, no per-user channels
+   until an event needs semantics beyond invalidation or multi-pod
+   deployment arrives.
+4. Development transport: the WebSocket is path-routed under the API
+   hostname (`api.tarams.org/connection/websocket`) in the committed
+   cloudflared ingress, behind Cloudflare Access; production expresses
+   the same as an `HTTPRoute` path match (D-018). Routing realtime to a
+   hostname that bypasses Access is a security-boundary change and is
+   not adopted without an explicit decision.
+
 ---
 
 ## Open decisions
@@ -394,3 +451,31 @@ D-021 fixes scope and principle. These defaults were proposed on
 Blocks: nothing before Slice 004 planning. Questions for that plan: whether
 an Organization admin may revoke memberships in 004 or only invite; whether
 the platform surface lists/suspends Organizations or only creates them.
+
+### O-008 — AI next-step suggestions after each communication and daily (OPEN — intent recorded, design open)
+
+Product intent recorded 2026-08-21 (user): after every communication
+with a Person is attempted or completed — call, email, SMS, chat — the
+system automatically runs that Person's communication history through an
+AI and asks it to suggest next steps for the agent. The same pass also
+runs on a schedule, once a day, so People nobody has contacted still get
+fresh suggestions.
+
+Constraints already fixed by accepted decisions, so the design cannot
+drift from them: the AI *suggests*; Today's ranking stays deterministic
+and explainable (D-010) and the model may explain but never secretly
+decide priority; any proposed action executes only through the typed
+command layer with application-enforced risk classification and
+confirmation (D-008, D-009); message bodies, transcripts, and emails are
+untrusted content and must never be interpreted as instructions
+(`AGENTS.md` §5.3); only the minimum necessary history is sent (§5.3);
+inference goes through the provider-neutral abstraction (D-001, Groq
+initially). "Autonomous AI nurture" remains deferred (thesis §11) — this
+is suggestion, not autonomous outreach.
+
+Open: trigger mechanism (after the communication fact is committed; the
+daily pass as a scheduled job), where suggestions are stored and how
+they appear (Today reasons? Person detail? Operator?), cost/latency
+budget, and what "communication history" includes once calls, SMS, email,
+and chat exist. No work before the communication slices (D-021
+sequencing: 006 calling onward). Blocks: nothing.

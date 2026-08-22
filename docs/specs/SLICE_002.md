@@ -386,8 +386,10 @@ present), else `primary_email`, else `primary_phone` (a Person always has
 at least one contact method, so it is never empty).
 
 **History entries.** `kind` is one of `inquiry_received`,
-`routing_decision`, `assignment_changed`, `stage_changed`. `detail` per
-kind (ids always accompanied by resolved names):
+`routing_decision`, `assignment_changed`, `stage_changed` — plus
+`contact_attempted` (`kind_rank` 4, `detail {channel, outcome}`), added
+by SLICE_003 §5 as a declared additive change (AGENTS.md §11). `detail`
+per kind (ids always accompanied by resolved names):
 
 - `inquiry_received`: `{inquiry_id, source, person_created, matched_by}`
 - `routing_decision`: `{inquiry_id, strategy, assignee: {id, display_name} | null}`

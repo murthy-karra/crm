@@ -4,21 +4,25 @@ Last updated: 2026-08-21
 
 ## Current phase
 
-Slice 002 (lead intake) merged to `main` (`0e764aa` backend,
-`70a33f2`/`1c4384b` frontend). Implemented, independently reviewed,
-adversarially tested, fixed, verified with a live two-process browser
-walkthrough, and re-verified green on `main` after merge (`./scripts/check`
-full pass: fmt, clippy, all Rust tests, web lint/typecheck/build). Ready
-to plan Slice 003.
+Slice 003 (Today + realtime) **specification approved** (user,
+2026-08-21). Next: the implementation gate. Slice 002 is merged and
+verified on `main`.
 
 ## Current slice
 
-None active. Next up: Slice 003 (Today + realtime; spec sketch at
-`docs/specs/SLICE_002.md` §16). After it, Slice 004 is administration
-(D-021): platform-admin creates Organizations and invites their admin;
-Organization admins invite agents; first membership roles; seeding moves
-onto the application path. Operator retrieval becomes Slice 005, calling
-Slice 006.
+Slice 003 — Today + realtime. `docs/specs/SLICE_003.md` (APPROVED). Flow: `crm-planner` plan (nine scope questions answered with
+recommendations) → `crm-reviewer` review of the plan (17 findings, all
+applied as safe defaults / implementation notes; verdict "ready for spec
+drafting with amendments") → one product decision taken by the user and
+recorded as D-022 (contact attempt as the unit of response) → spec
+drafted → second reviewer pass over the spec (13 amendments — notably:
+the 24 h tier boolean is computed once in SQL so `rank()` and the
+`ORDER BY` cannot disagree at the boundary; the isolation and
+`kind_rank` tests were vacuous as first written; a Centrifugo-level
+no-replay recovery test was missing; `occurred_at` for the unresolved
+event was undefined) — all applied; verdict "ready for user approval".
+After 003: Slice 004 administration (D-021), 005 Operator retrieval,
+006 calling.
 
 ## Current branch
 
@@ -28,6 +32,17 @@ removed after merging (`slice-002-intake`, `slice-002-web`).
 ## Last accepted decision
 
 2026-08-21, user-accepted:
+- D-023 — realtime model: one Organization channel with server-side
+  subscriptions in API-minted short-lived tokens; ids-only events;
+  best-effort publish after commit with recovery by refetch; dev
+  WebSocket path-routed under the API hostname behind Access.
+- Slice 003 specification approved as written, including the §14 safe
+  defaults and the declared additive history-kind change to SLICE_002
+  §5 (pointer line added there).
+- D-022 — a contact attempt is a recorded fact (`contact_attempted`, the
+  fifth typed fact table) and the unit of response for Today; any
+  member's attempt counts; stage does not remove a Person from Today;
+  done/snooze/dismiss remain unspecified (thesis §8).
 - D-021 — Slice 004 is administration (platform admin + invitations +
   roles) and, from 004 on, nothing outside migrations writes to the
   database directly: seed/CLI/API all go through the same domain
@@ -460,6 +475,12 @@ local (no CI yet):
 
 ## Backlog (deferred, not blocking)
 
+- **O-008 (user intent, 2026-08-21): AI next-step suggestions** — after
+  every communication attempt/completion (call, email, SMS, chat) and
+  once a day, run the Person's communication history through an AI and
+  suggest next steps. Reminder only; design open; no work before the
+  communication slices. Full note in the decision log.
+
 From the Slice 001 reviews — appropriately low priority per both
 reviewers' own framing (dev-only script, latent/library-internal, or
 requires a self-registration flow that doesn't exist yet):
@@ -513,15 +534,45 @@ slice:
 
 ## Next recommended action
 
-Plan Slice 003 (Today + realtime) with the `crm-planner` subagent,
-following the same plan → review → spec → review → approve → implement
-→ review → test → verify → commit → merge flow used for Slices 000–002.
+Implement Slice 003. The user intends to run implementation in a
+separate session with a faster model, so the handoff lives entirely in
+the repository: `docs/specs/SLICE_003.md` (APPROVED) plus the two lane
+briefs `docs/tasks/SLICE_003_LANE_A.md` (backend; owns the migration,
+`backend/**`, `scripts/**`, `infra/**`, `.env.example`, README dev
+section; branch `slice-003-realtime` in the main checkout) and
+`docs/tasks/SLICE_003_LANE_B.md` (web; owns `web/**`; branch
+`slice-003-web` in a worktree; integrates against Lane A once its step 1
+lands; merges after Lane A).
 
-Slice 003 planning should not pull administration work forward, but
-should avoid baking in "all members are equal" anywhere a later `role`
-on `organization_membership` would contradict it (D-021). Slice 004
-planning starts from D-021 and O-007.
+Implementation gate (AGENTS.md §13; present before writing code):
+- Outcome: SLICE_003 §1 steps 1–9.
+- Changes: the one migration; `realtime/*`, `domain/today/*`,
+  `commands/log_contact_attempt.rs`, routes `today`/`realtime`/`people`;
+  `state.rs`/`config.rs`; `.sqlx/`; `infra/development/centrifugo/
+  config.json` and `cloudflared/config.yml`; `scripts/demo-leads`,
+  `check`, `check-db`; `.env.example`, README; `web/src/realtime/*`,
+  `TodayView`, `LogContactDialog`, `PersonDetailView`, `AppShell`,
+  `router`, `api/*`, `package.json`/lockfile.
+- Exclusions: SLICE_003 §12.
+- Checks: `./scripts/check` with no services; `./scripts/check-db` with
+  `dev-services up` (now includes Centrifugo-backed tests and sqlx
+  `prepare --check`); web lint/typecheck/test/build; the §1 walkthrough
+  through the tunnel.
+- Risks: Access + WebSocket upgrade through the path-routed ingress
+  (fallback is a user decision); `centrifuge` SDK refresh semantics;
+  realtime test flakiness; the `.env` `CENTRIFUGO_TOKEN_HMAC_SECRET`
+  possibly shorter than 32 bytes (regenerate + restart Centrifugo).
+- Environment prerequisite: `./scripts/dev-services down && up` so
+  Centrifugo loads the new namespace config.
+
+After both lanes self-verify green: independent review (`crm-reviewer`)
+and adversarial testing (`crm-tester`) against the real diffs, diffing
+each lane's reported file list against actual `git status` (standing
+lesson from Slice 002); fix; re-verify; live walkthrough; commit and
+merge gates; then update this file.
 
 ## Approval currently required
 
-None right now. Next gate: approval of the Slice 003 scope/plan.
+"Proceed with implementation?" at the Slice 003 implementation gate
+(the user has approved the spec; the gate itself has not been presented
+in an implementing session yet).

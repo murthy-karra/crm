@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# Verifies the dev Cloudflare tunnel's actual routing — the layer that
+# broke silently in D-025 (docs/decisions/DECISION_LOG.md) while every
+# other check stayed green, because ./scripts/check and ./scripts/check-db
+# deliberately test the application over loopback, never the tunnel
+# (see the README "External connectivity" section for why: the app's
+# correctness and the tunnel's plumbing are different concerns, and
+# routing the real integration suite through Cloudflare's edge would
+# make it slow and dependent on external, stateful infra for no gain in
+# assertion strength).
+#
+# This script tests only the plumbing: does each hostname actually reach
+# what it's supposed to. It does not start the tunnel, does not require
+# .env, and is not part of ./scripts/check or ./scripts/check-db — run it
+# by hand after touching infra/development/cloudflared/ or the Cloudflare
+# dashboard routes, or whenever the realtime indicator looks wrong through
+# the tunnel and you want to know if it's the app or the network.
+set -euo pipefail
+
+app_url="${CRM_TUNNEL_APP_URL:-https://app.tarams.org}"
+api_url="${CRM_TUNNEL_API_URL:-https://api.tarams.org}"
+
+fail=0
+
+echo "==> $app_url (should reach the web app, not a Cloudflare error page)"
+app_status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "$app_url" || echo "000")"
+if [ "$app_status" = "200" ]; then
+  echo "    OK ($app_status)"
+else
+  echo "    FAILED: HTTP $app_status (expected 200)" >&2
+  echo "    Is ./scripts/dev-tunnel running, and ./scripts/dev-web?" >&2
+  fail=1
+fi
+
+echo "==> $api_url/api/health (should reach the Rust API directly)"
+health_status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "$api_url/api/health" || echo "000")"
+if [ "$health_status" = "200" ]; then
+  echo "    OK ($health_status)"
+else
+  echo "    FAILED: HTTP $health_status (expected 200)" >&2
+  echo "    Is ./scripts/dev-tunnel running, and ./scripts/dev-api?" >&2
+  fail=1
+fi
+
+echo "==> $api_url/connection/websocket (should reach Centrifugo, not the API)"
+# A successful upgrade leaves the connection open with no natural EOF, so
+# curl always runs until --max-time regardless of outcome and always exits
+# nonzero (28) even on success — that's expected, not a failure signal.
+# What matters is whether the response line itself says 101. Discard
+# stderr rather than merging it: curl's own timeout message, printed as
+# the connection is torn down, can otherwise interleave before the
+# already-received status line in the captured output.
+ws_headers="$(
+  curl -sS -i --http1.1 --no-buffer --max-time 3 \
+    -H "Connection: Upgrade" -H "Upgrade: websocket" \
+    -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
+    "$api_url/connection/websocket" 2>/dev/null || true
+)"
+ws_status_line="$(printf '%s\n' "$ws_headers" | grep -m1 '^HTTP/' || true)"
+if printf '%s' "$ws_status_line" | grep -q "101"; then
+  echo "    OK (101 Switching Protocols)"
+else
+  echo "    FAILED: got \"${ws_status_line:-no response}\" (expected \"HTTP/1.1 101 Switching Protocols\")" >&2
+  if printf '%s' "$ws_headers" | grep -qi "x-request-id"; then
+    cat >&2 <<EOF
+    This response carries the Rust API's own x-request-id header, which
+    means the request fell through to the plain api.* -> :3000 rule
+    instead of being caught by the api.*/connection/websocket -> :8000
+    rule. This is the D-025 failure mode: in the Cloudflare dashboard
+    (Zero Trust -> Networks -> Tunnels -> crm-dev -> Routes), the
+    api.tarams.org/connection/websocket route must be ordered ABOVE the
+    plain api.tarams.org route (routes are evaluated top-to-bottom,
+    first match wins; there's no drag-to-reorder — delete and re-add
+    the route that should sort later). See README "External
+    connectivity" and docs/decisions/DECISION_LOG.md D-025.
+EOF
+  else
+    echo "    Is Centrifugo running (./scripts/dev-services up) and is ./scripts/dev-tunnel up?" >&2
+  fi
+  fail=1
+fi
+
+if [ "$fail" -eq 0 ]; then
+  echo "==> tunnel routing OK"
+else
+  echo "==> tunnel routing FAILED — see above" >&2
+  exit 1
+fi

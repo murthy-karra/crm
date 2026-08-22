@@ -227,11 +227,19 @@ Then run:
 ./scripts/dev-tunnel
 ```
 
-There is no Cloudflare Access step (D-024): the tunnel routes straight to the app, and the app's own login screen is the only gate. Before trusting either hostname, confirm both actually reach the application — `https://app.tarams.org` should show the login page and `https://api.tarams.org/api/health` should return a JSON health response, not a Cloudflare error page.
+There is no Cloudflare Access step (D-024): the tunnel routes straight to the app, and the app's own login screen is the only gate.
 
-The realtime WebSocket (`wss://api.tarams.org/connection/websocket`) rides the same tunnel as every other `api.*` request — see the dashboard route above (D-025) and `CENTRIFUGO_TOKEN_HMAC_SECRET` above. Verify it directly if in doubt: a raw WebSocket-upgrade request to `https://api.tarams.org/connection/websocket` should return `101 Switching Protocols`, not `404` (a 404 with the API's own CORS/`X-Request-Id` headers means the request fell through to the `:3000` catch-all instead of reaching Centrifugo on `:8000` — check the route order above).
+The realtime WebSocket (`wss://api.tarams.org/connection/websocket`) rides the same tunnel as every other `api.*` request — see the dashboard route above (D-025) and `CENTRIFUGO_TOKEN_HMAC_SECRET` above. Before trusting the tunnel, or any time it's misbehaving, run:
+
+```sh
+./scripts/check-tunnel
+```
+
+This checks only the network plumbing — not part of `./scripts/check`/`./scripts/check-db`, which deliberately test the application over loopback and never depend on the tunnel or external Cloudflare state (see "Why not route the integration tests through the tunnel" below). It confirms `app.tarams.org` reaches the web app, `api.tarams.org/api/health` reaches the Rust API, and a raw WebSocket upgrade to `api.tarams.org/connection/websocket` returns `101 Switching Protocols`, not `404` — printing a specific diagnosis (pointing at D-025's route-ordering fix) when that last check fails the way it did the day this was written.
+
+**Why not route the integration tests through the tunnel instead of loopback:** the DB-backed and Centrifugo-backed suites (`./scripts/check-db`) test *application* correctness — tenant isolation, ranking, event contracts — which is a different concern from whether Cloudflare's routing happens to be configured correctly right now. Running that suite over the tunnel would make every run slower (real network round-trips instead of loopback) and dependent on external, stateful infra (the tunnel process, DNS, your Cloudflare account) for assertions that have nothing to do with any of that — the opposite of the fast, hermetic local loop this project deliberately has instead of CI (D-016 §9). `check-tunnel` exists precisely to cover the one thing the hermetic suite structurally can't: whether the real network path is wired correctly.
 
 ### Troubleshooting
 
 - **Centrifugo rejects a freshly-minted token as expired.** Docker Desktop's VM clock can drift after the host sleeps, so the container's notion of "now" runs ahead of or behind the API process's. Restart Docker Desktop (or just the `centrifugo` container: `./scripts/dev-services down && ./scripts/dev-services up`) to resync the clock.
-- **The realtime indicator is stuck on "reconnecting…" through the tunnel, but works on loopback.** Check the dashboard route order (D-025) first — this is the most likely cause, not an app bug. Restarting `cloudflared` does not help; it does not re-read `config.yml`'s ingress for this tunnel.
+- **The realtime indicator is stuck on "reconnecting…" through the tunnel, but works on loopback.** Run `./scripts/check-tunnel` first — the dashboard route order (D-025) is the most likely cause, not an app bug. Restarting `cloudflared` does not help; it does not re-read `config.yml`'s ingress for this tunnel.

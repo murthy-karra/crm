@@ -4,30 +4,39 @@ Last updated: 2026-08-22
 
 ## Current phase
 
-Slice 003 (Today + realtime) **specification approved** (user,
-2026-08-21). Next: the implementation gate. Slice 002 is merged and
-verified on `main`.
+Slice 003 (Today + realtime) **implemented, verified, and merged to
+`main`** (2026-08-22). Local `main` is 16 commits ahead of
+`origin/main` (not yet pushed — see Next recommended action). Next:
+Slice 004 administration (D-021), once planned.
 
 ## Current slice
 
-Slice 003 — Today + realtime. `docs/specs/SLICE_003.md` (APPROVED). Flow: `crm-planner` plan (nine scope questions answered with
-recommendations) → `crm-reviewer` review of the plan (17 findings, all
-applied as safe defaults / implementation notes; verdict "ready for spec
-drafting with amendments") → one product decision taken by the user and
-recorded as D-022 (contact attempt as the unit of response) → spec
-drafted → second reviewer pass over the spec (13 amendments — notably:
-the 24 h tier boolean is computed once in SQL so `rank()` and the
-`ORDER BY` cannot disagree at the boundary; the isolation and
-`kind_rank` tests were vacuous as first written; a Centrifugo-level
-no-replay recovery test was missing; `occurred_at` for the unresolved
-event was undefined) — all applied; verdict "ready for user approval".
-After 003: Slice 004 administration (D-021), 005 Operator retrieval,
-006 calling.
+None open. Slice 003 — Today + realtime — is complete.
+`docs/specs/SLICE_003.md` (APPROVED, implemented as specified with one
+pre-approved additive contract change to SLICE_002 §5). Flow:
+`crm-planner` plan (nine scope questions) → `crm-reviewer` review (17
+findings applied) → D-022 (contact attempt as the unit of response) →
+spec drafted → second reviewer pass (13 amendments applied) → D-023
+(realtime model) → user approval → two parallel lanes (backend on
+`slice-003-realtime`, web on `slice-003-web` worktree) → independent
+review (`crm-reviewer`: ready to merge, no blocking findings) →
+adversarial testing (`crm-tester`: one real bug found — a realtime
+disconnect-code gap that could silently freeze the status indicator at
+"connected" — and one test-coverage gap, both closed) → live browser
+walkthrough (all 8 scenarios pass) → merged. Along the way, two
+dev-environment decisions were made and executed: D-024 (Cloudflare
+Access removed from the dev tunnel) and D-025 (the dev tunnel turned
+out to be dashboard-managed, not file-managed; the Slice 003 realtime
+WebSocket route was fixed live in the Cloudflare dashboard and verified
+working through the actual public tunnel with a real two-browser
+cross-session walkthrough). After 003: Slice 004 administration
+(D-021), 005 Operator retrieval, 006 calling.
 
 ## Current branch
 
-`main`, clean, both feature branches deleted and the frontend worktree
-removed after merging (`slice-002-intake`, `slice-002-web`).
+`main`, clean, 16 commits ahead of `origin/main`. `slice-003-realtime`
+and `slice-003-web` are merged but not yet deleted; the
+`/Users/karrad/projects/crm-web` worktree is not yet removed.
 
 ## Last accepted decision
 
@@ -602,8 +611,53 @@ each lane's reported file list against actual `git status` (standing
 lesson from Slice 002); fix; re-verify; live walkthrough; commit and
 merge gates; then update this file.
 
+**Done** (2026-08-22). Both lanes implemented and self-verified green.
+`crm-reviewer` independently re-ran every check both lanes claimed
+(fmt, clippy, full test suites including the live Centrifugo test, web
+lint/typecheck/test/build, a live `demo-leads` run) and found no
+blocking issues — `git status` matched both lanes' reported file lists
+exactly, no repeat of the Slice 002 undisclosed-file lesson.
+`crm-tester` found one real bug (the realtime disconnect-status
+composable didn't treat Centrifugo's 4500–4999 code range as terminal,
+matching the frozen spec text exactly but not the actual SDK — status
+could get silently stuck at "connected" forever with no indicator) and
+one coverage gap (no test for two commands racing the same Person).
+Both fixed: Lane B widened the terminal-code check and added a
+regression test plus a cheap re-entrancy guard on the log-contact
+dialog; Lane A added two concurrent-command tests proving the reused
+`FOR UPDATE` lock pattern holds under a real race. Re-verified green.
+Live browser walkthrough (headless Playwright, 8 scenarios from spec
+§1) all passed, with one environmental-only caveat (residual test data
+in the dev DB meant "empty Today on first login" couldn't be observed
+literally, though the mechanism was proven via a genuinely empty
+second Organization).
+
+Merged to `main`: `slice-003-realtime` (`--no-ff`, 9 commits) then
+`slice-003-web` (`--no-ff`, 3 commits), zero conflicts. Full
+`./scripts/check` and `./scripts/check-db` re-run clean on the merged
+`main` (not just the pre-merge branches) — fmt, clippy, all
+service-free/DB-backed/Centrifugo-backed tests, web
+lint/typecheck/28 tests/build.
+
+Separately, mid-verification, the user asked for a real live
+walkthrough through the actual Cloudflare tunnel (not loopback), which
+surfaced and led to fixing two real dev-environment issues, both
+recorded as decisions: D-024 (Cloudflare Access removed — redundant
+given the app's own login) and D-025 (the tunnel was silently
+dashboard-managed, not file-managed as documented, so the realtime
+WebSocket route in `config.yml` was never actually applied — fixed
+live in the Cloudflare dashboard, verified with a real `101 Switching
+Protocols` upgrade and a full two-browser cross-session walkthrough
+over the public tunnel).
+
 ## Approval currently required
 
-"Proceed with implementation?" at the Slice 003 implementation gate
-(the user has approved the spec; the gate itself has not been presented
-in an implementing session yet).
+None blocking. Two housekeeping items pending the user's go-ahead
+(not urgent):
+1. Push `main` to `origin` (16 commits ahead, currently local-only).
+2. Delete the merged `slice-003-realtime` and `slice-003-web` branches
+   and remove the `/Users/karrad/projects/crm-web` worktree, per the
+   pattern from prior slices.
+
+Next substantive decision: when to plan Slice 004 (administration,
+D-021/O-007).

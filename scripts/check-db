@@ -23,6 +23,19 @@ if [ -z "${MIGRATION_DATABASE_URL:-}" ]; then
   exit 1
 fi
 
+# Step 0: Centrifugo reachability precheck (docs/specs/SLICE_003.md §13).
+# This suite now includes a Centrifugo-backed test that must fail loudly,
+# never skip, when the container is down (tests/centrifugo_realtime.rs
+# already does this on its own); checking here too surfaces a down
+# container immediately, before the slower sqlx-prepare/test steps run.
+centrifugo_api_url="${CRM_CENTRIFUGO_API_URL:-http://127.0.0.1:8000/api}"
+centrifugo_health_url="${centrifugo_api_url%/api}/health"
+echo "==> centrifugo: health endpoint ($centrifugo_health_url)"
+if ! curl -fsS --max-time 2 "$centrifugo_health_url" >/dev/null 2>&1; then
+  echo "Centrifugo not reachable at $centrifugo_health_url. Run ./scripts/dev-services up first." >&2
+  exit 1
+fi
+
 # Step 1: verify backend/.sqlx/ still matches the real schema (catches
 # nullability/type drift an offline compile cannot) — a throwaway,
 # freshly-migrated database, never the dev database (docs/specs/SLICE_002.md

@@ -101,6 +101,12 @@ Notable defaults and constraints, applied in code:
 | `CRM_WEB_API_PROXY_TARGET` | `http://127.0.0.1:3000` | Loopback HTTP only |
 | `CRM_WEB_ALLOWED_HOSTS` | Unset locally | One exact tunnel hostname, never a wildcard |
 | `VITE_API_BASE_URL` | `/api` | Browser-visible, root-relative path |
+| `CENTRIFUGO_HTTP_API_KEY` | Required, no default | Centrifugo publish credential; the same value `dev-services` passes to the Centrifugo container; the API refuses to start if empty |
+| `CENTRIFUGO_TOKEN_HMAC_SECRET` | Required, no default, **at least 32 bytes** | Connection-token signing secret; the same value `dev-services` passes to Centrifugo as `client.token.hmac_secret_key`. Regenerate with `openssl rand -hex 32` (64 hex characters = 32 bytes) and run `./scripts/dev-services down && ./scripts/dev-services up` if an existing value is shorter — both the API and the container must agree, so update `.env` and restart the container together |
+| `CRM_CENTRIFUGO_API_URL` | `http://127.0.0.1:8000/api` | Centrifugo's HTTP API base URL; `http://` only, no trailing slash |
+| `CRM_REALTIME_TOKEN_TTL_SECONDS` | `600`, bounded 60–3600 | Connection-token lifetime |
+| `CRM_WEB_REALTIME_PROXY_TARGET` | `http://127.0.0.1:8000` | Vite's WebSocket proxy target for `/connection` |
+| `CRM_DEMO_API_URL` | `http://127.0.0.1:3000` | `scripts/demo-leads`' target |
 
 Use synthetic development data only. Direct remote database access must use a private path such as SSH port forwarding; do not expose PostgreSQL publicly or place its connection URL in shell history.
 
@@ -176,7 +182,17 @@ Run the database-backed suite against the running local container (requires `dev
 ./scripts/check-db
 ```
 
-This first re-verifies `backend/.sqlx/` against a throwaway, freshly-migrated database (`cargo sqlx prepare --check --workspace`, catching schema/type drift an offline compile cannot), then exercises the full session lifecycle, tenant isolation between two Organizations, session/membership revocation, the `crm_migrator`/`crm_app` role boundary, the append-only fact tables, and the full lead-intake flow (including its two concurrency races), each against its own fresh ephemeral database with migrations applied from scratch. Requires sqlx-cli (see prerequisites above).
+This first checks that Centrifugo answers its health endpoint (a clear, immediate failure — never a skip — if the container is down), then re-verifies `backend/.sqlx/` against a throwaway, freshly-migrated database (`cargo sqlx prepare --check --workspace`, catching schema/type drift an offline compile cannot), then exercises the full session lifecycle, tenant isolation between two Organizations, session/membership revocation, the `crm_migrator`/`crm_app` role boundary, the append-only fact tables, the full lead-intake flow (including its two concurrency races), the Today read model, the realtime publisher's exact event contract per command, and — against the real Centrifugo container, reading `CENTRIFUGO_*` values from the environment because they must match the running container — connection-token scoping, cross-Organization channel isolation, expired/mis-signed token rejection, and no-replay reconnect recovery. Each DB-backed test runs against its own fresh ephemeral database with migrations applied from scratch. Requires sqlx-cli (see prerequisites above).
+
+### Demo data
+
+Log in as `alice@acme.test` through the web app (or hold a session cookie some other way), then post five realistic leads over HTTP — one assigned to Carol, mixed phone/email, a fresh `submission_id` per run so repeated runs add repeat inquiries rather than deduping:
+
+```sh
+./scripts/demo-leads
+```
+
+Requires `dev-api` running and `jq` installed. Reads the login password from `.env` (`CRM_DEV_SEED_PASSWORD`), never from argv; targets `http://127.0.0.1:3000` by default (`CRM_DEMO_API_URL` to override).
 
 ### Offline query cache
 
@@ -219,3 +235,10 @@ Before trusting either hostname, verify Access is actually in front of both: fro
 Set `CRM_SESSION_COOKIE_SECURE=true` before logging in through the tunnel, and confirm the app's own login still works once you're past Access — the two are independent layers.
 
 A future webhook-receiving hostname will bypass Access (webhooks cannot complete a login challenge) and instead verify requests itself, e.g. via provider signatures.
+
+The realtime WebSocket (`wss://api.tarams.org/connection/websocket`) rides the same tunnel and Access session as every other `api.*` request — see `infra/development/cloudflared/config.yml`'s path-routed ingress rule and `CENTRIFUGO_TOKEN_HMAC_SECRET` above.
+
+### Troubleshooting
+
+- **Centrifugo rejects a freshly-minted token as expired.** Docker Desktop's VM clock can drift after the host sleeps, so the container's notion of "now" runs ahead of or behind the API process's. Restart Docker Desktop (or just the `centrifugo` container: `./scripts/dev-services down && ./scripts/dev-services up`) to resync the clock.
+- **The realtime indicator is stuck on "reconnecting…" through the tunnel, even though the app otherwise works.** The per-hostname Cloudflare Access session for `api.*` has its own expiry, independent of the app's login session (see "Access sessions are scoped per hostname" above) — a WebSocket upgrade is a request like any other, so an expired `api.*` Access session blocks it the same way it would block a `fetch()`. Visit `https://api.tarams.org/api/health` directly (a real top-level page load) to re-establish the Access session, then reload the app.

@@ -5,3 +5,4 @@ pub mod people;
 pub mod realtime;
 pub mod session;
 pub mod stages;
+pub mod today;

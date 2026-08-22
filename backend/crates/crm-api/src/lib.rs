@@ -45,6 +45,7 @@ pub fn build_app(state: AppState) -> Router {
         .merge(routes::intake::router())
         .merge(routes::stages::router())
         .merge(routes::realtime::router())
+        .merge(routes::today::router())
         .with_state(state)
         .layer(
             ServiceBuilder::new()

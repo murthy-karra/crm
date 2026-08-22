@@ -33,6 +33,21 @@ impl ContactChannel {
             ContactChannel::Other => "other",
         }
     }
+
+    /// Decodes a value read back from the `channel` CHECK-constrained
+    /// column. Used by `domain::today::queries` to build `ContactAttemptRef`
+    /// from a raw row; `None` means the database contained a value the
+    /// application doesn't recognize (should be unreachable given the
+    /// CHECK constraint, but a read path must fail closed, not panic).
+    pub fn decode(s: &str) -> Option<Self> {
+        match s {
+            "call" => Some(ContactChannel::Call),
+            "text" => Some(ContactChannel::Text),
+            "email" => Some(ContactChannel::Email),
+            "other" => Some(ContactChannel::Other),
+            _ => None,
+        }
+    }
 }
 
 /// `"reached" | "no_answer" | "left_message" | "sent"`
@@ -53,6 +68,17 @@ impl ContactOutcome {
             ContactOutcome::NoAnswer => "no_answer",
             ContactOutcome::LeftMessage => "left_message",
             ContactOutcome::Sent => "sent",
+        }
+    }
+
+    /// See `ContactChannel::decode`.
+    pub fn decode(s: &str) -> Option<Self> {
+        match s {
+            "reached" => Some(ContactOutcome::Reached),
+            "no_answer" => Some(ContactOutcome::NoAnswer),
+            "left_message" => Some(ContactOutcome::LeftMessage),
+            "sent" => Some(ContactOutcome::Sent),
+            _ => None,
         }
     }
 }

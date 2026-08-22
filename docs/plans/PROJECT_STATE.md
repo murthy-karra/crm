@@ -446,18 +446,17 @@ Earlier the same day, user-accepted:
    (e.g. "Ada Lovelace", "Grace Hopper", an unresolved "website" entry).
    Harmless local data; `./scripts/dev-services down` + `up` + re-migrate
    + re-seed resets it if a clean slate is wanted before real use.
-6. Not blocking, discovered during the Slice 004 live walkthrough:
-   `./scripts/dev-services down` does not drop the `crm_postgres_data`
-   named volume, so `down && up` alone is not a true clean slate (a
-   prior review session's "Cedar Realty" Organization was still present
-   after a `down && up` before the walkthrough re-ran with `down -v`).
-   The current dev database holds the Slice 004 walkthrough's artifacts
-   (Cedar Realty; Erin/Frank/Gina invitations) on top of the standard
-   seed — real, verified-correct rows, harmless locally.
-   `./scripts/dev-services down -v && up` + `db-migrate` +
-   `dev-bootstrap` gives an actual clean slate. Worth fixing the script
-   itself (or its README instructions) in a later small change, not
-   part of this slice's scope.
+6. Resolved 2026-08-22: `./scripts/dev-services down` did not drop the
+   `crm_postgres_data` named volume, so `down && up` alone was not a
+   true clean slate (discovered during the Slice 004 live walkthrough —
+   a prior review session's "Cedar Realty" Organization was still
+   present). Fixed: `down` now accepts an optional `-v`/`--volumes` flag
+   (`compose down -v`); plain `down` still keeps data (needed for the
+   restart-only use cases already documented — Centrifugo HMAC-secret
+   changes, Docker Desktop clock drift). README's dev-services section
+   documents both forms. Used immediately after fixing to get a real
+   clean slate (`down -v && up && db-migrate && dev-bootstrap`) before
+   the tunnel walkthrough below.
 5. Not blocking, dev-only (D-025): the dev tunnel's real routing config
    lives only in the Cloudflare dashboard now, not in the repo — a fresh
    clone or a recreated tunnel would need the three dashboard routes

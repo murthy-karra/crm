@@ -30,13 +30,24 @@ case "$action" in
     compose exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "$provision_sql"
     ;;
   down)
-    compose down
+    case "${2:-}" in
+      -v|--volumes)
+        compose down -v
+        ;;
+      "")
+        compose down
+        ;;
+      *)
+        echo "usage: $0 down [-v|--volumes]" >&2
+        exit 1
+        ;;
+    esac
     ;;
   status)
     compose ps
     ;;
   *)
-    echo "usage: $0 [up|down|status]" >&2
+    echo "usage: $0 [up|down [-v|--volumes]|status]" >&2
     exit 1
     ;;
 esac

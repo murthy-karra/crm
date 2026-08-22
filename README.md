@@ -116,10 +116,13 @@ Use synthetic development data only. Direct remote database access must use a pr
 PostgreSQL and Centrifugo run as loopback-only Docker containers:
 
 ```sh
-./scripts/dev-services up      # start, waiting for both healthchecks
-./scripts/dev-services status  # show container status
-./scripts/dev-services down    # stop and remove containers
+./scripts/dev-services up            # start, waiting for both healthchecks
+./scripts/dev-services status        # show container status
+./scripts/dev-services down          # stop and remove containers, keep data
+./scripts/dev-services down -v       # stop and remove containers AND data (true clean slate)
 ```
+
+Plain `down` keeps the PostgreSQL data volume — use it to restart the containers (e.g. to pick up a changed `.env` value like `CENTRIFUGO_TOKEN_HMAC_SECRET`, or to resync Docker Desktop's VM clock) without losing local data. Use `down -v` when you actually want a fresh database (e.g. before `dev-bootstrap` if a prior session left conflicting data, such as a duplicate Organization name).
 
 Verify both are healthy (outside the main repository gate, since it must stay service-free):
 

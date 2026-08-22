@@ -3,6 +3,10 @@
 Status: APPROVED (user, 2026-08-22; planner pass, then independent
 review — 15 findings, all applied as safe defaults or implementation
 notes, none blocking; §14 safe defaults accepted as written).
+IMPLEMENTED 2026-08-22 (both lanes merged to `main` at `82630ca`). The
+implementation notes marked *[impl]* below record the safe defaults and
+declared refinements adopted during implementation; code is
+authoritative where they differ from the original sketch.
 Builds on: Slice 004 (`main` at `1ed84b0`).
 Targets: D-001 (provider-neutral inference, Groq first), D-008 (one typed
 command/query layer; no second data path for the Operator), D-009
@@ -268,10 +272,12 @@ pub struct TodayItemView { position: usize, person: PersonCard, priority: String
 pub struct TodayView { generated_at, total: usize, truncated: bool, items: Vec<TodayItemView> }
 pub struct NextWorkItem { item: Option<TodayItemView>, total: usize }
 pub enum PriorityExplanation {
-    OnToday { position, total, priority, reasons, waiting_since, recommended_action,
+    OnToday { person: PersonCard, position, total, priority, reasons, waiting_since, recommended_action,
               ordering_rule: &'static str /* "high_before_normal, then waiting_since ascending, then id" */,
               ahead: { high: usize, normal: usize } },
-    NotOnToday { reason: NotAssignedToYou { assigned_user_display_name: Option<String> } | AlreadyContacted },
+    NotOnToday { person: PersonCard, reason: NotAssignedToYou { assigned_user_display_name: Option<String> } | AlreadyContacted },
+    // [impl] `person` is carried on both variants so the loop can build the §4 reference card from
+    // this tool without a second call; the adapter has already resolved it through the scope.
     // An invisible/nonexistent person_id is ToolError::NotFound (§7), never a variant here: the adapter
     // calls summary_by_id (Organization-scoped) first, so assigned_user_display_name is only ever
     // populated for a Person visible in the caller's Organization.
@@ -311,10 +317,17 @@ has tool calls, execute at most `max_calls_per_round` **sequentially**
 (they share one DB pool; parallelism is LATER), append results, repeat;
 if it has content, return it. Unknown tool / non-JSON arguments / schema
 violation → one structured `invalid_arguments` result; two in a row →
-`MalformedToolCall`. On round exhaustion, one final call with
+`MalformedToolCall` (canned reply *[impl]*: "I had trouble looking that
+up — try asking more specifically."). A round that asks for more than
+`max_calls_per_round` tools executes the first `max_calls_per_round`,
+answers the rest with a structured `invalid_arguments`, and counts as
+one malformed round — two in a row end the turn the same way *[impl]*.
+On round exhaustion, one final call with
 `tool_choice: "none"`; if that also fails, the canned reply "I couldn't
 finish that — try asking more specifically." with
-`outcome: tool_budget_exhausted`. Whole loop under
+`outcome: tool_budget_exhausted`. A tool still running when the turn
+deadline fires is recorded in the ledger as `error` (it started; the
+audit must show it) *[impl]*. Whole loop under
 `tokio::time::timeout(turn_timeout)`. Provider `Unavailable` → one retry
 only if > 5 s of budget remain; `RateLimited` → no retry; `Timeout` →
 no retry.
@@ -491,7 +504,7 @@ unchanged.
 
 ```
 CRM_OPERATOR_BASE_URL=https://api.groq.com/openai/v1   # any OpenAI-compatible endpoint
-CRM_OPERATOR_MODEL=llama-3.3-70b-versatile
+CRM_OPERATOR_MODEL=openai/gpt-oss-120b   # [impl] see §14 item 3
 CRM_OPERATOR_TURN_TIMEOUT_MS=20000      # bounds 2000–60000
 CRM_OPERATOR_CALL_TIMEOUT_MS=10000      # bounds 1000–30000, must be ≤ turn timeout
 CRM_OPERATOR_MAX_CONCURRENT=4           # bounds 1–64
@@ -582,7 +595,10 @@ test/build.
 2. Stateless server; client-carried history (≤ 6 messages).
 3. Default model `llama-3.3-70b-versatile`; if tool-calling accuracy is
    poor at walkthrough, switch the default to `openai/gpt-oss-120b` —
-   a config change, not a contract change.
+   a config change, not a contract change. *[impl]* Groq had retired
+   `llama-3.3-70b-versatile` (404 `model_not_found`) before the
+   walkthrough; the default is `openai/gpt-oss-120b`, which handled the
+   five tool schemas correctly at 0.3–2 s per turn.
 4. Limits: 4 rounds × 3 calls, 20 s turn, 10 s call, concurrency 4,
    search limit 10, Today view 20 items, 500-char untrusted clip,
    1500-char reply cap, 10 reference cards.

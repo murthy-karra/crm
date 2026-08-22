@@ -7,12 +7,12 @@ Last updated: 2026-08-22
 **Slice 005 (Operator retrieval) — both lanes MERGED to `main`
 (`82630ca`, fast-forward from `slice-005-web`), not yet pushed.** Both
 slice branches still exist locally (`slice-005-operator`,
-`slice-005-web`); delete on request. Remaining for closure: the user's
+`slice-005-web`); delete on request. Spec synced (`docs/specs/SLICE_005.md`
+*[impl]* notes: §3 `person` on `PriorityExplanation`; §4 malformed
+canned reply, over-cap round rule, in-flight tool at deadline; §11/§14
+default model `openai/gpt-oss-120b`). Remaining for closure: the user's
 in-browser walkthrough (spec §1 steps 1–7 on loopback, then through the
-tunnel) and the coordinator doc syncs into `docs/specs/SLICE_005.md`
-(§3 `person` on `PriorityExplanation`; §11/§14 default model
-`openai/gpt-oss-120b`; §4 malformed-call canned reply, over-cap round
-rule, in-flight tool recorded at deadline). Dev DB already migrated.
+tunnel). Dev DB already migrated.
 
 ## Current slice
 

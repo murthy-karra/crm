@@ -9,6 +9,8 @@ import { RouterLink, useRouter } from 'vue-router'
 import { Inbox, LogOut, UserPlus, Users } from 'lucide-vue-next'
 import { useLogoutMutation, useMe } from '../api/queries'
 import { initials } from '../lib/format'
+import { buttonClasses } from '../lib/controls'
+import { describeApiError } from '../lib/errors'
 
 const router = useRouter()
 
@@ -34,8 +36,31 @@ const navGroups: NavGroup[] = [
   },
 ]
 
-const { data: me } = useMe()
+const {
+  data: me,
+  error: meError,
+  isError: meIsError,
+  isFetching: meIsFetching,
+  refetch: refetchMe,
+} = useMe()
 const logoutMutation = useLogoutMutation()
+
+// Every authenticated view derives its `orgId` from `me` and keeps its own
+// queries `enabled: false` until that resolves — and a disabled TanStack
+// query reports `isPending` forever. So a `me` failure that the router
+// guard deliberately lets through (router.ts: anything that is not a 401 —
+// a 503 `unavailable`, an unreachable API, a cross-origin response the
+// browser discards) used to leave every screen on a permanent "Loading…"
+// with nothing to click. Surface it here, once, instead of in each view.
+//
+// Guarded on `me` having no data at all: a background refetch (TanStack's
+// `refetchOnWindowFocus`) that fails while the cached session is still good
+// must not replace a working screen with an error.
+const sessionUnavailable = computed(() => meIsError.value && me.value === undefined)
+
+function retrySession() {
+  void refetchMe()
+}
 
 const navItemClass =
   'flex h-10 items-center gap-2 rounded-lg px-3 text-body text-text-muted transition-colors duration-150 ease-out hover:bg-surface-2/60'
@@ -121,7 +146,24 @@ function logout() {
 
     <div class="min-w-0 flex-1 overflow-y-auto">
       <div class="mx-auto max-w-[1280px] px-10 py-10">
-        <slot />
+        <div
+          v-if="sessionUnavailable"
+          class="rounded-xl border border-border bg-surface-0 p-5"
+        >
+          <p class="text-body text-danger">
+            {{ describeApiError(meError, 'Could not load your session.') }}
+          </p>
+          <button
+            type="button"
+            class="mt-4"
+            :class="buttonClasses('secondary')"
+            :disabled="meIsFetching"
+            @click="retrySession"
+          >
+            {{ meIsFetching ? 'Retrying…' : 'Try again' }}
+          </button>
+        </div>
+        <slot v-else />
       </div>
     </div>
   </div>

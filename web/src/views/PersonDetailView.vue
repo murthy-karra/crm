@@ -12,6 +12,7 @@ import { Flag, Inbox, Mail, Phone, Route, UserCheck } from 'lucide-vue-next'
 import Card from '../components/Card.vue'
 import FormField from '../components/FormField.vue'
 import Badge from '../components/Badge.vue'
+import StageLabel from '../components/StageLabel.vue'
 import { useAssignPersonMutation, useChangeStageMutation, useMe, useMembers, usePerson, useStages } from '../api/queries'
 import { ApiError } from '../api/client'
 import type { HistoryEntry, RoutingStrategy } from '../api/types'
@@ -162,7 +163,14 @@ function historySummary(entry: HistoryEntry): string {
               :pt="selectPt()"
               class="w-56"
               @update:model-value="onStageChange"
-            />
+            >
+              <template #value>
+                <StageLabel :stage="person.stage" />
+              </template>
+              <template #option="{ option }">
+                <StageLabel :stage="option" />
+              </template>
+            </Select>
             <p
               v-if="stageError"
               class="mt-1.5 text-small text-danger"

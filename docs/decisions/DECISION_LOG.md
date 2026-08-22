@@ -251,6 +251,27 @@ Lead, Hot Prospect, Nurture, Active Client, Pending, Closed, Past Client,
 Sphere, Trash. No stage-administration UI ships with the first slice;
 editing stages is a later broker-administration feature.
 
+### D-020 — Hot Prospect carries a stage marker; no other stage does (2026-08-21)
+
+Accepted. The Hot Prospect stage renders a 16 px Lucide `Flame` in `danger`
+red before its name everywhere a stage name appears: the People table's
+stage badge, and the Person detail stage `Select`'s value and its options.
+One component owns it (`web/src/components/StageLabel.vue`) so the three
+surfaces cannot drift apart.
+
+This is a deliberate single exception to `docs/design/UI_STYLE.md` §5
+("Monochrome … never a filled or multicolor icon") and §9 ("no per-stage
+colors"), and both sections were amended to record it. No other stage gets
+an icon or a color; a second stage marker is a new decision, not a
+precedent set by this one.
+
+Because stages are per-Organization rows with no semantic key (D-019), the
+marker matches the seeded stage *name* — `"Hot Prospect"`, compared
+case- and whitespace-insensitively. An Organization that renames the stage
+simply stops seeing the flame. Making the marker survive a rename needs a
+column on `stage` and an API contract change (`AGENTS.md` §11); that is
+explicitly not part of this decision.
+
 ---
 
 ## Open decisions

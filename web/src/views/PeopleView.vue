@@ -9,6 +9,7 @@ import type { ColumnDef } from '@tanstack/vue-table'
 import PageHeader from '../components/PageHeader.vue'
 import DataTable from '../components/DataTable.vue'
 import Badge from '../components/Badge.vue'
+import StageLabel from '../components/StageLabel.vue'
 import { useMe, usePeople } from '../api/queries'
 import type { PersonSummary } from '../api/types'
 import { formatAbsoluteTime, formatRelativeTime } from '../lib/format'
@@ -38,7 +39,8 @@ const columns: ColumnDef<PersonSummary>[] = [
   {
     id: 'stage',
     header: 'Stage',
-    cell: (info) => h(Badge, { tint: 'neutral' }, () => info.row.original.stage.name),
+    cell: (info) =>
+      h(Badge, { tint: 'neutral' }, () => h(StageLabel, { stage: info.row.original.stage })),
   },
   {
     id: 'assignee',

@@ -40,11 +40,18 @@ export const HELP_TEXT_CLASSES = 'mt-1.5 text-small text-text-muted'
  */
 export function selectPt(): SelectPassThroughOptions {
   return {
-    root: `${INPUT_CLASSES} flex items-center justify-between cursor-pointer text-left`,
+    root: `${INPUT_CLASSES} flex items-center justify-between gap-2 cursor-pointer text-left`,
     label: 'truncate',
     dropdownIcon: 'w-4 h-4 text-text-muted shrink-0',
     overlay: 'bg-surface-0 border border-border rounded-xl shadow-floating py-1 z-50',
-    list: 'py-1 max-h-64 overflow-auto',
+    // The scroll belongs on `listContainer`, not on the `list` <ul>.
+    // PrimeVue puts an inline `max-height: {scrollHeight}` (14rem) on the
+    // container but, unstyled, ships no `overflow` for it, so a taller
+    // <ul> spills out below the panel's background and border and paints
+    // over the page behind the menu. Clipping the container keeps the menu
+    // inside the box its own surface draws.
+    listContainer: 'overflow-auto',
+    list: 'py-1',
     // Parameter type is inferred contextually from selectPt()'s declared
     // SelectPassThroughOptions return type — do not annotate it explicitly
     // (a hand-written shape here risks drifting from SelectContext).

@@ -30,6 +30,9 @@ removed after merging (`slice-002-intake`, `slice-002-web`).
   API, `HTTPRoute` per hostname, no separate ingress controller.
 - D-019 — Person stages are an Organization-scoped table seeded with
   Follow Up Boss's nine defaults, not a fixed enum.
+- D-020 — Hot Prospect carries a red `Flame` marker wherever its name is
+  shown; the one exception to `UI_STYLE.md` §5/§9, matched on the seeded
+  stage name because D-019 stages have no semantic key.
 - Slice 002 scope (not log entries): raw-payload key is one `.env`
   value, no DEKs/rotation; routing is "assign to a named member", no
   rules engine; list view + frontend stack + Vue Router land in 002;
@@ -267,6 +270,45 @@ removed after merging (`slice-002-intake`, `slice-002-web`).
   data). Zero console or page errors. Found and fixed one cosmetic nit
   live (`DataTable`'s footer said "1 unresolved leads"; added proper
   singular/plural support) and re-verified.
+- 2026-08-21 (post-merge, on `main`, user-reported from live use through
+  the tunnel): three fixes, no slice open.
+  1. **Stage marker (D-020)**: `components/StageLabel.vue` +
+     `lib/stages.ts`; wired into the People table's stage badge and the
+     Person detail stage `Select` (`#value` and `#option` slots).
+     `UI_STYLE.md` §5 and §9 amended to record the exception.
+  2. **`Select` menu overflowed its own panel**: `lib/controls.ts`'s
+     `selectPt()` put `max-h-64 overflow-auto` on the `list` `<ul>`, but
+     PrimeVue sets an inline `max-height: {scrollHeight}` (14 rem) on the
+     `listContainer` and, unstyled, ships no `overflow` for it — so with
+     nine stages (D-019) the 368 px `<ul>` spilled out below the panel's
+     background and border and painted over the page beneath it (the user
+     saw "Trash" sitting on top of the Inquiries card). Scroll moved to
+     `listContainer`; measured after the fix, the container clips the
+     139 px of overflow. Affects every `Select`, not just stage. `root`
+     also gained `gap-2` so the value cannot touch the chevron.
+  3. **Permanent "Loading…" whenever `me` failed with anything but a 401**:
+     the router guard deliberately lets a non-401 `me` failure through so
+     "the view's own query can show an error state" (`router.ts`), but each
+     view derives `orgId` from `me` and keeps its queries `enabled: false`
+     until it resolves — and a *disabled* TanStack query reports
+     `isPending` forever. The intended error state was therefore
+     unreachable: every screen sat on "Loading…" with nothing to click.
+     `AppShell.vue` now renders the `me` error plus a "Try again" button in
+     place of the routed view, guarded on `me` having no cached data at all
+     so a failed background refetch cannot replace a working screen.
+- 2026-08-21 (environment, same session): the tunnel was broken and the
+  cause was `.env` drift, not the app. `CRM_CORS_ALLOWED_ORIGIN` was empty,
+  so the API attached no CORS layer and the browser discarded every
+  cross-origin response from `api.tarams.org` to the `app.tarams.org` page
+  — the API logged twelve `/api/me` 200s the client never saw, and
+  `/api/people` was never requested (this is what surfaced fix 3 above).
+  Restored to `https://app.tarams.org` and the API restarted;
+  `/api/session` and `/api/people` immediately 200'd from the user's
+  browser. Note that the Slice 002 walkthrough entry above claims the
+  tunnel-mode values were "restored exactly afterward" — they were not:
+  all three (`CRM_CORS_ALLOWED_ORIGIN`, `CRM_SESSION_COOKIE_DOMAIN`,
+  `CRM_SESSION_COOKIE_SECURE`) were left at loopback settings. See Pending
+  work item 4.
 
 ## Pending work
 
@@ -284,6 +326,19 @@ removed after merging (`slice-002-intake`, `slice-002-web`).
    (e.g. "Ada Lovelace", "Grace Hopper", an unresolved "website" entry).
    Harmless local data; `./scripts/dev-services down` + `up` + re-migrate
    + re-seed resets it if a clean slate is wanted before real use.
+4. Resolved 2026-08-21 (user: "I always go through the tunnel"): `.env` is
+   committed to tunnel mode — `CRM_CORS_ALLOWED_ORIGIN=https://app.tarams.org`
+   and `CRM_SESSION_COOKIE_SECURE=true`. `CRM_SESSION_COOKIE_DOMAIN` stays
+   **unset**, deviating from what README step 5 used to prescribe: only
+   `api.*` is ever called with credentials, so a host-only cookie is
+   sufficient, and adding a `Domain` cookie while a host-only one already
+   exists sends two same-named cookies (older, host-only one first), which
+   the server reads in preference while logout clears only the newer — a
+   401 loop with no way out but clearing cookies by hand. README's variable
+   table and step 5 were corrected to say this, and step 5 now states that
+   `CRM_CORS_ALLOWED_ORIGIN` is not optional and names the symptom of
+   forgetting it. Loopback dev still works with these values (Chromium
+   accepts `Secure` cookies on `http://127.0.0.1`; Safari would not).
 
 ## Blocking decisions
 
@@ -312,6 +367,24 @@ blocks recording features.
   accordingly.
 
 ## Latest verification
+
+2026-08-21, post-merge fixes on `main` (stage marker, `Select` overflow,
+session-unavailable state), web-only — no backend file changed, so the
+cargo half of `./scripts/check` was not re-run:
+- `pnpm lint`, `pnpm typecheck`, `pnpm build` green.
+- Live headless-Playwright walkthrough against the running dev stack
+  (real API, real Postgres, logged in as the seeded `alice@acme.test`):
+  People list badge and the Person detail `Select` both show the flame on
+  Hot Prospect only; the stage menu is clipped inside its own panel with
+  the last row cut as a scroll affordance (DOM measurement: `<ul>`
+  overflows its container by 139 px, `overflow: auto` on the container).
+- The permanent-"Loading…" defect was reproduced first (abort `/api/me`,
+  which is what a discarded cross-origin response looks like to the
+  client) and then re-run against the fix: both People and Person detail
+  now render "Could not reach the server…" and a "Try again" button.
+- Not covered: no automated web test suite exists (no vitest/Playwright
+  runner in `web/`), so all three fixes are pinned by manual verification
+  only. Worth a real frontend test setup before the web surface grows.
 
 2026-08-21, Slice 002, on `slice-002-intake` + `slice-002-web`, after
 implementation, independent review, adversarial testing, and fixes, all

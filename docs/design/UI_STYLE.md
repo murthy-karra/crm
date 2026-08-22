@@ -123,7 +123,11 @@ added under `prefers-color-scheme` later without touching components.
   tints above.
 - **Icons**: Lucide (outline, 1.5 px stroke, 18 px in nav and buttons,
   16 px inline). Monochrome — `text-muted` by default, `text` when active.
-  Never a filled or multicolor icon.
+  Never a filled or multicolor icon. **One exception** (2026-08-21, product
+  owner): the Hot Prospect stage carries a 16 px `Flame` in `danger` red
+  wherever its name is rendered — the People table badge and the stage
+  `Select`'s value and options, all through `components/StageLabel.vue`.
+  Stage-specific markers are otherwise still out (see §9).
 
 ## 6. Tables (TanStack Table + `components/DataTable.vue`)
 
@@ -179,8 +183,8 @@ Sample 3 (settings) and sample 4 (form builder) are the references.
 - No gradients, no colored page backgrounds, no illustration, no
   decorative shadows.
 - No accent color on navigation or tables.
-- No per-stage colors, no avatars with random colors (initials on
-  `surface-2` only).
+- No per-stage colors beyond the single Hot Prospect flame carved out in
+  §5, no avatars with random colors (initials on `surface-2` only).
 - No component library theme (PrimeVue's Aura/Lara are not used;
   `unstyled: true` with local `pt` objects built from the tokens above).
 

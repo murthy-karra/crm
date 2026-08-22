@@ -95,7 +95,7 @@ Notable defaults and constraints, applied in code:
 | `CRM_DEV_SEED_PASSWORD` | Required for `dev-seed` | One password for every seeded user; re-hashed on every run, so changing it rotates seeded credentials |
 | `CRM_RAW_PAYLOAD_KEY` | Required, no default | Raw lead-payload encryption key (docs/specs/SLICE_002.md §7); exactly 64 hex characters (32 bytes), e.g. `openssl rand -hex 32`; the API refuses to start if missing, the wrong length, or not hex |
 | `CRM_CORS_ALLOWED_ORIGIN` | Unset (no CORS layer) | Set only for the two-hostname tunnel setup (e.g. `https://app.tarams.org`); the API and browser app are on different hostnames, so the browser's cross-origin fetch needs an explicit allow-list entry |
-| `CRM_SESSION_COOKIE_DOMAIN` | Unset (host-only cookie) | Set alongside `CRM_CORS_ALLOWED_ORIGIN` (e.g. `tarams.org`) so the session cookie is sent to both hostnames |
+| `CRM_SESSION_COOKIE_DOMAIN` | Unset (host-only cookie) | Leave unset even in the two-hostname tunnel setup: only `api.*` is ever called with credentials (the `app.*` host just serves the SPA), so a host-only cookie is sufficient. Setting it while a host-only `crm_session` already exists is a trap — the next login adds a *second* cookie of the same name, the browser sends the older host-only one first, and the server reads that one; logout then clears only the newer cookie. Set it only if something on `app.*` ever needs the session, and clear cookies for the zone in the same step |
 | `CRM_WEB_BIND_ADDR` | `127.0.0.1` | Loopback only |
 | `CRM_WEB_PORT` | `5173` | |
 | `CRM_WEB_API_PROXY_TARGET` | `http://127.0.0.1:3000` | Loopback HTTP only |
@@ -204,7 +204,7 @@ One-time setup:
    ```
 3. `infra/development/cloudflared/config.yml` already declares the ingress: `app.tarams.org` → `localhost:5173` (web dev server), `api.tarams.org` → `localhost:3000` (API, called directly from the browser — see `CRM_CORS_ALLOWED_ORIGIN` above). If the tunnel ID or your username differ, update the `tunnel:` and `credentials-file:` lines to match `cloudflared tunnel list` and your `~/.cloudflared/` path.
 4. In the Cloudflare Zero Trust dashboard (**Access → Applications**), create **one** Access application covering **both** `app.tarams.org` and `api.tarams.org`, with a long-lived session duration and an Allow policy for your email. Enable **`options_preflight_bypass`** on the application — without it, Access intercepts the browser's CORS preflight (`OPTIONS`) requests to `api.tarams.org` before they ever reach the API, and the login form fails with a CORS error.
-5. Set `CRM_CORS_ALLOWED_ORIGIN=https://app.tarams.org`, `CRM_SESSION_COOKIE_DOMAIN=tarams.org`, and `CRM_WEB_ALLOWED_HOSTS=app.tarams.org` in `.env`.
+5. Set `CRM_CORS_ALLOWED_ORIGIN=https://app.tarams.org`, `CRM_SESSION_COOKIE_SECURE=true`, and `CRM_WEB_ALLOWED_HOSTS=app.tarams.org` in `.env`. Leave `CRM_SESSION_COOKIE_DOMAIN` unset — see its row in the table above. `CRM_CORS_ALLOWED_ORIGIN` is not optional: without it the API attaches no CORS layer, the browser silently discards every `api.*` response even though the server answered `200`, and the app sits on a permanent "Loading…" (the API request log will show `/api/me` succeeding and `/api/people` never being requested).
 
 Then run:
 

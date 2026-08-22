@@ -4,15 +4,11 @@ Last updated: 2026-08-22
 
 ## Current phase
 
-**Slice 005 (Operator retrieval) — both lanes MERGED to `main`
-(`82630ca`, fast-forward from `slice-005-web`), not yet pushed.** Both
-slice branches still exist locally (`slice-005-operator`,
-`slice-005-web`); delete on request. Spec synced (`docs/specs/SLICE_005.md`
-*[impl]* notes: §3 `person` on `PriorityExplanation`; §4 malformed
-canned reply, over-cap round rule, in-flight tool at deadline; §11/§14
-default model `openai/gpt-oss-120b`). Remaining for closure: the user's
-in-browser walkthrough (spec §1 steps 1–7 on loopback, then through the
-tunnel). Dev DB already migrated.
+**Slice 005 (Operator retrieval) — CLOSED.** Merged, spec synced, pushed
+to `origin/main`; slice branches deleted. The user ran the browser
+walkthrough on 2026-08-22 and moved on. Next: plan Slice 006 (calling,
+D-021), or a small 005b streaming slice if the user chooses it (§14
+item 1 / §16 currently defer SSE to the calling work).
 
 ## Current slice
 
@@ -26,8 +22,7 @@ proof chain. Slice 004 is complete and merged (see History).
 
 ## Current branch
 
-`main` at `82630ca` (Slice 005 merged), clean; `origin/main` is still at
-`93db87c` — push pending.
+`main`, clean, in sync with `origin/main` (Slice 005 closed).
 
 ## Last accepted decision
 

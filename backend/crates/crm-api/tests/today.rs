@@ -1,4 +1,4 @@
-//! Service-free HTTP tests for `GET /api/stages` (docs/specs/SLICE_002.md
+//! Service-free HTTP tests for `GET /api/today` (docs/specs/SLICE_003.md
 //! §13).
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -33,14 +33,14 @@ fn unreachable_database_url() -> String {
 }
 
 #[tokio::test]
-async fn list_stages_without_cookie_returns_401() {
+async fn get_today_without_cookie_returns_401() {
     let state = AppState::new(&test_config(&[])).unwrap();
     let app = crm_api::build_app(state);
     let response = app
         .oneshot(
             Request::builder()
                 .method("GET")
-                .uri("/api/stages")
+                .uri("/api/today")
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -50,7 +50,7 @@ async fn list_stages_without_cookie_returns_401() {
 }
 
 #[tokio::test]
-async fn list_stages_returns_503_when_database_unreachable() {
+async fn get_today_returns_503_when_database_unreachable() {
     let database_url = unreachable_database_url();
     let state = AppState::new(&test_config(&[
         ("DATABASE_URL", database_url.as_str()),
@@ -65,7 +65,7 @@ async fn list_stages_returns_503_when_database_unreachable() {
         .oneshot(
             Request::builder()
                 .method("GET")
-                .uri("/api/stages")
+                .uri("/api/today")
                 .header("cookie", format!("crm_session={plausible_token}"))
                 .body(Body::empty())
                 .unwrap(),

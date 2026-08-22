@@ -2,7 +2,8 @@ use std::time::Duration;
 
 use sqlx::postgres::{PgPool, PgPoolOptions};
 
-use crate::config::{Config, RawPayloadKey, SessionSecret};
+use crate::config::{Config, RawPayloadKey, RealtimeTokenSecret, SessionSecret};
+use crate::realtime::{CentrifugoTransport, Publisher};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -14,6 +15,9 @@ pub struct AppState {
     pub session_cookie_domain: Option<String>,
     pub cors_allowed_origin: Option<String>,
     pub raw_payload_key: RawPayloadKey,
+    pub realtime_token_secret: RealtimeTokenSecret,
+    pub realtime_token_ttl: Duration,
+    pub publisher: Publisher,
 }
 
 impl AppState {
@@ -30,6 +34,11 @@ impl AppState {
             None => None,
         };
 
+        let publisher = Publisher::Centrifugo(CentrifugoTransport::new(
+            config.centrifugo_api_url.clone(),
+            &config.centrifugo_api_key,
+        ));
+
         Ok(Self {
             db,
             database_connect_timeout: config.database_connect_timeout,
@@ -39,15 +48,20 @@ impl AppState {
             session_cookie_domain: config.session_cookie_domain.clone(),
             cors_allowed_origin: config.cors_allowed_origin.clone(),
             raw_payload_key: config.raw_payload_key.clone(),
+            realtime_token_secret: config.realtime_token_secret.clone(),
+            realtime_token_ttl: config.realtime_token_ttl,
+            publisher,
         })
     }
 
     /// Test-support constructor: builds `AppState` from an already-connected
-    /// pool (e.g. one whose credentials were swapped to `crm_app`) and a
-    /// `Config`, so a future new field only needs updating here instead of
-    /// at every integration-test struct literal (docs/specs/SLICE_002.md
-    /// §14a).
-    pub fn for_tests(pool: PgPool, config: &Config) -> Self {
+    /// pool (e.g. one whose credentials were swapped to `crm_app`), a
+    /// `Config`, and an explicit `Publisher` (almost always
+    /// `Publisher::recording()` — a real `Publisher::Centrifugo` is built
+    /// directly by the handful of tests that need one), so a future new
+    /// field only needs updating here instead of at every integration-test
+    /// struct literal (docs/specs/SLICE_002.md §14a).
+    pub fn for_tests(pool: PgPool, config: &Config, publisher: Publisher) -> Self {
         Self {
             db: Some(pool),
             database_connect_timeout: config.database_connect_timeout,
@@ -57,6 +71,9 @@ impl AppState {
             session_cookie_domain: config.session_cookie_domain.clone(),
             cors_allowed_origin: config.cors_allowed_origin.clone(),
             raw_payload_key: config.raw_payload_key.clone(),
+            realtime_token_secret: config.realtime_token_secret.clone(),
+            realtime_token_ttl: config.realtime_token_ttl,
+            publisher,
         }
     }
 }

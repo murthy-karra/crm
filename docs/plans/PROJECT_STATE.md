@@ -1,6 +1,6 @@
 # Project State
 
-Last updated: 2026-08-21
+Last updated: 2026-08-22
 
 ## Current phase
 
@@ -30,6 +30,22 @@ After 003: Slice 004 administration (D-021), 005 Operator retrieval,
 removed after merging (`slice-002-intake`, `slice-002-web`).
 
 ## Last accepted decision
+
+2026-08-22, user-accepted:
+- D-024 — Cloudflare Access removed from the dev tunnel. The app's own
+  session login is the only gate now; the tunnel and its TLS are
+  unchanged. Amends D-016 §4. Executed live (the `crm-dev` Access
+  application deleted via the Cloudflare API and confirmed gone);
+  README and SLICE_003 §11/§10 updated to match.
+- D-025 — the dev tunnel turned out to be dashboard-managed, not
+  file-managed as D-016 §4 documented; `config.yml`'s ingress was never
+  actually applied, so the Slice 003 realtime WebSocket silently 404'd
+  through the tunnel since it was written. Fixed live by adding/ordering
+  the three routes in the Cloudflare dashboard; verified with a real
+  101 Switching Protocols upgrade and a full two-browser cross-session
+  walkthrough over the actual tunnel. README, `config.yml`'s comments,
+  and this file updated to point at the dashboard as the real source of
+  truth.
 
 2026-08-21, user-accepted:
 - D-023 — realtime model: one Organization channel with server-side
@@ -334,16 +350,24 @@ removed after merging (`slice-002-intake`, `slice-002-web`).
   all three (`CRM_CORS_ALLOWED_ORIGIN`, `CRM_SESSION_COOKIE_DOMAIN`,
   `CRM_SESSION_COOKIE_SECURE`) were left at loopback settings. See Pending
   work item 4.
+- 2026-08-22: D-024 (Cloudflare Access removed from the dev tunnel) and
+  D-025 (the tunnel is actually dashboard-managed; the real WebSocket
+  routing fix and its verification) — full narrative in the decision
+  log. Net effect verified live over the real tunnel with two separate
+  headed-Chrome sessions (Alice, Carol): a brand-new lead posted
+  directly to the API appeared on the assignee's Today in under a
+  second with no reload; reassigning it from the Person-detail page
+  removed it from Alice's Today and added it to Carol's, live, in a
+  second real browser window, in under a second. This is the first time
+  the Slice 003 realtime path has been proven working through the
+  actual public tunnel rather than only on loopback.
 
 ## Pending work
 
-1. User-side, whenever convenient, not blocking: the Access application's
-   configuration (two hostnames, one policy, `options_preflight_bypass:
-   true`) was created via a series of API calls rather than a
-   reproducible dashboard/IaC flow and isn't visible from the repo —
-   worth documenting more durably (e.g. a short note in the README) or
-   recreating via Terraform/dashboard if this needs to survive account
-   changes.
+1. Resolved 2026-08-22 (D-024): the Cloudflare Access application was
+   deleted rather than documented more durably — the user decided the
+   app's own login is sufficient for the dev tunnel and Access was
+   redundant friction. No longer applicable.
 2. User-side (whenever convenient, not blocking): fresh-clone walkthrough
    of Slice 000.
 3. Not blocking: the local dev database (`crm_dev`) now has a few
@@ -351,6 +375,13 @@ removed after merging (`slice-002-intake`, `slice-002-web`).
    (e.g. "Ada Lovelace", "Grace Hopper", an unresolved "website" entry).
    Harmless local data; `./scripts/dev-services down` + `up` + re-migrate
    + re-seed resets it if a clean slate is wanted before real use.
+5. Not blocking, dev-only (D-025): the dev tunnel's real routing config
+   lives only in the Cloudflare dashboard now, not in the repo — a fresh
+   clone or a recreated tunnel would need the three dashboard routes
+   (and their order) set up by hand per the README, since `config.yml`'s
+   `ingress:` section is documentation only and is not applied. Worth
+   revisiting if this needs to survive an account change or if Cloudflare
+   ever offers a path back to file-managed mode.
 4. Resolved 2026-08-21 (user: "I always go through the tunnel"): `.env` is
    committed to tunnel mode — `CRM_CORS_ALLOWED_ORIGIN=https://app.tarams.org`
    and `CRM_SESSION_COOKIE_SECURE=true`. `CRM_SESSION_COOKIE_DOMAIN` stays

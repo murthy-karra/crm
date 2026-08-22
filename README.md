@@ -54,7 +54,7 @@ Current operational status and the next approval gate are recorded in `docs/plan
 
 ### Supported environment and prerequisites
 
-Development happens on a local macOS (Apple Silicon) machine per D-016: the API and web dev server run as local processes; PostgreSQL and Centrifugo run in Docker, loopback-only; authentication is local username/password behind the same abstraction ZITADEL fills in production; external connectivity uses a Cloudflare tunnel on `tarams.org` protected by Cloudflare Access.
+Development happens on a local macOS (Apple Silicon) machine per D-016: the API and web dev server run as local processes; PostgreSQL and Centrifugo run in Docker, loopback-only; authentication is local username/password behind the same abstraction ZITADEL fills in production; external connectivity uses a Cloudflare tunnel on `tarams.org` (D-024: no Cloudflare Access in front of it — the app's own login is the only gate).
 
 Install the pinned prerequisites before bootstrapping:
 
@@ -101,6 +101,12 @@ Notable defaults and constraints, applied in code:
 | `CRM_WEB_API_PROXY_TARGET` | `http://127.0.0.1:3000` | Loopback HTTP only |
 | `CRM_WEB_ALLOWED_HOSTS` | Unset locally | One exact tunnel hostname, never a wildcard |
 | `VITE_API_BASE_URL` | `/api` | Browser-visible, root-relative path |
+| `CENTRIFUGO_HTTP_API_KEY` | Required, no default | Centrifugo publish credential; the same value `dev-services` passes to the Centrifugo container; the API refuses to start if empty |
+| `CENTRIFUGO_TOKEN_HMAC_SECRET` | Required, no default, **at least 32 bytes** | Connection-token signing secret; the same value `dev-services` passes to Centrifugo as `client.token.hmac_secret_key`. Regenerate with `openssl rand -hex 32` (64 hex characters = 32 bytes) and run `./scripts/dev-services down && ./scripts/dev-services up` if an existing value is shorter — both the API and the container must agree, so update `.env` and restart the container together |
+| `CRM_CENTRIFUGO_API_URL` | `http://127.0.0.1:8000/api` | Centrifugo's HTTP API base URL; `http://` only, no trailing slash |
+| `CRM_REALTIME_TOKEN_TTL_SECONDS` | `600`, bounded 60–3600 | Connection-token lifetime |
+| `CRM_WEB_REALTIME_PROXY_TARGET` | `http://127.0.0.1:8000` | Vite's WebSocket proxy target for `/connection` |
+| `CRM_DEMO_API_URL` | `http://127.0.0.1:3000` | `scripts/demo-leads`' target |
 
 Use synthetic development data only. Direct remote database access must use a private path such as SSH port forwarding; do not expose PostgreSQL publicly or place its connection URL in shell history.
 
@@ -176,7 +182,17 @@ Run the database-backed suite against the running local container (requires `dev
 ./scripts/check-db
 ```
 
-This first re-verifies `backend/.sqlx/` against a throwaway, freshly-migrated database (`cargo sqlx prepare --check --workspace`, catching schema/type drift an offline compile cannot), then exercises the full session lifecycle, tenant isolation between two Organizations, session/membership revocation, the `crm_migrator`/`crm_app` role boundary, the append-only fact tables, and the full lead-intake flow (including its two concurrency races), each against its own fresh ephemeral database with migrations applied from scratch. Requires sqlx-cli (see prerequisites above).
+This first checks that Centrifugo answers its health endpoint (a clear, immediate failure — never a skip — if the container is down), then re-verifies `backend/.sqlx/` against a throwaway, freshly-migrated database (`cargo sqlx prepare --check --workspace`, catching schema/type drift an offline compile cannot), then exercises the full session lifecycle, tenant isolation between two Organizations, session/membership revocation, the `crm_migrator`/`crm_app` role boundary, the append-only fact tables, the full lead-intake flow (including its two concurrency races), the Today read model, the realtime publisher's exact event contract per command, and — against the real Centrifugo container, reading `CENTRIFUGO_*` values from the environment because they must match the running container — connection-token scoping, cross-Organization channel isolation, expired/mis-signed token rejection, and no-replay reconnect recovery. Each DB-backed test runs against its own fresh ephemeral database with migrations applied from scratch. Requires sqlx-cli (see prerequisites above).
+
+### Demo data
+
+Log in as `alice@acme.test` through the web app (or hold a session cookie some other way), then post five realistic leads over HTTP — one assigned to Carol, mixed phone/email, a fresh `submission_id` per run so repeated runs add repeat inquiries rather than deduping:
+
+```sh
+./scripts/demo-leads
+```
+
+Requires `dev-api` running and `jq` installed. Reads the login password from `.env` (`CRM_DEV_SEED_PASSWORD`), never from argv; targets `http://127.0.0.1:3000` by default (`CRM_DEMO_API_URL` to override).
 
 ### Offline query cache
 
@@ -192,7 +208,7 @@ This applies the current migrations to a throwaway database (never the dev datab
 
 This project uses a dedicated tunnel, `crm-dev`, separate from any other tunnel on the account (e.g. a production `k8s-crm` tunnel) — never point dev traffic at a tunnel you don't know the purpose of.
 
-`crm-dev` is a **locally-managed** tunnel: its ingress rules live in the committed `infra/development/cloudflared/config.yml`, not the Cloudflare dashboard. (Dashboard-managed ingress is a one-way migration Cloudflare warns is irreversible; a local config file is simpler and keeps the setup reproducible from the repo, consistent with how Centrifugo and the Postgres roles are configured.) It authenticates via the credentials file `cloudflared tunnel create` writes outside the repo (`~/.cloudflared/<tunnel-id>.json`) — no token in `.env`.
+`crm-dev` was set up to be a **locally-managed** tunnel, with ingress rules in the committed `infra/development/cloudflared/config.yml` rather than the Cloudflare dashboard. **In practice it is not** (D-025, discovered 2026-08-22): the tunnel is dashboard-managed, cloudflared ignores the local file's `ingress:` section entirely and applies whatever routes exist in the Cloudflare Zero Trust dashboard instead. The `tunnel:` id and `credentials-file:` lines in `config.yml` are still load-bearing (that's how `cloudflared` authenticates — `cloudflared tunnel create` writes the credentials file outside the repo, `~/.cloudflared/<tunnel-id>.json`, no token in `.env`); the `ingress:` list below them is **not** — it documents intent only. **The real routing lives in the dashboard: Zero Trust → Networks → Tunnels → `crm-dev` → Routes**, and must be kept in sync with `config.yml` by hand. Routes there are evaluated top-to-bottom, first match wins — the more specific `api.tarams.org/connection/websocket` path route must be ordered *above* the plain `api.tarams.org` catch-all, or the catch-all swallows the WebSocket upgrade and it 404s. There is no drag-to-reorder in the current dashboard UI; to reorder, delete the route that should sort later and re-add it (routes appear to be ordered by creation time).
 
 One-time setup:
 
@@ -202,9 +218,8 @@ One-time setup:
    cloudflared tunnel route dns crm-dev app.tarams.org
    cloudflared tunnel route dns crm-dev api.tarams.org
    ```
-3. `infra/development/cloudflared/config.yml` already declares the ingress: `app.tarams.org` → `localhost:5173` (web dev server), `api.tarams.org` → `localhost:3000` (API, called directly from the browser — see `CRM_CORS_ALLOWED_ORIGIN` above). If the tunnel ID or your username differ, update the `tunnel:` and `credentials-file:` lines to match `cloudflared tunnel list` and your `~/.cloudflared/` path.
-4. In the Cloudflare Zero Trust dashboard (**Access → Applications**), create **one** Access application covering **both** `app.tarams.org` and `api.tarams.org`, with a long-lived session duration and an Allow policy for your email. Enable **`options_preflight_bypass`** on the application — without it, Access intercepts the browser's CORS preflight (`OPTIONS`) requests to `api.tarams.org` before they ever reach the API, and the login form fails with a CORS error.
-5. Set `CRM_CORS_ALLOWED_ORIGIN=https://app.tarams.org`, `CRM_SESSION_COOKIE_SECURE=true`, and `CRM_WEB_ALLOWED_HOSTS=app.tarams.org` in `.env`. Leave `CRM_SESSION_COOKIE_DOMAIN` unset — see its row in the table above. `CRM_CORS_ALLOWED_ORIGIN` is not optional: without it the API attaches no CORS layer, the browser silently discards every `api.*` response even though the server answered `200`, and the app sits on a permanent "Loading…" (the API request log will show `/api/me` succeeding and `/api/people` never being requested).
+3. Add three routes in the dashboard (Zero Trust → Networks → Tunnels → `crm-dev` → Routes → Add route), in this order — **the order matters**, see above: `app.tarams.org` (no path) → `http://localhost:5173`; `api.tarams.org` with path `/connection/websocket` → `http://localhost:8000`; `api.tarams.org` (no path) → `http://localhost:3000`. `infra/development/cloudflared/config.yml`'s `ingress:` section describes the same three rules for reference, but is not what's actually applied (D-025) — if the tunnel ID or your username differ, still update its `tunnel:` and `credentials-file:` lines to match `cloudflared tunnel list` and your `~/.cloudflared/` path, since those two ARE load-bearing.
+4. Set `CRM_CORS_ALLOWED_ORIGIN=https://app.tarams.org`, `CRM_SESSION_COOKIE_SECURE=true`, and `CRM_WEB_ALLOWED_HOSTS=app.tarams.org` in `.env`. Leave `CRM_SESSION_COOKIE_DOMAIN` unset — see its row in the table above. `CRM_CORS_ALLOWED_ORIGIN` is not optional: without it the API attaches no CORS layer, the browser silently discards every `api.*` response even though the server answered `200`, and the app sits on a permanent "Loading…" (the API request log will show `/api/me` succeeding and `/api/people` never being requested).
 
 Then run:
 
@@ -212,10 +227,11 @@ Then run:
 ./scripts/dev-tunnel
 ```
 
-Before trusting either hostname, verify Access is actually in front of both: from a fresh private browser window (or `curl` with no session cookie), a request to `app.tarams.org` **and** to `api.tarams.org` must each land on the Cloudflare Access challenge, not the application. Only after both negative checks pass is the tunnel considered verified.
+There is no Cloudflare Access step (D-024): the tunnel routes straight to the app, and the app's own login screen is the only gate. Before trusting either hostname, confirm both actually reach the application — `https://app.tarams.org` should show the login page and `https://api.tarams.org/api/health` should return a JSON health response, not a Cloudflare error page.
 
-**Access sessions are scoped per hostname, not per Application** — logging in at `app.tarams.org` does not also authenticate `api.tarams.org`, even though they share one Application and one policy. Visit each hostname directly once (a real top-level page load, e.g. `https://api.tarams.org/api/health`) to establish its own session; only then will the browser's background `fetch()` calls from `app.*` to `api.*` carry a valid session and succeed.
+The realtime WebSocket (`wss://api.tarams.org/connection/websocket`) rides the same tunnel as every other `api.*` request — see the dashboard route above (D-025) and `CENTRIFUGO_TOKEN_HMAC_SECRET` above. Verify it directly if in doubt: a raw WebSocket-upgrade request to `https://api.tarams.org/connection/websocket` should return `101 Switching Protocols`, not `404` (a 404 with the API's own CORS/`X-Request-Id` headers means the request fell through to the `:3000` catch-all instead of reaching Centrifugo on `:8000` — check the route order above).
 
-Set `CRM_SESSION_COOKIE_SECURE=true` before logging in through the tunnel, and confirm the app's own login still works once you're past Access — the two are independent layers.
+### Troubleshooting
 
-A future webhook-receiving hostname will bypass Access (webhooks cannot complete a login challenge) and instead verify requests itself, e.g. via provider signatures.
+- **Centrifugo rejects a freshly-minted token as expired.** Docker Desktop's VM clock can drift after the host sleeps, so the container's notion of "now" runs ahead of or behind the API process's. Restart Docker Desktop (or just the `centrifugo` container: `./scripts/dev-services down && ./scripts/dev-services up`) to resync the clock.
+- **The realtime indicator is stuck on "reconnecting…" through the tunnel, but works on loopback.** Check the dashboard route order (D-025) first — this is the most likely cause, not an app bug. Restarting `cloudflared` does not help; it does not re-read `config.yml`'s ingress for this tunnel.

@@ -170,6 +170,8 @@ mod tests {
         crate::config::Config::from_source(|key| match key {
             "CRM_SESSION_SECRET" => Some("a".repeat(32)),
             "CRM_RAW_PAYLOAD_KEY" => Some("ab".repeat(32)),
+            "CENTRIFUGO_HTTP_API_KEY" => Some("test-key".to_string()),
+            "CENTRIFUGO_TOKEN_HMAC_SECRET" => Some("c".repeat(32)),
             _ => None,
         })
         .unwrap()
@@ -198,6 +200,8 @@ mod tests {
         let secret_b = crate::config::Config::from_source(|key| match key {
             "CRM_SESSION_SECRET" => Some("b".repeat(32)),
             "CRM_RAW_PAYLOAD_KEY" => Some("ab".repeat(32)),
+            "CENTRIFUGO_HTTP_API_KEY" => Some("test-key".to_string()),
+            "CENTRIFUGO_TOKEN_HMAC_SECRET" => Some("c".repeat(32)),
             _ => None,
         })
         .unwrap()

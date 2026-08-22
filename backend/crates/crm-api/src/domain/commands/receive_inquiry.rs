@@ -20,6 +20,7 @@ use crate::domain::inquiry::queries as inquiry_queries;
 use crate::domain::person::queries as person_queries;
 use crate::domain::raw_payload::{crypto, store};
 use crate::domain::stage;
+use crate::realtime::{PersonChange, Publication, Publisher, RealtimeEvent};
 
 pub struct ReceiveInquiry {
     pub source: Source,
@@ -141,10 +142,11 @@ fn determine_routing(
 pub async fn receive_inquiry(
     pool: &PgPool,
     key: &RawPayloadKey,
+    publisher: &Publisher,
     ctx: &CommandContext,
     cmd: ReceiveInquiry,
 ) -> Result<ReceiveInquiryOutcome, CommandError> {
-    let result = receive_inquiry_attempt(pool, key, ctx, cmd).await;
+    let result = receive_inquiry_attempt(pool, key, publisher, ctx, cmd).await;
     if let Err(ref err) = result {
         tracing::warn!(error_kind = err.kind(), "receive_inquiry failed");
         tracing::Span::current().record("outcome", err.kind());
@@ -155,6 +157,7 @@ pub async fn receive_inquiry(
 async fn receive_inquiry_attempt(
     pool: &PgPool,
     key: &RawPayloadKey,
+    publisher: &Publisher,
     ctx: &CommandContext,
     cmd: ReceiveInquiry,
 ) -> Result<ReceiveInquiryOutcome, CommandError> {
@@ -250,6 +253,20 @@ async fn receive_inquiry_attempt(
                     .await?;
                 tx.commit().await?;
                 tracing::Span::current().record("outcome", "unresolved");
+
+                // occurred_at = raw_payload.received_at (= cmd.received_at,
+                // the value Phase A stored it with); there is no fact for
+                // this outcome (docs/specs/SLICE_003.md §4).
+                let event = RealtimeEvent::intake_unresolved_changed(
+                    ctx.organization_id,
+                    cmd.received_at,
+                    ctx.correlation_id,
+                    locked.id,
+                );
+                publisher
+                    .publish_after_commit(Publication::for_event(event))
+                    .await;
+
                 return Ok(ReceiveInquiryOutcome::Unresolved {
                     raw_payload_id: locked.id,
                     reason,
@@ -447,6 +464,23 @@ async fn receive_inquiry_attempt(
         tx.commit().await?;
 
         tracing::Span::current().record("outcome", "resolved");
+
+        // Exactly one event per command execution, not per fact: a
+        // matched-Person intake writes up to three facts (inquiry_received,
+        // routing_decision, and sometimes assignment_changed) but publishes
+        // one person.changed{inquiry_received} (docs/specs/SLICE_003.md
+        // §4). occurred_at = the fact's occurred_at (= cmd.received_at),
+        // never publish time.
+        let event = RealtimeEvent::person_changed(
+            ctx.organization_id,
+            cmd.received_at,
+            ctx.correlation_id,
+            person_id,
+            PersonChange::InquiryReceived,
+        );
+        publisher
+            .publish_after_commit(Publication::for_event(event))
+            .await;
 
         return Ok(ReceiveInquiryOutcome::Resolved {
             inquiry_id: new_inquiry_id,

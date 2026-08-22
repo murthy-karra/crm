@@ -10,6 +10,7 @@ use crate::domain::facts::{self, StageChangedFact};
 use crate::domain::person::model::PersonSummary;
 use crate::domain::person::queries as person_queries;
 use crate::domain::stage;
+use crate::realtime::{PersonChange, Publication, Publisher, RealtimeEvent};
 
 pub struct ChangePersonStage {
     pub person_id: Uuid,
@@ -40,10 +41,11 @@ pub struct ChangePersonStage {
 )]
 pub async fn change_person_stage(
     pool: &PgPool,
+    publisher: &Publisher,
     ctx: &CommandContext,
     cmd: ChangePersonStage,
 ) -> Result<(PersonSummary, bool), CommandError> {
-    let result = change_person_stage_attempt(pool, ctx, cmd).await;
+    let result = change_person_stage_attempt(pool, publisher, ctx, cmd).await;
     match &result {
         Ok((_, changed)) => {
             tracing::Span::current()
@@ -59,6 +61,7 @@ pub async fn change_person_stage(
 
 async fn change_person_stage_attempt(
     pool: &PgPool,
+    publisher: &Publisher,
     ctx: &CommandContext,
     cmd: ChangePersonStage,
 ) -> Result<(PersonSummary, bool), CommandError> {
@@ -74,12 +77,13 @@ async fn change_person_stage_attempt(
     }
 
     let changed = person.stage_id != cmd.stage_id;
+    let occurred_at = Utc::now();
 
     if changed {
         person_queries::update_stage(&mut tx, cmd.person_id, ctx.organization_id, cmd.stage_id)
             .await?;
 
-        let envelope = FactEnvelope::for_command(ctx, Utc::now());
+        let envelope = FactEnvelope::for_command(ctx, occurred_at);
         facts::insert_stage_changed(
             &mut tx,
             &envelope,
@@ -98,5 +102,20 @@ async fn change_person_stage_attempt(
         .ok_or(CommandError::PersonNotFound)?;
 
     tx.commit().await?;
+
+    // An event only when changed (docs/specs/SLICE_003.md §4).
+    if changed {
+        let event = RealtimeEvent::person_changed(
+            ctx.organization_id,
+            occurred_at,
+            ctx.correlation_id,
+            cmd.person_id,
+            PersonChange::StageChanged,
+        );
+        publisher
+            .publish_after_commit(Publication::for_event(event))
+            .await;
+    }
+
     Ok((summary, changed))
 }

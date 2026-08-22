@@ -1,0 +1,71 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT ca.id, ca.occurred_at, ca.recorded_at, ca.origin, ca.correlation_id,\n                  ca.actor_user_id, au.display_name as \"actor_display_name?\",\n                  ca.channel, ca.outcome\n           FROM contact_attempted ca\n           LEFT JOIN app_user au ON au.id = ca.actor_user_id\n           WHERE ca.organization_id = $1 AND ca.person_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "occurred_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "recorded_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "origin",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "correlation_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "actor_user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "actor_display_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "channel",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "outcome",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "e3c828cf096f28247bbdbdd885921f95b80cfab396fe5e7f0bb873c2121e7fd2"
+}

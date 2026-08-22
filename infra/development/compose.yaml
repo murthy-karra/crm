@@ -27,7 +27,9 @@ services:
       retries: 10
 
   centrifugo:
-    # Container only in this slice; no application integration yet (§3).
+    # Realtime delivery (docs/specs/SLICE_003.md §6): the API mints
+    # connection tokens and publishes ids-only invalidation events here;
+    # Centrifugo itself stays stateless (no history/presence).
     image: centrifugo/centrifugo:v6.9.2
     restart: unless-stopped
     command: centrifugo --config=/centrifugo/config.json

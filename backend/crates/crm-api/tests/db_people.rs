@@ -518,26 +518,46 @@ async fn unresolved_queue_reports_not_truncated_under_500_rows(migrator_pool: Pg
 /// run.
 #[sqlx::test]
 #[ignore]
-async fn seed_binary_creates_nine_ordered_stages_and_two_members_idempotently(
-    migrator_pool: PgPool,
-) {
+async fn seed_dev_creates_nine_ordered_stages_and_two_members_idempotently(migrator_pool: PgPool) {
     let migration_url = common::migrator_url_for(&migrator_pool);
-    let seed_bin = env!("CARGO_BIN_EXE_seed");
+    let app_url = common::app_url_for(&migrator_pool);
+    let crm_admin_bin = env!("CARGO_BIN_EXE_crm-admin");
 
-    let run = |n: u32| {
-        let output = std::process::Command::new(seed_bin)
+    let bootstrap = || {
+        let output = std::process::Command::new(crm_admin_bin)
+            .arg("bootstrap-platform-admin")
+            .arg("--email")
+            .arg("owner@platform.test")
+            .arg("--display-name")
+            .arg("Platform Owner")
             .env("MIGRATION_DATABASE_URL", &migration_url)
-            .env("CRM_DEV_SEED_PASSWORD", "test-seed-password")
+            .env("CRM_DEV_SEED_PASSWORD", "test-seed-password-123456")
             .env_remove("DATABASE_URL")
             .output()
-            .unwrap_or_else(|e| panic!("seed run {n} failed to start: {e}"));
+            .expect("bootstrap-platform-admin failed to start");
         assert!(
             output.status.success(),
-            "seed run {n} failed: {}",
+            "bootstrap-platform-admin failed: {}",
             String::from_utf8_lossy(&output.stderr)
         );
     };
 
+    let run = |n: u32| {
+        let output = std::process::Command::new(crm_admin_bin)
+            .arg("seed-dev")
+            .env("MIGRATION_DATABASE_URL", &migration_url)
+            .env("DATABASE_URL", &app_url)
+            .env("CRM_DEV_SEED_PASSWORD", "test-seed-password-123456")
+            .output()
+            .unwrap_or_else(|e| panic!("seed-dev run {n} failed to start: {e}"));
+        assert!(
+            output.status.success(),
+            "seed-dev run {n} failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    };
+
+    bootstrap();
     run(1);
     run(2);
 

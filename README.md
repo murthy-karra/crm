@@ -86,13 +86,14 @@ Notable defaults and constraints, applied in code:
 |---|---|---|
 | `CRM_API_BIND_ADDR` | `127.0.0.1:3000` | Must be a loopback socket address |
 | `DATABASE_URL` | Unset; optional for startup and liveness | The `crm_app` (DML-only) connection; required only for a successful `/internal/ready` and authenticated endpoints |
-| `MIGRATION_DATABASE_URL` | Unset | The `crm_migrator` (schema-owner) connection; used only by `db-migrate`, `dev-seed`, and `check-db` |
+| `MIGRATION_DATABASE_URL` | Unset | The `crm_migrator` (schema-owner) connection; used only by `db-migrate`, `crm-admin bootstrap-platform-admin`, and `check-db` |
 | `CRM_DATABASE_CONNECT_TIMEOUT_MS` | `2000`, bounded to 1–30000 ms | Bounds how long readiness/auth queries wait on an unreachable database |
 | `CRM_DB_APP_PASSWORD` / `CRM_DB_MIGRATOR_PASSWORD` | Unset | Role passwords `dev-services up` provisions into the local Postgres container |
 | `CRM_SESSION_SECRET` | Required, no default | HMAC pepper for session tokens; must be at least 32 bytes; rotating it invalidates every session |
 | `CRM_SESSION_TTL_HOURS` | `168`, bounded 1–720 | Absolute session expiry |
 | `CRM_SESSION_COOKIE_SECURE` | `false` | Set `true` when using the tunnel; Safari rejects `Secure` cookies over plain `http://127.0.0.1`, so keep it `false` for loopback work in Safari |
-| `CRM_DEV_SEED_PASSWORD` | Required for `dev-seed` | One password for every seeded user; re-hashed on every run, so changing it rotates seeded credentials |
+| `CRM_DEV_SEED_PASSWORD` | Required for `dev-bootstrap` | One password for every seeded user, including the platform admin (`owner@platform.test`); re-applied on every `seed-dev` run, so changing it rotates seeded credentials |
+| `CRM_INVITATION_TTL_HOURS` | `168`, bounded 1–720 | Invitation expiry (docs/specs/SLICE_004.md §11); the API refuses to start if out of bounds |
 | `CRM_RAW_PAYLOAD_KEY` | Required, no default | Raw lead-payload encryption key (docs/specs/SLICE_002.md §7); exactly 64 hex characters (32 bytes), e.g. `openssl rand -hex 32`; the API refuses to start if missing, the wrong length, or not hex |
 | `CRM_CORS_ALLOWED_ORIGIN` | Unset (no CORS layer) | Set only for the two-hostname tunnel setup (e.g. `https://app.tarams.org`); the API and browser app are on different hostnames, so the browser's cross-origin fetch needs an explicit allow-list entry |
 | `CRM_SESSION_COOKIE_DOMAIN` | Unset (host-only cookie) | Leave unset even in the two-hostname tunnel setup: only `api.*` is ever called with credentials (the `app.*` host just serves the SPA), so a host-only cookie is sufficient. Setting it while a host-only `crm_session` already exists is a trap — the next login adds a *second* cookie of the same name, the browser sends the older host-only one first, and the server reads that one; logout then clears only the newer cookie. Set it only if something on `app.*` ever needs the session, and clear cookies for the zone in the same step |
@@ -136,10 +137,20 @@ Apply pending migrations (idempotent — safe to run repeatedly):
 ./scripts/db-migrate
 ```
 
-Seed two Organizations, each with the nine D-019 default stages and two local-auth Users — a second member so reassignment has a target (idempotent; re-running rotates the seeded password to match `CRM_DEV_SEED_PASSWORD` and creates no duplicate stages or memberships):
+Bootstrap the platform admin and seed two Organizations, each with the nine D-019 default stages and two local-auth Users — one admin, one member (D-021, D-026; idempotent; re-running rotates every seeded password, including the platform admin's, to match `CRM_DEV_SEED_PASSWORD`, and creates no duplicate Organizations, users, or memberships):
 
 ```sh
-./scripts/dev-seed
+./scripts/dev-bootstrap
+```
+
+This runs `crm-admin bootstrap-platform-admin` (creates `owner@platform.test` via the migrator connection — the only step that uses it) followed by `crm-admin seed-dev` (everything else, as `crm_app`, through the same domain functions the API uses): "Acme Realty" (Alice admin, Carol member) and "Best Realty" (Bob admin, Dave member). `./scripts/demo-leads` (below) is unaffected.
+
+The `crm-admin` binary also has standalone subcommands for ad hoc administration, all but `bootstrap-platform-admin` resolving an actor via `--as <email>` (defaulting to the sole platform admin when there is exactly one):
+
+```sh
+cargo run --manifest-path backend/Cargo.toml -p crm-api --bin crm-admin -- create-organization --name "Cedar Realty"
+cargo run --manifest-path backend/Cargo.toml -p crm-api --bin crm-admin -- invite --organization <id> --email erin@cedar.test --role admin --print-link
+cargo run --manifest-path backend/Cargo.toml -p crm-api --bin crm-admin -- set-password --email erin@cedar.test
 ```
 
 ### Start the applications
@@ -156,7 +167,7 @@ Start the API and web application in separate terminals from the repository root
 
 The API starts without PostgreSQL or a telemetry collector; it logs to the console. The web shell checks for an existing session on load, then shows a login form or the signed-in view. Vite proxies only `/api` to the loopback API; it does not proxy `/internal/ready`.
 
-Log in at `http://127.0.0.1:5173` with a seeded account, e.g. `alice@acme.test` / the value of `CRM_DEV_SEED_PASSWORD`. A successful login shows the Organization name and its member list; logout revokes the session server-side.
+Log in at `http://127.0.0.1:5173` with a seeded account, e.g. `alice@acme.test` / the value of `CRM_DEV_SEED_PASSWORD`. A successful login shows the Organization name and its member list; logout revokes the session server-side. Alice and Bob are seeded as Organization admins — their sidebar gains a **Manage** group (`/manage/members`) for inviting, promoting/demoting, and deactivating/reactivating members of their own Organization. Log in as the platform admin, `owner@platform.test` / `CRM_DEV_SEED_PASSWORD`, to reach **Platform** (`/platform`): a membership-free operator account (D-021) that creates Organizations and issues/promotes admin invitations, but has no Organization of its own and cannot see any tenant's People, Inquiries, or Today.
 
 Verify liveness:
 

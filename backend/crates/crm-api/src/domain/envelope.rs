@@ -33,6 +33,11 @@ pub enum Origin {
     Webhook,
     Operator,
     Migration,
+    /// The platform-admin surface acting on an Organization it does not
+    /// belong to (docs/specs/SLICE_004.md §4).
+    Platform,
+    /// The `crm-admin` CLI (docs/specs/SLICE_004.md §11).
+    Cli,
 }
 
 impl Origin {
@@ -42,6 +47,8 @@ impl Origin {
             Origin::Webhook => "webhook",
             Origin::Operator => "operator",
             Origin::Migration => "migration",
+            Origin::Platform => "platform",
+            Origin::Cli => "cli",
         }
     }
 }

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) as \"count!\" FROM organization_membership\n           WHERE organization_id = $1 AND role = 'admin' AND status = 'active' AND user_id != $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "f8c9222f85aa892f77ccf0fb44d4888cd5227645c064e16c4d1e95db16f6cf36"
+}

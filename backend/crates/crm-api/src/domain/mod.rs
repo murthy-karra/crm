@@ -2,6 +2,7 @@
 //! commands, the fact envelope, and the read models/queries that back them.
 //! Business mutations pass through `commands::*` only (AGENTS.md §4.8).
 
+pub mod admin;
 pub mod commands;
 pub mod contact;
 pub mod envelope;

@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO invitation_resolved\n            (organization_id, actor_kind, actor_user_id, on_behalf_of_user_id, origin,\n             occurred_at, correlation_id, causation_id,\n             invitation_id, outcome)\n           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)\n           RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "8952de16fe4c651bd92cee89d5e06926ac41a002d74e73cd748abf90487dfc3c"
+}

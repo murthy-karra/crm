@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE organization_membership SET status = $3, updated_at = now()\n           WHERE organization_id = $1 AND user_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "88458ae5cef9405d61c12e59ebcb8ce918a8c880bf892e139c75092746907e84"
+}

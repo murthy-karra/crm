@@ -1,160 +1,35 @@
-//! DB-backed tests for Slice 001 (docs/specs/SLICE_001.md §9). Run only
-//! via ./scripts/check-db: every test is `#[ignore]`d so the service-free
-//! main gate (`cargo test --workspace --locked`) never touches a database.
+//! DB-backed tests for Slice 001 (docs/specs/SLICE_001.md §9), amended by
+//! Slice 004 (docs/specs/SLICE_004.md §13, §11). Run only via
+//! ./scripts/check-db: every test is `#[ignore]`d so the service-free main
+//! gate (`cargo test --workspace --locked`) never touches a database.
 //! `DATABASE_URL` must be the crm_migrator URL for the `#[sqlx::test]`
 //! harness; `CRM_DB_APP_PASSWORD`/`CRM_DB_MIGRATOR_PASSWORD` let each test
-//! build a same-database connection under a different role.
+//! build a same-database connection under a different role. Fixtures come
+//! from `tests/common` (Organization/user/membership creation now goes
+//! through the Slice 004 domain functions as `crm_app` — the migrator
+//! connection is used only to backdate timestamps or delete rows).
+mod common;
+
 use std::time::Duration;
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use axum::response::Response;
 use axum::Router;
-use http_body_util::BodyExt;
-use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
 use tower::ServiceExt;
 use uuid::Uuid;
 
-use crm_api::auth::password;
-use crm_api::config::Config;
-use crm_api::state::AppState;
-
-fn app_password() -> String {
-    std::env::var("CRM_DB_APP_PASSWORD").expect("CRM_DB_APP_PASSWORD must be set for check-db")
-}
-
-fn migrator_password() -> String {
-    std::env::var("CRM_DB_MIGRATOR_PASSWORD")
-        .expect("CRM_DB_MIGRATOR_PASSWORD must be set for check-db")
-}
-
-async fn connect_as(migrator_pool: &PgPool, username: &str, password: &str) -> PgPool {
-    let options = migrator_pool
-        .connect_options()
-        .as_ref()
-        .clone()
-        .username(username)
-        .password(password);
-    PgPoolOptions::new()
-        .connect_with(options)
-        .await
-        .expect("connect with swapped credentials")
-}
-
-async fn connect_as_app(migrator_pool: &PgPool) -> PgPool {
-    connect_as(migrator_pool, "crm_app", &app_password()).await
-}
-
-/// A connection URL for the same ephemeral database `#[sqlx::test]`
-/// created, usable to run the real `seed` binary as a subprocess against
-/// it (docs/specs/SLICE_001.md §9: seed idempotency).
-fn migrator_url_for(migrator_pool: &PgPool) -> String {
-    let opts = migrator_pool.connect_options();
-    format!(
-        "postgres://{}:{}@{}:{}/{}",
-        opts.get_username(),
-        migrator_password(),
-        opts.get_host(),
-        opts.get_port(),
-        opts.get_database()
-            .expect("ephemeral test database has a name"),
-    )
-}
-
-fn test_config() -> Config {
-    Config::from_source(|key| match key {
-        "CRM_SESSION_SECRET" => Some("a".repeat(32)),
-        "CRM_RAW_PAYLOAD_KEY" => Some("ab".repeat(32)),
-        "CENTRIFUGO_HTTP_API_KEY" => Some("test-key".to_string()),
-        "CENTRIFUGO_TOKEN_HMAC_SECRET" => Some("c".repeat(32)),
-        _ => None,
-    })
-    .unwrap()
-}
-
-async fn build_router(migrator_pool: &PgPool) -> Router {
-    let app_pool = connect_as_app(migrator_pool).await;
-    let config = test_config();
-    let state = AppState::for_tests(app_pool, &config, crm_api::realtime::Publisher::recording());
-    crm_api::build_app(state)
-}
-
-async fn create_org(pool: &PgPool, name: &str) -> Uuid {
-    let (id,): (Uuid,) = sqlx::query_as("INSERT INTO organization (name) VALUES ($1) RETURNING id")
-        .bind(name)
-        .fetch_one(pool)
-        .await
-        .unwrap();
-    id
-}
-
-async fn create_user(pool: &PgPool, email: &str, display_name: &str, password_plain: &str) -> Uuid {
-    let (id,): (Uuid,) =
-        sqlx::query_as("INSERT INTO app_user (email, display_name) VALUES ($1, $2) RETURNING id")
-            .bind(email)
-            .bind(display_name)
-            .fetch_one(pool)
-            .await
-            .unwrap();
-    let hash = password::hash_password(password_plain).unwrap();
-    sqlx::query("INSERT INTO local_credential (user_id, password_hash) VALUES ($1, $2)")
-        .bind(id)
-        .bind(hash)
-        .execute(pool)
-        .await
-        .unwrap();
-    id
-}
+use common::{
+    add_membership, body_json, build_router, connect_as_app, create_org, create_user,
+    extract_cookie, login, migrator_url_for,
+};
+use crm_api::domain::admin::queries as admin_queries;
 
 async fn create_user_without_password(pool: &PgPool, email: &str, display_name: &str) -> Uuid {
-    let (id,): (Uuid,) =
-        sqlx::query_as("INSERT INTO app_user (email, display_name) VALUES ($1, $2) RETURNING id")
-            .bind(email)
-            .bind(display_name)
-            .fetch_one(pool)
-            .await
-            .unwrap();
-    id
-}
-
-async fn add_membership(pool: &PgPool, org_id: Uuid, user_id: Uuid) {
-    sqlx::query("INSERT INTO organization_membership (organization_id, user_id) VALUES ($1, $2)")
-        .bind(org_id)
-        .bind(user_id)
-        .execute(pool)
-        .await
-        .unwrap();
-}
-
-async fn body_json(response: Response) -> serde_json::Value {
-    let bytes = response.into_body().collect().await.unwrap().to_bytes();
-    serde_json::from_slice(&bytes).unwrap()
-}
-
-fn extract_cookie(response: &Response) -> String {
-    let set_cookie = response
-        .headers()
-        .get("set-cookie")
-        .expect("must set a cookie")
-        .to_str()
-        .unwrap();
-    set_cookie.split(';').next().unwrap().to_string()
-}
-
-async fn login(router: &Router, email: &str, password: &str) -> Response {
-    router
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/session")
-                .header("content-type", "application/json")
-                .body(Body::from(
-                    serde_json::json!({ "email": email, "password": password }).to_string(),
-                ))
-                .unwrap(),
-        )
+    let app_pool = connect_as_app(pool).await;
+    let mut conn = app_pool.acquire().await.unwrap();
+    admin_queries::insert_app_user(&mut conn, email, display_name)
         .await
         .unwrap()
 }
@@ -306,12 +181,12 @@ async fn expired_session_returns_401(migrator_pool: PgPool) {
     add_membership(&migrator_pool, org, user).await;
 
     let app_pool = connect_as_app(&migrator_pool).await;
-    let config = test_config();
+    let config = common::test_config();
     let (token, _expires_at) = crm_api::auth::session::create(
         &app_pool,
         &config.session_secret,
         user,
-        org,
+        Some(org),
         Duration::from_secs(3600),
     )
     .await
@@ -631,14 +506,20 @@ async fn multi_membership_picks_earliest_and_scopes_members_to_it(migrator_pool:
     )
     .await;
     let earlier_org = create_org(&migrator_pool, "Earlier Realty").await;
-    // Force a strictly later created_at on the second membership so the
-    // ordering isn't relying on same-instant timestamps.
-    sqlx::query("INSERT INTO organization_membership (organization_id, user_id, created_at) VALUES ($1, $2, now() - interval '1 day')")
-        .bind(earlier_org)
-        .bind(user)
-        .execute(&migrator_pool)
-        .await
-        .unwrap();
+    // Create the membership through the domain function, then backdate its
+    // timestamp via the migrator connection — the fixture rule permits
+    // backdating an existing row, never creating one directly
+    // (docs/specs/SLICE_004.md §11).
+    add_membership(&migrator_pool, earlier_org, user).await;
+    sqlx::query(
+        "UPDATE organization_membership SET created_at = now() - interval '1 day'
+         WHERE organization_id = $1 AND user_id = $2",
+    )
+    .bind(earlier_org)
+    .bind(user)
+    .execute(&migrator_pool)
+    .await
+    .unwrap();
 
     // A second person, member of the later Organization only, so the
     // members-scoping assertion below is discriminating: if scoping were
@@ -706,18 +587,17 @@ async fn crm_app_has_exactly_the_specified_grants(migrator_pool: PgPool) {
         .await;
     assert!(ddl.is_err(), "crm_app must not be able to run DDL");
 
-    // Every table but user_session is SELECT-only: INSERT and UPDATE must
-    // both be denied on all four, not just spot-checked on one (spec §2's
-    // "exactly the specified grants"). Postgres checks table-level
-    // privilege before evaluating constraints or column references, so
-    // `.is_err()` here is a genuine permission-denied failure regardless
-    // of each table's differing column set.
-    for (table, update_column) in [
-        ("organization", "name"),
-        ("app_user", "display_name"),
-        ("local_credential", "password_hash"),
-        ("organization_membership", "created_at"),
-    ] {
+    // Amended by docs/specs/SLICE_004.md §2 (declared change, AGENTS.md
+    // §11): crm_app gains INSERT on organization, app_user,
+    // local_credential, organization_membership (plus invitation, stage —
+    // covered in tests/db_admin.rs). organization_membership additionally
+    // gains column-level UPDATE (role, status, updated_at); local_credential
+    // gains column-level UPDATE (password_hash, updated_at) for the accept/
+    // CLI set-password paths. `app_user`/`organization` still have no
+    // UPDATE grant at all — Postgres checks table-level privilege before
+    // evaluating constraints, so `.is_err()` on a bare `UPDATE` is a genuine
+    // permission-denied failure regardless of each table's column set.
+    for table in ["organization", "app_user"] {
         let select = sqlx::query(&format!("SELECT * FROM {table}"))
             .fetch_all(&app_pool)
             .await;
@@ -726,14 +606,11 @@ async fn crm_app_has_exactly_the_specified_grants(migrator_pool: PgPool) {
             "crm_app must be able to SELECT from {table}"
         );
 
-        let insert = sqlx::query(&format!("INSERT INTO {table} DEFAULT VALUES"))
-            .execute(&app_pool)
-            .await;
-        assert!(
-            insert.is_err(),
-            "crm_app must not be able to INSERT into {table}"
-        );
-
+        let update_column = if table == "organization" {
+            "name"
+        } else {
+            "display_name"
+        };
         let update = sqlx::query(&format!(
             "UPDATE {table} SET {update_column} = {update_column} WHERE false"
         ))
@@ -744,6 +621,88 @@ async fn crm_app_has_exactly_the_specified_grants(migrator_pool: PgPool) {
             "crm_app must not be able to UPDATE {table}"
         );
     }
+
+    let org_insert = sqlx::query("INSERT INTO organization (name) VALUES ('Grant Check Org')")
+        .execute(&app_pool)
+        .await;
+    assert!(
+        org_insert.is_ok(),
+        "crm_app must be able to INSERT into organization (SLICE_004 §2)"
+    );
+
+    let user_insert = sqlx::query(
+        "INSERT INTO app_user (email, display_name) VALUES ('grant-check@test.internal', 'Grant Check')",
+    )
+    .execute(&app_pool)
+    .await;
+    assert!(
+        user_insert.is_ok(),
+        "crm_app must be able to INSERT into app_user (SLICE_004 §2)"
+    );
+
+    // local_credential: SELECT, INSERT, column-level UPDATE (password_hash,
+    // updated_at) — but not an arbitrary column.
+    let credential_select = sqlx::query("SELECT * FROM local_credential")
+        .fetch_all(&app_pool)
+        .await;
+    assert!(
+        credential_select.is_ok(),
+        "crm_app must be able to SELECT from local_credential"
+    );
+    let credential_insert = sqlx::query(
+        "INSERT INTO local_credential (user_id, password_hash)
+         SELECT id, 'grant-check-hash' FROM app_user LIMIT 0",
+    )
+    .execute(&app_pool)
+    .await;
+    assert!(
+        credential_insert.is_ok(),
+        "crm_app must be able to INSERT into local_credential (SLICE_004 §2)"
+    );
+    let credential_update =
+        sqlx::query("UPDATE local_credential SET password_hash = password_hash WHERE false")
+            .execute(&app_pool)
+            .await;
+    assert!(
+        credential_update.is_ok(),
+        "crm_app must be able to UPDATE local_credential.password_hash (SLICE_004 §2)"
+    );
+
+    // organization_membership: SELECT, INSERT, column-level UPDATE (role,
+    // status, updated_at) — created_at stays immutable to the application.
+    let membership_select = sqlx::query("SELECT * FROM organization_membership")
+        .fetch_all(&app_pool)
+        .await;
+    assert!(
+        membership_select.is_ok(),
+        "crm_app must be able to SELECT from organization_membership"
+    );
+    let membership_insert = sqlx::query(
+        "INSERT INTO organization_membership (organization_id, user_id, role, status)
+         SELECT id, id, 'member', 'active' FROM organization LIMIT 0",
+    )
+    .execute(&app_pool)
+    .await;
+    assert!(
+        membership_insert.is_ok(),
+        "crm_app must be able to INSERT into organization_membership (SLICE_004 §2)"
+    );
+    let membership_role_update =
+        sqlx::query("UPDATE organization_membership SET role = role WHERE false")
+            .execute(&app_pool)
+            .await;
+    assert!(
+        membership_role_update.is_ok(),
+        "crm_app must be able to UPDATE organization_membership.role (SLICE_004 §2)"
+    );
+    let membership_created_at_update =
+        sqlx::query("UPDATE organization_membership SET created_at = created_at WHERE false")
+            .execute(&app_pool)
+            .await;
+    assert!(
+        membership_created_at_update.is_err(),
+        "crm_app must not be able to UPDATE organization_membership.created_at"
+    );
 
     // user_session: SELECT, INSERT, UPDATE granted; DELETE denied.
     let session_select = sqlx::query("SELECT * FROM user_session")
@@ -786,25 +745,47 @@ async fn crm_app_has_exactly_the_specified_grants(migrator_pool: PgPool) {
 
 #[sqlx::test]
 #[ignore]
-async fn seed_binary_is_idempotent(migrator_pool: PgPool) {
+async fn crm_admin_seed_dev_is_idempotent(migrator_pool: PgPool) {
     let migration_url = migrator_url_for(&migrator_pool);
-    let seed_bin = env!("CARGO_BIN_EXE_seed");
+    let app_url = common::app_url_for(&migrator_pool);
+    let crm_admin_bin = env!("CARGO_BIN_EXE_crm-admin");
 
-    let run = |n: u32| {
-        let output = std::process::Command::new(seed_bin)
+    let bootstrap = || {
+        let output = std::process::Command::new(crm_admin_bin)
+            .arg("bootstrap-platform-admin")
+            .arg("--email")
+            .arg("owner@platform.test")
+            .arg("--display-name")
+            .arg("Platform Owner")
             .env("MIGRATION_DATABASE_URL", &migration_url)
-            .env("CRM_DEV_SEED_PASSWORD", "test-seed-password")
+            .env("CRM_DEV_SEED_PASSWORD", "test-seed-password-123456")
             .env_remove("DATABASE_URL")
             .output()
-            .unwrap_or_else(|e| panic!("seed run {n} failed to start: {e}"));
+            .expect("bootstrap-platform-admin failed to start");
         assert!(
             output.status.success(),
-            "seed run {n} failed: {}",
+            "bootstrap-platform-admin failed: {}",
             String::from_utf8_lossy(&output.stderr)
         );
     };
 
-    run(1);
+    let seed_dev = |n: u32| {
+        let output = std::process::Command::new(crm_admin_bin)
+            .arg("seed-dev")
+            .env("MIGRATION_DATABASE_URL", &migration_url)
+            .env("DATABASE_URL", &app_url)
+            .env("CRM_DEV_SEED_PASSWORD", "test-seed-password-123456")
+            .output()
+            .unwrap_or_else(|e| panic!("seed-dev run {n} failed to start: {e}"));
+        assert!(
+            output.status.success(),
+            "seed-dev run {n} failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    };
+
+    bootstrap();
+    seed_dev(1);
     let (orgs_1, users_1): (i64, i64) = sqlx::query_as(
         "SELECT (SELECT count(*) FROM organization), (SELECT count(*) FROM app_user)",
     )
@@ -812,7 +793,7 @@ async fn seed_binary_is_idempotent(migrator_pool: PgPool) {
     .await
     .unwrap();
 
-    run(2);
+    seed_dev(2);
     let (orgs_2, users_2): (i64, i64) = sqlx::query_as(
         "SELECT (SELECT count(*) FROM organization), (SELECT count(*) FROM app_user)",
     )
@@ -820,13 +801,25 @@ async fn seed_binary_is_idempotent(migrator_pool: PgPool) {
     .await
     .unwrap();
 
+    seed_dev(3);
+    let (orgs_3, users_3): (i64, i64) = sqlx::query_as(
+        "SELECT (SELECT count(*) FROM organization), (SELECT count(*) FROM app_user)",
+    )
+    .fetch_one(&migrator_pool)
+    .await
+    .unwrap();
+
     assert_eq!(
-        orgs_1, orgs_2,
-        "re-running seed must not create duplicate organizations"
+        (orgs_1, users_1),
+        (orgs_2, users_2),
+        "re-running seed-dev must not create duplicate rows"
     );
     assert_eq!(
-        users_1, users_2,
-        "re-running seed must not create duplicate users"
+        (orgs_2, users_2),
+        (orgs_3, users_3),
+        "re-running seed-dev a third time must still be idempotent"
     );
-    assert!(orgs_1 > 0 && users_1 > 0);
+    // Two Organizations, five users (the platform admin + four members).
+    assert_eq!(orgs_1, 2);
+    assert_eq!(users_1, 5);
 }

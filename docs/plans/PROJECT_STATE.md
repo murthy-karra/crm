@@ -4,15 +4,15 @@ Last updated: 2026-08-22
 
 ## Current phase
 
-Slice 004 (Administration) **approved; awaiting the implementation
-gate** (2026-08-22). `docs/specs/SLICE_004.md` is APPROVED; lane briefs
-`docs/tasks/SLICE_004_LANE_A.md` (backend, owns the migration; branch
-`slice-004-admin`) and `docs/tasks/SLICE_004_LANE_B.md` (web; branch
-`slice-004-web` in a worktree) are written. Pointer lines added to
-SLICE_001 §3/§4 and SLICE_002 §2 for the declared contract changes.
-Next: the user's "Proceed with implementation?" approval, then run the
-two lanes (the user intends a separate session with a faster model —
-the handoff is entirely in the repository).
+Slice 004 (Administration) **implemented, reviewed, tested, and verified
+live; awaiting merge approval** (2026-08-22). Both lanes complete on
+`slice-004-admin` (backend) and `slice-004-web` (web, worktree
+`../crm-web`). Independent review (`crm-reviewer`) and adversarial
+testing (`crm-tester`) ran against the real diffs; findings fixed and
+re-verified; a live headless-browser walkthrough of spec §1 steps 2–9
+passed 46/46 assertions against the real running stack. Next: merge
+`slice-004-admin` then `slice-004-web` into `main` (user approval
+pending), clean up branches/worktree, push.
 
 ## Current slice
 
@@ -27,9 +27,12 @@ merged (see History).
 
 ## Current branch
 
-`main`, clean, pushed, up to date with `origin/main`.
-`slice-003-realtime` and `slice-003-web` deleted after merging; the
-`/Users/karrad/projects/crm-web` worktree removed.
+Main checkout on `slice-004-admin` (backend); web worktree at
+`/Users/karrad/projects/crm-web` on `slice-004-web`. Neither merged to
+`main` yet. `main` itself unchanged since `194cc8f`, 4 commits behind
+what will become the post-merge tip.
+`slice-003-realtime` and `slice-003-web` deleted after merging; that
+worktree was removed and recreated for Slice 004.
 
 ## Last accepted decision
 
@@ -378,6 +381,58 @@ Earlier the same day, user-accepted:
   the Slice 003 realtime path has been proven working through the
   actual public tunnel rather than only on loopback.
 
+- 2026-08-22: Slice 004 implemented in two parallel lanes (backend on
+  `slice-004-admin` in the main checkout, owning the migration; web on
+  `slice-004-web` in the `../crm-web` worktree, built against the
+  frozen §5 contract without waiting on a running backend). Both
+  self-verified green, then independently reviewed and adversarially
+  tested against the real diffs:
+  - `crm-reviewer` found zero blocking issues; confirmed the one
+    coordinator-approved deviation from the spec's literal grant block
+    (`GRANT SELECT ON invitation TO crm_app;` — every sibling table in
+    that line already had SELECT from an earlier migration, `invitation`
+    was the one omission, and no narrower column-level grant works
+    because `token_hash` is used in the same `WHERE` clauses that
+    authenticate a token) as a safe mechanical correction, not a policy
+    decision. Two IMPLEMENTATION_DETAIL findings: a stale `stage.rs` doc
+    comment (fixed) and a defensible, non-fixed query-invalidation
+    narrowing in `web/src/api/queries.ts`.
+  - `crm-tester` found no exploitable tenant-isolation or
+    authorization-bypass bug. One real low-severity finding: `IssueInvitation`
+    racing a concurrent `AcceptInvitation` for the same `(org, email)`
+    could surface a bare 503 instead of a clean error, or leave a
+    harmless dangling invitation row, under READ COMMITTED's
+    per-statement snapshot — fixed with a re-check immediately before
+    insert plus a `check_violation` retry. Two test-coverage gaps
+    closed: a true concurrent double-accept test (mirroring the
+    existing last-admin race test's `tokio::spawn`/`tokio::join!`
+    pattern, not sequential accept-then-accept) and platform-route
+    403-for-org-admin coverage extended to all five routes (previously
+    three of five).
+  - Both lane file lists cross-checked against real `git status`/`git
+    diff --stat` at every hand-off — no undisclosed files, no repeat of
+    the Slice 002 lesson.
+  - Live headless-browser walkthrough of spec §1 steps 2–9 (real
+    backend on :3000, real frontend, real Postgres/Centrifugo): 46/46
+    assertions passed — platform-admin Organization creation and
+    first-admin invitation, promote/demote/deactivate/reactivate with
+    the last-admin invariant enforced through real UI actions, revoke/
+    re-issue, and every tenant-isolation and platform-vs-tenant
+    authorization boundary probed directly (403/404/401 exactly as
+    contracted). Zero real application console errors (the walkthrough
+    logged Chrome's automatic "failed to load resource" lines for
+    intentional negative-path 401/403/404/409 probes and the anonymous
+    session-check on public routes — not unhandled errors).
+  - Final counts, verified by direct re-run rather than trusted from
+    agent reports: backend 143 lib unit tests + 133 integration tests
+    (38 service-free via `./scripts/check`, 95 DB/Centrifugo-backed via
+    `./scripts/check-db`, including 24 new in `db_admin.rs`); web 57
+    Vitest tests across 5 files. All green.
+  - Found live (not a slice defect, an environment-tooling gap):
+    `./scripts/dev-services down` does not drop the Postgres named
+    volume, so it does not give a true clean slate on its own — needs
+    `down -v` or an explicit volume prune. Noted in Pending work below.
+
 ## Pending work
 
 1. Resolved 2026-08-22 (D-024): the Cloudflare Access application was
@@ -391,6 +446,18 @@ Earlier the same day, user-accepted:
    (e.g. "Ada Lovelace", "Grace Hopper", an unresolved "website" entry).
    Harmless local data; `./scripts/dev-services down` + `up` + re-migrate
    + re-seed resets it if a clean slate is wanted before real use.
+6. Not blocking, discovered during the Slice 004 live walkthrough:
+   `./scripts/dev-services down` does not drop the `crm_postgres_data`
+   named volume, so `down && up` alone is not a true clean slate (a
+   prior review session's "Cedar Realty" Organization was still present
+   after a `down && up` before the walkthrough re-ran with `down -v`).
+   The current dev database holds the Slice 004 walkthrough's artifacts
+   (Cedar Realty; Erin/Frank/Gina invitations) on top of the standard
+   seed — real, verified-correct rows, harmless locally.
+   `./scripts/dev-services down -v && up` + `db-migrate` +
+   `dev-bootstrap` gives an actual clean slate. Worth fixing the script
+   itself (or its README instructions) in a later small change, not
+   part of this slice's scope.
 5. Not blocking, dev-only (D-025): the dev tunnel's real routing config
    lives only in the Cloudflare dashboard now, not in the repo — a fresh
    clone or a recreated tunnel would need the three dashboard routes
@@ -420,6 +487,13 @@ blocks recording features.
 
 ## Safe defaults adopted
 
+- Slice 004: `GRANT SELECT ON invitation TO crm_app;`, added by Lane A
+  beyond SLICE_004 §2's literal grant block and confirmed by both
+  `crm-reviewer` and the coordinator as a mechanical correction of an
+  editing omission (every sibling table in the same GRANT line already
+  had SELECT), not a policy decision — no narrower grant is possible
+  since `token_hash` backs the same `WHERE` clauses that authenticate a
+  token, and no `token_hash` value is ever returned to a client.
 - The event-sourced aggregates document is classified as research
   (precedence level 6), not accepted architecture, because its scope
   conflicts with the thesis's deferred capabilities and D-007. Recorded as
@@ -581,38 +655,27 @@ slice:
 
 ## Next recommended action
 
-Implement Slice 004. Handoff lives in the repository: SLICE_004
-(APPROVED) plus `docs/tasks/SLICE_004_LANE_A.md` and `_LANE_B.md`.
+Merge `slice-004-admin` into `main`, then `slice-004-web` into `main`
+(spec §15 ordering — B depends on A's `me`/session shape), delete both
+branches and the `../crm-web` worktree, push `main`. Awaiting the user's
+merge approval.
 
-Implementation gate (AGENTS.md §13):
-- Outcome: SLICE_004 §1 steps 1–10.
-- Changes: one migration `20260823000001_administration.sql`;
-  `auth/{session,context}.rs`, `routes/{session,organization}.rs`, new
-  `routes/{invitations,platform}.rs`, `domain/admin/*`, `domain/stage.rs`
-  doc, `domain/envelope.rs` (`Origin::{Platform,Cli}`), `error.rs`,
-  `realtime/publisher.rs` (+ `disconnect_user`, `Disabled`), `config.rs`,
-  `lib.rs` (CORS `PUT`), new `bin/crm-admin.rs`, delete `bin/seed.rs`,
-  `tests/common/mod.rs` rewrite, new tests, `.sqlx/`;
-  `scripts/dev-bootstrap` (replaces `dev-seed`), `check-db`,
-  `.env.example`, README; `web/src/{router,App}`, `AppShell`, `api/*`,
-  new views `InviteView`, `MembersView`, `PlatformOrganizationsView`,
-  `PlatformOrganizationView`, Vitest tests.
-- Exclusions: SLICE_004 §12.
-- Branches: `slice-004-admin` (main checkout) and `slice-004-web`
-  (worktree `../crm-web`); B merges after A.
-- Migration ownership: Lane A only.
-- Checks: `./scripts/check`; `./scripts/check-db` with `dev-services up`;
-  web lint/typecheck/test/build; `dev-bootstrap` ×3 + `demo-leads`; the
-  §1 browser walkthrough through the tunnel.
-- Risks: the `session::verify` rewrite (every route's security; the
-  existing SLICE_001 session tests must stay green); the
-  `tests/common` fixture rewrite touching every DB test; the
-  last-admin advisory-lock race; Centrifugo `disconnect` API shape;
-  `organization_name_lower_idx` failing on a dev DB with duplicate names
-  (reset with `dev-services down && up`).
-- Environment: local dev DB has Slice-002/003 test rows; `dev-bootstrap`
-  is idempotent over the seeded identities but the new unique name
-  index needs no duplicate Organization names.
+**Done** (2026-08-22). Both lanes implemented and self-verified green.
+Independent review (`crm-reviewer`) and adversarial testing
+(`crm-tester`) ran against the real diffs (details in Completed work
+above); both lane file lists matched real `git status` exactly. Four
+findings fixed and re-verified: a stale `stage.rs` doc comment, a real
+`IssueInvitation`/`AcceptInvitation` race (fixed with a pre-insert
+re-check plus a `check_violation` retry), a missing true-concurrency
+double-accept test, and incomplete platform-route 403 test coverage.
+Live headless-browser walkthrough of spec §1 steps 2–9 passed 46/46
+assertions against the real running stack (details above). Final test
+counts verified by direct re-run: backend 143 unit + 133 integration
+(38 service-free, 95 DB/Centrifugo-backed); web 57 Vitest tests. All
+green. Not yet done: merge, branch/worktree cleanup, push; the tunnel
+walkthrough (done on loopback, not yet re-verified through
+`app.tarams.org`/`api.tarams.org` — optional before merge, the user's
+call).
 
 Previous (Slice 003): Implement Slice 003. The user intends to run implementation in a
 separate session with a faster model, so the handoff lives entirely in
@@ -692,6 +755,11 @@ over the public tunnel).
 
 ## Approval currently required
 
-None. Slice 003 is fully closed out: merged, pushed, branches and
-worktree cleaned up. Next substantive decision: when to plan Slice 004
-(administration, D-021/O-007).
+Merge approval for Slice 004: `slice-004-admin` → `main`, then
+`slice-004-web` → `main`. Test status: all green (see Next recommended
+action). Migration impact: one new migration
+(`20260823000001_administration.sql`), additive to the existing schema,
+no destructive changes. Unresolved risks: none blocking; see Pending
+work item 6 (dev-services volume gap, environment-only) and the
+deferred existing-user-acceptance/suspension increments already listed
+in SLICE_004 §12/§16.

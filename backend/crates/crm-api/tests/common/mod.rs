@@ -17,6 +17,12 @@ use uuid::Uuid;
 
 use crm_api::auth::password;
 use crm_api::config::Config;
+use crm_api::domain::admin::commands::{
+    create_organization, grant_platform_admin, CreateOrganization, GrantPlatformAdmin,
+};
+use crm_api::domain::admin::queries as admin_queries;
+use crm_api::domain::admin::{AdminActor, MembershipStatus, Role};
+use crm_api::domain::envelope::Origin;
 use crm_api::domain::raw_payload::crypto;
 use crm_api::domain::stage;
 use crm_api::realtime::Publisher;
@@ -56,6 +62,22 @@ pub fn migrator_url_for(migrator_pool: &PgPool) -> String {
         "postgres://{}:{}@{}:{}/{}",
         opts.get_username(),
         migrator_password(),
+        opts.get_host(),
+        opts.get_port(),
+        opts.get_database()
+            .expect("ephemeral test database has a name"),
+    )
+}
+
+/// A `crm_app` connection URL for the same ephemeral database, usable to
+/// run `crm-admin` as a subprocess against it (docs/specs/SLICE_004.md
+/// §11: `bootstrap-platform-admin` needs `MIGRATION_DATABASE_URL`; every
+/// other subcommand needs this as `DATABASE_URL`).
+pub fn app_url_for(migrator_pool: &PgPool) -> String {
+    let opts = migrator_pool.connect_options();
+    format!(
+        "postgres://crm_app:{}@{}:{}/{}",
+        app_password(),
         opts.get_host(),
         opts.get_port(),
         opts.get_database()
@@ -104,14 +126,57 @@ pub async fn build_router_with_publisher(migrator_pool: &PgPool, publisher: Publ
 }
 
 // --- Fixtures: Organizations, users, memberships, stages -----------------
+//
+// Slice 004 (D-021, docs/specs/SLICE_004.md §11 fixture rule): tests may
+// use the migrator connection only to backdate timestamps or delete rows
+// for negative cases, never to create domain rows. `create_org` therefore
+// bootstraps a fixture platform admin via the real `GrantPlatformAdmin`
+// migrator-only command (the one sanctioned migrator-write path) and then
+// creates the Organization through `CreateOrganization` as `crm_app`, same
+// as production. `create_user`/`add_membership` use the lower-level
+// `domain::admin::queries` helpers — the same functions `AcceptInvitation`
+// itself calls — as `crm_app`, rather than ad hoc SQL: there is no generic
+// "create a bare user with no Organization" command by design (users are
+// only ever created via `AcceptInvitation` or `GrantPlatformAdmin`), and
+// routing every fixture user through a full issue+accept invitation
+// round-trip is impractical for fixtures that intentionally build orphan
+// (zero-membership) users.
+
+/// A stable fixture platform admin, created idempotently per ephemeral
+/// test database via the real migrator-only `GrantPlatformAdmin` command.
+/// Never appears in any Organization's membership list (it is not added
+/// to any Organization it creates), so it cannot leak into an assertion
+/// about members/counts.
+async fn fixture_platform_admin(migrator_pool: &PgPool) -> Uuid {
+    grant_platform_admin(
+        migrator_pool,
+        GrantPlatformAdmin {
+            email: "fixture-actor@test.internal".to_string(),
+            display_name: "Fixture Actor".to_string(),
+            password: "fixture-actor-password-123456".to_string(),
+        },
+    )
+    .await
+    .expect("fixture platform-admin bootstrap must succeed")
+}
 
 pub async fn create_org(pool: &PgPool, name: &str) -> Uuid {
-    let (id,): (Uuid,) = sqlx::query_as("INSERT INTO organization (name) VALUES ($1) RETURNING id")
-        .bind(name)
-        .fetch_one(pool)
-        .await
-        .unwrap();
-    id
+    let actor_id = fixture_platform_admin(pool).await;
+    let app_pool = connect_as_app(pool).await;
+    let actor = AdminActor {
+        actor_user_id: actor_id,
+        origin: Origin::Cli,
+    };
+    let organization = create_organization(
+        &app_pool,
+        actor,
+        CreateOrganization {
+            name: name.to_string(),
+        },
+    )
+    .await
+    .expect("fixture organization creation must succeed");
+    organization.id
 }
 
 pub async fn create_user(
@@ -120,28 +185,63 @@ pub async fn create_user(
     display_name: &str,
     password_plain: &str,
 ) -> Uuid {
-    let (id,): (Uuid,) =
-        sqlx::query_as("INSERT INTO app_user (email, display_name) VALUES ($1, $2) RETURNING id")
-            .bind(email)
-            .bind(display_name)
-            .fetch_one(pool)
-            .await
-            .unwrap();
-    let hash = password::hash_password(password_plain).unwrap();
-    sqlx::query("INSERT INTO local_credential (user_id, password_hash) VALUES ($1, $2)")
-        .bind(id)
-        .bind(hash)
-        .execute(pool)
+    let app_pool = connect_as_app(pool).await;
+    let mut conn = app_pool.acquire().await.unwrap();
+    let user_id = admin_queries::insert_app_user(&mut conn, email, display_name)
         .await
         .unwrap();
-    id
+    let hash = password::hash_password(password_plain).unwrap();
+    admin_queries::insert_local_credential(&mut conn, user_id, &hash)
+        .await
+        .unwrap();
+    user_id
+}
+
+/// A `member`/`active` membership — the common case every pre-004 fixture
+/// used implicitly. Use `add_membership_with` for admin or inactive
+/// fixtures.
+/// A named, real platform admin (as opposed to `fixture_platform_admin`'s
+/// anonymous bootstrap actor) — for tests that log in as the platform
+/// admin (docs/specs/SLICE_004.md §13).
+pub async fn create_platform_admin(
+    migrator_pool: &PgPool,
+    email: &str,
+    display_name: &str,
+    password: &str,
+) -> Uuid {
+    grant_platform_admin(
+        migrator_pool,
+        GrantPlatformAdmin {
+            email: email.to_string(),
+            display_name: display_name.to_string(),
+            password: password.to_string(),
+        },
+    )
+    .await
+    .expect("platform admin fixture creation must succeed")
 }
 
 pub async fn add_membership(pool: &PgPool, org_id: Uuid, user_id: Uuid) {
-    sqlx::query("INSERT INTO organization_membership (organization_id, user_id) VALUES ($1, $2)")
-        .bind(org_id)
-        .bind(user_id)
-        .execute(pool)
+    add_membership_with(
+        pool,
+        org_id,
+        user_id,
+        Role::Member,
+        MembershipStatus::Active,
+    )
+    .await
+}
+
+pub async fn add_membership_with(
+    pool: &PgPool,
+    org_id: Uuid,
+    user_id: Uuid,
+    role: Role,
+    status: MembershipStatus,
+) {
+    let app_pool = connect_as_app(pool).await;
+    let mut conn = app_pool.acquire().await.unwrap();
+    admin_queries::insert_membership(&mut conn, org_id, user_id, role, status)
         .await
         .unwrap();
 }
@@ -246,6 +346,42 @@ pub async fn post_json_with_cookie(
                 .header("content-type", "application/json")
                 .header("cookie", cookie)
                 .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap()
+}
+
+pub async fn put_json_with_cookie(
+    router: &Router,
+    uri: &str,
+    cookie: &str,
+    body: serde_json::Value,
+) -> Response {
+    router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri(uri)
+                .header("content-type", "application/json")
+                .header("cookie", cookie)
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap()
+}
+
+pub async fn delete_with_cookie(router: &Router, uri: &str, cookie: &str) -> Response {
+    router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri(uri)
+                .header("cookie", cookie)
+                .body(Body::empty())
                 .unwrap(),
         )
         .await

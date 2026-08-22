@@ -1,0 +1,56 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT o.id, o.name, o.status, o.created_at,\n             (SELECT count(*) FROM organization_membership m\n                WHERE m.organization_id = o.id AND m.status = 'active') as \"member_count!\",\n             (SELECT count(*) FROM organization_membership m\n                WHERE m.organization_id = o.id AND m.status = 'active' AND m.role = 'admin')\n                as \"admin_count!\",\n             (SELECT count(*) FROM invitation i\n                WHERE i.organization_id = o.id AND i.role = 'admin'\n                  AND i.accepted_at IS NULL AND i.revoked_at IS NULL AND i.expires_at > now())\n                as \"pending_admin_invitations!\"\n           FROM organization o",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "member_count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "admin_count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "pending_admin_invitations!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "9b4aa55261ad6d13227f48f71b5202a7a44fabfdfdc36570f711ce7bb8ddff14"
+}

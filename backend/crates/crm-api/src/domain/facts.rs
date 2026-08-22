@@ -179,6 +179,149 @@ pub struct StageChangedFact {
     pub reason: &'static str,
 }
 
+// --- Slice 004 admin facts (docs/specs/SLICE_004.md §2) -------------------
+
+pub async fn insert_organization_created(
+    tx: &mut PgConnection,
+    envelope: &FactEnvelope,
+) -> Result<Uuid, sqlx::Error> {
+    let actor_kind = envelope.actor_kind.as_str();
+    let origin = envelope.origin.as_str();
+    let row = sqlx::query!(
+        r#"INSERT INTO organization_created
+            (organization_id, actor_kind, actor_user_id, on_behalf_of_user_id, origin,
+             occurred_at, correlation_id, causation_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+           RETURNING id"#,
+        envelope.organization_id,
+        actor_kind,
+        envelope.actor_user_id,
+        envelope.on_behalf_of_user_id,
+        origin,
+        envelope.occurred_at,
+        envelope.correlation_id,
+        envelope.causation_id,
+    )
+    .fetch_one(tx)
+    .await?;
+    Ok(row.id)
+}
+
+pub struct InvitationIssuedFact {
+    pub invitation_id: Uuid,
+    pub role: &'static str,
+    pub superseded_invitation_id: Option<Uuid>,
+}
+
+pub async fn insert_invitation_issued(
+    tx: &mut PgConnection,
+    envelope: &FactEnvelope,
+    fact: InvitationIssuedFact,
+) -> Result<Uuid, sqlx::Error> {
+    let actor_kind = envelope.actor_kind.as_str();
+    let origin = envelope.origin.as_str();
+    let row = sqlx::query!(
+        r#"INSERT INTO invitation_issued
+            (organization_id, actor_kind, actor_user_id, on_behalf_of_user_id, origin,
+             occurred_at, correlation_id, causation_id,
+             invitation_id, role, superseded_invitation_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+           RETURNING id"#,
+        envelope.organization_id,
+        actor_kind,
+        envelope.actor_user_id,
+        envelope.on_behalf_of_user_id,
+        origin,
+        envelope.occurred_at,
+        envelope.correlation_id,
+        envelope.causation_id,
+        fact.invitation_id,
+        fact.role,
+        fact.superseded_invitation_id,
+    )
+    .fetch_one(tx)
+    .await?;
+    Ok(row.id)
+}
+
+pub struct InvitationResolvedFact {
+    pub invitation_id: Uuid,
+    pub outcome: &'static str,
+}
+
+pub async fn insert_invitation_resolved(
+    tx: &mut PgConnection,
+    envelope: &FactEnvelope,
+    fact: InvitationResolvedFact,
+) -> Result<Uuid, sqlx::Error> {
+    let actor_kind = envelope.actor_kind.as_str();
+    let origin = envelope.origin.as_str();
+    let row = sqlx::query!(
+        r#"INSERT INTO invitation_resolved
+            (organization_id, actor_kind, actor_user_id, on_behalf_of_user_id, origin,
+             occurred_at, correlation_id, causation_id,
+             invitation_id, outcome)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+           RETURNING id"#,
+        envelope.organization_id,
+        actor_kind,
+        envelope.actor_user_id,
+        envelope.on_behalf_of_user_id,
+        origin,
+        envelope.occurred_at,
+        envelope.correlation_id,
+        envelope.causation_id,
+        fact.invitation_id,
+        fact.outcome,
+    )
+    .fetch_one(tx)
+    .await?;
+    Ok(row.id)
+}
+
+pub struct MembershipChangedFact {
+    pub user_id: Uuid,
+    pub from_role: Option<&'static str>,
+    pub to_role: &'static str,
+    pub from_status: Option<&'static str>,
+    pub to_status: &'static str,
+    pub reason: &'static str,
+}
+
+pub async fn insert_membership_changed(
+    tx: &mut PgConnection,
+    envelope: &FactEnvelope,
+    fact: MembershipChangedFact,
+) -> Result<Uuid, sqlx::Error> {
+    let actor_kind = envelope.actor_kind.as_str();
+    let origin = envelope.origin.as_str();
+    let row = sqlx::query!(
+        r#"INSERT INTO membership_changed
+            (organization_id, actor_kind, actor_user_id, on_behalf_of_user_id, origin,
+             occurred_at, correlation_id, causation_id,
+             user_id, from_role, to_role, from_status, to_status, reason)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+           RETURNING id"#,
+        envelope.organization_id,
+        actor_kind,
+        envelope.actor_user_id,
+        envelope.on_behalf_of_user_id,
+        origin,
+        envelope.occurred_at,
+        envelope.correlation_id,
+        envelope.causation_id,
+        fact.user_id,
+        fact.from_role,
+        fact.to_role,
+        fact.from_status,
+        fact.to_status,
+        fact.reason,
+    )
+    .fetch_one(tx)
+    .await?;
+    Ok(row.id)
+}
+
 pub async fn insert_stage_changed(
     tx: &mut PgConnection,
     envelope: &FactEnvelope,

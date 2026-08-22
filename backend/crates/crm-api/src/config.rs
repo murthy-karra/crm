@@ -36,6 +36,10 @@ const DEFAULT_REALTIME_TOKEN_TTL_SECONDS: u64 = 600;
 const MIN_REALTIME_TOKEN_TTL_SECONDS: u64 = 60;
 const MAX_REALTIME_TOKEN_TTL_SECONDS: u64 = 3600;
 
+const DEFAULT_INVITATION_TTL_HOURS: u64 = 168;
+const MIN_INVITATION_TTL_HOURS: u64 = 1;
+const MAX_INVITATION_TTL_HOURS: u64 = 720;
+
 const RAW_PAYLOAD_KEY_HEX_LEN: usize = 64;
 
 /// The raw-payload encryption key (docs/specs/SLICE_002.md §7): exactly 64
@@ -143,6 +147,9 @@ pub struct Config {
     /// Connection-token lifetime, bounds 60–3600s
     /// (docs/specs/SLICE_003.md §6, §11).
     pub realtime_token_ttl: Duration,
+    /// Invitation expiry, bounds 1–720 hours, default 168 (7 days)
+    /// (docs/specs/SLICE_004.md §11).
+    pub invitation_ttl: Duration,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -167,6 +174,8 @@ pub enum ConfigError {
     InvalidCentrifugoApiUrl(String),
     InvalidRealtimeTokenTtl(String),
     RealtimeTokenTtlOutOfBounds(u64),
+    InvalidInvitationTtl(String),
+    InvitationTtlOutOfBounds(u64),
 }
 
 impl fmt::Display for ConfigError {
@@ -239,6 +248,14 @@ impl fmt::Display for ConfigError {
             ConfigError::RealtimeTokenTtlOutOfBounds(value) => write!(
                 f,
                 "CRM_REALTIME_TOKEN_TTL_SECONDS must be between {MIN_REALTIME_TOKEN_TTL_SECONDS} and {MAX_REALTIME_TOKEN_TTL_SECONDS}, got {value}"
+            ),
+            ConfigError::InvalidInvitationTtl(value) => write!(
+                f,
+                "CRM_INVITATION_TTL_HOURS is not a valid integer: {value}"
+            ),
+            ConfigError::InvitationTtlOutOfBounds(value) => write!(
+                f,
+                "CRM_INVITATION_TTL_HOURS must be between {MIN_INVITATION_TTL_HOURS} and {MAX_INVITATION_TTL_HOURS}, got {value}"
             ),
         }
     }
@@ -361,6 +378,17 @@ impl Config {
         }
         let realtime_token_ttl = Duration::from_secs(realtime_ttl_secs);
 
+        let invitation_ttl_hours = match get("CRM_INVITATION_TTL_HOURS") {
+            Some(value) => value
+                .parse::<u64>()
+                .map_err(|_| ConfigError::InvalidInvitationTtl(value.clone()))?,
+            None => DEFAULT_INVITATION_TTL_HOURS,
+        };
+        if !(MIN_INVITATION_TTL_HOURS..=MAX_INVITATION_TTL_HOURS).contains(&invitation_ttl_hours) {
+            return Err(ConfigError::InvitationTtlOutOfBounds(invitation_ttl_hours));
+        }
+        let invitation_ttl = Duration::from_secs(invitation_ttl_hours * 3600);
+
         Ok(Config {
             bind_addr,
             database_url,
@@ -375,6 +403,7 @@ impl Config {
             realtime_token_secret,
             centrifugo_api_url,
             realtime_token_ttl,
+            invitation_ttl,
         })
     }
 }
@@ -813,5 +842,38 @@ mod tests {
         )]))
         .unwrap_err();
         assert!(matches!(err, ConfigError::InvalidRealtimeTokenTtl(_)));
+    }
+
+    // --- CRM_INVITATION_TTL_HOURS (docs/specs/SLICE_004.md §11) -----------
+
+    #[test]
+    fn defaults_invitation_ttl() {
+        let config = Config::from_source(source(&[])).unwrap();
+        assert_eq!(config.invitation_ttl, Duration::from_secs(168 * 3600));
+    }
+
+    #[test]
+    fn rejects_invitation_ttl_below_bounds() {
+        let err = Config::from_source(source(&[("CRM_INVITATION_TTL_HOURS", "0")])).unwrap_err();
+        assert_eq!(err, ConfigError::InvitationTtlOutOfBounds(0));
+    }
+
+    #[test]
+    fn rejects_invitation_ttl_above_bounds() {
+        let err = Config::from_source(source(&[("CRM_INVITATION_TTL_HOURS", "721")])).unwrap_err();
+        assert_eq!(err, ConfigError::InvitationTtlOutOfBounds(721));
+    }
+
+    #[test]
+    fn accepts_custom_invitation_ttl() {
+        let config = Config::from_source(source(&[("CRM_INVITATION_TTL_HOURS", "24")])).unwrap();
+        assert_eq!(config.invitation_ttl, Duration::from_secs(24 * 3600));
+    }
+
+    #[test]
+    fn rejects_invalid_invitation_ttl() {
+        let err = Config::from_source(source(&[("CRM_INVITATION_TTL_HOURS", "not-a-number")]))
+            .unwrap_err();
+        assert!(matches!(err, ConfigError::InvalidInvitationTtl(_)));
     }
 }

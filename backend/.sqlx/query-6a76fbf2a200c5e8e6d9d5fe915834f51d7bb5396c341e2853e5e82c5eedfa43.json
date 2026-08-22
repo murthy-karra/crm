@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO platform_admin (user_id, granted_via) VALUES ($1, 'cli')\n           ON CONFLICT (user_id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6a76fbf2a200c5e8e6d9d5fe915834f51d7bb5396c341e2853e5e82c5eedfa43"
+}

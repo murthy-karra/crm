@@ -60,7 +60,9 @@ async fn receive_inquiry_handler(
         received_at: Utc::now(),
     };
 
-    let outcome = commands::receive_inquiry(pool, &state.raw_payload_key, &ctx, cmd).await?;
+    let outcome =
+        commands::receive_inquiry(pool, &state.raw_payload_key, &state.publisher, &ctx, cmd)
+            .await?;
 
     let (status, body) = match outcome {
         ReceiveInquiryOutcome::Resolved {

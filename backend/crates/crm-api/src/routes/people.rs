@@ -125,6 +125,7 @@ async fn set_assignment(
 
     let (summary, changed) = commands::assign_person(
         pool,
+        &state.publisher,
         &ctx,
         AssignPerson {
             person_id,
@@ -154,6 +155,7 @@ async fn set_stage(
 
     let (summary, changed) = commands::change_person_stage(
         pool,
+        &state.publisher,
         &ctx,
         ChangePersonStage {
             person_id,

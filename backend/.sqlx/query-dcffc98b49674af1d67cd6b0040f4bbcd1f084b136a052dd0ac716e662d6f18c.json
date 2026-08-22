@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id FROM invitation\n           WHERE organization_id = $1 AND email = $2\n             AND accepted_at IS NULL AND revoked_at IS NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "dcffc98b49674af1d67cd6b0040f4bbcd1f084b136a052dd0ac716e662d6f18c"
+}

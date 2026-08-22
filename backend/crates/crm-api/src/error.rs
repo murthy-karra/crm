@@ -2,6 +2,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Json, Response};
 use serde_json::json;
 
+use crate::domain::admin::AdminCommandError;
 use crate::domain::commands::CommandError;
 
 /// `{"error": "<code>"}` envelope shared across authenticated endpoints
@@ -24,6 +25,16 @@ pub enum ApiError {
     /// retry shortly" apart from "the database itself is down"; carries
     /// `Retry-After`.
     IntakeBusy,
+    // --- Slice 004 (docs/specs/SLICE_004.md §5) -------------------------
+    Forbidden,
+    LastAdmin,
+    InvitationUsed,
+    InvitationExpired,
+    InvitationNotAcceptable,
+    OrganizationNameTaken,
+    WeakPassword,
+    InvalidEmail,
+    AlreadyMember,
 }
 
 impl IntoResponse for ApiError {
@@ -41,6 +52,19 @@ impl IntoResponse for ApiError {
             ApiError::InvalidStage => (StatusCode::UNPROCESSABLE_ENTITY, "invalid_stage", None),
             ApiError::InternalError => (StatusCode::INTERNAL_SERVER_ERROR, "internal_error", None),
             ApiError::IntakeBusy => (StatusCode::SERVICE_UNAVAILABLE, "intake_busy", Some(2u64)),
+            ApiError::Forbidden => (StatusCode::FORBIDDEN, "forbidden", None),
+            ApiError::LastAdmin => (StatusCode::CONFLICT, "last_admin", None),
+            ApiError::InvitationUsed => (StatusCode::CONFLICT, "invitation_used", None),
+            ApiError::InvitationExpired => (StatusCode::GONE, "invitation_expired", None),
+            ApiError::InvitationNotAcceptable => {
+                (StatusCode::CONFLICT, "invitation_not_acceptable", None)
+            }
+            ApiError::OrganizationNameTaken => {
+                (StatusCode::CONFLICT, "organization_name_taken", None)
+            }
+            ApiError::WeakPassword => (StatusCode::UNPROCESSABLE_ENTITY, "weak_password", None),
+            ApiError::InvalidEmail => (StatusCode::BAD_REQUEST, "invalid_email", None),
+            ApiError::AlreadyMember => (StatusCode::CONFLICT, "already_member", None),
         };
 
         let body = Json(json!({ "error": code }));
@@ -71,6 +95,27 @@ impl From<CommandError> for ApiError {
             }
             CommandError::IntakeBusy => ApiError::IntakeBusy,
             CommandError::Database(_) => ApiError::Unavailable,
+        }
+    }
+}
+
+/// `AdminCommandError` -> `ApiError` mapping for the Slice 004 admin
+/// commands (docs/specs/SLICE_004.md §5, §9).
+impl From<AdminCommandError> for ApiError {
+    fn from(err: AdminCommandError) -> Self {
+        match err {
+            AdminCommandError::NotFound => ApiError::NotFound,
+            AdminCommandError::OrganizationNameTaken => ApiError::OrganizationNameTaken,
+            AdminCommandError::InvalidEmail => ApiError::InvalidEmail,
+            AdminCommandError::AlreadyMember => ApiError::AlreadyMember,
+            AdminCommandError::InvitationUsed => ApiError::InvitationUsed,
+            AdminCommandError::InvitationExpired => ApiError::InvitationExpired,
+            AdminCommandError::InvitationNotAcceptable => ApiError::InvitationNotAcceptable,
+            AdminCommandError::WeakPassword => ApiError::WeakPassword,
+            AdminCommandError::MalformedRequest => ApiError::MalformedRequest,
+            AdminCommandError::LastAdmin => ApiError::LastAdmin,
+            AdminCommandError::Crypto | AdminCommandError::Corrupt => ApiError::InternalError,
+            AdminCommandError::Database(_) => ApiError::Unavailable,
         }
     }
 }

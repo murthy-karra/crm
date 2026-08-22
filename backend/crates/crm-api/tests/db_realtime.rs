@@ -19,7 +19,7 @@ use crm_api::realtime::{CentrifugoTransport, Publisher};
 /// Every recorded `(channel, data)` pair as JSON, for assertions that don't
 /// care about the exact index.
 async fn recorded(publisher: &Publisher) -> Vec<(String, Value)> {
-    let Publisher::Recording(recorded) = publisher else {
+    let Publisher::Recording(recorded, _) = publisher else {
         panic!("expected Publisher::Recording");
     };
     recorded.lock().await.clone()

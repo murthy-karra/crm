@@ -10,6 +10,7 @@ use std::time::Duration;
 use uuid::Uuid;
 
 use crate::config::SessionSecret;
+use crate::domain::admin::Role;
 
 pub const COOKIE_NAME: &str = "crm_session";
 /// 256-bit token, base64url (no padding) encoded: fixed length so the
@@ -20,13 +21,37 @@ pub const TOKEN_STR_LEN: usize = 43;
 
 type HmacSha256 = Hmac<Sha256>;
 
-#[derive(Debug, Clone, sqlx::FromRow)]
+/// A session's active Organization, when it has one
+/// (docs/specs/SLICE_004.md §3).
+#[derive(Debug, Clone)]
+pub struct SessionOrganization {
+    pub id: Uuid,
+    pub name: String,
+    pub role: Role,
+}
+
+#[derive(Debug, Clone)]
 pub struct SessionIdentity {
     pub user_id: Uuid,
     pub email: String,
     pub display_name: String,
-    pub organization_id: Uuid,
-    pub organization_name: String,
+    pub organization: Option<SessionOrganization>,
+    pub platform_admin: bool,
+}
+
+/// Raw row shape from `verify`'s query, before the Rust-side invariant
+/// re-assertion (docs/specs/SLICE_004.md §3: "Rust additionally asserts the
+/// invariant on the returned row and treats a violation as invalid —
+/// defense in depth, not the primary control").
+#[derive(Debug, Clone, sqlx::FromRow)]
+struct SessionIdentityRow {
+    user_id: Uuid,
+    email: String,
+    display_name: String,
+    organization_id: Option<Uuid>,
+    organization_name: Option<String>,
+    membership_role: Option<String>,
+    platform_admin: bool,
 }
 
 pub fn is_valid_token_format(token: &str) -> bool {
@@ -50,12 +75,14 @@ fn hash_token(secret: &SessionSecret, token: &str) -> String {
 }
 
 /// Inserts a fresh session row and returns the raw token (for the cookie)
-/// and its expiry (for the cookie's Max-Age).
+/// and its expiry (for the cookie's Max-Age). `active_organization_id` is
+/// `None` for a platform-admin session with no Organization
+/// (docs/specs/SLICE_004.md §3).
 pub async fn create(
     pool: &PgPool,
     secret: &SessionSecret,
     user_id: Uuid,
-    active_organization_id: Uuid,
+    active_organization_id: Option<Uuid>,
     ttl: Duration,
 ) -> Result<(String, DateTime<Utc>), sqlx::Error> {
     let token = generate_token();
@@ -78,9 +105,15 @@ pub async fn create(
 }
 
 /// The single statement that re-verifies both session validity and
-/// Organization membership on every request (docs/specs/SLICE_001.md §3):
-/// a session whose membership has since been revoked matches no row here,
-/// same as an expired or revoked session.
+/// Organization membership on every request (docs/specs/SLICE_001.md §3;
+/// amended by docs/specs/SLICE_004.md §3): a session whose membership has
+/// since been revoked or deactivated matches no row here, same as an
+/// expired or revoked session — *unless* it is a platform-admin session
+/// with no active Organization at all. The `WHERE` predicate is the primary
+/// control: `(s.active_organization_id IS NULL AND pa.user_id IS NOT NULL)
+/// OR (m.status = 'active')`. This lives in SQL so "Organization present ⇒
+/// active membership present" stays true by construction, matching the
+/// pre-004 INNER JOIN's safe-by-construction property.
 pub async fn verify(
     pool: &PgPool,
     secret: &SessionSecret,
@@ -88,21 +121,55 @@ pub async fn verify(
 ) -> Result<Option<SessionIdentity>, sqlx::Error> {
     let token_hash = hash_token(secret, token);
 
-    sqlx::query_as::<_, SessionIdentity>(
+    let row = sqlx::query_as::<_, SessionIdentityRow>(
         "SELECT u.id AS user_id, u.email, u.display_name,
-                o.id AS organization_id, o.name AS organization_name
+                o.id AS organization_id, o.name AS organization_name,
+                m.role AS membership_role,
+                (pa.user_id IS NOT NULL) AS platform_admin
          FROM user_session s
          JOIN app_user u ON u.id = s.user_id
-         JOIN organization o ON o.id = s.active_organization_id
-         JOIN organization_membership m
+         LEFT JOIN organization o ON o.id = s.active_organization_id
+         LEFT JOIN organization_membership m
              ON m.user_id = s.user_id AND m.organization_id = s.active_organization_id
+         LEFT JOIN platform_admin pa ON pa.user_id = s.user_id
          WHERE s.token_hash = $1
            AND s.revoked_at IS NULL
-           AND s.expires_at > now()",
+           AND s.expires_at > now()
+           AND ((s.active_organization_id IS NULL AND pa.user_id IS NOT NULL)
+                OR (m.status = 'active'))",
     )
     .bind(&token_hash)
     .fetch_optional(pool)
-    .await
+    .await?;
+
+    let Some(row) = row else {
+        return Ok(None);
+    };
+
+    // Defense in depth: re-assert the invariant the WHERE predicate above
+    // already enforces (docs/specs/SLICE_004.md §3).
+    let organization = match (
+        row.organization_id,
+        row.organization_name,
+        row.membership_role,
+    ) {
+        (Some(id), Some(name), Some(role_str)) => {
+            let Some(role) = Role::from_db_str(&role_str) else {
+                return Ok(None);
+            };
+            Some(SessionOrganization { id, name, role })
+        }
+        (None, None, None) if row.platform_admin => None,
+        _ => return Ok(None),
+    };
+
+    Ok(Some(SessionIdentity {
+        user_id: row.user_id,
+        email: row.email,
+        display_name: row.display_name,
+        organization,
+        platform_admin: row.platform_admin,
+    }))
 }
 
 /// Revokes the session matching `token`, if any. Idempotent: revoking an

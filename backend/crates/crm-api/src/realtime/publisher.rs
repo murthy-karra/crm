@@ -92,18 +92,31 @@ impl PublishOutcome {
 /// (docs/specs/SLICE_003.md §14a).
 pub type RecordedPublication = (String, serde_json::Value);
 
+/// A recorded `disconnect_user` call — `Recording`'s capture of
+/// `Publisher::disconnect_user` (docs/specs/SLICE_004.md §13 criterion 8).
+pub type RecordedDisconnect = uuid::Uuid;
+
 /// `Centrifugo`: publishes over HTTP. `Recording`: captures publications
 /// in memory for DB-backed tests that don't need a running Centrifugo
-/// (docs/specs/SLICE_003.md §4).
+/// (docs/specs/SLICE_003.md §4). `Disabled`: no-op, for the `crm-admin`
+/// CLI (docs/specs/SLICE_003.md §14a; docs/specs/SLICE_004.md §6, §11) —
+/// CLI subcommands run offline from Centrifugo and never need realtime.
 #[derive(Clone)]
 pub enum Publisher {
     Centrifugo(CentrifugoTransport),
-    Recording(Arc<Mutex<Vec<RecordedPublication>>>),
+    Recording(
+        Arc<Mutex<Vec<RecordedPublication>>>,
+        Arc<Mutex<Vec<RecordedDisconnect>>>,
+    ),
+    Disabled,
 }
 
 impl Publisher {
     pub fn recording() -> Self {
-        Publisher::Recording(Arc::new(Mutex::new(Vec::new())))
+        Publisher::Recording(
+            Arc::new(Mutex::new(Vec::new())),
+            Arc::new(Mutex::new(Vec::new())),
+        )
     }
 
     /// Publishes now, awaiting the outcome. This is the spawned body of
@@ -114,7 +127,7 @@ impl Publisher {
         let value = serde_json::to_value(&publication.event)
             .expect("RealtimeEvent serialization to JSON cannot fail");
         match self {
-            Publisher::Recording(recorded) => {
+            Publisher::Recording(recorded, _) => {
                 recorded
                     .lock()
                     .await
@@ -124,6 +137,7 @@ impl Publisher {
             Publisher::Centrifugo(transport) => {
                 publish_via_http(transport, &publication.channel, &value).await
             }
+            Publisher::Disabled => PublishOutcome::Published,
         }
     }
 
@@ -136,7 +150,7 @@ impl Publisher {
     /// (docs/specs/SLICE_003.md §8, §14a).
     pub async fn publish_after_commit(&self, publication: Publication) {
         match self {
-            Publisher::Recording(_) => {
+            Publisher::Recording(..) | Publisher::Disabled => {
                 self.publish_now(&publication).await;
             }
             Publisher::Centrifugo(_) => {
@@ -165,6 +179,56 @@ impl Publisher {
                     }
                     .instrument(span),
                 );
+            }
+        }
+    }
+
+    /// Disconnects `user_id`'s realtime connection via Centrifugo's
+    /// `disconnect` HTTP API, keyed by the `sub` claim (= user id) minted
+    /// into every connection token (docs/specs/SLICE_004.md §6). Called
+    /// after commit by `SetMemberStatus(inactive)`; best-effort — a
+    /// failure is a `warn`, never propagated, because the session is
+    /// already revoked and the client's next token refresh (≤ the
+    /// connection-token TTL) cuts the connection anyway
+    /// (docs/specs/SLICE_003.md §7). `Recording` captures the call for
+    /// tests instead of making one; `Disabled` no-ops (the CLI never has a
+    /// live Centrifugo to disconnect from).
+    pub async fn disconnect_user(&self, user_id: uuid::Uuid) {
+        match self {
+            Publisher::Recording(_, disconnects) => {
+                disconnects.lock().await.push(user_id);
+            }
+            Publisher::Disabled => {}
+            Publisher::Centrifugo(transport) => {
+                let url = format!("{}/disconnect", transport.api_url);
+                let body = serde_json::json!({ "user": user_id.to_string() });
+                let attempt = async {
+                    transport
+                        .http
+                        .post(&url)
+                        .header("X-API-Key", &transport.api_key)
+                        .json(&body)
+                        .send()
+                        .await
+                };
+                match tokio::time::timeout(TOTAL_BUDGET, attempt).await {
+                    Ok(Ok(response)) if response.status().is_success() => {
+                        tracing::debug!(%user_id, "realtime disconnect succeeded");
+                    }
+                    Ok(Ok(response)) => {
+                        tracing::warn!(
+                            %user_id,
+                            status = response.status().as_u16(),
+                            "realtime disconnect failed: api error"
+                        );
+                    }
+                    Ok(Err(_)) => {
+                        tracing::warn!(%user_id, "realtime disconnect failed: transport error");
+                    }
+                    Err(_) => {
+                        tracing::warn!(%user_id, "realtime disconnect failed: timeout");
+                    }
+                }
             }
         }
     }
@@ -222,7 +286,7 @@ mod tests {
         let outcome = publisher.publish_now(&publication).await;
         assert_eq!(outcome, PublishOutcome::Published);
 
-        let Publisher::Recording(recorded) = &publisher else {
+        let Publisher::Recording(recorded, _) = &publisher else {
             unreachable!()
         };
         let recorded = recorded.lock().await;
@@ -236,7 +300,7 @@ mod tests {
         let publisher = Publisher::recording();
         publisher.publish_after_commit(sample_publication()).await;
 
-        let Publisher::Recording(recorded) = &publisher else {
+        let Publisher::Recording(recorded, _) = &publisher else {
             unreachable!()
         };
         // No await/sleep needed: publish_after_commit already awaited the
@@ -289,6 +353,25 @@ mod tests {
             outcome,
             PublishOutcome::Timeout | PublishOutcome::TransportError
         ));
+    }
+
+    #[tokio::test]
+    async fn recording_publisher_captures_disconnect_user() {
+        let publisher = Publisher::recording();
+        let user_id = Uuid::new_v4();
+        publisher.disconnect_user(user_id).await;
+
+        let Publisher::Recording(_, disconnects) = &publisher else {
+            unreachable!()
+        };
+        assert_eq!(disconnects.lock().await.clone(), vec![user_id]);
+    }
+
+    #[tokio::test]
+    async fn disabled_publisher_disconnect_user_is_a_noop() {
+        let publisher = Publisher::Disabled;
+        // Must not panic or block.
+        publisher.disconnect_user(Uuid::new_v4()).await;
     }
 
     #[test]

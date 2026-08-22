@@ -17,6 +17,7 @@ pub struct AppState {
     pub raw_payload_key: RawPayloadKey,
     pub realtime_token_secret: RealtimeTokenSecret,
     pub realtime_token_ttl: Duration,
+    pub invitation_ttl: Duration,
     pub publisher: Publisher,
 }
 
@@ -50,6 +51,7 @@ impl AppState {
             raw_payload_key: config.raw_payload_key.clone(),
             realtime_token_secret: config.realtime_token_secret.clone(),
             realtime_token_ttl: config.realtime_token_ttl,
+            invitation_ttl: config.invitation_ttl,
             publisher,
         })
     }
@@ -73,6 +75,7 @@ impl AppState {
             raw_payload_key: config.raw_payload_key.clone(),
             realtime_token_secret: config.realtime_token_secret.clone(),
             realtime_token_ttl: config.realtime_token_ttl,
+            invitation_ttl: config.invitation_ttl,
             publisher,
         }
     }

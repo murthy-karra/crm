@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT i.id, i.email, i.role, i.expires_at, i.created_at,\n             i.accepted_at, i.revoked_at,\n             u.id as invited_by_id, u.display_name as invited_by_display_name\n           FROM invitation i\n           JOIN app_user u ON u.id = i.invited_by_user_id\n           WHERE i.organization_id = $1\n             AND NOT (\n               (i.accepted_at IS NOT NULL AND i.accepted_at < now() - interval '30 days')\n               OR (i.revoked_at IS NOT NULL AND i.revoked_at < now() - interval '30 days')\n               OR (i.accepted_at IS NULL AND i.revoked_at IS NULL\n                   AND i.expires_at <= now() AND i.expires_at < now() - interval '30 days')\n             )\n           ORDER BY i.created_at DESC, i.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "role",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "expires_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "accepted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "revoked_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "invited_by_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "invited_by_display_name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "b8dfc69b3dc5086c864930470616edb1c5e24bba8ede4663e28b4e4c3248c7c1"
+}

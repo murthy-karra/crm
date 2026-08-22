@@ -30,6 +30,12 @@ impl fmt::Debug for SessionSecret {
     }
 }
 
+const MIN_REALTIME_TOKEN_SECRET_BYTES: usize = 32;
+const DEFAULT_CENTRIFUGO_API_URL: &str = "http://127.0.0.1:8000/api";
+const DEFAULT_REALTIME_TOKEN_TTL_SECONDS: u64 = 600;
+const MIN_REALTIME_TOKEN_TTL_SECONDS: u64 = 60;
+const MAX_REALTIME_TOKEN_TTL_SECONDS: u64 = 3600;
+
 const RAW_PAYLOAD_KEY_HEX_LEN: usize = 64;
 
 /// The raw-payload encryption key (docs/specs/SLICE_002.md §7): exactly 64
@@ -48,6 +54,43 @@ impl RawPayloadKey {
 impl fmt::Debug for RawPayloadKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "RawPayloadKey(REDACTED)")
+    }
+}
+
+/// The Centrifugo HTTP API publish credential (docs/specs/SLICE_003.md
+/// §11): the same value compose passes to the Centrifugo container.
+/// `Debug` is redacted like `SessionSecret`/`RawPayloadKey`.
+#[derive(Clone)]
+pub struct CentrifugoApiKey(String);
+
+impl CentrifugoApiKey {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Debug for CentrifugoApiKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "CentrifugoApiKey(REDACTED)")
+    }
+}
+
+/// The Centrifugo connection-token HMAC signing secret
+/// (docs/specs/SLICE_003.md §6, §11): the same value compose passes to the
+/// Centrifugo container as `client.token.hmac_secret_key`. Must be at
+/// least 32 bytes. `Debug` is redacted like `SessionSecret`.
+#[derive(Clone)]
+pub struct RealtimeTokenSecret(Vec<u8>);
+
+impl RealtimeTokenSecret {
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl fmt::Debug for RealtimeTokenSecret {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "RealtimeTokenSecret(REDACTED)")
     }
 }
 
@@ -88,6 +131,18 @@ pub struct Config {
     pub session_cookie_domain: Option<String>,
     /// Raw lead-payload encryption key (docs/specs/SLICE_002.md §7).
     pub raw_payload_key: RawPayloadKey,
+    /// Centrifugo HTTP API publish credential (docs/specs/SLICE_003.md
+    /// §11).
+    pub centrifugo_api_key: CentrifugoApiKey,
+    /// Centrifugo connection-token HMAC signing secret
+    /// (docs/specs/SLICE_003.md §6, §11).
+    pub realtime_token_secret: RealtimeTokenSecret,
+    /// Centrifugo HTTP API base URL, e.g. `http://127.0.0.1:8000/api`.
+    /// `http://` only, no trailing slash (docs/specs/SLICE_003.md §11).
+    pub centrifugo_api_url: String,
+    /// Connection-token lifetime, bounds 60–3600s
+    /// (docs/specs/SLICE_003.md §6, §11).
+    pub realtime_token_ttl: Duration,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -106,6 +161,12 @@ pub enum ConfigError {
     MissingRawPayloadKey,
     InvalidRawPayloadKeyLength(usize),
     InvalidRawPayloadKeyEncoding,
+    MissingCentrifugoApiKey,
+    MissingRealtimeTokenSecret,
+    RealtimeTokenSecretTooShort(usize),
+    InvalidCentrifugoApiUrl(String),
+    InvalidRealtimeTokenTtl(String),
+    RealtimeTokenTtlOutOfBounds(u64),
 }
 
 impl fmt::Display for ConfigError {
@@ -157,6 +218,28 @@ impl fmt::Display for ConfigError {
             ConfigError::InvalidRawPayloadKeyEncoding => {
                 write!(f, "CRM_RAW_PAYLOAD_KEY must be hex-encoded")
             }
+            ConfigError::MissingCentrifugoApiKey => {
+                write!(f, "CENTRIFUGO_HTTP_API_KEY is required")
+            }
+            ConfigError::MissingRealtimeTokenSecret => {
+                write!(f, "CENTRIFUGO_TOKEN_HMAC_SECRET is required")
+            }
+            ConfigError::RealtimeTokenSecretTooShort(len) => write!(
+                f,
+                "CENTRIFUGO_TOKEN_HMAC_SECRET must be at least {MIN_REALTIME_TOKEN_SECRET_BYTES} bytes, got {len}"
+            ),
+            ConfigError::InvalidCentrifugoApiUrl(value) => write!(
+                f,
+                "CRM_CENTRIFUGO_API_URL must be a bare http:// URL with no trailing slash, got {value}"
+            ),
+            ConfigError::InvalidRealtimeTokenTtl(value) => write!(
+                f,
+                "CRM_REALTIME_TOKEN_TTL_SECONDS is not a valid integer: {value}"
+            ),
+            ConfigError::RealtimeTokenTtlOutOfBounds(value) => write!(
+                f,
+                "CRM_REALTIME_TOKEN_TTL_SECONDS must be between {MIN_REALTIME_TOKEN_TTL_SECONDS} and {MAX_REALTIME_TOKEN_TTL_SECONDS}, got {value}"
+            ),
         }
     }
 }
@@ -245,6 +328,39 @@ impl Config {
             decode_hex_32(&raw_payload_key_raw).ok_or(ConfigError::InvalidRawPayloadKeyEncoding)?,
         );
 
+        let centrifugo_api_key_raw = get("CENTRIFUGO_HTTP_API_KEY")
+            .filter(|v| !v.is_empty())
+            .ok_or(ConfigError::MissingCentrifugoApiKey)?;
+        let centrifugo_api_key = CentrifugoApiKey(centrifugo_api_key_raw);
+
+        let realtime_token_secret_raw =
+            get("CENTRIFUGO_TOKEN_HMAC_SECRET").ok_or(ConfigError::MissingRealtimeTokenSecret)?;
+        if realtime_token_secret_raw.len() < MIN_REALTIME_TOKEN_SECRET_BYTES {
+            return Err(ConfigError::RealtimeTokenSecretTooShort(
+                realtime_token_secret_raw.len(),
+            ));
+        }
+        let realtime_token_secret = RealtimeTokenSecret(realtime_token_secret_raw.into_bytes());
+
+        let centrifugo_api_url = match get("CRM_CENTRIFUGO_API_URL").filter(|v| !v.is_empty()) {
+            Some(value) if is_plausible_centrifugo_url(&value) => value,
+            Some(value) => return Err(ConfigError::InvalidCentrifugoApiUrl(value)),
+            None => DEFAULT_CENTRIFUGO_API_URL.to_string(),
+        };
+
+        let realtime_ttl_secs = match get("CRM_REALTIME_TOKEN_TTL_SECONDS") {
+            Some(value) => value
+                .parse::<u64>()
+                .map_err(|_| ConfigError::InvalidRealtimeTokenTtl(value.clone()))?,
+            None => DEFAULT_REALTIME_TOKEN_TTL_SECONDS,
+        };
+        if !(MIN_REALTIME_TOKEN_TTL_SECONDS..=MAX_REALTIME_TOKEN_TTL_SECONDS)
+            .contains(&realtime_ttl_secs)
+        {
+            return Err(ConfigError::RealtimeTokenTtlOutOfBounds(realtime_ttl_secs));
+        }
+        let realtime_token_ttl = Duration::from_secs(realtime_ttl_secs);
+
         Ok(Config {
             bind_addr,
             database_url,
@@ -255,6 +371,10 @@ impl Config {
             cors_allowed_origin,
             session_cookie_domain,
             raw_payload_key,
+            centrifugo_api_key,
+            realtime_token_secret,
+            centrifugo_api_url,
+            realtime_token_ttl,
         })
     }
 }
@@ -263,6 +383,14 @@ fn is_plausible_origin(value: &str) -> bool {
     (value.starts_with("http://") || value.starts_with("https://"))
         && !value.contains(char::is_whitespace)
         && !value.ends_with('/')
+}
+
+/// `CRM_CENTRIFUGO_API_URL` validation (docs/specs/SLICE_003.md §11):
+/// `http://` only (Centrifugo's HTTP API is a loopback call; no
+/// `https://` scheme is accepted here, unlike `CRM_CORS_ALLOWED_ORIGIN`),
+/// no trailing slash, no whitespace.
+fn is_plausible_centrifugo_url(value: &str) -> bool {
+    value.starts_with("http://") && !value.contains(char::is_whitespace) && !value.ends_with('/')
 }
 
 #[cfg(test)]
@@ -293,6 +421,14 @@ mod tests {
             "CRM_RAW_PAYLOAD_KEY".to_string(),
             "ab".repeat(RAW_PAYLOAD_KEY_HEX_LEN / 2),
         );
+        map.insert(
+            "CENTRIFUGO_HTTP_API_KEY".to_string(),
+            "test-centrifugo-api-key".to_string(),
+        );
+        map.insert(
+            "CENTRIFUGO_TOKEN_HMAC_SECRET".to_string(),
+            "c".repeat(MIN_REALTIME_TOKEN_SECRET_BYTES),
+        );
         for (k, v) in overrides {
             map.insert((*k).to_string(), (*v).to_string());
         }
@@ -307,6 +443,25 @@ mod tests {
         map.insert(
             "CRM_SESSION_SECRET".to_string(),
             "a".repeat(MIN_SESSION_SECRET_BYTES),
+        );
+        for (k, v) in overrides {
+            map.insert((*k).to_string(), (*v).to_string());
+        }
+        move |key: &str| map.get(key).cloned()
+    }
+
+    /// Like `source`, but omits the two `CENTRIFUGO_*` variables entirely,
+    /// for testing their own required-ness without tripping the
+    /// earlier-checked session secret / raw payload key requirements.
+    fn source_no_realtime(overrides: &[(&str, &str)]) -> impl Fn(&str) -> Option<String> {
+        let mut map: HashMap<String, String> = HashMap::new();
+        map.insert(
+            "CRM_SESSION_SECRET".to_string(),
+            "a".repeat(MIN_SESSION_SECRET_BYTES),
+        );
+        map.insert(
+            "CRM_RAW_PAYLOAD_KEY".to_string(),
+            "ab".repeat(RAW_PAYLOAD_KEY_HEX_LEN / 2),
         );
         for (k, v) in overrides {
             map.insert((*k).to_string(), (*v).to_string());
@@ -517,5 +672,146 @@ mod tests {
         // coincidentally matching an unrelated field's Debug output.
         assert!(!debug_output.contains(&"be".repeat(8)));
         assert!(debug_output.contains("RawPayloadKey(REDACTED)"));
+    }
+
+    // --- CENTRIFUGO_HTTP_API_KEY / CENTRIFUGO_TOKEN_HMAC_SECRET / --------
+    // --- CRM_CENTRIFUGO_API_URL / CRM_REALTIME_TOKEN_TTL_SECONDS ---------
+    // (docs/specs/SLICE_003.md §11) -----------------------------------------
+
+    #[test]
+    fn rejects_missing_centrifugo_api_key() {
+        let err = Config::from_source(source_no_realtime(&[(
+            "CENTRIFUGO_TOKEN_HMAC_SECRET",
+            &"c".repeat(32),
+        )]))
+        .unwrap_err();
+        assert_eq!(err, ConfigError::MissingCentrifugoApiKey);
+    }
+
+    #[test]
+    fn rejects_empty_centrifugo_api_key() {
+        let err = Config::from_source(source_no_realtime(&[
+            ("CENTRIFUGO_HTTP_API_KEY", ""),
+            ("CENTRIFUGO_TOKEN_HMAC_SECRET", &"c".repeat(32)),
+        ]))
+        .unwrap_err();
+        assert_eq!(err, ConfigError::MissingCentrifugoApiKey);
+    }
+
+    #[test]
+    fn rejects_missing_realtime_token_secret() {
+        let err = Config::from_source(source_no_realtime(&[(
+            "CENTRIFUGO_HTTP_API_KEY",
+            "test-key",
+        )]))
+        .unwrap_err();
+        assert_eq!(err, ConfigError::MissingRealtimeTokenSecret);
+    }
+
+    #[test]
+    fn rejects_short_realtime_token_secret() {
+        let err = Config::from_source(source(&[("CENTRIFUGO_TOKEN_HMAC_SECRET", "too-short")]))
+            .unwrap_err();
+        assert_eq!(err, ConfigError::RealtimeTokenSecretTooShort(9));
+    }
+
+    #[test]
+    fn accepts_realtime_token_secret_exactly_32_bytes() {
+        let config =
+            Config::from_source(source(&[("CENTRIFUGO_TOKEN_HMAC_SECRET", &"d".repeat(32))]))
+                .unwrap();
+        assert_eq!(config.realtime_token_secret.as_bytes().len(), 32);
+    }
+
+    #[test]
+    fn realtime_token_secret_is_redacted_in_debug() {
+        let config = Config::from_source(source(&[(
+            "CENTRIFUGO_TOKEN_HMAC_SECRET",
+            &"df".repeat(16),
+        )]))
+        .unwrap();
+        let debug_output = format!("{config:?}");
+        assert!(!debug_output.contains(&"df".repeat(8)));
+        assert!(debug_output.contains("RealtimeTokenSecret(REDACTED)"));
+    }
+
+    #[test]
+    fn centrifugo_api_key_is_redacted_in_debug() {
+        let config = Config::from_source(source(&[(
+            "CENTRIFUGO_HTTP_API_KEY",
+            "super-secret-publish-key-value",
+        )]))
+        .unwrap();
+        let debug_output = format!("{config:?}");
+        assert!(!debug_output.contains("super-secret-publish-key-value"));
+        assert!(debug_output.contains("CentrifugoApiKey(REDACTED)"));
+    }
+
+    #[test]
+    fn defaults_centrifugo_api_url_and_ttl() {
+        let config = Config::from_source(source(&[])).unwrap();
+        assert_eq!(config.centrifugo_api_url, "http://127.0.0.1:8000/api");
+        assert_eq!(config.realtime_token_ttl, Duration::from_secs(600));
+    }
+
+    #[test]
+    fn accepts_custom_centrifugo_api_url() {
+        let config = Config::from_source(source(&[(
+            "CRM_CENTRIFUGO_API_URL",
+            "http://127.0.0.1:9000/api",
+        )]))
+        .unwrap();
+        assert_eq!(config.centrifugo_api_url, "http://127.0.0.1:9000/api");
+    }
+
+    #[test]
+    fn rejects_https_centrifugo_api_url() {
+        let err = Config::from_source(source(&[(
+            "CRM_CENTRIFUGO_API_URL",
+            "https://127.0.0.1:8000/api",
+        )]))
+        .unwrap_err();
+        assert!(matches!(err, ConfigError::InvalidCentrifugoApiUrl(_)));
+    }
+
+    #[test]
+    fn rejects_centrifugo_api_url_with_trailing_slash() {
+        let err = Config::from_source(source(&[(
+            "CRM_CENTRIFUGO_API_URL",
+            "http://127.0.0.1:8000/api/",
+        )]))
+        .unwrap_err();
+        assert!(matches!(err, ConfigError::InvalidCentrifugoApiUrl(_)));
+    }
+
+    #[test]
+    fn rejects_realtime_ttl_below_bounds() {
+        let err =
+            Config::from_source(source(&[("CRM_REALTIME_TOKEN_TTL_SECONDS", "59")])).unwrap_err();
+        assert_eq!(err, ConfigError::RealtimeTokenTtlOutOfBounds(59));
+    }
+
+    #[test]
+    fn rejects_realtime_ttl_above_bounds() {
+        let err =
+            Config::from_source(source(&[("CRM_REALTIME_TOKEN_TTL_SECONDS", "3601")])).unwrap_err();
+        assert_eq!(err, ConfigError::RealtimeTokenTtlOutOfBounds(3601));
+    }
+
+    #[test]
+    fn accepts_custom_realtime_ttl() {
+        let config =
+            Config::from_source(source(&[("CRM_REALTIME_TOKEN_TTL_SECONDS", "120")])).unwrap();
+        assert_eq!(config.realtime_token_ttl, Duration::from_secs(120));
+    }
+
+    #[test]
+    fn rejects_invalid_realtime_ttl() {
+        let err = Config::from_source(source(&[(
+            "CRM_REALTIME_TOKEN_TTL_SECONDS",
+            "not-a-number",
+        )]))
+        .unwrap_err();
+        assert!(matches!(err, ConfigError::InvalidRealtimeTokenTtl(_)));
     }
 }

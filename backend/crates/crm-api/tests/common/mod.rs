@@ -19,6 +19,7 @@ use crm_api::auth::password;
 use crm_api::config::Config;
 use crm_api::domain::raw_payload::crypto;
 use crm_api::domain::stage;
+use crm_api::realtime::Publisher;
 use crm_api::state::AppState;
 
 /// The fixed raw-payload key every test in this suite uses, so a fixture
@@ -28,6 +29,14 @@ pub const TEST_RAW_PAYLOAD_KEY_HEX: &str =
     "1111111111111111111111111111111111111111111111111111111111111111";
 
 const _ASSERT_TEST_KEY_LEN: () = assert!(TEST_RAW_PAYLOAD_KEY_HEX.len() == 64);
+
+/// A fixed test value for `CENTRIFUGO_TOKEN_HMAC_SECRET` (≥ 32 bytes),
+/// used by every test that builds a router with `Publisher::recording()`
+/// (i.e. every DB-backed test except the Centrifugo-backed suite, which
+/// deliberately reads the real container secret from the environment —
+/// docs/specs/SLICE_003.md §13).
+pub const TEST_CENTRIFUGO_TOKEN_HMAC_SECRET: &str = "test-centrifugo-token-hmac-secret-32bytes!!";
+pub const TEST_CENTRIFUGO_HTTP_API_KEY: &str = "test-centrifugo-http-api-key";
 
 pub fn app_password() -> String {
     std::env::var("CRM_DB_APP_PASSWORD").expect("CRM_DB_APP_PASSWORD must be set for check-db")
@@ -71,6 +80,8 @@ pub fn test_config() -> Config {
     Config::from_source(|key| match key {
         "CRM_SESSION_SECRET" => Some("a".repeat(32)),
         "CRM_RAW_PAYLOAD_KEY" => Some(TEST_RAW_PAYLOAD_KEY_HEX.to_string()),
+        "CENTRIFUGO_HTTP_API_KEY" => Some(TEST_CENTRIFUGO_HTTP_API_KEY.to_string()),
+        "CENTRIFUGO_TOKEN_HMAC_SECRET" => Some(TEST_CENTRIFUGO_TOKEN_HMAC_SECRET.to_string()),
         _ => None,
     })
     .unwrap()
@@ -78,10 +89,17 @@ pub fn test_config() -> Config {
 
 /// The router under test runs as `crm_app`, not the migrator — a forgotten
 /// GRANT must fail here, not only in `dev-api` (docs/specs/SLICE_001.md §9).
+/// Uses a `Publisher::recording()` — most tests don't need a real
+/// Centrifugo; the handful of publisher-contract tests build their own
+/// router with `build_router_with_publisher`.
 pub async fn build_router(migrator_pool: &PgPool) -> Router {
+    build_router_with_publisher(migrator_pool, Publisher::recording()).await
+}
+
+pub async fn build_router_with_publisher(migrator_pool: &PgPool, publisher: Publisher) -> Router {
     let app_pool = connect_as_app(migrator_pool).await;
     let config = test_config();
-    let state = AppState::for_tests(app_pool, &config);
+    let state = AppState::for_tests(app_pool, &config, publisher);
     crm_api::build_app(state)
 }
 

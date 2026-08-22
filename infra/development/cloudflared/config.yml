@@ -3,12 +3,24 @@
 # outside the repo. Two hostnames on one tunnel: app.tarams.org (web dev
 # server) and api.tarams.org (API, called directly by the browser app —
 # see CRM_CORS_ALLOWED_ORIGIN / CRM_SESSION_COOKIE_DOMAIN in .env.example).
+#
+# The api.tarams.org rules are ordered: the anchored websocket path match
+# (docs/specs/SLICE_003.md §11) must come before the catch-all API rule,
+# since cloudflared evaluates ingress rules top-to-bottom and stops at the
+# first match. The regex is anchored to exactly `/connection/websocket` so
+# it never shadows any other `/api/...` route, and routes straight to
+# Centrifugo's own port (8000) — not through the Rust API. Centrifugo's
+# HTTP publish API (a different path prefix, never routed here) stays
+# unreachable from outside; only the WebSocket upgrade path is exposed.
 tunnel: 2c5ab577-46b3-4b71-b9bd-610d3894eaaf
 credentials-file: /Users/karrad/.cloudflared/2c5ab577-46b3-4b71-b9bd-610d3894eaaf.json
 
 ingress:
   - hostname: app.tarams.org
     service: http://localhost:5173
+  - hostname: api.tarams.org
+    path: ^/connection/websocket$
+    service: http://localhost:8000
   - hostname: api.tarams.org
     service: http://localhost:3000
   - service: http_status:404

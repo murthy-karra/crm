@@ -66,6 +66,8 @@ fn test_config() -> Config {
     Config::from_source(|key| match key {
         "CRM_SESSION_SECRET" => Some("a".repeat(32)),
         "CRM_RAW_PAYLOAD_KEY" => Some("ab".repeat(32)),
+        "CENTRIFUGO_HTTP_API_KEY" => Some("test-key".to_string()),
+        "CENTRIFUGO_TOKEN_HMAC_SECRET" => Some("c".repeat(32)),
         _ => None,
     })
     .unwrap()
@@ -74,7 +76,7 @@ fn test_config() -> Config {
 async fn build_router(migrator_pool: &PgPool) -> Router {
     let app_pool = connect_as_app(migrator_pool).await;
     let config = test_config();
-    let state = AppState::for_tests(app_pool, &config);
+    let state = AppState::for_tests(app_pool, &config, crm_api::realtime::Publisher::recording());
     crm_api::build_app(state)
 }
 

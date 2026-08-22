@@ -1,8 +1,19 @@
-# Local (not dashboard-managed) ingress for the crm-dev tunnel. Contains
-# no secret — the private key lives only in the credentials file below,
-# outside the repo. Two hostnames on one tunnel: app.tarams.org (web dev
-# server) and api.tarams.org (API, called directly by the browser app —
-# see CRM_CORS_ALLOWED_ORIGIN / CRM_SESSION_COOKIE_DOMAIN in .env.example).
+# NOTE (D-025, 2026-08-22): despite the filename and the `ingress:` list
+# below, this tunnel turned out to be dashboard-managed in practice —
+# cloudflared ignores the `ingress:` section entirely and applies routes
+# configured in the Cloudflare Zero Trust dashboard (Networks > Tunnels >
+# crm-dev > Routes) instead. Restarting cloudflared does not change this.
+# The `tunnel:` and `credentials-file:` lines below ARE still load-bearing
+# (how cloudflared authenticates); `ingress:` below is intent/documentation
+# only — the dashboard is the actual source of truth and must be kept in
+# sync with it by hand. See README "External connectivity" for the current
+# dashboard route list and the ordering requirement (dashboard routes are
+# first-match-wins, same as this file's own rule below).
+#
+# Original design intent, preserved for reference: two hostnames on one
+# tunnel: app.tarams.org (web dev server) and api.tarams.org (API, called
+# directly by the browser app — see CRM_CORS_ALLOWED_ORIGIN /
+# CRM_SESSION_COOKIE_DOMAIN in .env.example).
 #
 # The api.tarams.org rules are ordered: the anchored websocket path match
 # (docs/specs/SLICE_003.md §11) must come before the catch-all API rule,

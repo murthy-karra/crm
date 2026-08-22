@@ -403,6 +403,45 @@ to front internal/admin surfaces with Access-equivalent protection in
 production is a later decision — still stands. This decision is
 dev-tunnel-only.
 
+### D-025 — The dev Cloudflare Tunnel is dashboard-managed, not file-managed (2026-08-22)
+
+Discovered and recorded (user + agent, live). D-016 §4 and the README
+documented `crm-dev` as a locally-managed tunnel: ingress rules in the
+committed `infra/development/cloudflared/config.yml`, chosen specifically
+to avoid Cloudflare's dashboard-managed mode (warned to be a one-way,
+irreversible migration). In practice this was already false: `cloudflared`
+ignores `config.yml`'s `ingress:` section entirely and applies whatever
+routes are configured in the Cloudflare Zero Trust dashboard instead —
+confirmed by restarting `cloudflared` (no effect) and by its own log
+showing a server-pushed "Updated to new configuration" event whose rules
+did not match the local file. Consequence: the Slice 003 realtime
+WebSocket path rule, though correctly written into `config.yml` at
+implementation time, was never actually in effect, and the realtime
+connection silently 404'd through the tunnel until diagnosed and fixed
+live during this session (Today still worked via the 60 s poll backstop,
+D-011 — no data was lost or wrong, only the live-push path was dark).
+
+Fix: three routes added/reordered directly in the dashboard (Tunnels →
+`crm-dev` → Routes): `app.tarams.org` → `:5173`; `api.tarams.org` path
+`/connection/websocket` → `:8000`; `api.tarams.org` (catch-all) → `:3000`
+— the path-specific route ordered above the catch-all, since dashboard
+routes are evaluated top-to-bottom, first match wins, identical to the
+file's own rule. Verified live: a raw WebSocket upgrade to
+`wss://api.tarams.org/connection/websocket` returns `101`, and a full
+two-browser cross-session realtime walkthrough passed over the real
+tunnel (a new lead appeared on the assignee's Today in under a second;
+reassigning it live-moved it to a second, separately logged-in user's
+Today).
+
+`config.yml`'s `ingress:` section is retained as documentation of intent
+(and its `tunnel:`/`credentials-file:` lines remain genuinely
+load-bearing) but is not authoritative; the dashboard is, and must be
+kept in sync with it by hand going forward. Whether a path back to true
+local-file management exists is unconfirmed and not attempted — Cloudflare
+describes the transition as one-way. Dev-only; D-018's production ingress
+(in-cluster `cloudflared` → Cilium Gateway API `HTTPRoute`s) does not use
+Cloudflare Tunnel dashboard routing and is unaffected.
+
 ---
 
 ## Open decisions

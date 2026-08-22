@@ -270,8 +270,9 @@ removed after merging (`slice-002-intake`, `slice-002-web`).
   data). Zero console or page errors. Found and fixed one cosmetic nit
   live (`DataTable`'s footer said "1 unresolved leads"; added proper
   singular/plural support) and re-verified.
-- 2026-08-21 (post-merge, on `main`, user-reported from live use through
-  the tunnel): three fixes, no slice open.
+- 2026-08-21 (`fac3413`, fast-forwarded to `main` from `post-002-ui-fixes`;
+  root-level screenshots ignored in `e6dbd50`), user-reported from live use
+  through the tunnel: three fixes, no slice open.
   1. **Stage marker (D-020)**: `components/StageLabel.vue` +
      `lib/stages.ts`; wired into the People table's stage badge and the
      Person detail stage `Select` (`#value` and `#option` slots).

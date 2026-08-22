@@ -1,6 +1,7 @@
 // Tailwind class recipes for the control specs in docs/design/UI_STYLE.md
 // §5. Centralized so every view renders the same button/input/select
 // instead of each screen re-deriving the spec slightly differently.
+import type { DialogPassThroughOptions } from 'primevue/dialog'
 import type { SelectPassThroughOptions } from 'primevue/select'
 
 const FOCUS_RING =
@@ -63,5 +64,39 @@ export function selectPt(): SelectPassThroughOptions {
       ],
     }),
     emptyMessage: 'px-3 py-2 text-body text-text-muted',
+  }
+}
+
+/**
+ * PT object for PrimeVue's unstyled `Dialog` (UI_STYLE.md §2 "Floating
+ * surfaces (dialogs, popovers, select menus): white, radius 12px, 1px
+ * border plus a soft shadow — the only place shadows appear"; §8 "150ms
+ * ease-out on ... menus"). `closable: false` on every caller (no styled
+ * close-button pt needed) — a Cancel button in the footer plus the default
+ * mask-click/Escape dismissal cover it.
+ */
+export function dialogPt(): DialogPassThroughOptions {
+  return {
+    mask: {
+      class: 'fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4',
+    },
+    root: {
+      class: 'w-full max-w-md rounded-xl border border-border bg-surface-0 shadow-floating',
+    },
+    header: {
+      class: 'flex items-center justify-between gap-4 px-5 pt-5',
+    },
+    content: {
+      class: 'px-5 py-4',
+    },
+    footer: {
+      class: 'flex items-center justify-end gap-3 px-5 pb-5 pt-2',
+    },
+    transition: {
+      enterFromClass: 'opacity-0 scale-95',
+      enterActiveClass: 'transition-all duration-150 ease-out',
+      leaveActiveClass: 'transition-all duration-150 ease-out',
+      leaveToClass: 'opacity-0 scale-95',
+    },
   }
 }

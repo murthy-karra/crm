@@ -6,11 +6,13 @@
 // moving anything.
 import { computed, type Component } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
-import { Inbox, LogOut, UserPlus, Users } from 'lucide-vue-next'
+import { Inbox, LogOut, Sun, UserPlus, Users } from 'lucide-vue-next'
 import { useLogoutMutation, useMe } from '../api/queries'
 import { initials } from '../lib/format'
 import { buttonClasses } from '../lib/controls'
 import { describeApiError } from '../lib/errors'
+import { createRealtimeClient, resolveRealtimeUrl } from '../realtime/client'
+import { useRealtime } from '../realtime/useRealtime'
 
 const router = useRouter()
 
@@ -26,7 +28,13 @@ interface NavGroup {
 }
 
 const navGroups: NavGroup[] = [
-  { label: 'Work', items: [{ label: 'People', to: '/people', icon: Users }] },
+  {
+    label: 'Work',
+    items: [
+      { label: 'Today', to: '/today', icon: Sun },
+      { label: 'People', to: '/people', icon: Users },
+    ],
+  },
   {
     label: 'Intake',
     items: [
@@ -61,6 +69,20 @@ const sessionUnavailable = computed(() => meIsError.value && me.value === undefi
 function retrySession() {
   void refetchMe()
 }
+
+// AppShell mounts once for every non-public route (App.vue) and stays
+// mounted across navigations between them — the single owner of the
+// realtime connection SLICE_003 §7 describes: it tears down on unmount and
+// whenever `orgId` goes empty (logout navigates to /login, a public route,
+// unmounting AppShell), and on an Organization change it tears down and
+// reconnects rather than resubscribing (D-023 §1's channel is fixed per
+// connection).
+const orgId = computed(() => me.value?.organization.id ?? '')
+const { status: realtimeStatus } = useRealtime({
+  orgId,
+  createClient: createRealtimeClient,
+  resolveUrl: () => resolveRealtimeUrl(window.location),
+})
 
 const navItemClass =
   'flex h-10 items-center gap-2 rounded-lg px-3 text-body text-text-muted transition-colors duration-150 ease-out hover:bg-surface-2/60'
@@ -108,6 +130,19 @@ function logout() {
           </RouterLink>
         </div>
       </nav>
+
+      <div
+        v-if="realtimeStatus === 'reconnecting' || realtimeStatus === 'unavailable'"
+        class="border-t border-border px-4 py-2.5"
+      >
+        <p class="text-small text-text-muted">
+          {{
+            realtimeStatus === 'reconnecting'
+              ? 'Realtime: reconnecting…'
+              : 'Realtime unavailable — data may be delayed'
+          }}
+        </p>
+      </div>
 
       <div
         v-if="me"

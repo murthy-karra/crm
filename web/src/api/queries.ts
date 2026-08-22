@@ -4,15 +4,21 @@ import { queryClient } from '../query-client'
 import { apiFetch } from './client'
 import type {
   AssignmentRequest,
+  ContactChannel,
+  ContactOutcome,
+  LogContactRequest,
+  LogContactResponse,
   MeResponse,
   MembersResponse,
   MutatePersonResponse,
   PeopleResponse,
   PersonDetailResponse,
+  RealtimeTokenResponse,
   ReceiveInquiryRequest,
   ReceiveInquiryResponse,
   StageRequest,
   StagesResponse,
+  TodayResponse,
   UnresolvedResponse,
 } from './types'
 
@@ -29,6 +35,11 @@ export const queryKeys = {
   stages: (orgId: string) => ['org', orgId, 'stages'] as const,
   unresolved: (orgId: string) => ['org', orgId, 'unresolved'] as const,
   members: (orgId: string) => ['org', orgId, 'members'] as const,
+  // Added ahead of the Today view (SLICE_003 §10 lists it alongside useToday)
+  // because realtime/events.ts's invalidationsFor (Lane B step 1) already
+  // needs to name this key — every key an invalidation path touches goes
+  // through this factory, never hand-written (SLICE_003 Lane B task brief).
+  today: (orgId: string) => ['org', orgId, 'today'] as const,
 }
 
 export function fetchMe(): Promise<MeResponse> {
@@ -87,6 +98,31 @@ export function useMembers(orgId: MaybeRefOrGetter<string>) {
   })
 }
 
+/**
+ * SLICE_003 §10: `refetchInterval: 60_000` is one of the two backstops
+ * (with window-focus refetch, a TanStack default) that keep Today correct
+ * even if a realtime event is missed entirely — D-011, §9 "Missed events".
+ * TanStack pauses the interval while the tab is backgrounded.
+ */
+export function useToday(orgId: MaybeRefOrGetter<string>) {
+  return useQuery({
+    queryKey: computed(() => queryKeys.today(toValue(orgId))),
+    queryFn: () => apiFetch<TodayResponse>('/today'),
+    enabled: computed(() => toValue(orgId) !== ''),
+    refetchInterval: 60_000,
+  })
+}
+
+/**
+ * `POST /api/realtime/token` (§5, §6). Used by realtime/useRealtime.ts's
+ * `getToken` — a plain function, not a `useQuery`/`useMutation` hook, since
+ * the Centrifuge SDK calls it directly on its own schedule, not through
+ * TanStack Query's cache.
+ */
+export function fetchRealtimeToken(): Promise<RealtimeTokenResponse> {
+  return apiFetch<RealtimeTokenResponse>('/realtime/token', { method: 'POST' })
+}
+
 export function useLoginMutation() {
   const qc = useQueryClient()
   return useMutation({
@@ -136,6 +172,30 @@ export function useChangeStageMutation(orgId: MaybeRefOrGetter<string>) {
       apiFetch<MutatePersonResponse>(`/people/${personId}/stage`, {
         method: 'POST',
         body: JSON.stringify({ stage_id: stageId } satisfies StageRequest),
+      }),
+    onSuccess: (data, variables) => {
+      const id = toValue(orgId)
+      qc.setQueryData(queryKeys.person(id, variables.personId), (old: PersonDetailResponse | undefined) =>
+        old ? { ...old, person: data.person } : old,
+      )
+      void qc.invalidateQueries({ queryKey: queryKeys.org(id) })
+    },
+  })
+}
+
+/** `POST /api/people/{id}/contact-attempts` (§5, D-022). Same
+ * setQueryData-plus-invalidate pattern as assign/stage above: the mutation's
+ * own response updates the Person query immediately (this tab does not
+ * need to wait for a realtime round-trip), and invalidating the whole
+ * `['org', orgId]` branch covers Today (the row leaves) and any other open
+ * view without hand-picking keys. */
+export function useLogContactMutation(orgId: MaybeRefOrGetter<string>) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ personId, channel, outcome }: { personId: string; channel: ContactChannel; outcome: ContactOutcome }) =>
+      apiFetch<LogContactResponse>(`/people/${personId}/contact-attempts`, {
+        method: 'POST',
+        body: JSON.stringify({ channel, outcome } satisfies LogContactRequest),
       }),
     onSuccess: (data, variables) => {
       const id = toValue(orgId)

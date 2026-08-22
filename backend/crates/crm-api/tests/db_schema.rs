@@ -12,37 +12,47 @@ use uuid::Uuid;
 async fn crm_app_has_exactly_the_slice_002_grants(migrator_pool: PgPool) {
     let app_pool = common::connect_as_app(&migrator_pool).await;
 
-    // `stage`: SELECT only.
-    for table in ["stage"] {
-        let select = sqlx::query(&format!("SELECT * FROM {table}"))
-            .fetch_all(&app_pool)
-            .await;
-        assert!(select.is_ok(), "{table}: SELECT must succeed for crm_app");
+    // `stage`: amended by docs/specs/SLICE_004.md §2 (declared change,
+    // AGENTS.md §11) — `crm_app` gains INSERT (`stage::seed_defaults` moves
+    // to the application path via `CreateOrganization`), so this is no
+    // longer the SELECT-only table this comment described under Slice 002.
+    // No UPDATE/DELETE grant either way. The bare `INSERT ... DEFAULT
+    // VALUES` pattern the loop below still uses for other SELECT-only
+    // tables would `.is_err()` here for the wrong reason (a NOT NULL
+    // violation, not a permission denial) now that INSERT is granted, so
+    // `stage` is tested on its own with a real, FK-satisfying row —
+    // positive proof the grant actually works, not just that some INSERT
+    // failed.
+    let select = sqlx::query("SELECT * FROM stage")
+        .fetch_all(&app_pool)
+        .await;
+    assert!(select.is_ok(), "stage: SELECT must succeed for crm_app");
 
-        let insert = sqlx::query(&format!("INSERT INTO {table} DEFAULT VALUES"))
-            .execute(&app_pool)
-            .await;
-        assert!(
-            insert.is_err(),
-            "{table}: INSERT must be denied for crm_app"
-        );
+    let org_id = common::create_org(&migrator_pool, "Grant Check Realty").await;
+    let stage_insert = sqlx::query(
+        "INSERT INTO stage (organization_id, name, position) VALUES ($1, 'Custom Stage', 99)",
+    )
+    .bind(org_id)
+    .execute(&app_pool)
+    .await;
+    assert!(
+        stage_insert.is_ok(),
+        "stage: INSERT must succeed for crm_app (SLICE_004 §2)"
+    );
 
-        let update = sqlx::query(&format!("UPDATE {table} SET id = id WHERE false"))
-            .execute(&app_pool)
-            .await;
-        assert!(
-            update.is_err(),
-            "{table}: UPDATE must be denied for crm_app"
-        );
+    let stage_update = sqlx::query("UPDATE stage SET name = name WHERE false")
+        .execute(&app_pool)
+        .await;
+    assert!(
+        stage_update.is_err(),
+        "stage: UPDATE must be denied for crm_app"
+    );
 
-        let delete = sqlx::query(&format!("DELETE FROM {table}"))
-            .execute(&app_pool)
-            .await;
-        assert!(
-            delete.is_err(),
-            "{table}: DELETE must be denied for crm_app"
-        );
-    }
+    let stage_delete = sqlx::query("DELETE FROM stage").execute(&app_pool).await;
+    assert!(
+        stage_delete.is_err(),
+        "stage: DELETE must be denied for crm_app"
+    );
 
     // `contact_method`, `inquiry`, and the five fact tables: SELECT + INSERT,
     // no UPDATE/DELETE.

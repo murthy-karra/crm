@@ -1,0 +1,88 @@
+// Wire shapes and the invalidation mapping for the realtime events frozen in
+// docs/specs/SLICE_003.md §6 (D-023). Events are ids-only invalidation
+// hints — never state, never PII — so every handler here does is decide
+// which TanStack Query keys to invalidate; the actual refetch goes through
+// the normal authenticated API (D-011).
+import type { QueryKey } from '@tanstack/vue-query'
+import { queryKeys } from '../api/queries'
+
+export type PersonChange = 'inquiry_received' | 'assignment_changed' | 'stage_changed' | 'contact_attempted'
+
+interface RealtimeEnvelopeBase {
+  v: 1
+  organization_id: string
+  occurred_at: string
+  correlation_id: string
+}
+
+export interface PersonChangedEvent extends RealtimeEnvelopeBase {
+  type: 'person.changed'
+  data: { person_id: string; change: PersonChange }
+}
+
+export interface IntakeUnresolvedChangedEvent extends RealtimeEnvelopeBase {
+  type: 'intake.unresolved_changed'
+  data: { raw_payload_id: string }
+}
+
+/** The known event shapes (§6). `invalidationsFor` accepts `unknown`, not
+ * this union, because the wire payload must also tolerate an unrecognized
+ * `type` (future additive event) or a malformed body without throwing —
+ * §6: "Unknown type → ignored." */
+export type RealtimeEvent = PersonChangedEvent | IntakeUnresolvedChangedEvent
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+/**
+ * Maps one realtime event to the TanStack Query keys it invalidates
+ * (SLICE_003 §6 "Client invalidation mapping", exact). Every key comes from
+ * the `queryKeys` factory (api/queries.ts) — never hand-written here — so a
+ * key shape can only drift in one place.
+ *
+ * Defense in depth (§7): an event whose `organization_id` does not match the
+ * viewer's own is dropped with `console.warn` rather than trusted, even
+ * though the server-side channel subscription (D-023 §1) should make this
+ * impossible.
+ */
+export function invalidationsFor(event: unknown, orgId: string): QueryKey[] {
+  if (!isRecord(event) || typeof event.type !== 'string' || typeof event.organization_id !== 'string') {
+    return []
+  }
+
+  if (event.organization_id !== orgId) {
+    console.warn(
+      `realtime: dropped ${event.type} event for organization ${event.organization_id} (connected as ${orgId})`,
+    )
+    return []
+  }
+
+  const data = isRecord(event.data) ? event.data : {}
+
+  switch (event.type) {
+    case 'person.changed': {
+      const personId = typeof data.person_id === 'string' ? data.person_id : ''
+      if (personId === '') return []
+      const keys: QueryKey[] = [queryKeys.person(orgId, personId), queryKeys.people(orgId), queryKeys.today(orgId)]
+      // §6: a re-POST that resolves a `pending` row removes it from the
+      // unresolved queue but publishes only `person.changed` — so the
+      // `inquiry_received` change also invalidates the unresolved list.
+      if (data.change === 'inquiry_received') {
+        keys.push(queryKeys.unresolved(orgId))
+      }
+      return keys
+    }
+    case 'intake.unresolved_changed':
+      return [queryKeys.unresolved(orgId)]
+    default:
+      return []
+  }
+}
+
+/** Recovery invalidation (§6, §9, D-011): every `connected` after a prior
+ * disconnect invalidates everything under the Organization, since events
+ * missed while disconnected are never replayed (no Centrifugo history). */
+export function reconnectInvalidations(orgId: string): QueryKey[] {
+  return [queryKeys.org(orgId)]
+}

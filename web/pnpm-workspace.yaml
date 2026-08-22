@@ -2,4 +2,5 @@ allowBuilds:
   # vue-demi's postinstall detects the installed Vue major version and
   # selects the matching runtime shim (vue2 vs vue3); @tanstack/vue-query
   # depends on it transitively. This project is Vue-3-only.
+  protobufjs: true
   vue-demi: true

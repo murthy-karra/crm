@@ -29,6 +29,11 @@ export const queryKeys = {
   stages: (orgId: string) => ['org', orgId, 'stages'] as const,
   unresolved: (orgId: string) => ['org', orgId, 'unresolved'] as const,
   members: (orgId: string) => ['org', orgId, 'members'] as const,
+  // Added ahead of the Today view (SLICE_003 §10 lists it alongside useToday)
+  // because realtime/events.ts's invalidationsFor (Lane B step 1) already
+  // needs to name this key — every key an invalidation path touches goes
+  // through this factory, never hand-written (SLICE_003 Lane B task brief).
+  today: (orgId: string) => ['org', orgId, 'today'] as const,
 }
 
 export function fetchMe(): Promise<MeResponse> {

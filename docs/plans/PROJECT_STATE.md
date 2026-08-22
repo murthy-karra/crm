@@ -4,28 +4,22 @@ Last updated: 2026-08-21
 
 ## Current phase
 
-Slice 002 (lead intake) implemented, independently reviewed,
-adversarially tested, fixed, and verified with a live two-process
-browser walkthrough. Spec status is IMPLEMENTED, verified
-(`docs/specs/SLICE_002.md`). Nothing is committed yet — awaiting the
-user's commit/merge approval (Phase 9).
+Slice 002 (lead intake) merged to `main` (`0e764aa` backend,
+`70a33f2`/`1c4384b` frontend). Implemented, independently reviewed,
+adversarially tested, fixed, verified with a live two-process browser
+walkthrough, and re-verified green on `main` after merge (`./scripts/check`
+full pass: fmt, clippy, all Rust tests, web lint/typecheck/build). Ready
+to plan Slice 003.
 
 ## Current slice
 
-Slice 002 — lead intake: Person + contact methods, Inquiry with preserved
-source attribution, encrypted `raw_payload` + visible unresolved queue,
-the four D-015 fact tables (append-only via grants + trigger), the three
-typed commands (`ReceiveInquiry`, `AssignPerson`, `ChangePersonStage`),
-`PersonVisibilityScope`, the D-017 frontend stack with five screens, and
-sqlx offline mode. **Implemented, reviewed, tested, verified.** Not yet
-committed or merged.
+None active. Next up: Slice 003 (Today + realtime; spec sketch at
+`docs/specs/SLICE_002.md` §16).
 
 ## Current branch
 
-`main` (docs only, uncommitted: `DECISION_LOG.md`, `docs/specs/SLICE_002.md`,
-`docs/design/`, this file). Two lanes, both uncommitted:
-- `slice-002-intake` (in the main checkout) — backend.
-- `slice-002-web` (worktree at `/Users/karrad/projects/crm-worktrees/slice-002-web`) — frontend.
+`main`, clean, both feature branches deleted and the frontend worktree
+removed after merging (`slice-002-intake`, `slice-002-web`).
 
 ## Last accepted decision
 
@@ -276,18 +270,16 @@ committed or merged.
 
 ## Pending work
 
-1. Commit and merge approval for Slice 002 (both lanes; see "Approval
-   currently required" below).
-2. User-side, whenever convenient, not blocking: the Access application's
+1. User-side, whenever convenient, not blocking: the Access application's
    configuration (two hostnames, one policy, `options_preflight_bypass:
    true`) was created via a series of API calls rather than a
    reproducible dashboard/IaC flow and isn't visible from the repo —
    worth documenting more durably (e.g. a short note in the README) or
    recreating via Terraform/dashboard if this needs to survive account
    changes.
-3. User-side (whenever convenient, not blocking): fresh-clone walkthrough
+2. User-side (whenever convenient, not blocking): fresh-clone walkthrough
    of Slice 000.
-4. Not blocking: the local dev database (`crm_dev`) now has a few
+3. Not blocking: the local dev database (`crm_dev`) now has a few
    Slice-002-testing rows from review/adversarial/manual verification
    (e.g. "Ada Lovelace", "Grace Hopper", an unresolved "website" entry).
    Harmless local data; `./scripts/dev-services down` + `up` + re-migrate
@@ -437,13 +429,10 @@ slice:
 
 ## Next recommended action
 
-Present the Slice 002 diff and verification summary; on approval, commit
-each lane on its own branch, then merge `slice-002-intake` to `main`
-first (sole migration owner), rebase/merge `slice-002-web` after, then
-remove the worktree. Then plan Slice 003 (Today + realtime; spec
-§16 sketch).
+Plan Slice 003 (Today + realtime) with the `crm-planner` subagent,
+following the same plan → review → spec → review → approve → implement
+→ review → test → verify → commit → merge flow used for Slices 000–002.
 
 ## Approval currently required
 
-Commit approval for both lanes (`slice-002-intake`, `slice-002-web`),
-then separately, merge approval into `main`.
+None right now. Next gate: approval of the Slice 003 scope/plan.

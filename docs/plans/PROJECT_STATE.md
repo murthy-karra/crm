@@ -4,9 +4,8 @@ Last updated: 2026-08-22
 
 ## Current phase
 
-Slice 003 (Today + realtime) **implemented, verified, and merged to
-`main`** (2026-08-22). Local `main` is 16 commits ahead of
-`origin/main` (not yet pushed — see Next recommended action). Next:
+Slice 003 (Today + realtime) **implemented, verified, merged, and
+pushed** (2026-08-22). `main` is up to date with `origin/main`. Next:
 Slice 004 administration (D-021), once planned.
 
 ## Current slice
@@ -34,9 +33,9 @@ cross-session walkthrough). After 003: Slice 004 administration
 
 ## Current branch
 
-`main`, clean, 16 commits ahead of `origin/main`. `slice-003-realtime`
-and `slice-003-web` are merged but not yet deleted; the
-`/Users/karrad/projects/crm-web` worktree is not yet removed.
+`main`, clean, pushed, up to date with `origin/main`.
+`slice-003-realtime` and `slice-003-web` deleted after merging; the
+`/Users/karrad/projects/crm-web` worktree removed.
 
 ## Last accepted decision
 
@@ -652,12 +651,6 @@ over the public tunnel).
 
 ## Approval currently required
 
-None blocking. Two housekeeping items pending the user's go-ahead
-(not urgent):
-1. Push `main` to `origin` (16 commits ahead, currently local-only).
-2. Delete the merged `slice-003-realtime` and `slice-003-web` branches
-   and remove the `/Users/karrad/projects/crm-web` worktree, per the
-   pattern from prior slices.
-
-Next substantive decision: when to plan Slice 004 (administration,
-D-021/O-007).
+None. Slice 003 is fully closed out: merged, pushed, branches and
+worktree cleaned up. Next substantive decision: when to plan Slice 004
+(administration, D-021/O-007).

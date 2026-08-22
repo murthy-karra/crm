@@ -15,6 +15,13 @@ export default tseslint.config(
         parser: tseslint.parser,
       },
     },
+    rules: {
+      // Single-word names for atomic design-system primitives (matching
+      // the vocabulary docs/design/UI_STYLE.md itself uses: "Card",
+      // "Badge") — a sanctioned, common exception to the multi-word rule,
+      // not a blanket opt-out.
+      'vue/multi-word-component-names': ['error', { ignores: ['Card', 'Badge'] }],
+    },
   },
   {
     languageOptions: {

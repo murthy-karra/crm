@@ -1,6 +1,7 @@
 import { fileURLToPath, URL } from 'node:url'
 import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import tailwindcss from '@tailwindcss/vite'
 
 // Repo-root .env holds these variables (D-013), not web/.env.
 const repoRoot = fileURLToPath(new URL('..', import.meta.url))
@@ -17,7 +18,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     envDir: repoRoot,
-    plugins: [vue()],
+    plugins: [vue(), tailwindcss()],
     server: {
       host,
       port,

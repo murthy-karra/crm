@@ -17,7 +17,7 @@ import { buttonClasses } from '../lib/controls'
 import { describeApiError } from '../lib/errors'
 
 const { data: me } = useMe()
-const orgId = computed(() => me.value?.organization.id ?? '')
+const orgId = computed(() => me.value?.organization?.id ?? '')
 
 const { data: peopleData, isPending, isError, error } = usePeople(orgId)
 const people = computed(() => peopleData.value?.people ?? [])

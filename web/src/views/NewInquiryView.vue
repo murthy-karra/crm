@@ -23,7 +23,7 @@ const SOURCE_SUGGESTIONS = ['zillow', 'realtor_com', 'website', 'referral', 'man
 
 const router = useRouter()
 const { data: me } = useMe()
-const orgId = computed(() => me.value?.organization.id ?? '')
+const orgId = computed(() => me.value?.organization?.id ?? '')
 
 const { data: membersData, isPending: membersPending } = useMembers(orgId)
 const assigneeOptions = computed(() => [

@@ -6,7 +6,7 @@
 // moving anything.
 import { computed, type Component } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
-import { Inbox, LogOut, Sun, UserPlus, Users } from 'lucide-vue-next'
+import { Building2, Inbox, LogOut, Sun, UserCog, UserPlus, Users } from 'lucide-vue-next'
 import { useLogoutMutation, useMe } from '../api/queries'
 import { initials } from '../lib/format'
 import { buttonClasses } from '../lib/controls'
@@ -27,23 +27,6 @@ interface NavGroup {
   items: NavItem[]
 }
 
-const navGroups: NavGroup[] = [
-  {
-    label: 'Work',
-    items: [
-      { label: 'Today', to: '/today', icon: Sun },
-      { label: 'People', to: '/people', icon: Users },
-    ],
-  },
-  {
-    label: 'Intake',
-    items: [
-      { label: 'New lead', to: '/intake/new', icon: UserPlus },
-      { label: 'Unresolved', to: '/intake/unresolved', icon: Inbox },
-    ],
-  },
-]
-
 const {
   data: me,
   error: meError,
@@ -52,6 +35,53 @@ const {
   refetch: refetchMe,
 } = useMe()
 const logoutMutation = useLogoutMutation()
+
+// SLICE_004 §10: a platform-only session (`organization: null`) renders the
+// `Platform` group only — no Today/People/Intake, since it has no
+// Organization. An Organization session (member or admin) renders Work /
+// Intake, plus `Manage` when the member's role is admin. A user who is both
+// gets the Organization groups here and a `Platform` footer link below
+// (spec: "A user who is both sees a Platform link in the sidebar footer").
+const navGroups = computed<NavGroup[]>(() => {
+  if (!me.value) return []
+  if (me.value.organization === null) {
+    return [
+      {
+        label: 'Platform',
+        items: [{ label: 'Organizations', to: '/platform', icon: Building2 }],
+      },
+    ]
+  }
+  const groups: NavGroup[] = [
+    {
+      label: 'Work',
+      items: [
+        { label: 'Today', to: '/today', icon: Sun },
+        { label: 'People', to: '/people', icon: Users },
+      ],
+    },
+    {
+      label: 'Intake',
+      items: [
+        { label: 'New lead', to: '/intake/new', icon: UserPlus },
+        { label: 'Unresolved', to: '/intake/unresolved', icon: Inbox },
+      ],
+    },
+  ]
+  if (me.value.organization.role === 'admin') {
+    groups.push({
+      label: 'Manage',
+      items: [{ label: 'Members', to: '/manage/members', icon: UserCog }],
+    })
+  }
+  return groups
+})
+
+// SLICE_004 §10: "A user who is both sees a Platform link in the sidebar
+// footer." A platform-only session already gets the `Platform` group above
+// as its primary nav, so this is only for the composed case (an
+// Organization member/admin who is also a platform admin).
+const showPlatformFooterLink = computed(() => me.value?.organization !== null && me.value?.platform_admin === true)
 
 // Every authenticated view derives its `orgId` from `me` and keeps its own
 // queries `enabled: false` until that resolves — and a disabled TanStack
@@ -77,7 +107,7 @@ function retrySession() {
 // unmounting AppShell), and on an Organization change it tears down and
 // reconnects rather than resubscribing (D-023 §1's channel is fixed per
 // connection).
-const orgId = computed(() => me.value?.organization.id ?? '')
+const orgId = computed(() => me.value?.organization?.id ?? '')
 const { status: realtimeStatus } = useRealtime({
   orgId,
   createClient: createRealtimeClient,
@@ -88,7 +118,9 @@ const navItemClass =
   'flex h-10 items-center gap-2 rounded-lg px-3 text-body text-text-muted transition-colors duration-150 ease-out hover:bg-surface-2/60'
 const navItemActiveClass = 'bg-surface-2 font-semibold text-text hover:bg-surface-2'
 
-const orgLabel = computed(() => me.value?.organization.name ?? '')
+// A platform-only session has no Organization to name; label it instead so
+// the footer identity row is never blank.
+const orgLabel = computed(() => me.value?.organization?.name ?? (me.value?.platform_admin ? 'Platform admin' : ''))
 
 function logout() {
   logoutMutation.mutate(undefined, {
@@ -142,6 +174,23 @@ function logout() {
               : 'Realtime unavailable — data may be delayed'
           }}
         </p>
+      </div>
+
+      <div
+        v-if="showPlatformFooterLink"
+        class="border-t border-border px-3 py-2"
+      >
+        <RouterLink
+          to="/platform"
+          :class="navItemClass"
+          :active-class="navItemActiveClass"
+        >
+          <Building2
+            class="h-[18px] w-[18px] shrink-0"
+            stroke-width="1.5"
+          />
+          Platform
+        </RouterLink>
       </div>
 
       <div

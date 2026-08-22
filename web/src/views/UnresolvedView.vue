@@ -16,7 +16,7 @@ import { UNRESOLVED_REASON_LABEL } from '../lib/labels'
 import type { BadgeTint } from '../lib/controls'
 
 const { data: me } = useMe()
-const orgId = computed(() => me.value?.organization.id ?? '')
+const orgId = computed(() => me.value?.organization?.id ?? '')
 
 const { data: unresolvedData, isPending, isError, error } = useUnresolved(orgId)
 const items = computed(() => unresolvedData.value?.items ?? [])

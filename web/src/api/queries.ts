@@ -3,19 +3,37 @@ import { type MaybeRefOrGetter, computed, toValue } from 'vue'
 import { queryClient } from '../query-client'
 import { apiFetch } from './client'
 import type {
+  AcceptInvitationRequest,
+  AcceptInvitationResponse,
   AssignmentRequest,
+  ChangeMemberRoleRequest,
   ContactChannel,
   ContactOutcome,
+  CreateOrganizationRequest,
+  CreateOrganizationResponse,
+  InvitationPreviewRequest,
+  InvitationPreviewResponse,
+  InvitationsResponse,
+  IssueInvitationRequest,
+  IssueInvitationResponse,
   LogContactRequest,
   LogContactResponse,
   MeResponse,
+  MemberMutationResponse,
+  MembershipRole,
+  MembershipStatus,
   MembersResponse,
   MutatePersonResponse,
   PeopleResponse,
   PersonDetailResponse,
+  PlatformChangeMemberRoleRequest,
+  PlatformIssueInvitationRequest,
+  PlatformOrganizationDetailResponse,
+  PlatformOrganizationsResponse,
   RealtimeTokenResponse,
   ReceiveInquiryRequest,
   ReceiveInquiryResponse,
+  SetMemberStatusRequest,
   StageRequest,
   StagesResponse,
   TodayResponse,
@@ -40,6 +58,13 @@ export const queryKeys = {
   // needs to name this key — every key an invalidation path touches goes
   // through this factory, never hand-written (SLICE_003 Lane B task brief).
   today: (orgId: string) => ['org', orgId, 'today'] as const,
+  // SLICE_004 §10: extend the factory, never hand-write a key.
+  invitations: (orgId: string) => ['org', orgId, 'invitations'] as const,
+  // Keyed by the raw token, not an org id — the public accept page has no
+  // Organization context yet (that is exactly what the preview reveals).
+  invitationPreview: (token: string) => ['invitation-preview', token] as const,
+  platformOrganizations: () => ['platform', 'organizations'] as const,
+  platformOrganization: (id: string) => ['platform', 'organizations', id] as const,
 }
 
 export function fetchMe(): Promise<MeResponse> {
@@ -217,6 +242,177 @@ export function useCreateInquiryMutation(orgId: MaybeRefOrGetter<string>) {
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.org(toValue(orgId)) })
+    },
+  })
+}
+
+// ---- Administration (SLICE_004 §5, §10) -----------------------------------
+// Task brief: "After any mutation invalidate `me` and ['org', orgId,
+// 'members'] (plus the invitations and platform keys you add)."
+
+export function useInvitations(orgId: MaybeRefOrGetter<string>) {
+  return useQuery({
+    queryKey: computed(() => queryKeys.invitations(toValue(orgId))),
+    queryFn: () => apiFetch<InvitationsResponse>('/organization/invitations'),
+    enabled: computed(() => toValue(orgId) !== ''),
+  })
+}
+
+export function useIssueInvitationMutation(orgId: MaybeRefOrGetter<string>) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (request: IssueInvitationRequest) =>
+      apiFetch<IssueInvitationResponse>('/organization/invitations', {
+        method: 'POST',
+        body: JSON.stringify(request),
+      }),
+    onSuccess: () => {
+      const id = toValue(orgId)
+      void qc.invalidateQueries({ queryKey: queryKeys.invitations(id) })
+      void qc.invalidateQueries({ queryKey: queryKeys.members(id) })
+    },
+  })
+}
+
+export function useRevokeInvitationMutation(orgId: MaybeRefOrGetter<string>) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (invitationId: string) =>
+      apiFetch<void>(`/organization/invitations/${invitationId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.invitations(toValue(orgId)) })
+    },
+  })
+}
+
+export function useChangeMemberRoleMutation(orgId: MaybeRefOrGetter<string>) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ userId, role }: { userId: string; role: MembershipRole }) =>
+      apiFetch<MemberMutationResponse>(`/organization/members/${userId}/role`, {
+        method: 'PUT',
+        body: JSON.stringify({ role } satisfies ChangeMemberRoleRequest),
+      }),
+    onSuccess: () => {
+      const id = toValue(orgId)
+      void qc.invalidateQueries({ queryKey: queryKeys.members(id) })
+      void qc.invalidateQueries({ queryKey: queryKeys.me })
+    },
+  })
+}
+
+export function useSetMemberStatusMutation(orgId: MaybeRefOrGetter<string>) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ userId, status }: { userId: string; status: MembershipStatus }) =>
+      apiFetch<MemberMutationResponse>(`/organization/members/${userId}/status`, {
+        method: 'PUT',
+        body: JSON.stringify({ status } satisfies SetMemberStatusRequest),
+      }),
+    onSuccess: () => {
+      const id = toValue(orgId)
+      void qc.invalidateQueries({ queryKey: queryKeys.members(id) })
+      void qc.invalidateQueries({ queryKey: queryKeys.me })
+    },
+  })
+}
+
+export function usePlatformOrganizations() {
+  return useQuery({
+    queryKey: queryKeys.platformOrganizations(),
+    queryFn: () => apiFetch<PlatformOrganizationsResponse>('/platform/organizations'),
+  })
+}
+
+export function useCreateOrganizationMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (request: CreateOrganizationRequest) =>
+      apiFetch<CreateOrganizationResponse>('/platform/organizations', {
+        method: 'POST',
+        body: JSON.stringify(request),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.platformOrganizations() })
+    },
+  })
+}
+
+export function usePlatformOrganization(id: MaybeRefOrGetter<string>) {
+  return useQuery({
+    queryKey: computed(() => queryKeys.platformOrganization(toValue(id))),
+    queryFn: () => apiFetch<PlatformOrganizationDetailResponse>(`/platform/organizations/${toValue(id)}`),
+    enabled: computed(() => toValue(id) !== ''),
+  })
+}
+
+/** PUT /api/platform/organizations/{id}/members/{user_id}/role — always `admin` (D-026 §4); the route rejects `member` before the domain. */
+export function usePlatformPromoteMutation(organizationId: MaybeRefOrGetter<string>) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (userId: string) =>
+      apiFetch<MemberMutationResponse>(`/platform/organizations/${toValue(organizationId)}/members/${userId}/role`, {
+        method: 'PUT',
+        body: JSON.stringify({ role: 'admin' } satisfies PlatformChangeMemberRoleRequest),
+      }),
+    onSuccess: () => {
+      const id = toValue(organizationId)
+      void qc.invalidateQueries({ queryKey: queryKeys.platformOrganization(id) })
+      void qc.invalidateQueries({ queryKey: queryKeys.platformOrganizations() })
+      void qc.invalidateQueries({ queryKey: queryKeys.me })
+    },
+  })
+}
+
+/** POST /api/platform/organizations/{id}/invitations — always role `admin` (D-021 §1, D-026 §4). Takes `{email, role}` (role ignored, always sent as 'admin') so it shares InviteDialog.vue's submit payload shape with the org-admin mutation. */
+export function usePlatformIssueInvitationMutation(organizationId: MaybeRefOrGetter<string>) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ email }: { email: string; role: 'admin' }) =>
+      apiFetch<IssueInvitationResponse>(`/platform/organizations/${toValue(organizationId)}/invitations`, {
+        method: 'POST',
+        body: JSON.stringify({ email, role: 'admin' } satisfies PlatformIssueInvitationRequest),
+      }),
+    onSuccess: () => {
+      const id = toValue(organizationId)
+      void qc.invalidateQueries({ queryKey: queryKeys.platformOrganization(id) })
+      void qc.invalidateQueries({ queryKey: queryKeys.platformOrganizations() })
+    },
+  })
+}
+
+export function usePlatformRevokeInvitationMutation(organizationId: MaybeRefOrGetter<string>) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (invitationId: string) =>
+      apiFetch<void>(`/platform/organizations/${toValue(organizationId)}/invitations/${invitationId}`, {
+        method: 'DELETE',
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.platformOrganization(toValue(organizationId)) })
+    },
+  })
+}
+
+/** POST /api/invitations/preview — public, no session (§5). Called by a `useQuery` in InviteView.vue keyed on `queryKeys.invitationPreview(token)`, not a plain fetch, so `retry: false` there controls retries the same way every other read query does. */
+export function fetchInvitationPreview(token: string): Promise<InvitationPreviewResponse> {
+  return apiFetch<InvitationPreviewResponse>('/invitations/preview', {
+    method: 'POST',
+    body: JSON.stringify({ token } satisfies InvitationPreviewRequest),
+  })
+}
+
+/** POST /api/invitations/accept — public; success body is identical to `POST /api/session` (§5), so this mirrors useLoginMutation's onSuccess (seed the `me` cache directly rather than refetching). */
+export function useAcceptInvitationMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (request: AcceptInvitationRequest) =>
+      apiFetch<AcceptInvitationResponse>('/invitations/accept', {
+        method: 'POST',
+        body: JSON.stringify(request),
+      }),
+    onSuccess: (data) => {
+      qc.setQueryData(queryKeys.me, data)
     },
   })
 }

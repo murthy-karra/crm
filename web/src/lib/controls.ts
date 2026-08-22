@@ -7,7 +7,7 @@ import type { SelectPassThroughOptions } from 'primevue/select'
 const FOCUS_RING =
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2'
 
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost'
+export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
 
 /** UI_STYLE.md §3 semantic badge tints — the closed set; do not invent new ones. */
 export type BadgeTint = 'warm' | 'neutral' | 'indigo' | 'green' | 'red'
@@ -18,6 +18,10 @@ const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
   primary: `${BUTTON_BASE} bg-accent text-white hover:bg-accent-hover`,
   secondary: `${BUTTON_BASE} bg-surface-0 text-text border border-border hover:bg-surface-1`,
   ghost: `${BUTTON_BASE} bg-transparent text-text hover:bg-surface-2`,
+  // SLICE_004: the confirm action for Deactivate/Revoke. Not in UI_STYLE.md
+  // §5's control list, but built from its own §3 token ("danger: destructive
+  // actions, error text") rather than inventing a new color.
+  danger: `${BUTTON_BASE} bg-danger text-white hover:bg-danger/90`,
 }
 
 export function buttonClasses(variant: ButtonVariant = 'secondary'): string {

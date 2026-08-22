@@ -1,4 +1,13 @@
-import type { ContactChannel, ContactOutcome, UnresolvedReason } from '../api/types'
+import type {
+  ContactChannel,
+  ContactOutcome,
+  InvitationStatus,
+  MembershipRole,
+  MembershipStatus,
+  OrganizationState,
+  UnresolvedReason,
+} from '../api/types'
+import type { BadgeTint } from './controls'
 
 /** Shared by UnresolvedView (queue) and NewInquiryView (inline outcome). */
 export const UNRESOLVED_REASON_LABEL: Record<UnresolvedReason, string> = {
@@ -36,4 +45,51 @@ export const DEFAULT_OUTCOME_FOR_CHANNEL: Record<ContactChannel, ContactOutcome>
   text: 'sent',
   email: 'sent',
   other: 'reached',
+}
+
+// ---- SLICE_004 (MembersView, InviteView, PlatformOrganizations{,Organization}View) ----
+
+export const MEMBERSHIP_ROLE_LABEL: Record<MembershipRole, string> = {
+  admin: 'Admin',
+  member: 'Member',
+}
+
+export const MEMBERSHIP_STATUS_LABEL: Record<MembershipStatus, string> = {
+  active: 'Active',
+  inactive: 'Inactive',
+}
+
+/** `inactive` gets the "needs attention" red tint (UI_STYLE §3 "unresolved /
+ * error") since it is the exceptional state for a membership; `active` is
+ * the unremarkable default. */
+export const MEMBERSHIP_STATUS_TINT: Record<MembershipStatus, BadgeTint> = {
+  active: 'neutral',
+  inactive: 'red',
+}
+
+export const INVITATION_STATUS_LABEL: Record<InvitationStatus, string> = {
+  pending: 'Pending',
+  accepted: 'Accepted',
+  expired: 'Expired',
+  revoked: 'Revoked',
+}
+
+export const INVITATION_STATUS_TINT: Record<InvitationStatus, BadgeTint> = {
+  pending: 'neutral',
+  accepted: 'green',
+  expired: 'red',
+  revoked: 'red',
+}
+
+/** D-026 §5 naming; the platform Organizations table's state badge. */
+export const ORGANIZATION_STATE_LABEL: Record<OrganizationState, string> = {
+  ok: 'OK',
+  pending_first_admin: 'Pending first admin',
+  needs_attention: 'Needs attention',
+}
+
+export const ORGANIZATION_STATE_TINT: Record<OrganizationState, BadgeTint> = {
+  ok: 'green',
+  pending_first_admin: 'neutral',
+  needs_attention: 'red',
 }

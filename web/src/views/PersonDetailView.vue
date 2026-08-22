@@ -25,7 +25,7 @@ import { CONTACT_CHANNEL_LABEL, CONTACT_OUTCOME_LABEL } from '../lib/labels'
 const props = defineProps<{ id: string }>()
 
 const { data: me } = useMe()
-const orgId = computed(() => me.value?.organization.id ?? '')
+const orgId = computed(() => me.value?.organization?.id ?? '')
 
 const { data: detail, isPending, isError, error } = usePerson(orgId, () => props.id)
 const person = computed(() => detail.value?.person)

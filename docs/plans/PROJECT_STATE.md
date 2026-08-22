@@ -4,39 +4,46 @@ Last updated: 2026-08-22
 
 ## Current phase
 
-Slice 004 (Administration) **merged to `main`** (2026-08-22). Both
-lanes implemented, independently reviewed, adversarially tested,
-findings fixed and re-verified, live-walked-through on loopback
-(46/46) and then re-walked-through through the real Cloudflare tunnel
-(48/48, see Completed work), then merged: `slice-004-admin` (`9e7838a`)
-then `slice-004-web` (`c3694ce`), both `--no-ff`, zero conflicts. Full
-`./scripts/check` and `./scripts/check-db` re-run clean on the merged
-`main` itself (not just the pre-merge branches): backend fmt/clippy/143
-unit/133 integration tests, web lint/typecheck/57 tests/build. Branches
-deleted, the `../crm-web` worktree removed. Not yet pushed to
-`origin/main`. Next: push (awaiting approval); Slice 004 is otherwise
-fully closed out.
+**Slice 005 (Operator retrieval) — spec APPROVED 2026-08-22; awaiting
+the implementation gate.** Slice 004 is merged to `main` (`1ed84b0`), fully closed out,
+**not yet pushed** to `origin/main`. On 2026-08-22 the user started
+Slice 005 planning: D-028 (Operator as an in-process crate, with the
+§5 inverted-dependency refinement) and D-029 (PII-free ledger, no
+transcripts) were accepted; `docs/specs/SLICE_005.md` was drafted by the
+coordinator from a `crm-planner` pass and then independently reviewed
+(`crm-reviewer`: 15 findings — none blocking; all applied as safe
+defaults / implementation notes). Lane briefs
+`docs/tasks/SLICE_005_LANE_A.md` (backend) and `_LANE_B.md` (web) are
+written. The user approved the spec and the planning commit + push.
+Nothing implemented.
 
 ## Current slice
 
-Slice 004 — Administration — `docs/specs/SLICE_004.md` (APPROVED).
-Platform admin (membership-free, CLI-bootstrapped allowlist), membership
-role + status, one invitation mechanism (token in body, never a URL),
-last-active-admin invariant under a keyed advisory lock, member
-deactivation with session revocation + realtime disconnect, `crm-admin`
-CLI replacing `seed.rs` and the raw-INSERT test fixtures, web `Manage →
-Members`, `/invite/:token`, `/platform`. Slice 003 is complete and
-merged (see History).
+Slice 005 — Operator retrieval — `docs/specs/SLICE_005.md` (APPROVED). Read-only AI Operator: `crm-operator` crate with a
+`ToolBackend` trait (five tools: `search_people`, `get_person`,
+`get_today`, `get_next_work_item`, `explain_priority`), Groq via a
+provider-neutral trait, `POST /api/operator/turns` (stateless,
+non-streaming, bounded), append-only `operator_turn` /
+`operator_tool_call` ledger, web **Ask** drawer. Closes the thesis §16
+proof chain. Slice 004 is complete and merged (see History).
 
 ## Current branch
 
-`main`, clean, **not yet pushed** — local `main` is ahead of
-`origin/main` (Slice 004's merge commits plus the pre-004 documentation
-commits from planning/approval). `slice-004-admin`/`slice-004-web`
-deleted after merging; the `../crm-web` worktree removed.
+`main`, clean after the Slice 005 planning commit, pushed to
+`origin/main` (the first push since before Slice 004).
 
 ## Last accepted decision
 
+2026-08-22, user-accepted (Slice 005 planning):
+- D-028 — the AI Operator is an in-process workspace crate
+  (`crates/crm-operator`) compiled into `crm-api`; §5 refinement: the
+  dependency is inverted (`crm-api → crm-operator` only; `ToolBackend`
+  trait is the whole data surface); the `crm-app` extraction is a
+  prerequisite for the first Operator mutation slice.
+- D-029 — Operator turns are audited as a PII-free ledger; no
+  transcripts, no logged message/reply/argument text.
+
+Previous (Slice 004 planning):
 2026-08-22, user-accepted (Slice 004 planning):
 - D-027 — membership deactivation (status active/inactive) ships in
   004 instead of removal; removal is not a concept; data retained and
@@ -707,11 +714,11 @@ slice:
 
 ## Next recommended action
 
-Push `main` to `origin/main` (awaiting approval). The tunnel re-walkthrough
-(spec §1 steps 2–9 through `app.tarams.org`/`api.tarams.org`) is now done
-— 48/48 — so Slice 004 is otherwise fully closed out and the next
-substantive decision is when to plan Slice 005 (Operator retrieval,
-D-021).
+Implementation gate (skill Phase 6) for Lane A on `slice-005-operator`
+per `docs/tasks/SLICE_005_LANE_A.md`; Lane B on `slice-005-web` in a
+worktree after Lane A step 5. The user intends to implement with a
+faster model in a separate session; the handoff is entirely in the repo
+(spec + two lane briefs + this file).
 
 **Done** (2026-08-22). Both lanes implemented and self-verified green.
 Independent review (`crm-reviewer`) and adversarial testing

@@ -516,6 +516,72 @@ left open ("may an Organization admin revoke memberships in 004").
 
 Blocks: nothing. Feeds the Slice 004 specification.
 
+### D-028 — The AI Operator is an in-process crate, not a separate service (2026-08-22)
+
+Accepted (user, during Slice 005 planning). Applying D-002's test to the
+Operator: it has no technology boundary (inference providers are HTTP
+APIs, trivially called from Rust), no scaling boundary yet (load tracks
+user count, the cost is I/O wait), a failure boundary that bounded
+concurrency and timeouts inside one process already cover, and a
+**security boundary that argues against splitting** — a separate
+service would have to reach the typed commands/queries over the network
+with a second, service-to-service auth path carrying actor and
+Organization, which is exactly the kind of trust boundary D-008 and
+`AGENTS.md` §5.2 exist to avoid.
+
+1. The Operator lives in a new workspace crate, `crates/crm-operator`,
+   compiled into the same `crm-api` binary. It depends on the
+   application layer (typed commands, queries, `Actor`, Organization
+   context) and **not** on Axum, the HTTP/session layer, or SQLx
+   directly; the compiler enforces "approved typed tools only".
+2. The crate owns the provider-neutral inference abstraction (D-001,
+   Groq first), the tool registry and tool definitions, the tool-loop
+   runner, prompt assets, and Operator turn auditing. `crm-api` exposes
+   it through one route group with its own bounded concurrency and
+   timeouts so a slow or failing model call cannot starve other
+   handlers.
+3. The Operator-tool contract is a shared contract (`AGENTS.md` §9):
+   changes are explicit, never silent.
+4. Revisit criteria for splitting into its own workload: self-hosted
+   model inference; a voice/push-to-talk pipeline with its own runtime
+   (LiveKit audio, a non-Rust agent framework); or measured Operator
+   load starving the API. If any occurs, the crate is wrapped in its
+   own binary behind an internal API — the crate boundary is where the
+   service boundary would go.
+5. **Refinement (2026-08-22, user-accepted).** There is no standalone
+   application-layer crate yet: `domain/`, `auth/`, `realtime/` all
+   live inside `crm-api`, and `crm-api` must depend on `crm-operator`
+   to mount its routes, so `crm-operator` cannot depend on `crm-api`
+   (package cycle). For Slice 005 the dependency is **inverted**:
+   `crm-operator` defines `OperatorContext` and a `ToolBackend` trait
+   naming exactly the approved read tools; `crm-api` implements the
+   trait over its existing `domain::` queries and injects it. The only
+   Cargo edge is `crm-api -> crm-operator`; the trait is the complete
+   data surface reachable by the tool loop. Extracting a `crm-app`
+   crate (domain + realtime + non-Axum auth) is deferred and is a
+   **prerequisite for the first slice that gives the Operator mutation
+   tools**; it ships as its own refactor PR with no behavior change.
+
+Blocks: nothing. Feeds the Slice 005 specification.
+
+### D-029 — Operator turns are audited as a PII-free ledger; transcripts are not stored (2026-08-22)
+
+Accepted (user, during Slice 005 planning). Every Operator turn,
+including failed ones, writes an append-only ledger row: Organization,
+actor, origin, timing, outcome, provider/model, token counts, and one
+row per tool call (tool name, outcome, duration, Person ids touched).
+The user's message, the model's reply, tool arguments (including search
+strings), and conversation history are **not** persisted and are never
+logged. Rationale: transcripts are customer content with retention and
+erasure implications (D-015 §3, §5) that the product has not yet
+defined; the ledger alone satisfies "Operator actions must be
+explainable later" (thesis §13) for a read-only Operator. Revisit when
+quality evaluation, O-008 suggestions, or persisted conversations need
+the text — at which point transcripts follow the D-015 §4 encrypted,
+deletable-blob discipline.
+
+Blocks: nothing. Feeds the Slice 005 specification.
+
 ## Open decisions
 
 ### O-001 — RESOLVED

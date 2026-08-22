@@ -368,6 +368,7 @@ dependencies = [
  "chacha20poly1305",
  "chrono",
  "dotenvy",
+ "futures-util",
  "hmac 0.13.0",
  "http-body-util",
  "rand 0.10.2",

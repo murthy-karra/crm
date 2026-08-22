@@ -9,7 +9,9 @@ use serde_json::json;
 use uuid::Uuid;
 
 use crate::auth::AuthContext;
-use crate::domain::commands::{self, AssignPerson, ChangePersonStage};
+use crate::domain::commands::{
+    self, AssignPerson, ChangePersonStage, ContactChannel, ContactOutcome, LogContactAttempt,
+};
 use crate::domain::envelope::CommandContext;
 use crate::domain::inquiry::queries as inquiry_queries;
 use crate::domain::person::queries as person_queries;
@@ -23,6 +25,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/people/{id}", get(get_person))
         .route("/api/people/{id}/assignment", post(set_assignment))
         .route("/api/people/{id}/stage", post(set_stage))
+        .route("/api/people/{id}/contact-attempts", post(log_contact))
 }
 
 /// A `{id}` path segment parsed as a UUID, rejecting straight to `400
@@ -160,4 +163,43 @@ async fn set_stage(
     .await?;
 
     Ok(Json(json!({ "person": summary, "changed": changed })))
+}
+
+#[derive(Deserialize)]
+struct ContactAttemptRequest {
+    channel: ContactChannel,
+    outcome: ContactOutcome,
+}
+
+/// `POST /api/people/{id}/contact-attempts` (docs/specs/SLICE_003.md §5).
+/// An invalid `channel`/`outcome` value or non-JSON body is a serde
+/// rejection, not a new `ApiError` variant — it maps to the existing 400
+/// `malformed_request` exactly like every other bad body in this file.
+async fn log_contact(
+    State(state): State<AppState>,
+    PersonId(person_id): PersonId,
+    auth: AuthContext,
+    body: Result<Json<ContactAttemptRequest>, JsonRejection>,
+) -> Result<(axum::http::StatusCode, Json<serde_json::Value>), ApiError> {
+    let Json(req) = body.map_err(|_| ApiError::MalformedRequest)?;
+
+    let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
+    let ctx = CommandContext::from_auth(&auth);
+
+    let (summary, contact_attempt) = commands::log_contact_attempt(
+        pool,
+        &state.publisher,
+        &ctx,
+        LogContactAttempt {
+            person_id,
+            channel: req.channel,
+            outcome: req.outcome,
+        },
+    )
+    .await?;
+
+    Ok((
+        axum::http::StatusCode::CREATED,
+        Json(json!({ "person": summary, "contact_attempt": contact_attempt })),
+    ))
 }

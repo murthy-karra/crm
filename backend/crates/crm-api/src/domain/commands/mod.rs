@@ -4,10 +4,14 @@
 
 pub mod assign_person;
 pub mod change_person_stage;
+pub mod log_contact_attempt;
 pub mod receive_inquiry;
 
 pub use assign_person::{assign_person, AssignPerson};
 pub use change_person_stage::{change_person_stage, ChangePersonStage};
+pub use log_contact_attempt::{
+    log_contact_attempt, ContactAttemptRef, ContactChannel, ContactOutcome, LogContactAttempt,
+};
 pub use receive_inquiry::{
     receive_inquiry, ReceiveInquiry, ReceiveInquiryOutcome, RoutingStrategy,
 };

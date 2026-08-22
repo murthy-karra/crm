@@ -1,7 +1,8 @@
-//! Typed inserts for the four D-015 §8 fact tables (docs/specs/SLICE_002.md
-//! §2, §4). Each returns the inserted fact's id — needed so
-//! `assignment_changed.causation_id` can be set to the `routing_decision.id`
-//! on intake.
+//! Typed inserts for the five fact tables: the four D-015 §8 tables
+//! (docs/specs/SLICE_002.md §2, §4) plus `contact_attempted`, the fifth
+//! (docs/specs/SLICE_003.md §2, D-022). Each returns the inserted fact's
+//! id — needed so `assignment_changed.causation_id` can be set to the
+//! `routing_decision.id` on intake.
 
 use sqlx::PgConnection;
 use uuid::Uuid;
@@ -125,6 +126,46 @@ pub async fn insert_assignment_changed(
         fact.from_user_id,
         fact.to_user_id,
         fact.reason,
+    )
+    .fetch_one(tx)
+    .await?;
+    Ok(row.id)
+}
+
+pub struct ContactAttemptedFact<'a> {
+    pub person_id: Uuid,
+    pub channel: &'a str,
+    pub outcome: &'a str,
+}
+
+/// The fifth typed fact table (docs/specs/SLICE_003.md §2, D-022): a
+/// contact attempt is a real-world event with historical meaning, written
+/// by `LogContactAttempt`.
+pub async fn insert_contact_attempted(
+    tx: &mut PgConnection,
+    envelope: &FactEnvelope,
+    fact: ContactAttemptedFact<'_>,
+) -> Result<Uuid, sqlx::Error> {
+    let actor_kind = envelope.actor_kind.as_str();
+    let origin = envelope.origin.as_str();
+    let row = sqlx::query!(
+        r#"INSERT INTO contact_attempted
+            (organization_id, actor_kind, actor_user_id, on_behalf_of_user_id, origin,
+             occurred_at, correlation_id, causation_id,
+             person_id, channel, outcome)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+           RETURNING id"#,
+        envelope.organization_id,
+        actor_kind,
+        envelope.actor_user_id,
+        envelope.on_behalf_of_user_id,
+        origin,
+        envelope.occurred_at,
+        envelope.correlation_id,
+        envelope.causation_id,
+        fact.person_id,
+        fact.channel,
+        fact.outcome,
     )
     .fetch_one(tx)
     .await?;

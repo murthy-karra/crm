@@ -584,6 +584,59 @@ async fn stage_changed_history(
         .collect())
 }
 
+struct ContactAttemptedHistoryRow {
+    id: Uuid,
+    occurred_at: DateTime<Utc>,
+    recorded_at: DateTime<Utc>,
+    origin: String,
+    correlation_id: Uuid,
+    actor_user_id: Option<Uuid>,
+    actor_display_name: Option<String>,
+    channel: String,
+    outcome: String,
+}
+
+/// `contact_attempted` history entries (docs/specs/SLICE_003.md §5, the
+/// declared additive SLICE_002 §5 contract change): `kind_rank` 4,
+/// `detail: {"channel", "outcome"}`.
+async fn contact_attempted_history(
+    conn: &mut PgConnection,
+    organization_id: Uuid,
+    person_id: Uuid,
+) -> Result<Vec<HistoryEntry>, sqlx::Error> {
+    let rows = sqlx::query_as!(
+        ContactAttemptedHistoryRow,
+        r#"SELECT ca.id, ca.occurred_at, ca.recorded_at, ca.origin, ca.correlation_id,
+                  ca.actor_user_id, au.display_name as "actor_display_name?",
+                  ca.channel, ca.outcome
+           FROM contact_attempted ca
+           LEFT JOIN app_user au ON au.id = ca.actor_user_id
+           WHERE ca.organization_id = $1 AND ca.person_id = $2"#,
+        organization_id,
+        person_id,
+    )
+    .fetch_all(conn)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|r| HistoryEntry {
+            kind: "contact_attempted",
+            kind_rank: 4,
+            id: r.id,
+            occurred_at: r.occurred_at,
+            recorded_at: r.recorded_at,
+            actor: actor_ref(r.actor_user_id, r.actor_display_name),
+            origin: r.origin,
+            correlation_id: r.correlation_id,
+            detail: serde_json::json!({
+                "channel": r.channel,
+                "outcome": r.outcome,
+            }),
+        })
+        .collect())
+}
+
 /// The full history timeline for `GET /api/people/{id}`, ordered
 /// `occurred_at, recorded_at, kind_rank, id` (docs/specs/SLICE_002.md §5:
 /// required because intake's four facts otherwise share both timestamps).
@@ -597,6 +650,7 @@ pub async fn history_for_person(
     entries.extend(routing_decision_history(conn, organization_id, person_id).await?);
     entries.extend(assignment_changed_history(conn, organization_id, person_id).await?);
     entries.extend(stage_changed_history(conn, organization_id, person_id).await?);
+    entries.extend(contact_attempted_history(conn, organization_id, person_id).await?);
 
     entries.sort_by_key(|e| (e.occurred_at, e.recorded_at, e.kind_rank, e.id));
     Ok(entries)

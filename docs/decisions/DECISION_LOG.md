@@ -483,6 +483,39 @@ Accepted (user, during Slice 004 pre-planning). Refines D-021.
 Blocks: nothing. Feeds the Slice 004 plan (membership roles, the
 promote/demote commands, invitation expiry, platform-admin listing).
 
+### D-027 — Membership deactivation instead of removal; Organization suspension reserved (2026-08-22)
+
+Accepted (user, during Slice 004 planning). Answers the question D-021
+left open ("may an Organization admin revoke memberships in 004").
+
+1. **Removal is not a domain concept.** Memberships, users, and
+   Organizations are never deleted by an administrative action.
+   "Inactive" is the terminal membership state. Hard deletion, if ever,
+   is a future data-retention/compliance policy, not an admin button.
+2. **Member deactivation ships in Slice 004.** `organization_membership`
+   gains `status ∈ {active, inactive}`. An Organization admin may
+   deactivate and reactivate a member. Deactivation blocks login to that
+   Organization, invalidates existing sessions on the next request, and
+   disconnects the member's realtime connection (the hook SLICE_003 §14a
+   reserved). All history, People, and contact attempts are retained and
+   remain attributed to the inactive member.
+3. **Attribution stays visible.** Because an inactive member's assigned
+   People no longer appear on anyone's Today, the Members view shows the
+   count of People still assigned to each inactive member, and an admin
+   may reassign them with the existing per-Person assign command. Bulk
+   reassignment and any richer departure workflow remain with O-004.
+4. **Last-admin protection (D-026) counts active admins only.**
+   Deactivating or demoting the last active admin on the self-service
+   path is rejected. The platform admin's recovery path (promote an
+   active member, or invite a new admin) is unchanged.
+5. **Organization suspension is reserved, not shipped.** `organization`
+   gains `status` with only `active` permitted in 004 so suspension
+   later is a domain rule and a UI, not a migration. Its semantics
+   (non-payment vs legal hold; whether intake keeps accepting leads;
+   what members see) are customer-visible and open — see O-009.
+
+Blocks: nothing. Feeds the Slice 004 specification.
+
 ## Open decisions
 
 ### O-001 — RESOLVED
@@ -563,6 +596,15 @@ D-021 fixes scope and principle. These defaults were proposed on
 Blocks: nothing before Slice 004 planning. Questions for that plan: whether
 an Organization admin may revoke memberships in 004 or only invite; whether
 the platform surface lists/suspends Organizations or only creates them.
+
+### O-009 — Organization suspension semantics (OPEN)
+
+D-027 §5 reserves `organization.status`. Open: the distinct cases
+(non-payment, legal hold, voluntary pause) and for each whether inbound
+intake continues to accept and store leads, what members see on login,
+whether the platform admin may act inside the Organization during a
+hold, and retention after a terminal suspension. Blocks: any
+platform-admin suspend action; nothing in Slice 004.
 
 ### O-008 — AI next-step suggestions after each communication and daily (OPEN — intent recorded, design open)
 

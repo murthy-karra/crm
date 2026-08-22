@@ -40,7 +40,12 @@ cross-session walkthrough). After 003: Slice 004 administration
 
 ## Last accepted decision
 
-2026-08-22, user-accepted (Slice 004 pre-planning):
+2026-08-22, user-accepted (Slice 004 planning):
+- D-027 — membership deactivation (status active/inactive) ships in
+  004 instead of removal; removal is not a concept; data retained and
+  attribution stays visible with per-Person reassignment; last-admin
+  rule counts active admins; `organization.status` reserved with
+  suspension semantics OPEN as O-009.
 - D-026 — Organization admin continuity. Admin-less Organizations stay
   fully operational for members; an Organization admin cannot remove
   the last admin (themselves); the platform admin can always both

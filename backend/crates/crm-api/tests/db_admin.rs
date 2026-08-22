@@ -480,6 +480,38 @@ async fn every_platform_route_is_403_for_an_organization_admin(migrator_pool: Pg
     )
     .await;
     assert_eq!(detail_resp.status(), StatusCode::FORBIDDEN);
+
+    // The remaining three platform routes (spec §13 item 4: "every
+    // platform route"). PlatformAuthContext rejects before the handler
+    // body runs, so the path ids need not resolve to anything real.
+    let target_user_id = Uuid::new_v4();
+    let invitation_id = Uuid::new_v4();
+
+    let promote_resp = put_json_with_cookie(
+        &router,
+        &format!("/api/platform/organizations/{org_id}/members/{target_user_id}/role"),
+        &cookie,
+        serde_json::json!({ "role": "admin" }),
+    )
+    .await;
+    assert_eq!(promote_resp.status(), StatusCode::FORBIDDEN);
+
+    let invite_resp = post_json_with_cookie(
+        &router,
+        &format!("/api/platform/organizations/{org_id}/invitations"),
+        &cookie,
+        serde_json::json!({ "email": "nope@example.com", "role": "admin" }),
+    )
+    .await;
+    assert_eq!(invite_resp.status(), StatusCode::FORBIDDEN);
+
+    let revoke_resp = delete_with_cookie(
+        &router,
+        &format!("/api/platform/organizations/{org_id}/invitations/{invitation_id}"),
+        &cookie,
+    )
+    .await;
+    assert_eq!(revoke_resp.status(), StatusCode::FORBIDDEN);
 }
 
 #[sqlx::test]
@@ -742,6 +774,362 @@ async fn invitation_lifecycle_issue_preview_accept_reject_second_accept(migrator
     )
     .await;
     assert_eq!(malformed_resp.status(), StatusCode::NOT_FOUND);
+}
+
+/// A true concurrent double-accept — mirrors
+/// `two_admins_concurrently_demoting_each_other_leaves_at_least_one_active_admin`'s
+/// `tokio::spawn`/`tokio::join!` pattern against two independent
+/// connections racing the same token, not a sequential accept-then-accept
+/// (docs/specs/SLICE_004.md §9, §13 criterion 6).
+#[sqlx::test]
+#[ignore]
+async fn concurrent_double_accept_of_the_same_token_exactly_one_succeeds(migrator_pool: PgPool) {
+    let org_id = create_org(&migrator_pool, "Acme Realty").await;
+    let alice = create_user(&migrator_pool, "alice19@acme.test", "Alice", PW).await;
+    add_membership_with(
+        &migrator_pool,
+        org_id,
+        alice,
+        Role::Admin,
+        MembershipStatus::Active,
+    )
+    .await;
+
+    let app_pool = connect_as_app(&migrator_pool).await;
+    let outcome = issue_invitation(
+        &app_pool,
+        owner_actor(alice),
+        "Alice",
+        TTL,
+        IssueInvitation {
+            organization_id: org_id,
+            email: "racer19@acme.test".to_string(),
+            role: Role::Member,
+        },
+    )
+    .await
+    .unwrap();
+
+    let app_pool_2 = app_pool.clone();
+    let token_1 = outcome.token.clone();
+    let token_2 = outcome.token.clone();
+
+    let accept_1 = tokio::spawn(async move {
+        accept_invitation(
+            &app_pool,
+            AcceptInvitation {
+                token: token_1,
+                display_name: "Racer One".to_string(),
+                password: PW.to_string(),
+                origin: Origin::WebSession,
+            },
+        )
+        .await
+    });
+    let accept_2 = tokio::spawn(async move {
+        accept_invitation(
+            &app_pool_2,
+            AcceptInvitation {
+                token: token_2,
+                display_name: "Racer Two".to_string(),
+                password: PW.to_string(),
+                origin: Origin::WebSession,
+            },
+        )
+        .await
+    });
+
+    let (r1, r2) = tokio::join!(accept_1, accept_2);
+    let r1 = r1.unwrap();
+    let r2 = r2.unwrap();
+
+    let r1_ok = r1.is_ok();
+    let r2_ok = r2.is_ok();
+    assert!(
+        r1_ok ^ r2_ok,
+        "exactly one concurrent accept must succeed, got r1_ok={r1_ok} r2_ok={r2_ok}"
+    );
+    let loser = if r1_ok { r2 } else { r1 };
+    assert!(
+        matches!(
+            loser,
+            Err(crm_api::domain::admin::AdminCommandError::InvitationUsed)
+        ),
+        "the losing concurrent accept must see invitation_used"
+    );
+
+    // Exactly one membership_changed{reason: invitation} and one
+    // invitation_resolved{accepted} fact — not two, not zero.
+    let (membership_changed_count,): (i64,) = sqlx::query_as(
+        "SELECT count(*) FROM membership_changed
+         WHERE organization_id = $1 AND reason = 'invitation'",
+    )
+    .bind(org_id)
+    .fetch_one(&migrator_pool)
+    .await
+    .unwrap();
+    assert_eq!(membership_changed_count, 1);
+
+    let (invitation_resolved_accepted_count,): (i64,) = sqlx::query_as(
+        "SELECT count(*) FROM invitation_resolved
+         WHERE invitation_id = $1 AND outcome = 'accepted'",
+    )
+    .bind(outcome.invitation.id)
+    .fetch_one(&migrator_pool)
+    .await
+    .unwrap();
+    assert_eq!(invitation_resolved_accepted_count, 1);
+
+    // Exactly one app_user for the racer's email — the loser never
+    // created a duplicate account.
+    let (user_count,): (i64,) =
+        sqlx::query_as("SELECT count(*) FROM app_user WHERE lower(email) = 'racer19@acme.test'")
+            .fetch_one(&migrator_pool)
+            .await
+            .unwrap();
+    assert_eq!(user_count, 1);
+}
+
+/// A concurrent `IssueInvitation` racing an `AcceptInvitation` of the
+/// already-open invitation for the same `(organization, email)`
+/// (independent review finding, addressed in `issue_invitation.rs`): under
+/// READ COMMITTED, `is_member_by_email`'s first read can be stale by the
+/// time the transaction reaches `supersede_invitation`/`insert_invitation`.
+/// Either side may legitimately win — a re-issue unconditionally
+/// supersedes (§4/§9), so the accept correctly seeing `NotFound` because
+/// the token was revoked out from under it is not a bug. What repeated
+/// runs of this single test exercise (which shape occurs depends on exact
+/// interleaving) is the two failure modes an earlier version of
+/// `issue_invitation` had instead: the accept's commit landing between the
+/// open-invitation read and the supersede UPDATE (a `check_violation` on
+/// `CHECK (accepted_at IS NULL OR revoked_at IS NULL)`, now absorbed by the
+/// retry) — or the accept's commit landing between the re-issue's
+/// `find_open_invitation` read and its insert (previously no error at all,
+/// silently inserting a dangling, never-acceptable invitation for an email
+/// that is now an active member; now caught by the pre-insert re-check).
+/// The invariants asserted below hold regardless of which side won: never
+/// a bare database error from either call, the membership count matching
+/// whichever side actually won, and never an open invitation left behind
+/// for an email that already has an active membership.
+#[sqlx::test]
+#[ignore]
+async fn concurrent_issue_and_accept_never_leaves_a_dangling_invitation_or_bare_db_error(
+    migrator_pool: PgPool,
+) {
+    let org_id = create_org(&migrator_pool, "Acme Realty").await;
+    let alice = create_user(&migrator_pool, "alice20@acme.test", "Alice", PW).await;
+    add_membership_with(
+        &migrator_pool,
+        org_id,
+        alice,
+        Role::Admin,
+        MembershipStatus::Active,
+    )
+    .await;
+
+    let app_pool = connect_as_app(&migrator_pool).await;
+    let email = "racer20@acme.test".to_string();
+
+    let first = issue_invitation(
+        &app_pool,
+        owner_actor(alice),
+        "Alice",
+        TTL,
+        IssueInvitation {
+            organization_id: org_id,
+            email: email.clone(),
+            role: Role::Member,
+        },
+    )
+    .await
+    .unwrap();
+
+    let accept_pool = app_pool.clone();
+    let reissue_pool = app_pool.clone();
+    let accept_token = first.token.clone();
+    let reissue_email = email.clone();
+
+    let accept_task = tokio::spawn(async move {
+        accept_invitation(
+            &accept_pool,
+            AcceptInvitation {
+                token: accept_token,
+                display_name: "Racer Twenty".to_string(),
+                password: PW.to_string(),
+                origin: Origin::WebSession,
+            },
+        )
+        .await
+    });
+    let reissue_task = tokio::spawn(async move {
+        issue_invitation(
+            &reissue_pool,
+            owner_actor(alice),
+            "Alice",
+            TTL,
+            IssueInvitation {
+                organization_id: org_id,
+                email: reissue_email,
+                role: Role::Member,
+            },
+        )
+        .await
+    });
+
+    let (accept_result, reissue_result) = tokio::join!(accept_task, reissue_task);
+    let accept_result = accept_result.unwrap();
+    let reissue_result = reissue_result.unwrap();
+
+    // Either side may legitimately "win" this race — an admin re-issuing
+    // while the invitee is mid-accept is a real, if unlucky, ordering the
+    // spec doesn't special-case (issuing always supersedes, unconditionally,
+    // §4/§9). If the re-issue's supersede commits first, the accept
+    // correctly sees the token as no-longer-open (`NotFound`, since a
+    // revoked invitation is indistinguishable from an unknown one) — that
+    // is not a bug. What must never happen, from either call, is a bare
+    // `AdminCommandError::Database` reaching the caller — every outcome
+    // must be one of the clean, documented domain errors.
+    if let Err(err) = &accept_result {
+        assert!(
+            !matches!(err, crm_api::domain::admin::AdminCommandError::Database(_)),
+            "accept must never surface a bare database error under this race: {}",
+            err.kind()
+        );
+    }
+    if let Err(err) = &reissue_result {
+        assert!(
+            !matches!(err, crm_api::domain::admin::AdminCommandError::Database(_)),
+            "a concurrent re-issue must never surface a bare database error, only a clean \
+             domain outcome such as AlreadyMember: {}",
+            err.kind()
+        );
+    }
+
+    // Whichever side won, the membership count for this email must match:
+    // exactly one if the accept succeeded, zero if it lost the race (the
+    // re-issue itself never creates a membership).
+    let expected_member_count: i64 = if accept_result.is_ok() { 1 } else { 0 };
+    let (member_count,): (i64,) = sqlx::query_as(
+        "SELECT count(*) FROM organization_membership m
+         JOIN app_user u ON u.id = m.user_id
+         WHERE m.organization_id = $1 AND lower(u.email) = $2",
+    )
+    .bind(org_id)
+    .bind(&email)
+    .fetch_one(&migrator_pool)
+    .await
+    .unwrap();
+    assert_eq!(member_count, expected_member_count);
+
+    // Invariant: no OPEN invitation row survives for an email that already
+    // has an active membership — whether the re-issue failed with
+    // AlreadyMember (no new row) or raced ahead and legitimately
+    // superseded the prior row before the accept ran (that row is then
+    // revoked/superseded, not open).
+    let dangling: Option<(Uuid,)> = sqlx::query_as(
+        "SELECT i.id FROM invitation i
+         JOIN organization_membership m ON m.organization_id = i.organization_id
+         JOIN app_user u ON u.id = m.user_id
+         WHERE i.organization_id = $1 AND lower(u.email) = $2
+           AND m.status = 'active'
+           AND i.accepted_at IS NULL AND i.revoked_at IS NULL",
+    )
+    .bind(org_id)
+    .bind(&email)
+    .fetch_optional(&migrator_pool)
+    .await
+    .unwrap();
+    assert!(
+        dangling.is_none(),
+        "no open invitation may exist for an email that already has an active membership"
+    );
+}
+
+/// A deterministic, non-timing-dependent complement to the test above.
+/// Real `tokio::spawn`/`tokio::join!` concurrency reliably shows the
+/// invariants hold, but empirically almost never lands the exact
+/// interleaving `issue_invitation`'s pre-insert re-check exists to catch
+/// (`AcceptInvitation`'s Argon2id hashing costs tens of ms *before* it
+/// opens its transaction, so in practice a concurrent `IssueInvitation` —
+/// whose steps are all cheap `SELECT`s/`UPDATE`s — usually finishes
+/// entirely before `AcceptInvitation` even begins its transaction, which
+/// exercises only the "accept correctly loses to a revoke" path, not the
+/// stale-read path). This test instead proves the READ COMMITTED
+/// mechanism the fix depends on directly: within one still-open
+/// transaction, `is_member_by_email` returns `false`, then — after a
+/// *separate*, fully committed `AcceptInvitation` on a different
+/// connection — the exact same open transaction's next `is_member_by_email`
+/// call (a fresh statement, hence a fresh per-statement snapshot under
+/// READ COMMITTED) returns `true`. That is precisely the property
+/// `issue_invitation_attempt`'s pre-insert re-check relies on to observe a
+/// concurrent accept that committed after the transaction began.
+#[sqlx::test]
+#[ignore]
+async fn read_committed_per_statement_snapshot_observes_a_commit_made_after_the_transaction_began(
+    migrator_pool: PgPool,
+) {
+    let org_id = create_org(&migrator_pool, "Acme Realty").await;
+    let alice = create_user(&migrator_pool, "alice21@acme.test", "Alice", PW).await;
+    add_membership_with(
+        &migrator_pool,
+        org_id,
+        alice,
+        Role::Admin,
+        MembershipStatus::Active,
+    )
+    .await;
+
+    let app_pool = connect_as_app(&migrator_pool).await;
+    let email = "racer21@acme.test";
+
+    let outcome = issue_invitation(
+        &app_pool,
+        owner_actor(alice),
+        "Alice",
+        TTL,
+        IssueInvitation {
+            organization_id: org_id,
+            email: email.to_string(),
+            role: Role::Member,
+        },
+    )
+    .await
+    .unwrap();
+
+    // Open a long-lived transaction — standing in for the in-flight part
+    // of `issue_invitation_attempt` between its first `is_member_by_email`
+    // check and its pre-insert re-check.
+    let mut tx = app_pool.begin().await.unwrap();
+    let before = crm_api::domain::admin::queries::is_member_by_email(&mut tx, org_id, email)
+        .await
+        .unwrap();
+    assert!(!before, "not yet a member: no accept has happened yet");
+
+    // A separate, fully independent connection completes a real accept —
+    // exactly the concurrent commit the fix must observe.
+    accept_invitation(
+        &app_pool,
+        AcceptInvitation {
+            token: outcome.token,
+            display_name: "Racer TwentyOne".to_string(),
+            password: PW.to_string(),
+            origin: Origin::WebSession,
+        },
+    )
+    .await
+    .unwrap();
+
+    // The still-open transaction's next statement sees it.
+    let after = crm_api::domain::admin::queries::is_member_by_email(&mut tx, org_id, email)
+        .await
+        .unwrap();
+    assert!(
+        after,
+        "a fresh statement in the still-open transaction must observe the \
+         now-committed accept under READ COMMITTED's per-statement snapshot"
+    );
+
+    tx.rollback().await.unwrap();
 }
 
 #[sqlx::test]

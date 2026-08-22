@@ -79,11 +79,26 @@ pub async fn issue_invitation(
                 return Ok(outcome);
             }
             Err(AdminCommandError::Database(sqlx::Error::Database(db_err)))
-                if db_err.is_unique_violation() && attempt == 0 =>
+                if (db_err.is_unique_violation() || db_err.is_check_violation())
+                    && attempt == 0 =>
             {
-                // Partial-unique-index race (docs/specs/SLICE_004.md §9):
-                // another concurrent issue for the same (org, email) won.
-                // Retry the whole supersede-and-insert transaction once.
+                // Two distinct races land here, both absorbed by one retry
+                // of the whole supersede-and-insert transaction:
+                // - the partial-unique-index race (docs/specs/SLICE_004.md
+                //   §9): another concurrent issue for the same (org, email)
+                //   won the insert;
+                // - a concurrent AcceptInvitation on the very row this
+                //   attempt is superseding: its UPDATE (setting
+                //   accepted_at/accepted_user_id) commits between our
+                //   `find_open_invitation` read and our own
+                //   `supersede_invitation` UPDATE, so ours then tries to
+                //   set `revoked_at` on an already-`accepted_at` row and
+                //   trips `CHECK (accepted_at IS NULL OR revoked_at IS
+                //   NULL)` — a check_violation, not a unique_violation. The
+                //   retry's fresh `find_open_invitation`/`is_member_by_email`
+                //   reads see the now-committed accept, so it naturally
+                //   resolves as `AlreadyMember` via the pre-insert re-check
+                //   below rather than surfacing as a bare database error.
                 last_err = Some(AdminCommandError::Database(sqlx::Error::Database(db_err)));
                 continue;
             }
@@ -142,6 +157,18 @@ async fn issue_invitation_attempt(
             },
         )
         .await?;
+    }
+
+    // Re-check immediately before the insert (docs/specs/SLICE_004.md §4,
+    // §9): under READ COMMITTED, each statement sees a fresh snapshot, so
+    // this picks up a concurrent AcceptInvitation — for this row or a
+    // different already-resolved one for the same (org, email) — that
+    // committed between the check above and here, closing the window
+    // where a stale "not yet a member" read would otherwise let a
+    // dangling, never-acceptable invitation get inserted for someone who
+    // is now an active member.
+    if queries::is_member_by_email(&mut tx, organization_id, email).await? {
+        return Err(AdminCommandError::AlreadyMember);
     }
 
     let raw_token = token::generate();

@@ -1,7 +1,10 @@
 //! Person stages (D-019): a per-Organization list, not a fixed enum.
-//! `crm_app` has SELECT only — `seed_defaults` is a library helper used by
-//! the seed binary and test fixtures, never by the application
-//! (docs/specs/SLICE_002.md §2).
+//! `crm_app` has SELECT and INSERT (amended by docs/specs/SLICE_004.md §2,
+//! declared change, AGENTS.md §11) — `seed_defaults` is a library helper
+//! called from the application path by `CreateOrganization`
+//! (domain/admin/commands/create_organization.rs), and also used directly
+//! by test fixtures and the `crm-admin` CLI. The SLICE_002 §2 "never by the
+//! application" restriction is superseded.
 
 use serde::Serialize;
 use sqlx::PgConnection;

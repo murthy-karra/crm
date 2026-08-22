@@ -272,6 +272,46 @@ simply stops seeing the flame. Making the marker survive a rename needs a
 column on `stage` and an API contract change (`AGENTS.md` §11); that is
 explicitly not part of this decision.
 
+### D-021 — Slice 004 is administration: platform admin, invitations, no direct database writes (2026-08-21)
+
+Accepted. After Slice 003 (Today + realtime), Slice 004 is the first
+administration slice. It ships:
+
+1. A **platform administrator** surface for the operator of the product
+   (initially the developer alone) that creates Organizations and invites
+   each Organization's first admin.
+2. An **Organization-admin** surface that invites agents into that
+   Organization. Both invitations use one mechanism; only the
+   authorization check differs.
+3. The first Organization **roles** on membership, so "admin" is a fact
+   the application can enforce (D-003).
+
+Operator retrieval moves to Slice 005 and calling to Slice 006 (product
+thesis §16).
+
+Principle, applying from Slice 004 onward: **no data is created or changed
+by writing to the database directly.** Organizations, users, memberships,
+and invitations are created only through the application's domain
+functions, exposed via the API and, for local bootstrap, via a CLI that
+calls the same functions. `seed.rs`'s direct `INSERT`s are replaced by
+calls to those functions. Migrations are the only code that writes to the
+database outside the application path. Rationale: direct writes bypass
+validation, authorization, auditing, and default-stage seeding, and every
+slice so far has had to note hand-entered rows as a caveat.
+
+The platform administrator is a **separate actor**, not a member of every
+Organization: the platform surface may create Organizations and issue
+invitations but may not read tenant CRM data (People, Inquiries, facts).
+Support or impersonation access into a tenant is a later decision with
+its own consent and audit requirements, not a consequence of this one.
+
+Administrative actions (Organization created, invitation issued,
+invitation accepted, role granted) are recorded as typed fact rows in the
+same style as D-015 §8, per product thesis §12.8.
+
+The remaining design choices are listed as safe defaults in O-007 and are
+confirmed or changed when Slice 004 is planned.
+
 ---
 
 ## Open decisions
@@ -319,3 +359,38 @@ Open question: which, if any, of its aggregate boundaries and envelope
 practices are adopted for the initial product's immutable-history areas.
 Blocks: nothing immediately; informs the architecture baseline for
 history-bearing facts.
+
+### O-007 — Slice 004 administration design defaults (OPEN — confirm at planning)
+
+D-021 fixes scope and principle. These defaults were proposed on
+2026-08-21 and are adopted unless the Slice 004 plan changes them:
+
+1. **Platform admin model**: a `platform_admin` allowlist table keyed by
+   `app_user.id`, a separate `/platform/...` route group with its own
+   auth extractor, and handlers that take the Organization id explicitly —
+   never from the session's `active_organization_id`.
+2. **Initial role set**: `admin` and `member` on `organization_membership`.
+   Broker/team-leader/office nuance is deferred.
+3. **Invitation record**: `(organization_id, email, role, token_hash,
+   expires_at, invited_by, accepted_at)`; token random, hashed at rest,
+   single-use, expiring; acceptance requires the authenticated email to
+   match; responses never disclose whether an email already exists.
+4. **IdP-agnostic acceptance**: acceptance is "authenticate however the
+   current identity provider does, then claim the token". In dev the
+   authenticate step sets a local password; with ZITADEL it becomes a
+   login/registration round-trip. Only that step changes (D-016 §3).
+5. **No email delivery**: the admin UI shows the invitation link for the
+   inviter to send by hand. A transactional email provider is a later
+   increment.
+6. **Grants**: `crm_app` gains `INSERT` on `organization`, `app_user`,
+   `organization_membership`, `invitation`, and `stage` (default stages
+   are seeded through the application path, no longer only by the
+   migrator). The unique index on `organization.name` and email
+   trim/normalization (PROJECT_STATE backlog) land here.
+7. **Surface**: same API binary and same web app, gated area; in
+   production Cloudflare Access may additionally front it (D-016 §4),
+   which is not decided here.
+
+Blocks: nothing before Slice 004 planning. Questions for that plan: whether
+an Organization admin may revoke memberships in 004 or only invite; whether
+the platform surface lists/suspends Organizations or only creates them.

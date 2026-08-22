@@ -14,7 +14,11 @@ to plan Slice 003.
 ## Current slice
 
 None active. Next up: Slice 003 (Today + realtime; spec sketch at
-`docs/specs/SLICE_002.md` §16).
+`docs/specs/SLICE_002.md` §16). After it, Slice 004 is administration
+(D-021): platform-admin creates Organizations and invites their admin;
+Organization admins invite agents; first membership roles; seeding moves
+onto the application path. Operator retrieval becomes Slice 005, calling
+Slice 006.
 
 ## Current branch
 
@@ -24,6 +28,11 @@ removed after merging (`slice-002-intake`, `slice-002-web`).
 ## Last accepted decision
 
 2026-08-21, user-accepted:
+- D-021 — Slice 004 is administration (platform admin + invitations +
+  roles) and, from 004 on, nothing outside migrations writes to the
+  database directly: seed/CLI/API all go through the same domain
+  functions. Design defaults recorded as O-007 for confirmation when 004
+  is planned.
 - D-017 — web frontend stack: Tailwind, PrimeVue (unstyled), TanStack
   Table, TanStack Query; Centrifugo events drive Query invalidation.
 - D-018 — production ingress: in-cluster `cloudflared` → Cilium Gateway
@@ -457,15 +466,16 @@ requires a self-registration flow that doesn't exist yet):
 - `seed.rs`'s `find_or_create_organization` is not race-safe (no unique
   constraint on `organization.name`); two concurrent `dev-seed` runs
   could create duplicate Organizations. Local dev-bootstrap script only,
-  recoverable by hand; fix is a one-line unique index whenever it's
-  next convenient.
+  recoverable by hand. **Scheduled for Slice 004** (D-021/O-007 §6),
+  where `seed.rs` is rewritten onto the application path anyway.
 - Cookie-parsing edge cases (duplicate same-name cookies, percent-encoded
   values) are handled correctly today per `axum-extra`/`cookie`'s
   internals, but pinned only by library behavior, not an explicit test —
   latent risk on a future dependency bump.
 - No trimming/Unicode-normalization on login email input; will matter
   once a registration flow exists (none does yet — all emails today are
-  fixed seed literals).
+  fixed seed literals). **Scheduled for Slice 004** (O-007 §6), which
+  introduces the first user-entered emails via invitations.
 - `migrate`/`seed` binaries propagate connection errors via `Debug`,
   which doesn't currently echo a DSN/password in practice but isn't
   provably safe for every error variant; a generic-message wrapper on
@@ -506,6 +516,11 @@ slice:
 Plan Slice 003 (Today + realtime) with the `crm-planner` subagent,
 following the same plan → review → spec → review → approve → implement
 → review → test → verify → commit → merge flow used for Slices 000–002.
+
+Slice 003 planning should not pull administration work forward, but
+should avoid baking in "all members are equal" anywhere a later `role`
+on `organization_membership` would contradict it (D-021). Slice 004
+planning starts from D-021 and O-007.
 
 ## Approval currently required
 

@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, source, nonce, ciphertext, resolution, unresolved_reason, inquiry_id\n           FROM raw_payload WHERE id = $1 AND organization_id = $2 FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "source",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "nonce",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 3,
+        "name": "ciphertext",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 4,
+        "name": "resolution",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "unresolved_reason",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "inquiry_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "6beea52b3426f3eb915e1e74eaaf926d8ff648fe2bc60ee1e19227e2c57cdbce"
+}

@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT p.id\n           FROM contact_method cm\n           JOIN person p ON p.id = cm.person_id AND p.organization_id = cm.organization_id\n           WHERE cm.organization_id = $1 AND cm.kind = $2 AND cm.normalized_value = $3\n           ORDER BY p.created_at ASC, p.id ASC\n           LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d5ba7a270de0eb384a821ee7068a68efe8af1886c6b2ed35edc23377feb8c6d8"
+}

@@ -43,6 +43,26 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 echo "    docker ready"
 
+# sqlx-cli is not a bootstrap requirement (not needed by check, dev-api, or
+# this script itself) but is required for scripts/sqlx-prepare and
+# scripts/check-db (docs/specs/SLICE_002.md §11) — a non-fatal warning here,
+# not an install or a hard failure.
+echo "==> checking sqlx-cli (required for scripts/sqlx-prepare and check-db)"
+locked_minor="$(grep -A2 '^name = "sqlx"$' "$repo_root/backend/Cargo.lock" | grep '^version' | head -1 | sed -E 's/.*"([0-9]+\.[0-9]+)\.[0-9]+".*/\1/')"
+if cargo sqlx --version >/dev/null 2>&1; then
+  cli_version="$(cargo sqlx --version 2>&1 | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+  cli_minor="${cli_version%.*}"
+  if [ "$cli_minor" = "$locked_minor" ]; then
+    echo "    sqlx-cli $cli_version ready"
+  else
+    echo "    warning: sqlx-cli $cli_version found, but the workspace locks sqlx ${locked_minor}.x." >&2
+    echo "    install the matching version: cargo install sqlx-cli --version ${locked_minor}.6 --locked --no-default-features --features postgres,rustls" >&2
+  fi
+else
+  echo "    warning: sqlx-cli not found." >&2
+  echo "    install it: cargo install sqlx-cli --version ${locked_minor}.6 --locked --no-default-features --features postgres,rustls" >&2
+fi
+
 echo "==> fetching Cargo dependencies"
 (cd "$repo_root/backend" && cargo fetch --locked)
 

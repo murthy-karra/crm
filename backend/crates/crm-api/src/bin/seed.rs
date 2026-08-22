@@ -1,28 +1,51 @@
-//! Idempotently seeds two Organizations, each with one local-auth User.
-//! Connects via MIGRATION_DATABASE_URL so crm_app never needs INSERT on
-//! identity tables (docs/specs/SLICE_001.md §3). Wrapped by
-//! scripts/dev-seed.
+//! Idempotently seeds two Organizations, each with the nine D-019 default
+//! stages and two local-auth Users (a second member so reassignment has a
+//! target — docs/specs/SLICE_002.md §1, §14 default 10). Connects via
+//! MIGRATION_DATABASE_URL so crm_app never needs INSERT on identity/stage
+//! tables (docs/specs/SLICE_001.md §3; docs/specs/SLICE_002.md §2). Wrapped
+//! by scripts/dev-seed.
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use crm_api::auth::password;
+use crm_api::domain::stage;
+
+struct SeedUser {
+    email: &'static str,
+    display_name: &'static str,
+}
 
 struct SeedOrg {
     name: &'static str,
-    user_email: &'static str,
-    user_display_name: &'static str,
+    members: &'static [SeedUser],
 }
 
 const SEED_ORGS: &[SeedOrg] = &[
     SeedOrg {
         name: "Acme Realty",
-        user_email: "alice@acme.test",
-        user_display_name: "Alice Anderson",
+        members: &[
+            SeedUser {
+                email: "alice@acme.test",
+                display_name: "Alice Anderson",
+            },
+            SeedUser {
+                email: "carol@acme.test",
+                display_name: "Carol Chen",
+            },
+        ],
     },
     SeedOrg {
         name: "Best Realty",
-        user_email: "bob@best.test",
-        user_display_name: "Bob Baker",
+        members: &[
+            SeedUser {
+                email: "bob@best.test",
+                display_name: "Bob Baker",
+            },
+            SeedUser {
+                email: "dave@best.test",
+                display_name: "Dave Diaz",
+            },
+        ],
     },
 ];
 
@@ -43,10 +66,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for org in SEED_ORGS {
         let organization_id = find_or_create_organization(&pool, org.name).await?;
-        let user_id = find_or_create_user(&pool, org.user_email, org.user_display_name).await?;
-        upsert_credential(&pool, user_id, &password_hash).await?;
-        ensure_membership(&pool, organization_id, user_id).await?;
-        println!("seeded {} / {}", org.name, org.user_email);
+
+        let mut tx = pool.begin().await?;
+        stage::seed_defaults(&mut tx, organization_id).await?;
+        tx.commit().await?;
+        println!("seeded stages for {}", org.name);
+
+        for member in org.members {
+            let user_id = find_or_create_user(&pool, member.email, member.display_name).await?;
+            upsert_credential(&pool, user_id, &password_hash).await?;
+            ensure_membership(&pool, organization_id, user_id).await?;
+            println!("seeded {} / {}", org.name, member.email);
+        }
     }
 
     Ok(())

@@ -30,6 +30,44 @@ impl fmt::Debug for SessionSecret {
     }
 }
 
+const RAW_PAYLOAD_KEY_HEX_LEN: usize = 64;
+
+/// The raw-payload encryption key (docs/specs/SLICE_002.md §7): exactly 64
+/// hex characters (32 bytes), decoded once at startup. `Debug` is redacted
+/// like `SessionSecret` so an accidental `{:?}` never leaks it. The API
+/// refuses to start if it is missing, the wrong length, or not hex.
+#[derive(Clone)]
+pub struct RawPayloadKey([u8; 32]);
+
+impl RawPayloadKey {
+    pub fn as_bytes(&self) -> &[u8; 32] {
+        &self.0
+    }
+}
+
+impl fmt::Debug for RawPayloadKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "RawPayloadKey(REDACTED)")
+    }
+}
+
+/// No `hex` crate dependency for one 32-byte decode (docs/specs/SLICE_002.md
+/// §14a: "no other new backend dependencies are expected" beyond
+/// chacha20poly1305).
+fn decode_hex_32(raw: &str) -> Option<[u8; 32]> {
+    if raw.len() != RAW_PAYLOAD_KEY_HEX_LEN {
+        return None;
+    }
+    let bytes = raw.as_bytes();
+    let mut out = [0u8; 32];
+    for i in 0..32 {
+        let hi = (bytes[i * 2] as char).to_digit(16)?;
+        let lo = (bytes[i * 2 + 1] as char).to_digit(16)?;
+        out[i] = ((hi << 4) | lo) as u8;
+    }
+    Some(out)
+}
+
 #[derive(Debug, Clone)]
 pub struct Config {
     pub bind_addr: SocketAddr,
@@ -48,6 +86,8 @@ pub struct Config {
     /// value instead of leaving it host-only. Only needed alongside
     /// `cors_allowed_origin` for the same cross-subdomain case.
     pub session_cookie_domain: Option<String>,
+    /// Raw lead-payload encryption key (docs/specs/SLICE_002.md §7).
+    pub raw_payload_key: RawPayloadKey,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -63,6 +103,9 @@ pub enum ConfigError {
     InvalidCookieSecure(String),
     InvalidCorsOrigin(String),
     InvalidCookieDomain(String),
+    MissingRawPayloadKey,
+    InvalidRawPayloadKeyLength(usize),
+    InvalidRawPayloadKeyEncoding,
 }
 
 impl fmt::Display for ConfigError {
@@ -105,6 +148,14 @@ impl fmt::Display for ConfigError {
             ),
             ConfigError::InvalidCookieDomain(value) => {
                 write!(f, "CRM_SESSION_COOKIE_DOMAIN must not be empty or contain whitespace, got {value}")
+            }
+            ConfigError::MissingRawPayloadKey => write!(f, "CRM_RAW_PAYLOAD_KEY is required"),
+            ConfigError::InvalidRawPayloadKeyLength(len) => write!(
+                f,
+                "CRM_RAW_PAYLOAD_KEY must be exactly {RAW_PAYLOAD_KEY_HEX_LEN} hex characters, got {len}"
+            ),
+            ConfigError::InvalidRawPayloadKeyEncoding => {
+                write!(f, "CRM_RAW_PAYLOAD_KEY must be hex-encoded")
             }
         }
     }
@@ -183,6 +234,17 @@ impl Config {
             None => None,
         };
 
+        let raw_payload_key_raw =
+            get("CRM_RAW_PAYLOAD_KEY").ok_or(ConfigError::MissingRawPayloadKey)?;
+        if raw_payload_key_raw.len() != RAW_PAYLOAD_KEY_HEX_LEN {
+            return Err(ConfigError::InvalidRawPayloadKeyLength(
+                raw_payload_key_raw.len(),
+            ));
+        }
+        let raw_payload_key = RawPayloadKey(
+            decode_hex_32(&raw_payload_key_raw).ok_or(ConfigError::InvalidRawPayloadKeyEncoding)?,
+        );
+
         Ok(Config {
             bind_addr,
             database_url,
@@ -192,6 +254,7 @@ impl Config {
             session_cookie_secure,
             cors_allowed_origin,
             session_cookie_domain,
+            raw_payload_key,
         })
     }
 }
@@ -217,10 +280,29 @@ mod tests {
         move |key: &str| map.get(key).cloned()
     }
 
-    /// A valid baseline (including a valid session secret) overlaid with
-    /// per-test overrides, so existing tests don't all need updating for
-    /// every newly-required variable.
+    /// A valid baseline (including a valid session secret and a valid raw
+    /// payload key) overlaid with per-test overrides, so existing tests
+    /// don't all need updating for every newly-required variable.
     fn source(overrides: &[(&str, &str)]) -> impl Fn(&str) -> Option<String> {
+        let mut map: HashMap<String, String> = HashMap::new();
+        map.insert(
+            "CRM_SESSION_SECRET".to_string(),
+            "a".repeat(MIN_SESSION_SECRET_BYTES),
+        );
+        map.insert(
+            "CRM_RAW_PAYLOAD_KEY".to_string(),
+            "ab".repeat(RAW_PAYLOAD_KEY_HEX_LEN / 2),
+        );
+        for (k, v) in overrides {
+            map.insert((*k).to_string(), (*v).to_string());
+        }
+        move |key: &str| map.get(key).cloned()
+    }
+
+    /// Like `source`, but omits `CRM_RAW_PAYLOAD_KEY` entirely instead of
+    /// defaulting it, for testing that key's own required-ness without
+    /// tripping the (earlier-checked) session secret requirement.
+    fn source_no_raw_payload_key(overrides: &[(&str, &str)]) -> impl Fn(&str) -> Option<String> {
         let mut map: HashMap<String, String> = HashMap::new();
         map.insert(
             "CRM_SESSION_SECRET".to_string(),
@@ -377,5 +459,63 @@ mod tests {
     fn accepts_cookie_secure_true() {
         let config = Config::from_source(source(&[("CRM_SESSION_COOKIE_SECURE", "true")])).unwrap();
         assert!(config.session_cookie_secure);
+    }
+
+    // --- CRM_RAW_PAYLOAD_KEY (docs/specs/SLICE_002.md §7) ------------------
+
+    #[test]
+    fn rejects_missing_raw_payload_key() {
+        let err = Config::from_source(source_no_raw_payload_key(&[])).unwrap_err();
+        assert_eq!(err, ConfigError::MissingRawPayloadKey);
+    }
+
+    #[test]
+    fn rejects_raw_payload_key_63_chars() {
+        let err =
+            Config::from_source(source(&[("CRM_RAW_PAYLOAD_KEY", &"a".repeat(63))])).unwrap_err();
+        assert_eq!(err, ConfigError::InvalidRawPayloadKeyLength(63));
+    }
+
+    #[test]
+    fn rejects_raw_payload_key_65_chars() {
+        let err =
+            Config::from_source(source(&[("CRM_RAW_PAYLOAD_KEY", &"a".repeat(65))])).unwrap_err();
+        assert_eq!(err, ConfigError::InvalidRawPayloadKeyLength(65));
+    }
+
+    #[test]
+    fn rejects_non_hex_raw_payload_key() {
+        // 64 characters, but 'z' is not a hex digit.
+        let non_hex = format!("{}z", "a".repeat(63));
+        let err = Config::from_source(source(&[("CRM_RAW_PAYLOAD_KEY", &non_hex)])).unwrap_err();
+        assert_eq!(err, ConfigError::InvalidRawPayloadKeyEncoding);
+    }
+
+    #[test]
+    fn accepts_valid_raw_payload_key_and_decodes_it() {
+        let config = Config::from_source(source(&[(
+            "CRM_RAW_PAYLOAD_KEY",
+            "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        )]))
+        .unwrap();
+        assert_eq!(
+            config.raw_payload_key.as_bytes(),
+            &[
+                0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
+                0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b,
+                0x1c, 0x1d, 0x1e, 0x1f,
+            ]
+        );
+    }
+
+    #[test]
+    fn raw_payload_key_is_redacted_in_debug() {
+        let config =
+            Config::from_source(source(&[("CRM_RAW_PAYLOAD_KEY", &"be".repeat(32))])).unwrap();
+        let debug_output = format!("{config:?}");
+        // A distinctive repeated run, not just "be", so this cannot pass by
+        // coincidentally matching an unrelated field's Debug output.
+        assert!(!debug_output.contains(&"be".repeat(8)));
+        assert!(debug_output.contains("RawPayloadKey(REDACTED)"));
     }
 }

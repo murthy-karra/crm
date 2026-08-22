@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs the DB-backed test suite (Slice 001) against the local container.
+# Runs the DB-backed checks and test suite against the local container.
 # Requires ./scripts/dev-services up first. Never printed: any credential
 # value from .env.
 set -euo pipefail
@@ -18,11 +18,40 @@ set -a
 source "$env_file"
 set +a
 
-# #[sqlx::test] reads its master connection from DATABASE_URL specifically
-# (not a configurable attribute), so it is overridden here to the
-# crm_migrator URL for this process only — the one documented exception to
-# "tests never read ambient environment" (docs/specs/SLICE_001.md §9).
+if [ -z "${MIGRATION_DATABASE_URL:-}" ]; then
+  echo "MIGRATION_DATABASE_URL is not set in .env" >&2
+  exit 1
+fi
+
+# Step 1: verify backend/.sqlx/ still matches the real schema (catches
+# nullability/type drift an offline compile cannot) — a throwaway,
+# freshly-migrated database, never the dev database (docs/specs/SLICE_002.md
+# §11). The subsequent test run stays offline.
+echo "==> cargo sqlx prepare --check --workspace"
+prepare_check_url="${MIGRATION_DATABASE_URL%/*}/crm_sqlx_prepare_check"
+
+cleanup() {
+  (cd "$repo_root/backend" && cargo sqlx database drop -y --database-url "$prepare_check_url" >/dev/null 2>&1) || true
+}
+trap cleanup EXIT
+
+(
+  cd "$repo_root/backend"
+  cargo sqlx database create --database-url "$prepare_check_url"
+  cargo sqlx migrate run --source crates/crm-api/migrations --database-url "$prepare_check_url"
+  DATABASE_URL="$prepare_check_url" SQLX_OFFLINE=false cargo sqlx prepare --check --workspace
+)
+
+cleanup
+trap - EXIT
+
+# Step 2: the DB-backed test suite. #[sqlx::test] reads its master
+# connection from DATABASE_URL specifically (not a configurable attribute),
+# so it is overridden here to the crm_migrator URL for this process only —
+# the one documented exception to "tests never read ambient environment"
+# (docs/specs/SLICE_001.md §9).
 export DATABASE_URL="$MIGRATION_DATABASE_URL"
 
+echo "==> cargo test -- --ignored"
 cd "$repo_root/backend"
 exec cargo test --manifest-path Cargo.toml -p crm-api --locked -- --ignored

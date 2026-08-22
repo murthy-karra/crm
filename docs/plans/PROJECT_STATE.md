@@ -4,10 +4,11 @@ Last updated: 2026-08-21
 
 ## Current phase
 
-Slice 002 (lead intake) specified and **user-approved** 2026-08-21
-(`docs/specs/SLICE_002.md`, ACCEPTED). UI style reference accepted
-(`docs/design/UI_STYLE.md`). At the implementation gate; no code
-written yet.
+Slice 002 (lead intake) implemented, independently reviewed,
+adversarially tested, fixed, and verified with a live two-process
+browser walkthrough. Spec status is IMPLEMENTED, verified
+(`docs/specs/SLICE_002.md`). Nothing is committed yet — awaiting the
+user's commit/merge approval (Phase 9).
 
 ## Current slice
 
@@ -16,12 +17,15 @@ source attribution, encrypted `raw_payload` + visible unresolved queue,
 the four D-015 fact tables (append-only via grants + trigger), the three
 typed commands (`ReceiveInquiry`, `AssignPerson`, `ChangePersonStage`),
 `PersonVisibilityScope`, the D-017 frontend stack with five screens, and
-sqlx offline mode. Not yet implemented.
+sqlx offline mode. **Implemented, reviewed, tested, verified.** Not yet
+committed or merged.
 
 ## Current branch
 
-`main` (single writer; no worktrees active). Uncommitted: D-017/D-018/
-D-019 in `DECISION_LOG.md`, `docs/specs/SLICE_002.md`, this file.
+`main` (docs only, uncommitted: `DECISION_LOG.md`, `docs/specs/SLICE_002.md`,
+`docs/design/`, this file). Two lanes, both uncommitted:
+- `slice-002-intake` (in the main checkout) — backend.
+- `slice-002-web` (worktree at `/Users/karrad/projects/crm-worktrees/slice-002-web`) — frontend.
 
 ## Last accepted decision
 
@@ -196,14 +200,85 @@ D-019 in `DECISION_LOG.md`, `docs/specs/SLICE_002.md`, this file.
   shapes and `display_name` derivation were unspecified for the
   frontend lane). All findings applied as safe defaults; the reviewer
   classified zero items as blocking decisions.
+- 2026-08-21: Slice 002 implemented in two parallel lanes (backend on
+  `slice-002-intake`, frontend on `slice-002-web` worktree; sqlx-cli
+  0.9.0 replaced with the locked 0.8.6). Both self-verified green
+  (`check`/`check-db` backend; lint/typecheck/build frontend), then sent
+  through independent review and adversarial testing against the real
+  diffs. Review: contract cross-check between backend response bodies
+  and frontend types found zero discrepancies; a few IMPLEMENTATION_DETAIL/
+  LATER nits. Adversarial testing found real issues, all fixed:
+  - **An undisclosed file**: the backend lane had built
+    `dump_raw_payloads.rs` + `scripts/dump-raw-payloads`, a tool that
+    decrypted every Organization's raw lead payloads into one permanent,
+    unscoped plaintext table — never in the spec, never in the
+    implementer's own "files changed" report, caught only by diffing
+    actual `git status` against the report. Deleted; a standing memory
+    now says to always cross-check implementer-reported file lists
+    against real git state.
+  - A `TRUNCATE` gap in the append-only trigger (row-level triggers
+    don't fire on `TRUNCATE`; `crm_migrator` could empty a fact table)
+    — fixed with a second `FOR EACH STATEMENT` trigger + test.
+  - `routing_decision.strategy` had no CHECK constraint backing a
+    Rust `unreachable!()` — added the constraint, changed to a typed
+    error.
+  - Three `raw_payload` queries skipped the `organization_id` predicate
+    every other query in the slice includes — added for defense in
+    depth.
+  - No logging on intake failure paths — added, keyed by error variant
+    name only, never error text.
+  - A cross-tenant availability bug: one Organization's intake burst
+    could exhaust the shared, unconfigured connection pool and 503
+    every *other* Organization's logins/reads (empirically reproduced:
+    12 concurrent requests against a held lock). User chose to fix the
+    actual mechanism over containment or a PgBouncer-based approach
+    (which wouldn't have helped — transaction-mode pooling still binds
+    a connection for an open transaction's full duration): replaced the
+    blocking `pg_advisory_xact_lock` with a bounded `pg_try_advisory_xact_lock`
+    retry loop (3s budget, jittered backoff, releases the connection
+    between attempts) failing closed to a new 503 `intake_busy` +
+    `Retry-After` rather than parking a connection indefinitely.
+    Re-reproduced the original exploit as a test: busy Organization
+    fails in ~3.2s (not the full 7s external hold), an unrelated
+    Organization's 5-request burst during that same hold completes in
+    ~500ms, all succeeding.
+  - Frontend: a 401 encountered outside the router guard (session
+    expiring while idle on a page) didn't redirect to `/login`,
+    contradicting the code's own comment — fixed with a global
+    `QueryCache`-level handler, mutexed against the guard's own redirect.
+  - History timeline rows were ~64px against `UI_STYLE.md`'s specified
+    56px — fixed.
+  Spec `§3`/`§5`/`§8`/`§9` updated to describe the as-built bounded-retry
+  mechanism and the `intake_busy` error code.
+- 2026-08-21: Full live walkthrough run — both dev servers together
+  (backend from the main checkout, frontend from the worktree, real
+  Postgres), driven with a headless Playwright browser script (no
+  project `run` skill existed for this repo; none created, since
+  the setup — two servers in two locations, real login — was specific
+  to this verification, not a reusable pattern yet). One real
+  environment hazard found and fixed along the way: `.env` was left in
+  tunnel-mode config (`CRM_SESSION_COOKIE_DOMAIN=tarams.org`,
+  `CRM_SESSION_COOKIE_SECURE=true`) from earlier tunnel testing, which
+  a loopback browser correctly refuses (a `Domain=tarams.org` cookie
+  from a `127.0.0.1` response is invalid) — login 200'd but the cookie
+  never stuck; temporarily switched to loopback values for the test,
+  restored exactly afterward. Also found and killed a stale Vite
+  process serving the *old* Slice 001 frontend on the same port,
+  which the readiness check had passed against by coincidence.
+  Walkthrough covered: login; new lead → Person detail with all four
+  history facts; stage change; reassignment; repeat lead with the same
+  email → dedup, `kept_existing` routing confirmed live; unresolved
+  lead (no contact method); duplicate delivery; logout + cross-Organization
+  isolation (second Organization's login shows zero of the first's
+  data). Zero console or page errors. Found and fixed one cosmetic nit
+  live (`DataTable`'s footer said "1 unresolved leads"; added proper
+  singular/plural support) and re-verified.
 
 ## Pending work
 
-1. Implementation-gate approval for Slice 002 (spec §15 lanes).
-2. User-side, before Lane A step 2: `cargo install sqlx-cli --version
-   0.8.6 --locked --no-default-features --features postgres,rustls`
-   (machine currently has 0.9.0; spec §11).
-3. User-side, whenever convenient, not blocking: the Access application's
+1. Commit and merge approval for Slice 002 (both lanes; see "Approval
+   currently required" below).
+2. User-side, whenever convenient, not blocking: the Access application's
    configuration (two hostnames, one policy, `options_preflight_bypass:
    true`) was created via a series of API calls rather than a
    reproducible dashboard/IaC flow and isn't visible from the repo —
@@ -212,11 +287,17 @@ D-019 in `DECISION_LOG.md`, `docs/specs/SLICE_002.md`, this file.
    changes.
 3. User-side (whenever convenient, not blocking): fresh-clone walkthrough
    of Slice 000.
+4. Not blocking: the local dev database (`crm_dev`) now has a few
+   Slice-002-testing rows from review/adversarial/manual verification
+   (e.g. "Ada Lovelace", "Grace Hopper", an unresolved "website" entry).
+   Harmless local data; `./scripts/dev-services down` + `up` + re-migrate
+   + re-seed resets it if a clean slate is wanted before real use.
 
 ## Blocking decisions
 
-None for Slice 000 or its merge. O-006 (outbound messaging consent) blocks
-the SMS slice; O-002 (recording consent) blocks recording features.
+None for Slice 000, 001, or 002, or their merges. O-006 (outbound
+messaging consent) blocks the SMS slice; O-002 (recording consent)
+blocks recording features.
 
 ## Safe defaults adopted
 
@@ -239,6 +320,30 @@ the SMS slice; O-002 (recording consent) blocks recording features.
   accordingly.
 
 ## Latest verification
+
+2026-08-21, Slice 002, on `slice-002-intake` + `slice-002-web`, after
+implementation, independent review, adversarial testing, and fixes, all
+local (no CI yet):
+- Backend `./scripts/check` and `./scripts/check-db` (run twice) both
+  green: 109 unit/service-free tests, 46 DB-backed tests (append-only
+  via grants and via the TRUNCATE-statement trigger; both concurrency
+  races — same-email dedup and duplicate-delivery — plus the new
+  advisory-lock-contention race proving an unrelated Organization is
+  unaffected; encryption round-trip, tamper, and wrong-key failure
+  modes; tenant isolation on every endpoint in both directions;
+  `crm_app`/`crm_migrator` grants including the column-level
+  `raw_payload` grant and its trigger backstop; seed idempotency run
+  three times manually plus in-suite).
+- Frontend `pnpm lint`/`typecheck`/`build` green; no test framework
+  exists yet for this project (noted, not blocking — a future decision
+  if frontend tests are wanted).
+- Live walkthrough (both processes together, real Postgres, headless
+  browser): login; new lead → Person detail with 4 correctly-ordered
+  history facts; stage change and reassignment, each producing exactly
+  one new fact; repeat lead by email → no new Person, `kept_existing`
+  routing confirmed on screen; unresolved lead (no contact method);
+  duplicate delivery; full cross-Organization isolation on logout/relogin.
+  Zero console or page errors throughout.
 
 2026-08-20, on `slice-001-identity`, after both reviews' fixes, all local
 (no CI yet):
@@ -332,11 +437,13 @@ slice:
 
 ## Next recommended action
 
-Implement Slice 002 per spec §15: Lane A (backend) on `slice-002-intake`
-first through step 2 (migrations, offline-mode tooling), then Lane B
-(frontend) on `slice-002-web` as a worktree for the shell restyle;
-screens after endpoints land. Migrations owned by Lane A only.
+Present the Slice 002 diff and verification summary; on approval, commit
+each lane on its own branch, then merge `slice-002-intake` to `main`
+first (sole migration owner), rebase/merge `slice-002-web` after, then
+remove the worktree. Then plan Slice 003 (Today + realtime; spec
+§16 sketch).
 
 ## Approval currently required
 
-Implementation gate: "Proceed with implementation?" for Slice 002.
+Commit approval for both lanes (`slice-002-intake`, `slice-002-web`),
+then separately, merge approval into `main`.

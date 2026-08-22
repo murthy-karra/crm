@@ -12,6 +12,7 @@ use crm_api::state::AppState;
 fn test_config(overrides: &[(&str, &str)]) -> Config {
     let mut map: HashMap<String, String> = HashMap::new();
     map.insert("CRM_SESSION_SECRET".to_string(), "a".repeat(32));
+    map.insert("CRM_RAW_PAYLOAD_KEY".to_string(), "ab".repeat(32));
     for (k, v) in overrides {
         map.insert((*k).to_string(), (*v).to_string());
     }

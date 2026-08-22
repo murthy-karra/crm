@@ -1,0 +1,603 @@
+//! `person`/`contact_method` persistence and the People / Person-detail read
+//! models (docs/specs/SLICE_002.md §4, §5).
+
+use chrono::{DateTime, Utc};
+use serde::Serialize;
+use sqlx::PgConnection;
+use uuid::Uuid;
+
+use crate::domain::inquiry::parse::ParsedLead;
+use crate::domain::person::model::{compute_display_name, PersonSummary, StageRef, UserRef};
+use crate::domain::person::visibility::PersonVisibilityScope;
+
+// --- Command-side helpers ------------------------------------------------
+
+pub struct LockedPerson {
+    pub id: Uuid,
+    pub stage_id: Uuid,
+    pub assigned_user_id: Option<Uuid>,
+}
+
+/// `SELECT … FOR UPDATE` scoped to the Organization — used both by intake's
+/// identify match and by the assign/stage commands' check-then-act
+/// (docs/specs/SLICE_002.md §3, §4).
+///
+/// Deliberately left as a plain blocking row lock, not given the same
+/// bounded try/backoff treatment as `receive_inquiry`'s per-Organization
+/// advisory lock: unlike that lock (held by every concurrent intake for a
+/// whole Organization, so a burst can queue arbitrarily many waiters
+/// behind one connection-holding transaction each), this lock is scoped to
+/// one specific Person row. It contends with at most one other
+/// transaction at a time — another request racing to match/update the
+/// *same* Person — and is held only across a handful of small statements,
+/// not a whole Organization's backlog. Once a request holds the intake
+/// advisory lock, it is in practice the sole intake writer for that
+/// Organization, so this can only still contend with a concurrent manual
+/// `assign_person`/`change_person_stage` on that exact Person — a narrow,
+/// short-lived, non-cascading wait, not a pool-starvation vector.
+pub async fn lock_person(
+    conn: &mut PgConnection,
+    person_id: Uuid,
+    organization_id: Uuid,
+) -> Result<Option<LockedPerson>, sqlx::Error> {
+    sqlx::query_as!(
+        LockedPerson,
+        r#"SELECT id, stage_id, assigned_user_id
+           FROM person WHERE id = $1 AND organization_id = $2 FOR UPDATE"#,
+        person_id,
+        organization_id,
+    )
+    .fetch_optional(conn)
+    .await
+}
+
+pub async fn insert_person(
+    conn: &mut PgConnection,
+    organization_id: Uuid,
+    first_name: Option<&str>,
+    last_name: Option<&str>,
+    stage_id: Uuid,
+    assigned_user_id: Option<Uuid>,
+) -> Result<Uuid, sqlx::Error> {
+    let row = sqlx::query!(
+        r#"INSERT INTO person (organization_id, first_name, last_name, stage_id, assigned_user_id)
+           VALUES ($1, $2, $3, $4, $5)
+           RETURNING id"#,
+        organization_id,
+        first_name,
+        last_name,
+        stage_id,
+        assigned_user_id,
+    )
+    .fetch_one(conn)
+    .await?;
+    Ok(row.id)
+}
+
+pub async fn update_assignment(
+    conn: &mut PgConnection,
+    person_id: Uuid,
+    organization_id: Uuid,
+    assigned_user_id: Option<Uuid>,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"UPDATE person SET assigned_user_id = $3, updated_at = now()
+           WHERE id = $1 AND organization_id = $2"#,
+        person_id,
+        organization_id,
+        assigned_user_id,
+    )
+    .execute(conn)
+    .await?;
+    Ok(())
+}
+
+pub async fn update_stage(
+    conn: &mut PgConnection,
+    person_id: Uuid,
+    organization_id: Uuid,
+    stage_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"UPDATE person SET stage_id = $3, updated_at = now()
+           WHERE id = $1 AND organization_id = $2"#,
+        person_id,
+        organization_id,
+        stage_id,
+    )
+    .execute(conn)
+    .await?;
+    Ok(())
+}
+
+/// Used both to validate an explicit `assign_to_user_id` on intake and an
+/// assignment command's target (docs/specs/SLICE_002.md §3, §6: identical
+/// `invalid_assignee` for nonexistent and other-Organization users).
+pub async fn is_organization_member(
+    conn: &mut PgConnection,
+    organization_id: Uuid,
+    user_id: Uuid,
+) -> Result<bool, sqlx::Error> {
+    let row = sqlx::query!(
+        r#"SELECT 1 as "present!" FROM organization_membership
+           WHERE organization_id = $1 AND user_id = $2"#,
+        organization_id,
+        user_id,
+    )
+    .fetch_optional(conn)
+    .await?;
+    Ok(row.is_some())
+}
+
+/// Inserts any of `parsed`'s normalizable contact methods that are not
+/// already on `person_id` (docs/specs/SLICE_002.md §3: "add any payload
+/// contact methods not already on that Person"). Safe to call for both a
+/// brand-new Person and a matched one.
+pub async fn upsert_contact_methods(
+    conn: &mut PgConnection,
+    person_id: Uuid,
+    organization_id: Uuid,
+    parsed: &ParsedLead,
+) -> Result<(), sqlx::Error> {
+    if let Some(normalized) = &parsed.email {
+        let raw = parsed.raw_email.as_deref().unwrap_or(normalized.as_str());
+        sqlx::query!(
+            r#"INSERT INTO contact_method (organization_id, person_id, kind, value, normalized_value)
+               VALUES ($1, $2, 'email', $3, $4)
+               ON CONFLICT (person_id, kind, normalized_value) DO NOTHING"#,
+            organization_id,
+            person_id,
+            raw,
+            normalized,
+        )
+        .execute(&mut *conn)
+        .await?;
+    }
+    if let Some(normalized) = &parsed.phone {
+        let raw = parsed.raw_phone.as_deref().unwrap_or(normalized.as_str());
+        sqlx::query!(
+            r#"INSERT INTO contact_method (organization_id, person_id, kind, value, normalized_value)
+               VALUES ($1, $2, 'phone', $3, $4)
+               ON CONFLICT (person_id, kind, normalized_value) DO NOTHING"#,
+            organization_id,
+            person_id,
+            raw,
+            normalized,
+        )
+        .execute(&mut *conn)
+        .await?;
+    }
+    Ok(())
+}
+
+// --- Read models -----------------------------------------------------
+
+struct PersonSummaryRow {
+    id: Uuid,
+    first_name: Option<String>,
+    last_name: Option<String>,
+    created_at: DateTime<Utc>,
+    stage_id: Uuid,
+    stage_name: String,
+    assigned_user_id: Option<Uuid>,
+    assigned_user_display_name: Option<String>,
+    primary_email: Option<String>,
+    primary_phone: Option<String>,
+    inquiry_count: i64,
+    last_inquiry_at: Option<DateTime<Utc>>,
+}
+
+impl From<PersonSummaryRow> for PersonSummary {
+    fn from(row: PersonSummaryRow) -> Self {
+        let display_name = compute_display_name(
+            row.first_name.as_deref(),
+            row.last_name.as_deref(),
+            row.primary_email.as_deref(),
+            row.primary_phone.as_deref(),
+        );
+        let assigned_user = match (row.assigned_user_id, row.assigned_user_display_name) {
+            (Some(id), Some(display_name)) => Some(UserRef { id, display_name }),
+            _ => None,
+        };
+        PersonSummary {
+            id: row.id,
+            first_name: row.first_name,
+            last_name: row.last_name,
+            display_name,
+            stage: StageRef {
+                id: row.stage_id,
+                name: row.stage_name,
+            },
+            assigned_user,
+            primary_email: row.primary_email,
+            primary_phone: row.primary_phone,
+            inquiry_count: row.inquiry_count,
+            last_inquiry_at: row.last_inquiry_at,
+            created_at: row.created_at,
+        }
+    }
+}
+
+/// `GET /api/people`: `created_at DESC, id` order, capped at 500 with a
+/// `truncated` flag (docs/specs/SLICE_002.md §5).
+pub async fn list_summaries(
+    conn: &mut PgConnection,
+    scope: &PersonVisibilityScope,
+) -> Result<(Vec<PersonSummary>, bool), sqlx::Error> {
+    let organization_id = scope.organization_id();
+    let mut rows = sqlx::query_as!(
+        PersonSummaryRow,
+        r#"SELECT
+             p.id, p.first_name, p.last_name, p.created_at,
+             s.id as stage_id, s.name as stage_name,
+             u.id as "assigned_user_id?", u.display_name as "assigned_user_display_name?",
+             (SELECT cm.value FROM contact_method cm
+                WHERE cm.person_id = p.id AND cm.kind = 'email'
+                ORDER BY cm.created_at ASC LIMIT 1) as "primary_email?",
+             (SELECT cm.value FROM contact_method cm
+                WHERE cm.person_id = p.id AND cm.kind = 'phone'
+                ORDER BY cm.created_at ASC LIMIT 1) as "primary_phone?",
+             (SELECT count(*) FROM inquiry i WHERE i.person_id = p.id) as "inquiry_count!",
+             (SELECT max(i.received_at) FROM inquiry i WHERE i.person_id = p.id) as "last_inquiry_at?"
+           FROM person p
+           JOIN stage s ON s.id = p.stage_id
+           LEFT JOIN app_user u ON u.id = p.assigned_user_id
+           WHERE p.organization_id = $1
+           ORDER BY p.created_at DESC, p.id ASC
+           LIMIT 501"#,
+        organization_id,
+    )
+    .fetch_all(conn)
+    .await?;
+
+    let truncated = rows.len() > 500;
+    rows.truncate(500);
+    Ok((
+        rows.into_iter().map(PersonSummary::from).collect(),
+        truncated,
+    ))
+}
+
+/// A single Person's summary, scoped to the Organization
+/// (docs/specs/SLICE_002.md §5: the assignment/stage command responses).
+pub async fn summary_by_id(
+    conn: &mut PgConnection,
+    organization_id: Uuid,
+    person_id: Uuid,
+) -> Result<Option<PersonSummary>, sqlx::Error> {
+    let row = sqlx::query_as!(
+        PersonSummaryRow,
+        r#"SELECT
+             p.id, p.first_name, p.last_name, p.created_at,
+             s.id as stage_id, s.name as stage_name,
+             u.id as "assigned_user_id?", u.display_name as "assigned_user_display_name?",
+             (SELECT cm.value FROM contact_method cm
+                WHERE cm.person_id = p.id AND cm.kind = 'email'
+                ORDER BY cm.created_at ASC LIMIT 1) as "primary_email?",
+             (SELECT cm.value FROM contact_method cm
+                WHERE cm.person_id = p.id AND cm.kind = 'phone'
+                ORDER BY cm.created_at ASC LIMIT 1) as "primary_phone?",
+             (SELECT count(*) FROM inquiry i WHERE i.person_id = p.id) as "inquiry_count!",
+             (SELECT max(i.received_at) FROM inquiry i WHERE i.person_id = p.id) as "last_inquiry_at?"
+           FROM person p
+           JOIN stage s ON s.id = p.stage_id
+           LEFT JOIN app_user u ON u.id = p.assigned_user_id
+           WHERE p.organization_id = $1 AND p.id = $2"#,
+        organization_id,
+        person_id,
+    )
+    .fetch_optional(conn)
+    .await?;
+    Ok(row.map(PersonSummary::from))
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ContactMethodItem {
+    pub id: Uuid,
+    pub kind: String,
+    pub value: String,
+}
+
+/// `contact_methods` in `GET /api/people/{id}`, by `created_at`
+/// (docs/specs/SLICE_002.md §5).
+pub async fn contact_methods_for_person(
+    conn: &mut PgConnection,
+    organization_id: Uuid,
+    person_id: Uuid,
+) -> Result<Vec<ContactMethodItem>, sqlx::Error> {
+    sqlx::query_as!(
+        ContactMethodItem,
+        r#"SELECT id, kind, value FROM contact_method
+           WHERE organization_id = $1 AND person_id = $2
+           ORDER BY created_at ASC"#,
+        organization_id,
+        person_id,
+    )
+    .fetch_all(conn)
+    .await
+}
+
+// --- History ---------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize)]
+pub struct HistoryEntry {
+    pub kind: &'static str,
+    pub id: Uuid,
+    pub occurred_at: DateTime<Utc>,
+    pub recorded_at: DateTime<Utc>,
+    pub actor: Option<UserRef>,
+    pub origin: String,
+    pub correlation_id: Uuid,
+    pub detail: serde_json::Value,
+    /// `inquiry_received` = 0 … `stage_changed` = 3
+    /// (docs/specs/SLICE_002.md §5). Not part of the response shape.
+    #[serde(skip)]
+    pub kind_rank: u8,
+}
+
+fn actor_ref(user_id: Option<Uuid>, display_name: Option<String>) -> Option<UserRef> {
+    match (user_id, display_name) {
+        (Some(id), Some(display_name)) => Some(UserRef { id, display_name }),
+        _ => None,
+    }
+}
+
+struct InquiryReceivedHistoryRow {
+    id: Uuid,
+    occurred_at: DateTime<Utc>,
+    recorded_at: DateTime<Utc>,
+    origin: String,
+    correlation_id: Uuid,
+    actor_user_id: Option<Uuid>,
+    actor_display_name: Option<String>,
+    inquiry_id: Uuid,
+    source: String,
+    person_created: bool,
+    matched_by: Option<String>,
+}
+
+async fn inquiry_received_history(
+    conn: &mut PgConnection,
+    organization_id: Uuid,
+    person_id: Uuid,
+) -> Result<Vec<HistoryEntry>, sqlx::Error> {
+    let rows = sqlx::query_as!(
+        InquiryReceivedHistoryRow,
+        r#"SELECT ir.id, ir.occurred_at, ir.recorded_at, ir.origin, ir.correlation_id,
+                  ir.actor_user_id, au.display_name as "actor_display_name?",
+                  ir.inquiry_id, ir.source, ir.person_created, ir.matched_by
+           FROM inquiry_received ir
+           LEFT JOIN app_user au ON au.id = ir.actor_user_id
+           WHERE ir.organization_id = $1 AND ir.person_id = $2"#,
+        organization_id,
+        person_id,
+    )
+    .fetch_all(conn)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|r| HistoryEntry {
+            kind: "inquiry_received",
+            kind_rank: 0,
+            id: r.id,
+            occurred_at: r.occurred_at,
+            recorded_at: r.recorded_at,
+            actor: actor_ref(r.actor_user_id, r.actor_display_name),
+            origin: r.origin,
+            correlation_id: r.correlation_id,
+            detail: serde_json::json!({
+                "inquiry_id": r.inquiry_id,
+                "source": r.source,
+                "person_created": r.person_created,
+                "matched_by": r.matched_by,
+            }),
+        })
+        .collect())
+}
+
+struct RoutingDecisionHistoryRow {
+    id: Uuid,
+    occurred_at: DateTime<Utc>,
+    recorded_at: DateTime<Utc>,
+    origin: String,
+    correlation_id: Uuid,
+    actor_user_id: Option<Uuid>,
+    actor_display_name: Option<String>,
+    inquiry_id: Uuid,
+    strategy: String,
+    assignee_user_id: Option<Uuid>,
+    assignee_display_name: Option<String>,
+}
+
+async fn routing_decision_history(
+    conn: &mut PgConnection,
+    organization_id: Uuid,
+    person_id: Uuid,
+) -> Result<Vec<HistoryEntry>, sqlx::Error> {
+    let rows = sqlx::query_as!(
+        RoutingDecisionHistoryRow,
+        r#"SELECT rd.id, rd.occurred_at, rd.recorded_at, rd.origin, rd.correlation_id,
+                  rd.actor_user_id, au.display_name as "actor_display_name?",
+                  rd.inquiry_id, rd.strategy,
+                  rd.assignee_user_id, au2.display_name as "assignee_display_name?"
+           FROM routing_decision rd
+           LEFT JOIN app_user au ON au.id = rd.actor_user_id
+           LEFT JOIN app_user au2 ON au2.id = rd.assignee_user_id
+           WHERE rd.organization_id = $1 AND rd.person_id = $2"#,
+        organization_id,
+        person_id,
+    )
+    .fetch_all(conn)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|r| {
+            let assignee = actor_ref(r.assignee_user_id, r.assignee_display_name);
+            HistoryEntry {
+                kind: "routing_decision",
+                kind_rank: 1,
+                id: r.id,
+                occurred_at: r.occurred_at,
+                recorded_at: r.recorded_at,
+                actor: actor_ref(r.actor_user_id, r.actor_display_name),
+                origin: r.origin,
+                correlation_id: r.correlation_id,
+                detail: serde_json::json!({
+                    "inquiry_id": r.inquiry_id,
+                    "strategy": r.strategy,
+                    "assignee": assignee,
+                }),
+            }
+        })
+        .collect())
+}
+
+struct AssignmentChangedHistoryRow {
+    id: Uuid,
+    occurred_at: DateTime<Utc>,
+    recorded_at: DateTime<Utc>,
+    origin: String,
+    correlation_id: Uuid,
+    actor_user_id: Option<Uuid>,
+    actor_display_name: Option<String>,
+    from_user_id: Option<Uuid>,
+    from_display_name: Option<String>,
+    to_user_id: Option<Uuid>,
+    to_display_name: Option<String>,
+    reason: String,
+}
+
+async fn assignment_changed_history(
+    conn: &mut PgConnection,
+    organization_id: Uuid,
+    person_id: Uuid,
+) -> Result<Vec<HistoryEntry>, sqlx::Error> {
+    let rows = sqlx::query_as!(
+        AssignmentChangedHistoryRow,
+        r#"SELECT ac.id, ac.occurred_at, ac.recorded_at, ac.origin, ac.correlation_id,
+                  ac.actor_user_id, au.display_name as "actor_display_name?",
+                  ac.from_user_id, fu.display_name as "from_display_name?",
+                  ac.to_user_id, tu.display_name as "to_display_name?",
+                  ac.reason
+           FROM assignment_changed ac
+           LEFT JOIN app_user au ON au.id = ac.actor_user_id
+           LEFT JOIN app_user fu ON fu.id = ac.from_user_id
+           LEFT JOIN app_user tu ON tu.id = ac.to_user_id
+           WHERE ac.organization_id = $1 AND ac.person_id = $2"#,
+        organization_id,
+        person_id,
+    )
+    .fetch_all(conn)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|r| {
+            let from = actor_ref(r.from_user_id, r.from_display_name);
+            let to = actor_ref(r.to_user_id, r.to_display_name);
+            HistoryEntry {
+                kind: "assignment_changed",
+                kind_rank: 2,
+                id: r.id,
+                occurred_at: r.occurred_at,
+                recorded_at: r.recorded_at,
+                actor: actor_ref(r.actor_user_id, r.actor_display_name),
+                origin: r.origin,
+                correlation_id: r.correlation_id,
+                detail: serde_json::json!({
+                    "from": from,
+                    "to": to,
+                    "reason": r.reason,
+                }),
+            }
+        })
+        .collect())
+}
+
+struct StageChangedHistoryRow {
+    id: Uuid,
+    occurred_at: DateTime<Utc>,
+    recorded_at: DateTime<Utc>,
+    origin: String,
+    correlation_id: Uuid,
+    actor_user_id: Option<Uuid>,
+    actor_display_name: Option<String>,
+    from_stage_id: Option<Uuid>,
+    from_stage_name: Option<String>,
+    to_stage_id: Uuid,
+    to_stage_name: String,
+    reason: String,
+}
+
+async fn stage_changed_history(
+    conn: &mut PgConnection,
+    organization_id: Uuid,
+    person_id: Uuid,
+) -> Result<Vec<HistoryEntry>, sqlx::Error> {
+    let rows = sqlx::query_as!(
+        StageChangedHistoryRow,
+        r#"SELECT sc.id, sc.occurred_at, sc.recorded_at, sc.origin, sc.correlation_id,
+                  sc.actor_user_id, au.display_name as "actor_display_name?",
+                  sc.from_stage_id, fs.name as "from_stage_name?",
+                  sc.to_stage_id, ts.name as "to_stage_name!",
+                  sc.reason
+           FROM stage_changed sc
+           LEFT JOIN app_user au ON au.id = sc.actor_user_id
+           LEFT JOIN stage fs ON fs.id = sc.from_stage_id
+           JOIN stage ts ON ts.id = sc.to_stage_id
+           WHERE sc.organization_id = $1 AND sc.person_id = $2"#,
+        organization_id,
+        person_id,
+    )
+    .fetch_all(conn)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|r| {
+            let from_stage = match (r.from_stage_id, r.from_stage_name) {
+                (Some(id), Some(name)) => Some(StageRef { id, name }),
+                _ => None,
+            };
+            let to_stage = StageRef {
+                id: r.to_stage_id,
+                name: r.to_stage_name,
+            };
+            HistoryEntry {
+                kind: "stage_changed",
+                kind_rank: 3,
+                id: r.id,
+                occurred_at: r.occurred_at,
+                recorded_at: r.recorded_at,
+                actor: actor_ref(r.actor_user_id, r.actor_display_name),
+                origin: r.origin,
+                correlation_id: r.correlation_id,
+                detail: serde_json::json!({
+                    "from_stage": from_stage,
+                    "to_stage": to_stage,
+                    "reason": r.reason,
+                }),
+            }
+        })
+        .collect())
+}
+
+/// The full history timeline for `GET /api/people/{id}`, ordered
+/// `occurred_at, recorded_at, kind_rank, id` (docs/specs/SLICE_002.md §5:
+/// required because intake's four facts otherwise share both timestamps).
+pub async fn history_for_person(
+    conn: &mut PgConnection,
+    organization_id: Uuid,
+    person_id: Uuid,
+) -> Result<Vec<HistoryEntry>, sqlx::Error> {
+    let mut entries = Vec::new();
+    entries.extend(inquiry_received_history(conn, organization_id, person_id).await?);
+    entries.extend(routing_decision_history(conn, organization_id, person_id).await?);
+    entries.extend(assignment_changed_history(conn, organization_id, person_id).await?);
+    entries.extend(stage_changed_history(conn, organization_id, person_id).await?);
+
+    entries.sort_by_key(|e| (e.occurred_at, e.recorded_at, e.kind_rank, e.id));
+    Ok(entries)
+}

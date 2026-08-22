@@ -65,6 +65,7 @@ fn migrator_url_for(migrator_pool: &PgPool) -> String {
 fn test_config() -> Config {
     Config::from_source(|key| match key {
         "CRM_SESSION_SECRET" => Some("a".repeat(32)),
+        "CRM_RAW_PAYLOAD_KEY" => Some("ab".repeat(32)),
         _ => None,
     })
     .unwrap()
@@ -73,15 +74,7 @@ fn test_config() -> Config {
 async fn build_router(migrator_pool: &PgPool) -> Router {
     let app_pool = connect_as_app(migrator_pool).await;
     let config = test_config();
-    let state = AppState {
-        db: Some(app_pool),
-        database_connect_timeout: config.database_connect_timeout,
-        session_secret: config.session_secret,
-        session_ttl: config.session_ttl,
-        session_cookie_secure: config.session_cookie_secure,
-        session_cookie_domain: config.session_cookie_domain,
-        cors_allowed_origin: config.cors_allowed_origin,
-    };
+    let state = AppState::for_tests(app_pool, &config);
     crm_api::build_app(state)
 }
 

@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, source, received_at, resolution, unresolved_reason, byte_len\n           FROM raw_payload\n           WHERE organization_id = $1 AND resolution <> 'resolved'\n           ORDER BY received_at DESC\n           LIMIT 501",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "source",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "received_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "resolution",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "unresolved_reason",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "byte_len",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "a9ce334cb45d243aadbc8aecf752562a0c33707c1c84a69b56e9dd8db552d73b"
+}

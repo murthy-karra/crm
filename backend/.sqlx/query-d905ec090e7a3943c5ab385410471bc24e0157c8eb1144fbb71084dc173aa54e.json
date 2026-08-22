@@ -1,0 +1,83 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT ir.id, ir.occurred_at, ir.recorded_at, ir.origin, ir.correlation_id,\n                  ir.actor_user_id, au.display_name as \"actor_display_name?\",\n                  ir.inquiry_id, ir.source, ir.person_created, ir.matched_by\n           FROM inquiry_received ir\n           LEFT JOIN app_user au ON au.id = ir.actor_user_id\n           WHERE ir.organization_id = $1 AND ir.person_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "occurred_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "recorded_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "origin",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "correlation_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "actor_user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "actor_display_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "inquiry_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "source",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "person_created",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 10,
+        "name": "matched_by",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "d905ec090e7a3943c5ab385410471bc24e0157c8eb1144fbb71084dc173aa54e"
+}

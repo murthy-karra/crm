@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE raw_payload SET resolution = 'unresolved', resolved_at = now(), unresolved_reason = $3\n           WHERE id = $1 AND organization_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6e9962ba6ba92a6e758f84867703e0506e7f24c7fea72767761b8f6a1f92c81f"
+}

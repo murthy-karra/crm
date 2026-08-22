@@ -1,0 +1,33 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO assignment_changed\n            (organization_id, actor_kind, actor_user_id, on_behalf_of_user_id, origin,\n             occurred_at, correlation_id, causation_id,\n             person_id, from_user_id, to_user_id, reason)\n           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)\n           RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a3373d0c4603d4a95ab81157ba0e422399c1d3fd8d50dcfc716d7109f3131760"
+}

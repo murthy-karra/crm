@@ -167,12 +167,10 @@ mod tests {
     fn test_secret() -> SessionSecret {
         // Config::from_source normally constructs this; tests build one
         // directly via the same public parsing path.
-        crate::config::Config::from_source(|key| {
-            if key == "CRM_SESSION_SECRET" {
-                Some("a".repeat(32))
-            } else {
-                None
-            }
+        crate::config::Config::from_source(|key| match key {
+            "CRM_SESSION_SECRET" => Some("a".repeat(32)),
+            "CRM_RAW_PAYLOAD_KEY" => Some("ab".repeat(32)),
+            _ => None,
         })
         .unwrap()
         .session_secret
@@ -197,12 +195,10 @@ mod tests {
     #[test]
     fn hash_differs_across_secrets() {
         let secret_a = test_secret();
-        let secret_b = crate::config::Config::from_source(|key| {
-            if key == "CRM_SESSION_SECRET" {
-                Some("b".repeat(32))
-            } else {
-                None
-            }
+        let secret_b = crate::config::Config::from_source(|key| match key {
+            "CRM_SESSION_SECRET" => Some("b".repeat(32)),
+            "CRM_RAW_PAYLOAD_KEY" => Some("ab".repeat(32)),
+            _ => None,
         })
         .unwrap()
         .session_secret;

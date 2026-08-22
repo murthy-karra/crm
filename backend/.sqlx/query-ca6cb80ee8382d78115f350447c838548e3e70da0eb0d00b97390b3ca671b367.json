@@ -1,0 +1,89 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT ac.id, ac.occurred_at, ac.recorded_at, ac.origin, ac.correlation_id,\n                  ac.actor_user_id, au.display_name as \"actor_display_name?\",\n                  ac.from_user_id, fu.display_name as \"from_display_name?\",\n                  ac.to_user_id, tu.display_name as \"to_display_name?\",\n                  ac.reason\n           FROM assignment_changed ac\n           LEFT JOIN app_user au ON au.id = ac.actor_user_id\n           LEFT JOIN app_user fu ON fu.id = ac.from_user_id\n           LEFT JOIN app_user tu ON tu.id = ac.to_user_id\n           WHERE ac.organization_id = $1 AND ac.person_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "occurred_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "recorded_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "origin",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "correlation_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "actor_user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "actor_display_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "from_user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "from_display_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "to_user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 10,
+        "name": "to_display_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "reason",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "ca6cb80ee8382d78115f350447c838548e3e70da0eb0d00b97390b3ca671b367"
+}

@@ -61,10 +61,14 @@ Install the pinned prerequisites before bootstrapping:
 - Rust, through rustup, at the channel pinned in `rust-toolchain.toml`, with the `rustfmt` and `clippy` components;
 - Node, at the version recorded in `.node-version`;
 - Corepack (ships with Node; run `corepack enable`);
-- pnpm, through Corepack, as pinned by `web/package.json`; and
-- Docker Desktop, for PostgreSQL and Centrifugo.
+- pnpm, through Corepack, as pinned by `web/package.json`;
+- Docker Desktop, for PostgreSQL and Centrifugo; and
+- sqlx-cli, pinned to the workspace's locked `sqlx` minor version, for `scripts/sqlx-prepare` and `scripts/check-db` only (not required for `check`, `dev-api`, or `bootstrap` itself — docs/specs/SLICE_002.md §11):
+  ```sh
+  cargo install sqlx-cli --version 0.8.6 --locked --no-default-features --features postgres,rustls
+  ```
 
-The bootstrap command verifies those exact versions. It does not install system toolchains or start services:
+The bootstrap command verifies those exact versions (sqlx-cli's presence and version are checked too, but only as a non-fatal warning). It does not install system toolchains or start services:
 
 ```sh
 ./scripts/bootstrap
@@ -89,6 +93,7 @@ Notable defaults and constraints, applied in code:
 | `CRM_SESSION_TTL_HOURS` | `168`, bounded 1–720 | Absolute session expiry |
 | `CRM_SESSION_COOKIE_SECURE` | `false` | Set `true` when using the tunnel; Safari rejects `Secure` cookies over plain `http://127.0.0.1`, so keep it `false` for loopback work in Safari |
 | `CRM_DEV_SEED_PASSWORD` | Required for `dev-seed` | One password for every seeded user; re-hashed on every run, so changing it rotates seeded credentials |
+| `CRM_RAW_PAYLOAD_KEY` | Required, no default | Raw lead-payload encryption key (docs/specs/SLICE_002.md §7); exactly 64 hex characters (32 bytes), e.g. `openssl rand -hex 32`; the API refuses to start if missing, the wrong length, or not hex |
 | `CRM_CORS_ALLOWED_ORIGIN` | Unset (no CORS layer) | Set only for the two-hostname tunnel setup (e.g. `https://app.tarams.org`); the API and browser app are on different hostnames, so the browser's cross-origin fetch needs an explicit allow-list entry |
 | `CRM_SESSION_COOKIE_DOMAIN` | Unset (host-only cookie) | Set alongside `CRM_CORS_ALLOWED_ORIGIN` (e.g. `tarams.org`) so the session cookie is sent to both hostnames |
 | `CRM_WEB_BIND_ADDR` | `127.0.0.1` | Loopback only |
@@ -125,7 +130,7 @@ Apply pending migrations (idempotent — safe to run repeatedly):
 ./scripts/db-migrate
 ```
 
-Seed two Organizations, each with one local-auth User (idempotent; re-running rotates the seeded password to match `CRM_DEV_SEED_PASSWORD`):
+Seed two Organizations, each with the nine D-019 default stages and two local-auth Users — a second member so reassignment has a target (idempotent; re-running rotates the seeded password to match `CRM_DEV_SEED_PASSWORD` and creates no duplicate stages or memberships):
 
 ```sh
 ./scripts/dev-seed
@@ -163,7 +168,7 @@ Run the complete repository gate with no services running:
 ./scripts/check
 ```
 
-This runs, in order: `cargo fmt --check`, `cargo clippy` (warnings denied), `cargo test`, web lint, web typecheck, and web build. Database-backed tests are compiled here (so fmt/clippy cover them) but `#[ignore]`d, so this stays service-free.
+This runs, in order: `cargo fmt --check`, `cargo clippy` (warnings denied), `cargo test`, web lint, web typecheck, and web build. Database-backed tests are compiled here (so fmt/clippy cover them) but `#[ignore]`d, so this stays service-free. `cargo test`/`clippy` type-check every `query!`/`query_as!` macro call offline against the committed `backend/.sqlx/` cache (root `.cargo/config.toml` sets `SQLX_OFFLINE=true` for every cargo invocation) rather than a live database — see "Offline query cache" below.
 
 Run the database-backed suite against the running local container (requires `dev-services up`; never prints a credential value):
 
@@ -171,7 +176,17 @@ Run the database-backed suite against the running local container (requires `dev
 ./scripts/check-db
 ```
 
-This exercises the full session lifecycle, tenant isolation between two Organizations, session/membership revocation, and the `crm_migrator`/`crm_app` role boundary, each against its own fresh ephemeral database with migrations applied from scratch.
+This first re-verifies `backend/.sqlx/` against a throwaway, freshly-migrated database (`cargo sqlx prepare --check --workspace`, catching schema/type drift an offline compile cannot), then exercises the full session lifecycle, tenant isolation between two Organizations, session/membership revocation, the `crm_migrator`/`crm_app` role boundary, the append-only fact tables, and the full lead-intake flow (including its two concurrency races), each against its own fresh ephemeral database with migrations applied from scratch. Requires sqlx-cli (see prerequisites above).
+
+### Offline query cache
+
+New backend code uses sqlx's compile-time-checked `query!`/`query_as!` macros, which need either a live database or a precomputed cache to type-check against. This repository always uses the cache — the root `.cargo/config.toml` sets `SQLX_OFFLINE=true` for every `cargo` invocation, so a query change requires regenerating it before the next build:
+
+```sh
+./scripts/sqlx-prepare
+```
+
+This applies the current migrations to a throwaway database (never the dev database), regenerates `backend/.sqlx/`, and drops the throwaway database again. Commit the updated `backend/.sqlx/` alongside the query change — it contains only query text and column types, no data. Requires sqlx-cli (see prerequisites above); the script itself asserts the installed CLI's minor version matches the workspace's locked `sqlx` minor version and stops with an install hint otherwise.
 
 ### External connectivity (Cloudflare tunnel)
 

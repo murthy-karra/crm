@@ -1,0 +1,83 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT rd.id, rd.occurred_at, rd.recorded_at, rd.origin, rd.correlation_id,\n                  rd.actor_user_id, au.display_name as \"actor_display_name?\",\n                  rd.inquiry_id, rd.strategy,\n                  rd.assignee_user_id, au2.display_name as \"assignee_display_name?\"\n           FROM routing_decision rd\n           LEFT JOIN app_user au ON au.id = rd.actor_user_id\n           LEFT JOIN app_user au2 ON au2.id = rd.assignee_user_id\n           WHERE rd.organization_id = $1 AND rd.person_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "occurred_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "recorded_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "origin",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "correlation_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "actor_user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "actor_display_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "inquiry_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "strategy",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "assignee_user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 10,
+        "name": "assignee_display_name?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "231357b7b380b42ba3530a98c2c9a4b4686d7a05008ec24cfc1eadacb64cb0dc"
+}

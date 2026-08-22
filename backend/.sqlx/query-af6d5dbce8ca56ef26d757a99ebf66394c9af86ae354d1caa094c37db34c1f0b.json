@@ -1,0 +1,89 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT sc.id, sc.occurred_at, sc.recorded_at, sc.origin, sc.correlation_id,\n                  sc.actor_user_id, au.display_name as \"actor_display_name?\",\n                  sc.from_stage_id, fs.name as \"from_stage_name?\",\n                  sc.to_stage_id, ts.name as \"to_stage_name!\",\n                  sc.reason\n           FROM stage_changed sc\n           LEFT JOIN app_user au ON au.id = sc.actor_user_id\n           LEFT JOIN stage fs ON fs.id = sc.from_stage_id\n           JOIN stage ts ON ts.id = sc.to_stage_id\n           WHERE sc.organization_id = $1 AND sc.person_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "occurred_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "recorded_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "origin",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "correlation_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "actor_user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "actor_display_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "from_stage_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "from_stage_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "to_stage_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 10,
+        "name": "to_stage_name!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "reason",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "af6d5dbce8ca56ef26d757a99ebf66394c9af86ae354d1caa094c37db34c1f0b"
+}

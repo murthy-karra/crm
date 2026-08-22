@@ -1,0 +1,18 @@
+# Repo-root cargo config (docs/specs/SLICE_002.md §11).
+#
+# Root, not backend/: cargo discovers .cargo/config.toml by walking up from
+# the *current working directory*, not from --manifest-path, and
+# scripts/dev-api, dev-seed, and db-migrate run cargo from the repo root
+# while check/check-db run from backend/ — this file covers both (and
+# rust-analyzer).
+#
+# This is not optional: sqlx-macros-core 0.8.6 falls back to
+# dotenvy::dotenv_iter() when SQLX_OFFLINE is unset, which walks up from the
+# working directory, so dev-api's `cargo run` would otherwise find
+# /…/crm/.env and compile online against the drifting dev database.
+#
+# scripts/sqlx-prepare and the check-db prepare step override this with a
+# process-level SQLX_OFFLINE=false, which takes precedence over this [env]
+# default.
+[env]
+SQLX_OFFLINE = "true"

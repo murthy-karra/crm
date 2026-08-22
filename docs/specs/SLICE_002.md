@@ -1,8 +1,19 @@
 # Slice 002 — Lead Intake
 
-Status: ACCEPTED (2026-08-21; planner draft independently reviewed — 17
-findings applied; spec re-reviewed — 12 further items applied; §14
-defaults reviewed with and approved by the user)
+Status: IMPLEMENTED, verified (2026-08-21; planner draft independently
+reviewed — 17 findings applied; spec re-reviewed — 12 further items
+applied; §14 defaults reviewed with and approved by the user;
+implemented in two lanes, then independently reviewed and adversarially
+tested against the real working tree — one undisclosed out-of-scope
+file removed, five correctness/observability findings fixed, one
+cross-tenant availability finding (§3's lock acquisition, §5's
+`intake_busy`, §9) fixed per an explicit user decision to correct the
+mechanism rather than contain it; §1's full walkthrough run live —
+both processes together, real browser, real Postgres — covering new
+lead, dedup, stage/reassignment, unresolved, duplicate delivery, and
+cross-Organization isolation, zero console/page errors; one cosmetic
+singular/plural nit found and fixed during the walkthrough. Awaiting
+merge to `main`.)
 Builds on: Slice 001 (`587a087`) + tunnel follow-up (`3b6df76`).
 Targets: D-005, D-006, D-007, D-012, D-015, D-017, D-019; the first two
 links of the thesis §16 proof chain (`New lead → correct CRM state`).
@@ -184,12 +195,19 @@ A JSON object with optional `first_name`, `last_name`, `email`, `phone`,
 
 ### Identify (dedup) — Organization-scoped, never across Organizations
 
-1. Take one per-Organization intake lock:
-   `pg_advisory_xact_lock(hashtextextended('intake:' || $org_id::text, 0))`.
-   Serializing all intake within an Organization is fine at 10–50 agents,
-   and — unlike a per-contact-value lock — it covers the mixed case where
-   one payload carries `{email, phone}` and a concurrent one carries only
-   `{phone}`.
+1. Take one per-Organization intake lock, keyed
+   `hashtextextended('intake:' || $org_id::text, 0)`. Serializing all
+   intake within an Organization is fine at 10–50 agents, and — unlike a
+   per-contact-value lock — it covers the mixed case where one payload
+   carries `{email, phone}` and a concurrent one carries only `{phone}`.
+   **Acquired via bounded retry, not a blocking wait** (revised after
+   adversarial testing found the original blocking
+   `pg_advisory_xact_lock` call holds a pooled connection for the full
+   duration another request holds the lock — with an unconfigured
+   process-wide pool, one Organization's intake burst could exhaust it
+   and 503 every *other* Organization's logins and reads; empirically
+   reproduced and fixed). See "Two-phase `ReceiveInquiry`" below for the
+   mechanism.
 2. Look up `contact_method` by `(organization_id, 'email',
    normalized)`. If one or more Persons match, take the earliest-created
    (deterministic). Otherwise repeat by phone. Email wins when email and
@@ -225,17 +243,33 @@ A JSON object with optional `first_name`, `last_name`, `email`, `phone`,
   "stored before parsing"): compute `content_hmac`, encrypt, `INSERT
   raw_payload … resolution='pending' ON CONFLICT (organization_id,
   source, content_hmac) DO NOTHING`, re-select the id. Commit.
-- **Phase B** (one transaction): `SELECT … FROM raw_payload WHERE id=$1
-  AND organization_id=$2 FOR UPDATE`. If already `resolved` or
-  `unresolved` → return the stored outcome with `duplicate: true`.
-  Otherwise decrypt **the stored row** (not the request), parse,
-  identify, then atomically: Person (+ contact methods) if new;
-  `inquiry`; `inquiry_received`; `routing_decision`;
-  `assignment_changed` / `stage_changed` per the routing rules; `UPDATE
-  raw_payload SET resolution='resolved', resolved_at, inquiry_id`.
-  Parser rejection → `UPDATE raw_payload SET resolution='unresolved',
-  unresolved_reason` and commit (it is an outcome, not a failure).
-  Infrastructure error → rollback; the row stays `pending`.
+- **Phase B**: a bounded retry loop, each iteration its own transaction.
+  `SELECT … FROM raw_payload WHERE id=$1 AND organization_id=$2 FOR
+  UPDATE`. If already `resolved` or `unresolved` → return the stored
+  outcome with `duplicate: true`, committing without ever touching the
+  advisory lock (duplicate/parse-failure short-circuits are not subject
+  to lock contention). Otherwise attempt the per-Organization lock via
+  `pg_try_advisory_xact_lock` (non-blocking):
+  - **Acquired**: decrypt **the stored row** (not the request), parse,
+    identify, then atomically: Person (+ contact methods) if new;
+    `inquiry`; `inquiry_received`; `routing_decision`;
+    `assignment_changed` / `stage_changed` per the routing rules;
+    `UPDATE raw_payload SET resolution='resolved', resolved_at,
+    inquiry_id`. Parser rejection → `UPDATE raw_payload SET
+    resolution='unresolved', unresolved_reason` and commit (it is an
+    outcome, not a failure). Commit and return.
+  - **Not acquired**: roll back immediately — the connection is released
+    back to the pool, not held while waiting — then sleep with jittered
+    exponential backoff (starts ~25–37ms, doubles, capped ~250ms) and
+    retry from the top of the loop. A deadline bounds total wall-clock
+    time across all attempts at **3 seconds**, comfortably longer than
+    any legitimate contender's Phase B (a handful of small indexed
+    queries) but short enough to fail predictably instead of parking a
+    connection. Past the deadline: return `CommandError::IntakeBusy`
+    (§5, §9) with the `raw_payload` row untouched — still `pending` from
+    Phase A, exactly as if this attempt had never happened.
+  - Infrastructure error at any point → rollback; the row stays
+    `pending`, same as before this mechanism existed.
 
 ### Idempotency scope
 
@@ -337,7 +371,7 @@ method list (GET/POST/DELETE) is unchanged.
 
 | Endpoint | Request | Success | Errors |
 |---|---|---|---|
-| `POST /api/inquiries` — intake; the simulated dev ingress and the manual-entry form are the same route | `{"source": "zillow", "payload": {…any JSON…}, "assign_to_user_id"?: uuid}`; JSON content type; body ≤ 256 KiB; `source` lowercased/trimmed and must match `^[a-z0-9_]{1,64}$` | **201** first delivery: `{"status":"resolved","inquiry_id","person_id","person_created":bool,"routing_strategy","assigned_user_id":uuid\|null,"duplicate":false}` or `{"status":"unresolved","raw_payload_id","reason","duplicate":false}`; **200** same shapes with `"duplicate":true` when the payload was already stored and processed | 400 `malformed_request`, 422 `invalid_assignee`, 500 `internal_error` (decrypt failure; Organization without stages) |
+| `POST /api/inquiries` — intake; the simulated dev ingress and the manual-entry form are the same route | `{"source": "zillow", "payload": {…any JSON…}, "assign_to_user_id"?: uuid}`; JSON content type; body ≤ 256 KiB; `source` lowercased/trimmed and must match `^[a-z0-9_]{1,64}$` | **201** first delivery: `{"status":"resolved","inquiry_id","person_id","person_created":bool,"routing_strategy","assigned_user_id":uuid\|null,"duplicate":false}` or `{"status":"unresolved","raw_payload_id","reason","duplicate":false}`; **200** same shapes with `"duplicate":true` when the payload was already stored and processed | 400 `malformed_request`, 422 `invalid_assignee`, 500 `internal_error` (decrypt failure; Organization without stages), **503 `intake_busy`** (`Retry-After: 2`) when this Organization's intake lock could not be acquired within the retry budget — distinct from `unavailable`: the database is up, this Organization's intake is contended; the request was never stored as `pending` by this attempt if it was already `pending` from an earlier one, and a retry (or a client's own retry logic honoring `Retry-After`) resumes cleanly |
 | `GET /api/people` | — | 200 `{"people":[{id, first_name, last_name, display_name, stage:{id,name}, assigned_user:{id,display_name}\|null, primary_email, primary_phone, inquiry_count, last_inquiry_at, created_at}], "truncated": bool}` ordered `created_at DESC, id`; cap 500 | |
 | `GET /api/people/{id}` | — | 200 `{person:{…as above}, contact_methods:[{id,kind,value}] (by created_at), inquiries:[{id,source,source_external_id,message,received_at}] (received_at DESC), history:[{kind,id,occurred_at,recorded_at,actor:{id,display_name}\|null,origin,correlation_id,detail:{…per kind, below}}]}` | 404 `not_found` (identical for other Organizations' ids) |
 | `POST /api/people/{id}/assignment` | `{"assigned_user_id": uuid\|null}` | 200 `{"person": {…summary}, "changed": bool}` | 404 `not_found`, 422 `invalid_assignee` (identical for nonexistent and other-Organization users) |
@@ -428,21 +462,32 @@ bytes, provider delivery-id idempotency) onto the same `receive_inquiry`.
   one defaulting to 1.
 - Plaintext bytes for this endpoint = `serde_json::to_vec(&payload)`.
   `serde_json::Value` maps are `BTreeMap` unless `preserve_order` is
-  enabled — verified off in `backend/Cargo.lock` (no `indexmap`) — so
-  serialization is key-sorted and the hash is canonical. A unit test pins
-  this (§13) because a future dependency enabling `preserve_order`
-  through feature unification would silently change every idempotency
-  key. The webhook adapter will hash raw body bytes instead.
+  enabled, so serialization is key-sorted and the hash is canonical. (
+  `indexmap` itself is present in `backend/Cargo.lock` — pulled in by
+  `sqlx-core`, unrelated to this slice — but `serde_json` has no edge to
+  it and no crate in the workspace enables `preserve_order`; confirmed
+  with `cargo tree -e features -i serde_json`.) A unit test pins the
+  sorted-key assumption (§13) because a future dependency enabling
+  `preserve_order` through feature unification would silently change
+  every idempotency key. The webhook adapter will hash raw body bytes
+  instead.
 
 ## 8. Observability
 
 `#[tracing::instrument(skip_all, fields(organization_id, actor_id,
 correlation_id, source, raw_payload_id, outcome))]` on the three commands;
-the request span is unchanged. **Never logged**: payload bytes or
+the request span is unchanged. Each command is a thin wrapper around a
+private implementation: the wrapper is the single point that records
+`outcome` on every return, success or failure, so every error path is
+observable — `outcome` is `"resolved"` / `"unresolved"` / `"duplicate"`
+on success or `error_kind`'s value (`CommandError`'s variant name, e.g.
+`database`, `crypto`, `no_stages_configured`, `intake_busy`) on failure,
+logged via `tracing::warn!`. **Never logged**: payload bytes or
 plaintext, names, emails, phones, `message`, the key, ciphertext, or the
-content hash. `ParsedLead` and payload types get a hand-written `Debug`
-that prints only `has_email` / `has_phone`; sqlx errors inside intake are
-logged by kind, not by `%err` interpolation.
+content hash — `CommandError::Database`'s inner `sqlx::Error` is
+identified by variant name only, never its `Display`/`Debug` text.
+`ParsedLead` and payload types get a hand-written `Debug` that prints
+only `has_email` / `has_phone`.
 
 ## 9. Failure behavior
 
@@ -459,6 +504,13 @@ logged by kind, not by `%err` interpolation.
   `resolved` under the row lock → `duplicate: true`.
 - Two different first-contacts sharing a contact value concurrently → the
   per-Organization advisory lock serializes them → one Person.
+- One Organization's intake lock held past the 3-second retry budget
+  (§3) → 503 `intake_busy`, `Retry-After: 2`; the row stays `pending`
+  (or is created `pending` by this attempt) either way, exactly as any
+  other Phase B failure; a retry resumes cleanly. Empirically verified
+  this does **not** propagate to other Organizations: a burst against an
+  unrelated Organization during a 7-second external hold of the busy
+  Organization's lock completed in ~500ms, unaffected.
 - Invalid assignee → 422 and **no** `raw_payload` row.
 - Invalid or missing `CRM_RAW_PAYLOAD_KEY` → process refuses to start.
 

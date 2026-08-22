@@ -18,6 +18,12 @@ const routes: RouteRecordRaw[] = [
     meta: { public: true },
   },
   {
+    // SLICE_003 §14: Today is the landing route after login.
+    path: '/today',
+    name: 'today',
+    component: () => import('./views/TodayView.vue'),
+  },
+  {
     path: '/people',
     name: 'people',
     component: () => import('./views/PeopleView.vue'),
@@ -38,8 +44,8 @@ const routes: RouteRecordRaw[] = [
     name: 'unresolved',
     component: () => import('./views/UnresolvedView.vue'),
   },
-  { path: '/', redirect: '/people' },
-  { path: '/:pathMatch(.*)*', redirect: '/people' },
+  { path: '/', redirect: '/today' },
+  { path: '/:pathMatch(.*)*', redirect: '/today' },
 ]
 
 export const router = createRouter({
@@ -106,7 +112,7 @@ router.beforeEach(async (to) => {
   if (to.meta.public) {
     // Already signed in and heading to /login — send them where a signed-in
     // visitor belongs instead of showing the login form again.
-    return authenticated ? { path: '/people' } : true
+    return authenticated ? { path: '/today' } : true
   }
 
   if (!authenticated) {

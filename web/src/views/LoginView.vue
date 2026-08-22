@@ -38,7 +38,7 @@ function onSubmit() {
     {
       onSuccess: () => {
         const redirect = route.query.redirect
-        router.push(typeof redirect === 'string' ? redirect : '/people').catch(() => {})
+        router.push(typeof redirect === 'string' ? redirect : '/today').catch(() => {})
       },
     },
   )

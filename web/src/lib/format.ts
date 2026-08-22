@@ -18,8 +18,12 @@ const absoluteFormatter = new Intl.DateTimeFormat(undefined, {
   timeStyle: 'short',
 })
 
-/** "3 hours ago", "just now" — for §7's "actor + relative time in text-muted". */
-export function formatRelativeTime(iso: string): string {
+/** "3 hours ago", "just now" — for §7's "actor + relative time in
+ * text-muted". Accepts an epoch-millis number too (TanStack Query's
+ * `dataUpdatedAt`, SLICE_003 §10's Today subtitle: "Updated
+ * <relative TanStack dataUpdatedAt>"), since `Date`'s constructor already
+ * handles both — everywhere else keeps passing an ISO string. */
+export function formatRelativeTime(iso: string | number): string {
   const date = new Date(iso)
   const seconds = (date.getTime() - Date.now()) / 1000
 

@@ -8,8 +8,8 @@
 import { onScopeDispose, ref, toValue, watch, type MaybeRefOrGetter, type Ref } from 'vue'
 import type { QueryClient, QueryKey } from '@tanstack/vue-query'
 import { UnauthorizedError } from 'centrifuge'
-import { ApiError, apiFetch } from '../api/client'
-import { queryKeys } from '../api/queries'
+import { ApiError } from '../api/client'
+import { fetchRealtimeToken, queryKeys } from '../api/queries'
 import { queryClient as sharedQueryClient } from '../query-client'
 import { invalidationsFor, reconnectInvalidations } from './events'
 
@@ -99,18 +99,6 @@ const DISCONNECT_CALLED_CODE = 0
 
 function isTerminalDisconnect(code: number): boolean {
   return code === UNAUTHORIZED_CODE || (code >= TERMINAL_CODE_MIN && code <= TERMINAL_CODE_MAX)
-}
-
-interface RealtimeTokenResponse {
-  token: string
-}
-
-/** POST /api/realtime/token (§5). Local to this module for step 1 — step 2
- * may relocate it into api/queries.ts alongside the other fetch functions
- * once TodayView/AppShell need the same endpoint; the contract (and this
- * function's behavior) does not change either way. */
-function fetchRealtimeToken(): Promise<RealtimeTokenResponse> {
-  return apiFetch<RealtimeTokenResponse>('/realtime/token', { method: 'POST' })
 }
 
 export function useRealtime(options: UseRealtimeOptions): UseRealtimeResult {

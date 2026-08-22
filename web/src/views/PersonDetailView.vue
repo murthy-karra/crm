@@ -5,20 +5,22 @@
 // Inquiries / History cards. History renders the server's per-kind
 // `detail` shapes exactly as spec §5 documents them, in server order
 // (occurred_at, recorded_at, kind_rank, id) — never re-sorted here.
-import { computed, type Component } from 'vue'
+import { computed, ref, type Component } from 'vue'
 import { RouterLink } from 'vue-router'
 import Select from 'primevue/select'
-import { Flag, Inbox, Mail, Phone, Route, UserCheck } from 'lucide-vue-next'
+import { Flag, Inbox, Mail, Phone, PhoneCall, Route, UserCheck } from 'lucide-vue-next'
 import Card from '../components/Card.vue'
 import FormField from '../components/FormField.vue'
 import Badge from '../components/Badge.vue'
 import StageLabel from '../components/StageLabel.vue'
+import LogContactDialog from '../components/LogContactDialog.vue'
 import { useAssignPersonMutation, useChangeStageMutation, useMe, useMembers, usePerson, useStages } from '../api/queries'
 import { ApiError } from '../api/client'
 import type { HistoryEntry, RoutingStrategy } from '../api/types'
 import { formatAbsoluteTime, formatRelativeTime } from '../lib/format'
-import { selectPt } from '../lib/controls'
+import { buttonClasses, selectPt } from '../lib/controls'
 import { describeApiError } from '../lib/errors'
+import { CONTACT_CHANNEL_LABEL, CONTACT_OUTCOME_LABEL } from '../lib/labels'
 
 const props = defineProps<{ id: string }>()
 
@@ -63,7 +65,10 @@ const HISTORY_ICON: Record<HistoryEntry['kind'], Component> = {
   routing_decision: Route,
   assignment_changed: UserCheck,
   stage_changed: Flag,
+  contact_attempted: PhoneCall,
 }
+
+const logContactOpen = ref(false)
 
 const ROUTING_STRATEGY_LABEL: Record<RoutingStrategy, string> = {
   explicit: 'an explicit choice',
@@ -95,6 +100,11 @@ function historySummary(entry: HistoryEntry): string {
       return from_stage
         ? `Stage changed from ${from_stage.name} to ${to_stage.name}`
         : `Stage set to ${to_stage.name}`
+    }
+    case 'contact_attempted': {
+      const { channel, outcome } = entry.detail
+      // SLICE_003 §1's walkthrough: "Contact attempted — call, no answer".
+      return `Contact attempted — ${CONTACT_CHANNEL_LABEL[channel].toLowerCase()}, ${CONTACT_OUTCOME_LABEL[outcome].toLowerCase()}`
     }
   }
 }
@@ -143,9 +153,18 @@ function historySummary(entry: HistoryEntry): string {
       class="space-y-4"
     >
       <Card>
-        <h1 class="text-title font-semibold tracking-title text-text">
-          {{ person.display_name }}
-        </h1>
+        <div class="flex items-center justify-between gap-4">
+          <h1 class="text-title font-semibold tracking-title text-text">
+            {{ person.display_name }}
+          </h1>
+          <button
+            type="button"
+            :class="buttonClasses('secondary')"
+            @click="logContactOpen = true"
+          >
+            Log contact
+          </button>
+        </div>
 
         <div class="mt-4 flex flex-wrap gap-6">
           <FormField
@@ -315,6 +334,14 @@ function historySummary(entry: HistoryEntry): string {
           No history yet.
         </p>
       </Card>
+
+      <LogContactDialog
+        :visible="logContactOpen"
+        :org-id="orgId"
+        :person-id="person.id"
+        :person-name="person.display_name"
+        @update:visible="logContactOpen = $event"
+      />
     </div>
   </div>
 </template>

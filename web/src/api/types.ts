@@ -130,11 +130,19 @@ interface HistoryEntryBase {
   correlation_id: string
 }
 
+// SLICE_003 §5's declared additive change to the SLICE_002 §5 contract:
+// `contact_attempted`, `kind_rank` 4, `detail: {"channel", "outcome"}`.
+export interface ContactAttemptedDetail {
+  channel: ContactChannel
+  outcome: ContactOutcome
+}
+
 export type HistoryEntry =
   | (HistoryEntryBase & { kind: 'inquiry_received'; detail: InquiryReceivedDetail })
   | (HistoryEntryBase & { kind: 'routing_decision'; detail: RoutingDecisionDetail })
   | (HistoryEntryBase & { kind: 'assignment_changed'; detail: AssignmentChangedDetail })
   | (HistoryEntryBase & { kind: 'stage_changed'; detail: StageChangedDetail })
+  | (HistoryEntryBase & { kind: 'contact_attempted'; detail: ContactAttemptedDetail })
 
 export interface PersonDetailResponse {
   person: PersonSummary
@@ -220,4 +228,69 @@ export interface UnresolvedItem {
 export interface UnresolvedResponse {
   items: UnresolvedItem[]
   truncated: boolean
+}
+
+// ---- Today (SLICE_003 §5 GET /api/today; §3 reasons/priority/action) -----
+
+export type TodayPriority = 'high' | 'normal'
+export type RecommendedAction = 'call' | 'email'
+
+// Discriminated on `code`, in the fixed wire order (§3) — never re-sorted
+// client-side, same discipline as `history` above.
+export type TodayReason =
+  | { code: 'new_inquiry'; source: string; received_at: string }
+  | { code: 'no_contact_attempt'; since: string }
+  | { code: 'repeat_inquiry'; inquiry_count: number }
+
+// `latest_inquiry` on a TodayItem — exactly `{id, source, received_at}` (§5),
+// narrower than `PersonInquiry` (which also carries `source_external_id` and
+// `message`).
+export interface TodayInquiryRef {
+  id: string
+  source: string
+  received_at: string
+}
+
+export interface ContactAttemptRef {
+  id: string
+  channel: ContactChannel
+  outcome: ContactOutcome
+  occurred_at: string
+}
+
+export interface TodayItem {
+  person: PersonSummary
+  priority: TodayPriority
+  recommended_action: RecommendedAction
+  reasons: TodayReason[]
+  waiting_since: string
+  latest_inquiry: TodayInquiryRef
+  last_contact_attempt: ContactAttemptRef | null
+}
+
+export interface TodayResponse {
+  generated_at: string
+  items: TodayItem[]
+  truncated: boolean
+}
+
+// ---- Contact attempts (SLICE_003 §5 POST /api/people/{id}/contact-attempts)
+
+export type ContactChannel = 'call' | 'text' | 'email' | 'other'
+export type ContactOutcome = 'reached' | 'no_answer' | 'left_message' | 'sent'
+
+export interface LogContactRequest {
+  channel: ContactChannel
+  outcome: ContactOutcome
+}
+
+export interface LogContactResponse {
+  person: PersonSummary
+  contact_attempt: ContactAttemptRef
+}
+
+// ---- Realtime token (SLICE_003 §5 POST /api/realtime/token; §6) ----------
+
+export interface RealtimeTokenResponse {
+  token: string
 }

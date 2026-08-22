@@ -4,45 +4,15 @@ Last updated: 2026-08-22
 
 ## Current phase
 
-**Slice 005 (Operator retrieval) — Lane A committed (`666cb4d` on
-`slice-005-operator`); Lane B (web) IMPLEMENTED on `slice-005-web`
-(branched from Lane A), verified, UNCOMMITTED; awaiting commit approval,
-then merge of `slice-005-web` → `main`.** Lane B: `lib/operator.ts`
-(context derivation, 6/6000 history window, §10 error copy, ⌘K test),
-types + `useOperatorTurn`, `OperatorPersonCard.vue`, `OperatorPanel.vue`
-(`v-text` only, cards only from `references`), AppShell top-bar Ask
-button + right drawer (`v-show` while on Organization routes; ⌘K/Ctrl+K
-toggle; Esc closes unless a dialog is open), `@vue/test-utils` added as
-a devDependency; 19 new Vitest cases (76 total). Web lint/typecheck/
-test/build green; loopback integration via the Vite proxy against real
-Groq confirmed (login + a completed turn with a card). Not done: an
-in-browser walkthrough (no browser automation in the session) — §1
-steps 1–5 in a real browser remain for the user. Independent review
-(`crm-reviewer`): no blocking findings; applied the 6000-char history
-bound, Esc-vs-dialog scoping, `v-show` so a pending turn survives a
-close, 40 px targets, `nextTick` focus. Implemented 2026-08-22 in the main checkout (one writer): the
-`crm-operator` crate, `search_summaries`, the `crm-api` adapter /
-explanation builder / ledger writer, config + `AppState.operator`, the
-three `ApiError` variants, `POST /api/operator/turns`, migration
-`20260824000001_operator_ledger.sql`, §13 tests 1–4, `scripts/check`
-(+`pnpm run test`), `.env.example`, README Operator subsection.
-Independent review (`crm-reviewer`: no blocking findings) and
-adversarial analysis (`crm-tester`: three low-severity bugs with repros)
-both run; every finding applied (see Completed work).
-
-Safe defaults / declared deviations for the coordinator to sync into
-`docs/specs/SLICE_005.md` (code is authoritative until then):
-- §3: `PriorityExplanation::{OnToday,NotOnToday}` carry `person:
-  PersonCard` so the §4 reference card can come from `explain_priority`
-  without a second call.
-- §11/§14: default model is `openai/gpt-oss-120b` — Groq retired
-  `llama-3.3-70b-versatile` (404 `model_not_found`) before the
-  walkthrough; §14 item 3 pre-authorised the switch.
-- §4: the malformed-call canned reply is "I had trouble looking that up —
-  try asking more specifically." (unspecified in the spec); a round that
-  asks for more than `max_calls_per_round` tools is a malformed round
-  (two in a row end the turn); a tool in flight when the turn deadline
-  fires is recorded as `error` in the ledger.
+**Slice 005 (Operator retrieval) — both lanes MERGED to `main`
+(`82630ca`, fast-forward from `slice-005-web`), not yet pushed.** Both
+slice branches still exist locally (`slice-005-operator`,
+`slice-005-web`); delete on request. Remaining for closure: the user's
+in-browser walkthrough (spec §1 steps 1–7 on loopback, then through the
+tunnel) and the coordinator doc syncs into `docs/specs/SLICE_005.md`
+(§3 `person` on `PriorityExplanation`; §11/§14 default model
+`openai/gpt-oss-120b`; §4 malformed-call canned reply, over-cap round
+rule, in-flight tool recorded at deadline). Dev DB already migrated.
 
 ## Current slice
 
@@ -56,9 +26,8 @@ proof chain. Slice 004 is complete and merged (see History).
 
 ## Current branch
 
-`slice-005-web` (from `slice-005-operator` at `666cb4d`), Lane B work
-uncommitted in the main checkout. Neither slice branch is pushed; `main`
-is at `93db87c` on `origin/main`.
+`main` at `82630ca` (Slice 005 merged), clean; `origin/main` is still at
+`93db87c` — push pending.
 
 ## Last accepted decision
 

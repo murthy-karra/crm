@@ -4,15 +4,17 @@ Last updated: 2026-08-22
 
 ## Current phase
 
-Slice 004 (Administration) **implemented, reviewed, tested, and verified
-live; awaiting merge approval** (2026-08-22). Both lanes complete on
-`slice-004-admin` (backend) and `slice-004-web` (web, worktree
-`../crm-web`). Independent review (`crm-reviewer`) and adversarial
-testing (`crm-tester`) ran against the real diffs; findings fixed and
-re-verified; a live headless-browser walkthrough of spec §1 steps 2–9
-passed 46/46 assertions against the real running stack. Next: merge
-`slice-004-admin` then `slice-004-web` into `main` (user approval
-pending), clean up branches/worktree, push.
+Slice 004 (Administration) **merged to `main`** (2026-08-22). Both
+lanes implemented, independently reviewed, adversarially tested,
+findings fixed and re-verified, live-walked-through (46/46), then
+merged: `slice-004-admin` (`9e7838a`) then `slice-004-web` (`c3694ce`),
+both `--no-ff`, zero conflicts. Full `./scripts/check` and
+`./scripts/check-db` re-run clean on the merged `main` itself (not just
+the pre-merge branches): backend fmt/clippy/143 unit/133 integration
+tests, web lint/typecheck/57 tests/build. Branches deleted, the
+`../crm-web` worktree removed. Not yet pushed to `origin/main`. Next:
+push (awaiting approval), and optionally the tunnel re-walkthrough
+(done on loopback so far).
 
 ## Current slice
 
@@ -27,12 +29,10 @@ merged (see History).
 
 ## Current branch
 
-Main checkout on `slice-004-admin` (backend); web worktree at
-`/Users/karrad/projects/crm-web` on `slice-004-web`. Neither merged to
-`main` yet. `main` itself unchanged since `194cc8f`, 4 commits behind
-what will become the post-merge tip.
-`slice-003-realtime` and `slice-003-web` deleted after merging; that
-worktree was removed and recreated for Slice 004.
+`main`, clean, **not yet pushed** — local `main` is ahead of
+`origin/main` (Slice 004's merge commits plus the pre-004 documentation
+commits from planning/approval). `slice-004-admin`/`slice-004-web`
+deleted after merging; the `../crm-web` worktree removed.
 
 ## Last accepted decision
 
@@ -655,10 +655,12 @@ slice:
 
 ## Next recommended action
 
-Merge `slice-004-admin` into `main`, then `slice-004-web` into `main`
-(spec §15 ordering — B depends on A's `me`/session shape), delete both
-branches and the `../crm-web` worktree, push `main`. Awaiting the user's
-merge approval.
+Push `main` to `origin/main` (awaiting approval). Optionally re-run the
+spec §1 browser walkthrough through the real tunnel (`app.tarams.org`/
+`api.tarams.org`) rather than loopback only — done on loopback during
+this slice's live-walkthrough step. After that, Slice 004 is fully
+closed out and the next substantive decision is when to plan Slice 005
+(Operator retrieval, D-021).
 
 **Done** (2026-08-22). Both lanes implemented and self-verified green.
 Independent review (`crm-reviewer`) and adversarial testing
@@ -755,11 +757,5 @@ over the public tunnel).
 
 ## Approval currently required
 
-Merge approval for Slice 004: `slice-004-admin` → `main`, then
-`slice-004-web` → `main`. Test status: all green (see Next recommended
-action). Migration impact: one new migration
-(`20260823000001_administration.sql`), additive to the existing schema,
-no destructive changes. Unresolved risks: none blocking; see Pending
-work item 6 (dev-services volume gap, environment-only) and the
-deferred existing-user-acceptance/suspension increments already listed
-in SLICE_004 §12/§16.
+Push approval: `main` → `origin/main`. Slice 004 is merged and fully
+re-verified locally (see Current phase); nothing else is blocking.

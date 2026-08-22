@@ -4,17 +4,20 @@
 // reference screens is deliberately not shipped this slice (§1) — the
 // sidebar's internal layout is left so a rail can be added later without
 // moving anything.
-import { computed, type Component } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
-import { Building2, Inbox, LogOut, Sun, UserCog, UserPlus, Users } from 'lucide-vue-next'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { Building2, Inbox, LogOut, Sparkles, Sun, UserCog, UserPlus, Users } from 'lucide-vue-next'
 import { useLogoutMutation, useMe } from '../api/queries'
 import { initials } from '../lib/format'
 import { buttonClasses } from '../lib/controls'
 import { describeApiError } from '../lib/errors'
+import { isOrganizationRoute, isToggleShortcut } from '../lib/operator'
+import OperatorPanel from './OperatorPanel.vue'
 import { createRealtimeClient, resolveRealtimeUrl } from '../realtime/client'
 import { useRealtime } from '../realtime/useRealtime'
 
 const router = useRouter()
+const route = useRoute()
 
 interface NavItem {
   label: string
@@ -122,6 +125,52 @@ const navItemActiveClass = 'bg-surface-2 font-semibold text-text hover:bg-surfac
 // the footer identity row is never blank.
 const orgLabel = computed(() => me.value?.organization?.name ?? (me.value?.platform_admin ? 'Platform admin' : ''))
 
+// SLICE_005 §10: the Ask drawer. Owned here, not by a route, so it persists
+// across navigations while open (a card click navigates and leaves it
+// open). Available on Organization routes only — hidden on /platform/** and
+// /invite/** and for a platform-only session. `⌘K`/`Ctrl+K` toggles, `Esc`
+// closes. The transcript is OperatorPanel's own state and is discarded when
+// the drawer closes (v-if), matching "local history ... component state
+// only".
+const askAvailable = computed(() => me.value?.organization != null && isOrganizationRoute(route.path))
+const askOpen = ref(false)
+const operatorPanel = ref<InstanceType<typeof OperatorPanel> | null>(null)
+
+function toggleAsk() {
+  if (!askAvailable.value) return
+  askOpen.value = !askOpen.value
+  if (askOpen.value) {
+    void nextTick(() => operatorPanel.value?.focus())
+  }
+}
+
+// Leaving the Organization routes (e.g. to /platform) drops the drawer and
+// its transcript; coming back starts fresh.
+watch(askAvailable, (available) => {
+  if (!available) askOpen.value = false
+})
+
+function closeAsk() {
+  askOpen.value = false
+}
+
+function onWindowKeydown(event: KeyboardEvent) {
+  if (isToggleShortcut(event)) {
+    event.preventDefault()
+    toggleAsk()
+    return
+  }
+  // Esc closes the drawer only when no floating surface (PrimeVue Dialog,
+  // Select menu) is open — those listen on `document` without stopping
+  // propagation, and one Esc must not dismiss both.
+  if (event.key === 'Escape' && askOpen.value && !document.querySelector('[role="dialog"], [role="listbox"]')) {
+    closeAsk()
+  }
+}
+
+onMounted(() => window.addEventListener('keydown', onWindowKeydown))
+onBeforeUnmount(() => window.removeEventListener('keydown', onWindowKeydown))
+
 function logout() {
   logoutMutation.mutate(undefined, {
     onSuccess: () => {
@@ -228,27 +277,61 @@ function logout() {
       </div>
     </aside>
 
-    <div class="min-w-0 flex-1 overflow-y-auto">
-      <div class="mx-auto max-w-[1280px] px-10 py-10">
+    <div class="flex min-w-0 flex-1">
+      <div class="min-w-0 flex-1 overflow-y-auto">
         <div
-          v-if="sessionUnavailable"
-          class="rounded-xl border border-border bg-surface-0 p-5"
+          v-if="askAvailable"
+          class="flex h-14 items-center justify-end px-10"
         >
-          <p class="text-body text-danger">
-            {{ describeApiError(meError, 'Could not load your session.') }}
-          </p>
           <button
             type="button"
-            class="mt-4"
-            :class="buttonClasses('secondary')"
-            :disabled="meIsFetching"
-            @click="retrySession"
+            :class="buttonClasses(askOpen ? 'ghost' : 'secondary')"
+            :aria-pressed="askOpen"
+            title="Ask the Operator (⌘K)"
+            data-testid="ask-toggle"
+            @click="toggleAsk"
           >
-            {{ meIsFetching ? 'Retrying…' : 'Try again' }}
+            <Sparkles
+              class="h-[18px] w-[18px]"
+              stroke-width="1.5"
+            />
+            Ask
           </button>
         </div>
-        <slot v-else />
+        <div
+          class="mx-auto max-w-[1280px] px-10 pb-10"
+          :class="askAvailable ? 'pt-2' : 'pt-10'"
+        >
+          <div
+            v-if="sessionUnavailable"
+            class="rounded-xl border border-border bg-surface-0 p-5"
+          >
+            <p class="text-body text-danger">
+              {{ describeApiError(meError, 'Could not load your session.') }}
+            </p>
+            <button
+              type="button"
+              class="mt-4"
+              :class="buttonClasses('secondary')"
+              :disabled="meIsFetching"
+              @click="retrySession"
+            >
+              {{ meIsFetching ? 'Retrying…' : 'Try again' }}
+            </button>
+          </div>
+          <slot v-else />
+        </div>
       </div>
+      <!-- v-show while available: closing mid-turn must not discard the
+           answer or the transcript (component state survives until the
+           drawer stops being available, e.g. on /platform). -->
+      <OperatorPanel
+        v-if="askAvailable"
+        v-show="askOpen"
+        ref="operatorPanel"
+        class="sticky top-0 h-screen"
+        @close="closeAsk"
+      />
     </div>
   </div>
 </template>

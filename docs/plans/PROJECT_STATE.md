@@ -4,10 +4,23 @@ Last updated: 2026-08-22
 
 ## Current phase
 
-**Slice 005 (Operator retrieval) — Lane A (backend) IMPLEMENTED on
-`slice-005-operator`, verified, UNCOMMITTED; awaiting commit approval.**
-Lane B (web) can integrate now: the §5 HTTP contract is live on this
-branch. Implemented 2026-08-22 in the main checkout (one writer): the
+**Slice 005 (Operator retrieval) — Lane A committed (`666cb4d` on
+`slice-005-operator`); Lane B (web) IMPLEMENTED on `slice-005-web`
+(branched from Lane A), verified, UNCOMMITTED; awaiting commit approval,
+then merge of `slice-005-web` → `main`.** Lane B: `lib/operator.ts`
+(context derivation, 6/6000 history window, §10 error copy, ⌘K test),
+types + `useOperatorTurn`, `OperatorPersonCard.vue`, `OperatorPanel.vue`
+(`v-text` only, cards only from `references`), AppShell top-bar Ask
+button + right drawer (`v-show` while on Organization routes; ⌘K/Ctrl+K
+toggle; Esc closes unless a dialog is open), `@vue/test-utils` added as
+a devDependency; 19 new Vitest cases (76 total). Web lint/typecheck/
+test/build green; loopback integration via the Vite proxy against real
+Groq confirmed (login + a completed turn with a card). Not done: an
+in-browser walkthrough (no browser automation in the session) — §1
+steps 1–5 in a real browser remain for the user. Independent review
+(`crm-reviewer`): no blocking findings; applied the 6000-char history
+bound, Esc-vs-dialog scoping, `v-show` so a pending turn survives a
+close, 40 px targets, `nextTick` focus. Implemented 2026-08-22 in the main checkout (one writer): the
 `crm-operator` crate, `search_summaries`, the `crm-api` adapter /
 explanation builder / ledger writer, config + `AppState.operator`, the
 three `ApiError` variants, `POST /api/operator/turns`, migration
@@ -43,8 +56,9 @@ proof chain. Slice 004 is complete and merged (see History).
 
 ## Current branch
 
-`slice-005-operator` (from `main` at `93db87c`), Lane A work
-uncommitted in the main checkout. `main` is pushed to `origin/main`.
+`slice-005-web` (from `slice-005-operator` at `666cb4d`), Lane B work
+uncommitted in the main checkout. Neither slice branch is pushed; `main`
+is at `93db87c` on `origin/main`.
 
 ## Last accepted decision
 

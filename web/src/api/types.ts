@@ -443,3 +443,59 @@ export interface LogContactResponse {
 export interface RealtimeTokenResponse {
   token: string
 }
+
+// --- Slice 005: Operator (docs/specs/SLICE_005.md §5) -----------------------
+
+export type OperatorRoute = 'today' | 'person' | 'people' | 'other'
+
+export interface OperatorScreenContext {
+  route: OperatorRoute
+  person_id?: string
+}
+
+export type OperatorHistoryRole = 'user' | 'assistant'
+
+export interface OperatorHistoryMessage {
+  role: OperatorHistoryRole
+  content: string
+}
+
+export interface OperatorTurnRequest {
+  /** 1–2000 chars after trim. */
+  message: string
+  /** ≤ 6 items, each ≤ 2000 chars, ≤ 6000 total; oldest dropped first. */
+  history: OperatorHistoryMessage[]
+  context: OperatorScreenContext
+}
+
+/** `WirePersonCard`: plain strings — the only source of cards in the drawer. */
+export interface OperatorPersonCard {
+  id: string
+  display_name: string
+  stage_name: string
+  assigned_user_display_name: string | null
+  primary_email: string | null
+  primary_phone: string | null
+  inquiry_count: number
+  last_inquiry_at: string | null
+}
+
+export type OperatorToolOutcome = 'ok' | 'not_found' | 'invalid_arguments' | 'error'
+
+export interface OperatorToolCall {
+  name: string
+  outcome: OperatorToolOutcome
+  duration_ms: number
+}
+
+/** The 200 outcomes; every other `TurnOutcome` is a 503 `operator_unavailable`. */
+export type OperatorTurnOutcome = 'completed' | 'tool_budget_exhausted' | 'malformed_tool_call'
+
+export interface OperatorTurnResponse {
+  turn_id: string
+  /** Plain text. Rendered by interpolation only — never as HTML or markdown. */
+  reply: string
+  references: { people: OperatorPersonCard[] }
+  tool_calls: OperatorToolCall[]
+  outcome: OperatorTurnOutcome
+}

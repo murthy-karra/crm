@@ -24,6 +24,8 @@ import type {
   MembershipStatus,
   MembersResponse,
   MutatePersonResponse,
+  OperatorTurnRequest,
+  OperatorTurnResponse,
   PeopleResponse,
   PersonDetailResponse,
   PlatformChangeMemberRoleRequest,
@@ -414,5 +416,25 @@ export function useAcceptInvitationMutation() {
     onSuccess: (data) => {
       qc.setQueryData(queryKeys.me, data)
     },
+  })
+}
+
+// --- Slice 005: Operator (docs/specs/SLICE_005.md §10) ----------------------
+
+export function postOperatorTurn(request: OperatorTurnRequest): Promise<OperatorTurnResponse> {
+  return apiFetch<OperatorTurnResponse>('/operator/turns', {
+    method: 'POST',
+    body: JSON.stringify(request),
+  })
+}
+
+/**
+ * One stateless turn. No query keys and no invalidation: the Operator is
+ * read-only this slice (nothing it does changes data), and the transcript
+ * lives in `OperatorPanel`'s component state, never in the cache.
+ */
+export function useOperatorTurn() {
+  return useMutation({
+    mutationFn: postOperatorTurn,
   })
 }

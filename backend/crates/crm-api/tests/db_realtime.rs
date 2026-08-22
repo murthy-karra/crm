@@ -568,3 +568,219 @@ async fn publish_failure_does_not_fail_the_command(migrator_pool: PgPool) {
         .unwrap();
     assert_eq!(count, 1, "the command's rows must still be committed");
 }
+
+/// Coverage gap flagged by independent adversarial review: no test fired
+/// two commands concurrently against the *same* Person. `lock_person`'s
+/// `SELECT ... FOR UPDATE` (reused from Slice 002) should serialize the
+/// two `LogContactAttempt` calls below so each writes its own fact and
+/// publishes its own event — never a lost or duplicated one. `tokio::join!`
+/// mirrors the existing race pattern in tests/db_intake.rs.
+#[sqlx::test]
+#[ignore]
+async fn two_concurrent_log_contact_attempts_on_same_person_both_write_and_publish(
+    migrator_pool: PgPool,
+) {
+    let (org_id, _alice_id) = common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Acme Realty",
+        "alice@acme.test",
+        "Alice",
+        "pw",
+    )
+    .await;
+    let publisher = Publisher::recording();
+    let router = common::build_router_with_publisher(&migrator_pool, publisher.clone()).await;
+    let cookie = common::login_cookie(&router, "alice@acme.test", "pw").await;
+
+    let intake = common::post_inquiry(
+        &router,
+        &cookie,
+        "zillow",
+        json!({ "email": "race-target@example.com" }),
+        None,
+    )
+    .await;
+    assert_eq!(intake.status(), StatusCode::CREATED);
+    let person_id: Uuid = common::body_json(intake).await["person_id"]
+        .as_str()
+        .unwrap()
+        .parse()
+        .unwrap();
+    let events_before_race = recorded(&publisher).await.len();
+    assert_eq!(events_before_race, 1, "intake published its one event");
+
+    let contact_attempts_uri = format!("/api/people/{person_id}/contact-attempts");
+    let fut_a = common::post_json_with_cookie(
+        &router,
+        &contact_attempts_uri,
+        &cookie,
+        json!({ "channel": "call", "outcome": "no_answer" }),
+    );
+    let fut_b = common::post_json_with_cookie(
+        &router,
+        &contact_attempts_uri,
+        &cookie,
+        json!({ "channel": "email", "outcome": "sent" }),
+    );
+    let (resp_a, resp_b) = tokio::join!(fut_a, fut_b);
+
+    assert_eq!(
+        resp_a.status(),
+        StatusCode::CREATED,
+        "both concurrent calls must complete"
+    );
+    assert_eq!(
+        resp_b.status(),
+        StatusCode::CREATED,
+        "both concurrent calls must complete"
+    );
+
+    let (fact_count,): (i64,) =
+        sqlx::query_as("SELECT count(*) FROM contact_attempted WHERE person_id = $1")
+            .bind(person_id)
+            .fetch_one(&migrator_pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        fact_count, 2,
+        "exactly one fact row per command execution, none lost or merged"
+    );
+
+    let events = recorded(&publisher).await;
+    assert_eq!(
+        events.len(),
+        events_before_race + 2,
+        "exactly one person.changed per command execution, none lost or duplicated"
+    );
+    let new_events = &events[events_before_race..];
+    let expected_channel = format!("org:{org_id}");
+    for (channel, data) in new_events {
+        assert_eq!(channel, &expected_channel);
+        assert_eq!(data["type"], "person.changed");
+        assert_eq!(data["data"]["person_id"], person_id.to_string());
+        assert_eq!(data["data"]["change"], "contact_attempted");
+    }
+}
+
+/// Same coverage gap, the mixed-command leg: `LogContactAttempt` racing
+/// `AssignPerson` on the same Person. Both commands take the same
+/// `lock_person` row lock, so one must wait for the other's transaction to
+/// commit — each still writes exactly its own fact and publishes exactly
+/// its own event.
+#[sqlx::test]
+#[ignore]
+async fn log_contact_attempt_racing_assign_person_on_same_person_both_write_and_publish(
+    migrator_pool: PgPool,
+) {
+    let (org_id, _alice_id) = common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Acme Realty",
+        "alice@acme.test",
+        "Alice",
+        "pw",
+    )
+    .await;
+    let carol_id = common::create_user(&migrator_pool, "carol@acme.test", "Carol", "pw").await;
+    common::add_membership(&migrator_pool, org_id, carol_id).await;
+
+    let publisher = Publisher::recording();
+    let router = common::build_router_with_publisher(&migrator_pool, publisher.clone()).await;
+    let cookie = common::login_cookie(&router, "alice@acme.test", "pw").await;
+
+    // New-Person intake assigns to the actor (Alice) and writes its own
+    // assignment_changed fact (NULL -> Alice) plus one person.changed
+    // event — both are the race's baseline, not part of what we're
+    // asserting on.
+    let intake = common::post_inquiry(
+        &router,
+        &cookie,
+        "zillow",
+        json!({ "email": "mixed-race-target@example.com" }),
+        None,
+    )
+    .await;
+    assert_eq!(intake.status(), StatusCode::CREATED);
+    let person_id: Uuid = common::body_json(intake).await["person_id"]
+        .as_str()
+        .unwrap()
+        .parse()
+        .unwrap();
+    let events_before_race = recorded(&publisher).await.len();
+
+    let (contact_before,): (i64,) =
+        sqlx::query_as("SELECT count(*) FROM contact_attempted WHERE person_id = $1")
+            .bind(person_id)
+            .fetch_one(&migrator_pool)
+            .await
+            .unwrap();
+    let (assignment_before,): (i64,) =
+        sqlx::query_as("SELECT count(*) FROM assignment_changed WHERE person_id = $1")
+            .bind(person_id)
+            .fetch_one(&migrator_pool)
+            .await
+            .unwrap();
+
+    let contact_attempts_uri = format!("/api/people/{person_id}/contact-attempts");
+    let assignment_uri = format!("/api/people/{person_id}/assignment");
+    let fut_contact = common::post_json_with_cookie(
+        &router,
+        &contact_attempts_uri,
+        &cookie,
+        json!({ "channel": "call", "outcome": "reached" }),
+    );
+    let fut_assign = common::post_json_with_cookie(
+        &router,
+        &assignment_uri,
+        &cookie,
+        json!({ "assigned_user_id": carol_id }),
+    );
+    let (contact_resp, assign_resp) = tokio::join!(fut_contact, fut_assign);
+
+    assert_eq!(contact_resp.status(), StatusCode::CREATED);
+    let assign_status = assign_resp.status();
+    let assign_body = common::body_json(assign_resp).await;
+    assert_eq!(assign_status, StatusCode::OK);
+    assert_eq!(
+        assign_body["changed"], true,
+        "Alice -> Carol is a real change"
+    );
+
+    let (contact_after,): (i64,) =
+        sqlx::query_as("SELECT count(*) FROM contact_attempted WHERE person_id = $1")
+            .bind(person_id)
+            .fetch_one(&migrator_pool)
+            .await
+            .unwrap();
+    let (assignment_after,): (i64,) =
+        sqlx::query_as("SELECT count(*) FROM assignment_changed WHERE person_id = $1")
+            .bind(person_id)
+            .fetch_one(&migrator_pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        contact_after - contact_before,
+        1,
+        "exactly one contact_attempted fact"
+    );
+    assert_eq!(
+        assignment_after - assignment_before,
+        1,
+        "exactly one assignment_changed fact"
+    );
+
+    let events = recorded(&publisher).await;
+    assert_eq!(
+        events.len(),
+        events_before_race + 2,
+        "exactly one person.changed per command execution, none lost or duplicated"
+    );
+    let new_changes: Vec<&str> = events[events_before_race..]
+        .iter()
+        .map(|(_, data)| data["data"]["change"].as_str().unwrap())
+        .collect();
+    assert!(new_changes.contains(&"contact_attempted"));
+    assert!(new_changes.contains(&"assignment_changed"));
+    for (_, data) in &events[events_before_race..] {
+        assert_eq!(data["data"]["person_id"], person_id.to_string());
+    }
+}

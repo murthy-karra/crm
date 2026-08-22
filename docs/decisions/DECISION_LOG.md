@@ -176,6 +176,8 @@ Caddy model:
    bypasses Access and is verified by the application (signatures/tokens).
    Access is dev scaffolding for the customer-facing surface; keeping it
    for internal/admin surfaces in production is a later decision.
+   **Superseded 2026-08-22 by D-024: Access is removed from the dev
+   tunnel.** The tunnel and its TLS termination are unaffected.
 5. LiveKit SFU and Egress run on separate boxes with public IPs and full
    UDP access when the calling slice arrives; media never routes through
    the tunnel (consistent with AGENTS.md §7).
@@ -368,6 +370,38 @@ Accepted with the Slice 003 specification (`docs/specs/SLICE_003.md` §6,
    the same as an `HTTPRoute` path match (D-018). Routing realtime to a
    hostname that bypasses Access is a security-boundary change and is
    not adopted without an explicit decision.
+
+### D-024 — Cloudflare Access removed from the dev tunnel (2026-08-22)
+
+Accepted (user). Amends D-016 §4. The Cloudflare Access application
+gating `app.tarams.org`/`api.tarams.org` in development (one
+`self_hosted` app, one Allow-by-email policy, created when D-016 was
+accepted) is deleted from the Cloudflare account. The tunnel itself —
+routing, TLS termination, DNS — is unchanged; only the Cloudflare-level
+login wall in front of it is gone.
+
+Rationale: the app already has a real authentication boundary (D-016
+§3's session-cookie login, the same abstraction ZITADEL fills in
+production). Access was a second, redundant login layer whose
+per-hostname session scoping was a recurring source of friction
+(documented in the README's former troubleshooting section and in
+PROJECT_STATE: logging in at one hostname didn't authenticate the
+other, and an expired per-hostname Access session silently broke the
+realtime WebSocket, presenting as a stuck "reconnecting" indicator with
+no obvious cause).
+
+Consequence, stated plainly: `app.tarams.org` and `api.tarams.org` are
+now reachable by anyone on the public internet up to the app's own
+login screen. There is no login rate-limiting or lockout today (a
+pre-existing gap, not introduced by this decision — Argon2id's
+per-attempt cost is the only friction). Acceptable for a dev
+environment holding only synthetic seed data; revisit before real
+customer data reaches this environment.
+
+Production is unaffected: D-016 §4's original wording — that whether
+to front internal/admin surfaces with Access-equivalent protection in
+production is a later decision — still stands. This decision is
+dev-tunnel-only.
 
 ---
 

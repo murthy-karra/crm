@@ -54,7 +54,7 @@ Current operational status and the next approval gate are recorded in `docs/plan
 
 ### Supported environment and prerequisites
 
-Development happens on a local macOS (Apple Silicon) machine per D-016: the API and web dev server run as local processes; PostgreSQL and Centrifugo run in Docker, loopback-only; authentication is local username/password behind the same abstraction ZITADEL fills in production; external connectivity uses a Cloudflare tunnel on `tarams.org` protected by Cloudflare Access.
+Development happens on a local macOS (Apple Silicon) machine per D-016: the API and web dev server run as local processes; PostgreSQL and Centrifugo run in Docker, loopback-only; authentication is local username/password behind the same abstraction ZITADEL fills in production; external connectivity uses a Cloudflare tunnel on `tarams.org` (D-024: no Cloudflare Access in front of it — the app's own login is the only gate).
 
 Install the pinned prerequisites before bootstrapping:
 
@@ -219,8 +219,7 @@ One-time setup:
    cloudflared tunnel route dns crm-dev api.tarams.org
    ```
 3. `infra/development/cloudflared/config.yml` already declares the ingress: `app.tarams.org` → `localhost:5173` (web dev server), `api.tarams.org` → `localhost:3000` (API, called directly from the browser — see `CRM_CORS_ALLOWED_ORIGIN` above). If the tunnel ID or your username differ, update the `tunnel:` and `credentials-file:` lines to match `cloudflared tunnel list` and your `~/.cloudflared/` path.
-4. In the Cloudflare Zero Trust dashboard (**Access → Applications**), create **one** Access application covering **both** `app.tarams.org` and `api.tarams.org`, with a long-lived session duration and an Allow policy for your email. Enable **`options_preflight_bypass`** on the application — without it, Access intercepts the browser's CORS preflight (`OPTIONS`) requests to `api.tarams.org` before they ever reach the API, and the login form fails with a CORS error.
-5. Set `CRM_CORS_ALLOWED_ORIGIN=https://app.tarams.org`, `CRM_SESSION_COOKIE_SECURE=true`, and `CRM_WEB_ALLOWED_HOSTS=app.tarams.org` in `.env`. Leave `CRM_SESSION_COOKIE_DOMAIN` unset — see its row in the table above. `CRM_CORS_ALLOWED_ORIGIN` is not optional: without it the API attaches no CORS layer, the browser silently discards every `api.*` response even though the server answered `200`, and the app sits on a permanent "Loading…" (the API request log will show `/api/me` succeeding and `/api/people` never being requested).
+4. Set `CRM_CORS_ALLOWED_ORIGIN=https://app.tarams.org`, `CRM_SESSION_COOKIE_SECURE=true`, and `CRM_WEB_ALLOWED_HOSTS=app.tarams.org` in `.env`. Leave `CRM_SESSION_COOKIE_DOMAIN` unset — see its row in the table above. `CRM_CORS_ALLOWED_ORIGIN` is not optional: without it the API attaches no CORS layer, the browser silently discards every `api.*` response even though the server answered `200`, and the app sits on a permanent "Loading…" (the API request log will show `/api/me` succeeding and `/api/people` never being requested).
 
 Then run:
 
@@ -228,17 +227,10 @@ Then run:
 ./scripts/dev-tunnel
 ```
 
-Before trusting either hostname, verify Access is actually in front of both: from a fresh private browser window (or `curl` with no session cookie), a request to `app.tarams.org` **and** to `api.tarams.org` must each land on the Cloudflare Access challenge, not the application. Only after both negative checks pass is the tunnel considered verified.
+There is no Cloudflare Access step (D-024): the tunnel routes straight to the app, and the app's own login screen is the only gate. Before trusting either hostname, confirm both actually reach the application — `https://app.tarams.org` should show the login page and `https://api.tarams.org/api/health` should return a JSON health response, not a Cloudflare error page.
 
-**Access sessions are scoped per hostname, not per Application** — logging in at `app.tarams.org` does not also authenticate `api.tarams.org`, even though they share one Application and one policy. Visit each hostname directly once (a real top-level page load, e.g. `https://api.tarams.org/api/health`) to establish its own session; only then will the browser's background `fetch()` calls from `app.*` to `api.*` carry a valid session and succeed.
-
-Set `CRM_SESSION_COOKIE_SECURE=true` before logging in through the tunnel, and confirm the app's own login still works once you're past Access — the two are independent layers.
-
-A future webhook-receiving hostname will bypass Access (webhooks cannot complete a login challenge) and instead verify requests itself, e.g. via provider signatures.
-
-The realtime WebSocket (`wss://api.tarams.org/connection/websocket`) rides the same tunnel and Access session as every other `api.*` request — see `infra/development/cloudflared/config.yml`'s path-routed ingress rule and `CENTRIFUGO_TOKEN_HMAC_SECRET` above.
+The realtime WebSocket (`wss://api.tarams.org/connection/websocket`) rides the same tunnel as every other `api.*` request — see `infra/development/cloudflared/config.yml`'s path-routed ingress rule and `CENTRIFUGO_TOKEN_HMAC_SECRET` above.
 
 ### Troubleshooting
 
 - **Centrifugo rejects a freshly-minted token as expired.** Docker Desktop's VM clock can drift after the host sleeps, so the container's notion of "now" runs ahead of or behind the API process's. Restart Docker Desktop (or just the `centrifugo` container: `./scripts/dev-services down && ./scripts/dev-services up`) to resync the clock.
-- **The realtime indicator is stuck on "reconnecting…" through the tunnel, even though the app otherwise works.** The per-hostname Cloudflare Access session for `api.*` has its own expiry, independent of the app's login session (see "Access sessions are scoped per hostname" above) — a WebSocket upgrade is a request like any other, so an expired `api.*` Access session blocks it the same way it would block a `fetch()`. Visit `https://api.tarams.org/api/health` directly (a real top-level page load) to re-establish the Access session, then reload the app.

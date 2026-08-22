@@ -559,7 +559,9 @@ realtime/events.ts       RealtimeEvent types; invalidationsFor(event, orgId): Qu
 realtime/useRealtime.ts  composable: status ref ('idle' | 'connecting' | 'connected' | 'reconnecting' | 'unavailable');
                            mapping from SDK state: `connecting` before the first successful connect → 'connecting';
                            `connecting` after any `connected` → 'reconnecting'; `connected` → 'connected';
-                           `disconnected` with a terminal code (`unauthorized`, Centrifugo 3500–3999) → 'unavailable';
+                           `disconnected` with a terminal code (`unauthorized`, Centrifugo 3500–3999 or 4500–4999,
+                           corrected 2026-08-22 after adversarial testing found the narrower original range left
+                           status stuck at 'connected' with no indicator) → 'unavailable';
                            our own disconnect() → 'idle'. Client factory injected (fake client in tests, no SDK).
                            connect after `me` resolves (watch orgId); getToken per §9; on 'publication' → invalidate
                            mapped keys (250 ms coalesce); on 'connected' after a disconnect → invalidate ['org', orgId];
@@ -590,6 +592,13 @@ between lint/typecheck and build. The raw-`fetch` rule of SLICE_002 §10
 stands: every HTTP call goes through `apiFetch`.
 
 ## 11. Development environment, transport, and configuration
+
+**Note (2026-08-22, post-implementation): D-024 removed Cloudflare
+Access from the dev tunnel.** The Access-specific details below (the
+Access application, its session behavior, the WebSocket riding "the
+same tunnel and Access session") describe the environment as it stood
+when this spec was approved and implemented; they no longer apply. The
+tunnel, TLS, and path-routed WebSocket ingress are otherwise unchanged.
 
 **Config (Lane A; `.env.example` and README updated):**
 

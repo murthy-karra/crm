@@ -1,6 +1,6 @@
 # Project State
 
-Last updated: 2026-08-21
+Last updated: 2026-08-22
 
 ## Current phase
 
@@ -30,6 +30,13 @@ After 003: Slice 004 administration (D-021), 005 Operator retrieval,
 removed after merging (`slice-002-intake`, `slice-002-web`).
 
 ## Last accepted decision
+
+2026-08-22, user-accepted:
+- D-024 — Cloudflare Access removed from the dev tunnel. The app's own
+  session login is the only gate now; the tunnel and its TLS are
+  unchanged. Amends D-016 §4. Executed live (the `crm-dev` Access
+  application deleted via the Cloudflare API and confirmed gone);
+  README and SLICE_003 §11/§10 updated to match.
 
 2026-08-21, user-accepted:
 - D-023 — realtime model: one Organization channel with server-side
@@ -337,13 +344,10 @@ removed after merging (`slice-002-intake`, `slice-002-web`).
 
 ## Pending work
 
-1. User-side, whenever convenient, not blocking: the Access application's
-   configuration (two hostnames, one policy, `options_preflight_bypass:
-   true`) was created via a series of API calls rather than a
-   reproducible dashboard/IaC flow and isn't visible from the repo —
-   worth documenting more durably (e.g. a short note in the README) or
-   recreating via Terraform/dashboard if this needs to survive account
-   changes.
+1. Resolved 2026-08-22 (D-024): the Cloudflare Access application was
+   deleted rather than documented more durably — the user decided the
+   app's own login is sufficient for the dev tunnel and Access was
+   redundant friction. No longer applicable.
 2. User-side (whenever convenient, not blocking): fresh-clone walkthrough
    of Slice 000.
 3. Not blocking: the local dev database (`crm_dev`) now has a few

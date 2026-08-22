@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+# Posts five demo leads as alice@acme.test over HTTP (docs/specs/SLICE_003.md
+# §11, §1 step 3): zillow/realtor_com/website/referral/manual sources, mixed
+# phone and email, one assigned to Carol. Never printed and never on argv
+# (visible in `ps`): the login password or any cookie value. No -v, no
+# set -x.
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "$script_dir/.." && pwd)"
+env_file="$repo_root/.env"
+
+if [ ! -f "$env_file" ]; then
+  echo ".env not found at repo root. Copy .env.example to .env and fill in values first." >&2
+  exit 1
+fi
+
+set -a
+# shellcheck disable=SC1090
+source "$env_file"
+set +a
+
+if [ -z "${CRM_DEV_SEED_PASSWORD:-}" ]; then
+  echo "CRM_DEV_SEED_PASSWORD is not set in .env" >&2
+  exit 1
+fi
+
+if ! command -v jq >/dev/null 2>&1; then
+  echo "jq is required (used to read Carol's id off GET /api/organization/members)." >&2
+  exit 1
+fi
+
+api_url="${CRM_DEMO_API_URL:-http://127.0.0.1:3000}"
+
+# mktemp + trap cleanup (docs/specs/SLICE_003.md §11).
+cookie_jar="$(mktemp)"
+cleanup() {
+  rm -f "$cookie_jar"
+}
+trap cleanup EXIT
+
+echo "==> logging in as alice@acme.test at $api_url"
+login_status="$(
+  printf '{"email":"alice@acme.test","password":"%s"}' "$CRM_DEV_SEED_PASSWORD" \
+    | curl -sS -o /dev/null -w '%{http_code}' \
+        -c "$cookie_jar" -b "$cookie_jar" \
+        -X POST "$api_url/api/session" \
+        -H 'content-type: application/json' \
+        --data-binary @-
+)"
+if [ "$login_status" != "200" ]; then
+  echo "login failed with HTTP $login_status" >&2
+  exit 1
+fi
+
+# GET /api/me sanity check with a loud failure on anything but 200
+# (docs/specs/SLICE_003.md §11): in tunnel mode (CRM_SESSION_COOKIE_SECURE=
+# true), curl 8.7 replays a Secure cookie to http://127.0.0.1:<port> but
+# silently drops it for http://localhost:<port> — "localhost" is not
+# interchangeable with the default here.
+echo "==> sanity check: GET /api/me"
+me_status="$(
+  curl -sS -o /dev/null -w '%{http_code}' \
+    -c "$cookie_jar" -b "$cookie_jar" \
+    "$api_url/api/me"
+)"
+if [ "$me_status" != "200" ]; then
+  cat >&2 <<EOF
+GET /api/me returned HTTP $me_status (expected 200) after a successful login.
+If CRM_DEMO_API_URL uses "localhost" instead of "127.0.0.1" and
+CRM_SESSION_COOKIE_SECURE=true (tunnel mode), curl silently drops the Secure
+cookie for "localhost" — use the 127.0.0.1 default instead.
+EOF
+  exit 1
+fi
+
+echo "==> fetching Carol's id"
+carol_id="$(
+  curl -sS -c "$cookie_jar" -b "$cookie_jar" "$api_url/api/organization/members" \
+    | jq -r '.members[] | select(.email == "carol@acme.test") | .user_id'
+)"
+if [ -z "$carol_id" ]; then
+  echo "could not find a member with email carol@acme.test via GET /api/organization/members" >&2
+  exit 1
+fi
+
+# A random per-run submission_id in each payload so a rerun produces repeat
+# inquiries (proving the D-022 "Inquired again" path) rather than
+# content-hash duplicates (docs/specs/SLICE_003.md §11).
+run_id="$(date +%s)-$$"
+
+post_lead() {
+  local source="$1"
+  local payload="$2"
+  local status
+  status="$(
+    printf '%s' "$payload" \
+      | curl -sS -o /dev/null -w '%{http_code}' \
+          -c "$cookie_jar" -b "$cookie_jar" \
+          -X POST "$api_url/api/inquiries" \
+          -H 'content-type: application/json' \
+          --data-binary @-
+  )"
+  echo "    $source -> HTTP $status"
+}
+
+echo "==> posting five demo leads"
+post_lead "zillow" "$(printf '{"source":"zillow","payload":{"first_name":"Jordan","last_name":"Rivera","email":"jordan.rivera+%s@example.com","phone":"+15555550101","message":"Interested in the downtown listing.","submission_id":"%s-1"}}' "$run_id" "$run_id")"
+post_lead "realtor_com" "$(printf '{"source":"realtor_com","payload":{"first_name":"Priya","last_name":"Nair","phone":"+15555550102","message":"Looking for a 3-bed in the suburbs.","submission_id":"%s-2"}}' "$run_id")"
+post_lead "website" "$(printf '{"source":"website","payload":{"first_name":"Sam","last_name":"Okafor","email":"sam.okafor+%s@example.com","phone":"+15555550103","message":"Requesting a callback this week.","submission_id":"%s-3"}}' "$run_id" "$run_id")"
+post_lead "referral" "$(printf '{"source":"referral","payload":{"first_name":"Lena","last_name":"Kowalski","email":"lena.kowalski+%s@example.com","message":"Referred by a past client.","submission_id":"%s-4"}}' "$run_id" "$run_id")"
+post_lead "manual" "$(printf '{"source":"manual","payload":{"first_name":"Marcus","last_name":"Chen","phone":"+15555550105","message":"Walked in, assign to Carol.","submission_id":"%s-5"},"assign_to_user_id":"%s"}' "$run_id" "$carol_id")"
+
+echo "==> demo-leads complete"

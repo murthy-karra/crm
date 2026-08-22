@@ -40,16 +40,18 @@ struct OrganizationPayload {
 }
 
 /// Amended by docs/specs/SLICE_004.md §5 (declared change): `organization`
-/// is nullable and gains `role`; `platform_admin` is added.
+/// is nullable and gains `role`; `platform_admin` is added. `pub(crate)`
+/// so the public invitation-accept route (`routes/invitations.rs`) can
+/// build the identical body its own success response requires.
 #[derive(Serialize)]
-struct SessionResponse {
+pub(crate) struct SessionResponse {
     user: UserPayload,
     organization: Option<OrganizationPayload>,
     platform_admin: bool,
 }
 
 impl SessionResponse {
-    fn from_identity(identity: &session::SessionIdentity) -> Self {
+    pub(crate) fn from_identity(identity: &session::SessionIdentity) -> Self {
         SessionResponse {
             user: UserPayload {
                 id: identity.user_id,

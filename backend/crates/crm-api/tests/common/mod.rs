@@ -200,6 +200,27 @@ pub async fn create_user(
 /// A `member`/`active` membership — the common case every pre-004 fixture
 /// used implicitly. Use `add_membership_with` for admin or inactive
 /// fixtures.
+/// A named, real platform admin (as opposed to `fixture_platform_admin`'s
+/// anonymous bootstrap actor) — for tests that log in as the platform
+/// admin (docs/specs/SLICE_004.md §13).
+pub async fn create_platform_admin(
+    migrator_pool: &PgPool,
+    email: &str,
+    display_name: &str,
+    password: &str,
+) -> Uuid {
+    grant_platform_admin(
+        migrator_pool,
+        GrantPlatformAdmin {
+            email: email.to_string(),
+            display_name: display_name.to_string(),
+            password: password.to_string(),
+        },
+    )
+    .await
+    .expect("platform admin fixture creation must succeed")
+}
+
 pub async fn add_membership(pool: &PgPool, org_id: Uuid, user_id: Uuid) {
     add_membership_with(
         pool,
@@ -325,6 +346,42 @@ pub async fn post_json_with_cookie(
                 .header("content-type", "application/json")
                 .header("cookie", cookie)
                 .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap()
+}
+
+pub async fn put_json_with_cookie(
+    router: &Router,
+    uri: &str,
+    cookie: &str,
+    body: serde_json::Value,
+) -> Response {
+    router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri(uri)
+                .header("content-type", "application/json")
+                .header("cookie", cookie)
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap()
+}
+
+pub async fn delete_with_cookie(router: &Router, uri: &str, cookie: &str) -> Response {
+    router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri(uri)
+                .header("cookie", cookie)
+                .body(Body::empty())
                 .unwrap(),
         )
         .await

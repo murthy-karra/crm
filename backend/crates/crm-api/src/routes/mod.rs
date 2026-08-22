@@ -1,7 +1,9 @@
 pub mod health;
 pub mod intake;
+pub mod invitations;
 pub mod organization;
 pub mod people;
+pub mod platform;
 pub mod realtime;
 pub mod session;
 pub mod stages;

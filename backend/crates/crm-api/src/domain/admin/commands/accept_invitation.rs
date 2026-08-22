@@ -23,7 +23,10 @@ pub struct AcceptInvitation {
 
 pub struct AcceptInvitationOutcome {
     pub user_id: Uuid,
+    pub email: String,
+    pub display_name: String,
     pub organization_id: Uuid,
+    pub organization_name: String,
     pub role: Role,
 }
 
@@ -178,7 +181,10 @@ async fn accept_invitation_attempt(
 
     Ok(AcceptInvitationOutcome {
         user_id,
+        email: invitation.email.clone(),
+        display_name,
         organization_id: invitation.organization_id,
+        organization_name: invitation.organization_name.clone(),
         role: invitation.role,
     })
 }

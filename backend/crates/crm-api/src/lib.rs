@@ -46,6 +46,8 @@ pub fn build_app(state: AppState) -> Router {
         .merge(routes::stages::router())
         .merge(routes::realtime::router())
         .merge(routes::today::router())
+        .merge(routes::invitations::router())
+        .merge(routes::platform::router())
         .with_state(state)
         .layer(
             ServiceBuilder::new()
@@ -72,7 +74,7 @@ pub fn build_app(state: AppState) -> Router {
             let cors_layer = CorsLayer::new()
                 .allow_origin(tower_http::cors::AllowOrigin::list([origin_value]))
                 .allow_credentials(true)
-                .allow_methods([Method::GET, Method::POST, Method::DELETE])
+                .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
                 .allow_headers([axum::http::header::CONTENT_TYPE]);
             app.layer(cors_layer)
         }

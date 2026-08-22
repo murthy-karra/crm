@@ -33,7 +33,7 @@ pub struct AdminActor {
 
 /// `organization_membership.role` (docs/specs/SLICE_004.md §2). "Admin" is
 /// the only authorization fact this slice adds inside an Organization.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Role {
     Admin,
@@ -58,7 +58,7 @@ impl Role {
 }
 
 /// `organization_membership.status` (D-027; docs/specs/SLICE_004.md §2).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MembershipStatus {
     Active,

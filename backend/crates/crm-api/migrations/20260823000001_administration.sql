@@ -190,6 +190,18 @@ CREATE TRIGGER membership_changed_no_truncate
 
 GRANT INSERT ON organization, app_user, local_credential,
                 organization_membership, invitation, stage TO crm_app;
+-- Deviation from SLICE_004.md §2's literal grant list, flagged in the Lane
+-- A report per AGENTS.md §11 rather than applied silently: `invitation` is
+-- a brand-new table this migration creates, and the spec's grant block
+-- above gives crm_app INSERT (and, below, column-UPDATE) on it but never
+-- SELECT — unlike every other table in that INSERT line, which already had
+-- SELECT from an earlier migration. Without SELECT, every invitation read
+-- path (list, preview, revoke's FOR UPDATE lookup, accept's lookup, the
+-- AlreadyMember/open-invitation checks) fails with a bare "permission
+-- denied for table invitation", so the entire invitation mechanism is
+-- inoperable as literally specified. Confirmed against a live crm_app
+-- connection before adding this line.
+GRANT SELECT ON invitation TO crm_app;
 GRANT UPDATE (role, status, updated_at) ON organization_membership TO crm_app;
 GRANT UPDATE (accepted_at, accepted_user_id, revoked_at, revoke_reason)
     ON invitation TO crm_app;          -- token_hash/email/expires_at immutable

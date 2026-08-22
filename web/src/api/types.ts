@@ -3,7 +3,9 @@
 // file is a consumer of that contract, not an owner of it — every shape
 // here must match §5 exactly; do not add, rename, or infer fields.
 
-// ---- Session / identity (Slice 001, unchanged by Slice 002) --------------
+// ---- Session / identity (Slice 001; §3/§4 declared changes in SLICE_004
+// §5 "Declared changes to existing contracts" — organization is now
+// nullable and carries `role`; `platform_admin` is new) ---------------------
 
 export interface UserSummary {
   id: string
@@ -16,21 +18,168 @@ export interface OrganizationSummary {
   name: string
 }
 
-export interface MeResponse {
-  user: UserSummary
-  organization: OrganizationSummary
+export type MembershipRole = 'admin' | 'member'
+export type MembershipStatus = 'active' | 'inactive'
+
+export interface MeOrganization extends OrganizationSummary {
+  role: MembershipRole
 }
 
+// SLICE_004 §5 item 2: `organization` is null for a platform-only session
+// (no active Organization); `platform_admin` is additive. The three
+// session shapes router.ts's guard handles: member (`organization != null`,
+// role 'member'), admin (`organization != null`, role 'admin'), and
+// platform-only (`organization: null`, `platform_admin: true`) — plus a
+// user who is both an Organization admin/member and a platform admin.
+export interface MeResponse {
+  user: UserSummary
+  organization: MeOrganization | null
+  platform_admin: boolean
+}
+
+// SLICE_004 §5 "GET /api/organization/members gains role, status,
+// joined_at, assigned_people_count (additive)".
 export interface Member {
   user_id: string
   display_name: string
   email: string
+  role: MembershipRole
+  status: MembershipStatus
   joined_at: string
+  assigned_people_count: number
 }
 
 export interface MembersResponse {
   members: Member[]
 }
+
+// ---- Membership mutations (§5 PUT .../members/{id}/role, .../status) -----
+
+export interface ChangeMemberRoleRequest {
+  role: MembershipRole
+}
+
+export interface SetMemberStatusRequest {
+  status: MembershipStatus
+}
+
+export interface MemberMutationResponse {
+  member: Member
+}
+
+// ---- Invitations (§5 GET/POST /api/organization/invitations, DELETE
+// /api/organization/invitations/{id}; §2 "Invitation state is derived") ----
+
+// Derived state, never stored server-side (§2): accepted if accepted_at,
+// else revoked if revoked_at, else expired if expires_at <= now, else
+// pending.
+export type InvitationStatus = 'pending' | 'expired' | 'accepted' | 'revoked'
+
+export interface InvitedBy {
+  id: string
+  display_name: string
+}
+
+export interface Invitation {
+  id: string
+  email: string
+  role: MembershipRole
+  status: InvitationStatus
+  expires_at: string
+  created_at: string
+  invited_by: InvitedBy
+}
+
+export interface InvitationsResponse {
+  invitations: Invitation[]
+}
+
+export interface IssueInvitationRequest {
+  email: string
+  role: MembershipRole
+}
+
+// The only response that ever contains the raw token, embedded in
+// `accept_path` (§5); the client absolutizes it with its own origin.
+export interface IssueInvitationResponse {
+  invitation: Invitation
+  accept_path: string
+}
+
+// ---- Platform (§5 "Platform routes"; PlatformAuthContext, Organization id
+// from the path, never the session) ----------------------------------------
+
+export type OrganizationState = 'ok' | 'pending_first_admin' | 'needs_attention'
+
+export interface PlatformOrganizationSummary {
+  id: string
+  name: string
+  status: 'active'
+  created_at: string
+  member_count: number
+  admin_count: number
+  pending_admin_invitations: number
+  state: OrganizationState
+}
+
+export interface PlatformOrganizationsResponse {
+  organizations: PlatformOrganizationSummary[]
+}
+
+export interface CreateOrganizationRequest {
+  name: string
+}
+
+export interface CreateOrganizationResponse {
+  organization: PlatformOrganizationSummary
+}
+
+export interface PlatformOrganizationDetailResponse {
+  organization: PlatformOrganizationSummary
+  members: Member[]
+  invitations: Invitation[]
+}
+
+// Platform's role/invitation routes only ever accept 'admin' (D-026 §4) —
+// the route rejects 'member' before it reaches the domain (§4's
+// ChangeMemberRole table) — but the request shape is otherwise identical
+// to the org-admin one, so these are typed narrowly rather than reusing
+// ChangeMemberRoleRequest/IssueInvitationRequest, which allow 'member'.
+export interface PlatformChangeMemberRoleRequest {
+  role: 'admin'
+}
+
+export interface PlatformIssueInvitationRequest {
+  email: string
+  role: 'admin'
+}
+
+// ---- Public invitation routes (§5 "Public routes"; no session, the token
+// is the credential) --------------------------------------------------------
+
+export interface InvitationPreviewRequest {
+  token: string
+}
+
+// Deliberately excludes the `state` field the domain query
+// (`invitation::preview`, §4) mentions internally — the HTTP contract (§5)
+// distinguishes expired/used/invalid via status code (410/409/404), not a
+// body field, and the frozen contract is §5, not §4's prose.
+export interface InvitationPreviewResponse {
+  organization_name: string
+  email: string
+  role: MembershipRole
+  expires_at: string
+}
+
+export interface AcceptInvitationRequest {
+  token: string
+  display_name: string
+  password: string
+}
+
+// "body identical to POST /api/session" (§5).
+export type AcceptInvitationResponse = MeResponse
 
 // ---- Stages (§5 GET /api/stages) -----------------------------------------
 

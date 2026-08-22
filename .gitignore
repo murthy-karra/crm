@@ -10,3 +10,6 @@ web/dist/
 
 # OS noise
 .DS_Store
+
+# Ad-hoc screenshots dropped in the repo root while reviewing the UI
+/Screenshot*.png

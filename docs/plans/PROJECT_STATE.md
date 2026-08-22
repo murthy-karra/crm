@@ -6,15 +6,16 @@ Last updated: 2026-08-22
 
 Slice 004 (Administration) **merged to `main`** (2026-08-22). Both
 lanes implemented, independently reviewed, adversarially tested,
-findings fixed and re-verified, live-walked-through (46/46), then
-merged: `slice-004-admin` (`9e7838a`) then `slice-004-web` (`c3694ce`),
-both `--no-ff`, zero conflicts. Full `./scripts/check` and
-`./scripts/check-db` re-run clean on the merged `main` itself (not just
-the pre-merge branches): backend fmt/clippy/143 unit/133 integration
-tests, web lint/typecheck/57 tests/build. Branches deleted, the
-`../crm-web` worktree removed. Not yet pushed to `origin/main`. Next:
-push (awaiting approval), and optionally the tunnel re-walkthrough
-(done on loopback so far).
+findings fixed and re-verified, live-walked-through on loopback
+(46/46) and then re-walked-through through the real Cloudflare tunnel
+(48/48, see Completed work), then merged: `slice-004-admin` (`9e7838a`)
+then `slice-004-web` (`c3694ce`), both `--no-ff`, zero conflicts. Full
+`./scripts/check` and `./scripts/check-db` re-run clean on the merged
+`main` itself (not just the pre-merge branches): backend fmt/clippy/143
+unit/133 integration tests, web lint/typecheck/57 tests/build. Branches
+deleted, the `../crm-web` worktree removed. Not yet pushed to
+`origin/main`. Next: push (awaiting approval); Slice 004 is otherwise
+fully closed out.
 
 ## Current slice
 
@@ -433,6 +434,58 @@ Earlier the same day, user-accepted:
     volume, so it does not give a true clean slate on its own — needs
     `down -v` or an explicit volume prune. Noted in Pending work below.
 
+- 2026-08-22: Slice 004 spec §1 steps 2–9 re-walked-through through the
+  real Cloudflare tunnel (`https://app.tarams.org`/`https://api.tarams.org`,
+  not loopback), specifically because this project's history (D-024/D-025)
+  has repeatedly found tunnel-only bugs that loopback testing misses (the
+  Slice 003 realtime WebSocket 404'd silently through the tunnel for weeks
+  before D-025 caught it). Fresh `dev-bootstrap` seed data
+  (`owner@platform.test`, Acme/Best); Cedar Realty and Erin/Frank/Gina
+  created live during the walkthrough per the spec script. Headless
+  Playwright against `https://app.tarams.org` (adapted from the loopback
+  walkthrough script, with `apiFetch` resolving explicitly against
+  `https://api.tarams.org` since the app's own `resolveApiBaseUrl()` does
+  that at runtime and a bare relative fetch from an `app.*` page would
+  otherwise wrongly resolve against `app.*` itself): **48/48 assertions
+  passed** (the original 46, plus 2 new ones instrumenting step 6's
+  realtime disconnect directly). `./scripts/check-tunnel` confirmed
+  plumbing first (app 200, API health 200, WebSocket upgrade 101).
+  - **Step 6 (Frank deactivates Erin) got explicit WebSocket lifecycle
+    instrumentation** via Playwright's `page.on('websocket')`, tracking
+    Erin's live Centrifugo connection (`wss://api.tarams.org/connection/
+    websocket`) with open/close timestamps, attached before any
+    navigation. Confirmed live, with no page reload: Erin's WebSocket
+    closed **179ms after** Frank's deactivation request resolved, and her
+    tab's URL had not changed at that moment (ruling out the close being
+    a side effect of a forced navigation rather than a genuine server-
+    initiated disconnect). Cross-checked against the API's own log: zero
+    `realtime disconnect failed` warnings anywhere in the run (the
+    `disconnect_user` codepath in `realtime/publisher.rs` only warns on
+    failure; success is `debug!`-only and filtered by the default log
+    level, so silence plus the observed close is the expected signature
+    of success). This is the first time this exact codepath (Centrifugo's
+    HTTP disconnect API call, followed by the client's WebSocket actually
+    closing) has been proven over the real tunnel rather than loopback.
+  - A first run of the instrumented script scored 46/48 — a bug in the
+    script, not the app: the WebSocket tracker was attached *after*
+    navigating to `/today` and waiting, by which point the connection
+    (opened within about a second of mount) had already been missed
+    (`page.on('websocket')` only fires for connections opened after the
+    listener is registered). Fixed by attaching the tracker at page
+    creation, before any navigation, and re-run clean; required a full
+    `dev-services down -v && up && db-migrate && dev-bootstrap` reset
+    first since the first run's Cedar Realty/Erin/Frank/Gina data would
+    otherwise collide with the second run's unique-name/invitation-state
+    assumptions.
+  - No other tunnel-specific behavioral differences from the loopback
+    run: CORS, the `Secure` cross-origin cookie, and the WebSocket upgrade
+    path all held up unchanged. Zero unhandled console/page errors; all
+    observed "Failed to load resource" console lines were the anonymous
+    session-check on public routes or the walkthrough's own deliberate
+    401/403/404/409 negative-path probes.
+  - Backend/frontend/tunnel processes stopped after the run; dev-services
+    (Postgres, Centrifugo) left running per instruction.
+
 ## Pending work
 
 1. Resolved 2026-08-22 (D-024): the Cloudflare Access application was
@@ -654,12 +707,11 @@ slice:
 
 ## Next recommended action
 
-Push `main` to `origin/main` (awaiting approval). Optionally re-run the
-spec §1 browser walkthrough through the real tunnel (`app.tarams.org`/
-`api.tarams.org`) rather than loopback only — done on loopback during
-this slice's live-walkthrough step. After that, Slice 004 is fully
-closed out and the next substantive decision is when to plan Slice 005
-(Operator retrieval, D-021).
+Push `main` to `origin/main` (awaiting approval). The tunnel re-walkthrough
+(spec §1 steps 2–9 through `app.tarams.org`/`api.tarams.org`) is now done
+— 48/48 — so Slice 004 is otherwise fully closed out and the next
+substantive decision is when to plan Slice 005 (Operator retrieval,
+D-021).
 
 **Done** (2026-08-22). Both lanes implemented and self-verified green.
 Independent review (`crm-reviewer`) and adversarial testing
@@ -757,4 +809,5 @@ over the public tunnel).
 ## Approval currently required
 
 Push approval: `main` → `origin/main`. Slice 004 is merged and fully
-re-verified locally (see Current phase); nothing else is blocking.
+re-verified locally, including the tunnel re-walkthrough (see Current
+phase); nothing else is blocking.

@@ -444,6 +444,45 @@ Cloudflare Tunnel dashboard routing and is unaffected.
 
 ---
 
+### D-026 — Organization admin continuity: last-admin protection, platform-admin recovery, members unaffected (2026-08-22)
+
+Accepted (user, during Slice 004 pre-planning). Refines D-021.
+
+1. **Members never stop working.** An Organization with no active admin
+   stays fully operational for its members: leads, Today, contact
+   attempts, realtime, and every non-admin action behave exactly as
+   before. "Admin" is an authorization fact about who may change
+   membership and settings, not a liveness condition for the
+   Organization. The only thing an admin-less Organization cannot do is
+   admin-only actions.
+2. **Last-admin protection on self-service paths.** An Organization
+   admin cannot demote themselves or remove their own membership if they
+   are the last active admin; the application rejects the command with
+   a clear message (promote someone else first). This is an application
+   invariant enforced in the domain layer, not a database constraint.
+3. **Platform-admin recovery, both ways, always.** For any Organization
+   the platform admin may (a) promote an existing member to admin, and
+   (b) invite a new admin who is not yet in the system — the same
+   invitation mechanism D-021 ships. Both actions are always available;
+   neither is gated on the other (a newly appointed outsider is a normal
+   case). The platform-admin view may list members for convenience but
+   does not have to.
+4. **Scope of platform-admin power stays narrow.** Day-to-day membership
+   management inside an Organization is the Organization admin's job;
+   the platform admin steps in only to create Organizations and to
+   restore admin continuity. The platform admin is not a superuser over
+   Organization data (D-003, D-021).
+5. **Surfacing, not pushing, in Slice 004.** Admin-less Organizations
+   are surfaced as "needs attention" in the platform-admin view. A
+   newly created Organization whose first-admin invitation is still
+   pending is "pending first admin", not an error; it becomes "needs
+   attention" only if that invitation expires. No email/Slack/push
+   notification subsystem is built for this in 004; pushed alerts to
+   the platform admin are a later slice once a delivery channel exists.
+
+Blocks: nothing. Feeds the Slice 004 plan (membership roles, the
+promote/demote commands, invitation expiry, platform-admin listing).
+
 ## Open decisions
 
 ### O-001 — RESOLVED

@@ -6,7 +6,8 @@ Last updated: 2026-08-22
 
 Slice 003 (Today + realtime) **implemented, verified, merged, and
 pushed** (2026-08-22). `main` is up to date with `origin/main`. Next:
-Slice 004 administration (D-021), once planned.
+plan Slice 004 administration (D-021, refined by D-026). No
+`SLICE_004.md` or lane briefs exist yet.
 
 ## Current slice
 
@@ -39,7 +40,16 @@ cross-session walkthrough). After 003: Slice 004 administration
 
 ## Last accepted decision
 
-2026-08-22, user-accepted:
+2026-08-22, user-accepted (Slice 004 pre-planning):
+- D-026 — Organization admin continuity. Admin-less Organizations stay
+  fully operational for members; an Organization admin cannot remove
+  the last admin (themselves); the platform admin can always both
+  promote an existing member and invite a brand-new admin; admin-less
+  Organizations are surfaced as "needs attention" in the platform-admin
+  view (pending first-admin invitation is not an error); no push
+  notifications in 004. Feeds the Slice 004 plan.
+
+Earlier the same day, user-accepted:
 - D-024 — Cloudflare Access removed from the dev tunnel. The app's own
   session login is the only gate now; the tunnel and its TLS are
   unchanged. Amends D-016 §4. Executed live (the `crm-dev` Access

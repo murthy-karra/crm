@@ -5,14 +5,23 @@ Last updated: 2026-08-22
 ## Current phase
 
 **Slice 006 (calling) — spec APPROVED 2026-08-22; Lane C (telephony
-host) DEPLOYED and verified; Lane A (backend) next.** The user
+host) COMPLETE; Lane A (backend) STARTED on `slice-006-calling` (only
+`scripts/telephony-trunk` committed so far, `0ec8421`); the
+implementation gate for Lane A was stated but not yet explicitly
+approved — ask "Proceed with Lane A?" on resume.** The user
 provisioned `livekit1.tarams.org` (OVH, Ubuntu 24.04, public IPv4, DNS
 A record); Docker, ufw, Caddy (Let's Encrypt), Redis, LiveKit v1.13
 (built-in TURN on 3478/5349 using Caddy's cert) and LiveKit SIP v1.11
 are up from `infra/telephony/`. Verified from the Mac over TLS: room
-create/list/delete and `SIP/ListSIPOutboundTrunk` (empty). Remaining
-for Lane C: the Telnyx number + credential SIP connection (user), then
-the trunk via Lane A's `scripts/telephony-trunk`. Webhook URL is
+create/list/delete and `SIP/ListSIPOutboundTrunk` (empty). Lane C is
+COMPLETE: the user provisioned the Telnyx number + credential SIP
+connection; `scripts/telephony-trunk` created outbound trunk
+`ST_cZNMUtYCB7Na` (id in `.env`); a real PSTN test call to the user's
+phone was answered after 9.9 s and the remote hangup was observed by
+LiveKit. TODO (security): the Telnyx SIP password was echoed into a
+Claude session transcript on 2026-08-22 — the user should regenerate it
+in Telnyx, update `.env`, and the trunk must then be updated
+(`SIP/UpdateSIPOutboundTrunk`, or delete and re-run the script). Webhook URL is
 configured but the API route does not exist yet (Lane A). The hostname
 is `livekit1.tarams.org` (spec text says `livekit.tarams.org`). On 2026-08-22 the user accepted D-030
 (006 = human-initiated outbound browser calling; 006a = `crm-app`

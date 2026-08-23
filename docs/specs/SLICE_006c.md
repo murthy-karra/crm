@@ -36,9 +36,14 @@ As `alice` on `/people/:id` after a call placed from the Slice 006 panel:
    Talked to them; a `no_answer` attempt → No answer), with **Save
    outcome** (primary) and **Skip** (ghost; replaces Done).
 2. **Skip** writes nothing; the panel closes as today.
-3. **Save** with *Voicemail*: History shows the original "Contact
-   attempted — call, reached" muted with "superseded", then "Outcome
-   corrected — voicemail". The Person's Today card (for any member who
+3. **Save** with *Voicemail*: History shows **one line per call**
+   (Follow Up Boss style; user decision 2026-08-23 after seeing two
+   corrected calls rendered as indistinguishable rows): "Call —
+   voicemail, 7 s · Alice · 11 hours ago · outcome corrected from talked
+   to them 5 hours ago". Call-derived `contact_attempted` rows and
+   correction rows are folded into that line by the web client (the
+   stored facts are unchanged); manual attempts stay their own lines.
+   The Person's Today card (for any member who
    still has it) shows `last_contact_attempt` = voicemail. Every open
    tab updates within a second (`person.changed`).
 4. Saving the outcome already recorded changes nothing (the panel
@@ -256,11 +261,14 @@ text exists to leak; the log-capture test from Slice 006 still applies.
   others → the generic pattern. Ringback (§12) shipped in Lane B: a
   local WebAudio tone while `phase === 'ringing'`, independent of mic
   mute.
-- `PersonDetailView.vue` owns the mutation; `historySummary` renders
-  superseded rows muted with "(superseded)" (gray, no colour; strike-
-  through allowed) and correcting rows as "Outcome corrected — <label>";
-  optional **Change outcome** ghost action on the caller's own
-  call-derived, non-superseded rows (§1.7).
+- `PersonDetailView.vue` owns the mutation and folds history into one
+  row per call (§1.3): for each `call_completed` entry, the effective
+  attempt (same `call_id`, `superseded === false`) supplies the outcome
+  label; a `corrects_id` on it adds "outcome corrected from <root
+  outcome> <when>"; call-derived attempt rows are hidden (fallback: if
+  no `call_completed` row exists they render as before). **Change
+  outcome** ghost action sits on the call row for the caller's own calls
+  with a non-superseded attempt (§1.7).
 - `LogContactDialog.vue`: no change needed (derives options from the
   label map); verify.
 

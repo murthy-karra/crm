@@ -3,9 +3,10 @@
 // view; the Call → panel → Hang up flow against a fake room. SLICE_006c §13
 // item 3: the post-call prompt's Save/Skip against the mocked route, Save
 // gated on the server's status (seeded `answered`, refetched `ended`), the
-// error copy per code, superseded/corrected history rendering, Change
-// outcome only on the caller's own non-superseded call rows, and the manual
-// dialog's widened vocabulary. Service-free:
+// error copy per code, one-row-per-call history rendering (the call row
+// carries the effective outcome and a "corrected from" note), Change
+// outcome only on the caller's own still-correctable call rows, and the
+// manual dialog's widened vocabulary. Service-free:
 // `apiFetch` is mocked, the LiveKit room is a fake injected via the
 // `createRoom` prop, and PrimeVue runs unstyled as in main.ts.
 import { flushPromises, mount } from '@vue/test-utils'
@@ -15,6 +16,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, apiFetch } from '../api/client'
 import type {
+  CallCompletedDetail,
   CallCompletedOutcome,
   CallView,
   ContactAttemptedDetail,
@@ -581,82 +583,174 @@ describe('PersonDetailView — How did it go? (SLICE_006c §10)', () => {
   })
 })
 
-describe('PersonDetailView — corrected history (SLICE_006c §10)', () => {
-  it('renders a superseded row muted with "(superseded)" and a correction as "Outcome corrected — voicemail", by detail not position', async () => {
-    const completed: HistoryEntry = {
-      kind: 'call_completed',
-      id: 'h-completed',
-      occurred_at: '2026-08-22T10:00:00.000Z',
-      recorded_at: '2026-08-22T10:00:00.000Z',
-      actor: null,
-      origin: 'system',
-      correlation_id: 'corr',
-      detail: { call_id: CALL_ID, outcome: 'no_answer', talk_seconds: null, answered_at: null },
-    }
-    // The busy-call order from §2: original → call_completed → correction.
-    stubApi(
-      detail(
-        [PHONE_A],
-        [
-          attemptEntry(ATTEMPT_ID, { outcome: 'no_answer', superseded: true }),
-          completed,
-          attemptEntry('att-2', { outcome: 'busy', corrects_id: ATTEMPT_ID }),
-        ],
-      ),
-    )
-    const { wrapper } = await mountView()
-    const rows = wrapper.findAll('[data-superseded="true"]')
-    expect(rows).toHaveLength(1)
-    expect(rows[0].text()).toBe('Contact attempted — call, no answer (superseded)')
-    expect(rows[0].classes()).toContain('text-text-muted')
-    expect(rows[0].classes()).not.toContain('text-text')
-    expect(wrapper.text()).toContain('Outcome corrected — busy')
-    expect(wrapper.text()).toContain('Call — no answer')
-  })
+function completedEntry(
+  id: string,
+  detail: Partial<CallCompletedDetail> = {},
+  actor: { id: string; display_name: string } | null = { id: 'u-alice', display_name: 'Alice' },
+): HistoryEntry {
+  return {
+    kind: 'call_completed',
+    id,
+    occurred_at: '2026-08-22T10:00:05.000Z',
+    recorded_at: '2026-08-22T10:00:05.000Z',
+    actor,
+    origin: 'system',
+    correlation_id: 'corr',
+    detail: { call_id: CALL_ID, outcome: 'reached', talk_seconds: 7, answered_at: 'x', ...detail },
+  }
+}
 
-  it('a chain: the first correction is itself superseded; the head reads as the correction', async () => {
+/** The History rows as [summary, sub-line] pairs, in render order. */
+function historyRows(wrapper: Awaited<ReturnType<typeof mountView>>['wrapper']): Array<[string, string]> {
+  return wrapper
+    .findAll('li')
+    .filter((li) => li.find('p.text-body').exists())
+    .map((li) => [li.get('p.text-body').text(), li.get('p.text-small').text().replace(/\s+/g, ' ')])
+}
+
+describe('PersonDetailView — one row per call (decision 2026-08-23)', () => {
+  it('a corrected answered call is one row: the corrected outcome, the duration and a "corrected from" note', async () => {
+    // §2 order: automatic attempt → call_completed → correction; the
+    // correction is not adjacent to its original.
     stubApi(
       detail(
         [PHONE_A],
         [
           attemptEntry(ATTEMPT_ID, { outcome: 'reached', superseded: true }),
+          completedEntry('h-completed'),
+          attemptEntry('att-2', { outcome: 'left_message', corrects_id: ATTEMPT_ID }),
+        ],
+      ),
+    )
+    const { wrapper } = await mountView()
+    const rows = historyRows(wrapper)
+    expect(rows).toHaveLength(1)
+    expect(rows[0][0]).toBe('Call — voicemail, 7 s')
+    expect(rows[0][1]).toMatch(/^Alice · .+ · outcome corrected from talked to them .+$/)
+    expect(wrapper.get('[data-testid="correction-note"]').text()).toMatch(/^outcome corrected from talked to them /)
+    expect(wrapper.text()).not.toContain('superseded')
+    expect(wrapper.text()).not.toContain('Outcome corrected')
+    expect(wrapper.text()).not.toContain('Contact attempted')
+  })
+
+  it('an uncorrected answered call shows the observed outcome and no note', async () => {
+    stubApi(detail([PHONE_A], [attemptEntry(ATTEMPT_ID, { outcome: 'reached' }), completedEntry('h-completed', { talk_seconds: 72 })]))
+    const { wrapper } = await mountView()
+    const rows = historyRows(wrapper)
+    expect(rows).toEqual([['Call — talked to them, 1 min 12 s', expect.stringMatching(/^Alice · [^·]+$/)]])
+    expect(wrapper.find('[data-testid="correction-note"]').exists()).toBe(false)
+  })
+
+  it('a chain: the head of the chain is the outcome; the note names the root', async () => {
+    stubApi(
+      detail(
+        [PHONE_A],
+        [
+          attemptEntry(ATTEMPT_ID, { outcome: 'reached', superseded: true }),
+          completedEntry('h-completed'),
           attemptEntry('att-2', { outcome: 'left_message', corrects_id: ATTEMPT_ID, superseded: true }),
           attemptEntry('att-3', { outcome: 'wrong_number', corrects_id: 'att-2' }),
         ],
       ),
     )
     const { wrapper } = await mountView()
-    const summaries = wrapper.findAll('li p.text-body').map((p) => p.text())
-    expect(summaries).toEqual([
-      'Contact attempted — call, reached (superseded)',
-      'Outcome corrected — voicemail (superseded)',
-      'Outcome corrected — wrong number',
-    ])
+    const rows = historyRows(wrapper)
+    expect(rows).toHaveLength(1)
+    expect(rows[0][0]).toBe('Call — wrong number, 7 s')
+    expect(rows[0][1]).toContain('outcome corrected from talked to them')
     expect(wrapper.findAll('[data-testid="change-outcome"]')).toHaveLength(1)
   })
-})
 
-describe('PersonDetailView — Change outcome (SLICE_006c §1 step 7)', () => {
-  it('is offered only on the caller\'s own, call-derived, non-superseded attempt rows', async () => {
+  it('two calls on one Person each get their own row with their own outcome', async () => {
     stubApi(
       detail(
         [PHONE_A],
         [
-          attemptEntry('mine-call', {}),
-          attemptEntry('mine-manual', { call_id: null }),
-          attemptEntry('mine-superseded', { superseded: true }),
-          attemptEntry('carols-call', {}, { id: 'u-carol', display_name: 'Carol' }),
+          attemptEntry('a1', { outcome: 'no_answer', call_id: 'call-a', superseded: true }),
+          completedEntry('c-a', { call_id: 'call-a', outcome: 'busy', talk_seconds: null, answered_at: null }),
+          attemptEntry('a1-fix', { outcome: 'busy', call_id: 'call-a', corrects_id: 'a1' }),
+          attemptEntry('b1', { outcome: 'reached', call_id: 'call-b', superseded: true }),
+          completedEntry('c-b', { call_id: 'call-b', talk_seconds: 40 }),
+          attemptEntry('b1-fix', { outcome: 'left_message', call_id: 'call-b', corrects_id: 'b1' }),
         ],
       ),
     )
     const { wrapper } = await mountView()
-    const items = wrapper.findAll('li').filter((li) => li.text().includes('Contact attempted'))
-    expect(items).toHaveLength(4)
+    const rows = historyRows(wrapper)
+    expect(rows.map(([summary]) => summary)).toEqual(['Call — busy', 'Call — voicemail, 40 s'])
+    expect(rows[0][1]).toContain('outcome corrected from no answer')
+    expect(rows[1][1]).toContain('outcome corrected from talked to them')
+  })
+
+  it('a failed call with no attempt keeps the plain call_completed line', async () => {
+    stubApi(
+      detail([PHONE_A], [completedEntry('h-failed', { outcome: 'provider_error', talk_seconds: null, answered_at: null })]),
+    )
+    const { wrapper } = await mountView()
+    expect(historyRows(wrapper)).toEqual([['Call — failed', expect.stringMatching(/^Alice · [^·]+$/)]])
+    expect(wrapper.find('[data-testid="change-outcome"]').exists()).toBe(false)
+  })
+
+  it('manual attempts render as before, alongside a call row', async () => {
+    stubApi(
+      detail(
+        [PHONE_A],
+        [
+          attemptEntry('manual', { call_id: null, channel: 'text', outcome: 'sent' }),
+          attemptEntry(ATTEMPT_ID, { outcome: 'no_answer' }),
+          completedEntry('h-completed', { outcome: 'no_answer', talk_seconds: null, answered_at: null }),
+        ],
+      ),
+    )
+    const { wrapper } = await mountView()
+    expect(historyRows(wrapper).map(([summary]) => summary)).toEqual(['Contact attempted — text, sent', 'Call — no answer'])
+  })
+
+  it('a call-derived attempt without a call_completed row falls back to its own row', async () => {
+    stubApi(detail([PHONE_A], [attemptEntry(ATTEMPT_ID, { outcome: 'no_answer' })]))
+    const { wrapper } = await mountView()
+    expect(historyRows(wrapper).map(([summary]) => summary)).toEqual(['Contact attempted — call, no answer'])
+  })
+})
+
+describe('PersonDetailView — Change outcome (SLICE_006c §1 step 7)', () => {
+  it('sits on the call row, only when the caller is me and a non-superseded attempt exists', async () => {
+    stubApi(
+      detail(
+        [PHONE_A],
+        [
+          attemptEntry('mine', { call_id: 'call-mine' }),
+          completedEntry('c-mine', { call_id: 'call-mine' }),
+          attemptEntry('manual', { call_id: null }),
+          completedEntry('c-no-attempt', { call_id: 'call-no-attempt', outcome: 'expired', talk_seconds: null, answered_at: null }),
+          attemptEntry('carols', { call_id: 'call-carol' }, { id: 'u-carol', display_name: 'Carol' }),
+          completedEntry('c-carol', { call_id: 'call-carol' }, { id: 'u-carol', display_name: 'Carol' }),
+        ],
+      ),
+    )
+    const { wrapper } = await mountView()
+    const rows = historyRows(wrapper)
+    expect(rows.map(([summary]) => summary)).toEqual([
+      'Call — talked to them, 7 s',
+      'Contact attempted — call, reached',
+      'Call — failed',
+      'Call — talked to them, 7 s',
+    ])
+    const items = wrapper.findAll('li').filter((li) => li.find('p.text-body').exists())
     expect(items.map((li) => li.findAll('[data-testid="change-outcome"]').length)).toEqual([1, 0, 0, 0])
   })
 
-  it('opens the picker on the row\'s outcome and posts to /calls/{call_id}/outcome', async () => {
-    stubApi(detail([PHONE_A], [attemptEntry(ATTEMPT_ID, { outcome: 'no_answer' })]))
+  it('opens the picker on the effective outcome and posts to /calls/{call_id}/outcome', async () => {
+    stubApi(
+      detail(
+        [PHONE_A],
+        [
+          attemptEntry(ATTEMPT_ID, { outcome: 'reached', superseded: true }),
+          completedEntry('h-completed'),
+          attemptEntry('att-2', { outcome: 'no_answer', corrects_id: ATTEMPT_ID }),
+        ],
+      ),
+    )
     const { wrapper } = await mountView()
     const action = wrapper.get('[data-testid="change-outcome"]')
     expect(action.classes()).toContain('bg-transparent')
@@ -675,7 +769,7 @@ describe('PersonDetailView — Change outcome (SLICE_006c §1 step 7)', () => {
   })
 
   it('is disabled while the post-call prompt is open (one primary)', async () => {
-    stubApi(detail([PHONE_A], [attemptEntry(ATTEMPT_ID, {})]), {
+    stubApi(detail([PHONE_A], [attemptEntry(ATTEMPT_ID, {}), completedEntry('h-completed')]), {
       settledHangup: callView({ status: 'ended', end_reason: 'remote_hangup', answered_at: 'x' }),
     })
     const { wrapper, rooms } = await mountView()
@@ -699,11 +793,16 @@ describe('PersonDetailView — Change outcome (SLICE_006c §1 step 7)', () => {
     expect(wrapper.get('[data-testid="change-outcome"]').attributes('disabled')).toBeUndefined()
   })
 
-  it('re-seeds the picker when reopened on a different row', async () => {
+  it('re-seeds the picker when reopened on a different call row', async () => {
     stubApi(
       detail(
         [PHONE_A],
-        [attemptEntry('a1', { outcome: 'no_answer', call_id: 'call-a' }), attemptEntry('a2', { outcome: 'reached', call_id: 'call-b' })],
+        [
+          attemptEntry('a1', { outcome: 'no_answer', call_id: 'call-a' }),
+          completedEntry('c-a', { call_id: 'call-a', outcome: 'no_answer', talk_seconds: null, answered_at: null }),
+          attemptEntry('a2', { outcome: 'reached', call_id: 'call-b' }),
+          completedEntry('c-b', { call_id: 'call-b' }),
+        ],
       ),
     )
     const { wrapper } = await mountView()
@@ -725,7 +824,9 @@ describe('PersonDetailView — Change outcome (SLICE_006c §1 step 7)', () => {
   })
 
   it('shows the §10 copy inside the dialog on failure', async () => {
-    stubApi(detail([PHONE_A], [attemptEntry(ATTEMPT_ID, {})]), { outcome: new ApiError(422, 'no_contact_attempt') })
+    stubApi(detail([PHONE_A], [attemptEntry(ATTEMPT_ID, {}), completedEntry('h-completed')]), {
+      outcome: new ApiError(422, 'no_contact_attempt'),
+    })
     const { wrapper } = await mountView()
     await wrapper.get('[data-testid="change-outcome"]').trigger('click')
     await flushPromises()

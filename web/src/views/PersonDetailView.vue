@@ -28,13 +28,13 @@ import {
   useStages,
 } from '../api/queries'
 import { ApiError } from '../api/client'
-import type { CallOutcomeCorrection, HistoryEntry, RoutingStrategy } from '../api/types'
+import type { ActorRef, CallOutcomeCorrection, ContactAttemptedDetail, HistoryEntry, RoutingStrategy } from '../api/types'
 import { formatAbsoluteTime, formatRelativeTime } from '../lib/format'
 import { buttonClasses, selectPt } from '../lib/controls'
 import { describeApiError } from '../lib/errors'
 import { CONTACT_CHANNEL_LABEL, CONTACT_OUTCOME_LABEL, correctedOutcomeLabel } from '../lib/labels'
 import { describeOutcomeError } from '../telephony/errors'
-import { callCompletedSummary, showsOutcomePrompt } from '../telephony/format'
+import { callCompletedSummary, formatTalkSeconds, showsOutcomePrompt } from '../telephony/format'
 import { useCall, type CallRoomFactory } from '../telephony/useCall'
 import { createLiveKitRoom } from '../telephony/client'
 
@@ -159,28 +159,15 @@ function dismissCall() {
   resetPanelOutcome()
 }
 
-// History "Change outcome" (§1 step 7). Only the caller's own call-derived,
-// non-superseded attempt rows offer it — decided from the row's detail and
-// actor, never from its position in the list.
+// History "Change outcome" (§1 step 7). Offered on the call row when the
+// caller is me and the call still has a non-superseded attempt to correct —
+// decided from the folded row (below), never from its position in the list.
 const changeOutcomeOpen = ref(false)
 const changeOutcomeTarget = ref<{ callId: string; outcome: CallOutcomeCorrection } | null>(null)
 const historyOutcome = useCorrectCallOutcome(orgId)
 const historyOutcomeError = ref<string | null>(null)
 
-function changeableOutcome(entry: HistoryEntry): { callId: string; outcome: CallOutcomeCorrection } | null {
-  if (entry.kind !== 'contact_attempted') return null
-  const { call_id, superseded, outcome } = entry.detail
-  if (call_id === null || superseded || outcome === 'sent') return null
-  if (entry.actor === null || entry.actor.id !== me.value?.user.id) return null
-  return { callId: call_id, outcome }
-}
-
-function canChangeOutcome(entry: HistoryEntry): boolean {
-  return changeableOutcome(entry) !== null
-}
-
-function openChangeOutcome(entry: HistoryEntry) {
-  const target = changeableOutcome(entry)
+function openChangeOutcome(target: { callId: string; outcome: CallOutcomeCorrection } | null) {
   if (!target || outcomePromptOpen.value) return
   changeOutcomeTarget.value = target
   historyOutcomeError.value = null
@@ -307,16 +294,9 @@ function historySummary(entry: HistoryEntry): string {
         : `Stage set to ${to_stage.name}`
     }
     case 'contact_attempted': {
-      const { channel, outcome, corrects_id, superseded } = entry.detail
-      // SLICE_006c §10: a correction row reads "Outcome corrected — voicemail";
-      // a superseded row keeps its text plus "(superseded)". Both are
-      // decided from the row's own detail — never from neighbouring rows.
-      const base =
-        corrects_id !== null
-          ? `Outcome corrected — ${correctedOutcomeLabel(outcome)}`
-          : // SLICE_003 §1's walkthrough: "Contact attempted — call, no answer".
-            `Contact attempted — ${CONTACT_CHANNEL_LABEL[channel].toLowerCase()}, ${CONTACT_OUTCOME_LABEL[outcome].toLowerCase()}`
-      return superseded ? `${base} (superseded)` : base
+      const { channel, outcome } = entry.detail
+      // SLICE_003 §1's walkthrough: "Contact attempted — call, no answer".
+      return `Contact attempted — ${CONTACT_CHANNEL_LABEL[channel].toLowerCase()}, ${CONTACT_OUTCOME_LABEL[outcome].toLowerCase()}`
     }
     case 'call_completed': {
       // SLICE_006 §1 steps 4–5: "Call — reached, 1 min 12 s" / "Call — no answer".
@@ -325,6 +305,88 @@ function historySummary(entry: HistoryEntry): string {
     }
   }
 }
+
+// ---- One row per call (product decision 2026-08-23) -----------------------
+// A presentation-only fold over `history` (the wire shape is unchanged): each
+// `call_completed` entry absorbs the `contact_attempted` entries sharing its
+// `call_id` — the automatic attempt and any corrections — into ONE row at the
+// call's position, titled by the effective (non-superseded) outcome and
+// noting a correction against the chain's root. Call-derived attempts whose
+// call row is missing (should not happen) fall through as ordinary rows so
+// nothing is silently lost; manual attempts (`call_id === null`) are untouched.
+interface HistoryRow {
+  key: string
+  icon: Component
+  summary: string
+  actor: ActorRef | null
+  occurredAt: string
+  /** "outcome corrected from reached 2 minutes ago" — call rows only. */
+  correctionNote: string | null
+  /** The Change-outcome target when the row's call is mine and still correctable. */
+  change: { callId: string; outcome: CallOutcomeCorrection } | null
+}
+
+type AttemptEntry = HistoryEntry & { kind: 'contact_attempted'; detail: ContactAttemptedDetail }
+
+function plainRow(entry: HistoryEntry): HistoryRow {
+  return {
+    key: entry.id,
+    icon: HISTORY_ICON[entry.kind],
+    summary: historySummary(entry),
+    actor: entry.actor,
+    occurredAt: entry.occurred_at,
+    correctionNote: null,
+    change: null,
+  }
+}
+
+const historyRows = computed<HistoryRow[]>(() => {
+  const entries = history.value
+  const attemptsByCall = new Map<string, AttemptEntry[]>()
+  for (const entry of entries) {
+    if (entry.kind !== 'contact_attempted' || entry.detail.call_id === null) continue
+    const list = attemptsByCall.get(entry.detail.call_id) ?? []
+    list.push(entry)
+    attemptsByCall.set(entry.detail.call_id, list)
+  }
+  const completedCalls = new Set(entries.filter((e) => e.kind === 'call_completed').map((e) => e.detail.call_id))
+
+  const rows: HistoryRow[] = []
+  for (const entry of entries) {
+    if (entry.kind === 'contact_attempted') {
+      const { call_id } = entry.detail
+      if (call_id !== null && completedCalls.has(call_id)) continue
+      rows.push(plainRow(entry))
+      continue
+    }
+    if (entry.kind !== 'call_completed') {
+      rows.push(plainRow(entry))
+      continue
+    }
+    const { call_id, talk_seconds } = entry.detail
+    const attempts = attemptsByCall.get(call_id) ?? []
+    const effective = attempts.find((a) => !a.detail.superseded) ?? null
+    const root = attempts.find((a) => a.detail.corrects_id === null) ?? null
+    const actor = entry.actor ?? effective?.actor ?? null
+
+    let summary = historySummary(entry)
+    let correctionNote: string | null = null
+    if (effective) {
+      const duration = talk_seconds === null ? '' : `, ${formatTalkSeconds(talk_seconds)}`
+      summary = `Call — ${correctedOutcomeLabel(effective.detail.outcome)}${duration}`
+      if (effective.detail.corrects_id !== null && root) {
+        correctionNote = `outcome corrected from ${correctedOutcomeLabel(root.detail.outcome)} ${formatRelativeTime(effective.occurred_at)}`
+      }
+    }
+
+    const mine = actor !== null && actor.id === me.value?.user.id
+    const change =
+      mine && effective && effective.detail.outcome !== 'sent' ? { callId: call_id, outcome: effective.detail.outcome } : null
+
+    rows.push({ key: entry.id, icon: HISTORY_ICON.call_completed, summary, actor, occurredAt: entry.occurred_at, correctionNote, change })
+  }
+  return rows
+})
 </script>
 
 <template>
@@ -570,37 +632,36 @@ function historySummary(entry: HistoryEntry): string {
           class="divide-y divide-border"
         >
           <li
-            v-for="entry in history"
-            :key="entry.id"
+            v-for="row in historyRows"
+            :key="row.key"
             class="flex min-h-14 items-center gap-3 py-2 first:pt-0 last:pb-0"
           >
             <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-2">
               <component
-                :is="HISTORY_ICON[entry.kind]"
+                :is="row.icon"
                 class="h-4 w-4 text-text-muted"
                 stroke-width="1.5"
               />
             </div>
             <div class="min-w-0 flex-1">
-              <p
-                class="text-body"
-                :class="entry.kind === 'contact_attempted' && entry.detail.superseded ? 'text-text-muted line-through' : 'text-text'"
-                :data-superseded="entry.kind === 'contact_attempted' && entry.detail.superseded ? 'true' : undefined"
-              >
-                {{ historySummary(entry) }}
+              <p class="text-body text-text">
+                {{ row.summary }}
               </p>
               <p class="text-small text-text-muted">
-                {{ entry.actor?.display_name ?? 'System' }} ·
-                <span :title="formatAbsoluteTime(entry.occurred_at)">{{ formatRelativeTime(entry.occurred_at) }}</span>
+                {{ row.actor?.display_name ?? 'System' }} ·
+                <span :title="formatAbsoluteTime(row.occurredAt)">{{ formatRelativeTime(row.occurredAt) }}</span>
+                <template v-if="row.correctionNote">
+                  · <span data-testid="correction-note">{{ row.correctionNote }}</span>
+                </template>
               </p>
             </div>
             <button
-              v-if="canChangeOutcome(entry)"
+              v-if="row.change"
               type="button"
               :class="buttonClasses('ghost')"
               :disabled="outcomePromptOpen"
               data-testid="change-outcome"
-              @click="openChangeOutcome(entry)"
+              @click="openChangeOutcome(row.change)"
             >
               Change outcome
             </button>

@@ -660,6 +660,37 @@ detection at the carrier (unreliable, and a Telnyx feature the app would
 have to hold credentials for). Scheduled as Slice 006c (after 006a
 `crm-app` extraction; before or alongside 006b Operator calling).
 
+### D-033 — The agent must choose every call's outcome; until then the call is incomplete and the Person stays on Today in a lowest "outcome needed" tier (2026-08-23)
+
+Accepted (user, after the Slice 006c live walkthrough). Amends D-031
+and D-032. The system is unreliable at telling a person from voicemail,
+busy, or a carrier message, so its observation is never presented as
+the outcome. Rules:
+
+1. After every call in which the callee was reached or rang (i.e. an
+   automatic attempt exists), the post-call prompt requires a choice —
+   talked to them / voicemail / no answer / busy / wrong number — with
+   **no default and no Skip**. (Calls where nothing reached the callee
+   need no choice.)
+2. Until the agent chooses, the call is **incomplete**: the timeline
+   shows "Call — <duration> · outcome needed" with a **Set outcome**
+   action. The automatic attempt row stays as the system's evidence
+   ("answered" / "no answer") and still advances Today at answer time
+   (D-031's reason stands: the call happened, Today never waits).
+3. The Person additionally stays on the **caller's** Today in a new,
+   lowest tier — priority `low`, reason `call_outcome_needed`,
+   recommended action `set_outcome` — sorted under every other item,
+   until an outcome is chosen. Safe default: it is shown to the caller
+   (who owes the answer), not the assignee, when they differ.
+4. Storage is unchanged from 006c: the agent's choice is the row on top
+   of the automatic row (`corrects_id`); "correction" is no longer the
+   user-facing word — it is the outcome. Multiple choices chain; the
+   timeline shows the current one.
+
+Rejected: writing nothing until the agent chooses (a closed tab would
+lose the attempt and Today would wait on paperwork); pre-selecting the
+system's guess (it is wrong exactly in the cases that matter).
+
 ## Open decisions
 
 ### O-001 — RESOLVED

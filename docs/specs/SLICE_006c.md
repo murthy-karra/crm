@@ -198,6 +198,59 @@ the Operator calling slice.
 Works with telephony disabled (it is a pure fact write; no provider).
 New `ApiError` variants: `NoContactAttempt`, `CorrectionConflict`.
 
+## 5a. Amendment — forced outcome and the "outcome needed" Today tier (D-033, 2026-08-23)
+
+Supersedes §1.1–§1.4, §1.7 and the §10 prompt/rendering text where they
+conflict. Storage (§2), the command (§3) and the route (§5) are
+unchanged.
+
+**Post-call prompt.** Shown whenever an automatic attempt exists
+(`attemptOutcome(call) !== null`). No choice is pre-selected; **Save
+outcome** is disabled until one is picked and until the server reports
+`ended|failed`; there is **no Skip**. The panel stays until Save
+succeeds ("Outcome saved — <label>", then Done). Navigating away is
+allowed (nothing is lost: the automatic row stands and the Today tier
+below nags).
+
+**Timeline (one line per call, §1.3).** The effective attempt decides
+the label: if it is an agent choice (`corrects_id !== null`) → "Call —
+voicemail, 7 s"; if it is the automatic root → "Call — 7 s · outcome
+needed" (duration only when answered; "Call · outcome needed"
+otherwise) plus a **Set outcome** ghost action for the caller. Failed calls with no attempt: unchanged ("Call —
+failed"). The system's observation is never rendered as the outcome;
+manual Log-contact rows are unchanged.
+
+**Today (SLICE_003 §3/§5, additive).** A second membership source: a
+`call` of the viewer's Organization whose `caller_user_id = viewer`,
+status `ended|failed`, whose effective attempt is the automatic root
+(no corrector). Such a Person is a Today item with `priority: "low"`
+(new value; sorts after `normal`), `recommended_action: "set_outcome"`
+(new value), `reasons` containing `{"code": "call_outcome_needed",
+"call_id", "ended_at"}` (new code; may be combined with the existing
+reasons when the Person also qualifies by inquiry — then the inquiry
+tier wins and the reason is appended), `waiting_since` = the call's
+`ended_at` when it is the only reason. `TodayItem` gains no other
+field. Ordering: existing tiers first, then `low` by `ended_at ASC`.
+The Operator's `get_today`/`explain_priority` carry the new reason
+code and a one-line explanation ("a call on <date> has no outcome
+yet"); no tool-schema change (reasons are already a list of coded
+objects). Choosing an outcome removes the item; `person.changed
+{contact_attempted}` already invalidates Today.
+
+Web: the Today card for a `low` item shows "Outcome needed" with a
+**Set outcome** action linking to the Person page (which opens the
+Change-outcome dialog for that call, pre-selection none). `TodayPriority`
+gains `'low'`, `RecommendedAction` gains `'set_outcome'`, `TodayReason`
+gains `call_outcome_needed`.
+
+Tests: Lane A — the new membership source (caller only; not the
+assignee; not other members; foreign org never), tier ordering, reason
+payload, removal after an outcome, Operator explanation text, and that
+a Person qualifying both ways keeps the inquiry tier with the reason
+appended. Lane B — forced choice (no default, Save disabled until a
+pick, no Skip), the "outcome needed" timeline row and Set outcome
+action, the Today low-tier card, the Today → Person → dialog path.
+
 ## 6. Realtime
 
 `person.changed {contact_attempted}` (existing) after commit; it already

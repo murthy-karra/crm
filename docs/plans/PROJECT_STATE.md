@@ -1,11 +1,10 @@
 # Project State
 
-Last updated: 2026-08-22 (Lane A implemented)
+Last updated: 2026-08-23 (006c merged; D-033 exercised live; O-013 recorded)
 
 ## Current phase
 
-**Slice 006c (call outcome) COMPLETE on `slice-006c-outcome` and being
-merged to `main`.** Scope grew during the live walkthrough into three
+**Slice 006c (call outcome) COMPLETE and MERGED to `main` (`58ecad8`).** Scope grew during the live walkthrough into three
 user decisions, all implemented, reviewed and adversarially tested:
 one timeline line per call (Follow Up Boss style); D-033 — the agent
 must choose every call's outcome (no default, no Skip), an unchosen
@@ -18,9 +17,11 @@ written even when it equals the system's guess — otherwise the call
 stayed incomplete forever; Today query keeps its assignee index
 predicate; Operator `ORDERING_RULE`/`Ahead` extended for `low`; two new
 indexes `20260826000002`). Gates: `check` green (236 Vitest), `check-db`
-green (`db_calls` 49). Live: two real calls corrected on 2026-08-23;
-the D-033 UI (forced choice, Today nag) has NOT yet been exercised
-live. Follow-ups: rotate the Telnyx SIP password; busy/ring-out never
+green (`db_calls` 49). Live: two real calls corrected on 2026-08-23, and the D-033 UI (forced
+choice, "outcome needed" row, Today low tier, Set outcome clearing
+both) walked through live on 2026-08-23 — works. Note: the dev API runs
+as an orphaned process; restarting Docker services does not restart it
+(stale binary masked the fixes once). Follow-ups: rotate the Telnyx SIP password; busy/ring-out never
 proven live; `placing` sweep horizon vs slow mic prompts; orphaned
 "outcome needed" calls when a caller is deactivated (O-004 territory);
 OrbStack hung twice. Hostname is `livekit1.tarams.org`.
@@ -28,7 +29,7 @@ OrbStack hung twice. Hostname is `livekit1.tarams.org`.
 ## Current slice
 
 Slice 006c — Call outcome (D-032, D-033) — `docs/specs/SLICE_006c.md`
-(+ §5a) — COMPLETE, merging to `main`. Previous:
+(+ §5a) — COMPLETE, MERGED `58ecad8`. Next: 006a. Previous:
 Slice 006 — Calling — `docs/specs/SLICE_006.md` (MERGED `332e78a`). Previous:
 Slice 005 — Operator retrieval — `docs/specs/SLICE_005.md` (APPROVED). Read-only AI Operator: `crm-operator` crate with a
 `ToolBackend` trait (five tools: `search_people`, `get_person`,
@@ -760,11 +761,10 @@ slice:
 
 ## Next recommended action
 
-1. Exercise D-033 live once: a call, close the tab without choosing →
-   "outcome needed" row + Today low item → Set outcome clears both.
-2. Rotate the Telnyx SIP password; update the trunk.
-3. 006a (`crm-app` extraction, D-028 §5), then 006b (Operator
-   `start_call`). O-012 before any summary/recording/notes slice.
+1. Plan Slice 006a (`crm-app` extraction, D-028 §5), then 006b
+   (Operator `start_call`). O-012 before any summary/recording/notes
+   slice; O-013 after O-012.
+2. Rotate the Telnyx SIP password; update the trunk (user action).
 
 ## Approval currently required
 

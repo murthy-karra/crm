@@ -1,8 +1,8 @@
 # Slice 006 — Calling (outbound, browser, human-initiated)
 
-Status: DRAFT (planner pass 2026-08-22, then independent review —
-no blocking findings; 8 safe defaults, 9 implementation notes, 3 cuts
-applied below; awaiting user approval).
+Status: APPROVED (user, 2026-08-22; planner pass, then independent
+review — no blocking findings; 8 safe defaults, 9 implementation notes,
+3 cuts applied; telephony host on direct DNS + Caddy TLS, no tunnel).
 Builds on: Slice 005 (`main` at `c337093`).
 Targets: D-001 (self-hosted LiveKit + Telnyx SIP), D-002 (no new
 service; the provider is a trait inside `crm-api`), D-005 (Organization

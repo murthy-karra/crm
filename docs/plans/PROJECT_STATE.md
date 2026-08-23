@@ -4,9 +4,11 @@ Last updated: 2026-08-22
 
 ## Current phase
 
-**Slice 006 (calling) — PLANNING; spec drafted and independently
-reviewed (no blocking findings; 8 safe defaults, 9 implementation
-notes, 3 cuts applied); awaiting user approval of the spec.** On 2026-08-22 the user accepted D-030
+**Slice 006 (calling) — spec APPROVED 2026-08-22; awaiting the
+implementation gate.** Lane C (telephony host: direct DNS + Caddy TLS,
+LiveKit + SIP + Redis; Telnyx number + credential SIP connection) is
+the critical path and needs the user's provisioning; Lane A (backend)
+can start immediately; Lane B (web) after Lane A step 3. On 2026-08-22 the user accepted D-030
 (006 = human-initiated outbound browser calling; 006a = `crm-app`
 extraction; 006b = Operator `start_call`; dev telephony on a public
 Linux host with one Telnyx number as a LiveKit outbound trunk) and
@@ -18,7 +20,7 @@ closed (see History).
 
 ## Current slice
 
-Slice 006 — Calling — `docs/specs/SLICE_006.md` (DRAFT). Previous:
+Slice 006 — Calling — `docs/specs/SLICE_006.md` (APPROVED). Previous:
 Slice 005 — Operator retrieval — `docs/specs/SLICE_005.md` (APPROVED). Read-only AI Operator: `crm-operator` crate with a
 `ToolBackend` trait (five tools: `search_people`, `get_person`,
 `get_today`, `get_next_work_item`, `explain_priority`), Groq via a
@@ -29,7 +31,8 @@ proof chain. Slice 004 is complete and merged (see History).
 
 ## Current branch
 
-`plan-006` (from `main` at `c337093`): planning documents only.
+`main` (Slice 006 planning merged and pushed); implementation branches
+not yet created.
 
 ## Last accepted decision
 

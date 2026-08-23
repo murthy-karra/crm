@@ -4,46 +4,29 @@ Last updated: 2026-08-22 (Lane A implemented)
 
 ## Current phase
 
-**Slice 006 (calling) — Lane A COMMITTED (`62562c6` on
-`slice-006-calling`); Lane B (web) IMPLEMENTED and VERIFIED in worktree
-`../crm-slice-006-web` on `slice-006-web` (branched from `62562c6`),
-COMMITTED (`9aecedb`) and MERGED into `slice-006-calling` (`4090f13`);
-worktree removed. Next: live walkthrough, then merge to `main`.** Lane C
-(telephony host) is COMPLETE. Lane B delivered: `livekit-client`
-2.22.0 (exact pin, lazy chunk), `telephony/{useCall,client,errors,
-format}.ts`, `CallPanel.vue`, Call button + number picker on
-`PersonDetailView.vue` (Log contact now secondary), `call_completed`
-history rendering, types/queries (`useStartCall`/`useDialCall`/
-`useHangupCall`/`useCall`), `call.changed` invalidation, §10 error copy,
-`onBeforeRouteLeave` confirm while on a call. Verification in the
-worktree: `./scripts/check` all passed (web 159 Vitest; `typecheck` now
-really checks the app — `package.json` fixed to `-p tsconfig.app.json`,
-which exposed and fixed 5 pre-existing errors: `@tanstack/table-core`
-added as an exact devDependency so the `ColumnMeta` augmentation
-applies; `useRealtime.test.ts` typings). Review + adversarial testing
-found and fixed: hanging up / navigating while "Connecting…" let the
-call proceed with zero hangups and a hot mic (now every resume point
-checks the session is not ending; an owed hangup is sent once the id
-is known; adapter `disposed` flag stops a late mic track); join token
-no longer retained in the MutationCache; stale dial 202 can no longer
-regress a newer GET; duplicate `trackSubscribed` no longer leaks an
-audio element; callee name captured at start; SDK chunk loaded before
-the mic prompt (failure → `join_failed`); picker closes on Escape /
-outside click. Still unverified live: the real LiveKit adapter
-(autoplay of the attached audio, mic publish) and the SIP failure
-encoding (busy/ring-out must yield `no_answer`). Spec-level note from
-review (not a Lane defect): the `placing` sweep horizon is 40 s from
-`placed_at` while the mic prompt comes after `POST /calls`; a very slow
-first-time permission prompt can expire the call (then `dial` → 409) —
-consider keying `placing` expiry off `dial_requested_at` later. Dev API
-on :3000 was restarted with the Lane A build (`telephony enabled
-provider=livekit`). TODO (security): rotate the Telnyx SIP password and
-update the trunk. Hostname is `livekit1.tarams.org` (spec text says
-`livekit.tarams.org`).
+**Slice 006 (calling) MERGED to `main` (`332e78a`, pushed) after the
+live walkthrough on 2026-08-22: two real PSTN calls from
+`app.tarams.org`, both `answered`, webhooks accepted, hangup recorded,
+two-way audio confirmed by the user. Not yet proven live: the
+busy/decline/ring-out path ("no answer" attempt). Observed: the first
+call was "answered" in 2.8 s without the phone ringing — almost
+certainly voicemail or a carrier message; the system cannot tell. This
+led to D-032 (call outcome correction) — Slice 006c, planned by
+`crm-planner` (plan at `docs/plans/SLICE_006c_PLAN.md`); spec not yet
+drafted; ONE blocking decision open (notes on the correction — see
+Blocking decisions).** Follow-ups logged: ringback tone in the browser
+while ringing (tiny Lane B item, no decision needed); rotate the Telnyx
+SIP password (security TODO); `placing` sweep horizon is 40 s from
+`placed_at` while the mic prompt comes after `POST /calls` — a very slow
+first-time permission prompt expires the call (consider keying off
+`dial_requested_at`). Hostname is `livekit1.tarams.org` (spec text
+says `livekit.tarams.org`).
 
 ## Current slice
 
-Slice 006 — Calling — `docs/specs/SLICE_006.md` (APPROVED). Previous:
+Slice 006c — Call outcome correction (D-032) — PLANNING; plan at
+`docs/plans/SLICE_006c_PLAN.md`, spec pending one decision. Previous:
+Slice 006 — Calling — `docs/specs/SLICE_006.md` (MERGED `332e78a`). Previous:
 Slice 005 — Operator retrieval — `docs/specs/SLICE_005.md` (APPROVED). Read-only AI Operator: `crm-operator` crate with a
 `ToolBackend` trait (five tools: `search_people`, `get_person`,
 `get_today`, `get_next_work_item`, `explain_priority`), Groq via a
@@ -54,7 +37,8 @@ proof chain. Slice 004 is complete and merged (see History).
 
 ## Current branch
 
-`slice-006-calling` at `4090f13` (Lanes A, B, C all merged).
+`main` at `332e78a` (Slice 006 merged and pushed); `slice-006-calling`
+deleted.
 
 ## Last accepted decision
 
@@ -766,15 +750,21 @@ slice:
 
 ## Next recommended action
 
-1. Done: Lane B committed and merged.
-2. Live walkthrough (§1 steps 1–7 / §13 item 5) from
-   `https://app.tarams.org` with the telephony host: explicitly confirm
-   a busy and a ring-out produce `no_answer` attempts, audio both ways,
-   Today advancing in a second tab.
+1. Resolve the notes decision for 006c (below), then draft
+   `docs/specs/SLICE_006c.md` from the plan, review it, approve.
+2. Implement 006c (Lane A backend ≈ 1.5 d, Lane B web ≈ 1 d); add the
+   ringback tone to Lane B while there.
 3. Rotate the Telnyx SIP password and update the trunk.
-4. Merge `slice-006-calling` → `main`; then 006a (`crm-app` extraction).
+4. 006a (`crm-app` extraction), then 006b (Operator `start_call`).
+
+## Blocking decisions
+
+- 006c notes: D-032 says "optional notes", but D-022/SLICE_003 §2 and
+  D-015 §3 keep facts free of free text. Options: ship 006c without
+  notes (recommended) or add a minimal Note CRUD table as its own slice.
+  Proposed safe defaults (overridable): no Today resurfacing rule for
+  voicemail in 006c; 006c before 006a (no technical dependency).
 
 ## Approval currently required
 
-None pending for code. The live walkthrough needs the user at their
-phone; merge `slice-006-calling` → `main` after it.
+The notes decision above.

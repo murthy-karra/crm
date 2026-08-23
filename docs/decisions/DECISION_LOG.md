@@ -637,6 +637,26 @@ carries the call's `correlation_id`, with `causation_id = call.id`.
 Rejected: prompting the agent for an outcome after each call (makes
 "automatic" conditional), and writing only at call end.
 
+### D-032 — Agents may correct a call's outcome after the call (2026-08-22)
+
+Accepted (user, after the Slice 006 live walkthrough). Amends D-031's
+"Rejected: prompting the agent for an outcome". Observed: the system
+cannot tell a person answering from voicemail, a full mailbox, or a
+carrier message (a first live call was "answered" in 2.8 s without the
+phone ringing). Decision: the automatic attempt written by D-031 stays
+exactly as it is (Today never waits on the agent); in addition, when a
+call ends the panel offers an optional outcome — talked to them /
+voicemail / no answer / busy / wrong number — pre-selected from what the
+system observed, with optional notes. A chosen outcome is recorded as a
+*correction* fact (`corrects_id` on the existing envelope; history stays
+append-only; the original auto-logged row remains visible as superseded).
+Skipping the prompt changes nothing. Today may treat "voicemail" as an
+attempt made but resurface the Person sooner than "talked to them" —
+the exact rule is for the slice spec. Not taken: answering-machine
+detection at the carrier (unreliable, and a Telnyx feature the app would
+have to hold credentials for). Scheduled as Slice 006c (after 006a
+`crm-app` extraction; before or alongside 006b Operator calling).
+
 ## Open decisions
 
 ### O-001 — RESOLVED

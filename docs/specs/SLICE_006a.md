@@ -41,9 +41,11 @@ crm-operator -> unchanged
 ```
 
 No cycle. `crm-app` names neither `crm-operator` nor `crm-api` nor
-`axum` in `[dependencies]` (fenced by a test, §6). The 006b edge will be
-`crm-operator -> crm-app` per D-028 §1; `ToolBackend` stays as the
-injection seam and is untouched here.
+`axum` in `[dependencies]` (fenced by a test, §6). ~~The 006b edge will
+be `crm-operator -> crm-app` per D-028 §1~~ *(amended by D-034: 006b
+adds no edge — `start_call` goes through the ToolBackend seam; the
+edge question returns at the second mutation tool)*; `ToolBackend`
+stays as the injection seam and is untouched here.
 
 Naming: the crate ident is `crm_app`; the Postgres role is also
 `crm_app`. Docs say "the `crm_app` DB role" where it matters.

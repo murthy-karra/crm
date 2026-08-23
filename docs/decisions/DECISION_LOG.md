@@ -564,6 +564,10 @@ Organization, which is exactly the kind of trust boundary D-008 and
    *(Status 2026-08-23: done — Slice 006a, `docs/specs/SLICE_006a.md`.
    One step narrower than "non-Axum auth": the session layer stayed in
    crm-api; only the token format check and `AuthContext` moved.)*
+   *(Status 2026-08-23, D-034: the `crm-operator -> crm-app` edge is
+   deferred again — 006b ships `start_call` through the ToolBackend
+   seam with no new Cargo edge; the edge question returns at the
+   second mutation tool.)*
 
 Blocks: nothing. Feeds the Slice 005 specification.
 
@@ -952,3 +956,21 @@ Not blocking any current slice. Sequence: O-012 resolved and raw-payload
 migration done → this item specified → a slice that ships archive,
 admin erasure with suppression, and the erasure fact. Do before the
 first external customer holds real consumer data.
+
+### D-034 — 006b adds no `crm-operator -> crm-app` edge; mutation tools go through the ToolBackend seam (2026-08-23)
+
+Accepted (user, during Slice 006b planning). SLICE_006a §3 predicted
+the `crm-operator -> crm-app` Cargo edge would arrive in 006b. Planning
+showed 006b does not need it: the `start_call` tool only *proposes*
+(one new `ToolBackend` method implemented by crm-api's adapter over
+existing queries), and the confirm endpoint is a plain crm-api route
+calling `crm_app::domain::commands::start_call` directly. Keeping
+crm-operator unable to name `AuthContext`, `CommandContext`, or any
+domain type preserves D-028 §1's compile-time fence: fabricating an
+actor/Organization stays a compile error, not a discipline. The
+`operator_deps.rs` fence gains "crm-operator must not depend on
+crm-app" to freeze this; the edge question genuinely returns when a
+second mutation tool wants shared app types. Amends SLICE_006a §3's
+one-line prediction and the D-028 §5 status note.
+
+Blocks: nothing. Feeds the Slice 006b specification.

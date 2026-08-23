@@ -67,4 +67,4 @@ export DATABASE_URL="$MIGRATION_DATABASE_URL"
 
 echo "==> cargo test -- --ignored"
 cd "$repo_root/backend"
-exec cargo test --manifest-path Cargo.toml -p crm-api --locked -- --ignored
+exec cargo test --manifest-path Cargo.toml --workspace --locked -- --ignored

@@ -9,6 +9,12 @@ const DEFAULT_CONNECT_TIMEOUT_MS: u64 = 2000;
 const MIN_CONNECT_TIMEOUT_MS: u64 = 1;
 const MAX_CONNECT_TIMEOUT_MS: u64 = 30_000;
 
+pub use crm_app::config::{
+    CentrifugoApiKey, LiveKitApiSecret, LiveKitConfig, RawPayloadKey, RealtimeTokenSecret,
+    SecretError, TelephonyConfig,
+};
+use crm_app::config::MIN_REALTIME_TOKEN_SECRET_BYTES;
+
 const MIN_SESSION_SECRET_BYTES: usize = 32;
 const DEFAULT_SESSION_TTL_HOURS: u64 = 168;
 const MIN_SESSION_TTL_HOURS: u64 = 1;
@@ -32,7 +38,6 @@ impl fmt::Debug for SessionSecret {
     }
 }
 
-const MIN_REALTIME_TOKEN_SECRET_BYTES: usize = 32;
 const DEFAULT_CENTRIFUGO_API_URL: &str = "http://127.0.0.1:8000/api";
 const DEFAULT_REALTIME_TOKEN_TTL_SECONDS: u64 = 600;
 const MIN_REALTIME_TOKEN_TTL_SECONDS: u64 = 60;
@@ -71,66 +76,6 @@ const DEFAULT_TELEPHONY_JOIN_TTL_SECONDS: u64 = 300;
 const MIN_TELEPHONY_JOIN_TTL_SECONDS: u64 = 60;
 const MAX_TELEPHONY_JOIN_TTL_SECONDS: u64 = 900;
 
-/// Construction failure for the validated secret newtypes below. The
-/// invariants live on the constructors (docs/specs/SLICE_006a.md §4) so
-/// they hold for every caller, not only `Config::from_source`; crm-api
-/// maps these onto the exact `ConfigError` variants it raised before.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SecretError {
-    Empty,
-    TooShort { min: usize, len: usize },
-}
-
-/// `LIVEKIT_API_SECRET` (docs/specs/SLICE_006.md §7): signs join grants
-/// and verifies webhooks. `Debug` is redacted like `SessionSecret`.
-#[derive(Clone)]
-pub struct LiveKitApiSecret(Vec<u8>);
-
-impl LiveKitApiSecret {
-    /// Non-empty, as `Config::from_source` has always required.
-    pub fn parse(raw: String) -> Result<Self, SecretError> {
-        if raw.is_empty() {
-            return Err(SecretError::Empty);
-        }
-        Ok(Self(raw.into_bytes()))
-    }
-
-    pub fn as_bytes(&self) -> &[u8] {
-        &self.0
-    }
-}
-
-impl fmt::Debug for LiveKitApiSecret {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "LiveKitApiSecret(REDACTED)")
-    }
-}
-
-/// The LiveKit connection (docs/specs/SLICE_006.md §11): present only when
-/// `LIVEKIT_API_KEY` is non-empty; then every other value is required.
-#[derive(Debug, Clone)]
-pub struct LiveKitConfig {
-    /// Browser signaling URL (`ws://`/`wss://`), returned in the join grant.
-    pub url: String,
-    /// Twirp API base (`https://`; `http://` only for loopback); no
-    /// trailing slash.
-    pub api_url: String,
-    pub api_key: String,
-    pub api_secret: LiveKitApiSecret,
-    pub sip_outbound_trunk_id: String,
-}
-
-/// `CRM_TELEPHONY_*` (docs/specs/SLICE_006.md §11). Validated even when
-/// `LIVEKIT_API_KEY` is unset, like `OperatorConfig`.
-#[derive(Debug, Clone)]
-pub struct TelephonyConfig {
-    /// `None` = calling disabled (503 `telephony_disabled`), not an error.
-    pub livekit: Option<LiveKitConfig>,
-    pub ring_timeout: Duration,
-    pub max_call: Duration,
-    pub join_ttl: Duration,
-}
-
 /// Operator settings (docs/specs/SLICE_005.md §11). Validated even when no
 /// `GROQ_API_KEY` is present, so a keyless dev box still fails fast on a
 /// bad value.
@@ -144,88 +89,6 @@ pub struct OperatorConfig {
     /// Per provider call; must be ≤ `turn_timeout`.
     pub call_timeout: Duration,
     pub max_concurrent: usize,
-}
-
-/// The raw-payload encryption key (docs/specs/SLICE_002.md §7): exactly 64
-/// hex characters (32 bytes), decoded once at startup. `Debug` is redacted
-/// like `SessionSecret` so an accidental `{:?}` never leaks it. The API
-/// refuses to start if it is missing, the wrong length, or not hex.
-#[derive(Clone)]
-pub struct RawPayloadKey([u8; 32]);
-
-impl RawPayloadKey {
-    /// Exactly 32 bytes, type-enforced; the hex decoding (and its
-    /// errors) stay with `Config::from_source`.
-    pub fn new(key: [u8; 32]) -> Self {
-        Self(key)
-    }
-
-    pub fn as_bytes(&self) -> &[u8; 32] {
-        &self.0
-    }
-}
-
-impl fmt::Debug for RawPayloadKey {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "RawPayloadKey(REDACTED)")
-    }
-}
-
-/// The Centrifugo HTTP API publish credential (docs/specs/SLICE_003.md
-/// §11): the same value compose passes to the Centrifugo container.
-/// `Debug` is redacted like `SessionSecret`/`RawPayloadKey`.
-#[derive(Clone)]
-pub struct CentrifugoApiKey(String);
-
-impl CentrifugoApiKey {
-    /// Non-empty, as `Config::from_source` has always required.
-    pub fn parse(raw: String) -> Result<Self, SecretError> {
-        if raw.is_empty() {
-            return Err(SecretError::Empty);
-        }
-        Ok(Self(raw))
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Debug for CentrifugoApiKey {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "CentrifugoApiKey(REDACTED)")
-    }
-}
-
-/// The Centrifugo connection-token HMAC signing secret
-/// (docs/specs/SLICE_003.md §6, §11): the same value compose passes to the
-/// Centrifugo container as `client.token.hmac_secret_key`. Must be at
-/// least 32 bytes. `Debug` is redacted like `SessionSecret`.
-#[derive(Clone)]
-pub struct RealtimeTokenSecret(Vec<u8>);
-
-impl RealtimeTokenSecret {
-    /// At least `MIN_REALTIME_TOKEN_SECRET_BYTES` (32) bytes, as
-    /// `Config::from_source` has always required.
-    pub fn parse(raw: String) -> Result<Self, SecretError> {
-        if raw.len() < MIN_REALTIME_TOKEN_SECRET_BYTES {
-            return Err(SecretError::TooShort {
-                min: MIN_REALTIME_TOKEN_SECRET_BYTES,
-                len: raw.len(),
-            });
-        }
-        Ok(Self(raw.into_bytes()))
-    }
-
-    pub fn as_bytes(&self) -> &[u8] {
-        &self.0
-    }
-}
-
-impl fmt::Debug for RealtimeTokenSecret {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "RealtimeTokenSecret(REDACTED)")
-    }
 }
 
 /// No `hex` crate dependency for one 32-byte decode (docs/specs/SLICE_002.md

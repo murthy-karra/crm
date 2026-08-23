@@ -12,7 +12,7 @@ workspace = true
 [features]
 # `telephony::ScriptedProvider` for the integration tests (docs/specs/
 # SLICE_006.md §3, §14 item 7), mirroring crm-operator's feature.
-test-support = []
+test-support = ["crm-app/test-support"]
 
 [dependencies]
 axum = { workspace = true }
@@ -36,11 +36,13 @@ base64 = { workspace = true }
 time = { workspace = true }
 chacha20poly1305 = { workspace = true }
 reqwest = { workspace = true, features = ["rustls-tls"] }
+crm-app = { path = "../crm-app" }
 crm-operator = { path = "../crm-operator" }
 async-trait = { workspace = true }
 
 [dev-dependencies]
 crm-api = { path = ".", features = ["test-support"] }
+crm-app = { path = "../crm-app", features = ["test-support"] }
 crm-operator = { path = "../crm-operator", features = ["test-support"] }
 tower = { workspace = true, features = ["util"] }
 http-body-util = "0.1"

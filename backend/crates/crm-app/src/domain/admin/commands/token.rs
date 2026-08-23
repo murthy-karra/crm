@@ -9,7 +9,7 @@ use base64::Engine;
 use rand::Rng;
 use sha2::{Digest, Sha256};
 
-use crate::auth::session;
+use crate::auth::token_format as session;
 
 const TOKEN_LEN_BYTES: usize = 32;
 

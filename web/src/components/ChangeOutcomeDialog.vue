@@ -1,10 +1,13 @@
 <script setup lang="ts">
-// SLICE_006c §1 step 7 / §10: the History "Change outcome" dialog — the
-// same five-choice picker as the call panel's prompt, for the caller's own
-// call-derived, non-superseded attempt rows. Presentational: the owner
+// SLICE_006c §1 step 7 / §5a (D-033): the History "Set outcome" / "Change
+// outcome" dialog — the same five-choice picker as the call panel's prompt,
+// for the caller's own call rows. When the call already has an agent
+// choice the picker opens on it; when the effective attempt is still the
+// automatic root (incomplete call, also the Today → Person path) nothing is
+// pre-selected and Save waits for a pick. Presentational: the owner
 // (PersonDetailView.vue) runs `useCorrectCallOutcome` and passes its state
 // in, the same split as CallPanel.vue. No free text.
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import Dialog from 'primevue/dialog'
 import OutcomePicker from './OutcomePicker.vue'
 import type { CallOutcomeCorrection } from '../api/types'
@@ -13,8 +16,9 @@ import { buttonClasses, dialogPt } from '../lib/controls'
 const props = defineProps<{
   visible: boolean
   personName: string
-  /** The row's current outcome — the picker opens on it. */
-  currentOutcome: CallOutcomeCorrection
+  /** The agent's current choice — the picker opens on it; `null` when the
+   * call has no chosen outcome yet (nothing pre-selected). */
+  currentOutcome: CallOutcomeCorrection | null
   saving: boolean
   error: string | null
 }>()
@@ -24,7 +28,7 @@ const emit = defineEmits<{
   save: [outcome: CallOutcomeCorrection]
 }>()
 
-const selected = ref<CallOutcomeCorrection>(props.currentOutcome)
+const selected = ref<CallOutcomeCorrection | null>(props.currentOutcome)
 
 watch(
   () => props.visible,
@@ -32,6 +36,13 @@ watch(
     if (visible) selected.value = props.currentOutcome
   },
 )
+
+const title = computed(() => (props.currentOutcome === null ? 'Set outcome' : 'Change outcome'))
+
+function save() {
+  if (props.saving || selected.value === null) return
+  emit('save', selected.value)
+}
 
 function close() {
   if (props.saving) return
@@ -51,7 +62,7 @@ function close() {
   >
     <template #header>
       <h2 class="text-section font-semibold text-text">
-        Change outcome
+        {{ title }}
       </h2>
     </template>
 
@@ -87,9 +98,9 @@ function close() {
       <button
         type="button"
         :class="buttonClasses('primary')"
-        :disabled="saving"
+        :disabled="saving || selected === null"
         data-testid="change-outcome-save"
-        @click="emit('save', selected)"
+        @click="save"
       >
         {{ saving ? 'Saving…' : 'Save outcome' }}
       </button>

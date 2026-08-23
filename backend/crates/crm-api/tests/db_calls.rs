@@ -358,12 +358,25 @@ async fn recorded(publisher: &Publisher) -> Vec<(String, Value)> {
 }
 
 async fn today_has(router: &Router, cookie: &str, person_id: Uuid) -> bool {
+    today_item(router, cookie, person_id).await.is_some()
+}
+
+/// `person_id`'s `TodayItem` on `cookie`'s Today, if any.
+async fn today_item(router: &Router, cookie: &str, person_id: Uuid) -> Option<Value> {
     let body = common::body_json(common::get_with_cookie(router, "/api/today", cookie).await).await;
     body["items"]
         .as_array()
         .unwrap()
         .iter()
-        .any(|item| item["person"]["id"] == person_id.to_string())
+        .find(|item| item["person"]["id"] == person_id.to_string())
+        .cloned()
+}
+
+/// `person_id`'s priority on `cookie`'s Today (`None` = not listed).
+async fn today_priority(router: &Router, cookie: &str, person_id: Uuid) -> Option<String> {
+    today_item(router, cookie, person_id)
+        .await
+        .map(|item| item["priority"].as_str().unwrap().to_string())
 }
 
 // --- Schema / grants ---------------------------------------------------
@@ -856,7 +869,14 @@ async fn busy_declined_and_ring_timeout_each_write_one_no_answer_attempt(migrato
         assert!(completed[0].talk_seconds.is_none());
         assert!(!completed[0].answered_at_present);
         assert_eq!(completed[0].contact_method_id, phone);
-        assert!(!today_has(&f.router, &f.alice, person_id).await, "{reason}");
+        // The Inquiry is answered; what remains is D-033's outcome nag.
+        assert_eq!(
+            today_priority(&f.router, &f.alice, person_id)
+                .await
+                .as_deref(),
+            Some("low"),
+            "{reason}"
+        );
         // The room was deleted after the failure.
         assert!(f.provider.calls().iter().any(|c| matches!(
             c,
@@ -1006,7 +1026,12 @@ async fn hangup_while_the_dial_is_in_flight_is_cancelled_with_one_attempt_and_th
     assert_eq!(attempts.len(), 1);
     assert_eq!(attempts[0].outcome, "no_answer");
     assert_eq!(completed_for(&migrator_pool, call_id).await.len(), 1);
-    assert!(!today_has(&f.router, &f.alice, person_id).await);
+    assert_eq!(
+        today_priority(&f.router, &f.alice, person_id)
+            .await
+            .as_deref(),
+        Some("low")
+    );
 
     // Now the callee "answers": the dial task's late result is absorbed.
     release
@@ -1377,7 +1402,12 @@ async fn webhook_agent_left_in_answered_is_agent_disconnected_and_in_ringing_is_
     let attempts = attempts_for(&migrator_pool, person2).await;
     assert_eq!(attempts.len(), 1);
     assert_eq!(attempts[0].outcome, "no_answer");
-    assert!(!today_has(&f.router, &f.alice, person2).await);
+    assert_eq!(
+        today_priority(&f.router, &f.alice, person2)
+            .await
+            .as_deref(),
+        Some("low")
+    );
 
     // The parked dial then fails: still exactly one attempt.
     release
@@ -2528,9 +2558,15 @@ async fn today_shows_the_effective_outcome_for_a_member_who_has_the_person_by_as
     dial(&f.router, &f.alice, call_id).await;
     wait_for_status(&f.router, &f.alice, call_id, "answered").await;
     hangup(&f.router, &f.alice, call_id).await;
-    // Membership: the attempt answered the Inquiry for everyone.
+    // Membership: the attempt answered the Inquiry for everyone; only the
+    // caller carries the D-033 outcome nag.
     assert!(!today_has(&f.router, &dave, person_id).await);
-    assert!(!today_has(&f.router, &f.alice, person_id).await);
+    assert_eq!(
+        today_priority(&f.router, &f.alice, person_id)
+            .await
+            .as_deref(),
+        Some("low")
+    );
     assert!(!today_has(&f.router, &f.carol, person_id).await);
 
     assert_eq!(
@@ -2799,4 +2835,259 @@ async fn concurrent_hangup_and_correction_yield_at_most_one_correction_of_the_re
     }
     let (status, _, _, _) = call_row(&migrator_pool, call_id).await;
     assert_eq!(status, "ended");
+}
+
+// --- Slice 006c §5a / D-033: the "outcome needed" Today tier ----------
+
+/// A failed call (busy → automatic `no_answer` attempt) by alice to
+/// `person_id`; returns the call id.
+async fn busy_call(f: &Fixture, person_id: Uuid, phone: Uuid) -> Uuid {
+    f.provider
+        .push_dial(Ok(DialOutcome::Failed(SipFailure::Busy)));
+    let (call_id, _) = start_with_agent_present(f, person_id, phone).await;
+    assert_eq!(
+        dial(&f.router, &f.alice, call_id).await.status(),
+        StatusCode::ACCEPTED
+    );
+    wait_for_status(&f.router, &f.alice, call_id, "failed").await;
+    call_id
+}
+
+#[sqlx::test]
+#[ignore]
+async fn an_ended_call_without_an_outcome_is_a_low_item_for_the_caller_only(migrator_pool: PgPool) {
+    let f = fixture(&migrator_pool).await;
+    let dave_id = common::create_user(&migrator_pool, "dave@acme.test", "Dave", PW).await;
+    common::add_membership(&migrator_pool, f.org_id, dave_id).await;
+    let dave = common::login_cookie(&f.router, "dave@acme.test", PW).await;
+
+    // Assigned to carol, called by alice.
+    let (call_id, person_id, _) =
+        answered_and_ended(&f, "lead40@example.com", Some(f.carol_id)).await;
+    let call = get_call(&f.router, &f.alice, call_id).await;
+    assert_eq!(call["status"], "ended");
+    let ended_at = call["ended_at"].as_str().unwrap().to_string();
+
+    // Caller: a low item with exactly the §5a shape.
+    let item = today_item(&f.router, &f.alice, person_id)
+        .await
+        .expect("the caller carries the outcome nag");
+    assert_eq!(item["priority"], "low");
+    assert_eq!(item["recommended_action"], "set_outcome");
+    assert_eq!(
+        item["reasons"],
+        json!([{ "code": "call_outcome_needed", "call_id": call_id, "ended_at": ended_at }])
+    );
+    assert_eq!(item["waiting_since"], ended_at);
+    assert_eq!(item["latest_inquiry"]["source"], "zillow");
+    assert_eq!(item["last_contact_attempt"]["outcome"], "reached");
+    assert_eq!(item["last_contact_attempt"]["channel"], "call");
+    assert_eq!(item["person"]["id"], person_id.to_string());
+    assert_eq!(
+        item["person"]["assigned_user"]["id"],
+        f.carol_id.to_string()
+    );
+    let mut keys: Vec<&str> = item
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect();
+    keys.sort_unstable();
+    assert_eq!(
+        keys,
+        vec![
+            "last_contact_attempt",
+            "latest_inquiry",
+            "person",
+            "priority",
+            "reasons",
+            "recommended_action",
+            "waiting_since"
+        ],
+        "TodayItem gains no field"
+    );
+    let today =
+        common::body_json(common::get_with_cookie(&f.router, "/api/today", &f.alice).await).await;
+    assert_eq!(today["truncated"], false);
+
+    // Assignee, another member, a foreign member: never.
+    assert!(!today_has(&f.router, &f.carol, person_id).await);
+    assert!(!today_has(&f.router, &dave, person_id).await);
+    assert!(!today_has(&f.router, &f.bob, person_id).await);
+
+    // Choosing an outcome removes the item; a second choice keeps it gone.
+    assert_eq!(
+        correct(&f.router, &f.alice, call_id, "left_message")
+            .await
+            .status(),
+        StatusCode::OK
+    );
+    assert!(!today_has(&f.router, &f.alice, person_id).await);
+    assert_eq!(
+        correct(&f.router, &f.alice, call_id, "busy").await.status(),
+        StatusCode::OK
+    );
+    assert!(!today_has(&f.router, &f.alice, person_id).await);
+    assert!(!today_has(&f.router, &f.carol, person_id).await);
+}
+
+#[sqlx::test]
+#[ignore]
+async fn low_items_sort_under_every_inquiry_item_by_ended_at(migrator_pool: PgPool) {
+    let f = fixture(&migrator_pool).await;
+    // Two outcome-needed calls, in order, on People assigned to nobody.
+    let (p_first, phone_first, _) =
+        create_person_with_phone(&f.router, &f.alice, "lead41a@example.com", None).await;
+    let (p_second, phone_second, _) =
+        create_person_with_phone(&f.router, &f.alice, "lead41b@example.com", None).await;
+    let call_first = busy_call(&f, p_first, phone_first).await;
+    let call_second = busy_call(&f, p_second, phone_second).await;
+    // Then a fresh Inquiry assigned to alice: newer than both calls, still
+    // listed first.
+    let (p_inquiry, _, _) =
+        create_person_with_phone(&f.router, &f.alice, "lead41c@example.com", Some(f.alice_id))
+            .await;
+
+    let today =
+        common::body_json(common::get_with_cookie(&f.router, "/api/today", &f.alice).await).await;
+    let items = today["items"].as_array().unwrap();
+    let order: Vec<(String, String)> = items
+        .iter()
+        .map(|i| {
+            (
+                i["person"]["id"].as_str().unwrap().to_string(),
+                i["priority"].as_str().unwrap().to_string(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        order,
+        vec![
+            (p_inquiry.to_string(), "high".to_string()),
+            (p_first.to_string(), "low".to_string()),
+            (p_second.to_string(), "low".to_string()),
+        ],
+        "{items:?}"
+    );
+    assert_eq!(items[1]["reasons"][0]["call_id"], call_first.to_string());
+    assert_eq!(items[2]["reasons"][0]["call_id"], call_second.to_string());
+    assert_eq!(today["truncated"], false);
+
+    // A second incomplete call to the same Person yields one item, for the
+    // most recent call.
+    let call_third = busy_call(&f, p_first, phone_first).await;
+    let today =
+        common::body_json(common::get_with_cookie(&f.router, "/api/today", &f.alice).await).await;
+    let items = today["items"].as_array().unwrap();
+    let for_first: Vec<&Value> = items
+        .iter()
+        .filter(|i| i["person"]["id"] == p_first.to_string())
+        .collect();
+    assert_eq!(for_first.len(), 1);
+    assert_eq!(for_first[0]["reasons"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        for_first[0]["reasons"][0]["call_id"],
+        call_third.to_string()
+    );
+    // ...and its `ended_at` now sorts it after p_second.
+    assert_eq!(items[1]["person"]["id"], p_second.to_string());
+    assert_eq!(items[2]["person"]["id"], p_first.to_string());
+}
+
+#[sqlx::test]
+#[ignore]
+async fn a_person_qualifying_both_ways_keeps_the_inquiry_tier_with_the_reason_appended(
+    migrator_pool: PgPool,
+) {
+    let f = fixture(&migrator_pool).await;
+    let ((person_id, phone, _), digits) = create_person_with_phone_digits(
+        &f.router,
+        &f.alice,
+        "lead42@example.com",
+        Some(f.alice_id),
+    )
+    .await;
+    let call_id = busy_call(&f, person_id, phone).await;
+    assert_eq!(
+        today_priority(&f.router, &f.alice, person_id)
+            .await
+            .as_deref(),
+        Some("low")
+    );
+    let ended_at = get_call(&f.router, &f.alice, call_id).await["ended_at"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // A repeat Inquiry after the call: back on Today by Inquiry.
+    let resp = common::post_inquiry(
+        &f.router,
+        &f.alice,
+        "realtor",
+        json!({ "email": "lead42@example.com", "phone": format!("555{digits}"), "message": "again" }),
+        Some(f.alice_id),
+    )
+    .await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    let item = today_item(&f.router, &f.alice, person_id).await.unwrap();
+    assert_eq!(item["priority"], "high");
+    assert_eq!(item["recommended_action"], "call");
+    let codes: Vec<&str> = item["reasons"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["code"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        codes,
+        vec![
+            "new_inquiry",
+            "no_contact_attempt",
+            "repeat_inquiry",
+            "call_outcome_needed"
+        ]
+    );
+    assert_eq!(item["reasons"][3]["call_id"], call_id.to_string());
+    assert_eq!(item["reasons"][3]["ended_at"], ended_at);
+    assert_eq!(item["waiting_since"], item["latest_inquiry"]["received_at"]);
+    assert_eq!(item["latest_inquiry"]["source"], "realtor");
+
+    // Choosing the outcome drops the reason but not the Inquiry item.
+    assert_eq!(
+        correct(&f.router, &f.alice, call_id, "busy").await.status(),
+        StatusCode::OK
+    );
+    let item = today_item(&f.router, &f.alice, person_id).await.unwrap();
+    assert_eq!(item["priority"], "high");
+    assert_eq!(item["reasons"].as_array().unwrap().len(), 3);
+    assert!(item["reasons"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|r| r["code"] != "call_outcome_needed"));
+}
+
+#[sqlx::test]
+#[ignore]
+async fn a_call_with_no_attempt_creates_no_outcome_item(migrator_pool: PgPool) {
+    let f = fixture(&migrator_pool).await;
+    let (person_id, phone, _) =
+        create_person_with_phone(&f.router, &f.alice, "lead43@example.com", Some(f.carol_id)).await;
+    f.provider
+        .push_dial(Err(ProviderError::Rejected("trunk auth".into())));
+    let (call_id, _) = start_with_agent_present(&f, person_id, phone).await;
+    dial(&f.router, &f.alice, call_id).await;
+    let call = wait_for_status(&f.router, &f.alice, call_id, "failed").await;
+    assert_eq!(call["failure_reason"], "provider_error");
+    assert!(attempt_rows(&migrator_pool, person_id).await.is_empty());
+    assert!(!today_has(&f.router, &f.alice, person_id).await);
+    // The assignee's Inquiry item is untouched (nothing reached the callee).
+    assert_eq!(
+        today_priority(&f.router, &f.carol, person_id)
+            .await
+            .as_deref(),
+        Some("high")
+    );
 }

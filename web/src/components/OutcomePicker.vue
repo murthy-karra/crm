@@ -3,13 +3,15 @@
 // "How did it go?" prompt and the History "Change outcome" dialog. A
 // vertical radio group of 40 px rows (UI_STYLE §5/§8: minimum target,
 // `surface-2` selection fill, weight — not colour — carries the selected
-// state). Options derive from the label map; there is no free text.
+// state). Options derive from the label map; there is no free text. D-033:
+// `null` means nothing is selected — the prompt never pre-selects the
+// system's observation, so the owner gates Save on a pick.
 import { Check } from 'lucide-vue-next'
 import type { CallOutcomeCorrection } from '../api/types'
 import { CALL_OUTCOME_CORRECTION_LABEL } from '../lib/labels'
 
 defineProps<{
-  modelValue: CallOutcomeCorrection
+  modelValue: CallOutcomeCorrection | null
   disabled?: boolean
 }>()
 

@@ -1,11 +1,12 @@
 // SLICE_006 §13 item 4: Call disabled without a phone; number picker only
 // with ≥ 2 phones; `call_completed` history rendering; one primary per
 // view; the Call → panel → Hang up flow against a fake room. SLICE_006c §13
-// item 3: the post-call prompt's Save/Skip against the mocked route, Save
-// gated on the server's status (seeded `answered`, refetched `ended`), the
-// error copy per code, one-row-per-call history rendering (the call row
-// carries the effective outcome and a "corrected from" note), Change
-// outcome only on the caller's own still-correctable call rows, and the
+// item 3 / §5a (D-033): the post-call prompt's forced choice against the
+// mocked route (no default, no Skip, Save gated on a pick and the server's
+// status — seeded `answered`, refetched `ended`), the error copy per code,
+// one-row-per-call history rendering (an agent choice names the outcome;
+// the automatic root reads "outcome needed"), Set/Change outcome only on
+// the caller's own call rows, the Today → Person `?outcome=` path, and the
 // manual dialog's widened vocabulary. Service-free:
 // `apiFetch` is mocked, the LiveKit room is a fake injected via the
 // `createRoom` prop, and PrimeVue runs unstyled as in main.ts.
@@ -177,7 +178,7 @@ function stubApi(personDetail: PersonDetailResponse, options: StubOptions = {}) 
   })
 }
 
-async function mountView() {
+async function mountView(query = '') {
   const rooms: FakeRoom[] = []
   const createRoom: CallRoomFactory = () => {
     const room = new FakeRoom()
@@ -191,7 +192,7 @@ async function mountView() {
       { path: '/people/:id', component: { template: '<div />' } },
     ],
   })
-  await router.push(`/people/${PERSON_ID}`)
+  await router.push(`/people/${PERSON_ID}${query}`)
   await router.isReady()
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -202,7 +203,7 @@ async function mountView() {
     attachTo: document.body,
   })
   await flushPromises()
-  return { wrapper, rooms, queryClient }
+  return { wrapper, rooms, queryClient, router }
 }
 
 function requests(): string[] {
@@ -296,9 +297,19 @@ describe('PersonDetailView — Call button', () => {
     expect(wrapper.findAll('.bg-accent')).toHaveLength(1)
     expect(wrapper.get('[data-testid="call-outcome-save"]').classes()).toContain('bg-accent')
 
-    await wrapper.get('[data-testid="call-outcome-skip"]').trigger('click')
+    // D-033: forced choice — nothing selected, no Skip, Save disabled until a pick.
+    expect(wrapper.find('[data-testid="call-outcome-skip"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="call-dismiss"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="outcome-picker"] [aria-checked="true"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="call-outcome-save"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-outcome="no_answer"]').trigger('click')
+    expect(wrapper.get('[data-testid="call-outcome-save"]').attributes('disabled')).toBeUndefined()
+    await wrapper.get('[data-testid="call-outcome-save"]').trigger('click')
+    await flushPromises()
+    expect(requests().filter((r) => r === `POST /calls/${CALL_ID}/outcome`)).toHaveLength(1)
+    expect(wrapper.get('[data-testid="call-outcome-saved"]').text()).toBe('Outcome saved — no answer')
+    await wrapper.get('[data-testid="call-dismiss"]').trigger('click')
     expect(wrapper.find('[data-testid="call-panel"]').exists()).toBe(false)
-    expect(requests().some((r) => r.endsWith('/outcome'))).toBe(false)
     // The Call button is the primary again.
     expect(wrapper.get('[data-testid="call-button"]').classes()).toContain('bg-accent')
   })
@@ -492,6 +503,7 @@ describe('PersonDetailView — How did it go? (SLICE_006c §10)', () => {
   it('Save waits for the server: disabled at answered, enabled after the call.changed refetch shows ended', async () => {
     const { wrapper, queryClient } = await answeredCallEnded()
     expect(wrapper.find('[data-testid="call-outcome-prompt"]').exists()).toBe(true)
+    await wrapper.get('[data-outcome="reached"]').trigger('click')
     expect(wrapper.get('[data-testid="call-outcome-save"]').attributes('disabled')).toBeDefined()
     // D-023: `call.changed` is invalidation-only — the refetch carries the status.
     await queryClient.invalidateQueries({ queryKey: queryKeys.call(ORG_ID, CALL_ID) })
@@ -522,6 +534,7 @@ describe('PersonDetailView — How did it go? (SLICE_006c §10)', () => {
     const { wrapper, queryClient } = await answeredCallEnded({ outcome: correction(false) })
     await queryClient.invalidateQueries({ queryKey: queryKeys.call(ORG_ID, CALL_ID) })
     await flushPromises()
+    await wrapper.get('[data-outcome="left_message"]').trigger('click')
     await wrapper.get('[data-testid="call-outcome-save"]').trigger('click')
     await flushPromises()
     expect(requests().filter((r) => r === `POST /calls/${CALL_ID}/outcome`)).toHaveLength(1)
@@ -530,7 +543,7 @@ describe('PersonDetailView — How did it go? (SLICE_006c §10)', () => {
 
   it.each([
     [new ApiError(409, 'invalid_call_state'), "The call hasn't finished yet."],
-    [new ApiError(422, 'no_contact_attempt'), "There's no contact attempt to correct."],
+    [new ApiError(422, 'no_contact_attempt'), "There's no contact attempt to set an outcome on."],
     [new ApiError(409, 'correction_conflict'), 'This outcome was just changed — refreshed.'],
     [new ApiError(500, 'internal_error'), 'Could not save the outcome.'],
   ])('renders the §10 copy for %s and keeps the prompt open', async (failure, message) => {
@@ -539,6 +552,7 @@ describe('PersonDetailView — How did it go? (SLICE_006c §10)', () => {
     await flushPromises()
     const personGets = () => requests().filter((r) => r === `GET /people/${PERSON_ID}`).length
     const before = personGets()
+    await wrapper.get('[data-outcome="busy"]').trigger('click')
     await wrapper.get('[data-testid="call-outcome-save"]').trigger('click')
     await flushPromises()
     expect(wrapper.get('[data-testid="call-outcome-error"]').text()).toBe(message)
@@ -548,19 +562,25 @@ describe('PersonDetailView — How did it go? (SLICE_006c §10)', () => {
     expect(personGets() > before).toBe(failure.code === 'correction_conflict')
   })
 
-  it('Skip sends nothing — no /outcome request, panel closed', async () => {
+  it('forced choice: nothing pre-selected, no Skip or Done, Save disabled until a pick even once the server is terminal', async () => {
     const { wrapper, queryClient } = await answeredCallEnded()
     await queryClient.invalidateQueries({ queryKey: queryKeys.call(ORG_ID, CALL_ID) })
     await flushPromises()
+    expect(wrapper.find('[data-testid="outcome-picker"] [aria-checked="true"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="call-outcome-skip"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="call-dismiss"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="call-panel"]').text()).not.toContain('Skip')
+    expect(wrapper.get('[data-testid="call-outcome-save"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('[data-testid="call-outcome-finishing"]').exists()).toBe(false)
+    await wrapper.get('[data-outcome="wrong_number"]').trigger('click')
     expect(wrapper.get('[data-testid="call-outcome-save"]').attributes('disabled')).toBeUndefined()
-    await wrapper.get('[data-testid="call-outcome-skip"]').trigger('click')
-    await flushPromises()
     expect(requests().some((r) => r.endsWith('/outcome'))).toBe(false)
-    expect(wrapper.find('[data-testid="call-panel"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="call-panel"]').exists()).toBe(true)
   })
 
   it('shows "Finishing up…" under a disabled Save and a follow-up GET enables it without a realtime event', async () => {
     const { wrapper } = await answeredCallEnded()
+    await wrapper.get('[data-outcome="reached"]').trigger('click')
     expect(wrapper.get('[data-testid="call-outcome-finishing"]').text()).toBe('Finishing up…')
     const getCount = () => requests().filter((r) => r === `GET /calls/${CALL_ID}`).length
     expect(getCount()).toBe(0)
@@ -600,6 +620,11 @@ function completedEntry(
   }
 }
 
+/** The open outcome dialog's heading (PrimeVue teleports it to body). */
+function dialogTitle(): string | undefined {
+  return document.querySelector('[role="dialog"] h2')?.textContent?.trim()
+}
+
 /** The History rows as [summary, sub-line] pairs, in render order. */
 function historyRows(wrapper: Awaited<ReturnType<typeof mountView>>['wrapper']): Array<[string, string]> {
   return wrapper
@@ -608,10 +633,10 @@ function historyRows(wrapper: Awaited<ReturnType<typeof mountView>>['wrapper']):
     .map((li) => [li.get('p.text-body').text(), li.get('p.text-small').text().replace(/\s+/g, ' ')])
 }
 
-describe('PersonDetailView — one row per call (decision 2026-08-23)', () => {
-  it('a corrected answered call is one row: the corrected outcome, the duration and a "corrected from" note', async () => {
-    // §2 order: automatic attempt → call_completed → correction; the
-    // correction is not adjacent to its original.
+describe('PersonDetailView — one row per call (SLICE_006c §5a, D-033)', () => {
+  it('an answered call with an agent choice is one row naming the choice and the duration — no note', async () => {
+    // §2 order: automatic attempt → call_completed → the agent's choice;
+    // the choice is not adjacent to its root.
     stubApi(
       detail(
         [PHONE_A],
@@ -624,24 +649,41 @@ describe('PersonDetailView — one row per call (decision 2026-08-23)', () => {
     )
     const { wrapper } = await mountView()
     const rows = historyRows(wrapper)
-    expect(rows).toHaveLength(1)
-    expect(rows[0][0]).toBe('Call — voicemail, 7 s')
-    expect(rows[0][1]).toMatch(/^Alice · .+ · outcome corrected from talked to them .+$/)
-    expect(wrapper.get('[data-testid="correction-note"]').text()).toMatch(/^outcome corrected from talked to them /)
+    expect(rows).toEqual([['Call — voicemail, 7 s', expect.stringMatching(/^Alice · [^·]+$/)]])
+    expect(wrapper.find('[data-testid="correction-note"]').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('superseded')
-    expect(wrapper.text()).not.toContain('Outcome corrected')
+    expect(wrapper.text()).not.toContain('corrected')
     expect(wrapper.text()).not.toContain('Contact attempted')
+    expect(wrapper.text()).not.toContain('outcome needed')
+    expect(wrapper.get('[data-testid="change-outcome"]').text()).toBe('Change outcome')
   })
 
-  it('an uncorrected answered call shows the observed outcome and no note', async () => {
+  it('an answered call without a choice reads "Call — 7 s · outcome needed" and never the system\'s word', async () => {
     stubApi(detail([PHONE_A], [attemptEntry(ATTEMPT_ID, { outcome: 'reached' }), completedEntry('h-completed', { talk_seconds: 72 })]))
     const { wrapper } = await mountView()
-    const rows = historyRows(wrapper)
-    expect(rows).toEqual([['Call — talked to them, 1 min 12 s', expect.stringMatching(/^Alice · [^·]+$/)]])
-    expect(wrapper.find('[data-testid="correction-note"]').exists()).toBe(false)
+    expect(historyRows(wrapper)).toEqual([['Call — 1 min 12 s · outcome needed', expect.stringMatching(/^Alice · [^·]+$/)]])
+    expect(wrapper.text()).not.toContain('talked to them')
+    expect(wrapper.text()).not.toContain('reached')
+    expect(wrapper.get('[data-testid="change-outcome"]').text()).toBe('Set outcome')
   })
 
-  it('a chain: the head of the chain is the outcome; the note names the root', async () => {
+  it('a not-answered call without a choice reads "Call · outcome needed"', async () => {
+    stubApi(
+      detail(
+        [PHONE_A],
+        [
+          attemptEntry(ATTEMPT_ID, { outcome: 'no_answer' }),
+          completedEntry('h-completed', { outcome: 'ring_timeout', talk_seconds: null, answered_at: null }),
+        ],
+      ),
+    )
+    const { wrapper } = await mountView()
+    expect(historyRows(wrapper).map(([summary]) => summary)).toEqual(['Call · outcome needed'])
+    expect(wrapper.text()).not.toContain('no answer')
+    expect(wrapper.get('[data-testid="change-outcome"]').text()).toBe('Set outcome')
+  })
+
+  it('a chain: the head of the chain is the outcome', async () => {
     stubApi(
       detail(
         [PHONE_A],
@@ -657,11 +699,11 @@ describe('PersonDetailView — one row per call (decision 2026-08-23)', () => {
     const rows = historyRows(wrapper)
     expect(rows).toHaveLength(1)
     expect(rows[0][0]).toBe('Call — wrong number, 7 s')
-    expect(rows[0][1]).toContain('outcome corrected from talked to them')
+    expect(rows[0][1]).not.toContain('talked to them')
     expect(wrapper.findAll('[data-testid="change-outcome"]')).toHaveLength(1)
   })
 
-  it('two calls on one Person each get their own row with their own outcome', async () => {
+  it('two calls on one Person each get their own row with their own state', async () => {
     stubApi(
       detail(
         [PHONE_A],
@@ -669,17 +711,14 @@ describe('PersonDetailView — one row per call (decision 2026-08-23)', () => {
           attemptEntry('a1', { outcome: 'no_answer', call_id: 'call-a', superseded: true }),
           completedEntry('c-a', { call_id: 'call-a', outcome: 'busy', talk_seconds: null, answered_at: null }),
           attemptEntry('a1-fix', { outcome: 'busy', call_id: 'call-a', corrects_id: 'a1' }),
-          attemptEntry('b1', { outcome: 'reached', call_id: 'call-b', superseded: true }),
+          attemptEntry('b1', { outcome: 'reached', call_id: 'call-b' }),
           completedEntry('c-b', { call_id: 'call-b', talk_seconds: 40 }),
-          attemptEntry('b1-fix', { outcome: 'left_message', call_id: 'call-b', corrects_id: 'b1' }),
         ],
       ),
     )
     const { wrapper } = await mountView()
-    const rows = historyRows(wrapper)
-    expect(rows.map(([summary]) => summary)).toEqual(['Call — busy', 'Call — voicemail, 40 s'])
-    expect(rows[0][1]).toContain('outcome corrected from no answer')
-    expect(rows[1][1]).toContain('outcome corrected from talked to them')
+    expect(historyRows(wrapper).map(([summary]) => summary)).toEqual(['Call — busy', 'Call — 40 s · outcome needed'])
+    expect(wrapper.findAll('[data-testid="change-outcome"]').map((b) => b.text())).toEqual(['Change outcome', 'Set outcome'])
   })
 
   it('a failed call with no attempt keeps the plain call_completed line', async () => {
@@ -697,8 +736,9 @@ describe('PersonDetailView — one row per call (decision 2026-08-23)', () => {
         [PHONE_A],
         [
           attemptEntry('manual', { call_id: null, channel: 'text', outcome: 'sent' }),
-          attemptEntry(ATTEMPT_ID, { outcome: 'no_answer' }),
+          attemptEntry(ATTEMPT_ID, { outcome: 'no_answer', superseded: true }),
           completedEntry('h-completed', { outcome: 'no_answer', talk_seconds: null, answered_at: null }),
+          attemptEntry('att-2', { outcome: 'no_answer', corrects_id: ATTEMPT_ID }),
         ],
       ),
     )
@@ -713,8 +753,8 @@ describe('PersonDetailView — one row per call (decision 2026-08-23)', () => {
   })
 })
 
-describe('PersonDetailView — Change outcome (SLICE_006c §1 step 7)', () => {
-  it('sits on the call row, only when the caller is me and a non-superseded attempt exists', async () => {
+describe('PersonDetailView — Set / Change outcome (SLICE_006c §1 step 7, §5a)', () => {
+  it('sits on the call row, only when the caller is me and an effective attempt exists', async () => {
     stubApi(
       detail(
         [PHONE_A],
@@ -731,16 +771,16 @@ describe('PersonDetailView — Change outcome (SLICE_006c §1 step 7)', () => {
     const { wrapper } = await mountView()
     const rows = historyRows(wrapper)
     expect(rows.map(([summary]) => summary)).toEqual([
-      'Call — talked to them, 7 s',
+      'Call — 7 s · outcome needed',
       'Contact attempted — call, reached',
       'Call — failed',
-      'Call — talked to them, 7 s',
+      'Call — 7 s · outcome needed',
     ])
     const items = wrapper.findAll('li').filter((li) => li.find('p.text-body').exists())
     expect(items.map((li) => li.findAll('[data-testid="change-outcome"]').length)).toEqual([1, 0, 0, 0])
   })
 
-  it('opens the picker on the effective outcome and posts to /calls/{call_id}/outcome', async () => {
+  it('Change outcome opens the picker on the current choice and posts to /calls/{call_id}/outcome', async () => {
     stubApi(
       detail(
         [PHONE_A],
@@ -754,8 +794,10 @@ describe('PersonDetailView — Change outcome (SLICE_006c §1 step 7)', () => {
     const { wrapper } = await mountView()
     const action = wrapper.get('[data-testid="change-outcome"]')
     expect(action.classes()).toContain('bg-transparent')
+    expect(action.text()).toBe('Change outcome')
     await action.trigger('click')
     await flushPromises()
+    expect(dialogTitle()).toBe('Change outcome')
     const picker = document.querySelector('[data-testid="outcome-picker"]')
     expect(picker).not.toBeNull()
     expect(picker?.querySelector('[aria-checked="true"]')?.getAttribute('data-outcome')).toBe('no_answer')
@@ -765,6 +807,29 @@ describe('PersonDetailView — Change outcome (SLICE_006c §1 step 7)', () => {
     await flushPromises()
     const post = apiFetchMock.mock.calls.find(([path]) => path === `/calls/${CALL_ID}/outcome`)
     expect(JSON.parse(String(post?.[1]?.body))).toEqual({ outcome: 'busy' })
+    expect(document.querySelector('[data-testid="outcome-picker"]')).toBeNull()
+  })
+
+  it('Set outcome on an incomplete call opens with nothing selected, Save disabled until a pick, Cancel kept', async () => {
+    stubApi(detail([PHONE_A], [attemptEntry(ATTEMPT_ID, { outcome: 'reached' }), completedEntry('h-completed')]))
+    const { wrapper } = await mountView()
+    const action = wrapper.get('[data-testid="change-outcome"]')
+    expect(action.text()).toBe('Set outcome')
+    await action.trigger('click')
+    await flushPromises()
+    expect(dialogTitle()).toBe('Set outcome')
+    const picker = document.querySelector('[data-testid="outcome-picker"]')
+    expect(picker?.querySelector('[aria-checked="true"]')).toBeNull()
+    const save = document.querySelector('[data-testid="change-outcome-save"]') as HTMLButtonElement
+    expect(save.disabled).toBe(true)
+    expect(document.querySelector('[data-testid="change-outcome-cancel"]')).not.toBeNull()
+    ;(picker?.querySelector('[data-outcome="left_message"]') as HTMLButtonElement).click()
+    await flushPromises()
+    expect(save.disabled).toBe(false)
+    save.click()
+    await flushPromises()
+    const post = apiFetchMock.mock.calls.find(([path]) => path === `/calls/${CALL_ID}/outcome`)
+    expect(JSON.parse(String(post?.[1]?.body))).toEqual({ outcome: 'left_message' })
     expect(document.querySelector('[data-testid="outcome-picker"]')).toBeNull()
   })
 
@@ -788,26 +853,31 @@ describe('PersonDetailView — Change outcome (SLICE_006c §1 step 7)', () => {
     await flushPromises()
     expect(document.querySelector('[data-testid="change-outcome-save"]')).toBeNull()
     expect(wrapper.findAll('.bg-accent')).toHaveLength(1)
-    await wrapper.get('[data-testid="call-outcome-skip"]').trigger('click')
+    // Only a saved outcome releases the prompt (no Skip).
+    await wrapper.get('[data-outcome="reached"]').trigger('click')
+    await wrapper.get('[data-testid="call-outcome-save"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="call-dismiss"]').trigger('click')
     await flushPromises()
     expect(wrapper.get('[data-testid="change-outcome"]').attributes('disabled')).toBeUndefined()
   })
 
-  it('re-seeds the picker when reopened on a different call row', async () => {
+  it('re-seeds the picker when reopened on a different call row (chosen → incomplete)', async () => {
     stubApi(
       detail(
         [PHONE_A],
         [
-          attemptEntry('a1', { outcome: 'no_answer', call_id: 'call-a' }),
-          completedEntry('c-a', { call_id: 'call-a', outcome: 'no_answer', talk_seconds: null, answered_at: null }),
-          attemptEntry('a2', { outcome: 'reached', call_id: 'call-b' }),
+          attemptEntry('a1', { outcome: 'reached', call_id: 'call-a', superseded: true }),
+          completedEntry('c-a', { call_id: 'call-a' }),
+          attemptEntry('a1-fix', { outcome: 'no_answer', call_id: 'call-a', corrects_id: 'a1' }),
+          attemptEntry('b1', { outcome: 'reached', call_id: 'call-b' }),
           completedEntry('c-b', { call_id: 'call-b' }),
         ],
       ),
     )
     const { wrapper } = await mountView()
     const actions = wrapper.findAll('[data-testid="change-outcome"]')
-    expect(actions).toHaveLength(2)
+    expect(actions.map((a) => a.text())).toEqual(['Change outcome', 'Set outcome'])
     const checkedOutcome = () =>
       document.querySelector('[data-testid="outcome-picker"] [aria-checked="true"]')?.getAttribute('data-outcome')
     await actions[0].trigger('click')
@@ -820,7 +890,7 @@ describe('PersonDetailView — Change outcome (SLICE_006c §1 step 7)', () => {
     await flushPromises()
     await actions[1].trigger('click')
     await flushPromises()
-    expect(checkedOutcome()).toBe('reached')
+    expect(checkedOutcome()).toBeUndefined()
   })
 
   it('shows the §10 copy inside the dialog on failure', async () => {
@@ -830,11 +900,54 @@ describe('PersonDetailView — Change outcome (SLICE_006c §1 step 7)', () => {
     const { wrapper } = await mountView()
     await wrapper.get('[data-testid="change-outcome"]').trigger('click')
     await flushPromises()
+    ;(document.querySelector('[data-testid="outcome-picker"] [data-outcome="busy"]') as HTMLButtonElement).click()
+    await flushPromises()
     ;(document.querySelector('[data-testid="change-outcome-save"]') as HTMLButtonElement).click()
     await flushPromises()
     expect(document.querySelector('[data-testid="change-outcome-error"]')?.textContent?.trim()).toBe(
-      "There's no contact attempt to correct.",
+      "There's no contact attempt to set an outcome on.",
     )
+  })
+})
+
+describe('PersonDetailView — Today → Person ?outcome=<call_id> (SLICE_006c §5a)', () => {
+  const incomplete = () => detail([PHONE_A], [attemptEntry(ATTEMPT_ID, { outcome: 'reached' }), completedEntry('h-completed')])
+
+  it('opens the Set-outcome dialog for that call with nothing selected; Save closes it and clears the param', async () => {
+    stubApi(incomplete())
+    const { router } = await mountView(`?outcome=${CALL_ID}`)
+    expect(dialogTitle()).toBe('Set outcome')
+    const picker = document.querySelector('[data-testid="outcome-picker"]')
+    expect(picker).not.toBeNull()
+    expect(picker?.querySelector('[aria-checked="true"]')).toBeNull()
+    expect(router.currentRoute.value.query.outcome).toBe(CALL_ID)
+    ;(picker?.querySelector('[data-outcome="no_answer"]') as HTMLButtonElement).click()
+    await flushPromises()
+    ;(document.querySelector('[data-testid="change-outcome-save"]') as HTMLButtonElement).click()
+    await flushPromises()
+    const post = apiFetchMock.mock.calls.find(([path]) => path === `/calls/${CALL_ID}/outcome`)
+    expect(JSON.parse(String(post?.[1]?.body))).toEqual({ outcome: 'no_answer' })
+    expect(document.querySelector('[data-testid="outcome-picker"]')).toBeNull()
+    expect(router.currentRoute.value.query.outcome).toBeUndefined()
+    expect(router.currentRoute.value.path).toBe(`/people/${PERSON_ID}`)
+  })
+
+  it('Cancel closes the dialog and clears the param without a request', async () => {
+    stubApi(incomplete())
+    const { router } = await mountView(`?outcome=${CALL_ID}`)
+    expect(document.querySelector('[data-testid="outcome-picker"]')).not.toBeNull()
+    ;(document.querySelector('[data-testid="change-outcome-cancel"]') as HTMLButtonElement).click()
+    await flushPromises()
+    expect(document.querySelector('[data-testid="outcome-picker"]')).toBeNull()
+    expect(router.currentRoute.value.query.outcome).toBeUndefined()
+    expect(requests().some((r) => r.endsWith('/outcome'))).toBe(false)
+  })
+
+  it('an unknown call id (or one I cannot act on) just clears the param', async () => {
+    stubApi(incomplete())
+    const { router } = await mountView('?outcome=not-a-call')
+    expect(document.querySelector('[data-testid="outcome-picker"]')).toBeNull()
+    expect(router.currentRoute.value.query.outcome).toBeUndefined()
   })
 })
 

@@ -51,8 +51,8 @@ export const CALL_OUTCOME_CORRECTION_LABEL: Record<CallOutcomeCorrection, string
   wrong_number: 'Wrong number',
 }
 
-/** The lowercase tail of "Outcome saved — voicemail" / "Outcome corrected —
- * voicemail" (SLICE_006c §1 step 3, §10). Falls back to the generic outcome
+/** The lowercase tail of "Outcome saved — voicemail" and the History row's
+ * "Call — voicemail, 7 s" (SLICE_006c §1 step 3, §5a). Falls back to the generic outcome
  * label for a value the prompt never offers (`sent`). */
 export function correctedOutcomeLabel(outcome: ContactOutcome): string {
   const label = outcome === 'sent' ? CONTACT_OUTCOME_LABEL[outcome] : CALL_OUTCOME_CORRECTION_LABEL[outcome]

@@ -3,11 +3,15 @@
 // primary contact), Reasons (neutral badges, wire order — §3's fixed
 // order, never re-sorted), Priority (text weight, not color), Waiting
 // (relative; absolute in tooltip), Recommended (Call + phone / Email +
-// address), per-row secondary "Log contact". Server order is the only
-// order (§3: `rank()` preserves SQL order) — this view never sorts
-// `items` itself.
+// address), per-row secondary "Log contact". SLICE_006c §5a (D-033): a
+// `low` item — the viewer's own call with no chosen outcome — reads
+// "Outcome needed" / "Low" and its action is "Set outcome", which opens the
+// Person page with `?outcome=<call_id>` (the Set-outcome dialog). Server
+// order is the only order (§3: `rank()` preserves SQL order; `low` arrives
+// last) — this view never sorts `items` itself.
 import { computed, h, ref } from 'vue'
-import { Mail, Phone, Sun } from 'lucide-vue-next'
+import { useRouter } from 'vue-router'
+import { Mail, Phone, PhoneOutgoing, Sun } from 'lucide-vue-next'
 import type { ColumnDef } from '@tanstack/vue-table'
 import PageHeader from '../components/PageHeader.vue'
 import DataTable from '../components/DataTable.vue'
@@ -19,6 +23,7 @@ import { formatAbsoluteTime, formatRelativeTime } from '../lib/format'
 import { buttonClasses } from '../lib/controls'
 import { describeApiError } from '../lib/errors'
 
+const router = useRouter()
 const { data: me } = useMe()
 const orgId = computed(() => me.value?.organization?.id ?? '')
 
@@ -40,7 +45,23 @@ function reasonLabel(reason: TodayReason): string {
       return 'No contact attempt'
     case 'repeat_inquiry':
       return `Inquired again (${reason.inquiry_count})`
+    case 'call_outcome_needed':
+      return 'Outcome needed'
   }
+}
+
+const PRIORITY_LABEL: Record<TodayItem['priority'], string> = { high: 'High', normal: 'Normal', low: 'Low' }
+
+/** The `call_outcome_needed` reason on a `set_outcome` item (§5a: present
+ * whenever the action is `set_outcome`; null otherwise). */
+function outcomeNeeded(item: TodayItem): { call_id: string; ended_at: string } | null {
+  if (item.recommended_action !== 'set_outcome') return null
+  const reason = item.reasons.find((r) => r.code === 'call_outcome_needed')
+  return reason && reason.code === 'call_outcome_needed' ? reason : null
+}
+
+function setOutcomeTo(item: TodayItem, callId: string): string {
+  return `/people/${item.person.id}?outcome=${encodeURIComponent(callId)}`
 }
 
 const logContactTarget = ref<{ personId: string; personName: string } | null>(null)
@@ -83,11 +104,7 @@ const columns: ColumnDef<TodayItem>[] = [
     header: 'Priority',
     cell: (info) => {
       const priority = info.row.original.priority
-      return h(
-        'span',
-        { class: priority === 'high' ? 'font-semibold text-text' : 'text-text-muted' },
-        priority === 'high' ? 'High' : 'Normal',
-      )
+      return h('span', { class: priority === 'high' ? 'font-semibold text-text' : 'text-text-muted' }, PRIORITY_LABEL[priority])
     },
   },
   {
@@ -103,6 +120,14 @@ const columns: ColumnDef<TodayItem>[] = [
     header: 'Recommended',
     cell: (info) => {
       const item = info.row.original
+      const needed = outcomeNeeded(item)
+      if (needed) {
+        return h('div', { class: 'flex items-center gap-1.5', 'data-testid': 'today-set-outcome' }, [
+          h(PhoneOutgoing, { class: 'h-4 w-4 shrink-0 text-text-muted', 'stroke-width': 1.5 }),
+          h('span', { class: 'text-text' }, 'Set outcome'),
+          h('span', { class: 'text-text-muted', title: formatAbsoluteTime(needed.ended_at) }, `Call ${formatRelativeTime(needed.ended_at)} has no outcome yet`),
+        ])
+      }
       const isCall = item.recommended_action === 'call'
       const detail = isCall ? item.person.primary_phone : item.person.primary_email
       return h('div', { class: 'flex items-center gap-1.5' }, [
@@ -117,6 +142,22 @@ const columns: ColumnDef<TodayItem>[] = [
     header: '',
     cell: (info) => {
       const item = info.row.original
+      const needed = outcomeNeeded(item)
+      if (needed) {
+        return h(
+          'button',
+          {
+            type: 'button',
+            class: buttonClasses('secondary'),
+            'data-testid': 'today-set-outcome-action',
+            onClick: (event: MouseEvent) => {
+              event.stopPropagation()
+              void router.push(setOutcomeTo(item, needed.call_id))
+            },
+          },
+          'Set outcome',
+        )
+      }
       return h(
         'button',
         {

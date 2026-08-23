@@ -7,7 +7,7 @@ import { describeOutcomeError } from './errors'
 describe('describeOutcomeError (SLICE_006c §10)', () => {
   it.each([
     [409, 'invalid_call_state', "The call hasn't finished yet."],
-    [422, 'no_contact_attempt', "There's no contact attempt to correct."],
+    [422, 'no_contact_attempt', "There's no contact attempt to set an outcome on."],
     [409, 'correction_conflict', 'This outcome was just changed — refreshed.'],
     [403, 'forbidden', 'Only the caller can change this outcome.'],
     [404, 'not_found', 'This call no longer exists.'],

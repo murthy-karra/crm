@@ -403,15 +403,20 @@ export interface UnresolvedResponse {
 
 // ---- Today (SLICE_003 §5 GET /api/today; §3 reasons/priority/action) -----
 
-export type TodayPriority = 'high' | 'normal'
-export type RecommendedAction = 'call' | 'email'
+// SLICE_006c §5a (D-033): `low` is the "outcome needed" tier, served after
+// every other item; `set_outcome` is its recommended action.
+export type TodayPriority = 'high' | 'normal' | 'low'
+export type RecommendedAction = 'call' | 'email' | 'set_outcome'
 
 // Discriminated on `code`, in the fixed wire order (§3) — never re-sorted
-// client-side, same discipline as `history` above.
+// client-side, same discipline as `history` above. `call_outcome_needed`
+// (SLICE_006c §5a) names the viewer's own call whose outcome is still the
+// automatic root; it may be appended to the inquiry-based reasons.
 export type TodayReason =
   | { code: 'new_inquiry'; source: string; received_at: string }
   | { code: 'no_contact_attempt'; since: string }
   | { code: 'repeat_inquiry'; inquiry_count: number }
+  | { code: 'call_outcome_needed'; call_id: string; ended_at: string }
 
 // `latest_inquiry` on a TodayItem — exactly `{id, source, received_at}` (§5),
 // narrower than `PersonInquiry` (which also carries `source_external_id` and

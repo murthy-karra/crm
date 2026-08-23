@@ -1,23 +1,24 @@
 <script setup lang="ts">
 // SLICE_006 §10: the docked call panel — status line, elapsed timer, mute,
-// Hang up (the view's primary while a call is active). SLICE_006c §10
-// replaces SLICE_006's post-call line ("Logged as contact attempt — …"):
-// whenever an automatic attempt was written (`attemptOutcome(call) !==
+// Hang up (the view's primary while a call is active). SLICE_006c §5a
+// (D-033) replaces SLICE_006's post-call line ("Logged as contact attempt —
+// …"): whenever an automatic attempt was written (`attemptOutcome(call) !==
 // null`) the post-call block is the "How did it go?" prompt — the five-choice
-// picker pre-selected from what the system observed, Save outcome (the one
-// primary; enabled only once the *server* says the call is terminal) and
-// Skip (ghost, replaces Done; sends nothing). A floating
-// surface (UI_STYLE §2: white, 12 px radius, hairline plus the one soft
-// shadow) docked bottom-right of the content column. Purely presentational:
-// every value comes from `useCall` via props and every action is an emit,
-// so PersonDetailView.vue owns the one call and this component holds no
-// call state of its own.
+// picker with NOTHING pre-selected (the system's observation is never
+// offered as the outcome) and Save outcome (the one primary; enabled only
+// once a choice is made AND the *server* says the call is terminal). There
+// is no Skip: the panel stays until Save succeeds. A floating surface
+// (UI_STYLE §2: white, 12 px radius, hairline plus the one soft shadow)
+// docked bottom-right of the content column. Purely presentational: every
+// value comes from `useCall` via props and every action is an emit, so
+// PersonDetailView.vue owns the one call and this component holds no call
+// state of its own.
 import { computed, ref, watch } from 'vue'
 import { Mic, MicOff, PhoneOff } from 'lucide-vue-next'
 import type { CallOutcomeCorrection, CallView } from '../api/types'
 import { buttonClasses } from '../lib/controls'
 import { correctedOutcomeLabel } from '../lib/labels'
-import { attemptOutcome, statusLine } from '../telephony/format'
+import { statusLine } from '../telephony/format'
 import type { CallError, CallPhase } from '../telephony/useCall'
 import OutcomePicker from './OutcomePicker.vue'
 
@@ -45,45 +46,39 @@ const emit = defineEmits<{
   'hangup-previous': []
   dismiss: []
   'save-outcome': [outcome: CallOutcomeCorrection]
-  skip: []
 }>()
 
 const active = computed(() => !['idle', 'ended', 'failed'].includes(props.phase))
 const status = computed(() => statusLine(props.phase, props.elapsedSeconds, props.call))
 
-// ---- "How did it go?" (SLICE_006c §10) --------------------------------------
-// Observed = the automatic attempt D-031 wrote (reached / no_answer); null
-// when nothing reached the callee — then there is nothing to correct and the
-// owner never sets `outcomePrompt`.
-const observed = computed(() => attemptOutcome(props.call))
+// ---- "How did it go?" (SLICE_006c §5a, D-033) -----------------------------
+// The owner decides (`outcomePrompt`) whether an automatic attempt exists —
+// null when nothing reached the callee; then there is no outcome to choose
+// and the owner never sets the flag.
 const prompt = computed(() => props.outcomePrompt === true && !active.value && !props.outcomeSaved)
 const savedLine = computed(() => (props.outcomeSaved ? `Outcome saved — ${correctedOutcomeLabel(props.outcomeSaved)}` : null))
 // The server's word, not the client phase: `phase` turns `ended` before the
 // hangup request completes, and `call` is refetched on `call.changed`.
 const terminal = computed(() => props.call?.status === 'ended' || props.call?.status === 'failed')
-const saveEnabled = computed(() => terminal.value && !props.outcomeSaving)
 
-const selected = ref<CallOutcomeCorrection>('reached')
-// Pre-select from the observed outcome: once per call (keyed on the call
-// id), and again if the observation changes before the user picks (a
-// ring-out settling after the panel first rendered).
-const touched = ref(false)
+// Forced choice: starts empty for every call (keyed on the call id) and is
+// never seeded from the observation.
+const selected = ref<CallOutcomeCorrection | null>(null)
 watch(
-  () => [props.call?.id, observed.value] as const,
-  ([id, value], previous) => {
-    if (id !== previous?.[0]) touched.value = false
-    if (value !== null && !touched.value) selected.value = value
+  () => props.call?.id,
+  () => {
+    selected.value = null
   },
-  { immediate: true },
 )
 
+const saveEnabled = computed(() => terminal.value && selected.value !== null && !props.outcomeSaving)
+
 function pick(value: CallOutcomeCorrection) {
-  touched.value = true
   selected.value = value
 }
 
 function save() {
-  if (!saveEnabled.value) return
+  if (!saveEnabled.value || selected.value === null) return
   emit('save-outcome', selected.value)
 }
 </script>
@@ -186,15 +181,6 @@ function save() {
         </button>
       </template>
       <template v-else-if="prompt">
-        <button
-          type="button"
-          :class="buttonClasses('ghost')"
-          :disabled="outcomeSaving"
-          data-testid="call-outcome-skip"
-          @click="emit('skip')"
-        >
-          Skip
-        </button>
         <button
           type="button"
           :class="buttonClasses('primary')"

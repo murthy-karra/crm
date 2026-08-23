@@ -693,7 +693,10 @@ struct ContactAttemptedHistoryRow {
 /// row's `causation_id` when it names a `call` of this Organization
 /// (call-derived attempts and their corrections); a manual attempt has
 /// `causation_id` NULL and so `call_id: null`. `superseded` = a corrector
-/// exists.
+/// exists. A correction's history `occurred_at` is its `recorded_at` — the
+/// moment the agent corrected it — so the timeline reads "call, then the
+/// correction" (user decision 2026-08-23, SLICE_006c §2); the stored fact
+/// keeps the inherited `occurred_at` for Today.
 async fn contact_attempted_history(
     conn: &mut PgConnection,
     organization_id: Uuid,
@@ -723,7 +726,11 @@ async fn contact_attempted_history(
             kind: "contact_attempted",
             kind_rank: 4,
             id: r.id,
-            occurred_at: r.occurred_at,
+            occurred_at: if r.corrects_id.is_some() {
+                r.recorded_at
+            } else {
+                r.occurred_at
+            },
             recorded_at: r.recorded_at,
             actor: actor_ref(r.actor_user_id, r.actor_display_name),
             origin: r.origin,

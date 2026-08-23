@@ -2258,8 +2258,8 @@ async fn correcting_an_answered_call_writes_one_correction_row_with_the_call_env
         .unwrap();
     assert_eq!(
         &kinds[first_attempt..],
-        &["contact_attempted", "contact_attempted", "call_completed"],
-        "{kinds:?}"
+        &["contact_attempted", "call_completed", "contact_attempted"],
+        "a correction sits after the call it corrects: {kinds:?}"
     );
     let attempts = history_of_kind(history, "contact_attempted");
     assert_eq!(attempts[0]["id"], o.id.to_string());
@@ -2286,7 +2286,13 @@ async fn correcting_an_answered_call_writes_one_correction_row_with_the_call_env
     );
     assert_eq!(attempts[1]["actor"]["id"], f.alice_id.to_string());
     assert_eq!(attempts[1]["correlation_id"], correlation_id.to_string());
-    assert_eq!(attempts[0]["occurred_at"], attempts[1]["occurred_at"]);
+    // History shows the correction at the moment it was made (its
+    // recorded_at), after the call; the stored fact keeps the attempt's
+    // occurred_at (asserted on the rows above).
+    assert!(
+        attempts[1]["occurred_at"].as_str().unwrap() > attempts[0]["occurred_at"].as_str().unwrap()
+    );
+    assert_eq!(attempts[1]["occurred_at"], attempts[1]["recorded_at"]);
 }
 
 #[sqlx::test]
@@ -2377,7 +2383,17 @@ async fn a_second_correction_chains_onto_the_first_with_strictly_increasing_reco
         .map(|a| a["detail"]["superseded"].as_bool().unwrap())
         .collect();
     assert_eq!(superseded, vec![true, true, false]);
-    assert_eq!(history.last().unwrap()["kind"], "call_completed");
+    // The original attempt precedes the call's end; every correction follows it.
+    let kinds: Vec<&str> = history
+        .iter()
+        .map(|e| e["kind"].as_str().unwrap())
+        .collect();
+    let end = kinds.iter().position(|k| *k == "call_completed").unwrap();
+    assert_eq!(kinds[end - 1], "contact_attempted");
+    assert_eq!(
+        &kinds[end + 1..],
+        &["contact_attempted", "contact_attempted"]
+    );
 }
 
 #[sqlx::test]

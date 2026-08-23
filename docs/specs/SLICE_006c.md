@@ -119,14 +119,15 @@ unchanged: it records what the system observed, not a user statement.
 `GET /api/people/{id}` `history[]` entries of kind `contact_attempted`
 gain `detail.call_id: uuid | null` (= `causation_id` when the attempt is
 call-derived), `detail.corrects_id: uuid | null`, `detail.superseded:
-bool`. `kind`/`kind_rank` unchanged. Ordering (SLICE_002 §5 key
-`occurred_at, recorded_at, kind_rank, id`) places a correction after its
-original (same `occurred_at`, later `recorded_at`) but **not necessarily
-adjacent**: for a ring-out/busy/declined/cancelled call the automatic
-attempt and `call_completed` share both timestamps, so the order is
-original → `call_completed` → correction. Lane B must render
-superseded/corrected rows from `superseded`/`corrects_id`, never from
-position (implementation finding, 2026-08-22). Pointer lines go in: SLICE_002 §5 (history detail); SLICE_003 §2 (the
+bool`. `kind`/`kind_rank` unchanged. **Timeline placement of a
+correction** (user decision after the first live correction,
+2026-08-23): in `history[]` a correction's `occurred_at` is its
+`recorded_at` — the moment the agent corrected it — so the timeline
+reads original attempt → `call_completed` → correction, and the
+correction shows "2 minutes ago", not the call's time. The stored fact
+still inherits the attempt's `occurred_at` (Today semantics, §3). Lane B
+renders superseded/corrected rows from `superseded`/`corrects_id`,
+never from position. Pointer lines go in: SLICE_002 §5 (history detail); SLICE_003 §2 (the
 widened CHECK) and §5 (`POST /api/people/{id}/contact-attempts` now
 accepts `busy`/`wrong_number` — the manual route's vocabulary widens
 with `ContactOutcome`); SLICE_003 §3 (`last_contact_attempt` is now the
@@ -299,9 +300,9 @@ chain length (a caller may correct repeatedly; each is one row).
    concurrent double correction (`tokio::join!`) → both 200, exactly
    one or two new rows forming a chain, never two corrections of the
    same head; `recorded_at` strictly increasing along the chain; history
-   order pinned as original, correction, then `call_completed` for an
-   answered call and original, `call_completed`, correction for a busy
-   call (correct `no_answer` → `busy`; also proves a failed-with-attempt
+   order pinned as original, `call_completed`, then correction (the
+   correction's history `occurred_at` = its `recorded_at`) for both an
+   answered and a busy call (correct `no_answer` → `busy`; also proves a failed-with-attempt
    call is correctable); a `placing → cancelled` call (no attempt) → 422;
    non-caller on an *active* call → 403 (403 precedes 409);
    `tokio::join!(hangup, correct)` → 409 or 200, at most one correction; a

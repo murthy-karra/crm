@@ -4,18 +4,20 @@ Last updated: 2026-08-22
 
 ## Current phase
 
-**Slice 005 (Operator retrieval) — CLOSED.** Merged, spec synced, pushed
-to `origin/main`; slice branches deleted. The user ran the browser
-walkthrough on 2026-08-22 and moved on. Next: plan Slice 006 (calling,
-D-021), or a small 005b streaming slice if the user chooses it (§14
-item 1 / §16 currently defer SSE to the calling work).
-
-Deferred with notes: O-010 (fuzzy/site search — trigram primitive →
-search projection → pgvector, when needs are known); the Operator's
-"not found" on misspelt names is the known symptom.
+**Slice 006 (calling) — PLANNING; spec DRAFTED, independent review
+pending, then user approval.** On 2026-08-22 the user accepted D-030
+(006 = human-initiated outbound browser calling; 006a = `crm-app`
+extraction; 006b = Operator `start_call`; dev telephony on a public
+Linux host with one Telnyx number as a LiveKit outbound trunk) and
+D-031 (automatic contact attempt at answer/failure time; voicemail
+reads `reached`); O-011 (outbound-calling compliance) recorded.
+`docs/specs/SLICE_006.md` and lane briefs A (backend), B (web), C
+(telephony infra) drafted from a `crm-planner` pass. Slice 005 is
+closed (see History).
 
 ## Current slice
 
+Slice 006 — Calling — `docs/specs/SLICE_006.md` (DRAFT). Previous:
 Slice 005 — Operator retrieval — `docs/specs/SLICE_005.md` (APPROVED). Read-only AI Operator: `crm-operator` crate with a
 `ToolBackend` trait (five tools: `search_people`, `get_person`,
 `get_today`, `get_next_work_item`, `explain_priority`), Groq via a
@@ -26,7 +28,7 @@ proof chain. Slice 004 is complete and merged (see History).
 
 ## Current branch
 
-`main`, clean, in sync with `origin/main` (Slice 005 closed).
+`plan-006` (from `main` at `c337093`): planning documents only.
 
 ## Last accepted decision
 

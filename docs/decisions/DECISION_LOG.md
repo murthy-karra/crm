@@ -582,6 +582,61 @@ deletable-blob discipline.
 
 Blocks: nothing. Feeds the Slice 005 specification.
 
+### D-030 — Slice 006 is human-initiated outbound browser calling; Operator calling is 006b (2026-08-22)
+
+Accepted (user, during Slice 006 planning). Slice 006 proves "an agent
+places a real phone call from the CRM and the CRM records it": a member
+clicks Call on a Person, the browser joins a self-hosted LiveKit room
+over WebRTC, the API dials the Person's phone through LiveKit SIP →
+Telnyx → PSTN, the call lifecycle is recorded PII-free, and Today /
+realtime advance. Sequencing:
+
+- **006** — web calling from the Person page (this slice).
+- **006a** — the `crm-app` crate extraction (D-028 §5), a pure refactor
+  with no behaviour change.
+- **006b** — the first Operator mutation tool, `start_call`, with the
+  D-009 preview → confirm → receipt flow, on top of the same `StartCall`
+  command.
+
+Out of 006: inbound calls, native mobile, recording/egress/transcription
+(O-002 blocks), Telnyx API or webhooks in the application, per-
+Organization numbers, SMS (O-006), streaming/voice Operator (declared
+deferral of SLICE_005 §16's "arrive with the calling work"). Nothing in
+006 touches O-003: every call is started by a person in a session.
+
+Development telephony runs on a **public Linux host** (small VPS or the
+OVH box): LiveKit server + SIP service + Redis from a committed compose,
+signaling at `wss://livekit.tarams.org` through a `cloudflared` route on
+that host, media directly to the host's public IP over UDP (D-016 §5,
+AGENTS §7). One US number and a credential SIP connection are purchased
+on the user's Telnyx account and configured once as a LiveKit outbound
+trunk; the application holds no Telnyx credentials, only the trunk id.
+LiveKit Cloud was rejected (D-001 self-hosting); Mac-local LiveKit cannot
+receive PSTN media behind NAT.
+
+Safe defaults adopted with this decision: one deployment-level caller
+number (per-Organization numbers and number-ownership facts belong with
+thesis §5.3); the LiveKit webhook is a path under `api.tarams.org`
+(amends D-016 §4's "separate hostname bypassing Access", which D-024
+made moot); one active call per user; org-wide read of a call, caller-
+only control.
+
+### D-031 — A call becomes the contact attempt at answer/failure time (2026-08-22)
+
+Accepted (user, during Slice 006 planning). Refines D-022 for calls:
+the automatic `contact_attempted` is written in the same transaction as
+the transition that settles whether the callee was reached, not at call
+end — so Today never depends on the end-of-call signal. Answered →
+`call, reached` at `answered_at`. Busy / declined / ring-out (and a
+cancel after ringing started) → `call, no_answer`. Agent never joined,
+provider error, expiry, or a cancel before ringing → no attempt (nothing
+reached the callee). Voicemail is indistinguishable from a person
+answering and reads `reached`; the agent may log `left_message` with the
+existing dialog. The attempt's envelope names the caller as actor and
+carries the call's `correlation_id`, with `causation_id = call.id`.
+Rejected: prompting the agent for an outcome after each call (makes
+"automatic" conditional), and writing only at call end.
+
 ## Open decisions
 
 ### O-001 — RESOLVED
@@ -737,3 +792,11 @@ rather than the minimum untrusted text in the prompt, non-deterministic).
 Stopgap available at any time without a contract change: a prompt rule
 telling the model to retry a name search with a shorter prefix before
 answering "not found". Blocks: nothing.
+
+### O-011 — Outbound calling compliance (OPEN)
+
+O-006 scopes itself to SMS/email. No decision covers outbound *calling*
+compliance: Do-Not-Call scrubbing, quiet hours, caller-ID rules, state
+consent-to-record interplay with O-002. Slice 006 is human-dialed to
+People who inquired, so nothing is built; recorded so it is not
+forgotten. Blocks: autonomous or bulk outbound calling (with O-003).

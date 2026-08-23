@@ -25,7 +25,8 @@ says `livekit.tarams.org`).
 ## Current slice
 
 Slice 006c — Call outcome correction (D-032) — `docs/specs/SLICE_006c.md`
-DRAFT, reviewed (11 findings applied), awaiting approval. Previous:
+APPROVED 2026-08-22; lane briefs `docs/tasks/SLICE_006c_LANE_{A,B}.md`;
+implementation gate pending. Previous:
 Slice 006 — Calling — `docs/specs/SLICE_006.md` (MERGED `332e78a`). Previous:
 Slice 005 — Operator retrieval — `docs/specs/SLICE_005.md` (APPROVED). Read-only AI Operator: `crm-operator` crate with a
 `ToolBackend` trait (five tools: `search_people`, `get_person`,
@@ -750,7 +751,8 @@ slice:
 
 ## Next recommended action
 
-1. Approve `docs/specs/SLICE_006c.md`; write lane briefs; implement.
+1. Implementation gate for 006c Lane A (`slice-006c-outcome` from
+   `main`), then Lane B.
 2. Implement 006c (Lane A backend ≈ 1.5 d, Lane B web ≈ 1 d); add the
    ringback tone to Lane B while there.
 3. Rotate the Telnyx SIP password and update the trunk.
@@ -763,4 +765,4 @@ defaults in SLICE_006c §14 (no Today resurfacing; 006c before 006a).
 
 ## Approval currently required
 
-Approval of `docs/specs/SLICE_006c.md`.
+"Proceed with 006c implementation?" (Lane A first, then Lane B).

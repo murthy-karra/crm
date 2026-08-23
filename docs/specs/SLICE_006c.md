@@ -1,9 +1,8 @@
 # Slice 006c — Call outcome correction
 
-Status: DRAFT (coordinator, 2026-08-22, from the `crm-planner` pass in
-`docs/plans/SLICE_006c_PLAN.md`; independently reviewed — 11 findings,
-all applied as safe defaults / implementation details; awaiting user
-approval).
+Status: APPROVED (user, 2026-08-22; planner pass in
+`docs/plans/SLICE_006c_PLAN.md`, independent review — 11 findings, all
+applied as safe defaults / implementation details).
 Builds on: Slice 006 (`main` at `332e78a`).
 Targets: D-032 (agents may correct a call's outcome; notes deferred),
 D-031 (the automatic attempt stays exactly as written), D-022 (an

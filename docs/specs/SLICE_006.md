@@ -436,7 +436,7 @@ dependency).
 | Publish failure | logged, never a failed command (D-023) | — |
 | Mic permission denied | client calls `hangup` → `failed{cancelled}` before ringing | `call_completed`; no attempt |
 | Max call duration (60 min) | SIP participant leaves → `ended{max_duration}` if LiveKit's `disconnect_reason` distinguishes it, else `remote_hangup` | `call_completed` |
-| `CreateSIPParticipant` blocks up to `ring_timeout` | HTTP client timeout = `ring_timeout` + 15 s; ring timeout is capped at 80 s by config (Cloudflare's 100 s proxy limit if `LIVEKIT_API_URL` traverses the tunnel) | — |
+| `CreateSIPParticipant` blocks up to `ring_timeout` | HTTP client timeout = `ring_timeout` + 15 s; `LIVEKIT_API_URL` is the host directly (TLS via Caddy), never a Cloudflare-proxied hostname (100 s cap) | — |
 
 ## 10. Frontend (Lane B, `web/**`; D-017; `UI_STYLE.md` binds)
 
@@ -473,10 +473,12 @@ dependency).
 (small VPS or the OVH box) running `compose.yaml` — `livekit/livekit-
 server`, `redis`, `livekit/sip` — with `use_external_ip: true`, UDP
 50000–60000, 7881/TCP, SIP 5060/UDP+TCP and the SIP RTP range open;
-signaling TLS at `wss://livekit.tarams.org` via a **new, separate**
-`cloudflared` tunnel on that host (never a second connector of `crm-dev`,
-which would load-balance `api.`/`app.` traffic to the VPS); signaling
-only, ICE candidates point at the host IP;
+a plain DNS A record `livekit.tarams.org` → the host (no tunnel: the
+host is public); TLS terminated on the host by Caddy (Let's Encrypt) on
+443, reverse-proxying to LiveKit's 7880 for both browser signaling
+(`wss://`) and the API's Twirp calls (`https://`); ICE candidates point
+at the host IP; firewall: 443/TCP, 7881/TCP, 50000–60000/UDP, SIP
+5060/UDP+TCP and the SIP RTP range;
 `webhook.urls: [https://api.tarams.org/webhooks/livekit]` (reaches the
 Mac API through the existing tunnel); no egress service. README gains a
 "Telephony" section (firewall, DNS, how to verify with `lk`).
@@ -492,12 +494,12 @@ Telnyx credentials.
 `.env.example` gains:
 
 ```
-LIVEKIT_URL=                         # wss://livekit.tarams.org (browser signaling)
-LIVEKIT_API_URL=                     # https://livekit.tarams.org (API; http:// only for loopback)
+LIVEKIT_URL=                         # wss://livekit.tarams.org (browser signaling; Caddy → LiveKit)
+LIVEKIT_API_URL=                     # https://livekit.tarams.org (API; http:// only for loopback; never Cloudflare-proxied)
 LIVEKIT_API_KEY=                     # empty/unset = calling disabled
 LIVEKIT_API_SECRET=
 LIVEKIT_SIP_OUTBOUND_TRUNK_ID=
-CRM_TELEPHONY_RING_TIMEOUT_SECONDS=45      # bounds 10–80
+CRM_TELEPHONY_RING_TIMEOUT_SECONDS=45      # bounds 10–120
 CRM_TEST_LIVEKIT_API_URL=                  # scripts/check-telephony only; never read by check-db
 CRM_TELEPHONY_MAX_CALL_SECONDS=3600        # bounds 60–14400
 CRM_TELEPHONY_JOIN_TTL_SECONDS=300         # bounds 60–900

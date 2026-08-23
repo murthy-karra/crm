@@ -6,11 +6,14 @@ import type {
   AcceptInvitationRequest,
   AcceptInvitationResponse,
   AssignmentRequest,
+  CallOutcomeCorrection,
   CallResponse,
   ChangeMemberRoleRequest,
   ContactChannel,
   ContactOutcome,
   CreateOrganizationRequest,
+  CorrectOutcomeRequest,
+  CorrectOutcomeResponse,
   CreateOrganizationResponse,
   InvitationPreviewRequest,
   InvitationPreviewResponse,
@@ -525,6 +528,34 @@ export function useHangupCall(orgId: MaybeRefOrGetter<string>, queryClient?: Que
         const id = toValue(orgId)
         qc.setQueryData(queryKeys.call(id, data.call.id), data)
         void qc.invalidateQueries({ queryKey: queryKeys.person(id, data.call.person_id) })
+        void qc.invalidateQueries({ queryKey: queryKeys.today(id) })
+      },
+    },
+    queryClient,
+  )
+}
+
+// --- Slice 006c: Call outcome correction (docs/specs/SLICE_006c.md §5, §10)
+
+/** `POST /api/calls/{id}/outcome` → 200 `{attempt, changed}`. Caller-only
+ * (403), 409 `invalid_call_state` until the call is terminal, 422
+ * `no_contact_attempt`, 409 `correction_conflict`. On success the Person
+ * branch (history rows) and Today (`last_contact_attempt` is now the
+ * effective row) are invalidated — `person.changed` covers other tabs. */
+export function useCorrectCallOutcome(orgId: MaybeRefOrGetter<string>, queryClient?: QueryClient) {
+  const qc = queryClient ?? useQueryClient()
+  return useMutation(
+    {
+      // `personId` is not on the wire (the route is call-scoped); it names
+      // the Person query to invalidate, so the key stays factory-built.
+      mutationFn: ({ callId, outcome }: { callId: string; personId: string; outcome: CallOutcomeCorrection }) =>
+        apiFetch<CorrectOutcomeResponse>(`/calls/${callId}/outcome`, {
+          method: 'POST',
+          body: JSON.stringify({ outcome } satisfies CorrectOutcomeRequest),
+        }),
+      onSuccess: (_data, variables) => {
+        const id = toValue(orgId)
+        void qc.invalidateQueries({ queryKey: queryKeys.person(id, variables.personId) })
         void qc.invalidateQueries({ queryKey: queryKeys.today(id) })
       },
     },

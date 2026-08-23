@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CallView } from '../api/types'
-import { attemptOutcome, callCompletedSummary, formatElapsed, formatTalkSeconds, postCallLine, statusLine } from './format'
+import { attemptOutcome, callCompletedSummary, formatElapsed, formatTalkSeconds, showsOutcomePrompt, statusLine } from './format'
 
 function view(overrides: Partial<CallView>): CallView {
   return {
@@ -52,22 +52,16 @@ describe('callCompletedSummary (§1 steps 4–5)', () => {
   })
 })
 
-describe('attemptOutcome / postCallLine (D-031 mapping)', () => {
+describe('attemptOutcome (D-031 mapping)', () => {
   it('answered or ended → reached', () => {
     expect(attemptOutcome(view({ status: 'answered', answered_at: 'x' }))).toBe('reached')
     expect(attemptOutcome(view({ status: 'ended', end_reason: 'remote_hangup' }))).toBe('reached')
-    expect(postCallLine(view({ status: 'ended', end_reason: 'agent_hangup' }))).toBe(
-      'Logged as contact attempt — call, reached',
-    )
   })
 
   it('busy / declined / no_answer / ring_timeout → no answer', () => {
     for (const reason of ['busy', 'declined', 'no_answer', 'ring_timeout'] as const) {
       expect(attemptOutcome(view({ status: 'failed', failure_reason: reason }))).toBe('no_answer')
     }
-    expect(postCallLine(view({ status: 'failed', failure_reason: 'no_answer' }))).toBe(
-      'Logged as contact attempt — call, no answer',
-    )
   })
 
   it('cancelled counts as no answer only once ringing had started', () => {
@@ -75,12 +69,31 @@ describe('attemptOutcome / postCallLine (D-031 mapping)', () => {
     expect(attemptOutcome(view({ status: 'failed', failure_reason: 'cancelled' }))).toBeNull()
   })
 
-  it('nothing reached the callee → no attempt line', () => {
+  it('nothing reached the callee → no attempt', () => {
     for (const reason of ['agent_not_joined', 'provider_error', 'expired'] as const) {
-      expect(postCallLine(view({ status: 'failed', failure_reason: reason }))).toBeNull()
+      expect(attemptOutcome(view({ status: 'failed', failure_reason: reason }))).toBeNull()
     }
-    expect(postCallLine(view({ status: 'ringing' }))).toBeNull()
-    expect(postCallLine(undefined)).toBeNull()
+    expect(attemptOutcome(view({ status: 'ringing' }))).toBeNull()
+    expect(attemptOutcome(undefined)).toBeNull()
+  })
+})
+
+describe('showsOutcomePrompt (SLICE_006c §10)', () => {
+  const ended = view({ status: 'ended', end_reason: 'remote_hangup' })
+  it('prompts only for a finished call with an attempt, no error, nothing saved', () => {
+    expect(showsOutcomePrompt('ended', false, ended, false)).toBe(true)
+    expect(showsOutcomePrompt('failed', false, view({ status: 'failed', failure_reason: 'busy', ringing_at: 'x' }), false)).toBe(true)
+    // Terminal client phase with the server still at `answered`: the prompt
+    // shows (Save is gated separately on the server status).
+    expect(showsOutcomePrompt('ended', false, view({ status: 'answered', answered_at: 'x' }), false)).toBe(true)
+  })
+  it('never while active, on a call error, after save, or without an attempt', () => {
+    expect(showsOutcomePrompt('connected', false, ended, false)).toBe(false)
+    expect(showsOutcomePrompt('idle', false, ended, false)).toBe(false)
+    expect(showsOutcomePrompt('ended', true, ended, false)).toBe(false)
+    expect(showsOutcomePrompt('ended', false, ended, true)).toBe(false)
+    expect(showsOutcomePrompt('failed', false, view({ status: 'failed', failure_reason: 'provider_error' }), false)).toBe(false)
+    expect(showsOutcomePrompt('ended', false, undefined, false)).toBe(false)
   })
 })
 

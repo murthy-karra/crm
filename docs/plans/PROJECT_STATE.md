@@ -24,8 +24,8 @@ says `livekit.tarams.org`).
 
 ## Current slice
 
-Slice 006c — Call outcome correction (D-032) — PLANNING; plan at
-`docs/plans/SLICE_006c_PLAN.md`, spec pending one decision. Previous:
+Slice 006c — Call outcome correction (D-032) — `docs/specs/SLICE_006c.md`
+DRAFT, reviewed (11 findings applied), awaiting approval. Previous:
 Slice 006 — Calling — `docs/specs/SLICE_006.md` (MERGED `332e78a`). Previous:
 Slice 005 — Operator retrieval — `docs/specs/SLICE_005.md` (APPROVED). Read-only AI Operator: `crm-operator` crate with a
 `ToolBackend` trait (five tools: `search_people`, `get_person`,
@@ -750,8 +750,7 @@ slice:
 
 ## Next recommended action
 
-1. Resolve the notes decision for 006c (below), then draft
-   `docs/specs/SLICE_006c.md` from the plan, review it, approve.
+1. Approve `docs/specs/SLICE_006c.md`; write lane briefs; implement.
 2. Implement 006c (Lane A backend ≈ 1.5 d, Lane B web ≈ 1 d); add the
    ringback tone to Lane B while there.
 3. Rotate the Telnyx SIP password and update the trunk.
@@ -759,12 +758,9 @@ slice:
 
 ## Blocking decisions
 
-- 006c notes: D-032 says "optional notes", but D-022/SLICE_003 §2 and
-  D-015 §3 keep facts free of free text. Options: ship 006c without
-  notes (recommended) or add a minimal Note CRUD table as its own slice.
-  Proposed safe defaults (overridable): no Today resurfacing rule for
-  voicemail in 006c; 006c before 006a (no technical dependency).
+None. Notes resolved 2026-08-22 (deferred; recorded on D-032). Safe
+defaults in SLICE_006c §14 (no Today resurfacing; 006c before 006a).
 
 ## Approval currently required
 
-The notes decision above.
+Approval of `docs/specs/SLICE_006c.md`.

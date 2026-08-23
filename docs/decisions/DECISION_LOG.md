@@ -650,7 +650,10 @@ voicemail / no answer / busy / wrong number — pre-selected from what the
 system observed, with optional notes. A chosen outcome is recorded as a
 *correction* fact (`corrects_id` on the existing envelope; history stays
 append-only; the original auto-logged row remains visible as superseded).
-Skipping the prompt changes nothing. Today may treat "voicemail" as an
+Skipping the prompt changes nothing. Notes: deferred (user, 2026-08-22,
+option 1) — facts stay free of free text (D-015 §3, SLICE_003 §2); a
+Note-on-a-Person feature is its own later slice, so 006c ships the
+outcome picker only. Today may treat "voicemail" as an
 attempt made but resurface the Person sooner than "talked to them" —
 the exact rule is for the slice spec. Not taken: answering-machine
 detection at the carrier (unreliable, and a Telnyx feature the app would

@@ -5,15 +5,16 @@
 // Inquiries / History cards. History renders the server's per-kind
 // `detail` shapes exactly as spec §5 documents them, in server order
 // (occurred_at, recorded_at, kind_rank, id) — never re-sorted here.
-import { computed, ref, type Component } from 'vue'
-import { RouterLink } from 'vue-router'
+import { computed, onBeforeUnmount, ref, watch, type Component } from 'vue'
+import { RouterLink, onBeforeRouteLeave } from 'vue-router'
 import Select from 'primevue/select'
-import { Flag, Inbox, Mail, Phone, PhoneCall, Route, UserCheck } from 'lucide-vue-next'
+import { Flag, Inbox, Mail, Phone, PhoneCall, PhoneOutgoing, Route, UserCheck } from 'lucide-vue-next'
 import Card from '../components/Card.vue'
 import FormField from '../components/FormField.vue'
 import Badge from '../components/Badge.vue'
 import StageLabel from '../components/StageLabel.vue'
 import LogContactDialog from '../components/LogContactDialog.vue'
+import CallPanel from '../components/CallPanel.vue'
 import { useAssignPersonMutation, useChangeStageMutation, useMe, useMembers, usePerson, useStages } from '../api/queries'
 import { ApiError } from '../api/client'
 import type { HistoryEntry, RoutingStrategy } from '../api/types'
@@ -21,8 +22,20 @@ import { formatAbsoluteTime, formatRelativeTime } from '../lib/format'
 import { buttonClasses, selectPt } from '../lib/controls'
 import { describeApiError } from '../lib/errors'
 import { CONTACT_CHANNEL_LABEL, CONTACT_OUTCOME_LABEL } from '../lib/labels'
+import { callCompletedSummary } from '../telephony/format'
+import { useCall, type CallRoomFactory } from '../telephony/useCall'
+import { createLiveKitRoom } from '../telephony/client'
 
-const props = defineProps<{ id: string }>()
+const props = withDefaults(
+  defineProps<{
+    id: string
+    /** SLICE_006 §10: the LiveKit client factory is injected so tests mount
+     * this view with a fake room (no SDK, no WebRTC). */
+    createRoom?: CallRoomFactory
+  }>(),
+  // A Function-typed prop's default is the value itself, not a factory.
+  { createRoom: createLiveKitRoom },
+)
 
 const { data: me } = useMe()
 const orgId = computed(() => me.value?.organization?.id ?? '')
@@ -66,9 +79,84 @@ const HISTORY_ICON: Record<HistoryEntry['kind'], Component> = {
   assignment_changed: UserCheck,
   stage_changed: Flag,
   contact_attempted: PhoneCall,
+  call_completed: PhoneOutgoing,
 }
 
 const logContactOpen = ref(false)
+
+// ---- Calling (SLICE_006 §10) ----------------------------------------------
+// One call per view, owned here as component state (never persisted). The
+// header's Call button is the view's primary action until a call is
+// active, when the panel's Hang up takes over (UI_STYLE §5: one primary).
+const call = useCall({ orgId, createRoom: props.createRoom })
+
+const phones = computed(() => contactMethods.value.filter((cm) => cm.kind === 'phone'))
+const callDisabled = computed(() => phones.value.length === 0 || call.active.value)
+const pickerOpen = ref(false)
+const pickerRoot = ref<HTMLElement | null>(null)
+// The callee's name as it was when the call started — the panel keeps
+// naming that Person even if the route (and `person`) changes mid-call.
+const calleeName = ref('')
+
+function startCall(contactMethodId: string) {
+  pickerOpen.value = false
+  if (!person.value) return
+  calleeName.value = person.value.display_name
+  void call.start(person.value.id, contactMethodId)
+}
+
+function onCallClick() {
+  if (callDisabled.value || phones.value.length === 0) return
+  if (phones.value.length === 1) {
+    startCall(phones.value[0].id)
+    return
+  }
+  // Several phones: the number picker (§10 "only with several").
+  pickerOpen.value = !pickerOpen.value
+}
+
+function onDocumentClick(event: MouseEvent) {
+  if (!pickerOpen.value) return
+  const target = event.target
+  if (target instanceof Node && pickerRoot.value?.contains(target)) return
+  pickerOpen.value = false
+}
+
+function onDocumentKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape' && pickerOpen.value) pickerOpen.value = false
+}
+
+watch(pickerOpen, (open) => {
+  if (open) {
+    document.addEventListener('click', onDocumentClick, true)
+    document.addEventListener('keydown', onDocumentKeydown)
+  } else {
+    document.removeEventListener('click', onDocumentClick, true)
+    document.removeEventListener('keydown', onDocumentKeydown)
+  }
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('click', onDocumentClick, true)
+  document.removeEventListener('keydown', onDocumentKeydown)
+})
+
+// A different Person (route param change while this view stays mounted):
+// a finished panel belongs to the previous Person — clear it. An active
+// call is left alone; the panel still names the original callee.
+watch(
+  () => props.id,
+  () => {
+    pickerOpen.value = false
+    call.dismiss()
+  },
+)
+
+// Leaving the page mid-call ends it (the composable hangs up on dispose),
+// so ask first.
+onBeforeRouteLeave(() => {
+  if (!call.active.value) return true
+  return window.confirm('End the call?')
+})
 
 const ROUTING_STRATEGY_LABEL: Record<RoutingStrategy, string> = {
   explicit: 'an explicit choice',
@@ -105,6 +193,11 @@ function historySummary(entry: HistoryEntry): string {
       const { channel, outcome } = entry.detail
       // SLICE_003 §1's walkthrough: "Contact attempted — call, no answer".
       return `Contact attempted — ${CONTACT_CHANNEL_LABEL[channel].toLowerCase()}, ${CONTACT_OUTCOME_LABEL[outcome].toLowerCase()}`
+    }
+    case 'call_completed': {
+      // SLICE_006 §1 steps 4–5: "Call — reached, 1 min 12 s" / "Call — no answer".
+      const { outcome, talk_seconds } = entry.detail
+      return callCompletedSummary(outcome, talk_seconds)
     }
   }
 }
@@ -157,14 +250,62 @@ function historySummary(entry: HistoryEntry): string {
           <h1 class="text-title font-semibold tracking-title text-text">
             {{ person.display_name }}
           </h1>
-          <button
-            type="button"
-            :class="buttonClasses('secondary')"
-            @click="logContactOpen = true"
-          >
-            Log contact
-          </button>
+          <div class="flex items-center gap-3">
+            <button
+              type="button"
+              :class="buttonClasses('secondary')"
+              data-testid="log-contact"
+              @click="logContactOpen = true"
+            >
+              Log contact
+            </button>
+            <div
+              ref="pickerRoot"
+              class="relative"
+            >
+              <button
+                type="button"
+                :class="buttonClasses(call.active.value ? 'secondary' : 'primary')"
+                :disabled="callDisabled"
+                :title="phones.length === 0 ? 'No phone number' : undefined"
+                :aria-expanded="phones.length > 1 ? pickerOpen : undefined"
+                :aria-haspopup="phones.length > 1 ? 'menu' : undefined"
+                data-testid="call-button"
+                @click="onCallClick"
+              >
+                <Phone
+                  class="h-[18px] w-[18px]"
+                  stroke-width="1.5"
+                />
+                Call
+              </button>
+              <div
+                v-if="pickerOpen && phones.length > 1"
+                role="menu"
+                class="absolute right-0 top-full z-50 mt-2 min-w-56 rounded-xl border border-border bg-surface-0 py-1 shadow-floating"
+                data-testid="call-number-picker"
+              >
+                <button
+                  v-for="phone in phones"
+                  :key="phone.id"
+                  type="button"
+                  role="menuitem"
+                  class="flex h-10 w-full items-center px-3 text-left text-body text-text transition-colors duration-150 ease-out hover:bg-surface-2 focus-visible:outline-none focus-visible:bg-surface-2"
+                  @click="startCall(phone.id)"
+                >
+                  {{ phone.value }}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
+        <p
+          v-if="phones.length === 0"
+          class="mt-1.5 text-right text-small text-text-muted"
+          data-testid="call-no-phone"
+        >
+          No phone number
+        </p>
 
         <div class="mt-4 flex flex-wrap gap-6">
           <FormField
@@ -341,6 +482,19 @@ function historySummary(entry: HistoryEntry): string {
         :person-id="person.id"
         :person-name="person.display_name"
         @update:visible="logContactOpen = $event"
+      />
+
+      <CallPanel
+        :phase="call.phase.value"
+        :person-name="calleeName"
+        :elapsed-seconds="call.elapsedSeconds.value"
+        :muted="call.muted.value"
+        :error="call.error.value"
+        :call="call.call.value"
+        @hangup="call.hangup()"
+        @toggle-mute="call.toggleMute()"
+        @hangup-previous="call.hangupPrevious()"
+        @dismiss="call.dismiss()"
       />
     </div>
   </div>

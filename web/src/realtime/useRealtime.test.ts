@@ -1,4 +1,4 @@
-import { effectScope, nextTick, ref } from 'vue'
+import { effectScope, nextTick, ref, type Ref } from 'vue'
 import { QueryClient } from '@tanstack/vue-query'
 import { UnauthorizedError } from 'centrifuge'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -23,11 +23,13 @@ const ORG_ID = '11111111-1111-1111-1111-111111111111'
  * `disconnect()` does. Every other transition is driven explicitly by the
  * test via `emit`, standing in for the server. */
 class FakeRealtimeClient implements RealtimeClient {
-  handlers = new Map<string, Array<(ctx: unknown) => void>>()
+  // `never` so every overload of `RealtimeClient.on` (each with its own
+  // typed ctx) is assignable; `emit` passes the test's ctx through.
+  handlers = new Map<string, Array<(ctx: never) => void>>()
   disconnectCalls = 0
   connectCalls = 0
 
-  on(event: string, handler: (ctx: unknown) => void): this {
+  on(event: string, handler: (ctx: never) => void): this {
     const list = this.handlers.get(event) ?? []
     list.push(handler)
     this.handlers.set(event, list)
@@ -36,7 +38,7 @@ class FakeRealtimeClient implements RealtimeClient {
 
   emit(event: string, ctx: unknown): void {
     for (const handler of this.handlers.get(event) ?? []) {
-      handler(ctx)
+      handler(ctx as never)
     }
   }
 
@@ -52,7 +54,7 @@ class FakeRealtimeClient implements RealtimeClient {
 }
 
 interface Harness {
-  orgId: ReturnType<typeof ref<string>>
+  orgId: Ref<string>
   clients: FakeRealtimeClient[]
   createClient: RealtimeClientFactory
   urls: string[]

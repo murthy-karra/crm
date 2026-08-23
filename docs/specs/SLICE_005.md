@@ -357,6 +357,11 @@ the explanation builder (`explain.rs`, pure, unit-tested).
 
 ## 5. HTTP contract (Lane A; `routes/operator.rs`; frozen at approval)
 
+> Amended by SLICE_006b §4 (declared additive change, AGENTS.md §11):
+> the turn response gained a nullable `proposal` object, and
+> `POST /api/operator/proposals/{id}/confirm` joined the route group.
+
+
 `POST /api/operator/turns` — `AuthContext` (any active member of the
 active Organization; platform-only sessions 401 by construction, as
 every `/api/*` route). No admin gate.

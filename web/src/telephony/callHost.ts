@@ -109,10 +109,22 @@ export function createCallHost(options: CallHostOptions): CallHost {
   }
 
   async function startFromProposal(proposal: OperatorProposal): Promise<string | null> {
+    // Local pre-checks: nothing is POSTed, the proposal is not consumed,
+    // and — unlike the Call button — an unsaved D-033 outcome prompt is
+    // never silently discarded (SLICE_006c §5a).
     if (call.active.value) return 'call_in_progress'
+    if (outcomePromptOpen.value) return 'outcome_pending'
     calleeName.value = proposal.person.display_name
     resetOutcome()
-    await call.startProposed(proposal.person.id, () => confirmMutation.mutateAsync(proposal.id))
+    await call.startProposed(proposal.person.id, async () => {
+      // The response holds the join token: read it out and reset at once,
+      // so it never outlives this call in the MutationCache (the same rule
+      // useStartCall documents; gcTime: 0 alone does not cover an
+      // app-lifetime observer).
+      const response = await confirmMutation.mutateAsync(proposal.id)
+      confirmMutation.reset()
+      return response
+    })
     return call.phase.value === 'failed' ? (call.error.value?.code ?? 'unknown_error') : null
   }
 

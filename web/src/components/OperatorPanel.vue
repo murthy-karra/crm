@@ -66,8 +66,15 @@ function proposalExpired(proposal: OperatorProposal): boolean {
   return now.value >= Date.parse(proposal.expires_at)
 }
 
-/** Non-final = the proposal was not consumed; Confirm may be retried. */
-const RETRYABLE_CODES = new Set(['microphone_denied'])
+/** Non-final = the proposal was not consumed; Confirm may be retried
+ * (mic denial, and the two local pre-checks that never POST). */
+const RETRYABLE_CODES = new Set(['microphone_denied', 'call_in_progress', 'outcome_pending'])
+
+/** Copy for the local pre-checks, where `host.call.error` is null. */
+const LOCAL_CODE_MESSAGES: Record<string, string> = {
+  call_in_progress: 'You already have a call in progress — hang up first.',
+  outcome_pending: "Save the previous call's outcome first.",
+}
 
 async function confirmProposal(proposal: OperatorProposal) {
   const state = proposalState(proposal.id)
@@ -89,7 +96,8 @@ async function confirmProposal(proposal: OperatorProposal) {
   }
   state.status = 'failed'
   state.final = !RETRYABLE_CODES.has(code)
-  state.message = host.call.error.value?.message ?? 'Could not place the call.'
+  state.message =
+    LOCAL_CODE_MESSAGES[code] ?? host.call.error.value?.message ?? 'Could not place the call.'
   if (!state.final) state.status = 'idle'
 }
 

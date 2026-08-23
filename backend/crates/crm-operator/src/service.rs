@@ -1975,4 +1975,25 @@ mod tests {
         assert_eq!(out.tool_calls[0].outcome, ToolCallOutcome::NotFound);
         assert!(out.proposal.is_none());
     }
+
+    #[test]
+    fn the_prompt_carries_the_start_call_rules() {
+        // SLICE_006b §5: prepare-not-place. String-pinned like the actor
+        // line — a reworded prompt that drops a rule must fail a test.
+        let prompt = include_str!("../prompts/system.md");
+        for rule in [
+            "start_call",
+            "never places a call",
+            "Never claim a call was placed",
+            "Never propose a call the user did not ask for",
+            "you can never dial a number from the conversation",
+            "six tools",
+        ] {
+            assert!(prompt.contains(rule), "prompt lost the rule: {rule}");
+        }
+        assert!(
+            !prompt.contains("read-only assistant"),
+            "the read-only framing is gone (006b)"
+        );
+    }
 }

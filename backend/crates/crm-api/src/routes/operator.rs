@@ -352,7 +352,7 @@ async fn confirm_proposal(
     let telephony = match state.telephony.as_ref() {
         Some(t) => t,
         None => {
-            finalize_failed(pool, proposal_id, "telephony_disabled").await;
+            finalize_failed(pool, proposal_id, "telephony_disabled", None).await;
             span.record("outcome", "telephony_disabled");
             return Err(ApiError::TelephonyDisabled);
         }
@@ -403,20 +403,41 @@ async fn confirm_proposal(
         Err(err) => {
             let kind = err.kind();
             span.record("outcome", kind);
-            finalize_failed(pool, proposal_id, kind).await;
+            // SLICE_006b §2: when the command created a call row that
+            // settled failed (e.g. telephony_unavailable), the receipt
+            // keeps it. The row is found through the correlation chain —
+            // this execution used `correlation_id = turn_id`, and a
+            // turn has at most one proposal, so at most one call matches.
+            let failed_call_id = sqlx::query_scalar!(
+                r#"SELECT id FROM call
+                   WHERE organization_id = $1 AND correlation_id = $2"#,
+                auth.active_organization_id,
+                row.turn_id,
+            )
+            .fetch_optional(pool)
+            .await
+            .ok()
+            .flatten();
+            finalize_failed(pool, proposal_id, kind, failed_call_id).await;
             Err(ApiError::from(err))
         }
     }
 }
 
 /// Best-effort `failed` finalization; the command's error is the truth.
-async fn finalize_failed(pool: &sqlx::PgPool, proposal_id: Uuid, kind: &str) {
+async fn finalize_failed(
+    pool: &sqlx::PgPool,
+    proposal_id: Uuid,
+    kind: &str,
+    call_id: Option<Uuid>,
+) {
     let result = sqlx::query!(
         r#"UPDATE operator_proposal
-           SET status = 'failed', failure_code = $2
+           SET status = 'failed', failure_code = $2, call_id = $3
            WHERE id = $1 AND status = 'claimed'"#,
         proposal_id,
         kind,
+        call_id,
     )
     .execute(pool)
     .await;

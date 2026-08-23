@@ -1,7 +1,7 @@
 // SLICE_005 §13 item 5: pending/disabled states, each error code's copy,
 // cards from `references` only (a reply containing a UUID or `<a>` renders
 // as text), history capped at 6 and cleared by Clear, context per route.
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type DOMWrapper } from '@vue/test-utils'
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -9,7 +9,7 @@ import { ApiError, apiFetch } from '../api/client'
 import type { OperatorTurnRequest, OperatorTurnResponse } from '../api/types'
 import { defineComponent } from 'vue'
 import OperatorPanel from './OperatorPanel.vue'
-import { provideCallHost, type CallHost } from '../telephony/callHost'
+import { CALL_HOST_KEY, provideCallHost, type CallHost } from '../telephony/callHost'
 import type { CallRoomFactory, CallRoom } from '../telephony/useCall'
 
 const ORG_ID = '11111111-1111-1111-1111-111111111111'
@@ -96,7 +96,13 @@ async function mountPanel(path = '/today', roomBehavior: { denyMic?: boolean; ev
   return { wrapper, router, host: host! }
 }
 
-async function type(wrapper: Awaited<ReturnType<typeof mountPanel>>['wrapper'], text: string) {
+/** The structural surface both harnesses (provideCallHost wrapper and the
+ * mock-host direct mount) expose to the shared helpers. */
+interface PanelDom {
+  get(selector: string): Pick<DOMWrapper<Element>, 'setValue' | 'trigger' | 'text' | 'attributes'>
+}
+
+async function type(wrapper: PanelDom, text: string) {
   await wrapper.get('[data-testid="operator-input"]').setValue(text)
 }
 
@@ -295,7 +301,7 @@ function stubTurnThenConfirm(turn: OperatorTurnResponse, confirmResult?: () => P
   })
 }
 
-async function sendTurn(wrapper: Awaited<ReturnType<typeof mountPanel>>['wrapper']) {
+async function sendTurn(wrapper: PanelDom) {
   await type(wrapper, 'call grace')
   await wrapper.get('[data-testid="operator-send"]').trigger('click')
   await flushPromises()
@@ -381,5 +387,45 @@ describe('OperatorPanel — start_call proposal card (SLICE_006b)', () => {
     expect(
       wrapper.get('[data-testid="operator-proposal-confirm"]').attributes('disabled'),
     ).toBeDefined()
+  })
+})
+
+describe('OperatorPanel — local pre-checks never consume the proposal (SLICE_006b §6)', () => {
+  async function mountWithMockHost(code: string) {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/today', component: { template: '<div />' } }],
+    })
+    await router.push('/today')
+    await router.isReady()
+    const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+    const startFromProposal = vi.fn(() => Promise.resolve(code))
+    const host = { startFromProposal, call: { error: { value: null } } } as unknown as CallHost
+    const wrapper = mount(OperatorPanel, {
+      global: {
+        plugins: [router, [VueQueryPlugin, { queryClient }]],
+        provide: { [CALL_HOST_KEY as symbol]: host },
+      },
+      attachTo: document.body,
+    })
+    return { wrapper, startFromProposal }
+  }
+
+  it.each([
+    ['call_in_progress', 'You already have a call in progress — hang up first.'],
+    ['outcome_pending', "Save the previous call's outcome first."],
+  ])('%s: shows its copy and keeps Confirm retryable', async (code, copy) => {
+    stubTurnThenConfirm(response({ proposal: proposal() }))
+    const { wrapper, startFromProposal } = await mountWithMockHost(code)
+    await sendTurn(wrapper)
+
+    await wrapper.get('[data-testid="operator-proposal-confirm"]').trigger('click')
+    await flushPromises()
+    expect(startFromProposal).toHaveBeenCalledTimes(1)
+    expect(wrapper.get('[data-testid="operator-proposal-message"]').text()).toBe(copy)
+    // Retryable: the pre-check consumed nothing.
+    expect(
+      wrapper.get('[data-testid="operator-proposal-confirm"]').attributes('disabled'),
+    ).toBeUndefined()
   })
 })

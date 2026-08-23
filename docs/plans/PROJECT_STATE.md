@@ -29,7 +29,9 @@ OrbStack hung twice. Hostname is `livekit1.tarams.org`.
 ## Current slice
 
 Slice 006c — Call outcome (D-032, D-033) — `docs/specs/SLICE_006c.md`
-(+ §5a) — COMPLETE, MERGED `58ecad8`. Next: 006a. Previous:
+(+ §5a) — COMPLETE, MERGED `58ecad8`. Next: Slice 006a — `crm-app`
+extraction — `docs/specs/SLICE_006a.md` (REVIEWED, awaiting the
+implementation gate). Previous:
 Slice 006 — Calling — `docs/specs/SLICE_006.md` (MERGED `332e78a`). Previous:
 Slice 005 — Operator retrieval — `docs/specs/SLICE_005.md` (APPROVED). Read-only AI Operator: `crm-operator` crate with a
 `ToolBackend` trait (five tools: `search_people`, `get_person`,
@@ -761,11 +763,15 @@ slice:
 
 ## Next recommended action
 
-1. Plan Slice 006a (`crm-app` extraction, D-028 §5), then 006b
-   (Operator `start_call`). O-012 before any summary/recording/notes
-   slice; O-013 after O-012.
+1. Implement Slice 006a on `slice-006a-crm-app` per
+   `docs/specs/SLICE_006a.md` + `docs/tasks/SLICE_006a_LANE_A.md`
+   (planned and reviewed 2026-08-23; no blocking decision; safe
+   defaults: crm-app stays crm-operator-free, session layer stays in
+   crm-api, validating newtype constructors). Then 006b (Operator
+   `start_call`). O-012 before any summary/recording/notes slice;
+   O-013 after O-012.
 2. Rotate the Telnyx SIP password; update the trunk (user action).
 
 ## Approval currently required
 
-None.
+Implementation gate for Slice 006a (`Proceed with implementation?`).

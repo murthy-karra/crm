@@ -1,0 +1,43 @@
+# Slice 006 telephony host (docs/specs/SLICE_006.md §11): Caddy (TLS),
+# Redis, LiveKit server (SFU + built-in TURN), LiveKit SIP. Everything on
+# host networking: the SFU and SIP need wide UDP ranges, and LiveKit
+# recommends host mode for them. Render config first: ./deploy.sh.
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    network_mode: host
+    command: ["redis-server", "--bind", "127.0.0.1", "--save", "", "--appendonly", "no"]
+
+  livekit:
+    image: livekit/livekit-server:v1.13
+    restart: unless-stopped
+    network_mode: host
+    depends_on: [redis, caddy]
+    command: ["--config", "/etc/livekit.yaml"]
+    volumes:
+      - ./generated/livekit.yaml:/etc/livekit.yaml:ro
+      # Built-in TURN/TLS uses the certificate Caddy obtained. LiveKit
+      # restarts until the cert exists (first boot only).
+      - caddy_data:/certs:ro
+
+  sip:
+    image: livekit/sip:v1.11
+    restart: unless-stopped
+    network_mode: host
+    depends_on: [redis, livekit]
+    volumes:
+      - ./generated/sip.yaml:/sip/config.yaml:ro
+
+volumes:
+  caddy_data:
+  caddy_config:

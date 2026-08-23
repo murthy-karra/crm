@@ -1,0 +1,29 @@
+# Rendered by deploy.sh from .env — do not edit generated/livekit.yaml.
+port: 7880
+bind_addresses: ["127.0.0.1"]   # signaling/API only via Caddy
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 60000
+  use_external_ip: true
+redis:
+  address: 127.0.0.1:6379
+turn:
+  enabled: true
+  domain: ${LIVEKIT_DOMAIN}
+  tls_port: 5349
+  udp_port: 3478
+  cert_file: /certs/caddy/certificates/acme-v02.api.letsencrypt.org-directory/${LIVEKIT_DOMAIN}/${LIVEKIT_DOMAIN}.crt
+  key_file: /certs/caddy/certificates/acme-v02.api.letsencrypt.org-directory/${LIVEKIT_DOMAIN}/${LIVEKIT_DOMAIN}.key
+keys:
+  ${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}
+webhook:
+  api_key: ${LIVEKIT_API_KEY}
+  urls:
+    - ${LIVEKIT_WEBHOOK_URL}
+room:
+  auto_create: false
+  max_participants: 2
+logging:
+  level: info
+  json: true

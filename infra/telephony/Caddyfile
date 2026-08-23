@@ -1,0 +1,5 @@
+# TLS for LiveKit signaling (wss://) and the Twirp API (https://). Media
+# never touches Caddy. Let's Encrypt via HTTP-01 on :80.
+livekit1.tarams.org {
+    reverse_proxy 127.0.0.1:7880
+}

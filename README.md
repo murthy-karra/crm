@@ -222,6 +222,12 @@ New backend code uses sqlx's compile-time-checked `query!`/`query_as!` macros, w
 
 This applies the current migrations to a throwaway database (never the dev database), regenerates `backend/.sqlx/`, and drops the throwaway database again. Commit the updated `backend/.sqlx/` alongside the query change — it contains only query text and column types, no data. Requires sqlx-cli (see prerequisites above); the script itself asserts the installed CLI's minor version matches the workspace's locked `sqlx` minor version and stops with an install hint otherwise.
 
+### Telephony host (Slice 006)
+
+Calling needs a LiveKit server with public UDP, so it runs on a separate public-IP Linux host (`livekit1.tarams.org`, OVH), not on the Mac and never through the tunnel (D-016 §5, AGENTS §7). Everything on the host is in `infra/telephony/`: `compose.yaml` (Caddy for TLS, Redis, LiveKit server with built-in TURN, LiveKit SIP — all host networking), templates rendered from the host's gitignored `.env` by `deploy.sh`, and `firewall.sh` (ufw: 22, 80/443 TCP, 7881 TCP, 50000–60000 UDP media, 3478 UDP + 5349 TCP TURN, 30000–40000 UDP TURN relay, 5060 SIP, 10000–20000 UDP SIP RTP). DNS is a plain, unproxied A record; Caddy obtains the Let's Encrypt certificate and LiveKit's TURN reuses it from Caddy's data volume.
+
+Bring-up on a fresh Ubuntu 24.04: install `docker.io docker-compose-v2 gettext-base`, copy the directory to `/opt/crm-telephony`, fill `.env` from `.env.example` (the `LIVEKIT_API_KEY`/`SECRET` pair must match the Mac's `.env` — the one manual sync), run `./firewall.sh` then `./deploy.sh`. Verify from the Mac: `curl https://livekit1.tarams.org/` answers 200, and a `RoomService/CreateRoom` Twirp call with a token signed by the key succeeds. The Telnyx SIP trunk is created once with `scripts/telephony-trunk` (reads `TELNYX_SIP_*` from `.env`); the API only ever sees the resulting `LIVEKIT_SIP_OUTBOUND_TRUNK_ID`. Host logs carry SIP URIs and numbers — treat them as PII (retention is the default Docker json-file rotation; tighten before production).
+
 ### External connectivity (Cloudflare tunnel)
 
 This project uses a dedicated tunnel, `crm-dev`, separate from any other tunnel on the account (e.g. a production `k8s-crm` tunnel) — never point dev traffic at a tunnel you don't know the purpose of.

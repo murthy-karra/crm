@@ -4,11 +4,17 @@ Last updated: 2026-08-22
 
 ## Current phase
 
-**Slice 006 (calling) — spec APPROVED 2026-08-22; awaiting the
-implementation gate.** Lane C (telephony host: direct DNS + Caddy TLS,
-LiveKit + SIP + Redis; Telnyx number + credential SIP connection) is
-the critical path and needs the user's provisioning; Lane A (backend)
-can start immediately; Lane B (web) after Lane A step 3. On 2026-08-22 the user accepted D-030
+**Slice 006 (calling) — spec APPROVED 2026-08-22; Lane C (telephony
+host) DEPLOYED and verified; Lane A (backend) next.** The user
+provisioned `livekit1.tarams.org` (OVH, Ubuntu 24.04, public IPv4, DNS
+A record); Docker, ufw, Caddy (Let's Encrypt), Redis, LiveKit v1.13
+(built-in TURN on 3478/5349 using Caddy's cert) and LiveKit SIP v1.11
+are up from `infra/telephony/`. Verified from the Mac over TLS: room
+create/list/delete and `SIP/ListSIPOutboundTrunk` (empty). Remaining
+for Lane C: the Telnyx number + credential SIP connection (user), then
+the trunk via Lane A's `scripts/telephony-trunk`. Webhook URL is
+configured but the API route does not exist yet (Lane A). The hostname
+is `livekit1.tarams.org` (spec text says `livekit.tarams.org`). On 2026-08-22 the user accepted D-030
 (006 = human-initiated outbound browser calling; 006a = `crm-app`
 extraction; 006b = Operator `start_call`; dev telephony on a public
 Linux host with one Telnyx number as a LiveKit outbound trunk) and

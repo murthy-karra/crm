@@ -11,7 +11,7 @@ use uuid::Uuid;
 use crate::domain::commands::{ContactAttemptRef, ContactChannel, ContactOutcome};
 use crate::domain::person::model::{compute_display_name, PersonSummary, StageRef, UserRef};
 use crate::domain::person::visibility::PersonVisibilityScope;
-use crate::domain::today::model::{InquiryRef, TodayCandidate};
+use crate::domain::today::model::{InquiryRef, OutcomeNeededCall, TodayCandidate};
 
 struct TodayCandidateRow {
     id: Uuid,
@@ -34,6 +34,9 @@ struct TodayCandidateRow {
     last_attempt_occurred_at: Option<DateTime<Utc>>,
     waiting_since: Option<DateTime<Utc>>,
     fresh: Option<bool>,
+    by_inquiry: Option<bool>,
+    outcome_call_id: Option<Uuid>,
+    outcome_call_ended_at: Option<DateTime<Utc>>,
 }
 
 /// A read path fails closed on unexpected data rather than panicking
@@ -120,6 +123,23 @@ impl TryFrom<TodayCandidateRow> for TodayCandidate {
             _ => None,
         };
 
+        let outcome_needed = match (row.outcome_call_id, row.outcome_call_ended_at) {
+            (Some(call_id), Some(ended_at)) => Some(OutcomeNeededCall { call_id, ended_at }),
+            (None, None) => None,
+            _ => {
+                return Err(sqlx::Error::Decode(
+                    "today candidates query: outcome call id and ended_at must be set together"
+                        .into(),
+                ))
+            }
+        };
+        let by_inquiry = required(row.by_inquiry, "by_inquiry")?;
+        if !by_inquiry && outcome_needed.is_none() {
+            return Err(sqlx::Error::Decode(
+                "today candidates query: a candidate must qualify by inquiry or by call".into(),
+            ));
+        }
+
         Ok(TodayCandidate {
             person,
             latest_inquiry,
@@ -127,18 +147,46 @@ impl TryFrom<TodayCandidateRow> for TodayCandidate {
             waiting_since: required(row.waiting_since, "waiting_since")?,
             inquiry_count: row.inquiry_count,
             fresh: required(row.fresh, "fresh")?,
+            by_inquiry,
+            outcome_needed,
         })
     }
 }
 
-/// Candidates for `viewer`'s Today (docs/specs/SLICE_003.md §3, §4): People
-/// assigned to `viewer` in `scope`'s Organization whose latest Inquiry has
-/// not yet been answered by a contact attempt at or after it. `fresh` is
-/// computed once here, in SQL, from `now`, and used directly in the
-/// `ORDER BY` (tier before `LIMIT 201`) so a fresh lead can never fall off
-/// the cap behind stale ones. Tie-breaks (`received_at DESC, id DESC` for
-/// the latest Inquiry; `occurred_at DESC, id DESC` for the last attempt)
-/// are contract, not choice (§14a).
+/// Candidates for `viewer`'s Today (docs/specs/SLICE_003.md §3, §4;
+/// docs/specs/SLICE_006c.md §5a). Two membership sources, one statement:
+///
+/// 1. **By Inquiry** (§3): People assigned to `viewer` in `scope`'s
+///    Organization whose latest Inquiry has not yet been answered by a
+///    contact attempt at or after it. `fresh` is computed once here, in
+///    SQL, from `now`, and used directly in the `ORDER BY` (tier before
+///    `LIMIT 201`) so a fresh lead can never fall off the cap behind stale
+///    ones. Tie-breaks (`received_at DESC, id DESC` for the latest Inquiry;
+///    `occurred_at DESC, id DESC` for the last attempt) are contract, not
+///    choice (§14a).
+/// 2. **By outcome-needed call** (D-033): a `call` of the Organization
+///    with `caller_user_id = viewer`, status `ended|failed`, whose
+///    effective attempt (`causation_id = call.id`, no corrector) is the
+///    automatic root (`corrects_id IS NULL`). One call per Person — the
+///    most recent by `ended_at DESC, id DESC`. Such a Person is a `low`
+///    item unless it also qualifies by Inquiry, in which case the Inquiry
+///    tier wins and `waiting_since` stays the Inquiry's. Assignment is not
+///    consulted for this source: the caller owes the outcome.
+///
+/// The outer `WHERE` keeps an index-able predicate (`p.assigned_user_id
+/// = $2 OR p.id IN (outcome_call)`) alongside the membership condition so
+/// the planner can narrow `person` before the LATERAL joins run.
+///
+/// Ordering: Inquiry-based tiers first (`fresh DESC, waiting_since ASC,
+/// id`), then `low` by `ended_at ASC, id`. The `LIMIT 201` / `truncated`
+/// cap applies to the merged list, so `low` items are the first to fall
+/// off — an outcome nag never displaces a lead.
+///
+/// `last_contact_attempt` is the **effective** attempt (docs/specs/SLICE_006c.md
+/// §2, §3): rows that have a corrector (`corrects_id` chain) are excluded
+/// before the tie-break — a correction inherits its original's
+/// `occurred_at`, so without the filter the `id DESC` tie-break would pick
+/// original or correction at random.
 pub async fn candidates(
     conn: &mut PgConnection,
     scope: &PersonVisibilityScope,
@@ -149,7 +197,23 @@ pub async fn candidates(
 
     let mut rows = sqlx::query_as!(
         TodayCandidateRow,
-        r#"SELECT
+        r#"WITH outcome_call AS (
+               SELECT DISTINCT ON (c.person_id) c.person_id, c.id, c.ended_at
+               FROM call c
+               WHERE c.organization_id = $1
+                 AND c.caller_user_id = $2
+                 AND c.status IN ('ended', 'failed')
+                 AND c.ended_at IS NOT NULL
+                 AND EXISTS (
+                     SELECT 1 FROM contact_attempted root
+                     WHERE root.organization_id = $1
+                       AND root.causation_id = c.id
+                       AND root.corrects_id IS NULL
+                       AND NOT EXISTS (SELECT 1 FROM contact_attempted x WHERE x.corrects_id = root.id)
+                 )
+               ORDER BY c.person_id, c.ended_at DESC, c.id DESC
+           )
+           SELECT
              p.id, p.first_name, p.last_name, p.created_at,
              s.id as stage_id, s.name as stage_name,
              u.id as "assigned_user_id?", u.display_name as "assigned_user_display_name?",
@@ -167,8 +231,13 @@ pub async fn candidates(
              last_attempt.channel as "last_attempt_channel?",
              last_attempt.outcome as "last_attempt_outcome?",
              last_attempt.occurred_at as "last_attempt_occurred_at?",
-             waiting.received_at as "waiting_since?",
-             (latest.received_at > $3::timestamptz - interval '24 hours') as "fresh?"
+             CASE WHEN membership.by_inquiry THEN waiting.received_at ELSE oc.ended_at END
+                 as "waiting_since?",
+             (membership.by_inquiry AND latest.received_at > $3::timestamptz - interval '24 hours')
+                 as "fresh?",
+             membership.by_inquiry as "by_inquiry?",
+             oc.id as "outcome_call_id?",
+             oc.ended_at as "outcome_call_ended_at?"
            FROM person p
            JOIN stage s ON s.id = p.stage_id
            LEFT JOIN app_user u ON u.id = p.assigned_user_id
@@ -183,6 +252,7 @@ pub async fn candidates(
                SELECT ca.id, ca.channel, ca.outcome, ca.occurred_at
                FROM contact_attempted ca
                WHERE ca.person_id = p.id
+                 AND NOT EXISTS (SELECT 1 FROM contact_attempted c WHERE c.corrects_id = ca.id)
                ORDER BY ca.occurred_at DESC, ca.id DESC
                LIMIT 1
            ) last_attempt ON true
@@ -194,10 +264,18 @@ pub async fn candidates(
                ORDER BY i2.received_at ASC
                LIMIT 1
            ) waiting ON true
+           LEFT JOIN outcome_call oc ON oc.person_id = p.id
+           CROSS JOIN LATERAL (
+               SELECT (COALESCE(p.assigned_user_id = $2, false) AND waiting.received_at IS NOT NULL) as by_inquiry
+           ) membership
            WHERE p.organization_id = $1
-             AND p.assigned_user_id = $2
-             AND waiting.received_at IS NOT NULL
-           ORDER BY "fresh?" DESC, waiting.received_at ASC, p.id ASC
+             AND (p.assigned_user_id = $2 OR p.id IN (SELECT person_id FROM outcome_call))
+             AND latest.id IS NOT NULL
+             AND (membership.by_inquiry OR oc.id IS NOT NULL)
+           ORDER BY membership.by_inquiry DESC,
+                    "fresh?" DESC,
+                    CASE WHEN membership.by_inquiry THEN waiting.received_at ELSE oc.ended_at END ASC,
+                    p.id ASC
            LIMIT 201"#,
         organization_id,
         viewer,

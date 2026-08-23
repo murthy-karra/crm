@@ -479,3 +479,96 @@ async fn fact_tables_reject_truncate_via_grant_and_trigger(migrator_pool: PgPool
         );
     }
 }
+
+/// docs/specs/SLICE_006c.md §2, §13: the widened `outcome` CHECK and the
+/// linear-chain partial unique index `contact_attempted_corrects_once`.
+#[sqlx::test]
+#[ignore]
+async fn contact_attempted_outcome_check_and_corrects_once_index_are_section_2(
+    migrator_pool: PgPool,
+) {
+    let org_id = common::create_org(&migrator_pool, "Acme Realty").await;
+    let user_id = common::create_user(&migrator_pool, "alice@acme.test", "Alice", "pw").await;
+    common::add_membership(&migrator_pool, org_id, user_id).await;
+    let person_id = Uuid::new_v4();
+
+    let insert = |outcome: &'static str, corrects_id: Option<Uuid>| {
+        let migrator_pool = migrator_pool.clone();
+        async move {
+            sqlx::query_scalar::<_, Uuid>(
+                r#"INSERT INTO contact_attempted
+                    (organization_id, actor_kind, actor_user_id, origin, occurred_at,
+                     correlation_id, person_id, channel, outcome, corrects_id)
+                   VALUES ($1, 'user', $2, 'web_session', now(), $3, $4, 'call', $5, $6)
+                   RETURNING id"#,
+            )
+            .bind(org_id)
+            .bind(user_id)
+            .bind(Uuid::new_v4())
+            .bind(person_id)
+            .bind(outcome)
+            .bind(corrects_id)
+            .fetch_one(&migrator_pool)
+            .await
+        }
+    };
+
+    // The CHECK accepts exactly the six values.
+    let mut ids = Vec::new();
+    for outcome in [
+        "reached",
+        "no_answer",
+        "left_message",
+        "sent",
+        "busy",
+        "wrong_number",
+    ] {
+        ids.push(
+            insert(outcome, None)
+                .await
+                .unwrap_or_else(|e| panic!("{outcome}: {e}")),
+        );
+    }
+    for outcome in ["voicemail", "answered", "declined", ""] {
+        let err = insert(outcome, None).await.unwrap_err();
+        let db = err.as_database_error().expect("a CHECK violation");
+        assert_eq!(db.code().as_deref(), Some("23514"), "{outcome}");
+        assert_eq!(db.constraint(), Some("contact_attempted_outcome_check"));
+    }
+
+    // The partial unique index: a row is corrected at most once; NULLs
+    // are unconstrained (the six originals above already prove that).
+    let (indexdef,): (String,) = sqlx::query_as(
+        "SELECT indexdef FROM pg_indexes WHERE indexname = 'contact_attempted_corrects_once'",
+    )
+    .fetch_one(&migrator_pool)
+    .await
+    .unwrap();
+    assert!(indexdef.contains("UNIQUE"), "{indexdef}");
+    assert!(indexdef.contains("WHERE"), "{indexdef}");
+    assert!(indexdef.contains("corrects_id IS NOT NULL"), "{indexdef}");
+    let head = ids[0];
+    let first = insert("busy", Some(head)).await.unwrap();
+    let err = insert("wrong_number", Some(head)).await.unwrap_err();
+    let db = err.as_database_error().expect("a unique violation");
+    assert_eq!(db.code().as_deref(), Some("23505"));
+    assert_eq!(db.constraint(), Some("contact_attempted_corrects_once"));
+    // Chaining onto the correction is fine.
+    insert("wrong_number", Some(first)).await.unwrap();
+    // A correction row is append-only like every other fact row.
+    let app_pool = common::connect_as_app(&migrator_pool).await;
+    for pool in [&app_pool, &migrator_pool] {
+        assert!(
+            sqlx::query("UPDATE contact_attempted SET corrects_id = NULL WHERE id = $1")
+                .bind(first)
+                .execute(pool)
+                .await
+                .is_err()
+        );
+        assert!(sqlx::query("DELETE FROM contact_attempted WHERE id = $1")
+            .bind(first)
+            .execute(pool)
+            .await
+            .is_err());
+    }
+}

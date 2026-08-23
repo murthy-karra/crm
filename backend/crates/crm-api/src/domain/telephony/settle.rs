@@ -131,6 +131,8 @@ pub async fn settle_in_tx(
                 person_id: call.person_id,
                 channel: "call",
                 outcome: outcome.as_str(),
+                corrects_id: None,
+                recorded_at: None,
             },
         )
         .await?;

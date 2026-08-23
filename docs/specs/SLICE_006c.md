@@ -36,9 +36,14 @@ As `alice` on `/people/:id` after a call placed from the Slice 006 panel:
    Talked to them; a `no_answer` attempt → No answer), with **Save
    outcome** (primary) and **Skip** (ghost; replaces Done).
 2. **Skip** writes nothing; the panel closes as today.
-3. **Save** with *Voicemail*: History shows the original "Contact
-   attempted — call, reached" muted with "superseded", then "Outcome
-   corrected — voicemail". The Person's Today card (for any member who
+3. **Save** with *Voicemail*: History shows **one line per call**
+   (Follow Up Boss style; user decision 2026-08-23 after seeing two
+   corrected calls rendered as indistinguishable rows): "Call —
+   voicemail, 7 s · Alice · 11 hours ago · outcome corrected from talked
+   to them 5 hours ago". Call-derived `contact_attempted` rows and
+   correction rows are folded into that line by the web client (the
+   stored facts are unchanged); manual attempts stay their own lines.
+   The Person's Today card (for any member who
    still has it) shows `last_contact_attempt` = voicemail. Every open
    tab updates within a second (`person.changed`).
 4. Saving the outcome already recorded changes nothing (the panel
@@ -119,9 +124,15 @@ unchanged: it records what the system observed, not a user statement.
 `GET /api/people/{id}` `history[]` entries of kind `contact_attempted`
 gain `detail.call_id: uuid | null` (= `causation_id` when the attempt is
 call-derived), `detail.corrects_id: uuid | null`, `detail.superseded:
-bool`. `kind`/`kind_rank` unchanged; the existing ordering already
-places a correction directly after its original (same `occurred_at`,
-later `recorded_at`). Pointer lines go in: SLICE_002 §5 (history detail); SLICE_003 §2 (the
+bool`. `kind`/`kind_rank` unchanged. **Timeline placement of a
+correction** (user decision after the first live correction,
+2026-08-23): in `history[]` a correction's `occurred_at` is its
+`recorded_at` — the moment the agent corrected it — so the timeline
+reads original attempt → `call_completed` → correction, and the
+correction shows "2 minutes ago", not the call's time. The stored fact
+still inherits the attempt's `occurred_at` (Today semantics, §3). Lane B
+renders superseded/corrected rows from `superseded`/`corrects_id`,
+never from position. Pointer lines go in: SLICE_002 §5 (history detail); SLICE_003 §2 (the
 widened CHECK) and §5 (`POST /api/people/{id}/contact-attempts` now
 accepts `busy`/`wrong_number` — the manual route's vocabulary widens
 with `ContactOutcome`); SLICE_003 §3 (`last_contact_attempt` is now the
@@ -146,8 +157,11 @@ call_id, outcome: CallOutcomeCorrection }) -> CorrectionResult`
    NOT EXISTS (SELECT 1 FROM contact_attempted c WHERE c.corrects_id =
    ca.id) ORDER BY recorded_at DESC LIMIT 1` → none →
    `NoContactAttempt` (422).
-5. `head.outcome == requested` → roll back; return
-   `{attempt: head, changed: false}`; publish nothing.
+5. `head.outcome == requested` **and the head is already an agent choice**
+   (`corrects_id IS NOT NULL`) → roll back; return `{attempt: head,
+   changed: false}`; publish nothing. The automatic root is always
+   written over, even when equal (D-033: the agent's choice is the
+   outcome; without a row the call would stay incomplete).
 6. Insert the correction row (§2) via `facts::insert_contact_attempted`
    extended with `corrects_id` and an explicit `recorded_at`. Because
    step 1 holds the call row lock, concurrent saves **serialize**: the
@@ -186,6 +200,59 @@ the Operator calling slice.
 
 Works with telephony disabled (it is a pure fact write; no provider).
 New `ApiError` variants: `NoContactAttempt`, `CorrectionConflict`.
+
+## 5a. Amendment — forced outcome and the "outcome needed" Today tier (D-033, 2026-08-23)
+
+Supersedes §1.1–§1.4, §1.7 and the §10 prompt/rendering text where they
+conflict. Storage (§2), the command (§3) and the route (§5) are
+unchanged.
+
+**Post-call prompt.** Shown whenever an automatic attempt exists
+(`attemptOutcome(call) !== null`). No choice is pre-selected; **Save
+outcome** is disabled until one is picked and until the server reports
+`ended|failed`; there is **no Skip**. The panel stays until Save
+succeeds ("Outcome saved — <label>", then Done). Navigating away is
+allowed (nothing is lost: the automatic row stands and the Today tier
+below nags).
+
+**Timeline (one line per call, §1.3).** The effective attempt decides
+the label: if it is an agent choice (`corrects_id !== null`) → "Call —
+voicemail, 7 s"; if it is the automatic root → "Call — 7 s · outcome
+needed" (duration only when answered; "Call · outcome needed"
+otherwise) plus a **Set outcome** ghost action for the caller. Failed calls with no attempt: unchanged ("Call —
+failed"). The system's observation is never rendered as the outcome;
+manual Log-contact rows are unchanged.
+
+**Today (SLICE_003 §3/§5, additive).** A second membership source: a
+`call` of the viewer's Organization whose `caller_user_id = viewer`,
+status `ended|failed`, whose effective attempt is the automatic root
+(no corrector). Such a Person is a Today item with `priority: "low"`
+(new value; sorts after `normal`), `recommended_action: "set_outcome"`
+(new value), `reasons` containing `{"code": "call_outcome_needed",
+"call_id", "ended_at"}` (new code; may be combined with the existing
+reasons when the Person also qualifies by inquiry — then the inquiry
+tier wins and the reason is appended), `waiting_since` = the call's
+`ended_at` when it is the only reason. `TodayItem` gains no other
+field. Ordering: existing tiers first, then `low` by `ended_at ASC`.
+The Operator's `get_today`/`explain_priority` carry the new reason
+code and a one-line explanation ("a call at <rfc3339> has no outcome
+yet"); `ORDERING_RULE`/`Ahead` extended for `low` (SLICE_005 §3); no tool-schema change (reasons are already a list of coded
+objects). Choosing an outcome removes the item; `person.changed
+{contact_attempted}` already invalidates Today.
+
+Web: the Today card for a `low` item shows "Outcome needed" with a
+**Set outcome** action linking to the Person page (which opens the
+Change-outcome dialog for that call, pre-selection none). `TodayPriority`
+gains `'low'`, `RecommendedAction` gains `'set_outcome'`, `TodayReason`
+gains `call_outcome_needed`.
+
+Tests: Lane A — the new membership source (caller only; not the
+assignee; not other members; foreign org never), tier ordering, reason
+payload, removal after an outcome, Operator explanation text, and that
+a Person qualifying both ways keeps the inquiry tier with the reason
+appended. Lane B — forced choice (no default, Save disabled until a
+pick, no Skip), the "outcome needed" timeline row and Set outcome
+action, the Today low-tier card, the Today → Person → dialog path.
 
 ## 6. Realtime
 
@@ -244,13 +311,20 @@ text exists to leak; the log-capture test from Slice 006 still applies.
   ghost. After save: "Outcome saved — voicemail" then Done. Error copy:
   `invalid_call_state` → "The call hasn't finished yet."; `no_contact_
   attempt` → "There's no contact attempt to correct."; `correction_
-  conflict` → "This outcome was just changed — refreshed."; others →
-  the generic pattern.
-- `PersonDetailView.vue` owns the mutation; `historySummary` renders
-  superseded rows muted with "(superseded)" (gray, no colour; strike-
-  through allowed) and correcting rows as "Outcome corrected — <label>";
-  optional **Change outcome** ghost action on the caller's own
-  call-derived, non-superseded rows (§1.7).
+  conflict` → "This outcome was just changed — refreshed."; `forbidden`
+  → "Only the caller can change this outcome."; `not_found` → "This
+  call no longer exists." (both added at implementation, 2026-08-22);
+  others → the generic pattern. Ringback (§12) shipped in Lane B: a
+  local WebAudio tone while `phase === 'ringing'`, independent of mic
+  mute.
+- `PersonDetailView.vue` owns the mutation and folds history into one
+  row per call (§1.3): for each `call_completed` entry, the effective
+  attempt (same `call_id`, `superseded === false`) supplies the outcome
+  label; a `corrects_id` on it adds "outcome corrected from <root
+  outcome> <when>"; call-derived attempt rows are hidden (fallback: if
+  no `call_completed` row exists they render as before). **Change
+  outcome** ghost action sits on the call row for the caller's own calls
+  with a non-superseded attempt (§1.7).
 - `LogContactDialog.vue`: no change needed (derives options from the
   label map); verify.
 
@@ -290,7 +364,12 @@ chain length (a caller may correct repeatedly; each is one row).
    concurrent double correction (`tokio::join!`) → both 200, exactly
    one or two new rows forming a chain, never two corrections of the
    same head; `recorded_at` strictly increasing along the chain; history
-   order pinned as original, correction, then `call_completed`; a
+   order pinned as original, `call_completed`, then correction (the
+   correction's history `occurred_at` = its `recorded_at`) for both an
+   answered and a busy call (correct `no_answer` → `busy`; also proves a failed-with-attempt
+   call is correctable); a `placing → cancelled` call (no attempt) → 422;
+   non-caller on an *active* call → 403 (403 precedes 409);
+   `tokio::join!(hangup, correct)` → 409 or 200, at most one correction; a
    correction row is itself append-only (UPDATE/DELETE rejected for
    owner and `crm_app`); the manual `POST …/contact-attempts` accepts
    `busy` and `wrong_number`; Operator `get_person` marks the superseded

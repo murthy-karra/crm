@@ -273,7 +273,7 @@ pub struct TodayView { generated_at, total: usize, truncated: bool, items: Vec<T
 pub struct NextWorkItem { item: Option<TodayItemView>, total: usize }
 pub enum PriorityExplanation {
     OnToday { person: PersonCard, position, total, priority, reasons, waiting_since, recommended_action,
-              ordering_rule: &'static str /* "high_before_normal, then waiting_since ascending, then id" */,
+              ordering_rule: &'static str /* "high_before_normal_before_low, then waiting_since ascending (ended_at for low), then id" — extended by SLICE_006c §5a (D-033); `Ahead` gains `low` */,
               ahead: { high: usize, normal: usize } },
     NotOnToday { person: PersonCard, reason: NotAssignedToYou { assigned_user_display_name: Option<String> } | AlreadyContacted },
     // [impl] `person` is carried on both variants so the loop can build the §4 reference card from

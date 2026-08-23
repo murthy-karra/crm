@@ -4,29 +4,31 @@ Last updated: 2026-08-22 (Lane A implemented)
 
 ## Current phase
 
-**Slice 006 (calling) MERGED to `main` (`332e78a`, pushed) after the
-live walkthrough on 2026-08-22: two real PSTN calls from
-`app.tarams.org`, both `answered`, webhooks accepted, hangup recorded,
-two-way audio confirmed by the user. Not yet proven live: the
-busy/decline/ring-out path ("no answer" attempt). Observed: the first
-call was "answered" in 2.8 s without the phone ringing — almost
-certainly voicemail or a carrier message; the system cannot tell. This
-led to D-032 (call outcome correction) — Slice 006c, planned by
-`crm-planner` (plan at `docs/plans/SLICE_006c_PLAN.md`); spec not yet
-drafted; ONE blocking decision open (notes on the correction — see
-Blocking decisions).** Follow-ups logged: ringback tone in the browser
-while ringing (tiny Lane B item, no decision needed); rotate the Telnyx
-SIP password (security TODO); `placing` sweep horizon is 40 s from
-`placed_at` while the mic prompt comes after `POST /calls` — a very slow
-first-time permission prompt expires the call (consider keying off
-`dial_requested_at`). Hostname is `livekit1.tarams.org` (spec text
-says `livekit.tarams.org`).
+**Slice 006c (call outcome) COMPLETE on `slice-006c-outcome` and being
+merged to `main`.** Scope grew during the live walkthrough into three
+user decisions, all implemented, reviewed and adversarially tested:
+one timeline line per call (Follow Up Boss style); D-033 — the agent
+must choose every call's outcome (no default, no Skip), an unchosen
+call is "outcome needed" in the timeline, and the Person stays on the
+caller's Today in a new lowest `low` tier (`call_outcome_needed` /
+`set_outcome`) until chosen; O-012 recorded (PII content blobs,
+per-Person keys, crypto-shred — blocks summaries/recordings/notes).
+Review fixes in `fafaf95` (notably: the agent's first choice is always
+written even when it equals the system's guess — otherwise the call
+stayed incomplete forever; Today query keeps its assignee index
+predicate; Operator `ORDERING_RULE`/`Ahead` extended for `low`; two new
+indexes `20260826000002`). Gates: `check` green (236 Vitest), `check-db`
+green (`db_calls` 49). Live: two real calls corrected on 2026-08-23;
+the D-033 UI (forced choice, Today nag) has NOT yet been exercised
+live. Follow-ups: rotate the Telnyx SIP password; busy/ring-out never
+proven live; `placing` sweep horizon vs slow mic prompts; orphaned
+"outcome needed" calls when a caller is deactivated (O-004 territory);
+OrbStack hung twice. Hostname is `livekit1.tarams.org`.
 
 ## Current slice
 
-Slice 006c — Call outcome correction (D-032) — `docs/specs/SLICE_006c.md`
-APPROVED 2026-08-22; lane briefs `docs/tasks/SLICE_006c_LANE_{A,B}.md`;
-implementation gate pending. Previous:
+Slice 006c — Call outcome (D-032, D-033) — `docs/specs/SLICE_006c.md`
+(+ §5a) — COMPLETE, merging to `main`. Previous:
 Slice 006 — Calling — `docs/specs/SLICE_006.md` (MERGED `332e78a`). Previous:
 Slice 005 — Operator retrieval — `docs/specs/SLICE_005.md` (APPROVED). Read-only AI Operator: `crm-operator` crate with a
 `ToolBackend` trait (five tools: `search_people`, `get_person`,
@@ -38,8 +40,7 @@ proof chain. Slice 004 is complete and merged (see History).
 
 ## Current branch
 
-`main` at `332e78a` (Slice 006 merged and pushed); `slice-006-calling`
-deleted.
+`main` (006c merged).
 
 ## Last accepted decision
 
@@ -751,18 +752,12 @@ slice:
 
 ## Next recommended action
 
-1. Implementation gate for 006c Lane A (`slice-006c-outcome` from
-   `main`), then Lane B.
-2. Implement 006c (Lane A backend ≈ 1.5 d, Lane B web ≈ 1 d); add the
-   ringback tone to Lane B while there.
-3. Rotate the Telnyx SIP password and update the trunk.
-4. 006a (`crm-app` extraction), then 006b (Operator `start_call`).
-
-## Blocking decisions
-
-None. Notes resolved 2026-08-22 (deferred; recorded on D-032). Safe
-defaults in SLICE_006c §14 (no Today resurfacing; 006c before 006a).
+1. Exercise D-033 live once: a call, close the tab without choosing →
+   "outcome needed" row + Today low item → Set outcome clears both.
+2. Rotate the Telnyx SIP password; update the trunk.
+3. 006a (`crm-app` extraction, D-028 §5), then 006b (Operator
+   `start_call`). O-012 before any summary/recording/notes slice.
 
 ## Approval currently required
 
-"Proceed with 006c implementation?" (Lane A first, then Lane B).
+None.

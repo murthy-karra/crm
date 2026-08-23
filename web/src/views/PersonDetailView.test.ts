@@ -1,6 +1,13 @@
 // SLICE_006 §13 item 4: Call disabled without a phone; number picker only
 // with ≥ 2 phones; `call_completed` history rendering; one primary per
-// view; the Call → panel → Hang up flow against a fake room. Service-free:
+// view; the Call → panel → Hang up flow against a fake room. SLICE_006c §13
+// item 3 / §5a (D-033): the post-call prompt's forced choice against the
+// mocked route (no default, no Skip, Save gated on a pick and the server's
+// status — seeded `answered`, refetched `ended`), the error copy per code,
+// one-row-per-call history rendering (an agent choice names the outcome;
+// the automatic root reads "outcome needed"), Set/Change outcome only on
+// the caller's own call rows, the Today → Person `?outcome=` path, and the
+// manual dialog's widened vocabulary. Service-free:
 // `apiFetch` is mocked, the LiveKit room is a fake injected via the
 // `createRoom` prop, and PrimeVue runs unstyled as in main.ts.
 import { flushPromises, mount } from '@vue/test-utils'
@@ -10,13 +17,17 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, apiFetch } from '../api/client'
 import type {
+  CallCompletedDetail,
   CallCompletedOutcome,
   CallView,
+  ContactAttemptedDetail,
   ContactMethod,
+  CorrectOutcomeResponse,
   HistoryEntry,
   MeResponse,
   PersonDetailResponse,
 } from '../api/types'
+import { queryKeys } from '../api/queries'
 import type { CallRoom, CallRoomEvents, CallRoomFactory } from '../telephony/useCall'
 import PersonDetailView from './PersonDetailView.vue'
 
@@ -82,6 +93,20 @@ function callView(overrides: Partial<CallView> = {}): CallView {
   }
 }
 
+function correction(changed: boolean): CorrectOutcomeResponse {
+  return {
+    attempt: {
+      id: 'att-2',
+      channel: 'call',
+      outcome: 'left_message',
+      occurred_at: '2026-08-22T10:00:00.000Z',
+      recorded_at: '2026-08-22T10:05:00.000Z',
+      corrects_id: 'att-1',
+    },
+    changed,
+  }
+}
+
 class FakeRoom implements CallRoom {
   handlers: { [E in keyof CallRoomEvents]: CallRoomEvents[E][] } = {
     participantConnected: [],
@@ -112,11 +137,16 @@ interface StubOptions {
   settledHangup?: CallView
   /** Per-attempt start responses (thrown if an Error); the last repeats. */
   starts?: Array<unknown>
+  /** `GET /api/calls/{id}` responses in order; the last repeats. Defaults to `placing`. */
+  gets?: CallView[]
+  /** `POST /api/calls/{id}/outcome` response, or an Error to throw. */
+  outcome?: CorrectOutcomeResponse | Error
 }
 
 function stubApi(personDetail: PersonDetailResponse, options: StubOptions = {}) {
   const settledHangup = options.settledHangup ?? callView({ status: 'failed', failure_reason: 'cancelled', ringing_at: 'x' })
   const starts = [...(options.starts ?? [])]
+  const gets = [...(options.gets ?? [])]
   apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET'
     if (path === '/me') return me()
@@ -136,12 +166,19 @@ function stubApi(personDetail: PersonDetailResponse, options: StubOptions = {}) 
     }
     if (path === `/calls/${CALL_ID}/dial`) return { call: callView() }
     if (path === `/calls/${CALL_ID}/hangup`) return { call: settledHangup }
-    if (path === `/calls/${CALL_ID}`) return { call: callView() }
+    if (path === `/calls/${CALL_ID}/outcome`) {
+      if (options.outcome instanceof Error) throw options.outcome
+      return options.outcome ?? correction(true)
+    }
+    if (path === `/calls/${CALL_ID}`) {
+      const next = gets.length > 1 ? gets.shift() : gets[0]
+      return { call: next ?? callView() }
+    }
     throw new Error(`unexpected ${method} ${path}`)
   })
 }
 
-async function mountView() {
+async function mountView(query = '', seed?: PersonDetailResponse) {
   const rooms: FakeRoom[] = []
   const createRoom: CallRoomFactory = () => {
     const room = new FakeRoom()
@@ -155,18 +192,20 @@ async function mountView() {
       { path: '/people/:id', component: { template: '<div />' } },
     ],
   })
-  await router.push(`/people/${PERSON_ID}`)
+  await router.push(`/people/${PERSON_ID}${query}`)
   await router.isReady()
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
+  // A stale cached detail (a prior visit): rendered at once, refetched on mount.
+  if (seed) queryClient.setQueryData(queryKeys.person(ORG_ID, PERSON_ID), seed)
   const wrapper = mount(PersonDetailView, {
     props: { id: PERSON_ID, createRoom },
     global: { plugins: [router, [VueQueryPlugin, { queryClient }], [PrimeVue, { unstyled: true }]] },
     attachTo: document.body,
   })
   await flushPromises()
-  return { wrapper, rooms, queryClient }
+  return { wrapper, rooms, queryClient, router }
 }
 
 function requests(): string[] {
@@ -253,13 +292,28 @@ describe('PersonDetailView — Call button', () => {
     await flushPromises()
     expect(requests().filter((r) => r === `POST /calls/${CALL_ID}/hangup`)).toHaveLength(1)
     expect(wrapper.get('[data-testid="call-status"]').text()).toBe('No answer')
-    expect(wrapper.get('[data-testid="call-logged"]').text()).toBe('Logged as contact attempt — call, no answer')
-    // The Call button is the primary again.
+    // SLICE_006c: the prompt replaces the logged line; Save outcome is the
+    // one primary, so the Call button (enabled again) is secondary.
+    expect(wrapper.get('[data-testid="call-outcome-prompt"]').text()).toBe('How did it go?')
     expect(wrapper.get('[data-testid="call-button"]').attributes('disabled')).toBeUndefined()
-    expect(wrapper.get('[data-testid="call-button"]').classes()).toContain('bg-accent')
+    expect(wrapper.findAll('.bg-accent')).toHaveLength(1)
+    expect(wrapper.get('[data-testid="call-outcome-save"]').classes()).toContain('bg-accent')
 
+    // D-033: forced choice — nothing selected, no Skip, Save disabled until a pick.
+    expect(wrapper.find('[data-testid="call-outcome-skip"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="call-dismiss"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="outcome-picker"] [aria-checked="true"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="call-outcome-save"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-outcome="no_answer"]').trigger('click')
+    expect(wrapper.get('[data-testid="call-outcome-save"]').attributes('disabled')).toBeUndefined()
+    await wrapper.get('[data-testid="call-outcome-save"]').trigger('click')
+    await flushPromises()
+    expect(requests().filter((r) => r === `POST /calls/${CALL_ID}/outcome`)).toHaveLength(1)
+    expect(wrapper.get('[data-testid="call-outcome-saved"]').text()).toBe('Outcome saved — no answer')
     await wrapper.get('[data-testid="call-dismiss"]').trigger('click')
     expect(wrapper.find('[data-testid="call-panel"]').exists()).toBe(false)
+    // The Call button is the primary again.
+    expect(wrapper.get('[data-testid="call-button"]').classes()).toContain('bg-accent')
   })
 })
 
@@ -404,5 +458,556 @@ describe('PersonDetailView — call_completed history', () => {
     expect(text).toContain('Call — reached, 1 min 12 s')
     expect(text).toContain('Call — no answer')
     expect(text).toContain('Alice')
+  })
+})
+
+// ---- SLICE_006c ------------------------------------------------------------
+
+const ATTEMPT_ID = '88888888-8888-8888-8888-888888888888'
+
+function attemptEntry(
+  id: string,
+  detail: Partial<ContactAttemptedDetail>,
+  actor: { id: string; display_name: string } | null = { id: 'u-alice', display_name: 'Alice' },
+): HistoryEntry {
+  return {
+    kind: 'contact_attempted',
+    id,
+    occurred_at: '2026-08-22T10:00:00.000Z',
+    recorded_at: '2026-08-22T10:00:00.000Z',
+    actor,
+    origin: 'web_session',
+    correlation_id: 'corr',
+    detail: { channel: 'call', outcome: 'reached', call_id: CALL_ID, corrects_id: null, superseded: false, ...detail },
+  }
+}
+
+/** Call → SIP leg answered → remote hangup. The hangup response leaves the
+ * server at `answered` (the hangup request races the webhook), so the
+ * panel's Save is gated until a `GET` returns `ended`. */
+async function answeredCallEnded(options: StubOptions = {}) {
+  stubApi(detail([PHONE_A]), {
+    settledHangup: callView({ status: 'answered', answered_at: 'x' }),
+    gets: [callView({ status: 'ended', end_reason: 'remote_hangup', answered_at: 'x', talk_seconds: 5 })],
+    ...options,
+  })
+  const mounted = await mountView()
+  await mounted.wrapper.get('[data-testid="call-button"]').trigger('click')
+  await flushPromises()
+  mounted.rooms[0].emit('participantConnected', { identity: `sip:${CALL_ID}`, attributes: { 'sip.callStatus': 'active' } })
+  await flushPromises()
+  mounted.rooms[0].emit('participantDisconnected', { identity: `sip:${CALL_ID}`, attributes: {} })
+  await flushPromises()
+  return mounted
+}
+
+describe('PersonDetailView — How did it go? (SLICE_006c §10)', () => {
+  it('Save waits for the server: disabled at answered, enabled after the call.changed refetch shows ended', async () => {
+    const { wrapper, queryClient } = await answeredCallEnded()
+    expect(wrapper.find('[data-testid="call-outcome-prompt"]').exists()).toBe(true)
+    await wrapper.get('[data-outcome="reached"]').trigger('click')
+    expect(wrapper.get('[data-testid="call-outcome-save"]').attributes('disabled')).toBeDefined()
+    // D-023: `call.changed` is invalidation-only — the refetch carries the status.
+    await queryClient.invalidateQueries({ queryKey: queryKeys.call(ORG_ID, CALL_ID) })
+    await flushPromises()
+    expect(wrapper.get('[data-testid="call-outcome-save"]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('Save posts exactly {"outcome"} to /calls/{id}/outcome, shows the saved line, Done closes', async () => {
+    const { wrapper, queryClient } = await answeredCallEnded()
+    await queryClient.invalidateQueries({ queryKey: queryKeys.call(ORG_ID, CALL_ID) })
+    await flushPromises()
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+    await wrapper.get('[data-outcome="left_message"]').trigger('click')
+    await wrapper.get('[data-testid="call-outcome-save"]').trigger('click')
+    await flushPromises()
+    const post = apiFetchMock.mock.calls.find(([path]) => path === `/calls/${CALL_ID}/outcome`)
+    expect(post?.[1]?.method).toBe('POST')
+    expect(JSON.parse(String(post?.[1]?.body))).toEqual({ outcome: 'left_message' })
+    expect(wrapper.get('[data-testid="call-outcome-saved"]').text()).toBe('Outcome saved — voicemail')
+    const keys = invalidate.mock.calls.map(([f]) => JSON.stringify((typeof f === 'function' ? f() : f)?.queryKey))
+    expect(keys).toContain(JSON.stringify(queryKeys.person(ORG_ID, PERSON_ID)))
+    expect(keys).toContain(JSON.stringify(queryKeys.today(ORG_ID)))
+    await wrapper.get('[data-testid="call-dismiss"]').trigger('click')
+    expect(wrapper.find('[data-testid="call-panel"]').exists()).toBe(false)
+  })
+
+  it('saving the outcome already recorded (changed: false) still shows the saved line → Done (never a silent dismissal)', async () => {
+    const { wrapper, queryClient } = await answeredCallEnded({ outcome: correction(false) })
+    await queryClient.invalidateQueries({ queryKey: queryKeys.call(ORG_ID, CALL_ID) })
+    await flushPromises()
+    await wrapper.get('[data-outcome="left_message"]').trigger('click')
+    await wrapper.get('[data-testid="call-outcome-save"]').trigger('click')
+    await flushPromises()
+    expect(requests().filter((r) => r === `POST /calls/${CALL_ID}/outcome`)).toHaveLength(1)
+    expect(wrapper.find('[data-testid="call-panel"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="call-outcome-saved"]').text()).toBe('Outcome saved — voicemail')
+    await wrapper.get('[data-testid="call-dismiss"]').trigger('click')
+    expect(wrapper.find('[data-testid="call-panel"]').exists()).toBe(false)
+  })
+
+  it('two synchronous Save clicks post once', async () => {
+    const { wrapper, queryClient } = await answeredCallEnded()
+    await queryClient.invalidateQueries({ queryKey: queryKeys.call(ORG_ID, CALL_ID) })
+    await flushPromises()
+    await wrapper.get('[data-outcome="busy"]').trigger('click')
+    const save = wrapper.get('[data-testid="call-outcome-save"]').element as HTMLButtonElement
+    save.click()
+    save.click()
+    await flushPromises()
+    expect(requests().filter((r) => r === `POST /calls/${CALL_ID}/outcome`)).toHaveLength(1)
+    expect(wrapper.get('[data-testid="call-outcome-saved"]').text()).toBe('Outcome saved — busy')
+  })
+
+  it.each([
+    [new ApiError(409, 'invalid_call_state'), "The call hasn't finished yet."],
+    [new ApiError(422, 'no_contact_attempt'), "There's no contact attempt to set an outcome on."],
+    [new ApiError(409, 'correction_conflict'), 'This outcome was just changed — refreshed.'],
+    [new ApiError(500, 'internal_error'), 'Could not save the outcome.'],
+  ])('renders the §10 copy for %s and keeps the prompt open', async (failure, message) => {
+    const { wrapper, queryClient } = await answeredCallEnded({ outcome: failure })
+    await queryClient.invalidateQueries({ queryKey: queryKeys.call(ORG_ID, CALL_ID) })
+    await flushPromises()
+    const personGets = () => requests().filter((r) => r === `GET /people/${PERSON_ID}`).length
+    const before = personGets()
+    await wrapper.get('[data-outcome="busy"]').trigger('click')
+    await wrapper.get('[data-testid="call-outcome-save"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="call-outcome-error"]').text()).toBe(message)
+    expect(wrapper.find('[data-testid="outcome-picker"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="call-outcome-save"]').attributes('disabled')).toBeUndefined()
+    // correction_conflict refetches the Person (history) — the others do not.
+    expect(personGets() > before).toBe(failure.code === 'correction_conflict')
+  })
+
+  it('forced choice: nothing pre-selected, no Skip or Done, Save disabled until a pick even once the server is terminal', async () => {
+    const { wrapper, queryClient } = await answeredCallEnded()
+    await queryClient.invalidateQueries({ queryKey: queryKeys.call(ORG_ID, CALL_ID) })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="outcome-picker"] [aria-checked="true"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="call-outcome-skip"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="call-dismiss"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="call-panel"]').text()).not.toContain('Skip')
+    expect(wrapper.get('[data-testid="call-outcome-save"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('[data-testid="call-outcome-finishing"]').exists()).toBe(false)
+    await wrapper.get('[data-outcome="wrong_number"]').trigger('click')
+    expect(wrapper.get('[data-testid="call-outcome-save"]').attributes('disabled')).toBeUndefined()
+    expect(requests().some((r) => r.endsWith('/outcome'))).toBe(false)
+    expect(wrapper.find('[data-testid="call-panel"]').exists()).toBe(true)
+  })
+
+  it('shows "Finishing up…" under a disabled Save and a follow-up GET enables it without a realtime event', async () => {
+    const { wrapper } = await answeredCallEnded()
+    await wrapper.get('[data-outcome="reached"]').trigger('click')
+    expect(wrapper.get('[data-testid="call-outcome-finishing"]').text()).toBe('Finishing up…')
+    const getCount = () => requests().filter((r) => r === `GET /calls/${CALL_ID}`).length
+    expect(getCount()).toBe(0)
+    await new Promise((resolve) => setTimeout(resolve, 1100))
+    await flushPromises()
+    expect(getCount()).toBeGreaterThanOrEqual(1)
+    expect(wrapper.get('[data-testid="call-outcome-save"]').attributes('disabled')).toBeUndefined()
+    expect(wrapper.find('[data-testid="call-outcome-finishing"]').exists()).toBe(false)
+  })
+
+  it('a call that never reached the callee gets Done, not the prompt', async () => {
+    stubApi(detail([PHONE_A]), { settledHangup: callView({ status: 'failed', failure_reason: 'cancelled', ringing_at: null }) })
+    const { wrapper } = await mountView()
+    await wrapper.get('[data-testid="call-button"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="call-hangup"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="call-outcome-prompt"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="call-dismiss"]').exists()).toBe(true)
+  })
+})
+
+function completedEntry(
+  id: string,
+  detail: Partial<CallCompletedDetail> = {},
+  actor: { id: string; display_name: string } | null = { id: 'u-alice', display_name: 'Alice' },
+): HistoryEntry {
+  return {
+    kind: 'call_completed',
+    id,
+    occurred_at: '2026-08-22T10:00:05.000Z',
+    recorded_at: '2026-08-22T10:00:05.000Z',
+    actor,
+    origin: 'system',
+    correlation_id: 'corr',
+    detail: { call_id: CALL_ID, outcome: 'reached', talk_seconds: 7, answered_at: 'x', ...detail },
+  }
+}
+
+/** The open outcome dialog's heading (PrimeVue teleports it to body). */
+function dialogTitle(): string | undefined {
+  return document.querySelector('[role="dialog"] h2')?.textContent?.trim()
+}
+
+/** The History rows as [summary, sub-line] pairs, in render order. */
+function historyRows(wrapper: Awaited<ReturnType<typeof mountView>>['wrapper']): Array<[string, string]> {
+  return wrapper
+    .findAll('li')
+    .filter((li) => li.find('p.text-body').exists())
+    .map((li) => [li.get('p.text-body').text(), li.get('p.text-small').text().replace(/\s+/g, ' ')])
+}
+
+describe('PersonDetailView — one row per call (SLICE_006c §5a, D-033)', () => {
+  it('an answered call with an agent choice is one row naming the choice and the duration — no note', async () => {
+    // §2 order: automatic attempt → call_completed → the agent's choice;
+    // the choice is not adjacent to its root.
+    stubApi(
+      detail(
+        [PHONE_A],
+        [
+          attemptEntry(ATTEMPT_ID, { outcome: 'reached', superseded: true }),
+          completedEntry('h-completed'),
+          attemptEntry('att-2', { outcome: 'left_message', corrects_id: ATTEMPT_ID }),
+        ],
+      ),
+    )
+    const { wrapper } = await mountView()
+    const rows = historyRows(wrapper)
+    expect(rows).toEqual([['Call — voicemail, 7 s', expect.stringMatching(/^Alice · [^·]+$/)]])
+    expect(wrapper.find('[data-testid="correction-note"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('superseded')
+    expect(wrapper.text()).not.toContain('corrected')
+    expect(wrapper.text()).not.toContain('Contact attempted')
+    expect(wrapper.text()).not.toContain('outcome needed')
+    expect(wrapper.get('[data-testid="change-outcome"]').text()).toBe('Change outcome')
+  })
+
+  it('an answered call without a choice reads "Call — 7 s · outcome needed" and never the system\'s word', async () => {
+    stubApi(detail([PHONE_A], [attemptEntry(ATTEMPT_ID, { outcome: 'reached' }), completedEntry('h-completed', { talk_seconds: 72 })]))
+    const { wrapper } = await mountView()
+    expect(historyRows(wrapper)).toEqual([['Call — 1 min 12 s · outcome needed', expect.stringMatching(/^Alice · [^·]+$/)]])
+    expect(wrapper.text()).not.toContain('talked to them')
+    expect(wrapper.text()).not.toContain('reached')
+    expect(wrapper.get('[data-testid="change-outcome"]').text()).toBe('Set outcome')
+  })
+
+  it('a not-answered call without a choice reads "Call · outcome needed"', async () => {
+    stubApi(
+      detail(
+        [PHONE_A],
+        [
+          attemptEntry(ATTEMPT_ID, { outcome: 'no_answer' }),
+          completedEntry('h-completed', { outcome: 'ring_timeout', talk_seconds: null, answered_at: null }),
+        ],
+      ),
+    )
+    const { wrapper } = await mountView()
+    expect(historyRows(wrapper).map(([summary]) => summary)).toEqual(['Call · outcome needed'])
+    expect(wrapper.text()).not.toContain('no answer')
+    expect(wrapper.get('[data-testid="change-outcome"]').text()).toBe('Set outcome')
+  })
+
+  it('a chain: the head of the chain is the outcome', async () => {
+    stubApi(
+      detail(
+        [PHONE_A],
+        [
+          attemptEntry(ATTEMPT_ID, { outcome: 'reached', superseded: true }),
+          completedEntry('h-completed'),
+          attemptEntry('att-2', { outcome: 'left_message', corrects_id: ATTEMPT_ID, superseded: true }),
+          attemptEntry('att-3', { outcome: 'wrong_number', corrects_id: 'att-2' }),
+        ],
+      ),
+    )
+    const { wrapper } = await mountView()
+    const rows = historyRows(wrapper)
+    expect(rows).toHaveLength(1)
+    expect(rows[0][0]).toBe('Call — wrong number, 7 s')
+    expect(rows[0][1]).not.toContain('talked to them')
+    expect(wrapper.findAll('[data-testid="change-outcome"]')).toHaveLength(1)
+  })
+
+  it('two calls on one Person each get their own row with their own state', async () => {
+    stubApi(
+      detail(
+        [PHONE_A],
+        [
+          attemptEntry('a1', { outcome: 'no_answer', call_id: 'call-a', superseded: true }),
+          completedEntry('c-a', { call_id: 'call-a', outcome: 'busy', talk_seconds: null, answered_at: null }),
+          attemptEntry('a1-fix', { outcome: 'busy', call_id: 'call-a', corrects_id: 'a1' }),
+          attemptEntry('b1', { outcome: 'reached', call_id: 'call-b' }),
+          completedEntry('c-b', { call_id: 'call-b', talk_seconds: 40 }),
+        ],
+      ),
+    )
+    const { wrapper } = await mountView()
+    expect(historyRows(wrapper).map(([summary]) => summary)).toEqual(['Call — busy', 'Call — 40 s · outcome needed'])
+    expect(wrapper.findAll('[data-testid="change-outcome"]').map((b) => b.text())).toEqual(['Change outcome', 'Set outcome'])
+  })
+
+  it('a failed call with no attempt keeps the plain call_completed line', async () => {
+    stubApi(
+      detail([PHONE_A], [completedEntry('h-failed', { outcome: 'provider_error', talk_seconds: null, answered_at: null })]),
+    )
+    const { wrapper } = await mountView()
+    expect(historyRows(wrapper)).toEqual([['Call — failed', expect.stringMatching(/^Alice · [^·]+$/)]])
+    expect(wrapper.find('[data-testid="change-outcome"]').exists()).toBe(false)
+  })
+
+  it('manual attempts render as before, alongside a call row', async () => {
+    stubApi(
+      detail(
+        [PHONE_A],
+        [
+          attemptEntry('manual', { call_id: null, channel: 'text', outcome: 'sent' }),
+          attemptEntry(ATTEMPT_ID, { outcome: 'no_answer', superseded: true }),
+          completedEntry('h-completed', { outcome: 'no_answer', talk_seconds: null, answered_at: null }),
+          attemptEntry('att-2', { outcome: 'no_answer', corrects_id: ATTEMPT_ID }),
+        ],
+      ),
+    )
+    const { wrapper } = await mountView()
+    expect(historyRows(wrapper).map(([summary]) => summary)).toEqual(['Contact attempted — text, sent', 'Call — no answer'])
+  })
+
+  it('a call-derived attempt without a call_completed row falls back to its own row', async () => {
+    stubApi(detail([PHONE_A], [attemptEntry(ATTEMPT_ID, { outcome: 'no_answer' })]))
+    const { wrapper } = await mountView()
+    expect(historyRows(wrapper).map(([summary]) => summary)).toEqual(['Contact attempted — call, no answer'])
+  })
+})
+
+describe('PersonDetailView — Set / Change outcome (SLICE_006c §1 step 7, §5a)', () => {
+  it('sits on the call row, only when the caller is me and an effective attempt exists', async () => {
+    stubApi(
+      detail(
+        [PHONE_A],
+        [
+          attemptEntry('mine', { call_id: 'call-mine' }),
+          completedEntry('c-mine', { call_id: 'call-mine' }),
+          attemptEntry('manual', { call_id: null }),
+          completedEntry('c-no-attempt', { call_id: 'call-no-attempt', outcome: 'expired', talk_seconds: null, answered_at: null }),
+          attemptEntry('carols', { call_id: 'call-carol' }, { id: 'u-carol', display_name: 'Carol' }),
+          completedEntry('c-carol', { call_id: 'call-carol' }, { id: 'u-carol', display_name: 'Carol' }),
+        ],
+      ),
+    )
+    const { wrapper } = await mountView()
+    const rows = historyRows(wrapper)
+    expect(rows.map(([summary]) => summary)).toEqual([
+      'Call — 7 s · outcome needed',
+      'Contact attempted — call, reached',
+      'Call — failed',
+      'Call — 7 s · outcome needed',
+    ])
+    const items = wrapper.findAll('li').filter((li) => li.find('p.text-body').exists())
+    expect(items.map((li) => li.findAll('[data-testid="change-outcome"]').length)).toEqual([1, 0, 0, 0])
+  })
+
+  it('Change outcome opens the picker on the current choice and posts to /calls/{call_id}/outcome', async () => {
+    stubApi(
+      detail(
+        [PHONE_A],
+        [
+          attemptEntry(ATTEMPT_ID, { outcome: 'reached', superseded: true }),
+          completedEntry('h-completed'),
+          attemptEntry('att-2', { outcome: 'no_answer', corrects_id: ATTEMPT_ID }),
+        ],
+      ),
+    )
+    const { wrapper } = await mountView()
+    const action = wrapper.get('[data-testid="change-outcome"]')
+    expect(action.classes()).toContain('bg-transparent')
+    expect(action.text()).toBe('Change outcome')
+    await action.trigger('click')
+    await flushPromises()
+    expect(dialogTitle()).toBe('Change outcome')
+    const picker = document.querySelector('[data-testid="outcome-picker"]')
+    expect(picker).not.toBeNull()
+    expect(picker?.querySelector('[aria-checked="true"]')?.getAttribute('data-outcome')).toBe('no_answer')
+    ;(picker?.querySelector('[data-outcome="busy"]') as HTMLButtonElement).click()
+    await flushPromises()
+    ;(document.querySelector('[data-testid="change-outcome-save"]') as HTMLButtonElement).click()
+    await flushPromises()
+    const post = apiFetchMock.mock.calls.find(([path]) => path === `/calls/${CALL_ID}/outcome`)
+    expect(JSON.parse(String(post?.[1]?.body))).toEqual({ outcome: 'busy' })
+    expect(document.querySelector('[data-testid="outcome-picker"]')).toBeNull()
+  })
+
+  it('Set outcome on an incomplete call opens with nothing selected, Save disabled until a pick, Cancel kept', async () => {
+    stubApi(detail([PHONE_A], [attemptEntry(ATTEMPT_ID, { outcome: 'reached' }), completedEntry('h-completed')]))
+    const { wrapper } = await mountView()
+    const action = wrapper.get('[data-testid="change-outcome"]')
+    expect(action.text()).toBe('Set outcome')
+    await action.trigger('click')
+    await flushPromises()
+    expect(dialogTitle()).toBe('Set outcome')
+    const picker = document.querySelector('[data-testid="outcome-picker"]')
+    expect(picker?.querySelector('[aria-checked="true"]')).toBeNull()
+    const save = document.querySelector('[data-testid="change-outcome-save"]') as HTMLButtonElement
+    expect(save.disabled).toBe(true)
+    expect(document.querySelector('[data-testid="change-outcome-cancel"]')).not.toBeNull()
+    ;(picker?.querySelector('[data-outcome="left_message"]') as HTMLButtonElement).click()
+    await flushPromises()
+    expect(save.disabled).toBe(false)
+    save.click()
+    await flushPromises()
+    const post = apiFetchMock.mock.calls.find(([path]) => path === `/calls/${CALL_ID}/outcome`)
+    expect(JSON.parse(String(post?.[1]?.body))).toEqual({ outcome: 'left_message' })
+    expect(document.querySelector('[data-testid="outcome-picker"]')).toBeNull()
+  })
+
+  it('is disabled while the post-call prompt is open (one primary)', async () => {
+    stubApi(detail([PHONE_A], [attemptEntry(ATTEMPT_ID, {}), completedEntry('h-completed')]), {
+      settledHangup: callView({ status: 'ended', end_reason: 'remote_hangup', answered_at: 'x' }),
+    })
+    const { wrapper, rooms } = await mountView()
+    expect(wrapper.get('[data-testid="change-outcome"]').attributes('disabled')).toBeUndefined()
+    await wrapper.get('[data-testid="call-button"]').trigger('click')
+    await flushPromises()
+    rooms[0].emit('participantConnected', { identity: `sip:${CALL_ID}`, attributes: { 'sip.callStatus': 'active' } })
+    await flushPromises()
+    rooms[0].emit('participantDisconnected', { identity: `sip:${CALL_ID}`, attributes: {} })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="call-outcome-prompt"]').exists()).toBe(true)
+    const action = wrapper.get('[data-testid="change-outcome"]')
+    expect(action.attributes('disabled')).toBeDefined()
+    action.element.removeAttribute('disabled')
+    await action.trigger('click')
+    await flushPromises()
+    expect(document.querySelector('[data-testid="change-outcome-save"]')).toBeNull()
+    expect(wrapper.findAll('.bg-accent')).toHaveLength(1)
+    // Only a saved outcome releases the prompt (no Skip).
+    await wrapper.get('[data-outcome="reached"]').trigger('click')
+    await wrapper.get('[data-testid="call-outcome-save"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="call-dismiss"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="change-outcome"]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('re-seeds the picker when reopened on a different call row (chosen → incomplete)', async () => {
+    stubApi(
+      detail(
+        [PHONE_A],
+        [
+          attemptEntry('a1', { outcome: 'reached', call_id: 'call-a', superseded: true }),
+          completedEntry('c-a', { call_id: 'call-a' }),
+          attemptEntry('a1-fix', { outcome: 'no_answer', call_id: 'call-a', corrects_id: 'a1' }),
+          attemptEntry('b1', { outcome: 'reached', call_id: 'call-b' }),
+          completedEntry('c-b', { call_id: 'call-b' }),
+        ],
+      ),
+    )
+    const { wrapper } = await mountView()
+    const actions = wrapper.findAll('[data-testid="change-outcome"]')
+    expect(actions.map((a) => a.text())).toEqual(['Change outcome', 'Set outcome'])
+    const checkedOutcome = () =>
+      document.querySelector('[data-testid="outcome-picker"] [aria-checked="true"]')?.getAttribute('data-outcome')
+    await actions[0].trigger('click')
+    await flushPromises()
+    expect(checkedOutcome()).toBe('no_answer')
+    ;(document.querySelector('[data-testid="outcome-picker"] [data-outcome="busy"]') as HTMLButtonElement).click()
+    await flushPromises()
+    expect(checkedOutcome()).toBe('busy')
+    ;(document.querySelector('[data-testid="change-outcome-cancel"]') as HTMLButtonElement).click()
+    await flushPromises()
+    await actions[1].trigger('click')
+    await flushPromises()
+    expect(checkedOutcome()).toBeUndefined()
+  })
+
+  it('shows the §10 copy inside the dialog on failure', async () => {
+    stubApi(detail([PHONE_A], [attemptEntry(ATTEMPT_ID, {}), completedEntry('h-completed')]), {
+      outcome: new ApiError(422, 'no_contact_attempt'),
+    })
+    const { wrapper } = await mountView()
+    await wrapper.get('[data-testid="change-outcome"]').trigger('click')
+    await flushPromises()
+    ;(document.querySelector('[data-testid="outcome-picker"] [data-outcome="busy"]') as HTMLButtonElement).click()
+    await flushPromises()
+    ;(document.querySelector('[data-testid="change-outcome-save"]') as HTMLButtonElement).click()
+    await flushPromises()
+    expect(document.querySelector('[data-testid="change-outcome-error"]')?.textContent?.trim()).toBe(
+      "There's no contact attempt to set an outcome on.",
+    )
+  })
+})
+
+describe('PersonDetailView — Today → Person ?outcome=<call_id> (SLICE_006c §5a)', () => {
+  const incomplete = () => detail([PHONE_A], [attemptEntry(ATTEMPT_ID, { outcome: 'reached' }), completedEntry('h-completed')])
+
+  it('opens the Set-outcome dialog for that call with nothing selected; Save closes it and clears the param', async () => {
+    stubApi(incomplete())
+    const { router } = await mountView(`?outcome=${CALL_ID}`)
+    expect(dialogTitle()).toBe('Set outcome')
+    const picker = document.querySelector('[data-testid="outcome-picker"]')
+    expect(picker).not.toBeNull()
+    expect(picker?.querySelector('[aria-checked="true"]')).toBeNull()
+    expect(router.currentRoute.value.query.outcome).toBe(CALL_ID)
+    ;(picker?.querySelector('[data-outcome="no_answer"]') as HTMLButtonElement).click()
+    await flushPromises()
+    ;(document.querySelector('[data-testid="change-outcome-save"]') as HTMLButtonElement).click()
+    await flushPromises()
+    const post = apiFetchMock.mock.calls.find(([path]) => path === `/calls/${CALL_ID}/outcome`)
+    expect(JSON.parse(String(post?.[1]?.body))).toEqual({ outcome: 'no_answer' })
+    expect(document.querySelector('[data-testid="outcome-picker"]')).toBeNull()
+    expect(router.currentRoute.value.query.outcome).toBeUndefined()
+    expect(router.currentRoute.value.path).toBe(`/people/${PERSON_ID}`)
+  })
+
+  it('Cancel closes the dialog and clears the param without a request', async () => {
+    stubApi(incomplete())
+    const { router } = await mountView(`?outcome=${CALL_ID}`)
+    expect(document.querySelector('[data-testid="outcome-picker"]')).not.toBeNull()
+    ;(document.querySelector('[data-testid="change-outcome-cancel"]') as HTMLButtonElement).click()
+    await flushPromises()
+    expect(document.querySelector('[data-testid="outcome-picker"]')).toBeNull()
+    expect(router.currentRoute.value.query.outcome).toBeUndefined()
+    expect(requests().some((r) => r.endsWith('/outcome'))).toBe(false)
+  })
+
+  it('an unknown call id (or one I cannot act on) just clears the param', async () => {
+    stubApi(incomplete())
+    const { router } = await mountView('?outcome=not-a-call')
+    expect(document.querySelector('[data-testid="outcome-picker"]')).toBeNull()
+    expect(router.currentRoute.value.query.outcome).toBeUndefined()
+  })
+
+  it('a call with an existing choice opens as "Change outcome" with that choice pre-selected', async () => {
+    stubApi(
+      detail(
+        [PHONE_A],
+        [
+          attemptEntry(ATTEMPT_ID, { outcome: 'reached', superseded: true }),
+          completedEntry('h-completed'),
+          attemptEntry('att-fix', { outcome: 'no_answer', corrects_id: ATTEMPT_ID }),
+        ],
+      ),
+    )
+    const { router } = await mountView(`?outcome=${CALL_ID}`)
+    expect(dialogTitle()).toBe('Change outcome')
+    expect(
+      document.querySelector('[data-testid="outcome-picker"] [aria-checked="true"]')?.getAttribute('data-outcome'),
+    ).toBe('no_answer')
+    expect(router.currentRoute.value.query.outcome).toBe(CALL_ID)
+  })
+
+  it('does not clear the param while a refetch is in flight; the settled fetch decides', async () => {
+    // Stale cache without the call row (a prior visit, before the call); the
+    // refetch on mount carries the incomplete call. The param must survive
+    // the stale render and open the dialog once the fetch settles.
+    stubApi(incomplete())
+    const { router } = await mountView(`?outcome=${CALL_ID}`, detail([PHONE_A]))
+    expect(dialogTitle()).toBe('Set outcome')
+    expect(router.currentRoute.value.query.outcome).toBe(CALL_ID)
+  })
+})
+
+describe('PersonDetailView — Log contact dialog vocabulary (SLICE_006c §1)', () => {
+  it('offers Voicemail / left message, Busy and Wrong number', async () => {
+    stubApi(detail([PHONE_A]))
+    const { wrapper } = await mountView()
+    await wrapper.get('[data-testid="log-contact"]').trigger('click')
+    await flushPromises()
+    const outcome = document.querySelector('[aria-label="Outcome"]') as HTMLElement
+    outcome.click()
+    await flushPromises()
+    const labels = Array.from(document.querySelectorAll('[role="option"]')).map((o) => o.textContent?.trim())
+    expect(labels).toEqual(['Reached', 'No answer', 'Voicemail / left message', 'Sent', 'Busy', 'Wrong number'])
   })
 })

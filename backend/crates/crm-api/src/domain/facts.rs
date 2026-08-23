@@ -136,11 +136,20 @@ pub struct ContactAttemptedFact<'a> {
     pub person_id: Uuid,
     pub channel: &'a str,
     pub outcome: &'a str,
+    /// The row this one supersedes (docs/specs/SLICE_006c.md §2): set only
+    /// by `correct_call_outcome`; `None` for every original attempt.
+    pub corrects_id: Option<Uuid>,
+    /// `None` → the column default (`now()`, transaction start).
+    /// `correct_call_outcome` passes `clock_timestamp()` taken after the
+    /// call lock so a correction's `recorded_at` is strictly later than
+    /// its head's (SLICE_006c §2).
+    pub recorded_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// The fifth typed fact table (docs/specs/SLICE_003.md §2, D-022): a
 /// contact attempt is a real-world event with historical meaning, written
-/// by `LogContactAttempt`.
+/// by `LogContactAttempt`, by `settle` (D-031), and — as a correction row
+/// with `corrects_id` — by `correct_call_outcome` (SLICE_006c §2).
 pub async fn insert_contact_attempted(
     tx: &mut PgConnection,
     envelope: &FactEnvelope,
@@ -152,8 +161,8 @@ pub async fn insert_contact_attempted(
         r#"INSERT INTO contact_attempted
             (organization_id, actor_kind, actor_user_id, on_behalf_of_user_id, origin,
              occurred_at, correlation_id, causation_id,
-             person_id, channel, outcome)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+             person_id, channel, outcome, corrects_id, recorded_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,COALESCE($13, now()))
            RETURNING id"#,
         envelope.organization_id,
         actor_kind,
@@ -166,6 +175,8 @@ pub async fn insert_contact_attempted(
         fact.person_id,
         fact.channel,
         fact.outcome,
+        fact.corrects_id,
+        fact.recorded_at,
     )
     .fetch_one(tx)
     .await?;

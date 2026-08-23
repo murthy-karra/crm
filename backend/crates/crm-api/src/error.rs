@@ -59,6 +59,13 @@ pub enum ApiError {
     TelephonyDisabled,
     /// The provider failed (room creation).
     TelephonyUnavailable,
+    // --- Slice 006c (docs/specs/SLICE_006c.md §5) ----------------------
+    /// `POST /api/calls/{id}/outcome` on a call with no attempt to correct
+    /// (nothing reached the callee).
+    NoContactAttempt,
+    /// The head attempt was corrected concurrently by a writer outside
+    /// the call lock (the partial unique index).
+    CorrectionConflict,
 }
 
 impl IntoResponse for ApiError {
@@ -119,6 +126,10 @@ impl IntoResponse for ApiError {
                 "telephony_unavailable",
                 None,
             ),
+            ApiError::NoContactAttempt => {
+                (StatusCode::UNPROCESSABLE_ENTITY, "no_contact_attempt", None)
+            }
+            ApiError::CorrectionConflict => (StatusCode::CONFLICT, "correction_conflict", None),
         };
 
         let body = Json(json!({ "error": code }));
@@ -175,7 +186,8 @@ impl From<AdminCommandError> for ApiError {
 }
 
 /// `CallError` -> `ApiError` for the Slice 006 call routes
-/// (docs/specs/SLICE_006.md §5, §9).
+/// (docs/specs/SLICE_006.md §5, §9) and the Slice 006c outcome route
+/// (docs/specs/SLICE_006c.md §5).
 impl From<CallError> for ApiError {
     fn from(err: CallError) -> Self {
         match err {
@@ -185,8 +197,57 @@ impl From<CallError> for ApiError {
             CallError::InvalidCallState => ApiError::InvalidCallState,
             CallError::Forbidden => ApiError::Forbidden,
             CallError::TelephonyUnavailable => ApiError::TelephonyUnavailable,
+            CallError::NoContactAttempt => ApiError::NoContactAttempt,
+            CallError::CorrectionConflict => ApiError::CorrectionConflict,
             CallError::Corrupt => ApiError::InternalError,
             CallError::Database(_) => ApiError::Unavailable,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::http::StatusCode;
+    use axum::response::IntoResponse;
+    use http_body_util::BodyExt;
+
+    use super::ApiError;
+    use crate::domain::commands::CallError;
+
+    async fn status_and_code(err: ApiError) -> (StatusCode, String) {
+        let response = err.into_response();
+        let status = response.status();
+        let bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        (status, body["error"].as_str().unwrap().to_string())
+    }
+
+    /// docs/specs/SLICE_006c.md §5: the two new variants and their
+    /// `CallError` sources.
+    #[tokio::test]
+    async fn slice_006c_error_codes() {
+        assert_eq!(
+            status_and_code(CallError::NoContactAttempt.into()).await,
+            (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "no_contact_attempt".into()
+            )
+        );
+        assert_eq!(
+            status_and_code(CallError::CorrectionConflict.into()).await,
+            (StatusCode::CONFLICT, "correction_conflict".into())
+        );
+        assert_eq!(
+            status_and_code(CallError::InvalidCallState.into()).await,
+            (StatusCode::CONFLICT, "invalid_call_state".into())
+        );
+        assert_eq!(
+            status_and_code(CallError::Forbidden.into()).await,
+            (StatusCode::FORBIDDEN, "forbidden".into())
+        );
+        assert_eq!(
+            status_and_code(CallError::CallNotFound.into()).await,
+            (StatusCode::NOT_FOUND, "not_found".into())
+        );
     }
 }

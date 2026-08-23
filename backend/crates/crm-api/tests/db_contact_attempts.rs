@@ -288,9 +288,17 @@ async fn history_sorts_contact_attempted_last_on_identical_timestamps(migrator_p
     );
 
     let contact_entry = &history[contact_attempted_index];
+    // `call_id`/`corrects_id`/`superseded` are the declared additive
+    // SLICE_006c §2 change to the `contact_attempted` history detail.
     assert_eq!(
         contact_entry["detail"],
-        json!({ "channel": "text", "outcome": "sent" })
+        json!({
+            "channel": "text",
+            "outcome": "sent",
+            "call_id": null,
+            "corrects_id": null,
+            "superseded": false,
+        })
     );
 }
 
@@ -326,4 +334,48 @@ async fn any_organization_member_may_log_a_contact_attempt(migrator_pool: PgPool
     )
     .await;
     assert_eq!(resp.status(), StatusCode::CREATED);
+}
+
+/// docs/specs/SLICE_006c.md §2: the manual route's vocabulary widens with
+/// `ContactOutcome` — `busy` and `wrong_number` are accepted and stored.
+#[sqlx::test]
+#[ignore]
+async fn manual_route_accepts_busy_and_wrong_number(migrator_pool: PgPool) {
+    let (_org_id, _alice_id) = common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Acme Realty",
+        "alice@acme.test",
+        "Alice",
+        "pw",
+    )
+    .await;
+    let router = common::build_router(&migrator_pool).await;
+    let cookie = common::login_cookie(&router, "alice@acme.test", "pw").await;
+    let person_id = create_person_with_inquiry(&router, &cookie, "lead-006c@example.com").await;
+
+    for outcome in ["busy", "wrong_number"] {
+        let resp = common::post_json_with_cookie(
+            &router,
+            &format!("/api/people/{person_id}/contact-attempts"),
+            &cookie,
+            json!({ "channel": "call", "outcome": outcome }),
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::CREATED, "{outcome}");
+        let body = common::body_json(resp).await;
+        assert_eq!(body["contact_attempt"]["outcome"], outcome);
+        let id: Uuid = body["contact_attempt"]["id"]
+            .as_str()
+            .unwrap()
+            .parse()
+            .unwrap();
+        let (stored, corrects_id): (String, Option<Uuid>) =
+            sqlx::query_as("SELECT outcome, corrects_id FROM contact_attempted WHERE id = $1")
+                .bind(id)
+                .fetch_one(&migrator_pool)
+                .await
+                .unwrap();
+        assert_eq!(stored, outcome);
+        assert!(corrects_id.is_none());
+    }
 }

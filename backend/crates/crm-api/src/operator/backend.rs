@@ -126,7 +126,19 @@ fn history_detail(entry: &HistoryEntry) -> Option<String> {
         "contact_attempted" => {
             let channel = d.get("channel").and_then(|s| s.as_str()).unwrap_or("");
             let outcome = d.get("outcome").and_then(|s| s.as_str()).unwrap_or("");
-            Some(format!("{channel}: {outcome}"))
+            // docs/specs/SLICE_006c.md §4: a superseded row is not a live
+            // attempt, and a correction is the agent's restatement.
+            let corrected = d.get("corrects_id").is_some_and(|v| !v.is_null());
+            let superseded = d.get("superseded").and_then(|v| v.as_bool()) == Some(true);
+            let mut text = if corrected {
+                format!("corrected outcome {channel}: {outcome}")
+            } else {
+                format!("{channel}: {outcome}")
+            };
+            if superseded {
+                text.push_str(" (superseded)");
+            }
+            Some(text)
         }
         _ => None,
     }

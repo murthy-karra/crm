@@ -458,7 +458,8 @@ dependency).
   `call_completed`.
 - `CallPanel.vue`: docked, status line, elapsed timer, mute, **Hang up**
   (primary while active), post-call line "Logged as contact attempt —
-  call, reached / no answer". Error copy: `telephony_disabled` →
+  call, reached / no answer" (replaced by SLICE_006c §10's "How did it
+  go?" prompt, which renders under the same condition). Error copy: `telephony_disabled` →
   "Calling is not configured on this server."; `telephony_unavailable`
   → "Calling is temporarily unavailable — try again in a moment.";
   `call_in_progress` → "You already have a call in progress." with a
@@ -523,8 +524,10 @@ and the optional LiveKit-backed test; it cannot carry PSTN media.
 Inbound calls; native mobile calling (CallKit/Telecom); recording,
 egress, transcription, summaries (O-002); Telnyx API/webhooks in the
 app; per-Organization or per-user numbers and number-ownership facts
-(thesis §5.3); SMS (O-006); call disposition/notes UI; corrections of
-auto-logged attempts; O-008 suggestions; Operator `start_call` (006b);
+(thesis §5.3); SMS (O-006); call disposition/notes UI (outcome picker added by SLICE_006c;
+notes still excluded); corrections of
+auto-logged attempts (superseded by SLICE_006c for call-derived
+attempts); O-008 suggestions; Operator `start_call` (006b);
 the `crm-app` extraction (006a); streaming/voice Operator (declared
 deferral of SLICE_005 §16); DNC/quiet-hours compliance (O-011);
 multi-pod sweep/dial coordination; TURN/TCP media fallback (UDP-blocked

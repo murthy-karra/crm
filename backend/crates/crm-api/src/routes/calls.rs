@@ -1,6 +1,8 @@
 //! The four call routes (docs/specs/SLICE_006.md §5): `start`, `dial`,
 //! `hangup` need telephony enabled (503 `telephony_disabled` otherwise);
-//! `GET /api/calls/{id}` is a read and works with telephony disabled.
+//! `GET /api/calls/{id}` is a read and works with telephony disabled — as
+//! does `POST /api/calls/{id}/outcome` (docs/specs/SLICE_006c.md §5), a
+//! pure fact write with no provider involvement.
 
 use axum::extract::rejection::JsonRejection;
 use axum::extract::{FromRequestParts, Path, State};
@@ -14,7 +16,7 @@ use serde_json::json;
 use uuid::Uuid;
 
 use crate::auth::AuthContext;
-use crate::domain::commands::{self, StartCall};
+use crate::domain::commands::{self, CallOutcomeCorrection, CorrectCallOutcome, StartCall};
 use crate::domain::envelope::CommandContext;
 use crate::domain::telephony::queries as call_queries;
 use crate::error::ApiError;
@@ -25,6 +27,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/people/{id}/calls", post(start_call))
         .route("/api/calls/{id}/dial", post(dial_call))
         .route("/api/calls/{id}/hangup", post(hangup_call))
+        .route("/api/calls/{id}/outcome", post(correct_outcome))
         .route("/api/calls/{id}", get(get_call))
 }
 
@@ -127,6 +130,41 @@ async fn hangup_call(
 
     let call = commands::hangup_call(pool, &state.publisher, telephony, &ctx, call_id).await?;
     Ok(Json(json!({ "call": call })))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CorrectOutcomeRequest {
+    outcome: CallOutcomeCorrection,
+}
+
+/// `POST /api/calls/{id}/outcome` → 200 `{"attempt": CorrectedAttemptRef,
+/// "changed"}` (docs/specs/SLICE_006c.md §5). Any value outside the five
+/// (including `sent`) is a serde rejection → 400 `malformed_request`.
+/// Needs the database, not telephony.
+async fn correct_outcome(
+    State(state): State<AppState>,
+    PathId(call_id): PathId,
+    auth: AuthContext,
+    body: Result<Json<CorrectOutcomeRequest>, JsonRejection>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let Json(req) = body.map_err(|_| ApiError::MalformedRequest)?;
+    let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
+    let ctx = CommandContext::from_auth(&auth);
+
+    let result = commands::correct_call_outcome(
+        pool,
+        &state.publisher,
+        &ctx,
+        CorrectCallOutcome {
+            call_id,
+            outcome: req.outcome,
+        },
+    )
+    .await?;
+    Ok(Json(
+        json!({ "attempt": result.attempt, "changed": result.changed }),
+    ))
 }
 
 /// `GET /api/calls/{id}` → 200 `{"call"}` for any member; 404 foreign.

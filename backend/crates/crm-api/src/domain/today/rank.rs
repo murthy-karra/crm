@@ -6,7 +6,9 @@
 
 use chrono::{DateTime, Utc};
 
-use super::model::{RecommendedAction, TodayCandidate, TodayItem, TodayPriority, TodayReason};
+use super::model::{
+    OutcomeNeededCall, RecommendedAction, TodayCandidate, TodayItem, TodayPriority, TodayReason,
+};
 
 /// `now` is accepted for interface symmetry with `queries::candidates`
 /// (and so a future reason needing "now" for explanatory text has
@@ -20,33 +22,50 @@ pub fn rank(candidates: Vec<TodayCandidate>, now: DateTime<Utc>) -> Vec<TodayIte
 fn rank_one(candidate: TodayCandidate) -> TodayItem {
     let mut reasons = Vec::new();
 
-    // Fixed order (§3): new_inquiry (if fresh), no_contact_attempt
-    // (always), repeat_inquiry (if inquiry_count >= 2).
-    if candidate.fresh {
-        reasons.push(TodayReason::NewInquiry {
-            source: candidate.latest_inquiry.source.clone(),
-            received_at: candidate.latest_inquiry.received_at,
-        });
-    }
-    reasons.push(TodayReason::NoContactAttempt {
-        since: candidate.waiting_since,
-    });
-    if candidate.inquiry_count >= 2 {
-        reasons.push(TodayReason::RepeatInquiry {
-            inquiry_count: candidate.inquiry_count,
-        });
-    }
+    // A Person qualifying only through an outcome-needed call (D-033;
+    // docs/specs/SLICE_006c.md §5a) is the lowest tier with that single
+    // reason. A Person qualifying both ways keeps the Inquiry tier and
+    // gets the reason appended. `by_inquiry` is trusted as the SQL's
+    // verdict; a candidate with neither source cannot come out of the
+    // query, and is treated as Inquiry-based rather than invented as low.
+    let low_only = !candidate.by_inquiry && candidate.outcome_needed.is_some();
 
-    let priority = if candidate.fresh {
-        TodayPriority::High
+    let (priority, recommended_action) = if low_only {
+        (TodayPriority::Low, RecommendedAction::SetOutcome)
     } else {
-        TodayPriority::Normal
+        // Fixed order (§3): new_inquiry (if fresh), no_contact_attempt
+        // (always), repeat_inquiry (if inquiry_count >= 2).
+        if candidate.fresh {
+            reasons.push(TodayReason::NewInquiry {
+                source: candidate.latest_inquiry.source.clone(),
+                received_at: candidate.latest_inquiry.received_at,
+            });
+        }
+        reasons.push(TodayReason::NoContactAttempt {
+            since: candidate.waiting_since,
+        });
+        if candidate.inquiry_count >= 2 {
+            reasons.push(TodayReason::RepeatInquiry {
+                inquiry_count: candidate.inquiry_count,
+            });
+        }
+        let priority = if candidate.fresh {
+            TodayPriority::High
+        } else {
+            TodayPriority::Normal
+        };
+        let recommended_action = if candidate.person.primary_phone.is_some() {
+            RecommendedAction::Call
+        } else {
+            RecommendedAction::Email
+        };
+        (priority, recommended_action)
     };
-    let recommended_action = if candidate.person.primary_phone.is_some() {
-        RecommendedAction::Call
-    } else {
-        RecommendedAction::Email
-    };
+
+    // `call_outcome_needed` is always last.
+    if let Some(OutcomeNeededCall { call_id, ended_at }) = candidate.outcome_needed {
+        reasons.push(TodayReason::CallOutcomeNeeded { call_id, ended_at });
+    }
 
     TodayItem {
         person: candidate.person,
@@ -106,7 +125,21 @@ mod tests {
             waiting_since: ts(9),
             inquiry_count,
             fresh,
+            by_inquiry: true,
+            outcome_needed: None,
         }
+    }
+
+    fn reason_codes(item: &TodayItem) -> Vec<&'static str> {
+        item.reasons
+            .iter()
+            .map(|r| match r {
+                TodayReason::NewInquiry { .. } => "new_inquiry",
+                TodayReason::NoContactAttempt { .. } => "no_contact_attempt",
+                TodayReason::RepeatInquiry { .. } => "repeat_inquiry",
+                TodayReason::CallOutcomeNeeded { .. } => "call_outcome_needed",
+            })
+            .collect()
     }
 
     #[test]
@@ -158,19 +191,72 @@ mod tests {
     #[test]
     fn reason_order_is_fixed_new_inquiry_then_no_contact_then_repeat() {
         let items = rank(vec![candidate(true, 2, None)], ts(12));
-        let codes: Vec<&str> = items[0]
-            .reasons
-            .iter()
-            .map(|r| match r {
-                TodayReason::NewInquiry { .. } => "new_inquiry",
-                TodayReason::NoContactAttempt { .. } => "no_contact_attempt",
-                TodayReason::RepeatInquiry { .. } => "repeat_inquiry",
-            })
-            .collect();
         assert_eq!(
-            codes,
+            reason_codes(&items[0]),
             vec!["new_inquiry", "no_contact_attempt", "repeat_inquiry"]
         );
+    }
+
+    #[test]
+    fn call_only_candidate_is_low_set_outcome_with_the_single_reason() {
+        let call_id = Uuid::new_v4();
+        let mut c = candidate(false, 2, Some("+15555550100"));
+        c.by_inquiry = false;
+        c.waiting_since = ts(11);
+        c.outcome_needed = Some(OutcomeNeededCall {
+            call_id,
+            ended_at: ts(11),
+        });
+        let items = rank(vec![c], ts(12));
+        let item = &items[0];
+        assert_eq!(item.priority, TodayPriority::Low);
+        assert_eq!(item.recommended_action, RecommendedAction::SetOutcome);
+        assert_eq!(
+            item.reasons,
+            vec![TodayReason::CallOutcomeNeeded {
+                call_id,
+                ended_at: ts(11)
+            }]
+        );
+        assert_eq!(item.waiting_since, ts(11));
+    }
+
+    #[test]
+    fn both_ways_candidate_keeps_the_inquiry_tier_and_appends_the_reason_last() {
+        let call_id = Uuid::new_v4();
+        let mut c = candidate(true, 2, Some("+15555550100"));
+        c.outcome_needed = Some(OutcomeNeededCall {
+            call_id,
+            ended_at: ts(8),
+        });
+        let items = rank(vec![c], ts(12));
+        let item = &items[0];
+        assert_eq!(item.priority, TodayPriority::High);
+        assert_eq!(item.recommended_action, RecommendedAction::Call);
+        assert_eq!(
+            reason_codes(item),
+            vec![
+                "new_inquiry",
+                "no_contact_attempt",
+                "repeat_inquiry",
+                "call_outcome_needed"
+            ]
+        );
+        assert_eq!(item.waiting_since, ts(9));
+    }
+
+    #[test]
+    fn fresh_is_not_consulted_for_a_call_only_candidate() {
+        // The SQL already forces `fresh = false` off-Inquiry; even if it
+        // did not, a call-only candidate must never become high.
+        let mut c = candidate(true, 1, None);
+        c.by_inquiry = false;
+        c.outcome_needed = Some(OutcomeNeededCall {
+            call_id: Uuid::new_v4(),
+            ended_at: ts(11),
+        });
+        let items = rank(vec![c], ts(12));
+        assert_eq!(items[0].priority, TodayPriority::Low);
     }
 
     #[test]

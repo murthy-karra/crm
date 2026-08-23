@@ -100,10 +100,12 @@ impl CommandContext {
 ///
 /// `causation_id` semantics per fact: `assignment_changed.causation_id` =
 /// the `routing_decision.id` on intake (SLICE_002 §2);
-/// `contact_attempted.causation_id` = the `call.id` when the attempt was
-/// written automatically by a call (D-031, docs/specs/SLICE_006.md §2) and
-/// NULL when logged by hand; `call_completed.causation_id` = the
-/// `call.id` likewise. Every call-derived fact keeps the caller as the
+/// `contact_attempted.causation_id` = the `call.id` when written by or
+/// about a call — the automatic attempt (D-031, docs/specs/SLICE_006.md
+/// §2) and any correction of it (`corrects_id` set, docs/specs/SLICE_006c.md
+/// §2; the correction keeps `causation_id = call.id` so "all facts for this
+/// call" stays one lookup) — and NULL when logged by hand;
+/// `call_completed.causation_id` = the `call.id` likewise. Every call-derived fact keeps the caller as the
 /// actor (`actor_kind = 'user'`, `actor_user_id = caller_user_id`), the
 /// call's `origin`, and the call's `correlation_id` — the provider merely
 /// reports.

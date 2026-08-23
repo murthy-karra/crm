@@ -663,3 +663,88 @@ async fn client_supplied_viewer_or_organization_is_ignored(migrator_pool: PgPool
     );
     assert_eq!(items[0]["person"]["id"], person_id.to_string());
 }
+
+/// docs/specs/SLICE_006c.md §3: `last_contact_attempt` is the
+/// **effective** row. A correction inherits its original's `occurred_at`,
+/// so only the `NOT EXISTS corrector` filter keeps the `id DESC` tie-break
+/// from picking original or correction at random. Deterministic: the ids
+/// are chosen so the original's sorts *higher* — exactly the pair the old
+/// `id DESC` tie-break would get wrong.
+#[sqlx::test]
+#[ignore]
+async fn last_contact_attempt_is_the_effective_row_never_a_superseded_one(migrator_pool: PgPool) {
+    let (org_id, alice_id) = common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Acme Realty",
+        "alice@acme.test",
+        "Alice",
+        "pw",
+    )
+    .await;
+    let stage_id = first_stage_id(&migrator_pool, org_id).await;
+    let attempt_at = hours_ago(48);
+    let mut expected: Vec<(Uuid, Uuid)> = Vec::new();
+    for n in 0..3u8 {
+        let person_id = insert_person(&migrator_pool, org_id, stage_id, Some(alice_id)).await;
+        insert_inquiry(&migrator_pool, org_id, person_id, "zillow", hours_ago(72)).await;
+        // Explicit ids: original `ffff…`, correction `0000…` — the original
+        // wins `id DESC`, so only the effective-row filter picks right.
+        let original: Uuid = format!("ffffffff-ffff-4fff-8fff-00000000000{n}")
+            .parse()
+            .unwrap();
+        let correction: Uuid = format!("00000000-0000-4000-8000-00000000000{n}")
+            .parse()
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO contact_attempted
+                (id, organization_id, actor_kind, actor_user_id, origin, occurred_at,
+                 correlation_id, person_id, channel, outcome)
+             VALUES ($1, $2, 'user', $3, 'web_session', $4, $5, $6, 'call', 'reached')",
+        )
+        .bind(original)
+        .bind(org_id)
+        .bind(alice_id)
+        .bind(attempt_at)
+        .bind(Uuid::new_v4())
+        .bind(person_id)
+        .execute(&migrator_pool)
+        .await
+        .unwrap();
+        // The correction: same occurred_at, later recorded_at, corrects_id.
+        sqlx::query(
+            "INSERT INTO contact_attempted
+                (id, organization_id, actor_kind, actor_user_id, origin, occurred_at,
+                 correlation_id, person_id, channel, outcome, corrects_id, recorded_at)
+             VALUES ($1, $2, 'user', $3, 'web_session', $4, $5, $6, 'call', 'left_message', $7,
+                     clock_timestamp())",
+        )
+        .bind(correction)
+        .bind(org_id)
+        .bind(alice_id)
+        .bind(attempt_at)
+        .bind(Uuid::new_v4())
+        .bind(person_id)
+        .bind(original)
+        .execute(&migrator_pool)
+        .await
+        .unwrap();
+        insert_inquiry(&migrator_pool, org_id, person_id, "referral", hours_ago(1)).await;
+        expected.push((person_id, correction));
+    }
+
+    let router = common::build_router(&migrator_pool).await;
+    let alice_cookie = common::login_cookie(&router, "alice@acme.test", "pw").await;
+    let today =
+        common::body_json(common::get_with_cookie(&router, "/api/today", &alice_cookie).await)
+            .await;
+    let items = today["items"].as_array().unwrap();
+    assert_eq!(items.len(), expected.len());
+    for (person_id, correction) in expected {
+        let item = items
+            .iter()
+            .find(|i| i["person"]["id"] == person_id.to_string())
+            .unwrap();
+        assert_eq!(item["last_contact_attempt"]["id"], correction.to_string());
+        assert_eq!(item["last_contact_attempt"]["outcome"], "left_message");
+    }
+}

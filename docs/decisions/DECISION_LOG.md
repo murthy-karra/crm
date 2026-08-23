@@ -660,6 +660,37 @@ detection at the carrier (unreliable, and a Telnyx feature the app would
 have to hold credentials for). Scheduled as Slice 006c (after 006a
 `crm-app` extraction; before or alongside 006b Operator calling).
 
+### D-033 — The agent must choose every call's outcome; until then the call is incomplete and the Person stays on Today in a lowest "outcome needed" tier (2026-08-23)
+
+Accepted (user, after the Slice 006c live walkthrough). Amends D-031
+and D-032. The system is unreliable at telling a person from voicemail,
+busy, or a carrier message, so its observation is never presented as
+the outcome. Rules:
+
+1. After every call in which the callee was reached or rang (i.e. an
+   automatic attempt exists), the post-call prompt requires a choice —
+   talked to them / voicemail / no answer / busy / wrong number — with
+   **no default and no Skip**. (Calls where nothing reached the callee
+   need no choice.)
+2. Until the agent chooses, the call is **incomplete**: the timeline
+   shows "Call — <duration> · outcome needed" with a **Set outcome**
+   action. The automatic attempt row stays as the system's evidence
+   ("answered" / "no answer") and still advances Today at answer time
+   (D-031's reason stands: the call happened, Today never waits).
+3. The Person additionally stays on the **caller's** Today in a new,
+   lowest tier — priority `low`, reason `call_outcome_needed`,
+   recommended action `set_outcome` — sorted under every other item,
+   until an outcome is chosen. Safe default: it is shown to the caller
+   (who owes the answer), not the assignee, when they differ.
+4. Storage is unchanged from 006c: the agent's choice is the row on top
+   of the automatic row (`corrects_id`); "correction" is no longer the
+   user-facing word — it is the outcome. Multiple choices chain; the
+   timeline shows the current one.
+
+Rejected: writing nothing until the agent chooses (a closed tab would
+lose the attempt and Today would wait on paperwork); pre-selecting the
+system's guess (it is wrong exactly in the cases that matter).
+
 ## Open decisions
 
 ### O-001 — RESOLVED
@@ -823,3 +854,37 @@ compliance: Do-Not-Call scrubbing, quiet hours, caller-ID rules, state
 consent-to-record interplay with O-002. Slice 006 is human-dialed to
 People who inquired, so nothing is built; recorded so it is not
 forgotten. Blocks: autonomous or bulk outbound calling (with O-003).
+
+### O-012 — PII content blobs: per-Person keys and crypto-shred (OPEN)
+
+Recorded 2026-08-23 (user, while reviewing the Slice 006c timeline).
+Call summaries, transcripts, recordings, and free-text notes will land
+on the Person timeline. D-015 §3/§4 already settle *where* such content
+lives: never in a history row (IDs and tags only), always in a
+separate encrypted, deletable blob; the fact row keeps a pointer and a
+content hash, and after erasure it renders as "erased on <date>". What
+is not yet decided:
+
+1. Key hierarchy. Slice 002's raw-payload scheme is one master key in
+   `.env` with no per-payload keys (accepted then as a simplification)
+   — it cannot shred one Person: deleted blobs survive in backups.
+   Proposed: a per-Person key (wrapped by the master key; OpenBao in
+   production per D-014), and per-blob data keys wrapped by the
+   Person's key, so erasing a Person = deleting one key (every copy,
+   including backups, becomes unreadable; history rows untouched) and
+   a single recording can be shredded alone. This is the
+   ARCHITECTURE_BASELINE "Telephony" direction generalised to all PII
+   content. Raw payloads must migrate onto it so there is one mechanism.
+2. Where summaries come from. An LLM-written summary means the
+   transcript leaves the system to the model provider — a
+   data-processing boundary interacting with O-002 (recording consent).
+3. Operator discipline: a decrypted summary may be read at request time
+   to answer a question, but the Operator ledger (D-029) and logs never
+   hold the text.
+4. Timeline rendering: pointer rows fetch/decrypt on demand through a
+   dedicated endpoint; never embedded in `history[]` JSON.
+
+Blocks: call summaries/transcripts, recordings (with O-002), free-text
+notes (deferred from D-032). Must be resolved, and the raw-payload
+migration done, before any of those slices is planned.
+

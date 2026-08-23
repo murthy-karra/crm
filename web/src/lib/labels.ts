@@ -1,4 +1,5 @@
 import type {
+  CallOutcomeCorrection,
   ContactChannel,
   ContactOutcome,
   InvitationStatus,
@@ -31,8 +32,31 @@ export const CONTACT_CHANNEL_LABEL: Record<ContactChannel, string> = {
 export const CONTACT_OUTCOME_LABEL: Record<ContactOutcome, string> = {
   reached: 'Reached',
   no_answer: 'No answer',
-  left_message: 'Left message',
+  // SLICE_006c §2: relabelled so the manual dialog and the post-call prompt
+  // agree on what `left_message` means.
+  left_message: 'Voicemail / left message',
   sent: 'Sent',
+  busy: 'Busy',
+  wrong_number: 'Wrong number',
+}
+
+/** SLICE_006c §1/§10: the post-call "How did it go?" choices, in prompt
+ * order. Keys are exactly the five values `POST /api/calls/{id}/outcome`
+ * accepts; the object's key order is the picker's row order. */
+export const CALL_OUTCOME_CORRECTION_LABEL: Record<CallOutcomeCorrection, string> = {
+  reached: 'Talked to them',
+  left_message: 'Voicemail',
+  no_answer: 'No answer',
+  busy: 'Busy',
+  wrong_number: 'Wrong number',
+}
+
+/** The lowercase tail of "Outcome saved — voicemail" and the History row's
+ * "Call — voicemail, 7 s" (SLICE_006c §1 step 3, §5a). Falls back to the generic outcome
+ * label for a value the prompt never offers (`sent`). */
+export function correctedOutcomeLabel(outcome: ContactOutcome): string {
+  const label = outcome === 'sent' ? CONTACT_OUTCOME_LABEL[outcome] : CALL_OUTCOME_CORRECTION_LABEL[outcome]
+  return label.toLowerCase()
 }
 
 /** LogContactDialog.vue's per-channel default outcome (SLICE_003 §10: "per-

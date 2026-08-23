@@ -284,6 +284,14 @@ interface HistoryEntryBase {
 export interface ContactAttemptedDetail {
   channel: ContactChannel
   outcome: ContactOutcome
+  // SLICE_006c §2's declared additive change: `call_id` (= `causation_id`
+  // when the attempt is call-derived, null for a manual attempt),
+  // `corrects_id` (set on a correction row), `superseded` (a corrector
+  // exists). Render from these, never from row position — a correction is
+  // ordered after its original but not necessarily adjacent to it.
+  call_id: string | null
+  corrects_id: string | null
+  superseded: boolean
 }
 
 // SLICE_006 §2's declared additive change: `call_completed`, `kind_rank` 5,
@@ -395,15 +403,20 @@ export interface UnresolvedResponse {
 
 // ---- Today (SLICE_003 §5 GET /api/today; §3 reasons/priority/action) -----
 
-export type TodayPriority = 'high' | 'normal'
-export type RecommendedAction = 'call' | 'email'
+// SLICE_006c §5a (D-033): `low` is the "outcome needed" tier, served after
+// every other item; `set_outcome` is its recommended action.
+export type TodayPriority = 'high' | 'normal' | 'low'
+export type RecommendedAction = 'call' | 'email' | 'set_outcome'
 
 // Discriminated on `code`, in the fixed wire order (§3) — never re-sorted
-// client-side, same discipline as `history` above.
+// client-side, same discipline as `history` above. `call_outcome_needed`
+// (SLICE_006c §5a) names the viewer's own call whose outcome is still the
+// automatic root; it may be appended to the inquiry-based reasons.
 export type TodayReason =
   | { code: 'new_inquiry'; source: string; received_at: string }
   | { code: 'no_contact_attempt'; since: string }
   | { code: 'repeat_inquiry'; inquiry_count: number }
+  | { code: 'call_outcome_needed'; call_id: string; ended_at: string }
 
 // `latest_inquiry` on a TodayItem — exactly `{id, source, received_at}` (§5),
 // narrower than `PersonInquiry` (which also carries `source_external_id` and
@@ -440,7 +453,8 @@ export interface TodayResponse {
 // ---- Contact attempts (SLICE_003 §5 POST /api/people/{id}/contact-attempts)
 
 export type ContactChannel = 'call' | 'text' | 'email' | 'other'
-export type ContactOutcome = 'reached' | 'no_answer' | 'left_message' | 'sent'
+// SLICE_006c §2 widens the vocabulary with `busy` and `wrong_number`.
+export type ContactOutcome = 'reached' | 'no_answer' | 'left_message' | 'sent' | 'busy' | 'wrong_number'
 
 export interface LogContactRequest {
   channel: ContactChannel
@@ -572,4 +586,32 @@ export interface StartCallResponse {
 /** `POST …/dial` (202), `POST …/hangup` (200), `GET /api/calls/{id}` (200). */
 export interface CallResponse {
   call: CallView
+}
+
+// --- Slice 006c: Call outcome correction (docs/specs/SLICE_006c.md §5) ------
+
+/** The five values `POST /api/calls/{id}/outcome` accepts — `ContactOutcome`
+ * minus `sent` (rejected with 400 server-side). */
+export type CallOutcomeCorrection = Exclude<ContactOutcome, 'sent'>
+
+/** `deny_unknown_fields` server-side: exactly this one field. */
+export interface CorrectOutcomeRequest {
+  outcome: CallOutcomeCorrection
+}
+
+/** The effective attempt after the command — the new correction row, or
+ * the unchanged head when `changed: false`. A new type; `ContactAttemptRef`
+ * is unchanged. */
+export interface CorrectedAttemptRef {
+  id: string
+  channel: ContactChannel
+  outcome: ContactOutcome
+  occurred_at: string
+  recorded_at: string
+  corrects_id: string | null
+}
+
+export interface CorrectOutcomeResponse {
+  attempt: CorrectedAttemptRef
+  changed: boolean
 }

@@ -11,8 +11,11 @@ use uuid::Uuid;
 pub const UNTRUSTED_CLIP_CHARS: usize = 500;
 
 /// The ordering rule reported by `explain_priority`, verbatim from
-/// docs/specs/SLICE_003.md §3 / SLICE_005 §3.
-pub const ORDERING_RULE: &str = "high_before_normal, then waiting_since ascending, then id";
+/// docs/specs/SLICE_003.md §3 / SLICE_005 §3, extended by SLICE_006c §5a
+/// (D-033): the `low` "outcome needed" tier sorts under both Inquiry
+/// tiers, by the call's `ended_at`.
+pub const ORDERING_RULE: &str =
+    "high_before_normal_before_low, then waiting_since ascending (ended_at for low), then id";
 
 /// Zero-width and bidirectional formatting characters: invisible in a
 /// rendered reply but able to reorder or hide text in a prompt.
@@ -171,7 +174,9 @@ pub struct TodayItemView {
     pub person: PersonCard,
     pub priority: String,
     pub recommended_action: String,
-    /// docs/specs/SLICE_003.md §3 `TodayReason` serialized verbatim.
+    /// docs/specs/SLICE_003.md §3 `TodayReason` objects (`code` plus the
+    /// coded fields), each carrying an additional `explanation` line built
+    /// from the coded payload only (docs/specs/SLICE_006c.md §5a).
     pub reasons: Vec<serde_json::Value>,
     pub waiting_since: DateTime<Utc>,
     pub last_contact_attempt: Option<DateTime<Utc>>,
@@ -195,6 +200,8 @@ pub struct NextWorkItem {
 pub struct Ahead {
     pub high: usize,
     pub normal: usize,
+    /// `low` "outcome needed" items ahead (SLICE_006c §5a, D-033; additive).
+    pub low: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

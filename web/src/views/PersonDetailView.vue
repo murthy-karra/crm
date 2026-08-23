@@ -6,8 +6,9 @@
 // `detail` shapes exactly as spec §5 documents them, in server order
 // (occurred_at, recorded_at, kind_rank, id) — never re-sorted here.
 import { computed, onBeforeUnmount, ref, watch, type Component } from 'vue'
-import { RouterLink, onBeforeRouteLeave } from 'vue-router'
+import { RouterLink, onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import Select from 'primevue/select'
+import { useQueryClient } from '@tanstack/vue-query'
 import { Flag, Inbox, Mail, Phone, PhoneCall, PhoneOutgoing, Route, UserCheck } from 'lucide-vue-next'
 import Card from '../components/Card.vue'
 import FormField from '../components/FormField.vue'
@@ -15,14 +16,25 @@ import Badge from '../components/Badge.vue'
 import StageLabel from '../components/StageLabel.vue'
 import LogContactDialog from '../components/LogContactDialog.vue'
 import CallPanel from '../components/CallPanel.vue'
-import { useAssignPersonMutation, useChangeStageMutation, useMe, useMembers, usePerson, useStages } from '../api/queries'
+import ChangeOutcomeDialog from '../components/ChangeOutcomeDialog.vue'
+import {
+  queryKeys,
+  useAssignPersonMutation,
+  useChangeStageMutation,
+  useCorrectCallOutcome,
+  useMe,
+  useMembers,
+  usePerson,
+  useStages,
+} from '../api/queries'
 import { ApiError } from '../api/client'
-import type { HistoryEntry, RoutingStrategy } from '../api/types'
+import type { ActorRef, CallOutcomeCorrection, ContactAttemptedDetail, HistoryEntry, RoutingStrategy } from '../api/types'
 import { formatAbsoluteTime, formatRelativeTime } from '../lib/format'
 import { buttonClasses, selectPt } from '../lib/controls'
 import { describeApiError } from '../lib/errors'
-import { CONTACT_CHANNEL_LABEL, CONTACT_OUTCOME_LABEL } from '../lib/labels'
-import { callCompletedSummary } from '../telephony/format'
+import { CONTACT_CHANNEL_LABEL, CONTACT_OUTCOME_LABEL, correctedOutcomeLabel } from '../lib/labels'
+import { describeOutcomeError } from '../telephony/errors'
+import { callCompletedSummary, formatTalkSeconds, showsOutcomePrompt } from '../telephony/format'
 import { useCall, type CallRoomFactory } from '../telephony/useCall'
 import { createLiveKitRoom } from '../telephony/client'
 
@@ -39,8 +51,9 @@ const props = withDefaults(
 
 const { data: me } = useMe()
 const orgId = computed(() => me.value?.organization?.id ?? '')
+const queryClient = useQueryClient()
 
-const { data: detail, isPending, isError, error } = usePerson(orgId, () => props.id)
+const { data: detail, isPending, isFetching, isError, error } = usePerson(orgId, () => props.id)
 const person = computed(() => detail.value?.person)
 const contactMethods = computed(() => detail.value?.contact_methods ?? [])
 const inquiries = computed(() => detail.value?.inquiries ?? [])
@@ -92,6 +105,143 @@ const call = useCall({ orgId, createRoom: props.createRoom })
 
 const phones = computed(() => contactMethods.value.filter((cm) => cm.kind === 'phone'))
 const callDisabled = computed(() => phones.value.length === 0 || call.active.value)
+
+// ---- Call outcome (SLICE_006c §10, §5a) -------------------------------------
+// Two instances of the one mutation: the panel's post-call prompt and the
+// History "Set/Change outcome" dialog each own their pending/error state.
+const panelOutcome = useCorrectCallOutcome(orgId)
+const panelOutcomeSaved = ref<CallOutcomeCorrection | null>(null)
+const panelOutcomeError = ref<string | null>(null)
+// Synchronous re-entry latch: `isPending` flips on the next tick, so two
+// Save clicks in one task would otherwise post twice.
+const panelOutcomeSaving = ref(false)
+
+// Computed once and passed to CallPanel: while the prompt is open, Save
+// outcome is the view's one primary, so the header's Call button steps down
+// to secondary and the History "Change outcome" action is disabled.
+const outcomePromptOpen = computed(() =>
+  showsOutcomePrompt(call.phase.value, call.error.value !== null, call.call.value, panelOutcomeSaved.value !== null),
+)
+const callPrimary = computed(() => !call.active.value && !outcomePromptOpen.value)
+
+function resetPanelOutcome() {
+  panelOutcomeSaved.value = null
+  panelOutcomeError.value = null
+  panelOutcomeSaving.value = false
+  panelOutcome.reset()
+}
+
+function onSaveOutcome(outcome: CallOutcomeCorrection) {
+  if (panelOutcomeSaving.value || panelOutcome.isPending.value) return
+  const callId = call.callId.value
+  const personId = call.personId.value
+  if (callId === '' || personId === '') return
+  panelOutcomeSaving.value = true
+  panelOutcomeError.value = null
+  panelOutcome.mutate(
+    { callId, personId, outcome },
+    {
+      // §5a: the panel stays until Save succeeds, then shows "Outcome saved
+      // — <label>" → Done. `changed: false` (the choice was already on
+      // record) is a success too — never a silent dismissal.
+      onSuccess: () => {
+        panelOutcomeSaved.value = outcome
+      },
+      onError: (failure) => {
+        panelOutcomeError.value = describeOutcomeError(failure)
+        if (failure instanceof ApiError && failure.code === 'correction_conflict') {
+          void queryClient.invalidateQueries({ queryKey: queryKeys.person(orgId.value, personId) })
+        }
+      },
+      onSettled: () => {
+        panelOutcomeSaving.value = false
+      },
+    },
+  )
+}
+
+function dismissCall() {
+  call.dismiss()
+  resetPanelOutcome()
+}
+
+// History "Set outcome" / "Change outcome" (§1 step 7, §5a). Offered on the
+// call row when the caller is me and the call has an effective attempt —
+// decided from the folded row (below), never from its position in the list.
+// `outcome` is the agent's current choice, or null while the call is still
+// incomplete (the dialog then opens with nothing selected).
+interface OutcomeTarget {
+  callId: string
+  outcome: CallOutcomeCorrection | null
+}
+const changeOutcomeOpen = ref(false)
+const changeOutcomeTarget = ref<OutcomeTarget | null>(null)
+const historyOutcome = useCorrectCallOutcome(orgId)
+const historyOutcomeError = ref<string | null>(null)
+const historyOutcomeSaving = ref(false)
+
+function openChangeOutcome(target: OutcomeTarget | null) {
+  if (!target || outcomePromptOpen.value) return
+  changeOutcomeTarget.value = target
+  historyOutcomeError.value = null
+  historyOutcomeSaving.value = false
+  historyOutcome.reset()
+  changeOutcomeOpen.value = true
+}
+
+function onChangeOutcomeSave(outcome: CallOutcomeCorrection) {
+  const target = changeOutcomeTarget.value
+  if (!target || historyOutcomeSaving.value || historyOutcome.isPending.value) return
+  historyOutcomeSaving.value = true
+  historyOutcomeError.value = null
+  historyOutcome.mutate(
+    { callId: target.callId, personId: props.id, outcome },
+    {
+      onSuccess: () => {
+        closeChangeOutcome()
+      },
+      onError: (failure) => {
+        historyOutcomeError.value = describeOutcomeError(failure)
+        if (failure instanceof ApiError && failure.code === 'correction_conflict') {
+          void queryClient.invalidateQueries({ queryKey: queryKeys.person(orgId.value, props.id) })
+        }
+      },
+      onSettled: () => {
+        historyOutcomeSaving.value = false
+      },
+    },
+  )
+}
+
+function closeChangeOutcome() {
+  changeOutcomeOpen.value = false
+  clearOutcomeQuery()
+}
+
+// Today → Person (§5a): `/people/{id}?outcome=<call_id>` opens the dialog
+// for that call once History has loaded — with nothing selected while the
+// call is incomplete, or as "Change outcome" pre-selected with the current
+// choice; the param is cleared when the dialog closes (Save or Cancel) and
+// when a *settled* fetch shows no row I can act on (not mine, or gone) —
+// never while a refetch is still in flight.
+const route = useRoute()
+const router = useRouter()
+const outcomeQuery = computed(() => {
+  const value = route.query.outcome
+  return typeof value === 'string' && value !== '' ? value : null
+})
+
+function clearOutcomeQuery() {
+  if (outcomeQuery.value === null) return
+  const query = { ...route.query }
+  delete query.outcome
+  void router.replace({ query })
+}
+// The call id the param has already opened the dialog for: the param is
+// cleared asynchronously (router.replace), so a refetch landing in between
+// must not reopen the dialog just closed.
+const outcomeQueryHandled = ref<string | null>(null)
+
 const pickerOpen = ref(false)
 const pickerRoot = ref<HTMLElement | null>(null)
 // The callee's name as it was when the call started — the panel keeps
@@ -102,6 +252,7 @@ function startCall(contactMethodId: string) {
   pickerOpen.value = false
   if (!person.value) return
   calleeName.value = person.value.display_name
+  resetPanelOutcome()
   void call.start(person.value.id, contactMethodId)
 }
 
@@ -147,7 +298,8 @@ watch(
   () => props.id,
   () => {
     pickerOpen.value = false
-    call.dismiss()
+    changeOutcomeOpen.value = false
+    dismissCall()
   },
 )
 
@@ -201,6 +353,111 @@ function historySummary(entry: HistoryEntry): string {
     }
   }
 }
+
+// ---- One row per call (SLICE_006c §5a, D-033) -----------------------------
+// A presentation-only fold over `history` (the wire shape is unchanged): each
+// `call_completed` entry absorbs the `contact_attempted` entries sharing its
+// `call_id` — the automatic attempt and the agent's choices — into ONE row at
+// the call's position. The effective (non-superseded) attempt decides the
+// label: an agent choice (`corrects_id !== null`) → "Call — voicemail, 7 s";
+// the automatic root → "Call — 7 s · outcome needed" (duration only when
+// answered; "Call · outcome needed" otherwise). The system's observation is
+// never rendered as the outcome. Call-derived attempts whose call row is
+// missing (should not happen) fall through as ordinary rows so nothing is
+// silently lost; manual attempts (`call_id === null`) are untouched.
+interface HistoryRow {
+  key: string
+  icon: Component
+  summary: string
+  actor: ActorRef | null
+  occurredAt: string
+  /** The Set/Change-outcome target when the row's call is mine and has an
+   * effective attempt; `outcome` null while the call is incomplete. */
+  change: OutcomeTarget | null
+}
+
+type AttemptEntry = HistoryEntry & { kind: 'contact_attempted'; detail: ContactAttemptedDetail }
+
+function plainRow(entry: HistoryEntry): HistoryRow {
+  return {
+    key: entry.id,
+    icon: HISTORY_ICON[entry.kind],
+    summary: historySummary(entry),
+    actor: entry.actor,
+    occurredAt: entry.occurred_at,
+    change: null,
+  }
+}
+
+const historyRows = computed<HistoryRow[]>(() => {
+  const entries = history.value
+  const attemptsByCall = new Map<string, AttemptEntry[]>()
+  for (const entry of entries) {
+    if (entry.kind !== 'contact_attempted' || entry.detail.call_id === null) continue
+    const list = attemptsByCall.get(entry.detail.call_id) ?? []
+    list.push(entry)
+    attemptsByCall.set(entry.detail.call_id, list)
+  }
+  const completedCalls = new Set(entries.filter((e) => e.kind === 'call_completed').map((e) => e.detail.call_id))
+
+  const rows: HistoryRow[] = []
+  for (const entry of entries) {
+    if (entry.kind === 'contact_attempted') {
+      const { call_id } = entry.detail
+      if (call_id !== null && completedCalls.has(call_id)) continue
+      rows.push(plainRow(entry))
+      continue
+    }
+    if (entry.kind !== 'call_completed') {
+      rows.push(plainRow(entry))
+      continue
+    }
+    const { call_id, talk_seconds } = entry.detail
+    const attempts = attemptsByCall.get(call_id) ?? []
+    const effective = attempts.find((a) => !a.detail.superseded) ?? null
+    const actor = entry.actor ?? effective?.actor ?? null
+    const chosen = effective !== null && effective.detail.corrects_id !== null
+
+    let summary = historySummary(entry)
+    if (effective && chosen) {
+      const duration = talk_seconds === null ? '' : `, ${formatTalkSeconds(talk_seconds)}`
+      summary = `Call — ${correctedOutcomeLabel(effective.detail.outcome)}${duration}`
+    } else if (effective) {
+      summary = talk_seconds === null ? 'Call · outcome needed' : `Call — ${formatTalkSeconds(talk_seconds)} · outcome needed`
+    }
+
+    const mine = actor !== null && actor.id === me.value?.user.id
+    let change: OutcomeTarget | null = null
+    if (mine && effective) {
+      const { outcome } = effective.detail
+      if (chosen && outcome !== 'sent') change = { callId: call_id, outcome }
+      else if (!chosen) change = { callId: call_id, outcome: null }
+    }
+
+    rows.push({ key: entry.id, icon: HISTORY_ICON.call_completed, summary, actor, occurredAt: entry.occurred_at, change })
+  }
+  return rows
+})
+
+// Declared after `historyRows` — `immediate` runs it synchronously.
+watch(
+  [outcomeQuery, () => detail.value, () => isFetching.value, outcomePromptOpen],
+  ([callId, loaded, fetching, promptOpen]) => {
+    if (callId === null) {
+      outcomeQueryHandled.value = null
+      return
+    }
+    if (!loaded || changeOutcomeOpen.value || promptOpen || outcomeQueryHandled.value === callId) return
+    const row = historyRows.value.find((r) => r.change?.callId === callId)
+    if (row?.change) {
+      outcomeQueryHandled.value = callId
+      openChangeOutcome(row.change)
+    } else if (!fetching) {
+      clearOutcomeQuery()
+    }
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
@@ -265,7 +522,7 @@ function historySummary(entry: HistoryEntry): string {
             >
               <button
                 type="button"
-                :class="buttonClasses(call.active.value ? 'secondary' : 'primary')"
+                :class="buttonClasses(callPrimary ? 'primary' : 'secondary')"
                 :disabled="callDisabled"
                 :title="phones.length === 0 ? 'No phone number' : undefined"
                 :aria-expanded="phones.length > 1 ? pickerOpen : undefined"
@@ -446,26 +703,36 @@ function historySummary(entry: HistoryEntry): string {
           class="divide-y divide-border"
         >
           <li
-            v-for="entry in history"
-            :key="entry.id"
+            v-for="row in historyRows"
+            :key="row.key"
             class="flex min-h-14 items-center gap-3 py-2 first:pt-0 last:pb-0"
           >
             <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-2">
               <component
-                :is="HISTORY_ICON[entry.kind]"
+                :is="row.icon"
                 class="h-4 w-4 text-text-muted"
                 stroke-width="1.5"
               />
             </div>
             <div class="min-w-0 flex-1">
               <p class="text-body text-text">
-                {{ historySummary(entry) }}
+                {{ row.summary }}
               </p>
               <p class="text-small text-text-muted">
-                {{ entry.actor?.display_name ?? 'System' }} ·
-                <span :title="formatAbsoluteTime(entry.occurred_at)">{{ formatRelativeTime(entry.occurred_at) }}</span>
+                {{ row.actor?.display_name ?? 'System' }} ·
+                <span :title="formatAbsoluteTime(row.occurredAt)">{{ formatRelativeTime(row.occurredAt) }}</span>
               </p>
             </div>
+            <button
+              v-if="row.change"
+              type="button"
+              :class="buttonClasses('ghost')"
+              :disabled="outcomePromptOpen"
+              data-testid="change-outcome"
+              @click="openChangeOutcome(row.change)"
+            >
+              {{ row.change.outcome === null ? 'Set outcome' : 'Change outcome' }}
+            </button>
           </li>
         </ul>
         <p
@@ -484,6 +751,16 @@ function historySummary(entry: HistoryEntry): string {
         @update:visible="logContactOpen = $event"
       />
 
+      <ChangeOutcomeDialog
+        :visible="changeOutcomeOpen"
+        :person-name="person.display_name"
+        :current-outcome="changeOutcomeTarget?.outcome ?? null"
+        :saving="historyOutcomeSaving || historyOutcome.isPending.value"
+        :error="historyOutcomeError"
+        @update:visible="(value: boolean) => (value ? (changeOutcomeOpen = true) : closeChangeOutcome())"
+        @save="onChangeOutcomeSave"
+      />
+
       <CallPanel
         :phase="call.phase.value"
         :person-name="calleeName"
@@ -491,10 +768,15 @@ function historySummary(entry: HistoryEntry): string {
         :muted="call.muted.value"
         :error="call.error.value"
         :call="call.call.value"
+        :outcome-prompt="outcomePromptOpen"
+        :outcome-saving="panelOutcomeSaving || panelOutcome.isPending.value"
+        :outcome-saved="panelOutcomeSaved"
+        :outcome-error="panelOutcomeError"
         @hangup="call.hangup()"
         @toggle-mute="call.toggleMute()"
         @hangup-previous="call.hangupPrevious()"
-        @dismiss="call.dismiss()"
+        @dismiss="dismissCall()"
+        @save-outcome="onSaveOutcome"
       />
     </div>
   </div>

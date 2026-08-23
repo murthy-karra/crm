@@ -26,7 +26,8 @@ pub enum SecretError {
 pub struct LiveKitApiSecret(Vec<u8>);
 
 impl LiveKitApiSecret {
-    /// Non-empty, as `Config::from_source` has always required.
+    /// Non-empty, as `Config::from_source` has always required. The
+    /// caller trims (from_source does); whitespace here is stored as-is.
     pub fn parse(raw: String) -> Result<Self, SecretError> {
         if raw.is_empty() {
             return Err(SecretError::Empty);
@@ -149,5 +150,44 @@ impl RealtimeTokenSecret {
 impl fmt::Debug for RealtimeTokenSecret {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "RealtimeTokenSecret(REDACTED)")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn realtime_token_secret_rejects_short_and_empty_as_too_short() {
+        assert_eq!(
+            RealtimeTokenSecret::parse(String::new()).unwrap_err(),
+            SecretError::TooShort { min: 32, len: 0 },
+            "empty is TooShort, not Empty — crm-api maps TooShort to the \
+             RealtimeTokenSecretTooShort error from_source always raised"
+        );
+        assert_eq!(
+            RealtimeTokenSecret::parse("a".repeat(31)).unwrap_err(),
+            SecretError::TooShort { min: 32, len: 31 },
+        );
+        assert!(RealtimeTokenSecret::parse("a".repeat(32)).is_ok());
+    }
+
+    #[test]
+    fn centrifugo_api_key_and_livekit_secret_reject_empty() {
+        assert_eq!(
+            CentrifugoApiKey::parse(String::new()).unwrap_err(),
+            SecretError::Empty
+        );
+        assert_eq!(
+            LiveKitApiSecret::parse(String::new()).unwrap_err(),
+            SecretError::Empty
+        );
+        assert!(CentrifugoApiKey::parse("k".into()).is_ok());
+        assert!(LiveKitApiSecret::parse("s".into()).is_ok());
+    }
+
+    #[test]
+    fn raw_payload_key_round_trips_its_bytes() {
+        assert_eq!(RawPayloadKey::new([7u8; 32]).as_bytes(), &[7u8; 32]);
     }
 }

@@ -47,11 +47,7 @@ fn crm_app_has_no_axum_crm_operator_or_crm_api_dependency() {
         .expect("crm-app has a [dependencies] section");
     // `[dependencies]` only: cut at the next `[section]` line.
     let deps_section = match after.lines().position(|l| l.trim_start().starts_with('[')) {
-        Some(idx) => after
-            .lines()
-            .take(idx)
-            .collect::<Vec<_>>()
-            .join("\n"),
+        Some(idx) => after.lines().take(idx).collect::<Vec<_>>().join("\n"),
         None => after.to_string(),
     };
     for forbidden in ["axum", "crm-operator", "crm_operator", "crm-api", "crm_api"] {

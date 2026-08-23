@@ -9,11 +9,11 @@ const DEFAULT_CONNECT_TIMEOUT_MS: u64 = 2000;
 const MIN_CONNECT_TIMEOUT_MS: u64 = 1;
 const MAX_CONNECT_TIMEOUT_MS: u64 = 30_000;
 
+use crm_app::config::MIN_REALTIME_TOKEN_SECRET_BYTES;
 pub use crm_app::config::{
     CentrifugoApiKey, LiveKitApiSecret, LiveKitConfig, RawPayloadKey, RealtimeTokenSecret,
     SecretError, TelephonyConfig,
 };
-use crm_app::config::MIN_REALTIME_TOKEN_SECRET_BYTES;
 
 const MIN_SESSION_SECRET_BYTES: usize = 32;
 const DEFAULT_SESSION_TTL_HOURS: u64 = 168;
@@ -447,14 +447,17 @@ impl Config {
         let centrifugo_api_key_raw = get("CENTRIFUGO_HTTP_API_KEY")
             .filter(|v| !v.is_empty())
             .ok_or(ConfigError::MissingCentrifugoApiKey)?;
+        // Unreachable (the .filter above already rejects ""), kept for
+        // totality; the variant matches what that filter raises.
         let centrifugo_api_key = CentrifugoApiKey::parse(centrifugo_api_key_raw)
             .map_err(|_| ConfigError::MissingCentrifugoApiKey)?;
 
         let realtime_token_secret_raw =
             get("CENTRIFUGO_TOKEN_HMAC_SECRET").ok_or(ConfigError::MissingRealtimeTokenSecret)?;
-        let realtime_token_secret = RealtimeTokenSecret::parse(realtime_token_secret_raw)
-            .map_err(|err| match err {
+        let realtime_token_secret =
+            RealtimeTokenSecret::parse(realtime_token_secret_raw).map_err(|err| match err {
                 SecretError::TooShort { len, .. } => ConfigError::RealtimeTokenSecretTooShort(len),
+                // Unreachable ("" is TooShort{len:0}), kept for totality.
                 SecretError::Empty => ConfigError::MissingRealtimeTokenSecret,
             })?;
 
@@ -587,6 +590,8 @@ fn telephony_config(get: &impl Fn(&str) -> Option<String>) -> Result<TelephonyCo
                 url,
                 api_url,
                 api_key,
+                // Unreachable (trimmed + filtered non-empty above), kept
+                // for totality; parse's contract is "caller trims".
                 api_secret: LiveKitApiSecret::parse(api_secret)
                     .map_err(|_| ConfigError::MissingLiveKitApiSecret)?,
                 sip_outbound_trunk_id,
@@ -1030,6 +1035,15 @@ mod tests {
         let err = Config::from_source(source(&[("CENTRIFUGO_TOKEN_HMAC_SECRET", "too-short")]))
             .unwrap_err();
         assert_eq!(err, ConfigError::RealtimeTokenSecretTooShort(9));
+    }
+
+    #[test]
+    fn empty_realtime_token_secret_is_too_short_zero_not_missing() {
+        // Pins the error contract behind the (unreachable) SecretError::
+        // Empty arm in from_source: "" is TooShort{len:0}, exactly what
+        // main produced before the 006a constructor cutover.
+        let err = Config::from_source(source(&[("CENTRIFUGO_TOKEN_HMAC_SECRET", "")])).unwrap_err();
+        assert_eq!(err, ConfigError::RealtimeTokenSecretTooShort(0));
     }
 
     #[test]

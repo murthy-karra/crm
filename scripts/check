@@ -11,6 +11,22 @@ echo "==> cargo fmt --check"
 echo "==> cargo clippy"
 (cd "$repo_root/backend" && cargo clippy --workspace --all-targets --locked -- -D warnings)
 
+echo "==> cargo check (production shape, no test features)"
+# Without --all-targets: compiles crm-app/crm-api once as a deploy build
+# would, so non-gated use of a test-support-only symbol fails here rather
+# than only at deploy time (SLICE_006a review).
+(cd "$repo_root/backend" && cargo check --workspace --locked)
+
+echo "==> crate-boundary fences (resolved graph)"
+# The authoritative complement to the string fences in
+# crates/crm-api/tests/operator_deps.rs (SLICE_006a §6): the resolved
+# normal-dependency graph, which no Cargo.toml shape can smuggle past.
+(cd "$repo_root/backend" &&   if cargo tree -p crm-app -e normal --prefix none --locked | grep -qE '^(axum|crm-api|crm-operator) '; then
+    echo "crm-app must not depend on axum/crm-api/crm-operator (D-028 §5, SLICE_006a §3)" >&2; exit 1
+  fi &&   if cargo tree -p crm-operator -e normal --prefix none --locked | grep -qE '^(sqlx|axum|crm-api|crm-app) '; then
+    echo "crm-operator must not depend on sqlx/axum/crm-api/crm-app (D-028 §5)" >&2; exit 1
+  fi)
+
 echo "==> cargo test"
 (cd "$repo_root/backend" && cargo test --workspace --locked)
 

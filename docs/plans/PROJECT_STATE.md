@@ -4,41 +4,31 @@ Last updated: 2026-08-22 (Lane A implemented)
 
 ## Current phase
 
-**Slice 006c (call outcome correction) IMPLEMENTED on
-`slice-006c-outcome` (Lane A `30bce19`, Lane B merged `0064ed1`);
-reviewed + adversarially tested per lane, all findings applied; both
-gates green (`check` incl. 218 Vitest; `check-db` 142 DB tests incl.
-`db_calls` 42). Dev DB migrated; dev API restarted with the new build.
-Live walkthrough done 2026-08-23 (two calls corrected to voicemail);
-two user-driven UI refinements applied after it: a correction is placed
-in history when it was made (`1eea0b9`), and the timeline shows one
-line per call with the effective outcome + "corrected from" note,
-Follow Up Boss style (`a097435`). Awaiting merge approval to `main`.**
-Delivered: migration widening `contact_attempted.outcome` (+`busy`,
-`wrong_number`) and the one-corrector partial index; command + `POST
-/api/calls/{id}/outcome`; Today reads the effective attempt; history
-detail `call_id`/`corrects_id`/`superseded`; Operator history text marks
-superseded rows; web "How did it go?" prompt (Save gated on the server's
-terminal status, with a settle-refetch fallback when realtime is down),
-history rendering by linkage (not position), Change outcome from
-History, ringback tone while ringing, manual dialog gains the two new
-outcomes. Spec amendments during implementation: §2 adjacency note
-(ring-out corrections sort after `call_completed`); §10 two extra error
-messages; ringback shipped. Slice 006 live walkthrough on 2026-08-22:
-two real calls answered (the first "answered" in 2.8 s without ringing —
-the motivating case). Still unproven live: a busy/decline/ring-out call
-("no answer" attempt). Recorded O-012 (PII content blobs: per-Person keys + crypto-shred;
-blocks summaries/recordings/notes; Slice 002's single raw-payload key
-must be upgraded first). Follow-ups: rotate the Telnyx SIP password; the
-`placing` sweep horizon vs. slow mic prompts; OrbStack hung twice this
-session (recovered with force-quit + `orbctl start`). Hostname is
-`livekit1.tarams.org` (spec text says `livekit.tarams.org`).
+**Slice 006c (call outcome) COMPLETE on `slice-006c-outcome` and being
+merged to `main`.** Scope grew during the live walkthrough into three
+user decisions, all implemented, reviewed and adversarially tested:
+one timeline line per call (Follow Up Boss style); D-033 — the agent
+must choose every call's outcome (no default, no Skip), an unchosen
+call is "outcome needed" in the timeline, and the Person stays on the
+caller's Today in a new lowest `low` tier (`call_outcome_needed` /
+`set_outcome`) until chosen; O-012 recorded (PII content blobs,
+per-Person keys, crypto-shred — blocks summaries/recordings/notes).
+Review fixes in `fafaf95` (notably: the agent's first choice is always
+written even when it equals the system's guess — otherwise the call
+stayed incomplete forever; Today query keeps its assignee index
+predicate; Operator `ORDERING_RULE`/`Ahead` extended for `low`; two new
+indexes `20260826000002`). Gates: `check` green (236 Vitest), `check-db`
+green (`db_calls` 49). Live: two real calls corrected on 2026-08-23;
+the D-033 UI (forced choice, Today nag) has NOT yet been exercised
+live. Follow-ups: rotate the Telnyx SIP password; busy/ring-out never
+proven live; `placing` sweep horizon vs slow mic prompts; orphaned
+"outcome needed" calls when a caller is deactivated (O-004 territory);
+OrbStack hung twice. Hostname is `livekit1.tarams.org`.
 
 ## Current slice
 
-Slice 006c — Call outcome correction (D-032) — `docs/specs/SLICE_006c.md`
-APPROVED 2026-08-22; lane briefs `docs/tasks/SLICE_006c_LANE_{A,B}.md`;
-implementation gate pending. Previous:
+Slice 006c — Call outcome (D-032, D-033) — `docs/specs/SLICE_006c.md`
+(+ §5a) — COMPLETE, merging to `main`. Previous:
 Slice 006 — Calling — `docs/specs/SLICE_006.md` (MERGED `332e78a`). Previous:
 Slice 005 — Operator retrieval — `docs/specs/SLICE_005.md` (APPROVED). Read-only AI Operator: `crm-operator` crate with a
 `ToolBackend` trait (five tools: `search_people`, `get_person`,
@@ -50,8 +40,7 @@ proof chain. Slice 004 is complete and merged (see History).
 
 ## Current branch
 
-`slice-006c-outcome` at `0064ed1` (Lanes A+B merged, uncommitted docs
-edits pending); `main` at `5b7509c`.
+`main` (006c merged).
 
 ## Last accepted decision
 
@@ -763,14 +752,12 @@ slice:
 
 ## Next recommended action
 
-1. Live walkthrough of 006c from `app.tarams.org`: one call → answer →
-   hang up → "How did it go?" → Voicemail → History shows the original
-   "(superseded)" + "Outcome corrected — voicemail"; second tab's Today
-   card shows the corrected outcome; ringback audible while ringing.
-   Ideally also one declined call (proves the "no answer" path).
-2. Merge `slice-006c-outcome` → `main`, push.
-3. Rotate the Telnyx SIP password; 006a (`crm-app` extraction); 006b.
+1. Exercise D-033 live once: a call, close the tab without choosing →
+   "outcome needed" row + Today low item → Set outcome clears both.
+2. Rotate the Telnyx SIP password; update the trunk.
+3. 006a (`crm-app` extraction, D-028 §5), then 006b (Operator
+   `start_call`). O-012 before any summary/recording/notes slice.
 
 ## Approval currently required
 
-Merge of `slice-006c-outcome` → `main` after the walkthrough.
+None.

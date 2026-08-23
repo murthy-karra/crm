@@ -1,6 +1,6 @@
 # Project State
 
-Last updated: 2026-08-23 (006c merged; D-033 exercised live; O-013 recorded)
+Last updated: 2026-08-23 (006a implemented on slice-006a-crm-app; awaiting merge approval)
 
 ## Current phase
 
@@ -30,8 +30,15 @@ OrbStack hung twice. Hostname is `livekit1.tarams.org`.
 
 Slice 006c — Call outcome (D-032, D-033) — `docs/specs/SLICE_006c.md`
 (+ §5a) — COMPLETE, MERGED `58ecad8`. Next: Slice 006a — `crm-app`
-extraction — `docs/specs/SLICE_006a.md` (REVIEWED, awaiting the
-implementation gate). Previous:
+extraction — `docs/specs/SLICE_006a.md` — IMPLEMENTED on branch
+`slice-006a-crm-app` (reviewed + adversarially tested, no blocking
+findings; awaiting merge approval). Known flake (pre-existing, not
+006a): `db_calls::a_second_correction_chains_onto_the_first_with_
+strictly_increasing_recorded_at` can misorder around `call_completed`
+under full-suite load — the history sort ties on microsecond
+timestamps (person/queries.rs `(occurred_at, recorded_at, kind_rank,
+id)`); passed 8/8 isolated full-suite reruns on both main and the
+branch. Previous:
 Slice 006 — Calling — `docs/specs/SLICE_006.md` (MERGED `332e78a`). Previous:
 Slice 005 — Operator retrieval — `docs/specs/SLICE_005.md` (APPROVED). Read-only AI Operator: `crm-operator` crate with a
 `ToolBackend` trait (five tools: `search_people`, `get_person`,
@@ -763,15 +770,11 @@ slice:
 
 ## Next recommended action
 
-1. Implement Slice 006a on `slice-006a-crm-app` per
-   `docs/specs/SLICE_006a.md` + `docs/tasks/SLICE_006a_LANE_A.md`
-   (planned and reviewed 2026-08-23; no blocking decision; safe
-   defaults: crm-app stays crm-operator-free, session layer stays in
-   crm-api, validating newtype constructors). Then 006b (Operator
-   `start_call`). O-012 before any summary/recording/notes slice;
-   O-013 after O-012.
+1. Merge `slice-006a-crm-app` to `main` (approval pending), then plan
+   006b (Operator `start_call`). O-012 before any summary/recording/
+   notes slice; O-013 after O-012.
 2. Rotate the Telnyx SIP password; update the trunk (user action).
 
 ## Approval currently required
 
-Implementation gate for Slice 006a (`Proceed with implementation?`).
+Merge approval for `slice-006a-crm-app` → `main`.

@@ -143,7 +143,7 @@ async fn webhook_round_trip_with_the_real_key_pair() {
         "livekit",
         &live.api_key,
         live.api_secret.as_bytes(),
-        TelephonyLimits::from_config(&config),
+        TelephonyLimits::from_config(&config.telephony),
     ));
     // No database needed: `room_started` is verified, then ignored before
     // any lookup, so the lazy pool below is never touched.

@@ -23,7 +23,8 @@ Scope decisions (user-accepted 2026-08-22, not re-litigated here):
 `crm-api`, with `crm-api → crm-operator` as the only Cargo edge and a
 `ToolBackend` trait as the complete data surface (D-028 §5); (2) the
 `crm-app` crate extraction is deferred until the first mutation-tool
-slice (D-028 §5); (3) turns are audited as a PII-free ledger and
+slice (D-028 §5) — done in Slice 006a (2026-08-23): `crm-app` exists,
+the `ToolBackend` adapter still lives in crm-api; (3) turns are audited as a PII-free ledger and
 transcripts are not stored (D-029).
 
 The narrowest cut that proves the chain with real tests:

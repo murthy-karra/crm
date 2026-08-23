@@ -62,7 +62,7 @@ impl AppState {
             None => tracing::info!("operator disabled: GROQ_API_KEY is not set"),
         }
 
-        let telephony = Telephony::from_config(config).map(Arc::new);
+        let telephony = Telephony::from_config(&config.telephony).map(Arc::new);
         match &telephony {
             Some(telephony) => {
                 tracing::info!(provider = telephony.provider_name, "telephony enabled")

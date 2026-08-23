@@ -69,12 +69,18 @@ Splits:
   `session::is_valid_token_format` paths resolve. `SessionSecret` and
   `SessionContext` stay in crm-api; no `SessionSecret` constructor is
   added.
-- `auth/context.rs`: the plain structs `AuthContext`, `OrgAdminContext`,
-  `SessionContext`, `PlatformAuthContext` → crm-app. The
-  `FromRequestParts<AppState>` impls and `resolve_session` → new
+- `auth/context.rs`: only `AuthContext` moves to crm-app — it is the
+  one context struct the application layer consumes (`envelope.rs`,
+  `person/visibility.rs`). `OrgAdminContext`, `SessionContext` (which
+  wraps `session::SessionIdentity`, staying), `PlatformAuthContext`,
+  the `FromRequestParts<AppState>` impls and `resolve_session` → new
   `crm-api/src/auth/extractors.rs`. Keep the concrete
   `impl FromRequestParts<AppState> for …` form — a generic `impl<S>`
   would violate the orphan rule cross-crate.
+- `domain/admin/commands/token.rs`: its `use crate::auth::session;`
+  (for `is_valid_token_format`) becomes
+  `use crate::auth::token_format as session;` — the one in-file edit
+  inside `domain/**` (an R09x, not R100).
 - `config.rs`: secret newtypes `LiveKitApiSecret`, `RawPayloadKey`,
   `CentrifugoApiKey`, `RealtimeTokenSecret` and `LiveKitConfig`,
   `TelephonyConfig` → `crm-app/src/config.rs`. Today they are built by
@@ -96,7 +102,8 @@ Splits:
   `session.rs`'s helpers are untouched (it stays in crm-api).
   Consequently the moved files that are **modified, not R100**, are
   exactly: `telephony/mod.rs` (`use crate::config`, two `from_config`
-  signatures), `realtime/token.rs`, `domain/raw_payload/crypto.rs`.
+  signatures), `realtime/token.rs`, `domain/raw_payload/crypto.rs`,
+  `domain/admin/commands/token.rs` (import alias above).
 
 Shims in `crm-api/src/lib.rs`: `pub use crm_app::{domain, realtime,
 telephony};`, `auth` re-exporting the crm-app items plus the local

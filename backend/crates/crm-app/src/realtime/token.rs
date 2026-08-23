@@ -74,16 +74,8 @@ mod tests {
     use chrono::TimeZone;
 
     fn secret(byte: u8) -> RealtimeTokenSecret {
-        let hex: String = format!("{byte:02x}").repeat(16);
-        crate::config::Config::from_source(move |key| match key {
-            "CRM_SESSION_SECRET" => Some("a".repeat(32)),
-            "CRM_RAW_PAYLOAD_KEY" => Some("ab".repeat(32)),
-            "CENTRIFUGO_HTTP_API_KEY" => Some("test-key".to_string()),
-            "CENTRIFUGO_TOKEN_HMAC_SECRET" => Some(hex.clone()),
-            _ => None,
-        })
-        .unwrap()
-        .realtime_token_secret
+        // 32 hex chars = the minimum length `parse` enforces.
+        RealtimeTokenSecret::parse(format!("{byte:02x}").repeat(16)).unwrap()
     }
 
     fn ts() -> DateTime<Utc> {

@@ -1,9 +1,17 @@
+//! The Axum side of auth: `resolve_session` and the `FromRequestParts`
+//! extractors (docs/specs/SLICE_006a.md §4). `AuthContext` is the
+//! application-layer struct in `auth::context`; the concrete
+//! `impl FromRequestParts<AppState> for AuthContext` form is
+//! deliberate — with `AppState` local it is orphan-legal even once
+//! `AuthContext` moves crates; a generic `impl<S>` would not be.
+
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
 use axum_extra::extract::cookie::CookieJar;
 use uuid::Uuid;
 
 use crate::auth::session;
+use crate::auth::AuthContext;
 use crate::domain::admin::Role;
 use crate::error::ApiError;
 use crate::state::AppState;
@@ -32,24 +40,6 @@ async fn resolve_session(
         .await
         .map_err(|_| ApiError::Unavailable)?
         .ok_or(ApiError::Unauthenticated)
-}
-
-/// The trusted actor and active Organization for this request, derived
-/// entirely server-side from the session cookie. Handlers take this as a
-/// parameter and never see the cookie; an Organization ID never enters a
-/// query from client input (AGENTS.md §4.2).
-///
-/// Requires an active Organization (docs/specs/SLICE_004.md §3): a
-/// platform-only session (no Organization) gets 401 `unauthenticated` here,
-/// so every existing tenant route fails closed without modification.
-#[derive(Debug, Clone)]
-pub struct AuthContext {
-    pub actor_user_id: Uuid,
-    pub actor_email: String,
-    pub actor_display_name: String,
-    pub active_organization_id: Uuid,
-    pub active_organization_name: String,
-    pub role: Role,
 }
 
 impl FromRequestParts<AppState> for AuthContext {

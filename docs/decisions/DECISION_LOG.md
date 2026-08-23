@@ -561,6 +561,9 @@ Organization, which is exactly the kind of trust boundary D-008 and
    crate (domain + realtime + non-Axum auth) is deferred and is a
    **prerequisite for the first slice that gives the Operator mutation
    tools**; it ships as its own refactor PR with no behavior change.
+   *(Status 2026-08-23: done — Slice 006a, `docs/specs/SLICE_006a.md`.
+   One step narrower than "non-Axum auth": the session layer stayed in
+   crm-api; only the token format check and `AuthContext` moved.)*
 
 Blocks: nothing. Feeds the Slice 005 specification.
 

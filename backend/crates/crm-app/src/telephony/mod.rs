@@ -18,7 +18,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 
-use crate::config::Config;
+use crate::config::TelephonyConfig;
 
 pub use livekit::LiveKitProvider;
 pub use token::{JoinGrant, JoinToken, JoinTokenSigner};
@@ -188,11 +188,11 @@ pub struct TelephonyLimits {
 }
 
 impl TelephonyLimits {
-    pub fn from_config(config: &Config) -> Self {
+    pub fn from_config(config: &TelephonyConfig) -> Self {
         Self {
-            ring_timeout: config.telephony.ring_timeout,
-            max_call: config.telephony.max_call,
-            join_ttl: config.telephony.join_ttl,
+            ring_timeout: config.ring_timeout,
+            max_call: config.max_call,
+            join_ttl: config.join_ttl,
             agent_join_timeout: DEFAULT_AGENT_JOIN_TIMEOUT,
             presence_poll_interval: DEFAULT_PRESENCE_POLL_INTERVAL,
         }
@@ -252,8 +252,8 @@ impl Telephony {
 
     /// `None` when `LIVEKIT_API_KEY` is unset (docs/specs/SLICE_006.md
     /// §9); otherwise the real `LiveKitProvider` over `LIVEKIT_API_URL`.
-    pub fn from_config(config: &Config) -> Option<Self> {
-        let livekit = config.telephony.livekit.as_ref()?;
+    pub fn from_config(config: &TelephonyConfig) -> Option<Self> {
+        let livekit = config.livekit.as_ref()?;
         Some(Self::new(
             Arc::new(LiveKitProvider::new(livekit)),
             "livekit",

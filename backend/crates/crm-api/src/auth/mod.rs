@@ -1,5 +1,5 @@
-pub mod context;
-pub mod password;
+pub mod extractors;
 pub mod session;
 
-pub use context::{AuthContext, OrgAdminContext, PlatformAuthContext, SessionContext};
+pub use crm_app::auth::{context, password, token_format, AuthContext};
+pub use extractors::{OrgAdminContext, PlatformAuthContext, SessionContext};

@@ -17,7 +17,8 @@ pub const COOKIE_NAME: &str = "crm_session";
 /// extractor can reject a syntactically invalid cookie before touching the
 /// database (docs/specs/SLICE_001.md §3, §9).
 const TOKEN_LEN_BYTES: usize = 32;
-pub const TOKEN_STR_LEN: usize = 43;
+
+pub use super::token_format::{is_valid_token_format, TOKEN_STR_LEN};
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -52,13 +53,6 @@ struct SessionIdentityRow {
     organization_name: Option<String>,
     membership_role: Option<String>,
     platform_admin: bool,
-}
-
-pub fn is_valid_token_format(token: &str) -> bool {
-    token.len() == TOKEN_STR_LEN
-        && token
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
 }
 
 fn generate_token() -> String {
@@ -275,19 +269,6 @@ mod tests {
         .session_secret;
         let token = "fixed-token-value-for-this-test-1234567890a";
         assert_ne!(hash_token(&secret_a, token), hash_token(&secret_b, token));
-    }
-
-    #[test]
-    fn rejects_wrong_length_token_format() {
-        assert!(!is_valid_token_format("too-short"));
-        assert!(!is_valid_token_format(&"a".repeat(44)));
-    }
-
-    #[test]
-    fn rejects_non_base64url_characters() {
-        let mut bad = "a".repeat(TOKEN_STR_LEN - 1);
-        bad.push('+'); // not in the URL-safe alphabet
-        assert!(!is_valid_token_format(&bad));
     }
 
     #[test]

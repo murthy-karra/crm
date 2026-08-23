@@ -123,19 +123,9 @@ mod tests {
     use super::*;
 
     fn test_key(byte: u8) -> RawPayloadKey {
-        // Config::from_source is the only public constructor for
-        // RawPayloadKey; build one through it, matching the pattern
-        // auth::session's tests use for SessionSecret.
-        let hex: String = format!("{byte:02x}").repeat(32);
-        crate::config::Config::from_source(move |key| match key {
-            "CRM_SESSION_SECRET" => Some("a".repeat(32)),
-            "CRM_RAW_PAYLOAD_KEY" => Some(hex.clone()),
-            "CENTRIFUGO_HTTP_API_KEY" => Some("test-key".to_string()),
-            "CENTRIFUGO_TOKEN_HMAC_SECRET" => Some("c".repeat(32)),
-            _ => None,
-        })
-        .unwrap()
-        .raw_payload_key
+        // `RawPayloadKey::new` carries the 32-byte invariant in its type
+        // (docs/specs/SLICE_006a.md §4).
+        RawPayloadKey::new([byte; 32])
     }
 
     #[test]

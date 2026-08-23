@@ -71,12 +71,30 @@ const DEFAULT_TELEPHONY_JOIN_TTL_SECONDS: u64 = 300;
 const MIN_TELEPHONY_JOIN_TTL_SECONDS: u64 = 60;
 const MAX_TELEPHONY_JOIN_TTL_SECONDS: u64 = 900;
 
+/// Construction failure for the validated secret newtypes below. The
+/// invariants live on the constructors (docs/specs/SLICE_006a.md §4) so
+/// they hold for every caller, not only `Config::from_source`; crm-api
+/// maps these onto the exact `ConfigError` variants it raised before.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SecretError {
+    Empty,
+    TooShort { min: usize, len: usize },
+}
+
 /// `LIVEKIT_API_SECRET` (docs/specs/SLICE_006.md §7): signs join grants
 /// and verifies webhooks. `Debug` is redacted like `SessionSecret`.
 #[derive(Clone)]
 pub struct LiveKitApiSecret(Vec<u8>);
 
 impl LiveKitApiSecret {
+    /// Non-empty, as `Config::from_source` has always required.
+    pub fn parse(raw: String) -> Result<Self, SecretError> {
+        if raw.is_empty() {
+            return Err(SecretError::Empty);
+        }
+        Ok(Self(raw.into_bytes()))
+    }
+
     pub fn as_bytes(&self) -> &[u8] {
         &self.0
     }
@@ -136,6 +154,12 @@ pub struct OperatorConfig {
 pub struct RawPayloadKey([u8; 32]);
 
 impl RawPayloadKey {
+    /// Exactly 32 bytes, type-enforced; the hex decoding (and its
+    /// errors) stay with `Config::from_source`.
+    pub fn new(key: [u8; 32]) -> Self {
+        Self(key)
+    }
+
     pub fn as_bytes(&self) -> &[u8; 32] {
         &self.0
     }
@@ -154,6 +178,14 @@ impl fmt::Debug for RawPayloadKey {
 pub struct CentrifugoApiKey(String);
 
 impl CentrifugoApiKey {
+    /// Non-empty, as `Config::from_source` has always required.
+    pub fn parse(raw: String) -> Result<Self, SecretError> {
+        if raw.is_empty() {
+            return Err(SecretError::Empty);
+        }
+        Ok(Self(raw))
+    }
+
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -173,6 +205,18 @@ impl fmt::Debug for CentrifugoApiKey {
 pub struct RealtimeTokenSecret(Vec<u8>);
 
 impl RealtimeTokenSecret {
+    /// At least `MIN_REALTIME_TOKEN_SECRET_BYTES` (32) bytes, as
+    /// `Config::from_source` has always required.
+    pub fn parse(raw: String) -> Result<Self, SecretError> {
+        if raw.len() < MIN_REALTIME_TOKEN_SECRET_BYTES {
+            return Err(SecretError::TooShort {
+                min: MIN_REALTIME_TOKEN_SECRET_BYTES,
+                len: raw.len(),
+            });
+        }
+        Ok(Self(raw.into_bytes()))
+    }
+
     pub fn as_bytes(&self) -> &[u8] {
         &self.0
     }
@@ -533,23 +577,23 @@ impl Config {
                 raw_payload_key_raw.len(),
             ));
         }
-        let raw_payload_key = RawPayloadKey(
+        let raw_payload_key = RawPayloadKey::new(
             decode_hex_32(&raw_payload_key_raw).ok_or(ConfigError::InvalidRawPayloadKeyEncoding)?,
         );
 
         let centrifugo_api_key_raw = get("CENTRIFUGO_HTTP_API_KEY")
             .filter(|v| !v.is_empty())
             .ok_or(ConfigError::MissingCentrifugoApiKey)?;
-        let centrifugo_api_key = CentrifugoApiKey(centrifugo_api_key_raw);
+        let centrifugo_api_key = CentrifugoApiKey::parse(centrifugo_api_key_raw)
+            .map_err(|_| ConfigError::MissingCentrifugoApiKey)?;
 
         let realtime_token_secret_raw =
             get("CENTRIFUGO_TOKEN_HMAC_SECRET").ok_or(ConfigError::MissingRealtimeTokenSecret)?;
-        if realtime_token_secret_raw.len() < MIN_REALTIME_TOKEN_SECRET_BYTES {
-            return Err(ConfigError::RealtimeTokenSecretTooShort(
-                realtime_token_secret_raw.len(),
-            ));
-        }
-        let realtime_token_secret = RealtimeTokenSecret(realtime_token_secret_raw.into_bytes());
+        let realtime_token_secret = RealtimeTokenSecret::parse(realtime_token_secret_raw)
+            .map_err(|err| match err {
+                SecretError::TooShort { len, .. } => ConfigError::RealtimeTokenSecretTooShort(len),
+                SecretError::Empty => ConfigError::MissingRealtimeTokenSecret,
+            })?;
 
         let centrifugo_api_url = match get("CRM_CENTRIFUGO_API_URL").filter(|v| !v.is_empty()) {
             Some(value) if is_plausible_centrifugo_url(&value) => value,
@@ -680,7 +724,8 @@ fn telephony_config(get: &impl Fn(&str) -> Option<String>) -> Result<TelephonyCo
                 url,
                 api_url,
                 api_key,
-                api_secret: LiveKitApiSecret(api_secret.into_bytes()),
+                api_secret: LiveKitApiSecret::parse(api_secret)
+                    .map_err(|_| ConfigError::MissingLiveKitApiSecret)?,
                 sip_outbound_trunk_id,
             })
         }

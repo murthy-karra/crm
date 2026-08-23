@@ -1,6 +1,6 @@
 # Project State
 
-Last updated: 2026-08-23 (006b planned + reviewed; awaiting implementation gate)
+Last updated: 2026-08-23 (006b IMPLEMENTED on slice-006b-operator-call; awaiting merge approval)
 
 ## Current phase
 
@@ -770,15 +770,15 @@ slice:
 
 ## Next recommended action
 
-1. Implement Slice 006b per `docs/specs/SLICE_006b.md` + the two lane
-   briefs (planned + reviewed 2026-08-23; D-034 accepted: no
-   `crm-operator -> crm-app` edge, ToolBackend seam; reviewer's
-   claim-state fix applied to the frozen DDL). Two lanes (backend /
-   web) with the §4 contract frozen. The SLICE_006a §9 AuthContext
-   gate is mooted by D-034. O-012 before any summary/recording/notes
-   slice; O-013 after O-012.
+1. Merge `slice-006b-operator-call` (approval pending), then exercise
+   006b live once: Ask → "Call <name>" → proposal card → Confirm →
+   real ring → D-033 outcome prompt. Then O-012 before any
+   summary/recording/notes slice; O-013 after O-012. Noted for later:
+   confirm executes inline (client disconnect after claim leaves a
+   consumed row — accepted, spec §2); Operator-started calls now in
+   the ledger chain turn → proposal → call → facts.
 2. Rotate the Telnyx SIP password; update the trunk (user action).
 
 ## Approval currently required
 
-Implementation gate for Slice 006b (`Proceed with implementation?`).
+Merge approval for `slice-006b-operator-call` → `main`.

@@ -4,6 +4,7 @@
 // resolve/discard action this slice (spec §12) — rows are plain data, not
 // links.
 import { computed, h } from 'vue'
+import { Inbox } from 'lucide-vue-next'
 import type { ColumnDef } from '@tanstack/vue-table'
 import PageHeader from '../components/PageHeader.vue'
 import DataTable from '../components/DataTable.vue'
@@ -99,7 +100,9 @@ const columns: ColumnDef<UnresolvedItem>[] = [
       count-noun="unresolved leads"
       count-noun-singular="unresolved lead"
       :truncated="unresolvedData?.truncated ?? false"
-      empty-message="No unresolved leads. New leads that can't be matched to a contact method will show up here."
+      empty-title="No unresolved leads"
+      empty-message="New leads that can't be matched to a contact method will show up here."
+      :empty-icon="Inbox"
     />
   </div>
 </template>

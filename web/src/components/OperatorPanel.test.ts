@@ -124,7 +124,7 @@ describe('OperatorPanel', () => {
     await flushPromises()
 
     const bubble = wrapper.get('[data-testid="operator-assistant"]')
-    expect(bubble.text()).toBe(hostile)
+    expect(bubble.get('p:last-of-type').text()).toBe(hostile)
     expect(bubble.find('a').exists()).toBe(false)
     expect(bubble.element.querySelector('a')).toBeNull()
     expect(wrapper.findAll('[data-testid="operator-person-card"]')).toHaveLength(0)

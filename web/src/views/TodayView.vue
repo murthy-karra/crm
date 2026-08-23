@@ -7,7 +7,7 @@
 // order (§3: `rank()` preserves SQL order) — this view never sorts
 // `items` itself.
 import { computed, h, ref } from 'vue'
-import { Mail, Phone } from 'lucide-vue-next'
+import { Mail, Phone, Sun } from 'lucide-vue-next'
 import type { ColumnDef } from '@tanstack/vue-table'
 import PageHeader from '../components/PageHeader.vue'
 import DataTable from '../components/DataTable.vue'
@@ -164,7 +164,9 @@ const columns: ColumnDef<TodayItem>[] = [
       count-noun="items"
       count-noun-singular="item"
       :truncated="todayData?.truncated ?? false"
-      empty-message="Nothing needs your attention."
+      empty-title="You're all caught up"
+      empty-message="Nothing assigned to you is waiting for a response."
+      :empty-icon="Sun"
     />
 
     <LogContactDialog

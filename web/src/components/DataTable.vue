@@ -11,7 +11,7 @@
 // natively). The rest of the row additionally forwards a plain click to
 // the same destination as a mouse convenience — a harmless duplicate
 // navigation to the row's own target.
-import { computed } from 'vue'
+import { computed, type Component } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { FlexRender, getCoreRowModel, useVueTable, type ColumnDef } from '@tanstack/vue-table'
 import Card from './Card.vue'
@@ -28,6 +28,9 @@ const props = defineProps<{
   countNounSingular?: string
   truncated?: boolean
   emptyMessage: string
+  /** Short headline above `emptyMessage`, e.g. "No people yet". */
+  emptyTitle?: string
+  emptyIcon?: Component
   emptyActionLabel?: string
   emptyActionTo?: string
 }>()
@@ -61,9 +64,28 @@ function navigate(row: TData) {
   >
     <div
       v-if="data.length === 0"
-      class="px-5 py-16 text-center"
+      class="flex flex-col items-center px-5 py-16 text-center"
     >
-      <p class="text-body text-text-muted">
+      <div
+        v-if="emptyIcon"
+        class="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-surface-2 text-text-muted"
+      >
+        <component
+          :is="emptyIcon"
+          class="h-5 w-5"
+          stroke-width="1.5"
+        />
+      </div>
+      <p
+        v-if="emptyTitle"
+        class="text-body font-medium text-text"
+      >
+        {{ emptyTitle }}
+      </p>
+      <p
+        class="max-w-md text-body text-text-muted"
+        :class="emptyTitle ? 'mt-1 text-small' : ''"
+      >
         {{ emptyMessage }}
       </p>
       <RouterLink

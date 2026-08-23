@@ -4,7 +4,7 @@
 // assignee, inquiry count, last inquiry, row click -> detail).
 import { computed, h } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Plus } from 'lucide-vue-next'
+import { Plus, Users } from 'lucide-vue-next'
 import type { ColumnDef } from '@tanstack/vue-table'
 import PageHeader from '../components/PageHeader.vue'
 import DataTable from '../components/DataTable.vue'
@@ -108,7 +108,9 @@ const columns: ColumnDef<PersonSummary>[] = [
       count-noun="people"
       count-noun-singular="person"
       :truncated="peopleData?.truncated ?? false"
-      empty-message="No people yet."
+      empty-title="No people yet"
+      empty-message="Leads you add or receive will appear here."
+      :empty-icon="Users"
       empty-action-label="Add a lead"
       empty-action-to="/intake/new"
     />

@@ -37,6 +37,22 @@ const textarea = ref<HTMLTextAreaElement | null>(null)
 let nextId = 1
 
 const pending = computed(() => turn.isPending.value)
+
+/** Empty-state suggestion chips (one click = one turn). */
+const SUGGESTIONS = ['Who should I call next?', 'Why is she first?', 'Find …']
+
+/** Auto-grow the textarea from 2 to 5 lines with the draft. */
+const rows = computed(() => Math.min(5, Math.max(2, draft.value.split('\n').length)))
+
+function suggest(text: string) {
+  if (text.endsWith('…')) {
+    draft.value = text.slice(0, -1)
+    void nextTick(() => textarea.value?.focus())
+    return
+  }
+  draft.value = text
+  send()
+}
 const trimmed = computed(() => draft.value.trim())
 const canSend = computed(() => !pending.value && trimmed.value.length > 0 && trimmed.value.length <= MAX_MESSAGE_CHARS)
 
@@ -100,7 +116,7 @@ defineExpose({ focus: () => textarea.value?.focus() })
 
 <template>
   <aside
-    class="flex h-full w-[400px] shrink-0 flex-col border-l border-border bg-surface-0"
+    class="flex h-full w-[420px] shrink-0 flex-col border-l border-border bg-surface-0"
     aria-label="Ask the Operator"
     data-testid="operator-panel"
   >
@@ -139,12 +155,26 @@ defineExpose({ focus: () => textarea.value?.focus() })
       class="flex-1 space-y-3 overflow-y-auto px-4 py-4"
       data-testid="operator-transcript"
     >
-      <p
+      <div
         v-if="transcript.length === 0 && !errorText"
-        class="text-body text-text-muted"
+        class="pt-6 text-center"
       >
-        Ask who to call next, why someone is first, or about any Person.
-      </p>
+        <p class="text-body text-text-muted">
+          Ask who to call next, why someone is first, or about any Person.
+        </p>
+        <div class="mt-4 flex flex-wrap justify-center gap-2">
+          <button
+            v-for="suggestion in SUGGESTIONS"
+            :key="suggestion"
+            type="button"
+            class="h-10 rounded-full border border-border bg-surface-0 px-3.5 text-small font-medium text-text transition-colors duration-150 ease-out hover:bg-surface-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+            data-testid="operator-suggestion"
+            @click="suggest(suggestion)"
+          >
+            {{ suggestion }}
+          </button>
+        </div>
+      </div>
 
       <div
         v-for="entry in transcript"
@@ -154,12 +184,19 @@ defineExpose({ focus: () => textarea.value?.focus() })
         :class="entry.role === 'user' ? 'justify-end' : 'justify-start'"
       >
         <div
-          class="max-w-[85%] space-y-2"
+          class="space-y-2"
+          :class="entry.role === 'user' ? 'max-w-[85%]' : 'w-full'"
         >
+          <p
+            v-if="entry.role === 'assistant'"
+            class="text-small font-medium text-text-subtle"
+          >
+            Operator
+          </p>
           <!-- v-text (never v-html): the reply is plain text by contract (§10). -->
           <p
-            class="whitespace-pre-wrap break-words rounded-xl px-3 py-2 text-body"
-            :class="entry.role === 'user' ? 'bg-surface-2 text-text' : 'bg-surface-1 text-text'"
+            class="whitespace-pre-wrap break-words text-body text-text"
+            :class="entry.role === 'user' ? 'rounded-xl bg-surface-2 px-3 py-2' : ''"
             v-text="entry.text"
           />
           <div
@@ -175,13 +212,20 @@ defineExpose({ focus: () => textarea.value?.focus() })
         </div>
       </div>
 
-      <p
+      <div
         v-if="pending"
-        class="text-small text-text-muted"
+        class="flex items-center gap-1 pl-1"
         data-testid="operator-pending"
+        aria-label="Thinking"
       >
-        Thinking…
-      </p>
+        <span class="sr-only">Thinking…</span>
+        <span
+          v-for="i in 3"
+          :key="i"
+          class="h-1.5 w-1.5 animate-pulse rounded-full bg-text-subtle"
+          :style="{ animationDelay: `${(i - 1) * 150}ms` }"
+        />
+      </div>
       <p
         v-if="errorText"
         class="text-body text-danger"
@@ -199,8 +243,8 @@ defineExpose({ focus: () => textarea.value?.focus() })
         ref="textarea"
         v-model="draft"
         :class="TEXTAREA_CLASSES"
-        class="min-h-[72px]"
-        rows="3"
+        class="min-h-[64px]"
+        :rows="rows"
         placeholder="Who should I call next?"
         :maxlength="MAX_MESSAGE_CHARS"
         :disabled="pending"

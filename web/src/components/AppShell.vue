@@ -187,6 +187,29 @@ function logout() {
         <span class="text-[17px] font-semibold text-text">CRM</span>
       </div>
 
+      <div
+        v-if="askAvailable"
+        class="px-3 pb-2"
+      >
+        <!-- UI_STYLE §1: no top bar; the Operator entry point lives with
+             the navigation, styled as a sidebar item with its shortcut. -->
+        <button
+          type="button"
+          class="flex h-10 w-full items-center gap-2 rounded-lg border border-border px-3 text-body font-medium text-text transition-colors duration-150 ease-out hover:bg-surface-2/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+          :class="askOpen ? 'bg-surface-2' : 'bg-surface-0'"
+          :aria-pressed="askOpen"
+          data-testid="ask-toggle"
+          @click="toggleAsk"
+        >
+          <Sparkles
+            class="h-[18px] w-[18px] shrink-0 text-text-muted"
+            stroke-width="1.5"
+          />
+          <span class="flex-1 text-left">Ask</span>
+          <kbd class="rounded-md border border-border bg-surface-1 px-1.5 text-[11px] font-medium text-text-subtle">⌘K</kbd>
+        </button>
+      </div>
+
       <nav class="flex-1 space-y-6 overflow-y-auto px-3 py-2">
         <div
           v-for="group in navGroups"
@@ -279,29 +302,7 @@ function logout() {
 
     <div class="flex min-w-0 flex-1">
       <div class="min-w-0 flex-1 overflow-y-auto">
-        <div
-          v-if="askAvailable"
-          class="flex h-14 items-center justify-end px-10"
-        >
-          <button
-            type="button"
-            :class="buttonClasses(askOpen ? 'ghost' : 'secondary')"
-            :aria-pressed="askOpen"
-            title="Ask the Operator (⌘K)"
-            data-testid="ask-toggle"
-            @click="toggleAsk"
-          >
-            <Sparkles
-              class="h-[18px] w-[18px]"
-              stroke-width="1.5"
-            />
-            Ask
-          </button>
-        </div>
-        <div
-          class="mx-auto max-w-[1280px] px-10 pb-10"
-          :class="askAvailable ? 'pt-2' : 'pt-10'"
-        >
+        <div class="mx-auto max-w-[1280px] px-10 py-10">
           <div
             v-if="sessionUnavailable"
             class="rounded-xl border border-border bg-surface-0 p-5"
@@ -325,13 +326,20 @@ function logout() {
       <!-- v-show while available: closing mid-turn must not discard the
            answer or the transcript (component state survives until the
            drawer stops being available, e.g. on /platform). -->
-      <OperatorPanel
-        v-if="askAvailable"
-        v-show="askOpen"
-        ref="operatorPanel"
-        class="sticky top-0 h-screen"
-        @close="closeAsk"
-      />
+      <Transition
+        enter-from-class="opacity-0 translate-x-2"
+        enter-active-class="transition-all duration-150 ease-out"
+        leave-active-class="transition-all duration-150 ease-out"
+        leave-to-class="opacity-0 translate-x-2"
+      >
+        <OperatorPanel
+          v-if="askAvailable"
+          v-show="askOpen"
+          ref="operatorPanel"
+          class="sticky top-0 h-screen"
+          @close="closeAsk"
+        />
+      </Transition>
     </div>
   </div>
 </template>

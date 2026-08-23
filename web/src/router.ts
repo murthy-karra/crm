@@ -22,6 +22,8 @@ declare module 'vue-router' {
     requiresOrgAdmin?: boolean
     /** SLICE_004 §10: `/platform/*` — requires `platform_admin === true`. */
     requiresPlatformAdmin?: boolean
+    /** Document title, rendered as "<title> · CRM". */
+    title?: string
   }
 }
 
@@ -31,7 +33,7 @@ function routes(): RouteRecordRaw[] {
       path: '/login',
       name: 'login',
       component: () => import('./views/LoginView.vue'),
-      meta: { public: true },
+      meta: { public: true, title: 'Sign in' },
     },
     {
       // SLICE_004 §5/§10: the token is the credential, never a query string
@@ -41,53 +43,58 @@ function routes(): RouteRecordRaw[] {
       name: 'invite',
       component: () => import('./views/InviteView.vue'),
       props: true,
-      meta: { public: true, allowAuthenticated: true },
+      meta: { public: true, allowAuthenticated: true, title: 'Invitation' },
     },
     {
       // SLICE_003 §14: Today is the landing route after login.
       path: '/today',
       name: 'today',
       component: () => import('./views/TodayView.vue'),
+      meta: { title: 'Today' },
     },
     {
       path: '/people',
       name: 'people',
       component: () => import('./views/PeopleView.vue'),
+      meta: { title: 'People' },
     },
     {
       path: '/people/:id',
       name: 'person-detail',
       component: () => import('./views/PersonDetailView.vue'),
       props: true,
+      meta: { title: 'Person' },
     },
     {
       path: '/intake/new',
       name: 'new-inquiry',
       component: () => import('./views/NewInquiryView.vue'),
+      meta: { title: 'New lead' },
     },
     {
       path: '/intake/unresolved',
       name: 'unresolved',
       component: () => import('./views/UnresolvedView.vue'),
+      meta: { title: 'Unresolved' },
     },
     {
       path: '/manage/members',
       name: 'manage-members',
       component: () => import('./views/MembersView.vue'),
-      meta: { requiresOrgAdmin: true },
+      meta: { requiresOrgAdmin: true, title: 'Members' },
     },
     {
       path: '/platform',
       name: 'platform-organizations',
       component: () => import('./views/PlatformOrganizationsView.vue'),
-      meta: { requiresPlatformAdmin: true },
+      meta: { requiresPlatformAdmin: true, title: 'Organizations' },
     },
     {
       path: '/platform/organizations/:id',
       name: 'platform-organization',
       component: () => import('./views/PlatformOrganizationView.vue'),
       props: true,
-      meta: { requiresPlatformAdmin: true },
+      meta: { requiresPlatformAdmin: true, title: 'Organization' },
     },
     { path: '/', redirect: '/today' },
     { path: '/:pathMatch(.*)*', redirect: '/today' },
@@ -211,6 +218,12 @@ export function createAppRouter(history: RouterHistory): Router {
     }
 
     return true
+  })
+
+  router.afterEach((to) => {
+    if (typeof document !== 'undefined') {
+      document.title = to.meta.title ? `${to.meta.title} · CRM` : 'CRM'
+    }
   })
 
   return router

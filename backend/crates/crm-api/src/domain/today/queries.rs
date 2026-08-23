@@ -138,7 +138,12 @@ impl TryFrom<TodayCandidateRow> for TodayCandidate {
 /// `ORDER BY` (tier before `LIMIT 201`) so a fresh lead can never fall off
 /// the cap behind stale ones. Tie-breaks (`received_at DESC, id DESC` for
 /// the latest Inquiry; `occurred_at DESC, id DESC` for the last attempt)
-/// are contract, not choice (§14a).
+/// are contract, not choice (§14a). `last_contact_attempt` is the
+/// **effective** attempt (docs/specs/SLICE_006c.md §2, §3): rows that have
+/// a corrector (`corrects_id` chain) are excluded before the tie-break —
+/// a correction inherits its original's `occurred_at`, so without the
+/// filter the `id DESC` tie-break would pick original or correction at
+/// random.
 pub async fn candidates(
     conn: &mut PgConnection,
     scope: &PersonVisibilityScope,
@@ -183,6 +188,7 @@ pub async fn candidates(
                SELECT ca.id, ca.channel, ca.outcome, ca.occurred_at
                FROM contact_attempted ca
                WHERE ca.person_id = p.id
+                 AND NOT EXISTS (SELECT 1 FROM contact_attempted c WHERE c.corrects_id = ca.id)
                ORDER BY ca.occurred_at DESC, ca.id DESC
                LIMIT 1
            ) last_attempt ON true

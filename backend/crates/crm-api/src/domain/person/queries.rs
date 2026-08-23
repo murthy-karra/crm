@@ -681,11 +681,19 @@ struct ContactAttemptedHistoryRow {
     actor_display_name: Option<String>,
     channel: String,
     outcome: String,
+    call_id: Option<Uuid>,
+    corrects_id: Option<Uuid>,
+    superseded: bool,
 }
 
 /// `contact_attempted` history entries (docs/specs/SLICE_003.md §5, the
 /// declared additive SLICE_002 §5 contract change): `kind_rank` 4,
-/// `detail: {"channel", "outcome"}`.
+/// `detail: {"channel", "outcome", "call_id", "corrects_id", "superseded"}`
+/// — the last three added by docs/specs/SLICE_006c.md §2. `call_id` is the
+/// row's `causation_id` when it names a `call` of this Organization
+/// (call-derived attempts and their corrections); a manual attempt has
+/// `causation_id` NULL and so `call_id: null`. `superseded` = a corrector
+/// exists.
 async fn contact_attempted_history(
     conn: &mut PgConnection,
     organization_id: Uuid,
@@ -695,9 +703,13 @@ async fn contact_attempted_history(
         ContactAttemptedHistoryRow,
         r#"SELECT ca.id, ca.occurred_at, ca.recorded_at, ca.origin, ca.correlation_id,
                   ca.actor_user_id, au.display_name as "actor_display_name?",
-                  ca.channel, ca.outcome
+                  ca.channel, ca.outcome,
+                  cl.id as "call_id?", ca.corrects_id,
+                  EXISTS (SELECT 1 FROM contact_attempted c WHERE c.corrects_id = ca.id)
+                      as "superseded!"
            FROM contact_attempted ca
            LEFT JOIN app_user au ON au.id = ca.actor_user_id
+           LEFT JOIN call cl ON cl.id = ca.causation_id AND cl.organization_id = ca.organization_id
            WHERE ca.organization_id = $1 AND ca.person_id = $2"#,
         organization_id,
         person_id,
@@ -719,6 +731,9 @@ async fn contact_attempted_history(
             detail: serde_json::json!({
                 "channel": r.channel,
                 "outcome": r.outcome,
+                "call_id": r.call_id,
+                "corrects_id": r.corrects_id,
+                "superseded": r.superseded,
             }),
         })
         .collect())

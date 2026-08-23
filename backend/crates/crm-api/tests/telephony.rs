@@ -1,6 +1,7 @@
-//! Service-free HTTP tests for the Slice 006 call routes and the LiveKit
-//! webhook (docs/specs/SLICE_006.md §13 item 1): 401/400/503 on every new
-//! route with telephony disabled, and the webhook's signature gate. Every
+//! Service-free HTTP tests for the Slice 006 call routes, the Slice 006c
+//! outcome route, and the LiveKit webhook (docs/specs/SLICE_006.md §13
+//! item 1; SLICE_006c §13 item 1): 401/400/503 on every new route with
+//! telephony disabled, and the webhook's signature gate. Every
 //! other case needs a session, which `AuthContext` resolves against the
 //! database — same split as `tests/operator.rs`.
 use std::collections::HashMap;
@@ -68,6 +69,11 @@ fn routes() -> Vec<(&'static str, String, Option<serde_json::Value>)> {
         ),
         ("POST", format!("/api/calls/{id}/dial"), None),
         ("POST", format!("/api/calls/{id}/hangup"), None),
+        (
+            "POST",
+            format!("/api/calls/{id}/outcome"),
+            Some(serde_json::json!({ "outcome": "left_message" })),
+        ),
         ("GET", format!("/api/calls/{id}"), None),
     ]
 }
@@ -127,6 +133,11 @@ async fn every_call_route_with_a_non_uuid_id_returns_400_before_auth() {
         ),
         ("POST", "/api/calls/not-a-uuid/dial".to_string(), None),
         ("POST", "/api/calls/not-a-uuid/hangup".to_string(), None),
+        (
+            "POST",
+            "/api/calls/not-a-uuid/outcome".to_string(),
+            Some(serde_json::json!({ "outcome": "left_message" })),
+        ),
         ("GET", "/api/calls/not-a-uuid".to_string(), None),
     ] {
         let response = app

@@ -1572,3 +1572,88 @@ async fn validation_accepts_the_exact_boundaries(migrator_pool: PgPool) {
         assert_eq!(response.status(), StatusCode::OK, "{label}");
     }
 }
+
+/// docs/specs/SLICE_006c.md §4: `get_person`'s history text marks a
+/// superseded attempt and a correction, so the model never reports a
+/// superseded row as a live attempt. The original/correction pair is a
+/// migrator fixture (the same shape `correct_call_outcome` writes; the
+/// command itself is covered in `db_calls.rs`).
+#[sqlx::test]
+#[ignore]
+async fn get_person_history_marks_superseded_and_corrected_attempts(migrator_pool: PgPool) {
+    let f = fixture(migrator_pool).await;
+    let plain = router_with(&f.migrator_pool, None).await;
+    let alice = common::login_cookie(&plain, "alice@acme.test", "pw").await;
+    let person_id = create_person(
+        &plain,
+        &alice,
+        "Grace",
+        "Hopper",
+        "grace@example.test",
+        None,
+        None,
+        Some(f.alice_id),
+    )
+    .await;
+    let occurred_at = Utc::now();
+    let original: Uuid = sqlx::query_scalar(
+        "INSERT INTO contact_attempted
+            (organization_id, actor_kind, actor_user_id, origin, occurred_at, correlation_id,
+             person_id, channel, outcome, causation_id)
+         VALUES ($1, 'user', $2, 'web_session', $3, $4, $5, 'call', 'reached', $6) RETURNING id",
+    )
+    .bind(f.org_acme)
+    .bind(f.alice_id)
+    .bind(occurred_at)
+    .bind(Uuid::new_v4())
+    .bind(person_id)
+    .bind(Uuid::new_v4())
+    .fetch_one(&f.migrator_pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO contact_attempted
+            (organization_id, actor_kind, actor_user_id, origin, occurred_at, correlation_id,
+             person_id, channel, outcome, corrects_id, recorded_at)
+         VALUES ($1, 'user', $2, 'web_session', $3, $4, $5, 'call', 'left_message', $6,
+                 clock_timestamp())",
+    )
+    .bind(f.org_acme)
+    .bind(f.alice_id)
+    .bind(occurred_at)
+    .bind(Uuid::new_v4())
+    .bind(person_id)
+    .bind(original)
+    .execute(&f.migrator_pool)
+    .await
+    .unwrap();
+
+    let (router, provider) = router_scripted(
+        &f.migrator_pool,
+        vec![
+            tool_step("get_person", json!({ "person_id": person_id })),
+            text_step("Voicemail, per Alice."),
+        ],
+    )
+    .await;
+    let alice = common::login_cookie(&router, "alice@acme.test", "pw").await;
+    let response = post_turn(&router, &alice, message("How did the call go?")).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = common::body_json(response).await;
+    assert_eq!(body["tool_calls"][0]["outcome"], "ok");
+
+    let prompt = requests_json(&provider);
+    assert!(
+        prompt.contains("call: reached (superseded)"),
+        "the superseded row must be marked: {prompt}"
+    );
+    assert!(
+        prompt.contains("corrected outcome call: left_message"),
+        "the correction must be marked: {prompt}"
+    );
+    assert!(
+        !prompt.contains("\"call: reached\""),
+        "the original must not read as a live attempt: {prompt}"
+    );
+    let _ = (f.carol_id, f.org_best, f.bob_id);
+}

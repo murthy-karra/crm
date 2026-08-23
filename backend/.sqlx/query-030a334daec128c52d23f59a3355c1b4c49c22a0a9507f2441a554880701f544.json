@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT ca.id, ca.occurred_at, ca.recorded_at, ca.origin, ca.correlation_id,\n                  ca.actor_user_id, au.display_name as \"actor_display_name?\",\n                  ca.channel, ca.outcome\n           FROM contact_attempted ca\n           LEFT JOIN app_user au ON au.id = ca.actor_user_id\n           WHERE ca.organization_id = $1 AND ca.person_id = $2",
+  "query": "SELECT ca.id, ca.occurred_at, ca.recorded_at, ca.origin, ca.correlation_id,\n                  ca.actor_user_id, au.display_name as \"actor_display_name?\",\n                  ca.channel, ca.outcome,\n                  cl.id as \"call_id?\", ca.corrects_id,\n                  EXISTS (SELECT 1 FROM contact_attempted c WHERE c.corrects_id = ca.id)\n                      as \"superseded!\"\n           FROM contact_attempted ca\n           LEFT JOIN app_user au ON au.id = ca.actor_user_id\n           LEFT JOIN call cl ON cl.id = ca.causation_id AND cl.organization_id = ca.organization_id\n           WHERE ca.organization_id = $1 AND ca.person_id = $2",
   "describe": {
     "columns": [
       {
@@ -47,6 +47,21 @@
         "ordinal": 8,
         "name": "outcome",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "call_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 10,
+        "name": "corrects_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 11,
+        "name": "superseded!",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
@@ -64,8 +79,11 @@
       true,
       false,
       false,
-      false
+      false,
+      false,
+      true,
+      null
     ]
   },
-  "hash": "e3c828cf096f28247bbdbdd885921f95b80cfab396fe5e7f0bb873c2121e7fd2"
+  "hash": "030a334daec128c52d23f59a3355c1b4c49c22a0a9507f2441a554880701f544"
 }

@@ -4,6 +4,7 @@
 
 pub mod assign_person;
 pub mod change_person_stage;
+pub mod correct_call_outcome;
 pub mod dial_call;
 pub mod hangup_call;
 pub mod log_contact_attempt;
@@ -12,6 +13,10 @@ pub mod start_call;
 
 pub use assign_person::{assign_person, AssignPerson};
 pub use change_person_stage::{change_person_stage, ChangePersonStage};
+pub use correct_call_outcome::{
+    correct_call_outcome, CallOutcomeCorrection, CorrectCallOutcome, CorrectedAttemptRef,
+    CorrectionResult,
+};
 pub use dial_call::dial_call;
 pub use hangup_call::hangup_call;
 pub use log_contact_attempt::{
@@ -120,6 +125,15 @@ pub enum CallError {
     Forbidden,
     /// The provider failed at `start` (room creation).
     TelephonyUnavailable,
+    /// `correct_call_outcome` on a call that never reached the callee —
+    /// no `contact_attempted` row with `causation_id = call.id`
+    /// (docs/specs/SLICE_006c.md §3) — 422.
+    NoContactAttempt,
+    /// `23505` on `contact_attempted_corrects_once`: the head was
+    /// corrected by a writer that did not hold the call lock
+    /// (docs/specs/SLICE_006c.md §3; unreachable from the command itself)
+    /// — 409.
+    CorrectionConflict,
     /// Data read back from our own database didn't match an expected
     /// shape (see `CommandError::Corrupt`).
     Corrupt,
@@ -146,6 +160,8 @@ impl CallError {
             CallError::CallNotFound => "call_not_found",
             CallError::Forbidden => "forbidden",
             CallError::TelephonyUnavailable => "telephony_unavailable",
+            CallError::NoContactAttempt => "no_contact_attempt",
+            CallError::CorrectionConflict => "correction_conflict",
             CallError::Corrupt => "corrupt",
             CallError::Database(_) => "database",
         }

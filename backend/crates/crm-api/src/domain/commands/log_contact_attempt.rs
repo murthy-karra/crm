@@ -50,8 +50,10 @@ impl ContactChannel {
     }
 }
 
-/// `"reached" | "no_answer" | "left_message" | "sent"`
-/// (docs/specs/SLICE_003.md §2, §5).
+/// `"reached" | "no_answer" | "left_message" | "sent" | "busy" |
+/// "wrong_number"` (docs/specs/SLICE_003.md §2, §5; `busy` and
+/// `wrong_number` added by docs/specs/SLICE_006c.md §2 — the manual route's
+/// vocabulary widens with this enum).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ContactOutcome {
@@ -59,6 +61,8 @@ pub enum ContactOutcome {
     NoAnswer,
     LeftMessage,
     Sent,
+    Busy,
+    WrongNumber,
 }
 
 impl ContactOutcome {
@@ -68,6 +72,8 @@ impl ContactOutcome {
             ContactOutcome::NoAnswer => "no_answer",
             ContactOutcome::LeftMessage => "left_message",
             ContactOutcome::Sent => "sent",
+            ContactOutcome::Busy => "busy",
+            ContactOutcome::WrongNumber => "wrong_number",
         }
     }
 
@@ -78,6 +84,8 @@ impl ContactOutcome {
             "no_answer" => Some(ContactOutcome::NoAnswer),
             "left_message" => Some(ContactOutcome::LeftMessage),
             "sent" => Some(ContactOutcome::Sent),
+            "busy" => Some(ContactOutcome::Busy),
+            "wrong_number" => Some(ContactOutcome::WrongNumber),
             _ => None,
         }
     }
@@ -157,6 +165,8 @@ async fn log_contact_attempt_attempt(
             person_id: cmd.person_id,
             channel: cmd.channel.as_str(),
             outcome: cmd.outcome.as_str(),
+            corrects_id: None,
+            recorded_at: None,
         },
     )
     .await?;
@@ -187,4 +197,33 @@ async fn log_contact_attempt_attempt(
             occurred_at,
         },
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ContactOutcome;
+
+    /// docs/specs/SLICE_006c.md §13 item 1: the two new values round-trip
+    /// through serde and `as_str`/`decode`.
+    #[test]
+    fn contact_outcome_round_trips_every_value() {
+        for (value, wire) in [
+            (ContactOutcome::Reached, "reached"),
+            (ContactOutcome::NoAnswer, "no_answer"),
+            (ContactOutcome::LeftMessage, "left_message"),
+            (ContactOutcome::Sent, "sent"),
+            (ContactOutcome::Busy, "busy"),
+            (ContactOutcome::WrongNumber, "wrong_number"),
+        ] {
+            assert_eq!(value.as_str(), wire);
+            assert_eq!(ContactOutcome::decode(wire), Some(value));
+            assert_eq!(
+                serde_json::to_string(&value).unwrap(),
+                format!("\"{wire}\"")
+            );
+            let parsed: ContactOutcome = serde_json::from_str(&format!("\"{wire}\"")).unwrap();
+            assert_eq!(parsed, value);
+        }
+        assert_eq!(ContactOutcome::decode("voicemail"), None);
+    }
 }

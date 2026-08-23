@@ -6,6 +6,7 @@ use sqlx::postgres::{PgPool, PgPoolOptions};
 use crate::config::{Config, RawPayloadKey, RealtimeTokenSecret, SessionSecret};
 use crate::operator::OperatorRuntime;
 use crate::realtime::{CentrifugoTransport, Publisher};
+use crate::telephony::Telephony;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -25,6 +26,11 @@ pub struct AppState {
     /// answers 503 `operator_disabled` and nothing else changes
     /// (docs/specs/SLICE_005.md §9).
     pub operator: Option<Arc<OperatorRuntime>>,
+    /// `None` when calling is disabled (`LIVEKIT_API_KEY` unset): the
+    /// call routes answer 503 `telephony_disabled`; reads (`GET
+    /// /api/calls/{id}`, history) keep working (docs/specs/SLICE_006.md
+    /// §3, §9).
+    pub telephony: Option<Arc<Telephony>>,
 }
 
 impl AppState {
@@ -56,6 +62,14 @@ impl AppState {
             None => tracing::info!("operator disabled: GROQ_API_KEY is not set"),
         }
 
+        let telephony = Telephony::from_config(config).map(Arc::new);
+        match &telephony {
+            Some(telephony) => {
+                tracing::info!(provider = telephony.provider_name, "telephony enabled")
+            }
+            None => tracing::info!("telephony disabled"),
+        }
+
         Ok(Self {
             db,
             database_connect_timeout: config.database_connect_timeout,
@@ -70,6 +84,7 @@ impl AppState {
             invitation_ttl: config.invitation_ttl,
             publisher,
             operator,
+            telephony,
         })
     }
 
@@ -95,6 +110,7 @@ impl AppState {
             invitation_ttl: config.invitation_ttl,
             publisher,
             operator: None,
+            telephony: None,
         }
     }
 
@@ -102,6 +118,13 @@ impl AppState {
     /// over a `ScriptedProvider`).
     pub fn with_operator(mut self, runtime: OperatorRuntime) -> Self {
         self.operator = Some(Arc::new(runtime));
+        self
+    }
+
+    /// Test-support: attach a telephony runtime (almost always one built
+    /// over a `ScriptedProvider`).
+    pub fn with_telephony(mut self, telephony: Arc<Telephony>) -> Self {
+        self.telephony = Some(telephony);
         self
     }
 }

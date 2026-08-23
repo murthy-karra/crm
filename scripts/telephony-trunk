@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Creates (or lists) the LiveKit SIP outbound trunk toward Telnyx
+# (docs/specs/SLICE_006.md §11). Reads TELNYX_SIP_USERNAME/PASSWORD/
+# NUMBER_E164 and LIVEKIT_API_URL/KEY/SECRET from .env — never argv, never
+# printed. The application itself only ever sees the resulting trunk id
+# (LIVEKIT_SIP_OUTBOUND_TRUNK_ID). Idempotent: an existing trunk with the
+# same name is reused.
+set -euo pipefail
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "$script_dir/.." && pwd)"
+env_file="$repo_root/.env"
+[ -f "$env_file" ] || { echo ".env not found" >&2; exit 1; }
+set -a; # shellcheck disable=SC1090
+source "$env_file"; set +a
+for v in LIVEKIT_API_URL LIVEKIT_API_KEY LIVEKIT_API_SECRET TELNYX_SIP_USERNAME TELNYX_SIP_PASSWORD TELNYX_NUMBER_E164; do
+  [ -n "${!v:-}" ] || { echo "$v is empty in .env" >&2; exit 1; }
+done
+[[ "$TELNYX_NUMBER_E164" =~ ^\+[0-9]{8,15}$ ]] || { echo "TELNYX_NUMBER_E164 must be E.164 (+digits)" >&2; exit 1; }
+
+# Credentials travel only via the process environment into python; the
+# request body is built in memory and sent over TLS.
+TRUNK_NAME="${TRUNK_NAME:-telnyx-outbound}" python3 - <<'PY'
+import os, json, time, hmac, hashlib, base64, urllib.request, urllib.error
+api=os.environ['LIVEKIT_API_URL']; key=os.environ['LIVEKIT_API_KEY']; secret=os.environ['LIVEKIT_API_SECRET']
+def b64(b): return base64.urlsafe_b64encode(b).rstrip(b'=').decode()
+def token():
+    now=int(time.time()); h=b64(json.dumps({"alg":"HS256","typ":"JWT"}).encode())
+    p=b64(json.dumps({"iss":key,"nbf":now-10,"exp":now+60,"sip":{"admin":True}}).encode())
+    return f"{h}.{p}."+b64(hmac.new(secret.encode(), f"{h}.{p}".encode(), hashlib.sha256).digest())
+def call(method, body):
+    req=urllib.request.Request(f"{api}/twirp/livekit.SIP/{method}", data=json.dumps(body).encode(),
+        headers={"Content-Type":"application/json","Authorization":f"Bearer {token()}"})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r: return json.loads(r.read() or b"{}")
+    except urllib.error.HTTPError as e:
+        raise SystemExit(f"{method}: HTTP {e.code} {e.read()[:300].decode(errors='replace')}")
+name=os.environ['TRUNK_NAME']
+existing=[t for t in call("ListSIPOutboundTrunk", {}).get("items", []) if t.get("name")==name]
+if existing:
+    print(f"existing trunk: {existing[0]['sip_trunk_id']}"); raise SystemExit(0)
+trunk={"trunk":{
+    "name": name,
+    "address": "sip.telnyx.com",
+    "transport": "SIP_TRANSPORT_UDP",
+    "numbers": [os.environ['TELNYX_NUMBER_E164']],
+    "auth_username": os.environ['TELNYX_SIP_USERNAME'],
+    "auth_password": os.environ['TELNYX_SIP_PASSWORD'],
+}}
+r=call("CreateSIPOutboundTrunk", trunk)
+print(f"created trunk: {r['sip_trunk_id']}")
+PY

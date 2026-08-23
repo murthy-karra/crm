@@ -353,3 +353,55 @@ pub async fn insert_stage_changed(
     .await?;
     Ok(row.id)
 }
+
+// --- Slice 006 (docs/specs/SLICE_006.md §2) --------------------------------
+
+pub struct CallCompletedFact<'a> {
+    pub call_id: Uuid,
+    pub person_id: Uuid,
+    pub contact_method_id: Uuid,
+    /// `reached` for every answered call, else the `failure_reason`.
+    pub outcome: &'a str,
+    pub answered_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub ended_at: chrono::DateTime<chrono::Utc>,
+    pub talk_seconds: Option<i32>,
+}
+
+/// The completed-call fact (AGENTS.md §4.6; docs/specs/SLICE_006.md §2):
+/// written once by `settle` on every terminal transition, PII-free
+/// (`contact_method_id` is a bare id). `envelope.occurred_at` is the
+/// call's `ended_at`.
+pub async fn insert_call_completed(
+    tx: &mut PgConnection,
+    envelope: &FactEnvelope,
+    fact: CallCompletedFact<'_>,
+) -> Result<Uuid, sqlx::Error> {
+    let actor_kind = envelope.actor_kind.as_str();
+    let origin = envelope.origin.as_str();
+    let row = sqlx::query!(
+        r#"INSERT INTO call_completed
+            (organization_id, actor_kind, actor_user_id, on_behalf_of_user_id, origin,
+             occurred_at, correlation_id, causation_id,
+             call_id, person_id, contact_method_id, outcome, answered_at, ended_at, talk_seconds)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+           RETURNING id"#,
+        envelope.organization_id,
+        actor_kind,
+        envelope.actor_user_id,
+        envelope.on_behalf_of_user_id,
+        origin,
+        envelope.occurred_at,
+        envelope.correlation_id,
+        envelope.causation_id,
+        fact.call_id,
+        fact.person_id,
+        fact.contact_method_id,
+        fact.outcome,
+        fact.answered_at,
+        fact.ended_at,
+        fact.talk_seconds,
+    )
+    .fetch_one(tx)
+    .await?;
+    Ok(row.id)
+}

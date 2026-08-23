@@ -262,6 +262,9 @@ pub struct Telephony { provider: Arc<dyn TelephonyProvider>, signer: JoinTokenSi
   video: {room: "call:<id>", roomJoin: true, canPublish: true,
   canSubscribe: true, canPublishData: false}}`. No `roomCreate`,
   `roomAdmin`, `roomList`. TTL `CRM_TELEPHONY_JOIN_TTL_SECONDS`.
+  Implementation note (Lane A, 2026-08-22): the token also carries
+  `nbf = now`, as LiveKit's own SDKs do; the claim set is exactly
+  `{iss, sub, exp, nbf, video}`.
 - `WebhookVerifier`: LiveKit's scheme — `Authorization: <JWT>` signed
   with the API secret, `iss = api_key`, `exp`, `sha256` claim = base64
   SHA-256 of the raw body; constant-time compare.

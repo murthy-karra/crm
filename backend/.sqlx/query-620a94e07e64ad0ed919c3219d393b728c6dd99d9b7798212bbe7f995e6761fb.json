@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE call\n           SET status = $3, failure_reason = $4, end_reason = $5, provider_call_ref = $6,\n               ringing_at = $7, answered_at = $8, ended_at = $9, updated_at = $10\n           WHERE organization_id = $1 AND id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "620a94e07e64ad0ed919c3219d393b728c6dd99d9b7798212bbe7f995e6761fb"
+}

@@ -1,28 +1,45 @@
 # Project State
 
-Last updated: 2026-08-22
+Last updated: 2026-08-22 (Lane A implemented)
 
 ## Current phase
 
-**Slice 006 (calling) — spec APPROVED 2026-08-22; Lane C (telephony
-host) DEPLOYED and verified; Lane A (backend) next.** The user
-provisioned `livekit1.tarams.org` (OVH, Ubuntu 24.04, public IPv4, DNS
-A record); Docker, ufw, Caddy (Let's Encrypt), Redis, LiveKit v1.13
-(built-in TURN on 3478/5349 using Caddy's cert) and LiveKit SIP v1.11
-are up from `infra/telephony/`. Verified from the Mac over TLS: room
-create/list/delete and `SIP/ListSIPOutboundTrunk` (empty). Remaining
-for Lane C: the Telnyx number + credential SIP connection (user), then
-the trunk via Lane A's `scripts/telephony-trunk`. Webhook URL is
-configured but the API route does not exist yet (Lane A). The hostname
-is `livekit1.tarams.org` (spec text says `livekit.tarams.org`). On 2026-08-22 the user accepted D-030
-(006 = human-initiated outbound browser calling; 006a = `crm-app`
-extraction; 006b = Operator `start_call`; dev telephony on a public
-Linux host with one Telnyx number as a LiveKit outbound trunk) and
-D-031 (automatic contact attempt at answer/failure time; voicemail
-reads `reached`); O-011 (outbound-calling compliance) recorded.
-`docs/specs/SLICE_006.md` and lane briefs A (backend), B (web), C
-(telephony infra) drafted from a `crm-planner` pass. Slice 005 is
-closed (see History).
+**Slice 006 (calling) — Lane A COMMITTED (`62562c6` on
+`slice-006-calling`); Lane B (web) IMPLEMENTED and VERIFIED in worktree
+`../crm-slice-006-web` on `slice-006-web` (branched from `62562c6`),
+COMMITTED (`9aecedb`) and MERGED into `slice-006-calling` (`4090f13`);
+worktree removed. Next: live walkthrough, then merge to `main`.** Lane C
+(telephony host) is COMPLETE. Lane B delivered: `livekit-client`
+2.22.0 (exact pin, lazy chunk), `telephony/{useCall,client,errors,
+format}.ts`, `CallPanel.vue`, Call button + number picker on
+`PersonDetailView.vue` (Log contact now secondary), `call_completed`
+history rendering, types/queries (`useStartCall`/`useDialCall`/
+`useHangupCall`/`useCall`), `call.changed` invalidation, §10 error copy,
+`onBeforeRouteLeave` confirm while on a call. Verification in the
+worktree: `./scripts/check` all passed (web 159 Vitest; `typecheck` now
+really checks the app — `package.json` fixed to `-p tsconfig.app.json`,
+which exposed and fixed 5 pre-existing errors: `@tanstack/table-core`
+added as an exact devDependency so the `ColumnMeta` augmentation
+applies; `useRealtime.test.ts` typings). Review + adversarial testing
+found and fixed: hanging up / navigating while "Connecting…" let the
+call proceed with zero hangups and a hot mic (now every resume point
+checks the session is not ending; an owed hangup is sent once the id
+is known; adapter `disposed` flag stops a late mic track); join token
+no longer retained in the MutationCache; stale dial 202 can no longer
+regress a newer GET; duplicate `trackSubscribed` no longer leaks an
+audio element; callee name captured at start; SDK chunk loaded before
+the mic prompt (failure → `join_failed`); picker closes on Escape /
+outside click. Still unverified live: the real LiveKit adapter
+(autoplay of the attached audio, mic publish) and the SIP failure
+encoding (busy/ring-out must yield `no_answer`). Spec-level note from
+review (not a Lane defect): the `placing` sweep horizon is 40 s from
+`placed_at` while the mic prompt comes after `POST /calls`; a very slow
+first-time permission prompt can expire the call (then `dial` → 409) —
+consider keying `placing` expiry off `dial_requested_at` later. Dev API
+on :3000 was restarted with the Lane A build (`telephony enabled
+provider=livekit`). TODO (security): rotate the Telnyx SIP password and
+update the trunk. Hostname is `livekit1.tarams.org` (spec text says
+`livekit.tarams.org`).
 
 ## Current slice
 
@@ -37,8 +54,7 @@ proof chain. Slice 004 is complete and merged (see History).
 
 ## Current branch
 
-`main` (Slice 006 planning merged and pushed); implementation branches
-not yet created.
+`slice-006-calling` at `4090f13` (Lanes A, B, C all merged).
 
 ## Last accepted decision
 
@@ -750,107 +766,15 @@ slice:
 
 ## Next recommended action
 
-Implementation gate (skill Phase 6) for Lane A on `slice-005-operator`
-per `docs/tasks/SLICE_005_LANE_A.md`; Lane B on `slice-005-web` in a
-worktree after Lane A step 5. The user intends to implement with a
-faster model in a separate session; the handoff is entirely in the repo
-(spec + two lane briefs + this file).
-
-**Done** (2026-08-22). Both lanes implemented and self-verified green.
-Independent review (`crm-reviewer`) and adversarial testing
-(`crm-tester`) ran against the real diffs (details in Completed work
-above); both lane file lists matched real `git status` exactly. Four
-findings fixed and re-verified: a stale `stage.rs` doc comment, a real
-`IssueInvitation`/`AcceptInvitation` race (fixed with a pre-insert
-re-check plus a `check_violation` retry), a missing true-concurrency
-double-accept test, and incomplete platform-route 403 test coverage.
-Live headless-browser walkthrough of spec §1 steps 2–9 passed 46/46
-assertions against the real running stack (details above). Final test
-counts verified by direct re-run: backend 143 unit + 133 integration
-(38 service-free, 95 DB/Centrifugo-backed); web 57 Vitest tests. All
-green. Not yet done: merge, branch/worktree cleanup, push; the tunnel
-walkthrough (done on loopback, not yet re-verified through
-`app.tarams.org`/`api.tarams.org` — optional before merge, the user's
-call).
-
-Previous (Slice 003): Implement Slice 003. The user intends to run implementation in a
-separate session with a faster model, so the handoff lives entirely in
-the repository: `docs/specs/SLICE_003.md` (APPROVED) plus the two lane
-briefs `docs/tasks/SLICE_003_LANE_A.md` (backend; owns the migration,
-`backend/**`, `scripts/**`, `infra/**`, `.env.example`, README dev
-section; branch `slice-003-realtime` in the main checkout) and
-`docs/tasks/SLICE_003_LANE_B.md` (web; owns `web/**`; branch
-`slice-003-web` in a worktree; integrates against Lane A once its step 1
-lands; merges after Lane A).
-
-Implementation gate (AGENTS.md §13; present before writing code):
-- Outcome: SLICE_003 §1 steps 1–9.
-- Changes: the one migration; `realtime/*`, `domain/today/*`,
-  `commands/log_contact_attempt.rs`, routes `today`/`realtime`/`people`;
-  `state.rs`/`config.rs`; `.sqlx/`; `infra/development/centrifugo/
-  config.json` and `cloudflared/config.yml`; `scripts/demo-leads`,
-  `check`, `check-db`; `.env.example`, README; `web/src/realtime/*`,
-  `TodayView`, `LogContactDialog`, `PersonDetailView`, `AppShell`,
-  `router`, `api/*`, `package.json`/lockfile.
-- Exclusions: SLICE_003 §12.
-- Checks: `./scripts/check` with no services; `./scripts/check-db` with
-  `dev-services up` (now includes Centrifugo-backed tests and sqlx
-  `prepare --check`); web lint/typecheck/test/build; the §1 walkthrough
-  through the tunnel.
-- Risks: Access + WebSocket upgrade through the path-routed ingress
-  (fallback is a user decision); `centrifuge` SDK refresh semantics;
-  realtime test flakiness; the `.env` `CENTRIFUGO_TOKEN_HMAC_SECRET`
-  possibly shorter than 32 bytes (regenerate + restart Centrifugo).
-- Environment prerequisite: `./scripts/dev-services down && up` so
-  Centrifugo loads the new namespace config.
-
-After both lanes self-verify green: independent review (`crm-reviewer`)
-and adversarial testing (`crm-tester`) against the real diffs, diffing
-each lane's reported file list against actual `git status` (standing
-lesson from Slice 002); fix; re-verify; live walkthrough; commit and
-merge gates; then update this file.
-
-**Done** (2026-08-22). Both lanes implemented and self-verified green.
-`crm-reviewer` independently re-ran every check both lanes claimed
-(fmt, clippy, full test suites including the live Centrifugo test, web
-lint/typecheck/test/build, a live `demo-leads` run) and found no
-blocking issues — `git status` matched both lanes' reported file lists
-exactly, no repeat of the Slice 002 undisclosed-file lesson.
-`crm-tester` found one real bug (the realtime disconnect-status
-composable didn't treat Centrifugo's 4500–4999 code range as terminal,
-matching the frozen spec text exactly but not the actual SDK — status
-could get silently stuck at "connected" forever with no indicator) and
-one coverage gap (no test for two commands racing the same Person).
-Both fixed: Lane B widened the terminal-code check and added a
-regression test plus a cheap re-entrancy guard on the log-contact
-dialog; Lane A added two concurrent-command tests proving the reused
-`FOR UPDATE` lock pattern holds under a real race. Re-verified green.
-Live browser walkthrough (headless Playwright, 8 scenarios from spec
-§1) all passed, with one environmental-only caveat (residual test data
-in the dev DB meant "empty Today on first login" couldn't be observed
-literally, though the mechanism was proven via a genuinely empty
-second Organization).
-
-Merged to `main`: `slice-003-realtime` (`--no-ff`, 9 commits) then
-`slice-003-web` (`--no-ff`, 3 commits), zero conflicts. Full
-`./scripts/check` and `./scripts/check-db` re-run clean on the merged
-`main` (not just the pre-merge branches) — fmt, clippy, all
-service-free/DB-backed/Centrifugo-backed tests, web
-lint/typecheck/28 tests/build.
-
-Separately, mid-verification, the user asked for a real live
-walkthrough through the actual Cloudflare tunnel (not loopback), which
-surfaced and led to fixing two real dev-environment issues, both
-recorded as decisions: D-024 (Cloudflare Access removed — redundant
-given the app's own login) and D-025 (the tunnel was silently
-dashboard-managed, not file-managed as documented, so the realtime
-WebSocket route in `config.yml` was never actually applied — fixed
-live in the Cloudflare dashboard, verified with a real `101 Switching
-Protocols` upgrade and a full two-browser cross-session walkthrough
-over the public tunnel).
+1. Done: Lane B committed and merged.
+2. Live walkthrough (§1 steps 1–7 / §13 item 5) from
+   `https://app.tarams.org` with the telephony host: explicitly confirm
+   a busy and a ring-out produce `no_answer` attempts, audio both ways,
+   Today advancing in a second tab.
+3. Rotate the Telnyx SIP password and update the trunk.
+4. Merge `slice-006-calling` → `main`; then 006a (`crm-app` extraction).
 
 ## Approval currently required
 
-Push approval: `main` → `origin/main`. Slice 004 is merged and fully
-re-verified locally, including the tunnel re-walkthrough (see Current
-phase); nothing else is blocking.
+None pending for code. The live walkthrough needs the user at their
+phone; merge `slice-006-calling` → `main` after it.

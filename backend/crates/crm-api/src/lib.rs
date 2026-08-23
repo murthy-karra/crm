@@ -7,6 +7,7 @@ pub mod realtime;
 pub mod routes;
 pub mod state;
 pub mod telemetry;
+pub mod telephony;
 
 use axum::http::{HeaderName, HeaderValue, Method};
 use axum::Router;
@@ -23,49 +24,37 @@ use state::AppState;
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
 pub fn build_app(state: AppState) -> Router {
-    let request_id_header = HeaderName::from_static("x-request-id");
-
-    // tower-http's span/on_request/on_response levels default to DEBUG,
-    // which the default "info,sqlx=warn" filter (telemetry.rs) silently
-    // drops — raise them to INFO so per-request logging is visible
-    // without a RUST_LOG override. on_failure is left at its default
-    // (already ERROR-level, already unfiltered).
-    let trace_layer = TraceLayer::new_for_http()
-        .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
-        .on_request(DefaultOnRequest::new().level(Level::INFO))
-        .on_response(DefaultOnResponse::new().level(Level::INFO));
-
     // Read before `state` moves into `.with_state` below.
     let cors_allowed_origin = state.cors_allowed_origin.clone();
 
-    let app = Router::new()
-        .merge(routes::health::router())
-        .merge(routes::session::router())
-        .merge(routes::organization::router())
-        .merge(routes::people::router())
-        .merge(routes::intake::router())
-        .merge(routes::stages::router())
-        .merge(routes::realtime::router())
-        .merge(routes::today::router())
-        .merge(routes::invitations::router())
-        .merge(routes::platform::router())
-        .merge(routes::operator::router())
-        .with_state(state)
-        .layer(
-            ServiceBuilder::new()
-                .layer(SetRequestIdLayer::new(
-                    request_id_header.clone(),
-                    MakeRequestUuid,
-                ))
-                .layer(trace_layer)
-                .layer(PropagateRequestIdLayer::new(request_id_header)),
-        );
+    // `POST /webhooks/livekit` is built as its own router, outside the
+    // CORS layer (docs/specs/SLICE_006.md §5, §7): it is a server-to-server
+    // call with its own signature scheme, not a browser route. It still
+    // gets the request-id/trace layers.
+    let webhook = with_request_tracing(routes::livekit_webhook::router().with_state(state.clone()));
+
+    let app = with_request_tracing(
+        Router::new()
+            .merge(routes::health::router())
+            .merge(routes::session::router())
+            .merge(routes::organization::router())
+            .merge(routes::people::router())
+            .merge(routes::intake::router())
+            .merge(routes::stages::router())
+            .merge(routes::realtime::router())
+            .merge(routes::today::router())
+            .merge(routes::invitations::router())
+            .merge(routes::platform::router())
+            .merge(routes::operator::router())
+            .merge(routes::calls::router())
+            .with_state(state),
+    );
 
     // Only present for the cross-subdomain tunnel case (config::Config::
     // cors_allowed_origin doc comment); same-origin loopback dev adds no
     // CORS layer at all — no behavior change, not even OPTIONS-preflight
     // interception — from Slice 001's original posture.
-    match cors_allowed_origin {
+    let app = match cors_allowed_origin {
         Some(origin) => {
             let origin_value = HeaderValue::from_str(&origin)
                 .expect("cors_allowed_origin was already validated by Config::from_source");
@@ -81,13 +70,53 @@ pub fn build_app(state: AppState) -> Router {
             app.layer(cors_layer)
         }
         None => app,
-    }
+    };
+
+    app.merge(webhook)
+}
+
+/// The request-id + trace layer stack every route gets.
+fn with_request_tracing(router: Router) -> Router {
+    let request_id_header = HeaderName::from_static("x-request-id");
+
+    // tower-http's span/on_request/on_response levels default to DEBUG,
+    // which the default "info,sqlx=warn" filter (telemetry.rs) silently
+    // drops — raise them to INFO so per-request logging is visible
+    // without a RUST_LOG override. on_failure is left at its default
+    // (already ERROR-level, already unfiltered).
+    let trace_layer = TraceLayer::new_for_http()
+        .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
+        .on_request(DefaultOnRequest::new().level(Level::INFO))
+        .on_response(DefaultOnResponse::new().level(Level::INFO));
+
+    router.layer(
+        ServiceBuilder::new()
+            .layer(SetRequestIdLayer::new(
+                request_id_header.clone(),
+                MakeRequestUuid,
+            ))
+            .layer(trace_layer)
+            .layer(PropagateRequestIdLayer::new(request_id_header)),
+    )
 }
 
 pub async fn run(config: Config) -> Result<(), BoxError> {
     telemetry::init();
 
     let state = AppState::new(&config)?;
+
+    // The call sweep (docs/specs/SLICE_006.md §3): in-process, only when
+    // calling is enabled and a database is configured. Never started by
+    // `build_app`, so the test router is sweep-free.
+    let _sweep = match (&state.db, &state.telephony) {
+        (Some(pool), Some(telephony)) => Some(domain::telephony::sweep::spawn(
+            pool.clone(),
+            state.publisher.clone(),
+            telephony.clone(),
+        )),
+        _ => None,
+    };
+
     let app = build_app(state);
 
     let listener = TcpListener::bind(config.bind_addr).await?;

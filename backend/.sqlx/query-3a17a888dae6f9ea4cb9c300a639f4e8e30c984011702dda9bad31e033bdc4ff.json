@@ -1,0 +1,83 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT cc.id, cc.occurred_at, cc.recorded_at, cc.origin, cc.correlation_id,\n                  cc.actor_user_id, au.display_name as \"actor_display_name?\",\n                  cc.call_id, cc.outcome, cc.talk_seconds, cc.answered_at\n           FROM call_completed cc\n           LEFT JOIN app_user au ON au.id = cc.actor_user_id\n           WHERE cc.organization_id = $1 AND cc.person_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "occurred_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "recorded_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "origin",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "correlation_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "actor_user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "actor_display_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "call_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "outcome",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "talk_seconds",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 10,
+        "name": "answered_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "3a17a888dae6f9ea4cb9c300a639f4e8e30c984011702dda9bad31e033bdc4ff"
+}

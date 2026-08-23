@@ -108,6 +108,14 @@ Notable defaults and constraints, applied in code:
 | `CRM_REALTIME_TOKEN_TTL_SECONDS` | `600`, bounded 60–3600 | Connection-token lifetime |
 | `CRM_WEB_REALTIME_PROXY_TARGET` | `http://127.0.0.1:8000` | Vite's WebSocket proxy target for `/connection` |
 | `CRM_DEMO_API_URL` | `http://127.0.0.1:3000` | `scripts/demo-leads`' target |
+| `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | Unset (calling disabled) | The LiveKit key pair; empty key = calling disabled (503 `telephony_disabled`), not a startup error. With a key, every other `LIVEKIT_*` value is required. Must equal the telephony host's `livekit.yaml` pair — see "Telephony host" |
+| `LIVEKIT_URL` | Required with a key | Browser signaling URL (`ws://`/`wss://`), no trailing slash |
+| `LIVEKIT_API_URL` | Required with a key | The API's Twirp base URL (`https://`; `http://` only for loopback), no trailing slash; the host directly, never a Cloudflare-proxied hostname |
+| `LIVEKIT_SIP_OUTBOUND_TRUNK_ID` | Required with a key | Printed by `scripts/telephony-trunk` |
+| `CRM_TELEPHONY_RING_TIMEOUT_SECONDS` | `45`, bounded 10–120 | How long the callee's phone rings; validated even without a key |
+| `CRM_TELEPHONY_MAX_CALL_SECONDS` | `3600`, bounded 60–14400 | Hard cap on one call |
+| `CRM_TELEPHONY_JOIN_TTL_SECONDS` | `300`, bounded 60–900 | Lifetime of the one-room join token |
+| `CRM_TEST_LIVEKIT_API_URL` | Unset | Read only by `scripts/check-telephony`; `check-db` never reads it |
 
 Use synthetic development data only. Direct remote database access must use a private path such as SSH port forwarding; do not expose PostgreSQL publicly or place its connection URL in shell history.
 
@@ -197,6 +205,18 @@ Run the database-backed suite against the running local container (requires `dev
 ```
 
 This first checks that Centrifugo answers its health endpoint (a clear, immediate failure — never a skip — if the container is down), then re-verifies `backend/.sqlx/` against a throwaway, freshly-migrated database (`cargo sqlx prepare --check --workspace`, catching schema/type drift an offline compile cannot), then exercises the full session lifecycle, tenant isolation between two Organizations, session/membership revocation, the `crm_migrator`/`crm_app` role boundary, the append-only fact tables, the full lead-intake flow (including its two concurrency races), the Today read model, the realtime publisher's exact event contract per command, the Operator endpoint (validation, concurrency limits, tenant isolation through every tool, prompt-injection containment, and the append-only turn ledger — all driven by a scripted provider, never a real model), and — against the real Centrifugo container, reading `CENTRIFUGO_*` values from the environment because they must match the running container — connection-token scoping, cross-Organization channel isolation, expired/mis-signed token rejection, and no-replay reconnect recovery. Each DB-backed test runs against its own fresh ephemeral database with migrations applied from scratch. Requires sqlx-cli (see prerequisites above).
+
+### Calling
+
+Outbound calling (the **Call** button on a Person; docs/specs/SLICE_006.md) needs the telephony host (below) and `LIVEKIT_URL`, `LIVEKIT_API_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, and `LIVEKIT_SIP_OUTBOUND_TRUNK_ID` in `.env`. Leave `LIVEKIT_API_KEY` empty and calling is simply disabled (`POST /api/people/{id}/calls` answers 503 `telephony_disabled`; reading calls and Person history keeps working). The key pair is the one manual sync between the Mac's `.env` and the host's `livekit.yaml` (including its webhook `api_key`) — see "Telephony host". `TELNYX_SIP_*` are read only by `scripts/telephony-trunk`, never by the API. No table stores a phone number for a call, and no test places a PSTN call.
+
+Run the LiveKit-backed tests (create/list/delete a room with real auth; a webhook round-trip with the real signing algorithm) against a reachable server:
+
+```sh
+./scripts/check-telephony
+```
+
+Gated on `CRM_TEST_LIVEKIT_API_URL` (refuses to run when unset, fails loudly when the host is unreachable — never skips); `./scripts/check` and `./scripts/check-db` never reach it.
 
 ### Operator
 

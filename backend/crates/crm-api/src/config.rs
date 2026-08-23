@@ -60,6 +60,59 @@ const DEFAULT_OPERATOR_MAX_CONCURRENT: usize = 4;
 const MIN_OPERATOR_MAX_CONCURRENT: usize = 1;
 const MAX_OPERATOR_MAX_CONCURRENT: usize = 64;
 
+// --- Telephony (docs/specs/SLICE_006.md §11) ----------------------------
+const DEFAULT_TELEPHONY_RING_TIMEOUT_SECONDS: u64 = 45;
+const MIN_TELEPHONY_RING_TIMEOUT_SECONDS: u64 = 10;
+const MAX_TELEPHONY_RING_TIMEOUT_SECONDS: u64 = 120;
+const DEFAULT_TELEPHONY_MAX_CALL_SECONDS: u64 = 3600;
+const MIN_TELEPHONY_MAX_CALL_SECONDS: u64 = 60;
+const MAX_TELEPHONY_MAX_CALL_SECONDS: u64 = 14_400;
+const DEFAULT_TELEPHONY_JOIN_TTL_SECONDS: u64 = 300;
+const MIN_TELEPHONY_JOIN_TTL_SECONDS: u64 = 60;
+const MAX_TELEPHONY_JOIN_TTL_SECONDS: u64 = 900;
+
+/// `LIVEKIT_API_SECRET` (docs/specs/SLICE_006.md §7): signs join grants
+/// and verifies webhooks. `Debug` is redacted like `SessionSecret`.
+#[derive(Clone)]
+pub struct LiveKitApiSecret(Vec<u8>);
+
+impl LiveKitApiSecret {
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl fmt::Debug for LiveKitApiSecret {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "LiveKitApiSecret(REDACTED)")
+    }
+}
+
+/// The LiveKit connection (docs/specs/SLICE_006.md §11): present only when
+/// `LIVEKIT_API_KEY` is non-empty; then every other value is required.
+#[derive(Debug, Clone)]
+pub struct LiveKitConfig {
+    /// Browser signaling URL (`ws://`/`wss://`), returned in the join grant.
+    pub url: String,
+    /// Twirp API base (`https://`; `http://` only for loopback); no
+    /// trailing slash.
+    pub api_url: String,
+    pub api_key: String,
+    pub api_secret: LiveKitApiSecret,
+    pub sip_outbound_trunk_id: String,
+}
+
+/// `CRM_TELEPHONY_*` (docs/specs/SLICE_006.md §11). Validated even when
+/// `LIVEKIT_API_KEY` is unset, like `OperatorConfig`.
+#[derive(Debug, Clone)]
+pub struct TelephonyConfig {
+    /// `None` = calling disabled (503 `telephony_disabled`), not an error.
+    pub livekit: Option<LiveKitConfig>,
+    pub ring_timeout: Duration,
+    pub max_call: Duration,
+    pub join_ttl: Duration,
+}
+
 /// Operator settings (docs/specs/SLICE_005.md §11). Validated even when no
 /// `GROQ_API_KEY` is present, so a keyless dev box still fails fast on a
 /// bad value.
@@ -188,6 +241,9 @@ pub struct Config {
     /// `GROQ_API_KEY`; `None` (unset or empty) disables the Operator
     /// without failing startup (docs/specs/SLICE_005.md §9, §14 item 5).
     pub groq_api_key: Option<GroqApiKey>,
+    /// Telephony settings (docs/specs/SLICE_006.md §11); limits always
+    /// validated, LiveKit present only with `LIVEKIT_API_KEY`.
+    pub telephony: TelephonyConfig,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -222,6 +278,19 @@ pub enum ConfigError {
     OperatorCallTimeoutExceedsTurnTimeout { call_ms: u64, turn_ms: u64 },
     InvalidOperatorMaxConcurrent(String),
     OperatorMaxConcurrentOutOfBounds(usize),
+    // --- Slice 006 (docs/specs/SLICE_006.md §11) -------------------------
+    MissingLiveKitUrl,
+    InvalidLiveKitUrl(String),
+    MissingLiveKitApiUrl,
+    InvalidLiveKitApiUrl(String),
+    MissingLiveKitApiSecret,
+    MissingLiveKitSipOutboundTrunkId,
+    InvalidTelephonyRingTimeout(String),
+    TelephonyRingTimeoutOutOfBounds(u64),
+    InvalidTelephonyMaxCall(String),
+    TelephonyMaxCallOutOfBounds(u64),
+    InvalidTelephonyJoinTtl(String),
+    TelephonyJoinTtlOutOfBounds(u64),
 }
 
 impl fmt::Display for ConfigError {
@@ -334,6 +403,51 @@ impl fmt::Display for ConfigError {
             ConfigError::OperatorMaxConcurrentOutOfBounds(value) => write!(
                 f,
                 "CRM_OPERATOR_MAX_CONCURRENT must be between {MIN_OPERATOR_MAX_CONCURRENT} and {MAX_OPERATOR_MAX_CONCURRENT}, got {value}"
+            ),
+            ConfigError::MissingLiveKitUrl => {
+                write!(f, "LIVEKIT_URL is required when LIVEKIT_API_KEY is set")
+            }
+            ConfigError::InvalidLiveKitUrl(value) => write!(
+                f,
+                "LIVEKIT_URL must be a ws:// or wss:// URL with no trailing slash, got {value}"
+            ),
+            ConfigError::MissingLiveKitApiUrl => {
+                write!(f, "LIVEKIT_API_URL is required when LIVEKIT_API_KEY is set")
+            }
+            ConfigError::InvalidLiveKitApiUrl(value) => write!(
+                f,
+                "LIVEKIT_API_URL must be an https:// URL (http:// only for loopback) with no trailing slash, got {value}"
+            ),
+            ConfigError::MissingLiveKitApiSecret => {
+                write!(f, "LIVEKIT_API_SECRET is required when LIVEKIT_API_KEY is set")
+            }
+            ConfigError::MissingLiveKitSipOutboundTrunkId => write!(
+                f,
+                "LIVEKIT_SIP_OUTBOUND_TRUNK_ID is required when LIVEKIT_API_KEY is set"
+            ),
+            ConfigError::InvalidTelephonyRingTimeout(value) => write!(
+                f,
+                "CRM_TELEPHONY_RING_TIMEOUT_SECONDS is not a valid integer: {value}"
+            ),
+            ConfigError::TelephonyRingTimeoutOutOfBounds(value) => write!(
+                f,
+                "CRM_TELEPHONY_RING_TIMEOUT_SECONDS must be between {MIN_TELEPHONY_RING_TIMEOUT_SECONDS} and {MAX_TELEPHONY_RING_TIMEOUT_SECONDS}, got {value}"
+            ),
+            ConfigError::InvalidTelephonyMaxCall(value) => write!(
+                f,
+                "CRM_TELEPHONY_MAX_CALL_SECONDS is not a valid integer: {value}"
+            ),
+            ConfigError::TelephonyMaxCallOutOfBounds(value) => write!(
+                f,
+                "CRM_TELEPHONY_MAX_CALL_SECONDS must be between {MIN_TELEPHONY_MAX_CALL_SECONDS} and {MAX_TELEPHONY_MAX_CALL_SECONDS}, got {value}"
+            ),
+            ConfigError::InvalidTelephonyJoinTtl(value) => write!(
+                f,
+                "CRM_TELEPHONY_JOIN_TTL_SECONDS is not a valid integer: {value}"
+            ),
+            ConfigError::TelephonyJoinTtlOutOfBounds(value) => write!(
+                f,
+                "CRM_TELEPHONY_JOIN_TTL_SECONDS must be between {MIN_TELEPHONY_JOIN_TTL_SECONDS} and {MAX_TELEPHONY_JOIN_TTL_SECONDS}, got {value}"
             ),
         }
     }
@@ -472,6 +586,8 @@ impl Config {
             .filter(|v| !v.trim().is_empty())
             .map(GroqApiKey::new);
 
+        let telephony = telephony_config(&get)?;
+
         Ok(Config {
             bind_addr,
             database_url,
@@ -489,8 +605,105 @@ impl Config {
             invitation_ttl,
             operator,
             groq_api_key,
+            telephony,
         })
     }
+}
+
+/// `LIVEKIT_*` / `CRM_TELEPHONY_*` (docs/specs/SLICE_006.md §11). The
+/// bounds and URL rules are validated regardless of whether a key is
+/// present; an empty/unset `LIVEKIT_API_KEY` disables calling without
+/// failing startup.
+fn telephony_config(get: &impl Fn(&str) -> Option<String>) -> Result<TelephonyConfig, ConfigError> {
+    let ring_secs = match get("CRM_TELEPHONY_RING_TIMEOUT_SECONDS") {
+        Some(value) => value
+            .parse::<u64>()
+            .map_err(|_| ConfigError::InvalidTelephonyRingTimeout(value.clone()))?,
+        None => DEFAULT_TELEPHONY_RING_TIMEOUT_SECONDS,
+    };
+    if !(MIN_TELEPHONY_RING_TIMEOUT_SECONDS..=MAX_TELEPHONY_RING_TIMEOUT_SECONDS)
+        .contains(&ring_secs)
+    {
+        return Err(ConfigError::TelephonyRingTimeoutOutOfBounds(ring_secs));
+    }
+
+    let max_call_secs = match get("CRM_TELEPHONY_MAX_CALL_SECONDS") {
+        Some(value) => value
+            .parse::<u64>()
+            .map_err(|_| ConfigError::InvalidTelephonyMaxCall(value.clone()))?,
+        None => DEFAULT_TELEPHONY_MAX_CALL_SECONDS,
+    };
+    if !(MIN_TELEPHONY_MAX_CALL_SECONDS..=MAX_TELEPHONY_MAX_CALL_SECONDS).contains(&max_call_secs) {
+        return Err(ConfigError::TelephonyMaxCallOutOfBounds(max_call_secs));
+    }
+
+    let join_ttl_secs = match get("CRM_TELEPHONY_JOIN_TTL_SECONDS") {
+        Some(value) => value
+            .parse::<u64>()
+            .map_err(|_| ConfigError::InvalidTelephonyJoinTtl(value.clone()))?,
+        None => DEFAULT_TELEPHONY_JOIN_TTL_SECONDS,
+    };
+    if !(MIN_TELEPHONY_JOIN_TTL_SECONDS..=MAX_TELEPHONY_JOIN_TTL_SECONDS).contains(&join_ttl_secs) {
+        return Err(ConfigError::TelephonyJoinTtlOutOfBounds(join_ttl_secs));
+    }
+
+    // URL rules are validated even when calling is disabled, so a
+    // half-configured `.env` fails fast rather than at the first call.
+    let url = match get("LIVEKIT_URL").filter(|v| !v.is_empty()) {
+        Some(value) if is_plausible_livekit_ws_url(&value) => Some(value),
+        Some(value) => return Err(ConfigError::InvalidLiveKitUrl(value)),
+        None => None,
+    };
+    let api_url = match get("LIVEKIT_API_URL").filter(|v| !v.is_empty()) {
+        Some(value) if is_plausible_operator_url(&value) => Some(value),
+        Some(value) => return Err(ConfigError::InvalidLiveKitApiUrl(value)),
+        None => None,
+    };
+
+    let livekit = match get("LIVEKIT_API_KEY")
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+    {
+        None => None,
+        Some(api_key) => {
+            let url = url.ok_or(ConfigError::MissingLiveKitUrl)?;
+            let api_url = api_url.ok_or(ConfigError::MissingLiveKitApiUrl)?;
+            let api_secret = get("LIVEKIT_API_SECRET")
+                .map(|v| v.trim().to_string())
+                .filter(|v| !v.is_empty())
+                .ok_or(ConfigError::MissingLiveKitApiSecret)?;
+            let sip_outbound_trunk_id = get("LIVEKIT_SIP_OUTBOUND_TRUNK_ID")
+                .map(|v| v.trim().to_string())
+                .filter(|v| !v.is_empty())
+                .ok_or(ConfigError::MissingLiveKitSipOutboundTrunkId)?;
+            Some(LiveKitConfig {
+                url,
+                api_url,
+                api_key,
+                api_secret: LiveKitApiSecret(api_secret.into_bytes()),
+                sip_outbound_trunk_id,
+            })
+        }
+    };
+
+    Ok(TelephonyConfig {
+        livekit,
+        ring_timeout: Duration::from_secs(ring_secs),
+        max_call: Duration::from_secs(max_call_secs),
+        join_ttl: Duration::from_secs(join_ttl_secs),
+    })
+}
+
+/// `LIVEKIT_URL` (docs/specs/SLICE_006.md §11): the browser signaling URL,
+/// `ws://` or `wss://`, no trailing slash, no whitespace.
+fn is_plausible_livekit_ws_url(value: &str) -> bool {
+    if value.contains(char::is_whitespace) || value.ends_with('/') {
+        return false;
+    }
+    value
+        .strip_prefix("wss://")
+        .or_else(|| value.strip_prefix("ws://"))
+        .is_some_and(|rest| !rest.is_empty())
 }
 
 /// `CRM_OPERATOR_*` (docs/specs/SLICE_005.md §11).
@@ -1153,5 +1366,153 @@ mod tests {
         let err = Config::from_source(source(&[("CRM_INVITATION_TTL_HOURS", "not-a-number")]))
             .unwrap_err();
         assert!(matches!(err, ConfigError::InvalidInvitationTtl(_)));
+    }
+    // --- LIVEKIT_* / CRM_TELEPHONY_* (docs/specs/SLICE_006.md §11) ---------
+
+    const LIVEKIT_OK: &[(&str, &str)] = &[
+        ("LIVEKIT_URL", "wss://livekit.tarams.org"),
+        ("LIVEKIT_API_URL", "https://livekit.tarams.org"),
+        ("LIVEKIT_API_KEY", "APIkey123"),
+        ("LIVEKIT_API_SECRET", "livekit-secret-value-never-printed"),
+        ("LIVEKIT_SIP_OUTBOUND_TRUNK_ID", "ST_abc"),
+    ];
+
+    fn with_livekit(overrides: &[(&str, &str)]) -> impl Fn(&str) -> Option<String> {
+        let mut all: Vec<(&str, &str)> = LIVEKIT_OK.to_vec();
+        all.extend_from_slice(overrides);
+        source(&all)
+    }
+
+    #[test]
+    fn telephony_defaults_and_disabled_without_key() {
+        let config = Config::from_source(source(&[])).unwrap();
+        assert!(config.telephony.livekit.is_none());
+        assert_eq!(config.telephony.ring_timeout, Duration::from_secs(45));
+        assert_eq!(config.telephony.max_call, Duration::from_secs(3600));
+        assert_eq!(config.telephony.join_ttl, Duration::from_secs(300));
+    }
+
+    #[test]
+    fn empty_livekit_key_is_disabled_not_an_error() {
+        let config = Config::from_source(source(&[("LIVEKIT_API_KEY", "  ")])).unwrap();
+        assert!(config.telephony.livekit.is_none());
+    }
+
+    #[test]
+    fn livekit_enabled_with_full_config() {
+        let config = Config::from_source(with_livekit(&[])).unwrap();
+        let lk = config.telephony.livekit.as_ref().unwrap();
+        assert_eq!(lk.url, "wss://livekit.tarams.org");
+        assert_eq!(lk.api_url, "https://livekit.tarams.org");
+        assert_eq!(lk.api_key, "APIkey123");
+        assert_eq!(
+            lk.api_secret.as_bytes(),
+            b"livekit-secret-value-never-printed"
+        );
+        assert_eq!(lk.sip_outbound_trunk_id, "ST_abc");
+    }
+
+    #[test]
+    fn livekit_secret_is_trimmed_like_the_key() {
+        let config = Config::from_source(with_livekit(&[(
+            "LIVEKIT_API_SECRET",
+            "  livekit-secret-value-never-printed \n",
+        )]))
+        .unwrap();
+        let lk = config.telephony.livekit.as_ref().unwrap();
+        assert_eq!(
+            lk.api_secret.as_bytes(),
+            b"livekit-secret-value-never-printed"
+        );
+        let err = Config::from_source(with_livekit(&[("LIVEKIT_API_SECRET", "   ")])).unwrap_err();
+        assert!(matches!(err, ConfigError::MissingLiveKitApiSecret));
+    }
+
+    #[test]
+    fn livekit_secret_is_redacted_in_debug() {
+        let config = Config::from_source(with_livekit(&[])).unwrap();
+        let debug_output = format!("{config:?}");
+        assert!(!debug_output.contains("livekit-secret-value-never-printed"));
+        assert!(debug_output.contains("LiveKitApiSecret(REDACTED)"));
+    }
+
+    #[test]
+    fn livekit_key_requires_every_other_livekit_value() {
+        let err = Config::from_source(with_livekit(&[("LIVEKIT_URL", "")])).unwrap_err();
+        assert_eq!(err, ConfigError::MissingLiveKitUrl);
+        let err = Config::from_source(with_livekit(&[("LIVEKIT_API_URL", "")])).unwrap_err();
+        assert_eq!(err, ConfigError::MissingLiveKitApiUrl);
+        let err = Config::from_source(with_livekit(&[("LIVEKIT_API_SECRET", "")])).unwrap_err();
+        assert_eq!(err, ConfigError::MissingLiveKitApiSecret);
+        let err = Config::from_source(with_livekit(&[("LIVEKIT_SIP_OUTBOUND_TRUNK_ID", "")]))
+            .unwrap_err();
+        assert_eq!(err, ConfigError::MissingLiveKitSipOutboundTrunkId);
+    }
+
+    #[test]
+    fn livekit_urls_are_validated_even_without_a_key() {
+        for bad in [
+            "https://livekit.tarams.org",
+            "wss://",
+            "wss://x/",
+            "livekit",
+        ] {
+            let err = Config::from_source(source(&[("LIVEKIT_URL", bad)])).unwrap_err();
+            assert!(matches!(err, ConfigError::InvalidLiveKitUrl(_)), "{bad}");
+        }
+        for bad in ["http://livekit.tarams.org", "wss://x", "https://x/"] {
+            let err = Config::from_source(source(&[("LIVEKIT_API_URL", bad)])).unwrap_err();
+            assert!(matches!(err, ConfigError::InvalidLiveKitApiUrl(_)), "{bad}");
+        }
+        for ok in ["https://livekit.tarams.org", "http://127.0.0.1:7880"] {
+            Config::from_source(source(&[("LIVEKIT_API_URL", ok)])).unwrap();
+        }
+        for ok in ["wss://livekit.tarams.org", "ws://127.0.0.1:7880"] {
+            Config::from_source(source(&[("LIVEKIT_URL", ok)])).unwrap();
+        }
+    }
+
+    #[test]
+    fn telephony_bounds_are_validated_even_without_a_key() {
+        let err = Config::from_source(source(&[("CRM_TELEPHONY_RING_TIMEOUT_SECONDS", "9")]))
+            .unwrap_err();
+        assert_eq!(err, ConfigError::TelephonyRingTimeoutOutOfBounds(9));
+        let err = Config::from_source(source(&[("CRM_TELEPHONY_RING_TIMEOUT_SECONDS", "121")]))
+            .unwrap_err();
+        assert_eq!(err, ConfigError::TelephonyRingTimeoutOutOfBounds(121));
+        let err =
+            Config::from_source(source(&[("CRM_TELEPHONY_MAX_CALL_SECONDS", "59")])).unwrap_err();
+        assert_eq!(err, ConfigError::TelephonyMaxCallOutOfBounds(59));
+        let err = Config::from_source(source(&[("CRM_TELEPHONY_MAX_CALL_SECONDS", "14401")]))
+            .unwrap_err();
+        assert_eq!(err, ConfigError::TelephonyMaxCallOutOfBounds(14401));
+        let err =
+            Config::from_source(source(&[("CRM_TELEPHONY_JOIN_TTL_SECONDS", "59")])).unwrap_err();
+        assert_eq!(err, ConfigError::TelephonyJoinTtlOutOfBounds(59));
+        let err =
+            Config::from_source(source(&[("CRM_TELEPHONY_JOIN_TTL_SECONDS", "901")])).unwrap_err();
+        assert_eq!(err, ConfigError::TelephonyJoinTtlOutOfBounds(901));
+        let err =
+            Config::from_source(source(&[("CRM_TELEPHONY_JOIN_TTL_SECONDS", "soon")])).unwrap_err();
+        assert!(matches!(err, ConfigError::InvalidTelephonyJoinTtl(_)));
+        let err = Config::from_source(source(&[("CRM_TELEPHONY_RING_TIMEOUT_SECONDS", "x")]))
+            .unwrap_err();
+        assert!(matches!(err, ConfigError::InvalidTelephonyRingTimeout(_)));
+        let err =
+            Config::from_source(source(&[("CRM_TELEPHONY_MAX_CALL_SECONDS", "x")])).unwrap_err();
+        assert!(matches!(err, ConfigError::InvalidTelephonyMaxCall(_)));
+    }
+
+    #[test]
+    fn accepts_custom_telephony_limits() {
+        let config = Config::from_source(source(&[
+            ("CRM_TELEPHONY_RING_TIMEOUT_SECONDS", "30"),
+            ("CRM_TELEPHONY_MAX_CALL_SECONDS", "600"),
+            ("CRM_TELEPHONY_JOIN_TTL_SECONDS", "120"),
+        ]))
+        .unwrap();
+        assert_eq!(config.telephony.ring_timeout, Duration::from_secs(30));
+        assert_eq!(config.telephony.max_call, Duration::from_secs(600));
+        assert_eq!(config.telephony.join_ttl, Duration::from_secs(120));
     }
 }

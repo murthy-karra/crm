@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT normalized_value FROM contact_method\n           WHERE id = $1 AND person_id = $2 AND organization_id = $3 AND kind = 'phone'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "normalized_value",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "0a0afe2d54760dfb749ac5be9ceb7cc86b587182a7a572767b6f2d01214dfaaa"
+}

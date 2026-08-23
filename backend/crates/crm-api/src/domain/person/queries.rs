@@ -416,7 +416,8 @@ pub struct HistoryEntry {
     pub correlation_id: Uuid,
     pub detail: serde_json::Value,
     /// `inquiry_received` = 0 … `stage_changed` = 3
-    /// (docs/specs/SLICE_002.md §5). Not part of the response shape.
+    /// (docs/specs/SLICE_002.md §5), `contact_attempted` = 4 (SLICE_003),
+    /// `call_completed` = 5 (SLICE_006). Not part of the response shape.
     #[serde(skip)]
     pub kind_rank: u8,
 }
@@ -723,6 +724,65 @@ async fn contact_attempted_history(
         .collect())
 }
 
+struct CallCompletedHistoryRow {
+    id: Uuid,
+    occurred_at: DateTime<Utc>,
+    recorded_at: DateTime<Utc>,
+    origin: String,
+    correlation_id: Uuid,
+    actor_user_id: Option<Uuid>,
+    actor_display_name: Option<String>,
+    call_id: Uuid,
+    outcome: String,
+    talk_seconds: Option<i32>,
+    answered_at: Option<DateTime<Utc>>,
+}
+
+/// `call_completed` history entries (docs/specs/SLICE_006.md §2, the
+/// declared additive SLICE_002 §5 contract change): `kind_rank` 5,
+/// `detail: {"call_id", "outcome", "talk_seconds", "answered_at"}`.
+/// PII-free by construction (the fact table holds no number); reads
+/// with telephony disabled.
+async fn call_completed_history(
+    conn: &mut PgConnection,
+    organization_id: Uuid,
+    person_id: Uuid,
+) -> Result<Vec<HistoryEntry>, sqlx::Error> {
+    let rows = sqlx::query_as!(
+        CallCompletedHistoryRow,
+        r#"SELECT cc.id, cc.occurred_at, cc.recorded_at, cc.origin, cc.correlation_id,
+                  cc.actor_user_id, au.display_name as "actor_display_name?",
+                  cc.call_id, cc.outcome, cc.talk_seconds, cc.answered_at
+           FROM call_completed cc
+           LEFT JOIN app_user au ON au.id = cc.actor_user_id
+           WHERE cc.organization_id = $1 AND cc.person_id = $2"#,
+        organization_id,
+        person_id,
+    )
+    .fetch_all(conn)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|r| HistoryEntry {
+            kind: "call_completed",
+            kind_rank: 5,
+            id: r.id,
+            occurred_at: r.occurred_at,
+            recorded_at: r.recorded_at,
+            actor: actor_ref(r.actor_user_id, r.actor_display_name),
+            origin: r.origin,
+            correlation_id: r.correlation_id,
+            detail: serde_json::json!({
+                "call_id": r.call_id,
+                "outcome": r.outcome,
+                "talk_seconds": r.talk_seconds,
+                "answered_at": r.answered_at,
+            }),
+        })
+        .collect())
+}
+
 /// The full history timeline for `GET /api/people/{id}`, ordered
 /// `occurred_at, recorded_at, kind_rank, id` (docs/specs/SLICE_002.md §5:
 /// required because intake's four facts otherwise share both timestamps).
@@ -737,6 +797,7 @@ pub async fn history_for_person(
     entries.extend(assignment_changed_history(conn, organization_id, person_id).await?);
     entries.extend(stage_changed_history(conn, organization_id, person_id).await?);
     entries.extend(contact_attempted_history(conn, organization_id, person_id).await?);
+    entries.extend(call_completed_history(conn, organization_id, person_id).await?);
 
     entries.sort_by_key(|e| (e.occurred_at, e.recorded_at, e.kind_rank, e.id));
     Ok(entries)

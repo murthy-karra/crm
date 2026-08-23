@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO call\n            (id, organization_id, person_id, contact_method_id, caller_user_id, origin,\n             correlation_id, status, provider, provider_room, placed_at)\n           VALUES ($1, $2, $3, $4, $5, $6, $7, 'placing', $8, $9, $10)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Text",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "330612c5cd6ac5384a5bfc78ba1b224e7ccd14c5c164903afea49b1e0779d032"
+}

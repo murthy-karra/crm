@@ -54,8 +54,9 @@ async fn crm_app_has_exactly_the_slice_002_grants(migrator_pool: PgPool) {
         "stage: DELETE must be denied for crm_app"
     );
 
-    // `contact_method`, `inquiry`, and the five fact tables: SELECT + INSERT,
-    // no UPDATE/DELETE.
+    // `contact_method`, `inquiry`, and the fact tables (the five from
+    // Slices 002/003 plus `call_completed`, docs/specs/SLICE_006.md §2):
+    // SELECT + INSERT, no UPDATE/DELETE.
     for table in [
         "contact_method",
         "inquiry",
@@ -64,6 +65,7 @@ async fn crm_app_has_exactly_the_slice_002_grants(migrator_pool: PgPool) {
         "assignment_changed",
         "stage_changed",
         "contact_attempted",
+        "call_completed",
     ] {
         let select = sqlx::query(&format!("SELECT * FROM {table}"))
             .fetch_all(&app_pool)
@@ -214,6 +216,7 @@ struct FactRowIds {
     assignment_changed_id: Uuid,
     stage_changed_id: Uuid,
     contact_attempted_id: Uuid,
+    call_completed_id: Uuid,
 }
 
 async fn insert_one_row_per_fact_table(
@@ -304,12 +307,30 @@ async fn insert_one_row_per_fact_table(
     .await
     .unwrap();
 
+    let (call_completed_id,): (Uuid,) = sqlx::query_as(
+        r#"INSERT INTO call_completed
+            (organization_id, actor_kind, actor_user_id, origin, occurred_at, correlation_id,
+             call_id, person_id, contact_method_id, outcome, answered_at, ended_at, talk_seconds)
+           VALUES ($1, 'user', $2, 'web_session', now(), $3, $4, $5, $6, 'reached', now(), now(), 0)
+           RETURNING id"#,
+    )
+    .bind(org_id)
+    .bind(user_id)
+    .bind(correlation_id)
+    .bind(Uuid::new_v4())
+    .bind(Uuid::new_v4())
+    .bind(Uuid::new_v4())
+    .fetch_one(migrator_pool)
+    .await
+    .unwrap();
+
     FactRowIds {
         inquiry_received_id,
         routing_decision_id,
         assignment_changed_id,
         stage_changed_id,
         contact_attempted_id,
+        call_completed_id,
     }
 }
 
@@ -334,12 +355,13 @@ async fn fact_tables_are_append_only_via_grant_and_trigger(migrator_pool: PgPool
     let rows = insert_one_row_per_fact_table(&migrator_pool, org_id, user_id, stage_id).await;
     let app_pool = common::connect_as_app(&migrator_pool).await;
 
-    let cases: [(&str, Uuid); 5] = [
+    let cases: [(&str, Uuid); 6] = [
         ("inquiry_received", rows.inquiry_received_id),
         ("routing_decision", rows.routing_decision_id),
         ("assignment_changed", rows.assignment_changed_id),
         ("stage_changed", rows.stage_changed_id),
         ("contact_attempted", rows.contact_attempted_id),
+        ("call_completed", rows.call_completed_id),
     ];
 
     for (table, id) in cases {
@@ -422,6 +444,7 @@ async fn fact_tables_reject_truncate_via_grant_and_trigger(migrator_pool: PgPool
         "assignment_changed",
         "stage_changed",
         "contact_attempted",
+        "call_completed",
     ];
 
     for table in tables {

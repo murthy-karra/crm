@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE call SET dial_requested_at = $3, updated_at = $3\n           WHERE organization_id = $1 AND id = $2\n             AND dial_requested_at IS NULL AND status = 'placing'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "489d584ce36eba29a795634c993599c46e01067b22bcd27706cb00e2d9ffdaa6"
+}

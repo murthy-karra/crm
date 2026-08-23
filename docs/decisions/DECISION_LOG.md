@@ -888,3 +888,64 @@ Blocks: call summaries/transcripts, recordings (with O-002), free-text
 notes (deferred from D-032). Must be resolved, and the raw-payload
 migration done, before any of those slices is planned.
 
+
+### O-013 — "Delete my data": Person erasure, suppression, and who fields the request (OPEN — must be addressed, not immediately)
+
+Recorded 2026-08-23 (user, after comparing with Follow Up Boss). FUB's
+model, from its help center and privacy notice: any member can move a
+person to a *Trash* stage (hidden, fully recoverable); only the owner or
+admin can *Delete*, which FUB documents as unrestorable — yet its
+backups are retained 35 days continuously plus daily copies for one
+year at a second provider, so a deleted person stays readable in
+backups for up to a year. There is no per-artifact erasure (whole
+record only), no suppression list (the same lead re-arriving from a
+source is simply recreated), and no consumer-facing flow: leads are
+redirected to Zillow's privacy notice; in practice the brokerage
+(controller) performs the delete. CCPA requests go to
+privacy@followupboss.com with identity verification and no stated SLA;
+GDPR is not mentioned.
+
+We can do better than FUB, and the shape is already fixed by D-015
+(append-only facts, IDs and tags only in history rows) and O-012
+(per-Person keys, crypto-shred). O-012 supplies the mechanism; this item
+is the product and policy layer on top of it. Open questions:
+
+1. **What survives a shred.** Proposed: the non-PII skeleton stays
+   (that events happened, counts, stages, outcomes, assignments) for
+   reporting and audit; identifiers (name, phones, emails, addresses)
+   and all content blobs become unreadable; the Person renders as
+   "erased on <date>". Whether identifiers live under the Person key
+   (so the skeleton survives) or are physically removed is for the
+   slice spec.
+2. **Soft-remove vs. erase.** Match FUB's two tiers: a recoverable
+   "archived/trashed" state any member can apply (a stage or a flag —
+   interacts with O-007 stages), and an admin-only, confirmed,
+   irreversible erasure. Erasure is a fact on the ledger (who, when,
+   reason: consumer request / policy / duplicate).
+3. **Suppression.** After erasure keep a hashed-identifier suppression
+   record so a re-imported or re-arriving lead (migration delta, Zillow
+   /Realtor webhook) does not silently reappear with history; the
+   Unresolved queue should surface it as "previously erased". FUB has
+   nothing here.
+4. **Who fields the request.** Default: the brokerage is the controller
+   and erases from the product; we (processor) act only on account
+   offboarding or a verified request the customer cannot handle.
+   Document this in the customer-facing privacy posture; no
+   consumer-facing self-service flow in the first cut.
+5. **Statutory clocks.** CCPA/CPRA 45 days, GDPR 30 days: an erasure
+   request needs a recorded received-at and a due-by somewhere an admin
+   can see it (could be a Today item for the admin).
+6. **Backups.** Crypto-shred answers the backup problem only if backups
+   never hold the Person keys in the clear — the key store (OpenBao,
+   D-014) must be backed up separately from the database, with its own
+   deletion propagation.
+7. **Third parties.** What we have sent outward (LLM provider for
+   summaries — O-012 §2, telephony provider call records, email/calendar
+   syncs) is outside the shred; record what each receives and its
+   retention so the erasure report is honest, as the migration report
+   is (PRODUCT_THESIS §4.1 "never silently discard").
+
+Not blocking any current slice. Sequence: O-012 resolved and raw-payload
+migration done → this item specified → a slice that ships archive,
+admin erasure with suppression, and the erasure fact. Do before the
+first external customer holds real consumer data.

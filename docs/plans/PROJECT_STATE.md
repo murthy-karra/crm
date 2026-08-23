@@ -693,6 +693,14 @@ local (no CI yet):
 
 ## Backlog (deferred, not blocking)
 
+- **O-013 (user, 2026-08-23): "Delete my data"** — Person erasure on top
+  of O-012 crypto-shred: archive/trash tier vs admin-only erasure, what
+  skeleton survives, hashed-identifier suppression so re-arriving leads
+  don't resurrect, brokerage-as-controller posture, CCPA/GDPR clocks,
+  key-store backup separation, third-party disclosure in an erasure
+  report. Must be addressed before the first external customer holds
+  real consumer data; not immediate. Full note in the decision log.
+
 - **O-008 (user intent, 2026-08-21): AI next-step suggestions** — after
   every communication attempt/completion (call, email, SMS, chat) and
   once a day, run the Person's communication history through an AI and

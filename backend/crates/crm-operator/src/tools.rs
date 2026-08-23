@@ -137,11 +137,20 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
 /// a `ToolBackend`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ToolInvocation {
-    SearchPeople { query: String, limit: usize },
-    GetPerson { person_id: Uuid },
-    GetToday { limit: usize },
+    SearchPeople {
+        query: String,
+        limit: usize,
+    },
+    GetPerson {
+        person_id: Uuid,
+    },
+    GetToday {
+        limit: usize,
+    },
     GetNextWorkItem,
-    ExplainPriority { person_id: Uuid },
+    ExplainPriority {
+        person_id: Uuid,
+    },
     StartCall {
         person_id: Uuid,
         contact_method_id: Option<Uuid>,
@@ -291,10 +300,7 @@ fn parse_uuid(value: Option<&Value>) -> Result<Uuid, ArgumentError> {
     parse_uuid_named(value, "person_id")
 }
 
-fn parse_uuid_named(
-    value: Option<&Value>,
-    name: &'static str,
-) -> Result<Uuid, ArgumentError> {
+fn parse_uuid_named(value: Option<&Value>, name: &'static str) -> Result<Uuid, ArgumentError> {
     let raw = value
         .ok_or(ArgumentError::MissingProperty(name))?
         .as_str()

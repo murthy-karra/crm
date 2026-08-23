@@ -1258,8 +1258,8 @@ mod tests {
         let err = Config::from_source(source(&[("CRM_OPERATOR_PROPOSAL_TTL_SECONDS", "601")]))
             .unwrap_err();
         assert_eq!(err, ConfigError::OperatorProposalTtlOutOfBounds(601));
-        let err = Config::from_source(source(&[("CRM_OPERATOR_PROPOSAL_TTL_SECONDS", "x")]))
-            .unwrap_err();
+        let err =
+            Config::from_source(source(&[("CRM_OPERATOR_PROPOSAL_TTL_SECONDS", "x")])).unwrap_err();
         assert_eq!(
             err,
             ConfigError::InvalidOperatorProposalTtl("x".to_string())

@@ -9,7 +9,11 @@ Last updated: 2026-08-22 (Lane A implemented)
 reviewed + adversarially tested per lane, all findings applied; both
 gates green (`check` incl. 218 Vitest; `check-db` 142 DB tests incl.
 `db_calls` 42). Dev DB migrated; dev API restarted with the new build.
-Awaiting the live walkthrough (§13 item 4) and then merge to `main`.**
+Live walkthrough done 2026-08-23 (two calls corrected to voicemail);
+two user-driven UI refinements applied after it: a correction is placed
+in history when it was made (`1eea0b9`), and the timeline shows one
+line per call with the effective outcome + "corrected from" note,
+Follow Up Boss style (`a097435`). Awaiting merge approval to `main`.**
 Delivered: migration widening `contact_attempted.outcome` (+`busy`,
 `wrong_number`) and the one-corrector partial index; command + `POST
 /api/calls/{id}/outcome`; Today reads the effective attempt; history
@@ -23,7 +27,9 @@ outcomes. Spec amendments during implementation: §2 adjacency note
 messages; ringback shipped. Slice 006 live walkthrough on 2026-08-22:
 two real calls answered (the first "answered" in 2.8 s without ringing —
 the motivating case). Still unproven live: a busy/decline/ring-out call
-("no answer" attempt). Follow-ups: rotate the Telnyx SIP password; the
+("no answer" attempt). Recorded O-012 (PII content blobs: per-Person keys + crypto-shred;
+blocks summaries/recordings/notes; Slice 002's single raw-payload key
+must be upgraded first). Follow-ups: rotate the Telnyx SIP password; the
 `placing` sweep horizon vs. slow mic prompts; OrbStack hung twice this
 session (recovered with force-quit + `orbctl start`). Hostname is
 `livekit1.tarams.org` (spec text says `livekit.tarams.org`).

@@ -823,3 +823,37 @@ compliance: Do-Not-Call scrubbing, quiet hours, caller-ID rules, state
 consent-to-record interplay with O-002. Slice 006 is human-dialed to
 People who inquired, so nothing is built; recorded so it is not
 forgotten. Blocks: autonomous or bulk outbound calling (with O-003).
+
+### O-012 — PII content blobs: per-Person keys and crypto-shred (OPEN)
+
+Recorded 2026-08-23 (user, while reviewing the Slice 006c timeline).
+Call summaries, transcripts, recordings, and free-text notes will land
+on the Person timeline. D-015 §3/§4 already settle *where* such content
+lives: never in a history row (IDs and tags only), always in a
+separate encrypted, deletable blob; the fact row keeps a pointer and a
+content hash, and after erasure it renders as "erased on <date>". What
+is not yet decided:
+
+1. Key hierarchy. Slice 002's raw-payload scheme is one master key in
+   `.env` with no per-payload keys (accepted then as a simplification)
+   — it cannot shred one Person: deleted blobs survive in backups.
+   Proposed: a per-Person key (wrapped by the master key; OpenBao in
+   production per D-014), and per-blob data keys wrapped by the
+   Person's key, so erasing a Person = deleting one key (every copy,
+   including backups, becomes unreadable; history rows untouched) and
+   a single recording can be shredded alone. This is the
+   ARCHITECTURE_BASELINE "Telephony" direction generalised to all PII
+   content. Raw payloads must migrate onto it so there is one mechanism.
+2. Where summaries come from. An LLM-written summary means the
+   transcript leaves the system to the model provider — a
+   data-processing boundary interacting with O-002 (recording consent).
+3. Operator discipline: a decrypted summary may be read at request time
+   to answer a question, but the Operator ledger (D-029) and logs never
+   hold the text.
+4. Timeline rendering: pointer rows fetch/decrypt on demand through a
+   dedicated endpoint; never embedded in `history[]` JSON.
+
+Blocks: call summaries/transcripts, recordings (with O-002), free-text
+notes (deferred from D-032). Must be resolved, and the raw-payload
+migration done, before any of those slices is planned.
+

@@ -23,16 +23,22 @@ const apiBaseUrl = resolveApiBaseUrl()
 export class ApiError extends Error {
   readonly status: number
   readonly code: string
+  /** Every envelope field other than `error`. Empty for almost every
+   * response; SLICE_006 §5's 409 `call_in_progress` is the one documented
+   * extension (`{"error": "call_in_progress", "call_id": uuid}`) — read it
+   * through `telephony/errors.ts`'s `callInProgressId`, never ad hoc. */
+  readonly details: Readonly<Record<string, unknown>>
 
-  constructor(status: number, code: string) {
+  constructor(status: number, code: string, details: Record<string, unknown> = {}) {
     super(`API error ${status}: ${code}`)
     this.name = 'ApiError'
     this.status = status
     this.code = code
+    this.details = details
   }
 }
 
-interface ErrorEnvelope {
+interface ErrorEnvelope extends Record<string, unknown> {
   error: string
 }
 
@@ -69,7 +75,11 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
 
   if (!response.ok) {
     const body: unknown = await response.json().catch(() => null)
-    throw new ApiError(response.status, isErrorEnvelope(body) ? body.error : 'unknown_error')
+    if (isErrorEnvelope(body)) {
+      const { error, ...details } = body
+      throw new ApiError(response.status, error, details)
+    }
+    throw new ApiError(response.status, 'unknown_error')
   }
 
   if (response.status === 204) {

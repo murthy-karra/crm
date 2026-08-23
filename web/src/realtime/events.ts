@@ -25,11 +25,19 @@ export interface IntakeUnresolvedChangedEvent extends RealtimeEnvelopeBase {
   data: { raw_payload_id: string }
 }
 
+/** SLICE_006 §6: the additive third event type — ids only, published after
+ * every committed call transition. Invalidation only (D-023): in-call state
+ * comes from LiveKit, never from this event. */
+export interface CallChangedEvent extends RealtimeEnvelopeBase {
+  type: 'call.changed'
+  data: { call_id: string; person_id: string }
+}
+
 /** The known event shapes (§6). `invalidationsFor` accepts `unknown`, not
  * this union, because the wire payload must also tolerate an unrecognized
  * `type` (future additive event) or a malformed body without throwing —
  * §6: "Unknown type → ignored." */
-export type RealtimeEvent = PersonChangedEvent | IntakeUnresolvedChangedEvent
+export type RealtimeEvent = PersonChangedEvent | IntakeUnresolvedChangedEvent | CallChangedEvent
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
@@ -75,6 +83,15 @@ export function invalidationsFor(event: unknown, orgId: string): QueryKey[] {
     }
     case 'intake.unresolved_changed':
       return [queryKeys.unresolved(orgId)]
+    case 'call.changed': {
+      // SLICE_006 §6, exact: ['org', orgId, 'call', callId] and
+      // ['org', orgId, 'person', personId]. Today/People are covered by the
+      // separate `person.changed{contact_attempted}` the attempt publishes.
+      const callId = typeof data.call_id === 'string' ? data.call_id : ''
+      const personId = typeof data.person_id === 'string' ? data.person_id : ''
+      if (callId === '' || personId === '') return []
+      return [queryKeys.call(orgId, callId), queryKeys.person(orgId, personId)]
+    }
     default:
       return []
   }

@@ -286,12 +286,26 @@ export interface ContactAttemptedDetail {
   outcome: ContactOutcome
 }
 
+// SLICE_006 §2's declared additive change: `call_completed`, `kind_rank` 5,
+// `detail: {call_id, outcome, talk_seconds, answered_at}`. `outcome` is
+// `reached` for an answered call, otherwise the call's `failure_reason`
+// (backend `settle.rs`; the `call_completed.outcome` CHECK constraint).
+export type CallCompletedOutcome = 'reached' | CallFailureReason
+
+export interface CallCompletedDetail {
+  call_id: string
+  outcome: CallCompletedOutcome
+  talk_seconds: number | null
+  answered_at: string | null
+}
+
 export type HistoryEntry =
   | (HistoryEntryBase & { kind: 'inquiry_received'; detail: InquiryReceivedDetail })
   | (HistoryEntryBase & { kind: 'routing_decision'; detail: RoutingDecisionDetail })
   | (HistoryEntryBase & { kind: 'assignment_changed'; detail: AssignmentChangedDetail })
   | (HistoryEntryBase & { kind: 'stage_changed'; detail: StageChangedDetail })
   | (HistoryEntryBase & { kind: 'contact_attempted'; detail: ContactAttemptedDetail })
+  | (HistoryEntryBase & { kind: 'call_completed'; detail: CallCompletedDetail })
 
 export interface PersonDetailResponse {
   person: PersonSummary
@@ -498,4 +512,64 @@ export interface OperatorTurnResponse {
   references: { people: OperatorPersonCard[] }
   tool_calls: OperatorToolCall[]
   outcome: OperatorTurnOutcome
+}
+
+// --- Slice 006: Calling (docs/specs/SLICE_006.md §5; backend
+// `domain/telephony/mod.rs` enums, `queries.rs` `CallView`) -----------------
+
+export type CallStatus = 'placing' | 'ringing' | 'answered' | 'ended' | 'failed'
+
+/** `call.failure_reason` (set exactly when `status = 'failed'`). */
+export type CallFailureReason =
+  | 'no_answer'
+  | 'busy'
+  | 'declined'
+  | 'cancelled'
+  | 'ring_timeout'
+  | 'agent_not_joined'
+  | 'provider_error'
+  | 'expired'
+
+/** `call.end_reason` (set exactly when `status = 'ended'`). */
+export type CallEndReason = 'agent_hangup' | 'agent_disconnected' | 'remote_hangup' | 'max_duration' | 'reconciled'
+
+/** `CallView` — PII-free by construction: no number, no token, no room. */
+export interface CallView {
+  id: string
+  person_id: string
+  contact_method_id: string
+  caller: ActorRef
+  status: CallStatus
+  failure_reason: CallFailureReason | null
+  end_reason: CallEndReason | null
+  placed_at: string
+  ringing_at: string | null
+  answered_at: string | null
+  ended_at: string | null
+  talk_seconds: number | null
+}
+
+/** The one-room LiveKit join grant minted by `POST /api/people/{id}/calls`.
+ * Held in component state only for the duration of `room.connect`; never
+ * cached, logged, or persisted. */
+export interface JoinGrant {
+  url: string
+  token: string
+  room: string
+}
+
+/** `deny_unknown_fields` server-side: exactly this one field. The client
+ * never sends a phone number — only the contact method's id. */
+export interface StartCallRequest {
+  contact_method_id: string
+}
+
+export interface StartCallResponse {
+  call: CallView
+  join: JoinGrant
+}
+
+/** `POST …/dial` (202), `POST …/hangup` (200), `GET /api/calls/{id}` (200). */
+export interface CallResponse {
+  call: CallView
 }

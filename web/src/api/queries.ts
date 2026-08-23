@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/vue-query'
 import { type MaybeRefOrGetter, computed, toValue } from 'vue'
 import { queryClient } from '../query-client'
 import { apiFetch } from './client'
@@ -6,6 +6,7 @@ import type {
   AcceptInvitationRequest,
   AcceptInvitationResponse,
   AssignmentRequest,
+  CallResponse,
   ChangeMemberRoleRequest,
   ContactChannel,
   ContactOutcome,
@@ -38,6 +39,8 @@ import type {
   SetMemberStatusRequest,
   StageRequest,
   StagesResponse,
+  StartCallRequest,
+  StartCallResponse,
   TodayResponse,
   UnresolvedResponse,
 } from './types'
@@ -62,6 +65,10 @@ export const queryKeys = {
   today: (orgId: string) => ['org', orgId, 'today'] as const,
   // SLICE_004 §10: extend the factory, never hand-write a key.
   invitations: (orgId: string) => ['org', orgId, 'invitations'] as const,
+  // SLICE_006 §6: `call.changed` → ['org', orgId, 'call', callId] (and the
+  // person key). Under the org branch so reconnect recovery and the
+  // mutations' whole-branch invalidation cover it too.
+  call: (orgId: string, callId: string) => ['org', orgId, 'call', callId] as const,
   // Keyed by the raw token, not an org id — the public accept page has no
   // Organization context yet (that is exactly what the preview reveals).
   invitationPreview: (token: string) => ['invitation-preview', token] as const,
@@ -437,4 +444,90 @@ export function useOperatorTurn() {
   return useMutation({
     mutationFn: postOperatorTurn,
   })
+}
+
+// --- Slice 006: Calling (docs/specs/SLICE_006.md §5, §6, §10) ---------------
+// In-call ring/answer state comes from LiveKit itself (telephony/useCall.ts);
+// these hooks are the HTTP side only. Every mutation is "caller-only" on the
+// server (403 otherwise) and `hangup` is idempotent (200 on a terminal call).
+
+/**
+ * `GET /api/calls/{id}` — the authoritative fallback (D-023): `call.changed`
+ * invalidates `queryKeys.call`, this query refetches, and the panel reads the
+ * server's `status`/reasons from it rather than from the event. `queryClient`
+ * is optional so `useCall` (the composable) can run under a bare effect scope
+ * in tests without the Vue plugin; production callers leave it undefined.
+ */
+export function useCall(orgId: MaybeRefOrGetter<string>, callId: MaybeRefOrGetter<string>, queryClient?: QueryClient) {
+  return useQuery(
+    {
+      queryKey: computed(() => queryKeys.call(toValue(orgId), toValue(callId))),
+      queryFn: () => apiFetch<CallResponse>(`/calls/${toValue(callId)}`),
+      enabled: computed(() => toValue(orgId) !== '' && toValue(callId) !== ''),
+      // The start/dial/hangup responses seed this key with the settled call,
+      // so a freshly seeded entry is not refetched just for mounting;
+      // `invalidateQueries` (the `call.changed` path) refetches regardless of
+      // staleness, which is the one refetch trigger this query needs.
+      staleTime: 10_000,
+    },
+    queryClient,
+  )
+}
+
+/** `POST /api/people/{id}/calls` → 201 `{call, join}`. The body carries only
+ * the contact method's id — never a phone number (§10 hard rule). Only the
+ * PII-free `call` is seeded into the query cache; the response (which holds
+ * the join token) is not retained by the MutationCache: `gcTime: 0`, and
+ * `useCall` resets the mutation the moment it has read `join`. */
+export function useStartCall(orgId: MaybeRefOrGetter<string>, queryClient?: QueryClient) {
+  const qc = queryClient ?? useQueryClient()
+  return useMutation(
+    {
+      mutationFn: ({ personId, contactMethodId }: { personId: string; contactMethodId: string }) =>
+        apiFetch<StartCallResponse>(`/people/${personId}/calls`, {
+          method: 'POST',
+          body: JSON.stringify({ contact_method_id: contactMethodId } satisfies StartCallRequest),
+        }),
+      gcTime: 0,
+      onSuccess: (data) => {
+        qc.setQueryData(queryKeys.call(toValue(orgId), data.call.id), { call: data.call } satisfies CallResponse)
+      },
+    },
+    queryClient,
+  )
+}
+
+/** `POST /api/calls/{id}/dial` → 202 `{call}` (still `placing`; the dial task
+ * moves it to `ringing`). 409 `invalid_call_state` on a second request. The
+ * 202 body is deliberately not written to the cache: the 201 already seeded
+ * `placing`, and a late 202 must not regress a newer `GET` (the
+ * `call.changed` refetch) to `placing`. `orgId` is kept for signature
+ * symmetry with the other call mutations. */
+export function useDialCall(_orgId: MaybeRefOrGetter<string>, queryClient?: QueryClient) {
+  return useMutation(
+    {
+      mutationFn: (callId: string) => apiFetch<CallResponse>(`/calls/${callId}/dial`, { method: 'POST' }),
+    },
+    queryClient,
+  )
+}
+
+/** `POST /api/calls/{id}/hangup` → 200 `{call}`, idempotent. The response is
+ * the settled call, so the call key is seeded directly; the Person branch is
+ * invalidated for the `call_completed` / `contact_attempted` history rows —
+ * this tab need not wait for the realtime round-trip. */
+export function useHangupCall(orgId: MaybeRefOrGetter<string>, queryClient?: QueryClient) {
+  const qc = queryClient ?? useQueryClient()
+  return useMutation(
+    {
+      mutationFn: (callId: string) => apiFetch<CallResponse>(`/calls/${callId}/hangup`, { method: 'POST' }),
+      onSuccess: (data) => {
+        const id = toValue(orgId)
+        qc.setQueryData(queryKeys.call(id, data.call.id), data)
+        void qc.invalidateQueries({ queryKey: queryKeys.person(id, data.call.person_id) })
+        void qc.invalidateQueries({ queryKey: queryKeys.today(id) })
+      },
+    },
+    queryClient,
+  )
 }

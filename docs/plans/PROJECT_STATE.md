@@ -1,6 +1,6 @@
 # Project State
 
-Last updated: 2026-08-23 (006a MERGED to main `a17aed3`)
+Last updated: 2026-08-23 (006b planned + reviewed; awaiting implementation gate)
 
 ## Current phase
 
@@ -770,13 +770,15 @@ slice:
 
 ## Next recommended action
 
-1. Plan 006b (Operator `start_call`, D-030): the `crm-operator ->
-   crm-app` edge, mutation ToolBackend methods typed with crm-app
-   types, D-009 preview → confirm → receipt. Decide the `AuthContext`
-   gate (SLICE_006a §9). O-012 before any summary/recording/notes
+1. Implement Slice 006b per `docs/specs/SLICE_006b.md` + the two lane
+   briefs (planned + reviewed 2026-08-23; D-034 accepted: no
+   `crm-operator -> crm-app` edge, ToolBackend seam; reviewer's
+   claim-state fix applied to the frozen DDL). Two lanes (backend /
+   web) with the §4 contract frozen. The SLICE_006a §9 AuthContext
+   gate is mooted by D-034. O-012 before any summary/recording/notes
    slice; O-013 after O-012.
 2. Rotate the Telnyx SIP password; update the trunk (user action).
 
 ## Approval currently required
 
-None.
+Implementation gate for Slice 006b (`Proceed with implementation?`).

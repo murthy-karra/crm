@@ -7,8 +7,8 @@ Last updated: 2026-08-22 (Lane A implemented)
 **Slice 006 (calling) — Lane A COMMITTED (`62562c6` on
 `slice-006-calling`); Lane B (web) IMPLEMENTED and VERIFIED in worktree
 `../crm-slice-006-web` on `slice-006-web` (branched from `62562c6`),
-UNCOMMITTED; awaiting commit approval. Then: merge B into
-`slice-006-calling`, live walkthrough, merge to `main`.** Lane C
+COMMITTED (`9aecedb`) and MERGED into `slice-006-calling` (`4090f13`);
+worktree removed. Next: live walkthrough, then merge to `main`.** Lane C
 (telephony host) is COMPLETE. Lane B delivered: `livekit-client`
 2.22.0 (exact pin, lazy chunk), `telephony/{useCall,client,errors,
 format}.ts`, `CallPanel.vue`, Call button + number picker on
@@ -54,8 +54,7 @@ proof chain. Slice 004 is complete and merged (see History).
 
 ## Current branch
 
-`slice-006-calling` at `62562c6` (Lane A + Lane C). Lane B in worktree
-`../crm-slice-006-web` on `slice-006-web`, uncommitted.
+`slice-006-calling` at `4090f13` (Lanes A, B, C all merged).
 
 ## Last accepted decision
 
@@ -767,8 +766,7 @@ slice:
 
 ## Next recommended action
 
-1. Commit Lane B on `slice-006-web`; merge into `slice-006-calling`;
-   remove the worktree.
+1. Done: Lane B committed and merged.
 2. Live walkthrough (§1 steps 1–7 / §13 item 5) from
    `https://app.tarams.org` with the telephony host: explicitly confirm
    a busy and a ring-out produce `no_answer` attempts, audio both ways,
@@ -778,6 +776,5 @@ slice:
 
 ## Approval currently required
 
-Commit approval for Lane B on `slice-006-web` (9 modified + 11 new
-files under `web/**`), then merge of `slice-006-web` into
-`slice-006-calling`.
+None pending for code. The live walkthrough needs the user at their
+phone; merge `slice-006-calling` → `main` after it.

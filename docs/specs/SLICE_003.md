@@ -120,6 +120,8 @@ CREATE TABLE contact_attempted (
     outcome TEXT NOT NULL CHECK (outcome IN ('reached', 'no_answer', 'left_message', 'sent')),
     CHECK ((actor_kind = 'user') = (actor_user_id IS NOT NULL))
 );
+-- SLICE_006c widens the outcome CHECK with 'busy', 'wrong_number' and adds
+-- a partial unique index on corrects_id (one corrector per row).
 CREATE INDEX contact_attempted_org_person_occurred_idx
     ON contact_attempted (organization_id, person_id, occurred_at);
 CREATE INDEX contact_attempted_org_correlation_idx
@@ -182,7 +184,8 @@ For each candidate, with `now` = the request's `generated_at`:
 - `latest_inquiry` = the Person's Inquiry with the greatest
   `received_at`, tie-break `id DESC`.
 - `last_contact_attempt` = the Person's `contact_attempted` with the
-  greatest `occurred_at`, tie-break `id DESC`; null if none.
+  greatest `occurred_at`, tie-break `id DESC`; null if none. SLICE_006c:
+  only *effective* rows count (rows with no corrector via `corrects_id`).
 - `waiting_since` = the `received_at` of the **earliest Inquiry not yet
   answered** — the earliest Inquiry with `received_at >
   last_contact_attempt.occurred_at`, or the earliest Inquiry overall when
@@ -312,7 +315,7 @@ unchanged.
 | Endpoint | Request | Success | Errors |
 |---|---|---|---|
 | `GET /api/today` | — (no parameters; the viewer is `AuthContext.actor_user_id`, never client input) | 200 `{"generated_at": ts, "items": [TodayItem…], "truncated": bool}` ordered per §3, cap 200 | 401, 503 |
-| `POST /api/people/{id}/contact-attempts` | `{"channel": "call"\|"text"\|"email"\|"other", "outcome": "reached"\|"no_answer"\|"left_message"\|"sent"}`; JSON only; `occurred_at` is server time (not accepted from the client this slice) | 201 `{"person": {…PersonSummary}, "contact_attempt": {"id", "channel", "outcome", "occurred_at"}}` | 400 `malformed_request`, 404 `not_found` (byte-identical for other Organizations' ids), 503 |
+| `POST /api/people/{id}/contact-attempts` | `{"channel": "call"\|"text"\|"email"\|"other", "outcome": "reached"\|"no_answer"\|"left_message"\|"sent"\|"busy"\|"wrong_number"}` (last two added by SLICE_006c); JSON only; `occurred_at` is server time (not accepted from the client this slice) | 201 `{"person": {…PersonSummary}, "contact_attempt": {"id", "channel", "outcome", "occurred_at"}}` | 400 `malformed_request`, 404 `not_found` (byte-identical for other Organizations' ids), 503 |
 | `POST /api/realtime/token` | — (cookie) | 200 `{"token": "<jwt>"}`; minting is local (HMAC) and never contacts Centrifugo | 401 (including a revoked membership — this is the refresh cut-off, §7), 503 |
 
 `PersonSummary` is exactly the `GET /api/people` item shape of SLICE_002

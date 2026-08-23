@@ -249,8 +249,12 @@ text exists to leak; the log-capture test from Slice 006 still applies.
   ghost. After save: "Outcome saved — voicemail" then Done. Error copy:
   `invalid_call_state` → "The call hasn't finished yet."; `no_contact_
   attempt` → "There's no contact attempt to correct."; `correction_
-  conflict` → "This outcome was just changed — refreshed."; others →
-  the generic pattern.
+  conflict` → "This outcome was just changed — refreshed."; `forbidden`
+  → "Only the caller can change this outcome."; `not_found` → "This
+  call no longer exists." (both added at implementation, 2026-08-22);
+  others → the generic pattern. Ringback (§12) shipped in Lane B: a
+  local WebAudio tone while `phase === 'ringing'`, independent of mic
+  mute.
 - `PersonDetailView.vue` owns the mutation; `historySummary` renders
   superseded rows muted with "(superseded)" (gray, no colour; strike-
   through allowed) and correcting rows as "Outcome corrected — <label>";

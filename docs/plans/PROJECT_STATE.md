@@ -1,6 +1,6 @@
 # Project State
 
-Last updated: 2026-08-23 (006a implemented on slice-006a-crm-app; awaiting merge approval)
+Last updated: 2026-08-23 (006a MERGED to main `a17aed3`)
 
 ## Current phase
 
@@ -30,9 +30,9 @@ OrbStack hung twice. Hostname is `livekit1.tarams.org`.
 
 Slice 006c — Call outcome (D-032, D-033) — `docs/specs/SLICE_006c.md`
 (+ §5a) — COMPLETE, MERGED `58ecad8`. Next: Slice 006a — `crm-app`
-extraction — `docs/specs/SLICE_006a.md` — IMPLEMENTED on branch
-`slice-006a-crm-app` (reviewed + adversarially tested, no blocking
-findings; awaiting merge approval). Known flake (pre-existing, not
+extraction — `docs/specs/SLICE_006a.md` — COMPLETE, MERGED `a17aed3`
+(reviewed + adversarially tested, no blocking findings; check +
+check-db green post-fixes). Known flake (pre-existing, not
 006a): `db_calls::a_second_correction_chains_onto_the_first_with_
 strictly_increasing_recorded_at` can misorder around `call_completed`
 under full-suite load — the history sort ties on microsecond
@@ -770,11 +770,13 @@ slice:
 
 ## Next recommended action
 
-1. Merge `slice-006a-crm-app` to `main` (approval pending), then plan
-   006b (Operator `start_call`). O-012 before any summary/recording/
-   notes slice; O-013 after O-012.
+1. Plan 006b (Operator `start_call`, D-030): the `crm-operator ->
+   crm-app` edge, mutation ToolBackend methods typed with crm-app
+   types, D-009 preview → confirm → receipt. Decide the `AuthContext`
+   gate (SLICE_006a §9). O-012 before any summary/recording/notes
+   slice; O-013 after O-012.
 2. Rotate the Telnyx SIP password; update the trunk (user action).
 
 ## Approval currently required
 
-Merge approval for `slice-006a-crm-app` → `main`.
+None.

@@ -4,23 +4,29 @@ Last updated: 2026-08-22 (Lane A implemented)
 
 ## Current phase
 
-**Slice 006 (calling) MERGED to `main` (`332e78a`, pushed) after the
-live walkthrough on 2026-08-22: two real PSTN calls from
-`app.tarams.org`, both `answered`, webhooks accepted, hangup recorded,
-two-way audio confirmed by the user. Not yet proven live: the
-busy/decline/ring-out path ("no answer" attempt). Observed: the first
-call was "answered" in 2.8 s without the phone ringing — almost
-certainly voicemail or a carrier message; the system cannot tell. This
-led to D-032 (call outcome correction) — Slice 006c, planned by
-`crm-planner` (plan at `docs/plans/SLICE_006c_PLAN.md`); spec not yet
-drafted; ONE blocking decision open (notes on the correction — see
-Blocking decisions).** Follow-ups logged: ringback tone in the browser
-while ringing (tiny Lane B item, no decision needed); rotate the Telnyx
-SIP password (security TODO); `placing` sweep horizon is 40 s from
-`placed_at` while the mic prompt comes after `POST /calls` — a very slow
-first-time permission prompt expires the call (consider keying off
-`dial_requested_at`). Hostname is `livekit1.tarams.org` (spec text
-says `livekit.tarams.org`).
+**Slice 006c (call outcome correction) IMPLEMENTED on
+`slice-006c-outcome` (Lane A `30bce19`, Lane B merged `0064ed1`);
+reviewed + adversarially tested per lane, all findings applied; both
+gates green (`check` incl. 218 Vitest; `check-db` 142 DB tests incl.
+`db_calls` 42). Dev DB migrated; dev API restarted with the new build.
+Awaiting the live walkthrough (§13 item 4) and then merge to `main`.**
+Delivered: migration widening `contact_attempted.outcome` (+`busy`,
+`wrong_number`) and the one-corrector partial index; command + `POST
+/api/calls/{id}/outcome`; Today reads the effective attempt; history
+detail `call_id`/`corrects_id`/`superseded`; Operator history text marks
+superseded rows; web "How did it go?" prompt (Save gated on the server's
+terminal status, with a settle-refetch fallback when realtime is down),
+history rendering by linkage (not position), Change outcome from
+History, ringback tone while ringing, manual dialog gains the two new
+outcomes. Spec amendments during implementation: §2 adjacency note
+(ring-out corrections sort after `call_completed`); §10 two extra error
+messages; ringback shipped. Slice 006 live walkthrough on 2026-08-22:
+two real calls answered (the first "answered" in 2.8 s without ringing —
+the motivating case). Still unproven live: a busy/decline/ring-out call
+("no answer" attempt). Follow-ups: rotate the Telnyx SIP password; the
+`placing` sweep horizon vs. slow mic prompts; OrbStack hung twice this
+session (recovered with force-quit + `orbctl start`). Hostname is
+`livekit1.tarams.org` (spec text says `livekit.tarams.org`).
 
 ## Current slice
 
@@ -38,8 +44,8 @@ proof chain. Slice 004 is complete and merged (see History).
 
 ## Current branch
 
-`main` at `332e78a` (Slice 006 merged and pushed); `slice-006-calling`
-deleted.
+`slice-006c-outcome` at `0064ed1` (Lanes A+B merged, uncommitted docs
+edits pending); `main` at `5b7509c`.
 
 ## Last accepted decision
 
@@ -751,18 +757,14 @@ slice:
 
 ## Next recommended action
 
-1. Implementation gate for 006c Lane A (`slice-006c-outcome` from
-   `main`), then Lane B.
-2. Implement 006c (Lane A backend ≈ 1.5 d, Lane B web ≈ 1 d); add the
-   ringback tone to Lane B while there.
-3. Rotate the Telnyx SIP password and update the trunk.
-4. 006a (`crm-app` extraction), then 006b (Operator `start_call`).
-
-## Blocking decisions
-
-None. Notes resolved 2026-08-22 (deferred; recorded on D-032). Safe
-defaults in SLICE_006c §14 (no Today resurfacing; 006c before 006a).
+1. Live walkthrough of 006c from `app.tarams.org`: one call → answer →
+   hang up → "How did it go?" → Voicemail → History shows the original
+   "(superseded)" + "Outcome corrected — voicemail"; second tab's Today
+   card shows the corrected outcome; ringback audible while ringing.
+   Ideally also one declined call (proves the "no answer" path).
+2. Merge `slice-006c-outcome` → `main`, push.
+3. Rotate the Telnyx SIP password; 006a (`crm-app` extraction); 006b.
 
 ## Approval currently required
 
-"Proceed with 006c implementation?" (Lane A first, then Lane B).
+Merge of `slice-006c-outcome` → `main` after the walkthrough.

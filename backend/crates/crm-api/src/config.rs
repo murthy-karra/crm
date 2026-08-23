@@ -62,6 +62,9 @@ const DEFAULT_OPERATOR_CALL_TIMEOUT_MS: u64 = 10_000;
 const MIN_OPERATOR_CALL_TIMEOUT_MS: u64 = 1_000;
 const MAX_OPERATOR_CALL_TIMEOUT_MS: u64 = 30_000;
 const DEFAULT_OPERATOR_MAX_CONCURRENT: usize = 4;
+const DEFAULT_OPERATOR_PROPOSAL_TTL_SECONDS: u64 = 120;
+const MIN_OPERATOR_PROPOSAL_TTL_SECONDS: u64 = 30;
+const MAX_OPERATOR_PROPOSAL_TTL_SECONDS: u64 = 600;
 const MIN_OPERATOR_MAX_CONCURRENT: usize = 1;
 const MAX_OPERATOR_MAX_CONCURRENT: usize = 64;
 
@@ -89,6 +92,9 @@ pub struct OperatorConfig {
     /// Per provider call; must be ≤ `turn_timeout`.
     pub call_timeout: Duration,
     pub max_concurrent: usize,
+    /// How long a `start_call` proposal stays confirmable
+    /// (docs/specs/SLICE_006b.md §2).
+    pub proposal_ttl: Duration,
 }
 
 /// No `hex` crate dependency for one 32-byte decode (docs/specs/SLICE_002.md
@@ -185,6 +191,8 @@ pub enum ConfigError {
     OperatorCallTimeoutExceedsTurnTimeout { call_ms: u64, turn_ms: u64 },
     InvalidOperatorMaxConcurrent(String),
     OperatorMaxConcurrentOutOfBounds(usize),
+    InvalidOperatorProposalTtl(String),
+    OperatorProposalTtlOutOfBounds(u64),
     // --- Slice 006 (docs/specs/SLICE_006.md §11) -------------------------
     MissingLiveKitUrl,
     InvalidLiveKitUrl(String),
@@ -310,6 +318,14 @@ impl fmt::Display for ConfigError {
             ConfigError::OperatorMaxConcurrentOutOfBounds(value) => write!(
                 f,
                 "CRM_OPERATOR_MAX_CONCURRENT must be between {MIN_OPERATOR_MAX_CONCURRENT} and {MAX_OPERATOR_MAX_CONCURRENT}, got {value}"
+            ),
+            ConfigError::InvalidOperatorProposalTtl(value) => write!(
+                f,
+                "CRM_OPERATOR_PROPOSAL_TTL_SECONDS is not a valid integer: {value}"
+            ),
+            ConfigError::OperatorProposalTtlOutOfBounds(value) => write!(
+                f,
+                "CRM_OPERATOR_PROPOSAL_TTL_SECONDS must be between {MIN_OPERATOR_PROPOSAL_TTL_SECONDS} and {MAX_OPERATOR_PROPOSAL_TTL_SECONDS}, got {value}"
             ),
             ConfigError::MissingLiveKitUrl => {
                 write!(f, "LIVEKIT_URL is required when LIVEKIT_API_KEY is set")
@@ -667,12 +683,27 @@ fn operator_config(get: &impl Fn(&str) -> Option<String>) -> Result<OperatorConf
         ));
     }
 
+    let proposal_ttl_secs = match get("CRM_OPERATOR_PROPOSAL_TTL_SECONDS") {
+        Some(value) => value
+            .parse::<u64>()
+            .map_err(|_| ConfigError::InvalidOperatorProposalTtl(value.clone()))?,
+        None => DEFAULT_OPERATOR_PROPOSAL_TTL_SECONDS,
+    };
+    if !(MIN_OPERATOR_PROPOSAL_TTL_SECONDS..=MAX_OPERATOR_PROPOSAL_TTL_SECONDS)
+        .contains(&proposal_ttl_secs)
+    {
+        return Err(ConfigError::OperatorProposalTtlOutOfBounds(
+            proposal_ttl_secs,
+        ));
+    }
+
     Ok(OperatorConfig {
         base_url,
         model,
         turn_timeout: Duration::from_millis(turn_ms),
         call_timeout: Duration::from_millis(call_ms),
         max_concurrent,
+        proposal_ttl: Duration::from_secs(proposal_ttl_secs),
     })
 }
 
@@ -1183,6 +1214,7 @@ mod tests {
         assert_eq!(config.operator.turn_timeout, Duration::from_millis(20_000));
         assert_eq!(config.operator.call_timeout, Duration::from_millis(10_000));
         assert_eq!(config.operator.max_concurrent, 4);
+        assert_eq!(config.operator.proposal_ttl, Duration::from_secs(120));
     }
 
     #[test]
@@ -1220,6 +1252,18 @@ mod tests {
         let err =
             Config::from_source(source(&[("CRM_OPERATOR_MAX_CONCURRENT", "65")])).unwrap_err();
         assert_eq!(err, ConfigError::OperatorMaxConcurrentOutOfBounds(65));
+        let err = Config::from_source(source(&[("CRM_OPERATOR_PROPOSAL_TTL_SECONDS", "29")]))
+            .unwrap_err();
+        assert_eq!(err, ConfigError::OperatorProposalTtlOutOfBounds(29));
+        let err = Config::from_source(source(&[("CRM_OPERATOR_PROPOSAL_TTL_SECONDS", "601")]))
+            .unwrap_err();
+        assert_eq!(err, ConfigError::OperatorProposalTtlOutOfBounds(601));
+        let err = Config::from_source(source(&[("CRM_OPERATOR_PROPOSAL_TTL_SECONDS", "x")]))
+            .unwrap_err();
+        assert_eq!(
+            err,
+            ConfigError::InvalidOperatorProposalTtl("x".to_string())
+        );
         let err =
             Config::from_source(source(&[("CRM_OPERATOR_MAX_CONCURRENT", "four")])).unwrap_err();
         assert!(matches!(err, ConfigError::InvalidOperatorMaxConcurrent(_)));

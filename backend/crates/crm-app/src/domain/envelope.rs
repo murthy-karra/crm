@@ -73,7 +73,9 @@ impl Origin {
 /// and correlation id all come from the server, never from client input
 /// (AGENTS.md §4.2). `correlation_id` is fresh per command execution and is
 /// never the request id — the request span logs both (docs/specs/SLICE_002.md
-/// §4).
+/// §4). One declared amendment (docs/specs/SLICE_006b.md §3): an
+/// Operator-confirmed command reuses the Operator **turn id** as its
+/// correlation id, chaining turn → call → facts for the audit trail.
 #[derive(Debug, Clone)]
 pub struct CommandContext {
     pub organization_id: Uuid,
@@ -89,6 +91,19 @@ impl CommandContext {
             actor_user_id: auth.actor_user_id,
             origin: Origin::WebSession,
             correlation_id: Uuid::new_v4(),
+        }
+    }
+
+    /// An Operator-proposed command the user confirmed in the UI
+    /// (docs/specs/SLICE_006b.md §3): same trusted session identity as
+    /// `from_auth`, origin `Operator`, and the Operator turn id as the
+    /// correlation id (the declared amendment above).
+    pub fn for_operator(auth: &AuthContext, turn_id: Uuid) -> Self {
+        Self {
+            organization_id: auth.active_organization_id,
+            actor_user_id: auth.actor_user_id,
+            origin: Origin::Operator,
+            correlation_id: turn_id,
         }
     }
 }

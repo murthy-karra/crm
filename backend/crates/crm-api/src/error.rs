@@ -66,6 +66,14 @@ pub enum ApiError {
     /// The head attempt was corrected concurrently by a writer outside
     /// the call lock (the partial unique index).
     CorrectionConflict,
+    // --- Slice 006b (docs/specs/SLICE_006b.md §4) ----------------------
+    /// Confirm on a proposal past `expires_at` (still `proposed`).
+    ProposalExpired,
+    /// Confirm on a proposal already claimed/confirmed/failed — consumed
+    /// beats expired; `call_id` is null when no call was ever created.
+    ProposalConsumed {
+        call_id: Option<uuid::Uuid>,
+    },
 }
 
 impl IntoResponse for ApiError {
@@ -126,6 +134,14 @@ impl IntoResponse for ApiError {
                 "telephony_unavailable",
                 None,
             ),
+            ApiError::ProposalExpired => (StatusCode::CONFLICT, "proposal_expired", None),
+            ApiError::ProposalConsumed { call_id } => {
+                return (
+                    StatusCode::CONFLICT,
+                    Json(json!({ "error": "proposal_consumed", "call_id": call_id })),
+                )
+                    .into_response();
+            }
             ApiError::NoContactAttempt => {
                 (StatusCode::UNPROCESSABLE_ENTITY, "no_contact_attempt", None)
             }

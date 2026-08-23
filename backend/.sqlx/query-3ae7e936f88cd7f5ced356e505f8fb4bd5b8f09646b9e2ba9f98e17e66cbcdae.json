@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT organization_id, id, status FROM call\n           WHERE (status = 'placing' AND placed_at < $1)\n              OR (status = 'ringing' AND ringing_at < $2)\n              OR (status = 'answered' AND answered_at < $3)\n           ORDER BY placed_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "organization_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "status",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "3ae7e936f88cd7f5ced356e505f8fb4bd5b8f09646b9e2ba9f98e17e66cbcdae"
+}

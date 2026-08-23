@@ -34,6 +34,14 @@ pub struct UnresolvedChangedData {
     pub raw_payload_id: Uuid,
 }
 
+/// `data` on a `call.changed` event (docs/specs/SLICE_006.md §6): ids
+/// only, published after every committed call transition.
+#[derive(Debug, Clone, Serialize)]
+pub struct CallChangedData {
+    pub call_id: Uuid,
+    pub person_id: Uuid,
+}
+
 /// The exact §6 event envelope. `v: 1` always this slice; additive fields
 /// are allowed under `v: 1`, a breaking change bumps it. Internally
 /// tagged on `type` so the wire shape matches §6 exactly:
@@ -58,6 +66,14 @@ pub enum RealtimeEvent {
         occurred_at: DateTime<Utc>,
         correlation_id: Uuid,
         data: UnresolvedChangedData,
+    },
+    #[serde(rename = "call.changed")]
+    CallChanged {
+        v: u8,
+        organization_id: Uuid,
+        occurred_at: DateTime<Utc>,
+        correlation_id: Uuid,
+        data: CallChangedData,
     },
 }
 
@@ -93,12 +109,32 @@ impl RealtimeEvent {
         }
     }
 
+    /// `call.changed` (docs/specs/SLICE_006.md §6).
+    pub fn call_changed(
+        organization_id: Uuid,
+        occurred_at: DateTime<Utc>,
+        correlation_id: Uuid,
+        call_id: Uuid,
+        person_id: Uuid,
+    ) -> Self {
+        RealtimeEvent::CallChanged {
+            v: 1,
+            organization_id,
+            occurred_at,
+            correlation_id,
+            data: CallChangedData { call_id, person_id },
+        }
+    }
+
     pub fn organization_id(&self) -> Uuid {
         match self {
             RealtimeEvent::PersonChanged {
                 organization_id, ..
             }
             | RealtimeEvent::IntakeUnresolvedChanged {
+                organization_id, ..
+            }
+            | RealtimeEvent::CallChanged {
                 organization_id, ..
             } => *organization_id,
         }
@@ -107,7 +143,8 @@ impl RealtimeEvent {
     pub fn correlation_id(&self) -> Uuid {
         match self {
             RealtimeEvent::PersonChanged { correlation_id, .. }
-            | RealtimeEvent::IntakeUnresolvedChanged { correlation_id, .. } => *correlation_id,
+            | RealtimeEvent::IntakeUnresolvedChanged { correlation_id, .. }
+            | RealtimeEvent::CallChanged { correlation_id, .. } => *correlation_id,
         }
     }
 
@@ -115,6 +152,7 @@ impl RealtimeEvent {
         match self {
             RealtimeEvent::PersonChanged { .. } => "person.changed",
             RealtimeEvent::IntakeUnresolvedChanged { .. } => "intake.unresolved_changed",
+            RealtimeEvent::CallChanged { .. } => "call.changed",
         }
     }
 }
@@ -221,6 +259,30 @@ mod tests {
                 "data": { "raw_payload_id": raw_payload_id },
             })
         );
+    }
+
+    #[test]
+    fn call_changed_serializes_to_exact_shape() {
+        let org_id = Uuid::new_v4();
+        let corr_id = Uuid::new_v4();
+        let call_id = Uuid::new_v4();
+        let person_id = Uuid::new_v4();
+        let event = RealtimeEvent::call_changed(org_id, ts(), corr_id, call_id, person_id);
+        let value = serde_json::to_value(&event).unwrap();
+        assert_eq!(
+            value,
+            json!({
+                "v": 1,
+                "type": "call.changed",
+                "organization_id": org_id,
+                "occurred_at": "2026-08-21T18:02:11Z",
+                "correlation_id": corr_id,
+                "data": { "call_id": call_id, "person_id": person_id },
+            })
+        );
+        assert_eq!(event.type_tag(), "call.changed");
+        assert_eq!(event.organization_id(), org_id);
+        assert_eq!(event.correlation_id(), corr_id);
     }
 
     #[test]

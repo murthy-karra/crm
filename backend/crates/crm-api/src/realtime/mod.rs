@@ -7,5 +7,5 @@ pub mod events;
 pub mod publisher;
 pub mod token;
 
-pub use events::{channel_for, PersonChange, Publication, RealtimeEvent};
+pub use events::{channel_for, CallChangedData, PersonChange, Publication, RealtimeEvent};
 pub use publisher::{CentrifugoTransport, PublishOutcome, Publisher};

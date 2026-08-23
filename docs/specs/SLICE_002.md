@@ -393,8 +393,10 @@ at least one contact method, so it is never empty).
 **History entries.** `kind` is one of `inquiry_received`,
 `routing_decision`, `assignment_changed`, `stage_changed` — plus
 `contact_attempted` (`kind_rank` 4, `detail {channel, outcome}`), added
-by SLICE_003 §5 as a declared additive change (AGENTS.md §11). `detail`
-per kind (ids always accompanied by resolved names):
+by SLICE_003 §5 as a declared additive change (AGENTS.md §11), and
+`call_completed` (`kind_rank` 5, `detail {call_id, outcome,
+talk_seconds, answered_at}`), added by SLICE_006 §2 the same way.
+`detail` per kind (ids always accompanied by resolved names):
 
 - `inquiry_received`: `{inquiry_id, source, person_created, matched_by}`
 - `routing_decision`: `{inquiry_id, strategy, assignee: {id, display_name} | null}`

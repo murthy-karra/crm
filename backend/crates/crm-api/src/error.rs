@@ -3,7 +3,7 @@ use axum::response::{IntoResponse, Json, Response};
 use serde_json::json;
 
 use crate::domain::admin::AdminCommandError;
-use crate::domain::commands::CommandError;
+use crate::domain::commands::{CallError, CommandError};
 
 /// `{"error": "<code>"}` envelope shared across authenticated endpoints
 /// (docs/specs/SLICE_001.md §4). Slice 002 (docs/specs/SLICE_002.md §5)
@@ -44,6 +44,21 @@ pub enum ApiError {
     /// Provider timeout/error/rate-limit, the turn deadline, or a tool
     /// backend failure.
     OperatorUnavailable,
+    // --- Slice 006 (docs/specs/SLICE_006.md §5) -------------------------
+    /// Nonexistent, foreign, another Person's, or non-phone contact
+    /// method — identical 422.
+    InvalidContactMethod,
+    /// The caller already has an active call; the one envelope extension
+    /// (`call_id`) so the client can offer "hang up the previous call".
+    CallInProgress {
+        call_id: uuid::Uuid,
+    },
+    /// `dial` already requested or the call is not `placing`.
+    InvalidCallState,
+    /// `LIVEKIT_API_KEY` unset.
+    TelephonyDisabled,
+    /// The provider failed (room creation).
+    TelephonyUnavailable,
 }
 
 impl IntoResponse for ApiError {
@@ -81,6 +96,27 @@ impl IntoResponse for ApiError {
             ApiError::OperatorUnavailable => (
                 StatusCode::SERVICE_UNAVAILABLE,
                 "operator_unavailable",
+                None,
+            ),
+            ApiError::InvalidContactMethod => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "invalid_contact_method",
+                None,
+            ),
+            ApiError::CallInProgress { call_id } => {
+                return (
+                    StatusCode::CONFLICT,
+                    Json(json!({ "error": "call_in_progress", "call_id": call_id })),
+                )
+                    .into_response();
+            }
+            ApiError::InvalidCallState => (StatusCode::CONFLICT, "invalid_call_state", None),
+            ApiError::TelephonyDisabled => {
+                (StatusCode::SERVICE_UNAVAILABLE, "telephony_disabled", None)
+            }
+            ApiError::TelephonyUnavailable => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "telephony_unavailable",
                 None,
             ),
         };
@@ -134,6 +170,23 @@ impl From<AdminCommandError> for ApiError {
             AdminCommandError::LastAdmin => ApiError::LastAdmin,
             AdminCommandError::Crypto | AdminCommandError::Corrupt => ApiError::InternalError,
             AdminCommandError::Database(_) => ApiError::Unavailable,
+        }
+    }
+}
+
+/// `CallError` -> `ApiError` for the Slice 006 call routes
+/// (docs/specs/SLICE_006.md §5, §9).
+impl From<CallError> for ApiError {
+    fn from(err: CallError) -> Self {
+        match err {
+            CallError::PersonNotFound | CallError::CallNotFound => ApiError::NotFound,
+            CallError::InvalidContactMethod => ApiError::InvalidContactMethod,
+            CallError::CallInProgress { call_id } => ApiError::CallInProgress { call_id },
+            CallError::InvalidCallState => ApiError::InvalidCallState,
+            CallError::Forbidden => ApiError::Forbidden,
+            CallError::TelephonyUnavailable => ApiError::TelephonyUnavailable,
+            CallError::Corrupt => ApiError::InternalError,
+            CallError::Database(_) => ApiError::Unavailable,
         }
     }
 }

@@ -4,17 +4,25 @@
 
 pub mod assign_person;
 pub mod change_person_stage;
+pub mod dial_call;
+pub mod hangup_call;
 pub mod log_contact_attempt;
 pub mod receive_inquiry;
+pub mod start_call;
 
 pub use assign_person::{assign_person, AssignPerson};
 pub use change_person_stage::{change_person_stage, ChangePersonStage};
+pub use dial_call::dial_call;
+pub use hangup_call::hangup_call;
 pub use log_contact_attempt::{
     log_contact_attempt, ContactAttemptRef, ContactChannel, ContactOutcome, LogContactAttempt,
 };
 pub use receive_inquiry::{
     receive_inquiry, ReceiveInquiry, ReceiveInquiryOutcome, RoutingStrategy,
 };
+pub use start_call::{start_call, StartCall};
+
+use uuid::Uuid;
 
 use crate::domain::raw_payload::crypto::CryptoError;
 
@@ -90,3 +98,67 @@ impl std::fmt::Display for CommandError {
 }
 
 impl std::error::Error for CommandError {}
+
+/// Errors of the Slice 006 call commands (docs/specs/SLICE_006.md §3,
+/// §5), kept apart from `CommandError` the way `AdminCommandError` is.
+#[derive(Debug)]
+pub enum CallError {
+    /// Foreign or nonexistent Person — byte-identical 404.
+    PersonNotFound,
+    /// Nonexistent, foreign, another Person's, or non-phone contact method
+    /// — identical 422.
+    InvalidContactMethod,
+    /// The caller already has an active call (the partial unique index).
+    CallInProgress {
+        call_id: Uuid,
+    },
+    /// `dial` on a call that is not `placing` or was already dialed.
+    InvalidCallState,
+    /// Foreign or nonexistent call — 404.
+    CallNotFound,
+    /// Not the caller (`dial`/`hangup`).
+    Forbidden,
+    /// The provider failed at `start` (room creation).
+    TelephonyUnavailable,
+    /// Data read back from our own database didn't match an expected
+    /// shape (see `CommandError::Corrupt`).
+    Corrupt,
+    Database(sqlx::Error),
+}
+
+impl From<sqlx::Error> for CallError {
+    fn from(err: sqlx::Error) -> Self {
+        match err {
+            sqlx::Error::Decode(_) => CallError::Corrupt,
+            other => CallError::Database(other),
+        }
+    }
+}
+
+impl CallError {
+    /// PII-free tag for spans/logs (never the `Database` payload).
+    pub fn kind(&self) -> &'static str {
+        match self {
+            CallError::PersonNotFound => "person_not_found",
+            CallError::InvalidContactMethod => "invalid_contact_method",
+            CallError::CallInProgress { .. } => "call_in_progress",
+            CallError::InvalidCallState => "invalid_call_state",
+            CallError::CallNotFound => "call_not_found",
+            CallError::Forbidden => "forbidden",
+            CallError::TelephonyUnavailable => "telephony_unavailable",
+            CallError::Corrupt => "corrupt",
+            CallError::Database(_) => "database",
+        }
+    }
+}
+
+impl std::fmt::Display for CallError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CallError::Database(err) => write!(f, "database error: {err}"),
+            other => write!(f, "{}", other.kind()),
+        }
+    }
+}
+
+impl std::error::Error for CallError {}

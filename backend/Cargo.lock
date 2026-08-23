@@ -385,6 +385,7 @@ dependencies = [
  "base64 0.23.1",
  "chacha20poly1305",
  "chrono",
+ "crm-api",
  "crm-operator",
  "dotenvy",
  "futures-util",

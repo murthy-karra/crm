@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT 1 AS \"one!\" FROM contact_method\n           WHERE id = $1 AND person_id = $2 AND organization_id = $3 AND kind = 'phone'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "one!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "d01d1684c39b5a1aff510b1af638f41f173197fd3c989ec54b9d6f2e25b74b0c"
+}

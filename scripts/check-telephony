@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# Runs the LiveKit-backed telephony tests (docs/specs/SLICE_006.md §13
+# item 3) against a real LiveKit server. Gated on CRM_TEST_LIVEKIT_API_URL:
+# refuses to run when it is unset, and the tests themselves fail loudly —
+# never skip — when the host is unreachable. Not part of ./scripts/check
+# (no services) or ./scripts/check-db (loopback-only). Never placed a PSTN
+# call: only rooms are created/listed/deleted. Never printed: any
+# credential value from .env.
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "$script_dir/.." && pwd)"
+env_file="$repo_root/.env"
+
+# A value exported by the caller wins over .env (so a one-off run against
+# another host does not require editing .env).
+preset_url="${CRM_TEST_LIVEKIT_API_URL:-}"
+
+if [ ! -f "$env_file" ]; then
+  echo ".env not found at repo root. Copy .env.example to .env and fill in values first." >&2
+  exit 1
+fi
+
+set -a
+# shellcheck disable=SC1090
+source "$env_file"
+set +a
+
+if [ -n "$preset_url" ]; then
+  CRM_TEST_LIVEKIT_API_URL="$preset_url"
+fi
+
+if [ -z "${CRM_TEST_LIVEKIT_API_URL:-}" ]; then
+  cat >&2 <<'MSG'
+CRM_TEST_LIVEKIT_API_URL is not set. This check needs a reachable LiveKit
+server (README: "Telephony host"). Set it in .env — e.g. the telephony
+host's https:// API URL, the same value as LIVEKIT_API_URL — or export it
+for this run. Refusing to run rather than silently skipping.
+MSG
+  exit 1
+fi
+
+for v in LIVEKIT_API_KEY LIVEKIT_API_SECRET; do
+  if [ -z "${!v:-}" ]; then
+    echo "$v is empty in .env; it must match the telephony host's livekit.yaml" >&2
+    exit 1
+  fi
+done
+
+case "$CRM_TEST_LIVEKIT_API_URL" in
+  https://*|http://127.0.0.1*|http://localhost*) ;;
+  *)
+    echo "CRM_TEST_LIVEKIT_API_URL must be https:// (http:// only for loopback)" >&2
+    exit 1
+    ;;
+esac
+
+echo "==> livekit: ${CRM_TEST_LIVEKIT_API_URL}"
+cd "$repo_root/backend"
+export CRM_TEST_LIVEKIT_API_URL LIVEKIT_API_KEY LIVEKIT_API_SECRET
+exec cargo test --manifest-path Cargo.toml -p crm-api --locked --test livekit_telephony -- --ignored

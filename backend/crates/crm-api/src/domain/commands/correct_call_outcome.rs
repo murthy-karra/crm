@@ -1,9 +1,14 @@
-//! `correct_call_outcome` (docs/specs/SLICE_006c.md §3, D-032): the
-//! caller's statement of how a call went, written as a **new**
-//! `contact_attempted` row whose `corrects_id` points at the call's head
-//! attempt. The original is never touched (D-015). Step order is frozen:
-//! call lock first, then the head lookup, so concurrent saves serialize
-//! on the call row and the later one chains onto the earlier (or no-ops).
+//! `correct_call_outcome` (docs/specs/SLICE_006c.md §3, §5a; D-032,
+//! D-033): the caller's statement of how a call went, written as a
+//! **new** `contact_attempted` row whose `corrects_id` points at the
+//! call's head attempt. The original is never touched (D-015). Step
+//! order is frozen: call lock first, then the head lookup, so concurrent
+//! saves serialize on the call row and the later one chains onto the
+//! earlier (or no-ops). The agent's choice is always written when the
+//! head is the automatic root (`corrects_id IS NULL`), even if it equals
+//! the system's observation: the automatic row is evidence, not an
+//! outcome (D-033). `changed: false` only when the head is already an
+//! agent choice with the same outcome.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -204,8 +209,12 @@ async fn correct_call_outcome_attempt(
         .await?
         .ok_or(CallError::NoContactAttempt)?;
     let head = CorrectedAttemptRef::try_from(head)?;
-    // 5. Equal → nothing written, nothing published.
-    if head.outcome == requested {
+    // 5. Unchanged only when the head is already an agent choice with the
+    //    same outcome. When the head is the automatic root the agent's
+    //    choice is always written, even if it equals the observation —
+    //    the system's row is evidence, not an outcome (D-033), and the
+    //    "outcome needed" Today tier clears only on an agent row.
+    if head.corrects_id.is_some() && head.outcome == requested {
         tx.rollback().await?;
         return Ok(CorrectionResult {
             attempt: head,

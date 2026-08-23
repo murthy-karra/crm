@@ -1002,7 +1002,7 @@ async fn explain_priority_position_matches_today_query_and_get_api_today(migrato
         assert_eq!(r["ahead"]["normal"], want_normal);
         assert_eq!(
             r["ordering_rule"],
-            "high_before_normal, then waiting_since ascending, then id"
+            "high_before_normal_before_low, then waiting_since ascending (ended_at for low), then id"
         );
         assert_eq!(r["person"]["id"], person.to_string());
         assert!(r["reasons"]

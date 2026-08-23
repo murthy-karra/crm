@@ -149,6 +149,13 @@ history-bearing slice; this slice adds the fifth in the same style
 
 ## 3. Today
 
+Amended by SLICE_006c §5a (D-033): a second membership source — the
+viewer's own ended/failed calls whose outcome the agent has not set —
+yields items with priority `low`, reason `call_outcome_needed`, action
+`set_outcome`, sorted after every other tier; `last_contact_attempt`
+is the effective (uncorrected) attempt; each reason carries an
+`explanation` line in the Operator views.
+
 ### Semantics
 
 A **Today item** is a Person, assigned to the viewer, whose latest
@@ -304,6 +311,10 @@ for `intake.unresolved_changed`, which has no fact, it is the
 `raw_payload.received_at`. Never publish time.
 
 ## 5. HTTP contracts
+
+`GET /api/today` values widened by SLICE_006c §5a: `priority` adds
+`low`, `recommended_action` adds `set_outcome`, `reasons[]` adds
+`{code: "call_outcome_needed", call_id, ended_at}`. Additive.
 
 New endpoints only. All via `AuthContext`; `{"error": code}` envelope;
 401 without a valid session and 503 `unavailable` on database failure

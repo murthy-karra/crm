@@ -9,9 +9,9 @@ use crate::domain::today::{TodayItem, TodayList, TodayPriority, TodayReason};
 use crm_operator::{Ahead, NotOnTodayReason, PersonCard, PriorityExplanation, ORDERING_RULE};
 
 /// Where `person_id` sits on the list: the 0-based index and how many
-/// items precede it in each tier. `Ahead` counts the Inquiry tiers only;
-/// `low` items (D-033) sort under both, so none precede a high/normal
-/// item, and the `low` items ahead of a `low` item are not counted.
+/// items precede it in each tier (`high`, `normal`, and the D-033 `low`
+/// tier, which sorts under both — so `low` never precedes a high/normal
+/// item). The three counts sum to the index.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Placement {
     pub index: usize,
@@ -20,12 +20,16 @@ pub struct Placement {
 
 pub fn placement(items: &[TodayItem], person_id: Uuid) -> Option<Placement> {
     let index = items.iter().position(|item| item.person.id == person_id)?;
-    let mut ahead = Ahead { high: 0, normal: 0 };
+    let mut ahead = Ahead {
+        high: 0,
+        normal: 0,
+        low: 0,
+    };
     for item in &items[..index] {
         match item.priority {
             TodayPriority::High => ahead.high += 1,
             TodayPriority::Normal => ahead.normal += 1,
-            TodayPriority::Low => {}
+            TodayPriority::Low => ahead.low += 1,
         }
     }
     Some(Placement { index, ahead })
@@ -53,10 +57,7 @@ pub fn reason_text(reason: &TodayReason) -> String {
             format!("{inquiry_count} inquiries in total")
         }
         TodayReason::CallOutcomeNeeded { ended_at, .. } => {
-            format!(
-                "a call on {} has no outcome yet",
-                ended_at.format("%Y-%m-%d")
-            )
+            format!("a call at {} has no outcome yet", ended_at.to_rfc3339())
         }
     }
 }
@@ -210,14 +211,22 @@ mod tests {
             placement(&items, ids[0]),
             Some(Placement {
                 index: 0,
-                ahead: Ahead { high: 0, normal: 0 }
+                ahead: Ahead {
+                    high: 0,
+                    normal: 0,
+                    low: 0
+                }
             })
         );
         assert_eq!(
             placement(&items, ids[1]),
             Some(Placement {
                 index: 1,
-                ahead: Ahead { high: 1, normal: 0 }
+                ahead: Ahead {
+                    high: 1,
+                    normal: 0,
+                    low: 0
+                }
             })
         );
         // First normal item: both highs ahead, no normals.
@@ -225,14 +234,22 @@ mod tests {
             placement(&items, ids[2]),
             Some(Placement {
                 index: 2,
-                ahead: Ahead { high: 2, normal: 0 }
+                ahead: Ahead {
+                    high: 2,
+                    normal: 0,
+                    low: 0
+                }
             })
         );
         assert_eq!(
             placement(&items, ids[4]),
             Some(Placement {
                 index: 4,
-                ahead: Ahead { high: 2, normal: 2 }
+                ahead: Ahead {
+                    high: 2,
+                    normal: 2,
+                    low: 0
+                }
             })
         );
         assert_eq!(placement(&items, Uuid::new_v4()), None);
@@ -270,14 +287,21 @@ mod tests {
                 assert_eq!(reasons.len(), 1);
                 assert_eq!(reasons[0]["code"], "no_contact_attempt");
                 assert_eq!(ordering_rule, ORDERING_RULE);
-                assert_eq!(ahead, Ahead { high: 1, normal: 0 });
+                assert_eq!(
+                    ahead,
+                    Ahead {
+                        high: 1,
+                        normal: 0,
+                        low: 0
+                    }
+                );
             }
             other => panic!("{other:?}"),
         }
     }
 
     #[test]
-    fn placement_ignores_low_items_in_ahead_and_priority_str_is_low() {
+    fn placement_counts_low_items_ahead_and_priority_str_is_low() {
         let ids: Vec<Uuid> = (0..3).map(|_| Uuid::new_v4()).collect();
         let items = vec![
             item(ids[0], TodayPriority::Normal, 1),
@@ -288,14 +312,72 @@ mod tests {
             placement(&items, ids[2]),
             Some(Placement {
                 index: 2,
-                ahead: Ahead { high: 0, normal: 1 }
+                ahead: Ahead {
+                    high: 0,
+                    normal: 1,
+                    low: 1
+                }
             })
         );
         assert_eq!(priority_str(TodayPriority::Low), "low");
+        assert!(ORDERING_RULE.starts_with("high_before_normal_before_low"));
     }
 
     #[test]
-    fn call_outcome_needed_reason_is_explained_with_the_call_date() {
+    fn a_low_item_explanation_is_consistent_with_position_and_rule() {
+        let viewer = Uuid::new_v4();
+        let ids: Vec<Uuid> = (0..3).map(|_| Uuid::new_v4()).collect();
+        let mut low = item(ids[2], TodayPriority::Low, 3);
+        low.recommended_action = RecommendedAction::SetOutcome;
+        low.reasons = vec![TodayReason::CallOutcomeNeeded {
+            call_id: Uuid::new_v4(),
+            ended_at: ts(3),
+        }];
+        let list = TodayList {
+            generated_at: ts(12),
+            items: vec![
+                item(ids[0], TodayPriority::High, 8),
+                item(ids[1], TodayPriority::Low, 2),
+                low,
+            ],
+            truncated: false,
+        };
+        // Not assigned to the viewer: the caller owes the outcome (D-033).
+        let explanation = build_explanation(&list, &summary(ids[2], None), viewer, card(ids[2]));
+        match explanation {
+            PriorityExplanation::OnToday {
+                position,
+                total,
+                priority,
+                reasons,
+                ordering_rule,
+                ahead,
+                recommended_action,
+                ..
+            } => {
+                assert_eq!(position, 3);
+                assert_eq!(total, 3);
+                assert_eq!(priority, "low");
+                assert_eq!(recommended_action, "set_outcome");
+                assert_eq!(reasons.len(), 1);
+                assert_eq!(reasons[0]["code"], "call_outcome_needed");
+                assert_eq!(ordering_rule, ORDERING_RULE);
+                assert_eq!(
+                    ahead,
+                    Ahead {
+                        high: 1,
+                        normal: 0,
+                        low: 1
+                    }
+                );
+                assert_eq!(ahead.high + ahead.normal + ahead.low, position - 1);
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn call_outcome_needed_reason_is_explained_with_the_call_time() {
         let call_id = Uuid::new_v4();
         let reason = TodayReason::CallOutcomeNeeded {
             call_id,
@@ -303,7 +385,7 @@ mod tests {
         };
         assert_eq!(
             reason_text(&reason),
-            "a call on 2026-08-22 has no outcome yet"
+            "a call at 2026-08-22T14:00:00+00:00 has no outcome yet"
         );
 
         let mut it = item(call_id, TodayPriority::Low, 14);
@@ -316,7 +398,7 @@ mod tests {
         assert_eq!(json[0]["ended_at"], "2026-08-22T14:00:00Z");
         assert_eq!(
             json[0]["explanation"],
-            "a call on 2026-08-22 has no outcome yet"
+            "a call at 2026-08-22T14:00:00+00:00 has no outcome yet"
         );
         assert_eq!(
             serde_json::to_value(it.recommended_action).unwrap(),

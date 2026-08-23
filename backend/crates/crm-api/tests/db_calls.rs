@@ -244,13 +244,24 @@ async fn wait_for_status(router: &Router, cookie: &str, call_id: Uuid, status: &
 /// Starts a call and marks the agent present so the dial task proceeds;
 /// returns `(call_id, start body)`.
 async fn start_with_agent_present(f: &Fixture, person_id: Uuid, cm: Uuid) -> (Uuid, Value) {
-    let resp = start(&f.router, &f.alice, person_id, cm).await;
+    start_as_with_agent_present(f, &f.alice, f.alice_id, person_id, cm).await
+}
+
+/// `start_with_agent_present` for an arbitrary caller (`cookie`, `user_id`).
+async fn start_as_with_agent_present(
+    f: &Fixture,
+    cookie: &str,
+    user_id: Uuid,
+    person_id: Uuid,
+    cm: Uuid,
+) -> (Uuid, Value) {
+    let resp = start(&f.router, cookie, person_id, cm).await;
     assert_eq!(resp.status(), StatusCode::CREATED);
     let body = common::body_json(resp).await;
     let call_id: Uuid = body["call"]["id"].as_str().unwrap().parse().unwrap();
     f.provider.set_present(
         &Telephony::room_for(call_id),
-        &Telephony::agent_identity(f.alice_id),
+        &Telephony::agent_identity(user_id),
         true,
     );
     (call_id, body)
@@ -2331,33 +2342,124 @@ async fn same_outcome_is_unchanged_and_writes_and_publishes_nothing(migrator_poo
     let f = fixture(&migrator_pool).await;
     let (call_id, person_id, _) = answered_and_ended(&f, "lead31@example.com", None).await;
     let original = attempt_rows(&migrator_pool, person_id).await;
-    let before = recorded(&f.publisher).await.len();
 
-    // The observed outcome is `reached`: saving it is a no-op.
-    let resp = correct(&f.router, &f.alice, call_id, "reached").await;
-    assert_eq!(resp.status(), StatusCode::OK);
-    let body = common::body_json(resp).await;
-    assert_eq!(body["changed"], false);
-    assert_eq!(body["attempt"]["id"], original[0].id.to_string());
-    assert_eq!(body["attempt"]["outcome"], "reached");
-    assert!(body["attempt"]["corrects_id"].is_null());
-    assert_eq!(attempt_rows(&migrator_pool, person_id).await.len(), 1);
-    assert_eq!(recorded(&f.publisher).await.len(), before);
-
-    // After a real correction, re-saving *that* outcome is the no-op and
-    // returns the correction as the head.
+    // Start from an agent choice (D-033: the automatic root is never the
+    // "same outcome" — see `choosing_the_observed_outcome_still_writes…`).
     let resp = correct(&f.router, &f.alice, call_id, "busy").await;
     assert_eq!(resp.status(), StatusCode::OK);
     let correction_id = common::body_json(resp).await["attempt"]["id"].clone();
+    assert_eq!(attempt_rows(&migrator_pool, person_id).await.len(), 2);
     let before = recorded(&f.publisher).await.len();
+
+    // Re-saving the chosen outcome is the no-op and returns the choice as
+    // the head: nothing written, nothing published.
     let resp = correct(&f.router, &f.alice, call_id, "busy").await;
     assert_eq!(resp.status(), StatusCode::OK);
     let body = common::body_json(resp).await;
     assert_eq!(body["changed"], false);
     assert_eq!(body["attempt"]["id"], correction_id);
+    assert_eq!(body["attempt"]["outcome"], "busy");
     assert_eq!(body["attempt"]["corrects_id"], original[0].id.to_string());
     assert_eq!(attempt_rows(&migrator_pool, person_id).await.len(), 2);
     assert_eq!(recorded(&f.publisher).await.len(), before);
+}
+
+/// D-033: the automatic row is evidence, not an outcome. Choosing the
+/// value the system observed still writes the agent's row (so the call is
+/// complete and the "outcome needed" nag clears); only a repeat of an
+/// agent choice is `changed: false`.
+#[sqlx::test]
+#[ignore]
+async fn choosing_the_observed_outcome_still_writes_the_agents_row_and_clears_the_nag(
+    migrator_pool: PgPool,
+) {
+    let f = fixture(&migrator_pool).await;
+
+    // `reached` on an answered call.
+    let (call_id, person_id, _) = answered_and_ended(&f, "lead31a@example.com", None).await;
+    let original = attempt_rows(&migrator_pool, person_id).await;
+    assert_eq!(original.len(), 1);
+    assert_eq!(original[0].outcome, "reached");
+    assert_eq!(
+        today_priority(&f.router, &f.alice, person_id)
+            .await
+            .as_deref(),
+        Some("low")
+    );
+    let before = recorded(&f.publisher).await.len();
+
+    let resp = correct(&f.router, &f.alice, call_id, "reached").await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = common::body_json(resp).await;
+    assert_eq!(body["changed"], true);
+    assert_eq!(body["attempt"]["outcome"], "reached");
+    assert_eq!(body["attempt"]["corrects_id"], original[0].id.to_string());
+    let rows = attempt_rows(&migrator_pool, person_id).await;
+    assert_eq!(rows.len(), 2, "{rows:?}");
+    assert_eq!(rows[0].id, original[0].id);
+    assert_eq!(rows[1].outcome, "reached");
+    assert_eq!(rows[1].corrects_id, Some(rows[0].id));
+    assert_eq!(rows[1].actor_user_id, Some(f.alice_id));
+    assert_eq!(body["attempt"]["id"], rows[1].id.to_string());
+    assert_eq!(recorded(&f.publisher).await.len(), before + 1);
+    // The Today `low` item is gone.
+    assert!(!today_has(&f.router, &f.alice, person_id).await);
+    // History: the root is superseded, the agent's row is the chosen one.
+    let detail = common::body_json(
+        common::get_with_cookie(&f.router, &format!("/api/people/{person_id}"), &f.alice).await,
+    )
+    .await;
+    let attempts = history_of_kind(detail["history"].as_array().unwrap(), "contact_attempted");
+    assert_eq!(attempts.len(), 2);
+    assert_eq!(attempts[0]["id"], rows[0].id.to_string());
+    assert_eq!(attempts[0]["detail"]["superseded"], true);
+    assert_eq!(attempts[1]["id"], rows[1].id.to_string());
+    assert_eq!(attempts[1]["detail"]["outcome"], "reached");
+    assert_eq!(attempts[1]["detail"]["corrects_id"], rows[0].id.to_string());
+    assert_eq!(attempts[1]["detail"]["superseded"], false);
+
+    // A repeat of the agent's choice is the no-op.
+    let before = recorded(&f.publisher).await.len();
+    let resp = correct(&f.router, &f.alice, call_id, "reached").await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = common::body_json(resp).await;
+    assert_eq!(body["changed"], false);
+    assert_eq!(body["attempt"]["id"], rows[1].id.to_string());
+    assert_eq!(attempt_rows(&migrator_pool, person_id).await.len(), 2);
+    assert_eq!(recorded(&f.publisher).await.len(), before);
+
+    // `no_answer` on a busy call (observed `no_answer`, D-031 mapping).
+    let (person2, phone2, _) =
+        create_person_with_phone(&f.router, &f.alice, "lead31b@example.com", None).await;
+    let call2 = busy_call(&f, person2, phone2).await;
+    assert_eq!(
+        today_priority(&f.router, &f.alice, person2)
+            .await
+            .as_deref(),
+        Some("low")
+    );
+    let resp = correct(&f.router, &f.alice, call2, "no_answer").await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = common::body_json(resp).await;
+    assert_eq!(body["changed"], true);
+    let rows = attempt_rows(&migrator_pool, person2).await;
+    assert_eq!(rows.len(), 2, "{rows:?}");
+    assert_eq!(rows[0].outcome, "no_answer");
+    assert!(rows[0].corrects_id.is_none());
+    assert_eq!(rows[1].outcome, "no_answer");
+    assert_eq!(rows[1].corrects_id, Some(rows[0].id));
+    assert_eq!(body["attempt"]["id"], rows[1].id.to_string());
+    assert!(!today_has(&f.router, &f.alice, person2).await);
+    let detail = common::body_json(
+        common::get_with_cookie(&f.router, &format!("/api/people/{person2}"), &f.alice).await,
+    )
+    .await;
+    let attempts = history_of_kind(detail["history"].as_array().unwrap(), "contact_attempted");
+    assert_eq!(attempts[1]["id"], rows[1].id.to_string());
+    assert_eq!(attempts[1]["detail"]["superseded"], false);
+    let body = common::body_json(correct(&f.router, &f.alice, call2, "no_answer").await).await;
+    assert_eq!(body["changed"], false);
+    assert_eq!(attempt_rows(&migrator_pool, person2).await.len(), 2);
 }
 
 #[sqlx::test]
@@ -3090,4 +3192,127 @@ async fn a_call_with_no_attempt_creates_no_outcome_item(migrator_pool: PgPool) {
             .as_deref(),
         Some("high")
     );
+}
+
+/// D-033: the nag is per caller. Two members who each called one Person
+/// each see their own `low` item, for their own call; one's choice does
+/// not clear the other's.
+#[sqlx::test]
+#[ignore]
+async fn two_callers_on_one_person_each_carry_their_own_outcome_nag(migrator_pool: PgPool) {
+    let f = fixture(&migrator_pool).await;
+    let (person_id, phone, _) =
+        create_person_with_phone(&f.router, &f.alice, "lead44@example.com", None).await;
+    let alice_call = busy_call(&f, person_id, phone).await;
+    f.provider
+        .push_dial(Ok(DialOutcome::Failed(SipFailure::Busy)));
+    let (carol_call, _) =
+        start_as_with_agent_present(&f, &f.carol, f.carol_id, person_id, phone).await;
+    assert_eq!(
+        dial(&f.router, &f.carol, carol_call).await.status(),
+        StatusCode::ACCEPTED
+    );
+    wait_for_status(&f.router, &f.carol, carol_call, "failed").await;
+
+    let alice_item = today_item(&f.router, &f.alice, person_id)
+        .await
+        .expect("alice's nag");
+    assert_eq!(alice_item["priority"], "low");
+    assert_eq!(alice_item["reasons"][0]["call_id"], alice_call.to_string());
+    let carol_item = today_item(&f.router, &f.carol, person_id)
+        .await
+        .expect("carol's nag");
+    assert_eq!(carol_item["priority"], "low");
+    assert_eq!(carol_item["reasons"][0]["call_id"], carol_call.to_string());
+
+    // Carol chooses: only carol's item clears.
+    assert_eq!(
+        correct(&f.router, &f.carol, carol_call, "busy")
+            .await
+            .status(),
+        StatusCode::OK
+    );
+    assert!(!today_has(&f.router, &f.carol, person_id).await);
+    let alice_item = today_item(&f.router, &f.alice, person_id)
+        .await
+        .expect("alice's nag survives carol's choice");
+    assert_eq!(alice_item["reasons"][0]["call_id"], alice_call.to_string());
+
+    // Then alice's.
+    assert_eq!(
+        correct(&f.router, &f.alice, alice_call, "no_answer")
+            .await
+            .status(),
+        StatusCode::OK
+    );
+    assert!(!today_has(&f.router, &f.alice, person_id).await);
+    assert!(!today_has(&f.router, &f.carol, person_id).await);
+}
+
+/// §5a: the cap applies to the merged list and `low` items fall off
+/// first — 200 Inquiry items plus one outcome nag: the nag is absent and
+/// `truncated` is true.
+#[sqlx::test]
+#[ignore]
+async fn a_low_item_is_the_first_to_fall_off_the_cap(migrator_pool: PgPool) {
+    let f = fixture(&migrator_pool).await;
+    let (nagged, phone, _) =
+        create_person_with_phone(&f.router, &f.alice, "lead45@example.com", None).await;
+    let call_id = busy_call(&f, nagged, phone).await;
+    assert_eq!(
+        today_priority(&f.router, &f.alice, nagged).await.as_deref(),
+        Some("low")
+    );
+
+    // 200 unanswered Inquiries assigned to alice (fixture rows, as
+    // db_today.rs's cap test).
+    let stage_id: Uuid = sqlx::query_scalar(
+        "SELECT id FROM stage WHERE organization_id = $1 ORDER BY position LIMIT 1",
+    )
+    .bind(f.org_id)
+    .fetch_one(&migrator_pool)
+    .await
+    .unwrap();
+    let base = Utc::now() - chrono::Duration::hours(48);
+    for i in 0..200 {
+        let person_id: Uuid = sqlx::query_scalar(
+            "INSERT INTO person (organization_id, stage_id, assigned_user_id)
+             VALUES ($1, $2, $3) RETURNING id",
+        )
+        .bind(f.org_id)
+        .bind(stage_id)
+        .bind(f.alice_id)
+        .fetch_one(&migrator_pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO inquiry (organization_id, person_id, raw_payload_id, source, received_at)
+             VALUES ($1, $2, $3, 'zillow', $4)",
+        )
+        .bind(f.org_id)
+        .bind(person_id)
+        .bind(Uuid::new_v4())
+        .bind(base - chrono::Duration::seconds(i))
+        .execute(&migrator_pool)
+        .await
+        .unwrap();
+    }
+
+    let today =
+        common::body_json(common::get_with_cookie(&f.router, "/api/today", &f.alice).await).await;
+    assert_eq!(today["truncated"], true);
+    let items = today["items"].as_array().unwrap();
+    assert_eq!(items.len(), 200);
+    assert!(
+        items.iter().all(|i| i["priority"] != "low"),
+        "the nag fell off"
+    );
+    assert!(items
+        .iter()
+        .all(|i| i["person"]["id"] != nagged.to_string()));
+    assert!(items.iter().all(|i| i["reasons"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|r| r["call_id"] != call_id.to_string())));
 }

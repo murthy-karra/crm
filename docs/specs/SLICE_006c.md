@@ -157,8 +157,11 @@ call_id, outcome: CallOutcomeCorrection }) -> CorrectionResult`
    NOT EXISTS (SELECT 1 FROM contact_attempted c WHERE c.corrects_id =
    ca.id) ORDER BY recorded_at DESC LIMIT 1` → none →
    `NoContactAttempt` (422).
-5. `head.outcome == requested` → roll back; return
-   `{attempt: head, changed: false}`; publish nothing.
+5. `head.outcome == requested` **and the head is already an agent choice**
+   (`corrects_id IS NOT NULL`) → roll back; return `{attempt: head,
+   changed: false}`; publish nothing. The automatic root is always
+   written over, even when equal (D-033: the agent's choice is the
+   outcome; without a row the call would stay incomplete).
 6. Insert the correction row (§2) via `facts::insert_contact_attempted`
    extended with `corrects_id` and an explicit `recorded_at`. Because
    step 1 holds the call row lock, concurrent saves **serialize**: the
@@ -232,8 +235,8 @@ tier wins and the reason is appended), `waiting_since` = the call's
 `ended_at` when it is the only reason. `TodayItem` gains no other
 field. Ordering: existing tiers first, then `low` by `ended_at ASC`.
 The Operator's `get_today`/`explain_priority` carry the new reason
-code and a one-line explanation ("a call on <date> has no outcome
-yet"); no tool-schema change (reasons are already a list of coded
+code and a one-line explanation ("a call at <rfc3339> has no outcome
+yet"); `ORDERING_RULE`/`Ahead` extended for `low` (SLICE_005 §3); no tool-schema change (reasons are already a list of coded
 objects). Choosing an outcome removes the item; `person.changed
 {contact_attempted}` already invalidates Today.
 

@@ -173,6 +173,10 @@ impl TryFrom<TodayCandidateRow> for TodayCandidate {
 ///    tier wins and `waiting_since` stays the Inquiry's. Assignment is not
 ///    consulted for this source: the caller owes the outcome.
 ///
+/// The outer `WHERE` keeps an index-able predicate (`p.assigned_user_id
+/// = $2 OR p.id IN (outcome_call)`) alongside the membership condition so
+/// the planner can narrow `person` before the LATERAL joins run.
+///
 /// Ordering: Inquiry-based tiers first (`fresh DESC, waiting_since ASC,
 /// id`), then `low` by `ended_at ASC, id`. The `LIMIT 201` / `truncated`
 /// cap applies to the merged list, so `low` items are the first to fall
@@ -265,6 +269,7 @@ pub async fn candidates(
                SELECT (COALESCE(p.assigned_user_id = $2, false) AND waiting.received_at IS NOT NULL) as by_inquiry
            ) membership
            WHERE p.organization_id = $1
+             AND (p.assigned_user_id = $2 OR p.id IN (SELECT person_id FROM outcome_call))
              AND latest.id IS NOT NULL
              AND (membership.by_inquiry OR oc.id IS NOT NULL)
            ORDER BY membership.by_inquiry DESC,

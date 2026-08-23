@@ -905,7 +905,11 @@ mod tests {
                 waiting_since: ctx.now,
                 recommended_action: "call".to_string(),
                 ordering_rule: ORDERING_RULE,
-                ahead: Ahead { high: 0, normal: 0 },
+                ahead: Ahead {
+                    high: 0,
+                    normal: 0,
+                    low: 0,
+                },
             })
         }
     }

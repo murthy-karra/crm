@@ -178,7 +178,7 @@ function stubApi(personDetail: PersonDetailResponse, options: StubOptions = {}) 
   })
 }
 
-async function mountView(query = '') {
+async function mountView(query = '', seed?: PersonDetailResponse) {
   const rooms: FakeRoom[] = []
   const createRoom: CallRoomFactory = () => {
     const room = new FakeRoom()
@@ -197,6 +197,8 @@ async function mountView(query = '') {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
+  // A stale cached detail (a prior visit): rendered at once, refetched on mount.
+  if (seed) queryClient.setQueryData(queryKeys.person(ORG_ID, PERSON_ID), seed)
   const wrapper = mount(PersonDetailView, {
     props: { id: PERSON_ID, createRoom },
     global: { plugins: [router, [VueQueryPlugin, { queryClient }], [PrimeVue, { unstyled: true }]] },
@@ -530,7 +532,7 @@ describe('PersonDetailView — How did it go? (SLICE_006c §10)', () => {
     expect(wrapper.find('[data-testid="call-panel"]').exists()).toBe(false)
   })
 
-  it('saving the outcome already recorded (changed: false) closes the panel', async () => {
+  it('saving the outcome already recorded (changed: false) still shows the saved line → Done (never a silent dismissal)', async () => {
     const { wrapper, queryClient } = await answeredCallEnded({ outcome: correction(false) })
     await queryClient.invalidateQueries({ queryKey: queryKeys.call(ORG_ID, CALL_ID) })
     await flushPromises()
@@ -538,7 +540,23 @@ describe('PersonDetailView — How did it go? (SLICE_006c §10)', () => {
     await wrapper.get('[data-testid="call-outcome-save"]').trigger('click')
     await flushPromises()
     expect(requests().filter((r) => r === `POST /calls/${CALL_ID}/outcome`)).toHaveLength(1)
+    expect(wrapper.find('[data-testid="call-panel"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="call-outcome-saved"]').text()).toBe('Outcome saved — voicemail')
+    await wrapper.get('[data-testid="call-dismiss"]').trigger('click')
     expect(wrapper.find('[data-testid="call-panel"]').exists()).toBe(false)
+  })
+
+  it('two synchronous Save clicks post once', async () => {
+    const { wrapper, queryClient } = await answeredCallEnded()
+    await queryClient.invalidateQueries({ queryKey: queryKeys.call(ORG_ID, CALL_ID) })
+    await flushPromises()
+    await wrapper.get('[data-outcome="busy"]').trigger('click')
+    const save = wrapper.get('[data-testid="call-outcome-save"]').element as HTMLButtonElement
+    save.click()
+    save.click()
+    await flushPromises()
+    expect(requests().filter((r) => r === `POST /calls/${CALL_ID}/outcome`)).toHaveLength(1)
+    expect(wrapper.get('[data-testid="call-outcome-saved"]').text()).toBe('Outcome saved — busy')
   })
 
   it.each([
@@ -948,6 +966,35 @@ describe('PersonDetailView — Today → Person ?outcome=<call_id> (SLICE_006c �
     const { router } = await mountView('?outcome=not-a-call')
     expect(document.querySelector('[data-testid="outcome-picker"]')).toBeNull()
     expect(router.currentRoute.value.query.outcome).toBeUndefined()
+  })
+
+  it('a call with an existing choice opens as "Change outcome" with that choice pre-selected', async () => {
+    stubApi(
+      detail(
+        [PHONE_A],
+        [
+          attemptEntry(ATTEMPT_ID, { outcome: 'reached', superseded: true }),
+          completedEntry('h-completed'),
+          attemptEntry('att-fix', { outcome: 'no_answer', corrects_id: ATTEMPT_ID }),
+        ],
+      ),
+    )
+    const { router } = await mountView(`?outcome=${CALL_ID}`)
+    expect(dialogTitle()).toBe('Change outcome')
+    expect(
+      document.querySelector('[data-testid="outcome-picker"] [aria-checked="true"]')?.getAttribute('data-outcome'),
+    ).toBe('no_answer')
+    expect(router.currentRoute.value.query.outcome).toBe(CALL_ID)
+  })
+
+  it('does not clear the param while a refetch is in flight; the settled fetch decides', async () => {
+    // Stale cache without the call row (a prior visit, before the call); the
+    // refetch on mount carries the incomplete call. The param must survive
+    // the stale render and open the dialog once the fetch settles.
+    stubApi(incomplete())
+    const { router } = await mountView(`?outcome=${CALL_ID}`, detail([PHONE_A]))
+    expect(dialogTitle()).toBe('Set outcome')
+    expect(router.currentRoute.value.query.outcome).toBe(CALL_ID)
   })
 })
 

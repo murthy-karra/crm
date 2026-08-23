@@ -53,7 +53,7 @@ const { data: me } = useMe()
 const orgId = computed(() => me.value?.organization?.id ?? '')
 const queryClient = useQueryClient()
 
-const { data: detail, isPending, isError, error } = usePerson(orgId, () => props.id)
+const { data: detail, isPending, isFetching, isError, error } = usePerson(orgId, () => props.id)
 const person = computed(() => detail.value?.person)
 const contactMethods = computed(() => detail.value?.contact_methods ?? [])
 const inquiries = computed(() => detail.value?.inquiries ?? [])
@@ -112,6 +112,9 @@ const callDisabled = computed(() => phones.value.length === 0 || call.active.val
 const panelOutcome = useCorrectCallOutcome(orgId)
 const panelOutcomeSaved = ref<CallOutcomeCorrection | null>(null)
 const panelOutcomeError = ref<string | null>(null)
+// Synchronous re-entry latch: `isPending` flips on the next tick, so two
+// Save clicks in one task would otherwise post twice.
+const panelOutcomeSaving = ref(false)
 
 // Computed once and passed to CallPanel: while the prompt is open, Save
 // outcome is the view's one primary, so the header's Call button steps down
@@ -124,24 +127,24 @@ const callPrimary = computed(() => !call.active.value && !outcomePromptOpen.valu
 function resetPanelOutcome() {
   panelOutcomeSaved.value = null
   panelOutcomeError.value = null
+  panelOutcomeSaving.value = false
   panelOutcome.reset()
 }
 
 function onSaveOutcome(outcome: CallOutcomeCorrection) {
-  if (panelOutcome.isPending.value) return
+  if (panelOutcomeSaving.value || panelOutcome.isPending.value) return
   const callId = call.callId.value
   const personId = call.personId.value
   if (callId === '' || personId === '') return
+  panelOutcomeSaving.value = true
   panelOutcomeError.value = null
   panelOutcome.mutate(
     { callId, personId, outcome },
     {
-      onSuccess: (data) => {
-        // §1 step 4: the outcome already recorded → nothing written; close.
-        if (!data.changed) {
-          dismissCall()
-          return
-        }
+      // §5a: the panel stays until Save succeeds, then shows "Outcome saved
+      // — <label>" → Done. `changed: false` (the choice was already on
+      // record) is a success too — never a silent dismissal.
+      onSuccess: () => {
         panelOutcomeSaved.value = outcome
       },
       onError: (failure) => {
@@ -149,6 +152,9 @@ function onSaveOutcome(outcome: CallOutcomeCorrection) {
         if (failure instanceof ApiError && failure.code === 'correction_conflict') {
           void queryClient.invalidateQueries({ queryKey: queryKeys.person(orgId.value, personId) })
         }
+      },
+      onSettled: () => {
+        panelOutcomeSaving.value = false
       },
     },
   )
@@ -172,18 +178,21 @@ const changeOutcomeOpen = ref(false)
 const changeOutcomeTarget = ref<OutcomeTarget | null>(null)
 const historyOutcome = useCorrectCallOutcome(orgId)
 const historyOutcomeError = ref<string | null>(null)
+const historyOutcomeSaving = ref(false)
 
 function openChangeOutcome(target: OutcomeTarget | null) {
   if (!target || outcomePromptOpen.value) return
   changeOutcomeTarget.value = target
   historyOutcomeError.value = null
+  historyOutcomeSaving.value = false
   historyOutcome.reset()
   changeOutcomeOpen.value = true
 }
 
 function onChangeOutcomeSave(outcome: CallOutcomeCorrection) {
   const target = changeOutcomeTarget.value
-  if (!target || historyOutcome.isPending.value) return
+  if (!target || historyOutcomeSaving.value || historyOutcome.isPending.value) return
+  historyOutcomeSaving.value = true
   historyOutcomeError.value = null
   historyOutcome.mutate(
     { callId: target.callId, personId: props.id, outcome },
@@ -197,6 +206,9 @@ function onChangeOutcomeSave(outcome: CallOutcomeCorrection) {
           void queryClient.invalidateQueries({ queryKey: queryKeys.person(orgId.value, props.id) })
         }
       },
+      onSettled: () => {
+        historyOutcomeSaving.value = false
+      },
     },
   )
 }
@@ -207,9 +219,11 @@ function closeChangeOutcome() {
 }
 
 // Today → Person (§5a): `/people/{id}?outcome=<call_id>` opens the dialog
-// for that call with nothing selected once History has loaded; the param
-// is cleared when the dialog closes (Save or Cancel) and when the call has
-// no row I can act on (not mine, or gone).
+// for that call once History has loaded — with nothing selected while the
+// call is incomplete, or as "Change outcome" pre-selected with the current
+// choice; the param is cleared when the dialog closes (Save or Cancel) and
+// when a *settled* fetch shows no row I can act on (not mine, or gone) —
+// never while a refetch is still in flight.
 const route = useRoute()
 const router = useRouter()
 const outcomeQuery = computed(() => {
@@ -223,6 +237,10 @@ function clearOutcomeQuery() {
   delete query.outcome
   void router.replace({ query })
 }
+// The call id the param has already opened the dialog for: the param is
+// cleared asynchronously (router.replace), so a refetch landing in between
+// must not reopen the dialog just closed.
+const outcomeQueryHandled = ref<string | null>(null)
 
 const pickerOpen = ref(false)
 const pickerRoot = ref<HTMLElement | null>(null)
@@ -423,12 +441,20 @@ const historyRows = computed<HistoryRow[]>(() => {
 
 // Declared after `historyRows` — `immediate` runs it synchronously.
 watch(
-  [outcomeQuery, () => detail.value, outcomePromptOpen],
-  ([callId, loaded, promptOpen]) => {
-    if (callId === null || !loaded || changeOutcomeOpen.value || promptOpen) return
+  [outcomeQuery, () => detail.value, () => isFetching.value, outcomePromptOpen],
+  ([callId, loaded, fetching, promptOpen]) => {
+    if (callId === null) {
+      outcomeQueryHandled.value = null
+      return
+    }
+    if (!loaded || changeOutcomeOpen.value || promptOpen || outcomeQueryHandled.value === callId) return
     const row = historyRows.value.find((r) => r.change?.callId === callId)
-    if (row?.change) openChangeOutcome({ callId, outcome: null })
-    else clearOutcomeQuery()
+    if (row?.change) {
+      outcomeQueryHandled.value = callId
+      openChangeOutcome(row.change)
+    } else if (!fetching) {
+      clearOutcomeQuery()
+    }
   },
   { immediate: true },
 )
@@ -729,7 +755,7 @@ watch(
         :visible="changeOutcomeOpen"
         :person-name="person.display_name"
         :current-outcome="changeOutcomeTarget?.outcome ?? null"
-        :saving="historyOutcome.isPending.value"
+        :saving="historyOutcomeSaving || historyOutcome.isPending.value"
         :error="historyOutcomeError"
         @update:visible="(value: boolean) => (value ? (changeOutcomeOpen = true) : closeChangeOutcome())"
         @save="onChangeOutcomeSave"
@@ -743,7 +769,7 @@ watch(
         :error="call.error.value"
         :call="call.call.value"
         :outcome-prompt="outcomePromptOpen"
-        :outcome-saving="panelOutcome.isPending.value"
+        :outcome-saving="panelOutcomeSaving || panelOutcome.isPending.value"
         :outcome-saved="panelOutcomeSaved"
         :outcome-error="panelOutcomeError"
         @hangup="call.hangup()"

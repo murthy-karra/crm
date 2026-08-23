@@ -151,5 +151,22 @@ describe('TodayView — outcome needed tier (SLICE_006c §5a)', () => {
     expect(rows[0].find('[data-testid="today-set-outcome-action"]').exists()).toBe(false)
     expect(rows[1].findAll('td')[2].text()).toBe('Low')
     expect(rows[1].find('[data-testid="today-set-outcome-action"]').exists()).toBe(true)
+    expect(rows[1].find('[data-testid="today-set-outcome-aside"]').exists()).toBe(false)
+  })
+
+  it('a both-ways item keeps Log contact and gains a secondary Set outcome linking with ?outcome=<call_id>', async () => {
+    const both = inquiryItem()
+    both.reasons.push({ code: 'call_outcome_needed', call_id: CALL_ID, ended_at: ENDED_AT })
+    stubApi([both, inquiryItem()])
+    const { wrapper, router } = await mountView()
+    const rows = wrapper.findAll('tbody tr')
+    const actions = rows[0].findAll('td')[5].findAll('button').map((b) => b.text())
+    expect(actions).toEqual(['Log contact', 'Set outcome'])
+    // A plain inquiry item has no secondary Set outcome.
+    expect(rows[1].findAll('td')[5].findAll('button').map((b) => b.text())).toEqual(['Log contact'])
+    await rows[0].get('[data-testid="today-set-outcome-aside"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe(`/people/${both.person.id}`)
+    expect(router.currentRoute.value.query).toEqual({ outcome: CALL_ID })
   })
 })

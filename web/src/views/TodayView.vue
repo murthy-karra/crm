@@ -52,12 +52,41 @@ function reasonLabel(reason: TodayReason): string {
 
 const PRIORITY_LABEL: Record<TodayItem['priority'], string> = { high: 'High', normal: 'Normal', low: 'Low' }
 
+/** The item's `call_outcome_needed` reason, if any (§5a). */
+function outcomeNeededReason(item: TodayItem): { call_id: string; ended_at: string } | null {
+  const reason = item.reasons.find((r) => r.code === 'call_outcome_needed')
+  return reason && reason.code === 'call_outcome_needed' ? reason : null
+}
+
 /** The `call_outcome_needed` reason on a `set_outcome` item (§5a: present
  * whenever the action is `set_outcome`; null otherwise). */
 function outcomeNeeded(item: TodayItem): { call_id: string; ended_at: string } | null {
   if (item.recommended_action !== 'set_outcome') return null
-  const reason = item.reasons.find((r) => r.code === 'call_outcome_needed')
-  return reason && reason.code === 'call_outcome_needed' ? reason : null
+  return outcomeNeededReason(item)
+}
+
+/** A Person qualifying both ways (§5a): the Inquiry tier wins and the
+ * action stays Call/Email, but the viewer's own call still needs an
+ * outcome — offered as a secondary "Set outcome" beside Log contact. */
+function outcomeNeededAside(item: TodayItem): { call_id: string; ended_at: string } | null {
+  if (item.recommended_action === 'set_outcome') return null
+  return outcomeNeededReason(item)
+}
+
+function setOutcomeButton(item: TodayItem, callId: string, testId: string) {
+  return h(
+    'button',
+    {
+      type: 'button',
+      class: buttonClasses('secondary'),
+      'data-testid': testId,
+      onClick: (event: MouseEvent) => {
+        event.stopPropagation()
+        void router.push(setOutcomeTo(item, callId))
+      },
+    },
+    'Set outcome',
+  )
 }
 
 function setOutcomeTo(item: TodayItem, callId: string): string {
@@ -143,22 +172,9 @@ const columns: ColumnDef<TodayItem>[] = [
     cell: (info) => {
       const item = info.row.original
       const needed = outcomeNeeded(item)
-      if (needed) {
-        return h(
-          'button',
-          {
-            type: 'button',
-            class: buttonClasses('secondary'),
-            'data-testid': 'today-set-outcome-action',
-            onClick: (event: MouseEvent) => {
-              event.stopPropagation()
-              void router.push(setOutcomeTo(item, needed.call_id))
-            },
-          },
-          'Set outcome',
-        )
-      }
-      return h(
+      if (needed) return setOutcomeButton(item, needed.call_id, 'today-set-outcome-action')
+      const aside = outcomeNeededAside(item)
+      const logContact = h(
         'button',
         {
           type: 'button',
@@ -172,6 +188,11 @@ const columns: ColumnDef<TodayItem>[] = [
         },
         'Log contact',
       )
+      if (!aside) return logContact
+      return h('div', { class: 'flex items-center justify-end gap-2' }, [
+        logContact,
+        setOutcomeButton(item, aside.call_id, 'today-set-outcome-aside'),
+      ])
     },
   },
 ]

@@ -47,3 +47,20 @@ export function callInProgressId(err: unknown): string | null {
   const id = err.details.call_id
   return typeof id === 'string' && id !== '' ? id : null
 }
+
+// SLICE_006c §10 error copy for `POST /api/calls/{id}/outcome`, exact.
+const OUTCOME_CODE_MESSAGES: Record<string, string> = {
+  invalid_call_state: "The call hasn't finished yet.",
+  no_contact_attempt: "There's no contact attempt to correct.",
+  correction_conflict: 'This outcome was just changed — refreshed.',
+  forbidden: 'Only the caller can change this outcome.',
+  not_found: 'This call no longer exists.',
+}
+
+export function describeOutcomeError(err: unknown): string {
+  if (err instanceof ApiError) {
+    const message = OUTCOME_CODE_MESSAGES[err.code]
+    if (message) return message
+  }
+  return describeMutationError(err, 'Could not save the outcome.')
+}

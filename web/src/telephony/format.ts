@@ -49,11 +49,13 @@ export function attemptOutcome(call: CallView | undefined): 'reached' | 'no_answ
   }
 }
 
-/** SLICE_006 §10: "Logged as contact attempt — call, reached / no answer". */
-export function postCallLine(call: CallView | undefined): string | null {
-  const outcome = attemptOutcome(call)
-  if (outcome === null) return null
-  return `Logged as contact attempt — call, ${outcome === 'reached' ? 'reached' : 'no answer'}`
+/** SLICE_006c §10: whether the panel's post-call block is the "How did it
+ * go?" prompt — a finished call (terminal phase, no call error) that wrote
+ * an automatic attempt, whose outcome has not been saved yet. Computed once
+ * by the view (it also gates the header's primary and the History action)
+ * and passed to CallPanel. */
+export function showsOutcomePrompt(phase: CallPhase, hasError: boolean, call: CallView | undefined, saved: boolean): boolean {
+  return (phase === 'ended' || phase === 'failed') && !hasError && !saved && attemptOutcome(call) !== null
 }
 
 /** The panel's status line per phase (§1 step 2, step 5). A terminal phase

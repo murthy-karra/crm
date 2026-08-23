@@ -8,6 +8,7 @@
 import { computed, onBeforeUnmount, ref, watch, type Component } from 'vue'
 import { RouterLink, onBeforeRouteLeave } from 'vue-router'
 import Select from 'primevue/select'
+import { useQueryClient } from '@tanstack/vue-query'
 import { Flag, Inbox, Mail, Phone, PhoneCall, PhoneOutgoing, Route, UserCheck } from 'lucide-vue-next'
 import Card from '../components/Card.vue'
 import FormField from '../components/FormField.vue'
@@ -15,14 +16,25 @@ import Badge from '../components/Badge.vue'
 import StageLabel from '../components/StageLabel.vue'
 import LogContactDialog from '../components/LogContactDialog.vue'
 import CallPanel from '../components/CallPanel.vue'
-import { useAssignPersonMutation, useChangeStageMutation, useMe, useMembers, usePerson, useStages } from '../api/queries'
+import ChangeOutcomeDialog from '../components/ChangeOutcomeDialog.vue'
+import {
+  queryKeys,
+  useAssignPersonMutation,
+  useChangeStageMutation,
+  useCorrectCallOutcome,
+  useMe,
+  useMembers,
+  usePerson,
+  useStages,
+} from '../api/queries'
 import { ApiError } from '../api/client'
-import type { HistoryEntry, RoutingStrategy } from '../api/types'
+import type { CallOutcomeCorrection, HistoryEntry, RoutingStrategy } from '../api/types'
 import { formatAbsoluteTime, formatRelativeTime } from '../lib/format'
 import { buttonClasses, selectPt } from '../lib/controls'
 import { describeApiError } from '../lib/errors'
-import { CONTACT_CHANNEL_LABEL, CONTACT_OUTCOME_LABEL } from '../lib/labels'
-import { callCompletedSummary } from '../telephony/format'
+import { CONTACT_CHANNEL_LABEL, CONTACT_OUTCOME_LABEL, correctedOutcomeLabel } from '../lib/labels'
+import { describeOutcomeError } from '../telephony/errors'
+import { callCompletedSummary, showsOutcomePrompt } from '../telephony/format'
 import { useCall, type CallRoomFactory } from '../telephony/useCall'
 import { createLiveKitRoom } from '../telephony/client'
 
@@ -39,6 +51,7 @@ const props = withDefaults(
 
 const { data: me } = useMe()
 const orgId = computed(() => me.value?.organization?.id ?? '')
+const queryClient = useQueryClient()
 
 const { data: detail, isPending, isError, error } = usePerson(orgId, () => props.id)
 const person = computed(() => detail.value?.person)
@@ -92,6 +105,108 @@ const call = useCall({ orgId, createRoom: props.createRoom })
 
 const phones = computed(() => contactMethods.value.filter((cm) => cm.kind === 'phone'))
 const callDisabled = computed(() => phones.value.length === 0 || call.active.value)
+
+// ---- Call outcome correction (SLICE_006c §10) ------------------------------
+// Two instances of the one mutation: the panel's post-call prompt and the
+// History "Change outcome" dialog each own their pending/error state.
+const panelOutcome = useCorrectCallOutcome(orgId)
+const panelOutcomeSaved = ref<CallOutcomeCorrection | null>(null)
+const panelOutcomeError = ref<string | null>(null)
+
+// Computed once and passed to CallPanel: while the prompt is open, Save
+// outcome is the view's one primary, so the header's Call button steps down
+// to secondary and the History "Change outcome" action is disabled.
+const outcomePromptOpen = computed(() =>
+  showsOutcomePrompt(call.phase.value, call.error.value !== null, call.call.value, panelOutcomeSaved.value !== null),
+)
+const callPrimary = computed(() => !call.active.value && !outcomePromptOpen.value)
+
+function resetPanelOutcome() {
+  panelOutcomeSaved.value = null
+  panelOutcomeError.value = null
+  panelOutcome.reset()
+}
+
+function onSaveOutcome(outcome: CallOutcomeCorrection) {
+  if (panelOutcome.isPending.value) return
+  const callId = call.callId.value
+  const personId = call.personId.value
+  if (callId === '' || personId === '') return
+  panelOutcomeError.value = null
+  panelOutcome.mutate(
+    { callId, personId, outcome },
+    {
+      onSuccess: (data) => {
+        // §1 step 4: the outcome already recorded → nothing written; close.
+        if (!data.changed) {
+          dismissCall()
+          return
+        }
+        panelOutcomeSaved.value = outcome
+      },
+      onError: (failure) => {
+        panelOutcomeError.value = describeOutcomeError(failure)
+        if (failure instanceof ApiError && failure.code === 'correction_conflict') {
+          void queryClient.invalidateQueries({ queryKey: queryKeys.person(orgId.value, personId) })
+        }
+      },
+    },
+  )
+}
+
+function dismissCall() {
+  call.dismiss()
+  resetPanelOutcome()
+}
+
+// History "Change outcome" (§1 step 7). Only the caller's own call-derived,
+// non-superseded attempt rows offer it — decided from the row's detail and
+// actor, never from its position in the list.
+const changeOutcomeOpen = ref(false)
+const changeOutcomeTarget = ref<{ callId: string; outcome: CallOutcomeCorrection } | null>(null)
+const historyOutcome = useCorrectCallOutcome(orgId)
+const historyOutcomeError = ref<string | null>(null)
+
+function changeableOutcome(entry: HistoryEntry): { callId: string; outcome: CallOutcomeCorrection } | null {
+  if (entry.kind !== 'contact_attempted') return null
+  const { call_id, superseded, outcome } = entry.detail
+  if (call_id === null || superseded || outcome === 'sent') return null
+  if (entry.actor === null || entry.actor.id !== me.value?.user.id) return null
+  return { callId: call_id, outcome }
+}
+
+function canChangeOutcome(entry: HistoryEntry): boolean {
+  return changeableOutcome(entry) !== null
+}
+
+function openChangeOutcome(entry: HistoryEntry) {
+  const target = changeableOutcome(entry)
+  if (!target || outcomePromptOpen.value) return
+  changeOutcomeTarget.value = target
+  historyOutcomeError.value = null
+  historyOutcome.reset()
+  changeOutcomeOpen.value = true
+}
+
+function onChangeOutcomeSave(outcome: CallOutcomeCorrection) {
+  const target = changeOutcomeTarget.value
+  if (!target || historyOutcome.isPending.value) return
+  historyOutcomeError.value = null
+  historyOutcome.mutate(
+    { callId: target.callId, personId: props.id, outcome },
+    {
+      onSuccess: () => {
+        changeOutcomeOpen.value = false
+      },
+      onError: (failure) => {
+        historyOutcomeError.value = describeOutcomeError(failure)
+        if (failure instanceof ApiError && failure.code === 'correction_conflict') {
+          void queryClient.invalidateQueries({ queryKey: queryKeys.person(orgId.value, props.id) })
+        }
+      },
+    },
+  )
+}
 const pickerOpen = ref(false)
 const pickerRoot = ref<HTMLElement | null>(null)
 // The callee's name as it was when the call started — the panel keeps
@@ -102,6 +217,7 @@ function startCall(contactMethodId: string) {
   pickerOpen.value = false
   if (!person.value) return
   calleeName.value = person.value.display_name
+  resetPanelOutcome()
   void call.start(person.value.id, contactMethodId)
 }
 
@@ -147,7 +263,8 @@ watch(
   () => props.id,
   () => {
     pickerOpen.value = false
-    call.dismiss()
+    changeOutcomeOpen.value = false
+    dismissCall()
   },
 )
 
@@ -190,9 +307,16 @@ function historySummary(entry: HistoryEntry): string {
         : `Stage set to ${to_stage.name}`
     }
     case 'contact_attempted': {
-      const { channel, outcome } = entry.detail
-      // SLICE_003 §1's walkthrough: "Contact attempted — call, no answer".
-      return `Contact attempted — ${CONTACT_CHANNEL_LABEL[channel].toLowerCase()}, ${CONTACT_OUTCOME_LABEL[outcome].toLowerCase()}`
+      const { channel, outcome, corrects_id, superseded } = entry.detail
+      // SLICE_006c §10: a correction row reads "Outcome corrected — voicemail";
+      // a superseded row keeps its text plus "(superseded)". Both are
+      // decided from the row's own detail — never from neighbouring rows.
+      const base =
+        corrects_id !== null
+          ? `Outcome corrected — ${correctedOutcomeLabel(outcome)}`
+          : // SLICE_003 §1's walkthrough: "Contact attempted — call, no answer".
+            `Contact attempted — ${CONTACT_CHANNEL_LABEL[channel].toLowerCase()}, ${CONTACT_OUTCOME_LABEL[outcome].toLowerCase()}`
+      return superseded ? `${base} (superseded)` : base
     }
     case 'call_completed': {
       // SLICE_006 §1 steps 4–5: "Call — reached, 1 min 12 s" / "Call — no answer".
@@ -265,7 +389,7 @@ function historySummary(entry: HistoryEntry): string {
             >
               <button
                 type="button"
-                :class="buttonClasses(call.active.value ? 'secondary' : 'primary')"
+                :class="buttonClasses(callPrimary ? 'primary' : 'secondary')"
                 :disabled="callDisabled"
                 :title="phones.length === 0 ? 'No phone number' : undefined"
                 :aria-expanded="phones.length > 1 ? pickerOpen : undefined"
@@ -458,7 +582,11 @@ function historySummary(entry: HistoryEntry): string {
               />
             </div>
             <div class="min-w-0 flex-1">
-              <p class="text-body text-text">
+              <p
+                class="text-body"
+                :class="entry.kind === 'contact_attempted' && entry.detail.superseded ? 'text-text-muted line-through' : 'text-text'"
+                :data-superseded="entry.kind === 'contact_attempted' && entry.detail.superseded ? 'true' : undefined"
+              >
                 {{ historySummary(entry) }}
               </p>
               <p class="text-small text-text-muted">
@@ -466,6 +594,16 @@ function historySummary(entry: HistoryEntry): string {
                 <span :title="formatAbsoluteTime(entry.occurred_at)">{{ formatRelativeTime(entry.occurred_at) }}</span>
               </p>
             </div>
+            <button
+              v-if="canChangeOutcome(entry)"
+              type="button"
+              :class="buttonClasses('ghost')"
+              :disabled="outcomePromptOpen"
+              data-testid="change-outcome"
+              @click="openChangeOutcome(entry)"
+            >
+              Change outcome
+            </button>
           </li>
         </ul>
         <p
@@ -484,6 +622,16 @@ function historySummary(entry: HistoryEntry): string {
         @update:visible="logContactOpen = $event"
       />
 
+      <ChangeOutcomeDialog
+        :visible="changeOutcomeOpen"
+        :person-name="person.display_name"
+        :current-outcome="changeOutcomeTarget?.outcome ?? 'reached'"
+        :saving="historyOutcome.isPending.value"
+        :error="historyOutcomeError"
+        @update:visible="changeOutcomeOpen = $event"
+        @save="onChangeOutcomeSave"
+      />
+
       <CallPanel
         :phase="call.phase.value"
         :person-name="calleeName"
@@ -491,10 +639,16 @@ function historySummary(entry: HistoryEntry): string {
         :muted="call.muted.value"
         :error="call.error.value"
         :call="call.call.value"
+        :outcome-prompt="outcomePromptOpen"
+        :outcome-saving="panelOutcome.isPending.value"
+        :outcome-saved="panelOutcomeSaved"
+        :outcome-error="panelOutcomeError"
         @hangup="call.hangup()"
         @toggle-mute="call.toggleMute()"
         @hangup-previous="call.hangupPrevious()"
-        @dismiss="call.dismiss()"
+        @dismiss="dismissCall()"
+        @save-outcome="onSaveOutcome"
+        @skip="dismissCall()"
       />
     </div>
   </div>

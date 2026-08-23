@@ -5,6 +5,7 @@
 import { effectScope, nextTick, watch } from 'vue'
 import { QueryClient } from '@tanstack/vue-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { flushPromises } from '@vue/test-utils'
 import { ApiError, apiFetch } from '../api/client'
 import { queryKeys } from '../api/queries'
 import type { CallView, StartCallResponse } from '../api/types'
@@ -17,6 +18,7 @@ import {
   type CallRoomEvents,
   type CallRoomFactory,
 } from './useCall'
+import type { RingbackAudioContext, RingbackContextFactory } from './ringback'
 
 vi.mock('../api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/client')>()
@@ -123,7 +125,7 @@ class FakeRoom implements CallRoom {
   }
 }
 
-function harness(configure: (room: FakeRoom) => void = () => {}) {
+function harness(configure: (room: FakeRoom) => void = () => {}, createRingbackContext?: RingbackContextFactory) {
   const rooms: FakeRoom[] = []
   const createRoom: CallRoomFactory = () => {
     const room = new FakeRoom()
@@ -135,7 +137,7 @@ function harness(configure: (room: FakeRoom) => void = () => {}) {
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
   const scope = effectScope()
-  const result = scope.run(() => useCall({ orgId: ORG_ID, createRoom, queryClient }))
+  const result = scope.run(() => useCall({ orgId: ORG_ID, createRoom, queryClient, createRingbackContext }))
   if (!result) throw new Error('effectScope.run returned undefined')
   return { ...result, rooms, queryClient, scope, room: () => rooms[rooms.length - 1] }
 }
@@ -777,5 +779,147 @@ describe('useCall cache discipline', () => {
     expect(document.body.querySelectorAll('audio[data-call-audio]')).toHaveLength(0)
     expect(track.attached).toHaveLength(0)
     h.scope.stop()
+  })
+})
+
+describe('useCall ringback (SLICE_006c §12 rider)', () => {
+  function fakeAudio() {
+    const closes: number[] = []
+    const contexts: RingbackAudioContext[] = []
+    const factory: RingbackContextFactory = () => {
+      const param = { setValueAtTime: () => undefined }
+      const context = {
+        currentTime: 0,
+        destination: {} as AudioNode,
+        createOscillator: () =>
+          ({ frequency: param, type: 'sine', connect: () => undefined, start: () => undefined, stop: () => undefined }) as unknown as OscillatorNode,
+        createGain: () => ({ gain: param, connect: () => undefined }) as unknown as GainNode,
+        close: async () => {
+          closes.push(contexts.indexOf(context))
+        },
+      }
+      contexts.push(context)
+      return context
+    }
+    return { factory, contexts, closes }
+  }
+
+  it('plays only while ringing: silent when placing, started on ringing, closed on connected', async () => {
+    stubApi()
+    const audio = fakeAudio()
+    const h = harness(() => {}, audio.factory)
+    await placeCall(h)
+    expect(h.phase.value).toBe('placing')
+    expect(audio.contexts).toHaveLength(0)
+    h.room().emit('participantConnected', { identity: `sip:${CALL_ID}`, attributes: {} })
+    await nextTick()
+    expect(h.phase.value).toBe('ringing')
+    expect(audio.contexts).toHaveLength(1)
+    expect(audio.closes).toEqual([])
+    h.room().emit('participantAttributesChanged', { 'sip.callStatus': 'active' }, { identity: `sip:${CALL_ID}`, attributes: {} })
+    await nextTick()
+    expect(h.phase.value).toBe('connected')
+    expect(audio.closes).toEqual([0])
+    expect(audio.contexts).toHaveLength(1)
+    h.scope.stop()
+  })
+
+  it('keeps ringing through a mic mute and stops on hangup', async () => {
+    stubApi()
+    const audio = fakeAudio()
+    const h = harness(() => {}, audio.factory)
+    await placeCall(h)
+    h.room().emit('participantConnected', { identity: `sip:${CALL_ID}`, attributes: {} })
+    await nextTick()
+    expect(audio.contexts).toHaveLength(1)
+    await h.toggleMute()
+    await nextTick()
+    expect(audio.closes).toEqual([])
+    await h.hangup()
+    await nextTick()
+    expect(audio.closes).toEqual([0])
+    expect(h.phase.value).toBe('failed')
+    h.scope.stop()
+  })
+
+  it('disposing the scope while ringing closes the context', async () => {
+    stubApi()
+    const audio = fakeAudio()
+    const h = harness(() => {}, audio.factory)
+    await placeCall(h)
+    h.room().emit('participantConnected', { identity: `sip:${CALL_ID}`, attributes: {} })
+    await nextTick()
+    expect(audio.contexts).toHaveLength(1)
+    h.scope.stop()
+    await nextTick()
+    expect(audio.closes).toEqual([0])
+  })
+
+  it('never drives the phase: a missing AudioContext changes nothing', async () => {
+    stubApi()
+    const h = harness(() => {}, () => null)
+    await placeCall(h)
+    h.room().emit('participantConnected', { identity: `sip:${CALL_ID}`, attributes: {} })
+    await nextTick()
+    expect(h.phase.value).toBe('ringing')
+    h.scope.stop()
+  })
+})
+
+describe('useCall settle refetch (SLICE_006c §10 Save-stuck guard)', () => {
+  it('a non-terminal hangup response with no realtime event → delayed GET /calls/{id} until it reads ended', async () => {
+    const gets: CallView[] = [callView({ status: 'answered', answered_at: 'x' }), callView({ status: 'ended', end_reason: 'remote_hangup', answered_at: 'x' })]
+    apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === `/people/${PERSON_ID}/calls`) return startResponse()
+      if (path === `/calls/${CALL_ID}/dial`) return { call: callView() }
+      if (path.endsWith('/hangup')) return { call: callView({ status: 'answered', answered_at: 'x' }) }
+      if (path === `/calls/${CALL_ID}` && (init?.method ?? 'GET') === 'GET') return { call: gets.length > 1 ? gets.shift() : gets[0] }
+      throw new Error(`unexpected ${init?.method ?? 'GET'} ${path}`)
+    })
+    const h = harness()
+    await placeCall(h)
+    h.room().emit('participantConnected', { identity: `sip:${CALL_ID}`, attributes: { 'sip.callStatus': 'active' } })
+    await nextTick()
+    await h.hangup()
+    await flushPromises()
+    expect(h.phase.value).toBe('ended')
+    expect(h.call.value?.status).toBe('answered')
+    const getCount = () => requests().filter((r) => r === `GET /calls/${CALL_ID}`).length
+    expect(getCount()).toBe(0)
+    await vi.advanceTimersByTimeAsync(1000)
+    await flushPromises()
+    expect(getCount()).toBe(1)
+    expect(h.call.value?.status).toBe('answered')
+    await vi.advanceTimersByTimeAsync(2000)
+    await flushPromises()
+    expect(getCount()).toBe(2)
+    expect(h.call.value?.status).toBe('ended')
+    h.scope.stop()
+  })
+
+  it('a terminal hangup response schedules no refetch; dispose clears pending timers', async () => {
+    stubApi()
+    const h = harness()
+    await placeCall(h)
+    await h.hangup()
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(4000)
+    expect(requests().filter((r) => r === `GET /calls/${CALL_ID}`)).toHaveLength(0)
+
+    apiFetchMock.mockReset()
+    apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === `/people/${PERSON_ID}/calls`) return startResponse()
+      if (path === `/calls/${CALL_ID}/dial`) return { call: callView() }
+      if (path.endsWith('/hangup')) return { call: callView({ status: 'answered', answered_at: 'x' }) }
+      if (path === `/calls/${CALL_ID}` && (init?.method ?? 'GET') === 'GET') return { call: callView() }
+      throw new Error(`unexpected ${init?.method ?? 'GET'} ${path}`)
+    })
+    const h2 = harness()
+    await placeCall(h2)
+    await h2.hangup()
+    await flushPromises()
+    h2.scope.stop()
+    await vi.advanceTimersByTimeAsync(4000)
+    expect(requests().filter((r) => r === `GET /calls/${CALL_ID}`)).toHaveLength(0)
   })
 })

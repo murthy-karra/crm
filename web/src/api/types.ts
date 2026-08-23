@@ -284,6 +284,14 @@ interface HistoryEntryBase {
 export interface ContactAttemptedDetail {
   channel: ContactChannel
   outcome: ContactOutcome
+  // SLICE_006c §2's declared additive change: `call_id` (= `causation_id`
+  // when the attempt is call-derived, null for a manual attempt),
+  // `corrects_id` (set on a correction row), `superseded` (a corrector
+  // exists). Render from these, never from row position — a correction is
+  // ordered after its original but not necessarily adjacent to it.
+  call_id: string | null
+  corrects_id: string | null
+  superseded: boolean
 }
 
 // SLICE_006 §2's declared additive change: `call_completed`, `kind_rank` 5,
@@ -440,7 +448,8 @@ export interface TodayResponse {
 // ---- Contact attempts (SLICE_003 §5 POST /api/people/{id}/contact-attempts)
 
 export type ContactChannel = 'call' | 'text' | 'email' | 'other'
-export type ContactOutcome = 'reached' | 'no_answer' | 'left_message' | 'sent'
+// SLICE_006c §2 widens the vocabulary with `busy` and `wrong_number`.
+export type ContactOutcome = 'reached' | 'no_answer' | 'left_message' | 'sent' | 'busy' | 'wrong_number'
 
 export interface LogContactRequest {
   channel: ContactChannel
@@ -572,4 +581,32 @@ export interface StartCallResponse {
 /** `POST …/dial` (202), `POST …/hangup` (200), `GET /api/calls/{id}` (200). */
 export interface CallResponse {
   call: CallView
+}
+
+// --- Slice 006c: Call outcome correction (docs/specs/SLICE_006c.md §5) ------
+
+/** The five values `POST /api/calls/{id}/outcome` accepts — `ContactOutcome`
+ * minus `sent` (rejected with 400 server-side). */
+export type CallOutcomeCorrection = Exclude<ContactOutcome, 'sent'>
+
+/** `deny_unknown_fields` server-side: exactly this one field. */
+export interface CorrectOutcomeRequest {
+  outcome: CallOutcomeCorrection
+}
+
+/** The effective attempt after the command — the new correction row, or
+ * the unchanged head when `changed: false`. A new type; `ContactAttemptRef`
+ * is unchanged. */
+export interface CorrectedAttemptRef {
+  id: string
+  channel: ContactChannel
+  outcome: ContactOutcome
+  occurred_at: string
+  recorded_at: string
+  corrects_id: string | null
+}
+
+export interface CorrectOutcomeResponse {
+  attempt: CorrectedAttemptRef
+  changed: boolean
 }

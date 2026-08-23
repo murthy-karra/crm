@@ -19,11 +19,16 @@
 //   token lives in a local for the duration of `connect` and nowhere else);
 // - Centrifugo's `call.changed` is invalidation-only: it refetches
 //   `GET /api/calls/{id}` (the `call` ref below) and never drives `phase`.
-import { computed, onScopeDispose, ref, toValue, type MaybeRefOrGetter, type Ref } from 'vue'
+// - SLICE_006c: a local ringback tone (telephony/ringback.ts) plays while
+//   `phase === 'ringing'` (the microphone mute is the caller's own mic and
+//   does not silence it); any other phase stops it. It is derived from
+//   `phase`, never the other way round.
+import { computed, onScopeDispose, ref, toValue, watch, type MaybeRefOrGetter, type Ref } from 'vue'
 import { useQueryClient, type QueryClient } from '@tanstack/vue-query'
 import { queryKeys, useCall as useCallQuery, useDialCall, useHangupCall, useStartCall } from '../api/queries'
 import type { CallView } from '../api/types'
 import { CallClientError, callInProgressId, describeCallError } from './errors'
+import { createRingback, defaultRingbackContext, type RingbackContextFactory } from './ringback'
 
 export type CallPhase = 'idle' | 'requesting_mic' | 'joining' | 'placing' | 'ringing' | 'connected' | 'ended' | 'failed'
 
@@ -94,6 +99,9 @@ export interface UseCallOptions {
   createRoom: CallRoomFactory
   /** Defaults to the Vue-provided client; tests pass their own. */
   queryClient?: QueryClient
+  /** The WebAudio context for the local ringback; defaults to the browser's
+   * `AudioContext` (no-op where absent). Tests pass a fake. */
+  createRingbackContext?: RingbackContextFactory
 }
 
 export interface UseCallResult {
@@ -175,6 +183,25 @@ export function useCall(options: UseCallOptions): UseCallResult {
     s.audioElements.clear()
   }
 
+  const settleTimers: Array<ReturnType<typeof setTimeout>> = []
+  const SETTLE_REFETCH_DELAYS_MS = [1000, 3000] as const
+
+  function clearSettleTimers(): void {
+    for (const timer of settleTimers) clearTimeout(timer)
+    settleTimers.length = 0
+  }
+
+  function scheduleSettleRefetch(id: string): void {
+    clearSettleTimers()
+    for (const delay of SETTLE_REFETCH_DELAYS_MS) {
+      settleTimers.push(
+        setTimeout(() => {
+          void qc.invalidateQueries({ queryKey: queryKeys.call(toValue(options.orgId), id) })
+        }, delay),
+      )
+    }
+  }
+
   /** Sends `hangup` for the current call — exactly once per session. The
    * server call is idempotent, but the client still guards so every path
    * (local, remote leave, mic denial, disconnect) converges on one request. */
@@ -182,7 +209,15 @@ export function useCall(options: UseCallOptions): UseCallResult {
     if (s.hangupSent || id === '') return Promise.resolve()
     s.hangupSent = true
     return hangupMutation.mutateAsync(id).then(
-      () => undefined,
+      (response) => {
+        // SLICE_006c §10: Save outcome waits for the server's terminal
+        // status. When the hangup response is still non-terminal (the
+        // request raced the provider webhook) and no `call.changed` arrives,
+        // a couple of delayed refetches keep Save from sticking.
+        if (response.call.status !== 'ended' && response.call.status !== 'failed') {
+          scheduleSettleRefetch(id)
+        }
+      },
       () => {
         // Idempotent server-side; a lost request is the sweep's job (§9).
         // The call key was not seeded with the settled call, so refetch it
@@ -453,10 +488,22 @@ export function useCall(options: UseCallOptions): UseCallResult {
     elapsedSeconds.value = 0
   }
 
+  // Local ringback: on while ringing, off otherwise (§12 rider).
+  const ringback = createRingback(options.createRingbackContext ?? defaultRingbackContext)
+  watch(
+    () => phase.value === 'ringing',
+    (ring) => {
+      if (ring) ringback.start()
+      else ringback.stop()
+    },
+  )
+
   // Leaving the page mid-call: hang up (once) and leave the room, rather
   // than leaving the PSTN leg to the server's `agent:*` participant_left
   // webhook alone (§9).
   onScopeDispose(() => {
+    ringback.stop()
+    clearSettleTimers()
     const s = session
     if (s && !s.ending && (active.value || starting)) {
       void endCall(s, s.wasConnected ? 'ended' : 'failed')

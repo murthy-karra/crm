@@ -187,29 +187,6 @@ function logout() {
         <span class="text-[17px] font-semibold text-text">CRM</span>
       </div>
 
-      <div
-        v-if="askAvailable"
-        class="px-3 pb-2"
-      >
-        <!-- UI_STYLE §1: no top bar; the Operator entry point lives with
-             the navigation, styled as a sidebar item with its shortcut. -->
-        <button
-          type="button"
-          class="flex h-10 w-full items-center gap-2 rounded-lg border border-border px-3 text-body font-medium text-text transition-colors duration-150 ease-out hover:bg-surface-2/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
-          :class="askOpen ? 'bg-surface-2' : 'bg-surface-0'"
-          :aria-pressed="askOpen"
-          data-testid="ask-toggle"
-          @click="toggleAsk"
-        >
-          <Sparkles
-            class="h-[18px] w-[18px] shrink-0 text-text-muted"
-            stroke-width="1.5"
-          />
-          <span class="flex-1 text-left">Ask</span>
-          <kbd class="rounded-md border border-border bg-surface-1 px-1.5 text-[11px] font-medium text-text-subtle">⌘K</kbd>
-        </button>
-      </div>
-
       <nav class="flex-1 space-y-6 overflow-y-auto px-3 py-2">
         <div
           v-for="group in navGroups"
@@ -301,8 +278,11 @@ function logout() {
     </aside>
 
     <div class="flex min-w-0 flex-1">
-      <div class="min-w-0 flex-1 overflow-y-auto">
-        <div class="mx-auto max-w-[1280px] px-10 py-10">
+      <div class="relative min-w-0 flex-1 overflow-y-auto">
+        <div
+          class="mx-auto max-w-[1280px] px-10 py-10"
+          :class="askAvailable ? 'pb-24' : ''"
+        >
           <div
             v-if="sessionUnavailable"
             class="rounded-xl border border-border bg-surface-0 p-5"
@@ -326,6 +306,37 @@ function logout() {
       <!-- v-show while available: closing mid-turn must not discard the
            answer or the transcript (component state survives until the
            drawer stops being available, e.g. on /platform). -->
+      <!-- The Operator is the product's headline feature (thesis §16), so
+           its trigger is a floating pill, bottom-centre of the content
+           area — the one intentional exception to UI_STYLE §2/§9's
+           "shadows only on floating surfaces": it *is* a floating
+           surface. Hidden while the drawer is open (the drawer's own
+           close button and ⌘K take over). -->
+      <Transition
+        enter-from-class="opacity-0 translate-y-2"
+        enter-active-class="transition-all duration-150 ease-out"
+        leave-active-class="transition-all duration-150 ease-out"
+        leave-to-class="opacity-0 translate-y-2"
+      >
+        <div
+          v-if="askAvailable && !askOpen"
+          class="pointer-events-none fixed bottom-6 left-[280px] right-0 z-40 flex justify-center"
+        >
+          <button
+            type="button"
+            class="pointer-events-auto inline-flex h-12 items-center gap-2.5 rounded-full bg-accent pl-4 pr-5 text-body font-medium text-white shadow-floating transition-all duration-150 ease-out hover:-translate-y-0.5 hover:bg-accent-hover hover:shadow-[0_12px_32px_rgb(0_0_0_/_0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface-1 active:translate-y-0"
+            data-testid="ask-toggle"
+            @click="toggleAsk"
+          >
+            <Sparkles
+              class="h-5 w-5 shrink-0"
+              stroke-width="1.75"
+            />
+            Ask AI Operator
+            <kbd class="ml-1 rounded-md bg-white/15 px-1.5 text-[11px] font-medium text-white/80">⌘K</kbd>
+          </button>
+        </div>
+      </Transition>
       <Transition
         enter-from-class="opacity-0 translate-x-2"
         enter-active-class="transition-all duration-150 ease-out"

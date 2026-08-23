@@ -699,3 +699,41 @@ they appear (Today reasons? Person detail? Operator?), cost/latency
 budget, and what "communication history" includes once calls, SMS, email,
 and chat exist. No work before the communication slices (D-021
 sequencing: 006 calling onward). Blocks: nothing.
+
+### O-010 — Search: fuzzy matching and a search layer (OPEN — deferred until needs are known)
+
+Recorded 2026-08-22 after the Slice 005 walkthrough: the Operator's
+`search_people` is an exact substring match (SLICE_005 §2), so a
+misspelt name ("Okafore" for "Okafor") returns nothing. The user chose
+to defer fuzzy search until the product's search needs are clearer
+(properties, locations, notes, a site-wide search box), rather than
+fix the one case now.
+
+Direction recorded for when it is picked up, so the first fix is step
+one of a layered design rather than a one-off:
+
+1. **Matching primitive** — `pg_trgm` similarity (typo-tolerant names,
+   addresses, identifiers) as a reusable `domain::search` helper that
+   each entity's own Organization-scoped query calls. Never a generic
+   cross-entity query that bypasses `PersonVisibilityScope` (D-005).
+2. **Search projection** — a `search_document` table (organization_id,
+   entity_kind, entity_id, title, body) with a trigram index on `title`
+   and full-text (`tsvector`) on `body`, written by the same domain
+   commands (D-021) and rebuildable from history; powers a global search
+   box, the Operator's search tool, and entity pickers. Built when the
+   second searchable entity lands.
+3. **Semantic search** — `pgvector` embeddings on the same table for
+   meaning-based queries (inquiry messages, notes, property
+   descriptions), combined with 1–2 as hybrid retrieval. Embedding text
+   means sending PII to an embedding provider or running a local model:
+   a privacy decision to log explicitly (D-029 spirit), not an
+   implementation detail. Not the starting point — it does not solve
+   the typo case.
+
+Explicitly rejected: sending the full People roster to the model and
+asking it to match (does not scale past demo data, puts the maximum
+rather than the minimum untrusted text in the prompt, non-deterministic).
+
+Stopgap available at any time without a contract change: a prompt rule
+telling the model to retry a name search with a shorter prefix before
+answering "not found". Blocks: nothing.

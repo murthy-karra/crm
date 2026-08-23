@@ -83,13 +83,16 @@ describe('AppShell Ask drawer', () => {
     expect(wrapper.get('[data-testid="operator-panel"]').isVisible()).toBe(false)
     await wrapper.get('[data-testid="ask-toggle"]').trigger('click')
     expect(wrapper.get('[data-testid="operator-panel"]').isVisible()).toBe(true)
+    // The pill yields to the drawer while it is open.
+    expect(wrapper.find('[data-testid="ask-toggle"]').exists()).toBe(false)
 
     await router.push('/people')
     await flushPromises()
     expect(wrapper.get('[data-testid="operator-panel"]').isVisible()).toBe(true)
 
-    await wrapper.get('[data-testid="ask-toggle"]').trigger('click')
+    await wrapper.get('[data-testid="operator-close"]').trigger('click')
     expect(wrapper.get('[data-testid="operator-panel"]').isVisible()).toBe(false)
+    expect(wrapper.get('[data-testid="ask-toggle"]').text()).toContain('Ask AI Operator')
     wrapper.unmount()
   })
 

@@ -10,6 +10,10 @@ walkthrough on 2026-08-22 and moved on. Next: plan Slice 006 (calling,
 D-021), or a small 005b streaming slice if the user chooses it (§14
 item 1 / §16 currently defer SSE to the calling work).
 
+Deferred with notes: O-010 (fuzzy/site search — trigram primitive →
+search projection → pgvector, when needs are known); the Operator's
+"not found" on misspelt names is the known symptom.
+
 ## Current slice
 
 Slice 005 — Operator retrieval — `docs/specs/SLICE_005.md` (APPROVED). Read-only AI Operator: `crm-operator` crate with a

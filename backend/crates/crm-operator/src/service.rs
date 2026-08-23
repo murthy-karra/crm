@@ -310,6 +310,7 @@ fn ledger_name(model_supplied: &str) -> &'static str {
         tools::GET_TODAY => tools::GET_TODAY,
         tools::GET_NEXT_WORK_ITEM => tools::GET_NEXT_WORK_ITEM,
         tools::EXPLAIN_PRIORITY => tools::EXPLAIN_PRIORITY,
+        tools::START_CALL => tools::START_CALL,
         _ => "unknown",
     }
 }
@@ -1836,5 +1837,142 @@ mod tests {
             v,
             json!({"name": "get_today", "outcome": "ok", "duration_ms": 12})
         );
+    }
+
+    // --- Slice 006b: start_call proposal flow (docs/specs/SLICE_006b.md §3) ---
+
+    #[tokio::test]
+    async fn start_call_proposal_lands_in_turn_output_and_ledger() {
+        let person = Uuid::new_v4();
+        let phone_method = Uuid::new_v4();
+        let backend = FakeBackend {
+            phones: vec![phone_method],
+            ..Default::default()
+        };
+        let (svc, _) = service(
+            vec![
+                ScriptedStep::Respond(ChatResponse::tool_calls(vec![call(
+                    "c1",
+                    "start_call",
+                    json!({"person_id": person.to_string()}),
+                )])),
+                ScriptedStep::Respond(ChatResponse::text("Ready — confirm the call to place it.")),
+            ],
+            Limits::default(),
+        );
+        let out = svc.run_turn(&ctx(), &backend, input("call P")).await;
+        assert_eq!(out.outcome, TurnOutcome::Completed);
+        let proposal = out.proposal.expect("proposal on the output");
+        assert_eq!(proposal.contact_method_id, phone_method);
+        assert_eq!(proposal.person.id, person);
+        assert_eq!(out.tool_calls.len(), 1);
+        assert_eq!(out.tool_calls[0].name, "start_call");
+        assert_eq!(out.tool_calls[0].outcome, ToolCallOutcome::Ok);
+        assert_eq!(out.tool_calls[0].person_ids, vec![person]);
+    }
+
+    #[tokio::test]
+    async fn second_start_call_after_a_proposal_is_rejected_without_backend_hit() {
+        let person = Uuid::new_v4();
+        let backend = FakeBackend {
+            phones: vec![Uuid::new_v4()],
+            ..Default::default()
+        };
+        let (svc, _) = service(
+            vec![
+                ScriptedStep::Respond(ChatResponse::tool_calls(vec![
+                    call("c1", "start_call", json!({"person_id": person.to_string()})),
+                    call("c2", "start_call", json!({"person_id": person.to_string()})),
+                ])),
+                ScriptedStep::Respond(ChatResponse::text("done")),
+            ],
+            Limits::default(),
+        );
+        let out = svc.run_turn(&ctx(), &backend, input("call P twice")).await;
+        assert_eq!(out.outcome, TurnOutcome::Completed);
+        assert!(out.proposal.is_some(), "the first proposal stands");
+        assert_eq!(out.tool_calls.len(), 2);
+        assert_eq!(out.tool_calls[1].outcome, ToolCallOutcome::InvalidArguments);
+        // Exactly one backend call reached propose_start_call: the fake
+        // records every noted ctx; search/etc not called here.
+        assert_eq!(backend.seen.lock().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn needs_number_choice_and_no_phone_set_no_proposal() {
+        for phones in [Vec::new(), vec![Uuid::new_v4(), Uuid::new_v4()]] {
+            let person = Uuid::new_v4();
+            let backend = FakeBackend {
+                phones,
+                ..Default::default()
+            };
+            let (svc, _) = service(
+                vec![
+                    ScriptedStep::Respond(ChatResponse::tool_calls(vec![call(
+                        "c1",
+                        "start_call",
+                        json!({"person_id": person.to_string()}),
+                    )])),
+                    ScriptedStep::Respond(ChatResponse::text("which number?")),
+                ],
+                Limits::default(),
+            );
+            let out = svc.run_turn(&ctx(), &backend, input("call P")).await;
+            assert_eq!(out.outcome, TurnOutcome::Completed);
+            assert!(out.proposal.is_none());
+            assert_eq!(out.tool_calls[0].outcome, ToolCallOutcome::Ok);
+        }
+    }
+
+    #[tokio::test]
+    async fn a_503_outcome_never_surfaces_its_proposal() {
+        // The tool runs (row inserted server-side), then the provider
+        // dies: the wire must not show the proposal (§10: never shown;
+        // expires inert).
+        let person = Uuid::new_v4();
+        let backend = FakeBackend {
+            phones: vec![Uuid::new_v4()],
+            ..Default::default()
+        };
+        let (svc, _) = service(
+            vec![
+                ScriptedStep::Respond(ChatResponse::tool_calls(vec![call(
+                    "c1",
+                    "start_call",
+                    json!({"person_id": person.to_string()}),
+                )])),
+                ScriptedStep::Fail(ProviderError::Timeout),
+            ],
+            Limits::default(),
+        );
+        let out = svc.run_turn(&ctx(), &backend, input("call P")).await;
+        assert!(!out.outcome.is_reply());
+        assert!(out.proposal.is_none());
+    }
+
+    #[tokio::test]
+    async fn start_call_with_invented_contact_method_is_not_found() {
+        let person = Uuid::new_v4();
+        let backend = FakeBackend {
+            phones: vec![Uuid::new_v4()],
+            ..Default::default()
+        };
+        let (svc, _) = service(
+            vec![
+                ScriptedStep::Respond(ChatResponse::tool_calls(vec![call(
+                    "c1",
+                    "start_call",
+                    json!({
+                        "person_id": person.to_string(),
+                        "contact_method_id": Uuid::new_v4().to_string(),
+                    }),
+                )])),
+                ScriptedStep::Respond(ChatResponse::text("could not find it")),
+            ],
+            Limits::default(),
+        );
+        let out = svc.run_turn(&ctx(), &backend, input("call P")).await;
+        assert_eq!(out.tool_calls[0].outcome, ToolCallOutcome::NotFound);
+        assert!(out.proposal.is_none());
     }
 }

@@ -62,6 +62,24 @@ reported per AGENTS §11.
 Lane C's host up: the LiveKit-backed test and one real call (report the
 SIP status flow and timings, never the number).
 
+## Implementation notes from review (binding)
+
+- Dial with `contact_method.normalized_value`, never `value`.
+- Webhook: `sha256` claim is standard (padded) base64; check `nbf`/`exp`
+  with small skew; `Mac::verify_slice`, never `==`.
+- Twirp client timeout = `ring_timeout` + 15 s; `SipFailure` codes arrive
+  as Twirp error metadata; if `participant_left.disconnect_reason` does
+  not distinguish max-duration, record `remote_hangup` — never guess.
+- `settle` locks the row (`FOR UPDATE`); `hangup` settles before
+  `provider.hangup`; `provider.hangup` treats not-found as Ok.
+- Reads work with `AppState.telephony = None`.
+- `scripts/telephony-trunk`: write the `lk` JSON to a `mktemp` file
+  (0600) with a `trap` delete; credentials never on argv.
+- The LiveKit-backed test is `scripts/check-telephony` gated on
+  `CRM_TEST_LIVEKIT_API_URL`; `check-db` must stay loopback-only.
+- README: Lane C also edits it (Telephony section); the coordinator
+  merges README last.
+
 ## Stop and report
 
 Any §2/§3/§5/§6/§11 shape change; any Telnyx credential or phone number

@@ -1,7 +1,8 @@
 # Slice 006 — Calling (outbound, browser, human-initiated)
 
-Status: DRAFT (planner pass 2026-08-22; awaiting independent review and
-user approval).
+Status: DRAFT (planner pass 2026-08-22, then independent review —
+no blocking findings; 8 safe defaults, 9 implementation notes, 3 cuts
+applied below; awaiting user approval).
 Builds on: Slice 005 (`main` at `c337093`).
 Targets: D-001 (self-hosted LiveKit + Telnyx SIP), D-002 (no new
 service; the provider is a trait inside `crm-api`), D-005 (Organization
@@ -26,8 +27,8 @@ answer/failure time, voicemail reads `reached` (D-031).
 
 The narrowest cut that proves the chain with real tests:
 
-1. a `call` aggregate (live state) and a `call_completed` fact (sixth
-   typed fact table, PII-free);
+1. a `call` aggregate (live state) and a `call_completed` fact (the
+   next typed fact table, PII-free);
 2. a `TelephonyProvider` trait with a LiveKit implementation and a
    scripted test implementation; the browser talks to LiveKit directly
    with a one-room join token minted by the API;
@@ -62,8 +63,8 @@ up (§11):
    gains "Contact attempted — call, no answer" and "Call — no answer";
    the Person leaves Today (D-022/D-031).
 6. As `bob` (other Organization): the call does not exist (404). As
-   `carol` (same Organization, not the caller): the call is visible on
-   the Person page but cannot be hung up (403).
+   `carol` (same Organization, not the caller): `GET /api/calls/{id}`
+   is 200 but `hangup` is 403.
 7. Stop LiveKit → **Call** answers 503 `telephony_unavailable` with a
    clear message; a call left dangling is finalised by the sweep (§9).
    With `LIVEKIT_API_KEY` unset the API starts, calling is disabled
@@ -82,7 +83,8 @@ Nothing here records audio (O-002). Nothing is autonomous (O-003).
   append-only log. Identified by `call.id`; the LiveKit room is
   `call:<id>`; one `correlation_id` for the whole lifecycle.
 - **Completed call** — the immutable, PII-free fact written once on
-  every terminal transition (AGENTS §4.6). Standard fact envelope.
+  every terminal transition (AGENTS §4.6); the next typed fact table.
+  Standard fact envelope.
 - **Automatic contact attempt** — the existing `contact_attempted` fact,
   written per D-031 with `causation_id = call.id`.
 - **Join grant** — a LiveKit access token scoped to exactly one room,
@@ -115,11 +117,12 @@ CREATE TABLE call (
     status             TEXT NOT NULL CHECK (status IN ('placing','ringing','answered','ended','failed')),
     failure_reason     TEXT CHECK (failure_reason IN ('no_answer','busy','declined','cancelled',
                          'ring_timeout','agent_not_joined','provider_error','expired')),
-    end_reason         TEXT CHECK (end_reason IN ('agent_hangup','remote_hangup','max_duration','reconciled')),
+    end_reason         TEXT CHECK (end_reason IN ('agent_hangup','agent_disconnected','remote_hangup','max_duration','reconciled')),
     provider           TEXT NOT NULL,                    -- 'livekit' | 'scripted'
     provider_room      TEXT NOT NULL,
     provider_call_ref  TEXT,                             -- LiveKit sip_call_id; not PII
     placed_at          TIMESTAMPTZ NOT NULL,
+    dial_requested_at  TIMESTAMPTZ,                     -- set once by POST /dial; second dial → 409
     ringing_at         TIMESTAMPTZ,
     answered_at        TIMESTAMPTZ,
     ended_at           TIMESTAMPTZ,
@@ -132,10 +135,10 @@ CREATE TABLE call (
 CREATE UNIQUE INDEX call_one_active_per_caller
     ON call (organization_id, caller_user_id) WHERE status IN ('placing','ringing','answered');
 CREATE INDEX call_org_person_placed_idx ON call (organization_id, person_id, placed_at DESC);
-CREATE INDEX call_active_idx ON call (status, placed_at) WHERE status IN ('placing','ringing','answered');
 GRANT SELECT, INSERT ON call TO crm_app;
-GRANT UPDATE (status, failure_reason, end_reason, provider_call_ref,
+GRANT UPDATE (status, failure_reason, end_reason, provider_call_ref, dial_requested_at,
               ringing_at, answered_at, ended_at, updated_at) ON call TO crm_app;
+-- The partial unique index doubles as the sweep's index over active calls.
 
 CREATE TABLE call_completed (
     -- envelope columns, CHECKs, FKs verbatim from contact_attempted (SLICE_002 §2)
@@ -173,21 +176,31 @@ for a failed one.
 ### State machine (pure Rust, `domain/telephony/transitions.rs`)
 
 ```
-placing  --Dialing-->          ringing
-placing  --Cancelled-->        failed{cancelled}            (no attempt)
-placing  --AgentNotJoined-->   failed{agent_not_joined}     (no attempt)
-placing  --ProviderError-->    failed{provider_error}       (no attempt)
-ringing  --Answered{ref}-->    answered                     (attempt: reached)
+placing  --Dialing-->          ringing                     [dial task, after the presence check]
+placing  --Cancelled|AgentLeft-->  failed{cancelled}       (no attempt)
+placing  --AgentNotJoined-->   failed{agent_not_joined}    (no attempt)
+placing  --ProviderError-->    failed{provider_error}      (no attempt)
+placing  --Expired-->          failed{expired}             (no attempt)   [sweep]
+ringing  --Answered{ref}-->    answered                    (attempt: reached)
 ringing  --DialFailed(busy|declined|no_answer|ring_timeout)--> failed{…}   (attempt: no_answer)
-ringing  --Cancelled-->        failed{cancelled}            (attempt: no_answer — D-031: ringing had started)
-ringing  --ProviderError-->    failed{provider_error}       (no attempt)
+ringing  --Cancelled|AgentLeft-->  failed{cancelled}       (attempt: no_answer — D-031: ringing had started)
+ringing  --ProviderError-->    failed{provider_error}      (no attempt)
+ringing  --Expired-->          failed{expired}             (no attempt)   [sweep]
+placing|ringing --RemoteLeft|RoomFinished--> no-op         (the dial task owns these states)
 answered --AgentHangup-->      ended{agent_hangup}
-answered --RemoteLeft-->       ended{remote_hangup}
-answered --MaxDuration-->      ended{max_duration}
-any non-terminal --Expired-->  failed{expired}              (no attempt)   [sweep]
-answered --Reconciled-->       ended{reconciled}                           [sweep]
+answered --AgentLeft-->        ended{agent_disconnected}   [webhook: agent:* participant_left]
+answered --RemoteLeft|RoomFinished--> ended{remote_hangup}
+answered --MaxDuration-->      ended{max_duration}         (only if LiveKit reports it distinguishably; else remote_hangup)
+answered --Reconciled-->       ended{reconciled}           [sweep]
 ended | failed: every signal is a no-op (idempotent webhooks).
 ```
+
+`settle` takes `SELECT … FOR UPDATE` on the `call` row and applies the
+transition to the **locked** status — that is what makes "first signal
+wins, the other is a no-op" true across the dial task, commands,
+webhooks, and the sweep. After settling `Answered`, the dial task makes
+one `participant_present("sip:<id>")` check and settles `RemoteLeft` if
+the callee is already gone (a sub-second answer-and-hangup race).
 
 `talk_seconds = ended_at - answered_at` (whole seconds) when answered.
 
@@ -226,8 +239,7 @@ pub trait TelephonyProvider: Send + Sync {
     async fn create_room(&self, room: &str, max_call: Duration) -> Result<(), ProviderError>;
     async fn participant_present(&self, room: &str, identity: &str) -> Result<bool, ProviderError>;
     async fn dial(&self, req: DialRequest) -> Result<DialOutcome, ProviderError>; // Answered{call_ref} | Failed(SipFailure)
-    async fn hangup(&self, room: &str) -> Result<(), ProviderError>;              // delete room
-    async fn room_exists(&self, room: &str) -> Result<bool, ProviderError>;
+    async fn hangup(&self, room: &str) -> Result<(), ProviderError>;              // delete room; not-found is Ok
 }
 pub enum ProviderError { Timeout, Unavailable(String), Rejected(String) }
 pub enum SipFailure { Busy, Declined, NoAnswer, RingTimeout, Other(u16) }
@@ -265,11 +277,17 @@ Commands (`src/domain/commands/`):
   index → `CallInProgress`); then `provider.create_room` — on failure
   settle `failed{provider_error}` and map to `TelephonyUnavailable`.
   Mint the grant last. Publishes `call.changed`.
-- `dial_call(…, call_id)`: caller only; `placing → ringing` (else
-  `InvalidCallState`); then spawns the dial task.
-- `hangup_call(…, call_id)`: caller only; idempotent; `provider.hangup`
-  then `answered → ended{agent_hangup}` or `placing|ringing →
-  failed{cancelled}`; terminal → no-op `Ok`.
+- `dial_call(…, call_id)`: caller only; `UPDATE call SET
+  dial_requested_at = now() WHERE … AND dial_requested_at IS NULL AND
+  status = 'placing'` (0 rows → `InvalidCallState`, 409); then spawns the
+  dial task. Returns 202 with the call still `placing`.
+- `hangup_call(…, call_id)`: caller only; idempotent. **Settle first**
+  (row lock): `answered → ended{agent_hangup}`, `placing|ringing →
+  failed{cancelled}`, terminal → no-op; **then** `provider.hangup`
+  best-effort — including on an already-terminal call, so a client retry
+  after a 503 still cleans the room up. Settling before deleting the
+  room is what keeps a concurrent dial-task `ProviderError` from winning
+  and changing the recorded outcome.
 - `settle(tx, call, transition)` (`src/domain/telephony/settle.rs`): the
   **one** write path for every signal source (command, dial task,
   webhook, sweep): `UPDATE call`; insert `contact_attempted` per D-031;
@@ -278,23 +296,27 @@ Commands (`src/domain/commands/`):
   {contact_attempted}` (existing event).
 
 Dial task (spawned from `dial_call`, `.instrument(Span::current())`,
-bounded by `ring_timeout + 10 s`): wait ≤ 10 s for `agent:<user_id>` to
-be present in the room, else settle `failed{agent_not_joined}`; then
-`provider.dial(...)` with `participant_identity = "sip:<call_id>"` →
-`Answered` → settle; `Failed(SipFailure)` → map (486 → busy, 603 →
+bounded by `10 s + ring_timeout + 10 s`): wait ≤ 10 s for
+`agent:<user_id>` to be present in the room, else settle
+`failed{agent_not_joined}`; then settle `Dialing` (`placing → ringing`)
+and call `provider.dial(...)` with `participant_identity =
+"sip:<call_id>"` and the number from `contact_method.normalized_value`
+(E.164-style; `value` is never used) → `Answered` → settle (then the
+presence re-check above); `Failed(SipFailure)` → map (486 → busy, 603 →
 declined, 480/408 → no_answer, ring timeout → ring_timeout, other →
 provider_error) → settle.
 
-Sweep (`tokio` interval, 30 s, one pod): every non-terminal call with
-`placed_at < now - (ring_timeout + max_call + 60 s)` → if
-`room_exists` is false: `answered → ended{reconciled}`, else `failed
-{expired}`; if the room still exists, leave it. In-process, noted with
-the Operator's guards for the multi-pod backlog.
+Sweep (`tokio` interval, 30 s, one pod) with per-state horizons:
+`placing` older than 10 s + 30 s → `failed{expired}`; `ringing` older
+than `ring_timeout` + 30 s → `failed{expired}`; `answered` older than
+`max_call` + 60 s → `ended{reconciled}`; each followed by best-effort
+`provider.hangup`. No room-existence query. In-process, noted with the
+Operator's guards for the multi-pod backlog.
 
 Queries (`src/domain/telephony/queries.rs`): `call_by_id(conn,
-organization_id, id)`, `active_call_for_user`, `calls_for_person`
-(history source). `person/queries.rs` gains the `call_completed`
-history source.
+organization_id, id)`, `active_call_for_user` (used for the 409 body).
+`person/queries.rs` gains the `call_completed` history source. Reads
+(`GET /api/calls/{id}`, history) work with telephony disabled.
 
 ## 4. Operator tools
 
@@ -309,8 +331,8 @@ All routes take `AuthContext` (any active member) except the webhook.
 
 | Route | Request | Success | Errors |
 |---|---|---|---|
-| `POST /api/people/{id}/calls` | `{"contact_method_id": uuid}` (`deny_unknown_fields`) | 201 `{"call": CallView, "join": {"url", "token", "room"}}` | 400 `malformed_request`; 404 `not_found` (foreign/nonexistent Person, byte-identical); 422 `invalid_contact_method`; 409 `call_in_progress`; 503 `telephony_disabled`; 503 `telephony_unavailable`; 503 `unavailable` |
-| `POST /api/calls/{id}/dial` | — | 202 `{"call"}` (`ringing`) | 404 (foreign); 403 `forbidden` (not the caller); 409 `invalid_call_state` |
+| `POST /api/people/{id}/calls` | `{"contact_method_id": uuid}` (`deny_unknown_fields`) | 201 `{"call": CallView, "join": {"url", "token", "room"}}` | 400 `malformed_request`; 404 `not_found` (foreign/nonexistent Person, byte-identical); 422 `invalid_contact_method`; 409 `{"error": "call_in_progress", "call_id": uuid}` (the one envelope extension, so the client can offer "hang up the previous call"); 503 `telephony_disabled`; 503 `telephony_unavailable`; 503 `unavailable` |
+| `POST /api/calls/{id}/dial` | — | 202 `{"call"}` (still `placing`; the dial task moves it to `ringing`) | 404 (foreign); 403 `forbidden` (not the caller); 409 `invalid_call_state` (already requested or not `placing`) |
 | `POST /api/calls/{id}/hangup` | — | 200 `{"call"}`, idempotent | 404; 403 |
 | `GET /api/calls/{id}` | — | 200 `{"call"}` (any member) | 404 |
 | `POST /webhooks/livekit` | raw JSON ≤ 64 KiB, `Authorization: <LiveKit JWT>` | 200 `{}` for any valid signature (unknown room/event ignored) | 401 `unauthenticated`; 413 |
@@ -359,8 +381,11 @@ stays invalidation-only (D-023).
 - Join token: exactly one room, one identity, join/publish/subscribe
   only, short TTL, returned once, never logged or persisted. Room
   `max_participants = 2`.
-- Webhook: no session; signature verified with `LIVEKIT_API_SECRET`;
-  mounted outside the `/api` session/CORS layers; ingress is a path on
+- Webhook: no `AuthContext`; `DefaultBodyLimit::max(64 KiB)` as
+  `routes/intake.rs`; signature verified with `LIVEKIT_API_SECRET`
+  (LiveKit's scheme: bare JWT in `Authorization`, `iss` = API key,
+  `exp`/`nbf` with small skew, `sha256` claim = **standard** base64 of
+  the body hash, verified with `Mac::verify_slice`); ingress is a path on
   the existing `api.tarams.org` route (D-030 safe default amending
   D-016 §4). A webhook naming another Organization's room cannot touch
   it: room → call → Organization is resolved server-side.
@@ -385,8 +410,10 @@ Spans: `call.start`, `call.dial` (`call_id`, `person_id`,
 `organization_id`, `actor_id`, `correlation_id`, `outcome`,
 `sip_status_class`), `call.hangup`, `call.webhook` (`event`, `room`,
 `outcome ∈ applied | ignored | unknown_room | invalid_signature`),
-`call.sweep` (`finalized`). Never the number, token, secret, or webhook
-body. `/internal/ready` unchanged (LiveKit is not a readiness
+`call.sweep` (`finalized`). Never the number, token, secret, the webhook
+body, or a `ListParticipants` response / participant attributes (LiveKit
+puts `sip.phoneNumber` in them). A log-capture test (§13) proves the
+fixture number never appears in output. `/internal/ready` unchanged (LiveKit is not a readiness
 dependency).
 
 | Condition | Behavior | Records |
@@ -395,6 +422,9 @@ dependency).
 | Bad telephony config | refuse to start (as `Config::from_source`) | — |
 | LiveKit unreachable at `start` | `failed{provider_error}`; 503 `telephony_unavailable` | `call_completed`; no attempt |
 | Agent never joins / never dials | dial task (10 s) or sweep → `failed{agent_not_joined}`/`{expired}`; room deleted | `call_completed`; no attempt |
+| Agent's browser leaves (tab closed, sleep) | webhook `participant_left` for `agent:*` → `ended{agent_disconnected}` or `failed{cancelled}`; room deleted best-effort | `call_completed` (+ attempt per D-031) |
+| Second `POST /dial` | 409 `invalid_call_state` | — |
+| Caller already has an active call | 409 `call_in_progress` with `call_id`; the panel offers "Hang up the previous call" | — |
 | Ring timeout (45 s) / busy / declined | `failed{…}` | `call_completed` + attempt `no_answer` |
 | Trunk auth failure / SIP 5xx | `failed{provider_error}` | `call_completed`; no attempt |
 | Answered | `answered` | attempt `reached` → Today advances |
@@ -405,7 +435,8 @@ dependency).
 | Bad webhook signature | 401; nothing written; `warn` | — |
 | Publish failure | logged, never a failed command (D-023) | — |
 | Mic permission denied | client calls `hangup` → `failed{cancelled}` before ringing | `call_completed`; no attempt |
-| Max call duration (60 min) | SIP participant leaves → `ended{max_duration}` | `call_completed` |
+| Max call duration (60 min) | SIP participant leaves → `ended{max_duration}` if LiveKit's `disconnect_reason` distinguishes it, else `remote_hangup` | `call_completed` |
+| `CreateSIPParticipant` blocks up to `ring_timeout` | HTTP client timeout = `ring_timeout` + 15 s; ring timeout is capped at 80 s by config (Cloudflare's 100 s proxy limit if `LIVEKIT_API_URL` traverses the tunnel) | — |
 
 ## 10. Frontend (Lane B, `web/**`; D-017; `UI_STYLE.md` binds)
 
@@ -427,7 +458,8 @@ dependency).
   call, reached / no answer". Error copy: `telephony_disabled` →
   "Calling is not configured on this server."; `telephony_unavailable`
   → "Calling is temporarily unavailable — try again in a moment.";
-  `call_in_progress` → "You already have a call in progress.";
+  `call_in_progress` → "You already have a call in progress." with a
+  **Hang up previous call** action using the returned `call_id`;
   `invalid_contact_method` → "That number can't be called."; others →
   the generic pattern.
 - `api/types.ts`, `api/queries.ts`: `CallView`, `StartCallResponse`,
@@ -441,14 +473,17 @@ dependency).
 (small VPS or the OVH box) running `compose.yaml` — `livekit/livekit-
 server`, `redis`, `livekit/sip` — with `use_external_ip: true`, UDP
 50000–60000, 7881/TCP, SIP 5060/UDP+TCP and the SIP RTP range open;
-signaling TLS at `wss://livekit.tarams.org` via a `cloudflared` route on
-that host (signaling only; ICE candidates point at the host IP);
+signaling TLS at `wss://livekit.tarams.org` via a **new, separate**
+`cloudflared` tunnel on that host (never a second connector of `crm-dev`,
+which would load-balance `api.`/`app.` traffic to the VPS); signaling
+only, ICE candidates point at the host IP;
 `webhook.urls: [https://api.tarams.org/webhooks/livekit]` (reaches the
 Mac API through the existing tunnel); no egress service. README gains a
 "Telephony" section (firewall, DNS, how to verify with `lk`).
 
-**Telnyx** (one-time, user's account): one US number; a credential-based
-SIP connection; `scripts/telephony-trunk` (bash + `lk` CLI; reads
+**Telnyx** (one-time, user's account): one US number with caller-ID
+set; a credential-based SIP connection with an outbound voice profile
+assigned; `scripts/telephony-trunk` (bash + `lk` CLI; reads
 `TELNYX_SIP_USERNAME`, `TELNYX_SIP_PASSWORD`, `TELNYX_NUMBER_E164` from
 `.env`, never argv) creates the LiveKit outbound trunk and prints its
 id for `LIVEKIT_SIP_OUTBOUND_TRUNK_ID`. The application never holds
@@ -462,7 +497,8 @@ LIVEKIT_API_URL=                     # https://livekit.tarams.org (API; http:// 
 LIVEKIT_API_KEY=                     # empty/unset = calling disabled
 LIVEKIT_API_SECRET=
 LIVEKIT_SIP_OUTBOUND_TRUNK_ID=
-CRM_TELEPHONY_RING_TIMEOUT_SECONDS=45      # bounds 10–120
+CRM_TELEPHONY_RING_TIMEOUT_SECONDS=45      # bounds 10–80
+CRM_TEST_LIVEKIT_API_URL=                  # scripts/check-telephony only; never read by check-db
 CRM_TELEPHONY_MAX_CALL_SECONDS=3600        # bounds 60–14400
 CRM_TELEPHONY_JOIN_TTL_SECONDS=300         # bounds 60–900
 TELNYX_SIP_USERNAME=                 # scripts/telephony-trunk only
@@ -471,7 +507,9 @@ TELNYX_NUMBER_E164=
 ```
 
 `LIVEKIT_API_KEY` empty → calling disabled, not a startup error; bounds
-and URLs validated regardless. A loopback LiveKit container on the Mac
+and URLs validated regardless. The same `LIVEKIT_API_KEY`/`SECRET` pair
+must be in the host's `livekit.yaml` (including its webhook `api_key`)
+and the Mac's `.env` — a manual sync the README calls out. A loopback LiveKit container on the Mac
 (optional `infra/development` profile) serves browser-only development
 and the optional LiveKit-backed test; it cannot carry PSTN media.
 
@@ -484,7 +522,8 @@ app; per-Organization or per-user numbers and number-ownership facts
 auto-logged attempts; O-008 suggestions; Operator `start_call` (006b);
 the `crm-app` extraction (006a); streaming/voice Operator (declared
 deferral of SLICE_005 §16); DNC/quiet-hours compliance (O-011);
-multi-pod sweep/dial coordination.
+multi-pod sweep/dial coordination; TURN/TCP media fallback (UDP-blocked
+networks fail at ICE).
 
 ## 13. Checks and tests
 
@@ -513,17 +552,30 @@ multi-pod sweep/dial coordination.
    `participant_left` for `sip:<id>` → `ended{remote_hangup}` with
    `talk_seconds`, duplicate `room_finished` no-op, unknown room 200 and
    nothing written, tampered / wrong secret / expired → 401; sweep
-   finalises a backdated `answered` call to `ended{reconciled}` when
-   `room_exists` is false; history `call_completed` (`kind_rank` 5) sorts
-   after a same-instant `contact_attempted`.
-3. **LiveKit-backed (optional; runs in `check-db` when `LIVEKIT_API_URL`
-   is set; fails loudly on unreachable, never skips)** — create room →
+   finalises a backdated `placing` and `ringing` to `failed{expired}`
+   (no attempt) and a backdated `answered` to `ended{reconciled}`;
+   webhook `participant_left` for `agent:*` in `answered` →
+   `ended{agent_disconnected}` and in `ringing` → `failed{cancelled}`
+   with one `no_answer` attempt; an out-of-order `participant_left` for
+   `sip:*` in `ringing` is a no-op and the dial task's later `Failed`
+   still yields exactly one attempt; `hangup` while the scripted `dial`
+   is blocked (released by a oneshot) → `failed{cancelled}` with exactly
+   one attempt and the dial task's later result a no-op; double
+   `POST /dial` → 409; `GET /api/calls/{id}` and Person history with
+   telephony disabled; a log-capture test that the fixture number never
+   appears in spans or log lines; history `call_completed` (`kind_rank`
+   5) sorts after a same-instant `contact_attempted`.
+3. **LiveKit-backed (`scripts/check-telephony`, gated on
+   `CRM_TEST_LIVEKIT_API_URL`; fails loudly on unreachable, never skips;
+   `check-db` stays loopback-only per SLICE_001 §9)** — create room →
    list → delete with real auth; webhook round-trip with a signature
    produced by the real algorithm.
 4. **Web (Vitest)** — `useCall` with a fake LiveKit client: every
    transition, remote leave → `hangup` exactly once, mic denied →
    `hangup`, `call.changed` → refetch; `invalidationsFor('call.changed')`;
-   Call disabled without a phone; error copy per code.
+   Call disabled without a phone; number picker only with ≥ 2 phones;
+   `call_completed` history rendering; the 409 "hang up previous call"
+   affordance; error copy per code.
 5. **Live walkthrough** (not CI): §1 steps 1–7 from
    `https://app.tarams.org`, with a second browser watching Today.
 
@@ -546,6 +598,13 @@ item 3); web lint/typecheck/test/build; the live walkthrough.
 10. One deployment-level caller number (D-030).
 11. Voicemail reads `reached` (D-031).
 12. Mic denial before ringing is `cancelled` with no attempt.
+13. Review amendments (2026-08-22): `dial` returns 202 with `placing`
+    and the dial task owns `placing → ringing`; `Expired` only from
+    `placing|ringing`; per-state sweep horizons, no `room_exists`;
+    `AgentLeft` signal and `agent_disconnected` end reason; `hangup`
+    settles before deleting the room; `RemoteLeft`/`RoomFinished` are
+    no-ops before `answered`; 409 `call_in_progress` carries `call_id`;
+    the LiveKit-backed test lives in `scripts/check-telephony`.
 
 ## 15. Lane ownership and sequencing
 

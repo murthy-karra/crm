@@ -4,8 +4,9 @@ Last updated: 2026-08-22
 
 ## Current phase
 
-**Slice 006 (calling) — PLANNING; spec DRAFTED, independent review
-pending, then user approval.** On 2026-08-22 the user accepted D-030
+**Slice 006 (calling) — PLANNING; spec drafted and independently
+reviewed (no blocking findings; 8 safe defaults, 9 implementation
+notes, 3 cuts applied); awaiting user approval of the spec.** On 2026-08-22 the user accepted D-030
 (006 = human-initiated outbound browser calling; 006a = `crm-app`
 extraction; 006b = Operator `start_call`; dev telephony on a public
 Linux host with one Telnyx number as a LiveKit outbound trunk) and

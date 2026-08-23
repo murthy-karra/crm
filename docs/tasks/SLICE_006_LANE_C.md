@@ -28,9 +28,16 @@ script it.
 
 ## Needs from the user
 
-The host (VPS or OVH box, SSH access, public IPv4), DNS for
-`livekit.tarams.org`, the Telnyx account with one number and a
-credential SIP connection. Report exact firewall rules required.
+(a) The host (VPS or OVH box, SSH access, public IPv4). (b) A **new,
+separate Cloudflare tunnel** for `livekit.tarams.org`, created on the
+host (dashboard token or `cloudflared login`) — never a second connector
+of `crm-dev`, which would load-balance `api.`/`app.` traffic to the VPS.
+(c) DNS for `livekit.tarams.org` (created by that tunnel's route). (d)
+Telnyx: one number with caller-ID set, a credential SIP connection with
+an outbound voice profile assigned. (e) The same `LIVEKIT_API_KEY` /
+`SECRET` pair in the host's `livekit.yaml` (incl. the webhook `api_key`)
+and the Mac's `.env` — document the manual sync. Report exact firewall
+rules required, and note host log retention (SIP logs carry numbers).
 
 ## Required checks
 

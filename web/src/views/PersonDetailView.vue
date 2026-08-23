@@ -6,7 +6,7 @@
 // `detail` shapes exactly as spec §5 documents them, in server order
 // (occurred_at, recorded_at, kind_rank, id) — never re-sorted here.
 import { computed, onBeforeUnmount, ref, watch, type Component } from 'vue'
-import { RouterLink, onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import Select from 'primevue/select'
 import { useQueryClient } from '@tanstack/vue-query'
 import { Flag, Inbox, Mail, Phone, PhoneCall, PhoneOutgoing, Route, UserCheck } from 'lucide-vue-next'
@@ -15,7 +15,7 @@ import FormField from '../components/FormField.vue'
 import Badge from '../components/Badge.vue'
 import StageLabel from '../components/StageLabel.vue'
 import LogContactDialog from '../components/LogContactDialog.vue'
-import CallPanel from '../components/CallPanel.vue'
+
 import ChangeOutcomeDialog from '../components/ChangeOutcomeDialog.vue'
 import {
   queryKeys,
@@ -34,20 +34,12 @@ import { buttonClasses, selectPt } from '../lib/controls'
 import { describeApiError } from '../lib/errors'
 import { CONTACT_CHANNEL_LABEL, CONTACT_OUTCOME_LABEL, correctedOutcomeLabel } from '../lib/labels'
 import { describeOutcomeError } from '../telephony/errors'
-import { callCompletedSummary, formatTalkSeconds, showsOutcomePrompt } from '../telephony/format'
-import { useCall, type CallRoomFactory } from '../telephony/useCall'
-import { createLiveKitRoom } from '../telephony/client'
+import { callCompletedSummary, formatTalkSeconds } from '../telephony/format'
+import { useCallHost } from '../telephony/callHost'
 
-const props = withDefaults(
-  defineProps<{
-    id: string
-    /** SLICE_006 §10: the LiveKit client factory is injected so tests mount
-     * this view with a fake room (no SDK, no WebRTC). */
-    createRoom?: CallRoomFactory
-  }>(),
-  // A Function-typed prop's default is the value itself, not a factory.
-  { createRoom: createLiveKitRoom },
-)
+const props = defineProps<{
+  id: string
+}>()
 
 const { data: me } = useMe()
 const orgId = computed(() => me.value?.organization?.id ?? '')
@@ -97,73 +89,26 @@ const HISTORY_ICON: Record<HistoryEntry['kind'], Component> = {
 
 const logContactOpen = ref(false)
 
-// ---- Calling (SLICE_006 §10) ----------------------------------------------
-// One call per view, owned here as component state (never persisted). The
-// header's Call button is the view's primary action until a call is
-// active, when the panel's Hang up takes over (UI_STYLE §5: one primary).
-const call = useCall({ orgId, createRoom: props.createRoom })
+// ---- Calling (SLICE_006 §10; SLICE_006b §6) --------------------------------
+// The call session and docked panel live in the app-level call host
+// (AppShell provides it; CallHostPanel renders it) so the Ask drawer's
+// Confirm shares them and the panel survives navigation. This view keeps
+// its Call button, number picker, and History outcome dialog.
+const host = useCallHost()
+const { call } = host
 
 const phones = computed(() => contactMethods.value.filter((cm) => cm.kind === 'phone'))
 const callDisabled = computed(() => phones.value.length === 0 || call.active.value)
 
 // ---- Call outcome (SLICE_006c §10, §5a) -------------------------------------
-// Two instances of the one mutation: the panel's post-call prompt and the
-// History "Set/Change outcome" dialog each own their pending/error state.
-const panelOutcome = useCorrectCallOutcome(orgId)
-const panelOutcomeSaved = ref<CallOutcomeCorrection | null>(null)
-const panelOutcomeError = ref<string | null>(null)
-// Synchronous re-entry latch: `isPending` flips on the next tick, so two
-// Save clicks in one task would otherwise post twice.
-const panelOutcomeSaving = ref(false)
-
-// Computed once and passed to CallPanel: while the prompt is open, Save
-// outcome is the view's one primary, so the header's Call button steps down
-// to secondary and the History "Change outcome" action is disabled.
-const outcomePromptOpen = computed(() =>
-  showsOutcomePrompt(call.phase.value, call.error.value !== null, call.call.value, panelOutcomeSaved.value !== null),
-)
+// The panel's post-call prompt moved to the call host (SLICE_006b §6);
+// this view keeps the History Set/Change-outcome dialog and the
+// `?outcome=` deep link.
+// While the prompt is open, Save outcome is the app's one primary, so the
+// header's Call button steps down to secondary and the History "Change
+// outcome" action is disabled (UI_STYLE §5: one primary).
+const outcomePromptOpen = host.outcomePromptOpen
 const callPrimary = computed(() => !call.active.value && !outcomePromptOpen.value)
-
-function resetPanelOutcome() {
-  panelOutcomeSaved.value = null
-  panelOutcomeError.value = null
-  panelOutcomeSaving.value = false
-  panelOutcome.reset()
-}
-
-function onSaveOutcome(outcome: CallOutcomeCorrection) {
-  if (panelOutcomeSaving.value || panelOutcome.isPending.value) return
-  const callId = call.callId.value
-  const personId = call.personId.value
-  if (callId === '' || personId === '') return
-  panelOutcomeSaving.value = true
-  panelOutcomeError.value = null
-  panelOutcome.mutate(
-    { callId, personId, outcome },
-    {
-      // §5a: the panel stays until Save succeeds, then shows "Outcome saved
-      // — <label>" → Done. `changed: false` (the choice was already on
-      // record) is a success too — never a silent dismissal.
-      onSuccess: () => {
-        panelOutcomeSaved.value = outcome
-      },
-      onError: (failure) => {
-        panelOutcomeError.value = describeOutcomeError(failure)
-        if (failure instanceof ApiError && failure.code === 'correction_conflict') {
-          void queryClient.invalidateQueries({ queryKey: queryKeys.person(orgId.value, personId) })
-        }
-      },
-      onSettled: () => {
-        panelOutcomeSaving.value = false
-      },
-    },
-  )
-}
-
-function dismissCall() {
-  call.dismiss()
-  resetPanelOutcome()
-}
 
 // History "Set outcome" / "Change outcome" (§1 step 7, §5a). Offered on the
 // call row when the caller is me and the call has an effective attempt —
@@ -244,16 +189,10 @@ const outcomeQueryHandled = ref<string | null>(null)
 
 const pickerOpen = ref(false)
 const pickerRoot = ref<HTMLElement | null>(null)
-// The callee's name as it was when the call started — the panel keeps
-// naming that Person even if the route (and `person`) changes mid-call.
-const calleeName = ref('')
-
 function startCall(contactMethodId: string) {
   pickerOpen.value = false
   if (!person.value) return
-  calleeName.value = person.value.display_name
-  resetPanelOutcome()
-  void call.start(person.value.id, contactMethodId)
+  host.startFromPerson(person.value.id, person.value.display_name, contactMethodId)
 }
 
 function onCallClick() {
@@ -292,23 +231,16 @@ onBeforeUnmount(() => {
 })
 
 // A different Person (route param change while this view stays mounted):
-// a finished panel belongs to the previous Person — clear it. An active
-// call is left alone; the panel still names the original callee.
+// close this view's own popovers. The panel is app-level now (SLICE_006b
+// §6): a call — or an unanswered D-033 outcome prompt — survives
+// navigation, still naming the original callee.
 watch(
   () => props.id,
   () => {
     pickerOpen.value = false
     changeOutcomeOpen.value = false
-    dismissCall()
   },
 )
-
-// Leaving the page mid-call ends it (the composable hangs up on dispose),
-// so ask first.
-onBeforeRouteLeave(() => {
-  if (!call.active.value) return true
-  return window.confirm('End the call?')
-})
 
 const ROUTING_STRATEGY_LABEL: Record<RoutingStrategy, string> = {
   explicit: 'an explicit choice',
@@ -759,24 +691,6 @@ watch(
         :error="historyOutcomeError"
         @update:visible="(value: boolean) => (value ? (changeOutcomeOpen = true) : closeChangeOutcome())"
         @save="onChangeOutcomeSave"
-      />
-
-      <CallPanel
-        :phase="call.phase.value"
-        :person-name="calleeName"
-        :elapsed-seconds="call.elapsedSeconds.value"
-        :muted="call.muted.value"
-        :error="call.error.value"
-        :call="call.call.value"
-        :outcome-prompt="outcomePromptOpen"
-        :outcome-saving="panelOutcomeSaving || panelOutcome.isPending.value"
-        :outcome-saved="panelOutcomeSaved"
-        :outcome-error="panelOutcomeError"
-        @hangup="call.hangup()"
-        @toggle-mute="call.toggleMute()"
-        @hangup-previous="call.hangupPrevious()"
-        @dismiss="dismissCall()"
-        @save-outcome="onSaveOutcome"
       />
     </div>
   </div>

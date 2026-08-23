@@ -13,8 +13,23 @@ import { buttonClasses } from '../lib/controls'
 import { describeApiError } from '../lib/errors'
 import { isOrganizationRoute, isToggleShortcut } from '../lib/operator'
 import OperatorPanel from './OperatorPanel.vue'
+import CallHostPanel from './CallHostPanel.vue'
 import { createRealtimeClient, resolveRealtimeUrl } from '../realtime/client'
 import { useRealtime } from '../realtime/useRealtime'
+import { provideCallHost } from '../telephony/callHost'
+import { createLiveKitRoom } from '../telephony/client'
+import type { CallRoomFactory } from '../telephony/useCall'
+
+// SLICE_006b §6: the one call session for the whole app lives here, so
+// the Person page's Call button and the Ask drawer's Confirm share it and
+// the docked panel (with its D-033 outcome prompt) survives navigation.
+// Tests inject a fake room factory.
+const props = withDefaults(
+  defineProps<{
+    createRoom?: CallRoomFactory
+  }>(),
+  { createRoom: createLiveKitRoom },
+)
 
 const router = useRouter()
 const route = useRoute()
@@ -38,6 +53,11 @@ const {
   refetch: refetchMe,
 } = useMe()
 const logoutMutation = useLogoutMutation()
+
+provideCallHost({
+  orgId: () => me.value?.organization?.id ?? '',
+  createRoom: props.createRoom,
+})
 
 // SLICE_004 §10: a platform-only session (`organization: null`) renders the
 // `Platform` group only — no Today/People/Intake, since it has no
@@ -351,6 +371,7 @@ function logout() {
           @close="closeAsk"
         />
       </Transition>
+      <CallHostPanel />
     </div>
   </div>
 </template>

@@ -8,14 +8,15 @@
 // - History is component state only (no localStorage, no server); the last
 //   six messages travel with each turn and Clear resets it.
 // - Screen context is derived from the route at send time, not open time.
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { X } from 'lucide-vue-next'
+import { PhoneOutgoing, X } from 'lucide-vue-next'
 import { useOperatorTurn } from '../api/queries'
-import type { OperatorHistoryMessage, OperatorPersonCard } from '../api/types'
+import type { OperatorHistoryMessage, OperatorPersonCard, OperatorProposal } from '../api/types'
 import { buttonClasses, TEXTAREA_CLASSES } from '../lib/controls'
 import { deriveScreenContext, describeOperatorError, historyWindow, MAX_MESSAGE_CHARS } from '../lib/operator'
 import OperatorPersonCardView from './OperatorPersonCard.vue'
+import { useCallHost } from '../telephony/callHost'
 
 const emit = defineEmits<{ close: [] }>()
 
@@ -24,10 +25,82 @@ interface TranscriptEntry {
   role: 'user' | 'assistant'
   text: string
   cards: OperatorPersonCard[]
+  /** SLICE_006b §6: the turn's proposal — rendered from this server
+   * object only, never from model prose. */
+  proposal?: OperatorProposal
+}
+
+/** Per-proposal card state. `final` cards keep their message and never
+ * re-enable (consumed/expired/executed); non-final failures (mic denied)
+ * leave the proposal intact so Confirm can be clicked again. */
+interface ProposalCardState {
+  status: 'idle' | 'confirming' | 'started' | 'failed'
+  final: boolean
+  message: string | null
 }
 
 const route = useRoute()
 const turn = useOperatorTurn()
+const host = useCallHost()
+
+const proposalStates = reactive(new Map<string, ProposalCardState>())
+
+// A coarse clock so a pending card disables itself at `expires_at`
+// (SLICE_006b §1) without a per-card timer.
+const now = ref(Date.now())
+const clock = setInterval(() => {
+  now.value = Date.now()
+}, 5000)
+onBeforeUnmount(() => clearInterval(clock))
+
+function proposalState(id: string): ProposalCardState {
+  let state = proposalStates.get(id)
+  if (!state) {
+    state = { status: 'idle', final: false, message: null }
+    proposalStates.set(id, state)
+  }
+  return state
+}
+
+function proposalExpired(proposal: OperatorProposal): boolean {
+  return now.value >= Date.parse(proposal.expires_at)
+}
+
+/** Non-final = the proposal was not consumed; Confirm may be retried. */
+const RETRYABLE_CODES = new Set(['microphone_denied'])
+
+async function confirmProposal(proposal: OperatorProposal) {
+  const state = proposalState(proposal.id)
+  if (state.status === 'confirming' || state.final) return
+  if (proposalExpired(proposal)) {
+    state.status = 'failed'
+    state.final = true
+    state.message = 'This suggestion expired — ask again.'
+    return
+  }
+  state.status = 'confirming'
+  state.message = null
+  const code = await host.startFromProposal(proposal)
+  if (code === null) {
+    state.status = 'started'
+    state.final = true
+    state.message = null
+    return
+  }
+  state.status = 'failed'
+  state.final = !RETRYABLE_CODES.has(code)
+  state.message = host.call.error.value?.message ?? 'Could not place the call.'
+  if (!state.final) state.status = 'idle'
+}
+
+function dismissProposal(proposal: OperatorProposal) {
+  // Purely local (SLICE_006b §6): the row expires inert server-side.
+  const state = proposalState(proposal.id)
+  if (state.status === 'confirming') return
+  state.status = 'failed'
+  state.final = true
+  state.message = 'Dismissed.'
+}
 
 const draft = ref('')
 const transcript = ref<TranscriptEntry[]>([])
@@ -78,6 +151,7 @@ function send() {
           role: 'assistant',
           text: response.reply,
           cards: response.references.people,
+          proposal: response.proposal ?? undefined,
         })
       },
       onError: (err) => {
@@ -208,6 +282,68 @@ defineExpose({ focus: () => textarea.value?.focus() })
               :key="card.id"
               :card="card"
             />
+          </div>
+          <div
+            v-if="entry.proposal"
+            class="rounded-xl border border-border bg-surface-1 p-3"
+            data-testid="operator-proposal"
+          >
+            <div class="flex items-center gap-2">
+              <PhoneOutgoing
+                class="h-4 w-4 shrink-0 text-text-muted"
+                stroke-width="1.75"
+              />
+              <p class="text-body text-text">
+                Call <span class="font-semibold">{{ entry.proposal.person.display_name }}</span>
+                at <span class="font-semibold">{{ entry.proposal.phone }}</span>?
+              </p>
+            </div>
+            <div
+              v-if="proposalState(entry.proposal.id).status === 'started'"
+              class="mt-2 text-small text-text-muted"
+              data-testid="operator-proposal-started"
+            >
+              Calling — see the call panel.
+            </div>
+            <template v-else>
+              <div class="mt-3 flex items-center gap-2">
+                <button
+                  type="button"
+                  :class="buttonClasses('primary')"
+                  :disabled="proposalState(entry.proposal.id).status === 'confirming'
+                    || proposalState(entry.proposal.id).final
+                    || proposalExpired(entry.proposal)"
+                  data-testid="operator-proposal-confirm"
+                  @click="confirmProposal(entry.proposal)"
+                >
+                  {{ proposalState(entry.proposal.id).status === 'confirming' ? 'Connecting…' : 'Confirm' }}
+                </button>
+                <button
+                  type="button"
+                  :class="buttonClasses('ghost')"
+                  :disabled="proposalState(entry.proposal.id).status === 'confirming'
+                    || proposalState(entry.proposal.id).final"
+                  data-testid="operator-proposal-dismiss"
+                  @click="dismissProposal(entry.proposal)"
+                >
+                  Dismiss
+                </button>
+              </div>
+              <p
+                v-if="proposalState(entry.proposal.id).message"
+                class="mt-2 text-small text-danger"
+                data-testid="operator-proposal-message"
+              >
+                {{ proposalState(entry.proposal.id).message }}
+              </p>
+              <p
+                v-else-if="proposalExpired(entry.proposal) && !proposalState(entry.proposal.id).final"
+                class="mt-2 text-small text-text-muted"
+                data-testid="operator-proposal-expired"
+              >
+                This suggestion expired — ask again.
+              </p>
+            </template>
           </div>
         </div>
       </div>

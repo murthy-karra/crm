@@ -16,8 +16,7 @@ pub struct AcceptInvitation {
     pub token: String,
     pub display_name: String,
     pub password: String,
-    /// `WebSession` from the public route; `Cli` from `crm-admin seed-dev`
-    /// (docs/specs/SLICE_004.md §4).
+    /// `WebSession` from the public route (docs/specs/SLICE_004.md §4).
     pub origin: Origin,
 }
 
@@ -42,7 +41,7 @@ pub struct AcceptInvitationOutcome {
 /// to_status: active, reason: invitation}` with `actor_user_id` = the new
 /// user. `CommandContext::from_auth` does not apply — the context is built
 /// after the `app_user` insert, inside the transaction
-/// (docs/specs/SLICE_004.md §4). Actor paths: public, CLI (`seed-dev`).
+/// (docs/specs/SLICE_004.md §4). Actor path: the public accept route.
 #[tracing::instrument(skip_all, fields(outcome = tracing::field::Empty))]
 pub async fn accept_invitation(
     pool: &PgPool,

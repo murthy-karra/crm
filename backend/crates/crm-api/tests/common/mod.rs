@@ -247,7 +247,7 @@ pub async fn add_membership_with(
 }
 
 /// Seeds the nine D-019 default stages for `org_id` via the same library
-/// helper `scripts/dev-seed` uses.
+/// helper `create_organization` uses.
 pub async fn seed_stages(pool: &PgPool, org_id: Uuid) {
     let mut tx = pool.begin().await.unwrap();
     stage::seed_defaults(&mut tx, org_id).await.unwrap();
@@ -268,6 +268,103 @@ pub async fn create_org_with_stages_and_member(
     let user_id = create_user(pool, email, display_name, password_plain).await;
     add_membership(pool, org_id, user_id).await;
     (org_id, user_id)
+}
+
+pub struct SeedPerson<'a> {
+    pub email: &'a str,
+    pub display_name: &'a str,
+}
+
+/// One org-admin invite/accept round-trip, driven entirely over HTTP: the
+/// platform admin creates an Organization and invites its first admin;
+/// that admin, once logged in, invites one member. The dev-bootstrap flow
+/// (`scripts/dev-bootstrap`) is this same sequence run against a live
+/// server — no CLI seed-dev, no direct writes (docs/specs/SLICE_004.md
+/// §4, §11). Returns the new Organization's id.
+pub async fn create_org_with_admin_and_member_via_api(
+    router: &Router,
+    platform_cookie: &str,
+    pw: &str,
+    org_name: &str,
+    admin: SeedPerson<'_>,
+    member: SeedPerson<'_>,
+) -> String {
+    let create_resp = post_json_with_cookie(
+        router,
+        "/api/platform/organizations",
+        platform_cookie,
+        serde_json::json!({ "name": org_name }),
+    )
+    .await;
+    assert_eq!(
+        create_resp.status(),
+        StatusCode::CREATED,
+        "{org_name} creation"
+    );
+    let create_body = body_json(create_resp).await;
+    let org_id = create_body["organization"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let invite_admin_resp = post_json_with_cookie(
+        router,
+        &format!("/api/platform/organizations/{org_id}/invitations"),
+        platform_cookie,
+        serde_json::json!({ "email": admin.email, "role": "admin" }),
+    )
+    .await;
+    assert_eq!(invite_admin_resp.status(), StatusCode::CREATED);
+    let admin_token = body_json(invite_admin_resp).await["accept_path"]
+        .as_str()
+        .unwrap()
+        .strip_prefix("/invite/")
+        .unwrap()
+        .to_string();
+
+    let accept_admin_resp = post_json_with_cookie(
+        router,
+        "/api/invitations/accept",
+        "",
+        serde_json::json!({
+            "token": admin_token,
+            "display_name": admin.display_name,
+            "password": pw,
+        }),
+    )
+    .await;
+    assert_eq!(accept_admin_resp.status(), StatusCode::OK);
+
+    let admin_cookie = login_cookie(router, admin.email, pw).await;
+    let invite_member_resp = post_json_with_cookie(
+        router,
+        "/api/organization/invitations",
+        &admin_cookie,
+        serde_json::json!({ "email": member.email, "role": "member" }),
+    )
+    .await;
+    assert_eq!(invite_member_resp.status(), StatusCode::CREATED);
+    let member_token = body_json(invite_member_resp).await["accept_path"]
+        .as_str()
+        .unwrap()
+        .strip_prefix("/invite/")
+        .unwrap()
+        .to_string();
+
+    let accept_member_resp = post_json_with_cookie(
+        router,
+        "/api/invitations/accept",
+        "",
+        serde_json::json!({
+            "token": member_token,
+            "display_name": member.display_name,
+            "password": pw,
+        }),
+    )
+    .await;
+    assert_eq!(accept_member_resp.status(), StatusCode::OK);
+
+    org_id
 }
 
 // --- HTTP helpers ----------------------------------------------------

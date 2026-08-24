@@ -513,53 +513,51 @@ async fn unresolved_queue_reports_not_truncated_under_500_rows(migrator_pool: Pg
     assert_eq!(body["items"].as_array().unwrap().len(), 3);
 }
 
-/// Criterion 14: re-running the seed binary creates nine D-019 stages (in
-/// order) and two members per Organization, with no duplicates on a second
-/// run.
+/// Criterion 14: creating an Organization through the platform-admin HTTP
+/// flow (`common::create_org_with_admin_and_member_via_api` — the same
+/// sequence `scripts/dev-bootstrap` drives) seeds its nine D-019 default
+/// stages, in order, and its two invited members; repeating the creation
+/// is rejected, not a second set of stages or memberships.
 #[sqlx::test]
 #[ignore]
-async fn seed_dev_creates_nine_ordered_stages_and_two_members_idempotently(migrator_pool: PgPool) {
-    let migration_url = common::migrator_url_for(&migrator_pool);
-    let app_url = common::app_url_for(&migrator_pool);
-    let crm_admin_bin = env!("CARGO_BIN_EXE_crm-admin");
+async fn organization_creation_seeds_nine_ordered_stages_and_two_members(migrator_pool: PgPool) {
+    const PW: &str = "test-seed-password-123456";
 
-    let bootstrap = || {
-        let output = std::process::Command::new(crm_admin_bin)
-            .arg("bootstrap-platform-admin")
-            .arg("--email")
-            .arg("owner@platform.test")
-            .arg("--display-name")
-            .arg("Platform Owner")
-            .env("MIGRATION_DATABASE_URL", &migration_url)
-            .env("CRM_DEV_SEED_PASSWORD", "test-seed-password-123456")
-            .env_remove("DATABASE_URL")
-            .output()
-            .expect("bootstrap-platform-admin failed to start");
-        assert!(
-            output.status.success(),
-            "bootstrap-platform-admin failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    };
+    common::create_platform_admin(&migrator_pool, "owner@platform.test", "Platform Owner", PW)
+        .await;
+    let router = common::build_router(&migrator_pool).await;
+    let platform_cookie = common::login_cookie(&router, "owner@platform.test", PW).await;
 
-    let run = |n: u32| {
-        let output = std::process::Command::new(crm_admin_bin)
-            .arg("seed-dev")
-            .env("MIGRATION_DATABASE_URL", &migration_url)
-            .env("DATABASE_URL", &app_url)
-            .env("CRM_DEV_SEED_PASSWORD", "test-seed-password-123456")
-            .output()
-            .unwrap_or_else(|e| panic!("seed-dev run {n} failed to start: {e}"));
-        assert!(
-            output.status.success(),
-            "seed-dev run {n} failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    };
-
-    bootstrap();
-    run(1);
-    run(2);
+    let acme_id = common::create_org_with_admin_and_member_via_api(
+        &router,
+        &platform_cookie,
+        PW,
+        "Acme Realty",
+        common::SeedPerson {
+            email: "alice@acme.test",
+            display_name: "Alice Anderson",
+        },
+        common::SeedPerson {
+            email: "carol@acme.test",
+            display_name: "Carol Chen",
+        },
+    )
+    .await;
+    let best_id = common::create_org_with_admin_and_member_via_api(
+        &router,
+        &platform_cookie,
+        PW,
+        "Best Realty",
+        common::SeedPerson {
+            email: "bob@best.test",
+            display_name: "Bob Baker",
+        },
+        common::SeedPerson {
+            email: "dave@best.test",
+            display_name: "Dave Diaz",
+        },
+    )
+    .await;
 
     let (org_count,): (i64,) = sqlx::query_as("SELECT count(*) FROM organization")
         .fetch_one(&migrator_pool)
@@ -567,21 +565,15 @@ async fn seed_dev_creates_nine_ordered_stages_and_two_members_idempotently(migra
         .unwrap();
     assert_eq!(org_count, 2);
 
-    let org_ids: Vec<(Uuid,)> = sqlx::query_as("SELECT id FROM organization")
-        .fetch_all(&migrator_pool)
-        .await
-        .unwrap();
-    for (org_id,) in org_ids {
+    for org_id_str in [&acme_id, &best_id] {
+        let org_id: Uuid = org_id_str.parse().unwrap();
         let (stage_count,): (i64,) =
             sqlx::query_as("SELECT count(*) FROM stage WHERE organization_id = $1")
                 .bind(org_id)
                 .fetch_one(&migrator_pool)
                 .await
                 .unwrap();
-        assert_eq!(
-            stage_count, 9,
-            "no duplicate stages after a second seed run"
-        );
+        assert_eq!(stage_count, 9);
 
         let stage_rows: Vec<(String,)> =
             sqlx::query_as("SELECT name FROM stage WHERE organization_id = $1 ORDER BY position")
@@ -613,11 +605,31 @@ async fn seed_dev_creates_nine_ordered_stages_and_two_members_idempotently(migra
         .fetch_one(&migrator_pool)
         .await
         .unwrap();
-        assert_eq!(
-            member_count, 2,
-            "no duplicate memberships after a second seed run"
-        );
+        assert_eq!(member_count, 2);
     }
+
+    // Repeating the creation is a clean rejection, never a second set of
+    // stages or memberships (docs/specs/SLICE_004.md §4).
+    let dup = common::post_json_with_cookie(
+        &router,
+        "/api/platform/organizations",
+        &platform_cookie,
+        json!({ "name": "Acme Realty" }),
+    )
+    .await;
+    assert_eq!(dup.status(), StatusCode::CONFLICT);
+
+    let acme_uuid: Uuid = acme_id.parse().unwrap();
+    let (stage_count_after,): (i64,) =
+        sqlx::query_as("SELECT count(*) FROM stage WHERE organization_id = $1")
+            .bind(acme_uuid)
+            .fetch_one(&migrator_pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        stage_count_after, 9,
+        "no duplicate stages after a rejected repeat creation"
+    );
 }
 
 // --- Malformed-request 400s requiring a real session ---------------------

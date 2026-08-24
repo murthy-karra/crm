@@ -21,8 +21,8 @@ use tower::ServiceExt;
 use uuid::Uuid;
 
 use common::{
-    add_membership, body_json, build_router, connect_as_app, create_org, create_user,
-    extract_cookie, login, migrator_url_for,
+    add_membership, body_json, build_router, connect_as_app, create_org, create_platform_admin,
+    create_user, extract_cookie, login, login_cookie, post_json_with_cookie,
 };
 use crm_api::domain::admin::queries as admin_queries;
 
@@ -746,85 +746,96 @@ async fn crm_app_has_exactly_the_specified_grants(migrator_pool: PgPool) {
     );
 }
 
-// --- Seed idempotency ------------------------------------------------
+// --- Bootstrap idempotency (via the API, not direct writes) ----------
 
+/// The dev-bootstrap flow (platform admin creates Organizations and
+/// invites their admins; each admin invites a member) now runs entirely
+/// through the same HTTP endpoints the API exposes (no CLI seed-dev, no
+/// direct writes). Re-attempting a step against already-created state
+/// must be rejected cleanly — not silently skipped, not duplicated
+/// (docs/specs/SLICE_004.md §4, §11).
 #[sqlx::test]
 #[ignore]
-async fn crm_admin_seed_dev_is_idempotent(migrator_pool: PgPool) {
-    let migration_url = migrator_url_for(&migrator_pool);
-    let app_url = common::app_url_for(&migrator_pool);
-    let crm_admin_bin = env!("CARGO_BIN_EXE_crm-admin");
+async fn platform_bootstrap_flow_rejects_repeat_creation(migrator_pool: PgPool) {
+    const PW: &str = "test-seed-password-123456";
 
-    let bootstrap = || {
-        let output = std::process::Command::new(crm_admin_bin)
-            .arg("bootstrap-platform-admin")
-            .arg("--email")
-            .arg("owner@platform.test")
-            .arg("--display-name")
-            .arg("Platform Owner")
-            .env("MIGRATION_DATABASE_URL", &migration_url)
-            .env("CRM_DEV_SEED_PASSWORD", "test-seed-password-123456")
-            .env_remove("DATABASE_URL")
-            .output()
-            .expect("bootstrap-platform-admin failed to start");
-        assert!(
-            output.status.success(),
-            "bootstrap-platform-admin failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    };
+    create_platform_admin(&migrator_pool, "owner@platform.test", "Platform Owner", PW).await;
 
-    let seed_dev = |n: u32| {
-        let output = std::process::Command::new(crm_admin_bin)
-            .arg("seed-dev")
-            .env("MIGRATION_DATABASE_URL", &migration_url)
-            .env("DATABASE_URL", &app_url)
-            .env("CRM_DEV_SEED_PASSWORD", "test-seed-password-123456")
-            .output()
-            .unwrap_or_else(|e| panic!("seed-dev run {n} failed to start: {e}"));
-        assert!(
-            output.status.success(),
-            "seed-dev run {n} failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    };
+    let router = build_router(&migrator_pool).await;
+    let platform_cookie = login_cookie(&router, "owner@platform.test", PW).await;
 
-    bootstrap();
-    seed_dev(1);
+    let acme_id = common::create_org_with_admin_and_member_via_api(
+        &router,
+        &platform_cookie,
+        PW,
+        "Acme Realty",
+        common::SeedPerson {
+            email: "alice@acme.test",
+            display_name: "Alice Anderson",
+        },
+        common::SeedPerson {
+            email: "carol@acme.test",
+            display_name: "Carol Chen",
+        },
+    )
+    .await;
+    common::create_org_with_admin_and_member_via_api(
+        &router,
+        &platform_cookie,
+        PW,
+        "Best Realty",
+        common::SeedPerson {
+            email: "bob@best.test",
+            display_name: "Bob Baker",
+        },
+        common::SeedPerson {
+            email: "dave@best.test",
+            display_name: "Dave Diaz",
+        },
+    )
+    .await;
+
     let (orgs_1, users_1): (i64, i64) = sqlx::query_as(
         "SELECT (SELECT count(*) FROM organization), (SELECT count(*) FROM app_user)",
     )
     .fetch_one(&migrator_pool)
     .await
     .unwrap();
+    // Two Organizations, five users (the platform admin + four members).
+    assert_eq!(orgs_1, 2);
+    assert_eq!(users_1, 5);
 
-    seed_dev(2);
+    // Re-attempting either step against already-created state is a clean
+    // rejection, never a duplicate row.
+    let dup_org = post_json_with_cookie(
+        &router,
+        "/api/platform/organizations",
+        &platform_cookie,
+        serde_json::json!({ "name": "Acme Realty" }),
+    )
+    .await;
+    assert_eq!(dup_org.status(), StatusCode::CONFLICT);
+    assert_eq!(body_json(dup_org).await["error"], "organization_name_taken");
+
+    let dup_invite = post_json_with_cookie(
+        &router,
+        &format!("/api/platform/organizations/{acme_id}/invitations"),
+        &platform_cookie,
+        serde_json::json!({ "email": "alice@acme.test", "role": "admin" }),
+    )
+    .await;
+    assert_eq!(dup_invite.status(), StatusCode::CONFLICT);
+    assert_eq!(body_json(dup_invite).await["error"], "already_member");
+
     let (orgs_2, users_2): (i64, i64) = sqlx::query_as(
         "SELECT (SELECT count(*) FROM organization), (SELECT count(*) FROM app_user)",
     )
     .fetch_one(&migrator_pool)
     .await
     .unwrap();
-
-    seed_dev(3);
-    let (orgs_3, users_3): (i64, i64) = sqlx::query_as(
-        "SELECT (SELECT count(*) FROM organization), (SELECT count(*) FROM app_user)",
-    )
-    .fetch_one(&migrator_pool)
-    .await
-    .unwrap();
-
     assert_eq!(
         (orgs_1, users_1),
         (orgs_2, users_2),
-        "re-running seed-dev must not create duplicate rows"
+        "rejected repeat-creation attempts must not create duplicate rows"
     );
-    assert_eq!(
-        (orgs_2, users_2),
-        (orgs_3, users_3),
-        "re-running seed-dev a third time must still be idempotent"
-    );
-    // Two Organizations, five users (the platform admin + four members).
-    assert_eq!(orgs_1, 2);
-    assert_eq!(users_1, 5);
 }

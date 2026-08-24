@@ -12,62 +12,14 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crm_api::domain::admin::commands::{
-    accept_invitation, change_member_role, create_organization, grant_platform_admin,
-    issue_invitation, set_local_password, AcceptInvitation, ChangeMemberRole, CreateOrganization,
-    GrantPlatformAdmin, IssueInvitation, SetLocalPassword,
+    create_organization, grant_platform_admin, issue_invitation, set_local_password,
+    CreateOrganization, GrantPlatformAdmin, IssueInvitation, SetLocalPassword,
 };
 use crm_api::domain::admin::queries as admin_queries;
 use crm_api::domain::admin::{AdminActor, Role};
 use crm_api::domain::envelope::Origin;
 
 const DEFAULT_INVITATION_TTL: Duration = Duration::from_secs(168 * 3600);
-
-struct SeedUser {
-    email: &'static str,
-    display_name: &'static str,
-    role: Role,
-}
-
-struct SeedOrg {
-    name: &'static str,
-    members: &'static [SeedUser],
-}
-
-const SEED_ORGS: &[SeedOrg] = &[
-    SeedOrg {
-        name: "Acme Realty",
-        members: &[
-            SeedUser {
-                email: "alice@acme.test",
-                display_name: "Alice Anderson",
-                role: Role::Admin,
-            },
-            SeedUser {
-                email: "carol@acme.test",
-                display_name: "Carol Chen",
-                role: Role::Member,
-            },
-        ],
-    },
-    SeedOrg {
-        name: "Best Realty",
-        members: &[
-            SeedUser {
-                email: "bob@best.test",
-                display_name: "Bob Baker",
-                role: Role::Admin,
-            },
-            SeedUser {
-                email: "dave@best.test",
-                display_name: "Dave Diaz",
-                role: Role::Member,
-            },
-        ],
-    },
-];
-
-const SEED_PLATFORM_ADMIN_EMAIL: &str = "owner@platform.test";
-const SEED_PLATFORM_ADMIN_DISPLAY_NAME: &str = "Platform Owner";
 
 #[tokio::main]
 async fn main() {
@@ -82,7 +34,6 @@ async fn main() {
 
     let result = match subcommand.as_str() {
         "bootstrap-platform-admin" => run_bootstrap_platform_admin(args).await,
-        "seed-dev" => run_seed_dev(args).await,
         "create-organization" => run_create_organization(args).await,
         "invite" => run_invite(args).await,
         "set-password" => run_set_password(args).await,
@@ -104,7 +55,6 @@ fn print_usage() {
         "usage: crm-admin <subcommand> [flags]\n\n\
          subcommands:\n\
          \x20 bootstrap-platform-admin --email <email> --display-name <name>\n\
-         \x20 seed-dev\n\
          \x20 create-organization --name <name> [--as <email>]\n\
          \x20 invite --organization <id> --email <email> --role <admin|member> [--print-link] [--as <email>]\n\
          \x20 set-password --email <email> [--as <email>]"
@@ -329,119 +279,5 @@ async fn run_set_password(mut args: Vec<String>) -> Result<(), Box<dyn std::erro
         .map_err(|err| format!("{err}"))?;
 
     println!("password set for {email}");
-    Ok(())
-}
-
-async fn run_seed_dev(_args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
-    let seed_password = require_env("CRM_DEV_SEED_PASSWORD")?;
-    let migrator = migrator_pool().await?;
-    let app = app_pool().await?;
-    let ttl = invitation_ttl();
-
-    let platform_admin_id = grant_platform_admin(
-        &migrator,
-        GrantPlatformAdmin {
-            email: SEED_PLATFORM_ADMIN_EMAIL.to_string(),
-            display_name: SEED_PLATFORM_ADMIN_DISPLAY_NAME.to_string(),
-            password: seed_password.clone(),
-        },
-    )
-    .await
-    .map_err(|err| format!("{err}"))?;
-    println!("platform admin ready: {SEED_PLATFORM_ADMIN_EMAIL}");
-
-    let owner_actor = AdminActor {
-        actor_user_id: platform_admin_id,
-        origin: Origin::Cli,
-    };
-
-    for org in SEED_ORGS {
-        let organization_id = match admin_queries::organization_id_by_name(&app, org.name).await? {
-            Some(id) => id,
-            None => {
-                let organization = create_organization(
-                    &app,
-                    owner_actor,
-                    CreateOrganization {
-                        name: org.name.to_string(),
-                    },
-                )
-                .await
-                .map_err(|err| format!("{err}"))?;
-                organization.id
-            }
-        };
-        println!("organization ready: {}", org.name);
-
-        for member in org.members {
-            let normalized_email = member.email.to_lowercase();
-            let existing_user_id =
-                admin_queries::app_user_id_by_email(&mut *app.acquire().await?, &normalized_email)
-                    .await?;
-
-            let user_id = match existing_user_id {
-                Some(id) => id,
-                None => {
-                    let outcome = issue_invitation(
-                        &app,
-                        owner_actor,
-                        SEED_PLATFORM_ADMIN_DISPLAY_NAME,
-                        ttl,
-                        IssueInvitation {
-                            organization_id,
-                            email: member.email.to_string(),
-                            role: Role::Member,
-                        },
-                    )
-                    .await
-                    .map_err(|err| format!("{err}"))?;
-
-                    let accepted = accept_invitation(
-                        &app,
-                        AcceptInvitation {
-                            token: outcome.token,
-                            display_name: member.display_name.to_string(),
-                            password: seed_password.clone(),
-                            origin: Origin::Cli,
-                        },
-                    )
-                    .await
-                    .map_err(|err| format!("{err}"))?;
-
-                    if member.role == Role::Admin {
-                        change_member_role(
-                            &app,
-                            owner_actor,
-                            ChangeMemberRole {
-                                organization_id,
-                                user_id: accepted.user_id,
-                                role: Role::Admin,
-                            },
-                        )
-                        .await
-                        .map_err(|err| format!("{err}"))?;
-                    }
-
-                    accepted.user_id
-                }
-            };
-
-            // Idempotent rotation: existing users are left alone except
-            // that the password is re-applied from CRM_DEV_SEED_PASSWORD
-            // every run (docs/specs/SLICE_004.md §11).
-            set_local_password(
-                &app,
-                SetLocalPassword {
-                    user_id,
-                    password: seed_password.clone(),
-                },
-            )
-            .await
-            .map_err(|err| format!("{err}"))?;
-
-            println!("seeded {} / {}", org.name, member.email);
-        }
-    }
-
     Ok(())
 }

@@ -7,6 +7,8 @@
 target/
 node_modules/
 web/dist/
+.venv/
+__pycache__/
 
 # OS noise
 .DS_Store

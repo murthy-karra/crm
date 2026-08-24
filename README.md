@@ -92,7 +92,7 @@ Notable defaults and constraints, applied in code:
 | `CRM_SESSION_SECRET` | Required, no default | HMAC pepper for session tokens; must be at least 32 bytes; rotating it invalidates every session |
 | `CRM_SESSION_TTL_HOURS` | `168`, bounded 1–720 | Absolute session expiry |
 | `CRM_SESSION_COOKIE_SECURE` | `false` | Set `true` when using the tunnel; Safari rejects `Secure` cookies over plain `http://127.0.0.1`, so keep it `false` for loopback work in Safari |
-| `CRM_DEV_SEED_PASSWORD` | Required for `dev-bootstrap` | One password for every seeded user, including the platform admin (`owner@platform.test`); re-applied on every `seed-dev` run, so changing it rotates seeded credentials |
+| `CRM_DEV_SEED_PASSWORD` | Required for `dev-bootstrap` | One password for every seeded user, including the platform admin (`owner@platform.test`) |
 | `CRM_INVITATION_TTL_HOURS` | `168`, bounded 1–720 | Invitation expiry (docs/specs/SLICE_004.md §11); the API refuses to start if out of bounds |
 | `CRM_RAW_PAYLOAD_KEY` | Required, no default | Raw lead-payload encryption key (docs/specs/SLICE_002.md §7); exactly 64 hex characters (32 bytes), e.g. `openssl rand -hex 32`; the API refuses to start if missing, the wrong length, or not hex |
 | `CRM_CORS_ALLOWED_ORIGIN` | Unset (no CORS layer) | Set only for the two-hostname tunnel setup (e.g. `https://app.tarams.org`); the API and browser app are on different hostnames, so the browser's cross-origin fetch needs an explicit allow-list entry |
@@ -107,7 +107,7 @@ Notable defaults and constraints, applied in code:
 | `CRM_CENTRIFUGO_API_URL` | `http://127.0.0.1:8000/api` | Centrifugo's HTTP API base URL; `http://` only, no trailing slash |
 | `CRM_REALTIME_TOKEN_TTL_SECONDS` | `600`, bounded 60–3600 | Connection-token lifetime |
 | `CRM_WEB_REALTIME_PROXY_TARGET` | `http://127.0.0.1:8000` | Vite's WebSocket proxy target for `/connection` |
-| `CRM_DEMO_API_URL` | `http://127.0.0.1:3000` | `scripts/demo-leads`' target |
+| `CRM_DEMO_API_URL` | `http://127.0.0.1:3000` | Target for `scripts/demo-leads` and `scripts/seed_dev.py` |
 | `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | Unset (calling disabled) | The LiveKit key pair; empty key = calling disabled (503 `telephony_disabled`), not a startup error. With a key, every other `LIVEKIT_*` value is required. Must equal the telephony host's `livekit.yaml` pair — see "Telephony host" |
 | `LIVEKIT_URL` | Required with a key | Browser signaling URL (`ws://`/`wss://`), no trailing slash |
 | `LIVEKIT_API_URL` | Required with a key | The API's Twirp base URL (`https://`; `http://` only for loopback), no trailing slash; the host directly, never a Cloudflare-proxied hostname |
@@ -130,7 +130,7 @@ PostgreSQL and Centrifugo run as loopback-only Docker containers:
 ./scripts/dev-services down -v       # stop and remove containers AND data (true clean slate)
 ```
 
-Plain `down` keeps the PostgreSQL data volume — use it to restart the containers (e.g. to pick up a changed `.env` value like `CENTRIFUGO_TOKEN_HMAC_SECRET`, or to resync Docker Desktop's VM clock) without losing local data. Use `down -v` when you actually want a fresh database (e.g. before `dev-bootstrap` if a prior session left conflicting data, such as a duplicate Organization name).
+Plain `down` keeps the PostgreSQL data volume — use it to restart the containers (e.g. to pick up a changed `.env` value like `CENTRIFUGO_TOKEN_HMAC_SECRET`, or to resync Docker Desktop's VM clock) without losing local data. Use `down -v` when you actually want a fresh database; `./scripts/dev-bootstrap` (below) already does this as its first step, so there's no need to run it separately before that.
 
 Verify both are healthy (outside the main repository gate, since it must stay service-free):
 
@@ -142,19 +142,21 @@ Verify both are healthy (outside the main repository gate, since it must stay se
 
 ### Database schema
 
-Apply pending migrations (idempotent — safe to run repeatedly):
+Apply pending migrations (idempotent — safe to run repeatedly; use this on its own after pulling a branch with a new migration, when you want to keep existing dev data rather than wipe it):
 
 ```sh
 ./scripts/db-migrate
 ```
 
-Bootstrap the platform admin and seed two Organizations, each with the nine D-019 default stages and two local-auth Users — one admin, one member (D-021, D-026; idempotent; re-running rotates every seeded password, including the platform admin's, to match `CRM_DEV_SEED_PASSWORD`, and creates no duplicate Organizations, users, or memberships):
+Rebuild the local environment from a blank database and seed it — the platform admin, two Organizations, each with the nine D-019 default stages and two local-auth Users (one admin, one member):
 
 ```sh
 ./scripts/dev-bootstrap
 ```
 
-This runs `crm-admin bootstrap-platform-admin` (creates `owner@platform.test` via the migrator connection — the only step that uses it) followed by `crm-admin seed-dev` (everything else, as `crm_app`, through the same domain functions the API uses): "Acme Realty" (Alice admin, Carol member) and "Best Realty" (Bob admin, Dave member). `./scripts/demo-leads` (below) is unaffected.
+This is destructive by design (D-021, D-026): it runs `./scripts/dev-services down -v` and `up`, `./scripts/db-migrate`, then `crm-admin bootstrap-platform-admin` (creates `owner@platform.test` via the migrator connection — the only step that uses it, alongside migrations the other sanctioned exception to "no direct database writes"). Everything else — "Acme Realty" (Alice admin, Carol member) and "Best Realty" (Bob admin, Dave member) — is created by `scripts/seed_dev.py` entirely through the live HTTP API (create Organization, invite admin, accept, invite member, accept), the same sequence a real platform admin and org admin would drive by hand. `dev-bootstrap` starts a temporary API instance to seed through and stops it when done; it refuses to run if an API is already answering at `CRM_DEMO_API_URL` (default `http://127.0.0.1:3000`), since it's about to drop the database that instance is using — stop `./scripts/dev-api` first. `scripts/seed_dev.py` needs the `requests` package: `pip install -r scripts/requirements.txt`. `./scripts/demo-leads` (below) is unaffected.
+
+Because `dev-bootstrap` now wipes the database, run it before `./scripts/dev-api`, not after.
 
 The `crm-admin` binary also has standalone subcommands for ad hoc administration, all but `bootstrap-platform-admin` resolving an actor via `--as <email>` (defaulting to the sole platform admin when there is exactly one):
 

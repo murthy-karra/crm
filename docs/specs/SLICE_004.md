@@ -266,7 +266,7 @@ one transaction, writes its fact(s), and publishes nothing (§6).
 | `CreateOrganization { name }` | platform, CLI | Trim; 1–120 chars; insert `organization` (`status = 'active'`); `stage::seed_defaults`; fact `organization_created`. Name collision → `OrganizationNameTaken`. |
 | `IssueInvitation { organization_id, email, role }` | org-admin, platform, CLI | Normalize email (trim + lowercase; syntactic check: one `@`, non-empty local and domain parts, ≤254 chars). In one transaction: if an open invitation exists for `(org, email)`, mark it `revoked / superseded` and write `invitation_resolved {superseded}`; insert the new row with `expires_at = now() + CRM_INVITATION_TTL_HOURS`; write `invitation_issued`. Returns the raw token **once**. If the email belongs to a current member (any status) of the **target** Organization → `AlreadyMember` (membership in the admin's own Organization is already visible on the members list, so this leaks nothing and avoids a pending-forever row). Existence anywhere else is never disclosed (201 as for any other email; O-007 §3). |
 | `RevokeInvitation { organization_id, invitation_id }` | org-admin, platform | `SELECT … FOR UPDATE` the invitation; if pending or expired → set `revoked / revoked`, fact `invitation_resolved {revoked}`; if already accepted → `InvitationUsed`; if already revoked → idempotent 204; unknown or other-Organization id → `NotFound`. |
-| `AcceptInvitation { token, display_name, password }` | public, CLI (`seed-dev`) | Hash token; read the invitation without a lock and validate state first (`NotFound` if absent or revoked, `InvitationExpired` if expired, `InvitationUsed` if accepted; `InvitationNotAcceptable` if an `app_user` with that email exists — generic) and validate display name (trim, 1–120) and password (12–256); only then Argon2id under `spawn_blocking` (so a dead token never costs a hash); then open the transaction, `SELECT … FOR UPDATE` the invitation and re-check every condition. Insert `app_user`, `local_credential`, `organization_membership {role, status: active}`; set `accepted_at/accepted_user_id`; facts `invitation_resolved {accepted}` and `membership_changed {to_role, to_status: active, reason: invitation}` with `actor_user_id` = the newly created user. `origin` comes from the caller (route: `WebSession`; CLI: `Cli`); `CommandContext::from_auth` does not apply — the command builds its context after the `app_user` insert inside the transaction. Returns `(user_id, organization_id)`; the route mints the session. |
+| `AcceptInvitation { token, display_name, password }` | public (superseded 2026-08-24, §11: the `CLI (seed-dev)` path no longer exists) | Hash token; read the invitation without a lock and validate state first (`NotFound` if absent or revoked, `InvitationExpired` if expired, `InvitationUsed` if accepted; `InvitationNotAcceptable` if an `app_user` with that email exists — generic) and validate display name (trim, 1–120) and password (12–256); only then Argon2id under `spawn_blocking` (so a dead token never costs a hash); then open the transaction, `SELECT … FOR UPDATE` the invitation and re-check every condition. Insert `app_user`, `local_credential`, `organization_membership {role, status: active}`; set `accepted_at/accepted_user_id`; facts `invitation_resolved {accepted}` and `membership_changed {to_role, to_status: active, reason: invitation}` with `actor_user_id` = the newly created user. `origin` comes from the caller (`WebSession`); `CommandContext::from_auth` does not apply — the command builds its context after the `app_user` insert inside the transaction. Returns `(user_id, organization_id)`; the route mints the session. |
 | `ChangeMemberRole { organization_id, user_id, role }` | org-admin (any direction), platform (**promote only**), CLI | Take `SELECT pg_advisory_xact_lock(hashtextextended('admin:' \|\| $1::text, 0))` — the keyed transaction-scoped advisory lock pattern `receive_inquiry` uses, under a distinct `admin:` namespace so membership changes never contend with intake — to serialize all role/status changes per Organization (a row lock is not used: `FOR UPDATE` needs an UPDATE grant on `organization`, which `crm_app` deliberately lacks). `NotFound` if the target is not a member of this Organization; no-op 200 if already that role. Role and status are independent: promoting an inactive member is allowed and does not count toward the invariant (only active admins count); the UI disables Promote for inactive rows (§10), a UX choice, not a domain rule. If the change would leave zero active admins → `LastAdmin` (both self and other; D-026 §2 applies to the whole self-service path). Platform path with `role = member` → `MalformedRequest` (never reaches the domain; the route rejects it). Fact `membership_changed {from_role, to_role, reason: promote\|demote\|bootstrap}`. |
 | `SetMemberStatus { organization_id, user_id, status }` | org-admin | Same advisory lock; `NotFound` as above; no-op if unchanged. Deactivating the last active admin → `LastAdmin`. On `inactive`: `UPDATE user_session SET revoked_at = now() WHERE user_id = $1 AND active_organization_id = $2 AND revoked_at IS NULL`, then after commit call `realtime::disconnect_user(user_id)` (best-effort, `warn` on failure — same policy as publish in SLICE_003 §6). Fact `membership_changed {from_status, to_status, reason: deactivate\|reactivate}`. Reactivation requires nothing beyond the status flip. |
 | `SetLocalPassword { user_id, password }` | CLI only | Argon2id re-hash; `UPDATE local_credential`. No fact (credential material is not a business fact; D-015). No route. |
@@ -526,6 +526,15 @@ only with `--print-link`, the accept path; never passwords.
 
 ## 11. Development environment, transport, and configuration
 
+> **Superseded (2026-08-24):** `crm-admin seed-dev`, described below, was
+> removed. `scripts/dev-bootstrap` now wipes and recreates the local
+> database on every run and seeds Organizations/admins/members via
+> `scripts/seed_dev.py`, which drives the same create/invite/accept
+> sequence entirely over the live HTTP API rather than in-process domain
+> calls. `crm-admin bootstrap-platform-admin` is unchanged — it remains
+> the one step with no HTTP route. The rest of this section is kept for
+> historical context.
+
 - New config: `CRM_INVITATION_TTL_HOURS` (default 168, bounds 1–720).
   `CRM_DEV_SEED_PASSWORD` is kept as the password for every bootstrapped
   dev user including the platform admin.
@@ -601,8 +610,13 @@ DB-backed (as `crm_app`, over HTTP where a route exists):
    proves `crm_app` cannot INSERT into `platform_admin` and cannot UPDATE
    `invitation.token_hash`); the four fact tables reject UPDATE/DELETE/
    TRUNCATE for both roles.
-2. `crm-admin seed-dev` three times yields identical row counts and the
-   same ids; `demo-leads` passes unchanged.
+2. Superseded (2026-08-24, §11): the platform-admin-driven create/invite/
+   accept flow, run over HTTP, seeds nine ordered D-019 stages and two
+   members per Organization; repeating a creation step is rejected
+   (`organization_name_taken` / `already_member`), never duplicated —
+   see `tests/db_identity.rs::platform_bootstrap_flow_rejects_repeat_creation`
+   and `tests/db_people.rs::organization_creation_seeds_nine_ordered_stages_and_two_members`.
+   `demo-leads` passes unchanged.
 3. Platform admin with zero memberships logs in; `me` has `organization:
    null, platform_admin: true`; 401 on `/api/people`, `/api/today`,
    `/api/inquiries`, `/api/stages`, `/api/realtime/token`; lists and

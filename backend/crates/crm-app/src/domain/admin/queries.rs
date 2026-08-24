@@ -958,19 +958,3 @@ pub async fn app_user_basic(
     .await?;
     Ok(row.map(|r| (r.email, r.display_name)))
 }
-
-/// Case-insensitive Organization id lookup by name — a CLI idempotency
-/// helper (`seed-dev`, docs/specs/SLICE_004.md §11), read-only so it does
-/// not fall under the "no direct database writes" rule.
-pub async fn organization_id_by_name(
-    pool: &PgPool,
-    name: &str,
-) -> Result<Option<Uuid>, sqlx::Error> {
-    let row = sqlx::query!(
-        r#"SELECT id FROM organization WHERE lower(name) = lower($1)"#,
-        name,
-    )
-    .fetch_optional(pool)
-    .await?;
-    Ok(row.map(|r| r.id))
-}

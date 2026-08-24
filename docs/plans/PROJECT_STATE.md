@@ -1,6 +1,6 @@
 # Project State
 
-Last updated: 2026-08-24 (007a MERGED to main `81af77f`; dev-seed-via-api reviewed, fixed per findings + user direction, MERGED to main `HEAD`. Neither pushed. Next: plan 007b per the ladder rule.)
+Last updated: 2026-08-24 (main pushed through `24377c4`; SLICE_007b spec APPROVED — planned, independently reviewed, amendments applied. Next: 007b implementation gate.)
 
 ## Current phase
 
@@ -819,10 +819,24 @@ slice:
 
 ## Approval currently required
 
-None. Both 007a and dev-seed-via-api are merged to local `main`
-(user-approved 2026-08-24). Not yet pushed to origin; merged branches
-not yet deleted — both awaiting a user call. Next planning step per
-the ladder rule: SLICE_007b spec (inbound email endpoint).
+Implementation-gate approval for Slice 007b. The spec
+(`docs/specs/SLICE_007b.md`) is APPROVED (user, 2026-08-24; planned by
+crm-planner, independently reviewed by crm-reviewer the same day — no
+blocking findings, all amendments applied: 500/crypto row in the
+frozen §5 table, extended tracing-capture test to 400/401 paths,
+concurrency-race and legacy-hex-token criteria 19–20, dummy-compare
+length note, disabled-endpoint 413 caveat). Key shape: no migration,
+no new dependencies, single backend lane on `slice-007b-inbound-email`;
+`POST /inbound/email` outside CORS, bearer `CRM_INBOUND_EMAIL_SECRET`,
+tenant from recipient slug+token only, Phase-A-only
+`receive_inbound_email` in `domain/intake/`, Unresolved reason
+`email_unparsed`, two-line web label touch, `scripts/inbound-email` +
+`.eml` fixtures. LATER noted by review: SLICE_007a.md §2/§3 still say
+rotation is "007f" (ladder says 007g) — fix when next touched.
+
+Also merged and pushed earlier the same day: 007a (`81af77f`) and
+dev-seed-via-api (`b91dcb9`); origin/main at `24377c4`. Merged branches
+`slice-007a-intake-address` / `dev-seed-via-api` not yet deleted.
 
 dev-seed-via-api review outcome (crm-reviewer, 2026-08-24): the two
 blocking findings (refusal guard failed open against a stale

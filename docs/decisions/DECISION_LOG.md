@@ -1032,14 +1032,17 @@ stack call; visibility of captured mail (assigned agent vs broker
 continuity) is a BLOCKING product decision for #2, as is capture scope
 (matched-People threads only — never whole-mailbox — proposed).
 
-Test infrastructure (2026-08-23): the user holds test domains —
-**eospia.com**, **choravia.com**, **cypressbayrealty.com** (more
-available). Suggested roles: eospia.com or choravia.com as the
-platform's inbound-intake domain (MX + a receiving path);
+Test infrastructure (2026-08-23): **elysianfeld.com is the CRM's own
+domain** — the per-Organization inbound-intake addresses live there, on
+a dedicated subdomain (e.g. `acme@leads.elysianfeld.com`) so intake MX
+stays isolated from any root-domain mail. The user also holds test
+domains — **eospia.com**, **choravia.com**, **cypressbayrealty.com**
+(more available) — for the *other* side of the flow:
 cypressbayrealty.com as the fictional brokerage brand (its "agents" and
-forwarded lead mail) — it matches the existing Cypress Bay Entra tenant
-(parked federation work), which may already serve as the M365 test
-tenant for capture later.
+forwarding rules; matches the existing Cypress Bay Entra tenant from
+the parked federation work, a candidate M365 test tenant for capture
+later); eospia.com/choravia.com as fake lead-source senders (a pretend
+portal) or additional test brokerages for multi-org isolation tests.
 
 Accounts needed, by slice: **#1 intake needs no Google or 365 accounts**
 — only DNS/MX control on one test domain plus an inbound receiving path

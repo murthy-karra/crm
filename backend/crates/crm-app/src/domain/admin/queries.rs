@@ -773,14 +773,51 @@ pub async fn mark_invitation_accepted(
 
 // --- app_user / local_credential / organization (write helpers) ---------
 
-pub async fn insert_organization(conn: &mut PgConnection, name: &str) -> Result<Uuid, sqlx::Error> {
+pub async fn insert_organization(
+    conn: &mut PgConnection,
+    name: &str,
+    intake_slug: &str,
+    intake_token: &str,
+) -> Result<Uuid, sqlx::Error> {
     let row = sqlx::query!(
-        r#"INSERT INTO organization (name) VALUES ($1) RETURNING id"#,
+        r#"INSERT INTO organization (name, intake_slug, intake_token)
+           VALUES ($1, $2, $3) RETURNING id"#,
         name,
+        intake_slug,
+        intake_token,
     )
     .fetch_one(conn)
     .await?;
     Ok(row.id)
+}
+
+/// Which of `candidates` are already taken (docs/specs/SLICE_007a.md §4:
+/// pre-select rather than retry-after-violation, which would abort the
+/// transaction).
+pub async fn taken_intake_slugs(
+    conn: &mut PgConnection,
+    candidates: &[String],
+) -> Result<Vec<String>, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"SELECT intake_slug FROM organization WHERE intake_slug = ANY($1)"#,
+        candidates,
+    )
+    .fetch_all(conn)
+    .await
+}
+
+/// `(intake_slug, intake_token)` for one Organization.
+pub async fn organization_intake_address(
+    conn: &mut PgConnection,
+    organization_id: Uuid,
+) -> Result<Option<(String, String)>, sqlx::Error> {
+    let row = sqlx::query!(
+        r#"SELECT intake_slug, intake_token FROM organization WHERE id = $1"#,
+        organization_id,
+    )
+    .fetch_optional(conn)
+    .await?;
+    Ok(row.map(|r| (r.intake_slug, r.intake_token)))
 }
 
 pub async fn insert_app_user(

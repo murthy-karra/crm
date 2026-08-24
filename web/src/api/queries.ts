@@ -43,6 +43,7 @@ import type {
   StageRequest,
   StagesResponse,
   StartCallRequest,
+  IntakeAddressResponse,
   StartCallResponse,
   TodayResponse,
   UnresolvedResponse,
@@ -61,6 +62,7 @@ export const queryKeys = {
   stages: (orgId: string) => ['org', orgId, 'stages'] as const,
   unresolved: (orgId: string) => ['org', orgId, 'unresolved'] as const,
   members: (orgId: string) => ['org', orgId, 'members'] as const,
+  intakeAddress: (orgId: string) => ['org', orgId, 'intake-address'] as const,
   // Added ahead of the Today view (SLICE_003 §10 lists it alongside useToday)
   // because realtime/events.ts's invalidationsFor (Lane B step 1) already
   // needs to name this key — every key an invalidation path touches goes
@@ -123,6 +125,15 @@ export function useUnresolved(orgId: MaybeRefOrGetter<string>) {
   return useQuery({
     queryKey: computed(() => queryKeys.unresolved(toValue(orgId))),
     queryFn: () => apiFetch<UnresolvedResponse>('/intake/unresolved'),
+    enabled: computed(() => toValue(orgId) !== ''),
+  })
+}
+
+/** `GET /api/organization/intake-address` (SLICE_007a §5) — org admins only. */
+export function useIntakeAddress(orgId: MaybeRefOrGetter<string>) {
+  return useQuery({
+    queryKey: computed(() => queryKeys.intakeAddress(toValue(orgId))),
+    queryFn: () => apiFetch<IntakeAddressResponse>('/organization/intake-address'),
     enabled: computed(() => toValue(orgId) !== ''),
   })
 }

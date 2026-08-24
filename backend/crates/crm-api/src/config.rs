@@ -11,8 +11,8 @@ const MAX_CONNECT_TIMEOUT_MS: u64 = 30_000;
 
 use crm_app::config::MIN_REALTIME_TOKEN_SECRET_BYTES;
 pub use crm_app::config::{
-    CentrifugoApiKey, LiveKitApiSecret, LiveKitConfig, RawPayloadKey, RealtimeTokenSecret,
-    SecretError, TelephonyConfig,
+    CentrifugoApiKey, IntakeAddressScheme, IntakeMailConfig, LiveKitApiSecret, LiveKitConfig,
+    RawPayloadKey, RealtimeTokenSecret, SecretError, TelephonyConfig,
 };
 
 const MIN_SESSION_SECRET_BYTES: usize = 32;
@@ -157,6 +157,8 @@ pub struct Config {
     /// Telephony settings (docs/specs/SLICE_006.md §11); limits always
     /// validated, LiveKit present only with `LIVEKIT_API_KEY`.
     pub telephony: TelephonyConfig,
+    /// Slice 007a: how Organization intake addresses are rendered.
+    pub intake_mail: IntakeMailConfig,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -206,6 +208,9 @@ pub enum ConfigError {
     TelephonyMaxCallOutOfBounds(u64),
     InvalidTelephonyJoinTtl(String),
     TelephonyJoinTtlOutOfBounds(u64),
+    // --- Slice 007a (docs/specs/SLICE_007a.md §4) ----------------------
+    InvalidIntakeMailDomain(String),
+    InvalidIntakeAddressScheme(String),
 }
 
 impl fmt::Display for ConfigError {
@@ -372,6 +377,14 @@ impl fmt::Display for ConfigError {
                 f,
                 "CRM_TELEPHONY_JOIN_TTL_SECONDS must be between {MIN_TELEPHONY_JOIN_TTL_SECONDS} and {MAX_TELEPHONY_JOIN_TTL_SECONDS}, got {value}"
             ),
+            ConfigError::InvalidIntakeMailDomain(value) => write!(
+                f,
+                "CRM_INTAKE_MAIL_DOMAIN must be a bare hostname (no scheme, port, path, or trailing dot), got {value}"
+            ),
+            ConfigError::InvalidIntakeAddressScheme(value) => write!(
+                f,
+                "CRM_INTAKE_ADDRESS_SCHEME must be \"subdomain\" or \"local_part\", got {value}"
+            ),
         }
     }
 }
@@ -513,6 +526,7 @@ impl Config {
             .map(GroqApiKey::new);
 
         let telephony = telephony_config(&get)?;
+        let intake_mail = intake_mail_config(&get)?;
 
         Ok(Config {
             bind_addr,
@@ -532,6 +546,7 @@ impl Config {
             operator,
             groq_api_key,
             telephony,
+            intake_mail,
         })
     }
 }
@@ -540,6 +555,44 @@ impl Config {
 /// bounds and URL rules are validated regardless of whether a key is
 /// present; an empty/unset `LIVEKIT_API_KEY` disables calling without
 /// failing startup.
+const DEFAULT_INTAKE_MAIL_DOMAIN: &str = "elysianfeld.com";
+
+/// `CRM_INTAKE_MAIL_DOMAIN` (bare hostname; default `elysianfeld.com`) and
+/// `CRM_INTAKE_ADDRESS_SCHEME` (`subdomain` default | `local_part`)
+/// (docs/specs/SLICE_007a.md §4). Public so `crm-admin` can render an
+/// address from the same two variables without a full `Config`.
+pub fn intake_mail_config(
+    get: &impl Fn(&str) -> Option<String>,
+) -> Result<IntakeMailConfig, ConfigError> {
+    let domain = match get("CRM_INTAKE_MAIL_DOMAIN").map(|v| v.trim().to_string()) {
+        Some(value) if !value.is_empty() => value,
+        _ => DEFAULT_INTAKE_MAIL_DOMAIN.to_string(),
+    };
+    if !is_bare_hostname(&domain) {
+        return Err(ConfigError::InvalidIntakeMailDomain(domain));
+    }
+    let scheme = match get("CRM_INTAKE_ADDRESS_SCHEME").map(|v| v.trim().to_string()) {
+        Some(value) if !value.is_empty() => IntakeAddressScheme::parse(&value)
+            .ok_or(ConfigError::InvalidIntakeAddressScheme(value))?,
+        _ => IntakeAddressScheme::Subdomain,
+    };
+    Ok(IntakeMailConfig { domain, scheme })
+}
+
+/// Labels of `[a-z0-9-]`, dot-separated, at least two, no leading/trailing
+/// dash or dot, no scheme/port/path.
+fn is_bare_hostname(value: &str) -> bool {
+    let labels: Vec<&str> = value.split('.').collect();
+    labels.len() >= 2
+        && labels.iter().all(|l| {
+            !l.is_empty()
+                && !l.starts_with('-')
+                && !l.ends_with('-')
+                && l.bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+        })
+}
+
 fn telephony_config(get: &impl Fn(&str) -> Option<String>) -> Result<TelephonyConfig, ConfigError> {
     let ring_secs = match get("CRM_TELEPHONY_RING_TIMEOUT_SECONDS") {
         Some(value) => value
@@ -1480,5 +1533,51 @@ mod tests {
         assert_eq!(config.telephony.ring_timeout, Duration::from_secs(30));
         assert_eq!(config.telephony.max_call, Duration::from_secs(600));
         assert_eq!(config.telephony.join_ttl, Duration::from_secs(120));
+    }
+
+    // --- Slice 007a ---------------------------------------------------
+
+    #[test]
+    fn intake_mail_defaults_to_elysianfeld_subdomain_scheme() {
+        let config = Config::from_source(source(&[])).unwrap();
+        assert_eq!(config.intake_mail.domain, "elysianfeld.com");
+        assert_eq!(config.intake_mail.scheme, IntakeAddressScheme::Subdomain);
+    }
+
+    #[test]
+    fn intake_mail_accepts_a_bare_hostname_and_the_local_part_scheme() {
+        let config = Config::from_source(source(&[
+            ("CRM_INTAKE_MAIL_DOMAIN", "leads.example.co.uk"),
+            ("CRM_INTAKE_ADDRESS_SCHEME", "local_part"),
+        ]))
+        .unwrap();
+        assert_eq!(config.intake_mail.domain, "leads.example.co.uk");
+        assert_eq!(config.intake_mail.scheme, IntakeAddressScheme::LocalPart);
+    }
+
+    #[test]
+    fn intake_mail_rejects_non_bare_hostnames_and_unknown_schemes() {
+        for bad in [
+            "https://elysianfeld.com",
+            "elysianfeld.com.",
+            "elysianfeld.com:25",
+            "elysianfeld",
+            "-bad.com",
+            "Elysianfeld.com",
+            "a b.com",
+        ] {
+            let err = Config::from_source(source(&[("CRM_INTAKE_MAIL_DOMAIN", bad)])).unwrap_err();
+            assert_eq!(
+                err,
+                ConfigError::InvalidIntakeMailDomain(bad.to_string()),
+                "{bad}"
+            );
+        }
+        let err =
+            Config::from_source(source(&[("CRM_INTAKE_ADDRESS_SCHEME", "wildcard")])).unwrap_err();
+        assert_eq!(
+            err,
+            ConfigError::InvalidIntakeAddressScheme("wildcard".to_string())
+        );
     }
 }

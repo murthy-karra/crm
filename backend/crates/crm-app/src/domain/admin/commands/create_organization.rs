@@ -25,6 +25,7 @@ pub struct CreateOrganization {
     skip_all,
     fields(
         actor_id = %actor.actor_user_id,
+        intake_slug = tracing::field::Empty,
         outcome = tracing::field::Empty,
     )
 )]
@@ -55,13 +56,37 @@ async fn create_organization_attempt(
 
     let mut tx = pool.begin().await?;
 
-    let organization_id = match queries::insert_organization(&mut tx, &name).await {
-        Ok(id) => id,
-        Err(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
-            return Err(AdminCommandError::OrganizationNameTaken);
-        }
-        Err(err) => return Err(err.into()),
-    };
+    // Intake address (docs/specs/SLICE_007a.md §4): first free slug among
+    // the candidates, chosen by a pre-select so a collision never aborts
+    // the transaction; the unique index remains the last-resort guard.
+    let candidates = validation::intake_slug_candidates(&name);
+    let taken = queries::taken_intake_slugs(&mut tx, &candidates).await?;
+    let intake_slug = candidates
+        .into_iter()
+        .find(|c| !taken.contains(c))
+        // Nine collisions on one lossy slug is not a request-shape error;
+        // surface it as the 503-class failure the route/CLI already map.
+        .ok_or_else(|| {
+            AdminCommandError::Database(sqlx::Error::Protocol(
+                "intake slug candidates exhausted".to_string(),
+            ))
+        })?;
+    let intake_token = validation::mint_intake_token();
+    tracing::Span::current().record("intake_slug", intake_slug.as_str());
+
+    let organization_id =
+        match queries::insert_organization(&mut tx, &name, &intake_slug, &intake_token).await {
+            Ok(id) => id,
+            Err(sqlx::Error::Database(db_err))
+                if db_err.is_unique_violation()
+                    && db_err.constraint() == Some("organization_name_lower_idx") =>
+            {
+                return Err(AdminCommandError::OrganizationNameTaken);
+            }
+            // A lost race on the slug index (or any other violation) is a
+            // plain database error, never misreported as a name clash.
+            Err(err) => return Err(err.into()),
+        };
 
     stage::seed_defaults(&mut tx, organization_id).await?;
 

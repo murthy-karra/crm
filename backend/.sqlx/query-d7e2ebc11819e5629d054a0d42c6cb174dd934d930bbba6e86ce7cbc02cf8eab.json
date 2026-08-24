@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO organization (name) VALUES ($1) RETURNING id",
+  "query": "INSERT INTO organization (name, intake_slug, intake_token)\n           VALUES ($1, $2, $3) RETURNING id",
   "describe": {
     "columns": [
       {
@@ -11,6 +11,8 @@
     ],
     "parameters": {
       "Left": [
+        "Text",
+        "Text",
         "Text"
       ]
     },
@@ -18,5 +20,5 @@
       false
     ]
   },
-  "hash": "48dd429de47f54dabb9525bc2ca32a0d2961b36963198ea1fbfd733edcd36026"
+  "hash": "d7e2ebc11819e5629d054a0d42c6cb174dd934d930bbba6e86ce7cbc02cf8eab"
 }

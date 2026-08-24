@@ -138,6 +138,17 @@ export interface PlatformOrganizationDetailResponse {
   organization: PlatformOrganizationSummary
   members: Member[]
   invitations: Invitation[]
+  /** SLICE_007a §5: the rendered intake address (top-level, additive). */
+  intake_address: string | null
+}
+
+// --- Slice 007a: Organization intake address (docs/specs/SLICE_007a.md §5) ---
+
+export type IntakeAddressScheme = 'subdomain' | 'local_part'
+
+export interface IntakeAddressResponse {
+  address: string
+  scheme: IntakeAddressScheme
 }
 
 // Platform's role/invitation routes only ever accept 'admin' (D-026 §4) —

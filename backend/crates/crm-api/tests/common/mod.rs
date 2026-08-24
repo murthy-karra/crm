@@ -147,7 +147,7 @@ pub async fn build_router_with_publisher(migrator_pool: &PgPool, publisher: Publ
 /// Never appears in any Organization's membership list (it is not added
 /// to any Organization it creates), so it cannot leak into an assertion
 /// about members/counts.
-async fn fixture_platform_admin(migrator_pool: &PgPool) -> Uuid {
+pub async fn fixture_platform_admin(migrator_pool: &PgPool) -> Uuid {
     grant_platform_admin(
         migrator_pool,
         GrantPlatformAdmin {

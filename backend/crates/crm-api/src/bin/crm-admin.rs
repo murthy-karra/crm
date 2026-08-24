@@ -258,6 +258,18 @@ async fn run_create_organization(mut args: Vec<String>) -> Result<(), Box<dyn st
         "organization created: {} ({})",
         organization.name, organization.id
     );
+    // Slice 007a: the intake address, rendered from the same two env vars
+    // the API uses. The token reaching a local terminal is accepted for
+    // the local CLI (docs/specs/SLICE_007a.md §5).
+    let intake_mail = crm_api::config::intake_mail_config(&|key| std::env::var(key).ok())?;
+    let mut conn = pool.acquire().await?;
+    if let Some((slug, token)) =
+        crm_api::domain::admin::queries::organization_intake_address(&mut conn, organization.id)
+            .await?
+    {
+        let address = crm_api::domain::intake::IntakeAddress { slug, token }.render(&intake_mail);
+        println!("intake address: {address}");
+    }
     Ok(())
 }
 

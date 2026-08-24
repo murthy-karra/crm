@@ -65,9 +65,115 @@ pub fn validate_organization_name(raw: &str) -> Result<String, AdminCommandError
     Ok(trimmed.to_string())
 }
 
+/// Slug base for an Organization's intake address (docs/specs/
+/// SLICE_007a.md §4): lowercase, non-`[a-z0-9]` runs → `-`, trimmed,
+/// clipped to 38 so a `-N` collision suffix keeps the DB CHECK's 40-char
+/// ceiling; empty → `org`.
+pub fn slugify_organization_name(name: &str) -> String {
+    let mut out = String::with_capacity(name.len());
+    let mut pending_dash = false;
+    for ch in name.chars() {
+        let ch = ch.to_ascii_lowercase();
+        if ch.is_ascii_lowercase() || ch.is_ascii_digit() {
+            if pending_dash && !out.is_empty() {
+                out.push('-');
+            }
+            pending_dash = false;
+            out.push(ch);
+        } else {
+            pending_dash = true;
+        }
+    }
+    const SLUG_BASE_MAX: usize = 38;
+    if out.len() > SLUG_BASE_MAX {
+        out.truncate(SLUG_BASE_MAX);
+        while out.ends_with('-') {
+            out.pop();
+        }
+    }
+    if out.is_empty() {
+        "org".to_string()
+    } else {
+        out
+    }
+}
+
+/// The candidate slugs tried in order: the base, then `-2` … `-9`.
+pub fn intake_slug_candidates(name: &str) -> Vec<String> {
+    let base = slugify_organization_name(name);
+    let mut out = vec![base.clone()];
+    out.extend((2..=9).map(|n| format!("{base}-{n}")));
+    out
+}
+
+/// An unguessable 8-char token from `[a-z2-7]` (~40 bits), the anti-
+/// forgery secret in the intake address. Never logged.
+pub fn mint_intake_token() -> String {
+    use rand::RngExt;
+    const ALPHABET: &[u8] = b"abcdefghijklmnopqrstuvwxyz234567";
+    let mut rng = rand::rng();
+    (0..8)
+        .map(|_| ALPHABET[rng.random_range(0..ALPHABET.len())] as char)
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn slugify_lowercases_collapses_and_trims() {
+        assert_eq!(
+            slugify_organization_name("Cypress Bay Realty"),
+            "cypress-bay-realty"
+        );
+        assert_eq!(
+            slugify_organization_name("  Acme -- Realty! "),
+            "acme-realty"
+        );
+        assert_eq!(slugify_organization_name("Ünïcödé Homes"), "n-c-d-homes");
+        assert_eq!(slugify_organization_name("---"), "org");
+        assert_eq!(slugify_organization_name(""), "org");
+        assert_eq!(slugify_organization_name("A1"), "a1");
+    }
+
+    #[test]
+    fn slugify_clips_to_38_and_never_ends_with_a_dash() {
+        let long = format!("{} tail", "a".repeat(37));
+        let slug = slugify_organization_name(&long);
+        assert_eq!(slug.len(), 37, "{slug}");
+        assert!(!slug.ends_with('-'));
+        let exact = "b".repeat(60);
+        assert_eq!(slugify_organization_name(&exact).len(), 38);
+        for c in intake_slug_candidates(&exact) {
+            assert!(c.len() <= 40, "{c}");
+            assert!(crate::domain::intake::address::is_slug(&c), "{c}");
+        }
+    }
+
+    #[test]
+    fn candidates_are_base_then_2_to_9() {
+        let c = intake_slug_candidates("Acme Realty");
+        assert_eq!(c.len(), 9);
+        assert_eq!(c[0], "acme-realty");
+        assert_eq!(c[1], "acme-realty-2");
+        assert_eq!(c[8], "acme-realty-9");
+    }
+
+    #[test]
+    fn token_is_eight_chars_from_the_mint_alphabet_and_varies() {
+        let a = mint_intake_token();
+        let b = mint_intake_token();
+        for t in [&a, &b] {
+            assert_eq!(t.len(), 8);
+            assert!(
+                t.bytes()
+                    .all(|c| c.is_ascii_lowercase() || (b'2'..=b'7').contains(&c)),
+                "{t}"
+            );
+        }
+        assert_ne!(a, b);
+    }
 
     #[test]
     fn normalizes_trims_and_lowercases() {

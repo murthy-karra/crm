@@ -1065,6 +1065,22 @@ accounts (free) for the consumer path, and an M365 tenant with Exchange
 (check whether the Cypress Bay tenant has mailboxes; otherwise a
 Microsoft 365 developer/test tenant).
 
+Extraction approach for #1 (user suggestion 2026-08-23): **hybrid,
+leaning LLM**. Deterministic template parsers only for the few pinned
+high-volume formats (portal notifications are rigid templates); **LLM
+extraction as the general path** for everything else — extraction only,
+into a strict validated schema (no tools, no side effects; the
+application decides), raw email preserved first so extraction is
+re-runnable/auditable (D-012), low confidence or validation failure →
+Unresolved, never an invented lead. Injection blast radius is "wrong
+field values", absorbed by validation + Unresolved. To confirm at slice
+planning: sending inbound lead-email content to the inference provider
+is a data-processing flow to bless explicitly — not a new boundary
+(Operator turns already send Person PII to Groq, SLICE_005) but a new
+kind: unsolicited third-party content, automatic, at volume (interacts
+with O-012 §2). Intake is async, so provider-down = queue and retry,
+never a lost lead.
+
 Fixture strategy for #1 (2026-08-23; the user is not an agent and has
 no listings): synthesize per-source fixtures from published format
 samples (portal lead emails are machine-generated templates; CRM

@@ -703,6 +703,14 @@ local (no CI yet):
 
 ## Backlog (deferred, not blocking)
 
+- **O-014 (user, 2026-08-23): Email epic** — five products: lead-intake
+  via forwarded notification mail (recommended first; no OAuth, no
+  O-012), metadata-only correspondence capture (bodies wait on O-012;
+  visibility + scope are blocking product decisions), send (O-006),
+  transactional, migration reconstruction. Gmail restricted-scope
+  CASA assessment is the schedule-driver — start paperwork early.
+  User holds test domains. Full note in the decision log.
+
 - **O-013 (user, 2026-08-23): "Delete my data"** — Person erasure on top
   of O-012 crypto-shred: archive/trash tier vs admin-only erasure, what
   skeleton survives, hashed-identifier suppression so re-arriving leads

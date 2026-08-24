@@ -974,3 +974,68 @@ second mutation tool wants shared app types. Amends SLICE_006a §3's
 one-line prediction and the D-028 §5 status note.
 
 Blocks: nothing. Feeds the Slice 006b specification.
+
+### O-014 — Email: intake first, then capture; mailbox access models (OPEN — expected to be a major epic)
+
+Recorded 2026-08-23 (user, in discussion after 006b). "Email" is five
+products and must not be planned as one slice:
+
+1. **Lead intake via email** — Zillow/Realtor notification mail parsed
+   into `receive_inquiry` (raw email preserved as the raw payload).
+   Needs NO agent-mailbox access: one inbound address per Organization
+   on a domain we control, sources set up a forward once. Reuses
+   intake/dedupe/routing/Today wholesale. **Recommended first email
+   slice.**
+2. **Correspondence capture** — agent ↔ Person mail on the timeline.
+   Metadata-only (direction, timestamps, thread id, matched Person) is
+   compatible with D-015/D-029 today and already carries the operating-
+   loop value ("they replied" → Today). Message bodies (and arguably
+   subjects) are PII content blobs → **blocked on O-012** (parked).
+   Capture design must not preclude the later O-012 body upgrade or
+   migration reconstruction (thesis §4.1).
+3. **Send from the CRM** — after capture; outbound policy is O-006.
+4. **Transactional email** (invitations) — separate, small (D-021
+   deferred it).
+5. **Migration reconstruction** from Gmail/M365 — with the migration
+   epic.
+
+Access models for #2 (recorded so the slice starts from facts):
+
+- **Google (Workspace + consumer Gmail)**: Gmail API. Per-agent OAuth
+  (refresh token per mailbox) covers both; Workspace-only alternative
+  is domain-wide delegation (admin grants a service account, bulk, big
+  trust). `watch` + Pub/Sub push, `history.list` incremental. **The
+  schedule-driver: Gmail read scopes (`gmail.readonly`, even
+  `gmail.metadata`) are "restricted" — OAuth app verification plus an
+  annual third-party security assessment (CASA). Real cost/lead time;
+  start the paperwork before the slice. Re-verify current requirements
+  at planning time.**
+- **Microsoft 365 + Outlook.com**: Microsoft Graph, delegated
+  `Mail.Read` per agent (tenant may require one-time admin consent);
+  bulk alternative is application permissions scoped by an application
+  access policy. Change notifications + delta queries. Publisher
+  verification only — much lighter than Google's.
+- **Long tail**: IMAP (Yahoo/AOL, iCloud app passwords, hosting-bundled
+  mail) — do not build early. **Universal fallback: BCC/forwarding
+  capture** to a per-org/per-agent address on our domain — works with
+  every provider, no OAuth, no verification programs; relies on agent
+  discipline for correspondence but is fully reliable for forwarded
+  lead notifications (#1 uses exactly this).
+- **Aggregators (Nylas, Aurinko, Unipile…)**: one API over all three,
+  they carry the verification burden — but per-mailbox pricing and a
+  third party processing all client mail, against the D-015/O-012/O-013
+  posture. Default: direct integrations.
+
+Defaults proposed (to confirm at slice planning): per-agent OAuth (not
+admin bulk-connect) for v1 capture; Gmail vs Graph first is the user's
+stack call; visibility of captured mail (assigned agent vs broker
+continuity) is a BLOCKING product decision for #2, as is capture scope
+(matched-People threads only — never whole-mailbox — proposed).
+
+Test infrastructure: the user holds several domain names reserved for
+testing (2026-08-23) — usable for the org inbound-intake addresses and
+forwarding-capture experiments without touching production domains.
+
+Blocks: nothing yet. #1 can be planned independently of every open
+item; #2 waits on O-012 for bodies (not for metadata) and on the
+visibility decision; #3 waits on O-006.

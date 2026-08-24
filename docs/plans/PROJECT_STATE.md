@@ -1,6 +1,6 @@
 # Project State
 
-Last updated: 2026-08-23 (006b MERGED to main `3f36d25`; exercised live incl. real ring)
+Last updated: 2026-08-23 (Slice 007 email-intake ladder planned + reviewed; 007a spec ready; awaiting implementation gate)
 
 ## Current phase
 
@@ -778,17 +778,24 @@ slice:
 
 ## Next recommended action
 
-1. Next slice: user's call. Candidates, in thesis order: O-012 (PII
-   content keys / crypto-shred — unblocks call summaries, recordings,
-   notes; O-013 follows it), a second Operator mutation tool (revisits
-   the D-034 edge question), or SMS/email intake groundwork (O-006).
-   Smaller follow-ups: Telnyx SIP password rotation (user action,
+1. **Slice 007 — email lead intake**, as a ladder of small rungs
+   (`docs/plans/SLICE_007_LADDER.md`, user rule: each rung fully
+   tested + walked through before the next): 007a intake address →
+   007b inbound endpoint → 007c system actor + unattended routing →
+   007d first pinned format → 007e Unresolved workbench → 007f LLM
+   extraction → 007g real DNS/receiving → 007h portal parsers. O-012
+   parked (user). 007a spec `docs/specs/SLICE_007a.md` reviewed; safe
+   default adopted: intake address/token readable by org admins only.
+   Genuine decisions land at their rungs: default lead recipient
+   (007c), who reads raw mail (007e), lead mail → Groq (007f), final
+   address scheme (007g).
+2. Smaller follow-ups: Telnyx SIP password rotation (user action,
    still pending); the pre-existing db_calls timeline-sort flake;
-   deterministic tiebreaker for history ordering. Noted: 006b confirm
-   executes inline (accepted, SLICE_006b §2); dev DB needs
-   ./scripts/db-migrate after branch switches (memory + this note).
+   deterministic history tiebreaker. Noted: 006b confirm executes
+   inline (accepted); dev DB needs ./scripts/db-migrate after branch
+   switches.
 2. Rotate the Telnyx SIP password; update the trunk (user action).
 
 ## Approval currently required
 
-None.
+Implementation gate for Slice 007a (`Proceed with implementation?`).

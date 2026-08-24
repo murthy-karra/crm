@@ -139,7 +139,7 @@ export interface PlatformOrganizationDetailResponse {
   members: Member[]
   invitations: Invitation[]
   /** SLICE_007a §5: the rendered intake address (top-level, additive). */
-  intake_address: string | null
+  intake_address: string
 }
 
 // --- Slice 007a: Organization intake address (docs/specs/SLICE_007a.md §5) ---

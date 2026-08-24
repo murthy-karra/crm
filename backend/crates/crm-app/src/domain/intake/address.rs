@@ -39,7 +39,7 @@ impl IntakeAddress {
     pub fn parse_recipient(addr: &str, cfg: &IntakeMailConfig) -> Option<IntakeAddress> {
         let addr = addr.trim().to_ascii_lowercase();
         let (local, host) = addr.split_once('@')?;
-        if local.is_empty() || host.is_empty() || local.contains('@') {
+        if local.is_empty() || host.is_empty() {
             return None;
         }
         let domain = cfg.domain.to_ascii_lowercase();
@@ -175,9 +175,26 @@ mod tests {
             "@cypress-bay-realty.elysianfeld.com",
             "leads-k7f3q2wd@",
             "",
+            "leads-k7f3q2wd@x@cypress-bay-realty.elysianfeld.com",
+            "leads-k7f3q2wd@cypress-bay-realty.elysianfeld.com.",
+            "leads-k7f3q2wd @cypress-bay-realty.elysianfeld.com",
+            "leads-k7f3q2wd@cypress-bay-realty.xelysianfeld.com",
         ] {
             assert_eq!(IntakeAddress::parse_recipient(bad, &c), None, "{bad}");
         }
+    }
+
+    #[test]
+    fn an_org_whose_slug_is_leads_is_unambiguous_across_both_forms() {
+        let c = cfg(IntakeAddressScheme::Subdomain);
+        let expected = Some(IntakeAddress {
+            slug: "leads".into(),
+            token: "abcdefgh".into(),
+        });
+        assert_eq!(
+            IntakeAddress::parse_recipient("leads-abcdefgh@leads.elysianfeld.com", &c),
+            expected
+        );
     }
 
     #[test]

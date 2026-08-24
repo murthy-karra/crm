@@ -81,6 +81,13 @@ describe('router guards (SLICE_004 §10)', () => {
       expect(router.currentRoute.value.path).toBe('/today')
     })
 
+    it('is bounced from /manage/intake to /today (not an admin; SLICE_007a §6)', async () => {
+      vi.mocked(fetchMe).mockResolvedValue(MEMBER)
+      const router = freshRouter()
+      await router.push('/manage/intake')
+      expect(router.currentRoute.value.path).toBe('/today')
+    })
+
     it('is bounced from /platform to /today (not a platform admin)', async () => {
       vi.mocked(fetchMe).mockResolvedValue(MEMBER)
       const router = freshRouter()
@@ -102,6 +109,13 @@ describe('router guards (SLICE_004 §10)', () => {
       const router = freshRouter()
       await router.push('/manage/members')
       expect(router.currentRoute.value.path).toBe('/manage/members')
+    })
+
+    it('reaches /manage/intake (SLICE_007a §6)', async () => {
+      vi.mocked(fetchMe).mockResolvedValue(ADMIN)
+      const router = freshRouter()
+      await router.push('/manage/intake')
+      expect(router.currentRoute.value.path).toBe('/manage/intake')
     })
 
     it('is still bounced from /platform (not a platform admin)', async () => {

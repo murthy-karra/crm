@@ -40,7 +40,7 @@ const { data, isPending, isError, error } = usePlatformOrganization(() => props.
 const organization = computed(() => data.value?.organization)
 const members = computed(() => data.value?.members ?? [])
 const invitations = computed(() => data.value?.invitations ?? [])
-const intakeAddress = computed(() => data.value?.intake_address ?? null)
+const intakeAddress = computed(() => data.value?.intake_address ?? '')
 
 const notFound = computed(() => error.value instanceof ApiError && error.value.status === 404)
 

@@ -237,3 +237,130 @@ async fn intake_columns_have_their_checks_index_and_no_update_grant(migrator_poo
         assert_eq!(db.code().as_deref(), Some("42501"), "{col}");
     }
 }
+
+// --- Observability (docs/specs/SLICE_007a.md §9) -----------------------------------
+
+#[sqlx::test]
+#[ignore]
+async fn the_create_span_carries_the_slug_and_never_the_token(migrator_pool: PgPool) {
+    use std::sync::{Arc, Mutex};
+    use tracing_subscriber::layer::SubscriberExt;
+
+    #[derive(Clone, Default)]
+    struct CaptureWriter(Arc<Mutex<Vec<u8>>>);
+    impl std::io::Write for CaptureWriter {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(buf);
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for CaptureWriter {
+        type Writer = CaptureWriter;
+        fn make_writer(&'a self) -> Self::Writer {
+            self.clone()
+        }
+    }
+    let buffer = Arc::new(Mutex::new(Vec::new()));
+    let subscriber = tracing_subscriber::registry().with(
+        tracing_subscriber::fmt::layer()
+            .with_writer(CaptureWriter(buffer.clone()))
+            .with_ansi(false)
+            .with_span_events(tracing_subscriber::fmt::format::FmtSpan::FULL),
+    );
+    // The only test in this binary that installs a subscriber.
+    tracing::subscriber::set_global_default(subscriber)
+        .expect("the capture test must be the only one installing a subscriber");
+
+    let org_id = common::create_org(&migrator_pool, "Span Check Realty").await;
+    let (slug, token) = intake_row(&migrator_pool, org_id).await;
+    let captured = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
+    assert!(captured.contains("intake_slug="), "span field present");
+    assert!(
+        captured.contains(&slug),
+        "slug is public, expected in the span"
+    );
+    assert!(
+        !captured.contains(&token),
+        "the token never reaches spans/logs"
+    );
+}
+
+// --- Backfill expressions (docs/specs/SLICE_007a.md §3, §11) ----------------------
+
+#[sqlx::test]
+#[ignore]
+async fn the_backfill_expressions_satisfy_the_checks(migrator_pool: PgPool) {
+    // #[sqlx::test] applies every migration to an empty DB, so the UPDATE
+    // itself runs over zero rows; evaluate its expressions the same way.
+    for _ in 0..5 {
+        let (slug, token): (String, String) = sqlx::query_as(
+            "SELECT 'org-' || left(gen_random_uuid()::text, 8),
+                    substr(md5(random()::text || gen_random_uuid()::text), 1, 8)",
+        )
+        .fetch_one(&migrator_pool)
+        .await
+        .unwrap();
+        let (slug_ok, token_ok): (bool, bool) = sqlx::query_as(
+            "SELECT $1 ~ '^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$', $2 ~ '^[a-z0-9]{8}$'",
+        )
+        .bind(&slug)
+        .bind(&token)
+        .fetch_one(&migrator_pool)
+        .await
+        .unwrap();
+        assert!(slug_ok && token_ok, "{slug} {token}");
+        // …and a backfilled address resolves through the recipient parser.
+        let cfg = crm_api::config::IntakeMailConfig {
+            domain: "elysianfeld.com".into(),
+            scheme: crm_api::config::IntakeAddressScheme::Subdomain,
+        };
+        let rendered = crm_api::domain::intake::IntakeAddress {
+            slug: slug.clone(),
+            token: token.clone(),
+        }
+        .render(&cfg);
+        assert!(crm_api::domain::intake::IntakeAddress::parse_recipient(&rendered, &cfg).is_some());
+    }
+}
+
+// --- Lossy names never exhaust (tester 2026-08-23) ---------------------------------
+
+#[sqlx::test]
+#[ignore]
+async fn ten_orgs_whose_names_all_slugify_to_org_are_all_created(migrator_pool: PgPool) {
+    // Every non-Latin name slugifies to `org`; numbered candidates run out
+    // at nine, then the random suffixes take over.
+    let mut slugs = Vec::new();
+    for i in 0..10 {
+        let name = format!("日本不動産{}", "!".repeat(i));
+        let id = common::create_org(&migrator_pool, &name).await;
+        slugs.push(intake_row(&migrator_pool, id).await.0);
+    }
+    assert_eq!(
+        &slugs[..9],
+        &["org", "org-2", "org-3", "org-4", "org-5", "org-6", "org-7", "org-8", "org-9"]
+    );
+    assert!(
+        slugs[9].starts_with("org-") && slugs[9].len() == 8,
+        "{}",
+        slugs[9]
+    );
+    let unique: std::collections::HashSet<&String> = slugs.iter().collect();
+    assert_eq!(unique.len(), 10);
+}
+
+// --- Session edges (tester 2026-08-23) ------------------------------------------------
+
+#[sqlx::test]
+#[ignore]
+async fn a_platform_only_session_is_401_on_the_intake_address(migrator_pool: PgPool) {
+    common::create_platform_admin(&migrator_pool, "owner@platform.test", "Owner", PLATFORM_PW)
+        .await;
+    let router = common::build_router(&migrator_pool).await;
+    let owner = common::login_cookie(&router, "owner@platform.test", PLATFORM_PW).await;
+    let resp = common::get_with_cookie(&router, "/api/organization/intake-address", &owner).await;
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+}

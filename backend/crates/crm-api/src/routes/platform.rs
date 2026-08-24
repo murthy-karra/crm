@@ -156,7 +156,8 @@ async fn get_organization_detail(
     let intake_address = admin_queries::organization_intake_address(&mut conn, organization_id)
         .await
         .map_err(|_| ApiError::Unavailable)?
-        .map(|(slug, token)| IntakeAddress { slug, token }.render(&state.intake_mail));
+        .map(|(slug, token)| IntakeAddress { slug, token }.render(&state.intake_mail))
+        .ok_or(ApiError::Unavailable)?;
 
     Ok(Json(json!({
         "organization": organization,

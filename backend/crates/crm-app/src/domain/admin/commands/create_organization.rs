@@ -64,13 +64,9 @@ async fn create_organization_attempt(
     let intake_slug = candidates
         .into_iter()
         .find(|c| !taken.contains(c))
-        // Nine collisions on one lossy slug is not a request-shape error;
-        // surface it as the 503-class failure the route/CLI already map.
-        .ok_or_else(|| {
-            AdminCommandError::Database(sqlx::Error::Protocol(
-                "intake slug candidates exhausted".to_string(),
-            ))
-        })?;
+        // Unreachable in practice (random-suffix candidates follow the
+        // numbered ones); named rather than disguised as a DB failure.
+        .ok_or(AdminCommandError::IntakeSlugExhausted)?;
     let intake_token = validation::mint_intake_token();
     tracing::Span::current().record("intake_slug", intake_slug.as_str());
 

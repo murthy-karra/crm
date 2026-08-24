@@ -1,6 +1,6 @@
 # Project State
 
-Last updated: 2026-08-23 (Slice 007 email-intake ladder planned + reviewed; 007a spec ready; awaiting implementation gate)
+Last updated: 2026-08-23 (007a IMPLEMENTED on slice-007a-intake-address; live in dev; awaiting merge approval)
 
 ## Current phase
 
@@ -798,4 +798,4 @@ slice:
 
 ## Approval currently required
 
-Implementation gate for Slice 007a (`Proceed with implementation?`).
+Merge approval for `slice-007a-intake-address` → `main`.

@@ -98,12 +98,27 @@ pub fn slugify_organization_name(name: &str) -> String {
     }
 }
 
-/// The candidate slugs tried in order: the base, then `-2` … `-9`.
+/// The candidate slugs tried in order: the base, `-2` … `-9`, then three
+/// random `-xxxx` suffixes — so a lossy base (every non-Latin name slugifies
+/// to `org`) can never exhaust; the slug format is unchanged.
 pub fn intake_slug_candidates(name: &str) -> Vec<String> {
     let base = slugify_organization_name(name);
     let mut out = vec![base.clone()];
     out.extend((2..=9).map(|n| format!("{base}-{n}")));
+    // `-xxxx` is 5 chars: clip the base to 35 so the CHECK's 40 holds.
+    let short: String = base.chars().take(35).collect();
+    let short = short.trim_end_matches('-').to_string();
+    out.extend((0..3).map(|_| format!("{short}-{}", random_suffix(4))));
     out
+}
+
+fn random_suffix(len: usize) -> String {
+    use rand::RngExt;
+    const ALPHABET: &[u8] = b"abcdefghijklmnopqrstuvwxyz234567";
+    let mut rng = rand::rng();
+    (0..len)
+        .map(|_| ALPHABET[rng.random_range(0..ALPHABET.len())] as char)
+        .collect()
 }
 
 /// An unguessable 8-char token from `[a-z2-7]` (~40 bits), the anti-
@@ -152,12 +167,27 @@ mod tests {
     }
 
     #[test]
-    fn candidates_are_base_then_2_to_9() {
+    fn candidates_are_base_then_2_to_9_then_random() {
         let c = intake_slug_candidates("Acme Realty");
-        assert_eq!(c.len(), 9);
+        assert_eq!(c.len(), 12);
         assert_eq!(c[0], "acme-realty");
         assert_eq!(c[1], "acme-realty-2");
         assert_eq!(c[8], "acme-realty-9");
+        for extra in &c[9..] {
+            assert!(
+                extra.starts_with("acme-realty-") && extra.len() == "acme-realty-".len() + 4,
+                "{extra}"
+            );
+            assert!(crate::domain::intake::address::is_slug(extra), "{extra}");
+        }
+        // The random candidates clip a long base so the 40-char CHECK holds.
+        let long = intake_slug_candidates(&"b".repeat(60));
+        for c in &long {
+            assert!(
+                c.len() <= 40 && crate::domain::intake::address::is_slug(c),
+                "{c}"
+            );
+        }
     }
 
     #[test]

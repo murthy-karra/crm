@@ -1,6 +1,6 @@
 # Slice 007a — Organization intake address (no mail)
 
-Status: REVIEWED (planner + reviewer 2026-08-23; fixes applied)
+Status: IMPLEMENTED (2026-08-23; reviewer + tester findings applied; schema assertions live in tests/db_intake_address.rs rather than db_schema.rs — equivalent coverage)
 Ladder: docs/plans/SLICE_007_LADDER.md rung a. Targets O-014 (address
 scheme, test domains), D-021 (creation paths), D-007 (config is CRUD
 state), AGENTS.md §4.2 (Organization from the session only).
@@ -58,7 +58,12 @@ grant on either column this rung (rotation is 007f).
   empty → `org`) and `mint_intake_token() -> String` (`rand`,
   `[a-z2-7]{8}`).
 - `create_organization`: mint the token and the slug from the validated
-  name inside the existing transaction. A unique violation aborts a
+  name inside the existing transaction. Candidates are the base, `-2` …
+  `-9`, then three random `-xxxx` suffixes (tester 2026-08-23: every
+  non-Latin name slugifies to `org`, so numbered candidates alone would
+  make the tenth such brokerage uncreatable); exhaustion is the named
+  `AdminCommandError::IntakeSlugExhausted` → 503, unreachable in
+  practice. A unique violation aborts a
   Postgres transaction, so **no retry-after-violation**: first
   `SELECT intake_slug FROM organization WHERE intake_slug = ANY($1)`
   over the candidates `[base, base-2, …, base-9]` and take the first

@@ -622,9 +622,14 @@ async fn crm_app_has_exactly_the_specified_grants(migrator_pool: PgPool) {
         );
     }
 
-    let org_insert = sqlx::query("INSERT INTO organization (name) VALUES ('Grant Check Org')")
-        .execute(&app_pool)
-        .await;
+    // Slice 007a added NOT NULL intake columns; the grant under test is
+    // still "crm_app may INSERT into organization".
+    let org_insert = sqlx::query(
+        "INSERT INTO organization (name, intake_slug, intake_token)
+         VALUES ('Grant Check Org', 'grant-check-org', 'abcdefgh')",
+    )
+    .execute(&app_pool)
+    .await;
     assert!(
         org_insert.is_ok(),
         "crm_app must be able to INSERT into organization (SLICE_004 §2)"

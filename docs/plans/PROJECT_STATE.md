@@ -1,6 +1,6 @@
 # Project State
 
-Last updated: 2026-08-23 (006b IMPLEMENTED on slice-006b-operator-call; awaiting merge approval)
+Last updated: 2026-08-23 (006b MERGED to main `3f36d25`; exercised live incl. real ring)
 
 ## Current phase
 
@@ -770,15 +770,17 @@ slice:
 
 ## Next recommended action
 
-1. Merge `slice-006b-operator-call` (approval pending), then exercise
-   006b live once: Ask → "Call <name>" → proposal card → Confirm →
-   real ring → D-033 outcome prompt. Then O-012 before any
-   summary/recording/notes slice; O-013 after O-012. Noted for later:
-   confirm executes inline (client disconnect after claim leaves a
-   consumed row — accepted, spec §2); Operator-started calls now in
-   the ledger chain turn → proposal → call → facts.
+1. Next slice: user's call. Candidates, in thesis order: O-012 (PII
+   content keys / crypto-shred — unblocks call summaries, recordings,
+   notes; O-013 follows it), a second Operator mutation tool (revisits
+   the D-034 edge question), or SMS/email intake groundwork (O-006).
+   Smaller follow-ups: Telnyx SIP password rotation (user action,
+   still pending); the pre-existing db_calls timeline-sort flake;
+   deterministic tiebreaker for history ordering. Noted: 006b confirm
+   executes inline (accepted, SLICE_006b §2); dev DB needs
+   ./scripts/db-migrate after branch switches (memory + this note).
 2. Rotate the Telnyx SIP password; update the trunk (user action).
 
 ## Approval currently required
 
-Merge approval for `slice-006b-operator-call` → `main`.
+None.

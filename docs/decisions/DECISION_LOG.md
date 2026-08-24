@@ -1032,9 +1032,25 @@ stack call; visibility of captured mail (assigned agent vs broker
 continuity) is a BLOCKING product decision for #2, as is capture scope
 (matched-People threads only — never whole-mailbox — proposed).
 
-Test infrastructure: the user holds several domain names reserved for
-testing (2026-08-23) — usable for the org inbound-intake addresses and
-forwarding-capture experiments without touching production domains.
+Test infrastructure (2026-08-23): the user holds test domains —
+**eospia.com**, **choravia.com**, **cypressbayrealty.com** (more
+available). Suggested roles: eospia.com or choravia.com as the
+platform's inbound-intake domain (MX + a receiving path);
+cypressbayrealty.com as the fictional brokerage brand (its "agents" and
+forwarded lead mail) — it matches the existing Cypress Bay Entra tenant
+(parked federation work), which may already serve as the M365 test
+tenant for capture later.
+
+Accounts needed, by slice: **#1 intake needs no Google or 365 accounts**
+— only DNS/MX control on one test domain plus an inbound receiving path
+(own SMTP receiver vs an inbound-email service vs registrar/CDN email
+routing — an IMPLEMENTATION choice at slice planning); lead-source
+fixtures can be sent from any mailbox or synthesized. **#2 capture**
+later needs: one Google Workspace tenant on a test domain (paid,
+per-user) for the Workspace path, one or two consumer @gmail.com
+accounts (free) for the consumer path, and an M365 tenant with Exchange
+(check whether the Cypress Bay tenant has mailboxes; otherwise a
+Microsoft 365 developer/test tenant).
 
 Blocks: nothing yet. #1 can be planned independently of every open
 item; #2 waits on O-012 for bodies (not for metadata) and on the

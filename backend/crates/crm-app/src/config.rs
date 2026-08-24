@@ -153,6 +153,37 @@ impl fmt::Debug for RealtimeTokenSecret {
     }
 }
 
+/// The inbound email HTTP endpoint bearer credential (docs/specs/SLICE_007b.md
+/// §6): deployment-level transport auth for `POST /inbound/email`. Unset =
+/// endpoint disabled (all requests 401). Must be at least 32 bytes.
+/// `Debug` is redacted like `SessionSecret`.
+#[derive(Clone)]
+pub struct InboundEmailSecret(Vec<u8>);
+
+impl InboundEmailSecret {
+    /// At least 32 bytes (same value as `MIN_REALTIME_TOKEN_SECRET_BYTES`,
+    /// a value match not a shared const per the spec).
+    pub fn parse(raw: String) -> Result<Self, SecretError> {
+        if raw.len() < 32 {
+            return Err(SecretError::TooShort {
+                min: 32,
+                len: raw.len(),
+            });
+        }
+        Ok(Self(raw.into_bytes()))
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl fmt::Debug for InboundEmailSecret {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "InboundEmailSecret(REDACTED)")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -189,6 +220,19 @@ mod tests {
     #[test]
     fn raw_payload_key_round_trips_its_bytes() {
         assert_eq!(RawPayloadKey::new([7u8; 32]).as_bytes(), &[7u8; 32]);
+    }
+
+    #[test]
+    fn inbound_email_secret_enforces_minimum_length() {
+        assert_eq!(
+            InboundEmailSecret::parse(String::new()).unwrap_err(),
+            SecretError::TooShort { min: 32, len: 0 }
+        );
+        assert_eq!(
+            InboundEmailSecret::parse("a".repeat(31)).unwrap_err(),
+            SecretError::TooShort { min: 32, len: 31 }
+        );
+        assert!(InboundEmailSecret::parse("a".repeat(32)).is_ok());
     }
 }
 

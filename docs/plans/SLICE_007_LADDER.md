@@ -24,8 +24,8 @@ rung merges, not in advance, so they can absorb what was learned.
 - Unresolved is metadata-only, no detail/retry/discard (SLICE_002 §12
   deferred them). `unresolved_reason` is free TEXT.
 - `organization` has no slug/settings; `create_organization` is the
-  only creation path (platform route, `crm-admin create-organization`
-  and its `seed-dev` subcommand).
+  only creation path (platform route, `crm-admin create-organization`;
+  dev seeding drives the platform route via `scripts/seed_dev.py`).
 - Webhook precedent: `routes/livekit_webhook.rs` — outside CORS,
   signature verified in crm-app, Organization derived server-side.
 - Provider seam: `crm_operator::InferenceProvider`; crm-app must not

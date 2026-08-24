@@ -247,7 +247,7 @@ pub async fn add_membership_with(
 }
 
 /// Seeds the nine D-019 default stages for `org_id` via the same library
-/// helper `scripts/dev-seed` uses.
+/// helper `create_organization` uses.
 pub async fn seed_stages(pool: &PgPool, org_id: Uuid) {
     let mut tx = pool.begin().await.unwrap();
     stage::seed_defaults(&mut tx, org_id).await.unwrap();

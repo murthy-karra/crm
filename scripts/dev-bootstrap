@@ -1,12 +1,19 @@
 #!/usr/bin/env bash
 # Rebuilds the local dev environment from a blank database: drops and
 # recreates the Postgres/Centrifugo containers, migrates, creates the
-# platform admin (the one step with no HTTP route -- alongside migrations,
-# D-021's other sanctioned exception to "no direct database writes"), then
-# creates Organizations/admins/members entirely through the live API via
+# platform admin over the migrator database connection (the one step with
+# no HTTP route -- alongside migrations, D-021's other sanctioned
+# exception to "no direct database writes"), then seeds Organizations,
+# admins, and members entirely through the RUNNING dev API via
 # scripts/seed_dev.py -- the same create/invite/accept sequence a real
 # platform admin and org admin would drive by hand (docs/specs/SLICE_004.md
 # §1, §4, §11). Replaces scripts/dev-seed and crm-admin seed-dev.
+#
+# Unconditional by design (user, 2026-08-24): asking for a wipe wipes.
+# ./scripts/dev-api must already be running -- seeding talks to it; its
+# lazy SQLx pool reconnects to the recreated database on its own. If the
+# binary predates your current code, restart it first (an orphaned
+# dev-api serving a stale binary is a known trap -- see README).
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -36,13 +43,13 @@ if [ -z "${CRM_DEV_SEED_PASSWORD:-}" ]; then
 fi
 
 api_url="${CRM_DEMO_API_URL:-http://127.0.0.1:3000}"
+health_url="${api_url%/}/api/health"
 ready_url="${api_url%/}/internal/ready"
 
-# This run is about to drop the database out from under any API process
-# already using it; refuse rather than let that happen silently.
-if curl -fsS --max-time 1 "$ready_url" >/dev/null 2>&1; then
-  echo "an API is already running at $api_url (probably ./scripts/dev-api)." >&2
-  echo "stop it first -- this run drops and recreates the database it's using." >&2
+# Seeding needs the dev API; check liveness (not readiness -- the API
+# answers /api/health even while its database is being recreated).
+if ! curl -fsS --max-time 2 "$health_url" >/dev/null 2>&1; then
+  echo "no API is answering at $api_url. Start ./scripts/dev-api first, then re-run." >&2
   exit 1
 fi
 
@@ -57,21 +64,9 @@ echo "==> bootstrapping the platform admin"
 cargo run --manifest-path backend/Cargo.toml -p crm-api --bin crm-admin -- \
   bootstrap-platform-admin --email owner@platform.test --display-name "Platform Owner"
 
-api_log="$(mktemp)"
-cleanup() {
-  kill "$api_pid" 2>/dev/null || true
-  wait "$api_pid" 2>/dev/null || true
-  rm -f "$api_log"
-}
-trap cleanup EXIT
-
-echo "==> starting a temporary API instance to seed through"
-cargo run --manifest-path backend/Cargo.toml -p crm-api >"$api_log" 2>&1 &
-api_pid=$!
-
-echo "==> waiting for $ready_url"
+echo "==> waiting for the running API to reconnect to the fresh database ($ready_url)"
 ready=false
-for _ in $(seq 1 120); do
+for _ in $(seq 1 30); do
   if curl -fsS --max-time 1 "$ready_url" >/dev/null 2>&1; then
     ready=true
     break
@@ -79,12 +74,12 @@ for _ in $(seq 1 120); do
   sleep 1
 done
 if [ "$ready" != true ]; then
-  echo "API never became ready; log follows:" >&2
-  cat "$api_log" >&2
+  echo "the API at $api_url never became ready against the fresh database." >&2
+  echo "it may be a stale process -- restart ./scripts/dev-api and re-run." >&2
   exit 1
 fi
 
 echo "==> seeding Organizations, admins, and members through the API"
 python3 "$script_dir/seed_dev.py"
 
-echo "==> done. Run ./scripts/dev-api to start the API for normal use."
+echo "==> done."

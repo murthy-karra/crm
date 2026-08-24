@@ -1,6 +1,6 @@
 # Project State
 
-Last updated: 2026-08-24 (007a IMPLEMENTED on slice-007a-intake-address; live in dev; awaiting merge approval. Unrelated dev-tooling branch `dev-seed-via-api` also committed, off the same commit, awaiting review/merge decision.)
+Last updated: 2026-08-24 (007a MERGED to main `81af77f`; dev-seed-via-api reviewed, fixed per findings + user direction, MERGED to main `HEAD`. Neither pushed. Next: plan 007b per the ladder rule.)
 
 ## Current phase
 
@@ -819,6 +819,20 @@ slice:
 
 ## Approval currently required
 
-Merge approval for `slice-007a-intake-address` → `main`. Separately:
-review + merge decision for `dev-seed-via-api` (dev tooling, committed
-but unreviewed).
+None. Both 007a and dev-seed-via-api are merged to local `main`
+(user-approved 2026-08-24). Not yet pushed to origin; merged branches
+not yet deleted — both awaiting a user call. Next planning step per
+the ladder rule: SLICE_007b spec (inbound email endpoint).
+
+dev-seed-via-api review outcome (crm-reviewer, 2026-08-24): the two
+blocking findings (refusal guard failed open against a stale
+listening-but-unready API; guard probed CRM_DEMO_API_URL while the
+API binds CRM_API_BIND_ADDR) were resolved by redesign per user
+direction ("when I ask for a wipe, do a wipe"): dev-bootstrap now
+wipes unconditionally and seeds through the already-running dev-api
+(liveness-checked via /api/health before the wipe; /internal/ready
+reconnect wait after), removing the temporary-API machinery and with
+it the remaining temp-API findings. LATER items deliberately left:
+`set_local_password` has no test coverage (only caller is `crm-admin
+set-password`, still a SLICE_004 §4 contract row); no test executes
+the `crm-admin` binary anymore.

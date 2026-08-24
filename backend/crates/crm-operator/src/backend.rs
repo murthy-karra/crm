@@ -6,7 +6,10 @@ use async_trait::async_trait;
 use uuid::Uuid;
 
 use crate::context::OperatorContext;
-use crate::views::{NextWorkItem, PersonDetail, PriorityExplanation, SearchResult, TodayView};
+use crate::views::{
+    NextWorkItem, PersonDetail, PriorityExplanation, SearchResult, StartCallProposalOutcome,
+    TodayView,
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ToolError {
@@ -48,4 +51,15 @@ pub trait ToolBackend: Send + Sync {
         ctx: &OperatorContext,
         person_id: Uuid,
     ) -> ToolResult<PriorityExplanation>;
+
+    /// The one mutation-adjacent tool (docs/specs/SLICE_006b.md §3;
+    /// D-009, D-034): validates and **proposes** a call — never places
+    /// one. Execution happens on the model-free confirm endpoint after a
+    /// human click. Ids only; the model can never supply a phone number.
+    async fn propose_start_call(
+        &self,
+        ctx: &OperatorContext,
+        person_id: Uuid,
+        contact_method_id: Option<Uuid>,
+    ) -> ToolResult<StartCallProposalOutcome>;
 }

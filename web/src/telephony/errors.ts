@@ -12,6 +12,9 @@ const CALL_CODE_MESSAGES: Record<string, string> = {
   invalid_call_state: 'This call can no longer be dialed.',
   forbidden: 'Only the caller can control this call.',
   not_found: 'This call no longer exists.',
+  // SLICE_006b §4: confirm-endpoint failures.
+  proposal_expired: 'This suggestion expired — ask again.',
+  proposal_consumed: 'This call was already confirmed.',
 }
 
 /** Client-side failures that are not `ApiError`s: the composable raises

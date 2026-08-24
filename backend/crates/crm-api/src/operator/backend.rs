@@ -19,8 +19,9 @@ use crate::domain::today::{self, TodayItem, TodayList};
 use crate::operator::explain;
 use crm_operator::{
     ContactMethodView, HistoryEntryView, InquiryView, NextWorkItem, OperatorContext, PersonCard,
-    PersonDetail, PriorityExplanation, SearchResult, TodayItemView, TodayView, ToolBackend,
-    ToolError, ToolResult, UntrustedText,
+    PersonDetail, PhoneOption, PriorityExplanation, ProposalView, SearchResult,
+    StartCallProposalOutcome, TodayItemView, TodayView, ToolBackend, ToolError, ToolResult,
+    UntrustedText,
 };
 
 /// `get_person` returns the latest 5 inquiries and latest 20 history
@@ -30,11 +31,13 @@ const MAX_HISTORY: usize = 20;
 
 pub struct SqlxToolBackend {
     pool: PgPool,
+    /// `start_call` proposal lifetime (docs/specs/SLICE_006b.md §2).
+    proposal_ttl: std::time::Duration,
 }
 
 impl SqlxToolBackend {
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+    pub fn new(pool: PgPool, proposal_ttl: std::time::Duration) -> Self {
+        Self { pool, proposal_ttl }
     }
 
     async fn conn(&self) -> ToolResult<sqlx::pool::PoolConnection<sqlx::Postgres>> {
@@ -287,5 +290,88 @@ impl ToolBackend for SqlxToolBackend {
             ctx.actor_user_id,
             card_from_summary(&summary),
         ))
+    }
+
+    /// `start_call` (docs/specs/SLICE_006b.md §3): validates and inserts a
+    /// proposal — never executes. Person resolved through the same
+    /// visibility gate as every read tool; the contact method must belong
+    /// to the Person (foreign/nonexistent → byte-identical NotFound) and
+    /// be a phone (an email id → structured invalid_arguments).
+    async fn propose_start_call(
+        &self,
+        ctx: &OperatorContext,
+        person_id: Uuid,
+        contact_method_id: Option<Uuid>,
+    ) -> ToolResult<StartCallProposalOutcome> {
+        let mut conn = self.conn().await?;
+        let summary = visible_summary(&mut conn, ctx, person_id).await?;
+        let methods =
+            person_queries::contact_methods_for_person(&mut conn, ctx.organization_id, person_id)
+                .await
+                .map_err(db_error)?;
+
+        let chosen = match contact_method_id {
+            Some(id) => {
+                let method = methods
+                    .iter()
+                    .find(|m| m.id == id)
+                    .ok_or(ToolError::NotFound)?;
+                if method.kind != "phone" {
+                    return Err(ToolError::InvalidArguments(
+                        "that contact method is not a phone number".to_string(),
+                    ));
+                }
+                Some(method)
+            }
+            None => {
+                let mut phones = methods.iter().filter(|m| m.kind == "phone");
+                match (phones.next(), phones.next()) {
+                    (None, _) => return Ok(StartCallProposalOutcome::NoPhone),
+                    (Some(only), None) => Some(only),
+                    (Some(_), Some(_)) => {
+                        return Ok(StartCallProposalOutcome::NeedsNumberChoice {
+                            phones: methods
+                                .iter()
+                                .filter(|m| m.kind == "phone")
+                                .map(|m| PhoneOption {
+                                    contact_method_id: m.id,
+                                    value: UntrustedText::new(&m.value),
+                                })
+                                .collect(),
+                        })
+                    }
+                }
+            }
+        };
+        let method = chosen.expect("all None paths returned above");
+
+        let proposal_id = Uuid::new_v4();
+        let ttl_secs = i64::try_from(self.proposal_ttl.as_secs()).unwrap_or(120);
+        let expires_at = sqlx::query_scalar!(
+            r#"INSERT INTO operator_proposal
+                 (id, organization_id, actor_user_id, turn_id, tool,
+                  person_id, contact_method_id, status, expires_at)
+               VALUES ($1, $2, $3, $4, 'start_call', $5, $6, 'proposed',
+                       now() + make_interval(secs => $7::double precision))
+               RETURNING expires_at"#,
+            proposal_id,
+            ctx.organization_id,
+            ctx.actor_user_id,
+            ctx.turn_id,
+            person_id,
+            method.id,
+            ttl_secs as f64,
+        )
+        .fetch_one(&mut *conn)
+        .await
+        .map_err(db_error)?;
+
+        Ok(StartCallProposalOutcome::Proposed(Box::new(ProposalView {
+            proposal_id,
+            person: card_from_summary(&summary),
+            phone: UntrustedText::new(&method.value),
+            contact_method_id: method.id,
+            expires_at,
+        })))
     }
 }

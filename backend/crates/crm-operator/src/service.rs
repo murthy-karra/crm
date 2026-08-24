@@ -19,7 +19,7 @@ use crate::provider::{
     Usage,
 };
 use crate::tools::{self, parse_invocation, tool_definitions, ArgumentError, ToolInvocation};
-use crate::views::PersonCard;
+use crate::views::{PersonCard, ProposalView, StartCallProposalOutcome};
 use crate::SYSTEM_PROMPT;
 
 /// Total characters of replayed history (§4).
@@ -200,6 +200,10 @@ pub struct TurnOutput {
     pub reply: Option<String>,
     pub references: References,
     pub tool_calls: Vec<ToolCallRecord>,
+    /// The turn's inserted `start_call` proposal, if any (at most one per
+    /// turn, docs/specs/SLICE_006b.md §3). The wire renders the card from
+    /// this object only, never from model prose.
+    pub proposal: Option<ProposalView>,
     pub outcome: TurnOutcome,
     pub usage: Usage,
     pub model_call_count: u32,
@@ -211,6 +215,7 @@ impl std::fmt::Debug for TurnOutput {
             .field("reply", &self.reply.as_ref().map(|r| r.chars().count()))
             .field("references", &self.references.people.len())
             .field("tool_calls", &self.tool_calls)
+            .field("proposal", &self.proposal.as_ref().map(|p| p.proposal_id))
             .field("outcome", &self.outcome)
             .field("usage", &self.usage)
             .field("model_call_count", &self.model_call_count)
@@ -273,6 +278,9 @@ struct TurnState {
     consecutive_malformed: u8,
     consecutive_over_cap: u8,
     started: Instant,
+    /// At most one inserted proposal per turn (docs/specs/SLICE_006b.md
+    /// §3); `NeedsNumberChoice`/`NoPhone` do not set this.
+    proposal: Option<ProposalView>,
 }
 
 enum LoopEnd {
@@ -302,6 +310,7 @@ fn ledger_name(model_supplied: &str) -> &'static str {
         tools::GET_TODAY => tools::GET_TODAY,
         tools::GET_NEXT_WORK_ITEM => tools::GET_NEXT_WORK_ITEM,
         tools::EXPLAIN_PRIORITY => tools::EXPLAIN_PRIORITY,
+        tools::START_CALL => tools::START_CALL,
         _ => "unknown",
     }
 }
@@ -402,6 +411,7 @@ impl OperatorService {
             consecutive_malformed: 0,
             consecutive_over_cap: 0,
             started: Instant::now(),
+            proposal: None,
         };
 
         let result = tokio::time::timeout(
@@ -419,10 +429,19 @@ impl OperatorService {
             Err(_elapsed) => (None, TurnOutcome::TurnTimeout),
         };
 
+        // A 503 outcome never surfaces its proposal (docs/specs/
+        // SLICE_006b.md §10: "never shown; expires inert").
+        let proposal = if outcome.is_reply() {
+            state.proposal
+        } else {
+            None
+        };
+
         TurnOutput {
             reply,
             references: state.refs.finish(),
             tool_calls: state.tool_calls,
+            proposal,
             outcome,
             usage: state.usage,
             model_call_count: state.model_call_count,
@@ -623,6 +642,30 @@ impl OperatorService {
             }
         };
 
+        // One inserted proposal per turn (docs/specs/SLICE_006b.md §3):
+        // a second `start_call` after a `Proposed` outcome is a structured
+        // rejection with no backend hit.
+        if matches!(invocation, ToolInvocation::StartCall { .. }) && state.proposal.is_some() {
+            let duration_ms = elapsed_ms(started);
+            span.record("outcome", "invalid_arguments");
+            span.record("duration_ms", duration_ms);
+            state.tool_calls.push(ToolCallRecord {
+                name,
+                outcome: ToolCallOutcome::InvalidArguments,
+                duration_ms,
+                person_ids: Vec::new(),
+            });
+            state.messages.push(ChatMessage::Tool {
+                tool_call_id: call.id.clone(),
+                content: tool_error_json(
+                    "invalid_arguments",
+                    "a call is already proposed in this turn; the user must confirm or dismiss it first",
+                ),
+            });
+            state.consecutive_malformed += 1;
+            return Err(ExecError::Malformed);
+        }
+
         // Recorded as `error` *before* it runs: if the turn deadline fires
         // inside this tool (e.g. inside its DB query) the future is dropped
         // here, and the ledger still shows that the tool started (D-029's
@@ -642,7 +685,7 @@ impl OperatorService {
         span.record("duration_ms", duration_ms);
 
         match result {
-            Ok((value, bucket, cards)) => {
+            Ok((value, bucket, cards, proposal)) => {
                 span.record("outcome", "ok");
                 state.tool_calls[slot] = ToolCallRecord {
                     name,
@@ -650,6 +693,9 @@ impl OperatorService {
                     duration_ms,
                     person_ids: cards.iter().map(|c| c.id).collect(),
                 };
+                if proposal.is_some() {
+                    state.proposal = proposal;
+                }
                 state.refs.add(bucket, cards);
                 state.messages.push(ChatMessage::Tool {
                     tool_call_id: call.id.clone(),
@@ -721,7 +767,7 @@ async fn dispatch(
     ctx: &OperatorContext,
     backend: &dyn ToolBackend,
     invocation: &ToolInvocation,
-) -> Result<(Value, RefBucket, Vec<PersonCard>), ToolError> {
+) -> Result<(Value, RefBucket, Vec<PersonCard>, Option<ProposalView>), ToolError> {
     fn to_value<T: Serialize>(v: &T) -> Result<Value, ToolError> {
         serde_json::to_value(v).map_err(|e| ToolError::Backend(format!("serialize: {e}")))
     }
@@ -730,30 +776,67 @@ async fn dispatch(
         ToolInvocation::SearchPeople { query, limit } => {
             let result = backend.search_people(ctx, query, *limit).await?;
             let value = to_value(&result)?;
-            Ok((value, RefBucket::Search, result.matches))
+            Ok((value, RefBucket::Search, result.matches, None))
         }
         ToolInvocation::GetPerson { person_id } => {
             let detail = backend.get_person(ctx, *person_id).await?;
             let value = to_value(&detail)?;
-            Ok((value, RefBucket::Primary, vec![detail.person]))
+            Ok((value, RefBucket::Primary, vec![detail.person], None))
         }
         ToolInvocation::GetToday { limit } => {
             let view = backend.get_today(ctx, *limit).await?;
             let value = to_value(&view)?;
             let cards = view.items.into_iter().map(|i| i.person).collect();
-            Ok((value, RefBucket::Today, cards))
+            Ok((value, RefBucket::Today, cards, None))
         }
         ToolInvocation::GetNextWorkItem => {
             let next = backend.get_next_work_item(ctx).await?;
             let value = to_value(&next)?;
             let cards = next.item.map(|i| i.person).into_iter().collect();
-            Ok((value, RefBucket::Primary, cards))
+            Ok((value, RefBucket::Primary, cards, None))
         }
         ToolInvocation::ExplainPriority { person_id } => {
             let explanation = backend.explain_priority(ctx, *person_id).await?;
             let value = to_value(&explanation)?;
             let card = explanation.person().clone();
-            Ok((value, RefBucket::Primary, vec![card]))
+            Ok((value, RefBucket::Primary, vec![card], None))
+        }
+        ToolInvocation::StartCall {
+            person_id,
+            contact_method_id,
+        } => {
+            let outcome = backend
+                .propose_start_call(ctx, *person_id, *contact_method_id)
+                .await?;
+            match outcome {
+                StartCallProposalOutcome::Proposed(boxed) => {
+                    let view = *boxed;
+                    // The model sees a confirmation-pending summary; the
+                    // wire card renders from `TurnOutput::proposal`, and
+                    // the model is told the user must confirm in the UI.
+                    let value = json!({
+                        "status": "awaiting_user_confirmation",
+                        "person": to_value(&view.person)?,
+                        "phone": to_value(&view.phone)?,
+                        "expires_at": view.expires_at,
+                    });
+                    let card = view.person.clone();
+                    Ok((value, RefBucket::Primary, vec![card], Some(view)))
+                }
+                StartCallProposalOutcome::NeedsNumberChoice { phones } => {
+                    let value = json!({
+                        "status": "choice_required",
+                        "phones": to_value(&phones)?,
+                    });
+                    Ok((value, RefBucket::Primary, Vec::new(), None))
+                }
+                StartCallProposalOutcome::NoPhone => {
+                    let value = json!({
+                        "status": "no_phone",
+                    });
+                    Ok((value, RefBucket::Primary, Vec::new(), None))
+                }
+            }
         }
     }
 }
@@ -811,6 +894,10 @@ mod tests {
         not_found: bool,
         today_ids: Vec<Uuid>,
         search_ids: Vec<Uuid>,
+        /// `propose_start_call` fixture: the Person's phone options.
+        /// 0 => NoPhone; 1 => Proposed; >1 => NeedsNumberChoice unless a
+        /// contact_method_id picks one.
+        phones: Vec<Uuid>,
     }
 
     impl FakeBackend {
@@ -911,6 +998,44 @@ mod tests {
                     low: 0,
                 },
             })
+        }
+        async fn propose_start_call(
+            &self,
+            ctx: &OperatorContext,
+            person_id: Uuid,
+            contact_method_id: Option<Uuid>,
+        ) -> Result<StartCallProposalOutcome, ToolError> {
+            self.note(ctx)?;
+            let chosen = match contact_method_id {
+                Some(id) => {
+                    if !self.phones.contains(&id) {
+                        return Err(ToolError::NotFound);
+                    }
+                    Some(id)
+                }
+                None if self.phones.len() == 1 => Some(self.phones[0]),
+                None => None,
+            };
+            match chosen {
+                Some(id) => Ok(StartCallProposalOutcome::Proposed(Box::new(ProposalView {
+                    proposal_id: Uuid::new_v4(),
+                    person: card(person_id, "P"),
+                    phone: UntrustedText::new("(555) 015-0100"),
+                    contact_method_id: id,
+                    expires_at: ctx.now + chrono::Duration::seconds(120),
+                }))),
+                None if self.phones.is_empty() => Ok(StartCallProposalOutcome::NoPhone),
+                None => Ok(StartCallProposalOutcome::NeedsNumberChoice {
+                    phones: self
+                        .phones
+                        .iter()
+                        .map(|id| PhoneOption {
+                            contact_method_id: *id,
+                            value: UntrustedText::new("(555) 015-0100"),
+                        })
+                        .collect(),
+                }),
+            }
         }
     }
 
@@ -1366,6 +1491,14 @@ mod tests {
             ) -> Result<PriorityExplanation, ToolError> {
                 unreachable!()
             }
+            async fn propose_start_call(
+                &self,
+                _: &OperatorContext,
+                _: Uuid,
+                _: Option<Uuid>,
+            ) -> Result<StartCallProposalOutcome, ToolError> {
+                unreachable!()
+            }
         }
         let (svc, _) = service(
             vec![ScriptedStep::Respond(ChatResponse::tool_calls(vec![call(
@@ -1703,6 +1836,164 @@ mod tests {
         assert_eq!(
             v,
             json!({"name": "get_today", "outcome": "ok", "duration_ms": 12})
+        );
+    }
+
+    // --- Slice 006b: start_call proposal flow (docs/specs/SLICE_006b.md §3) ---
+
+    #[tokio::test]
+    async fn start_call_proposal_lands_in_turn_output_and_ledger() {
+        let person = Uuid::new_v4();
+        let phone_method = Uuid::new_v4();
+        let backend = FakeBackend {
+            phones: vec![phone_method],
+            ..Default::default()
+        };
+        let (svc, _) = service(
+            vec![
+                ScriptedStep::Respond(ChatResponse::tool_calls(vec![call(
+                    "c1",
+                    "start_call",
+                    json!({"person_id": person.to_string()}),
+                )])),
+                ScriptedStep::Respond(ChatResponse::text("Ready — confirm the call to place it.")),
+            ],
+            Limits::default(),
+        );
+        let out = svc.run_turn(&ctx(), &backend, input("call P")).await;
+        assert_eq!(out.outcome, TurnOutcome::Completed);
+        let proposal = out.proposal.expect("proposal on the output");
+        assert_eq!(proposal.contact_method_id, phone_method);
+        assert_eq!(proposal.person.id, person);
+        assert_eq!(out.tool_calls.len(), 1);
+        assert_eq!(out.tool_calls[0].name, "start_call");
+        assert_eq!(out.tool_calls[0].outcome, ToolCallOutcome::Ok);
+        assert_eq!(out.tool_calls[0].person_ids, vec![person]);
+    }
+
+    #[tokio::test]
+    async fn second_start_call_after_a_proposal_is_rejected_without_backend_hit() {
+        let person = Uuid::new_v4();
+        let backend = FakeBackend {
+            phones: vec![Uuid::new_v4()],
+            ..Default::default()
+        };
+        let (svc, _) = service(
+            vec![
+                ScriptedStep::Respond(ChatResponse::tool_calls(vec![
+                    call("c1", "start_call", json!({"person_id": person.to_string()})),
+                    call("c2", "start_call", json!({"person_id": person.to_string()})),
+                ])),
+                ScriptedStep::Respond(ChatResponse::text("done")),
+            ],
+            Limits::default(),
+        );
+        let out = svc.run_turn(&ctx(), &backend, input("call P twice")).await;
+        assert_eq!(out.outcome, TurnOutcome::Completed);
+        assert!(out.proposal.is_some(), "the first proposal stands");
+        assert_eq!(out.tool_calls.len(), 2);
+        assert_eq!(out.tool_calls[1].outcome, ToolCallOutcome::InvalidArguments);
+        // Exactly one backend call reached propose_start_call: the fake
+        // records every noted ctx; search/etc not called here.
+        assert_eq!(backend.seen.lock().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn needs_number_choice_and_no_phone_set_no_proposal() {
+        for phones in [Vec::new(), vec![Uuid::new_v4(), Uuid::new_v4()]] {
+            let person = Uuid::new_v4();
+            let backend = FakeBackend {
+                phones,
+                ..Default::default()
+            };
+            let (svc, _) = service(
+                vec![
+                    ScriptedStep::Respond(ChatResponse::tool_calls(vec![call(
+                        "c1",
+                        "start_call",
+                        json!({"person_id": person.to_string()}),
+                    )])),
+                    ScriptedStep::Respond(ChatResponse::text("which number?")),
+                ],
+                Limits::default(),
+            );
+            let out = svc.run_turn(&ctx(), &backend, input("call P")).await;
+            assert_eq!(out.outcome, TurnOutcome::Completed);
+            assert!(out.proposal.is_none());
+            assert_eq!(out.tool_calls[0].outcome, ToolCallOutcome::Ok);
+        }
+    }
+
+    #[tokio::test]
+    async fn a_503_outcome_never_surfaces_its_proposal() {
+        // The tool runs (row inserted server-side), then the provider
+        // dies: the wire must not show the proposal (§10: never shown;
+        // expires inert).
+        let person = Uuid::new_v4();
+        let backend = FakeBackend {
+            phones: vec![Uuid::new_v4()],
+            ..Default::default()
+        };
+        let (svc, _) = service(
+            vec![
+                ScriptedStep::Respond(ChatResponse::tool_calls(vec![call(
+                    "c1",
+                    "start_call",
+                    json!({"person_id": person.to_string()}),
+                )])),
+                ScriptedStep::Fail(ProviderError::Timeout),
+            ],
+            Limits::default(),
+        );
+        let out = svc.run_turn(&ctx(), &backend, input("call P")).await;
+        assert!(!out.outcome.is_reply());
+        assert!(out.proposal.is_none());
+    }
+
+    #[tokio::test]
+    async fn start_call_with_invented_contact_method_is_not_found() {
+        let person = Uuid::new_v4();
+        let backend = FakeBackend {
+            phones: vec![Uuid::new_v4()],
+            ..Default::default()
+        };
+        let (svc, _) = service(
+            vec![
+                ScriptedStep::Respond(ChatResponse::tool_calls(vec![call(
+                    "c1",
+                    "start_call",
+                    json!({
+                        "person_id": person.to_string(),
+                        "contact_method_id": Uuid::new_v4().to_string(),
+                    }),
+                )])),
+                ScriptedStep::Respond(ChatResponse::text("could not find it")),
+            ],
+            Limits::default(),
+        );
+        let out = svc.run_turn(&ctx(), &backend, input("call P")).await;
+        assert_eq!(out.tool_calls[0].outcome, ToolCallOutcome::NotFound);
+        assert!(out.proposal.is_none());
+    }
+
+    #[test]
+    fn the_prompt_carries_the_start_call_rules() {
+        // SLICE_006b §5: prepare-not-place. String-pinned like the actor
+        // line — a reworded prompt that drops a rule must fail a test.
+        let prompt = include_str!("../prompts/system.md");
+        for rule in [
+            "start_call",
+            "never places a call",
+            "Never claim a call was placed",
+            "Never propose a call the user did not ask for",
+            "you can never dial a number from the conversation",
+            "six tools",
+        ] {
+            assert!(prompt.contains(rule), "prompt lost the rule: {rule}");
+        }
+        assert!(
+            !prompt.contains("read-only assistant"),
+            "the read-only framing is gone (006b)"
         );
     }
 }

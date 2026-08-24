@@ -34,8 +34,9 @@ pub use service::{
 pub use tools::tool_definitions;
 pub use views::{
     Ahead, ContactMethodView, HistoryEntryView, InquiryView, NextWorkItem, NotOnTodayReason,
-    PersonCard, PersonDetail, PriorityExplanation, SearchResult, TodayItemView, TodayView,
-    UntrustedText, WirePersonCard, ORDERING_RULE,
+    PersonCard, PersonDetail, PhoneOption, PriorityExplanation, ProposalView, SearchResult,
+    StartCallProposalOutcome, TodayItemView, TodayView, UntrustedText, WirePersonCard,
+    ORDERING_RULE,
 };
 
 /// The system prompt (docs/specs/SLICE_005.md §3). Not a contract; the

@@ -29,7 +29,10 @@ import type {
 } from '../api/types'
 import { queryKeys } from '../api/queries'
 import type { CallRoom, CallRoomEvents, CallRoomFactory } from '../telephony/useCall'
+import { defineComponent } from 'vue'
 import PersonDetailView from './PersonDetailView.vue'
+import CallHostPanel from '../components/CallHostPanel.vue'
+import { provideCallHost } from '../telephony/callHost'
 
 vi.mock('../api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/client')>()
@@ -199,8 +202,19 @@ async function mountView(query = '', seed?: PersonDetailResponse) {
   })
   // A stale cached detail (a prior visit): rendered at once, refetched on mount.
   if (seed) queryClient.setQueryData(queryKeys.person(ORG_ID, PERSON_ID), seed)
-  const wrapper = mount(PersonDetailView, {
-    props: { id: PERSON_ID, createRoom },
+  // SLICE_006b §6: the call host lives above the view (AppShell in prod);
+  // the harness mirrors that — the view plus the one docked panel.
+  // eslint-disable-next-line vue/one-component-per-file -- test harness
+  const Harness = defineComponent({
+    components: { PersonDetailView, CallHostPanel },
+    props: { id: { type: String, required: true } },
+    setup() {
+      provideCallHost({ orgId: () => ORG_ID, createRoom })
+    },
+    template: '<PersonDetailView :id="id" /><CallHostPanel />',
+  })
+  const wrapper = mount(Harness, {
+    props: { id: PERSON_ID },
     global: { plugins: [router, [VueQueryPlugin, { queryClient }], [PrimeVue, { unstyled: true }]] },
     attachTo: document.body,
   })
@@ -375,7 +389,7 @@ describe('PersonDetailView — call in progress (409) and mid-call navigation', 
   })
 })
 
-describe('PersonDetailView — leaving the page mid-call', () => {
+describe('PersonDetailView — the call survives navigation (SLICE_006b §6)', () => {
   async function mountThroughRouter() {
     const rooms: FakeRoom[] = []
     const createRoom: CallRoomFactory = () => {
@@ -390,22 +404,31 @@ describe('PersonDetailView — leaving the page mid-call', () => {
         {
           path: '/people/:id',
           component: PersonDetailView,
-          props: (route) => ({ id: route.params.id, createRoom }),
+          props: (route) => ({ id: route.params.id }),
         },
       ],
     })
     await router.push(`/people/${PERSON_ID}`)
     await router.isReady()
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
-    const wrapper = mount(
-      { template: '<RouterView />' },
-      { global: { plugins: [router, [VueQueryPlugin, { queryClient }], [PrimeVue, { unstyled: true }]] }, attachTo: document.body },
-    )
+    // AppShell's shape: host + RouterView + the docked panel outside it.
+    // eslint-disable-next-line vue/one-component-per-file -- test harness
+    const Shell = defineComponent({
+      components: { CallHostPanel },
+      setup() {
+        provideCallHost({ orgId: () => ORG_ID, createRoom })
+      },
+      template: '<RouterView /><CallHostPanel />',
+    })
+    const wrapper = mount(Shell, {
+      global: { plugins: [router, [VueQueryPlugin, { queryClient }], [PrimeVue, { unstyled: true }]] },
+      attachTo: document.body,
+    })
     await flushPromises()
     return { wrapper, router, rooms }
   }
 
-  it('asks "End the call?" — cancel stays, confirm leaves and hangs up once', async () => {
+  it('keeps the call and panel alive across navigation — no prompt, no hangup', async () => {
     stubApi(detail([PHONE_A]))
     const { wrapper, router } = await mountThroughRouter()
     await wrapper.get('[data-testid="call-button"]').trigger('click')
@@ -413,27 +436,24 @@ describe('PersonDetailView — leaving the page mid-call', () => {
     const confirm = vi.fn(() => false)
     vi.stubGlobal('confirm', confirm)
     await router.push('/people')
-    expect(confirm).toHaveBeenCalledWith('End the call?')
-    expect(router.currentRoute.value.path).toBe(`/people/${PERSON_ID}`)
-    expect(wrapper.find('[data-testid="call-panel"]').exists()).toBe(true)
-
-    confirm.mockReturnValue(true)
-    await router.push('/people')
     await flushPromises()
+    // The old route-leave guard is gone: navigation succeeds, nothing asks,
+    // the call is not hung up, and the docked panel is still there.
+    expect(confirm).not.toHaveBeenCalled()
     expect(router.currentRoute.value.path).toBe('/people')
-    expect(requests().filter((r) => r === `POST /calls/${CALL_ID}/hangup`)).toHaveLength(1)
+    expect(requests().filter((r) => r === `POST /calls/${CALL_ID}/hangup`)).toHaveLength(0)
+    expect(wrapper.find('[data-testid="call-panel"]').exists()).toBe(true)
     vi.unstubAllGlobals()
   })
 
-  it('leaves without asking when no call is active', async () => {
+  it('unmounting the whole shell (tab close) still hangs up once', async () => {
     stubApi(detail([PHONE_A]))
-    const { router } = await mountThroughRouter()
-    const confirm = vi.fn(() => false)
-    vi.stubGlobal('confirm', confirm)
-    await router.push('/people')
-    expect(confirm).not.toHaveBeenCalled()
-    expect(router.currentRoute.value.path).toBe('/people')
-    vi.unstubAllGlobals()
+    const { wrapper } = await mountThroughRouter()
+    await wrapper.get('[data-testid="call-button"]').trigger('click')
+    await flushPromises()
+    wrapper.unmount()
+    await flushPromises()
+    expect(requests().filter((r) => r === `POST /calls/${CALL_ID}/hangup`)).toHaveLength(1)
   })
 })
 

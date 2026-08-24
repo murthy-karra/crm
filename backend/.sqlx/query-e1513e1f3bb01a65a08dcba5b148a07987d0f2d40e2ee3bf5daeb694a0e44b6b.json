@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE operator_proposal\n           SET status = 'failed', failure_code = $2, call_id = $3\n           WHERE id = $1 AND status = 'claimed'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e1513e1f3bb01a65a08dcba5b148a07987d0f2d40e2ee3bf5daeb694a0e44b6b"
+}

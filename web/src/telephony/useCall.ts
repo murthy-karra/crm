@@ -26,7 +26,7 @@
 import { computed, onScopeDispose, ref, toValue, watch, type MaybeRefOrGetter, type Ref } from 'vue'
 import { useQueryClient, type QueryClient } from '@tanstack/vue-query'
 import { queryKeys, useCall as useCallQuery, useDialCall, useHangupCall, useStartCall } from '../api/queries'
-import type { CallView } from '../api/types'
+import type { CallView, StartCallResponse } from '../api/types'
 import { CallClientError, callInProgressId, describeCallError } from './errors'
 import { createRingback, defaultRingbackContext, type RingbackContextFactory } from './ringback'
 
@@ -118,6 +118,11 @@ export interface UseCallResult {
   /** True from `requesting_mic` through `connected`. */
   active: Ref<boolean>
   start(personId: string, contactMethodId: string): Promise<void>
+  /** SLICE_006b §6: an Operator proposal the user confirmed. Order is
+   * mic FIRST, then `executeConfirm` (the confirm POST) — a mic denial
+   * must not consume the proposal — then the same join → dial path as
+   * `start`. `executeConfirm` runs at most once. */
+  startProposed(personId: string, executeConfirm: () => Promise<StartCallResponse>): Promise<void>
   hangup(): Promise<void>
   /** The 409 affordance: hangs up `error.previousCallId`, then clears the error. */
   hangupPrevious(): Promise<void>
@@ -330,11 +335,34 @@ export function useCall(options: UseCallOptions): UseCallResult {
     if (starting || active.value) return
     starting = true
     try {
-      await startInner(targetPersonId, contactMethodId)
+      await startInner(targetPersonId, {
+        kind: 'button',
+        contactMethodId,
+      })
     } finally {
       starting = false
     }
   }
+
+  async function startProposed(
+    targetPersonId: string,
+    executeConfirm: () => Promise<StartCallResponse>,
+  ): Promise<void> {
+    if (starting || active.value) return
+    starting = true
+    try {
+      await startInner(targetPersonId, {
+        kind: 'proposal',
+        executeConfirm,
+      })
+    } finally {
+      starting = false
+    }
+  }
+
+  type StartOrigin =
+    | { kind: 'button'; contactMethodId: string }
+    | { kind: 'proposal'; executeConfirm: () => Promise<StartCallResponse> }
 
   /** After every await: the scope may have been disposed or `hangup()`
    * called (`s.ending`), or a newer session may have replaced this one
@@ -345,7 +373,7 @@ export function useCall(options: UseCallOptions): UseCallResult {
     return session !== s || s.ending
   }
 
-  async function startInner(targetPersonId: string, contactMethodId: string): Promise<void> {
+  async function startInner(targetPersonId: string, origin: StartOrigin): Promise<void> {
     const s: Session = {
       room: null,
       hangupSent: false,
@@ -379,14 +407,39 @@ export function useCall(options: UseCallOptions): UseCallResult {
     }
     phase.value = 'requesting_mic'
 
-    // 1. Create the call. No call exists on failure, so nothing to hang up;
-    //    the §10 copy (incl. the 409 "hang up previous call" affordance)
-    //    comes from the error code. The join grant is read out of the
-    //    response and the mutation reset at once, so the token lives in
-    //    this local only (never the MutationCache, never a ref).
+    // The button flow creates the call before the mic prompt (SLICE_006
+    // §5); the proposal flow asks for the MIC FIRST (SLICE_006b §6) so a
+    // denial cannot consume the single-use proposal.
+    if (origin.kind === 'proposal') {
+      try {
+        await room.acquireMicrophone()
+        if (abandoned(s)) {
+          await room.disconnect().catch(() => undefined)
+          return
+        }
+      } catch (cause) {
+        if (abandoned(s)) {
+          await room.disconnect().catch(() => undefined)
+          return
+        }
+        // No call exists: nothing to hang up, the proposal stays valid.
+        await endCall(s, 'failed', new CallClientError('microphone_denied', cause))
+        return
+      }
+    }
+
+    // 1. Create the call (button: POST /people/{id}/calls; proposal: the
+    //    confirm endpoint). No call exists on failure, so nothing to hang
+    //    up; the §10 copy (incl. the 409 "hang up previous call"
+    //    affordance) comes from the error code. The join grant is read out
+    //    of the response and the mutation reset at once, so the token
+    //    lives in this local only (never the MutationCache, never a ref).
     let join: { url: string; token: string }
     try {
-      const response = await startMutation.mutateAsync({ personId: targetPersonId, contactMethodId })
+      const response =
+        origin.kind === 'button'
+          ? await startMutation.mutateAsync({ personId: targetPersonId, contactMethodId: origin.contactMethodId })
+          : await origin.executeConfirm()
       join = { url: response.join.url, token: response.join.token }
       startMutation.reset()
       if (session !== s) return
@@ -410,21 +463,23 @@ export function useCall(options: UseCallOptions): UseCallResult {
       return
     }
 
-    // 2. Microphone first (§9 "Mic permission denied → hangup → failed{cancelled}").
-    try {
-      await room.acquireMicrophone()
-      if (abandoned(s)) {
-        // Ended while the prompt was open: make sure the track is released.
-        await room.disconnect().catch(() => undefined)
+    // 2. Microphone (button flow; the proposal flow already holds it).
+    if (origin.kind === 'button') {
+      try {
+        await room.acquireMicrophone()
+        if (abandoned(s)) {
+          // Ended while the prompt was open: make sure the track is released.
+          await room.disconnect().catch(() => undefined)
+          return
+        }
+      } catch (cause) {
+        if (abandoned(s)) {
+          await room.disconnect().catch(() => undefined)
+          return
+        }
+        await endCall(s, 'failed', new CallClientError('microphone_denied', cause))
         return
       }
-    } catch (cause) {
-      if (abandoned(s)) {
-        await room.disconnect().catch(() => undefined)
-        return
-      }
-      await endCall(s, 'failed', new CallClientError('microphone_denied', cause))
-      return
     }
 
     // 3. Join the room before the PSTN leg is dialed (§5 "why two steps").
@@ -520,6 +575,7 @@ export function useCall(options: UseCallOptions): UseCallResult {
     elapsedSeconds,
     active,
     start,
+    startProposed,
     hangup,
     hangupPrevious,
     toggleMute,

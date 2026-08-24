@@ -500,6 +500,29 @@ export function useStartCall(orgId: MaybeRefOrGetter<string>, queryClient?: Quer
   )
 }
 
+/**
+ * `POST /api/operator/proposals/{id}/confirm` (SLICE_006b §4): the human
+ * click that executes a proposed call. Same response shape as
+ * `useStartCall`; seeds the call key the same way. Model-free: works with
+ * the operator unavailable.
+ */
+export function useConfirmProposal(orgId: MaybeRefOrGetter<string>, queryClient?: QueryClient) {
+  const qc = queryClient ?? useQueryClient()
+  return useMutation(
+    {
+      mutationFn: (proposalId: string) =>
+        apiFetch<StartCallResponse>(`/operator/proposals/${proposalId}/confirm`, {
+          method: 'POST',
+        }),
+      gcTime: 0,
+      onSuccess: (data) => {
+        qc.setQueryData(queryKeys.call(toValue(orgId), data.call.id), { call: data.call } satisfies CallResponse)
+      },
+    },
+    queryClient,
+  )
+}
+
 /** `POST /api/calls/{id}/dial` → 202 `{call}` (still `placing`; the dial task
  * moves it to `ringing`). 409 `invalid_call_state` on a second request. The
  * 202 body is deliberately not written to the cache: the 201 already seeded

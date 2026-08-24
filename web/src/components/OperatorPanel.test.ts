@@ -1,13 +1,38 @@
 // SLICE_005 §13 item 5: pending/disabled states, each error code's copy,
 // cards from `references` only (a reply containing a UUID or `<a>` renders
 // as text), history capped at 6 and cleared by Clear, context per route.
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type DOMWrapper } from '@vue/test-utils'
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, apiFetch } from '../api/client'
 import type { OperatorTurnRequest, OperatorTurnResponse } from '../api/types'
+import { defineComponent } from 'vue'
 import OperatorPanel from './OperatorPanel.vue'
+import { CALL_HOST_KEY, provideCallHost, type CallHost } from '../telephony/callHost'
+import type { CallRoomFactory, CallRoom } from '../telephony/useCall'
+
+const ORG_ID = '11111111-1111-1111-1111-111111111111'
+
+/** A no-op room; `events` records the mic/connect order so the
+ * mic-BEFORE-confirm rule (SLICE_006b §6) is assertable. */
+function fakeRoomFactory(behavior: { denyMic?: boolean; events?: string[] } = {}): CallRoomFactory {
+  return () =>
+    ({
+      on: () => undefined,
+      load: () => Promise.resolve(),
+      acquireMicrophone: () => {
+        behavior.events?.push('mic')
+        return behavior.denyMic ? Promise.reject(new Error('denied')) : Promise.resolve()
+      },
+      connect: () => {
+        behavior.events?.push('connect')
+        return Promise.resolve()
+      },
+      setMicrophoneMuted: () => Promise.resolve(),
+      disconnect: () => Promise.resolve(),
+    }) satisfies CallRoom
+}
 
 vi.mock('../api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/client')>()
@@ -21,6 +46,7 @@ function response(overrides: Partial<OperatorTurnResponse> = {}): OperatorTurnRe
   return {
     turn_id: 'turn-1',
     reply: 'Call Grace first.',
+    proposal: null,
     references: {
       people: [
         {
@@ -41,7 +67,7 @@ function response(overrides: Partial<OperatorTurnResponse> = {}): OperatorTurnRe
   }
 }
 
-async function mountPanel(path = '/today') {
+async function mountPanel(path = '/today', roomBehavior: { denyMic?: boolean; events?: string[] } = {}) {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -54,14 +80,29 @@ async function mountPanel(path = '/today') {
   await router.push(path)
   await router.isReady()
   const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
-  const wrapper = mount(OperatorPanel, {
+  // The drawer needs the app-level call host (SLICE_006b §6).
+  let host: CallHost | undefined
+  const Harness = defineComponent({
+    components: { OperatorPanel },
+    setup() {
+      host = provideCallHost({ orgId: () => ORG_ID, createRoom: fakeRoomFactory(roomBehavior) })
+    },
+    template: '<OperatorPanel />',
+  })
+  const wrapper = mount(Harness, {
     global: { plugins: [router, [VueQueryPlugin, { queryClient }]] },
     attachTo: document.body,
   })
-  return { wrapper, router }
+  return { wrapper, router, host: host! }
 }
 
-async function type(wrapper: Awaited<ReturnType<typeof mountPanel>>['wrapper'], text: string) {
+/** The structural surface both harnesses (provideCallHost wrapper and the
+ * mock-host direct mount) expose to the shared helpers. */
+interface PanelDom {
+  get(selector: string): Pick<DOMWrapper<Element>, 'setValue' | 'trigger' | 'text' | 'attributes'>
+}
+
+async function type(wrapper: PanelDom, text: string) {
   await wrapper.get('[data-testid="operator-input"]').setValue(text)
 }
 
@@ -216,6 +257,175 @@ describe('OperatorPanel', () => {
     expect(apiFetchMock).toHaveBeenCalledTimes(1)
 
     await wrapper.get('[data-testid="operator-close"]').trigger('click')
-    expect(wrapper.emitted('close')).toHaveLength(1)
+    expect(wrapper.findComponent(OperatorPanel).emitted('close')).toHaveLength(1)
+  })
+})
+
+// ---- SLICE_006b §6: the proposal card ---------------------------------------
+
+const PROPOSAL_ID = '9b1c1a3e-2b6a-4c1e-9a1f-0d3e4f5a6b7c'
+const CALL_ID = '7c2d1a3e-2b6a-4c1e-9a1f-0d3e4f5a6b7d'
+
+function proposal(expiresInMs = 120_000) {
+  return {
+    id: PROPOSAL_ID,
+    kind: 'start_call' as const,
+    person: response().references.people[0],
+    phone: '(555) 015-0100',
+    contact_method_id: '6d3e1a3e-2b6a-4c1e-9a1f-0d3e4f5a6b7e',
+    expires_at: new Date(Date.now() + expiresInMs).toISOString(),
+  }
+}
+
+function stubTurnThenConfirm(turn: OperatorTurnResponse, confirmResult?: () => Promise<unknown>) {
+  apiFetchMock.mockImplementation((path: string, init?: RequestInit) => {
+    const method = init?.method ?? 'GET'
+    if (method === 'POST' && path === '/operator/turns') return Promise.resolve(turn)
+    if (method === 'POST' && path === `/operator/proposals/${PROPOSAL_ID}/confirm`) {
+      if (confirmResult) return confirmResult()
+      return Promise.resolve({
+        call: { id: CALL_ID, person_id: proposal().person.id, status: 'placing' },
+        join: { url: 'wss://lk', token: 'tok', room: 'call-x' },
+      })
+    }
+    if (method === 'POST' && path === `/calls/${CALL_ID}/dial`) {
+      return Promise.resolve({ call: { id: CALL_ID, status: 'ringing' } })
+    }
+    if (method === 'GET' && path === `/calls/${CALL_ID}`) {
+      return Promise.resolve({ call: { id: CALL_ID, status: 'ringing' } })
+    }
+    if (method === 'POST' && path === `/calls/${CALL_ID}/hangup`) {
+      return Promise.resolve({ call: { id: CALL_ID, status: 'ended' } })
+    }
+    return Promise.reject(new Error(`unexpected ${method} ${path}`))
+  })
+}
+
+async function sendTurn(wrapper: PanelDom) {
+  await type(wrapper, 'call grace')
+  await wrapper.get('[data-testid="operator-send"]').trigger('click')
+  await flushPromises()
+}
+
+describe('OperatorPanel — start_call proposal card (SLICE_006b)', () => {
+  it('renders the card from the server proposal object only, and Confirm asks for the mic BEFORE the confirm POST', async () => {
+    const events: string[] = []
+    stubTurnThenConfirm(response({ proposal: proposal(), reply: 'Call (999) 999-9999 now!' }))
+    const { wrapper } = await mountPanel('/today', { events })
+    await sendTurn(wrapper)
+
+    const card = wrapper.get('[data-testid="operator-proposal"]')
+    // Server data, not the model's prose number.
+    expect(card.text()).toContain('Grace Hopper')
+    expect(card.text()).toContain('(555) 015-0100')
+    expect(card.text()).not.toContain('(999) 999-9999')
+
+    await card.get('[data-testid="operator-proposal-confirm"]').trigger('click')
+    await flushPromises()
+    const confirmIndex = apiFetchMock.mock.calls.findIndex(
+      ([path]) => path === `/operator/proposals/${PROPOSAL_ID}/confirm`,
+    )
+    expect(confirmIndex).toBeGreaterThan(-1)
+    expect(events[0]).toBe('mic')
+    // The card hands over to the docked panel.
+    expect(wrapper.get('[data-testid="operator-proposal-started"]').text()).toContain('Calling')
+  })
+
+  it('mic denial never consumes the proposal: no confirm POST, Confirm clickable again', async () => {
+    stubTurnThenConfirm(response({ proposal: proposal() }))
+    const { wrapper } = await mountPanel('/today', { denyMic: true })
+    await sendTurn(wrapper)
+
+    await wrapper.get('[data-testid="operator-proposal-confirm"]').trigger('click')
+    await flushPromises()
+    expect(
+      apiFetchMock.mock.calls.some(([path]) => path === `/operator/proposals/${PROPOSAL_ID}/confirm`),
+    ).toBe(false)
+    const confirm = wrapper.get('[data-testid="operator-proposal-confirm"]')
+    expect(confirm.attributes('disabled')).toBeUndefined()
+  })
+
+  it('an expired proposal disables Confirm with the expiry copy', async () => {
+    stubTurnThenConfirm(response({ proposal: proposal(-1000) }))
+    const { wrapper } = await mountPanel()
+    await sendTurn(wrapper)
+
+    const confirm = wrapper.get('[data-testid="operator-proposal-confirm"]')
+    expect(confirm.attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="operator-proposal-expired"]').text()).toBe(
+      'This suggestion expired — ask again.',
+    )
+  })
+
+  it('a 409 proposal_expired from confirm shows the copy and finalizes the card', async () => {
+    stubTurnThenConfirm(response({ proposal: proposal() }), () =>
+      Promise.reject(new ApiError(409, 'proposal_expired', {})),
+    )
+    const { wrapper } = await mountPanel()
+    await sendTurn(wrapper)
+
+    await wrapper.get('[data-testid="operator-proposal-confirm"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="operator-proposal-message"]').text()).toBe(
+      'This suggestion expired — ask again.',
+    )
+    expect(
+      wrapper.get('[data-testid="operator-proposal-confirm"]').attributes('disabled'),
+    ).toBeDefined()
+  })
+
+  it('Dismiss is local: no request, card finalized', async () => {
+    stubTurnThenConfirm(response({ proposal: proposal() }))
+    const { wrapper } = await mountPanel()
+    await sendTurn(wrapper)
+    const before = apiFetchMock.mock.calls.length
+
+    await wrapper.get('[data-testid="operator-proposal-dismiss"]').trigger('click')
+    await flushPromises()
+    expect(apiFetchMock.mock.calls.length).toBe(before)
+    expect(wrapper.get('[data-testid="operator-proposal-message"]').text()).toBe('Dismissed.')
+    expect(
+      wrapper.get('[data-testid="operator-proposal-confirm"]').attributes('disabled'),
+    ).toBeDefined()
+  })
+})
+
+describe('OperatorPanel — local pre-checks never consume the proposal (SLICE_006b §6)', () => {
+  async function mountWithMockHost(code: string) {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/today', component: { template: '<div />' } }],
+    })
+    await router.push('/today')
+    await router.isReady()
+    const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+    const startFromProposal = vi.fn(() => Promise.resolve(code))
+    const host = { startFromProposal, call: { error: { value: null } } } as unknown as CallHost
+    const wrapper = mount(OperatorPanel, {
+      global: {
+        plugins: [router, [VueQueryPlugin, { queryClient }]],
+        provide: { [CALL_HOST_KEY as symbol]: host },
+      },
+      attachTo: document.body,
+    })
+    return { wrapper, startFromProposal }
+  }
+
+  it.each([
+    ['call_in_progress', 'You already have a call in progress — hang up first.'],
+    ['outcome_pending', "Save the previous call's outcome first."],
+  ])('%s: shows its copy and keeps Confirm retryable', async (code, copy) => {
+    stubTurnThenConfirm(response({ proposal: proposal() }))
+    const { wrapper, startFromProposal } = await mountWithMockHost(code)
+    await sendTurn(wrapper)
+
+    await wrapper.get('[data-testid="operator-proposal-confirm"]').trigger('click')
+    await flushPromises()
+    expect(startFromProposal).toHaveBeenCalledTimes(1)
+    expect(wrapper.get('[data-testid="operator-proposal-message"]').text()).toBe(copy)
+    // Retryable: the pre-check consumed nothing.
+    expect(
+      wrapper.get('[data-testid="operator-proposal-confirm"]').attributes('disabled'),
+    ).toBeUndefined()
   })
 })

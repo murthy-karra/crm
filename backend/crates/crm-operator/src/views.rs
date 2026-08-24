@@ -84,6 +84,32 @@ impl<'de> Deserialize<'de> for UntrustedText {
     }
 }
 
+/// `start_call`'s outcome (docs/specs/SLICE_006b.md §3): a proposal the
+/// user must confirm in the UI, a number-choice question, or "no phone".
+/// Only `Proposed` writes a row; the model can never execute anything.
+#[derive(Debug, Clone)]
+pub enum StartCallProposalOutcome {
+    Proposed(Box<ProposalView>),
+    NeedsNumberChoice { phones: Vec<PhoneOption> },
+    NoPhone,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ProposalView {
+    pub proposal_id: Uuid,
+    pub person: PersonCard,
+    pub phone: UntrustedText,
+    pub contact_method_id: Uuid,
+    pub expires_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PhoneOption {
+    pub contact_method_id: Uuid,
+    // No label until one exists in the schema (docs/specs/SLICE_006b.md §3).
+    pub value: UntrustedText,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PersonCard {
     pub id: Uuid,

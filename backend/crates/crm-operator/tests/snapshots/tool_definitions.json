@@ -72,6 +72,29 @@
     }
   },
   {
+    "name": "start_call",
+    "description": "Propose a phone call to a Person. This does NOT place the call: it prepares a proposal the user must confirm in the app before anything happens. Use only when the user explicitly asks to call someone. If the Person has several phone numbers, call this without contact_method_id first to see the options, then ask the user which to use.",
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "contact_method_id": {
+          "description": "The chosen phone contact method's id, from a previous start_call result. Omit when the Person has one phone number.",
+          "format": "uuid",
+          "type": "string"
+        },
+        "person_id": {
+          "description": "The Person's id, from a previous tool result.",
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "person_id"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "name": "explain_priority",
     "description": "Why a Person is (or is not) on the user's Today list and at what position: priority tier, reasons, the ordering rule, and how many People are ahead in each tier.",
     "parameters": {

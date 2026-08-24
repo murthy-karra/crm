@@ -20,6 +20,7 @@ pub const GET_PERSON: &str = "get_person";
 pub const GET_TODAY: &str = "get_today";
 pub const GET_NEXT_WORK_ITEM: &str = "get_next_work_item";
 pub const EXPLAIN_PRIORITY: &str = "explain_priority";
+pub const START_CALL: &str = "start_call";
 
 /// The tool contract offered to the model on every call.
 pub fn tool_definitions() -> Vec<ToolDefinition> {
@@ -93,6 +94,27 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
             }),
         },
         ToolDefinition {
+            name: START_CALL,
+            description: "Propose a phone call to a Person. This does NOT place the call: it prepares a proposal the user must confirm in the app before anything happens. Use only when the user explicitly asks to call someone. If the Person has several phone numbers, call this without contact_method_id first to see the options, then ask the user which to use.",
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "person_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "The Person's id, from a previous tool result."
+                    },
+                    "contact_method_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "The chosen phone contact method's id, from a previous start_call result. Omit when the Person has one phone number."
+                    }
+                },
+                "required": ["person_id"],
+                "additionalProperties": false
+            }),
+        },
+        ToolDefinition {
             name: EXPLAIN_PRIORITY,
             description: "Why a Person is (or is not) on the user's Today list and at what position: priority tier, reasons, the ordering rule, and how many People are ahead in each tier.",
             parameters: json!({
@@ -115,11 +137,24 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
 /// a `ToolBackend`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ToolInvocation {
-    SearchPeople { query: String, limit: usize },
-    GetPerson { person_id: Uuid },
-    GetToday { limit: usize },
+    SearchPeople {
+        query: String,
+        limit: usize,
+    },
+    GetPerson {
+        person_id: Uuid,
+    },
+    GetToday {
+        limit: usize,
+    },
     GetNextWorkItem,
-    ExplainPriority { person_id: Uuid },
+    ExplainPriority {
+        person_id: Uuid,
+    },
+    StartCall {
+        person_id: Uuid,
+        contact_method_id: Option<Uuid>,
+    },
 }
 
 impl ToolInvocation {
@@ -130,6 +165,7 @@ impl ToolInvocation {
             ToolInvocation::GetToday { .. } => GET_TODAY,
             ToolInvocation::GetNextWorkItem => GET_NEXT_WORK_ITEM,
             ToolInvocation::ExplainPriority { .. } => EXPLAIN_PRIORITY,
+            ToolInvocation::StartCall { .. } => START_CALL,
         }
     }
 }
@@ -167,6 +203,7 @@ fn known_properties(name: &str) -> Option<&'static [&'static str]> {
     match name {
         SEARCH_PEOPLE => Some(&["query", "limit"]),
         GET_PERSON | EXPLAIN_PRIORITY => Some(&["person_id"]),
+        START_CALL => Some(&["person_id", "contact_method_id"]),
         GET_TODAY => Some(&["limit"]),
         GET_NEXT_WORK_ITEM => Some(&[]),
         _ => None,
@@ -228,6 +265,13 @@ pub fn parse_invocation(name: &str, arguments: &str) -> Result<ToolInvocation, A
             limit: parse_limit(object.get("limit"), TODAY_LIMIT_MIN, TODAY_LIMIT_MAX)?,
         }),
         GET_NEXT_WORK_ITEM => Ok(ToolInvocation::GetNextWorkItem),
+        START_CALL => Ok(ToolInvocation::StartCall {
+            person_id: parse_uuid(object.get("person_id"))?,
+            contact_method_id: match object.get("contact_method_id") {
+                None | Some(Value::Null) => None,
+                some => Some(parse_uuid_named(some, "contact_method_id")?),
+            },
+        }),
         _ => Err(ArgumentError::UnknownTool),
     }
 }
@@ -253,11 +297,15 @@ fn parse_limit(value: Option<&Value>, min: u64, max: u64) -> Result<usize, Argum
 }
 
 fn parse_uuid(value: Option<&Value>) -> Result<Uuid, ArgumentError> {
+    parse_uuid_named(value, "person_id")
+}
+
+fn parse_uuid_named(value: Option<&Value>, name: &'static str) -> Result<Uuid, ArgumentError> {
     let raw = value
-        .ok_or(ArgumentError::MissingProperty("person_id"))?
+        .ok_or(ArgumentError::MissingProperty(name))?
         .as_str()
-        .ok_or(ArgumentError::WrongType("person_id"))?;
-    Uuid::parse_str(raw.trim()).map_err(|_| ArgumentError::InvalidUuid("person_id"))
+        .ok_or(ArgumentError::WrongType(name))?;
+    Uuid::parse_str(raw.trim()).map_err(|_| ArgumentError::InvalidUuid(name))
 }
 
 #[cfg(test)]

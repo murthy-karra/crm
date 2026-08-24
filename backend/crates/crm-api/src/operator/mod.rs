@@ -29,6 +29,9 @@ pub struct OperatorRuntime {
     pub service: OperatorService,
     semaphore: Arc<Semaphore>,
     in_flight: Mutex<HashSet<Uuid>>,
+    /// `start_call` proposal lifetime (docs/specs/SLICE_006b.md §2),
+    /// threaded to `SqlxToolBackend` at turn time.
+    proposal_ttl: Duration,
 }
 
 /// Both concurrency entries, released by RAII (docs/specs/SLICE_005.md
@@ -77,10 +80,19 @@ pub enum SlotError {
 
 impl OperatorRuntime {
     pub fn new(service: OperatorService, max_concurrent: usize) -> Self {
+        Self::with_proposal_ttl(service, max_concurrent, Duration::from_secs(120))
+    }
+
+    pub fn with_proposal_ttl(
+        service: OperatorService,
+        max_concurrent: usize,
+        proposal_ttl: Duration,
+    ) -> Self {
         Self {
             service,
             semaphore: Arc::new(Semaphore::new(max_concurrent.max(1))),
             in_flight: Mutex::new(HashSet::new()),
+            proposal_ttl,
         }
     }
 
@@ -98,9 +110,10 @@ impl OperatorRuntime {
             turn_timeout: config.operator.turn_timeout,
             ..Limits::default()
         };
-        Some(Self::new(
+        Some(Self::with_proposal_ttl(
             OperatorService::new(Arc::new(provider), limits),
             config.operator.max_concurrent,
+            config.operator.proposal_ttl,
         ))
     }
 
@@ -115,6 +128,10 @@ impl OperatorRuntime {
 
     pub fn turn_timeout(&self) -> Duration {
         self.service.limits().turn_timeout
+    }
+
+    pub fn proposal_ttl(&self) -> Duration {
+        self.proposal_ttl
     }
 
     /// Acquires both guards or fails fast with `Busy` — never waits

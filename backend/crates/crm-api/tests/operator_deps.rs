@@ -16,7 +16,9 @@ fn crm_operator_has_no_sqlx_axum_or_crm_api_dependency() {
         .split("[dependencies]")
         .nth(1)
         .expect("crm-operator has a [dependencies] section");
-    for forbidden in ["sqlx", "axum", "crm-api", "crm_api"] {
+    // "crm-app" joined the list in Slice 006b (D-034): mutation tools go
+    // through the ToolBackend seam; crm-operator gets no domain edge.
+    for forbidden in ["sqlx", "axum", "crm-api", "crm_api", "crm-app", "crm_app"] {
         let direct = deps_section
             .lines()
             .any(|line| line.trim_start().starts_with(forbidden));

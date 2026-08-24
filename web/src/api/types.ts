@@ -519,12 +519,24 @@ export interface OperatorToolCall {
 /** The 200 outcomes; every other `TurnOutcome` is a 503 `operator_unavailable`. */
 export type OperatorTurnOutcome = 'completed' | 'tool_budget_exhausted' | 'malformed_tool_call'
 
+/** SLICE_006b §4: the turn's `start_call` proposal. The card renders from
+ * this server-built object only — never from model prose. */
+export interface OperatorProposal {
+  id: string
+  kind: 'start_call'
+  person: OperatorPersonCard
+  phone: string
+  contact_method_id: string
+  expires_at: string
+}
+
 export interface OperatorTurnResponse {
   turn_id: string
   /** Plain text. Rendered by interpolation only — never as HTML or markdown. */
   reply: string
   references: { people: OperatorPersonCard[] }
   tool_calls: OperatorToolCall[]
+  proposal: OperatorProposal | null
   outcome: OperatorTurnOutcome
 }
 

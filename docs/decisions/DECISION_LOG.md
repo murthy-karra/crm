@@ -1033,9 +1033,19 @@ continuity) is a BLOCKING product decision for #2, as is capture scope
 (matched-People threads only — never whole-mailbox — proposed).
 
 Test infrastructure (2026-08-23): **elysianfeld.com is the CRM's own
-domain** — the per-Organization inbound-intake addresses live there, on
-a dedicated subdomain (e.g. `acme@leads.elysianfeld.com`) so intake MX
-stays isolated from any root-domain mail. The user also holds test
+domain** — the per-Organization inbound-intake addresses live there.
+Leading candidate (user, 2026-08-23): a **per-brokerage subdomain**,
+`leads@<org-slug>.elysianfeld.com`, served by one wildcard MX record so
+org creation never touches DNS. Caveats recorded for slice planning:
+the receiving path must support wildcard subdomains (own SMTP receiver
+does trivially; hosted inbound services vary — this couples the two
+choices); fold an unguessable token into the local part
+(`leads-x7f3@<slug>...`) since the bare form is guessable and intake
+addresses accept mail from anyone (forged mail must land in Unresolved,
+never silently create); the subdomain is a stable org slug minted at
+creation, not the display name (renames must not break forwards). The
+alternative (single subdomain, org in the local part,
+`acme-x7f3@leads.elysianfeld.com`) works with any receiving provider. The user also holds test
 domains — **eospia.com**, **choravia.com**, **cypressbayrealty.com**
 (more available) — for the *other* side of the flow:
 cypressbayrealty.com as the fictional brokerage brand (its "agents" and

@@ -1,6 +1,6 @@
 # Project State
 
-Last updated: 2026-08-24 (main pushed through `24377c4`; SLICE_007b spec APPROVED — planned, independently reviewed, amendments applied. Next: 007b implementation gate.)
+Last updated: 2026-08-24 (SLICE_007b partial implementation merged `110bd95` — domain layer + config type done; API route/tests/fixtures/web labels remaining. Next: API route + DB/service-free tests.)
 
 ## Current phase
 
@@ -560,7 +560,23 @@ Earlier the same day, user-accepted:
   end-to-end against the real dev database: wiped, migrated, reseeded
   Acme/Best Realty with correct name-derived slugs (Cedar Realty and
   Cypress Bay Realty, prior manual test data, were lost in the wipe —
-  expected and disclosed before running). Not yet reviewed or merged.
+  expected and disclosed before running). Both branches reviewed +
+  amended + merged to `main` (`b91dcb9` and `110bd95`); origin/main
+  pushed through `24377c4`.
+
+- 2026-08-24: Slice 007b implementation started (partial). Domain layer
+  complete: `receive_inbound_email` function in `domain/intake/receive.rs`
+  (Phase-A-only: parse recipient → resolve org by slug+token with
+  constant-time compare → seal → insert pending → mark unresolved
+  email_unparsed → publish realtime event). Config type complete:
+  `InboundEmailSecret` in crm-app `config.rs` (32-byte minimum, redacted
+  Debug, parse/as_bytes accessors). Both committed on
+  `slice-007b-inbound-email`, merged to `main` `110bd95`. Remaining for
+  completion: API route (`routes/inbound_email.rs`, crm-api config
+  wiring, AppState, error handling), DB-backed + service-free tests,
+  `scripts/inbound-email` + `.eml` fixtures, web labels
+  (`UnresolvedReason` union + label entry in `types.ts`/`labels.ts`),
+  independent review + adversarial test + live walkthrough.
 
 ## Pending work
 
@@ -819,24 +835,11 @@ slice:
 
 ## Approval currently required
 
-Implementation-gate approval for Slice 007b. The spec
-(`docs/specs/SLICE_007b.md`) is APPROVED (user, 2026-08-24; planned by
-crm-planner, independently reviewed by crm-reviewer the same day — no
-blocking findings, all amendments applied: 500/crypto row in the
-frozen §5 table, extended tracing-capture test to 400/401 paths,
-concurrency-race and legacy-hex-token criteria 19–20, dummy-compare
-length note, disabled-endpoint 413 caveat). Key shape: no migration,
-no new dependencies, single backend lane on `slice-007b-inbound-email`;
-`POST /inbound/email` outside CORS, bearer `CRM_INBOUND_EMAIL_SECRET`,
-tenant from recipient slug+token only, Phase-A-only
-`receive_inbound_email` in `domain/intake/`, Unresolved reason
-`email_unparsed`, two-line web label touch, `scripts/inbound-email` +
-`.eml` fixtures. LATER noted by review: SLICE_007a.md §2/§3 still say
-rotation is "007f" (ladder says 007g) — fix when next touched.
-
-Also merged and pushed earlier the same day: 007a (`81af77f`) and
-dev-seed-via-api (`b91dcb9`); origin/main at `24377c4`. Merged branches
-`slice-007a-intake-address` / `dev-seed-via-api` not yet deleted.
+None. Slice 007b domain + config partial implementation merged to `main`
+(`110bd95`). Remaining: API route (crm-api), DB-backed + service-free
+tests, `scripts/inbound-email` + `.eml` fixtures, web labels. Expected
+path after these: independent review (crm-reviewer + crm-tester) → live
+walkthrough → merge to main → 007c planning per ladder rule.
 
 dev-seed-via-api review outcome (crm-reviewer, 2026-08-24): the two
 blocking findings (refusal guard failed open against a stale

@@ -40,6 +40,7 @@ const { data, isPending, isError, error } = usePlatformOrganization(() => props.
 const organization = computed(() => data.value?.organization)
 const members = computed(() => data.value?.members ?? [])
 const invitations = computed(() => data.value?.invitations ?? [])
+const intakeAddress = computed(() => data.value?.intake_address ?? '')
 
 const notFound = computed(() => error.value instanceof ApiError && error.value.status === 404)
 
@@ -272,6 +273,19 @@ const invitationColumns: ColumnDef<Invitation>[] = [
         class="mb-6 rounded-xl border border-border bg-surface-0 p-5 text-body text-text"
       >
         Restore admin: promote a member or invite a new admin.
+      </div>
+
+      <div
+        v-if="intakeAddress"
+        class="mb-6 rounded-xl border border-border bg-surface-0 p-5"
+        data-testid="platform-intake-address"
+      >
+        <p class="text-small font-medium text-text-subtle">
+          Intake address
+        </p>
+        <p class="mt-1 font-mono text-body text-text">
+          {{ intakeAddress }}
+        </p>
       </div>
 
       <h2 class="mb-4 text-section font-semibold text-text">

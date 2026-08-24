@@ -25,6 +25,7 @@ use crate::domain::admin::commands::{
 use crate::domain::admin::queries as admin_queries;
 use crate::domain::admin::{AdminActor, Role};
 use crate::domain::envelope::Origin;
+use crate::domain::intake::IntakeAddress;
 use crate::error::ApiError;
 use crate::state::AppState;
 
@@ -150,11 +151,19 @@ async fn get_organization_detail(
     let invitations = admin_queries::list_invitations(&mut conn, organization_id)
         .await
         .map_err(|_| ApiError::Unavailable)?;
+    // Slice 007a: an onboarding-configuration value (not tenant CRM data —
+    // a recorded exclusion to D-021), top-level so the list stays untouched.
+    let intake_address = admin_queries::organization_intake_address(&mut conn, organization_id)
+        .await
+        .map_err(|_| ApiError::Unavailable)?
+        .map(|(slug, token)| IntakeAddress { slug, token }.render(&state.intake_mail))
+        .ok_or(ApiError::Unavailable)?;
 
     Ok(Json(json!({
         "organization": organization,
         "members": members,
         "invitations": invitations,
+        "intake_address": intake_address,
     })))
 }
 

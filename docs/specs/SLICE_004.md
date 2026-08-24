@@ -408,6 +408,11 @@ no data exposure). `Publisher::Disabled` is added for the CLI (SLICE_003
 
 ## 7. Authorization and tenant isolation
 
+> Amended by SLICE_007a §5 (declared additive change): `GET
+> /api/platform/organizations/{id}` gained a top-level `intake_address`
+> — an onboarding-configuration value, a recorded exclusion to D-021's
+> "no tenant CRM data" rule for platform admins.
+
 - Three extractors (§3). Every admin route is 403 for a member, every
   platform route is 403 for an Organization admin without a
   `platform_admin` row, every tenant route is 401 for a platform-only

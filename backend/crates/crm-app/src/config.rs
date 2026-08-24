@@ -191,3 +191,39 @@ mod tests {
         assert_eq!(RawPayloadKey::new([7u8; 32]).as_bytes(), &[7u8; 32]);
     }
 }
+
+/// How an Organization's intake address is rendered (docs/specs/
+/// SLICE_007a.md §4; O-014 decision 1). Storage is scheme-neutral.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IntakeAddressScheme {
+    /// `leads-<token>@<slug>.<domain>` — the user's preference, default.
+    Subdomain,
+    /// `<slug>-<token>@leads.<domain>` — for receiving paths without
+    /// wildcard-subdomain support.
+    LocalPart,
+}
+
+impl IntakeAddressScheme {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            IntakeAddressScheme::Subdomain => "subdomain",
+            IntakeAddressScheme::LocalPart => "local_part",
+        }
+    }
+
+    pub fn parse(raw: &str) -> Option<Self> {
+        match raw {
+            "subdomain" => Some(IntakeAddressScheme::Subdomain),
+            "local_part" => Some(IntakeAddressScheme::LocalPart),
+            _ => None,
+        }
+    }
+}
+
+/// `CRM_INTAKE_MAIL_DOMAIN` + `CRM_INTAKE_ADDRESS_SCHEME`. `domain` is a
+/// bare hostname (validated by `Config::from_source`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IntakeMailConfig {
+    pub domain: String,
+    pub scheme: IntakeAddressScheme,
+}

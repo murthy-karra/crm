@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use sqlx::postgres::{PgPool, PgPoolOptions};
 
-use crate::config::{Config, RawPayloadKey, RealtimeTokenSecret, SessionSecret};
+use crate::config::{Config, IntakeMailConfig, RawPayloadKey, RealtimeTokenSecret, SessionSecret};
 use crate::operator::OperatorRuntime;
 use crate::realtime::{CentrifugoTransport, Publisher};
 use crate::telephony::Telephony;
@@ -31,6 +31,8 @@ pub struct AppState {
     /// /api/calls/{id}`, history) keep working (docs/specs/SLICE_006.md
     /// §3, §9).
     pub telephony: Option<Arc<Telephony>>,
+    /// Slice 007a: renders Organization intake addresses.
+    pub intake_mail: IntakeMailConfig,
 }
 
 impl AppState {
@@ -85,6 +87,7 @@ impl AppState {
             publisher,
             operator,
             telephony,
+            intake_mail: config.intake_mail.clone(),
         })
     }
 
@@ -108,6 +111,7 @@ impl AppState {
             realtime_token_secret: config.realtime_token_secret.clone(),
             realtime_token_ttl: config.realtime_token_ttl,
             invitation_ttl: config.invitation_ttl,
+            intake_mail: config.intake_mail.clone(),
             publisher,
             operator: None,
             telephony: None,

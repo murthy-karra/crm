@@ -84,6 +84,12 @@ function routes(): RouteRecordRaw[] {
       meta: { requiresOrgAdmin: true, title: 'Members' },
     },
     {
+      path: '/manage/intake',
+      name: 'manage-intake',
+      component: () => import('./views/IntakeSettingsView.vue'),
+      meta: { requiresOrgAdmin: true, title: 'Intake' },
+    },
+    {
       path: '/platform',
       name: 'platform-organizations',
       component: () => import('./views/PlatformOrganizationsView.vue'),

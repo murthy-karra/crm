@@ -1,6 +1,6 @@
 # Project State
 
-Last updated: 2026-08-23 (Slice 007 email-intake ladder planned + reviewed; 007a spec ready; awaiting implementation gate)
+Last updated: 2026-08-24 (007a IMPLEMENTED on slice-007a-intake-address; live in dev; awaiting merge approval. Unrelated dev-tooling branch `dev-seed-via-api` also committed, off the same commit, awaiting review/merge decision.)
 
 ## Current phase
 
@@ -541,6 +541,27 @@ Earlier the same day, user-accepted:
   - Backend/frontend/tunnel processes stopped after the run; dev-services
     (Postgres, Centrifugo) left running per instruction.
 
+- 2026-08-24: Dev seeding moved from `crm-admin seed-dev` (in-process
+  domain-function calls) to `scripts/seed_dev.py` (the live HTTP API),
+  on a new branch `dev-seed-via-api` off the same commit as
+  `slice-007a-intake-address` (kept separate since it's dev tooling, not
+  part of 007a's feature scope). `scripts/dev-bootstrap` now wipes and
+  recreates the database on every run instead of being idempotent — user
+  choice ("I always want to start from a baseline"). Found and fixed
+  along the way: an Organization created before the 007a migration ran
+  fell into its backfill path and got a generic `org-<uuid8>` intake
+  slug instead of a name-derived one; a genuinely blank database (this
+  new flow's starting point) never hits that path. `./scripts/check`
+  equivalent (fmt, clippy `-D warnings`, `cargo check --workspace`, full
+  `cargo test --workspace`) green; both rewritten DB tests
+  (`db_identity.rs::platform_bootstrap_flow_rejects_repeat_creation`,
+  `db_people.rs::organization_creation_seeds_nine_ordered_stages_and_two_members`)
+  pass against a real Postgres instance. `dev-bootstrap` run live
+  end-to-end against the real dev database: wiped, migrated, reseeded
+  Acme/Best Realty with correct name-derived slugs (Cedar Realty and
+  Cypress Bay Realty, prior manual test data, were lost in the wipe —
+  expected and disclosed before running). Not yet reviewed or merged.
+
 ## Pending work
 
 1. Resolved 2026-08-22 (D-024): the Cloudflare Access application was
@@ -798,4 +819,6 @@ slice:
 
 ## Approval currently required
 
-Implementation gate for Slice 007a (`Proceed with implementation?`).
+Merge approval for `slice-007a-intake-address` → `main`. Separately:
+review + merge decision for `dev-seed-via-api` (dev tooling, committed
+but unreviewed).

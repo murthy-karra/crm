@@ -22,12 +22,14 @@ use crate::domain::admin::commands::{
 use crate::domain::admin::queries as admin_queries;
 use crate::domain::admin::{AdminActor, MembershipStatus, Role};
 use crate::domain::envelope::Origin;
+use crate::domain::intake::IntakeAddress;
 use crate::error::ApiError;
 use crate::state::AppState;
 
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/organization/members", get(members))
+        .route("/api/organization/intake-address", get(intake_address))
         .route("/api/organization/members/{user_id}/role", put(update_role))
         .route(
             "/api/organization/members/{user_id}/status",
@@ -225,4 +227,26 @@ async fn revoke_invitation_route(
     .await?;
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// `GET /api/organization/intake-address` (docs/specs/SLICE_007a.md §5):
+/// the Organization's rendered intake address. Org admins only — the
+/// token in it is the anti-forgery secret. Rendered from
+/// `state.intake_mail`, never stored as text.
+async fn intake_address(
+    State(state): State<AppState>,
+    ctx: OrgAdminContext,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
+    let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
+    let (slug, token) =
+        admin_queries::organization_intake_address(&mut conn, ctx.auth.active_organization_id)
+            .await
+            .map_err(|_| ApiError::Unavailable)?
+            .ok_or(ApiError::Unavailable)?;
+    let address = IntakeAddress { slug, token }.render(&state.intake_mail);
+    Ok(Json(json!({
+        "address": address,
+        "scheme": state.intake_mail.scheme.as_str(),
+    })))
 }

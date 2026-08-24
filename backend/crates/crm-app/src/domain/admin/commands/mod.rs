@@ -37,6 +37,8 @@ pub enum AdminCommandError {
     MalformedRequest,
     LastAdmin,
     Crypto,
+    /// Slice 007a: nine intake-slug candidates all taken (create_organization).
+    IntakeSlugExhausted,
     /// Data read back from our own database didn't match an expected
     /// shape — fail closed rather than panic, matching
     /// `domain::commands::CommandError::Corrupt`.
@@ -67,6 +69,7 @@ impl AdminCommandError {
             AdminCommandError::MalformedRequest => "malformed_request",
             AdminCommandError::LastAdmin => "last_admin",
             AdminCommandError::Crypto => "crypto",
+            AdminCommandError::IntakeSlugExhausted => "intake_slug_exhausted",
             AdminCommandError::Corrupt => "corrupt",
             AdminCommandError::Database(_) => "database",
         }

@@ -197,6 +197,7 @@ impl From<AdminCommandError> for ApiError {
             AdminCommandError::LastAdmin => ApiError::LastAdmin,
             AdminCommandError::Crypto | AdminCommandError::Corrupt => ApiError::InternalError,
             AdminCommandError::Database(_) => ApiError::Unavailable,
+            AdminCommandError::IntakeSlugExhausted => ApiError::Unavailable,
         }
     }
 }

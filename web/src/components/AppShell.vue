@@ -6,7 +6,7 @@
 // moving anything.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import { Building2, Inbox, LogOut, Sparkles, Sun, UserCog, UserPlus, Users } from 'lucide-vue-next'
+import { Building2, Inbox, LogOut, Mail, Sparkles, Sun, UserCog, UserPlus, Users } from 'lucide-vue-next'
 import { useLogoutMutation, useMe } from '../api/queries'
 import { initials } from '../lib/format'
 import { buttonClasses } from '../lib/controls'
@@ -94,7 +94,10 @@ const navGroups = computed<NavGroup[]>(() => {
   if (me.value.organization.role === 'admin') {
     groups.push({
       label: 'Manage',
-      items: [{ label: 'Members', to: '/manage/members', icon: UserCog }],
+      items: [
+        { label: 'Members', to: '/manage/members', icon: UserCog },
+        { label: 'Intake', to: '/manage/intake', icon: Mail },
+      ],
     })
   }
   return groups

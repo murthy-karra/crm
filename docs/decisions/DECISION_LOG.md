@@ -1065,6 +1065,22 @@ accounts (free) for the consumer path, and an M365 tenant with Exchange
 (check whether the Cypress Bay tenant has mailboxes; otherwise a
 Microsoft 365 developer/test tenant).
 
+Fixture strategy for #1 (2026-08-23; the user is not an agent and has
+no listings): synthesize per-source fixtures from published format
+samples (portal lead emails are machine-generated templates; CRM
+vendors document the formats they parse); generate real end-to-end
+mail from sources we own — a contact form on cypressbayrealty.com (the
+"website" source) and hand-forwarded mail (the generic-forward path);
+harden against reality later via design partners forwarding actual
+notification mail. Architectural consequence, already supported:
+parsers MUST assume unknown formats — unparseable mail lands in the
+Unresolved queue with the raw email preserved (D-012, raw-payload
+store), never dropped, and each new real format becomes a fixture +
+parser case. Optional pre-slice task: a throwaway catch-all mailbox on
+a test domain purely to collect sample notifications; never part of
+the architecture (production receiving is a mailbox-less stream:
+inbound-service webhook or our own SMTP receiver).
+
 Blocks: nothing yet. #1 can be planned independently of every open
 item; #2 waits on O-012 for bodies (not for metadata) and on the
 visibility decision; #3 waits on O-006.

@@ -57,7 +57,7 @@ the original c bundled two rungs — split into c and d.)
 | 3 | Where the extraction LLM call lives | SAFE_DEFAULT | crm-app trait + crm-api adapter (as ToolBackend). Revisit → shared `crm-inference` crate only if a third consumer appears. |
 | 4 | Sending inbound lead mail to Groq | **BLOCKING at 007f** | Nothing in a–e sends anything externally. Bless with scope: text-only, ≤16 KiB, subject + sender domain, no org/agent identifiers, no tools; Groq on the subprocessor list. |
 | 5 | System actor + new routing strategies | SAFE_DEFAULT, declared contract change in 007c | `IntakeActor::System`, `FactEnvelope::for_system`, CHECK extension. |
-| 6 | Who receives unattended email leads | **BLOCKING at 007c** | Org-admin-set default assignee; unset → Person created unassigned (People, not Today) + settings warning. Round-robin later. |
+| 6 | Who receives unattended email leads | **DECIDED — D-035** (user, 2026-08-24) | Org-admin-set default assignee; unset → Person created unassigned (People, not Today) + settings warning. Round-robin later. |
 | 7 | Who may read raw unresolved content | **BLOCKING at 007e** | Org admins only, on demand. |
 | 7a | Who may read the intake address/token | SAFE_DEFAULT (adopted 2026-08-23) | Org admins only (endpoint + page agree); the token is the anti-forgery secret. |
 | 8–13 | Backfill in migration; `mail-parser` dep (wrapped); 2 MiB/413; `received_at` = receipt time; `inquiry.source` = detected source while `raw_payload.source` stays `email`; rotation/spam auto-discard/round-robin/O-012 key migration | IMPL / SAFE / LATER | as stated |
@@ -76,3 +76,11 @@ Correspondence capture (O-014 #2, OAuth, CASA), sending (#3, O-006),
 transactional mail (#4), migration reconstruction (#5), O-012/O-013,
 round-robin/rules routing, SMS intake, Operator tools over intake,
 inbound calls, any mailbox for the CRM.
+
+Round-robin note (user, 2026-08-24, during 007c spec discussion): the
+intake settings card is expected to grow into a routing-*mode* picker
+(single default assignee | round-robin | rules later). Round-robin
+becomes **its own rung after 007d**, once unattended leads actually
+flow — not part of 007c and not before email parsing exists. 007c's
+single routing decision point and free-text `routing_decision.strategy`
+leave the seam open (a `round_robin` strategy is additive).

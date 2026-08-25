@@ -1,22 +1,43 @@
 # Project State
 
-Last updated: 2026-08-24 (SLICE_007b implementation complete on branch
-`slice-007b-inbound-email-api`, off `main` `ca89d70`: `POST /inbound/email`
-route, config/state wiring, `ApiError::PayloadTooLarge`, DB-backed +
-service-free tests, `.eml` fixtures, `scripts/inbound-email`, web label.
-Independently reviewed (`crm-reviewer`) and adversarially tested
-(`crm-tester`) in parallel; both found the same two low-severity,
-pre-existing (already-merged in `110bd95`) deviations from `receive.rs`'s
-frozen contract, both fixed. `./scripts/check` and `./scripts/check-db`
-green; live walkthrough via `scripts/inbound-email` against the real dev
-stack passed. Not yet committed — awaiting user approval.)
+Last updated: 2026-08-24 (SLICE_007b committed and MERGED to `main`
+`4b3462a`; Slice 007c planned: D-035 accepted and recorded (unattended
+intake routes to an admin-set Organization default assignee; unset →
+unassigned + settings warning), `crm-planner` pass done,
+`docs/specs/SLICE_007c.md` drafted, independently reviewed by
+`crm-reviewer` — verdict "ready with amendments", zero blocking
+findings, all six amendments applied (CLI payload normalization so
+`content_hmac` dedup matches `/api/inquiries`' serde re-serialization;
+PUT absent-key → 400, only explicit null clears; `updated_at` in the
+column grant and maintained by the PUT; READ COMMITTED re-check window
+documented as accepted; CLI skips actor resolution, validates the org,
+no assign flag; criterion 10 pins GET-after-deactivation). Awaiting
+user spec approval.)
 
 ## Current phase
 
-**Slice 007b (inbound email endpoint) implemented, reviewed, tested, and
-walked through on branch `slice-007b-inbound-email-api`; not yet
-committed or merged.** See Completed work below for the full account.
-Next action: commit approval, then merge approval, then 007c planning.
+**Slice 007c (system actor + unattended routing) spec APPROVED (user,
+2026-08-24); awaiting the Phase 6 implementation-gate approval.** 007b
+is COMPLETE and MERGED to `main` (`4b3462a`). D-035 accepted (resolves
+ladder cross-rung decision 6). Spec `docs/specs/SLICE_007c.md`:
+planner pass, independent review (no blocking findings), amendments
+applied, user-approved as written. The SLICE_002 §6 fact-vocabulary
+pointer for the two new routing strategies is in place. Round-robin
+confirmed as its own post-007d rung (ladder note added). Planning
+edits not yet committed to `main`.
+
+Planner findings that shaped the draft: the fact tables already permit
+`actor_kind='system'` (no fact-table migration); the Rust
+`RoutingStrategy::from_str` fails closed, so the two new strategies are
+a declared additive change to the frozen `POST /api/inquiries`
+`routing_strategy` vocabulary (reachable via `duplicate: true` replays
+of system-routed rows); the walkthrough trigger is a new `crm-admin
+receive-inquiry` subcommand (D-021-sanctioned domain-function path,
+`Publisher::Disabled`); a deactivated default assignee routes
+`unassigned` fail-safe with the setting retained (D-027 interaction);
+`is_organization_member` lacking a status filter on the manual
+explicit-assign path is a pre-existing D-027/O-004 gap, flagged in the
+spec's exclusions, not fixed in 007c.
 
 Prior phase, for reference: **Slice 006c (call outcome) COMPLETE and
 MERGED to `main` (`58ecad8`).** Scope grew during the live walkthrough into three
@@ -43,11 +64,12 @@ OrbStack hung twice. Hostname is `livekit1.tarams.org`.
 
 ## Current slice
 
-Slice 007b — Inbound email endpoint — `docs/specs/SLICE_007b.md` —
-IMPLEMENTED + REVIEWED + TESTED on `slice-007b-inbound-email-api`
-(off `main` `ca89d70`), not yet committed. Previous: Slice 007a —
-Organization intake address — `docs/specs/SLICE_007a.md` — COMPLETE,
-MERGED `81af77f`.
+Slice 007c — System actor + unattended routing —
+`docs/specs/SLICE_007c.md` (APPROVED).
+Previous: Slice 007b — Inbound email endpoint —
+`docs/specs/SLICE_007b.md` — COMPLETE, MERGED `4b3462a`. Before that:
+Slice 007a — Organization intake address — `docs/specs/SLICE_007a.md`
+— COMPLETE, MERGED `81af77f`.
 
 Earlier history, for reference:
 Slice 006c — Call outcome (D-032, D-033) — `docs/specs/SLICE_006c.md`
@@ -72,11 +94,19 @@ proof chain. Slice 004 is complete and merged (see History).
 
 ## Current branch
 
-`slice-007b-inbound-email-api` (off `main` `ca89d70`), not yet committed.
+`main` (`4b3462a`); planning edits only, no implementation branch yet.
 
 ## Last accepted decision
 
-2026-08-22, user-accepted (Slice 005 planning):
+2026-08-24, user-accepted (Slice 007c planning):
+- D-035 — unattended intake (system-actor path, email from 007d on)
+  routes to an admin-set Organization default assignee
+  (`intake_default_assignee_user_id`); unset → the Person is created
+  unassigned (visible in People, on nobody's Today) and the intake
+  settings page warns. Round-robin/rules routing stay outside the 007
+  ladder. Resolves ladder cross-rung decision 6.
+
+Previous (Slice 005 planning), 2026-08-22, user-accepted:
 - D-028 — the AI Operator is an in-process workspace crate
   (`crates/crm-operator`) compiled into `crm-api`; §5 refinement: the
   dependency is inverted (`crm-api → crm-operator` only; `ToolBackend`
@@ -928,12 +958,12 @@ slice:
 
 ## Approval currently required
 
-**Commit approval** for the `slice-007b-inbound-email-api` branch (see
-Completed work above): implementation done, independently reviewed and
-adversarially tested with fixes applied, `./scripts/check` +
-`./scripts/check-db` green, live walkthrough passed. After commit, a
-separate merge-to-`main` approval is still needed per AGENTS.md Phase 9.
-Then: 007c planning per the ladder rule (docs/plans/SLICE_007_LADDER.md).
+**Slice 007c implementation-gate approval** (AGENTS.md Phase 6): the
+spec is user-approved; the gate report (outcome, files, exclusions,
+branch, migration ownership, checks, risks) has been presented and
+awaits "Proceed with implementation?". The planning edits (spec,
+D-035, ladder, SLICE_002 pointer, this file) also await a commit to
+`main`.
 
 dev-seed-via-api review outcome (crm-reviewer, 2026-08-24): the two
 blocking findings (refusal guard failed open against a stale

@@ -1100,3 +1100,20 @@ inbound-service webhook or our own SMTP receiver).
 Blocks: nothing yet. #1 can be planned independently of every open
 item; #2 waits on O-012 for bodies (not for metadata) and on the
 visibility decision; #3 waits on O-006.
+
+### D-035 — Unattended intake routes to an admin-set Organization default assignee (2026-08-24)
+
+Accepted (user, during Slice 007c planning). Resolves the ladder's
+cross-rung decision 6 (`docs/plans/SLICE_007_LADDER.md`).
+
+When intake runs with no human actor (the 007c system-actor path;
+email intake from 007d on), the Person is assigned to the
+Organization's default assignee — an org-admin-set setting
+(`intake_default_assignee_user_id`) — and therefore lands on that
+member's Today. When the setting is unset, the Person is created
+**unassigned**: visible in the People list, on nobody's Today, and the
+intake settings page shows a warning that unattended leads are going
+unassigned. Round-robin and rules-based routing remain later work,
+explicitly outside the 007 ladder.
+
+Blocks: nothing. Feeds the Slice 007c specification.

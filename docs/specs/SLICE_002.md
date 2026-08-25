@@ -150,7 +150,11 @@ Fact-specific columns:
   `content_hmac`, `source`, `person_created BOOL`, `matched_by TEXT NULL`
   (`'email'` | `'phone'`).
 - `routing_decision`: `inquiry_id`, `person_id`, `strategy TEXT`
-  (`'explicit'` | `'actor_default'` | `'kept_existing'`),
+  (`'explicit'` | `'actor_default'` | `'kept_existing'` — plus
+  `'organization_default'` | `'unassigned'`, added by SLICE_007c §3/§5
+  as a declared additive change (AGENTS.md §11) for system-actor
+  intake; they can surface in `POST /api/inquiries` responses only on
+  `duplicate: true` replays of system-routed rows),
   `assignee_user_id UUID NULL` FK `app_user`.
 - `assignment_changed`: `person_id`, `from_user_id UUID NULL`,
   `to_user_id UUID NULL` (both FK `app_user`), `reason TEXT` (`'intake'`

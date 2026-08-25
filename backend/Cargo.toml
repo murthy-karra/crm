@@ -40,6 +40,7 @@ tokio-tungstenite = "0.24"
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
 thiserror = "2"
 async-trait = "0.1"
+mail-parser = "0.11"
 
 [workspace.lints.clippy]
 all = { level = "deny", priority = -1 }

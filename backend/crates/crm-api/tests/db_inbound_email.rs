@@ -194,7 +194,13 @@ async fn valid_delivery_stores_one_row_that_decrypts_to_the_exact_bytes(migrator
     assert_eq!(row.payload_format, "rfc822_v1");
     assert_eq!(row.origin, "webhook");
     assert_eq!(row.resolution, "unresolved");
-    assert_eq!(row.unresolved_reason.as_deref(), Some("email_unparsed"));
+    // SLICE_007d declared amendment (SLICE_007b superseded): valid MIME
+    // matching no pinned format is `email_unrecognized_format`, not
+    // `email_unparsed`.
+    assert_eq!(
+        row.unresolved_reason.as_deref(),
+        Some("email_unrecognized_format")
+    );
     assert_eq!(row.byte_len as usize, PLAIN_EML.len());
     assert!(
         row.received_at >= before && row.received_at <= after,
@@ -240,6 +246,16 @@ async fn valid_delivery_creates_nothing_beyond_the_raw_payload_row(migrator_pool
         .unwrap();
         assert_eq!(count, 0, "{table} must stay empty");
     }
+
+    // SLICE_007d criterion 8: the multipart fixture, too, is valid MIME in
+    // no pinned format.
+    let (reason,): (Option<String>,) =
+        sqlx::query_as("SELECT unresolved_reason FROM raw_payload WHERE organization_id = $1")
+            .bind(org_id)
+            .fetch_one(&migrator_pool)
+            .await
+            .unwrap();
+    assert_eq!(reason.as_deref(), Some("email_unrecognized_format"));
 }
 
 /// Criterion 4: a byte-identical re-delivery stores nothing new and
@@ -439,7 +455,8 @@ async fn first_storage_publishes_exactly_one_event(migrator_pool: PgPool) {
 }
 
 /// Criterion 12: the stored row shows up in `GET /api/intake/unresolved`
-/// with reason `email_unparsed`, visible only to org A.
+/// with reason `email_unrecognized_format` (SLICE_007d declared
+/// amendment), visible only to org A.
 #[sqlx::test]
 #[ignore]
 async fn stored_row_appears_in_unresolved_for_its_own_org_only(migrator_pool: PgPool) {
@@ -477,7 +494,7 @@ async fn stored_row_appears_in_unresolved_for_its_own_org_only(migrator_pool: Pg
     let items = body["items"].as_array().unwrap();
     assert_eq!(items.len(), 1);
     assert_eq!(items[0]["source"], "email");
-    assert_eq!(items[0]["reason"], "email_unparsed");
+    assert_eq!(items[0]["reason"], "email_unrecognized_format");
 
     let bob_cookie = common::login_cookie(&router, "bob@best.test", "pw").await;
     let resp = common::get_with_cookie(&router, "/api/intake/unresolved", &bob_cookie).await;
@@ -581,9 +598,11 @@ async fn no_span_or_log_line_ever_carries_secret_or_content(migrator_pool: PgPoo
     );
 }
 
-/// Criterion 14: a delivery that finds an existing `pending` row for the
-/// same bytes (the crash-between-two-commits window) transitions it to
-/// unresolved and publishes exactly once.
+/// Criterion 14 (upgraded by SLICE_007d §4d): a delivery that finds an
+/// existing `pending` row for the same bytes (the crash-between-two-
+/// commits window) now runs the full parse — for this unknown-format
+/// fixture that means unresolved `email_unrecognized_format` — and
+/// publishes exactly once.
 #[sqlx::test]
 #[ignore]
 async fn stuck_pending_row_is_rescued_and_published_once(migrator_pool: PgPool) {
@@ -629,7 +648,10 @@ async fn stuck_pending_row_is_rescued_and_published_once(migrator_pool: PgPool) 
     );
     let row = raw_payload_row(&migrator_pool, stuck_id).await;
     assert_eq!(row.resolution, "unresolved");
-    assert_eq!(row.unresolved_reason.as_deref(), Some("email_unparsed"));
+    assert_eq!(
+        row.unresolved_reason.as_deref(),
+        Some("email_unrecognized_format")
+    );
     assert_eq!(recorded(&publisher).await.len(), 1, "exactly one publish");
 }
 

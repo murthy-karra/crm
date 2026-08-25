@@ -40,4 +40,11 @@ describe('unresolved reason labels (SLICE_007b §7)', () => {
   it('labels an unparsed inbound email', () => {
     expect(UNRESOLVED_REASON_LABEL.email_unparsed).toBe('Unparsed email')
   })
+
+  // SLICE_007d §6: valid MIME matching no pinned format.
+  it('labels an unrecognized email format', () => {
+    expect(UNRESOLVED_REASON_LABEL.email_unrecognized_format).toBe(
+      'Unrecognized email format',
+    )
+  })
 })

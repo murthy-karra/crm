@@ -32,6 +32,10 @@ chacha20poly1305 = { workspace = true }
 # by feature unification (docs/specs/SLICE_006a.md §3).
 reqwest = { workspace = true, features = ["rustls-tls"] }
 async-trait = { workspace = true }
+# Confined to domain/intake/email/mime.rs (docs/specs/SLICE_007d.md §4a;
+# a directory-walk fence test enforces it). Default features (charset
+# decoding is wanted for real mail); no serde feature.
+mail-parser = { workspace = true }
 
 [dev-dependencies]
 # The fake LiveKit server test in telephony/livekit.rs only.

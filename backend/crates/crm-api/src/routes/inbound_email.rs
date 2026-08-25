@@ -46,6 +46,13 @@ struct InboundEmailRequest {
         outcome = tracing::field::Empty,
         byte_len = tracing::field::Empty,
         raw_payload_id = tracing::field::Empty,
+        // SLICE_007d §8: the static format name (recorded by the email
+        // parse closure only when a format matched), and the created ids
+        // on a completed intake. Ids only — never subject, sender, body,
+        // recipient, slug, or token.
+        format = tracing::field::Empty,
+        person_id = tracing::field::Empty,
+        inquiry_id = tracing::field::Empty,
     )
 )]
 async fn inbound_email(
@@ -109,9 +116,41 @@ async fn inbound_email(
     )
     .await;
 
+    // Every stored outcome — completed, unresolved, deferred, duplicate —
+    // is the same 200 `{"status":"accepted"}` (SLICE_007d §5: the frozen
+    // 007b envelope reveals nothing about the parse outcome).
     match outcome {
-        Ok(InboundEmailOutcome::Stored { raw_payload_id }) => {
-            span.record("outcome", "accepted");
+        Ok(InboundEmailOutcome::Completed {
+            person_id,
+            inquiry_id,
+            raw_payload_id,
+        }) => {
+            span.record("outcome", "completed");
+            span.record("raw_payload_id", tracing::field::display(raw_payload_id));
+            span.record("person_id", tracing::field::display(person_id));
+            span.record("inquiry_id", tracing::field::display(inquiry_id));
+            Ok((StatusCode::OK, Json(json!({ "status": "accepted" }))).into_response())
+        }
+        Ok(InboundEmailOutcome::Unresolved {
+            raw_payload_id,
+            reason,
+        }) => {
+            // SLICE_007d §8's outcome vocabulary, keyed by the reason
+            // variant only — never content.
+            span.record(
+                "outcome",
+                match reason.as_str() {
+                    "email_unparsed" => "unresolved_unparsed",
+                    "email_unrecognized_format" => "unresolved_unrecognized_format",
+                    "no_contact_method" => "unresolved_no_contact_method",
+                    _ => "unresolved",
+                },
+            );
+            span.record("raw_payload_id", tracing::field::display(raw_payload_id));
+            Ok((StatusCode::OK, Json(json!({ "status": "accepted" }))).into_response())
+        }
+        Ok(InboundEmailOutcome::DeferredPending { raw_payload_id }) => {
+            span.record("outcome", "deferred_busy");
             span.record("raw_payload_id", tracing::field::display(raw_payload_id));
             Ok((StatusCode::OK, Json(json!({ "status": "accepted" }))).into_response())
         }
@@ -129,6 +168,10 @@ async fn inbound_email(
         }
         Err(ReceiveInboundEmailError::Crypto) => {
             span.record("outcome", "crypto");
+            Err(ApiError::InternalError)
+        }
+        Err(ReceiveInboundEmailError::Internal) => {
+            span.record("outcome", "internal");
             Err(ApiError::InternalError)
         }
         Err(ReceiveInboundEmailError::Database(_)) => {

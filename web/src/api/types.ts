@@ -404,6 +404,7 @@ export type UnresolvedReason =
   | 'not_an_object'
   | 'no_contact_method'
   | 'email_unparsed'
+  | 'email_unrecognized_format'
 
 export interface ReceiveInquiryUnresolved {
   status: 'unresolved'

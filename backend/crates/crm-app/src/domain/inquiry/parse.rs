@@ -5,7 +5,9 @@ use serde::Deserialize;
 
 use crate::domain::contact;
 
-const MESSAGE_MAX_BYTES: usize = 4096;
+/// Shared with the email extraction path (docs/specs/SLICE_007d.md §4c):
+/// both intake formats truncate the free-text message identically.
+pub(crate) const MESSAGE_MAX_BYTES: usize = 4096;
 
 /// A validated intake `source`: lowercased, trimmed, matching
 /// `^[a-z0-9_]{1,64}$` (docs/specs/SLICE_002.md §5).
@@ -37,6 +39,14 @@ pub enum UnresolvedReason {
     InvalidJson,
     NotAnObject,
     NoContactMethod,
+    /// Raw bytes the MIME wrapper refuses to treat as an email
+    /// (docs/specs/SLICE_007d.md §4a). The reason string is unchanged from
+    /// SLICE_007b, where every inbound email landed with it.
+    EmailUnparsed,
+    /// Valid MIME that matches no pinned `EmailFormat` — including the
+    /// right template from the wrong sender domain (D-036's mitigation;
+    /// docs/specs/SLICE_007d.md §4e).
+    EmailUnrecognizedFormat,
 }
 
 impl UnresolvedReason {
@@ -45,6 +55,8 @@ impl UnresolvedReason {
             UnresolvedReason::InvalidJson => "invalid_json",
             UnresolvedReason::NotAnObject => "not_an_object",
             UnresolvedReason::NoContactMethod => "no_contact_method",
+            UnresolvedReason::EmailUnparsed => "email_unparsed",
+            UnresolvedReason::EmailUnrecognizedFormat => "email_unrecognized_format",
         }
     }
 }
@@ -85,8 +97,9 @@ impl std::fmt::Debug for ParsedLead {
 }
 
 /// Truncates `s` to at most `max_bytes` UTF-8 bytes without splitting a
-/// multi-byte character.
-fn truncate_to_bytes(s: &str, max_bytes: usize) -> String {
+/// multi-byte character. Shared with the email extraction path
+/// (docs/specs/SLICE_007d.md §4b).
+pub(crate) fn truncate_to_bytes(s: &str, max_bytes: usize) -> String {
     if s.len() <= max_bytes {
         return s.to_string();
     }

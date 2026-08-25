@@ -1,6 +1,45 @@
 # Project State
 
-Last updated: 2026-08-25 (Slice 007d planning underway: D-036 accepted
+Last updated: 2026-08-25 (SLICE_007d implemented on
+`slice-007d-email-format` off `main` `d491175`: `mail-parser` 0.11.8
+wrapped in `domain/intake/email/mime.rs` (directory-walk fence test,
+redacted Debug, NUL stripped at the fence), `EmailFormat` registry with
+`cypress_bay_contact_v1` (domain + exact-subject matching per D-036),
+`complete_intake` extracted from `receive_inquiry` and shared by both
+intake entry points, Phase B on `receive_inbound_email`
+(`IntakeActor::System`, `Origin::Webhook`; IntakeBusy → 200 + row left
+`pending`), `email_unrecognized_format` reason + web label, five new
+`.eml` fixtures, the three declared 007b test amendments. Two safe-
+default refinements disclosed: "unparseable" = no From + no Subject +
+no body (mail-parser headers even garbage, so the spec's literal
+definition was unreachable — probed empirically); NUL bytes stripped in
+the mime wrapper (see below). Independently reviewed (`crm-reviewer`:
+"ready to commit", extraction verified verbatim against HEAD) and
+adversarially tested (`crm-tester`) in parallel; the tester found one
+HIGH blocking issue — NUL bytes in attacker-crafted in-format mail
+reached Postgres TEXT (22021) → attacker-triggerable 503 + permanently
+stuck queue-invisible `pending` rows — fixed at the mime fence with
+unit + DB pins (`nul_bytes_in_an_in_format_email_complete_without_
+error_or_poison_row`). Reviewer's four smaller items all folded in:
+capture test extended over unparsed/no-contact paths, registry
+source-validity check made real, email-path default-unset test,
+multipart reason assertion. `./scripts/check` + `./scripts/check-db`
+green after fixes (db_inbound_email 13, db_inbound_email_intake 17,
+regression gates db_intake 22 + db_intake_system_routing 7 unmodified).
+Live walkthrough against the real dev stack (dev-api rebuilt onto the
+branch, old orphaned PID killed): carol reactivated + set as Acme's
+default assignee via the real 007c endpoints; `scripts/inbound-email`
+with the cypress fixture → 200 accepted → "Jordan Ellis" on carol's
+Today with all four facts System-attributed, routing
+`organization_default` → Carol, inquiry `source=website` with the
+multi-line message; `plain.eml` → Unresolved "email_unrecognized_
+format"; byte-identical redelivery → still one Person, one unresolved
+row; wrong token → rejected. NOT yet committed — awaiting user commit
+approval (AGENTS.md Phase 9). Dev-api left running on the branch
+binary; crm_dev now has carol active, the default-assignee setting,
+and the walkthrough rows.)
+
+Planning phase, earlier the same day (Slice 007d: D-036 accepted
 and recorded (forged-mail posture — in-format mail from a valid intake
 address creates a Person; defenses are the address token, per-format
 sender-domain matching, SPF/DKIM at 007g; everything else lands in
@@ -40,8 +79,10 @@ PUSHED to `origin/main` (`fe0b99b`), all with explicit user approval
 
 ## Current phase
 
-**Slice 007d (one pinned email format → real inquiries) spec APPROVED
-(user, 2026-08-25); awaiting the Phase 6 implementation-gate
+**Slice 007d (one pinned email format → real inquiries) IMPLEMENTED,
+reviewed, adversarially tested (one HIGH finding fixed + pinned),
+checks green, live walkthrough passed — on `slice-007d-email-format`,
+NOT yet committed; awaiting user commit approval, then merge
 approval.** D-036 accepted. Spec `docs/specs/SLICE_007d.md`: planner
 pass, independent review (no blocking findings), seven amendments
 applied, user-approved as written. The SLICE_007b supersession pointer
@@ -103,7 +144,9 @@ OrbStack hung twice. Hostname is `livekit1.tarams.org`.
 ## Current slice
 
 Slice 007d — One pinned email format → real inquiries —
-`docs/specs/SLICE_007d.md` (APPROVED).
+`docs/specs/SLICE_007d.md` — IMPLEMENTED + REVIEWED + TESTED + WALKED
+THROUGH on `slice-007d-email-format` (off `main` `d491175`), not yet
+committed.
 Previous: Slice 007c — System actor + unattended routing —
 `docs/specs/SLICE_007c.md` — COMPLETE, MERGED + PUSHED `fe0b99b`.
 Before that: Slice 007b — Inbound email endpoint —
@@ -1178,10 +1221,12 @@ slice:
 
 ## Approval currently required
 
-**Slice 007d implementation-gate approval** (AGENTS.md Phase 6): the
-spec is user-approved; the gate report awaits "Proceed with
-implementation?". The 007d planning edits (spec, D-036, the 007b
-pointer, this file) also await a commit to `main`.
+**Commit approval** for `slice-007d-email-format` (AGENTS.md Phase 9):
+implementation done, independently reviewed ("ready to commit") and
+adversarially tested (HIGH NUL finding fixed + pinned), both check
+gates green, live walkthrough passed. After commit, a separate
+merge-to-`main` approval is needed. Then: 007e planning per the ladder
+(or 007g, which can start any time after 007b).
 
 Slice 007c: nothing outstanding — implemented, verified, committed
 (`57ef058`, `fe0b99b`), fast-forward merged to `main`, and pushed to

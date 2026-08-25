@@ -2,9 +2,12 @@
 //! Organization intake address value type only — nothing receives mail.
 //! Rung 007b: Phase-A-only inbound email endpoint (receive module).
 //! Rung 007c: `IntakeActor` — the system-actor path through
-//! `receive_inquiry` (docs/specs/SLICE_007c.md §4).
+//! `receive_inquiry` (docs/specs/SLICE_007c.md §4). Rung 007d: the
+//! pinned-format email module and Phase B on the inbound endpoint
+//! (docs/specs/SLICE_007d.md §4).
 
 pub mod address;
+pub mod email;
 pub mod receive;
 
 pub use address::IntakeAddress;

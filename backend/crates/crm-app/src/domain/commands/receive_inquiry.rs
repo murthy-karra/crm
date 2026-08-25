@@ -15,7 +15,7 @@ use crate::domain::contact;
 use crate::domain::facts::{
     self, AssignmentChangedFact, InquiryReceivedFact, RoutingDecisionFact, StageChangedFact,
 };
-use crate::domain::inquiry::parse::{self, Source, UnresolvedReason};
+use crate::domain::inquiry::parse::{self, ParsedLead, Source, UnresolvedReason};
 use crate::domain::inquiry::queries as inquiry_queries;
 use crate::domain::intake::IntakeActor;
 use crate::domain::person::queries as person_queries;
@@ -179,9 +179,29 @@ pub async fn receive_inquiry(
         tracing::Span::current().record("actor_id", tracing::field::display(actor_user_id));
     }
     let result = receive_inquiry_attempt(pool, key, publisher, actor, cmd).await;
-    if let Err(ref err) = result {
-        tracing::warn!(error_kind = err.kind(), "receive_inquiry failed");
-        tracing::Span::current().record("outcome", err.kind());
+    // The `outcome` record lives with each caller, derived from the
+    // returned outcome, not inside `complete_intake`
+    // (docs/specs/SLICE_007d.md §4c): the email caller's span uses a
+    // different vocabulary, and re-recording inside the shared function
+    // would double-stamp fields across the two spans.
+    match &result {
+        Ok(outcome) => {
+            let label = match outcome {
+                ReceiveInquiryOutcome::Resolved {
+                    duplicate: true, ..
+                }
+                | ReceiveInquiryOutcome::Unresolved {
+                    duplicate: true, ..
+                } => "duplicate",
+                ReceiveInquiryOutcome::Resolved { .. } => "resolved",
+                ReceiveInquiryOutcome::Unresolved { .. } => "unresolved",
+            };
+            tracing::Span::current().record("outcome", label);
+        }
+        Err(err) => {
+            tracing::warn!(error_kind = err.kind(), "receive_inquiry failed");
+            tracing::Span::current().record("outcome", err.kind());
+        }
     }
     result
 }
@@ -194,7 +214,6 @@ async fn receive_inquiry_attempt(
     cmd: ReceiveInquiry,
 ) -> Result<ReceiveInquiryOutcome, CommandError> {
     let organization_id = actor.organization_id();
-    let correlation_id = actor.correlation_id();
 
     // Assignee validity is checked before anything is stored, so a
     // rejected request leaves no `pending` row (docs/specs/SLICE_002.md §3,
@@ -230,6 +249,61 @@ async fn receive_inquiry_attempt(
     .await?;
     tracing::Span::current().record("raw_payload_id", tracing::field::display(raw_payload_id));
 
+    // --- Phase B: shared with the email path (docs/specs/SLICE_007d.md
+    // §4c). The closure re-states this caller's parse: `generic_v1` JSON
+    // plus the request's own validated `source`.
+    let source = cmd.source.clone();
+    complete_intake(
+        pool,
+        key,
+        publisher,
+        actor,
+        CompleteIntake {
+            raw_payload_id,
+            content_hmac: &content_hmac,
+            received_at: cmd.received_at,
+            assign_to_user_id: cmd.assign_to_user_id,
+        },
+        move |bytes| parse::parse(bytes).map(|parsed| (source.clone(), parsed)),
+    )
+    .await
+}
+
+/// Phase-B parameters shared by both intake entry points
+/// (docs/specs/SLICE_007d.md §4c). `raw_payload_id` is the *stored* row's
+/// id from Phase A (which differs from the candidate on a duplicate);
+/// `content_hmac` is only threaded into the `inquiry_received` fact.
+pub(crate) struct CompleteIntake<'a> {
+    pub raw_payload_id: Uuid,
+    pub content_hmac: &'a [u8],
+    pub received_at: DateTime<Utc>,
+    pub assign_to_user_id: Option<Uuid>,
+}
+
+/// Everything after Phase A, extracted verbatim from `receive_inquiry`
+/// (docs/specs/SLICE_007d.md §4c) and shared by `POST /api/inquiries` and
+/// the inbound-email path: row lock → duplicate short-circuit → decrypt →
+/// parse (the closure) → per-Organization advisory lock with bounded
+/// retry → identify → Person/contact methods → routing → Inquiry → facts
+/// → `mark_resolved` → one `person_changed` publish; parse failure →
+/// `mark_unresolved` + `intake_unresolved_changed`. Callers record their
+/// own span `outcome` from the returned value — this function records
+/// none.
+pub(crate) async fn complete_intake<F>(
+    pool: &PgPool,
+    key: &RawPayloadKey,
+    publisher: &Publisher,
+    actor: &IntakeActor,
+    params: CompleteIntake<'_>,
+    parse_payload: F,
+) -> Result<ReceiveInquiryOutcome, CommandError>
+where
+    F: Fn(&[u8]) -> Result<(Source, ParsedLead), UnresolvedReason>,
+{
+    let organization_id = actor.organization_id();
+    let correlation_id = actor.correlation_id();
+    let raw_payload_id = params.raw_payload_id;
+
     // --- Phase B: bounded retry around the per-Organization advisory lock
     // ---------------------------------------------------------------------
     // Each iteration is a fresh, complete transaction attempt: acquire a
@@ -262,7 +336,6 @@ async fn receive_inquiry_attempt(
         if locked.resolution != "pending" {
             let outcome = duplicate_outcome(&mut tx, organization_id, locked).await?;
             tx.commit().await?;
-            tracing::Span::current().record("outcome", "duplicate");
             return Ok(outcome);
         }
 
@@ -280,20 +353,19 @@ async fn receive_inquiry_attempt(
         )
         .map_err(|_| CommandError::Crypto)?;
 
-        let parsed = match parse::parse(&plaintext) {
+        let (source, parsed) = match parse_payload(&plaintext) {
             Ok(parsed) => parsed,
             Err(reason) => {
                 store::mark_unresolved(&mut tx, locked.id, organization_id, reason.as_str())
                     .await?;
                 tx.commit().await?;
-                tracing::Span::current().record("outcome", "unresolved");
 
-                // occurred_at = raw_payload.received_at (= cmd.received_at,
-                // the value Phase A stored it with); there is no fact for
-                // this outcome (docs/specs/SLICE_003.md §4).
+                // occurred_at = raw_payload.received_at (the value Phase A
+                // stored it with); there is no fact for this outcome
+                // (docs/specs/SLICE_003.md §4).
                 let event = RealtimeEvent::intake_unresolved_changed(
                     organization_id,
-                    cmd.received_at,
+                    params.received_at,
                     correlation_id,
                     locked.id,
                 );
@@ -398,7 +470,7 @@ async fn receive_inquiry_attempt(
         };
 
         let (routing_strategy, routing_assignee) =
-            determine_routing(&mut tx, actor, cmd.assign_to_user_id, current_assignee).await?;
+            determine_routing(&mut tx, actor, params.assign_to_user_id, current_assignee).await?;
 
         // A repeat lead must not leave a Person ownerless: whenever there
         // was no prior assignee (new Person, or a matched Person nobody
@@ -415,21 +487,25 @@ async fn receive_inquiry_attempt(
             .await?;
         }
 
+        // `source` is the closure's *detected* source (the request's own
+        // for `generic_v1`; e.g. `website` for a pinned email format) —
+        // `inquiry.source` takes it while `raw_payload.source` keeps the
+        // transport value Phase A stored (docs/specs/SLICE_007d.md §4c).
         let new_inquiry_id = inquiry_queries::insert(
             &mut tx,
             inquiry_queries::NewInquiry {
                 organization_id,
                 person_id,
                 raw_payload_id: locked.id,
-                source: cmd.source.as_str(),
+                source: source.as_str(),
                 source_external_id: parsed.external_id.as_deref(),
                 message: parsed.message.as_deref(),
-                received_at: cmd.received_at,
+                received_at: params.received_at,
             },
         )
         .await?;
 
-        let envelope = actor.envelope(cmd.received_at);
+        let envelope = actor.envelope(params.received_at);
 
         facts::insert_inquiry_received(
             &mut tx,
@@ -438,8 +514,8 @@ async fn receive_inquiry_attempt(
                 inquiry_id: new_inquiry_id,
                 person_id,
                 raw_payload_id: locked.id,
-                content_hmac: &content_hmac,
-                source: cmd.source.as_str(),
+                content_hmac: params.content_hmac,
+                source: source.as_str(),
                 person_created,
                 matched_by,
             },
@@ -500,17 +576,15 @@ async fn receive_inquiry_attempt(
         store::mark_resolved(&mut tx, locked.id, organization_id, new_inquiry_id).await?;
         tx.commit().await?;
 
-        tracing::Span::current().record("outcome", "resolved");
-
         // Exactly one event per command execution, not per fact: a
         // matched-Person intake writes up to three facts (inquiry_received,
         // routing_decision, and sometimes assignment_changed) but publishes
         // one person.changed{inquiry_received} (docs/specs/SLICE_003.md
-        // §4). occurred_at = the fact's occurred_at (= cmd.received_at),
+        // §4). occurred_at = the fact's occurred_at (= received_at),
         // never publish time.
         let event = RealtimeEvent::person_changed(
             organization_id,
-            cmd.received_at,
+            params.received_at,
             correlation_id,
             person_id,
             PersonChange::InquiryReceived,
@@ -559,6 +633,10 @@ async fn duplicate_outcome(
             let reason = match reason_str {
                 "invalid_json" => UnresolvedReason::InvalidJson,
                 "not_an_object" => UnresolvedReason::NotAnObject,
+                // The email vocabulary (docs/specs/SLICE_007d.md §4c), so
+                // a duplicate replay of an email row decodes faithfully.
+                "email_unparsed" => UnresolvedReason::EmailUnparsed,
+                "email_unrecognized_format" => UnresolvedReason::EmailUnrecognizedFormat,
                 _ => UnresolvedReason::NoContactMethod,
             };
             Ok(ReceiveInquiryOutcome::Unresolved {

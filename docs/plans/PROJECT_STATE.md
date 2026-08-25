@@ -33,9 +33,10 @@ contacts and system/webhook facts; `spam.eml` → "Not a lead" 0.99;
 the outage demo (dead CRM_OPERATOR_BASE_URL, kill-by-PID restarts) →
 `provider_unavailable` then, after restore, the same row's ledger
 reads provider_unavailable→extracted and Sasha Reyes appeared — a
-lead is never lost; zero lead content in any dev-api log. NOT yet
-committed — awaiting user commit approval (AGENTS.md Phase 9).
-crm_dev gained the walkthrough rows; dev-api runs the branch binary.)
+lead is never lost; zero lead content in any dev-api log. Committed,
+fast-forward merged to `main`, and pushed with explicit user approval
+2026-08-25. crm_dev gained the walkthrough rows; dev-api runs the
+merged binary.)
 
 Planning phase, earlier (Slice 007f: D-038 accepted
 and recorded (inbound lead mail → Groq blessed with the fixed scope:
@@ -189,10 +190,10 @@ PUSHED to `origin/main` (`fe0b99b`), all with explicit user approval
 
 ## Current phase
 
-**Slice 007f (LLM extraction) IMPLEMENTED, reviewed, adversarially
-tested (CRITICAL+HIGH found and fixed+pinned), checks green, live
-real-Groq walkthrough passed — on `slice-007f-extraction`, NOT yet
-committed; awaiting user commit approval, then merge approval.**
+**Slice 007f (LLM extraction) COMPLETE: implemented, reviewed,
+adversarially tested (CRITICAL+HIGH found, fixed, pinned), checks
+green, live real-Groq walkthrough passed, committed, merged to
+`main`, and pushed — all with explicit user approval 2026-08-25.**
 
 Spec phase, for reference: **spec APPROVED (user, 2026-08-25).** D-038 accepted.
 Spec: planner pass, independent review (no blocking findings, eight
@@ -280,8 +281,7 @@ OrbStack hung twice. Hostname is `livekit1.tarams.org`.
 ## Current slice
 
 Slice 007f — LLM extraction — `docs/specs/SLICE_007f.md` —
-IMPLEMENTED + REVIEWED + TESTED + WALKED THROUGH (real Groq) on
-`slice-007f-extraction` (off `main` `c3cbc5a`), not yet committed. Previous: Slice 007e — Unresolved
+COMPLETE, MERGED to `main` and pushed. Previous: Slice 007e — Unresolved
 workbench — `docs/specs/SLICE_007e.md` — COMPLETE, MERGED to `main`
 and pushed. Previous: Slice 007d — One pinned
 email format → real inquiries — `docs/specs/SLICE_007d.md` —
@@ -1376,12 +1376,11 @@ slice:
 
 ## Approval currently required
 
-**Commit approval** for `slice-007f-extraction` (AGENTS.md Phase 9):
-implementation done, reviewed and adversarially tested with all
-findings fixed and pinned, both gates green, real-Groq walkthrough
-passed. After commit, a separate merge approval. Then: 007g (real
-DNS/receiving — the ladder's last infrastructure rung; carries the
-address-scheme check) or 007h (portal parsers as fixtures arrive).
+None outstanding for Slice 007f: committed, merged to `main`, pushed,
+branch deleted — all with explicit user approval 2026-08-25. Next:
+007g (real DNS/receiving — the ladder's last infrastructure rung;
+carries the address-scheme check) or 007h (portal parsers as fixtures
+arrive).
 
 Slice 007e: nothing outstanding — committed, merged, pushed, branch
 deleted, all with explicit user approval 2026-08-25.

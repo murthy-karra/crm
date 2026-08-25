@@ -45,6 +45,7 @@ async fn system_intake(
 ) -> ReceiveInquiryOutcome {
     let key = common::test_config().raw_payload_key;
     let actor = IntakeActor::System {
+        on_behalf_of_user_id: None,
         organization_id: org_id,
         origin: Origin::Cli,
         correlation_id: Uuid::new_v4(),

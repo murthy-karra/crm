@@ -326,6 +326,7 @@ async fn run_receive_inquiry(mut args: Vec<String>) -> Result<(), Box<dyn std::e
     let payload = serde_json::to_vec(&value)?;
 
     let actor = IntakeActor::System {
+        on_behalf_of_user_id: None,
         organization_id,
         origin: Origin::Cli,
         correlation_id: Uuid::new_v4(),

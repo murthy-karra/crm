@@ -406,6 +406,53 @@ export type UnresolvedReason =
   | 'email_unparsed'
   | 'email_unrecognized_format'
 
+// ---- SLICE_007e §5: the Unresolved workbench (admin-only, D-037) ---------
+
+export type UnresolvedDetailContent =
+  | {
+      kind: 'email'
+      subject: string | null
+      from_display: string | null
+      from_addr: string | null
+      date: string | null
+      text: string | null
+      truncated: boolean
+    }
+  | { kind: 'text'; text: string; truncated: boolean }
+
+export interface UnresolvedDetailResponse {
+  id: string
+  source: string
+  payload_format: string
+  received_at: string
+  resolution: UnresolvedResolution
+  reason: UnresolvedReason | null
+  byte_len: number
+  content: UnresolvedDetailContent
+}
+
+/** `POST .../retry` — the SLICE_002 §5 outcome vocabulary reused. */
+export type RetryUnresolvedResponse =
+  | {
+      status: 'resolved'
+      inquiry_id: string
+      person_id: string
+      person_created: boolean
+      routing_strategy: RoutingStrategy
+      assigned_user_id: string | null
+      duplicate: boolean
+    }
+  | {
+      status: 'unresolved'
+      raw_payload_id: string
+      reason: UnresolvedReason
+      duplicate: boolean
+    }
+
+export interface DiscardUnresolvedResponse {
+  status: 'discarded'
+}
+
 export interface ReceiveInquiryUnresolved {
   status: 'unresolved'
   raw_payload_id: string

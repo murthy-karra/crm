@@ -1,0 +1,71 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, source, payload_format, received_at, resolution,\n                  unresolved_reason, byte_len, nonce, ciphertext\n           FROM raw_payload\n           WHERE id = $1 AND organization_id = $2\n             AND resolution IN ('pending', 'unresolved')",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "source",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "payload_format",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "received_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "resolution",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "unresolved_reason",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "byte_len",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "nonce",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 8,
+        "name": "ciphertext",
+        "type_info": "Bytea"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "5df3f3cc846049fabf459119482cf4a94e16ce3f094a206c95ece83db4269bed"
+}

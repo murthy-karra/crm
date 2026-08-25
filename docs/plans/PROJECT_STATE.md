@@ -1,6 +1,43 @@
 # Project State
 
-Last updated: 2026-08-25 (Slice 007e planning underway: D-037 accepted
+Last updated: 2026-08-25 (SLICE_007e implemented on
+`slice-007e-workbench` off `main` `5720f54`: migration `20260830000001`
+(discarded resolution + attributed discard columns, pair-CHECK,
+column grants), `domain/intake/workbench.rs` (detail decrypt-on-demand
+with 64 KiB UTF-8-safe caps, guarded-reset retry via the shared
+`complete_intake` as System actor + `on_behalf_of` admin, attributed
+idempotent discard), the `duplicate_outcome` discarded arm (fixes the
+latent redelivery panic), queue filter → `pending|unresolved`, three
+admin-only routes (400-before-auth id extractor, 409 `discarded`/
+`already_resolved`), the web workbench dialog (fetch-on-open, cleared
+on close, ConfirmDialog discard, intake-busy copy) + DataTable
+`onRowClick`. Independently reviewed (`crm-reviewer`: "ready with
+fixes") and adversarially tested (`crm-tester`: no security/tenancy
+blockers) in parallel; all findings fixed and pinned: B1 the dialog
+rendered unstyled (`dialogPt` passed uncalled — the one-char fix);
+MEDIUM-1 failed retries committed the reset but published nothing
+(now one ids-only invalidation + web onError refetch, test-pinned);
+MEDIUM-2 unretryable rows (unknown payload_format) destroyed the
+stored reason before failing (now fail-closed BEFORE the reset,
+test-pinned); the missing criterion-14 test (/api/inquiries replay of
+a discarded row) added; cross-org retry/discard 404 probes,
+deterministic resolved-retry duplicate test, nonce/content_hmac
+denial, `payload_format` on the retry span, and the declared unit
+tests all added. Spec §4/§9/§13 amended to record the hardenings.
+`./scripts/check` + `./scripts/check-db` green after fixes (184 unit,
+18 db_intake_workbench + 2 service-free new; 259+2 web). Live
+walkthrough against the real dev stack (dev-api rebuilt onto the
+branch, PID 4838): admin detail render + member 403; retry-unchanged
+same reason; delivery deferred under a psql-held advisory lock →
+Pending row → Try again rescued it end-to-end ("Morgan Hale" on
+Carol's Today, `organization_default`, facts system/on_behalf_of=
+alice/web_session); forged eospia.com mail opened + discarded with
+attribution; byte-identical redelivery stayed discarded. NOT yet
+committed — awaiting user commit approval (AGENTS.md Phase 9).
+crm_dev gained the walkthrough rows; dev-api left on the branch
+binary.)
+
+Planning phase, earlier the same day (Slice 007e: D-037 accepted
 and recorded (raw unresolved content is org-admin-only, on demand —
 resolves ladder cross-rung decision 7), `crm-planner` pass done,
 `docs/specs/SLICE_007e.md` drafted, independent review
@@ -97,8 +134,12 @@ PUSHED to `origin/main` (`fe0b99b`), all with explicit user approval
 
 ## Current phase
 
-**Slice 007e (Unresolved workbench) spec APPROVED (user, 2026-08-25);
-awaiting the Phase 6 implementation-gate approval.** D-037 accepted.
+**Slice 007e (Unresolved workbench) IMPLEMENTED, reviewed,
+adversarially tested (all findings fixed + pinned), checks green, live
+walkthrough passed — on `slice-007e-workbench`, NOT yet committed;
+awaiting user commit approval, then merge approval.**
+
+Spec phase, for reference: **spec APPROVED (user, 2026-08-25).** D-037 accepted.
 Spec: planner pass, independent review (no blocking findings, six
 documentation-level amendments applied), user-approved as written
 incl. the three highlighted safe defaults (rescue routes per D-035 not
@@ -172,8 +213,9 @@ OrbStack hung twice. Hostname is `livekit1.tarams.org`.
 
 ## Current slice
 
-Slice 007e — Unresolved workbench — `docs/specs/SLICE_007e.md`
-(APPROVED). Previous: Slice 007d — One pinned
+Slice 007e — Unresolved workbench — `docs/specs/SLICE_007e.md` —
+IMPLEMENTED + REVIEWED + TESTED + WALKED THROUGH on
+`slice-007e-workbench` (off `main` `5720f54`), not yet committed. Previous: Slice 007d — One pinned
 email format → real inquiries — `docs/specs/SLICE_007d.md` —
 COMPLETE, MERGED to `main` and pushed.
 Previous: Slice 007c — System actor + unattended routing —
@@ -1257,13 +1299,13 @@ slice:
 
 ## Approval currently required
 
-**Slice 007e implementation-gate approval** (AGENTS.md Phase 6): the
-spec is user-approved; the gate report awaits "Proceed with
-implementation?" — including the lane-strategy choice (sequential
-single branch vs two parallel worktree lanes, which need explicit
-user approval per AGENTS.md §12). The 007e planning edits (spec,
-D-037, ladder row 7, SLICE_002/SLICE_007d pointers, this file) also
-await a commit to `main`.
+**Commit approval** for `slice-007e-workbench` (AGENTS.md Phase 9):
+implementation done (sequential single lane, user-approved),
+independently reviewed and adversarially tested with all findings
+fixed and pinned, both check gates green, live walkthrough passed.
+After commit, a separate merge-to-`main` approval is needed. Then:
+007f (LLM extraction — carries the blocking lead-mail→Groq decision)
+or 007g (real DNS/receiving) per the ladder.
 
 Slice 007d: nothing outstanding — committed (`a75b9a8`), merged,
 pushed, branch deleted, all with explicit user approval 2026-08-25.

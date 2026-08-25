@@ -604,7 +604,10 @@ where
     }
 }
 
-async fn duplicate_outcome(
+/// `pub(crate)`: the workbench retry's resolved short-circuit reuses it
+/// (docs/specs/SLICE_007e.md §4) so the two-admin race returns the stored
+/// outcome instead of reprocessing.
+pub(crate) async fn duplicate_outcome(
     tx: &mut sqlx::PgConnection,
     organization_id: Uuid,
     locked: store::LockedRawPayload,
@@ -625,20 +628,15 @@ async fn duplicate_outcome(
                 duplicate: true,
             })
         }
-        "unresolved" => {
-            let reason_str = locked
-                .unresolved_reason
-                .as_deref()
-                .unwrap_or("no_contact_method");
-            let reason = match reason_str {
-                "invalid_json" => UnresolvedReason::InvalidJson,
-                "not_an_object" => UnresolvedReason::NotAnObject,
-                // The email vocabulary (docs/specs/SLICE_007d.md §4c), so
-                // a duplicate replay of an email row decodes faithfully.
-                "email_unparsed" => UnresolvedReason::EmailUnparsed,
-                "email_unrecognized_format" => UnresolvedReason::EmailUnrecognizedFormat,
-                _ => UnresolvedReason::NoContactMethod,
-            };
+        // A discarded row (SLICE_007e §3) stays discarded: an admin's
+        // explicit decision is not undone by a byte-identical re-send.
+        // Same outcome shape as an unresolved duplicate — the callers
+        // already map it (accepted-no-publish on /inbound/email; the
+        // existing unresolved duplicate envelope on /api/inquiries). A
+        // row discarded while still `pending` has a NULL reason — the
+        // shared fallback decode below covers it.
+        "unresolved" | "discarded" => {
+            let reason = decode_unresolved_reason(locked.unresolved_reason.as_deref());
             Ok(ReceiveInquiryOutcome::Unresolved {
                 raw_payload_id: locked.id,
                 reason,
@@ -646,6 +644,21 @@ async fn duplicate_outcome(
             })
         }
         other => unreachable!("unknown raw_payload.resolution in database: {other}"),
+    }
+}
+
+/// The duplicate-replay reason decode, shared with the workbench's
+/// discarded arm (docs/specs/SLICE_007e.md §3). Unknown or NULL values
+/// fall back to `no_contact_method` — the pre-existing posture.
+pub(crate) fn decode_unresolved_reason(reason: Option<&str>) -> UnresolvedReason {
+    match reason.unwrap_or("no_contact_method") {
+        "invalid_json" => UnresolvedReason::InvalidJson,
+        "not_an_object" => UnresolvedReason::NotAnObject,
+        // The email vocabulary (docs/specs/SLICE_007d.md §4c), so a
+        // duplicate replay of an email row decodes faithfully.
+        "email_unparsed" => UnresolvedReason::EmailUnparsed,
+        "email_unrecognized_format" => UnresolvedReason::EmailUnrecognizedFormat,
+        _ => UnresolvedReason::NoContactMethod,
     }
 }
 
@@ -671,6 +684,32 @@ mod tests {
                 strategy
             );
         }
+    }
+
+    #[test]
+    fn decode_unresolved_reason_covers_the_vocabulary_and_falls_back() {
+        assert_eq!(
+            decode_unresolved_reason(Some("invalid_json")),
+            UnresolvedReason::InvalidJson
+        );
+        assert_eq!(
+            decode_unresolved_reason(Some("email_unparsed")),
+            UnresolvedReason::EmailUnparsed
+        );
+        assert_eq!(
+            decode_unresolved_reason(Some("email_unrecognized_format")),
+            UnresolvedReason::EmailUnrecognizedFormat
+        );
+        // NULL (a row discarded while pending) and unknown values fall
+        // back — the pre-existing posture (docs/specs/SLICE_007e.md §3).
+        assert_eq!(
+            decode_unresolved_reason(None),
+            UnresolvedReason::NoContactMethod
+        );
+        assert_eq!(
+            decode_unresolved_reason(Some("something_new")),
+            UnresolvedReason::NoContactMethod
+        );
     }
 
     #[test]

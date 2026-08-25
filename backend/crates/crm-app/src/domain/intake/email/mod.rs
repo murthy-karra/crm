@@ -12,6 +12,22 @@ pub mod mime;
 pub use format::detect;
 pub use mime::ParsedMail;
 
+use crate::domain::inquiry::parse::{ParsedLead, Source, UnresolvedReason};
+
+/// The email parse pipeline — MIME → format detection → field extraction
+/// → normalization — as one named function so the delivery path
+/// (`receive_inbound_email`) and the workbench retry
+/// (docs/specs/SLICE_007e.md §4) cannot drift. The static format name is
+/// the one format-derived value observability may record
+/// (docs/specs/SLICE_007d.md §8); recording is a no-op on spans that do
+/// not declare the field.
+pub(crate) fn parse_payload(bytes: &[u8]) -> Result<(Source, ParsedLead), UnresolvedReason> {
+    let mail = mime::parse(bytes).ok_or(UnresolvedReason::EmailUnparsed)?;
+    let email_format = detect(&mail).ok_or(UnresolvedReason::EmailUnrecognizedFormat)?;
+    tracing::Span::current().record("format", email_format.name());
+    format::to_parsed_lead(email_format.extract(&mail))
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::Path;

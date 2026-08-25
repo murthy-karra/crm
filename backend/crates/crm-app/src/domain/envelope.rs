@@ -166,17 +166,23 @@ impl FactEnvelope {
     /// `(actor_kind = 'user') = (actor_user_id IS NOT NULL)` CHECK
     /// (migration `20260821000004`). `origin` is a parameter: the CLI
     /// walkthrough passes `Origin::Cli`; 007d passes `Origin::Webhook`.
+    /// `on_behalf_of_user_id` (D-015 §2's "on-whose-behalf" field,
+    /// docs/specs/SLICE_007e.md §4): the human whose action caused this
+    /// unattended execution — e.g. the admin who clicked Try again.
+    /// Delivery paths pass `None`. Declared additive extension of the
+    /// SLICE_007c §4 signature (SLICE_007e approval).
     pub fn for_system(
         organization_id: Uuid,
         origin: Origin,
         occurred_at: DateTime<Utc>,
         correlation_id: Uuid,
+        on_behalf_of_user_id: Option<Uuid>,
     ) -> Self {
         Self {
             organization_id,
             actor_kind: ActorKind::System,
             actor_user_id: None,
-            on_behalf_of_user_id: None,
+            on_behalf_of_user_id,
             origin,
             occurred_at,
             correlation_id,

@@ -4,6 +4,7 @@ use serde_json::json;
 
 use crate::domain::admin::AdminCommandError;
 use crate::domain::commands::{CallError, CommandError};
+use crate::domain::intake::workbench::WorkbenchError;
 
 /// `{"error": "<code>"}` envelope shared across authenticated endpoints
 /// (docs/specs/SLICE_001.md §4). Slice 002 (docs/specs/SLICE_002.md §5)
@@ -48,6 +49,11 @@ pub enum ApiError {
     /// Nonexistent, foreign, another Person's, or non-phone contact
     /// method — identical 422.
     InvalidContactMethod,
+    // --- Slice 007e (docs/specs/SLICE_007e.md §5) -----------------------
+    /// Retry on a discarded row.
+    Discarded,
+    /// Discard on a resolved row.
+    AlreadyResolved,
     /// The caller already has an active call; the one envelope extension
     /// (`call_id`) so the client can offer "hang up the previous call".
     CallInProgress {
@@ -95,6 +101,8 @@ impl IntoResponse for ApiError {
             ApiError::InvalidStage => (StatusCode::UNPROCESSABLE_ENTITY, "invalid_stage", None),
             ApiError::InternalError => (StatusCode::INTERNAL_SERVER_ERROR, "internal_error", None),
             ApiError::IntakeBusy => (StatusCode::SERVICE_UNAVAILABLE, "intake_busy", Some(2u64)),
+            ApiError::Discarded => (StatusCode::CONFLICT, "discarded", None),
+            ApiError::AlreadyResolved => (StatusCode::CONFLICT, "already_resolved", None),
             ApiError::Forbidden => (StatusCode::FORBIDDEN, "forbidden", None),
             ApiError::LastAdmin => (StatusCode::CONFLICT, "last_admin", None),
             ApiError::InvitationUsed => (StatusCode::CONFLICT, "invitation_used", None),
@@ -181,6 +189,20 @@ impl From<CommandError> for ApiError {
             }
             CommandError::IntakeBusy => ApiError::IntakeBusy,
             CommandError::Database(_) => ApiError::Unavailable,
+        }
+    }
+}
+
+/// `WorkbenchError` -> `ApiError` mapping (docs/specs/SLICE_007e.md §5).
+impl From<WorkbenchError> for ApiError {
+    fn from(err: WorkbenchError) -> Self {
+        match err {
+            WorkbenchError::NotFound => ApiError::NotFound,
+            WorkbenchError::Discarded => ApiError::Discarded,
+            WorkbenchError::AlreadyResolved => ApiError::AlreadyResolved,
+            WorkbenchError::Crypto | WorkbenchError::Corrupt => ApiError::InternalError,
+            WorkbenchError::Command(inner) => inner.into(),
+            WorkbenchError::Database(_) => ApiError::Unavailable,
         }
     }
 }

@@ -218,7 +218,15 @@ updated, one `intake_unresolved_changed` (all already inside
 unlike `/inbound/email`); the row stays `pending` with its reason
 cleared (the same "Pending, reason —" queue presentation as 007d's
 deferral). Crypto failure → 500, row stays `pending` (crash-window
-rule; UI directs to Discard).
+rule; UI directs to Discard). Two verification-pass hardenings
+(adversarial findings, folded in at implementation): every post-reset
+error path publishes one ids-only `intake_unresolved_changed` (the
+reset committed; without an event all connected clients keep the stale
+"Unresolved" row) and the web retry mutation also invalidates the
+queue on error; and unretryable rows (unknown `payload_format`, a
+stored source that no longer validates) fail closed **before** the
+reset, so the stored diagnostic reason survives a retry that could
+never succeed.
 
 **Actor semantics** (safe default, and one consequence to be aware
 of): the retry runs as **`IntakeActor::System`** with a fresh
@@ -313,7 +321,9 @@ plaintext is persisted anywhere new.
 
 Spans `intake.unresolved_detail` / `intake.retry` / `intake.discard`:
 `organization_id`, `actor_id` (the admin — ids are safe),
-`raw_payload_id`, `payload_format`, `outcome` (static tags:
+`raw_payload_id`, `payload_format` (detail and retry; the discard span
+omits it — a discard parses nothing and its row read does not carry
+the column), `outcome` (static tags:
 `shown` | `retried_resolved` | `retried_unresolved` | `retried_busy` |
 `discarded` | `already_discarded` | `already_resolved` | error-variant
 names). Never: subject, sender, body text, JSON content, decrypted

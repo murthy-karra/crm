@@ -11,6 +11,9 @@ import type {
   ChangeMemberRoleRequest,
   ContactChannel,
   ContactOutcome,
+  DiscardUnresolvedResponse,
+  RetryUnresolvedResponse,
+  UnresolvedDetailResponse,
   CreateOrganizationRequest,
   CorrectOutcomeRequest,
   CorrectOutcomeResponse,
@@ -162,6 +165,49 @@ export function useUpdateIntakeSettingsMutation(orgId: MaybeRefOrGetter<string>)
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.intakeSettings(toValue(orgId)) })
+    },
+  })
+}
+
+/** `GET /api/intake/unresolved/{id}` (SLICE_007e §5) — admin-only,
+ *  decrypt-on-demand. Deliberately NOT a useQuery: content is fetched
+ *  imperatively when the dialog opens and never cached (§7). */
+export function fetchUnresolvedDetail(id: string): Promise<UnresolvedDetailResponse> {
+  return apiFetch<UnresolvedDetailResponse>(`/intake/unresolved/${id}`)
+}
+
+/** `POST /api/intake/unresolved/{id}/retry` (SLICE_007e §5). A resolved
+ *  retry also touches people/today, so invalidate those alongside the
+ *  queue. */
+export function useRetryUnresolvedMutation(orgId: MaybeRefOrGetter<string>) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<RetryUnresolvedResponse>(`/intake/unresolved/${id}/retry`, { method: 'POST' }),
+    onSuccess: (outcome) => {
+      const org = toValue(orgId)
+      void qc.invalidateQueries({ queryKey: queryKeys.unresolved(org) })
+      if (outcome.status === 'resolved') {
+        void qc.invalidateQueries({ queryKey: queryKeys.people(org) })
+        void qc.invalidateQueries({ queryKey: queryKeys.today(org) })
+      }
+    },
+    // A failed retry may still have committed the reset-to-pending
+    // (SLICE_007e §4) — refetch so the row's changed state shows.
+    onError: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.unresolved(toValue(orgId)) })
+    },
+  })
+}
+
+/** `POST /api/intake/unresolved/{id}/discard` (SLICE_007e §5). */
+export function useDiscardUnresolvedMutation(orgId: MaybeRefOrGetter<string>) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<DiscardUnresolvedResponse>(`/intake/unresolved/${id}/discard`, { method: 'POST' }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.unresolved(toValue(orgId)) })
     },
   })
 }

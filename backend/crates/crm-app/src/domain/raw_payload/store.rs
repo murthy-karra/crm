@@ -170,7 +170,9 @@ pub async fn resolved_outcome_for_inquiry(
 /// Unresolved-queue metadata (`GET /api/intake/unresolved`; spec §5):
 /// visible to every Organization member, id/source/received_at/
 /// resolution/reason/byte_len only — the queue never decrypts. Fetches one
-/// row past the 500 cap to compute `truncated`.
+/// row past the 500 cap to compute `truncated`. Lists `pending` and
+/// `unresolved` only — `discarded` rows left the queue in SLICE_007e
+/// (declared SLICE_002 §5 amendment).
 pub async fn list_unresolved(
     conn: &mut PgConnection,
     organization_id: Uuid,
@@ -179,7 +181,7 @@ pub async fn list_unresolved(
         UnresolvedItem,
         r#"SELECT id, source, received_at, resolution, unresolved_reason, byte_len
            FROM raw_payload
-           WHERE organization_id = $1 AND resolution <> 'resolved'
+           WHERE organization_id = $1 AND resolution IN ('pending', 'unresolved')
            ORDER BY received_at DESC
            LIMIT 501"#,
         organization_id,
@@ -190,4 +192,39 @@ pub async fn list_unresolved(
     let truncated = rows.len() > 500;
     rows.truncate(500);
     Ok((rows, truncated))
+}
+
+/// The workbench detail read (docs/specs/SLICE_007e.md §4): the full
+/// org-scoped row, visible only while `pending` or `unresolved` —
+/// `resolved`/`discarded`/unknown/cross-org are all the same `None`
+/// (byte-identical 404 upstream). The first reader of `payload_format`.
+pub struct DetailRawPayload {
+    pub id: Uuid,
+    pub source: String,
+    pub payload_format: String,
+    pub received_at: DateTime<Utc>,
+    pub resolution: String,
+    pub unresolved_reason: Option<String>,
+    pub byte_len: i32,
+    pub nonce: Vec<u8>,
+    pub ciphertext: Vec<u8>,
+}
+
+pub async fn unresolved_row_for_detail(
+    conn: &mut PgConnection,
+    id: Uuid,
+    organization_id: Uuid,
+) -> Result<Option<DetailRawPayload>, sqlx::Error> {
+    sqlx::query_as!(
+        DetailRawPayload,
+        r#"SELECT id, source, payload_format, received_at, resolution,
+                  unresolved_reason, byte_len, nonce, ciphertext
+           FROM raw_payload
+           WHERE id = $1 AND organization_id = $2
+             AND resolution IN ('pending', 'unresolved')"#,
+        id,
+        organization_id,
+    )
+    .fetch_optional(conn)
+    .await
 }

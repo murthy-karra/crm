@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE raw_payload\n           SET resolution = 'discarded', discarded_by_user_id = $3, discarded_at = $4\n           WHERE id = $1 AND organization_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "418e00a02538198370a4a0e58ed75be48d1a09e9a309df6a5f79c2d6422b23f6"
+}

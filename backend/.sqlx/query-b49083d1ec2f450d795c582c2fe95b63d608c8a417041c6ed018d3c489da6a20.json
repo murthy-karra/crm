@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, source, received_at, resolution, unresolved_reason, byte_len\n           FROM raw_payload\n           WHERE organization_id = $1 AND resolution <> 'resolved'\n           ORDER BY received_at DESC\n           LIMIT 501",
+  "query": "SELECT id, source, received_at, resolution, unresolved_reason, byte_len\n           FROM raw_payload\n           WHERE organization_id = $1 AND resolution IN ('pending', 'unresolved')\n           ORDER BY received_at DESC\n           LIMIT 501",
   "describe": {
     "columns": [
       {
@@ -48,5 +48,5 @@
       false
     ]
   },
-  "hash": "a9ce334cb45d243aadbc8aecf752562a0c33707c1c84a69b56e9dd8db552d73b"
+  "hash": "b49083d1ec2f450d795c582c2fe95b63d608c8a417041c6ed018d3c489da6a20"
 }

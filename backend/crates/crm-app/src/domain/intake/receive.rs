@@ -17,7 +17,7 @@ use crate::domain::commands::receive_inquiry::{
 use crate::domain::commands::CommandError;
 use crate::domain::envelope::Origin;
 use crate::domain::inquiry::parse::UnresolvedReason;
-use crate::domain::intake::email::{detect, format, mime};
+use crate::domain::intake::email;
 use crate::domain::intake::{IntakeActor, IntakeAddress};
 use crate::domain::raw_payload::{crypto, store};
 use crate::realtime::{Publication, Publisher, RealtimeEvent};
@@ -144,6 +144,7 @@ pub async fn receive_inbound_email(
         organization_id: org_id,
         origin: Origin::Webhook,
         correlation_id,
+        on_behalf_of_user_id: None,
     };
     let result = complete_intake(
         pool,
@@ -156,17 +157,7 @@ pub async fn receive_inbound_email(
             received_at,
             assign_to_user_id: None,
         },
-        |bytes| {
-            let mail = mime::parse(bytes).ok_or(UnresolvedReason::EmailUnparsed)?;
-            let email_format = detect(&mail).ok_or(UnresolvedReason::EmailUnrecognizedFormat)?;
-            // The static format name is the one format-derived value
-            // observability may record (docs/specs/SLICE_007d.md §8); the
-            // route's span declares the field, and recording on a span
-            // without it is a no-op for the `/api/inquiries` caller's
-            // span (which never runs this closure anyway).
-            tracing::Span::current().record("format", email_format.name());
-            format::to_parsed_lead(email_format.extract(&mail))
-        },
+        email::parse_payload,
     )
     .await;
 
@@ -203,10 +194,12 @@ pub async fn receive_inbound_email(
         ) => Ok(InboundEmailOutcome::Duplicate),
         // Advisory-lock budget exhausted: row stays `pending`, 200
         // accepted, one ids-only invalidation so the queue shows the row
-        // (docs/specs/SLICE_007d.md §4f). Known accepted limitation: when
-        // a later redelivery completes this row, only `person_changed`
-        // fires — connected queue viewers keep the stale row until
-        // refetch (SLICE_003's refetch-recovery convention).
+        // (docs/specs/SLICE_007d.md §4f). When a later redelivery or a
+        // workbench retry completes this row, its `person_changed`
+        // publish drops it from connected queues live — the web maps
+        // that event to an unresolved-queue invalidation
+        // (docs/specs/SLICE_007e.md §6, correcting 007d's original
+        // stale-until-refetch caveat).
         Err(CommandError::IntakeBusy) => {
             let event = RealtimeEvent::intake_unresolved_changed(
                 org_id,

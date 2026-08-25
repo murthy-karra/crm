@@ -9,6 +9,7 @@
 pub mod address;
 pub mod email;
 pub mod receive;
+pub mod workbench;
 
 pub use address::IntakeAddress;
 pub use receive::{receive_inbound_email, InboundEmailOutcome, ReceiveInboundEmailError};
@@ -32,6 +33,10 @@ pub enum IntakeActor {
         organization_id: Uuid,
         origin: Origin,
         correlation_id: Uuid,
+        /// The human whose action caused this unattended execution
+        /// (docs/specs/SLICE_007e.md §4: the retrying admin). Delivery
+        /// paths pass `None`.
+        on_behalf_of_user_id: Option<Uuid>,
     },
 }
 
@@ -83,7 +88,14 @@ impl IntakeActor {
                 organization_id,
                 origin,
                 correlation_id,
-            } => FactEnvelope::for_system(*organization_id, *origin, occurred_at, *correlation_id),
+                on_behalf_of_user_id,
+            } => FactEnvelope::for_system(
+                *organization_id,
+                *origin,
+                occurred_at,
+                *correlation_id,
+                *on_behalf_of_user_id,
+            ),
         }
     }
 }
@@ -101,6 +113,7 @@ mod tests {
             organization_id,
             origin: Origin::Cli,
             correlation_id,
+            on_behalf_of_user_id: None,
         };
 
         assert_eq!(actor.organization_id(), organization_id);
@@ -118,6 +131,24 @@ mod tests {
         assert_eq!(envelope.occurred_at, occurred_at);
         assert_eq!(envelope.correlation_id, correlation_id);
         assert_eq!(envelope.causation_id, None);
+    }
+
+    #[test]
+    fn system_actor_on_behalf_of_reaches_the_envelope() {
+        // SLICE_007e §4: the workbench retry records the acting admin in
+        // on_behalf_of_user_id while staying a System actor.
+        let admin = Uuid::new_v4();
+        let actor = IntakeActor::System {
+            organization_id: Uuid::new_v4(),
+            origin: Origin::WebSession,
+            correlation_id: Uuid::new_v4(),
+            on_behalf_of_user_id: Some(admin),
+        };
+        let envelope = actor.envelope(Utc::now());
+        assert_eq!(envelope.actor_kind, ActorKind::System);
+        assert_eq!(envelope.actor_user_id, None);
+        assert_eq!(envelope.on_behalf_of_user_id, Some(admin));
+        assert_eq!(envelope.origin, Origin::WebSession);
     }
 
     #[test]

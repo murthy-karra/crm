@@ -22,6 +22,9 @@ const props = defineProps<{
   columns: ColumnDef<TData>[]
   rowKey: (row: TData) => string
   rowTo?: (row: TData) => string
+  /** Row click as an action (e.g. open a dialog) instead of a route.
+   *  SLICE_007e: the Unresolved table's admin-only detail dialog. */
+  onRowClick?: (row: TData) => void
   /** Noun for the footer count, e.g. "people", "unresolved leads". */
   countNoun: string
   /** Singular form used when the count is exactly 1, e.g. "person", "unresolved lead". Defaults to `countNoun`. */
@@ -48,6 +51,10 @@ const table = useVueTable({
 const rows = computed(() => table.getRowModel().rows)
 
 function navigate(row: TData) {
+  if (props.onRowClick) {
+    props.onRowClick(row)
+    return
+  }
   if (!props.rowTo) return
   router.push(props.rowTo(row)).catch(() => {
     // Redundant navigation to the row's own already-open target (the
@@ -126,7 +133,7 @@ function navigate(row: TData) {
               v-for="row in rows"
               :key="rowKey(row.original)"
               class="h-14 border-t border-border"
-              :class="rowTo ? 'cursor-pointer hover:bg-surface-1' : ''"
+              :class="rowTo || onRowClick ? 'cursor-pointer hover:bg-surface-1' : ''"
               @click="navigate(row.original)"
             >
               <td

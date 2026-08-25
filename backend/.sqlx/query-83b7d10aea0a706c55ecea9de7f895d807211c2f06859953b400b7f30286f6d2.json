@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT payload_format, received_at, content_hmac\n           FROM raw_payload WHERE id = $1 AND organization_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "payload_format",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "received_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "content_hmac",
+        "type_info": "Bytea"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "83b7d10aea0a706c55ecea9de7f895d807211c2f06859953b400b7f30286f6d2"
+}

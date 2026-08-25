@@ -32,11 +32,13 @@ independent review (no
 blocking findings), amendments applied, user-approved as written. The
 user gave the implementation go-ahead 2026-08-24/25 ("Implement 007c
 now") after an earlier "Not yet" on the same gate report. Branch
-`slice-007c-system-routing` created off `main` `778c2e2`;
+`slice-007c-system-routing` was created off `main` `778c2e2`;
 implementation, tests, independent review, adversarial testing, fixes,
-full-suite verification, and a live dev walkthrough are all complete.
-Nothing has been committed yet — the working tree on this branch holds
-the diff, pending the user's explicit commit approval.
+full-suite verification, and a live dev walkthrough all completed
+there, then committed (`57ef058`, `fe0b99b`), fast-forward merged to
+`main`, and pushed to `origin/main` (`fe0b99b`) with explicit user
+approval 2026-08-25. The branch itself no longer exists (confirmed
+deleted 2026-08-25; only `main` remains locally).
 
 Planner findings that shaped the draft: the fact tables already permit
 `actor_kind='system'` (no fact-table migration); the Rust
@@ -1142,11 +1144,10 @@ slice:
 None outstanding for Slice 007c: implemented, verified, committed
 (`57ef058`, `fe0b99b`), fast-forward merged to `main`, and pushed to
 `origin/main` (`fe0b99b`) — all with explicit user approval 2026-08-25
-("merge and push"). `slice-007c-system-routing` still exists locally
-(same commit as `main`, not yet deleted — a short-lived branch per
-AGENTS.md §12, worth deleting once the user confirms). Next: start
-Slice 007d (first pinned email format) per the ladder, or address the
-smaller follow-ups below.
+("merge and push"). Confirmed 2026-08-25: `slice-007c-system-routing`
+no longer exists (already deleted; only `main` remains locally). Next:
+start Slice 007d (first pinned email format) per the ladder, or
+address the smaller follow-ups below.
 
 dev-seed-via-api review outcome (crm-reviewer, 2026-08-24): the two
 blocking findings (refusal guard failed open against a stale

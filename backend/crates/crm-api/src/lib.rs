@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod config;
 pub mod error;
+pub mod extraction;
 pub mod operator;
 pub mod routes;
 pub mod state;
@@ -118,6 +119,29 @@ pub async fn run(config: Config) -> Result<(), BoxError> {
             state.publisher.clone(),
             telephony.clone(),
         )),
+        _ => None,
+    };
+
+    // The extraction worker (docs/specs/SLICE_007f.md §4): in-process,
+    // only when a database is configured AND GROQ_API_KEY is set — the
+    // same gate that enables the Operator. Unset key: rows simply wait,
+    // externally identical to provider-down. Never started by
+    // `build_app`, so the test router is worker-free.
+    let _extraction = match (
+        &state.db,
+        extraction::GroqLeadExtractor::from_config(&config, &config.extraction),
+    ) {
+        (Some(pool), Some(extractor)) => Some(domain::intake::extraction::worker::spawn(
+            pool.clone(),
+            config.raw_payload_key.clone(),
+            state.publisher.clone(),
+            std::sync::Arc::new(extractor),
+            config.extraction.poll_interval,
+        )),
+        (Some(_), None) => {
+            tracing::info!("extraction worker disabled: GROQ_API_KEY is not set");
+            None
+        }
         _ => None,
     };
 

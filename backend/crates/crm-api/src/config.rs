@@ -97,6 +97,26 @@ pub struct OperatorConfig {
     pub proposal_ttl: Duration,
 }
 
+/// Extraction-worker settings (docs/specs/SLICE_007f.md §5).
+#[derive(Debug, Clone)]
+pub struct ExtractionConfig {
+    pub poll_interval: Duration,
+    pub model: String,
+    /// Per-LLM-call budget; the lease invariant below keeps the whole
+    /// attempt under the 60 s claim lease.
+    pub call_timeout: Duration,
+}
+
+const DEFAULT_EXTRACTION_POLL_SECONDS: u64 = 10;
+const MIN_EXTRACTION_POLL_SECONDS: u64 = 1;
+const MAX_EXTRACTION_POLL_SECONDS: u64 = 300;
+const DEFAULT_EXTRACTION_CALL_TIMEOUT_MS: u64 = 15_000;
+const MIN_EXTRACTION_CALL_TIMEOUT_MS: u64 = 1_000;
+const MAX_EXTRACTION_CALL_TIMEOUT_MS: u64 = 30_000;
+/// Overhead allowance in the lease invariant (spec §5): call timeout +
+/// the advisory-lock budget + this must stay under the claim lease.
+const EXTRACTION_LEASE_OVERHEAD_MS: u64 = 5_000;
+
 /// No `hex` crate dependency for one 32-byte decode (docs/specs/SLICE_002.md
 /// §14a: "no other new backend dependencies are expected" beyond
 /// chacha20poly1305).
@@ -154,6 +174,10 @@ pub struct Config {
     /// `GROQ_API_KEY`; `None` (unset or empty) disables the Operator
     /// without failing startup (docs/specs/SLICE_005.md §9, §14 item 5).
     pub groq_api_key: Option<GroqApiKey>,
+    /// Extraction-worker settings (docs/specs/SLICE_007f.md §5); always
+    /// validated. The worker itself is spawned only when `groq_api_key`
+    /// is set.
+    pub extraction: ExtractionConfig,
     /// Telephony settings (docs/specs/SLICE_006.md §11); limits always
     /// validated, LiveKit present only with `LIVEKIT_API_KEY`.
     pub telephony: TelephonyConfig,
@@ -194,10 +218,23 @@ pub enum ConfigError {
     OperatorTurnTimeoutOutOfBounds(u64),
     InvalidOperatorCallTimeout(String),
     OperatorCallTimeoutOutOfBounds(u64),
-    OperatorCallTimeoutExceedsTurnTimeout { call_ms: u64, turn_ms: u64 },
+    OperatorCallTimeoutExceedsTurnTimeout {
+        call_ms: u64,
+        turn_ms: u64,
+    },
     InvalidOperatorMaxConcurrent(String),
     OperatorMaxConcurrentOutOfBounds(usize),
     InvalidOperatorProposalTtl(String),
+    InvalidExtractionPollSeconds(String),
+    ExtractionPollSecondsOutOfBounds(u64),
+    InvalidExtractionCallTimeout(String),
+    ExtractionCallTimeoutOutOfBounds(u64),
+    /// The lease invariant (docs/specs/SLICE_007f.md §5): a slow attempt
+    /// under a lapsed claim lease could be double-extracted.
+    ExtractionCallTimeoutBreaksLease {
+        call_ms: u64,
+        lease_ms: u64,
+    },
     OperatorProposalTtlOutOfBounds(u64),
     // --- Slice 006 (docs/specs/SLICE_006.md §11) -------------------------
     MissingLiveKitUrl,
@@ -313,6 +350,26 @@ impl fmt::Display for ConfigError {
             ConfigError::InvalidOperatorCallTimeout(value) => write!(
                 f,
                 "CRM_OPERATOR_CALL_TIMEOUT_MS is not a valid integer: {value}"
+            ),
+            ConfigError::InvalidExtractionPollSeconds(value) => write!(
+                f,
+                "CRM_EXTRACTION_POLL_SECONDS is not a valid integer: {value}"
+            ),
+            ConfigError::ExtractionPollSecondsOutOfBounds(value) => write!(
+                f,
+                "CRM_EXTRACTION_POLL_SECONDS must be between {MIN_EXTRACTION_POLL_SECONDS} and {MAX_EXTRACTION_POLL_SECONDS}, got {value}"
+            ),
+            ConfigError::InvalidExtractionCallTimeout(value) => write!(
+                f,
+                "CRM_EXTRACTION_CALL_TIMEOUT_MS is not a valid integer: {value}"
+            ),
+            ConfigError::ExtractionCallTimeoutOutOfBounds(value) => write!(
+                f,
+                "CRM_EXTRACTION_CALL_TIMEOUT_MS must be between {MIN_EXTRACTION_CALL_TIMEOUT_MS} and {MAX_EXTRACTION_CALL_TIMEOUT_MS}, got {value}"
+            ),
+            ConfigError::ExtractionCallTimeoutBreaksLease { call_ms, lease_ms } => write!(
+                f,
+                "CRM_EXTRACTION_CALL_TIMEOUT_MS ({call_ms}) plus lock budget and overhead must stay under the {lease_ms} ms extraction claim lease (docs/specs/SLICE_007f.md §5)"
             ),
             ConfigError::OperatorCallTimeoutOutOfBounds(value) => write!(
                 f,
@@ -522,6 +579,7 @@ impl Config {
         let invitation_ttl = Duration::from_secs(invitation_ttl_hours * 3600);
 
         let operator = operator_config(&get)?;
+        let extraction = extraction_config(&get)?;
         let groq_api_key = get("GROQ_API_KEY")
             .filter(|v| !v.trim().is_empty())
             .map(GroqApiKey::new);
@@ -556,6 +614,7 @@ impl Config {
             invitation_ttl,
             operator,
             groq_api_key,
+            extraction,
             telephony,
             intake_mail,
             inbound_email_secret,
@@ -786,6 +845,53 @@ fn operator_config(get: &impl Fn(&str) -> Option<String>) -> Result<OperatorConf
         call_timeout: Duration::from_millis(call_ms),
         max_concurrent,
         proposal_ttl: Duration::from_secs(proposal_ttl_secs),
+    })
+}
+
+/// `CRM_EXTRACTION_*` (docs/specs/SLICE_007f.md §5). Always validated;
+/// the worker is gated separately on `GROQ_API_KEY`.
+fn extraction_config(
+    get: &impl Fn(&str) -> Option<String>,
+) -> Result<ExtractionConfig, ConfigError> {
+    let poll_secs = match get("CRM_EXTRACTION_POLL_SECONDS") {
+        Some(value) => value
+            .parse::<u64>()
+            .map_err(|_| ConfigError::InvalidExtractionPollSeconds(value.clone()))?,
+        None => DEFAULT_EXTRACTION_POLL_SECONDS,
+    };
+    if !(MIN_EXTRACTION_POLL_SECONDS..=MAX_EXTRACTION_POLL_SECONDS).contains(&poll_secs) {
+        return Err(ConfigError::ExtractionPollSecondsOutOfBounds(poll_secs));
+    }
+
+    let model = get("CRM_EXTRACTION_MODEL")
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+        .unwrap_or_else(|| DEFAULT_OPERATOR_MODEL.to_string());
+
+    let call_ms = match get("CRM_EXTRACTION_CALL_TIMEOUT_MS") {
+        Some(value) => value
+            .parse::<u64>()
+            .map_err(|_| ConfigError::InvalidExtractionCallTimeout(value.clone()))?,
+        None => DEFAULT_EXTRACTION_CALL_TIMEOUT_MS,
+    };
+    if !(MIN_EXTRACTION_CALL_TIMEOUT_MS..=MAX_EXTRACTION_CALL_TIMEOUT_MS).contains(&call_ms) {
+        return Err(ConfigError::ExtractionCallTimeoutOutOfBounds(call_ms));
+    }
+
+    // The lease invariant (spec §5): call + advisory-lock budget +
+    // overhead < the 60 s claim lease, or a slow attempt under a lapsed
+    // lease could be double-extracted.
+    let lease_ms = crm_app::domain::intake::extraction::worker::TRANSPORT_RETRY.as_millis() as u64;
+    let budget_ms =
+        crm_app::domain::commands::receive_inquiry::ADVISORY_LOCK_BUDGET.as_millis() as u64;
+    if call_ms + budget_ms + EXTRACTION_LEASE_OVERHEAD_MS > lease_ms {
+        return Err(ConfigError::ExtractionCallTimeoutBreaksLease { call_ms, lease_ms });
+    }
+
+    Ok(ExtractionConfig {
+        poll_interval: Duration::from_secs(poll_secs),
+        model,
+        call_timeout: Duration::from_millis(call_ms),
     })
 }
 

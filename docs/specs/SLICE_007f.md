@@ -139,18 +139,28 @@ The ladder's "backoff, max attempts" and "provider down → waits, never
 lost" only reconcile with a **two-class taxonomy**, stated here
 explicitly:
 
-- **Transport failures** (`provider_timeout`, `provider_unavailable`,
-  `rate_limited`; also `intake_busy` from `complete_intake`): never
-  count toward the attempt cap, never go terminal. The row's
-  `extraction_next_attempt_at` moves 60 s out and it waits — forever
-  if need be. A lead is never lost to an outage.
-- **Quality failures** (`schema_invalid`, `malformed_response`,
+- **Transport failures** — genuine provider outages ONLY
+  (`provider_timeout`, `provider_unavailable`, `rate_limited`) plus
+  `intake_busy` (real lock contention): never count toward the attempt
+  cap, never go terminal. The row's `extraction_next_attempt_at` moves
+  60 s out and it waits — forever if need be. A lead is never lost to
+  an outage.
+- **Counted failures** — everything deterministic: the model-quality
+  failures (`schema_invalid`, `malformed_response`,
   `hallucinated_contact`, `low_confidence`, `no_contact_method` after
-  validation): `extraction_attempts += 1`, backoff 1 min then 5 min;
-  the third quality failure is terminal —
-  `unresolved_reason = 'email_extraction_failed'`, one
-  `intake_unresolved_changed` publish. The granular cause lives in the
-  ledger; the queue shows one terminal reason.
+  validation) AND `internal_error` (corrupted ciphertext, unreadable
+  stored mail, any non-busy post-reset `complete_intake` error).
+  `extraction_attempts += 1`, backoff 1 min then 5 min; the third is
+  terminal — `unresolved_reason = 'email_extraction_failed'`, one
+  `intake_unresolved_changed` publish. Verification-pass hardening
+  (adversarial H1, folded in at implementation): the draft classed
+  `internal_error`/`malformed_response` as wait-forever, which would
+  have made any deterministically-failing row — including one poisoned
+  by a model reply Postgres rejects — an infinite loop paying for a
+  model call every cycle. Deterministic failures are bounded and end
+  visible ("Extraction failed", admin-rescuable); only real outages
+  wait forever. The granular cause lives in the ledger; the queue
+  shows one terminal reason.
 
 ### 4b. State machine (existing `raw_payload` columns; no new resolution value)
 
@@ -387,7 +397,9 @@ Per-attempt span `intake.extract`: `raw_payload_id`,
 tag), `confidence`, `input_truncated`, `duration_ms` — never subject,
 sender, body, reply text, or extracted values. `ExtractionInput` and
 `ExtractorReply` carry manual redacted `Debug` impls with tests.
-Pass-level span `intake.extraction_sweep` with the report counts.
+Pass-level span `intake.extraction_sweep` with all six report counts.
+(`seq` lives in the ledger only — it is assigned at insert time under
+the row lock; the per-attempt span carries the ids and outcome.)
 Provider errors log status-class only (the existing groq.rs
 discipline).
 

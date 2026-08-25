@@ -274,9 +274,14 @@ pub async fn retry_intake(
         tx.rollback().await?;
         return Err(WorkbenchError::Corrupt);
     }
+    // The reset also re-arms LLM extraction (docs/specs/SLICE_007f.md
+    // §4b): an explicit human Try-again clears the attempt counters, so
+    // a terminal not_a_lead / email_extraction_failed row that lands
+    // back at email_unrecognized_format becomes eligible again.
     sqlx::query!(
         r#"UPDATE raw_payload
-           SET resolution = 'pending', unresolved_reason = NULL, resolved_at = NULL
+           SET resolution = 'pending', unresolved_reason = NULL, resolved_at = NULL,
+               extraction_attempts = 0, extraction_next_attempt_at = NULL
            WHERE id = $1 AND organization_id = $2"#,
         id,
         ctx.organization_id,

@@ -47,6 +47,13 @@ pub enum UnresolvedReason {
     /// right template from the wrong sender domain (D-036's mitigation;
     /// docs/specs/SLICE_007d.md §4e).
     EmailUnrecognizedFormat,
+    /// The extraction model confidently classified the mail as not a
+    /// lead (docs/specs/SLICE_007f.md §4b). Terminal.
+    NotALead,
+    /// Three unusable extraction answers (docs/specs/SLICE_007f.md §4a).
+    /// Terminal; the granular causes live in the intake_extraction
+    /// ledger.
+    EmailExtractionFailed,
 }
 
 impl UnresolvedReason {
@@ -57,6 +64,8 @@ impl UnresolvedReason {
             UnresolvedReason::NoContactMethod => "no_contact_method",
             UnresolvedReason::EmailUnparsed => "email_unparsed",
             UnresolvedReason::EmailUnrecognizedFormat => "email_unrecognized_format",
+            UnresolvedReason::NotALead => "not_a_lead",
+            UnresolvedReason::EmailExtractionFailed => "email_extraction_failed",
         }
     }
 }

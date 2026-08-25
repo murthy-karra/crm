@@ -21,10 +21,10 @@ pub mod views;
 pub use backend::{ToolBackend, ToolError, ToolResult};
 pub use context::OperatorContext;
 pub use provider::{
-    ChatMessage, ChatRequest, ChatResponse, InferenceProvider, ProviderError, ToolCall, ToolChoice,
-    ToolDefinition, Usage,
+    ChatMessage, ChatRequest, ChatResponse, InferenceProvider, ProviderError, ResponseFormat,
+    ToolCall, ToolChoice, ToolDefinition, Usage,
 };
-pub use providers::groq::{GroqApiKey, GroqConfig, GroqProvider};
+pub use providers::groq::{GroqApiKey, GroqConfig, GroqProvider, DEFAULT_CONNECT_TIMEOUT};
 #[cfg(any(test, feature = "test-support"))]
 pub use providers::scripted::{ScriptedProvider, ScriptedStep};
 pub use service::{

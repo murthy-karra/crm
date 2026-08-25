@@ -1,6 +1,43 @@
 # Project State
 
-Last updated: 2026-08-25 (Slice 007f planning underway: D-038 accepted
+Last updated: 2026-08-25 (SLICE_007f implemented on
+`slice-007f-extraction` off `main` `c3cbc5a`: migration
+`20260901000001` (extraction-state columns + the PII-free
+`intake_extraction` ledger, append-only), the `LeadExtractor` seam +
+full validation gauntlet in crm-app (strict schema, inclusive 0.7
+gate both verdicts, subject+text anti-hallucination with the 10-digit
+phone floor and separator-only stripping, reply-field control-char
+sanitation), the sweep-pattern worker (claim lease, guarded reset,
+un-reset on any post-reset error, two-class failure accounting), the
+Groq adapter + injection-hardened prompt, `ChatRequest.response_format`
+in crm-operator (declared additive; wire byte-identical when None),
+`not_a_lead`/`email_extraction_failed` end-to-end, config with the
+lease invariant. Independently reviewed (`crm-reviewer`: no blockers;
+F1 span-instrument fix applied) and adversarially tested
+(`crm-tester`: CRITICAL C1 + HIGH H1 found and FIXED — a model reply
+echoing NUL into name/message, or any deterministic post-reset
+failure, was classed as an unbounded wait-forever retry paying for a
+Groq call every 60 s; now reply fields are sanitized and all
+deterministic failures are counted/bounded → terminal
+"Extraction failed" after 3, only genuine provider outages wait
+forever — both pinned by tests incl. the empty-script no-paid-calls
+proof). All lesser findings folded in (drain continuation, full span
+counts, build_request no-tools pin, TRUNCATE pin, eligibility
+negatives, failed-attempt capture, from_config keyless test).
+`./scripts/check` + `./scripts/check-db` green (14 db_intake_extraction
+tests). Live walkthrough against REAL Groq (`openai/gpt-oss-120b`):
+the leftover 007e plain.eml row auto-extracted at confidence 0.99 in
+1.2 s (Jordan → Carol's Today); `unrecognized_lead.eml` → Priya
+Natarajan extracted 0.99/771 ms onto Carol's Today with normalized
+contacts and system/webhook facts; `spam.eml` → "Not a lead" 0.99;
+the outage demo (dead CRM_OPERATOR_BASE_URL, kill-by-PID restarts) →
+`provider_unavailable` then, after restore, the same row's ledger
+reads provider_unavailable→extracted and Sasha Reyes appeared — a
+lead is never lost; zero lead content in any dev-api log. NOT yet
+committed — awaiting user commit approval (AGENTS.md Phase 9).
+crm_dev gained the walkthrough rows; dev-api runs the branch binary.)
+
+Planning phase, earlier (Slice 007f: D-038 accepted
 and recorded (inbound lead mail → Groq blessed with the fixed scope:
 text-only ≤16 KiB, subject + sender domain only, no org/agent/
 recipient identifiers, no tools, Groq on the subprocessor list — the
@@ -152,8 +189,12 @@ PUSHED to `origin/main` (`fe0b99b`), all with explicit user approval
 
 ## Current phase
 
-**Slice 007f (LLM extraction) spec APPROVED (user, 2026-08-25);
-awaiting the Phase 6 implementation-gate approval.** D-038 accepted.
+**Slice 007f (LLM extraction) IMPLEMENTED, reviewed, adversarially
+tested (CRITICAL+HIGH found and fixed+pinned), checks green, live
+real-Groq walkthrough passed — on `slice-007f-extraction`, NOT yet
+committed; awaiting user commit approval, then merge approval.**
+
+Spec phase, for reference: **spec APPROVED (user, 2026-08-25).** D-038 accepted.
 Spec: planner pass, independent review (no blocking findings, eight
 amendments applied incl. the non-Clone-ParsedLead closure fix and the
 race-safe ledger seq), user-approved as written incl. the declared
@@ -238,7 +279,9 @@ OrbStack hung twice. Hostname is `livekit1.tarams.org`.
 
 ## Current slice
 
-Slice 007f — LLM extraction — `docs/specs/SLICE_007f.md` (APPROVED). Previous: Slice 007e — Unresolved
+Slice 007f — LLM extraction — `docs/specs/SLICE_007f.md` —
+IMPLEMENTED + REVIEWED + TESTED + WALKED THROUGH (real Groq) on
+`slice-007f-extraction` (off `main` `c3cbc5a`), not yet committed. Previous: Slice 007e — Unresolved
 workbench — `docs/specs/SLICE_007e.md` — COMPLETE, MERGED to `main`
 and pushed. Previous: Slice 007d — One pinned
 email format → real inquiries — `docs/specs/SLICE_007d.md` —
@@ -1333,10 +1376,12 @@ slice:
 
 ## Approval currently required
 
-**Slice 007f implementation-gate approval** (AGENTS.md Phase 6): the
-spec is user-approved; the gate report awaits "Proceed with
-implementation?". The 007f planning edits (spec, D-038, ladder row 4,
-this file) also await a commit to `main`.
+**Commit approval** for `slice-007f-extraction` (AGENTS.md Phase 9):
+implementation done, reviewed and adversarially tested with all
+findings fixed and pinned, both gates green, real-Groq walkthrough
+passed. After commit, a separate merge approval. Then: 007g (real
+DNS/receiving — the ladder's last infrastructure rung; carries the
+address-scheme check) or 007h (portal parsers as fixtures arrive).
 
 Slice 007e: nothing outstanding — committed, merged, pushed, branch
 deleted, all with explicit user approval 2026-08-25.

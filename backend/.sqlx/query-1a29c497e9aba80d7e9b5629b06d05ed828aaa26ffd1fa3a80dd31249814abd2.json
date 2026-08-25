@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE raw_payload\n                   SET resolution = 'unresolved',\n                       unresolved_reason = 'email_unrecognized_format',\n                       resolved_at = now(),\n                       extraction_attempts = extraction_attempts + 1,\n                       extraction_next_attempt_at = now() + $3::interval\n                   WHERE id = $1 AND organization_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Interval"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1a29c497e9aba80d7e9b5629b06d05ed828aaa26ffd1fa3a80dd31249814abd2"
+}

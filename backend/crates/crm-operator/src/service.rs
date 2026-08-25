@@ -547,6 +547,7 @@ impl OperatorService {
             messages: state.messages.clone(),
             tools: tool_definitions(),
             tool_choice,
+            response_format: None,
         };
 
         let first = self.one_call(state, request.clone(), 1).await;

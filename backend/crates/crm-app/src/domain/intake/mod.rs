@@ -8,6 +8,7 @@
 
 pub mod address;
 pub mod email;
+pub mod extraction;
 pub mod receive;
 pub mod workbench;
 

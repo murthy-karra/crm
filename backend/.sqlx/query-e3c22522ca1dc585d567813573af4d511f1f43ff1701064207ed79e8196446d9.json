@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE raw_payload\n                       SET unresolved_reason = $3, resolved_at = now(),\n                           extraction_attempts = extraction_attempts\n                               + CASE WHEN $4 THEN 1 ELSE 0 END\n                       WHERE id = $1 AND organization_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e3c22522ca1dc585d567813573af4d511f1f43ff1701064207ed79e8196446d9"
+}

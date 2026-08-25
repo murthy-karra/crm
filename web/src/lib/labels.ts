@@ -17,6 +17,8 @@ export const UNRESOLVED_REASON_LABEL: Record<UnresolvedReason, string> = {
   no_contact_method: 'No contact method',
   email_unparsed: 'Unparsed email',
   email_unrecognized_format: 'Unrecognized email format',
+  not_a_lead: 'Not a lead',
+  email_extraction_failed: 'Extraction failed',
 }
 
 /** Shared by LogContactDialog.vue's Channel Select and PersonDetailView's

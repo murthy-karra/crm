@@ -47,4 +47,10 @@ describe('unresolved reason labels (SLICE_007b §7)', () => {
       'Unrecognized email format',
     )
   })
+
+  // SLICE_007f §6: the two terminal extraction outcomes.
+  it('labels the extraction outcomes', () => {
+    expect(UNRESOLVED_REASON_LABEL.not_a_lead).toBe('Not a lead')
+    expect(UNRESOLVED_REASON_LABEL.email_extraction_failed).toBe('Extraction failed')
+  })
 })

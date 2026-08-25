@@ -658,6 +658,9 @@ pub(crate) fn decode_unresolved_reason(reason: Option<&str>) -> UnresolvedReason
         // duplicate replay of an email row decodes faithfully.
         "email_unparsed" => UnresolvedReason::EmailUnparsed,
         "email_unrecognized_format" => UnresolvedReason::EmailUnrecognizedFormat,
+        // The extraction vocabulary (docs/specs/SLICE_007f.md §6).
+        "not_a_lead" => UnresolvedReason::NotALead,
+        "email_extraction_failed" => UnresolvedReason::EmailExtractionFailed,
         _ => UnresolvedReason::NoContactMethod,
     }
 }

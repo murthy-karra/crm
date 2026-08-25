@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO intake_extraction\n            (id, organization_id, raw_payload_id, seq, provider, model,\n             outcome, confidence, input_truncated, prompt_tokens,\n             completion_tokens, duration_ms, occurred_at, correlation_id)\n           VALUES ($1, $2, $3,\n                   (SELECT COALESCE(MAX(seq), 0) + 1 FROM intake_extraction\n                    WHERE raw_payload_id = $3),\n                   $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Float4",
+        "Bool",
+        "Int4",
+        "Int4",
+        "Int4",
+        "Timestamptz",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ddb352d6be816ec8b912af09c8559a79a6740b6b1569eecaa8eeaf1e0f73ef0d"
+}

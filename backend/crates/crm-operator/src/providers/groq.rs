@@ -9,8 +9,8 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use crate::provider::{
-    ChatMessage, ChatRequest, ChatResponse, InferenceProvider, ProviderError, ToolCall, ToolChoice,
-    Usage,
+    ChatMessage, ChatRequest, ChatResponse, InferenceProvider, ProviderError, ResponseFormat,
+    ToolCall, ToolChoice, Usage,
 };
 
 pub const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
@@ -117,6 +117,12 @@ struct WireMessage<'a> {
 }
 
 #[derive(Serialize)]
+struct WireResponseFormat {
+    #[serde(rename = "type")]
+    kind: &'static str,
+}
+
+#[derive(Serialize)]
 struct WireRequest<'a> {
     model: &'a str,
     messages: Vec<WireMessage<'a>>,
@@ -124,6 +130,8 @@ struct WireRequest<'a> {
     tools: Vec<WireTool<'a>>,
     tool_choice: &'static str,
     temperature: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    response_format: Option<WireResponseFormat>,
 }
 
 #[derive(Deserialize)]
@@ -230,6 +238,11 @@ pub(crate) fn request_body(model: &str, req: &ChatRequest) -> serde_json::Value 
             ToolChoice::None => "none",
         },
         temperature: TEMPERATURE,
+        response_format: req.response_format.map(|f| match f {
+            ResponseFormat::JsonObject => WireResponseFormat {
+                kind: "json_object",
+            },
+        }),
     };
     serde_json::to_value(wire).expect("wire request serializes")
 }
@@ -370,6 +383,29 @@ mod tests {
     }
 
     #[test]
+    fn request_body_carries_response_format_only_when_set() {
+        // SLICE_007f §4d: the additive structured-output extension. None
+        // (every Operator caller) leaves the wire shape byte-identical.
+        let mut req = ChatRequest {
+            messages: vec![ChatMessage::User {
+                content: "hi".into(),
+            }],
+            tools: vec![],
+            tool_choice: ToolChoice::None,
+            response_format: None,
+        };
+        let body = request_body("m", &req);
+        assert!(body.get("response_format").is_none());
+
+        req.response_format = Some(ResponseFormat::JsonObject);
+        let body = request_body("m", &req);
+        assert_eq!(
+            body["response_format"],
+            serde_json::json!({"type": "json_object"})
+        );
+    }
+
+    #[test]
     fn request_body_is_openai_compatible() {
         let req = ChatRequest {
             messages: vec![
@@ -394,6 +430,7 @@ mod tests {
             ],
             tools: tool_definitions(),
             tool_choice: ToolChoice::None,
+            response_format: None,
         };
         let body = request_body("m", &req);
         assert_eq!(body["model"], "m");
@@ -457,6 +494,7 @@ mod tests {
                 messages: vec![],
                 tools: vec![],
                 tool_choice: ToolChoice::Auto,
+                response_format: None,
             })
             .await
             .unwrap_err();
@@ -486,6 +524,7 @@ mod tests {
                 messages: vec![],
                 tools: vec![],
                 tool_choice: ToolChoice::Auto,
+                response_format: None,
             })
             .await
             .unwrap_err();
@@ -519,6 +558,7 @@ mod tests {
             messages: vec![],
             tools: vec![],
             tool_choice: ToolChoice::Auto,
+            response_format: None,
         };
         let p = GroqProvider::new(config(
             &serve_once("429 Too Many").await,

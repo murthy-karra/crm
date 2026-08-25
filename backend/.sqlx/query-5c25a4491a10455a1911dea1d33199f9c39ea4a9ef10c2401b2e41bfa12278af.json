@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE raw_payload\n           SET resolution = 'pending', unresolved_reason = NULL, resolved_at = NULL,\n               extraction_attempts = 0, extraction_next_attempt_at = NULL\n           WHERE id = $1 AND organization_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5c25a4491a10455a1911dea1d33199f9c39ea4a9ef10c2401b2e41bfa12278af"
+}

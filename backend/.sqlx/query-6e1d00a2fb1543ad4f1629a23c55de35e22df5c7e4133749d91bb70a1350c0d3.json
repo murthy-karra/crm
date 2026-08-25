@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE raw_payload\n                   SET resolution = 'unresolved',\n                       unresolved_reason = 'email_extraction_failed',\n                       resolved_at = now(),\n                       extraction_attempts = extraction_attempts + 1\n                   WHERE id = $1 AND organization_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6e1d00a2fb1543ad4f1629a23c55de35e22df5c7e4133749d91bb70a1350c0d3"
+}

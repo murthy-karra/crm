@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE raw_payload\n                       SET extraction_attempts = extraction_attempts + 1,\n                           extraction_next_attempt_at = now() + $3::interval\n                       WHERE id = $1 AND organization_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Interval"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0cb0360780a9103292ecae4f98fd5e7fda91abf3df3ab7143f7bcf6293a251cc"
+}

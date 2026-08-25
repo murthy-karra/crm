@@ -405,6 +405,8 @@ export type UnresolvedReason =
   | 'no_contact_method'
   | 'email_unparsed'
   | 'email_unrecognized_format'
+  | 'not_a_lead'
+  | 'email_extraction_failed'
 
 // ---- SLICE_007e §5: the Unresolved workbench (admin-only, D-037) ---------
 

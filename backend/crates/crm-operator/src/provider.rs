@@ -52,12 +52,24 @@ pub enum ToolChoice {
     None,
 }
 
+/// Structured-output request (docs/specs/SLICE_007f.md §4d — a declared
+/// additive extension, AGENTS.md §11). `JsonObject` maps to the
+/// OpenAI-compatible `response_format: {"type": "json_object"}`. The
+/// Operator's callers pass `None`; `ScriptedProvider` ignores it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ResponseFormat {
+    JsonObject,
+}
+
 /// `Debug` is redacted: messages carry user and tool text (D-029).
 #[derive(Clone, PartialEq, Eq, Serialize)]
 pub struct ChatRequest {
     pub messages: Vec<ChatMessage>,
     pub tools: Vec<ToolDefinition>,
     pub tool_choice: ToolChoice,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub response_format: Option<ResponseFormat>,
 }
 
 impl std::fmt::Debug for ChatRequest {
@@ -69,6 +81,7 @@ impl std::fmt::Debug for ChatRequest {
             )
             .field("tools", &self.tools.len())
             .field("tool_choice", &self.tool_choice)
+            .field("response_format", &self.response_format)
             .finish()
     }
 }

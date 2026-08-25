@@ -1,6 +1,24 @@
 # Project State
 
-Last updated: 2026-08-25 (SLICE_007d implemented on
+Last updated: 2026-08-25 (Slice 007e planning underway: D-037 accepted
+and recorded (raw unresolved content is org-admin-only, on demand —
+resolves ladder cross-rung decision 7), `crm-planner` pass done,
+`docs/specs/SLICE_007e.md` drafted, independent review
+(`crm-reviewer`) in progress. Notable planner findings baked into the
+draft: adding `resolution='discarded'` without extending
+`duplicate_outcome` would make redelivery of discarded bytes hit its
+`unreachable!` — a handler panic; `list_unresolved`'s `<> 'resolved'`
+filter must become `IN ('pending','unresolved')` (declared SLICE_002
+§5 queue amendment); "re-run Phase B" needs a guarded reset-to-pending
+step; retry runs as System actor with `on_behalf_of_user_id` = the
+acting admin (declared envelope extension) so rescued leads route per
+D-035 to the org default, NOT to the clicking admin; discarded rows
+are retained, UI-invisible ciphertext until O-013 — stated, not
+silent; 007d's §4e "stale queue" caveat is factually wrong (the web
+already invalidates the unresolved queue on `person_changed`) and gets
+corrected at approval.)
+
+Prior update, same day (SLICE_007d implemented on
 `slice-007d-email-format` off `main` `d491175`: `mail-parser` 0.11.8
 wrapped in `domain/intake/email/mime.rs` (directory-walk fence test,
 redacted Debug, NUL stripped at the fence), `EmailFormat` registry with
@@ -79,11 +97,22 @@ PUSHED to `origin/main` (`fe0b99b`), all with explicit user approval
 
 ## Current phase
 
-**Slice 007d (one pinned email format → real inquiries) COMPLETE:
-implemented, reviewed, adversarially tested (one HIGH finding fixed +
-pinned), checks green, live walkthrough passed, committed (`a75b9a8`),
-merged to `main`, and pushed — all with explicit user approval
-2026-08-25.** D-036 accepted. Spec `docs/specs/SLICE_007d.md`: planner
+**Slice 007e (Unresolved workbench) spec APPROVED (user, 2026-08-25);
+awaiting the Phase 6 implementation-gate approval.** D-037 accepted.
+Spec: planner pass, independent review (no blocking findings, six
+documentation-level amendments applied), user-approved as written
+incl. the three highlighted safe defaults (rescue routes per D-035 not
+to the clicking admin; discarded bytes never resurrect; discard
+retains ciphertext until O-013). Amendment pointers placed: SLICE_002
+§5 (queue lists pending|unresolved only), SLICE_007d header (stale-
+queue caveat corrected; duplicate_outcome discarded arm; for_system
+on_behalf_of extension).
+
+Prior phase: **Slice 007d (one pinned email format → real inquiries)
+COMPLETE: implemented, reviewed, adversarially tested (one HIGH
+finding fixed + pinned), checks green, live walkthrough passed,
+committed (`a75b9a8`), merged to `main`, and pushed — all with
+explicit user approval 2026-08-25.** D-036 accepted. Spec `docs/specs/SLICE_007d.md`: planner
 pass, independent review (no blocking findings), seven amendments
 applied, user-approved as written. The SLICE_007b supersession pointer
 (criteria 3/14/18 + the fixture-reason change) is in place.
@@ -143,8 +172,10 @@ OrbStack hung twice. Hostname is `livekit1.tarams.org`.
 
 ## Current slice
 
-Slice 007d — One pinned email format → real inquiries —
-`docs/specs/SLICE_007d.md` — COMPLETE, MERGED to `main` and pushed.
+Slice 007e — Unresolved workbench — `docs/specs/SLICE_007e.md`
+(APPROVED). Previous: Slice 007d — One pinned
+email format → real inquiries — `docs/specs/SLICE_007d.md` —
+COMPLETE, MERGED to `main` and pushed.
 Previous: Slice 007c — System actor + unattended routing —
 `docs/specs/SLICE_007c.md` — COMPLETE, MERGED + PUSHED `fe0b99b`.
 Before that: Slice 007b — Inbound email endpoint —
@@ -181,7 +212,14 @@ branches point at `fe0b99b`).
 
 ## Last accepted decision
 
-2026-08-25, user-confirmed (Slice 007d planning):
+2026-08-25, user-accepted (Slice 007e planning):
+- D-037 — raw unresolved content (the decrypted email/JSON), Try
+  again, and Discard are Organization-admin-only, on demand, per row,
+  never in the list, never logged; members keep the metadata-only
+  queue. Resolves ladder cross-rung decision 7. Widening later remains
+  a future decision.
+
+Previous, same day, user-confirmed (Slice 007d planning):
 - D-036 — forged-mail posture for pinned email formats. Mail reaching
   a valid intake address (unguessable token) that matches a pinned
   format's template AND claims that format's real sender domain WILL
@@ -1219,10 +1257,16 @@ slice:
 
 ## Approval currently required
 
-None outstanding for Slice 007d: committed (`a75b9a8`), merged to
-`main`, pushed, branch deleted — all with explicit user approval
-2026-08-25. Next: 007e planning per the ladder (Unresolved workbench),
-or 007g (real DNS/receiving — can start any time after 007b).
+**Slice 007e implementation-gate approval** (AGENTS.md Phase 6): the
+spec is user-approved; the gate report awaits "Proceed with
+implementation?" — including the lane-strategy choice (sequential
+single branch vs two parallel worktree lanes, which need explicit
+user approval per AGENTS.md §12). The 007e planning edits (spec,
+D-037, ladder row 7, SLICE_002/SLICE_007d pointers, this file) also
+await a commit to `main`.
+
+Slice 007d: nothing outstanding — committed (`a75b9a8`), merged,
+pushed, branch deleted, all with explicit user approval 2026-08-25.
 
 Slice 007c: nothing outstanding — implemented, verified, committed
 (`57ef058`, `fe0b99b`), fast-forward merged to `main`, and pushed to

@@ -386,7 +386,7 @@ method list (GET/POST/DELETE) is unchanged.
 | `POST /api/people/{id}/assignment` | `{"assigned_user_id": uuid\|null}` | 200 `{"person": {…summary}, "changed": bool}` | 404 `not_found`, 422 `invalid_assignee` (identical for nonexistent and other-Organization users) |
 | `POST /api/people/{id}/stage` | `{"stage_id": uuid}` | 200 `{"person": {…summary}, "changed": bool}` | 404 `not_found`, 422 `invalid_stage` (same non-leaking behavior) |
 | `GET /api/stages` | — | 200 `{"stages":[{id,name,position}]}` in position order | |
-| `GET /api/intake/unresolved` | — | 200 `{"items":[{id,source,received_at,resolution,reason,byte_len}], "truncated": bool}` ordered `received_at DESC`; cap 500 | |
+| `GET /api/intake/unresolved` | — | 200 `{"items":[{id,source,received_at,resolution,reason,byte_len}], "truncated": bool}` ordered `received_at DESC`; cap 500. *Amended by SLICE_007e (declared, AGENTS.md §11): the queue lists `resolution IN ('pending','unresolved')` — `discarded` rows (new in 007e) do not appear; shape unchanged.* | |
 
 `primary_email` / `primary_phone` = the earliest-created contact method of
 that kind, or null. `display_name` is derived server-side so both lanes

@@ -5,6 +5,16 @@ same day, reviewer verdict "ready with amendments" — no blocking
 findings, all seven amendments applied, including the declared 007b
 criteria 3/14/18 supersessions and the route-file ownership; §12 safe
 defaults accepted as written)
+
+> Corrected by SLICE_007e (declared, AGENTS.md §11): §4e's and
+> §12(m)'s "a completed previously-deferred row leaves connected queue
+> viewers stale until refetch" is factually wrong — the web client
+> already invalidates the unresolved queue on
+> `person_changed{inquiry_received}` (`web/src/realtime/events.ts`),
+> so the row drops live. 007e also amends §4d's `duplicate_outcome`
+> description (a `discarded` arm is added) and SLICE_007c §4's
+> `FactEnvelope::for_system`/`IntakeActor::System` signatures
+> (`on_behalf_of_user_id` parameter; existing callers pass `None`).
 Ladder: docs/plans/SLICE_007_LADDER.md rung d. Builds on 007b (inbound
 endpoint; merged `4b3462a`) and 007c (system actor + unattended
 routing; merged `fe0b99b`). Targets O-014 #1 (deterministic template

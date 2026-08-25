@@ -1142,3 +1142,20 @@ of a successful forgery: one bogus, quickly recognizable lead row —
 no data access, no privilege.
 
 Blocks: nothing. Feeds the Slice 007d specification.
+
+### D-037 — Raw unresolved content is readable by Organization admins only (2026-08-25)
+
+Accepted (user, during Slice 007e planning). Resolves the ladder's
+cross-rung decision 7.
+
+Opening an Unresolved row to read its decrypted raw content (the
+actual email or JSON that arrived), and the Try-again and Discard
+actions, are restricted to Organization admins — always on demand, per
+row, never in the list response, never logged. All active members keep
+the metadata-only queue (source, reason, size, received time) they
+have today. Rationale: unresolved content is unvetted third-party
+material; the narrowest sensible surface ships first, and widening
+later is easy while walking back is not. Widening to members (in
+either the read or the retry-only form) remains a future decision.
+
+Blocks: nothing. Feeds the Slice 007e specification.

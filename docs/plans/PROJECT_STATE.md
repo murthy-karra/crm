@@ -24,7 +24,9 @@ planner pass, independent review (no blocking findings), amendments
 applied, user-approved as written. The SLICE_002 §6 fact-vocabulary
 pointer for the two new routing strategies is in place. Round-robin
 confirmed as its own post-007d rung (ladder note added). Planning
-edits not yet committed to `main`.
+edits committed to `main` (`7ac6d47`, not pushed). The Phase 6 gate
+report was presented; the user answered **"Not yet"** — implementation
+is on hold until the user gives the go-ahead.
 
 Planner findings that shaped the draft: the fact tables already permit
 `actor_kind='system'` (no fact-table migration); the Rust
@@ -958,12 +960,12 @@ slice:
 
 ## Approval currently required
 
-**Slice 007c implementation-gate approval** (AGENTS.md Phase 6): the
-spec is user-approved; the gate report (outcome, files, exclusions,
-branch, migration ownership, checks, risks) has been presented and
-awaits "Proceed with implementation?". The planning edits (spec,
-D-035, ladder, SLICE_002 pointer, this file) also await a commit to
-`main`.
+**Slice 007c implementation go-ahead** (AGENTS.md Phase 6): the spec
+is user-approved and the gate report (outcome, files, exclusions,
+branch `slice-007c-system-routing`, migration ownership, checks,
+risks) was presented on 2026-08-24; the user chose **"Not yet"**.
+Implementation starts only on an explicit user go-ahead. Also
+outstanding: push approval for `main` (`7ac6d47` local-only).
 
 dev-seed-via-api review outcome (crm-reviewer, 2026-08-24): the two
 blocking findings (refusal guard failed open against a stale

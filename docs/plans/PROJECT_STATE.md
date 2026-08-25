@@ -34,8 +34,8 @@ Today with all four facts System-attributed, routing
 `organization_default` → Carol, inquiry `source=website` with the
 multi-line message; `plain.eml` → Unresolved "email_unrecognized_
 format"; byte-identical redelivery → still one Person, one unresolved
-row; wrong token → rejected. NOT yet committed — awaiting user commit
-approval (AGENTS.md Phase 9). Dev-api left running on the branch
+row; wrong token → rejected. Committed (`a75b9a8`), fast-forward
+merged to `main`, and pushed with explicit user approval 2026-08-25. Dev-api left running on the branch
 binary; crm_dev now has carol active, the default-assignee setting,
 and the walkthrough rows.)
 
@@ -79,11 +79,11 @@ PUSHED to `origin/main` (`fe0b99b`), all with explicit user approval
 
 ## Current phase
 
-**Slice 007d (one pinned email format → real inquiries) IMPLEMENTED,
-reviewed, adversarially tested (one HIGH finding fixed + pinned),
-checks green, live walkthrough passed — on `slice-007d-email-format`,
-NOT yet committed; awaiting user commit approval, then merge
-approval.** D-036 accepted. Spec `docs/specs/SLICE_007d.md`: planner
+**Slice 007d (one pinned email format → real inquiries) COMPLETE:
+implemented, reviewed, adversarially tested (one HIGH finding fixed +
+pinned), checks green, live walkthrough passed, committed (`a75b9a8`),
+merged to `main`, and pushed — all with explicit user approval
+2026-08-25.** D-036 accepted. Spec `docs/specs/SLICE_007d.md`: planner
 pass, independent review (no blocking findings), seven amendments
 applied, user-approved as written. The SLICE_007b supersession pointer
 (criteria 3/14/18 + the fixture-reason change) is in place.
@@ -144,9 +144,7 @@ OrbStack hung twice. Hostname is `livekit1.tarams.org`.
 ## Current slice
 
 Slice 007d — One pinned email format → real inquiries —
-`docs/specs/SLICE_007d.md` — IMPLEMENTED + REVIEWED + TESTED + WALKED
-THROUGH on `slice-007d-email-format` (off `main` `d491175`), not yet
-committed.
+`docs/specs/SLICE_007d.md` — COMPLETE, MERGED to `main` and pushed.
 Previous: Slice 007c — System actor + unattended routing —
 `docs/specs/SLICE_007c.md` — COMPLETE, MERGED + PUSHED `fe0b99b`.
 Before that: Slice 007b — Inbound email endpoint —
@@ -1221,12 +1219,10 @@ slice:
 
 ## Approval currently required
 
-**Commit approval** for `slice-007d-email-format` (AGENTS.md Phase 9):
-implementation done, independently reviewed ("ready to commit") and
-adversarially tested (HIGH NUL finding fixed + pinned), both check
-gates green, live walkthrough passed. After commit, a separate
-merge-to-`main` approval is needed. Then: 007e planning per the ladder
-(or 007g, which can start any time after 007b).
+None outstanding for Slice 007d: committed (`a75b9a8`), merged to
+`main`, pushed, branch deleted — all with explicit user approval
+2026-08-25. Next: 007e planning per the ladder (Unresolved workbench),
+or 007g (real DNS/receiving — can start any time after 007b).
 
 Slice 007c: nothing outstanding — implemented, verified, committed
 (`57ef058`, `fe0b99b`), fast-forward merged to `main`, and pushed to

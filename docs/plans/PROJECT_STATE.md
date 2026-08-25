@@ -1138,18 +1138,14 @@ slice:
 
 ## Approval currently required
 
-**Slice 007c commit approval** (AGENTS.md Phase 9): implementation is
-complete and verified on `slice-007c-system-routing` (off `main`
-`778c2e2`) — independent review, adversarial testing, the two
-resulting fixes, `./scripts/check`/`./scripts/check-db` both green, and
-a full live walkthrough (API/CLI end-to-end plus a real-browser
-screenshot of the settings card). Nothing has been committed. Waiting
-on: the user reviewing the diff summary and giving explicit commit
-approval; then, separately, merge approval (source
-`slice-007c-system-routing` → `main`, per AGENTS.md Phase 9's separate
-merge-approval step) and — as already outstanding since 007b — push
-approval for `main` (currently 4 commits ahead of `origin/main`,
-local-only).
+**Slice 007c merge approval** (AGENTS.md Phase 9): implementation
+complete, verified, and committed on `slice-007c-system-routing`
+(`57ef058`, off `main` `778c2e2`) — user gave explicit commit approval
+2026-08-25. Waiting on: merge approval (source
+`slice-007c-system-routing` → destination `main`, per Phase 9's
+separate merge-approval step) and — as already outstanding since
+007b — push approval for `main` (currently 4 commits ahead of
+`origin/main`, local-only; the merge would add a 5th).
 
 dev-seed-via-api review outcome (crm-reviewer, 2026-08-24): the two
 blocking findings (refusal guard failed open against a stale

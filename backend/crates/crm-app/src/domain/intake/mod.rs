@@ -6,4 +6,4 @@ pub mod address;
 pub mod receive;
 
 pub use address::IntakeAddress;
-pub use receive::{InboundEmailOutcome, ReceiveInboundEmailError, receive_inbound_email};
+pub use receive::{receive_inbound_email, InboundEmailOutcome, ReceiveInboundEmailError};

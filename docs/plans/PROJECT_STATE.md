@@ -1,10 +1,25 @@
 # Project State
 
-Last updated: 2026-08-24 (SLICE_007b partial implementation merged `110bd95` — domain layer + config type done; API route/tests/fixtures/web labels remaining. Next: API route + DB/service-free tests.)
+Last updated: 2026-08-24 (SLICE_007b implementation complete on branch
+`slice-007b-inbound-email-api`, off `main` `ca89d70`: `POST /inbound/email`
+route, config/state wiring, `ApiError::PayloadTooLarge`, DB-backed +
+service-free tests, `.eml` fixtures, `scripts/inbound-email`, web label.
+Independently reviewed (`crm-reviewer`) and adversarially tested
+(`crm-tester`) in parallel; both found the same two low-severity,
+pre-existing (already-merged in `110bd95`) deviations from `receive.rs`'s
+frozen contract, both fixed. `./scripts/check` and `./scripts/check-db`
+green; live walkthrough via `scripts/inbound-email` against the real dev
+stack passed. Not yet committed — awaiting user approval.)
 
 ## Current phase
 
-**Slice 006c (call outcome) COMPLETE and MERGED to `main` (`58ecad8`).** Scope grew during the live walkthrough into three
+**Slice 007b (inbound email endpoint) implemented, reviewed, tested, and
+walked through on branch `slice-007b-inbound-email-api`; not yet
+committed or merged.** See Completed work below for the full account.
+Next action: commit approval, then merge approval, then 007c planning.
+
+Prior phase, for reference: **Slice 006c (call outcome) COMPLETE and
+MERGED to `main` (`58ecad8`).** Scope grew during the live walkthrough into three
 user decisions, all implemented, reviewed and adversarially tested:
 one timeline line per call (Follow Up Boss style); D-033 — the agent
 must choose every call's outcome (no default, no Skip), an unchosen
@@ -28,6 +43,13 @@ OrbStack hung twice. Hostname is `livekit1.tarams.org`.
 
 ## Current slice
 
+Slice 007b — Inbound email endpoint — `docs/specs/SLICE_007b.md` —
+IMPLEMENTED + REVIEWED + TESTED on `slice-007b-inbound-email-api`
+(off `main` `ca89d70`), not yet committed. Previous: Slice 007a —
+Organization intake address — `docs/specs/SLICE_007a.md` — COMPLETE,
+MERGED `81af77f`.
+
+Earlier history, for reference:
 Slice 006c — Call outcome (D-032, D-033) — `docs/specs/SLICE_006c.md`
 (+ §5a) — COMPLETE, MERGED `58ecad8`. Next: Slice 006a — `crm-app`
 extraction — `docs/specs/SLICE_006a.md` — COMPLETE, MERGED `a17aed3`
@@ -50,7 +72,7 @@ proof chain. Slice 004 is complete and merged (see History).
 
 ## Current branch
 
-`main` (006c merged).
+`slice-007b-inbound-email-api` (off `main` `ca89d70`), not yet committed.
 
 ## Last accepted decision
 
@@ -571,12 +593,83 @@ Earlier the same day, user-accepted:
   email_unparsed → publish realtime event). Config type complete:
   `InboundEmailSecret` in crm-app `config.rs` (32-byte minimum, redacted
   Debug, parse/as_bytes accessors). Both committed on
-  `slice-007b-inbound-email`, merged to `main` `110bd95`. Remaining for
-  completion: API route (`routes/inbound_email.rs`, crm-api config
-  wiring, AppState, error handling), DB-backed + service-free tests,
-  `scripts/inbound-email` + `.eml` fixtures, web labels
-  (`UnresolvedReason` union + label entry in `types.ts`/`labels.ts`),
-  independent review + adversarial test + live walkthrough.
+  `slice-007b-inbound-email`, merged to `main` `110bd95`.
+
+- 2026-08-24: Slice 007b completed on `slice-007b-inbound-email-api`
+  (branched off `main` `ca89d70`): `POST /inbound/email`
+  (`crm-api/src/routes/inbound_email.rs`) — bearer-first constant-time
+  auth, then JSON, then base64; mounted outside CORS like
+  `livekit_webhook.rs`; own `DefaultBodyLimit::max(2 MiB)`; new additive
+  `ApiError::PayloadTooLarge` (413, keeps the shared envelope). Config/
+  state wiring: `Config.inbound_email_secret: Option<InboundEmailSecret>`
+  (`CRM_INBOUND_EMAIL_SECRET`, unset/short handled per §6),
+  `AppState.inbound_email_secret`. `.env.example` documents the new
+  variable name-only. Web: `UnresolvedReason` gains `'email_unparsed'`,
+  `UNRESOLVED_REASON_LABEL` gains `"Unparsed email"`, one Vitest line.
+  Tests: `tests/db_inbound_email.rs` (13, criteria 1–9/11–15/19–20 incl.
+  the concurrency race, the stuck-pending rescue, and the §9 tracing-
+  capture leak test across accepted/rejected/malformed/bad-bearer) and
+  `tests/inbound_email.rs` (5, service-free: no-bearer 401, secret-unset
+  401, unreachable-DB 503, no-CORS-headers, oversize-body-with-bad-bearer
+  413-with-envelope). Two synthesized `.eml` fixtures under
+  `crm-api/tests/fixtures/email/`. `scripts/inbound-email` (bash,
+  `demo-leads`-style: sources `.env`, secret never on argv, GNU/BSD
+  base64 no-wrap handled).
+
+  Independent review (`crm-reviewer`) and adversarial test analysis
+  (`crm-tester`) run in parallel against the real diff; both
+  independently found the same two issues, both pre-existing in the
+  already-merged `receive.rs` (not introduced by this session), both
+  fixed:
+  - The unknown-slug lookup path short-circuited via `.ok_or(...)?`
+    before ever calling `constant_time_eq`, so it skipped the dummy
+    8-byte compare §4 step 2 and criterion 7 explicitly require — the
+    wrong-token and unknown-slug paths did not have identical work
+    profiles as documented, though the HTTP response was already
+    byte-identical (no observable oracle; `crm-tester` and `crm-reviewer`
+    both rated this low-severity/IMPLEMENTATION_DETAIL). Fixed: the
+    `None` branch now runs `constant_time_eq` against a fixed
+    `DUMMY_TOKEN` before returning `OrgNotFound`. Added unit tests for
+    `constant_time_eq` (receive.rs had none) — single-bit near-miss
+    coverage, length-mismatch, and the dummy-token length invariant.
+  - `crm-reviewer` additionally noted the DB-unset 503 path in the route
+    never recorded `span.record("outcome", …)` unlike the DB-unreachable
+    503 path — fixed with one `"unavailable"` record.
+  - `crm-tester` additionally flagged that criteria 1 and 11's explicit
+    "`received_at`/`occurred_at` = receipt time" and "fresh
+    `correlation_id`" claims weren't directly asserted — fixed by adding
+    before/after timestamp-window and correlation-id assertions to the
+    existing storage and publish tests.
+  - `receive_inbound_email` computing `received_at = Utc::now()`
+    internally rather than accepting it as a parameter (deviating from
+    SLICE_007b.md §4's pseudocode signature) was flagged by both agents
+    as harmless — `Utc::now()` runs before any DB work, functionally
+    equivalent to receipt time for this rung's synchronous delivery
+    path — and left as a LATER note, not fixed (matches production
+    behavior; only 007g's queued/retried receiving path could ever make
+    this observable, and no test today would catch a regression there).
+
+  `./scripts/check` and `./scripts/check-db` both green after the fixes
+  (156 service-free + 236 DB-backed backend tests incl. the 13 new
+  `db_inbound_email` + 5 new `inbound_email`; web lint/typecheck/248
+  Vitest/build). Live walkthrough: `scripts/inbound-email` against the
+  real dev stack (real Postgres, real dev-api rebuilt onto this branch)
+  — first delivery to Acme Realty's real intake address (`leads-
+  yhbchrw7@acme-realty.elysianfeld.com`) → 200 accepted, one row
+  (`source=email`, `payload_format=rfc822_v1`, `origin=webhook`,
+  `resolution=unresolved`, `unresolved_reason=email_unparsed`);
+  byte-identical re-delivery → 200 accepted, still one row; wrong token
+  → 200 rejected, nothing stored; unknown slug (post-fix) → 200
+  rejected, nothing stored; `GET /api/intake/unresolved` as
+  `alice@acme.test` shows the row with `reason: "email_unparsed"`,
+  matching the web label. Not covered by this walkthrough: a live
+  browser screenshot of the Unresolved table (no Playwright runner in
+  this repo; the API-level check plus the Vitest-pinned label were used
+  instead — noted as a gap, not a blocker, consistent with prior
+  slices' web-verification posture where no browser tooling exists).
+
+  Not yet committed to `main`: awaiting user review of the diff summary
+  and explicit commit approval (AGENTS.md Phase 9).
 
 ## Pending work
 
@@ -835,11 +928,12 @@ slice:
 
 ## Approval currently required
 
-None. Slice 007b domain + config partial implementation merged to `main`
-(`110bd95`). Remaining: API route (crm-api), DB-backed + service-free
-tests, `scripts/inbound-email` + `.eml` fixtures, web labels. Expected
-path after these: independent review (crm-reviewer + crm-tester) → live
-walkthrough → merge to main → 007c planning per ladder rule.
+**Commit approval** for the `slice-007b-inbound-email-api` branch (see
+Completed work above): implementation done, independently reviewed and
+adversarially tested with fixes applied, `./scripts/check` +
+`./scripts/check-db` green, live walkthrough passed. After commit, a
+separate merge-to-`main` approval is still needed per AGENTS.md Phase 9.
+Then: 007c planning per the ladder rule (docs/plans/SLICE_007_LADDER.md).
 
 dev-seed-via-api review outcome (crm-reviewer, 2026-08-24): the two
 blocking findings (refusal guard failed open against a stale

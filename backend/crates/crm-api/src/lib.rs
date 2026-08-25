@@ -28,11 +28,14 @@ pub fn build_app(state: AppState) -> Router {
     // Read before `state` moves into `.with_state` below.
     let cors_allowed_origin = state.cors_allowed_origin.clone();
 
-    // `POST /webhooks/livekit` is built as its own router, outside the
-    // CORS layer (docs/specs/SLICE_006.md §5, §7): it is a server-to-server
-    // call with its own signature scheme, not a browser route. It still
-    // gets the request-id/trace layers.
+    // `POST /webhooks/livekit` and `POST /inbound/email` are built as their
+    // own routers, outside the CORS layer (docs/specs/SLICE_006.md §5, §7;
+    // docs/specs/SLICE_007b.md §5): both are server-to-server calls with
+    // their own auth scheme, not browser routes. They still get the
+    // request-id/trace layers.
     let webhook = with_request_tracing(routes::livekit_webhook::router().with_state(state.clone()));
+    let inbound_email =
+        with_request_tracing(routes::inbound_email::router().with_state(state.clone()));
 
     let app = with_request_tracing(
         Router::new()
@@ -73,7 +76,7 @@ pub fn build_app(state: AppState) -> Router {
         None => app,
     };
 
-    app.merge(webhook)
+    app.merge(webhook).merge(inbound_email)
 }
 
 /// The request-id + trace layer stack every route gets.

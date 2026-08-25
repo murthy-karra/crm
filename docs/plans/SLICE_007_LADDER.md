@@ -41,7 +41,7 @@ rung merges, not in advance, so they can absorb what was learned.
 | **007d** One pinned deterministic format → real inquiries | MIME layer (`mail-parser`, wrapped in `email/mime.rs`), `EmailFormat` registry, the cypressbayrealty.com contact-form template (we author it) → Person, Inquiry (`source=website`), facts, Today via 007c's routing. `complete_intake` refactor for reuse. Unknown format → Unresolved `email_unrecognized_format`. | M |
 | **007e** Unresolved workbench | Admin opens a row: subject/from/date/text (decrypted on demand, never listed, never logged); **Try again** (re-run Phase B — also rescues SLICE_002's stuck `pending`); **Discard** (`resolution=discarded`, actor+time on the row). Members keep metadata only. | M (2 lanes) |
 | **007f** LLM extraction for unrecognised formats | crm-app `LeadExtractor` trait; crm-api adapter over `crm_operator::InferenceProvider` (D-028 §5 pattern, no new crate/edge); background worker (`SKIP LOCKED`, backoff, max attempts); strict schema; anti-hallucination (every email/phone must appear in the input text); `confidence ≥ 0.7`; `is_lead=false` → `not_a_lead`; PII-free `intake_extraction` ledger. Provider down → waits, never lost. | M–L |
-| **007g** Real receiving on elysianfeld.com | DNS (wildcard MX or single subdomain), inbound provider, provider adapter route with signature verification, tunnel ingress, `.env.example`; **token rotation**. Mostly ops. Can start any time after 007b. | S–M |
+| **007g** Real receiving on elysianfeld.com | Per D-039: Cloudflare Email Routing on the registered `leads.` subdomain, catch-all → a committed Email Worker relaying raw MIME to the frozen `/inbound/email` (same bearer; no provider adapter route or signature scheme — none exists on this path), config flip to local-part, `.env.example`; **token rotation**. Mostly ops. | S–M |
 | **007h** Portal parsers as fixtures arrive | One rung per format (Zillow, Realtor.com, Homes.com, forwarded-wrapper unwrapper): fixture `.eml` + `formats/<name>.rs` + tests incl. "LLM path not invoked". Repeatable. | S each |
 
 Dependencies: a → b → c → d → e → f; g after b (before h so
@@ -52,8 +52,8 @@ the original c bundled two rungs — split into c and d.)
 
 | # | Decision | Class | Default / when |
 |---|---|---|---|
-| 1 | Address scheme final form | **BLOCKING at 007g** (not 007a — storage is scheme-neutral) | Default render = subdomain (`leads-<token>@<slug>.<domain>`), the user's preference. Before 007g: a 30-minute check of which inbound path accepts mail for arbitrary `*.elysianfeld.com`; if none → flip config to local-part form. Token 8 chars `[a-z2-7]`, plaintext to admins, never logged. Slug immutable, minted from name. |
-| 2 | Inbound endpoint auth | SAFE_DEFAULT | Deployment bearer secret on the provider-neutral endpoint (007b); provider signature verification on the provider adapter (007g). Tenant from the recipient token only. |
+| 1 | Address scheme final form | **DECIDED — D-039** (user, 2026-08-25) | The wildcard check found no free/incumbent wildcard-subdomain inbound path → flipped to local-part: `<slug>-<token>@leads.elysianfeld.com`, received via Cloudflare Email Routing (registered subdomain, catch-all → Email Worker → the frozen `/inbound/email`). Token 8 chars `[a-z2-7]`, plaintext to admins, never logged. Slug immutable. |
+| 2 | Inbound endpoint auth | SAFE_DEFAULT (007g half resolved by D-039) | Deployment bearer secret on the provider-neutral endpoint (007b). With the Email Worker relay there is no third-party webhook to verify — the worker authenticates with the same bearer; a provider-signature adapter returns only if a third-party inbound provider is ever adopted. Tenant from the recipient token only. |
 | 3 | Where the extraction LLM call lives | SAFE_DEFAULT | crm-app trait + crm-api adapter (as ToolBackend). Revisit → shared `crm-inference` crate only if a third consumer appears. |
 | 4 | Sending inbound lead mail to Groq | **DECIDED — D-038** (user, 2026-08-25) | Blessed with scope: text-only, ≤16 KiB, subject + sender domain, no org/agent identifiers, no tools; Groq on the subprocessor list. |
 | 5 | System actor + new routing strategies | SAFE_DEFAULT, declared contract change in 007c | `IntakeActor::System`, `FactEnvelope::for_system`, CHECK extension. |
@@ -67,8 +67,12 @@ Unresolved, never silently create". A forged message that *matches* a
 pinned format with a valid contact method **will** create a Person —
 that is what a valid format means. Mitigations: the unguessable token;
 restricting each pinned format's `matches()` to its real sender domain;
-sender authentication (SPF/DKIM result) carried from the provider
-adapter from 007g on (`ParsedMail.authenticated_sender`).
+sender authentication (SPF/DKIM) deferred per SLICE_007g §6: the
+stored raw bytes are the carrier IF Cloudflare stamps
+`Authentication-Results` on Worker delivery (a known open issue says
+it may not) — the 007g walkthrough captures real headers and
+escalates before 007h relies on them; `ParsedMail.authenticated_sender`
+lands with its first consumer.
 
 ## Explicitly not in this ladder
 

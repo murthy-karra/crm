@@ -1,6 +1,24 @@
 # Project State
 
-Last updated: 2026-08-25 (SLICE_007f implemented on
+Last updated: 2026-08-25 (Slice 007g planning underway: D-039 accepted
+and recorded — the mandated wildcard check found no free/incumbent
+inbound path accepting arbitrary `*.elysianfeld.com` (Cloudflare Email
+Routing: ≤30 registered subdomains, no wildcard; SendGrid: named
+hosts, unsigned webhooks; Mailgun: wildcard works but a new paid-ish
+vendor), and the user chose Cloudflare Email Routing + the
+007a-prepared local-part scheme: `<slug>-<token>@leads.elysianfeld.com`,
+catch-all on the registered subdomain → a committed Email Worker
+relaying raw MIME to the frozen `/inbound/email` with the existing
+bearer (no new crm-api route; resolves ladder cross-rung decisions 1
+and the 007g half of 2). `docs/specs/SLICE_007g.md` drafted (worker
+artifact, token rotation end-to-end with an append-only
+`intake_token_rotated` fact, config flip, ops runbook); independent
+review in progress. Research caveat carried in the spec: a known
+Cloudflare issue may deliver Worker mail WITHOUT Authentication-
+Results headers — the walkthrough captures real stored headers and
+escalates before 007h relies on SPF/DKIM.)
+
+Prior update, same day (SLICE_007f implemented on
 `slice-007f-extraction` off `main` `c3cbc5a`: migration
 `20260901000001` (extraction-state columns + the PII-free
 `intake_extraction` ledger, append-only), the `LeadExtractor` seam +
@@ -190,9 +208,18 @@ PUSHED to `origin/main` (`fe0b99b`), all with explicit user approval
 
 ## Current phase
 
-**Slice 007f (LLM extraction) COMPLETE: implemented, reviewed,
-adversarially tested (CRITICAL+HIGH found, fixed, pinned), checks
-green, live real-Groq walkthrough passed, committed, merged to
+**Slice 007g (real receiving) spec APPROVED (user, 2026-08-25);
+awaiting the Phase 6 implementation-gate approval.** D-039 accepted;
+D-036's SPF/DKIM wording amended via this approval (deferred with a
+conditional escalation). Spec: planner pass + live provider research,
+independent review (every factual claim code-verified, no blocking
+findings, all amendments applied), user-approved as written incl. the
+single-token rotation semantics. This rung interleaves code with
+user-executed Cloudflare console steps per §10.
+
+Prior phase: **Slice 007f (LLM extraction) COMPLETE: implemented,
+reviewed, adversarially tested (CRITICAL+HIGH found, fixed, pinned),
+checks green, live real-Groq walkthrough passed, committed, merged to
 `main`, and pushed — all with explicit user approval 2026-08-25.**
 
 Spec phase, for reference: **spec APPROVED (user, 2026-08-25).** D-038 accepted.
@@ -280,8 +307,8 @@ OrbStack hung twice. Hostname is `livekit1.tarams.org`.
 
 ## Current slice
 
-Slice 007f — LLM extraction — `docs/specs/SLICE_007f.md` —
-COMPLETE, MERGED to `main` and pushed. Previous: Slice 007e — Unresolved
+Slice 007g — Real receiving — `docs/specs/SLICE_007g.md` (APPROVED). Previous: Slice 007f — LLM extraction —
+`docs/specs/SLICE_007f.md` — COMPLETE, MERGED to `main` and pushed. Previous: Slice 007e — Unresolved
 workbench — `docs/specs/SLICE_007e.md` — COMPLETE, MERGED to `main`
 and pushed. Previous: Slice 007d — One pinned
 email format → real inquiries — `docs/specs/SLICE_007d.md` —
@@ -322,7 +349,17 @@ branches point at `fe0b99b`).
 
 ## Last accepted decision
 
-2026-08-25, user-accepted (Slice 007f planning):
+2026-08-25, user-accepted (Slice 007g planning):
+- D-039 — final intake address scheme is local-part
+  (`<slug>-<token>@leads.elysianfeld.com`); receiving via Cloudflare
+  Email Routing on the registered `leads.` subdomain, catch-all → a
+  committed Email Worker relaying raw MIME to the frozen
+  `/inbound/email` with the existing bearer. No new vendor, no new
+  crm-api route; a provider-signature adapter returns only if a
+  third-party inbound provider is adopted. Resolves ladder cross-rung
+  decisions 1 and the 007g half of 2.
+
+Previous, same day (Slice 007f planning):
 - D-038 — inbound lead-email content may be sent to Groq for
   extraction, scope fixed: text-only ≤16 KiB, subject + sender
   domain only (never the full address/recipient/org/agent
@@ -1376,11 +1413,14 @@ slice:
 
 ## Approval currently required
 
-None outstanding for Slice 007f: committed, merged to `main`, pushed,
-branch deleted — all with explicit user approval 2026-08-25. Next:
-007g (real DNS/receiving — the ladder's last infrastructure rung;
-carries the address-scheme check) or 007h (portal parsers as fixtures
-arrive).
+**Slice 007g implementation-gate approval** (AGENTS.md Phase 6): the
+spec is user-approved; the gate report awaits "Proceed with
+implementation?". The planning edits (spec, D-039, the D-036
+amendment, ladder rows 1+2 + rung-g row + 007d note, the SLICE_007a
+pointer, this file) also await a commit to `main`.
+
+Slice 007f: nothing outstanding — committed, merged, pushed, branch
+deleted, all with explicit user approval 2026-08-25.
 
 Slice 007e: nothing outstanding — committed, merged, pushed, branch
 deleted, all with explicit user approval 2026-08-25.

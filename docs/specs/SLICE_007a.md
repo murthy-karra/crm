@@ -5,6 +5,11 @@ Ladder: docs/plans/SLICE_007_LADDER.md rung a. Targets O-014 (address
 scheme, test domains), D-021 (creation paths), D-007 (config is CRUD
 state), AGENTS.md §4.2 (Organization from the session only).
 
+> Stale forward-pointers corrected by SLICE_007g (declared): this
+> spec's mentions of token rotation and the final rendered scheme at
+> "007f" predate the ladder's c/d split — both landed in 007g
+> (D-039: local-part scheme; rotation shipped there).
+
 ## 1. User-visible outcome
 
 An Organization admin opens **Manage → Intake** and sees:

@@ -1141,6 +1141,16 @@ Unresolved with the raw mail preserved (D-012). Accepted blast radius
 of a successful forgery: one bogus, quickly recognizable lead row —
 no data access, no privilege.
 
+Amended 2026-08-25 (user, via SLICE_007g approval): D-036's third
+defense layer — "SPF/DKIM from 007g on" — becomes
+deferred-with-escalation per SLICE_007g §6: the D-039 receiving path
+has no provider payload carrying verdicts; the stored raw bytes are
+the carrier IF Cloudflare stamps Authentication-Results on Worker
+delivery (a known open issue says it may not). The 007g walkthrough
+captures real stored headers; if absent, a decision is raised before
+007h relies on SPF/DKIM (fallbacks: DKIM re-verification from stored
+bytes, or token + sender-domain matching as the permanent gates).
+
 Blocks: nothing. Feeds the Slice 007d specification.
 
 ### D-037 — Raw unresolved content is readable by Organization admins only (2026-08-25)
@@ -1187,3 +1197,40 @@ content, automatic, at volume, no human per call. Injection blast
 radius is wrong field values, absorbed by validation + Unresolved.
 
 Blocks: nothing. Feeds the Slice 007f specification.
+
+### D-039 — Final intake address scheme is local-part; receiving via Cloudflare Email Routing + an Email Worker relay (2026-08-25)
+
+Accepted (user, during Slice 007g planning). Resolves the ladder's
+cross-rung decision 1 (deferred from 007a to here by design) and the
+007g half of decision 2.
+
+The mandated pre-007g check found no free/incumbent inbound path that
+accepts mail for arbitrary `*.elysianfeld.com` subdomains (Cloudflare
+Email Routing: up to 30 individually registered subdomains, no
+wildcard; SendGrid Inbound Parse: named hosts only, unsigned webhooks;
+Mailgun supports wildcard inbound but means a new vendor account). The
+user chose **no new vendor**: the scheme flips to the 007a-prepared
+local-part form —
+
+    <slug>-<token>@leads.elysianfeld.com
+
+(`CRM_INTAKE_ADDRESS_SCHEME=local_part`; storage was always
+scheme-neutral and `parse_recipient` accepts both forms, so any
+previously shared subdomain-form address keeps working at the parser —
+though mail to it will no longer be routable once MX exists only on
+`leads.elysianfeld.com`).
+
+Receiving path: Cloudflare Email Routing enabled on the registered
+subdomain `leads.elysianfeld.com` (the elysianfeld.com zone lives in
+the user's Cloudflare account), catch-all route → a committed
+Cloudflare **Email Worker** that relays the raw RFC 822 bytes to the
+frozen `POST /inbound/email` endpoint with the existing
+`CRM_INBOUND_EMAIL_SECRET` bearer. Decision 2's "provider signature
+verification on the adapter" resolves accordingly for this path: the
+sender of the webhook IS our own worker, so the receiving hop's
+transport auth is our own deployment bearer — no third-party
+signature scheme exists or is needed; no new crm-api route is built.
+A provider-signature adapter returns as a design only if a
+third-party inbound provider is ever adopted.
+
+Blocks: nothing. Feeds the Slice 007g specification.

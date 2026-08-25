@@ -44,6 +44,8 @@ import type {
   StagesResponse,
   StartCallRequest,
   IntakeAddressResponse,
+  IntakeSettingsRequest,
+  IntakeSettingsResponse,
   StartCallResponse,
   TodayResponse,
   UnresolvedResponse,
@@ -63,6 +65,8 @@ export const queryKeys = {
   unresolved: (orgId: string) => ['org', orgId, 'unresolved'] as const,
   members: (orgId: string) => ['org', orgId, 'members'] as const,
   intakeAddress: (orgId: string) => ['org', orgId, 'intake-address'] as const,
+  // SLICE_007c §10: extend the factory, never hand-write a key.
+  intakeSettings: (orgId: string) => ['org', orgId, 'intake-settings'] as const,
   // Added ahead of the Today view (SLICE_003 §10 lists it alongside useToday)
   // because realtime/events.ts's invalidationsFor (Lane B step 1) already
   // needs to name this key — every key an invalidation path touches goes
@@ -135,6 +139,30 @@ export function useIntakeAddress(orgId: MaybeRefOrGetter<string>) {
     queryKey: computed(() => queryKeys.intakeAddress(toValue(orgId))),
     queryFn: () => apiFetch<IntakeAddressResponse>('/organization/intake-address'),
     enabled: computed(() => toValue(orgId) !== ''),
+  })
+}
+
+/** `GET /api/organization/intake-settings` (SLICE_007c §5) — org admins only. */
+export function useIntakeSettings(orgId: MaybeRefOrGetter<string>) {
+  return useQuery({
+    queryKey: computed(() => queryKeys.intakeSettings(toValue(orgId))),
+    queryFn: () => apiFetch<IntakeSettingsResponse>('/organization/intake-settings'),
+    enabled: computed(() => toValue(orgId) !== ''),
+  })
+}
+
+/** `PUT /api/organization/intake-settings` (SLICE_007c §5). */
+export function useUpdateIntakeSettingsMutation(orgId: MaybeRefOrGetter<string>) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: IntakeSettingsRequest) =>
+      apiFetch<IntakeSettingsResponse>('/organization/intake-settings', {
+        method: 'PUT',
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.intakeSettings(toValue(orgId)) })
+    },
   })
 }
 

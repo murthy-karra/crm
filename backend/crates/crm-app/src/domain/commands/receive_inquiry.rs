@@ -5,18 +5,19 @@ use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Utc};
 use rand::RngExt;
-use sqlx::PgPool;
+use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
 use crate::config::RawPayloadKey;
+use crate::domain::admin::queries as admin_queries;
 use crate::domain::commands::CommandError;
 use crate::domain::contact;
-use crate::domain::envelope::{CommandContext, FactEnvelope};
 use crate::domain::facts::{
     self, AssignmentChangedFact, InquiryReceivedFact, RoutingDecisionFact, StageChangedFact,
 };
 use crate::domain::inquiry::parse::{self, Source, UnresolvedReason};
 use crate::domain::inquiry::queries as inquiry_queries;
+use crate::domain::intake::IntakeActor;
 use crate::domain::person::queries as person_queries;
 use crate::domain::raw_payload::{crypto, store};
 use crate::domain::stage;
@@ -57,6 +58,16 @@ pub enum RoutingStrategy {
     Explicit,
     ActorDefault,
     KeptExisting,
+    /// System-actor intake, default assignee set and an active member
+    /// (docs/specs/SLICE_007c.md §4). Declared additive extension of the
+    /// frozen `POST /api/inquiries` `routing_strategy` vocabulary
+    /// (SLICE_002 §5) — reachable there only via a `duplicate: true`
+    /// replay of a system-routed row.
+    OrganizationDefault,
+    /// System-actor intake, no default set or the configured default is
+    /// not currently an active member — `assignee_user_id` NULL
+    /// (docs/specs/SLICE_007c.md §4). Same declared additive extension.
+    Unassigned,
 }
 
 impl RoutingStrategy {
@@ -65,6 +76,8 @@ impl RoutingStrategy {
             RoutingStrategy::Explicit => "explicit",
             RoutingStrategy::ActorDefault => "actor_default",
             RoutingStrategy::KeptExisting => "kept_existing",
+            RoutingStrategy::OrganizationDefault => "organization_default",
+            RoutingStrategy::Unassigned => "unassigned",
         }
     }
 
@@ -78,6 +91,8 @@ impl RoutingStrategy {
             "explicit" => Ok(RoutingStrategy::Explicit),
             "actor_default" => Ok(RoutingStrategy::ActorDefault),
             "kept_existing" => Ok(RoutingStrategy::KeptExisting),
+            "organization_default" => Ok(RoutingStrategy::OrganizationDefault),
+            "unassigned" => Ok(RoutingStrategy::Unassigned),
             _ => Err(CommandError::Corrupt),
         }
     }
@@ -100,23 +115,36 @@ pub enum ReceiveInquiryOutcome {
 }
 
 /// `assign_to_user_id`/`current_assignee` -> `(strategy, assignee)`
-/// (docs/specs/SLICE_002.md §3). A Person that already has an assignee
+/// (docs/specs/SLICE_002.md §3; routing matrix extended by
+/// docs/specs/SLICE_007c.md §4). A Person that already has an assignee
 /// always keeps it (`kept_existing`), regardless of what the request asked
-/// for; otherwise an explicit request wins, else the actor. Applies
-/// uniformly to a brand-new Person (`current_assignee` always `None`) and a
-/// matched one.
-fn determine_routing(
+/// for; otherwise an explicit request wins; otherwise a User actor's own
+/// id (`actor_default`); otherwise (a System actor) the Organization's
+/// configured default, re-checked for active membership inside this same
+/// Phase-B transaction (`organization_default` if set and active,
+/// `unassigned` — NULL assignee — otherwise). Applies uniformly to a
+/// brand-new Person (`current_assignee` always `None`) and a matched one.
+async fn determine_routing(
+    tx: &mut PgConnection,
+    actor: &IntakeActor,
     assign_to_user_id: Option<Uuid>,
-    actor_user_id: Uuid,
     current_assignee: Option<Uuid>,
-) -> (RoutingStrategy, Option<Uuid>) {
+) -> Result<(RoutingStrategy, Option<Uuid>), CommandError> {
     if let Some(existing) = current_assignee {
-        return (RoutingStrategy::KeptExisting, Some(existing));
+        return Ok((RoutingStrategy::KeptExisting, Some(existing)));
     }
-    match assign_to_user_id {
-        Some(explicit) => (RoutingStrategy::Explicit, Some(explicit)),
-        None => (RoutingStrategy::ActorDefault, Some(actor_user_id)),
+    if let Some(explicit) = assign_to_user_id {
+        return Ok((RoutingStrategy::Explicit, Some(explicit)));
     }
+    if let Some(actor_user_id) = actor.user_actor_id() {
+        return Ok((RoutingStrategy::ActorDefault, Some(actor_user_id)));
+    }
+    let default =
+        admin_queries::active_intake_default_assignee(tx, actor.organization_id()).await?;
+    Ok(match default {
+        Some(user_id) => (RoutingStrategy::OrganizationDefault, Some(user_id)),
+        None => (RoutingStrategy::Unassigned, None),
+    })
 }
 
 /// Public entry point: keeps the `#[instrument]` span (and its "outcome"
@@ -131,9 +159,10 @@ fn determine_routing(
 #[tracing::instrument(
     skip_all,
     fields(
-        organization_id = %ctx.organization_id,
-        actor_id = %ctx.actor_user_id,
-        correlation_id = %ctx.correlation_id,
+        organization_id = %actor.organization_id(),
+        actor_kind = actor.actor_kind().as_str(),
+        actor_id = tracing::field::Empty,
+        correlation_id = %actor.correlation_id(),
         source = cmd.source.as_str(),
         raw_payload_id = tracing::field::Empty,
         outcome = tracing::field::Empty,
@@ -143,10 +172,13 @@ pub async fn receive_inquiry(
     pool: &PgPool,
     key: &RawPayloadKey,
     publisher: &Publisher,
-    ctx: &CommandContext,
+    actor: &IntakeActor,
     cmd: ReceiveInquiry,
 ) -> Result<ReceiveInquiryOutcome, CommandError> {
-    let result = receive_inquiry_attempt(pool, key, publisher, ctx, cmd).await;
+    if let Some(actor_user_id) = actor.user_actor_id() {
+        tracing::Span::current().record("actor_id", tracing::field::display(actor_user_id));
+    }
+    let result = receive_inquiry_attempt(pool, key, publisher, actor, cmd).await;
     if let Err(ref err) = result {
         tracing::warn!(error_kind = err.kind(), "receive_inquiry failed");
         tracing::Span::current().record("outcome", err.kind());
@@ -158,17 +190,19 @@ async fn receive_inquiry_attempt(
     pool: &PgPool,
     key: &RawPayloadKey,
     publisher: &Publisher,
-    ctx: &CommandContext,
+    actor: &IntakeActor,
     cmd: ReceiveInquiry,
 ) -> Result<ReceiveInquiryOutcome, CommandError> {
+    let organization_id = actor.organization_id();
+    let correlation_id = actor.correlation_id();
+
     // Assignee validity is checked before anything is stored, so a
     // rejected request leaves no `pending` row (docs/specs/SLICE_002.md §3,
     // §9; acceptance criterion 12).
     if let Some(assignee) = cmd.assign_to_user_id {
         let mut conn = pool.acquire().await?;
         let is_member =
-            person_queries::is_organization_member(&mut conn, ctx.organization_id, assignee)
-                .await?;
+            person_queries::is_organization_member(&mut conn, organization_id, assignee).await?;
         if !is_member {
             return Err(CommandError::InvalidAssignee);
         }
@@ -177,16 +211,16 @@ async fn receive_inquiry_attempt(
     // --- Phase A: store the encrypted payload before parsing (D-015 §4) ---
     let content_hmac = crypto::content_hmac(key, &cmd.payload);
     let candidate_id = Uuid::new_v4();
-    let sealed = crypto::seal(key, ctx.organization_id, candidate_id, &cmd.payload)
+    let sealed = crypto::seal(key, organization_id, candidate_id, &cmd.payload)
         .map_err(|_| CommandError::Crypto)?;
 
     let raw_payload_id = store::insert_pending(
         pool,
         candidate_id,
-        ctx.organization_id,
+        organization_id,
         cmd.source.as_str(),
         "generic_v1",
-        ctx.origin.as_str(),
+        actor.origin().as_str(),
         cmd.received_at,
         &sealed.nonce,
         &sealed.ciphertext,
@@ -221,12 +255,12 @@ async fn receive_inquiry_attempt(
 
     loop {
         let mut tx = pool.begin().await?;
-        let locked = store::lock_for_processing(&mut tx, raw_payload_id, ctx.organization_id)
+        let locked = store::lock_for_processing(&mut tx, raw_payload_id, organization_id)
             .await?
             .ok_or(CommandError::Database(sqlx::Error::RowNotFound))?;
 
         if locked.resolution != "pending" {
-            let outcome = duplicate_outcome(&mut tx, ctx.organization_id, locked).await?;
+            let outcome = duplicate_outcome(&mut tx, organization_id, locked).await?;
             tx.commit().await?;
             tracing::Span::current().record("outcome", "duplicate");
             return Ok(outcome);
@@ -239,7 +273,7 @@ async fn receive_inquiry_attempt(
         // §3, §14a).
         let plaintext = crypto::open(
             key,
-            ctx.organization_id,
+            organization_id,
             raw_payload_id,
             &locked.nonce,
             &locked.ciphertext,
@@ -249,7 +283,7 @@ async fn receive_inquiry_attempt(
         let parsed = match parse::parse(&plaintext) {
             Ok(parsed) => parsed,
             Err(reason) => {
-                store::mark_unresolved(&mut tx, locked.id, ctx.organization_id, reason.as_str())
+                store::mark_unresolved(&mut tx, locked.id, organization_id, reason.as_str())
                     .await?;
                 tx.commit().await?;
                 tracing::Span::current().record("outcome", "unresolved");
@@ -258,9 +292,9 @@ async fn receive_inquiry_attempt(
                 // the value Phase A stored it with); there is no fact for
                 // this outcome (docs/specs/SLICE_003.md §4).
                 let event = RealtimeEvent::intake_unresolved_changed(
-                    ctx.organization_id,
+                    organization_id,
                     cmd.received_at,
-                    ctx.correlation_id,
+                    correlation_id,
                     locked.id,
                 );
                 publisher
@@ -283,7 +317,7 @@ async fn receive_inquiry_attempt(
         // parameter — spec §14a's "the ::text cast is required"), so the
         // id is formatted in Rust rather than relying on an implicit
         // uuid->text coercion.
-        let organization_id_text = ctx.organization_id.to_string();
+        let organization_id_text = organization_id.to_string();
         let lock_attempt = sqlx::query!(
             r#"SELECT pg_try_advisory_xact_lock(hashtextextended('intake:' || $1::text, 0)) as "acquired!""#,
             organization_id_text,
@@ -311,7 +345,7 @@ async fn receive_inquiry_attempt(
         // before.
         let identify_match = contact::identify(
             &mut tx,
-            ctx.organization_id,
+            organization_id,
             parsed.email.as_deref(),
             parsed.phone.as_deref(),
         )
@@ -322,13 +356,13 @@ async fn receive_inquiry_attempt(
         // brand-new Person).
         let (person_id, person_created, matched_by, current_assignee) = match identify_match {
             Some(m) => {
-                let person = person_queries::lock_person(&mut tx, m.person_id, ctx.organization_id)
+                let person = person_queries::lock_person(&mut tx, m.person_id, organization_id)
                     .await?
                     .ok_or(CommandError::Database(sqlx::Error::RowNotFound))?;
                 person_queries::upsert_contact_methods(
                     &mut tx,
                     person.id,
-                    ctx.organization_id,
+                    organization_id,
                     &parsed,
                 )
                 .await?;
@@ -340,12 +374,12 @@ async fn receive_inquiry_attempt(
                 )
             }
             None => {
-                let first_stage_id = stage::first_id(&mut tx, ctx.organization_id)
+                let first_stage_id = stage::first_id(&mut tx, organization_id)
                     .await?
                     .ok_or(CommandError::NoStagesConfigured)?;
                 let new_person_id = person_queries::insert_person(
                     &mut tx,
-                    ctx.organization_id,
+                    organization_id,
                     parsed.first_name.as_deref(),
                     parsed.last_name.as_deref(),
                     first_stage_id,
@@ -355,7 +389,7 @@ async fn receive_inquiry_attempt(
                 person_queries::upsert_contact_methods(
                     &mut tx,
                     new_person_id,
-                    ctx.organization_id,
+                    organization_id,
                     &parsed,
                 )
                 .await?;
@@ -364,7 +398,7 @@ async fn receive_inquiry_attempt(
         };
 
         let (routing_strategy, routing_assignee) =
-            determine_routing(cmd.assign_to_user_id, ctx.actor_user_id, current_assignee);
+            determine_routing(&mut tx, actor, cmd.assign_to_user_id, current_assignee).await?;
 
         // A repeat lead must not leave a Person ownerless: whenever there
         // was no prior assignee (new Person, or a matched Person nobody
@@ -375,7 +409,7 @@ async fn receive_inquiry_attempt(
             person_queries::update_assignment(
                 &mut tx,
                 person_id,
-                ctx.organization_id,
+                organization_id,
                 routing_assignee,
             )
             .await?;
@@ -384,7 +418,7 @@ async fn receive_inquiry_attempt(
         let new_inquiry_id = inquiry_queries::insert(
             &mut tx,
             inquiry_queries::NewInquiry {
-                organization_id: ctx.organization_id,
+                organization_id,
                 person_id,
                 raw_payload_id: locked.id,
                 source: cmd.source.as_str(),
@@ -395,7 +429,7 @@ async fn receive_inquiry_attempt(
         )
         .await?;
 
-        let envelope = FactEnvelope::for_command(ctx, cmd.received_at);
+        let envelope = actor.envelope(cmd.received_at);
 
         facts::insert_inquiry_received(
             &mut tx,
@@ -426,8 +460,11 @@ async fn receive_inquiry_attempt(
 
         // Only written when the Person did not already have an assignee
         // (docs/specs/SLICE_002.md §2: "On intake, causation_id = the
-        // routing_decision.id").
-        if current_assignee.is_none() {
+        // routing_decision.id") AND the routing outcome actually assigned
+        // someone — a system-actor `unassigned` routing (NULL -> NULL)
+        // gains no fact here; it would be noise (docs/specs/SLICE_007c.md
+        // §4).
+        if current_assignee.is_none() && routing_assignee.is_some() {
             facts::insert_assignment_changed(
                 &mut tx,
                 &envelope.clone().with_causation(routing_decision_id),
@@ -444,7 +481,7 @@ async fn receive_inquiry_attempt(
         // Only a brand-new Person gets a stage_changed fact on intake —
         // stage is unchanged on a repeat inquiry (spec §14 default 1).
         if person_created {
-            let first_stage_id = stage::first_id(&mut tx, ctx.organization_id)
+            let first_stage_id = stage::first_id(&mut tx, organization_id)
                 .await?
                 .ok_or(CommandError::NoStagesConfigured)?;
             facts::insert_stage_changed(
@@ -460,7 +497,7 @@ async fn receive_inquiry_attempt(
             .await?;
         }
 
-        store::mark_resolved(&mut tx, locked.id, ctx.organization_id, new_inquiry_id).await?;
+        store::mark_resolved(&mut tx, locked.id, organization_id, new_inquiry_id).await?;
         tx.commit().await?;
 
         tracing::Span::current().record("outcome", "resolved");
@@ -472,9 +509,9 @@ async fn receive_inquiry_attempt(
         // §4). occurred_at = the fact's occurred_at (= cmd.received_at),
         // never publish time.
         let event = RealtimeEvent::person_changed(
-            ctx.organization_id,
+            organization_id,
             cmd.received_at,
-            ctx.correlation_id,
+            correlation_id,
             person_id,
             PersonChange::InquiryReceived,
         );
@@ -531,5 +568,38 @@ async fn duplicate_outcome(
             })
         }
         other => unreachable!("unknown raw_payload.resolution in database: {other}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Round-trips every strategy, including the two Slice 007c additions
+    /// — the declared additive extension to `RoutingStrategy::from_str`
+    /// (docs/specs/SLICE_007c.md §5) that lets a `duplicate: true` replay
+    /// of a system-routed row decode without a 500.
+    #[test]
+    fn routing_strategy_round_trips_every_variant() {
+        for strategy in [
+            RoutingStrategy::Explicit,
+            RoutingStrategy::ActorDefault,
+            RoutingStrategy::KeptExisting,
+            RoutingStrategy::OrganizationDefault,
+            RoutingStrategy::Unassigned,
+        ] {
+            assert_eq!(
+                RoutingStrategy::from_str(strategy.as_str()).unwrap(),
+                strategy
+            );
+        }
+    }
+
+    #[test]
+    fn routing_strategy_from_str_fails_closed_on_an_unknown_value() {
+        assert!(matches!(
+            RoutingStrategy::from_str("bogus"),
+            Err(CommandError::Corrupt)
+        ));
     }
 }

@@ -820,6 +820,91 @@ pub async fn organization_intake_address(
     Ok(row.map(|r| (r.intake_slug, r.intake_token)))
 }
 
+// --- Slice 007c: unattended intake routing (docs/specs/SLICE_007c.md §3, §4) ---
+
+/// The stored `intake_default_assignee_user_id`, regardless of that
+/// member's current status — `GET /api/organization/intake-settings`
+/// (§5) must keep reflecting the setting after the member is later
+/// deactivated (criterion 10); the deactivated-warning state is computed
+/// client-side from the members list.
+pub async fn intake_default_assignee_user_id(
+    conn: &mut PgConnection,
+    organization_id: Uuid,
+) -> Result<Option<Uuid>, sqlx::Error> {
+    let row = sqlx::query!(
+        r#"SELECT intake_default_assignee_user_id FROM organization WHERE id = $1"#,
+        organization_id,
+    )
+    .fetch_optional(conn)
+    .await?;
+    Ok(row.and_then(|r| r.intake_default_assignee_user_id))
+}
+
+/// `PUT /api/organization/intake-settings` (§5): sets or clears the
+/// default assignee and maintains `updated_at` (the column-level grant
+/// includes it — the membership-grant precedent).
+pub async fn update_intake_default_assignee(
+    conn: &mut PgConnection,
+    organization_id: Uuid,
+    user_id: Option<Uuid>,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"UPDATE organization SET intake_default_assignee_user_id = $2, updated_at = now()
+           WHERE id = $1"#,
+        organization_id,
+        user_id,
+    )
+    .execute(conn)
+    .await?;
+    Ok(())
+}
+
+/// PUT validation (§5): true only for an active member of *this*
+/// Organization — a nonexistent user, another Organization's member, and
+/// an inactive member all read `false` here, giving the route's
+/// byte-identical 422 `invalid_assignee` (no existence leak).
+pub async fn is_active_member(
+    conn: &mut PgConnection,
+    organization_id: Uuid,
+    user_id: Uuid,
+) -> Result<bool, sqlx::Error> {
+    let row = sqlx::query!(
+        r#"SELECT 1 as "present!" FROM organization_membership
+           WHERE organization_id = $1 AND user_id = $2 AND status = 'active'"#,
+        organization_id,
+        user_id,
+    )
+    .fetch_optional(conn)
+    .await?;
+    Ok(row.is_some())
+}
+
+/// Routing-time lookup (§4 routing matrix step 4): the configured default
+/// assignee, but only if they are still an active member of this
+/// Organization — the join fails closed to `None` (routed `unassigned`)
+/// when the setting is unset, the member was deactivated, or the member
+/// row is otherwise gone. Best-effort under READ COMMITTED by design (§3
+/// "Deactivated default assignee"): no row locking against a deactivation
+/// racing this read.
+pub async fn active_intake_default_assignee(
+    conn: &mut PgConnection,
+    organization_id: Uuid,
+) -> Result<Option<Uuid>, sqlx::Error> {
+    let row = sqlx::query!(
+        r#"SELECT o.intake_default_assignee_user_id as "user_id!"
+           FROM organization o
+           JOIN organization_membership m
+             ON m.organization_id = o.id
+            AND m.user_id = o.intake_default_assignee_user_id
+            AND m.status = 'active'
+           WHERE o.id = $1"#,
+        organization_id,
+    )
+    .fetch_optional(conn)
+    .await?;
+    Ok(row.map(|r| r.user_id))
+}
+
 pub async fn insert_app_user(
     conn: &mut PgConnection,
     email: &str,

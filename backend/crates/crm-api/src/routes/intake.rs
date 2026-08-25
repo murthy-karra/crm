@@ -13,6 +13,7 @@ use crate::auth::AuthContext;
 use crate::domain::commands::{self, ReceiveInquiry, ReceiveInquiryOutcome};
 use crate::domain::envelope::CommandContext;
 use crate::domain::inquiry::parse::Source;
+use crate::domain::intake::IntakeActor;
 use crate::domain::raw_payload::store;
 use crate::error::ApiError;
 use crate::state::AppState;
@@ -51,7 +52,7 @@ async fn receive_inquiry_handler(
     let payload_bytes = serde_json::to_vec(&req.payload).map_err(|_| ApiError::MalformedRequest)?;
 
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
-    let ctx = CommandContext::from_auth(&auth);
+    let actor = IntakeActor::User(CommandContext::from_auth(&auth));
 
     let cmd = ReceiveInquiry {
         source,
@@ -61,7 +62,7 @@ async fn receive_inquiry_handler(
     };
 
     let outcome =
-        commands::receive_inquiry(pool, &state.raw_payload_key, &state.publisher, &ctx, cmd)
+        commands::receive_inquiry(pool, &state.raw_payload_key, &state.publisher, &actor, cmd)
             .await?;
 
     let (status, body) = match outcome {

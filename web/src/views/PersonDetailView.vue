@@ -246,6 +246,8 @@ const ROUTING_STRATEGY_LABEL: Record<RoutingStrategy, string> = {
   explicit: 'an explicit choice',
   actor_default: 'the default assignee',
   kept_existing: 'the existing assignee',
+  organization_default: 'the organization default',
+  unassigned: 'no default assignee',
 }
 
 function historySummary(entry: HistoryEntry): string {

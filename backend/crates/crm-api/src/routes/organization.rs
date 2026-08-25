@@ -30,6 +30,10 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/organization/members", get(members))
         .route("/api/organization/intake-address", get(intake_address))
+        .route(
+            "/api/organization/intake-settings",
+            get(intake_settings).put(update_intake_settings),
+        )
         .route("/api/organization/members/{user_id}/role", put(update_role))
         .route(
             "/api/organization/members/{user_id}/status",
@@ -249,4 +253,92 @@ async fn intake_address(
         "address": address,
         "scheme": state.intake_mail.scheme.as_str(),
     })))
+}
+
+/// `GET /api/organization/intake-settings` (docs/specs/SLICE_007c.md §5):
+/// the Organization's default assignee for unattended intake, whatever its
+/// current membership status — the deactivated-warning state is computed
+/// client-side from `GET /api/organization/members`, not duplicated here.
+/// Org admins only.
+async fn intake_settings(
+    State(state): State<AppState>,
+    ctx: OrgAdminContext,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
+    let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
+    let value =
+        admin_queries::intake_default_assignee_user_id(&mut conn, ctx.auth.active_organization_id)
+            .await
+            .map_err(|_| ApiError::Unavailable)?;
+    Ok(Json(json!({ "intake_default_assignee_user_id": value })))
+}
+
+/// `PUT /api/organization/intake-settings` (docs/specs/SLICE_007c.md §5):
+/// 422 `invalid_assignee` — byte-identical for a nonexistent user, another
+/// Organization's member, and an inactive member (no existence leak) — is
+/// checked before the write. Span records the Organization and whether the
+/// value was set or cleared (§8) — the assignee UUID is an id, not
+/// content, but is not itself recorded here.
+///
+/// The body is parsed as a raw `serde_json::Value`, not a struct with an
+/// `Option<Uuid>` field: serde's derive implicitly defaults *any*
+/// `Option<T>` field to `None` when its key is absent — there is no
+/// attribute that turns that off for a field literally typed `Option<T>`
+/// — which would silently equate "key omitted" with "explicit null" and
+/// defeat the very distinction this endpoint's contract requires.
+#[tracing::instrument(
+    skip_all,
+    fields(
+        organization_id = %ctx.auth.active_organization_id,
+        assignee_action = tracing::field::Empty,
+    )
+)]
+async fn update_intake_settings(
+    State(state): State<AppState>,
+    ctx: OrgAdminContext,
+    body: Result<Json<serde_json::Value>, JsonRejection>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let Json(body) = body.map_err(|_| ApiError::MalformedRequest)?;
+    let raw = body
+        .as_object()
+        .and_then(|obj| obj.get("intake_default_assignee_user_id"))
+        .ok_or(ApiError::MalformedRequest)?;
+    let assignee_user_id: Option<Uuid> = match raw {
+        serde_json::Value::Null => None,
+        other => {
+            Some(serde_json::from_value(other.clone()).map_err(|_| ApiError::MalformedRequest)?)
+        }
+    };
+    tracing::Span::current().record(
+        "assignee_action",
+        if assignee_user_id.is_some() {
+            "set"
+        } else {
+            "cleared"
+        },
+    );
+    let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
+    let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
+
+    if let Some(user_id) = assignee_user_id {
+        let is_active =
+            admin_queries::is_active_member(&mut conn, ctx.auth.active_organization_id, user_id)
+                .await
+                .map_err(|_| ApiError::Unavailable)?;
+        if !is_active {
+            return Err(ApiError::InvalidAssignee);
+        }
+    }
+
+    admin_queries::update_intake_default_assignee(
+        &mut conn,
+        ctx.auth.active_organization_id,
+        assignee_user_id,
+    )
+    .await
+    .map_err(|_| ApiError::Unavailable)?;
+
+    Ok(Json(
+        json!({ "intake_default_assignee_user_id": assignee_user_id }),
+    ))
 }

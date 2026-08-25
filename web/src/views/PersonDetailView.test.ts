@@ -26,6 +26,7 @@ import type {
   HistoryEntry,
   MeResponse,
   PersonDetailResponse,
+  RoutingStrategy,
 } from '../api/types'
 import { queryKeys } from '../api/queries'
 import type { CallRoom, CallRoomEvents, CallRoomFactory } from '../telephony/useCall'
@@ -478,6 +479,45 @@ describe('PersonDetailView — call_completed history', () => {
     expect(text).toContain('Call — reached, 1 min 12 s')
     expect(text).toContain('Call — no answer')
     expect(text).toContain('Alice')
+  })
+})
+
+// ---- SLICE_007c: system-actor routing labels --------------------------------
+
+describe('PersonDetailView — system-actor routing history (SLICE_007c §6)', () => {
+  function routingEntry(
+    strategy: RoutingStrategy,
+    assignee: { id: string; display_name: string } | null,
+  ): HistoryEntry {
+    return {
+      kind: 'routing_decision',
+      id: `h-routing-${strategy}`,
+      occurred_at: '2026-08-24T10:00:00.000Z',
+      recorded_at: '2026-08-24T10:00:00.000Z',
+      // A system-actor fact carries no user actor (docs/specs/
+      // SLICE_007c.md §4) — the template's existing `?? 'System'` fallback
+      // renders it, unchanged by this slice.
+      actor: null,
+      origin: 'cli',
+      correlation_id: 'corr',
+      detail: { inquiry_id: 'inq-1', strategy, assignee },
+    }
+  }
+
+  it('organization_default with an assignee: "Routed to Bob (the organization default)", actor System', async () => {
+    stubApi(
+      detail([EMAIL], [routingEntry('organization_default', { id: 'u-bob', display_name: 'Bob' })]),
+    )
+    const { wrapper } = await mountView()
+    const text = wrapper.text()
+    expect(text).toContain('Routed to Bob (the organization default)')
+    expect(text).toContain('System')
+  })
+
+  it('unassigned with no assignee: "Routing decided (no default assignee) — left unassigned"', async () => {
+    stubApi(detail([EMAIL], [routingEntry('unassigned', null)]))
+    const { wrapper } = await mountView()
+    expect(wrapper.text()).toContain('Routing decided (no default assignee) — left unassigned')
   })
 })
 

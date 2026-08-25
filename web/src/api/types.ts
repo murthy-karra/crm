@@ -151,6 +151,14 @@ export interface IntakeAddressResponse {
   scheme: IntakeAddressScheme
 }
 
+// --- Slice 007c: unattended intake routing (docs/specs/SLICE_007c.md §5) ---
+
+export interface IntakeSettingsResponse {
+  intake_default_assignee_user_id: string | null
+}
+
+export type IntakeSettingsRequest = IntakeSettingsResponse
+
 // Platform's role/invitation routes only ever accept 'admin' (D-026 §4) —
 // the route rejects 'member' before it reaches the domain (§4's
 // ChangeMemberRole table) — but the request shape is otherwise identical
@@ -259,7 +267,17 @@ export interface InquiryReceivedDetail {
   matched_by: 'email' | 'phone' | null
 }
 
-export type RoutingStrategy = 'explicit' | 'actor_default' | 'kept_existing'
+// SLICE_007c §5's declared additive change to the frozen `POST
+// /api/inquiries` `routing_strategy` vocabulary: `organization_default`
+// and `unassigned` appear there only on a `duplicate: true` replay of a
+// system-routed row (nothing on the user-actor endpoint ever produces
+// them directly).
+export type RoutingStrategy =
+  | 'explicit'
+  | 'actor_default'
+  | 'kept_existing'
+  | 'organization_default'
+  | 'unassigned'
 
 export interface RoutingDecisionDetail {
   inquiry_id: string

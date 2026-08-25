@@ -472,16 +472,7 @@ impl Config {
             None => None,
         };
 
-        let raw_payload_key_raw =
-            get("CRM_RAW_PAYLOAD_KEY").ok_or(ConfigError::MissingRawPayloadKey)?;
-        if raw_payload_key_raw.len() != RAW_PAYLOAD_KEY_HEX_LEN {
-            return Err(ConfigError::InvalidRawPayloadKeyLength(
-                raw_payload_key_raw.len(),
-            ));
-        }
-        let raw_payload_key = RawPayloadKey::new(
-            decode_hex_32(&raw_payload_key_raw).ok_or(ConfigError::InvalidRawPayloadKeyEncoding)?,
-        );
+        let raw_payload_key = raw_payload_key_config(&get)?;
 
         let centrifugo_api_key_raw = get("CENTRIFUGO_HTTP_API_KEY")
             .filter(|v| !v.is_empty())
@@ -577,6 +568,23 @@ impl Config {
 /// present; an empty/unset `LIVEKIT_API_KEY` disables calling without
 /// failing startup.
 const DEFAULT_INTAKE_MAIL_DOMAIN: &str = "elysianfeld.com";
+
+/// `CRM_RAW_PAYLOAD_KEY` alone (docs/specs/SLICE_002.md §7): exactly 64 hex
+/// characters, decoded once. Public so `crm-admin receive-inquiry`
+/// (docs/specs/SLICE_007c.md §4) can build a `RawPayloadKey` from the same
+/// variable the API uses without a full `Config` — the `intake_mail_config`
+/// precedent above.
+pub fn raw_payload_key_config(
+    get: &impl Fn(&str) -> Option<String>,
+) -> Result<RawPayloadKey, ConfigError> {
+    let raw = get("CRM_RAW_PAYLOAD_KEY").ok_or(ConfigError::MissingRawPayloadKey)?;
+    if raw.len() != RAW_PAYLOAD_KEY_HEX_LEN {
+        return Err(ConfigError::InvalidRawPayloadKeyLength(raw.len()));
+    }
+    Ok(RawPayloadKey::new(
+        decode_hex_32(&raw).ok_or(ConfigError::InvalidRawPayloadKeyEncoding)?,
+    ))
+}
 
 /// `CRM_INTAKE_MAIL_DOMAIN` (bare hostname; default `elysianfeld.com`) and
 /// `CRM_INTAKE_ADDRESS_SCHEME` (`subdomain` default | `local_part`)

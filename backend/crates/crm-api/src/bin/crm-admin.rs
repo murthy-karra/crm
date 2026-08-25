@@ -7,6 +7,7 @@
 
 use std::time::Duration;
 
+use chrono::Utc;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -17,7 +18,11 @@ use crm_api::domain::admin::commands::{
 };
 use crm_api::domain::admin::queries as admin_queries;
 use crm_api::domain::admin::{AdminActor, Role};
+use crm_api::domain::commands::{self, ReceiveInquiry, ReceiveInquiryOutcome};
 use crm_api::domain::envelope::Origin;
+use crm_api::domain::inquiry::parse::Source;
+use crm_api::domain::intake::IntakeActor;
+use crm_api::realtime::Publisher;
 
 const DEFAULT_INVITATION_TTL: Duration = Duration::from_secs(168 * 3600);
 
@@ -37,6 +42,7 @@ async fn main() {
         "create-organization" => run_create_organization(args).await,
         "invite" => run_invite(args).await,
         "set-password" => run_set_password(args).await,
+        "receive-inquiry" => run_receive_inquiry(args).await,
         other => {
             eprintln!("unknown subcommand: {other}");
             print_usage();
@@ -57,7 +63,8 @@ fn print_usage() {
          \x20 bootstrap-platform-admin --email <email> --display-name <name>\n\
          \x20 create-organization --name <name> [--as <email>]\n\
          \x20 invite --organization <id> --email <email> --role <admin|member> [--print-link] [--as <email>]\n\
-         \x20 set-password --email <email> [--as <email>]"
+         \x20 set-password --email <email> [--as <email>]\n\
+         \x20 receive-inquiry --organization <id> --source <source> --payload-file <path>"
     );
 }
 
@@ -279,5 +286,96 @@ async fn run_set_password(mut args: Vec<String>) -> Result<(), Box<dyn std::erro
         .map_err(|err| format!("{err}"))?;
 
     println!("password set for {email}");
+    Ok(())
+}
+
+/// Slice 007c's system-actor walkthrough trigger (docs/specs/SLICE_007c.md
+/// §4): the only caller of `receive_inquiry(IntakeActor::System { .. })`
+/// before 007d replaces this with the real webhook-derived caller. Skips
+/// `resolve_actor` entirely — no user actor is the point — and validates
+/// `--organization` before Phase A so a typo is a clean error, not a raw
+/// FK failure. `Publisher::Disabled`: this dev subcommand runs offline
+/// from Centrifugo (SLICE_004 §11 precedent); the walkthrough refreshes
+/// Today rather than relying on realtime.
+async fn run_receive_inquiry(mut args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let organization_id_raw = require_flag(&mut args, "organization")?;
+    let organization_id =
+        Uuid::parse_str(&organization_id_raw).map_err(|_| "--organization must be a UUID")?;
+    let source_raw = require_flag(&mut args, "source")?;
+    let source = Source::parse(&source_raw).ok_or("--source must be 1-64 chars of [a-z0-9_]")?;
+    let payload_file = require_flag(&mut args, "payload-file")?;
+
+    let pool = app_pool().await?;
+
+    let exists =
+        admin_queries::organization_exists(&mut *pool.acquire().await?, organization_id).await?;
+    if !exists {
+        return Err(format!("no organization found for {organization_id_raw}").into());
+    }
+
+    let raw_payload_key = crm_api::config::raw_payload_key_config(&|key| std::env::var(key).ok())
+        .map_err(|err| format!("{err}"))?;
+
+    let raw_bytes =
+        std::fs::read(&payload_file).map_err(|_| format!("could not read {payload_file}"))?;
+    let value: serde_json::Value = serde_json::from_slice(&raw_bytes)
+        .map_err(|_| format!("{payload_file} is not valid JSON"))?;
+    // Payload normalization (docs/specs/SLICE_007c.md §4): re-serialize
+    // exactly as routes/intake.rs does before sealing, so `content_hmac`
+    // dedup matches a POST /api/inquiries delivery of the same bytes.
+    let payload = serde_json::to_vec(&value)?;
+
+    let actor = IntakeActor::System {
+        organization_id,
+        origin: Origin::Cli,
+        correlation_id: Uuid::new_v4(),
+    };
+
+    let outcome = commands::receive_inquiry(
+        &pool,
+        &raw_payload_key,
+        &Publisher::Disabled,
+        &actor,
+        ReceiveInquiry {
+            source,
+            payload,
+            assign_to_user_id: None,
+            received_at: Utc::now(),
+        },
+    )
+    .await
+    .map_err(|err| format!("{err}"))?;
+
+    match outcome {
+        ReceiveInquiryOutcome::Resolved {
+            person_id,
+            person_created,
+            routing_strategy,
+            assigned_user_id,
+            duplicate,
+            ..
+        } => {
+            println!(
+                "intake resolved: person {person_id} ({}), routing {} -> {}{}",
+                if person_created { "new" } else { "matched" },
+                routing_strategy.as_str(),
+                assigned_user_id
+                    .map(|id| id.to_string())
+                    .unwrap_or_else(|| "unassigned".to_string()),
+                if duplicate { " [duplicate]" } else { "" },
+            );
+        }
+        ReceiveInquiryOutcome::Unresolved {
+            raw_payload_id,
+            reason,
+            duplicate,
+        } => {
+            println!(
+                "intake unresolved: raw_payload {raw_payload_id} ({}){}",
+                reason.as_str(),
+                if duplicate { " [duplicate]" } else { "" },
+            );
+        }
+    }
     Ok(())
 }

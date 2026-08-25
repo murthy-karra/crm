@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT o.intake_default_assignee_user_id as \"user_id!\"\n           FROM organization o\n           JOIN organization_membership m\n             ON m.organization_id = o.id\n            AND m.user_id = o.intake_default_assignee_user_id\n            AND m.status = 'active'\n           WHERE o.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "03742ea3ce8d7a47e91efc82697bc507125d6f781f90aae85a9e6acb54d7b4c5"
+}

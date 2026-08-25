@@ -1,32 +1,41 @@
 # Project State
 
-Last updated: 2026-08-24 (SLICE_007b committed and MERGED to `main`
-`4b3462a`; Slice 007c planned: D-035 accepted and recorded (unattended
-intake routes to an admin-set Organization default assignee; unset →
-unassigned + settings warning), `crm-planner` pass done,
-`docs/specs/SLICE_007c.md` drafted, independently reviewed by
-`crm-reviewer` — verdict "ready with amendments", zero blocking
-findings, all six amendments applied (CLI payload normalization so
-`content_hmac` dedup matches `/api/inquiries`' serde re-serialization;
-PUT absent-key → 400, only explicit null clears; `updated_at` in the
-column grant and maintained by the PUT; READ COMMITTED re-check window
-documented as accepted; CLI skips actor resolution, validates the org,
-no assign flag; criterion 10 pins GET-after-deactivation). Awaiting
-user spec approval.)
+Last updated: 2026-08-24/25 (Slice 007c implemented on
+`slice-007c-system-routing`, off `main` `778c2e2`: system actor,
+unattended routing, `GET`/`PUT /api/organization/intake-settings`,
+`crm-admin receive-inquiry`, the Unattended-lead-routing web card.
+Independently reviewed by `crm-reviewer` and adversarially tested by
+`crm-tester` in parallel against the real diff — both found the
+implementation spec-faithful with no blocking issues; both
+independently converged on the same real gap (§7's "system-actor
+intake into org A writes zero rows in org B" pin was unwritten,
+though the code was already correctly scoped); `crm-tester`
+additionally flagged an untested explicit-null-vs-absent-key PUT wire
+case. Both fixed with new tests (`db_intake_system_routing.rs`'s
+`system_actor_intake_into_org_a_writes_zero_rows_in_org_b`,
+`IntakeSettingsView.test.ts`'s "choosing Unassigned PUTs an explicit
+null"). `./scripts/check` and `./scripts/check-db` both green after
+the fixes. Full live walkthrough run against the real dev stack (real
+Postgres, real dev-api rebuilt onto this branch, real headless
+Chromium against the real Vite dev server) — see Completed work below.
+Not yet committed: awaiting user review of the diff summary and
+explicit commit approval (AGENTS.md Phase 9).)
 
 ## Current phase
 
-**Slice 007c (system actor + unattended routing) spec APPROVED (user,
-2026-08-24); awaiting the Phase 6 implementation-gate approval.** 007b
-is COMPLETE and MERGED to `main` (`4b3462a`). D-035 accepted (resolves
-ladder cross-rung decision 6). Spec `docs/specs/SLICE_007c.md`:
-planner pass, independent review (no blocking findings), amendments
-applied, user-approved as written. The SLICE_002 §6 fact-vocabulary
-pointer for the two new routing strategies is in place. Round-robin
-confirmed as its own post-007d rung (ladder note added). Planning
-edits committed to `main` (`7ac6d47`, not pushed). The Phase 6 gate
-report was presented; the user answered **"Not yet"** — implementation
-is on hold until the user gives the go-ahead.
+**Slice 007c (system actor + unattended routing) IMPLEMENTED and
+VERIFIED on `slice-007c-system-routing`; awaiting commit approval
+(AGENTS.md Phase 9).** 007b is COMPLETE and MERGED to `main`
+(`4b3462a`). D-035 accepted (resolves ladder cross-rung decision 6).
+Spec `docs/specs/SLICE_007c.md`: planner pass, independent review (no
+blocking findings), amendments applied, user-approved as written. The
+user gave the implementation go-ahead 2026-08-24/25 ("Implement 007c
+now") after an earlier "Not yet" on the same gate report. Branch
+`slice-007c-system-routing` created off `main` `778c2e2`;
+implementation, tests, independent review, adversarial testing, fixes,
+full-suite verification, and a live dev walkthrough are all complete.
+Nothing has been committed yet — the working tree on this branch holds
+the diff, pending the user's explicit commit approval.
 
 Planner findings that shaped the draft: the fact tables already permit
 `actor_kind='system'` (no fact-table migration); the Rust
@@ -96,7 +105,9 @@ proof chain. Slice 004 is complete and merged (see History).
 
 ## Current branch
 
-`main` (`4b3462a`); planning edits only, no implementation branch yet.
+`slice-007c-system-routing`, off `main` `778c2e2` (`main` itself is 4
+commits ahead of `origin/main`, unpushed since 007b). Implementation
+complete, working tree holds the diff; not yet committed.
 
 ## Last accepted decision
 
@@ -703,6 +714,146 @@ Earlier the same day, user-accepted:
   Not yet committed to `main`: awaiting user review of the diff summary
   and explicit commit approval (AGENTS.md Phase 9).
 
+- 2026-08-24/25: Slice 007c implemented on `slice-007c-system-routing`
+  (branched off `main` `778c2e2`), single lane per the spec's §11
+  ownership: migration `20260829000001_intake_settings.sql` (the
+  nullable `intake_default_assignee_user_id` FK, its scoped `crm_app`
+  UPDATE grant, the widened `routing_decision.strategy` CHECK);
+  `FactEnvelope::for_system` (`domain/envelope.rs`); `IntakeActor`
+  (`domain/intake/mod.rs`) — `User(CommandContext)` /
+  `System { organization_id, origin, correlation_id }` with
+  `organization_id()`/`origin()`/`correlation_id()`/`actor_kind()`/
+  `user_actor_id()`/`envelope()` accessors; `receive_inquiry`'s actor
+  parameter and routing matrix refactored onto it (`determine_routing`
+  is now async, doing the System-actor default-assignee lookup inside
+  the same Phase-B transaction via three new `admin_queries` functions
+  — `intake_default_assignee_user_id`, `update_intake_default_assignee`,
+  `is_active_member`, `active_intake_default_assignee`); two new
+  `RoutingStrategy` variants (`organization_default`, `unassigned`) with
+  `from_str`/`as_str` round-trips; the `assignment_changed` NULL→NULL
+  no-op fact suppressed for `unassigned`. `GET`/`PUT
+  /api/organization/intake-settings` (`routes/organization.rs`) — the
+  PUT parses the body as a raw `serde_json::Value` specifically because
+  serde's derive implicitly defaults *any* `Option<T>`-typed field to
+  `None` on a missing key, which would have silently equated "key
+  omitted" with "explicit null" and defeated the contract's required
+  400-vs-clear distinction. `crm-admin receive-inquiry` subcommand (the
+  walkthrough trigger; validates the Organization exists before Phase A,
+  re-serializes the payload exactly as `routes/intake.rs` does before
+  sealing so `content_hmac` dedup matches `POST /api/inquiries`); a new
+  standalone `config::raw_payload_key_config` factored out of
+  `Config::from_source` (the `intake_mail_config` precedent) so the CLI
+  doesn't need a full `Config`. Web: `IntakeSettingsResponse`/`Request`
+  types, `RoutingStrategy` union extended, `useIntakeSettings`/
+  `useUpdateIntakeSettingsMutation` hooks, the "Unattended lead routing"
+  card in `IntakeSettingsView.vue` (active-members-only dropdown +
+  explicit Unassigned option, unset/deactivated warnings);
+  `PersonDetailView.vue` needed only two new `ROUTING_STRATEGY_LABEL`
+  entries — the "System" actor label fell out of the existing
+  `row.actor?.display_name ?? 'System'` fallback with no code change,
+  since a null actor was previously unreachable and is now exactly what
+  a system fact produces.
+
+  New tests: `tests/db_intake_settings.rs` (5: tenant isolation +
+  role-gating, byte-identical 422 across nonexistent/foreign/inactive,
+  explicit-null-clears/absent-key-400/malformed-UUID-400/
+  GET-survives-deactivation, the `crm_app` grant scoped to the new
+  column, the CHECK accepting both new strategies and rejecting an
+  unknown one); `tests/db_intake_system_routing.rs` (7: criteria 3–9 —
+  default set routes `organization_default` with all facts sharing one
+  correlation id/system shape and landing on the default's Today only,
+  no default routes `unassigned` with no assignment fact, a
+  since-deactivated default routes `unassigned` with the setting
+  retained, `kept_existing` writes no new assignment fact, a
+  matched-but-previously-unassigned Person picks up a newly-set default
+  with exactly one fact, a system-routed payload's exact-byte re-POST
+  via `POST /api/inquiries` reports `organization_default` with
+  `duplicate: true`, and — added after adversarial review, see below —
+  a system-actor intake into one Organization writes zero rows into
+  another); `tests/intake_settings.rs` (4, service-free: 401/503 for
+  both routes); 2 new unit tests each in `receive_inquiry.rs` (the
+  `RoutingStrategy` round-trip and fail-closed) and `domain/intake/
+  mod.rs` (`IntakeActor` accessors/envelope construction, both actor
+  kinds); Vitest additions in `IntakeSettingsView.test.ts` (6: unset/
+  active/deactivated warning states, dropdown lists active members
+  only, choosing a member PUTs the value, and — added after adversarial
+  review — choosing Unassigned PUTs an explicit `null`, not an omitted
+  key) and `PersonDetailView.test.ts` (2: the two new routing-strategy
+  label pins, actor "System"). The full existing `db_intake.rs`
+  suite (18 tests) re-run unmodified and green as the criterion-8
+  regression gate.
+
+  Independent review (`crm-reviewer`) and adversarial test analysis
+  (`crm-tester`) run in parallel against the real diff (not a
+  description of it — both re-ran `cargo check`/`clippy`/the full test
+  suites themselves). Both verdicts: spec-faithful, no blocking issues,
+  no exploitable tenant-isolation or authorization bypass, no way to
+  write an invalid assignee to the column, no way to produce a
+  NULL→NULL `assignment_changed` fact, and the PUT's byte-identical-422
+  guarantee holds structurally (one static error tuple regardless of
+  cause). Both independently converged on the same real gap — §7
+  explicitly requires a pinned test that "a system-actor intake into
+  org A writes zero rows in org B," and no such test existed (the code
+  was already correctly scoped by inspection: `IntakeActor::System`'s
+  `organization_id` is server-supplied and every new query, including
+  `active_intake_default_assignee`'s join, is scoped by it — but this
+  is exactly the kind of copy/paste parameter-order mistake a test
+  should catch, not inspection). `crm-tester` additionally flagged the
+  one untested wire-format case that matters most given the PUT's
+  absent-key-is-400/explicit-null-clears contract: the web test suite
+  asserted a PUT body for setting a value but not for clearing one via
+  the "Unassigned" option (which the code already handled correctly —
+  `IntakeSettingsRequest`'s field is required, not optional, so
+  `JSON.stringify` always includes the key). Both fixed with new tests
+  (listed above); no application code changed as a result. `crm-tester`
+  also noted, informationally only, that the diff deletes a stale
+  `.sqlx` cache file for an unrelated Slice-004-era query no longer in
+  source — expected fallout of the required `cargo sqlx prepare`, not a
+  regression.
+
+  `./scripts/check` and `./scripts/check-db` both green after the fixes
+  (160 crm-app + 58 crm-operator unit tests, 256 Vitest, plus the new
+  DB-backed and service-free integration tests above; `cargo sqlx
+  prepare --check --workspace` confirmed no offline/schema drift).
+
+  Live walkthrough against the real dev stack: killed the orphaned
+  stale-binary `dev-api` process (the known "dev-api runs orphaned"
+  hazard) and restarted it onto this branch; `./scripts/dev-bootstrap`
+  for a clean Acme/Best seed. Ran the full §1 script end-to-end over
+  real HTTP/CLI against the real Postgres: (1) set Carol (Acme member)
+  as the default assignee via `PUT /api/organization/intake-settings`;
+  (2) `crm-admin receive-inquiry --organization <acme> --source website
+  --payload-file lead1.json` → `intake resolved: ... routing
+  organization_default -> <carol>`; (3) as Carol, `GET /api/today` shows
+  the new Person, `GET /api/people/{id}` history shows all four facts
+  with `actor: null`/`origin: "cli"` (renders as "System" in the UI) and
+  the `organization_default` routing decision naming Carol; (4) cleared
+  the setting, delivered a second lead → resolved `unassigned`, visible
+  in `GET /api/people`, on neither Carol's nor Alice's Today; (5) tried
+  setting the default to Carol while she was already deactivated → 422
+  `invalid_assignee`; reactivated her, set her as default, deactivated
+  her again, confirmed `GET` still returned her id (retained), delivered
+  a third lead → resolved `unassigned`, nothing errored. Also drove a
+  real headless Chromium (via a throwaway Playwright script, since
+  neither `chromium-cli` nor a project `run` skill exists in this repo —
+  a gap worth `/run-skill-generator` if browser walkthroughs recur)
+  against the already-running real Vite dev server: logged in as Alice,
+  navigated to `/manage/intake`, screenshotted the card in the
+  deactivated-default state (dropdown blank, red "deactivated" warning,
+  visually consistent spacing/borders with the address card above it),
+  then selected "Unassigned" in the real dropdown and screenshotted the
+  resulting unset-warning state — confirmed via a follow-up `GET` that
+  the click genuinely persisted through the real PUT. One console 401
+  observed, matching every prior slice's documented signature (the
+  anonymous session-check on the public `/login` route before
+  authentication) — not an application error. `dev-web` (already
+  running, pre-existing) and `dev-services` left running per the
+  established convention from prior walkthroughs; the restarted
+  `dev-api` also left running.
+
+  Not yet committed: awaiting user review of the diff summary and
+  explicit commit approval (AGENTS.md Phase 9).
+
 ## Pending work
 
 1. Resolved 2026-08-22 (D-024): the Cloudflare Access application was
@@ -863,6 +1014,33 @@ local (no CI yet):
   tunnel negative-Access check (both Slices' spec §8/§9) — require the
   user's machine/dashboard, called out as pending work above.
 
+2026-08-24/25, Slice 007c, on `slice-007c-system-routing`, after
+implementation, independent review, adversarial testing, and the two
+resulting test additions — full detail in Completed work above; summary
+here:
+- `./scripts/check` green: fmt, clippy `-D warnings`, cargo check,
+  crate-boundary fences, 160 crm-app + 58 crm-operator unit tests
+  (including new `IntakeActor`/`RoutingStrategy` unit tests), web
+  lint/typecheck/256 Vitest/build.
+- `./scripts/check-db` green: `cargo sqlx prepare --check --workspace`
+  against a live migrated database (no offline/schema drift), the
+  `db_intake.rs` regression suite (18 tests, unmodified, criterion 8),
+  the two new DB-backed files (`db_intake_settings.rs` 5,
+  `db_intake_system_routing.rs` 7 including the post-review cross-org
+  isolation test), and `intake_settings.rs` (4, service-free).
+- Live walkthrough against the real dev stack (real Postgres, real
+  dev-api rebuilt onto this branch after restarting the previously
+  orphaned stale-binary process, real headless Chromium against the
+  already-running Vite dev server): the full §1 script end-to-end —
+  set/clear/re-set the default assignee via the real HTTP API,
+  `crm-admin receive-inquiry` for both the `organization_default` and
+  `unassigned` outcomes, Today/People/history verified per-assignee via
+  real logged-in sessions, the deactivated-before-set 422 and
+  deactivated-after-set self-healing-to-unassigned cases both proven
+  live — plus a real-browser screenshot of the settings card in both
+  its deactivated-warning and unset-warning states, with the dropdown
+  interaction's PUT confirmed to actually persist via a follow-up GET.
+
 ## Backlog (deferred, not blocking)
 
 - **O-014 (user, 2026-08-23): Email epic** — five products: lead-intake
@@ -960,12 +1138,18 @@ slice:
 
 ## Approval currently required
 
-**Slice 007c implementation go-ahead** (AGENTS.md Phase 6): the spec
-is user-approved and the gate report (outcome, files, exclusions,
-branch `slice-007c-system-routing`, migration ownership, checks,
-risks) was presented on 2026-08-24; the user chose **"Not yet"**.
-Implementation starts only on an explicit user go-ahead. Also
-outstanding: push approval for `main` (`7ac6d47` local-only).
+**Slice 007c commit approval** (AGENTS.md Phase 9): implementation is
+complete and verified on `slice-007c-system-routing` (off `main`
+`778c2e2`) — independent review, adversarial testing, the two
+resulting fixes, `./scripts/check`/`./scripts/check-db` both green, and
+a full live walkthrough (API/CLI end-to-end plus a real-browser
+screenshot of the settings card). Nothing has been committed. Waiting
+on: the user reviewing the diff summary and giving explicit commit
+approval; then, separately, merge approval (source
+`slice-007c-system-routing` → `main`, per AGENTS.md Phase 9's separate
+merge-approval step) and — as already outstanding since 007b — push
+approval for `main` (currently 4 commits ahead of `origin/main`,
+local-only).
 
 dev-seed-via-api review outcome (crm-reviewer, 2026-08-24): the two
 blocking findings (refusal guard failed open against a stale

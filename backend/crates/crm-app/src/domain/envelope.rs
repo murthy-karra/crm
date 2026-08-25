@@ -159,4 +159,28 @@ impl FactEnvelope {
         self.causation_id = Some(causation_id);
         self
     }
+
+    /// Envelope for a fact caused by unattended (no human actor) intake
+    /// (docs/specs/SLICE_007c.md §4): `actor_kind = 'system'`,
+    /// `actor_user_id` NULL — unrepresentable any other way, per the
+    /// `(actor_kind = 'user') = (actor_user_id IS NOT NULL)` CHECK
+    /// (migration `20260821000004`). `origin` is a parameter: the CLI
+    /// walkthrough passes `Origin::Cli`; 007d passes `Origin::Webhook`.
+    pub fn for_system(
+        organization_id: Uuid,
+        origin: Origin,
+        occurred_at: DateTime<Utc>,
+        correlation_id: Uuid,
+    ) -> Self {
+        Self {
+            organization_id,
+            actor_kind: ActorKind::System,
+            actor_user_id: None,
+            on_behalf_of_user_id: None,
+            origin,
+            occurred_at,
+            correlation_id,
+            causation_id: None,
+        }
+    }
 }

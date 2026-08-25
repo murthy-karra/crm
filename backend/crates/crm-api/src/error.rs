@@ -74,6 +74,10 @@ pub enum ApiError {
     ProposalConsumed {
         call_id: Option<uuid::Uuid>,
     },
+    // --- Slice 007b (docs/specs/SLICE_007b.md §5) -----------------------
+    /// `POST /inbound/email` body over its 2 MiB limit; kept in the shared
+    /// error envelope rather than Axum's default plain-text 413.
+    PayloadTooLarge,
 }
 
 impl IntoResponse for ApiError {
@@ -146,6 +150,7 @@ impl IntoResponse for ApiError {
                 (StatusCode::UNPROCESSABLE_ENTITY, "no_contact_attempt", None)
             }
             ApiError::CorrectionConflict => (StatusCode::CONFLICT, "correction_conflict", None),
+            ApiError::PayloadTooLarge => (StatusCode::PAYLOAD_TOO_LARGE, "payload_too_large", None),
         };
 
         let body = Json(json!({ "error": code }));

@@ -3,7 +3,9 @@ use std::time::Duration;
 
 use sqlx::postgres::{PgPool, PgPoolOptions};
 
-use crate::config::{Config, IntakeMailConfig, RawPayloadKey, RealtimeTokenSecret, SessionSecret};
+use crate::config::{
+    Config, InboundEmailSecret, IntakeMailConfig, RawPayloadKey, RealtimeTokenSecret, SessionSecret,
+};
 use crate::operator::OperatorRuntime;
 use crate::realtime::{CentrifugoTransport, Publisher};
 use crate::telephony::Telephony;
@@ -33,6 +35,10 @@ pub struct AppState {
     pub telephony: Option<Arc<Telephony>>,
     /// Slice 007a: renders Organization intake addresses.
     pub intake_mail: IntakeMailConfig,
+    /// `None` when `CRM_INBOUND_EMAIL_SECRET` is unset: `POST
+    /// /inbound/email` answers 401 `unauthenticated` for every request
+    /// (docs/specs/SLICE_007b.md §6).
+    pub inbound_email_secret: Option<InboundEmailSecret>,
 }
 
 impl AppState {
@@ -88,6 +94,7 @@ impl AppState {
             operator,
             telephony,
             intake_mail: config.intake_mail.clone(),
+            inbound_email_secret: config.inbound_email_secret.clone(),
         })
     }
 
@@ -112,6 +119,7 @@ impl AppState {
             realtime_token_ttl: config.realtime_token_ttl,
             invitation_ttl: config.invitation_ttl,
             intake_mail: config.intake_mail.clone(),
+            inbound_email_secret: config.inbound_email_secret.clone(),
             publisher,
             operator: None,
             telephony: None,

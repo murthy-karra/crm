@@ -2,7 +2,12 @@
 // post-call prompt derive their options from these maps, so the maps are
 // pinned here (the dialog test proves it reads them).
 import { describe, expect, it } from 'vitest'
-import { CALL_OUTCOME_CORRECTION_LABEL, CONTACT_OUTCOME_LABEL, correctedOutcomeLabel } from './labels'
+import {
+  CALL_OUTCOME_CORRECTION_LABEL,
+  CONTACT_OUTCOME_LABEL,
+  UNRESOLVED_REASON_LABEL,
+  correctedOutcomeLabel,
+} from './labels'
 
 describe('contact outcome labels (SLICE_006c §2)', () => {
   it('relabels left_message and adds busy / wrong_number', () => {
@@ -26,5 +31,13 @@ describe('contact outcome labels (SLICE_006c §2)', () => {
     expect(correctedOutcomeLabel('left_message')).toBe('voicemail')
     expect(correctedOutcomeLabel('reached')).toBe('talked to them')
     expect(correctedOutcomeLabel('sent')).toBe('sent')
+  })
+})
+
+// SLICE_007b §7: the Unresolved table's Reason cell renders `undefined`
+// without this entry.
+describe('unresolved reason labels (SLICE_007b §7)', () => {
+  it('labels an unparsed inbound email', () => {
+    expect(UNRESOLVED_REASON_LABEL.email_unparsed).toBe('Unparsed email')
   })
 })

@@ -15,6 +15,7 @@ export const UNRESOLVED_REASON_LABEL: Record<UnresolvedReason, string> = {
   invalid_json: 'Invalid JSON',
   not_an_object: 'Not an object',
   no_contact_method: 'No contact method',
+  email_unparsed: 'Unparsed email',
 }
 
 /** Shared by LogContactDialog.vue's Channel Select and PersonDetailView's

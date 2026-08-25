@@ -11,7 +11,13 @@ use uuid::Uuid;
 use crate::config::RawPayloadKey;
 use crate::domain::intake::IntakeAddress;
 use crate::domain::raw_payload::{crypto, store};
-use crate::realtime::{Publisher, RealtimeEvent, Publication};
+use crate::realtime::{Publication, Publisher, RealtimeEvent};
+
+/// Presented to `constant_time_eq` on an unknown slug, so that branch does
+/// the same 8-byte compare as a known slug with the wrong token. 8 bytes:
+/// the length `IntakeAddress::parse_recipient` guarantees for every
+/// presented token.
+const DUMMY_TOKEN: &[u8; 8] = b"00000000";
 
 pub enum InboundEmailOutcome {
     Stored { raw_payload_id: Uuid },
@@ -52,10 +58,20 @@ pub async fn receive_inbound_email(
 
     // Resolve organization by slug + tenant-only authentication.
     let mut conn = pool.acquire().await?;
-    let (org_id, stored_token) = organization_by_intake_slug(&mut conn, &intake_addr.slug)
-        .await?
-        .ok_or(ReceiveInboundEmailError::OrgNotFound)?;
+    let lookup = organization_by_intake_slug(&mut conn, &intake_addr.slug).await?;
     drop(conn);
+
+    let (org_id, stored_token) = match lookup {
+        Some(row) => row,
+        None => {
+            // Unknown slug: still run the constant-time compare against a
+            // fixed dummy token, so this path does the same work as the
+            // wrong-token path below (never a shortcut an attacker could
+            // distinguish by timing).
+            let _ = constant_time_eq(intake_addr.token.as_bytes(), DUMMY_TOKEN);
+            return Err(ReceiveInboundEmailError::OrgNotFound);
+        }
+    };
 
     // Constant-time token compare (tenant credential, never logged).
     if !constant_time_eq(intake_addr.token.as_bytes(), stored_token.as_bytes()) {
@@ -135,7 +151,7 @@ async fn organization_by_intake_slug(
     slug: &str,
 ) -> Result<Option<(Uuid, String)>, sqlx::Error> {
     sqlx::query_as::<_, (Uuid, String)>(
-        "SELECT id, intake_token FROM organization WHERE intake_slug = $1"
+        "SELECT id, intake_token FROM organization WHERE intake_slug = $1",
     )
     .bind(slug)
     .fetch_optional(&mut **conn)
@@ -154,4 +170,32 @@ fn constant_time_eq(presented: &[u8], stored: &[u8]) -> bool {
         result |= a ^ b;
     }
     result == 0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn constant_time_eq_matches_identical_and_rejects_length_mismatch_or_wrong_bytes() {
+        assert!(constant_time_eq(b"k7f3q2wd", b"k7f3q2wd"));
+        assert!(!constant_time_eq(b"k7f3q2wd", b"k7f3q2we"));
+        assert!(!constant_time_eq(b"short", b"k7f3q2wd"));
+        assert!(!constant_time_eq(b"", DUMMY_TOKEN));
+        // Single-bit-flip near-misses: every position must be checked, not
+        // just short-circuited on the first differing byte.
+        for i in 0..DUMMY_TOKEN.len() {
+            let mut near_miss = *DUMMY_TOKEN;
+            near_miss[i] ^= 0x01;
+            assert!(!constant_time_eq(&near_miss, DUMMY_TOKEN), "byte {i}");
+        }
+    }
+
+    #[test]
+    fn dummy_token_is_exactly_eight_bytes() {
+        // The length IntakeAddress::parse_recipient guarantees for every
+        // presented token (address.rs's TOKEN_LEN), so the unknown-slug
+        // path's dummy compare never hits the length-mismatch fast path.
+        assert_eq!(DUMMY_TOKEN.len(), 8);
+    }
 }

@@ -381,7 +381,11 @@ export interface ReceiveInquiryResolved {
   duplicate: boolean
 }
 
-export type UnresolvedReason = 'invalid_json' | 'not_an_object' | 'no_contact_method'
+export type UnresolvedReason =
+  | 'invalid_json'
+  | 'not_an_object'
+  | 'no_contact_method'
+  | 'email_unparsed'
 
 export interface ReceiveInquiryUnresolved {
   status: 'unresolved'

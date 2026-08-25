@@ -1,0 +1,23 @@
+From: "Priya Nair" <priya.nair@example.com>
+To: leads-k7f3q2wd@acme-realty.elysianfeld.com
+Subject: Looking for a 3-bed in the suburbs
+Date: Mon, 24 Aug 2026 15:10:00 -0700
+Message-ID: <fixture-multipart-002@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="fixture-boundary-007b"
+
+--fixture-boundary-007b
+Content-Type: text/plain; charset=us-ascii
+Content-Transfer-Encoding: 7bit
+
+Hello, I'm looking for a 3-bedroom home in the suburbs, budget around
+$450k. Please call me at 555-555-0102.
+
+--fixture-boundary-007b
+Content-Type: text/html; charset=us-ascii
+Content-Transfer-Encoding: 7bit
+
+<html><body><p>Hello, I'm looking for a 3-bedroom home in the suburbs,
+budget around $450k. Please call me at 555-555-0102.</p></body></html>
+
+--fixture-boundary-007b--

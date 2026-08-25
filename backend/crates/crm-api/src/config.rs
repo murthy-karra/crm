@@ -11,8 +11,8 @@ const MAX_CONNECT_TIMEOUT_MS: u64 = 30_000;
 
 use crm_app::config::MIN_REALTIME_TOKEN_SECRET_BYTES;
 pub use crm_app::config::{
-    CentrifugoApiKey, IntakeAddressScheme, IntakeMailConfig, LiveKitApiSecret, LiveKitConfig,
-    RawPayloadKey, RealtimeTokenSecret, SecretError, TelephonyConfig,
+    CentrifugoApiKey, InboundEmailSecret, IntakeAddressScheme, IntakeMailConfig, LiveKitApiSecret,
+    LiveKitConfig, RawPayloadKey, RealtimeTokenSecret, SecretError, TelephonyConfig,
 };
 
 const MIN_SESSION_SECRET_BYTES: usize = 32;
@@ -159,6 +159,10 @@ pub struct Config {
     pub telephony: TelephonyConfig,
     /// Slice 007a: how Organization intake addresses are rendered.
     pub intake_mail: IntakeMailConfig,
+    /// Slice 007b: `POST /inbound/email` bearer credential. `None` (unset
+    /// or empty) disables the endpoint (every request 401) without
+    /// failing startup, mirroring `LIVEKIT_API_KEY`.
+    pub inbound_email_secret: Option<InboundEmailSecret>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -211,6 +215,8 @@ pub enum ConfigError {
     // --- Slice 007a (docs/specs/SLICE_007a.md §4) ----------------------
     InvalidIntakeMailDomain(String),
     InvalidIntakeAddressScheme(String),
+    // --- Slice 007b (docs/specs/SLICE_007b.md §6) -----------------------
+    InboundEmailSecretTooShort(usize),
 }
 
 impl fmt::Display for ConfigError {
@@ -385,6 +391,10 @@ impl fmt::Display for ConfigError {
                 f,
                 "CRM_INTAKE_ADDRESS_SCHEME must be \"subdomain\" or \"local_part\", got {value}"
             ),
+            ConfigError::InboundEmailSecretTooShort(len) => write!(
+                f,
+                "CRM_INBOUND_EMAIL_SECRET must be at least 32 bytes when set, got {len}"
+            ),
         }
     }
 }
@@ -528,6 +538,16 @@ impl Config {
         let telephony = telephony_config(&get)?;
         let intake_mail = intake_mail_config(&get)?;
 
+        let inbound_email_secret = match get("CRM_INBOUND_EMAIL_SECRET").filter(|v| !v.is_empty()) {
+            Some(value) => Some(InboundEmailSecret::parse(value).map_err(|err| match err {
+                SecretError::TooShort { len, .. } => ConfigError::InboundEmailSecretTooShort(len),
+                // Unreachable (the .filter above already rejects ""), kept
+                // for totality.
+                SecretError::Empty => ConfigError::InboundEmailSecretTooShort(0),
+            })?),
+            None => None,
+        };
+
         Ok(Config {
             bind_addr,
             database_url,
@@ -547,6 +567,7 @@ impl Config {
             groq_api_key,
             telephony,
             intake_mail,
+            inbound_email_secret,
         })
     }
 }
@@ -1579,5 +1600,42 @@ mod tests {
             err,
             ConfigError::InvalidIntakeAddressScheme("wildcard".to_string())
         );
+    }
+
+    // --- CRM_INBOUND_EMAIL_SECRET (docs/specs/SLICE_007b.md §6) -----------
+
+    #[test]
+    fn inbound_email_secret_unset_is_none() {
+        let config = Config::from_source(source(&[])).unwrap();
+        assert!(config.inbound_email_secret.is_none());
+    }
+
+    #[test]
+    fn inbound_email_secret_empty_is_none() {
+        let config = Config::from_source(source(&[("CRM_INBOUND_EMAIL_SECRET", "")])).unwrap();
+        assert!(config.inbound_email_secret.is_none());
+    }
+
+    #[test]
+    fn inbound_email_secret_short_is_an_error() {
+        let err = Config::from_source(source(&[("CRM_INBOUND_EMAIL_SECRET", &"a".repeat(31))]))
+            .unwrap_err();
+        assert_eq!(err, ConfigError::InboundEmailSecretTooShort(31));
+    }
+
+    #[test]
+    fn inbound_email_secret_accepts_exactly_32_bytes() {
+        let config =
+            Config::from_source(source(&[("CRM_INBOUND_EMAIL_SECRET", &"a".repeat(32))])).unwrap();
+        assert_eq!(config.inbound_email_secret.unwrap().as_bytes().len(), 32);
+    }
+
+    #[test]
+    fn inbound_email_secret_is_redacted_in_debug() {
+        let config =
+            Config::from_source(source(&[("CRM_INBOUND_EMAIL_SECRET", &"ee".repeat(20))])).unwrap();
+        let debug_output = format!("{config:?}");
+        assert!(!debug_output.contains(&"ee".repeat(8)));
+        assert!(debug_output.contains("InboundEmailSecret(REDACTED)"));
     }
 }

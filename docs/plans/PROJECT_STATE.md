@@ -32,10 +32,10 @@ same reason; delivery deferred under a psql-held advisory lock →
 Pending row → Try again rescued it end-to-end ("Morgan Hale" on
 Carol's Today, `organization_default`, facts system/on_behalf_of=
 alice/web_session); forged eospia.com mail opened + discarded with
-attribution; byte-identical redelivery stayed discarded. NOT yet
-committed — awaiting user commit approval (AGENTS.md Phase 9).
-crm_dev gained the walkthrough rows; dev-api left on the branch
-binary.)
+attribution; byte-identical redelivery stayed discarded. Committed,
+fast-forward merged to `main`, and pushed with explicit user approval
+2026-08-25. crm_dev gained the walkthrough rows; dev-api runs the
+merged binary.)
 
 Planning phase, earlier the same day (Slice 007e: D-037 accepted
 and recorded (raw unresolved content is org-admin-only, on demand —
@@ -134,10 +134,10 @@ PUSHED to `origin/main` (`fe0b99b`), all with explicit user approval
 
 ## Current phase
 
-**Slice 007e (Unresolved workbench) IMPLEMENTED, reviewed,
+**Slice 007e (Unresolved workbench) COMPLETE: implemented, reviewed,
 adversarially tested (all findings fixed + pinned), checks green, live
-walkthrough passed — on `slice-007e-workbench`, NOT yet committed;
-awaiting user commit approval, then merge approval.**
+walkthrough passed, committed, merged to `main`, and pushed — all with
+explicit user approval 2026-08-25.**
 
 Spec phase, for reference: **spec APPROVED (user, 2026-08-25).** D-037 accepted.
 Spec: planner pass, independent review (no blocking findings, six
@@ -214,8 +214,7 @@ OrbStack hung twice. Hostname is `livekit1.tarams.org`.
 ## Current slice
 
 Slice 007e — Unresolved workbench — `docs/specs/SLICE_007e.md` —
-IMPLEMENTED + REVIEWED + TESTED + WALKED THROUGH on
-`slice-007e-workbench` (off `main` `5720f54`), not yet committed. Previous: Slice 007d — One pinned
+COMPLETE, MERGED to `main` and pushed. Previous: Slice 007d — One pinned
 email format → real inquiries — `docs/specs/SLICE_007d.md` —
 COMPLETE, MERGED to `main` and pushed.
 Previous: Slice 007c — System actor + unattended routing —
@@ -1299,13 +1298,11 @@ slice:
 
 ## Approval currently required
 
-**Commit approval** for `slice-007e-workbench` (AGENTS.md Phase 9):
-implementation done (sequential single lane, user-approved),
-independently reviewed and adversarially tested with all findings
-fixed and pinned, both check gates green, live walkthrough passed.
-After commit, a separate merge-to-`main` approval is needed. Then:
+None outstanding for Slice 007e: committed, merged to `main`, pushed,
+branch deleted — all with explicit user approval 2026-08-25. Next:
 007f (LLM extraction — carries the blocking lead-mail→Groq decision)
-or 007g (real DNS/receiving) per the ladder.
+or 007g (real DNS/receiving — mostly ops, can start any time) per the
+ladder.
 
 Slice 007d: nothing outstanding — committed (`a75b9a8`), merged,
 pushed, branch deleted, all with explicit user approval 2026-08-25.

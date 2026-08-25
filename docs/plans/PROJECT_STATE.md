@@ -1,6 +1,22 @@
 # Project State
 
-Last updated: 2026-08-24/25 (Slice 007c implemented on
+Last updated: 2026-08-25 (Slice 007d planning underway: D-036 accepted
+and recorded (forged-mail posture — in-format mail from a valid intake
+address creates a Person; defenses are the address token, per-format
+sender-domain matching, SPF/DKIM at 007g; everything else lands in
+Unresolved), `crm-planner` pass done, `docs/specs/SLICE_007d.md`
+drafted, independent review (`crm-reviewer`) in progress. Notable
+planner findings: no migration needed (`unresolved_reason` and
+`inquiry.source` are free text); `mail-parser` confirmed absent from
+the workspace (the ladder-blessed new dep, wrapped in
+`domain/intake/email/mime.rs` with a fence test); the email path must
+take the per-org advisory lock since it now creates People, and on
+`IntakeBusy` returns 200 with the row left `pending` (007b's
+"never `intake_busy`" holds; redelivery or 007e rescues); a declared
+amendment: 007b's tests pinning `email_unparsed` for
+`plain.eml`/`multipart.eml` change to `email_unrecognized_format`.)
+
+Previous update, 2026-08-24/25 (Slice 007c implemented on
 `slice-007c-system-routing`, off `main` `778c2e2`: system actor,
 unattended routing, `GET`/`PUT /api/organization/intake-settings`,
 `crm-admin receive-inquiry`, the Unattended-lead-routing web card.
@@ -24,8 +40,16 @@ PUSHED to `origin/main` (`fe0b99b`), all with explicit user approval
 
 ## Current phase
 
-**Slice 007c (system actor + unattended routing) COMPLETE, MERGED to
-`main`, and PUSHED to `origin/main` (`fe0b99b`).** 007b is COMPLETE
+**Slice 007d (one pinned email format → real inquiries) spec APPROVED
+(user, 2026-08-25); awaiting the Phase 6 implementation-gate
+approval.** D-036 accepted. Spec `docs/specs/SLICE_007d.md`: planner
+pass, independent review (no blocking findings), seven amendments
+applied, user-approved as written. The SLICE_007b supersession pointer
+(criteria 3/14/18 + the fixture-reason change) is in place.
+
+Prior phase: **Slice 007c (system actor + unattended routing)
+COMPLETE, MERGED to `main`, and PUSHED to `origin/main` (`fe0b99b`).**
+007b is COMPLETE
 and MERGED to `main` (`4b3462a`). D-035 accepted (resolves ladder
 cross-rung decision 6). Spec `docs/specs/SLICE_007c.md`: planner pass,
 independent review (no
@@ -78,9 +102,11 @@ OrbStack hung twice. Hostname is `livekit1.tarams.org`.
 
 ## Current slice
 
-Slice 007c — System actor + unattended routing —
-`docs/specs/SLICE_007c.md` (APPROVED).
-Previous: Slice 007b — Inbound email endpoint —
+Slice 007d — One pinned email format → real inquiries —
+`docs/specs/SLICE_007d.md` (APPROVED).
+Previous: Slice 007c — System actor + unattended routing —
+`docs/specs/SLICE_007c.md` — COMPLETE, MERGED + PUSHED `fe0b99b`.
+Before that: Slice 007b — Inbound email endpoint —
 `docs/specs/SLICE_007b.md` — COMPLETE, MERGED `4b3462a`. Before that:
 Slice 007a — Organization intake address — `docs/specs/SLICE_007a.md`
 — COMPLETE, MERGED `81af77f`.
@@ -114,7 +140,18 @@ branches point at `fe0b99b`).
 
 ## Last accepted decision
 
-2026-08-24, user-accepted (Slice 007c planning):
+2026-08-25, user-confirmed (Slice 007d planning):
+- D-036 — forged-mail posture for pinned email formats. Mail reaching
+  a valid intake address (unguessable token) that matches a pinned
+  format's template AND claims that format's real sender domain WILL
+  create a Person and route per D-035, without human review — that is
+  what a pinned format means. Defenses layered: the token, per-format
+  sender-domain `matches()`, SPF/DKIM from 007g. Everything failing
+  any gate lands in Unresolved with raw mail preserved (D-012).
+  Accepted blast radius: one obvious bogus lead row. Records the
+  confirmation the ladder mandated at rung d.
+
+Previous, 2026-08-24, user-accepted (Slice 007c planning):
 - D-035 — unattended intake (system-actor path, email from 007d on)
   routes to an admin-set Organization default assignee
   (`intake_default_assignee_user_id`); unset → the Person is created
@@ -1141,13 +1178,15 @@ slice:
 
 ## Approval currently required
 
-None outstanding for Slice 007c: implemented, verified, committed
+**Slice 007d implementation-gate approval** (AGENTS.md Phase 6): the
+spec is user-approved; the gate report awaits "Proceed with
+implementation?". The 007d planning edits (spec, D-036, the 007b
+pointer, this file) also await a commit to `main`.
+
+Slice 007c: nothing outstanding — implemented, verified, committed
 (`57ef058`, `fe0b99b`), fast-forward merged to `main`, and pushed to
-`origin/main` (`fe0b99b`) — all with explicit user approval 2026-08-25
-("merge and push"). Confirmed 2026-08-25: `slice-007c-system-routing`
-no longer exists (already deleted; only `main` remains locally). Next:
-start Slice 007d (first pinned email format) per the ladder, or
-address the smaller follow-ups below.
+`origin/main` (`fe0b99b`) with explicit user approval 2026-08-25; the
+branch is deleted.
 
 dev-seed-via-api review outcome (crm-reviewer, 2026-08-24): the two
 blocking findings (refusal guard failed open against a stale

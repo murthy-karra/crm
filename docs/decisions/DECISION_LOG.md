@@ -1117,3 +1117,28 @@ unassigned. Round-robin and rules-based routing remain later work,
 explicitly outside the 007 ladder.
 
 Blocks: nothing. Feeds the Slice 007c specification.
+
+### D-036 — Forged-mail posture for pinned email formats (2026-08-25)
+
+Confirmed (user, during Slice 007d planning). Records the confirmation
+the ladder required at rung d, reconciling O-014's "forged mail must
+land in Unresolved, never silently create" with what a pinned format
+means.
+
+Mail that (1) reaches a valid intake address — which embeds the
+unguessable 8-character token — **and** (2) matches a pinned format's
+template **and** (3) claims that format's real sender domain WILL
+create a Person and route it per D-035 (default assignee's Today)
+without human review. That is the point of a pinned format; requiring
+review for format-matching mail would keep every email lead off Today.
+
+Layered defenses, in order: the address token (mail without it never
+resolves to an Organization); each pinned format's `matches()` is
+restricted to its real sender domain, never content alone; from 007g
+on, the provider adapter carries real SPF/DKIM sender-authentication
+results to tighten domain claims. Everything failing any gate lands in
+Unresolved with the raw mail preserved (D-012). Accepted blast radius
+of a successful forgery: one bogus, quickly recognizable lead row —
+no data access, no privilege.
+
+Blocks: nothing. Feeds the Slice 007d specification.

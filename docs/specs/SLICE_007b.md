@@ -3,6 +3,15 @@
 Status: APPROVED (user, 2026-08-24; planner pass + independent review
 same day, reviewer amendments applied — no blocking findings; §5
 contract and §13 safe defaults accepted as written)
+
+> Amended by SLICE_007d (declared change, AGENTS.md §11): once 007d
+> lands, the endpoint parses stored mail and completes intake, so
+> criteria 3 ("advisory lock never taken"), 14 (the stuck-`pending`
+> rescue now runs the full parse), and 18 ("no changes to
+> `receive_inquiry`") are superseded, and valid-MIME unknown-format
+> mail lands `email_unrecognized_format` instead of `email_unparsed`
+> (the §1/§10 expectations for `plain.eml`/`multipart.eml`). The §5
+> HTTP envelope is unchanged.
 Ladder: docs/plans/SLICE_007_LADDER.md rung b. Builds on 007a (intake
 address; merged `81af77f`). Targets O-014 (mailbox-less receiving,
 raw-first), D-012 (raw payloads preserved), D-021 (creation paths),

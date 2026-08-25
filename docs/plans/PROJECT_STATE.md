@@ -18,16 +18,17 @@ null"). `./scripts/check` and `./scripts/check-db` both green after
 the fixes. Full live walkthrough run against the real dev stack (real
 Postgres, real dev-api rebuilt onto this branch, real headless
 Chromium against the real Vite dev server) — see Completed work below.
-Not yet committed: awaiting user review of the diff summary and
-explicit commit approval (AGENTS.md Phase 9).)
+Committed (`57ef058`, `fe0b99b`), fast-forward MERGED to `main`, and
+PUSHED to `origin/main` (`fe0b99b`), all with explicit user approval
+2026-08-25.)
 
 ## Current phase
 
-**Slice 007c (system actor + unattended routing) IMPLEMENTED and
-VERIFIED on `slice-007c-system-routing`; awaiting commit approval
-(AGENTS.md Phase 9).** 007b is COMPLETE and MERGED to `main`
-(`4b3462a`). D-035 accepted (resolves ladder cross-rung decision 6).
-Spec `docs/specs/SLICE_007c.md`: planner pass, independent review (no
+**Slice 007c (system actor + unattended routing) COMPLETE, MERGED to
+`main`, and PUSHED to `origin/main` (`fe0b99b`).** 007b is COMPLETE
+and MERGED to `main` (`4b3462a`). D-035 accepted (resolves ladder
+cross-rung decision 6). Spec `docs/specs/SLICE_007c.md`: planner pass,
+independent review (no
 blocking findings), amendments applied, user-approved as written. The
 user gave the implementation go-ahead 2026-08-24/25 ("Implement 007c
 now") after an earlier "Not yet" on the same gate report. Branch
@@ -105,9 +106,9 @@ proof chain. Slice 004 is complete and merged (see History).
 
 ## Current branch
 
-`slice-007c-system-routing`, off `main` `778c2e2` (`main` itself is 4
-commits ahead of `origin/main`, unpushed since 007b). Implementation
-complete, working tree holds the diff; not yet committed.
+`main` (`fe0b99b`, pushed to `origin/main`). `slice-007c-system-routing`
+fast-forward merged into it and left in place, not yet deleted (both
+branches point at `fe0b99b`).
 
 ## Last accepted decision
 
@@ -1138,14 +1139,14 @@ slice:
 
 ## Approval currently required
 
-**Slice 007c merge approval** (AGENTS.md Phase 9): implementation
-complete, verified, and committed on `slice-007c-system-routing`
-(`57ef058`, off `main` `778c2e2`) — user gave explicit commit approval
-2026-08-25. Waiting on: merge approval (source
-`slice-007c-system-routing` → destination `main`, per Phase 9's
-separate merge-approval step) and — as already outstanding since
-007b — push approval for `main` (currently 4 commits ahead of
-`origin/main`, local-only; the merge would add a 5th).
+None outstanding for Slice 007c: implemented, verified, committed
+(`57ef058`, `fe0b99b`), fast-forward merged to `main`, and pushed to
+`origin/main` (`fe0b99b`) — all with explicit user approval 2026-08-25
+("merge and push"). `slice-007c-system-routing` still exists locally
+(same commit as `main`, not yet deleted — a short-lived branch per
+AGENTS.md §12, worth deleting once the user confirms). Next: start
+Slice 007d (first pinned email format) per the ladder, or address the
+smaller follow-ups below.
 
 dev-seed-via-api review outcome (crm-reviewer, 2026-08-24): the two
 blocking findings (refusal guard failed open against a stale

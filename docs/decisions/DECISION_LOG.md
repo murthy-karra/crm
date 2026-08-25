@@ -1159,3 +1159,31 @@ later is easy while walking back is not. Widening to members (in
 either the read or the retry-only form) remains a future decision.
 
 Blocks: nothing. Feeds the Slice 007e specification.
+
+### D-038 — Inbound lead-email content may be sent to Groq for extraction, under a fixed scope (2026-08-25)
+
+Accepted (user, during Slice 007f planning). Resolves the ladder's
+cross-rung decision 4 — the last blocking decision in the 007 ladder.
+
+Emails that fail every pinned format may be sent automatically to the
+inference provider (Groq) for lead extraction, with this scope fixed:
+
+- text only — no attachments, no raw HTML (the mime wrapper's text
+  conversion), total input ≤ 16 KiB (truncated, flagged);
+- subject and the sender's **domain** accompany the text — never the
+  full sender address, never the recipient/intake address, never the
+  Organization's name, and never any agent identifier;
+- no tools: extraction is a pure question-in/answer-out call; the
+  model's reply is untrusted data, strictly schema-validated, with
+  anti-hallucination checks (every extracted contact value must appear,
+  normalized, in the input) and a confidence gate before anything is
+  created — low confidence or validation failure lands in Unresolved,
+  never an invented lead (O-014);
+- Groq goes on the subprocessor list for the SOC 2/DPA work.
+
+Context: not a new boundary (Operator turns already send Person PII to
+Groq, SLICE_005) but a new kind of flow — unsolicited third-party
+content, automatic, at volume, no human per call. Injection blast
+radius is wrong field values, absorbed by validation + Unresolved.
+
+Blocks: nothing. Feeds the Slice 007f specification.

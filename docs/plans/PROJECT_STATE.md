@@ -1,6 +1,24 @@
 # Project State
 
-Last updated: 2026-08-25 (SLICE_007e implemented on
+Last updated: 2026-08-25 (Slice 007f planning underway: D-038 accepted
+and recorded (inbound lead mail → Groq blessed with the fixed scope:
+text-only ≤16 KiB, subject + sender domain only, no org/agent/
+recipient identifiers, no tools, Groq on the subprocessor list — the
+ladder's LAST blocking decision), `crm-planner` pass done,
+`docs/specs/SLICE_007f.md` drafted, independent review in progress.
+Key planner findings baked into the draft: the telephony sweep is the
+worker template (spawn/run_once/interval — no worker built from
+scratch); `InferenceProvider` has no structured-output support, so
+`ChatRequest` gains a declared additive `response_format` field;
+"backoff+max attempts" vs "provider down waits forever" reconciles
+only via a two-class failure taxonomy (transport failures never count
+or go terminal; quality failures cap at 3 → `email_extraction_failed`);
+anti-hallucination needs normalized matching (digit-sequence phones),
+not raw substring; extraction model default must be
+`openai/gpt-oss-120b` (llama retired); the IntakeBusy path inside the
+worker must UN-reset the row or it strands as pending.)
+
+Prior update, same day (SLICE_007e implemented on
 `slice-007e-workbench` off `main` `5720f54`: migration `20260830000001`
 (discarded resolution + attributed discard columns, pair-CHECK,
 column grants), `domain/intake/workbench.rs` (detail decrypt-on-demand
@@ -134,10 +152,17 @@ PUSHED to `origin/main` (`fe0b99b`), all with explicit user approval
 
 ## Current phase
 
-**Slice 007e (Unresolved workbench) COMPLETE: implemented, reviewed,
-adversarially tested (all findings fixed + pinned), checks green, live
-walkthrough passed, committed, merged to `main`, and pushed — all with
-explicit user approval 2026-08-25.**
+**Slice 007f (LLM extraction) spec APPROVED (user, 2026-08-25);
+awaiting the Phase 6 implementation-gate approval.** D-038 accepted.
+Spec: planner pass, independent review (no blocking findings, eight
+amendments applied incl. the non-Clone-ParsedLead closure fix and the
+race-safe ledger seq), user-approved as written incl. the declared
+additive ChatRequest.response_format extension.
+
+Prior phase: **Slice 007e (Unresolved workbench) COMPLETE: implemented,
+reviewed, adversarially tested (all findings fixed + pinned), checks
+green, live walkthrough passed, committed, merged to `main`, and
+pushed — all with explicit user approval 2026-08-25.**
 
 Spec phase, for reference: **spec APPROVED (user, 2026-08-25).** D-037 accepted.
 Spec: planner pass, independent review (no blocking findings, six
@@ -213,8 +238,9 @@ OrbStack hung twice. Hostname is `livekit1.tarams.org`.
 
 ## Current slice
 
-Slice 007e — Unresolved workbench — `docs/specs/SLICE_007e.md` —
-COMPLETE, MERGED to `main` and pushed. Previous: Slice 007d — One pinned
+Slice 007f — LLM extraction — `docs/specs/SLICE_007f.md` (APPROVED). Previous: Slice 007e — Unresolved
+workbench — `docs/specs/SLICE_007e.md` — COMPLETE, MERGED to `main`
+and pushed. Previous: Slice 007d — One pinned
 email format → real inquiries — `docs/specs/SLICE_007d.md` —
 COMPLETE, MERGED to `main` and pushed.
 Previous: Slice 007c — System actor + unattended routing —
@@ -253,7 +279,16 @@ branches point at `fe0b99b`).
 
 ## Last accepted decision
 
-2026-08-25, user-accepted (Slice 007e planning):
+2026-08-25, user-accepted (Slice 007f planning):
+- D-038 — inbound lead-email content may be sent to Groq for
+  extraction, scope fixed: text-only ≤16 KiB, subject + sender
+  domain only (never the full address/recipient/org/agent
+  identifiers), no tools; the reply is untrusted, schema-validated,
+  anti-hallucination-checked, confidence-gated; Groq on the
+  subprocessor list. Resolves ladder cross-rung decision 4 — the
+  ladder's last blocking decision.
+
+Previous, same day (Slice 007e planning):
 - D-037 — raw unresolved content (the decrypted email/JSON), Try
   again, and Discard are Organization-admin-only, on demand, per row,
   never in the list, never logged; members keep the metadata-only
@@ -1298,11 +1333,13 @@ slice:
 
 ## Approval currently required
 
-None outstanding for Slice 007e: committed, merged to `main`, pushed,
-branch deleted — all with explicit user approval 2026-08-25. Next:
-007f (LLM extraction — carries the blocking lead-mail→Groq decision)
-or 007g (real DNS/receiving — mostly ops, can start any time) per the
-ladder.
+**Slice 007f implementation-gate approval** (AGENTS.md Phase 6): the
+spec is user-approved; the gate report awaits "Proceed with
+implementation?". The 007f planning edits (spec, D-038, ladder row 4,
+this file) also await a commit to `main`.
+
+Slice 007e: nothing outstanding — committed, merged, pushed, branch
+deleted, all with explicit user approval 2026-08-25.
 
 Slice 007d: nothing outstanding — committed (`a75b9a8`), merged,
 pushed, branch deleted, all with explicit user approval 2026-08-25.

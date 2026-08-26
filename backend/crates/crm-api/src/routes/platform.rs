@@ -27,7 +27,7 @@ use crate::domain::admin::{AdminActor, Role};
 use crate::domain::envelope::Origin;
 use crate::domain::intake::IntakeAddress;
 use crate::error::ApiError;
-use crate::ids::OrganizationId;
+use crate::ids::{OrganizationId, UserId};
 use crate::state::AppState;
 
 pub fn router() -> Router<AppState> {
@@ -126,11 +126,10 @@ async fn create_organization_route(
         create_organization(pool, actor, CreateOrganization { name: req.name }).await?;
 
     let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
-    let item =
-        admin_queries::platform_organization_by_id(&mut conn, OrganizationId::new(organization.id))
-            .await
-            .map_err(|_| ApiError::Unavailable)?
-            .ok_or(ApiError::Unavailable)?;
+    let item = admin_queries::platform_organization_by_id(&mut conn, organization.id)
+        .await
+        .map_err(|_| ApiError::Unavailable)?
+        .ok_or(ApiError::Unavailable)?;
 
     Ok((StatusCode::CREATED, Json(json!({ "organization": item }))).into_response())
 }
@@ -202,7 +201,7 @@ async fn promote_member(
         actor,
         ChangeMemberRole {
             organization_id,
-            user_id,
+            user_id: UserId::new(user_id),
             role: Role::Admin,
         },
     )

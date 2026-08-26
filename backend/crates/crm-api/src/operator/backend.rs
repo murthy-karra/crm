@@ -16,7 +16,7 @@ use crate::domain::person::model::PersonSummary;
 use crate::domain::person::queries::{self as person_queries, HistoryEntry};
 use crate::domain::person::PersonVisibilityScope;
 use crate::domain::today::{self, TodayItem, TodayList};
-use crate::ids::OrganizationId;
+use crate::ids::{OrganizationId, UserId};
 use crate::operator::explain;
 use crm_operator::{
     ContactMethodView, HistoryEntryView, InquiryView, NextWorkItem, OperatorContext, PersonCard,
@@ -155,11 +155,16 @@ fn org_id(ctx: &OperatorContext) -> OrganizationId {
     OrganizationId::new(ctx.organization_id)
 }
 
+// Same seam, for the User id (hardening chunk N2).
+fn user_id(ctx: &OperatorContext) -> UserId {
+    UserId::new(ctx.actor_user_id)
+}
+
 async fn today_for(conn: &mut PgConnection, ctx: &OperatorContext) -> ToolResult<TodayList> {
     today::query(
         conn,
         &PersonVisibilityScope::Organization(org_id(ctx)),
-        ctx.actor_user_id,
+        user_id(ctx),
         ctx.now,
     )
     .await
@@ -294,7 +299,7 @@ impl ToolBackend for SqlxToolBackend {
         Ok(explain::build_explanation(
             &list,
             &summary,
-            ctx.actor_user_id,
+            user_id(ctx),
             card_from_summary(&summary),
         ))
     }

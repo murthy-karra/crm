@@ -17,6 +17,7 @@ use crate::domain::inquiry::queries as inquiry_queries;
 use crate::domain::person::queries as person_queries;
 use crate::domain::person::PersonVisibilityScope;
 use crate::error::ApiError;
+use crate::ids::UserId;
 use crate::state::AppState;
 
 pub fn router() -> Router<AppState> {
@@ -109,7 +110,7 @@ async fn get_person(
 struct AssignmentRequest {
     // `None` (both a JSON `null` and an omitted key) means unassign.
     #[serde(default)]
-    assigned_user_id: Option<Uuid>,
+    assigned_user_id: Option<UserId>,
 }
 
 async fn set_assignment(

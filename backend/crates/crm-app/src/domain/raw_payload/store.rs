@@ -8,7 +8,7 @@ use uuid::Uuid;
 use crate::domain::envelope::Origin;
 use crate::domain::inquiry::parse::Source;
 use crate::domain::raw_payload::{PayloadFormat, Resolution};
-use crate::ids::OrganizationId;
+use crate::ids::{OrganizationId, UserId};
 
 /// A `raw_payload.resolution`/`payload_format` value read back that
 /// doesn't decode into its enum — the `CHECK` constraint on `resolution`
@@ -46,7 +46,18 @@ pub struct ResolvedLookup {
     pub person_id: Uuid,
     pub person_created: bool,
     pub strategy: String,
-    pub assigned_user_id: Option<Uuid>,
+    pub assigned_user_id: Option<UserId>,
+}
+
+/// The direct `query_as!` decode target for `resolved_outcome_for_inquiry`
+/// — bare `Uuid` per the sqlx strategy; `ResolvedLookup` itself carries the
+/// typed id.
+struct ResolvedLookupRow {
+    inquiry_id: Uuid,
+    person_id: Uuid,
+    person_created: bool,
+    strategy: String,
+    assigned_user_id: Option<Uuid>,
 }
 
 /// Phase A (docs/specs/SLICE_002.md §3): stores the encrypted payload
@@ -184,8 +195,8 @@ pub async fn resolved_outcome_for_inquiry(
     organization_id: OrganizationId,
     inquiry_id: Uuid,
 ) -> Result<ResolvedLookup, sqlx::Error> {
-    sqlx::query_as!(
-        ResolvedLookup,
+    let row = sqlx::query_as!(
+        ResolvedLookupRow,
         r#"SELECT i.id as inquiry_id, i.person_id, ir.person_created, rd.strategy,
                   p.assigned_user_id
            FROM inquiry i
@@ -197,7 +208,14 @@ pub async fn resolved_outcome_for_inquiry(
         organization_id.0,
     )
     .fetch_one(tx)
-    .await
+    .await?;
+    Ok(ResolvedLookup {
+        inquiry_id: row.inquiry_id,
+        person_id: row.person_id,
+        person_created: row.person_created,
+        strategy: row.strategy,
+        assigned_user_id: row.assigned_user_id.map(UserId::new),
+    })
 }
 
 /// Unresolved-queue metadata (`GET /api/intake/unresolved`; spec §5):

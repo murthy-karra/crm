@@ -9,12 +9,13 @@ use crate::domain::envelope::{CommandContext, FactEnvelope};
 use crate::domain::facts::{self, AssignmentChangedFact};
 use crate::domain::person::model::PersonSummary;
 use crate::domain::person::queries as person_queries;
+use crate::ids::UserId;
 use crate::realtime::{PersonChange, Publication, Publisher, RealtimeEvent};
 
 pub struct AssignPerson {
     pub person_id: Uuid,
     /// `None` means unassign.
-    pub assigned_user_id: Option<Uuid>,
+    pub assigned_user_id: Option<UserId>,
 }
 
 /// One transaction; loads the Person through the scope (else

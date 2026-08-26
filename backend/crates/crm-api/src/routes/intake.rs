@@ -19,6 +19,7 @@ use crate::domain::intake::workbench::{self, DiscardOutcome, UnresolvedContent};
 use crate::domain::intake::IntakeActor;
 use crate::domain::raw_payload::store;
 use crate::error::ApiError;
+use crate::ids::UserId;
 use crate::state::AppState;
 
 const MAX_INTAKE_BODY_BYTES: usize = 256 * 1024;
@@ -63,7 +64,7 @@ struct ReceiveInquiryRequest {
     source: String,
     payload: serde_json::Value,
     #[serde(default)]
-    assign_to_user_id: Option<Uuid>,
+    assign_to_user_id: Option<UserId>,
 }
 
 /// `POST /api/inquiries` — the simulated dev ingress and the manual-entry

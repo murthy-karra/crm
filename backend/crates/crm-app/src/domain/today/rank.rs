@@ -102,7 +102,7 @@ mod tests {
                 name: "Lead".to_string(),
             },
             assigned_user: Some(UserRef {
-                id: Uuid::new_v4(),
+                id: crate::ids::UserId::new(Uuid::new_v4()),
                 display_name: "Alice".to_string(),
             }),
             primary_email: Some("ada@example.com".to_string()),

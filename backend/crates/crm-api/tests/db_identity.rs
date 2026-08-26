@@ -25,6 +25,7 @@ use common::{
     create_user, extract_cookie, login, login_cookie, post_json_with_cookie,
 };
 use crm_api::domain::admin::queries as admin_queries;
+use crm_api::ids::{OrganizationId, UserId};
 
 async fn create_user_without_password(pool: &PgPool, email: &str, display_name: &str) -> Uuid {
     let app_pool = connect_as_app(pool).await;
@@ -32,6 +33,7 @@ async fn create_user_without_password(pool: &PgPool, email: &str, display_name: 
     admin_queries::insert_app_user(&mut conn, email, display_name)
         .await
         .unwrap()
+        .as_uuid()
 }
 
 async fn login_with_cookie(router: &Router, email: &str, password: &str, cookie: &str) -> Response {
@@ -185,8 +187,8 @@ async fn expired_session_returns_401(migrator_pool: PgPool) {
     let (token, _expires_at) = crm_api::auth::session::create(
         &app_pool,
         &config.session_secret,
-        user,
-        Some(org),
+        UserId::new(user),
+        Some(OrganizationId::new(org)),
         Duration::from_secs(3600),
     )
     .await

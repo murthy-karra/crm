@@ -10,14 +10,23 @@ use crate::domain::contact::{normalize_email, normalize_phone};
 use crate::domain::inquiry::parse::ParsedLead;
 use crate::domain::person::model::{compute_display_name, PersonSummary, StageRef, UserRef};
 use crate::domain::person::visibility::PersonVisibilityScope;
-use crate::ids::OrganizationId;
+use crate::ids::{OrganizationId, UserId};
 
 // --- Command-side helpers ------------------------------------------------
 
 pub struct LockedPerson {
     pub id: Uuid,
     pub stage_id: Uuid,
-    pub assigned_user_id: Option<Uuid>,
+    pub assigned_user_id: Option<UserId>,
+}
+
+/// The direct `query_as!` decode target for `lock_person` — bare `Uuid`
+/// per the sqlx strategy (private row-boundary struct; `LockedPerson`
+/// itself carries the typed id).
+struct LockedPersonRow {
+    id: Uuid,
+    stage_id: Uuid,
+    assigned_user_id: Option<Uuid>,
 }
 
 /// `SELECT … FOR UPDATE` scoped to the Organization — used both by intake's
@@ -42,15 +51,20 @@ pub async fn lock_person(
     person_id: Uuid,
     organization_id: OrganizationId,
 ) -> Result<Option<LockedPerson>, sqlx::Error> {
-    sqlx::query_as!(
-        LockedPerson,
+    let row = sqlx::query_as!(
+        LockedPersonRow,
         r#"SELECT id, stage_id, assigned_user_id
            FROM person WHERE id = $1 AND organization_id = $2 FOR UPDATE"#,
         person_id,
         organization_id.0,
     )
     .fetch_optional(conn)
-    .await
+    .await?;
+    Ok(row.map(|r| LockedPerson {
+        id: r.id,
+        stage_id: r.stage_id,
+        assigned_user_id: r.assigned_user_id.map(UserId::new),
+    }))
 }
 
 pub async fn insert_person(
@@ -59,7 +73,7 @@ pub async fn insert_person(
     first_name: Option<&str>,
     last_name: Option<&str>,
     stage_id: Uuid,
-    assigned_user_id: Option<Uuid>,
+    assigned_user_id: Option<UserId>,
 ) -> Result<Uuid, sqlx::Error> {
     let row = sqlx::query!(
         r#"INSERT INTO person (organization_id, first_name, last_name, stage_id, assigned_user_id)
@@ -69,7 +83,7 @@ pub async fn insert_person(
         first_name,
         last_name,
         stage_id,
-        assigned_user_id,
+        assigned_user_id.map(|id| id.0),
     )
     .fetch_one(conn)
     .await?;
@@ -80,14 +94,14 @@ pub async fn update_assignment(
     conn: &mut PgConnection,
     person_id: Uuid,
     organization_id: OrganizationId,
-    assigned_user_id: Option<Uuid>,
+    assigned_user_id: Option<UserId>,
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
         r#"UPDATE person SET assigned_user_id = $3, updated_at = now()
            WHERE id = $1 AND organization_id = $2"#,
         person_id,
         organization_id.0,
-        assigned_user_id,
+        assigned_user_id.map(|id| id.0),
     )
     .execute(conn)
     .await?;
@@ -118,13 +132,13 @@ pub async fn update_stage(
 pub async fn is_organization_member(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
-    user_id: Uuid,
+    user_id: UserId,
 ) -> Result<bool, sqlx::Error> {
     let row = sqlx::query!(
         r#"SELECT 1 as "present!" FROM organization_membership
            WHERE organization_id = $1 AND user_id = $2"#,
         organization_id.0,
-        user_id,
+        user_id.0,
     )
     .fetch_optional(conn)
     .await?;
@@ -198,7 +212,10 @@ impl From<PersonSummaryRow> for PersonSummary {
             row.primary_phone.as_deref(),
         );
         let assigned_user = match (row.assigned_user_id, row.assigned_user_display_name) {
-            (Some(id), Some(display_name)) => Some(UserRef { id, display_name }),
+            (Some(id), Some(display_name)) => Some(UserRef {
+                id: UserId::new(id),
+                display_name,
+            }),
             _ => None,
         };
         PersonSummary {
@@ -425,7 +442,10 @@ pub struct HistoryEntry {
 
 fn actor_ref(user_id: Option<Uuid>, display_name: Option<String>) -> Option<UserRef> {
     match (user_id, display_name) {
-        (Some(id), Some(display_name)) => Some(UserRef { id, display_name }),
+        (Some(id), Some(display_name)) => Some(UserRef {
+            id: UserId::new(id),
+            display_name,
+        }),
         _ => None,
     }
 }

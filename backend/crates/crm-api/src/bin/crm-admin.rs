@@ -22,7 +22,7 @@ use crm_api::domain::commands::{self, ReceiveInquiry, ReceiveInquiryOutcome};
 use crm_api::domain::envelope::Origin;
 use crm_api::domain::inquiry::parse::Source;
 use crm_api::domain::intake::IntakeActor;
-use crm_api::ids::OrganizationId;
+use crm_api::ids::{OrganizationId, UserId};
 use crm_api::realtime::Publisher;
 
 const DEFAULT_INVITATION_TTL: Duration = Duration::from_secs(168 * 3600);
@@ -169,7 +169,7 @@ async fn resolve_actor(
 
     Ok((
         AdminActor {
-            actor_user_id: user_id,
+            actor_user_id: UserId::new(user_id),
             origin: Origin::Cli,
         },
         display_name,
@@ -221,11 +221,9 @@ async fn run_create_organization(mut args: Vec<String>) -> Result<(), Box<dyn st
     // the local CLI (docs/specs/SLICE_007a.md §5).
     let intake_mail = crm_api::config::intake_mail_config(&|key| std::env::var(key).ok())?;
     let mut conn = pool.acquire().await?;
-    if let Some((slug, token)) = crm_api::domain::admin::queries::organization_intake_address(
-        &mut conn,
-        OrganizationId::new(organization.id),
-    )
-    .await?
+    if let Some((slug, token)) =
+        crm_api::domain::admin::queries::organization_intake_address(&mut conn, organization.id)
+            .await?
     {
         let address = crm_api::domain::intake::IntakeAddress { slug, token }.render(&intake_mail);
         println!("intake address: {address}");

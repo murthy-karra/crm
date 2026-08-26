@@ -27,7 +27,7 @@ use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use uuid::Uuid;
 
 use crm_api::config::Config;
-use crm_api::ids::OrganizationId;
+use crm_api::ids::{OrganizationId, UserId};
 use crm_api::realtime::{token, CentrifugoTransport, Publisher};
 use crm_api::state::AppState;
 
@@ -187,7 +187,7 @@ async fn centrifugo_delivers_scoped_events_denies_cross_org_and_never_replays(
     // stateless, so B needs no DB row at all).
     let token_a = token::mint(
         &config.realtime_token_secret,
-        alice_id,
+        UserId::new(alice_id),
         OrganizationId::new(org_a_id),
         Utc::now(),
         Duration::from_secs(600),
@@ -195,7 +195,7 @@ async fn centrifugo_delivers_scoped_events_denies_cross_org_and_never_replays(
     let org_b_id = Uuid::new_v4();
     let token_b = token::mint(
         &config.realtime_token_secret,
-        Uuid::new_v4(),
+        UserId::new(Uuid::new_v4()),
         OrganizationId::new(org_b_id),
         Utc::now(),
         Duration::from_secs(600),
@@ -282,7 +282,7 @@ async fn centrifugo_delivers_scoped_events_denies_cross_org_and_never_replays(
     // refused at connect.
     let expired_token = token::mint(
         &config.realtime_token_secret,
-        alice_id,
+        UserId::new(alice_id),
         OrganizationId::new(org_a_id),
         Utc::now() - chrono::Duration::hours(1),
         Duration::from_secs(60),
@@ -299,7 +299,7 @@ async fn centrifugo_delivers_scoped_events_denies_cross_org_and_never_replays(
     .unwrap();
     let wrong_secret_token = token::mint(
         &wrong_secret_config.realtime_token_secret,
-        alice_id,
+        UserId::new(alice_id),
         OrganizationId::new(org_a_id),
         Utc::now(),
         Duration::from_secs(600),
@@ -324,7 +324,7 @@ async fn centrifugo_delivers_scoped_events_denies_cross_org_and_never_replays(
 
     let fresh_token_a = token::mint(
         &config.realtime_token_secret,
-        alice_id,
+        UserId::new(alice_id),
         OrganizationId::new(org_a_id),
         Utc::now(),
         Duration::from_secs(600),

@@ -11,7 +11,7 @@ use crate::domain::admin::queries::{self, InvitationStatus};
 use crate::domain::admin::{validation, MembershipStatus, Role};
 use crate::domain::envelope::{CommandContext, FactEnvelope, Origin};
 use crate::domain::facts::{self, InvitationResolvedFact, MembershipChangedFact};
-use crate::ids::OrganizationId;
+use crate::ids::{OrganizationId, UserId};
 
 pub struct AcceptInvitation {
     pub token: String,
@@ -22,7 +22,7 @@ pub struct AcceptInvitation {
 }
 
 pub struct AcceptInvitationOutcome {
-    pub user_id: Uuid,
+    pub user_id: UserId,
     pub email: String,
     pub display_name: String,
     pub organization_id: OrganizationId,

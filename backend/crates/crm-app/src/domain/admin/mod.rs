@@ -14,9 +14,9 @@ pub use commands::{
 };
 
 use serde::Serialize;
-use uuid::Uuid;
 
 use crate::domain::envelope::Origin;
+use crate::ids::UserId;
 
 /// The actor and origin behind an admin command — deliberately lighter
 /// than `domain::envelope::CommandContext` (docs/specs/SLICE_002.md §4):
@@ -27,7 +27,7 @@ use crate::domain::envelope::Origin;
 /// does (docs/specs/SLICE_004.md §4).
 #[derive(Debug, Clone, Copy)]
 pub struct AdminActor {
-    pub actor_user_id: Uuid,
+    pub actor_user_id: UserId,
     pub origin: Origin,
 }
 

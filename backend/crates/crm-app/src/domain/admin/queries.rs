@@ -10,7 +10,7 @@ use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
 use super::{MembershipStatus, Role};
-use crate::ids::OrganizationId;
+use crate::ids::{OrganizationId, UserId};
 
 fn decode_role(s: &str) -> Result<Role, sqlx::Error> {
     Role::from_db_str(s).ok_or_else(|| sqlx::Error::Decode(format!("invalid role: {s}").into()))
@@ -25,7 +25,7 @@ fn decode_status(s: &str) -> Result<MembershipStatus, sqlx::Error> {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct OrganizationRef {
-    pub id: Uuid,
+    pub id: OrganizationId,
     pub name: String,
 }
 
@@ -65,7 +65,7 @@ impl OrganizationState {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct PlatformOrganizationItem {
-    pub id: Uuid,
+    pub id: OrganizationId,
     pub name: String,
     pub status: String,
     pub created_at: DateTime<Utc>,
@@ -113,7 +113,7 @@ pub async fn list_for_platform(
         .map(|r| {
             let state = OrganizationState::derive(r.admin_count, r.pending_admin_invitations);
             PlatformOrganizationItem {
-                id: r.id,
+                id: OrganizationId::new(r.id),
                 name: r.name,
                 status: r.status,
                 created_at: r.created_at,
@@ -163,7 +163,7 @@ pub async fn platform_organization_by_id(
     Ok(row.map(|r| {
         let state = OrganizationState::derive(r.admin_count, r.pending_admin_invitations);
         PlatformOrganizationItem {
-            id: r.id,
+            id: OrganizationId::new(r.id),
             name: r.name,
             status: r.status,
             created_at: r.created_at,
@@ -195,7 +195,7 @@ pub async fn organization_exists(
 
 #[derive(Debug, Clone, Serialize)]
 pub struct MemberView {
-    pub user_id: Uuid,
+    pub user_id: UserId,
     pub display_name: String,
     pub email: String,
     pub role: Role,
@@ -217,7 +217,7 @@ struct MemberRow {
 impl MemberRow {
     fn into_view(self) -> Result<MemberView, sqlx::Error> {
         Ok(MemberView {
-            user_id: self.user_id,
+            user_id: UserId::new(self.user_id),
             display_name: self.display_name,
             email: self.email,
             role: decode_role(&self.role)?,
@@ -259,7 +259,7 @@ pub async fn members(
 pub async fn member_view(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
-    user_id: Uuid,
+    user_id: UserId,
 ) -> Result<Option<MemberView>, sqlx::Error> {
     let row = sqlx::query_as!(
         MemberRow,
@@ -271,7 +271,7 @@ pub async fn member_view(
            JOIN app_user u ON u.id = m.user_id
            WHERE m.organization_id = $1 AND m.user_id = $2"#,
         organization_id.0,
-        user_id,
+        user_id.0,
     )
     .fetch_optional(conn)
     .await?;
@@ -289,13 +289,13 @@ pub struct MemberRoleStatus {
 pub async fn member_role_status(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
-    user_id: Uuid,
+    user_id: UserId,
 ) -> Result<Option<MemberRoleStatus>, sqlx::Error> {
     let row = sqlx::query!(
         r#"SELECT role, status FROM organization_membership
            WHERE organization_id = $1 AND user_id = $2"#,
         organization_id.0,
-        user_id,
+        user_id.0,
     )
     .fetch_optional(&mut *conn)
     .await?;
@@ -316,13 +316,13 @@ pub async fn member_role_status(
 pub async fn count_active_admins_excluding(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
-    excluding_user_id: Uuid,
+    excluding_user_id: UserId,
 ) -> Result<i64, sqlx::Error> {
     let row = sqlx::query!(
         r#"SELECT count(*) as "count!" FROM organization_membership
            WHERE organization_id = $1 AND role = 'admin' AND status = 'active' AND user_id != $2"#,
         organization_id.0,
-        excluding_user_id,
+        excluding_user_id.0,
     )
     .fetch_one(conn)
     .await?;
@@ -332,7 +332,7 @@ pub async fn count_active_admins_excluding(
 pub async fn update_membership_role(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
-    user_id: Uuid,
+    user_id: UserId,
     role: Role,
 ) -> Result<(), sqlx::Error> {
     let role_str = role.as_str();
@@ -340,7 +340,7 @@ pub async fn update_membership_role(
         r#"UPDATE organization_membership SET role = $3, updated_at = now()
            WHERE organization_id = $1 AND user_id = $2"#,
         organization_id.0,
-        user_id,
+        user_id.0,
         role_str,
     )
     .execute(conn)
@@ -351,7 +351,7 @@ pub async fn update_membership_role(
 pub async fn update_membership_status(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
-    user_id: Uuid,
+    user_id: UserId,
     status: MembershipStatus,
 ) -> Result<(), sqlx::Error> {
     let status_str = status.as_str();
@@ -359,7 +359,7 @@ pub async fn update_membership_status(
         r#"UPDATE organization_membership SET status = $3, updated_at = now()
            WHERE organization_id = $1 AND user_id = $2"#,
         organization_id.0,
-        user_id,
+        user_id.0,
         status_str,
     )
     .execute(conn)
@@ -391,7 +391,7 @@ pub async fn acquire_admin_lock(
 pub async fn insert_membership(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
-    user_id: Uuid,
+    user_id: UserId,
     role: Role,
     status: MembershipStatus,
 ) -> Result<(), sqlx::Error> {
@@ -401,7 +401,7 @@ pub async fn insert_membership(
         r#"INSERT INTO organization_membership (organization_id, user_id, role, status)
            VALUES ($1, $2, $3, $4)"#,
         organization_id.0,
-        user_id,
+        user_id.0,
         role_str,
         status_str,
     )
@@ -448,12 +448,12 @@ pub async fn app_user_id_by_email(
 pub async fn revoke_sessions_for_member(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
-    user_id: Uuid,
+    user_id: UserId,
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
         r#"UPDATE user_session SET revoked_at = now()
            WHERE user_id = $1 AND active_organization_id = $2 AND revoked_at IS NULL"#,
-        user_id,
+        user_id.0,
         organization_id.0,
     )
     .execute(conn)
@@ -492,7 +492,7 @@ fn derive_invitation_status(
 
 #[derive(Debug, Clone, Serialize)]
 pub struct InvitedByRef {
-    pub id: Uuid,
+    pub id: UserId,
     pub display_name: String,
 }
 
@@ -557,7 +557,7 @@ pub async fn list_invitations(
                 expires_at: r.expires_at,
                 created_at: r.created_at,
                 invited_by: InvitedByRef {
-                    id: r.invited_by_id,
+                    id: UserId::new(r.invited_by_id),
                     display_name: r.invited_by_display_name,
                 },
             })
@@ -718,7 +718,7 @@ pub struct NewInvitation<'a> {
     pub email: &'a str,
     pub role: Role,
     pub token_hash: &'a str,
-    pub invited_by_user_id: Uuid,
+    pub invited_by_user_id: UserId,
     pub expires_at: DateTime<Utc>,
 }
 
@@ -736,7 +736,7 @@ pub async fn insert_invitation(
         new.email,
         role_str,
         new.token_hash,
-        new.invited_by_user_id,
+        new.invited_by_user_id.0,
         new.expires_at,
     )
     .fetch_one(conn)
@@ -760,12 +760,12 @@ pub async fn revoke_invitation_row(
 pub async fn mark_invitation_accepted(
     conn: &mut PgConnection,
     invitation_id: Uuid,
-    accepted_user_id: Uuid,
+    accepted_user_id: UserId,
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
         r#"UPDATE invitation SET accepted_at = now(), accepted_user_id = $2 WHERE id = $1"#,
         invitation_id,
-        accepted_user_id,
+        accepted_user_id.0,
     )
     .execute(conn)
     .await?;
@@ -831,14 +831,16 @@ pub async fn organization_intake_address(
 pub async fn intake_default_assignee_user_id(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
-) -> Result<Option<Uuid>, sqlx::Error> {
+) -> Result<Option<UserId>, sqlx::Error> {
     let row = sqlx::query!(
         r#"SELECT intake_default_assignee_user_id FROM organization WHERE id = $1"#,
         organization_id.0,
     )
     .fetch_optional(conn)
     .await?;
-    Ok(row.and_then(|r| r.intake_default_assignee_user_id))
+    Ok(row
+        .and_then(|r| r.intake_default_assignee_user_id)
+        .map(UserId::new))
 }
 
 /// `PUT /api/organization/intake-settings` (§5): sets or clears the
@@ -847,13 +849,13 @@ pub async fn intake_default_assignee_user_id(
 pub async fn update_intake_default_assignee(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
-    user_id: Option<Uuid>,
+    user_id: Option<UserId>,
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
         r#"UPDATE organization SET intake_default_assignee_user_id = $2, updated_at = now()
            WHERE id = $1"#,
         organization_id.0,
-        user_id,
+        user_id.map(|id| id.0),
     )
     .execute(conn)
     .await?;
@@ -867,13 +869,13 @@ pub async fn update_intake_default_assignee(
 pub async fn is_active_member(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
-    user_id: Uuid,
+    user_id: UserId,
 ) -> Result<bool, sqlx::Error> {
     let row = sqlx::query!(
         r#"SELECT 1 as "present!" FROM organization_membership
            WHERE organization_id = $1 AND user_id = $2 AND status = 'active'"#,
         organization_id.0,
-        user_id,
+        user_id.0,
     )
     .fetch_optional(conn)
     .await?;
@@ -890,7 +892,7 @@ pub async fn is_active_member(
 pub async fn active_intake_default_assignee(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
-) -> Result<Option<Uuid>, sqlx::Error> {
+) -> Result<Option<UserId>, sqlx::Error> {
     let row = sqlx::query!(
         r#"SELECT o.intake_default_assignee_user_id as "user_id!"
            FROM organization o
@@ -903,14 +905,14 @@ pub async fn active_intake_default_assignee(
     )
     .fetch_optional(conn)
     .await?;
-    Ok(row.map(|r| r.user_id))
+    Ok(row.map(|r| UserId::new(r.user_id)))
 }
 
 pub async fn insert_app_user(
     conn: &mut PgConnection,
     email: &str,
     display_name: &str,
-) -> Result<Uuid, sqlx::Error> {
+) -> Result<UserId, sqlx::Error> {
     let row = sqlx::query!(
         r#"INSERT INTO app_user (email, display_name) VALUES ($1, $2) RETURNING id"#,
         email,
@@ -918,17 +920,17 @@ pub async fn insert_app_user(
     )
     .fetch_one(conn)
     .await?;
-    Ok(row.id)
+    Ok(UserId::new(row.id))
 }
 
 pub async fn insert_local_credential(
     conn: &mut PgConnection,
-    user_id: Uuid,
+    user_id: UserId,
     password_hash: &str,
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
         r#"INSERT INTO local_credential (user_id, password_hash) VALUES ($1, $2)"#,
-        user_id,
+        user_id.0,
         password_hash,
     )
     .execute(conn)
@@ -962,7 +964,9 @@ pub async fn find_or_create_app_user(
         return Ok(id);
     }
     let mut conn = pool.acquire().await?;
-    insert_app_user(&mut conn, email, display_name).await
+    insert_app_user(&mut conn, email, display_name)
+        .await
+        .map(UserId::as_uuid)
 }
 
 pub async fn upsert_local_credential(

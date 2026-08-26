@@ -5,6 +5,8 @@ use chrono::{DateTime, Utc};
 use serde::Serialize;
 use uuid::Uuid;
 
+use crate::ids::UserId;
+
 #[derive(Debug, Clone, Serialize)]
 pub struct StageRef {
     pub id: Uuid,
@@ -13,7 +15,7 @@ pub struct StageRef {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct UserRef {
-    pub id: Uuid,
+    pub id: UserId,
     pub display_name: String,
 }
 

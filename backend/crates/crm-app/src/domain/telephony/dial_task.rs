@@ -19,7 +19,7 @@ use crate::domain::telephony::queries;
 use crate::domain::telephony::settle::{settle, SettleOutcome};
 use crate::domain::telephony::transitions::Signal;
 use crate::domain::telephony::CallStatus;
-use crate::ids::OrganizationId;
+use crate::ids::{OrganizationId, UserId};
 use crate::realtime::Publisher;
 use crate::telephony::livekit::ADMIN_CALL_TIMEOUT;
 use crate::telephony::{
@@ -36,7 +36,7 @@ pub struct DialTask {
     pub call_id: Uuid,
     pub person_id: Uuid,
     pub contact_method_id: Uuid,
-    pub caller_user_id: Uuid,
+    pub caller_user_id: UserId,
 }
 
 /// How the task ended — the `outcome` span field and a test observable.
@@ -111,7 +111,7 @@ impl DialTask {
     async fn run_inner(&self, room: &str) -> DialTaskOutcome {
         let limits = &self.telephony.limits;
         let provider = &self.telephony.provider;
-        let agent = Telephony::agent_identity(self.caller_user_id);
+        let agent = Telephony::agent_identity(self.caller_user_id.as_uuid());
 
         // 1. Wait ≤ agent_join_timeout for the browser to be in the room.
         let deadline = Instant::now() + limits.agent_join_timeout;

@@ -8,13 +8,12 @@
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
 use axum_extra::extract::cookie::CookieJar;
-use uuid::Uuid;
 
 use crate::auth::session;
 use crate::auth::AuthContext;
 use crate::domain::admin::Role;
 use crate::error::ApiError;
-use crate::ids::OrganizationId;
+use crate::ids::UserId;
 use crate::state::AppState;
 
 /// Resolves the caller's session identity from the cookie, rejecting with
@@ -57,10 +56,10 @@ impl FromRequestParts<AppState> for AuthContext {
             actor_user_id: identity.user_id,
             actor_email: identity.email,
             actor_display_name: identity.display_name,
-            // The org id enters the trusted system here — the one
-            // construction site for `OrganizationId` on the session-read
-            // path (hardening chunk N1).
-            active_organization_id: OrganizationId::new(organization.id),
+            // The org id enters the trusted system in `session::verify`
+            // (hardening chunk N2 closed the session-layer carry-over from
+            // N1); by the time it reaches here it is already typed.
+            active_organization_id: organization.id,
             active_organization_name: organization.name,
             role: organization.role,
         })
@@ -114,7 +113,7 @@ impl FromRequestParts<AppState> for SessionContext {
 /// (§7) — never from this context.
 #[derive(Debug, Clone)]
 pub struct PlatformAuthContext {
-    pub actor_user_id: Uuid,
+    pub actor_user_id: UserId,
     pub actor_email: String,
     pub actor_display_name: String,
 }

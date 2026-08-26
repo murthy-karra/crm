@@ -25,6 +25,7 @@ use crate::domain::envelope::CommandContext;
 use crate::domain::envelope::Origin;
 use crate::domain::intake::IntakeAddress;
 use crate::error::ApiError;
+use crate::ids::UserId;
 use crate::state::AppState;
 
 pub fn router() -> Router<AppState> {
@@ -117,7 +118,7 @@ async fn update_role(
         actor,
         ChangeMemberRole {
             organization_id: ctx.auth.active_organization_id,
-            user_id,
+            user_id: UserId::new(user_id),
             role: req.role,
         },
     )
@@ -150,7 +151,7 @@ async fn update_status(
         actor,
         SetMemberStatus {
             organization_id: ctx.auth.active_organization_id,
-            user_id,
+            user_id: UserId::new(user_id),
             status: req.status,
         },
     )
@@ -367,7 +368,7 @@ async fn update_intake_settings(
         .as_object()
         .and_then(|obj| obj.get("intake_default_assignee_user_id"))
         .ok_or(ApiError::MalformedRequest)?;
-    let assignee_user_id: Option<Uuid> = match raw {
+    let assignee_user_id: Option<UserId> = match raw {
         serde_json::Value::Null => None,
         other => {
             Some(serde_json::from_value(other.clone()).map_err(|_| ApiError::MalformedRequest)?)

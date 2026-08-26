@@ -15,6 +15,7 @@ use crm_api::domain::admin::commands::{
 };
 use crm_api::domain::admin::{AdminActor, MembershipStatus, Role};
 use crm_api::domain::envelope::Origin;
+use crm_api::ids::UserId;
 
 const PW: &str = "pw";
 /// `grant_platform_admin` enforces the password policy; org fixtures do not.
@@ -57,7 +58,7 @@ async fn names_that_slugify_identically_get_a_suffix_and_never_a_name_clash(migr
     let err = create_organization(
         &app_pool,
         AdminActor {
-            actor_user_id: actor_id,
+            actor_user_id: UserId::new(actor_id),
             origin: Origin::Cli,
         },
         CreateOrganization {

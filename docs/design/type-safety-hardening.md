@@ -73,6 +73,15 @@ enum gets a round-trip pin.
 Dependencies: S1 and V1 are free-standing; N2..N4 build on N1's
 module/pattern; A1 after N2 (holds `UserId`); S2 after S1+N1.
 
+Recorded residuals (LATER, from the N2 review — a shared newtype
+cannot distinguish SAME-role parameters): `determine_routing`'s two
+adjacent `Option<UserId>` params remain transposable (smallest fix: a
+small params struct, fold into A1 or N3); `routes/platform.rs`'s
+`TwoUuidPathIds` positional org/user path pair (typed path extractor,
+later); the CLI/migrator bootstrap cluster stays bare-Uuid by design
+(no adjacency; type it if it ever grows one, closing N2's
+`find_or_create_app_user` unwrap).
+
 **Recommended order: as numbered. Start with S1** — smallest,
 zero-wire-risk, kills a real compiling transposition immediately, and
 establishes the decode-at-row-boundary pattern every id chunk reuses.

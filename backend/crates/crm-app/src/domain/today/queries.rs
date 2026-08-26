@@ -12,6 +12,7 @@ use crate::domain::commands::{ContactAttemptRef, ContactChannel, ContactOutcome}
 use crate::domain::person::model::{compute_display_name, PersonSummary, StageRef, UserRef};
 use crate::domain::person::visibility::PersonVisibilityScope;
 use crate::domain::today::model::{InquiryRef, OutcomeNeededCall, TodayCandidate};
+use crate::ids::UserId;
 
 struct TodayCandidateRow {
     id: Uuid,
@@ -65,7 +66,10 @@ impl TryFrom<TodayCandidateRow> for TodayCandidate {
             row.primary_phone.as_deref(),
         );
         let assigned_user = match (row.assigned_user_id, row.assigned_user_display_name) {
-            (Some(id), Some(display_name)) => Some(UserRef { id, display_name }),
+            (Some(id), Some(display_name)) => Some(UserRef {
+                id: UserId::new(id),
+                display_name,
+            }),
             _ => None,
         };
         let latest_inquiry_received_at =
@@ -190,7 +194,7 @@ impl TryFrom<TodayCandidateRow> for TodayCandidate {
 pub async fn candidates(
     conn: &mut PgConnection,
     scope: &PersonVisibilityScope,
-    viewer: Uuid,
+    viewer: UserId,
     now: DateTime<Utc>,
 ) -> Result<(Vec<TodayCandidate>, bool), sqlx::Error> {
     let organization_id = scope.organization_id();
@@ -278,7 +282,7 @@ pub async fn candidates(
                     p.id ASC
            LIMIT 201"#,
         organization_id.0,
-        viewer,
+        viewer.0,
         now,
     )
     .fetch_all(conn)

@@ -13,10 +13,10 @@ use std::time::Duration;
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
-use uuid::Uuid;
 
 use crate::config::Config;
 use crate::domain::envelope::{ActorKind, Origin};
+use crate::ids::UserId;
 use crm_operator::{
     GroqConfig, GroqProvider, InferenceProvider, Limits, OperatorContext, OperatorService,
     ScreenRoute, TurnOutput,
@@ -28,7 +28,7 @@ pub use backend::SqlxToolBackend;
 pub struct OperatorRuntime {
     pub service: OperatorService,
     semaphore: Arc<Semaphore>,
-    in_flight: Mutex<HashSet<Uuid>>,
+    in_flight: Mutex<HashSet<UserId>>,
     /// `start_call` proposal lifetime (docs/specs/SLICE_006b.md §2),
     /// threaded to `SqlxToolBackend` at turn time.
     proposal_ttl: Duration,
@@ -44,7 +44,7 @@ pub struct TurnSlot {
 
 struct InFlightRelease {
     runtime: Arc<OperatorRuntime>,
-    user_id: Uuid,
+    user_id: UserId,
 }
 
 impl Drop for InFlightRelease {
@@ -59,7 +59,7 @@ impl Drop for InFlightRelease {
 
 impl TurnSlot {
     /// Kept so the slot is observably alive for the task's whole lifetime.
-    pub fn user_id(&self) -> Uuid {
+    pub fn user_id(&self) -> UserId {
         self.in_flight.user_id
     }
 }
@@ -136,7 +136,7 @@ impl OperatorRuntime {
 
     /// Acquires both guards or fails fast with `Busy` — never waits
     /// (docs/specs/SLICE_005.md §7, §9).
-    pub fn try_acquire(self: &Arc<Self>, user_id: Uuid) -> Result<TurnSlot, SlotError> {
+    pub fn try_acquire(self: &Arc<Self>, user_id: UserId) -> Result<TurnSlot, SlotError> {
         let permit = self
             .semaphore
             .clone()
@@ -162,7 +162,7 @@ impl OperatorRuntime {
         self.semaphore.available_permits()
     }
 
-    pub fn is_in_flight(&self, user_id: Uuid) -> bool {
+    pub fn is_in_flight(&self, user_id: UserId) -> bool {
         self.in_flight
             .lock()
             .unwrap_or_else(|e| e.into_inner())
@@ -255,6 +255,7 @@ pub async fn record_turn(pool: &PgPool, record: TurnRecord<'_>) -> Result<(), sq
 mod tests {
     use super::*;
     use crm_operator::ScriptedProvider;
+    use uuid::Uuid;
 
     fn runtime(max_concurrent: usize) -> Arc<OperatorRuntime> {
         Arc::new(OperatorRuntime::with_provider(
@@ -267,7 +268,7 @@ mod tests {
     #[test]
     fn same_user_cannot_hold_two_slots_and_release_is_raii() {
         let rt = runtime(4);
-        let alice = Uuid::new_v4();
+        let alice = UserId::new(Uuid::new_v4());
         let slot = rt.try_acquire(alice).unwrap();
         assert_eq!(slot.user_id(), alice);
         assert_eq!(rt.try_acquire(alice).unwrap_err(), SlotError::Busy);
@@ -282,8 +283,8 @@ mod tests {
     #[test]
     fn semaphore_full_is_busy_and_does_not_mark_the_user() {
         let rt = runtime(1);
-        let alice = Uuid::new_v4();
-        let bob = Uuid::new_v4();
+        let alice = UserId::new(Uuid::new_v4());
+        let bob = UserId::new(Uuid::new_v4());
         let _slot = rt.try_acquire(alice).unwrap();
         assert_eq!(rt.try_acquire(bob).unwrap_err(), SlotError::Busy);
         assert!(!rt.is_in_flight(bob));
@@ -292,7 +293,7 @@ mod tests {
     #[test]
     fn a_rejected_same_user_attempt_does_not_consume_a_permit() {
         let rt = runtime(2);
-        let alice = Uuid::new_v4();
+        let alice = UserId::new(Uuid::new_v4());
         let _slot = rt.try_acquire(alice).unwrap();
         assert_eq!(rt.try_acquire(alice).unwrap_err(), SlotError::Busy);
         assert_eq!(rt.available_permits(), 1);

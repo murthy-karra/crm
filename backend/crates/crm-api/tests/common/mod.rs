@@ -25,7 +25,7 @@ use crm_api::domain::admin::{AdminActor, MembershipStatus, Role};
 use crm_api::domain::envelope::Origin;
 use crm_api::domain::raw_payload::crypto;
 use crm_api::domain::stage;
-use crm_api::ids::OrganizationId;
+use crm_api::ids::{OrganizationId, UserId};
 use crm_api::realtime::Publisher;
 use crm_api::state::AppState;
 
@@ -165,7 +165,7 @@ pub async fn create_org(pool: &PgPool, name: &str) -> Uuid {
     let actor_id = fixture_platform_admin(pool).await;
     let app_pool = connect_as_app(pool).await;
     let actor = AdminActor {
-        actor_user_id: actor_id,
+        actor_user_id: UserId::new(actor_id),
         origin: Origin::Cli,
     };
     let organization = create_organization(
@@ -177,7 +177,7 @@ pub async fn create_org(pool: &PgPool, name: &str) -> Uuid {
     )
     .await
     .expect("fixture organization creation must succeed");
-    organization.id
+    organization.id.as_uuid()
 }
 
 pub async fn create_user(
@@ -195,7 +195,7 @@ pub async fn create_user(
     admin_queries::insert_local_credential(&mut conn, user_id, &hash)
         .await
         .unwrap();
-    user_id
+    user_id.as_uuid()
 }
 
 /// A `member`/`active` membership — the common case every pre-004 fixture
@@ -245,7 +245,7 @@ pub async fn add_membership_with(
     admin_queries::insert_membership(
         &mut conn,
         OrganizationId::new(org_id),
-        user_id,
+        UserId::new(user_id),
         role,
         status,
     )

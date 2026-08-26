@@ -159,9 +159,12 @@ async fn start_call_attempt(
 
     let grant = JoinGrant {
         url: telephony.join_url.clone(),
-        token: telephony
-            .signer
-            .mint(ctx.actor_user_id, &room, Utc::now(), limits.join_ttl),
+        token: telephony.signer.mint(
+            ctx.actor_user_id.as_uuid(),
+            &room,
+            Utc::now(),
+            limits.join_ttl,
+        ),
         room: room.clone(),
     };
 

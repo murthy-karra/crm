@@ -20,7 +20,7 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::domain::envelope::{ActorKind, CommandContext, FactEnvelope, Origin};
-use crate::ids::OrganizationId;
+use crate::ids::{OrganizationId, UserId};
 
 /// The actor behind a `receive_inquiry` call (docs/specs/SLICE_007c.md
 /// §4): either an authenticated user's trusted session context, or no
@@ -39,7 +39,7 @@ pub enum IntakeActor {
         /// The human whose action caused this unattended execution
         /// (docs/specs/SLICE_007e.md §4: the retrying admin). Delivery
         /// paths pass `None`.
-        on_behalf_of_user_id: Option<Uuid>,
+        on_behalf_of_user_id: Option<UserId>,
     },
 }
 
@@ -77,7 +77,7 @@ impl IntakeActor {
     /// The authenticated user id behind a `User` actor — `None` for
     /// `System` (the point of the variant). Used by the routing matrix's
     /// `actor_default` branch (docs/specs/SLICE_007c.md §4).
-    pub fn user_actor_id(&self) -> Option<Uuid> {
+    pub fn user_actor_id(&self) -> Option<UserId> {
         match self {
             IntakeActor::User(ctx) => Some(ctx.actor_user_id),
             IntakeActor::System { .. } => None,
@@ -140,7 +140,7 @@ mod tests {
     fn system_actor_on_behalf_of_reaches_the_envelope() {
         // SLICE_007e §4: the workbench retry records the acting admin in
         // on_behalf_of_user_id while staying a System actor.
-        let admin = Uuid::new_v4();
+        let admin = UserId::new(Uuid::new_v4());
         let actor = IntakeActor::System {
             organization_id: OrganizationId::new(Uuid::new_v4()),
             origin: Origin::WebSession,
@@ -158,7 +158,7 @@ mod tests {
     fn user_actor_accessors_and_envelope() {
         let ctx = CommandContext {
             organization_id: OrganizationId::new(Uuid::new_v4()),
-            actor_user_id: Uuid::new_v4(),
+            actor_user_id: UserId::new(Uuid::new_v4()),
             origin: Origin::WebSession,
             correlation_id: Uuid::new_v4(),
         };

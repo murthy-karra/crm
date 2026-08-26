@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use crate::domain::person::model::PersonSummary;
 use crate::domain::today::{TodayItem, TodayList, TodayPriority, TodayReason};
+use crate::ids::UserId;
 use crm_operator::{Ahead, NotOnTodayReason, PersonCard, PriorityExplanation, ORDERING_RULE};
 
 /// Where `person_id` sits on the list: the 0-based index and how many
@@ -90,7 +91,7 @@ pub fn reasons_json(item: &TodayItem) -> Vec<serde_json::Value> {
 pub fn build_explanation(
     list: &TodayList,
     summary: &PersonSummary,
-    viewer: Uuid,
+    viewer: UserId,
     card: PersonCard,
 ) -> PriorityExplanation {
     match placement(&list.items, summary.id) {
@@ -157,7 +158,7 @@ mod tests {
                 name: "Lead".into(),
             },
             assigned_user: assignee.map(|id| UserRef {
-                id,
+                id: UserId::new(id),
                 display_name: "Carol".into(),
             }),
             primary_email: None,
@@ -268,7 +269,12 @@ mod tests {
             ],
             truncated: false,
         };
-        let explanation = build_explanation(&list, &summary(b, Some(viewer)), viewer, card(b));
+        let explanation = build_explanation(
+            &list,
+            &summary(b, Some(viewer)),
+            UserId::new(viewer),
+            card(b),
+        );
         match explanation {
             PriorityExplanation::OnToday {
                 position,
@@ -343,7 +349,12 @@ mod tests {
             truncated: false,
         };
         // Not assigned to the viewer: the caller owes the outcome (D-033).
-        let explanation = build_explanation(&list, &summary(ids[2], None), viewer, card(ids[2]));
+        let explanation = build_explanation(
+            &list,
+            &summary(ids[2], None),
+            UserId::new(viewer),
+            card(ids[2]),
+        );
         match explanation {
             PriorityExplanation::OnToday {
                 position,
@@ -417,7 +428,12 @@ mod tests {
             truncated: false,
         };
 
-        let e = build_explanation(&list, &summary(p, Some(other)), viewer, card(p));
+        let e = build_explanation(
+            &list,
+            &summary(p, Some(other)),
+            UserId::new(viewer),
+            card(p),
+        );
         assert!(matches!(
             e,
             PriorityExplanation::NotOnToday {
@@ -428,7 +444,7 @@ mod tests {
             } if n == "Carol"
         ));
 
-        let e = build_explanation(&list, &summary(p, None), viewer, card(p));
+        let e = build_explanation(&list, &summary(p, None), UserId::new(viewer), card(p));
         assert!(matches!(
             e,
             PriorityExplanation::NotOnToday {
@@ -439,7 +455,12 @@ mod tests {
             }
         ));
 
-        let e = build_explanation(&list, &summary(p, Some(viewer)), viewer, card(p));
+        let e = build_explanation(
+            &list,
+            &summary(p, Some(viewer)),
+            UserId::new(viewer),
+            card(p),
+        );
         assert!(matches!(
             e,
             PriorityExplanation::NotOnToday {

@@ -3,10 +3,8 @@
 //! Axum extractors that *build* it live in `auth::extractors`
 //! (docs/specs/SLICE_006a.md §4).
 
-use uuid::Uuid;
-
 use crate::domain::admin::Role;
-use crate::ids::OrganizationId;
+use crate::ids::{OrganizationId, UserId};
 
 /// The trusted actor and active Organization for this request, derived
 /// entirely server-side from the session cookie. Handlers take this as a
@@ -18,7 +16,7 @@ use crate::ids::OrganizationId;
 /// so every existing tenant route fails closed without modification.
 #[derive(Debug, Clone)]
 pub struct AuthContext {
-    pub actor_user_id: Uuid,
+    pub actor_user_id: UserId,
     pub actor_email: String,
     pub actor_display_name: String,
     pub active_organization_id: OrganizationId,

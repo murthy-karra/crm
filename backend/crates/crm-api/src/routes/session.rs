@@ -11,6 +11,7 @@ use uuid::Uuid;
 use crate::auth::{password, session, SessionContext};
 use crate::domain::admin::Role;
 use crate::error::ApiError;
+use crate::ids::{OrganizationId, UserId};
 use crate::state::AppState;
 
 pub fn router() -> Router<AppState> {
@@ -27,14 +28,14 @@ struct LoginRequest {
 
 #[derive(Serialize)]
 struct UserPayload {
-    id: Uuid,
+    id: UserId,
     email: String,
     display_name: String,
 }
 
 #[derive(Serialize)]
 struct OrganizationPayload {
-    id: Uuid,
+    id: OrganizationId,
     name: String,
     role: Role,
 }
@@ -166,8 +167,10 @@ async fn login(
     let (token, _expires_at) = session::create(
         pool,
         &state.session_secret,
-        credential.id,
-        active_organization.as_ref().map(|(id, _, _)| *id),
+        UserId::new(credential.id),
+        active_organization
+            .as_ref()
+            .map(|(id, _, _)| OrganizationId::new(*id)),
         state.session_ttl,
     )
     .await
@@ -181,7 +184,7 @@ async fn login(
         if let Ok(Some(previous)) =
             session::verify(pool, &state.session_secret, existing.value()).await
         {
-            if previous.user_id == credential.id {
+            if previous.user_id == UserId::new(credential.id) {
                 let _ =
                     session::revoke_by_token(pool, &state.session_secret, existing.value()).await;
             }
@@ -205,15 +208,17 @@ async fn login(
             .await
             .map_err(|_| ApiError::Unavailable)?;
 
-    let identity =
-        session::SessionIdentity {
-            user_id: credential.id,
-            email: credential.email,
-            display_name: credential.display_name,
-            organization: active_organization
-                .map(|(id, name, role)| session::SessionOrganization { id, name, role }),
-            platform_admin,
-        };
+    let identity = session::SessionIdentity {
+        user_id: UserId::new(credential.id),
+        email: credential.email,
+        display_name: credential.display_name,
+        organization: active_organization.map(|(id, name, role)| session::SessionOrganization {
+            id: OrganizationId::new(id),
+            name,
+            role,
+        }),
+        platform_admin,
+    };
 
     let body = SessionResponse::from_identity(&identity);
 

@@ -12,6 +12,7 @@ use tokio::sync::Mutex;
 use tracing::Instrument;
 
 use crate::config::CentrifugoApiKey;
+use crate::ids::UserId;
 use crate::realtime::events::Publication;
 
 /// Connect timeout for the publish HTTP call (docs/specs/SLICE_003.md
@@ -94,7 +95,7 @@ pub type RecordedPublication = (String, serde_json::Value);
 
 /// A recorded `disconnect_user` call — `Recording`'s capture of
 /// `Publisher::disconnect_user` (docs/specs/SLICE_004.md §13 criterion 8).
-pub type RecordedDisconnect = uuid::Uuid;
+pub type RecordedDisconnect = UserId;
 
 /// `Centrifugo`: publishes over HTTP. `Recording`: captures publications
 /// in memory for DB-backed tests that don't need a running Centrifugo
@@ -193,7 +194,7 @@ impl Publisher {
     /// (docs/specs/SLICE_003.md §7). `Recording` captures the call for
     /// tests instead of making one; `Disabled` no-ops (the CLI never has a
     /// live Centrifugo to disconnect from).
-    pub async fn disconnect_user(&self, user_id: uuid::Uuid) {
+    pub async fn disconnect_user(&self, user_id: UserId) {
         match self {
             Publisher::Recording(_, disconnects) => {
                 disconnects.lock().await.push(user_id);
@@ -359,7 +360,7 @@ mod tests {
     #[tokio::test]
     async fn recording_publisher_captures_disconnect_user() {
         let publisher = Publisher::recording();
-        let user_id = Uuid::new_v4();
+        let user_id = UserId::new(Uuid::new_v4());
         publisher.disconnect_user(user_id).await;
 
         let Publisher::Recording(_, disconnects) = &publisher else {
@@ -372,7 +373,7 @@ mod tests {
     async fn disabled_publisher_disconnect_user_is_a_noop() {
         let publisher = Publisher::Disabled;
         // Must not panic or block.
-        publisher.disconnect_user(Uuid::new_v4()).await;
+        publisher.disconnect_user(UserId::new(Uuid::new_v4())).await;
     }
 
     #[test]

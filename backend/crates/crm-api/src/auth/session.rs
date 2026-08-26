@@ -11,6 +11,7 @@ use uuid::Uuid;
 
 use crate::config::SessionSecret;
 use crate::domain::admin::Role;
+use crate::ids::{OrganizationId, UserId};
 
 pub const COOKIE_NAME: &str = "crm_session";
 /// 256-bit token, base64url (no padding) encoded: fixed length so the
@@ -26,14 +27,14 @@ type HmacSha256 = Hmac<Sha256>;
 /// (docs/specs/SLICE_004.md §3).
 #[derive(Debug, Clone)]
 pub struct SessionOrganization {
-    pub id: Uuid,
+    pub id: OrganizationId,
     pub name: String,
     pub role: Role,
 }
 
 #[derive(Debug, Clone)]
 pub struct SessionIdentity {
-    pub user_id: Uuid,
+    pub user_id: UserId,
     pub email: String,
     pub display_name: String,
     pub organization: Option<SessionOrganization>,
@@ -75,8 +76,8 @@ fn hash_token(secret: &SessionSecret, token: &str) -> String {
 pub async fn create(
     pool: &PgPool,
     secret: &SessionSecret,
-    user_id: Uuid,
-    active_organization_id: Option<Uuid>,
+    user_id: UserId,
+    active_organization_id: Option<OrganizationId>,
     ttl: Duration,
 ) -> Result<(String, DateTime<Utc>), sqlx::Error> {
     let token = generate_token();
@@ -89,8 +90,8 @@ pub async fn create(
          VALUES ($1, $2, $3, $4)",
     )
     .bind(&token_hash)
-    .bind(user_id)
-    .bind(active_organization_id)
+    .bind(user_id.0)
+    .bind(active_organization_id.map(|organization_id| organization_id.0))
     .bind(expires_at)
     .execute(pool)
     .await?;
@@ -151,14 +152,18 @@ pub async fn verify(
             let Some(role) = Role::from_db_str(&role_str) else {
                 return Ok(None);
             };
-            Some(SessionOrganization { id, name, role })
+            Some(SessionOrganization {
+                id: OrganizationId::new(id),
+                name,
+                role,
+            })
         }
         (None, None, None) if row.platform_admin => None,
         _ => return Ok(None),
     };
 
     Ok(Some(SessionIdentity {
-        user_id: row.user_id,
+        user_id: UserId::new(row.user_id),
         email: row.email,
         display_name: row.display_name,
         organization,

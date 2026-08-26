@@ -14,7 +14,7 @@ use crm_api::domain::commands::{self, ReceiveInquiry, ReceiveInquiryOutcome, Rou
 use crm_api::domain::envelope::{ActorKind, Origin};
 use crm_api::domain::inquiry::parse::Source;
 use crm_api::domain::intake::IntakeActor;
-use crm_api::ids::OrganizationId;
+use crm_api::ids::{OrganizationId, UserId};
 use crm_api::realtime::Publisher;
 
 const PW: &str = "pw";
@@ -23,7 +23,7 @@ async fn set_default(pool: &PgPool, org_id: Uuid, user_id: Option<Uuid>) {
     admin_queries::update_intake_default_assignee(
         &mut pool.acquire().await.unwrap(),
         OrganizationId::new(org_id),
-        user_id,
+        user_id.map(UserId::new),
     )
     .await
     .unwrap();
@@ -105,7 +105,7 @@ async fn default_set_and_active_routes_organization_default_and_lands_on_their_t
     assert!(person_created);
     assert!(!duplicate);
     assert_eq!(routing_strategy, RoutingStrategy::OrganizationDefault);
-    assert_eq!(assigned_user_id, Some(bob));
+    assert_eq!(assigned_user_id, Some(UserId::new(bob)));
 
     // Every fact shares one correlation id and the system-actor shape.
     for table in [
@@ -299,7 +299,11 @@ async fn default_member_deactivated_routes_unassigned_and_setting_is_retained(
     )
     .await
     .unwrap();
-    assert_eq!(stored, Some(bob), "setting is retained across deactivation");
+    assert_eq!(
+        stored,
+        Some(UserId::new(bob)),
+        "setting is retained across deactivation"
+    );
 }
 
 /// Criterion 7 (kept_existing leg): a system-actor intake matching an
@@ -351,7 +355,7 @@ async fn matching_already_assigned_person_keeps_existing(migrator_pool: PgPool) 
     assert_eq!(second_person_id, person_id, "same Person matched by email");
     assert!(!person_created);
     assert_eq!(routing_strategy, RoutingStrategy::KeptExisting);
-    assert_eq!(assigned_user_id, Some(bob));
+    assert_eq!(assigned_user_id, Some(UserId::new(bob)));
 
     let (assignment_count,): (i64,) =
         sqlx::query_as("SELECT count(*) FROM assignment_changed WHERE person_id = $1")
@@ -419,7 +423,7 @@ async fn matching_existing_unassigned_person_applies_the_default(migrator_pool: 
     };
     assert_eq!(second_person_id, person_id);
     assert_eq!(routing_strategy, RoutingStrategy::OrganizationDefault);
-    assert_eq!(assigned_user_id, Some(bob));
+    assert_eq!(assigned_user_id, Some(UserId::new(bob)));
 
     let assignments: Vec<(Option<Uuid>, Option<Uuid>)> = sqlx::query_as(
         "SELECT from_user_id, to_user_id FROM assignment_changed WHERE person_id = $1 ORDER BY recorded_at",
@@ -477,7 +481,11 @@ async fn system_actor_intake_into_org_a_writes_zero_rows_in_org_b(migrator_pool:
     else {
         panic!("expected Resolved");
     };
-    assert_eq!(assigned_user_id, Some(alice), "routed within org A only");
+    assert_eq!(
+        assigned_user_id,
+        Some(UserId::new(alice)),
+        "routed within org A only"
+    );
 
     for (table, count_col) in [
         ("person", "organization_id"),
@@ -509,7 +517,7 @@ async fn system_actor_intake_into_org_a_writes_zero_rows_in_org_b(migrator_pool:
     )
     .await
     .unwrap();
-    assert_eq!(org_b_default, Some(bob));
+    assert_eq!(org_b_default, Some(UserId::new(bob)));
 
     let router = common::build_router(&migrator_pool).await;
     let bob_cookie = common::login_cookie(&router, "bob@best.test", PW).await;

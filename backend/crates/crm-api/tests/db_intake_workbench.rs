@@ -20,7 +20,7 @@ use crm_api::domain::admin::queries as admin_queries;
 use crm_api::domain::admin::{MembershipStatus, Role};
 use crm_api::domain::commands::receive_inquiry::ADVISORY_LOCK_BUDGET;
 use crm_api::domain::raw_payload::crypto;
-use crm_api::ids::OrganizationId;
+use crm_api::ids::{OrganizationId, UserId};
 use crm_api::realtime::Publisher;
 use crm_api::state::AppState;
 
@@ -143,7 +143,7 @@ async fn org_fixture(migrator_pool: &PgPool, name: &str) -> Fixture {
     admin_queries::update_intake_default_assignee(
         &mut migrator_pool.acquire().await.unwrap(),
         OrganizationId::new(org_id),
-        Some(bob),
+        Some(UserId::new(bob)),
     )
     .await
     .unwrap();

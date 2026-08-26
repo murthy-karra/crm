@@ -24,7 +24,7 @@ use crm_api::domain::intake::extraction::worker::{run_once, ExtractionReport};
 use crm_api::domain::intake::extraction::{
     ExtractionInput, ExtractorError, ExtractorReply, LeadExtractor,
 };
-use crm_api::ids::OrganizationId;
+use crm_api::ids::{OrganizationId, UserId};
 use crm_api::realtime::Publisher;
 use crm_api::state::AppState;
 
@@ -199,7 +199,7 @@ async fn org_with_default(migrator_pool: &PgPool, name: &str) -> (Uuid, Uuid) {
     admin_queries::update_intake_default_assignee(
         &mut migrator_pool.acquire().await.unwrap(),
         OrganizationId::new(org_id),
-        Some(bob),
+        Some(UserId::new(bob)),
     )
     .await
     .unwrap();

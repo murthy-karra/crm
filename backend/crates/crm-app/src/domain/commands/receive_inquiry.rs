@@ -21,13 +21,13 @@ use crate::domain::intake::IntakeActor;
 use crate::domain::person::queries as person_queries;
 use crate::domain::raw_payload::{crypto, store, PayloadFormat, Resolution};
 use crate::domain::stage;
-use crate::ids::OrganizationId;
+use crate::ids::{OrganizationId, UserId};
 use crate::realtime::{PersonChange, Publication, Publisher, RealtimeEvent};
 
 pub struct ReceiveInquiry {
     pub source: Source,
     pub payload: Vec<u8>,
-    pub assign_to_user_id: Option<Uuid>,
+    pub assign_to_user_id: Option<UserId>,
     pub received_at: DateTime<Utc>,
 }
 
@@ -105,7 +105,7 @@ pub enum ReceiveInquiryOutcome {
         person_id: Uuid,
         person_created: bool,
         routing_strategy: RoutingStrategy,
-        assigned_user_id: Option<Uuid>,
+        assigned_user_id: Option<UserId>,
         duplicate: bool,
     },
     Unresolved {
@@ -128,9 +128,9 @@ pub enum ReceiveInquiryOutcome {
 async fn determine_routing(
     tx: &mut PgConnection,
     actor: &IntakeActor,
-    assign_to_user_id: Option<Uuid>,
-    current_assignee: Option<Uuid>,
-) -> Result<(RoutingStrategy, Option<Uuid>), CommandError> {
+    assign_to_user_id: Option<UserId>,
+    current_assignee: Option<UserId>,
+) -> Result<(RoutingStrategy, Option<UserId>), CommandError> {
     if let Some(existing) = current_assignee {
         return Ok((RoutingStrategy::KeptExisting, Some(existing)));
     }
@@ -278,7 +278,7 @@ pub(crate) struct CompleteIntake<'a> {
     pub raw_payload_id: Uuid,
     pub content_hmac: &'a [u8],
     pub received_at: DateTime<Utc>,
-    pub assign_to_user_id: Option<Uuid>,
+    pub assign_to_user_id: Option<UserId>,
 }
 
 /// Everything after Phase A, extracted verbatim from `receive_inquiry`

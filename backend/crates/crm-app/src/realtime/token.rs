@@ -11,10 +11,9 @@ use hmac::{Hmac, KeyInit, Mac};
 use serde::Serialize;
 use sha2::Sha256;
 use std::time::Duration;
-use uuid::Uuid;
 
 use crate::config::RealtimeTokenSecret;
-use crate::ids::OrganizationId;
+use crate::ids::{OrganizationId, UserId};
 use crate::realtime::events::channel_for;
 
 type HmacSha256 = Hmac<Sha256>;
@@ -41,7 +40,7 @@ struct Claims {
 /// channel.
 pub fn mint(
     secret: &RealtimeTokenSecret,
-    user_id: Uuid,
+    user_id: UserId,
     organization_id: OrganizationId,
     now: DateTime<Utc>,
     ttl: Duration,
@@ -73,6 +72,7 @@ pub fn mint(
 mod tests {
     use super::*;
     use chrono::TimeZone;
+    use uuid::Uuid;
 
     fn secret(byte: u8) -> RealtimeTokenSecret {
         // 32 hex chars = the minimum length `parse` enforces.
@@ -96,7 +96,7 @@ mod tests {
     fn header_is_exact() {
         let token = mint(
             &secret(1),
-            Uuid::new_v4(),
+            UserId::new(Uuid::new_v4()),
             OrganizationId::new(Uuid::new_v4()),
             ts(),
             Duration::from_secs(600),
@@ -108,7 +108,7 @@ mod tests {
 
     #[test]
     fn claims_are_exact_and_in_order() {
-        let user_id = Uuid::new_v4();
+        let user_id = UserId::new(Uuid::new_v4());
         let org_id = OrganizationId::new(Uuid::new_v4());
         let now = ts();
         let ttl = Duration::from_secs(600);
@@ -131,7 +131,7 @@ mod tests {
         let ttl = Duration::from_secs(120);
         let token = mint(
             &secret(1),
-            Uuid::new_v4(),
+            UserId::new(Uuid::new_v4()),
             OrganizationId::new(Uuid::new_v4()),
             now,
             ttl,
@@ -149,7 +149,7 @@ mod tests {
         let org_id = OrganizationId::new(Uuid::new_v4());
         let token = mint(
             &secret(1),
-            Uuid::new_v4(),
+            UserId::new(Uuid::new_v4()),
             org_id,
             ts(),
             Duration::from_secs(600),
@@ -168,7 +168,7 @@ mod tests {
         let s = secret(7);
         let token = mint(
             &s,
-            Uuid::new_v4(),
+            UserId::new(Uuid::new_v4()),
             OrganizationId::new(Uuid::new_v4()),
             ts(),
             Duration::from_secs(600),
@@ -187,14 +187,14 @@ mod tests {
     fn signature_differs_across_secrets() {
         let token_a = mint(
             &secret(1),
-            Uuid::new_v4(),
+            UserId::new(Uuid::new_v4()),
             OrganizationId::new(Uuid::new_v4()),
             ts(),
             Duration::from_secs(600),
         );
         let token_b = mint(
             &secret(2),
-            Uuid::new_v4(),
+            UserId::new(Uuid::new_v4()),
             OrganizationId::new(Uuid::new_v4()),
             ts(),
             Duration::from_secs(600),

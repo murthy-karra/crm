@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::domain::person::model::UserRef;
 use crate::domain::telephony::{CallStatus, EndReason, FailureReason};
-use crate::ids::OrganizationId;
+use crate::ids::{OrganizationId, UserId};
 
 /// One `call` row as the application sees it. `status`/reasons are
 /// decoded enums; a value the CHECK constraints allow but the application
@@ -21,7 +21,7 @@ pub struct CallRow {
     pub organization_id: OrganizationId,
     pub person_id: Uuid,
     pub contact_method_id: Uuid,
-    pub caller_user_id: Uuid,
+    pub caller_user_id: UserId,
     pub origin: String,
     pub correlation_id: Uuid,
     pub status: CallStatus,
@@ -94,7 +94,7 @@ impl TryFrom<RawCallRow> for CallRow {
             organization_id: OrganizationId::new(row.organization_id),
             person_id: row.person_id,
             contact_method_id: row.contact_method_id,
-            caller_user_id: row.caller_user_id,
+            caller_user_id: UserId::new(row.caller_user_id),
             origin: row.origin,
             correlation_id: row.correlation_id,
             status,
@@ -180,14 +180,14 @@ pub async fn call_by_room(
 pub async fn active_call_for_user(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
-    caller_user_id: Uuid,
+    caller_user_id: UserId,
 ) -> Result<Option<Uuid>, sqlx::Error> {
     let row = sqlx::query!(
         r#"SELECT id FROM call
            WHERE organization_id = $1 AND caller_user_id = $2
              AND status IN ('placing', 'ringing', 'answered')"#,
         organization_id.0,
-        caller_user_id,
+        caller_user_id.0,
     )
     .fetch_optional(conn)
     .await?;
@@ -199,7 +199,7 @@ pub struct NewCall<'a> {
     pub organization_id: OrganizationId,
     pub person_id: Uuid,
     pub contact_method_id: Uuid,
-    pub caller_user_id: Uuid,
+    pub caller_user_id: UserId,
     pub origin: &'a str,
     pub correlation_id: Uuid,
     pub provider: &'a str,
@@ -219,7 +219,7 @@ pub async fn insert_placing(conn: &mut PgConnection, call: NewCall<'_>) -> Resul
         call.organization_id.0,
         call.person_id,
         call.contact_method_id,
-        call.caller_user_id,
+        call.caller_user_id.0,
         call.origin,
         call.correlation_id,
         call.provider,
@@ -340,9 +340,9 @@ impl CallView {
 /// The caller's display name for `CallView.caller`.
 pub async fn caller_display_name(
     conn: &mut PgConnection,
-    user_id: Uuid,
+    user_id: UserId,
 ) -> Result<String, sqlx::Error> {
-    let row = sqlx::query!("SELECT display_name FROM app_user WHERE id = $1", user_id)
+    let row = sqlx::query!("SELECT display_name FROM app_user WHERE id = $1", user_id.0)
         .fetch_one(conn)
         .await?;
     Ok(row.display_name)

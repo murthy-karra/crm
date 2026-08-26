@@ -8,6 +8,7 @@ use sqlx::PgConnection;
 use uuid::Uuid;
 
 use crate::domain::envelope::FactEnvelope;
+use crate::ids::UserId;
 
 pub struct InquiryReceivedFact<'a> {
     pub inquiry_id: Uuid,
@@ -35,8 +36,8 @@ pub async fn insert_inquiry_received(
            RETURNING id"#,
         envelope.organization_id.0,
         actor_kind,
-        envelope.actor_user_id,
-        envelope.on_behalf_of_user_id,
+        envelope.actor_user_id.map(|id| id.0),
+        envelope.on_behalf_of_user_id.map(|id| id.0),
         origin,
         envelope.occurred_at,
         envelope.correlation_id,
@@ -58,7 +59,7 @@ pub struct RoutingDecisionFact<'a> {
     pub inquiry_id: Uuid,
     pub person_id: Uuid,
     pub strategy: &'a str,
-    pub assignee_user_id: Option<Uuid>,
+    pub assignee_user_id: Option<UserId>,
 }
 
 pub async fn insert_routing_decision(
@@ -77,8 +78,8 @@ pub async fn insert_routing_decision(
            RETURNING id"#,
         envelope.organization_id.0,
         actor_kind,
-        envelope.actor_user_id,
-        envelope.on_behalf_of_user_id,
+        envelope.actor_user_id.map(|id| id.0),
+        envelope.on_behalf_of_user_id.map(|id| id.0),
         origin,
         envelope.occurred_at,
         envelope.correlation_id,
@@ -86,7 +87,7 @@ pub async fn insert_routing_decision(
         fact.inquiry_id,
         fact.person_id,
         fact.strategy,
-        fact.assignee_user_id,
+        fact.assignee_user_id.map(|id| id.0),
     )
     .fetch_one(tx)
     .await?;
@@ -95,8 +96,8 @@ pub async fn insert_routing_decision(
 
 pub struct AssignmentChangedFact {
     pub person_id: Uuid,
-    pub from_user_id: Option<Uuid>,
-    pub to_user_id: Option<Uuid>,
+    pub from_user_id: Option<UserId>,
+    pub to_user_id: Option<UserId>,
     pub reason: &'static str,
 }
 
@@ -116,15 +117,15 @@ pub async fn insert_assignment_changed(
            RETURNING id"#,
         envelope.organization_id.0,
         actor_kind,
-        envelope.actor_user_id,
-        envelope.on_behalf_of_user_id,
+        envelope.actor_user_id.map(|id| id.0),
+        envelope.on_behalf_of_user_id.map(|id| id.0),
         origin,
         envelope.occurred_at,
         envelope.correlation_id,
         envelope.causation_id,
         fact.person_id,
-        fact.from_user_id,
-        fact.to_user_id,
+        fact.from_user_id.map(|id| id.0),
+        fact.to_user_id.map(|id| id.0),
         fact.reason,
     )
     .fetch_one(tx)
@@ -166,8 +167,8 @@ pub async fn insert_contact_attempted(
            RETURNING id"#,
         envelope.organization_id.0,
         actor_kind,
-        envelope.actor_user_id,
-        envelope.on_behalf_of_user_id,
+        envelope.actor_user_id.map(|id| id.0),
+        envelope.on_behalf_of_user_id.map(|id| id.0),
         origin,
         envelope.occurred_at,
         envelope.correlation_id,
@@ -206,8 +207,8 @@ pub async fn insert_organization_created(
            RETURNING id"#,
         envelope.organization_id.0,
         actor_kind,
-        envelope.actor_user_id,
-        envelope.on_behalf_of_user_id,
+        envelope.actor_user_id.map(|id| id.0),
+        envelope.on_behalf_of_user_id.map(|id| id.0),
         origin,
         envelope.occurred_at,
         envelope.correlation_id,
@@ -240,8 +241,8 @@ pub async fn insert_invitation_issued(
            RETURNING id"#,
         envelope.organization_id.0,
         actor_kind,
-        envelope.actor_user_id,
-        envelope.on_behalf_of_user_id,
+        envelope.actor_user_id.map(|id| id.0),
+        envelope.on_behalf_of_user_id.map(|id| id.0),
         origin,
         envelope.occurred_at,
         envelope.correlation_id,
@@ -276,8 +277,8 @@ pub async fn insert_invitation_resolved(
            RETURNING id"#,
         envelope.organization_id.0,
         actor_kind,
-        envelope.actor_user_id,
-        envelope.on_behalf_of_user_id,
+        envelope.actor_user_id.map(|id| id.0),
+        envelope.on_behalf_of_user_id.map(|id| id.0),
         origin,
         envelope.occurred_at,
         envelope.correlation_id,
@@ -291,7 +292,7 @@ pub async fn insert_invitation_resolved(
 }
 
 pub struct MembershipChangedFact {
-    pub user_id: Uuid,
+    pub user_id: UserId,
     pub from_role: Option<&'static str>,
     pub to_role: &'static str,
     pub from_status: Option<&'static str>,
@@ -315,13 +316,13 @@ pub async fn insert_membership_changed(
            RETURNING id"#,
         envelope.organization_id.0,
         actor_kind,
-        envelope.actor_user_id,
-        envelope.on_behalf_of_user_id,
+        envelope.actor_user_id.map(|id| id.0),
+        envelope.on_behalf_of_user_id.map(|id| id.0),
         origin,
         envelope.occurred_at,
         envelope.correlation_id,
         envelope.causation_id,
-        fact.user_id,
+        fact.user_id.0,
         fact.from_role,
         fact.to_role,
         fact.from_status,
@@ -349,8 +350,8 @@ pub async fn insert_stage_changed(
            RETURNING id"#,
         envelope.organization_id.0,
         actor_kind,
-        envelope.actor_user_id,
-        envelope.on_behalf_of_user_id,
+        envelope.actor_user_id.map(|id| id.0),
+        envelope.on_behalf_of_user_id.map(|id| id.0),
         origin,
         envelope.occurred_at,
         envelope.correlation_id,
@@ -398,8 +399,8 @@ pub async fn insert_call_completed(
            RETURNING id"#,
         envelope.organization_id.0,
         actor_kind,
-        envelope.actor_user_id,
-        envelope.on_behalf_of_user_id,
+        envelope.actor_user_id.map(|id| id.0),
+        envelope.on_behalf_of_user_id.map(|id| id.0),
         origin,
         envelope.occurred_at,
         envelope.correlation_id,

@@ -22,7 +22,7 @@ use crm_api::domain::admin::commands::{
 };
 use crm_api::domain::admin::{AdminActor, MembershipStatus, Role};
 use crm_api::domain::envelope::Origin;
-use crm_api::ids::OrganizationId;
+use crm_api::ids::{OrganizationId, UserId};
 use crm_api::realtime::Publisher;
 
 const TTL: Duration = Duration::from_secs(168 * 3600);
@@ -34,7 +34,7 @@ async fn me_json(router: &Router, cookie: &str) -> serde_json::Value {
 
 fn owner_actor(user_id: Uuid) -> AdminActor {
     AdminActor {
-        actor_user_id: user_id,
+        actor_user_id: UserId::new(user_id),
         origin: Origin::Cli,
     }
 }
@@ -144,7 +144,7 @@ async fn admin_fact_rows(migrator_pool: &PgPool, app_pool: &PgPool) -> AdminFact
     .unwrap();
     let (organization_created_id,): (Uuid,) =
         sqlx::query_as("SELECT id FROM organization_created WHERE organization_id = $1")
-            .bind(organization.id)
+            .bind(organization.id.0)
             .fetch_one(migrator_pool)
             .await
             .unwrap();
@@ -155,7 +155,7 @@ async fn admin_fact_rows(migrator_pool: &PgPool, app_pool: &PgPool) -> AdminFact
         "Bootstrap",
         TTL,
         IssueInvitation {
-            organization_id: OrganizationId::new(organization.id),
+            organization_id: organization.id,
             email: "newadmin@factrows.test".to_string(),
             role: Role::Member,
         },
@@ -191,7 +191,7 @@ async fn admin_fact_rows(migrator_pool: &PgPool, app_pool: &PgPool) -> AdminFact
         app_pool,
         actor,
         ChangeMemberRole {
-            organization_id: OrganizationId::new(organization.id),
+            organization_id: organization.id,
             user_id: accepted.user_id,
             role: Role::Admin,
         },
@@ -201,7 +201,7 @@ async fn admin_fact_rows(migrator_pool: &PgPool, app_pool: &PgPool) -> AdminFact
     let (membership_changed_id,): (Uuid,) = sqlx::query_as(
         "SELECT id FROM membership_changed WHERE user_id = $1 AND reason = 'promote'",
     )
-    .bind(accepted.user_id)
+    .bind(accepted.user_id.0)
     .fetch_one(migrator_pool)
     .await
     .unwrap();
@@ -286,7 +286,7 @@ async fn admin_facts_are_pii_free_and_carry_correct_origin(migrator_pool: PgPool
     let app_pool = connect_as_app(&migrator_pool).await;
     let owner = create_user(&migrator_pool, "owner2@platform.test", "Owner", PW).await;
     let platform_actor = AdminActor {
-        actor_user_id: owner,
+        actor_user_id: UserId::new(owner),
         origin: Origin::Platform,
     };
 
@@ -302,7 +302,7 @@ async fn admin_facts_are_pii_free_and_carry_correct_origin(migrator_pool: PgPool
 
     let (org_origin,): (String,) =
         sqlx::query_as("SELECT origin FROM organization_created WHERE organization_id = $1")
-            .bind(organization.id)
+            .bind(organization.id.0)
             .fetch_one(&migrator_pool)
             .await
             .unwrap();
@@ -314,7 +314,7 @@ async fn admin_facts_are_pii_free_and_carry_correct_origin(migrator_pool: PgPool
         "Owner",
         TTL,
         IssueInvitation {
-            organization_id: OrganizationId::new(organization.id),
+            organization_id: organization.id,
             email: "secret-email@origin-check.test".to_string(),
             role: Role::Admin,
         },
@@ -324,7 +324,7 @@ async fn admin_facts_are_pii_free_and_carry_correct_origin(migrator_pool: PgPool
 
     let (invitation_origin,): (String,) =
         sqlx::query_as("SELECT origin FROM invitation_issued WHERE organization_id = $1")
-            .bind(organization.id)
+            .bind(organization.id.0)
             .fetch_one(&migrator_pool)
             .await
             .unwrap();
@@ -335,7 +335,7 @@ async fn admin_facts_are_pii_free_and_carry_correct_origin(migrator_pool: PgPool
     let row: (Uuid, String) = sqlx::query_as(
         "SELECT invitation_id, role FROM invitation_issued WHERE organization_id = $1",
     )
-    .bind(organization.id)
+    .bind(organization.id.0)
     .fetch_one(&migrator_pool)
     .await
     .unwrap();
@@ -1259,13 +1259,13 @@ async fn expired_invitation_returns_410_and_org_state_flips_to_needs_attention(
     let outcome = issue_invitation(
         &app_pool,
         AdminActor {
-            actor_user_id: owner,
+            actor_user_id: UserId::new(owner),
             origin: Origin::Platform,
         },
         "Owner",
         TTL,
         IssueInvitation {
-            organization_id: OrganizationId::new(organization.id),
+            organization_id: organization.id,
             email: "expiring9@example.com".to_string(),
             role: Role::Admin,
         },
@@ -1486,7 +1486,7 @@ async fn two_admins_concurrently_demoting_each_other_leaves_at_least_one_active_
             owner_actor(alice),
             ChangeMemberRole {
                 organization_id: OrganizationId::new(org_id),
-                user_id: bob,
+                user_id: UserId::new(bob),
                 role: Role::Member,
             },
         )
@@ -1498,7 +1498,7 @@ async fn two_admins_concurrently_demoting_each_other_leaves_at_least_one_active_
             owner_actor(bob),
             ChangeMemberRole {
                 organization_id: OrganizationId::new(org_id),
-                user_id: alice,
+                user_id: UserId::new(alice),
                 role: Role::Member,
             },
         )
@@ -1624,7 +1624,7 @@ async fn deactivation_revokes_sessions_blocks_login_and_disconnects_realtime(
 
     // disconnect_user was called for Erin.
     let disconnects = recorded_disconnects.lock().await.clone();
-    assert_eq!(disconnects, vec![erin]);
+    assert_eq!(disconnects, vec![UserId::new(erin)]);
 
     // Reactivation restores login.
     let reactivate_resp = put_json_with_cookie(

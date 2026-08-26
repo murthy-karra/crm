@@ -15,16 +15,16 @@ pub use rank::rank;
 
 use chrono::{DateTime, Utc};
 use sqlx::PgConnection;
-use uuid::Uuid;
 
 use crate::domain::person::visibility::PersonVisibilityScope;
+use crate::ids::UserId;
 
 /// What a Slice 005 Operator tool calls — never a separate path
 /// (docs/specs/SLICE_003.md §3).
 pub async fn query(
     conn: &mut PgConnection,
     scope: &PersonVisibilityScope,
-    viewer: Uuid,
+    viewer: UserId,
     now: DateTime<Utc>,
 ) -> Result<TodayList, sqlx::Error> {
     let (candidates, truncated) = queries::candidates(conn, scope, viewer, now).await?;

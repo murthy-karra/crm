@@ -9,12 +9,12 @@ use crate::domain::admin::queries::{self, MemberView};
 use crate::domain::admin::{AdminActor, MembershipStatus, Role};
 use crate::domain::envelope::{ActorKind, FactEnvelope};
 use crate::domain::facts::{self, MembershipChangedFact};
-use crate::ids::OrganizationId;
+use crate::ids::{OrganizationId, UserId};
 use crate::realtime::Publisher;
 
 pub struct SetMemberStatus {
     pub organization_id: OrganizationId,
-    pub user_id: Uuid,
+    pub user_id: UserId,
     pub status: MembershipStatus,
 }
 

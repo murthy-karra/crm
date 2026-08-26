@@ -388,7 +388,7 @@ pub async fn discard_raw_payload(
            WHERE id = $1 AND organization_id = $2"#,
         id,
         ctx.organization_id.0,
-        ctx.actor_user_id,
+        ctx.actor_user_id.0,
         discarded_at,
     )
     .execute(&mut *tx)

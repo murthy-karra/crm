@@ -64,7 +64,7 @@ pub async fn rotate_intake_token(
     .await?;
 
     let envelope = FactEnvelope::for_command(ctx, Utc::now());
-    let actor_kind = envelope.actor_kind.as_str();
+    let actor_kind = envelope.actor.kind().as_str();
     let origin = envelope.origin.as_str();
     sqlx::query!(
         r#"INSERT INTO intake_token_rotated
@@ -73,7 +73,7 @@ pub async fn rotate_intake_token(
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"#,
         envelope.organization_id.0,
         actor_kind,
-        envelope.actor_user_id.map(|id| id.0),
+        envelope.actor.user_id().map(|id| id.0),
         envelope.on_behalf_of_user_id.map(|id| id.0),
         origin,
         envelope.occurred_at,

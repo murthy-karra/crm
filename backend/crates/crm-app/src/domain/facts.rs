@@ -25,7 +25,7 @@ pub async fn insert_inquiry_received(
     envelope: &FactEnvelope,
     fact: InquiryReceivedFact<'_>,
 ) -> Result<Uuid, sqlx::Error> {
-    let actor_kind = envelope.actor_kind.as_str();
+    let actor_kind = envelope.actor.kind().as_str();
     let origin = envelope.origin.as_str();
     let row = sqlx::query!(
         r#"INSERT INTO inquiry_received
@@ -36,7 +36,7 @@ pub async fn insert_inquiry_received(
            RETURNING id"#,
         envelope.organization_id.0,
         actor_kind,
-        envelope.actor_user_id.map(|id| id.0),
+        envelope.actor.user_id().map(|id| id.0),
         envelope.on_behalf_of_user_id.map(|id| id.0),
         origin,
         envelope.occurred_at,
@@ -67,7 +67,7 @@ pub async fn insert_routing_decision(
     envelope: &FactEnvelope,
     fact: RoutingDecisionFact<'_>,
 ) -> Result<Uuid, sqlx::Error> {
-    let actor_kind = envelope.actor_kind.as_str();
+    let actor_kind = envelope.actor.kind().as_str();
     let origin = envelope.origin.as_str();
     let row = sqlx::query!(
         r#"INSERT INTO routing_decision
@@ -78,7 +78,7 @@ pub async fn insert_routing_decision(
            RETURNING id"#,
         envelope.organization_id.0,
         actor_kind,
-        envelope.actor_user_id.map(|id| id.0),
+        envelope.actor.user_id().map(|id| id.0),
         envelope.on_behalf_of_user_id.map(|id| id.0),
         origin,
         envelope.occurred_at,
@@ -106,7 +106,7 @@ pub async fn insert_assignment_changed(
     envelope: &FactEnvelope,
     fact: AssignmentChangedFact,
 ) -> Result<Uuid, sqlx::Error> {
-    let actor_kind = envelope.actor_kind.as_str();
+    let actor_kind = envelope.actor.kind().as_str();
     let origin = envelope.origin.as_str();
     let row = sqlx::query!(
         r#"INSERT INTO assignment_changed
@@ -117,7 +117,7 @@ pub async fn insert_assignment_changed(
            RETURNING id"#,
         envelope.organization_id.0,
         actor_kind,
-        envelope.actor_user_id.map(|id| id.0),
+        envelope.actor.user_id().map(|id| id.0),
         envelope.on_behalf_of_user_id.map(|id| id.0),
         origin,
         envelope.occurred_at,
@@ -156,7 +156,7 @@ pub async fn insert_contact_attempted(
     envelope: &FactEnvelope,
     fact: ContactAttemptedFact<'_>,
 ) -> Result<Uuid, sqlx::Error> {
-    let actor_kind = envelope.actor_kind.as_str();
+    let actor_kind = envelope.actor.kind().as_str();
     let origin = envelope.origin.as_str();
     let row = sqlx::query!(
         r#"INSERT INTO contact_attempted
@@ -167,7 +167,7 @@ pub async fn insert_contact_attempted(
            RETURNING id"#,
         envelope.organization_id.0,
         actor_kind,
-        envelope.actor_user_id.map(|id| id.0),
+        envelope.actor.user_id().map(|id| id.0),
         envelope.on_behalf_of_user_id.map(|id| id.0),
         origin,
         envelope.occurred_at,
@@ -197,7 +197,7 @@ pub async fn insert_organization_created(
     tx: &mut PgConnection,
     envelope: &FactEnvelope,
 ) -> Result<Uuid, sqlx::Error> {
-    let actor_kind = envelope.actor_kind.as_str();
+    let actor_kind = envelope.actor.kind().as_str();
     let origin = envelope.origin.as_str();
     let row = sqlx::query!(
         r#"INSERT INTO organization_created
@@ -207,7 +207,7 @@ pub async fn insert_organization_created(
            RETURNING id"#,
         envelope.organization_id.0,
         actor_kind,
-        envelope.actor_user_id.map(|id| id.0),
+        envelope.actor.user_id().map(|id| id.0),
         envelope.on_behalf_of_user_id.map(|id| id.0),
         origin,
         envelope.occurred_at,
@@ -230,7 +230,7 @@ pub async fn insert_invitation_issued(
     envelope: &FactEnvelope,
     fact: InvitationIssuedFact,
 ) -> Result<Uuid, sqlx::Error> {
-    let actor_kind = envelope.actor_kind.as_str();
+    let actor_kind = envelope.actor.kind().as_str();
     let origin = envelope.origin.as_str();
     let row = sqlx::query!(
         r#"INSERT INTO invitation_issued
@@ -241,7 +241,7 @@ pub async fn insert_invitation_issued(
            RETURNING id"#,
         envelope.organization_id.0,
         actor_kind,
-        envelope.actor_user_id.map(|id| id.0),
+        envelope.actor.user_id().map(|id| id.0),
         envelope.on_behalf_of_user_id.map(|id| id.0),
         origin,
         envelope.occurred_at,
@@ -266,7 +266,7 @@ pub async fn insert_invitation_resolved(
     envelope: &FactEnvelope,
     fact: InvitationResolvedFact,
 ) -> Result<Uuid, sqlx::Error> {
-    let actor_kind = envelope.actor_kind.as_str();
+    let actor_kind = envelope.actor.kind().as_str();
     let origin = envelope.origin.as_str();
     let row = sqlx::query!(
         r#"INSERT INTO invitation_resolved
@@ -277,7 +277,7 @@ pub async fn insert_invitation_resolved(
            RETURNING id"#,
         envelope.organization_id.0,
         actor_kind,
-        envelope.actor_user_id.map(|id| id.0),
+        envelope.actor.user_id().map(|id| id.0),
         envelope.on_behalf_of_user_id.map(|id| id.0),
         origin,
         envelope.occurred_at,
@@ -305,7 +305,7 @@ pub async fn insert_membership_changed(
     envelope: &FactEnvelope,
     fact: MembershipChangedFact,
 ) -> Result<Uuid, sqlx::Error> {
-    let actor_kind = envelope.actor_kind.as_str();
+    let actor_kind = envelope.actor.kind().as_str();
     let origin = envelope.origin.as_str();
     let row = sqlx::query!(
         r#"INSERT INTO membership_changed
@@ -316,7 +316,7 @@ pub async fn insert_membership_changed(
            RETURNING id"#,
         envelope.organization_id.0,
         actor_kind,
-        envelope.actor_user_id.map(|id| id.0),
+        envelope.actor.user_id().map(|id| id.0),
         envelope.on_behalf_of_user_id.map(|id| id.0),
         origin,
         envelope.occurred_at,
@@ -339,7 +339,7 @@ pub async fn insert_stage_changed(
     envelope: &FactEnvelope,
     fact: StageChangedFact,
 ) -> Result<Uuid, sqlx::Error> {
-    let actor_kind = envelope.actor_kind.as_str();
+    let actor_kind = envelope.actor.kind().as_str();
     let origin = envelope.origin.as_str();
     let row = sqlx::query!(
         r#"INSERT INTO stage_changed
@@ -350,7 +350,7 @@ pub async fn insert_stage_changed(
            RETURNING id"#,
         envelope.organization_id.0,
         actor_kind,
-        envelope.actor_user_id.map(|id| id.0),
+        envelope.actor.user_id().map(|id| id.0),
         envelope.on_behalf_of_user_id.map(|id| id.0),
         origin,
         envelope.occurred_at,
@@ -388,7 +388,7 @@ pub async fn insert_call_completed(
     envelope: &FactEnvelope,
     fact: CallCompletedFact<'_>,
 ) -> Result<Uuid, sqlx::Error> {
-    let actor_kind = envelope.actor_kind.as_str();
+    let actor_kind = envelope.actor.kind().as_str();
     let origin = envelope.origin.as_str();
     let row = sqlx::query!(
         r#"INSERT INTO call_completed
@@ -399,7 +399,7 @@ pub async fn insert_call_completed(
            RETURNING id"#,
         envelope.organization_id.0,
         actor_kind,
-        envelope.actor_user_id.map(|id| id.0),
+        envelope.actor.user_id().map(|id| id.0),
         envelope.on_behalf_of_user_id.map(|id| id.0),
         origin,
         envelope.occurred_at,

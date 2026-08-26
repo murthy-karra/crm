@@ -16,7 +16,7 @@ use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
 use crate::domain::commands::{CallError, ContactChannel, ContactOutcome};
-use crate::domain::envelope::{ActorKind, CommandContext, FactEnvelope};
+use crate::domain::envelope::{Actor, CommandContext, FactEnvelope};
 use crate::domain::facts::{self, ContactAttemptedFact};
 use crate::domain::telephony::queries as call_queries;
 use crate::ids::OrganizationId;
@@ -232,8 +232,7 @@ async fn correct_call_outcome_attempt(
         .await?;
     let envelope = FactEnvelope {
         organization_id: ctx.organization_id,
-        actor_kind: ActorKind::User,
-        actor_user_id: Some(ctx.actor_user_id),
+        actor: Actor::User(ctx.actor_user_id),
         on_behalf_of_user_id: None,
         origin: ctx.origin,
         occurred_at: head.occurred_at,

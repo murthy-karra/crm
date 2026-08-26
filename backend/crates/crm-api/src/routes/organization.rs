@@ -8,7 +8,7 @@ use axum::extract::{FromRequestParts, Path, State};
 use axum::http::request::Parts;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Json, Response};
-use axum::routing::{delete, get, put};
+use axum::routing::{delete, get, post, put};
 use axum::Router;
 use serde::Deserialize;
 use serde_json::json;
@@ -21,6 +21,7 @@ use crate::domain::admin::commands::{
 };
 use crate::domain::admin::queries as admin_queries;
 use crate::domain::admin::{AdminActor, MembershipStatus, Role};
+use crate::domain::envelope::CommandContext;
 use crate::domain::envelope::Origin;
 use crate::domain::intake::IntakeAddress;
 use crate::error::ApiError;
@@ -30,6 +31,10 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/organization/members", get(members))
         .route("/api/organization/intake-address", get(intake_address))
+        .route(
+            "/api/organization/intake-address/rotate",
+            post(rotate_intake_address),
+        )
         .route(
             "/api/organization/intake-settings",
             get(intake_settings).put(update_intake_settings),
@@ -237,6 +242,65 @@ async fn revoke_invitation_route(
 /// the Organization's rendered intake address. Org admins only — the
 /// token in it is the anti-forgery secret. Rendered from
 /// `state.intake_mail`, never stored as text.
+/// `POST /api/organization/intake-address/rotate`
+/// (docs/specs/SLICE_007g.md §5): break-glass rotation, admin-only
+/// (D-037/7a). Returns the NEW address in the GET shape. The span
+/// records ids only — never token material.
+#[tracing::instrument(
+    name = "intake.rotate_token",
+    skip_all,
+    fields(
+        organization_id = tracing::field::Empty,
+        actor_id = tracing::field::Empty,
+        outcome = tracing::field::Empty,
+    )
+)]
+async fn rotate_intake_address(
+    State(state): State<AppState>,
+    ctx: OrgAdminContext,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let span = tracing::Span::current();
+    span.record(
+        "organization_id",
+        tracing::field::display(ctx.auth.active_organization_id),
+    );
+    span.record("actor_id", tracing::field::display(ctx.auth.actor_user_id));
+
+    let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
+
+    // The slug is immutable — read it BEFORE rotating so nothing after
+    // the commit can fail and misreport the (already-effective)
+    // rotation.
+    let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
+    let (slug, _old_token) =
+        admin_queries::organization_intake_address(&mut conn, ctx.auth.active_organization_id)
+            .await
+            .map_err(|_| ApiError::Unavailable)?
+            .ok_or(ApiError::Unavailable)?;
+    drop(conn);
+
+    let command_ctx = CommandContext::from_auth(&ctx.auth);
+    let new_token = crate::domain::intake::rotate::rotate_intake_token(pool, &command_ctx)
+        .await
+        .map_err(|err| {
+            span.record("outcome", err.kind());
+            ApiError::Unavailable
+        })?;
+    span.record("outcome", "rotated");
+
+    let address = IntakeAddress {
+        slug,
+        token: new_token,
+    }
+    .render(&state.intake_mail);
+    Ok(Json(json!({
+        "address": address,
+        "scheme": state.intake_mail.scheme.as_str(),
+    })))
+}
+
+/// `GET /api/organization/intake-address` (docs/specs/SLICE_007a.md §5):
+/// admins only; renders the address from storage + config.
 async fn intake_address(
     State(state): State<AppState>,
     ctx: OrgAdminContext,

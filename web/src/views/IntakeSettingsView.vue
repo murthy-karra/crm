@@ -5,12 +5,14 @@
 // SLICE_007c §6: below that, the "Unattended lead routing" card — the
 // Organization's default assignee for system-actor (unattended) intake.
 import { computed, ref } from 'vue'
-import { Check, Copy } from 'lucide-vue-next'
+import { Check, Copy, RefreshCw } from 'lucide-vue-next'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
 import Select from 'primevue/select'
 import PageHeader from '../components/PageHeader.vue'
 import FormField from '../components/FormField.vue'
 import {
   useIntakeAddress,
+  useRotateIntakeAddressMutation,
   useIntakeSettings,
   useMe,
   useMembers,
@@ -24,6 +26,21 @@ const orgId = computed(() => me.value?.organization?.id ?? '')
 const { data, isPending, isError, error } = useIntakeAddress(orgId)
 
 const address = computed(() => data.value?.address ?? '')
+
+// SLICE_007g §8: break-glass rotation behind a confirm that states the
+// immediate-invalidation consequence.
+const rotateConfirmOpen = ref(false)
+const rotateMutation = useRotateIntakeAddressMutation(orgId)
+
+async function rotate() {
+  try {
+    await rotateMutation.mutateAsync()
+    rotateConfirmOpen.value = false
+  } catch {
+    // Error rendered below the card via rotateMutation.error.
+    rotateConfirmOpen.value = false
+  }
+}
 const copied = ref(false)
 let copiedTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -116,6 +133,24 @@ function onAssigneeChange(value: unknown) {
           />
           {{ copied ? 'Copied' : 'Copy' }}
         </button>
+        <button
+          type="button"
+          :class="buttonClasses('danger')"
+          data-testid="rotate-address"
+          @click="rotateConfirmOpen = true"
+        >
+          <component
+            :is="RefreshCw"
+            class="mr-1.5 inline h-4 w-4 align-text-bottom"
+          />
+          Rotate
+        </button>
+      </div>
+      <div
+        v-if="rotateMutation.error.value"
+        class="mt-3 text-body text-danger"
+      >
+        {{ describeApiError(rotateMutation.error.value, 'Could not rotate the address.') }}
       </div>
       <p class="mt-3 text-small text-text-muted">
         Emails sent here will appear as leads once email intake is enabled.
@@ -176,4 +211,14 @@ function onAssigneeChange(value: unknown) {
       </p>
     </FormField>
   </div>
+
+  <ConfirmDialog
+    v-model:visible="rotateConfirmOpen"
+    title="Rotate the intake address?"
+    message="The current address stops working immediately — mail sent to it will be silently discarded. Update every forwarding rule to the new address after rotating."
+    confirm-label="Rotate"
+    confirm-variant="danger"
+    :is-pending="rotateMutation.isPending.value"
+    @confirm="rotate"
+  />
 </template>

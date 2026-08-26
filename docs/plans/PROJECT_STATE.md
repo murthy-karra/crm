@@ -1,6 +1,60 @@
 # Project State
 
-Last updated: 2026-08-25 (Slice 007g planning underway: D-039 accepted
+Last updated: 2026-08-25 (SLICE_007g LIVE-WALKTHROUGH COMPLETE on
+`slice-007g-real-receiving` off `main` `7ef2277`; NOTHING committed on
+the branch — next action is the Phase 9 commit gate, then merge. The
+§10 ops runbook ran end-to-end with the user: worker
+`crm-inbound-relay` deployed (`workers_dev = false` added to
+wrangler.toml — email-only worker, no HTTP URL, which also sidesteps
+the workers.dev-subdomain registration error on first deploy) with
+`CRM_INBOUND_EMAIL_SECRET` set via `wrangler secret put`; the user
+registered subdomain `leads.elysianfeld.com` in Email Routing (MX
+live) and the enabled catch-all routes to the worker; `.env` gained
+`CRM_INTAKE_ADDRESS_SCHEME=local_part` (domain already defaults to
+elysianfeld.com) and dev-api was restarted. Live results, all real
+Gmail → Cloudflare → worker → tunnel → `/inbound/email`: (1) freeform
+inquiry to the org address → 200 in 35 ms → unresolved → Groq
+extraction ~5 s → Person created at stage Lead with phone, assigned
+via round-robin; (2) forged-token address → worker Ok, endpoint 200,
+silently discarded — no person, no unresolved row; (3) live rotation
+via the admin API → old address dead (same discard path), fresh mail
+to the minted address → second Person created. WALKTHROUGH FINDING
+that RESOLVES the §6 escalation: Email Routing → Worker delivery DOES
+carry `Authentication-Results` from mx.cloudflare.net (observed live:
+dkim=pass, spf=pass, dmarc=pass, arc=pass) — the known-issue caveat is
+moot and 007h MAY rely on SPF/DKIM verdicts. Verified via a temporary
+verdict-headers-only console.log in the worker, removed and
+clean-redeployed afterward; the committed worker.js logs nothing.
+Implemented and verified: migration `20260902000001`
+(intake_token UPDATE grant + the append-only `intake_token_rotated`
+envelope fact table with corrects_id/indexes), `rotate_intake_token`
+(one tx: FOR UPDATE → re-mint-on-collision → UPDATE → fact; returns
+the minted token so the response can never misreport a completed
+rotation), the admin-only rotate route (slug pre-read; ids-only span),
+the web Rotate button behind the consequence-stating ConfirmDialog,
+the Email Worker relay `infra/email-worker/` (derived 1.4 MiB
+threshold, chunked 3-aligned base64, envelope recipient, explicit
+2xx/400/413-bounce/401+5xx-throw matrix, 30 s AbortSignal timeout, no
+content logging) with 9 `node --test` cases wired into
+`./scripts/check`, `.env.example` D-025-drift + scheme comments, the
+declared 007a/007c grant-pin amendments. Independently reviewed
+("ready with fixes" — all applied: criterion-6 config-render test,
+TRUNCATE/migrator-DELETE pins, doc-comment fixes, scheme assert) and
+adversarially tested (no blocking issues; M1 worker-matrix tests,
+L1 return-token refactor, L6 fetch timeout all applied). ALL GATES
+GREEN: ./scripts/check (incl. worker tests) + ./scripts/check-db
+(db_intake_rotation 4/4 incl. the token-leak capture).
+
+OUTSTANDING: Phase 9 commit gate (diff + verification shown, commit
+approval), then merge gate (`slice-007g-real-receiving` → `main`;
+note local `main` `7ef2277` is itself unpushed — the push rides with
+the merge approval). Ops side notes: the user's Cloudflare API token
+in `.env` was re-minted during the runbook (zones + Email Routing
+Rules + DNS edit); rotation during the walkthrough means the seeded
+org's live intake address is the rotated one, visible in Intake
+Settings.)
+
+Planning phase, earlier (Slice 007g: D-039 accepted
 and recorded — the mandated wildcard check found no free/incumbent
 inbound path accepting arbitrary `*.elysianfeld.com` (Cloudflare Email
 Routing: ≤30 registered subdomains, no wildcard; SendGrid: named
@@ -208,14 +262,15 @@ PUSHED to `origin/main` (`fe0b99b`), all with explicit user approval
 
 ## Current phase
 
-**Slice 007g (real receiving) spec APPROVED (user, 2026-08-25);
-awaiting the Phase 6 implementation-gate approval.** D-039 accepted;
-D-036's SPF/DKIM wording amended via this approval (deferred with a
-conditional escalation). Spec: planner pass + live provider research,
-independent review (every factual claim code-verified, no blocking
-findings, all amendments applied), user-approved as written incl. the
-single-token rotation semantics. This rung interleaves code with
-user-executed Cloudflare console steps per §10.
+**Slice 007g (real receiving) CODE + OPS + LIVE WALKTHROUGH COMPLETE
+on `slice-007g-real-receiving` (2026-08-25): real Gmail → Cloudflare →
+worker → lead; forged token silently dropped; live rotation verified;
+Authentication-Results PRESENT (§6 escalation resolved — 007h may use
+SPF/DKIM). Uncommitted; awaiting the Phase 9 commit gate. See the
+header block.**
+
+Spec phase, for reference: spec APPROVED (user, 2026-08-25); D-039;
+D-036's SPF/DKIM wording amended via that approval.
 
 Prior phase: **Slice 007f (LLM extraction) COMPLETE: implemented,
 reviewed, adversarially tested (CRITICAL+HIGH found, fixed, pinned),
@@ -307,7 +362,10 @@ OrbStack hung twice. Hostname is `livekit1.tarams.org`.
 
 ## Current slice
 
-Slice 007g — Real receiving — `docs/specs/SLICE_007g.md` (APPROVED). Previous: Slice 007f — LLM extraction —
+Slice 007g — Real receiving — `docs/specs/SLICE_007g.md` — CODE
+COMPLETE + REVIEWED + ADVERSARIALLY TESTED + OPS RUNBOOK + LIVE
+WALKTHROUGH COMPLETE on `slice-007g-real-receiving` (off `main`
+`7ef2277`), uncommitted; awaiting commit + merge gates. Previous: Slice 007f — LLM extraction —
 `docs/specs/SLICE_007f.md` — COMPLETE, MERGED to `main` and pushed. Previous: Slice 007e — Unresolved
 workbench — `docs/specs/SLICE_007e.md` — COMPLETE, MERGED to `main`
 and pushed. Previous: Slice 007d — One pinned
@@ -1413,11 +1471,13 @@ slice:
 
 ## Approval currently required
 
-**Slice 007g implementation-gate approval** (AGENTS.md Phase 6): the
-spec is user-approved; the gate report awaits "Proceed with
-implementation?". The planning edits (spec, D-039, the D-036
-amendment, ladder rows 1+2 + rung-g row + 007d note, the SLICE_007a
-pointer, this file) also await a commit to `main`.
+**Resume the 007g ops runbook** (user's choice to pause,
+2026-08-25): the code is complete and verified, uncommitted on
+`slice-007g-real-receiving`. Next action on resume: runbook step 1
+(confirm the elysianfeld.com zone in the user's Cloudflare account),
+then steps 2–4 (Email Routing subdomain, wrangler deploy + secret,
+catch-all → worker), then the .env flip + live walkthrough, then the
+Phase 9 commit gate. No other approvals outstanding.
 
 Slice 007f: nothing outstanding — committed, merged, pushed, branch
 deleted, all with explicit user approval 2026-08-25.

@@ -42,4 +42,7 @@ echo "==> web test"
 echo "==> web build"
 (cd "$repo_root/web" && pnpm run build)
 
+echo "==> email-worker tests"
+(cd "$repo_root" && node --test infra/email-worker/worker.test.mjs)
+
 echo "==> all checks passed"

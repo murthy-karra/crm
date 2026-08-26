@@ -1,0 +1,16 @@
+# The elysianfeld.com inbound relay (docs/specs/SLICE_007g.md §3).
+# Deploy with `wrangler deploy`; set the secret with
+#   wrangler secret put CRM_INBOUND_EMAIL_SECRET
+# then bind the worker as the catch-all route for the
+# leads.elysianfeld.com subdomain in Email Routing.
+
+name = "crm-inbound-relay"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+# No public URL: this worker only receives email (Email Routing ->
+# Send to Worker); it never serves HTTP.
+workers_dev = false
+
+[vars]
+# The CRM's frozen inbound endpoint (SLICE_007b §5).
+CRM_INBOUND_API_URL = "https://api.tarams.org/inbound/email"

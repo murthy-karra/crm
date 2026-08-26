@@ -328,7 +328,11 @@ and rethrows on 5xx for MTA-level retry (live-verified, adjusted if
 Cloudflare's semantics differ); (f) catch-all routing at the edge —
 the endpoint stays the only judge of recipients (no edge-level
 oracle); (g) no realtime event on rotation; another tab's stale
-address until refetch accepted; (h) the subdomain-form addresses stay
+address until refetch accepted; (h2) two prior grant pins are amended, declared: 007a's
+"no UPDATE on intake_token" test and 007c's denied-columns list both
+predate this rung's grant — each now points at
+`db_intake_rotation.rs` as the rotation pin (`intake_slug` stays
+un-updatable forever); (h) the subdomain-form addresses stay
 parseable forever (`parse_recipient` unchanged) though unroutable
 once MX exists only on `leads.elysianfeld.com` — stated, accepted
 (no real subdomain-form mail ever flowed; the form existed only in

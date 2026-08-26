@@ -10,6 +10,7 @@ pub mod address;
 pub mod email;
 pub mod extraction;
 pub mod receive;
+pub mod rotate;
 pub mod workbench;
 
 pub use address::IntakeAddress;

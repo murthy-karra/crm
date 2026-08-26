@@ -63,6 +63,7 @@ function members(): MembersResponse {
 
 interface StubOptions {
   address?: () => Promise<IntakeAddressResponse>
+  rotate?: () => Promise<IntakeAddressResponse>
   members?: () => Promise<MembersResponse>
   settings?: () => Promise<IntakeSettingsResponse>
   update?: (body: IntakeSettingsRequest) => Promise<IntakeSettingsResponse>
@@ -75,7 +76,12 @@ function stub(options: StubOptions = {}) {
   apiFetchMock.mockImplementation((path: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET'
     if (path === '/me') return Promise.resolve(me())
-    if (path === '/organization/intake-address') return address()
+    if (path === '/organization/intake-address' && (init?.method ?? 'GET') === 'GET')
+      return address()
+    if (path === '/organization/intake-address/rotate' && init?.method === 'POST') {
+      if (!options.rotate) return Promise.reject(new Error('unexpected rotate POST'))
+      return options.rotate()
+    }
     if (path === '/organization/members') return membersFn()
     if (path === '/organization/intake-settings' && method === 'GET') return settings()
     if (path === '/organization/intake-settings' && method === 'PUT') {
@@ -213,5 +219,40 @@ describe('IntakeSettingsView — unattended lead routing (SLICE_007c §6)', () =
     expect(body.intake_default_assignee_user_id).toBeNull()
 
     expect(wrapper.find('[data-testid="intake-default-assignee-unset-warning"]').exists()).toBe(true)
+  })
+
+  // SLICE_007g §8: break-glass rotation behind a confirm stating the
+  // immediate-invalidation consequence.
+  it('rotates the address behind a confirm and shows the new one', async () => {
+    let current = ADDRESS
+    stub({
+      address: () => Promise.resolve({ address: current, scheme: 'local_part' as const }),
+      rotate: () => {
+        current = 'acme-realty-newtok99@leads.elysianfeld.com'
+        return Promise.resolve({ address: current, scheme: 'local_part' as const })
+      },
+    })
+    const wrapper = await mountView()
+
+    await wrapper.find('[data-testid="rotate-address"]').trigger('click')
+    await flushPromises()
+    // The confirm dialog (teleported) states the consequence; nothing
+    // rotated yet.
+    expect(document.body.textContent).toContain('stops working immediately')
+    expect(
+      apiFetchMock.mock.calls.filter(([p]) => p === '/organization/intake-address/rotate'),
+    ).toHaveLength(0)
+
+    const confirm = Array.from(document.body.querySelectorAll('button')).find(
+      (b) => b.textContent?.trim() === 'Rotate' && b.closest('[role="dialog"]'),
+    )
+    confirm?.click()
+    await flushPromises()
+
+    expect(
+      apiFetchMock.mock.calls.filter(([p]) => p === '/organization/intake-address/rotate'),
+    ).toHaveLength(1)
+    expect(wrapper.find('[data-testid="intake-address"]').text()).toContain('newtok99')
+    wrapper.unmount()
   })
 })

@@ -225,17 +225,23 @@ async fn intake_columns_have_their_checks_index_and_no_update_grant(migrator_poo
     .unwrap();
     assert!(indexdef.contains("UNIQUE"), "{indexdef}");
 
-    // No UPDATE grant for crm_app on either column (rotation is a later rung).
+    // The slug stays un-updatable by crm_app forever (immutable identity).
+    // intake_token gained its UPDATE grant in SLICE_007g (rotation — the
+    // "later rung" this comment originally deferred to); the rotate flow
+    // itself is pinned in db_intake_rotation.rs. Declared amendment of
+    // this 007a pin (SLICE_007g §4).
     let app_pool = common::connect_as_app(&migrator_pool).await;
-    for col in ["intake_slug", "intake_token"] {
-        let err = sqlx::query(&format!("UPDATE organization SET {col} = $1 WHERE false"))
-            .bind("whatever")
-            .execute(&app_pool)
-            .await
-            .unwrap_err();
-        let db = err.as_database_error().expect("a permission error");
-        assert_eq!(db.code().as_deref(), Some("42501"), "{col}");
-    }
+    let err = sqlx::query("UPDATE organization SET intake_slug = $1 WHERE false")
+        .bind("whatever")
+        .execute(&app_pool)
+        .await
+        .unwrap_err();
+    let db = err.as_database_error().expect("a permission error");
+    assert_eq!(db.code().as_deref(), Some("42501"), "intake_slug");
+    sqlx::query("UPDATE organization SET intake_token = 'abcd2345' WHERE false")
+        .execute(&app_pool)
+        .await
+        .expect("intake_token is updatable since SLICE_007g");
 }
 
 // --- Observability (docs/specs/SLICE_007a.md §9) -----------------------------------

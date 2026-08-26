@@ -269,12 +269,10 @@ async fn crm_app_update_grant_is_scoped_to_the_new_column_and_updated_at(migrato
         .await
         .unwrap();
 
-    // Denied.
-    for (col, value) in [
-        ("name", "'Renamed'"),
-        ("intake_slug", "'x'"),
-        ("intake_token", "'x'"),
-    ] {
+    // Denied. (intake_token left this list in SLICE_007g — rotation
+    // granted its UPDATE; pinned in db_intake_rotation.rs. Declared
+    // amendment.)
+    for (col, value) in [("name", "'Renamed'"), ("intake_slug", "'x'")] {
         let err = sqlx::query(&format!(
             "UPDATE organization SET {col} = {value} WHERE false"
         ))

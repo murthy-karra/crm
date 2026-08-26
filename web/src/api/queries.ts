@@ -145,6 +145,21 @@ export function useIntakeAddress(orgId: MaybeRefOrGetter<string>) {
   })
 }
 
+/** `POST /api/organization/intake-address/rotate` (SLICE_007g §5):
+ *  break-glass rotation; returns the NEW address in the GET shape. */
+export function useRotateIntakeAddressMutation(orgId: MaybeRefOrGetter<string>) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<IntakeAddressResponse>('/organization/intake-address/rotate', {
+        method: 'POST',
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.intakeAddress(toValue(orgId)) })
+    },
+  })
+}
+
 /** `GET /api/organization/intake-settings` (SLICE_007c §5) — org admins only. */
 export function useIntakeSettings(orgId: MaybeRefOrGetter<string>) {
   return useQuery({

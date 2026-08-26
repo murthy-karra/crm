@@ -68,11 +68,12 @@ pinned format with a valid contact method **will** create a Person —
 that is what a valid format means. Mitigations: the unguessable token;
 restricting each pinned format's `matches()` to its real sender domain;
 sender authentication (SPF/DKIM) deferred per SLICE_007g §6: the
-stored raw bytes are the carrier IF Cloudflare stamps
-`Authentication-Results` on Worker delivery (a known open issue says
-it may not) — the 007g walkthrough captures real headers and
-escalates before 007h relies on them; `ParsedMail.authenticated_sender`
-lands with its first consumer.
+stored raw bytes are the carrier, and the 007g live walkthrough
+(2026-08-25) RESOLVED the known-issue caveat — Email Routing → Worker
+delivery does stamp `Authentication-Results` from mx.cloudflare.net
+(observed live: dkim=pass, spf=pass, dmarc=pass, arc=pass), so 007h
+may rely on those verdicts; `ParsedMail.authenticated_sender` lands
+with its first consumer.
 
 ## Explicitly not in this ladder
 

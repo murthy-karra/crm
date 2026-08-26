@@ -97,3 +97,26 @@ async fn workbench_endpoints_without_cookie_return_401() {
         );
     }
 }
+
+/// SLICE_007g: the rotate endpoint's service-free shapes — 401 without a
+/// cookie (no DB touched).
+#[tokio::test]
+async fn rotate_without_cookie_returns_401() {
+    let state = AppState::new(&test_config()).unwrap();
+    let app = crm_api::build_app(state);
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/organization/intake-address/rotate")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        body_json(response).await,
+        serde_json::json!({ "error": "unauthenticated" })
+    );
+}

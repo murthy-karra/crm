@@ -17,7 +17,7 @@ use crate::domain::envelope::{CommandContext, Origin};
 use crate::domain::inquiry::parse::{self, Source};
 use crate::domain::intake::email;
 use crate::domain::intake::IntakeActor;
-use crate::domain::raw_payload::{crypto, store};
+use crate::domain::raw_payload::{crypto, store, PayloadFormat, Resolution};
 use crate::realtime::{Publication, Publisher, RealtimeEvent};
 
 /// Every text field in a detail response is capped here (raw mail can be
@@ -71,7 +71,7 @@ pub struct UnresolvedDetail {
     pub source: String,
     pub payload_format: String,
     pub received_at: DateTime<Utc>,
-    pub resolution: String,
+    pub resolution: Resolution,
     pub unresolved_reason: Option<String>,
     pub byte_len: i32,
     pub content: UnresolvedContent,
@@ -160,8 +160,8 @@ pub async fn unresolved_detail(
     .map_err(|_| WorkbenchError::Crypto)?;
 
     let mut truncated = false;
-    let content = match row.payload_format.as_str() {
-        "rfc822_v1" => match email::mime::parse(&plaintext) {
+    let content = match PayloadFormat::parse(&row.payload_format) {
+        Some(PayloadFormat::Rfc822V1) => match email::mime::parse(&plaintext) {
             Some(mail) => UnresolvedContent::Email {
                 subject: mail.subject.map(|s| cap(s, &mut truncated)),
                 from_display: mail.from_display.map(|s| cap(s, &mut truncated)),
@@ -180,7 +180,7 @@ pub async fn unresolved_detail(
                 truncated,
             },
         },
-        "generic_v1" => {
+        Some(PayloadFormat::GenericV1) => {
             let text = match serde_json::from_slice::<serde_json::Value>(&plaintext) {
                 Ok(value) => serde_json::to_string_pretty(&value)
                     .unwrap_or_else(|_| String::from_utf8_lossy(&plaintext).into_owned()),
@@ -194,7 +194,7 @@ pub async fn unresolved_detail(
         }
         // Unknown format: display-only fail-open as raw text (retry fails
         // closed instead — docs/specs/SLICE_007e.md safe default (e)).
-        _ => UnresolvedContent::Text {
+        None => UnresolvedContent::Text {
             text: cap(
                 String::from_utf8_lossy(&plaintext).into_owned(),
                 &mut truncated,
@@ -215,6 +215,18 @@ pub async fn unresolved_detail(
     })
 }
 
+/// The one per-format decision `retry_intake` needs: whether the stored
+/// row is retryable and, if so, how to parse it. Built by exactly one
+/// match on the stored `payload_format` (below) — before S1, the
+/// retryable-check and the dispatch it gates were two independent
+/// `match ... .as_str()` blocks that had to agree by hand; carrying the
+/// already-validated `Source` inside `Generic` means the dispatch below
+/// never re-parses (and can't re-derive a different answer).
+enum RetryPlan {
+    Rfc822,
+    Generic(Source),
+}
+
 /// Try again (docs/specs/SLICE_007e.md §4): a guarded reset-to-pending,
 /// then the shared `complete_intake` under the System actor with the
 /// acting admin recorded as `on_behalf_of_user_id` — the rescued lead
@@ -233,21 +245,21 @@ pub async fn retry_intake(
         .ok_or(WorkbenchError::NotFound)?;
     let row_source = locked.source.clone();
 
-    match locked.resolution.as_str() {
+    match locked.resolution {
         // The two-admin race: return the stored outcome, never reprocess.
-        "resolved" => {
+        Resolution::Resolved => {
             let outcome = duplicate_outcome(&mut tx, ctx.organization_id, locked)
                 .await
                 .map_err(WorkbenchError::Command)?;
             tx.commit().await?;
             return Ok(outcome);
         }
-        "discarded" => {
+        Resolution::Discarded => {
             tx.rollback().await?;
             return Err(WorkbenchError::Discarded);
         }
         // pending (a no-op reset) or unresolved.
-        _ => {}
+        Resolution::Pending | Resolution::Unresolved => {}
     }
 
     let meta = sqlx::query!(
@@ -264,16 +276,18 @@ pub async fn retry_intake(
     // Fail closed BEFORE mutating: a retry that can never succeed
     // (unknown payload_format, a stored source that no longer validates)
     // must not destroy the stored diagnostic reason (adversarial
-    // finding, SLICE_007e verification).
-    let retryable = match meta.payload_format.as_str() {
-        "rfc822_v1" => true,
-        "generic_v1" => Source::parse(&row_source).is_some(),
-        _ => false,
+    // finding, SLICE_007e verification). One match builds the plan
+    // (`RetryPlan` above) that both decides retryability and drives the
+    // dispatch below, so the two can never diverge.
+    let plan = match PayloadFormat::parse(&meta.payload_format) {
+        Some(PayloadFormat::Rfc822V1) => Some(RetryPlan::Rfc822),
+        Some(PayloadFormat::GenericV1) => Source::parse(&row_source).map(RetryPlan::Generic),
+        None => None,
     };
-    if !retryable {
+    let Some(plan) = plan else {
         tx.rollback().await?;
         return Err(WorkbenchError::Corrupt);
-    }
+    };
     // The reset also re-arms LLM extraction (docs/specs/SLICE_007f.md
     // §4b): an explicit human Try-again clears the attempt counters, so
     // a terminal not_a_lead / email_extraction_failed row that lands
@@ -305,19 +319,16 @@ pub async fn retry_intake(
         assign_to_user_id: None,
     };
 
-    let result = match meta.payload_format.as_str() {
-        "rfc822_v1" => {
+    let result = match plan {
+        RetryPlan::Rfc822 => {
             complete_intake(pool, key, publisher, &actor, params, email::parse_payload).await
         }
-        "generic_v1" => {
-            // Already validated above; the ok_or is unreachable belt.
-            let source = Source::parse(&row_source).ok_or(WorkbenchError::Corrupt)?;
+        RetryPlan::Generic(source) => {
             complete_intake(pool, key, publisher, &actor, params, move |bytes| {
                 parse::parse(bytes).map(|parsed| (source.clone(), parsed))
             })
             .await
         }
-        _ => return Err(WorkbenchError::Corrupt),
     };
     match result {
         Ok(outcome) => Ok(outcome),
@@ -358,17 +369,17 @@ pub async fn discard_raw_payload(
         .await?
         .ok_or(WorkbenchError::NotFound)?;
 
-    match locked.resolution.as_str() {
-        "discarded" => {
+    match locked.resolution {
+        Resolution::Discarded => {
             // Idempotent repeat; original attribution unchanged.
             tx.rollback().await?;
             return Ok(DiscardOutcome::AlreadyDiscarded);
         }
-        "resolved" => {
+        Resolution::Resolved => {
             tx.rollback().await?;
             return Err(WorkbenchError::AlreadyResolved);
         }
-        _ => {}
+        Resolution::Pending | Resolution::Unresolved => {}
     }
 
     sqlx::query!(

@@ -5,12 +5,28 @@ use chrono::{DateTime, Utc};
 use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
+use crate::domain::envelope::Origin;
+use crate::domain::inquiry::parse::Source;
+use crate::domain::raw_payload::{PayloadFormat, Resolution};
+
+/// A `raw_payload.resolution`/`payload_format` value read back that
+/// doesn't decode into its enum — the `CHECK` constraint on `resolution`
+/// (and, for `payload_format`, this slice's typed `insert_pending`) make
+/// this unreachable in practice, but a read path must never crash the
+/// process on unexpected data. Mirrors the shipped
+/// `Origin::decode(...).ok_or_else(...)` idiom in
+/// `domain/telephony/settle.rs` — the same `sqlx::Error::Decode` variant
+/// sqlx itself raises for an in-macro decode failure.
+fn decode_error(column: &'static str, value: &str) -> sqlx::Error {
+    sqlx::Error::Decode(format!("raw_payload.{column}: unknown value {value:?}").into())
+}
+
 pub struct LockedRawPayload {
     pub id: Uuid,
     pub source: String,
     pub nonce: Vec<u8>,
     pub ciphertext: Vec<u8>,
-    pub resolution: String,
+    pub resolution: Resolution,
     pub unresolved_reason: Option<String>,
     pub inquiry_id: Option<Uuid>,
 }
@@ -19,7 +35,7 @@ pub struct UnresolvedItem {
     pub id: Uuid,
     pub source: String,
     pub received_at: DateTime<Utc>,
-    pub resolution: String,
+    pub resolution: Resolution,
     pub unresolved_reason: Option<String>,
     pub byte_len: i32,
 }
@@ -43,9 +59,9 @@ pub async fn insert_pending(
     pool: &PgPool,
     id: Uuid,
     organization_id: Uuid,
-    source: &str,
-    payload_format: &str,
-    origin: &str,
+    source: &Source,
+    payload_format: PayloadFormat,
+    origin: Origin,
     received_at: DateTime<Utc>,
     nonce: &[u8],
     ciphertext: &[u8],
@@ -53,6 +69,9 @@ pub async fn insert_pending(
     byte_len: i32,
 ) -> Result<Uuid, sqlx::Error> {
     let mut tx = pool.begin().await?;
+    let source = source.as_str();
+    let payload_format = payload_format.as_str();
+    let origin = origin.as_str();
 
     sqlx::query!(
         r#"INSERT INTO raw_payload
@@ -95,15 +114,28 @@ pub async fn lock_for_processing(
     id: Uuid,
     organization_id: Uuid,
 ) -> Result<Option<LockedRawPayload>, sqlx::Error> {
-    sqlx::query_as!(
-        LockedRawPayload,
+    let row = sqlx::query!(
         r#"SELECT id, source, nonce, ciphertext, resolution, unresolved_reason, inquiry_id
            FROM raw_payload WHERE id = $1 AND organization_id = $2 FOR UPDATE"#,
         id,
         organization_id,
     )
     .fetch_optional(tx)
-    .await
+    .await?;
+    let Some(row) = row else {
+        return Ok(None);
+    };
+    let resolution = Resolution::parse(&row.resolution)
+        .ok_or_else(|| decode_error("resolution", &row.resolution))?;
+    Ok(Some(LockedRawPayload {
+        id: row.id,
+        source: row.source,
+        nonce: row.nonce,
+        ciphertext: row.ciphertext,
+        resolution,
+        unresolved_reason: row.unresolved_reason,
+        inquiry_id: row.inquiry_id,
+    }))
 }
 
 pub async fn mark_resolved(
@@ -177,8 +209,7 @@ pub async fn list_unresolved(
     conn: &mut PgConnection,
     organization_id: Uuid,
 ) -> Result<(Vec<UnresolvedItem>, bool), sqlx::Error> {
-    let mut rows = sqlx::query_as!(
-        UnresolvedItem,
+    let mut rows = sqlx::query!(
         r#"SELECT id, source, received_at, resolution, unresolved_reason, byte_len
            FROM raw_payload
            WHERE organization_id = $1 AND resolution IN ('pending', 'unresolved')
@@ -191,7 +222,22 @@ pub async fn list_unresolved(
 
     let truncated = rows.len() > 500;
     rows.truncate(500);
-    Ok((rows, truncated))
+    let items = rows
+        .into_iter()
+        .map(|row| {
+            let resolution = Resolution::parse(&row.resolution)
+                .ok_or_else(|| decode_error("resolution", &row.resolution))?;
+            Ok(UnresolvedItem {
+                id: row.id,
+                source: row.source,
+                received_at: row.received_at,
+                resolution,
+                unresolved_reason: row.unresolved_reason,
+                byte_len: row.byte_len,
+            })
+        })
+        .collect::<Result<Vec<_>, sqlx::Error>>()?;
+    Ok((items, truncated))
 }
 
 /// The workbench detail read (docs/specs/SLICE_007e.md §4): the full
@@ -201,9 +247,14 @@ pub async fn list_unresolved(
 pub struct DetailRawPayload {
     pub id: Uuid,
     pub source: String,
+    /// Left as the stored string, not decoded to `PayloadFormat` here:
+    /// the detail read stays fail-open for an unrecognized format
+    /// (docs/specs/SLICE_007e.md §4) — the workbench's content dispatch
+    /// parses this itself and falls back to raw text on `None`, which a
+    /// hard decode failure at this row boundary would foreclose.
     pub payload_format: String,
     pub received_at: DateTime<Utc>,
-    pub resolution: String,
+    pub resolution: Resolution,
     pub unresolved_reason: Option<String>,
     pub byte_len: i32,
     pub nonce: Vec<u8>,
@@ -215,8 +266,7 @@ pub async fn unresolved_row_for_detail(
     id: Uuid,
     organization_id: Uuid,
 ) -> Result<Option<DetailRawPayload>, sqlx::Error> {
-    sqlx::query_as!(
-        DetailRawPayload,
+    let row = sqlx::query!(
         r#"SELECT id, source, payload_format, received_at, resolution,
                   unresolved_reason, byte_len, nonce, ciphertext
            FROM raw_payload
@@ -226,5 +276,21 @@ pub async fn unresolved_row_for_detail(
         organization_id,
     )
     .fetch_optional(conn)
-    .await
+    .await?;
+    let Some(row) = row else {
+        return Ok(None);
+    };
+    let resolution = Resolution::parse(&row.resolution)
+        .ok_or_else(|| decode_error("resolution", &row.resolution))?;
+    Ok(Some(DetailRawPayload {
+        id: row.id,
+        source: row.source,
+        payload_format: row.payload_format,
+        received_at: row.received_at,
+        resolution,
+        unresolved_reason: row.unresolved_reason,
+        byte_len: row.byte_len,
+        nonce: row.nonce,
+        ciphertext: row.ciphertext,
+    }))
 }

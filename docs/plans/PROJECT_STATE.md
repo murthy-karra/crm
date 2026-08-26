@@ -1,6 +1,28 @@
 # Project State
 
-Last updated: 2026-08-25 (SLICE_007h1 IMPLEMENTED on
+Last updated: 2026-08-26 (NEW TRACK: type-safety hardening ladder
+surveyed and accepted as the working plan —
+`docs/design/type-safety-hardening.md` (full-backend planner sweep at
+`105f730`): 8 chunks, S1 (Resolution/PayloadFormat enums) → N1
+(OrganizationId) → N2 (UserId) → A1 (Actor enum) → N3/N4 (id
+clusters) → V1 (NormalizedEmail/Phone) → S2 (fact fields +
+IntakeToken + Publication). Each chunk behavior-preserving, own
+branch, gates green, wire/DB byte-identical; sqlx strategy = bind
+`.0`, `.sqlx` untouched; crm-operator seam stays bare Uuid (D-028
+fence). CHUNK S1 IMPLEMENTED on `hardening-s1` (Option A: Sonnet
+implementation subagent under Fable coordination — worked well; file
+list verified against git status, both deviations disclosed and
+sound). Independently reviewed: READY, no blockers; deferred minors:
+F1 (row-boundary `sqlx::Error::Decode` surfaces as 503 not 500 —
+fold a `Decode → Corrupt` mapping into S2) and F2 (no direct
+`duplicate_outcome(Pending)` pin — needs a crm-app db harness that
+doesn't exist; parse-level pins cover it). Gates verified green by
+the coordinator (check + check-db 285/0, `.sqlx` byte-untouched).
+Awaiting commit gate; then N1 (`OrganizationId`) is next. Feature
+slices may interleave.
+
+Prior update, 2026-08-25 (SLICE_007h1 COMPLETE, MERGED, PUSHED —
+`main` `105f730`. Detail below; SLICE_007h1 IMPLEMENTED on
 `slice-007h1-forwarded-wrapper` (off `main` `9604f76`), uncommitted.
 Built: email/forward.rs (SenderTrust Direct/ForwardedClaim,
 ForwardStyle registry, gmail_inline_v1, resolve with depth cap 3),

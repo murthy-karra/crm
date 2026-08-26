@@ -4,6 +4,8 @@
 use sqlx::PgConnection;
 use uuid::Uuid;
 
+use crate::ids::OrganizationId;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ContactKind {
     Email,
@@ -60,7 +62,7 @@ pub struct IdentifyMatch {
 /// before calling this.
 pub async fn identify(
     conn: &mut PgConnection,
-    organization_id: Uuid,
+    organization_id: OrganizationId,
     email: Option<&str>,
     phone: Option<&str>,
 ) -> Result<Option<IdentifyMatch>, sqlx::Error> {
@@ -89,7 +91,7 @@ pub async fn identify(
 
 async fn find_earliest_person(
     conn: &mut PgConnection,
-    organization_id: Uuid,
+    organization_id: OrganizationId,
     kind: ContactKind,
     normalized_value: &str,
 ) -> Result<Option<Uuid>, sqlx::Error> {
@@ -101,7 +103,7 @@ async fn find_earliest_person(
            WHERE cm.organization_id = $1 AND cm.kind = $2 AND cm.normalized_value = $3
            ORDER BY p.created_at ASC, p.id ASC
            LIMIT 1"#,
-        organization_id,
+        organization_id.0,
         kind_str,
         normalized_value,
     )

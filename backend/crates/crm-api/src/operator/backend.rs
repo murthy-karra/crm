@@ -16,6 +16,7 @@ use crate::domain::person::model::PersonSummary;
 use crate::domain::person::queries::{self as person_queries, HistoryEntry};
 use crate::domain::person::PersonVisibilityScope;
 use crate::domain::today::{self, TodayItem, TodayList};
+use crate::ids::OrganizationId;
 use crate::operator::explain;
 use crm_operator::{
     ContactMethodView, HistoryEntryView, InquiryView, NextWorkItem, OperatorContext, PersonCard,
@@ -147,10 +148,17 @@ fn history_detail(entry: &HistoryEntry) -> Option<String> {
     }
 }
 
+// crm-operator keeps a bare `Uuid` at the tool seam (D-028 §5 crate
+// fence); this is the one conversion point back to `OrganizationId` for
+// every crm-app call this file makes (hardening chunk N1).
+fn org_id(ctx: &OperatorContext) -> OrganizationId {
+    OrganizationId::new(ctx.organization_id)
+}
+
 async fn today_for(conn: &mut PgConnection, ctx: &OperatorContext) -> ToolResult<TodayList> {
     today::query(
         conn,
-        &PersonVisibilityScope::Organization(ctx.organization_id),
+        &PersonVisibilityScope::Organization(org_id(ctx)),
         ctx.actor_user_id,
         ctx.now,
     )
@@ -163,7 +171,7 @@ async fn visible_summary(
     ctx: &OperatorContext,
     person_id: Uuid,
 ) -> ToolResult<PersonSummary> {
-    person_queries::summary_by_id(conn, ctx.organization_id, person_id)
+    person_queries::summary_by_id(conn, org_id(ctx), person_id)
         .await
         .map_err(db_error)?
         .ok_or(ToolError::NotFound)
@@ -181,7 +189,7 @@ impl ToolBackend for SqlxToolBackend {
         let limit = i64::try_from(limit).unwrap_or(i64::MAX);
         let (summaries, truncated) = person_queries::search_summaries(
             &mut conn,
-            &PersonVisibilityScope::Organization(ctx.organization_id),
+            &PersonVisibilityScope::Organization(org_id(ctx)),
             query,
             limit,
         )
@@ -198,7 +206,7 @@ impl ToolBackend for SqlxToolBackend {
         let summary = visible_summary(&mut conn, ctx, person_id).await?;
 
         let contact_methods =
-            person_queries::contact_methods_for_person(&mut conn, ctx.organization_id, person_id)
+            person_queries::contact_methods_for_person(&mut conn, org_id(ctx), person_id)
                 .await
                 .map_err(db_error)?
                 .into_iter()
@@ -208,7 +216,7 @@ impl ToolBackend for SqlxToolBackend {
                 })
                 .collect();
 
-        let inquiries = inquiry_queries::list_for_person(&mut conn, ctx.organization_id, person_id)
+        let inquiries = inquiry_queries::list_for_person(&mut conn, org_id(ctx), person_id)
             .await
             .map_err(db_error)?
             .into_iter()
@@ -221,10 +229,9 @@ impl ToolBackend for SqlxToolBackend {
             })
             .collect();
 
-        let all_history =
-            person_queries::history_for_person(&mut conn, ctx.organization_id, person_id)
-                .await
-                .map_err(db_error)?;
+        let all_history = person_queries::history_for_person(&mut conn, org_id(ctx), person_id)
+            .await
+            .map_err(db_error)?;
         let skip = all_history.len().saturating_sub(MAX_HISTORY);
         let history = all_history
             .iter()
@@ -305,10 +312,9 @@ impl ToolBackend for SqlxToolBackend {
     ) -> ToolResult<StartCallProposalOutcome> {
         let mut conn = self.conn().await?;
         let summary = visible_summary(&mut conn, ctx, person_id).await?;
-        let methods =
-            person_queries::contact_methods_for_person(&mut conn, ctx.organization_id, person_id)
-                .await
-                .map_err(db_error)?;
+        let methods = person_queries::contact_methods_for_person(&mut conn, org_id(ctx), person_id)
+            .await
+            .map_err(db_error)?;
 
         let chosen = match contact_method_id {
             Some(id) => {

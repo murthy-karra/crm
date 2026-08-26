@@ -181,7 +181,10 @@ async fn post_turn(
 
     let ctx = OperatorContext {
         actor_user_id: auth.actor_user_id,
-        organization_id: auth.active_organization_id,
+        // crm-operator keeps a bare `Uuid` at the tool seam (D-028 §5
+        // crate fence) — convert explicitly at this boundary (hardening
+        // chunk N1).
+        organization_id: auth.active_organization_id.as_uuid(),
         actor_display_name: auth.actor_display_name.clone(),
         turn_id: Uuid::new_v4(),
         now: Utc::now(),
@@ -310,7 +313,7 @@ async fn confirm_proposal(
              AND status = 'proposed' AND expires_at > now()
            RETURNING person_id, contact_method_id, turn_id"#,
         proposal_id,
-        auth.active_organization_id,
+        auth.active_organization_id.0,
         auth.actor_user_id,
     )
     .fetch_optional(pool)
@@ -324,7 +327,7 @@ async fn confirm_proposal(
             r#"SELECT status, call_id FROM operator_proposal
                WHERE id = $1 AND organization_id = $2 AND actor_user_id = $3"#,
             proposal_id,
-            auth.active_organization_id,
+            auth.active_organization_id.0,
             auth.actor_user_id,
         )
         .fetch_optional(pool)
@@ -411,7 +414,7 @@ async fn confirm_proposal(
             let failed_call_id = sqlx::query_scalar!(
                 r#"SELECT id FROM call
                    WHERE organization_id = $1 AND correlation_id = $2"#,
-                auth.active_organization_id,
+                auth.active_organization_id.0,
                 row.turn_id,
             )
             .fetch_optional(pool)

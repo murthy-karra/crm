@@ -33,7 +33,7 @@ pub async fn insert_inquiry_received(
              inquiry_id, person_id, raw_payload_id, content_hmac, source, person_created, matched_by)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
            RETURNING id"#,
-        envelope.organization_id,
+        envelope.organization_id.0,
         actor_kind,
         envelope.actor_user_id,
         envelope.on_behalf_of_user_id,
@@ -75,7 +75,7 @@ pub async fn insert_routing_decision(
              inquiry_id, person_id, strategy, assignee_user_id)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
            RETURNING id"#,
-        envelope.organization_id,
+        envelope.organization_id.0,
         actor_kind,
         envelope.actor_user_id,
         envelope.on_behalf_of_user_id,
@@ -114,7 +114,7 @@ pub async fn insert_assignment_changed(
              person_id, from_user_id, to_user_id, reason)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
            RETURNING id"#,
-        envelope.organization_id,
+        envelope.organization_id.0,
         actor_kind,
         envelope.actor_user_id,
         envelope.on_behalf_of_user_id,
@@ -164,7 +164,7 @@ pub async fn insert_contact_attempted(
              person_id, channel, outcome, corrects_id, recorded_at)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,COALESCE($13, now()))
            RETURNING id"#,
-        envelope.organization_id,
+        envelope.organization_id.0,
         actor_kind,
         envelope.actor_user_id,
         envelope.on_behalf_of_user_id,
@@ -204,7 +204,7 @@ pub async fn insert_organization_created(
              occurred_at, correlation_id, causation_id)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
            RETURNING id"#,
-        envelope.organization_id,
+        envelope.organization_id.0,
         actor_kind,
         envelope.actor_user_id,
         envelope.on_behalf_of_user_id,
@@ -238,7 +238,7 @@ pub async fn insert_invitation_issued(
              invitation_id, role, superseded_invitation_id)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
            RETURNING id"#,
-        envelope.organization_id,
+        envelope.organization_id.0,
         actor_kind,
         envelope.actor_user_id,
         envelope.on_behalf_of_user_id,
@@ -274,7 +274,7 @@ pub async fn insert_invitation_resolved(
              invitation_id, outcome)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
            RETURNING id"#,
-        envelope.organization_id,
+        envelope.organization_id.0,
         actor_kind,
         envelope.actor_user_id,
         envelope.on_behalf_of_user_id,
@@ -313,7 +313,7 @@ pub async fn insert_membership_changed(
              user_id, from_role, to_role, from_status, to_status, reason)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
            RETURNING id"#,
-        envelope.organization_id,
+        envelope.organization_id.0,
         actor_kind,
         envelope.actor_user_id,
         envelope.on_behalf_of_user_id,
@@ -347,7 +347,7 @@ pub async fn insert_stage_changed(
              person_id, from_stage_id, to_stage_id, reason)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
            RETURNING id"#,
-        envelope.organization_id,
+        envelope.organization_id.0,
         actor_kind,
         envelope.actor_user_id,
         envelope.on_behalf_of_user_id,
@@ -396,7 +396,7 @@ pub async fn insert_call_completed(
              call_id, person_id, contact_method_id, outcome, answered_at, ended_at, talk_seconds)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
            RETURNING id"#,
-        envelope.organization_id,
+        envelope.organization_id.0,
         actor_kind,
         envelope.actor_user_id,
         envelope.on_behalf_of_user_id,

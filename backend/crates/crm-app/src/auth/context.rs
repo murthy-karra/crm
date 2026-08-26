@@ -6,6 +6,7 @@
 use uuid::Uuid;
 
 use crate::domain::admin::Role;
+use crate::ids::OrganizationId;
 
 /// The trusted actor and active Organization for this request, derived
 /// entirely server-side from the session cookie. Handlers take this as a
@@ -20,7 +21,7 @@ pub struct AuthContext {
     pub actor_user_id: Uuid,
     pub actor_email: String,
     pub actor_display_name: String,
-    pub active_organization_id: Uuid,
+    pub active_organization_id: OrganizationId,
     pub active_organization_name: String,
     pub role: Role,
 }

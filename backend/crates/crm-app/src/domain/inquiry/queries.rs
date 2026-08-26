@@ -5,8 +5,10 @@ use serde::Serialize;
 use sqlx::PgConnection;
 use uuid::Uuid;
 
+use crate::ids::OrganizationId;
+
 pub struct NewInquiry<'a> {
-    pub organization_id: Uuid,
+    pub organization_id: OrganizationId,
     pub person_id: Uuid,
     pub raw_payload_id: Uuid,
     pub source: &'a str,
@@ -21,7 +23,7 @@ pub async fn insert(conn: &mut PgConnection, new: NewInquiry<'_>) -> Result<Uuid
             (organization_id, person_id, raw_payload_id, source, source_external_id, message, received_at)
            VALUES ($1, $2, $3, $4, $5, $6, $7)
            RETURNING id"#,
-        new.organization_id,
+        new.organization_id.0,
         new.person_id,
         new.raw_payload_id,
         new.source,
@@ -47,7 +49,7 @@ pub struct InquirySummary {
 /// §5). Caller is responsible for the `PersonVisibilityScope` check.
 pub async fn list_for_person(
     conn: &mut PgConnection,
-    organization_id: Uuid,
+    organization_id: OrganizationId,
     person_id: Uuid,
 ) -> Result<Vec<InquirySummary>, sqlx::Error> {
     sqlx::query_as!(
@@ -56,7 +58,7 @@ pub async fn list_for_person(
            FROM inquiry
            WHERE organization_id = $1 AND person_id = $2
            ORDER BY received_at DESC"#,
-        organization_id,
+        organization_id.0,
         person_id,
     )
     .fetch_all(conn)

@@ -25,6 +25,7 @@ use crate::domain::intake::extraction::{
 };
 use crate::domain::intake::IntakeActor;
 use crate::domain::raw_payload::{crypto, store, Resolution};
+use crate::ids::OrganizationId;
 use crate::realtime::{Publication, Publisher, RealtimeEvent};
 
 pub const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(10);
@@ -250,7 +251,7 @@ async fn attempt_inner(
     let attempt_outcome: Result<AttemptOk, &'static str> = {
         match crypto::open(
             key,
-            row.organization_id,
+            OrganizationId::new(row.organization_id),
             row.id,
             &row.nonce,
             &row.ciphertext,
@@ -380,7 +381,7 @@ async fn attempt_inner(
                     return Ok(());
                 }
                 let actor = IntakeActor::System {
-                    organization_id: row.organization_id,
+                    organization_id: OrganizationId::new(row.organization_id),
                     origin: Origin::Webhook,
                     correlation_id,
                     on_behalf_of_user_id: None,
@@ -509,7 +510,9 @@ async fn attempt_inner(
 /// Returns false when a concurrent discard/retry/resolve superseded us.
 async fn reset_to_pending(pool: &PgPool, row: &ClaimedRow) -> Result<bool, sqlx::Error> {
     let mut tx = pool.begin().await?;
-    let locked = store::lock_for_processing(&mut tx, row.id, row.organization_id).await?;
+    let locked =
+        store::lock_for_processing(&mut tx, row.id, OrganizationId::new(row.organization_id))
+            .await?;
     let still_ours = matches!(
         &locked,
         Some(l) if l.resolution == Resolution::Unresolved
@@ -546,7 +549,9 @@ async fn un_reset(
     publisher: &Publisher,
 ) -> Result<bool, sqlx::Error> {
     let mut tx = pool.begin().await?;
-    let locked = store::lock_for_processing(&mut tx, row.id, row.organization_id).await?;
+    let locked =
+        store::lock_for_processing(&mut tx, row.id, OrganizationId::new(row.organization_id))
+            .await?;
     let mut terminal = false;
     if matches!(&locked, Some(l) if l.resolution == Resolution::Pending) {
         if counted && row.extraction_attempts + 1 >= MAX_QUALITY_ATTEMPTS {
@@ -603,7 +608,7 @@ async fn un_reset(
 
     if terminal {
         let event = RealtimeEvent::intake_unresolved_changed(
-            row.organization_id,
+            OrganizationId::new(row.organization_id),
             ledger.occurred_at,
             ledger.correlation_id,
             row.id,
@@ -626,7 +631,9 @@ async fn apply(
 ) -> Result<(), sqlx::Error> {
     let mut tx = pool.begin().await?;
     // Serialize with 007e actions and other workers.
-    let locked = store::lock_for_processing(&mut tx, row.id, row.organization_id).await?;
+    let locked =
+        store::lock_for_processing(&mut tx, row.id, OrganizationId::new(row.organization_id))
+            .await?;
     let still_ours = matches!(
         &locked,
         Some(l) if l.resolution == Resolution::Unresolved
@@ -699,7 +706,7 @@ async fn apply(
 
     if publish {
         let event = RealtimeEvent::intake_unresolved_changed(
-            row.organization_id,
+            OrganizationId::new(row.organization_id),
             ledger.occurred_at,
             ledger.correlation_id,
             row.id,

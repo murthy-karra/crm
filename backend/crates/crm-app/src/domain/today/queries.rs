@@ -277,7 +277,7 @@ pub async fn candidates(
                     CASE WHEN membership.by_inquiry THEN waiting.received_at ELSE oc.ended_at END ASC,
                     p.id ASC
            LIMIT 201"#,
-        organization_id,
+        organization_id.0,
         viewer,
         now,
     )

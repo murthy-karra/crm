@@ -19,6 +19,7 @@ use uuid::Uuid;
 
 use crm_api::domain::person::PersonVisibilityScope;
 use crm_api::domain::today;
+use crm_api::ids::OrganizationId;
 use crm_api::operator::OperatorRuntime;
 use crm_api::realtime::Publisher;
 use crm_api::state::AppState;
@@ -943,7 +944,7 @@ async fn explain_priority_position_matches_today_query_and_get_api_today(migrato
     let mut conn = app_pool.acquire().await.unwrap();
     let list = today::query(
         &mut conn,
-        &PersonVisibilityScope::Organization(f.org_acme),
+        &PersonVisibilityScope::Organization(OrganizationId::new(f.org_acme)),
         f.alice_id,
         Utc::now(),
     )

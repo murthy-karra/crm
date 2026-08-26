@@ -10,6 +10,7 @@ use uuid::Uuid;
 
 use crate::domain::person::model::UserRef;
 use crate::domain::telephony::{CallStatus, EndReason, FailureReason};
+use crate::ids::OrganizationId;
 
 /// One `call` row as the application sees it. `status`/reasons are
 /// decoded enums; a value the CHECK constraints allow but the application
@@ -17,7 +18,7 @@ use crate::domain::telephony::{CallStatus, EndReason, FailureReason};
 #[derive(Debug, Clone)]
 pub struct CallRow {
     pub id: Uuid,
-    pub organization_id: Uuid,
+    pub organization_id: OrganizationId,
     pub person_id: Uuid,
     pub contact_method_id: Uuid,
     pub caller_user_id: Uuid,
@@ -90,7 +91,7 @@ impl TryFrom<RawCallRow> for CallRow {
             .transpose()?;
         Ok(CallRow {
             id: row.id,
-            organization_id: row.organization_id,
+            organization_id: OrganizationId::new(row.organization_id),
             person_id: row.person_id,
             contact_method_id: row.contact_method_id,
             caller_user_id: row.caller_user_id,
@@ -114,7 +115,7 @@ impl TryFrom<RawCallRow> for CallRow {
 /// `call_by_id(conn, organization_id, id)` (docs/specs/SLICE_006.md §3).
 pub async fn call_by_id(
     conn: &mut PgConnection,
-    organization_id: Uuid,
+    organization_id: OrganizationId,
     id: Uuid,
 ) -> Result<Option<CallRow>, sqlx::Error> {
     let row = sqlx::query_as!(
@@ -123,7 +124,7 @@ pub async fn call_by_id(
                   correlation_id, status, failure_reason, end_reason, provider, provider_room,
                   provider_call_ref, placed_at, dial_requested_at, ringing_at, answered_at, ended_at
            FROM call WHERE organization_id = $1 AND id = $2"#,
-        organization_id,
+        organization_id.0,
         id,
     )
     .fetch_optional(conn)
@@ -136,7 +137,7 @@ pub async fn call_by_id(
 /// own statements.
 pub async fn lock_call(
     conn: &mut PgConnection,
-    organization_id: Uuid,
+    organization_id: OrganizationId,
     id: Uuid,
 ) -> Result<Option<CallRow>, sqlx::Error> {
     let row = sqlx::query_as!(
@@ -145,7 +146,7 @@ pub async fn lock_call(
                   correlation_id, status, failure_reason, end_reason, provider, provider_room,
                   provider_call_ref, placed_at, dial_requested_at, ringing_at, answered_at, ended_at
            FROM call WHERE organization_id = $1 AND id = $2 FOR UPDATE"#,
-        organization_id,
+        organization_id.0,
         id,
     )
     .fetch_optional(conn)
@@ -178,14 +179,14 @@ pub async fn call_by_room(
 /// exists by the partial unique index.
 pub async fn active_call_for_user(
     conn: &mut PgConnection,
-    organization_id: Uuid,
+    organization_id: OrganizationId,
     caller_user_id: Uuid,
 ) -> Result<Option<Uuid>, sqlx::Error> {
     let row = sqlx::query!(
         r#"SELECT id FROM call
            WHERE organization_id = $1 AND caller_user_id = $2
              AND status IN ('placing', 'ringing', 'answered')"#,
-        organization_id,
+        organization_id.0,
         caller_user_id,
     )
     .fetch_optional(conn)
@@ -195,7 +196,7 @@ pub async fn active_call_for_user(
 
 pub struct NewCall<'a> {
     pub id: Uuid,
-    pub organization_id: Uuid,
+    pub organization_id: OrganizationId,
     pub person_id: Uuid,
     pub contact_method_id: Uuid,
     pub caller_user_id: Uuid,
@@ -215,7 +216,7 @@ pub async fn insert_placing(conn: &mut PgConnection, call: NewCall<'_>) -> Resul
              correlation_id, status, provider, provider_room, placed_at)
            VALUES ($1, $2, $3, $4, $5, $6, $7, 'placing', $8, $9, $10)"#,
         call.id,
-        call.organization_id,
+        call.organization_id.0,
         call.person_id,
         call.contact_method_id,
         call.caller_user_id,
@@ -235,7 +236,7 @@ pub async fn insert_placing(conn: &mut PgConnection, call: NewCall<'_>) -> Resul
 /// already requested or not `placing` (409 `invalid_call_state`).
 pub async fn mark_dial_requested(
     conn: &mut PgConnection,
-    organization_id: Uuid,
+    organization_id: OrganizationId,
     id: Uuid,
     now: DateTime<Utc>,
 ) -> Result<bool, sqlx::Error> {
@@ -243,7 +244,7 @@ pub async fn mark_dial_requested(
         r#"UPDATE call SET dial_requested_at = $3, updated_at = $3
            WHERE organization_id = $1 AND id = $2
              AND dial_requested_at IS NULL AND status = 'placing'"#,
-        organization_id,
+        organization_id.0,
         id,
         now,
     )
@@ -258,7 +259,7 @@ pub async fn mark_dial_requested(
 /// `normalized_value`; `value` is never used for dialing.
 pub async fn phone_contact_method_normalized(
     conn: &mut PgConnection,
-    organization_id: Uuid,
+    organization_id: OrganizationId,
     person_id: Uuid,
     contact_method_id: Uuid,
 ) -> Result<Option<String>, sqlx::Error> {
@@ -267,7 +268,7 @@ pub async fn phone_contact_method_normalized(
            WHERE id = $1 AND person_id = $2 AND organization_id = $3 AND kind = 'phone'"#,
         contact_method_id,
         person_id,
-        organization_id,
+        organization_id.0,
     )
     .fetch_optional(conn)
     .await?;
@@ -281,7 +282,7 @@ pub async fn phone_contact_method_normalized(
 /// dial task needs it.
 pub async fn phone_contact_method_exists(
     conn: &mut PgConnection,
-    organization_id: Uuid,
+    organization_id: OrganizationId,
     person_id: Uuid,
     contact_method_id: Uuid,
 ) -> Result<bool, sqlx::Error> {
@@ -290,7 +291,7 @@ pub async fn phone_contact_method_exists(
            WHERE id = $1 AND person_id = $2 AND organization_id = $3 AND kind = 'phone'"#,
         contact_method_id,
         person_id,
-        organization_id,
+        organization_id.0,
     )
     .fetch_optional(conn)
     .await?;
@@ -351,7 +352,7 @@ pub async fn caller_display_name(
 /// Organization; foreign → `None`.
 pub async fn call_view_by_id(
     conn: &mut PgConnection,
-    organization_id: Uuid,
+    organization_id: OrganizationId,
     id: Uuid,
 ) -> Result<Option<CallView>, sqlx::Error> {
     let Some(row) = call_by_id(conn, organization_id, id).await? else {

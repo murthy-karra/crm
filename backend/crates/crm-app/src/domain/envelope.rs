@@ -5,6 +5,7 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::auth::AuthContext;
+use crate::ids::OrganizationId;
 
 /// `actor_kind` on every fact row. This slice only ever writes `User` (a
 /// future webhook adapter writes `System` — spec §5's "actor_kind =
@@ -78,7 +79,7 @@ impl Origin {
 /// correlation id, chaining turn → call → facts for the audit trail.
 #[derive(Debug, Clone)]
 pub struct CommandContext {
-    pub organization_id: Uuid,
+    pub organization_id: OrganizationId,
     pub actor_user_id: Uuid,
     pub origin: Origin,
     pub correlation_id: Uuid,
@@ -126,7 +127,7 @@ impl CommandContext {
 /// reports.
 #[derive(Debug, Clone)]
 pub struct FactEnvelope {
-    pub organization_id: Uuid,
+    pub organization_id: OrganizationId,
     pub actor_kind: ActorKind,
     pub actor_user_id: Option<Uuid>,
     pub on_behalf_of_user_id: Option<Uuid>,
@@ -172,7 +173,7 @@ impl FactEnvelope {
     /// Delivery paths pass `None`. Declared additive extension of the
     /// SLICE_007c §4 signature (SLICE_007e approval).
     pub fn for_system(
-        organization_id: Uuid,
+        organization_id: OrganizationId,
         origin: Origin,
         occurred_at: DateTime<Utc>,
         correlation_id: Uuid,

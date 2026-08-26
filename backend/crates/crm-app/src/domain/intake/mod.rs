@@ -20,6 +20,7 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::domain::envelope::{ActorKind, CommandContext, FactEnvelope, Origin};
+use crate::ids::OrganizationId;
 
 /// The actor behind a `receive_inquiry` call (docs/specs/SLICE_007c.md
 /// §4): either an authenticated user's trusted session context, or no
@@ -32,7 +33,7 @@ use crate::domain::envelope::{ActorKind, CommandContext, FactEnvelope, Origin};
 pub enum IntakeActor {
     User(CommandContext),
     System {
-        organization_id: Uuid,
+        organization_id: OrganizationId,
         origin: Origin,
         correlation_id: Uuid,
         /// The human whose action caused this unattended execution
@@ -43,7 +44,7 @@ pub enum IntakeActor {
 }
 
 impl IntakeActor {
-    pub fn organization_id(&self) -> Uuid {
+    pub fn organization_id(&self) -> OrganizationId {
         match self {
             IntakeActor::User(ctx) => ctx.organization_id,
             IntakeActor::System {
@@ -108,7 +109,7 @@ mod tests {
 
     #[test]
     fn system_actor_accessors_and_envelope() {
-        let organization_id = Uuid::new_v4();
+        let organization_id = OrganizationId::new(Uuid::new_v4());
         let correlation_id = Uuid::new_v4();
         let occurred_at = Utc::now();
         let actor = IntakeActor::System {
@@ -141,7 +142,7 @@ mod tests {
         // on_behalf_of_user_id while staying a System actor.
         let admin = Uuid::new_v4();
         let actor = IntakeActor::System {
-            organization_id: Uuid::new_v4(),
+            organization_id: OrganizationId::new(Uuid::new_v4()),
             origin: Origin::WebSession,
             correlation_id: Uuid::new_v4(),
             on_behalf_of_user_id: Some(admin),
@@ -156,7 +157,7 @@ mod tests {
     #[test]
     fn user_actor_accessors_and_envelope() {
         let ctx = CommandContext {
-            organization_id: Uuid::new_v4(),
+            organization_id: OrganizationId::new(Uuid::new_v4()),
             actor_user_id: Uuid::new_v4(),
             origin: Origin::WebSession,
             correlation_id: Uuid::new_v4(),

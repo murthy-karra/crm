@@ -14,6 +14,7 @@ use crate::auth::session;
 use crate::auth::AuthContext;
 use crate::domain::admin::Role;
 use crate::error::ApiError;
+use crate::ids::OrganizationId;
 use crate::state::AppState;
 
 /// Resolves the caller's session identity from the cookie, rejecting with
@@ -56,7 +57,10 @@ impl FromRequestParts<AppState> for AuthContext {
             actor_user_id: identity.user_id,
             actor_email: identity.email,
             actor_display_name: identity.display_name,
-            active_organization_id: organization.id,
+            // The org id enters the trusted system here — the one
+            // construction site for `OrganizationId` on the session-read
+            // path (hardening chunk N1).
+            active_organization_id: OrganizationId::new(organization.id),
             active_organization_name: organization.name,
             role: organization.role,
         })

@@ -16,6 +16,7 @@ use crate::domain::facts::{self, CallCompletedFact, ContactAttemptedFact};
 use crate::domain::telephony::queries::{self, CallRow};
 use crate::domain::telephony::transitions::{apply, Signal, Transition};
 use crate::domain::telephony::CallStatus;
+use crate::ids::OrganizationId;
 use crate::realtime::{PersonChange, Publication, Publisher, RealtimeEvent};
 
 /// What one `settle_in_tx` decided and what to publish after commit.
@@ -39,7 +40,7 @@ impl SettleOutcome {
 /// such call exists in `organization_id`. Does not commit.
 pub async fn settle_in_tx(
     tx: &mut PgConnection,
-    organization_id: Uuid,
+    organization_id: OrganizationId,
     call_id: Uuid,
     signal: &Signal,
     now: DateTime<Utc>,
@@ -86,7 +87,7 @@ pub async fn settle_in_tx(
            SET status = $3, failure_reason = $4, end_reason = $5, provider_call_ref = $6,
                ringing_at = $7, answered_at = $8, ended_at = $9, updated_at = $10
            WHERE organization_id = $1 AND id = $2"#,
-        organization_id,
+        organization_id.0,
         call.id,
         status,
         failure_reason,
@@ -194,7 +195,7 @@ pub async fn settle_in_tx(
 pub async fn settle(
     pool: &PgPool,
     publisher: &Publisher,
-    organization_id: Uuid,
+    organization_id: OrganizationId,
     call_id: Uuid,
     signal: &Signal,
     now: DateTime<Utc>,

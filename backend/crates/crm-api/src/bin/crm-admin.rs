@@ -22,6 +22,7 @@ use crm_api::domain::commands::{self, ReceiveInquiry, ReceiveInquiryOutcome};
 use crm_api::domain::envelope::Origin;
 use crm_api::domain::inquiry::parse::Source;
 use crm_api::domain::intake::IntakeActor;
+use crm_api::ids::OrganizationId;
 use crm_api::realtime::Publisher;
 
 const DEFAULT_INVITATION_TTL: Duration = Duration::from_secs(168 * 3600);
@@ -220,9 +221,11 @@ async fn run_create_organization(mut args: Vec<String>) -> Result<(), Box<dyn st
     // the local CLI (docs/specs/SLICE_007a.md §5).
     let intake_mail = crm_api::config::intake_mail_config(&|key| std::env::var(key).ok())?;
     let mut conn = pool.acquire().await?;
-    if let Some((slug, token)) =
-        crm_api::domain::admin::queries::organization_intake_address(&mut conn, organization.id)
-            .await?
+    if let Some((slug, token)) = crm_api::domain::admin::queries::organization_intake_address(
+        &mut conn,
+        OrganizationId::new(organization.id),
+    )
+    .await?
     {
         let address = crm_api::domain::intake::IntakeAddress { slug, token }.render(&intake_mail);
         println!("intake address: {address}");
@@ -232,8 +235,9 @@ async fn run_create_organization(mut args: Vec<String>) -> Result<(), Box<dyn st
 
 async fn run_invite(mut args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     let organization_id_raw = require_flag(&mut args, "organization")?;
-    let organization_id =
-        Uuid::parse_str(&organization_id_raw).map_err(|_| "--organization must be a UUID")?;
+    let organization_id = OrganizationId::new(
+        Uuid::parse_str(&organization_id_raw).map_err(|_| "--organization must be a UUID")?,
+    );
     let email = require_flag(&mut args, "email")?;
     let role_raw = require_flag(&mut args, "role")?;
     let role = match role_raw.as_str() {
@@ -299,8 +303,9 @@ async fn run_set_password(mut args: Vec<String>) -> Result<(), Box<dyn std::erro
 /// Today rather than relying on realtime.
 async fn run_receive_inquiry(mut args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     let organization_id_raw = require_flag(&mut args, "organization")?;
-    let organization_id =
-        Uuid::parse_str(&organization_id_raw).map_err(|_| "--organization must be a UUID")?;
+    let organization_id = OrganizationId::new(
+        Uuid::parse_str(&organization_id_raw).map_err(|_| "--organization must be a UUID")?,
+    );
     let source_raw = require_flag(&mut args, "source")?;
     let source = Source::parse(&source_raw).ok_or("--source must be 1-64 chars of [a-z0-9_]")?;
     let payload_file = require_flag(&mut args, "payload-file")?;

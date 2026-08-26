@@ -21,6 +21,7 @@ use crate::domain::intake::IntakeActor;
 use crate::domain::person::queries as person_queries;
 use crate::domain::raw_payload::{crypto, store, PayloadFormat, Resolution};
 use crate::domain::stage;
+use crate::ids::OrganizationId;
 use crate::realtime::{PersonChange, Publication, Publisher, RealtimeEvent};
 
 pub struct ReceiveInquiry {
@@ -609,7 +610,7 @@ where
 /// outcome instead of reprocessing.
 pub(crate) async fn duplicate_outcome(
     tx: &mut sqlx::PgConnection,
-    organization_id: Uuid,
+    organization_id: OrganizationId,
     locked: store::LockedRawPayload,
 ) -> Result<ReceiveInquiryOutcome, CommandError> {
     match locked.resolution {

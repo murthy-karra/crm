@@ -14,6 +14,7 @@ use crm_api::domain::commands::{self, ReceiveInquiry, ReceiveInquiryOutcome, Rou
 use crm_api::domain::envelope::{ActorKind, Origin};
 use crm_api::domain::inquiry::parse::Source;
 use crm_api::domain::intake::IntakeActor;
+use crm_api::ids::OrganizationId;
 use crm_api::realtime::Publisher;
 
 const PW: &str = "pw";
@@ -21,7 +22,7 @@ const PW: &str = "pw";
 async fn set_default(pool: &PgPool, org_id: Uuid, user_id: Option<Uuid>) {
     admin_queries::update_intake_default_assignee(
         &mut pool.acquire().await.unwrap(),
-        org_id,
+        OrganizationId::new(org_id),
         user_id,
     )
     .await
@@ -46,7 +47,7 @@ async fn system_intake(
     let key = common::test_config().raw_payload_key;
     let actor = IntakeActor::System {
         on_behalf_of_user_id: None,
-        organization_id: org_id,
+        organization_id: OrganizationId::new(org_id),
         origin: Origin::Cli,
         correlation_id: Uuid::new_v4(),
     };
@@ -294,7 +295,7 @@ async fn default_member_deactivated_routes_unassigned_and_setting_is_retained(
 
     let stored = admin_queries::intake_default_assignee_user_id(
         &mut migrator_pool.acquire().await.unwrap(),
-        org_id,
+        OrganizationId::new(org_id),
     )
     .await
     .unwrap();
@@ -504,7 +505,7 @@ async fn system_actor_intake_into_org_a_writes_zero_rows_in_org_b(migrator_pool:
     // stays empty — the cross-org write did not leak into org B's state.
     let org_b_default = admin_queries::intake_default_assignee_user_id(
         &mut migrator_pool.acquire().await.unwrap(),
-        org_b,
+        OrganizationId::new(org_b),
     )
     .await
     .unwrap();

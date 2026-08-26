@@ -9,7 +9,7 @@ pub mod telemetry;
 
 // The application layer moved to `crm-app` (docs/specs/SLICE_006a.md);
 // these shims keep every existing `crm_api::…`/`crate::…` path valid.
-pub use crm_app::{domain, realtime, telephony};
+pub use crm_app::{domain, ids, realtime, telephony};
 
 use axum::http::{HeaderName, HeaderValue, Method};
 use axum::Router;

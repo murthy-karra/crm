@@ -22,6 +22,7 @@ use crm_api::domain::admin::commands::{
 };
 use crm_api::domain::admin::{AdminActor, MembershipStatus, Role};
 use crm_api::domain::envelope::Origin;
+use crm_api::ids::OrganizationId;
 use crm_api::realtime::Publisher;
 
 const TTL: Duration = Duration::from_secs(168 * 3600);
@@ -71,7 +72,7 @@ async fn crm_app_cannot_mint_platform_admin_or_mutate_invitation_token_hash(migr
         "Owner",
         TTL,
         IssueInvitation {
-            organization_id: org_id,
+            organization_id: OrganizationId::new(org_id),
             email: "invitee@acme.test".to_string(),
             role: Role::Member,
         },
@@ -154,7 +155,7 @@ async fn admin_fact_rows(migrator_pool: &PgPool, app_pool: &PgPool) -> AdminFact
         "Bootstrap",
         TTL,
         IssueInvitation {
-            organization_id: organization.id,
+            organization_id: OrganizationId::new(organization.id),
             email: "newadmin@factrows.test".to_string(),
             role: Role::Member,
         },
@@ -190,7 +191,7 @@ async fn admin_fact_rows(migrator_pool: &PgPool, app_pool: &PgPool) -> AdminFact
         app_pool,
         actor,
         ChangeMemberRole {
-            organization_id: organization.id,
+            organization_id: OrganizationId::new(organization.id),
             user_id: accepted.user_id,
             role: Role::Admin,
         },
@@ -313,7 +314,7 @@ async fn admin_facts_are_pii_free_and_carry_correct_origin(migrator_pool: PgPool
         "Owner",
         TTL,
         IssueInvitation {
-            organization_id: organization.id,
+            organization_id: OrganizationId::new(organization.id),
             email: "secret-email@origin-check.test".to_string(),
             role: Role::Admin,
         },
@@ -615,7 +616,7 @@ async fn cross_organization_admin_routes_are_byte_identical_404s(migrator_pool: 
         "Bob",
         TTL,
         IssueInvitation {
-            organization_id: org_b,
+            organization_id: OrganizationId::new(org_b),
             email: "target@best.test".to_string(),
             role: Role::Member,
         },
@@ -802,7 +803,7 @@ async fn concurrent_double_accept_of_the_same_token_exactly_one_succeeds(migrato
         "Alice",
         TTL,
         IssueInvitation {
-            organization_id: org_id,
+            organization_id: OrganizationId::new(org_id),
             email: "racer19@acme.test".to_string(),
             role: Role::Member,
         },
@@ -936,7 +937,7 @@ async fn concurrent_issue_and_accept_never_leaves_a_dangling_invitation_or_bare_
         "Alice",
         TTL,
         IssueInvitation {
-            organization_id: org_id,
+            organization_id: OrganizationId::new(org_id),
             email: email.clone(),
             role: Role::Member,
         },
@@ -968,7 +969,7 @@ async fn concurrent_issue_and_accept_never_leaves_a_dangling_invitation_or_bare_
             "Alice",
             TTL,
             IssueInvitation {
-                organization_id: org_id,
+                organization_id: OrganizationId::new(org_id),
                 email: reissue_email,
                 role: Role::Member,
             },
@@ -1088,7 +1089,7 @@ async fn read_committed_per_statement_snapshot_observes_a_commit_made_after_the_
         "Alice",
         TTL,
         IssueInvitation {
-            organization_id: org_id,
+            organization_id: OrganizationId::new(org_id),
             email: email.to_string(),
             role: Role::Member,
         },
@@ -1100,9 +1101,13 @@ async fn read_committed_per_statement_snapshot_observes_a_commit_made_after_the_
     // of `issue_invitation_attempt` between its first `is_member_by_email`
     // check and its pre-insert re-check.
     let mut tx = app_pool.begin().await.unwrap();
-    let before = crm_api::domain::admin::queries::is_member_by_email(&mut tx, org_id, email)
-        .await
-        .unwrap();
+    let before = crm_api::domain::admin::queries::is_member_by_email(
+        &mut tx,
+        OrganizationId::new(org_id),
+        email,
+    )
+    .await
+    .unwrap();
     assert!(!before, "not yet a member: no accept has happened yet");
 
     // A separate, fully independent connection completes a real accept —
@@ -1120,9 +1125,13 @@ async fn read_committed_per_statement_snapshot_observes_a_commit_made_after_the_
     .unwrap();
 
     // The still-open transaction's next statement sees it.
-    let after = crm_api::domain::admin::queries::is_member_by_email(&mut tx, org_id, email)
-        .await
-        .unwrap();
+    let after = crm_api::domain::admin::queries::is_member_by_email(
+        &mut tx,
+        OrganizationId::new(org_id),
+        email,
+    )
+    .await
+    .unwrap();
     assert!(
         after,
         "a fresh statement in the still-open transaction must observe the \
@@ -1256,7 +1265,7 @@ async fn expired_invitation_returns_410_and_org_state_flips_to_needs_attention(
         "Owner",
         TTL,
         IssueInvitation {
-            organization_id: organization.id,
+            organization_id: OrganizationId::new(organization.id),
             email: "expiring9@example.com".to_string(),
             role: Role::Admin,
         },
@@ -1476,7 +1485,7 @@ async fn two_admins_concurrently_demoting_each_other_leaves_at_least_one_active_
             &app_pool,
             owner_actor(alice),
             ChangeMemberRole {
-                organization_id: org_id,
+                organization_id: OrganizationId::new(org_id),
                 user_id: bob,
                 role: Role::Member,
             },
@@ -1488,7 +1497,7 @@ async fn two_admins_concurrently_demoting_each_other_leaves_at_least_one_active_
             &app_pool_2,
             owner_actor(bob),
             ChangeMemberRole {
-                organization_id: org_id,
+                organization_id: OrganizationId::new(org_id),
                 user_id: alice,
                 role: Role::Member,
             },
@@ -1866,7 +1875,7 @@ async fn revoking_an_accepted_invitation_is_invitation_used(migrator_pool: PgPoo
         "Alice",
         TTL,
         IssueInvitation {
-            organization_id: org_id,
+            organization_id: OrganizationId::new(org_id),
             email: "gina18@acme.test".to_string(),
             role: Role::Member,
         },
@@ -1889,7 +1898,7 @@ async fn revoking_an_accepted_invitation_is_invitation_used(migrator_pool: PgPoo
         &app_pool,
         owner_actor(alice),
         RevokeInvitation {
-            organization_id: org_id,
+            organization_id: OrganizationId::new(org_id),
             invitation_id: outcome.invitation.id,
         },
     )

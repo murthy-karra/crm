@@ -19,6 +19,7 @@ use crate::domain::telephony::queries;
 use crate::domain::telephony::settle::{settle, SettleOutcome};
 use crate::domain::telephony::transitions::Signal;
 use crate::domain::telephony::CallStatus;
+use crate::ids::OrganizationId;
 use crate::realtime::Publisher;
 use crate::telephony::livekit::ADMIN_CALL_TIMEOUT;
 use crate::telephony::{
@@ -31,7 +32,7 @@ pub struct DialTask {
     pub pool: PgPool,
     pub publisher: Publisher,
     pub telephony: Arc<Telephony>,
-    pub organization_id: Uuid,
+    pub organization_id: OrganizationId,
     pub call_id: Uuid,
     pub person_id: Uuid,
     pub contact_method_id: Uuid,

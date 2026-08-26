@@ -20,6 +20,7 @@ use crm_api::config::Config;
 use crm_api::domain::admin::queries as admin_queries;
 use crm_api::domain::commands::receive_inquiry::ADVISORY_LOCK_BUDGET;
 use crm_api::domain::raw_payload::crypto;
+use crm_api::ids::OrganizationId;
 use crm_api::realtime::Publisher;
 use crm_api::state::AppState;
 
@@ -111,7 +112,7 @@ async fn org_with_default(migrator_pool: &PgPool, name: &str) -> (Uuid, Uuid, Uu
     common::add_membership(migrator_pool, org_id, alice).await;
     admin_queries::update_intake_default_assignee(
         &mut migrator_pool.acquire().await.unwrap(),
-        org_id,
+        OrganizationId::new(org_id),
         Some(bob),
     )
     .await
@@ -488,7 +489,7 @@ async fn terminal_unresolved_row_is_never_reprocessed_by_redelivery(migrator_poo
     // A 007b-era terminal row for the (now in-format) cypress bytes.
     let old_id = Uuid::new_v4();
     let content_hmac = crypto::content_hmac(&key, CYPRESS_EML);
-    let sealed = crypto::seal(&key, org_id, old_id, CYPRESS_EML).unwrap();
+    let sealed = crypto::seal(&key, OrganizationId::new(org_id), old_id, CYPRESS_EML).unwrap();
     sqlx::query(
         r#"INSERT INTO raw_payload
             (id, organization_id, source, payload_format, origin, received_at,
@@ -541,7 +542,7 @@ async fn stuck_pending_in_format_row_resolves_end_to_end_on_redelivery(migrator_
 
     let stuck_id = Uuid::new_v4();
     let content_hmac = crypto::content_hmac(&key, CYPRESS_EML);
-    let sealed = crypto::seal(&key, org_id, stuck_id, CYPRESS_EML).unwrap();
+    let sealed = crypto::seal(&key, OrganizationId::new(org_id), stuck_id, CYPRESS_EML).unwrap();
     sqlx::query(
         r#"INSERT INTO raw_payload
             (id, organization_id, source, payload_format, origin, received_at,
@@ -920,7 +921,7 @@ async fn email_intake_without_a_default_creates_an_unassigned_person(migrator_po
     let (org_id, _bob, _alice) = org_with_default(&migrator_pool, "Acme Realty").await;
     admin_queries::update_intake_default_assignee(
         &mut migrator_pool.acquire().await.unwrap(),
-        org_id,
+        OrganizationId::new(org_id),
         None,
     )
     .await

@@ -105,7 +105,7 @@ async fn accept(
         pool,
         &state.session_secret,
         outcome.user_id,
-        Some(outcome.organization_id),
+        Some(outcome.organization_id.as_uuid()),
         state.session_ttl,
     )
     .await
@@ -124,7 +124,7 @@ async fn accept(
         email: outcome.email,
         display_name: outcome.display_name,
         organization: Some(session::SessionOrganization {
-            id: outcome.organization_id,
+            id: outcome.organization_id.as_uuid(),
             name: outcome.organization_name,
             role: outcome.role,
         }),

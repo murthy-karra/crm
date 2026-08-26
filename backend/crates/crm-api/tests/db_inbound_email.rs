@@ -15,6 +15,7 @@ use uuid::Uuid;
 
 use crm_api::config::Config;
 use crm_api::domain::raw_payload::crypto;
+use crm_api::ids::OrganizationId;
 use crm_api::realtime::Publisher;
 use crm_api::state::AppState;
 
@@ -210,7 +211,7 @@ async fn valid_delivery_stores_one_row_that_decrypts_to_the_exact_bytes(migrator
 
     let opened = crypto::open(
         &test_config().raw_payload_key,
-        org_id,
+        OrganizationId::new(org_id),
         id,
         &row.nonce,
         &row.ciphertext,
@@ -613,7 +614,7 @@ async fn stuck_pending_row_is_rescued_and_published_once(migrator_pool: PgPool) 
 
     let stuck_id = Uuid::new_v4();
     let content_hmac = crypto::content_hmac(&key, PLAIN_EML);
-    let sealed = crypto::seal(&key, org_id, stuck_id, PLAIN_EML).unwrap();
+    let sealed = crypto::seal(&key, OrganizationId::new(org_id), stuck_id, PLAIN_EML).unwrap();
     sqlx::query(
         r#"INSERT INTO raw_payload
             (id, organization_id, source, payload_format, origin, received_at,

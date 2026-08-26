@@ -63,7 +63,7 @@ enum gets a round-trip pin.
 |---|-------|------|------|
 | 1 | **S1** | `Resolution` + `PayloadFormat` enums; `insert_pending` takes typed `(Source-ish, PayloadFormat, Origin)`; `unreachable!` → fail-closed `Corrupt`. ~6 files. | S |
 | 2 | **N1** | `OrganizationId` — the tenant key, everywhere in crm-app + crm-api edges (~35–40 files, ~96 binds). Highest absolute payoff. May sub-split crm-app / crm-api. | M/L |
-| 3 | **N2** | `UserId` (~20 files) — kills the most frequent adjacency (user-vs-org). | M |
+| 3 | **N2** | `UserId` (~20 files) — kills the most frequent adjacency (user-vs-org). N1 review carry-overs: type the session layer below `AuthContext` (`session::create`, `SessionOrganization.id` — the login-path user/org adjacency still compiles until then, mitigated by the membership-join 401); consider typing `OrganizationRef.id`/`PlatformOrganizationItem.id` to remove typed→bare→typed chains. | M |
 | 4 | **A1** | `Actor` enum (`User(UserId) \| System`) replacing the kind+option pair in `FactEnvelope`; DB CHECK demoted to defense-in-depth. | S/M |
 | 5 | **N3** | Intake cluster: `PersonId`, `InquiryId`, `RawPayloadId`, `StageId` (~25 files). | M |
 | 6 | **N4** | Call cluster: `CallId`, `ContactMethodId`, `ProposalId`, `CorrelationId`, `TurnId`, `InvitationId` (~20 files). | M |

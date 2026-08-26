@@ -19,6 +19,7 @@ use crate::domain::commands::{CallError, ContactChannel, ContactOutcome};
 use crate::domain::envelope::{ActorKind, CommandContext, FactEnvelope};
 use crate::domain::facts::{self, ContactAttemptedFact};
 use crate::domain::telephony::queries as call_queries;
+use crate::ids::OrganizationId;
 use crate::realtime::{PersonChange, Publication, Publisher, RealtimeEvent};
 
 /// The five values `POST /api/calls/{id}/outcome` accepts
@@ -106,7 +107,7 @@ impl TryFrom<HeadRow> for CorrectedAttemptRef {
 /// at most one row qualifies.
 async fn head_attempt(
     conn: &mut PgConnection,
-    organization_id: Uuid,
+    organization_id: OrganizationId,
     call_id: Uuid,
     person_id: Uuid,
 ) -> Result<Option<HeadRow>, sqlx::Error> {
@@ -118,7 +119,7 @@ async fn head_attempt(
              AND NOT EXISTS (SELECT 1 FROM contact_attempted c WHERE c.corrects_id = ca.id)
            ORDER BY ca.recorded_at DESC
            LIMIT 1"#,
-        organization_id,
+        organization_id.0,
         call_id,
         person_id,
     )

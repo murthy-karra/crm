@@ -7,15 +7,14 @@
 //! Organization data, not Person visibility, and must not become
 //! team-scoped if a Team variant ever arrives.
 
-use uuid::Uuid;
-
 use crate::auth::AuthContext;
+use crate::ids::OrganizationId;
 
 /// The only implemented variant is Organization-wide visibility
 /// (AGENTS.md §4.4, D-005).
 #[derive(Debug, Clone, Copy)]
 pub enum PersonVisibilityScope {
-    Organization(Uuid),
+    Organization(OrganizationId),
 }
 
 impl PersonVisibilityScope {
@@ -23,7 +22,7 @@ impl PersonVisibilityScope {
         PersonVisibilityScope::Organization(auth.active_organization_id)
     }
 
-    pub fn organization_id(&self) -> Uuid {
+    pub fn organization_id(&self) -> OrganizationId {
         match self {
             PersonVisibilityScope::Organization(id) => *id,
         }
@@ -33,10 +32,11 @@ impl PersonVisibilityScope {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use uuid::Uuid;
 
     #[test]
     fn organization_id_returns_the_wrapped_id() {
-        let org_id = Uuid::new_v4();
+        let org_id = OrganizationId::new(Uuid::new_v4());
         let scope = PersonVisibilityScope::Organization(org_id);
         assert_eq!(scope.organization_id(), org_id);
     }

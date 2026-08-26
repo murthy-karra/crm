@@ -13,9 +13,10 @@ use crate::domain::admin::validation;
 use crate::domain::admin::{AdminActor, Role};
 use crate::domain::envelope::{ActorKind, FactEnvelope};
 use crate::domain::facts::{self, InvitationIssuedFact, InvitationResolvedFact};
+use crate::ids::OrganizationId;
 
 pub struct IssueInvitation {
-    pub organization_id: Uuid,
+    pub organization_id: OrganizationId,
     pub email: String,
     pub role: Role,
 }
@@ -124,7 +125,7 @@ async fn issue_invitation_attempt(
     actor: AdminActor,
     actor_display_name: &str,
     invitation_ttl: Duration,
-    organization_id: Uuid,
+    organization_id: OrganizationId,
     email: &str,
     role: Role,
 ) -> Result<IssueInvitationOutcome, AdminCommandError> {

@@ -9,9 +9,10 @@ use crate::domain::admin::queries::{self, InvitationStatus};
 use crate::domain::admin::AdminActor;
 use crate::domain::envelope::{ActorKind, FactEnvelope};
 use crate::domain::facts::{self, InvitationResolvedFact};
+use crate::ids::OrganizationId;
 
 pub struct RevokeInvitation {
-    pub organization_id: Uuid,
+    pub organization_id: OrganizationId,
     pub invitation_id: Uuid,
 }
 

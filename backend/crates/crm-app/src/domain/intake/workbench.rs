@@ -266,7 +266,7 @@ pub async fn retry_intake(
         r#"SELECT payload_format, received_at, content_hmac
            FROM raw_payload WHERE id = $1 AND organization_id = $2"#,
         id,
-        ctx.organization_id,
+        ctx.organization_id.0,
     )
     .fetch_one(&mut *tx)
     .await?;
@@ -298,7 +298,7 @@ pub async fn retry_intake(
                extraction_attempts = 0, extraction_next_attempt_at = NULL
            WHERE id = $1 AND organization_id = $2"#,
         id,
-        ctx.organization_id,
+        ctx.organization_id.0,
     )
     .execute(&mut *tx)
     .await?;
@@ -387,7 +387,7 @@ pub async fn discard_raw_payload(
            SET resolution = 'discarded', discarded_by_user_id = $3, discarded_at = $4
            WHERE id = $1 AND organization_id = $2"#,
         id,
-        ctx.organization_id,
+        ctx.organization_id.0,
         ctx.actor_user_id,
         discarded_at,
     )

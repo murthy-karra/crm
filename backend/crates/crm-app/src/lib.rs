@@ -8,5 +8,6 @@
 pub mod auth;
 pub mod config;
 pub mod domain;
+pub mod ids;
 pub mod realtime;
 pub mod telephony;

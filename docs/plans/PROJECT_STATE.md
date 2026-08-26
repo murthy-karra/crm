@@ -18,8 +18,21 @@ fold a `Decode → Corrupt` mapping into S2) and F2 (no direct
 `duplicate_outcome(Pending)` pin — needs a crm-app db harness that
 doesn't exist; parse-level pins cover it). Gates verified green by
 the coordinator (check + check-db 285/0, `.sqlx` byte-untouched).
-Awaiting commit gate; then N1 (`OrganizationId`) is next. Feature
-slices may interleave.
+S1 MERGED + PUSHED (`main` `dc27ae6`). CHUNK N1 (`OrganizationId`)
+IMPLEMENTED on `hardening-n1` (same Option A workflow): new
+`crm-app/src/ids.rs` (serde/repr-transparent, no implicit
+conversions, compile_fail,E0308 doctests), 49 files swept —
+CommandContext/FactEnvelope/IntakeActor/AuthContext/visibility/
+realtime (channel_for, mint, events)/crypto AAD all typed; ~96 binds
+via `.0`, SQL + `.sqlx` byte-untouched (proven by live
+sqlx-prepare-check); crm-operator zero-diff (D-028 fence); AAD/
+channel/JWT byte-identity verified. Reviewer: READY (20 conversion
+sites audited authoritative; doctest error-code pin applied).
+Deferred to N2 (recorded in ladder doc): session-layer bare island
+(`session::create`, `SessionOrganization.id`) + OrganizationRef/
+PlatformOrganizationItem `.id`. Gates verified independently by
+coordinator (check + check-db 285/0). Awaiting N1 commit gate; then
+N2 (`UserId`). Feature slices may interleave.
 
 Prior update, 2026-08-25 (SLICE_007h1 COMPLETE, MERGED, PUSHED —
 `main` `105f730`. Detail below; SLICE_007h1 IMPLEMENTED on

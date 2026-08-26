@@ -20,6 +20,7 @@ use crate::domain::inquiry::parse::{Source, UnresolvedReason};
 use crate::domain::intake::email;
 use crate::domain::intake::{IntakeActor, IntakeAddress};
 use crate::domain::raw_payload::{crypto, store, PayloadFormat};
+use crate::ids::OrganizationId;
 use crate::realtime::{Publication, Publisher, RealtimeEvent};
 
 /// Presented to `constant_time_eq` on an unknown slug, so that branch does
@@ -112,6 +113,7 @@ pub async fn receive_inbound_email(
     if !constant_time_eq(intake_addr.token.as_bytes(), stored_token.as_bytes()) {
         return Ok(InboundEmailOutcome::Rejected);
     }
+    let org_id = OrganizationId::new(org_id);
 
     // Phase A: seal + insert pending (unchanged from SLICE_007b).
     let candidate_id = Uuid::new_v4();

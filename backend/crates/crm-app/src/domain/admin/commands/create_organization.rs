@@ -101,7 +101,7 @@ async fn create_organization_attempt(
     tx.commit().await?;
 
     Ok(queries::OrganizationRef {
-        id: organization_id,
+        id: organization_id.as_uuid(),
         name,
     })
 }

@@ -25,6 +25,7 @@ use crm_api::domain::admin::{AdminActor, MembershipStatus, Role};
 use crm_api::domain::envelope::Origin;
 use crm_api::domain::raw_payload::crypto;
 use crm_api::domain::stage;
+use crm_api::ids::OrganizationId;
 use crm_api::realtime::Publisher;
 use crm_api::state::AppState;
 
@@ -241,16 +242,24 @@ pub async fn add_membership_with(
 ) {
     let app_pool = connect_as_app(pool).await;
     let mut conn = app_pool.acquire().await.unwrap();
-    admin_queries::insert_membership(&mut conn, org_id, user_id, role, status)
-        .await
-        .unwrap();
+    admin_queries::insert_membership(
+        &mut conn,
+        OrganizationId::new(org_id),
+        user_id,
+        role,
+        status,
+    )
+    .await
+    .unwrap();
 }
 
 /// Seeds the nine D-019 default stages for `org_id` via the same library
 /// helper `create_organization` uses.
 pub async fn seed_stages(pool: &PgPool, org_id: Uuid) {
     let mut tx = pool.begin().await.unwrap();
-    stage::seed_defaults(&mut tx, org_id).await.unwrap();
+    stage::seed_defaults(&mut tx, OrganizationId::new(org_id))
+        .await
+        .unwrap();
     tx.commit().await.unwrap();
 }
 
@@ -514,7 +523,7 @@ pub fn seal_fixture(
     let plaintext = serde_json::to_vec(payload).unwrap();
     let sealed = crypto::seal(
         &config.raw_payload_key,
-        organization_id,
+        OrganizationId::new(organization_id),
         raw_payload_id,
         &plaintext,
     )

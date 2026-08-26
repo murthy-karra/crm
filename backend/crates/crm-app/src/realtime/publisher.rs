@@ -263,12 +263,13 @@ async fn publish_via_http(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ids::OrganizationId;
     use crate::realtime::events::RealtimeEvent;
     use uuid::Uuid;
 
     fn sample_publication() -> Publication {
         let event = RealtimeEvent::intake_unresolved_changed(
-            Uuid::new_v4(),
+            OrganizationId::new(Uuid::new_v4()),
             chrono::Utc::now(),
             Uuid::new_v4(),
             Uuid::new_v4(),

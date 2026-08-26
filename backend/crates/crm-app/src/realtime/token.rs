@@ -14,6 +14,7 @@ use std::time::Duration;
 use uuid::Uuid;
 
 use crate::config::RealtimeTokenSecret;
+use crate::ids::OrganizationId;
 use crate::realtime::events::channel_for;
 
 type HmacSha256 = Hmac<Sha256>;
@@ -41,7 +42,7 @@ struct Claims {
 pub fn mint(
     secret: &RealtimeTokenSecret,
     user_id: Uuid,
-    organization_id: Uuid,
+    organization_id: OrganizationId,
     now: DateTime<Utc>,
     ttl: Duration,
 ) -> String {
@@ -96,7 +97,7 @@ mod tests {
         let token = mint(
             &secret(1),
             Uuid::new_v4(),
-            Uuid::new_v4(),
+            OrganizationId::new(Uuid::new_v4()),
             ts(),
             Duration::from_secs(600),
         );
@@ -108,7 +109,7 @@ mod tests {
     #[test]
     fn claims_are_exact_and_in_order() {
         let user_id = Uuid::new_v4();
-        let org_id = Uuid::new_v4();
+        let org_id = OrganizationId::new(Uuid::new_v4());
         let now = ts();
         let ttl = Duration::from_secs(600);
         let token = mint(&secret(1), user_id, org_id, now, ttl);
@@ -128,7 +129,13 @@ mod tests {
     fn ttl_controls_exp_minus_iat() {
         let now = ts();
         let ttl = Duration::from_secs(120);
-        let token = mint(&secret(1), Uuid::new_v4(), Uuid::new_v4(), now, ttl);
+        let token = mint(
+            &secret(1),
+            Uuid::new_v4(),
+            OrganizationId::new(Uuid::new_v4()),
+            now,
+            ttl,
+        );
         let (_, payload_b64, _) = split(&token);
         let payload_bytes = URL_SAFE_NO_PAD.decode(payload_b64).unwrap();
         let value: serde_json::Value = serde_json::from_slice(&payload_bytes).unwrap();
@@ -139,7 +146,7 @@ mod tests {
 
     #[test]
     fn channels_is_exactly_the_active_organization_channel() {
-        let org_id = Uuid::new_v4();
+        let org_id = OrganizationId::new(Uuid::new_v4());
         let token = mint(
             &secret(1),
             Uuid::new_v4(),
@@ -162,7 +169,7 @@ mod tests {
         let token = mint(
             &s,
             Uuid::new_v4(),
-            Uuid::new_v4(),
+            OrganizationId::new(Uuid::new_v4()),
             ts(),
             Duration::from_secs(600),
         );
@@ -181,14 +188,14 @@ mod tests {
         let token_a = mint(
             &secret(1),
             Uuid::new_v4(),
-            Uuid::new_v4(),
+            OrganizationId::new(Uuid::new_v4()),
             ts(),
             Duration::from_secs(600),
         );
         let token_b = mint(
             &secret(2),
             Uuid::new_v4(),
-            Uuid::new_v4(),
+            OrganizationId::new(Uuid::new_v4()),
             ts(),
             Duration::from_secs(600),
         );

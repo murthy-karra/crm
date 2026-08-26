@@ -10,6 +10,7 @@ use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
 use super::{MembershipStatus, Role};
+use crate::ids::OrganizationId;
 
 fn decode_role(s: &str) -> Result<Role, sqlx::Error> {
     Role::from_db_str(s).ok_or_else(|| sqlx::Error::Decode(format!("invalid role: {s}").into()))
@@ -138,7 +139,7 @@ pub async fn list_for_platform(
 /// (`GET /api/platform/organizations/{id}`).
 pub async fn platform_organization_by_id(
     conn: &mut PgConnection,
-    organization_id: Uuid,
+    organization_id: OrganizationId,
 ) -> Result<Option<PlatformOrganizationItem>, sqlx::Error> {
     let row = sqlx::query_as!(
         PlatformOrganizationRow,
@@ -154,7 +155,7 @@ pub async fn platform_organization_by_id(
                 as "pending_admin_invitations!"
            FROM organization o
            WHERE o.id = $1"#,
-        organization_id,
+        organization_id.0,
     )
     .fetch_optional(conn)
     .await?;
@@ -179,11 +180,11 @@ pub async fn platform_organization_by_id(
 /// (docs/specs/SLICE_004.md §7).
 pub async fn organization_exists(
     conn: &mut PgConnection,
-    organization_id: Uuid,
+    organization_id: OrganizationId,
 ) -> Result<bool, sqlx::Error> {
     let row = sqlx::query!(
         r#"SELECT 1 as "present!" FROM organization WHERE id = $1"#,
-        organization_id,
+        organization_id.0,
     )
     .fetch_optional(conn)
     .await?;
@@ -232,7 +233,7 @@ impl MemberRow {
 /// `status`, `assigned_people_count` (D-027 §3).
 pub async fn members(
     conn: &mut PgConnection,
-    organization_id: Uuid,
+    organization_id: OrganizationId,
 ) -> Result<Vec<MemberView>, sqlx::Error> {
     let rows = sqlx::query_as!(
         MemberRow,
@@ -244,7 +245,7 @@ pub async fn members(
            JOIN app_user u ON u.id = m.user_id
            WHERE m.organization_id = $1
            ORDER BY m.created_at, u.id"#,
-        organization_id,
+        organization_id.0,
     )
     .fetch_all(conn)
     .await?;
@@ -257,7 +258,7 @@ pub async fn members(
 /// and by the platform detail route.
 pub async fn member_view(
     conn: &mut PgConnection,
-    organization_id: Uuid,
+    organization_id: OrganizationId,
     user_id: Uuid,
 ) -> Result<Option<MemberView>, sqlx::Error> {
     let row = sqlx::query_as!(
@@ -269,7 +270,7 @@ pub async fn member_view(
            FROM organization_membership m
            JOIN app_user u ON u.id = m.user_id
            WHERE m.organization_id = $1 AND m.user_id = $2"#,
-        organization_id,
+        organization_id.0,
         user_id,
     )
     .fetch_optional(conn)
@@ -287,13 +288,13 @@ pub struct MemberRoleStatus {
 
 pub async fn member_role_status(
     conn: &mut PgConnection,
-    organization_id: Uuid,
+    organization_id: OrganizationId,
     user_id: Uuid,
 ) -> Result<Option<MemberRoleStatus>, sqlx::Error> {
     let row = sqlx::query!(
         r#"SELECT role, status FROM organization_membership
            WHERE organization_id = $1 AND user_id = $2"#,
-        organization_id,
+        organization_id.0,
         user_id,
     )
     .fetch_optional(&mut *conn)
@@ -314,13 +315,13 @@ pub async fn member_role_status(
 /// `admin:` advisory lock.
 pub async fn count_active_admins_excluding(
     conn: &mut PgConnection,
-    organization_id: Uuid,
+    organization_id: OrganizationId,
     excluding_user_id: Uuid,
 ) -> Result<i64, sqlx::Error> {
     let row = sqlx::query!(
         r#"SELECT count(*) as "count!" FROM organization_membership
            WHERE organization_id = $1 AND role = 'admin' AND status = 'active' AND user_id != $2"#,
-        organization_id,
+        organization_id.0,
         excluding_user_id,
     )
     .fetch_one(conn)
@@ -330,7 +331,7 @@ pub async fn count_active_admins_excluding(
 
 pub async fn update_membership_role(
     conn: &mut PgConnection,
-    organization_id: Uuid,
+    organization_id: OrganizationId,
     user_id: Uuid,
     role: Role,
 ) -> Result<(), sqlx::Error> {
@@ -338,7 +339,7 @@ pub async fn update_membership_role(
     sqlx::query!(
         r#"UPDATE organization_membership SET role = $3, updated_at = now()
            WHERE organization_id = $1 AND user_id = $2"#,
-        organization_id,
+        organization_id.0,
         user_id,
         role_str,
     )
@@ -349,7 +350,7 @@ pub async fn update_membership_role(
 
 pub async fn update_membership_status(
     conn: &mut PgConnection,
-    organization_id: Uuid,
+    organization_id: OrganizationId,
     user_id: Uuid,
     status: MembershipStatus,
 ) -> Result<(), sqlx::Error> {
@@ -357,7 +358,7 @@ pub async fn update_membership_status(
     sqlx::query!(
         r#"UPDATE organization_membership SET status = $3, updated_at = now()
            WHERE organization_id = $1 AND user_id = $2"#,
-        organization_id,
+        organization_id.0,
         user_id,
         status_str,
     )
@@ -375,7 +376,7 @@ pub async fn update_membership_status(
 /// SLICE_004.md §7).
 pub async fn acquire_admin_lock(
     conn: &mut PgConnection,
-    organization_id: Uuid,
+    organization_id: OrganizationId,
 ) -> Result<(), sqlx::Error> {
     let organization_id_text = organization_id.to_string();
     sqlx::query!(
@@ -389,7 +390,7 @@ pub async fn acquire_admin_lock(
 
 pub async fn insert_membership(
     conn: &mut PgConnection,
-    organization_id: Uuid,
+    organization_id: OrganizationId,
     user_id: Uuid,
     role: Role,
     status: MembershipStatus,
@@ -399,7 +400,7 @@ pub async fn insert_membership(
     sqlx::query!(
         r#"INSERT INTO organization_membership (organization_id, user_id, role, status)
            VALUES ($1, $2, $3, $4)"#,
-        organization_id,
+        organization_id.0,
         user_id,
         role_str,
         status_str,
@@ -414,14 +415,14 @@ pub async fn insert_membership(
 /// (docs/specs/SLICE_004.md §4).
 pub async fn is_member_by_email(
     conn: &mut PgConnection,
-    organization_id: Uuid,
+    organization_id: OrganizationId,
     normalized_email: &str,
 ) -> Result<bool, sqlx::Error> {
     let row = sqlx::query!(
         r#"SELECT 1 as "present!" FROM organization_membership m
            JOIN app_user u ON u.id = m.user_id
            WHERE m.organization_id = $1 AND lower(u.email) = $2"#,
-        organization_id,
+        organization_id.0,
         normalized_email,
     )
     .fetch_optional(conn)
@@ -446,14 +447,14 @@ pub async fn app_user_id_by_email(
 /// (docs/specs/SLICE_004.md §4 `SetMemberStatus`: "On `inactive`").
 pub async fn revoke_sessions_for_member(
     conn: &mut PgConnection,
-    organization_id: Uuid,
+    organization_id: OrganizationId,
     user_id: Uuid,
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
         r#"UPDATE user_session SET revoked_at = now()
            WHERE user_id = $1 AND active_organization_id = $2 AND revoked_at IS NULL"#,
         user_id,
-        organization_id,
+        organization_id.0,
     )
     .execute(conn)
     .await?;
@@ -523,7 +524,7 @@ struct InvitationListRow {
 /// omitted (§14 default 13).
 pub async fn list_invitations(
     conn: &mut PgConnection,
-    organization_id: Uuid,
+    organization_id: OrganizationId,
 ) -> Result<Vec<InvitationView>, sqlx::Error> {
     let now = Utc::now();
     let rows = sqlx::query_as!(
@@ -541,7 +542,7 @@ pub async fn list_invitations(
                    AND i.expires_at <= now() AND i.expires_at < now() - interval '30 days')
              )
            ORDER BY i.created_at DESC, i.id"#,
-        organization_id,
+        organization_id.0,
     )
     .fetch_all(conn)
     .await?;
@@ -569,7 +570,7 @@ pub async fn list_invitations(
 /// accept) — one shape, two lookups.
 pub struct InvitationRow {
     pub id: Uuid,
-    pub organization_id: Uuid,
+    pub organization_id: OrganizationId,
     pub organization_name: String,
     pub email: String,
     pub role: Role,
@@ -599,7 +600,7 @@ impl InvitationFullDbRow {
     fn into_row(self) -> Result<InvitationRow, sqlx::Error> {
         Ok(InvitationRow {
             id: self.id,
-            organization_id: self.organization_id,
+            organization_id: OrganizationId::new(self.organization_id),
             organization_name: self.organization_name,
             email: self.email,
             role: decode_role(&self.role)?,
@@ -659,7 +660,7 @@ pub async fn lock_invitation_by_token_hash(
 /// `None`, mapped to a byte-identical `NotFound`.
 pub async fn lock_invitation_in_org(
     conn: &mut PgConnection,
-    organization_id: Uuid,
+    organization_id: OrganizationId,
     invitation_id: Uuid,
 ) -> Result<Option<InvitationRow>, sqlx::Error> {
     let row = sqlx::query_as!(
@@ -671,7 +672,7 @@ pub async fn lock_invitation_in_org(
            WHERE i.id = $1 AND i.organization_id = $2
            FOR UPDATE OF i"#,
         invitation_id,
-        organization_id,
+        organization_id.0,
     )
     .fetch_optional(conn)
     .await?;
@@ -684,14 +685,14 @@ pub async fn lock_invitation_in_org(
 /// check.
 pub async fn find_open_invitation(
     conn: &mut PgConnection,
-    organization_id: Uuid,
+    organization_id: OrganizationId,
     normalized_email: &str,
 ) -> Result<Option<Uuid>, sqlx::Error> {
     let row = sqlx::query!(
         r#"SELECT id FROM invitation
            WHERE organization_id = $1 AND email = $2
              AND accepted_at IS NULL AND revoked_at IS NULL"#,
-        organization_id,
+        organization_id.0,
         normalized_email,
     )
     .fetch_optional(conn)
@@ -713,7 +714,7 @@ pub async fn supersede_invitation(
 }
 
 pub struct NewInvitation<'a> {
-    pub organization_id: Uuid,
+    pub organization_id: OrganizationId,
     pub email: &'a str,
     pub role: Role,
     pub token_hash: &'a str,
@@ -731,7 +732,7 @@ pub async fn insert_invitation(
             (organization_id, email, role, token_hash, invited_by_user_id, expires_at)
            VALUES ($1, $2, $3, $4, $5, $6)
            RETURNING id, created_at"#,
-        new.organization_id,
+        new.organization_id.0,
         new.email,
         role_str,
         new.token_hash,
@@ -778,7 +779,7 @@ pub async fn insert_organization(
     name: &str,
     intake_slug: &str,
     intake_token: &str,
-) -> Result<Uuid, sqlx::Error> {
+) -> Result<OrganizationId, sqlx::Error> {
     let row = sqlx::query!(
         r#"INSERT INTO organization (name, intake_slug, intake_token)
            VALUES ($1, $2, $3) RETURNING id"#,
@@ -788,7 +789,7 @@ pub async fn insert_organization(
     )
     .fetch_one(conn)
     .await?;
-    Ok(row.id)
+    Ok(OrganizationId::new(row.id))
 }
 
 /// Which of `candidates` are already taken (docs/specs/SLICE_007a.md §4:
@@ -809,11 +810,11 @@ pub async fn taken_intake_slugs(
 /// `(intake_slug, intake_token)` for one Organization.
 pub async fn organization_intake_address(
     conn: &mut PgConnection,
-    organization_id: Uuid,
+    organization_id: OrganizationId,
 ) -> Result<Option<(String, String)>, sqlx::Error> {
     let row = sqlx::query!(
         r#"SELECT intake_slug, intake_token FROM organization WHERE id = $1"#,
-        organization_id,
+        organization_id.0,
     )
     .fetch_optional(conn)
     .await?;
@@ -829,11 +830,11 @@ pub async fn organization_intake_address(
 /// client-side from the members list.
 pub async fn intake_default_assignee_user_id(
     conn: &mut PgConnection,
-    organization_id: Uuid,
+    organization_id: OrganizationId,
 ) -> Result<Option<Uuid>, sqlx::Error> {
     let row = sqlx::query!(
         r#"SELECT intake_default_assignee_user_id FROM organization WHERE id = $1"#,
-        organization_id,
+        organization_id.0,
     )
     .fetch_optional(conn)
     .await?;
@@ -845,13 +846,13 @@ pub async fn intake_default_assignee_user_id(
 /// includes it — the membership-grant precedent).
 pub async fn update_intake_default_assignee(
     conn: &mut PgConnection,
-    organization_id: Uuid,
+    organization_id: OrganizationId,
     user_id: Option<Uuid>,
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
         r#"UPDATE organization SET intake_default_assignee_user_id = $2, updated_at = now()
            WHERE id = $1"#,
-        organization_id,
+        organization_id.0,
         user_id,
     )
     .execute(conn)
@@ -865,13 +866,13 @@ pub async fn update_intake_default_assignee(
 /// byte-identical 422 `invalid_assignee` (no existence leak).
 pub async fn is_active_member(
     conn: &mut PgConnection,
-    organization_id: Uuid,
+    organization_id: OrganizationId,
     user_id: Uuid,
 ) -> Result<bool, sqlx::Error> {
     let row = sqlx::query!(
         r#"SELECT 1 as "present!" FROM organization_membership
            WHERE organization_id = $1 AND user_id = $2 AND status = 'active'"#,
-        organization_id,
+        organization_id.0,
         user_id,
     )
     .fetch_optional(conn)
@@ -888,7 +889,7 @@ pub async fn is_active_member(
 /// racing this read.
 pub async fn active_intake_default_assignee(
     conn: &mut PgConnection,
-    organization_id: Uuid,
+    organization_id: OrganizationId,
 ) -> Result<Option<Uuid>, sqlx::Error> {
     let row = sqlx::query!(
         r#"SELECT o.intake_default_assignee_user_id as "user_id!"
@@ -898,7 +899,7 @@ pub async fn active_intake_default_assignee(
             AND m.user_id = o.intake_default_assignee_user_id
             AND m.status = 'active'
            WHERE o.id = $1"#,
-        organization_id,
+        organization_id.0,
     )
     .fetch_optional(conn)
     .await?;

@@ -44,7 +44,7 @@ pub async fn rotate_intake_token(
 
     let old: Option<String> = sqlx::query_scalar!(
         r#"SELECT intake_token FROM organization WHERE id = $1 FOR UPDATE"#,
-        ctx.organization_id,
+        ctx.organization_id.0,
     )
     .fetch_optional(&mut *tx)
     .await?;
@@ -57,7 +57,7 @@ pub async fn rotate_intake_token(
 
     sqlx::query!(
         r#"UPDATE organization SET intake_token = $2 WHERE id = $1"#,
-        ctx.organization_id,
+        ctx.organization_id.0,
         new_token,
     )
     .execute(&mut *tx)
@@ -71,7 +71,7 @@ pub async fn rotate_intake_token(
             (organization_id, actor_kind, actor_user_id, on_behalf_of_user_id,
              origin, occurred_at, correlation_id, causation_id)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"#,
-        envelope.organization_id,
+        envelope.organization_id.0,
         actor_kind,
         envelope.actor_user_id,
         envelope.on_behalf_of_user_id,

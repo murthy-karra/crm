@@ -19,6 +19,7 @@ use uuid::Uuid;
 use crate::domain::telephony::settle::settle;
 use crate::domain::telephony::transitions::Signal;
 use crate::domain::telephony::CallStatus;
+use crate::ids::OrganizationId;
 use crate::realtime::Publisher;
 use crate::telephony::{Telephony, DEFAULT_AGENT_JOIN_TIMEOUT};
 
@@ -105,7 +106,7 @@ pub async fn run_once(
         let outcome = match settle(
             pool,
             publisher,
-            candidate.organization_id,
+            OrganizationId::new(candidate.organization_id),
             candidate.id,
             &signal,
             now,

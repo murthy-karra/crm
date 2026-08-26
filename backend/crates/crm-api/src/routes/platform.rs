@@ -27,6 +27,7 @@ use crate::domain::admin::{AdminActor, Role};
 use crate::domain::envelope::Origin;
 use crate::domain::intake::IntakeAddress;
 use crate::error::ApiError;
+use crate::ids::OrganizationId;
 use crate::state::AppState;
 
 pub fn router() -> Router<AppState> {
@@ -125,10 +126,11 @@ async fn create_organization_route(
         create_organization(pool, actor, CreateOrganization { name: req.name }).await?;
 
     let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
-    let item = admin_queries::platform_organization_by_id(&mut conn, organization.id)
-        .await
-        .map_err(|_| ApiError::Unavailable)?
-        .ok_or(ApiError::Unavailable)?;
+    let item =
+        admin_queries::platform_organization_by_id(&mut conn, OrganizationId::new(organization.id))
+            .await
+            .map_err(|_| ApiError::Unavailable)?
+            .ok_or(ApiError::Unavailable)?;
 
     Ok((StatusCode::CREATED, Json(json!({ "organization": item }))).into_response())
 }
@@ -138,6 +140,10 @@ async fn get_organization_detail(
     UuidPathId(organization_id): UuidPathId,
     _ctx: PlatformAuthContext,
 ) -> Result<Json<serde_json::Value>, ApiError> {
+    // The path segment is the org-id entry point for platform routes
+    // (hardening chunk N1) — a platform admin explicitly targets an
+    // Organization by id, never the session's active one (module doc).
+    let organization_id = OrganizationId::new(organization_id);
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
     let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
 
@@ -184,6 +190,7 @@ async fn promote_member(
     if req.role != Role::Admin {
         return Err(ApiError::MalformedRequest);
     }
+    let organization_id = OrganizationId::new(organization_id);
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
 
     let actor = AdminActor {
@@ -222,6 +229,7 @@ async fn create_admin_invitation(
     if req.role != Role::Admin {
         return Err(ApiError::MalformedRequest);
     }
+    let organization_id = OrganizationId::new(organization_id);
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
 
     // The FK on invitation.organization_id would otherwise turn a
@@ -267,6 +275,7 @@ async fn revoke_admin_invitation(
     TwoUuidPathIds(organization_id, invitation_id): TwoUuidPathIds,
     ctx: PlatformAuthContext,
 ) -> Result<StatusCode, ApiError> {
+    let organization_id = OrganizationId::new(organization_id);
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
 
     let actor = AdminActor {

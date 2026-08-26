@@ -24,6 +24,7 @@ use crm_api::domain::intake::extraction::worker::{run_once, ExtractionReport};
 use crm_api::domain::intake::extraction::{
     ExtractionInput, ExtractorError, ExtractorReply, LeadExtractor,
 };
+use crm_api::ids::OrganizationId;
 use crm_api::realtime::Publisher;
 use crm_api::state::AppState;
 
@@ -197,7 +198,7 @@ async fn org_with_default(migrator_pool: &PgPool, name: &str) -> (Uuid, Uuid) {
     common::add_membership(migrator_pool, org_id, bob).await;
     admin_queries::update_intake_default_assignee(
         &mut migrator_pool.acquire().await.unwrap(),
-        org_id,
+        OrganizationId::new(org_id),
         Some(bob),
     )
     .await
@@ -946,7 +947,7 @@ async fn deterministic_internal_errors_are_bounded_not_infinite(migrator_pool: P
     let row_id = Uuid::new_v4();
     let wrong_id = Uuid::new_v4();
     let content_hmac = crypto::content_hmac(&key, LEAD_EML);
-    let sealed = crypto::seal(&key, org_id, wrong_id, LEAD_EML).unwrap();
+    let sealed = crypto::seal(&key, OrganizationId::new(org_id), wrong_id, LEAD_EML).unwrap();
     sqlx::query(
         r#"INSERT INTO raw_payload
             (id, organization_id, source, payload_format, origin, received_at,

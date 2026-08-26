@@ -15,6 +15,7 @@ use sha2::Sha256;
 use uuid::Uuid;
 
 use crate::config::RawPayloadKey;
+use crate::ids::OrganizationId;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -33,10 +34,13 @@ pub struct CryptoError;
 
 /// `organization_id ‖ raw_payload.id` — binds a ciphertext to the exact row
 /// and Organization it was sealed for, so it cannot be re-pointed to
-/// another row (docs/specs/SLICE_002.md §7).
-fn associated_data(organization_id: Uuid, raw_payload_id: Uuid) -> [u8; 32] {
+/// another row (docs/specs/SLICE_002.md §7). The org half is typed
+/// (hardening chunk N1): the bytes are still exactly the inner `Uuid`'s,
+/// so a stored ciphertext's AAD is unaffected — only the Rust call site
+/// can no longer transpose this argument with `raw_payload_id`.
+fn associated_data(organization_id: OrganizationId, raw_payload_id: Uuid) -> [u8; 32] {
     let mut out = [0u8; 32];
-    out[..16].copy_from_slice(organization_id.as_bytes());
+    out[..16].copy_from_slice(organization_id.as_uuid().as_bytes());
     out[16..].copy_from_slice(raw_payload_id.as_bytes());
     out
 }
@@ -49,7 +53,7 @@ fn cipher(key: &RawPayloadKey) -> XChaCha20Poly1305 {
 /// counters or rotation at this volume — docs/specs/SLICE_002.md §7).
 pub fn seal(
     key: &RawPayloadKey,
-    organization_id: Uuid,
+    organization_id: OrganizationId,
     raw_payload_id: Uuid,
     plaintext: &[u8],
 ) -> Result<Sealed, CryptoError> {
@@ -79,7 +83,7 @@ pub fn seal(
 /// indistinguishable to the caller by design.
 pub fn open(
     key: &RawPayloadKey,
-    organization_id: Uuid,
+    organization_id: OrganizationId,
     raw_payload_id: Uuid,
     nonce: &[u8],
     ciphertext: &[u8],
@@ -131,7 +135,7 @@ mod tests {
     #[test]
     fn seal_open_roundtrip() {
         let key = test_key(0x11);
-        let org_id = Uuid::new_v4();
+        let org_id = OrganizationId::new(Uuid::new_v4());
         let payload_id = Uuid::new_v4();
         let plaintext = b"{\"email\":\"ada@example.com\"}";
 
@@ -143,7 +147,7 @@ mod tests {
     #[test]
     fn tampered_ciphertext_fails_to_open() {
         let key = test_key(0x22);
-        let org_id = Uuid::new_v4();
+        let org_id = OrganizationId::new(Uuid::new_v4());
         let payload_id = Uuid::new_v4();
         let mut sealed = seal(&key, org_id, payload_id, b"hello world").unwrap();
         let last = sealed.ciphertext.len() - 1;
@@ -157,7 +161,7 @@ mod tests {
     fn wrong_key_fails_to_open() {
         let key_a = test_key(0x33);
         let key_b = test_key(0x44);
-        let org_id = Uuid::new_v4();
+        let org_id = OrganizationId::new(Uuid::new_v4());
         let payload_id = Uuid::new_v4();
         let sealed = seal(&key_a, org_id, payload_id, b"hello world").unwrap();
 
@@ -174,7 +178,7 @@ mod tests {
     #[test]
     fn wrong_aad_fails_to_open() {
         let key = test_key(0x55);
-        let org_id = Uuid::new_v4();
+        let org_id = OrganizationId::new(Uuid::new_v4());
         let payload_id = Uuid::new_v4();
         let other_payload_id = Uuid::new_v4();
         let sealed = seal(&key, org_id, payload_id, b"hello world").unwrap();
@@ -193,7 +197,7 @@ mod tests {
 
         let result = open(
             &key,
-            Uuid::new_v4(),
+            OrganizationId::new(Uuid::new_v4()),
             payload_id,
             &sealed.nonce,
             &sealed.ciphertext,
@@ -204,7 +208,7 @@ mod tests {
     #[test]
     fn distinct_calls_use_distinct_nonces() {
         let key = test_key(0x66);
-        let org_id = Uuid::new_v4();
+        let org_id = OrganizationId::new(Uuid::new_v4());
         let payload_id = Uuid::new_v4();
         let first = seal(&key, org_id, payload_id, b"hello world").unwrap();
         let second = seal(&key, org_id, payload_id, b"hello world").unwrap();

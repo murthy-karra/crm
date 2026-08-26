@@ -1380,3 +1380,63 @@ async fn queue_lists_pending_and_unresolved_never_discarded(migrator_pool: PgPoo
     assert_eq!(items.len(), 1);
     assert_eq!(items[0]["id"], unresolved_id.to_string());
 }
+
+// ---------------------------------------------------------------------
+// Slice 007h1 criterion 8 (retry half): a forwarded pinned-format mail
+// that landed unresolved BEFORE the unwrapper existed now resolves
+// through it on a 007e retry — the parse_payload seam gives the retry
+// path unwrapping for free, pinned here.
+
+const GMAIL_FWD_CYPRESS_EML_007H1: &[u8] =
+    include_bytes!("fixtures/email/gmail_fwd_cypress_bay.eml");
+
+#[sqlx::test]
+#[ignore]
+async fn retry_resolves_a_pre_existing_forwarded_row_through_the_unwrapper(migrator_pool: PgPool) {
+    let f = org_fixture(&migrator_pool, "Acme Realty").await;
+    let router = build_router(&migrator_pool, Publisher::recording()).await;
+    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let key = test_config().raw_payload_key;
+
+    // A pre-007h1 leftover: the forwarded bytes stored unresolved as
+    // email_unrecognized_format (what delivery did before the unwrapper).
+    let old_id = Uuid::new_v4();
+    let content_hmac = crypto::content_hmac(&key, GMAIL_FWD_CYPRESS_EML_007H1);
+    let sealed = crypto::seal(&key, f.org_id, old_id, GMAIL_FWD_CYPRESS_EML_007H1).unwrap();
+    sqlx::query(
+        r#"INSERT INTO raw_payload
+            (id, organization_id, source, payload_format, origin, received_at,
+             nonce, ciphertext, content_hmac, byte_len, resolution,
+             unresolved_reason)
+           VALUES ($1, $2, 'email', 'rfc822_v1', 'webhook', now(), $3, $4, $5,
+                   $6, 'unresolved', 'email_unrecognized_format')"#,
+    )
+    .bind(old_id)
+    .bind(f.org_id)
+    .bind(sealed.nonce.to_vec())
+    .bind(sealed.ciphertext)
+    .bind(content_hmac.to_vec())
+    .bind(GMAIL_FWD_CYPRESS_EML_007H1.len() as i32)
+    .execute(&app_pool)
+    .await
+    .unwrap();
+
+    let alice_cookie = common::login_cookie(&router, "alice@acmerealty.test", PW).await;
+    let resp = post_empty_with_cookie(
+        &router,
+        &format!("/api/intake/unresolved/{old_id}/retry"),
+        &alice_cookie,
+    )
+    .await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = common::body_json(resp).await;
+    assert_eq!(body["status"], "resolved");
+
+    let (first_name,): (Option<String>,) =
+        sqlx::query_as("SELECT first_name FROM person WHERE organization_id = $1")
+            .bind(f.org_id)
+            .fetch_one(&migrator_pool)
+            .await
+            .unwrap();
+    assert_eq!(first_name.as_deref(), Some("Jordan"), "the INNER lead");
+}

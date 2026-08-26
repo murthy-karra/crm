@@ -6,6 +6,7 @@
 use crate::domain::contact;
 use crate::domain::inquiry::parse::{self, ParsedLead, Source, UnresolvedReason};
 use crate::domain::intake::email::formats::cypress_bay::CypressBayContact;
+use crate::domain::intake::email::forward::SenderTrust;
 use crate::domain::intake::email::mime::ParsedMail;
 
 /// A pinned format's best-effort field scan. Deliberately infallible
@@ -30,16 +31,32 @@ pub trait EmailFormat: Send + Sync {
     /// (docs/specs/SLICE_007d.md §8).
     fn name(&self) -> &'static str;
     /// Sender-domain restriction AND template marker, both required
-    /// (D-036). Never content alone.
-    fn matches(&self, mail: &ParsedMail) -> bool;
+    /// (D-036). Never content alone. The message as delivered — when a
+    /// later rung extracts Authentication-Results verdicts (carried on
+    /// `SenderTrust::Direct`), tightening happens on this arm.
+    fn matches_direct(&self, mail: &ParsedMail) -> bool;
+    /// The same question for an unwrapped forwarded view, whose
+    /// From/Subject are quoted text under the forwarder's control
+    /// (D-040). A REQUIRED method — every format, present and future,
+    /// answers the forwarded arm explicitly; matching here is never
+    /// inherited from `matches_direct`, and never tightened implicitly
+    /// when the direct arm later consumes verdicts
+    /// (docs/specs/SLICE_007h1.md §3).
+    fn matches_forwarded(&self, mail: &ParsedMail, depth: u8) -> bool;
     fn extract(&self, mail: &ParsedMail) -> ExtractedLead;
 }
 
 /// The registry: declaration order, first match wins. 007h appends here.
 static FORMATS: &[&dyn EmailFormat] = &[&CypressBayContact];
 
-pub fn detect(mail: &ParsedMail) -> Option<&'static dyn EmailFormat> {
-    FORMATS.iter().find(|f| f.matches(mail)).copied()
+pub fn detect(mail: &ParsedMail, trust: SenderTrust) -> Option<&'static dyn EmailFormat> {
+    FORMATS
+        .iter()
+        .find(|f| match trust {
+            SenderTrust::Direct => f.matches_direct(mail),
+            SenderTrust::ForwardedClaim { depth } => f.matches_forwarded(mail, depth),
+        })
+        .copied()
 }
 
 /// `ExtractedLead → ParsedLead`, mirroring the `generic_v1` normalization

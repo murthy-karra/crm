@@ -22,21 +22,26 @@ impl EmailFormat for CypressBayContact {
     /// Sender **domain** equality (case-insensitive; we control the form
     /// but the mailer's local part may vary) AND the subject equals the
     /// marker after trim, exact case — both required (D-036). A
-    /// "Fwd: "-prefixed subject deliberately does not match: forwarded
-    /// copies of form mail are not the pinned flow
-    /// (docs/specs/SLICE_007d.md §4b).
-    fn matches(&self, mail: &ParsedMail) -> bool {
-        let domain_ok = mail
-            .from_addr
-            .as_deref()
-            .and_then(|addr| addr.rsplit_once('@'))
-            // from_addr is already lowercased by the mime wrapper.
-            .is_some_and(|(_, domain)| domain == SENDER_DOMAIN);
-        let subject_ok = mail
-            .subject
-            .as_deref()
-            .is_some_and(|s| s.trim() == SUBJECT_MARKER);
-        domain_ok && subject_ok
+    /// "Fwd: "-prefixed subject deliberately does not match ON THIS ARM:
+    /// forwarded copies reach the format through the unwrapper's inner
+    /// view via [`matches_forwarded`] instead (D-040, superseding
+    /// SLICE_007d §4b's original "not the pinned flow" stance —
+    /// docs/specs/SLICE_007h1.md).
+    ///
+    /// [`matches_forwarded`]: EmailFormat::matches_forwarded
+    fn matches_direct(&self, mail: &ParsedMail) -> bool {
+        rules_match(mail)
+    }
+
+    /// D-040: the same domain + subject rules against the unwrapped
+    /// inner view, any depth within the resolver's cap. The inner From
+    /// is a forwarder-controlled claim — accepted here because no arm
+    /// consumes authentication verdicts yet and the LLM fallback would
+    /// create the same lead from the same text (see D-040's blast-radius
+    /// paragraph). When SPF/DKIM tightening lands on the direct arm,
+    /// this arm's posture is revisited EXPLICITLY, per format.
+    fn matches_forwarded(&self, mail: &ParsedMail, _depth: u8) -> bool {
+        rules_match(mail)
     }
 
     /// Line-anchored, exact-case labels; values trimmed; `Message:`
@@ -93,6 +98,23 @@ impl EmailFormat for CypressBayContact {
     }
 }
 
+/// The one shared rule set both trust arms apply (this format keeps
+/// them identical until a verdict consumer exists).
+fn rules_match(mail: &ParsedMail) -> bool {
+    let domain_ok = mail
+        .from_addr
+        .as_deref()
+        .and_then(|addr| addr.rsplit_once('@'))
+        // from_addr is already lowercased by the mime wrapper (and by
+        // the unwrapper for inner views).
+        .is_some_and(|(_, domain)| domain == SENDER_DOMAIN);
+    let subject_ok = mail
+        .subject
+        .as_deref()
+        .is_some_and(|s| s.trim() == SUBJECT_MARKER);
+    domain_ok && subject_ok
+}
+
 fn non_empty(value: &str) -> Option<String> {
     let trimmed = value.trim();
     if trimmed.is_empty() {
@@ -127,7 +149,7 @@ mod tests {
             Some("New contact form submission"),
             Some(BODY),
         );
-        assert!(CypressBayContact.matches(&m));
+        assert!(CypressBayContact.matches_direct(&m));
     }
 
     #[test]
@@ -139,7 +161,7 @@ mod tests {
             Some("New contact form submission"),
             Some(BODY),
         );
-        assert!(CypressBayContact.matches(&m));
+        assert!(CypressBayContact.matches_direct(&m));
     }
 
     #[test]
@@ -150,14 +172,14 @@ mod tests {
             Some("New contact form submission"),
             Some(BODY),
         );
-        assert!(!CypressBayContact.matches(&m));
+        assert!(!CypressBayContact.matches_direct(&m));
         // A lookalike domain that merely *contains* the real one.
         let m = mail(
             Some("forms@notcypressbayrealty.com"),
             Some("New contact form submission"),
             Some(BODY),
         );
-        assert!(!CypressBayContact.matches(&m));
+        assert!(!CypressBayContact.matches_direct(&m));
     }
 
     #[test]
@@ -167,16 +189,16 @@ mod tests {
             Some("Monthly newsletter"),
             Some(BODY),
         );
-        assert!(!CypressBayContact.matches(&m));
+        assert!(!CypressBayContact.matches_direct(&m));
         // Exact equality after trim: a forwarded prefix fails by design.
         let m = mail(
             Some("forms@cypressbayrealty.com"),
             Some("Fwd: New contact form submission"),
             Some(BODY),
         );
-        assert!(!CypressBayContact.matches(&m));
+        assert!(!CypressBayContact.matches_direct(&m));
         let m = mail(Some("forms@cypressbayrealty.com"), None, Some(BODY));
-        assert!(!CypressBayContact.matches(&m));
+        assert!(!CypressBayContact.matches_direct(&m));
     }
 
     #[test]
@@ -186,7 +208,29 @@ mod tests {
             Some("  New contact form submission  "),
             Some(BODY),
         );
-        assert!(CypressBayContact.matches(&m));
+        assert!(CypressBayContact.matches_direct(&m));
+    }
+
+    // --- matches_forwarded(): the D-040 arm ----------------------------
+
+    #[test]
+    fn forwarded_arm_applies_the_same_domain_and_subject_rules() {
+        let m = mail(
+            Some("forms@cypressbayrealty.com"),
+            Some("New contact form submission"),
+            Some(BODY),
+        );
+        for depth in 1..=3 {
+            assert!(CypressBayContact.matches_forwarded(&m, depth));
+        }
+        // Content alone never matches on this arm either (D-036/D-040):
+        // the forwarded claim of the wrong domain is rejected.
+        let m = mail(
+            Some("forms@eospia.com"),
+            Some("New contact form submission"),
+            Some(BODY),
+        );
+        assert!(!CypressBayContact.matches_forwarded(&m, 1));
     }
 
     // --- extract() -----------------------------------------------------

@@ -53,6 +53,11 @@ struct InboundEmailRequest {
         format = tracing::field::Empty,
         person_id = tracing::field::Empty,
         inquiry_id = tracing::field::Empty,
+        // SLICE_007h1 §4: forwarded-wrapper provenance, recorded by the
+        // parse closure — statics/scalars only, never inner content.
+        forwarded = tracing::field::Empty,
+        forward_style = tracing::field::Empty,
+        forward_depth = tracing::field::Empty,
     )
 )]
 async fn inbound_email(

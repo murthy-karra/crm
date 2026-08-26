@@ -47,6 +47,9 @@ fn lead_reply() -> String {
 
 type Script = Result<String, ExtractorError>;
 
+/// (subject, sender_domain, text) as captured by the fake extractor.
+type SeenInput = (Option<String>, Option<String>, String);
+
 /// Scripted `LeadExtractor`: pops one reply per call; panics when the
 /// script runs dry (a test bug). Optional gate: block inside `extract`
 /// until the test releases it (the mid-extraction interleavings).
@@ -55,6 +58,10 @@ struct FakeExtractor {
     entered: tokio::sync::Semaphore,
     proceed: tokio::sync::Semaphore,
     gated: bool,
+    /// Every input seen — the worker seam pin (SLICE_007h1 §3: the
+    /// model must see the same view pinned matching saw, i.e. the INNER
+    /// message of a recognized forward).
+    seen: Mutex<Vec<SeenInput>>,
 }
 
 impl FakeExtractor {
@@ -64,6 +71,7 @@ impl FakeExtractor {
             entered: tokio::sync::Semaphore::new(0),
             proceed: tokio::sync::Semaphore::new(0),
             gated: false,
+            seen: Mutex::new(Vec::new()),
         })
     }
     fn gated(replies: Vec<Script>) -> Arc<Self> {
@@ -72,13 +80,19 @@ impl FakeExtractor {
             entered: tokio::sync::Semaphore::new(0),
             proceed: tokio::sync::Semaphore::new(0),
             gated: true,
+            seen: Mutex::new(Vec::new()),
         })
     }
 }
 
 #[async_trait]
 impl LeadExtractor for FakeExtractor {
-    async fn extract(&self, _input: &ExtractionInput) -> Result<ExtractorReply, ExtractorError> {
+    async fn extract(&self, input: &ExtractionInput) -> Result<ExtractorReply, ExtractorError> {
+        self.seen.lock().unwrap().push((
+            input.subject.clone(),
+            input.sender_domain.clone(),
+            input.text.clone(),
+        ));
         if self.gated {
             self.entered.add_permits(1);
             let _ = self.proceed.acquire().await.expect("gate open");
@@ -1010,4 +1024,72 @@ async fn unparsed_and_discarded_rows_are_never_claimed(migrator_pool: PgPool) {
     let fake = FakeExtractor::scripted(vec![]);
     let report = run_pass(&migrator_pool, &publisher, &fake).await;
     assert_eq!(report.claimed, 0);
+}
+
+// ---------------------------------------------------------------------
+// Slice 007h1 (docs/specs/SLICE_007h1.md §3/§5/§6): the worker half of
+// the shared unwrap seam, pinned executably — deleting the worker's
+// `forward::resolve` call would fail these (the model would see the
+// outer Fwd: view instead of the inner message).
+
+const GMAIL_FWD_UNKNOWN_EML: &[u8] = include_bytes!("fixtures/email/gmail_fwd_unknown_lead.eml");
+
+/// A reply the forwarded fixture's INNER contacts genuinely contain.
+fn inner_lead_reply() -> String {
+    json!({
+        "is_lead": true, "confidence": 0.9,
+        "first_name": "Tom", "last_name": "Okafor",
+        "email": null,
+        "phone": "(628) 555-0942",
+        "message": "Relocating; Saturday tour?"
+    })
+    .to_string()
+}
+
+/// Criteria 2 + 8 (worker half): a forwarded unknown-format lead is
+/// extracted FROM THE INNER VIEW — inner subject (no "Fwd:"), inner
+/// claimed sender domain, inner text with the banner gone — and
+/// completes end-to-end from the model's reply.
+#[sqlx::test]
+#[ignore]
+async fn forwarded_unknown_lead_extracts_from_the_inner_view(migrator_pool: PgPool) {
+    let (org_id, _bob) = org_with_default(&migrator_pool, "Acme Realty").await;
+    let publisher = Publisher::recording();
+    let router = build_router(&migrator_pool, publisher.clone()).await;
+    let id = deliver_eligible(&router, &migrator_pool, org_id, GMAIL_FWD_UNKNOWN_EML).await;
+    make_due(&migrator_pool, id).await;
+
+    let fake = FakeExtractor::scripted(vec![Ok(inner_lead_reply())]);
+    let report = run_pass(&migrator_pool, &publisher, &fake).await;
+    assert_eq!(report.resolved, 1);
+
+    let seen = fake.seen.lock().unwrap().clone();
+    assert_eq!(seen.len(), 1);
+    let (subject, sender_domain, text) = &seen[0];
+    assert_eq!(
+        subject.as_deref(),
+        Some("Condo tour this weekend?"),
+        "inner subject, not the outer Fwd: one"
+    );
+    assert_eq!(
+        sender_domain.as_deref(),
+        Some("example.com"),
+        "the inner claimed domain, not gmail.com"
+    );
+    assert!(text.starts_with("Hello - my partner"));
+    assert!(
+        !text.contains(&["Forwarded", "message"].join(" ")),
+        "banner decoration must not reach the model"
+    );
+
+    let (resolution, _, _) = row_state(&migrator_pool, id).await;
+    assert_eq!(resolution, "resolved");
+    let (first_name, last_name): (Option<String>, Option<String>) =
+        sqlx::query_as("SELECT first_name, last_name FROM person WHERE organization_id = $1")
+            .bind(org_id)
+            .fetch_one(&migrator_pool)
+            .await
+            .unwrap();
+    assert_eq!(first_name.as_deref(), Some("Tom"));
+    assert_eq!(last_name.as_deref(), Some("Okafor"));
 }

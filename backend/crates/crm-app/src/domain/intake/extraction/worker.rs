@@ -24,7 +24,7 @@ use crate::domain::intake::extraction::{
     build_input, validate_reply, ClaimVerdict, ExtractorError, LeadExtractor,
 };
 use crate::domain::intake::IntakeActor;
-use crate::domain::raw_payload::{crypto, store};
+use crate::domain::raw_payload::{crypto, store, Resolution};
 use crate::realtime::{Publication, Publisher, RealtimeEvent};
 
 pub const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(10);
@@ -512,7 +512,7 @@ async fn reset_to_pending(pool: &PgPool, row: &ClaimedRow) -> Result<bool, sqlx:
     let locked = store::lock_for_processing(&mut tx, row.id, row.organization_id).await?;
     let still_ours = matches!(
         &locked,
-        Some(l) if l.resolution == "unresolved"
+        Some(l) if l.resolution == Resolution::Unresolved
             && l.unresolved_reason.as_deref() == Some("email_unrecognized_format")
     );
     if !still_ours {
@@ -548,7 +548,7 @@ async fn un_reset(
     let mut tx = pool.begin().await?;
     let locked = store::lock_for_processing(&mut tx, row.id, row.organization_id).await?;
     let mut terminal = false;
-    if matches!(&locked, Some(l) if l.resolution == "pending") {
+    if matches!(&locked, Some(l) if l.resolution == Resolution::Pending) {
         if counted && row.extraction_attempts + 1 >= MAX_QUALITY_ATTEMPTS {
             terminal = true;
             sqlx::query!(
@@ -629,7 +629,7 @@ async fn apply(
     let locked = store::lock_for_processing(&mut tx, row.id, row.organization_id).await?;
     let still_ours = matches!(
         &locked,
-        Some(l) if l.resolution == "unresolved"
+        Some(l) if l.resolution == Resolution::Unresolved
             && l.unresolved_reason.as_deref() == Some("email_unrecognized_format")
     );
 

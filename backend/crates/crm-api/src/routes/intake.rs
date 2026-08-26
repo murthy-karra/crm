@@ -164,7 +164,7 @@ async fn list_unresolved(
                 "id": item.id,
                 "source": item.source,
                 "received_at": item.received_at,
-                "resolution": item.resolution,
+                "resolution": item.resolution.as_str(),
                 "reason": item.unresolved_reason,
                 "byte_len": item.byte_len,
             })
@@ -244,7 +244,7 @@ async fn unresolved_detail(
         "source": detail.source,
         "payload_format": detail.payload_format,
         "received_at": detail.received_at,
-        "resolution": detail.resolution,
+        "resolution": detail.resolution.as_str(),
         "reason": detail.unresolved_reason,
         "byte_len": detail.byte_len,
         "content": content,

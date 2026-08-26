@@ -19,7 +19,7 @@ use crate::domain::inquiry::parse::{self, ParsedLead, Source, UnresolvedReason};
 use crate::domain::inquiry::queries as inquiry_queries;
 use crate::domain::intake::IntakeActor;
 use crate::domain::person::queries as person_queries;
-use crate::domain::raw_payload::{crypto, store};
+use crate::domain::raw_payload::{crypto, store, PayloadFormat, Resolution};
 use crate::domain::stage;
 use crate::realtime::{PersonChange, Publication, Publisher, RealtimeEvent};
 
@@ -237,9 +237,9 @@ async fn receive_inquiry_attempt(
         pool,
         candidate_id,
         organization_id,
-        cmd.source.as_str(),
-        "generic_v1",
-        actor.origin().as_str(),
+        &cmd.source,
+        PayloadFormat::GenericV1,
+        actor.origin(),
         cmd.received_at,
         &sealed.nonce,
         &sealed.ciphertext,
@@ -333,7 +333,7 @@ where
             .await?
             .ok_or(CommandError::Database(sqlx::Error::RowNotFound))?;
 
-        if locked.resolution != "pending" {
+        if locked.resolution != Resolution::Pending {
             let outcome = duplicate_outcome(&mut tx, organization_id, locked).await?;
             tx.commit().await?;
             return Ok(outcome);
@@ -612,8 +612,8 @@ pub(crate) async fn duplicate_outcome(
     organization_id: Uuid,
     locked: store::LockedRawPayload,
 ) -> Result<ReceiveInquiryOutcome, CommandError> {
-    match locked.resolution.as_str() {
-        "resolved" => {
+    match locked.resolution {
+        Resolution::Resolved => {
             let inquiry_id = locked
                 .inquiry_id
                 .ok_or(CommandError::Database(sqlx::Error::RowNotFound))?;
@@ -635,7 +635,7 @@ pub(crate) async fn duplicate_outcome(
         // existing unresolved duplicate envelope on /api/inquiries). A
         // row discarded while still `pending` has a NULL reason — the
         // shared fallback decode below covers it.
-        "unresolved" | "discarded" => {
+        Resolution::Unresolved | Resolution::Discarded => {
             let reason = decode_unresolved_reason(locked.unresolved_reason.as_deref());
             Ok(ReceiveInquiryOutcome::Unresolved {
                 raw_payload_id: locked.id,
@@ -643,7 +643,15 @@ pub(crate) async fn duplicate_outcome(
                 duplicate: true,
             })
         }
-        other => unreachable!("unknown raw_payload.resolution in database: {other}"),
+        // Both call sites (above, and workbench.rs's `retry_intake`)
+        // only reach `duplicate_outcome` once they've already
+        // established the row isn't `pending`; `Resolution` can't
+        // encode that exclusion in `locked`'s type, so this arm is the
+        // caller-contract violation this match must still handle. Was
+        // `unreachable!` — a corrupt/impossible state must yield a
+        // 500-class error, not a process panic (hardening chunk S1,
+        // docs/design/type-safety-hardening.md).
+        Resolution::Pending => Err(CommandError::Corrupt),
     }
 }
 

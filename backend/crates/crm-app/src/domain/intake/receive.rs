@@ -16,10 +16,10 @@ use crate::domain::commands::receive_inquiry::{
 };
 use crate::domain::commands::CommandError;
 use crate::domain::envelope::Origin;
-use crate::domain::inquiry::parse::UnresolvedReason;
+use crate::domain::inquiry::parse::{Source, UnresolvedReason};
 use crate::domain::intake::email;
 use crate::domain::intake::{IntakeActor, IntakeAddress};
-use crate::domain::raw_payload::{crypto, store};
+use crate::domain::raw_payload::{crypto, store, PayloadFormat};
 use crate::realtime::{Publication, Publisher, RealtimeEvent};
 
 /// Presented to `constant_time_eq` on an unknown slug, so that branch does
@@ -120,13 +120,18 @@ pub async fn receive_inbound_email(
         .map_err(|_| ReceiveInboundEmailError::Crypto)?;
 
     let byte_len = raw.len() as i32;
+    // Fixed transport-level `raw_payload.source` for every inbound email
+    // (distinct from the per-message `Source` the pinned email format
+    // eventually gives `inquiry.source` — docs/specs/SLICE_007d.md §4c);
+    // "email" trivially satisfies `Source::parse`'s rules.
+    let source = Source::parse("email").expect("\"email\" is a valid Source literal");
     let stored_id = store::insert_pending(
         pool,
         candidate_id,
         org_id,
-        "email",
-        "rfc822_v1",
-        "webhook",
+        &source,
+        PayloadFormat::Rfc822V1,
+        Origin::Webhook,
         received_at,
         &sealed.nonce,
         &sealed.ciphertext,

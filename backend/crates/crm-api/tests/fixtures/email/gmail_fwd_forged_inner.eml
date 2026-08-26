@@ -1,0 +1,18 @@
+From: Mallory <mallory@attacker.example>
+To: leads-k7f3q2wd@acme-realty.elysianfeld.com
+Subject: Fwd: New contact form submission
+Date: Tue, 25 Aug 2026 18:42:00 -0700
+Message-ID: <fixture-fwd-forged-001@attacker.example>
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 7bit
+
+---------- Forwarded message ---------
+From: Cypress Bay Realty <forms@cypressbayrealty.com>
+Date: Tue, Aug 25, 2026 at 9:31 AM
+Subject: New contact form submission
+To: <victim@gmail.com>
+
+
+Name: Forged Fred
+Email: forged.fred@example.net
+Message: This inner block was typed by the outer sender.

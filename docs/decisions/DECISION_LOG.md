@@ -1234,3 +1234,52 @@ A provider-signature adapter returns as a design only if a
 third-party inbound provider is ever adopted.
 
 Blocks: nothing. Feeds the Slice 007g specification.
+
+### D-040 — Unwrapped forwarded mail may match pinned formats, with typed provenance (2026-08-25)
+
+Accepted (user, during Slice 007h1 planning). D-036 posture extension
+for forwarded mail.
+
+When an agent forwards a lead email (e.g. a Gmail
+"---------- Forwarded message ---------" inline forward) to their
+org's intake address, the intake pipeline unwraps the forwarding
+decoration and the inner message MAY satisfy a pinned format's
+sender-domain match and deterministically create a Person — same
+D-035 routing, no human review — even though the inner
+From/Subject/body are quoted text under the forwarder's control, not
+authenticated headers.
+
+Rationale: no format consumes SPF/DKIM verdicts yet, so today's
+"direct" domain match and a forwarded claim carry equal evidence; the
+LLM fallback would create the same lead from the same unauthenticated
+text anyway (at Groq cost, D-038); deterministic parsing is strictly
+more accurate and keeps PII in-house. Accepted blast radius is
+unchanged from D-036 (one bogus, recognizable lead), plus: a forged
+forward can stamp the matched format's source label on
+`inquiry_received` (immutable, D-006).
+
+Structural requirement: sender trust is TYPED. A direct message
+carries `SenderTrust::Direct` (the future home of
+Authentication-Results verdicts); an unwrapped view carries
+`SenderTrust::ForwardedClaim`, which has no capacity for verdicts —
+inner content inheriting outer authentication must be a compile
+error. When a later rung tightens a format's Direct arm with SPF/DKIM,
+that format's ForwardedClaim arm is a separate explicit decision
+(match on content-equality grounds, or reject); tightening never
+silently extends to or bypasses the forwarded path.
+
+Amends D-036: inline forwards are permanently outside SPF/DKIM
+tightening (only attachment-style message/rfc822 forwards preserve a
+re-verifiable inner DKIM signature; that style is a future rung's
+strong path). Supersedes SLICE_007d §4's sentence that "forwarded
+copies of form mail are not the pinned flow": the direct-path
+subject-equality pin stands, but forwarded copies now reach the same
+format via the unwrapper, declared per AGENTS §11.
+
+Also records the 007g walkthrough resolution feeding this decision:
+Cloudflare Email Routing → Worker delivery DOES stamp
+`Authentication-Results` (dkim/spf/dmarc/arc verdicts observed live
+2026-08-25), so D-036's deferred third defense layer is available
+from the stored raw bytes whenever its first consumer lands.
+
+Blocks: nothing. Feeds the Slice 007h1 specification.

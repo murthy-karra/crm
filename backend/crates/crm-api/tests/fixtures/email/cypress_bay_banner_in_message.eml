@@ -1,0 +1,19 @@
+From: "Cypress Bay Realty" <forms@cypressbayrealty.com>
+To: leads-k7f3q2wd@acme-realty.elysianfeld.com
+Subject: New contact form submission
+Date: Tue, 25 Aug 2026 18:43:00 -0700
+Message-ID: <fixture-cypress-banner-001@cypressbayrealty.com>
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 7bit
+
+Name: Quoting Quinn
+Email: quoting.quinn@example.com
+Message: I got this from another agent, quoting it below:
+---------- Forwarded message ---------
+From: Somebody Else <someone.else@example.net>
+Date: Mon, Aug 24, 2026 at 1:00 PM
+Subject: the quoted mail
+To: <quoting.quinn@example.com>
+
+
+quoted text that must stay part of the Message field

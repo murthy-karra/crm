@@ -958,3 +958,330 @@ async fn email_intake_without_a_default_creates_an_unassigned_person(migrator_po
         common::body_json(common::get_with_cookie(&router, "/api/people", &cookie).await).await;
     assert_eq!(people["people"].as_array().unwrap().len(), 1);
 }
+
+// ---------------------------------------------------------------------
+// Slice 007h1 (docs/specs/SLICE_007h1.md §6): forwarded-wrapper
+// unwrapping. "LLM path not invoked" holds by construction in every
+// deterministic-outcome test here: `build_app` never starts the
+// extraction worker (crm-api/src/lib.rs), so a `resolved` row can only
+// have come from the pinned-format path.
+
+const GMAIL_FWD_CYPRESS_EML: &[u8] = include_bytes!("fixtures/email/gmail_fwd_cypress_bay.eml");
+const FAKE_FWD_SUBJECT_EML: &[u8] = include_bytes!("fixtures/email/fake_fwd_subject.eml");
+const GMAIL_FWD_FORGED_EML: &[u8] = include_bytes!("fixtures/email/gmail_fwd_forged_inner.eml");
+const CYPRESS_BANNER_IN_MESSAGE_EML: &[u8] =
+    include_bytes!("fixtures/email/cypress_bay_banner_in_message.eml");
+const GMAIL_FWD_NESTED_EML: &[u8] = include_bytes!("fixtures/email/gmail_fwd_nested.eml");
+const GMAIL_FWD_UNKNOWN_EML: &[u8] = include_bytes!("fixtures/email/gmail_fwd_unknown_lead.eml");
+const GMAIL_FWD_EMPTY_INNER_EML: &[u8] = include_bytes!("fixtures/email/gmail_fwd_empty_inner.eml");
+const GMAIL_FWD_HTML_EML: &[u8] = include_bytes!("fixtures/email/gmail_fwd_html_only.eml");
+
+async fn resolution_row(pool: &PgPool, org_id: Uuid) -> (String, Option<String>) {
+    sqlx::query_as(
+        "SELECT resolution, unresolved_reason FROM raw_payload WHERE organization_id = $1",
+    )
+    .bind(org_id)
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+/// Criterion 1: a Gmail forward of the pinned form mail completes
+/// end-to-end — inner fields, D-035 routing, `source='website'` — with
+/// the preamble above the banner playing no part.
+#[sqlx::test]
+#[ignore]
+async fn gmail_forward_of_pinned_format_mail_completes_deterministically(migrator_pool: PgPool) {
+    let (org_id, bob, _alice) = org_with_default(&migrator_pool, "Acme Realty").await;
+    let (slug, token) = intake_row(&migrator_pool, org_id).await;
+    let router = build_router(&migrator_pool, Publisher::recording()).await;
+
+    let resp = post_inbound_email(&router, &recipient(&slug, &token), GMAIL_FWD_CYPRESS_EML).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let (resolution, _) = resolution_row(&migrator_pool, org_id).await;
+    assert_eq!(resolution, "resolved");
+    let (first_name, last_name, assigned): (Option<String>, Option<String>, Option<Uuid>) =
+        sqlx::query_as(
+            "SELECT first_name, last_name, assigned_user_id FROM person WHERE organization_id = $1",
+        )
+        .bind(org_id)
+        .fetch_one(&migrator_pool)
+        .await
+        .unwrap();
+    assert_eq!(first_name.as_deref(), Some("Jordan"));
+    assert_eq!(last_name.as_deref(), Some("Ellis"));
+    assert_eq!(assigned, Some(bob), "D-035 default-assignee routing");
+    let source: String =
+        sqlx::query_scalar("SELECT source FROM inquiry WHERE organization_id = $1")
+            .bind(org_id)
+            .fetch_one(&migrator_pool)
+            .await
+            .unwrap();
+    assert_eq!(source, "website", "the inner format's source label");
+}
+
+/// Criterion 3 (first half): a "Fwd:" subject with no real banner is a
+/// no-op — exactly today's unrecognized outcome, nothing created.
+#[sqlx::test]
+#[ignore]
+async fn fake_fwd_subject_is_a_noop_and_lands_unrecognized(migrator_pool: PgPool) {
+    let (org_id, _bob, _alice) = org_with_default(&migrator_pool, "Acme Realty").await;
+    let (slug, token) = intake_row(&migrator_pool, org_id).await;
+    let router = build_router(&migrator_pool, Publisher::recording()).await;
+
+    let resp = post_inbound_email(&router, &recipient(&slug, &token), FAKE_FWD_SUBJECT_EML).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let (resolution, reason) = resolution_row(&migrator_pool, org_id).await;
+    assert_eq!(resolution, "unresolved");
+    assert_eq!(reason.as_deref(), Some("email_unrecognized_format"));
+    assert_eq!(count(&migrator_pool, "person", org_id).await, 0);
+}
+
+/// Criterion 4: a hand-forged forward whose inner block claims the
+/// pinned domain creates the D-040-accepted lead through the
+/// ForwardedClaim arm — the accepted blast radius (one bogus,
+/// recognizable lead; spoofable source label), never anything more.
+#[sqlx::test]
+#[ignore]
+async fn forged_inner_forward_creates_the_d040_accepted_lead(migrator_pool: PgPool) {
+    let (org_id, _bob, _alice) = org_with_default(&migrator_pool, "Acme Realty").await;
+    let (slug, token) = intake_row(&migrator_pool, org_id).await;
+    let router = build_router(&migrator_pool, Publisher::recording()).await;
+
+    let resp = post_inbound_email(&router, &recipient(&slug, &token), GMAIL_FWD_FORGED_EML).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let (resolution, _) = resolution_row(&migrator_pool, org_id).await;
+    assert_eq!(resolution, "resolved");
+    let first_name: Option<String> =
+        sqlx::query_scalar("SELECT first_name FROM person WHERE organization_id = $1")
+            .bind(org_id)
+            .fetch_one(&migrator_pool)
+            .await
+            .unwrap();
+    assert_eq!(first_name.as_deref(), Some("Forged"));
+}
+
+/// Reviewer S-2 pin: a genuine DIRECT form mail whose Message field
+/// quotes a forward banner keeps its deterministic parse — detect runs
+/// before resolve, so the outer fields win and the quoted text stays
+/// inside the Message.
+#[sqlx::test]
+#[ignore]
+async fn direct_mail_with_a_quoted_banner_keeps_its_deterministic_parse(migrator_pool: PgPool) {
+    let (org_id, _bob, _alice) = org_with_default(&migrator_pool, "Acme Realty").await;
+    let (slug, token) = intake_row(&migrator_pool, org_id).await;
+    let router = build_router(&migrator_pool, Publisher::recording()).await;
+
+    let resp = post_inbound_email(
+        &router,
+        &recipient(&slug, &token),
+        CYPRESS_BANNER_IN_MESSAGE_EML,
+    )
+    .await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let (resolution, _) = resolution_row(&migrator_pool, org_id).await;
+    assert_eq!(resolution, "resolved");
+    let first_name: Option<String> =
+        sqlx::query_scalar("SELECT first_name FROM person WHERE organization_id = $1")
+            .bind(org_id)
+            .fetch_one(&migrator_pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        first_name.as_deref(),
+        Some("Quoting"),
+        "the OUTER form's lead"
+    );
+    let message: Option<String> =
+        sqlx::query_scalar("SELECT message FROM inquiry WHERE organization_id = $1")
+            .bind(org_id)
+            .fetch_one(&migrator_pool)
+            .await
+            .unwrap();
+    let message = message.unwrap();
+    assert!(
+        message.contains("Forwarded message"),
+        "the quoted banner stays inside the Message field"
+    );
+    assert!(message.contains("quoted text that must stay"));
+}
+
+/// Criterion 5: a forward-of-a-forward unwraps to the innermost form
+/// mail within the depth cap.
+#[sqlx::test]
+#[ignore]
+async fn nested_forward_unwraps_to_the_innermost_form_mail(migrator_pool: PgPool) {
+    let (org_id, _bob, _alice) = org_with_default(&migrator_pool, "Acme Realty").await;
+    let (slug, token) = intake_row(&migrator_pool, org_id).await;
+    let router = build_router(&migrator_pool, Publisher::recording()).await;
+
+    let resp = post_inbound_email(&router, &recipient(&slug, &token), GMAIL_FWD_NESTED_EML).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let (resolution, _) = resolution_row(&migrator_pool, org_id).await;
+    assert_eq!(resolution, "resolved");
+    let first_name: Option<String> =
+        sqlx::query_scalar("SELECT first_name FROM person WHERE organization_id = $1")
+            .bind(org_id)
+            .fetch_one(&migrator_pool)
+            .await
+            .unwrap();
+    assert_eq!(first_name.as_deref(), Some("Nested"));
+}
+
+/// Criterion 2 (delivery half): a forward of an unknown-format lead
+/// stays extraction-eligible — same reason, same partial-index
+/// predicate; the worker seeing the INNER view is pinned at the unit
+/// seam (`forwarded_mail_extraction_input_is_the_inner_view`).
+#[sqlx::test]
+#[ignore]
+async fn forwarded_unknown_lead_lands_unrecognized_for_extraction(migrator_pool: PgPool) {
+    let (org_id, _bob, _alice) = org_with_default(&migrator_pool, "Acme Realty").await;
+    let (slug, token) = intake_row(&migrator_pool, org_id).await;
+    let router = build_router(&migrator_pool, Publisher::recording()).await;
+
+    let resp = post_inbound_email(&router, &recipient(&slug, &token), GMAIL_FWD_UNKNOWN_EML).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let (resolution, reason) = resolution_row(&migrator_pool, org_id).await;
+    assert_eq!(resolution, "unresolved");
+    assert_eq!(reason.as_deref(), Some("email_unrecognized_format"));
+}
+
+/// Criterion 3 (second half): a real banner with an empty inner body is
+/// a no-op — whole-message fallback, no panic, nothing created.
+#[sqlx::test]
+#[ignore]
+async fn forward_banner_with_empty_inner_body_falls_back_whole_message(migrator_pool: PgPool) {
+    let (org_id, _bob, _alice) = org_with_default(&migrator_pool, "Acme Realty").await;
+    let (slug, token) = intake_row(&migrator_pool, org_id).await;
+    let router = build_router(&migrator_pool, Publisher::recording()).await;
+
+    let resp = post_inbound_email(
+        &router,
+        &recipient(&slug, &token),
+        GMAIL_FWD_EMPTY_INNER_EML,
+    )
+    .await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let (resolution, reason) = resolution_row(&migrator_pool, org_id).await;
+    assert_eq!(resolution, "unresolved");
+    assert_eq!(reason.as_deref(), Some("email_unrecognized_format"));
+    assert_eq!(count(&migrator_pool, "person", org_id).await, 0);
+}
+
+/// Criterion 6: an HTML-only Gmail forward — the banner survives the
+/// HTML→text conversion, unwraps, and the inner form mail completes.
+#[sqlx::test]
+#[ignore]
+async fn html_only_forward_unwraps_and_completes(migrator_pool: PgPool) {
+    let (org_id, _bob, _alice) = org_with_default(&migrator_pool, "Acme Realty").await;
+    let (slug, token) = intake_row(&migrator_pool, org_id).await;
+    let router = build_router(&migrator_pool, Publisher::recording()).await;
+
+    let resp = post_inbound_email(&router, &recipient(&slug, &token), GMAIL_FWD_HTML_EML).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let (resolution, _) = resolution_row(&migrator_pool, org_id).await;
+    assert_eq!(resolution, "resolved");
+    let first_name: Option<String> =
+        sqlx::query_scalar("SELECT first_name FROM person WHERE organization_id = $1")
+            .bind(org_id)
+            .fetch_one(&migrator_pool)
+            .await
+            .unwrap();
+    assert_eq!(first_name.as_deref(), Some("Hilda"));
+}
+
+const GMAIL_FWD_CYPRESS_OTHER_AGENT_EML: &[u8] =
+    include_bytes!("fixtures/email/gmail_fwd_cypress_bay_other_agent.eml");
+
+/// Criterion 8 (redelivery half): byte-identical redelivery of a
+/// forwarded mail is the same HMAC no-op as any other — the dedup runs
+/// on raw OUTER bytes before any unwrapping.
+#[sqlx::test]
+#[ignore]
+async fn byte_identical_redelivery_of_a_forwarded_mail_is_a_noop(migrator_pool: PgPool) {
+    let (org_id, _bob, _alice) = org_with_default(&migrator_pool, "Acme Realty").await;
+    let (slug, token) = intake_row(&migrator_pool, org_id).await;
+    let router = build_router(&migrator_pool, Publisher::recording()).await;
+
+    for _ in 0..2 {
+        let resp =
+            post_inbound_email(&router, &recipient(&slug, &token), GMAIL_FWD_CYPRESS_EML).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+    assert_eq!(count(&migrator_pool, "raw_payload", org_id).await, 1);
+    assert_eq!(count(&migrator_pool, "person", org_id).await, 1);
+    assert_eq!(count(&migrator_pool, "inquiry", org_id).await, 1);
+}
+
+/// The duplicate scenario 007h1 newly enables (adversarial M2): two
+/// different agents forward the same original lead — different outer
+/// bytes (two raw_payload rows) converging on ONE Person via the
+/// existing contact-method identify step.
+#[sqlx::test]
+#[ignore]
+async fn two_forwarders_of_the_same_inner_lead_converge_on_one_person(migrator_pool: PgPool) {
+    let (org_id, _bob, _alice) = org_with_default(&migrator_pool, "Acme Realty").await;
+    let (slug, token) = intake_row(&migrator_pool, org_id).await;
+    let router = build_router(&migrator_pool, Publisher::recording()).await;
+
+    for raw in [GMAIL_FWD_CYPRESS_EML, GMAIL_FWD_CYPRESS_OTHER_AGENT_EML] {
+        let resp = post_inbound_email(&router, &recipient(&slug, &token), raw).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+    assert_eq!(count(&migrator_pool, "raw_payload", org_id).await, 2);
+    assert_eq!(count(&migrator_pool, "person", org_id).await, 1);
+}
+
+/// Criterion 8 (tenant half): a forwarded mail delivered to org A's
+/// intake address — whatever domain its inner block claims — writes
+/// nothing in org B. Org resolution is the recipient token, never any
+/// From line.
+#[sqlx::test]
+#[ignore]
+async fn forwarded_mail_writes_nothing_in_another_org(migrator_pool: PgPool) {
+    let (org_a, _bob, _alice) = org_with_default(&migrator_pool, "Acme Realty").await;
+    let (org_b, _, _) = org_with_default(&migrator_pool, "Rival Realty").await;
+    let (slug, token) = intake_row(&migrator_pool, org_a).await;
+    let router = build_router(&migrator_pool, Publisher::recording()).await;
+
+    let resp = post_inbound_email(&router, &recipient(&slug, &token), GMAIL_FWD_FORGED_EML).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(count(&migrator_pool, "person", org_a).await, 1);
+    for table in ["raw_payload", "person", "inquiry"] {
+        assert_eq!(count(&migrator_pool, table, org_b).await, 0, "{table}");
+    }
+}
+
+const GMAIL_FWD_REAL_STRUCTURE_EML: &[u8] =
+    include_bytes!("fixtures/email/gmail_fwd_real_structure.eml");
+
+/// Reconciliation against REAL Gmail bytes (2026-08-25): the user's
+/// actual forwards (plain, HTML-heavy, nested) were verified locally
+/// against the unwrapper — banner, quoted-printable date line with
+/// U+202F, multipart/alternative, and the trailing forwarder signature
+/// all as this sanitized replica preserves them. Runs without a
+/// database so the structural pin lives in the fast gate.
+#[test]
+fn real_gmail_structure_unwraps_to_the_inner_view() {
+    use crm_api::domain::intake::email::{forward, mime, SenderTrust};
+    let mail = mime::parse(GMAIL_FWD_REAL_STRUCTURE_EML).expect("parses");
+    let resolved = forward::resolve(mail);
+    assert_eq!(resolved.trust, SenderTrust::ForwardedClaim { depth: 1 });
+    assert_eq!(resolved.style, Some("gmail_inline_v1"));
+    assert_eq!(
+        resolved.mail.from_addr.as_deref(),
+        Some("maya.l@example.com")
+    );
+    assert_eq!(
+        resolved.mail.subject.as_deref(),
+        Some("Looking at 12 Harbor Lane")
+    );
+    let body = resolved.mail.text_body.as_deref().unwrap();
+    assert!(body.contains("(415) 555-0173"));
+    // Known accepted edge (SLICE_007h1 §5 note): Gmail places the
+    // FORWARDER's signature after the quoted message at the same text
+    // level — it is part of the inner body in plain text. The HTML
+    // gmail_quote structure could separate it; that is a later rung.
+    assert!(body.contains("(555) 555-0100"), "trailing signature stays");
+}

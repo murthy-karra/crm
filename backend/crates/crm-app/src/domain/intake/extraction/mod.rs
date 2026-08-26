@@ -656,6 +656,49 @@ mod tests {
         );
     }
 
+    /// The seam, behaviorally (docs/specs/SLICE_007h1.md §3/§5): the
+    /// worker's input path — mime::parse → forward::resolve →
+    /// build_input, exactly as `worker.rs` composes it — yields the
+    /// INNER subject/domain/text for a recognized Gmail forward. The
+    /// companion source-level fence lives in `email/mod.rs`
+    /// (`only_forward_rs_matches_the_forward_banner`).
+    #[test]
+    fn forwarded_mail_extraction_input_is_the_inner_view() {
+        use crate::domain::intake::email::{self, SenderTrust};
+        // The banner is assembled at runtime: the banner-fence test in
+        // email/mod.rs walks this module too, and only forward.rs may
+        // contain the literal.
+        let banner = format!(
+            "---------- {} ---------",
+            ["Forwarded", "message"].join(" ")
+        );
+        let raw = format!(
+            "From: Agent Person <agent@gmail.com>\r\n\
+Subject: Fwd: Looking at 12 Harbor Lane\r\n\
+Content-Type: text/plain; charset=utf-8\r\n\
+\r\n\
+{banner}\r\n\
+From: Maya Lindqvist <maya.l@example.com>\r\n\
+Date: Mon, Aug 24, 2026 at 5:12 PM\r\n\
+Subject: Looking at 12 Harbor Lane\r\n\
+To: <agent@gmail.com>\r\n\
+\r\n\
+Hi, we would love a viewing this week.\r\n"
+        );
+        let mail = email::mime::parse(raw.as_bytes()).expect("parses");
+        let resolved = email::forward::resolve(mail);
+        assert_eq!(resolved.trust, SenderTrust::ForwardedClaim { depth: 1 });
+        let input = build_input(&resolved.mail);
+        assert_eq!(input.sender_domain.as_deref(), Some("example.com"));
+        assert_eq!(
+            input.subject.as_deref(),
+            Some("Looking at 12 Harbor Lane"),
+            "inner subject, not the Fwd: outer one"
+        );
+        assert!(input.text.starts_with("Hi, we would love"));
+        assert!(!input.text.contains("Forwarded"));
+    }
+
     #[test]
     fn build_input_scopes_and_truncates() {
         use crate::domain::intake::email::ParsedMail;

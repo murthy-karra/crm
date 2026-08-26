@@ -217,6 +217,11 @@ async fn attempt(
         confidence = tracing::field::Empty,
         input_truncated = tracing::field::Empty,
         duration_ms = tracing::field::Empty,
+        // SLICE_007h1 §4: statics/scalars only — never the inner
+        // sender, subject, or text.
+        forwarded = tracing::field::Empty,
+        forward_style = tracing::field::Empty,
+        forward_depth = tracing::field::Empty,
     );
     // Instrumented, never a held `enter()` guard across the awaits below
     // (the multi-threaded-runtime span-corruption footgun — review F1).
@@ -254,7 +259,22 @@ async fn attempt_inner(
             Ok(plaintext) => match email::mime::parse(&plaintext) {
                 None => Err("internal_error"),
                 Some(mail) => {
-                    let input = build_input(&mail);
+                    // The one shared unwrap seam (docs/specs/SLICE_007h1.md
+                    // §3/§5): the model sees the same view pinned matching
+                    // saw — the inner message of a recognized forward
+                    // (inner subject/domain/text under the unchanged D-038
+                    // scope), the whole message otherwise. Rows here
+                    // matched no format as delivered, so no direct-detect
+                    // pass is repeated.
+                    let resolved = email::forward::resolve(mail);
+                    if let email::SenderTrust::ForwardedClaim { depth } = resolved.trust {
+                        span.record("forwarded", true);
+                        span.record("forward_depth", depth);
+                        if let Some(style) = resolved.style {
+                            span.record("forward_style", style);
+                        }
+                    }
+                    let input = build_input(&resolved.mail);
                     span.record("input_truncated", input.truncated);
                     match extractor.extract(&input).await {
                         Err(ExtractorError::Timeout) => Err("provider_timeout"),

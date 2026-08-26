@@ -1,8 +1,43 @@
 # Project State
 
-Last updated: 2026-08-25 (SLICE_007g LIVE-WALKTHROUGH COMPLETE on
-`slice-007g-real-receiving` off `main` `7ef2277`; NOTHING committed on
-the branch — next action is the Phase 9 commit gate, then merge. The
+Last updated: 2026-08-25 (SLICE_007h1 IMPLEMENTED on
+`slice-007h1-forwarded-wrapper` (off `main` `9604f76`), uncommitted.
+Built: email/forward.rs (SenderTrust Direct/ForwardedClaim,
+ForwardStyle registry, gmail_inline_v1, resolve with depth cap 3),
+trait split matches_direct/matches_forwarded + detect(mail, trust),
+detect-first parse_payload, worker resolve-before-build_input, span
+fields both sites, banner fence widened to the whole intake module,
+8 authored fixtures (self-approximated Gmail format — reconcile
+against the user's real .eml when provided) + 12 new db tests across
+inbound/extraction/workbench suites + adversarial From-line panic pin.
+Implementation review: ready-with-fixes — F1 worker-seam executable
+pin (db test capturing the fake extractor's input: inner
+subject/domain/text), F2 fence scope, F3 forwarded
+redelivery/convergence pins, F4 bracket rejection in is_addr_shaped —
+ALL APPLIED. Adversarial testing: NO critical/high (panic-free slicer
+probed with multibyte/RTL/nested brackets; linear work; tenant-safe);
+its gaps (worker db pin, retry-on-forwarded-row, two-forwarder
+convergence, forwarded cross-tenant, From-line panic pin) ALL
+APPLIED. LIVE WALKTHROUGH PASSED (2026-08-25): the user forwarded the earlier
+Maya sample from Gmail through leads.elysianfeld.com → unwrapped →
+extracted (0.99, 1.1 s) → converged on the existing Maya Lindqvist as
+her SECOND inquiry (no duplicate person); an unplanned newsletter
+forward was correctly binned not_a_lead 0.99. REAL-FIXTURE
+RECONCILIATION DONE: the user's three real .eml forwards (plain,
+HTML-heavy, nested — PII, never committed; probed via a temporary
+runtime test, then deleted) all unwrap (depths 1/1/2, true inner
+domains recovered); real Gmail's banner/QP/U+202F/multipart structure
+matches the matcher byte-for-byte, and a SANITIZED replica fixture
+(gmail_fwd_real_structure.eml) + fast-gate structural test pin it.
+Known accepted edge recorded in spec §5: the forwarder's trailing
+signature is part of the inner body in plain text (LLM could pick the
+forwarder's phone); HTML gmail_quote separation is a later rung.
+Final gates re-run after the fixture addition; next: commit gate →
+merge gate.
+
+SLICE_007g COMPLETE, MERGED, PUSHED (2026-08-25): `main` `9604f76` on
+origin carries planning `7ef2277` + implementation `c601363` + merge.
+The 007g detail below is history. The
 §10 ops runbook ran end-to-end with the user: worker
 `crm-inbound-relay` deployed (`workers_dev = false` added to
 wrangler.toml — email-only worker, no HTTP URL, which also sidesteps
@@ -45,14 +80,13 @@ L1 return-token refactor, L6 fetch timeout all applied). ALL GATES
 GREEN: ./scripts/check (incl. worker tests) + ./scripts/check-db
 (db_intake_rotation 4/4 incl. the token-leak capture).
 
-OUTSTANDING: Phase 9 commit gate (diff + verification shown, commit
-approval), then merge gate (`slice-007g-real-receiving` → `main`;
-note local `main` `7ef2277` is itself unpushed — the push rides with
-the merge approval). Ops side notes: the user's Cloudflare API token
-in `.env` was re-minted during the runbook (zones + Email Routing
-Rules + DNS edit); rotation during the walkthrough means the seeded
+Ops side notes from the 007g runbook: the user's Cloudflare API token
+in `.env` was re-minted (zones + Email Routing Rules + DNS edit; it
+still cannot read Email Routing *settings/subdomains* endpoints —
+rules + catch-all suffice); the walkthrough rotation means the seeded
 org's live intake address is the rotated one, visible in Intake
-Settings.)
+Settings; `slice-007g-real-receiving` still exists locally (deletion
+not yet approved).)
 
 Planning phase, earlier (Slice 007g: D-039 accepted
 and recorded — the mandated wildcard check found no free/incumbent
@@ -262,12 +296,12 @@ PUSHED to `origin/main` (`fe0b99b`), all with explicit user approval
 
 ## Current phase
 
-**Slice 007g (real receiving) CODE + OPS + LIVE WALKTHROUGH COMPLETE
-on `slice-007g-real-receiving` (2026-08-25): real Gmail → Cloudflare →
-worker → lead; forged token silently dropped; live rotation verified;
-Authentication-Results PRESENT (§6 escalation resolved — 007h may use
-SPF/DKIM). Uncommitted; awaiting the Phase 9 commit gate. See the
-header block.**
+**Slice 007h1 (forwarded-wrapper, Gmail inline) PLANNING: D-040
+accepted, spec drafted, independent review in progress. See the
+header block.** Prior: Slice 007g COMPLETE + MERGED + PUSHED
+(`main` `9604f76`): real Gmail → Cloudflare → worker → lead live;
+forged token silently dropped; rotation verified;
+Authentication-Results PRESENT (§6 escalation resolved).
 
 Spec phase, for reference: spec APPROVED (user, 2026-08-25); D-039;
 D-036's SPF/DKIM wording amended via that approval.
@@ -362,10 +396,11 @@ OrbStack hung twice. Hostname is `livekit1.tarams.org`.
 
 ## Current slice
 
-Slice 007g — Real receiving — `docs/specs/SLICE_007g.md` — CODE
-COMPLETE + REVIEWED + ADVERSARIALLY TESTED + OPS RUNBOOK + LIVE
-WALKTHROUGH COMPLETE on `slice-007g-real-receiving` (off `main`
-`7ef2277`), uncommitted; awaiting commit + merge gates. Previous: Slice 007f — LLM extraction —
+Slice 007h1 — Forwarded-wrapper (Gmail inline) —
+`docs/specs/SLICE_007h1.md` — DRAFT under independent review; D-040
+accepted. Previous: Slice 007g — Real receiving —
+`docs/specs/SLICE_007g.md` — COMPLETE, MERGED to `main` and pushed
+(`9604f76`); live receiving operational on leads.elysianfeld.com. Previous: Slice 007f — LLM extraction —
 `docs/specs/SLICE_007f.md` — COMPLETE, MERGED to `main` and pushed. Previous: Slice 007e — Unresolved
 workbench — `docs/specs/SLICE_007e.md` — COMPLETE, MERGED to `main`
 and pushed. Previous: Slice 007d — One pinned

@@ -164,8 +164,8 @@ async fn log_contact_attempt_attempt(
         &envelope,
         ContactAttemptedFact {
             person_id: cmd.person_id,
-            channel: cmd.channel.as_str(),
-            outcome: cmd.outcome.as_str(),
+            channel: cmd.channel,
+            outcome: cmd.outcome,
             corrects_id: None,
             recorded_at: None,
         },

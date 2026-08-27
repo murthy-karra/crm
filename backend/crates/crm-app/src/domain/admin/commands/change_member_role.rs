@@ -8,7 +8,7 @@ use crate::domain::admin::commands::AdminCommandError;
 use crate::domain::admin::queries::{self, MemberView};
 use crate::domain::admin::{AdminActor, MembershipStatus, Role};
 use crate::domain::envelope::{Actor, FactEnvelope};
-use crate::domain::facts::{self, MembershipChangedFact};
+use crate::domain::facts::{self, MembershipChangeReason, MembershipChangedFact};
 use crate::ids::{CorrelationId, OrganizationId, UserId};
 
 pub struct ChangeMemberRole {
@@ -86,9 +86,9 @@ async fn change_member_role_attempt(
             .await?;
 
         let reason = if cmd.role == Role::Admin {
-            "promote"
+            MembershipChangeReason::Promote
         } else {
-            "demote"
+            MembershipChangeReason::Demote
         };
         let envelope = FactEnvelope {
             organization_id: cmd.organization_id,
@@ -104,10 +104,10 @@ async fn change_member_role_attempt(
             &envelope,
             MembershipChangedFact {
                 user_id: cmd.user_id,
-                from_role: Some(current.role.as_str()),
-                to_role: cmd.role.as_str(),
-                from_status: Some(current.status.as_str()),
-                to_status: current.status.as_str(),
+                from_role: Some(current.role),
+                to_role: cmd.role,
+                from_status: Some(current.status),
+                to_status: current.status,
                 reason,
             },
         )

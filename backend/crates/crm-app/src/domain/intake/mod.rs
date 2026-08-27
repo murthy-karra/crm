@@ -13,7 +13,7 @@ pub mod receive;
 pub mod rotate;
 pub mod workbench;
 
-pub use address::IntakeAddress;
+pub use address::{IntakeAddress, IntakeToken};
 pub use receive::{receive_inbound_email, InboundEmailOutcome, ReceiveInboundEmailError};
 
 use chrono::{DateTime, Utc};

@@ -7,6 +7,9 @@
 use sqlx::PgConnection;
 use uuid::Uuid;
 
+use crate::domain::admin::{MembershipStatus, Role};
+use crate::domain::commands::{ContactChannel, ContactOutcome, RoutingStrategy};
+use crate::domain::contact::ContactKind;
 use crate::domain::envelope::FactEnvelope;
 use crate::ids::{
     CallId, ContactMethodId, InquiryId, InvitationId, PersonId, RawPayloadId, StageId, UserId,
@@ -19,7 +22,7 @@ pub struct InquiryReceivedFact<'a> {
     pub content_hmac: &'a [u8],
     pub source: &'a str,
     pub person_created: bool,
-    pub matched_by: Option<&'a str>,
+    pub matched_by: Option<ContactKind>,
 }
 
 pub async fn insert_inquiry_received(
@@ -50,24 +53,24 @@ pub async fn insert_inquiry_received(
         fact.content_hmac,
         fact.source,
         fact.person_created,
-        fact.matched_by,
+        fact.matched_by.map(|kind| kind.as_str()),
     )
     .fetch_one(tx)
     .await?;
     Ok(row.id)
 }
 
-pub struct RoutingDecisionFact<'a> {
+pub struct RoutingDecisionFact {
     pub inquiry_id: InquiryId,
     pub person_id: PersonId,
-    pub strategy: &'a str,
+    pub strategy: RoutingStrategy,
     pub assignee_user_id: Option<UserId>,
 }
 
 pub async fn insert_routing_decision(
     tx: &mut PgConnection,
     envelope: &FactEnvelope,
-    fact: RoutingDecisionFact<'_>,
+    fact: RoutingDecisionFact,
 ) -> Result<Uuid, sqlx::Error> {
     let actor_kind = envelope.actor.kind().as_str();
     let origin = envelope.origin.as_str();
@@ -88,7 +91,7 @@ pub async fn insert_routing_decision(
         envelope.causation_id,
         fact.inquiry_id.0,
         fact.person_id.0,
-        fact.strategy,
+        fact.strategy.as_str(),
         fact.assignee_user_id.map(|id| id.0),
     )
     .fetch_one(tx)
@@ -96,11 +99,34 @@ pub async fn insert_routing_decision(
     Ok(row.id)
 }
 
+/// Why a Person's assignment changed (hardening chunk S2 micro-enum): the
+/// two values `AssignmentChangedFact.reason` is ever constructed with —
+/// `receive_inquiry.rs`'s intake routing outcome, or an explicit
+/// `AssignPerson` (docs/specs/SLICE_002.md §4). No DB `CHECK` constrains
+/// this column (`assignment_changed.reason TEXT NOT NULL`, unconstrained),
+/// and nothing reads it back into Rust (`person::queries`'s history read
+/// keeps the raw column string for its JSON `detail` blob), so this type
+/// covers only the construction side — `as_str()`, no decode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AssignmentReason {
+    Intake,
+    Manual,
+}
+
+impl AssignmentReason {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            AssignmentReason::Intake => "intake",
+            AssignmentReason::Manual => "manual",
+        }
+    }
+}
+
 pub struct AssignmentChangedFact {
     pub person_id: PersonId,
     pub from_user_id: Option<UserId>,
     pub to_user_id: Option<UserId>,
-    pub reason: &'static str,
+    pub reason: AssignmentReason,
 }
 
 pub async fn insert_assignment_changed(
@@ -128,17 +154,17 @@ pub async fn insert_assignment_changed(
         fact.person_id.0,
         fact.from_user_id.map(|id| id.0),
         fact.to_user_id.map(|id| id.0),
-        fact.reason,
+        fact.reason.as_str(),
     )
     .fetch_one(tx)
     .await?;
     Ok(row.id)
 }
 
-pub struct ContactAttemptedFact<'a> {
+pub struct ContactAttemptedFact {
     pub person_id: PersonId,
-    pub channel: &'a str,
-    pub outcome: &'a str,
+    pub channel: ContactChannel,
+    pub outcome: ContactOutcome,
     /// The row this one supersedes (docs/specs/SLICE_006c.md §2): set only
     /// by `correct_call_outcome`; `None` for every original attempt.
     pub corrects_id: Option<Uuid>,
@@ -156,7 +182,7 @@ pub struct ContactAttemptedFact<'a> {
 pub async fn insert_contact_attempted(
     tx: &mut PgConnection,
     envelope: &FactEnvelope,
-    fact: ContactAttemptedFact<'_>,
+    fact: ContactAttemptedFact,
 ) -> Result<Uuid, sqlx::Error> {
     let actor_kind = envelope.actor.kind().as_str();
     let origin = envelope.origin.as_str();
@@ -176,8 +202,8 @@ pub async fn insert_contact_attempted(
         envelope.correlation_id.0,
         envelope.causation_id,
         fact.person_id.0,
-        fact.channel,
-        fact.outcome,
+        fact.channel.as_str(),
+        fact.outcome.as_str(),
         fact.corrects_id,
         fact.recorded_at,
     )
@@ -186,11 +212,35 @@ pub async fn insert_contact_attempted(
     Ok(row.id)
 }
 
+/// Why a Person's stage changed (hardening chunk S2 micro-enum): mirrors
+/// [`AssignmentReason`] exactly — same two values, same "no DB `CHECK`,
+/// nothing reads it back" rationale — but kept as a separate type rather
+/// than shared: `stage_changed` and `assignment_changed` are independent
+/// columns on independent tables, and this codebase's established
+/// precedent (`CallOutcomeCorrection` vs `ContactOutcome`,
+/// `commands/correct_call_outcome.rs`) is to keep structurally-identical
+/// but conceptually-distinct vocabularies as separate types rather than
+/// share one, even when today's value sets coincide.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StageChangeReason {
+    Intake,
+    Manual,
+}
+
+impl StageChangeReason {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            StageChangeReason::Intake => "intake",
+            StageChangeReason::Manual => "manual",
+        }
+    }
+}
+
 pub struct StageChangedFact {
     pub person_id: PersonId,
     pub from_stage_id: Option<StageId>,
     pub to_stage_id: StageId,
-    pub reason: &'static str,
+    pub reason: StageChangeReason,
 }
 
 // --- Slice 004 admin facts (docs/specs/SLICE_004.md §2) -------------------
@@ -223,7 +273,7 @@ pub async fn insert_organization_created(
 
 pub struct InvitationIssuedFact {
     pub invitation_id: InvitationId,
-    pub role: &'static str,
+    pub role: Role,
     pub superseded_invitation_id: Option<InvitationId>,
 }
 
@@ -250,7 +300,7 @@ pub async fn insert_invitation_issued(
         envelope.correlation_id.0,
         envelope.causation_id,
         fact.invitation_id.0,
-        fact.role,
+        fact.role.as_str(),
         fact.superseded_invitation_id.map(|id| id.0),
     )
     .fetch_one(tx)
@@ -293,13 +343,50 @@ pub async fn insert_invitation_resolved(
     Ok(row.id)
 }
 
+/// Why a membership changed (hardening chunk S2 micro-enum): the DB
+/// `CHECK` on `membership_changed.reason` (migration 20260823000001) also
+/// allows `'bootstrap'`, but no application code ever constructs it — the
+/// genesis/bootstrap path this is presumably reserved for does not exist
+/// yet (grepped: no caller anywhere in the workspace passes `"bootstrap"`
+/// to this fact). Per this chunk's discipline (read the actual values
+/// USED, not the full CHECK superset — mirrors S1's fail-closed `parse`
+/// covering exactly the constructible set), this enum has five variants,
+/// not six; add `Bootstrap` when a real caller needs it, the same way
+/// `RoutingStrategy` grew `OrganizationDefault`/`Unassigned` when
+/// SLICE_007c added their call sites.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MembershipChangeReason {
+    /// `AcceptInvitation` (docs/specs/SLICE_004.md §4).
+    Invitation,
+    /// `ChangeMemberRole` to `Admin`.
+    Promote,
+    /// `ChangeMemberRole` to `Member`.
+    Demote,
+    /// `SetMemberStatus` to `Inactive`.
+    Deactivate,
+    /// `SetMemberStatus` to `Active`.
+    Reactivate,
+}
+
+impl MembershipChangeReason {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            MembershipChangeReason::Invitation => "invitation",
+            MembershipChangeReason::Promote => "promote",
+            MembershipChangeReason::Demote => "demote",
+            MembershipChangeReason::Deactivate => "deactivate",
+            MembershipChangeReason::Reactivate => "reactivate",
+        }
+    }
+}
+
 pub struct MembershipChangedFact {
     pub user_id: UserId,
-    pub from_role: Option<&'static str>,
-    pub to_role: &'static str,
-    pub from_status: Option<&'static str>,
-    pub to_status: &'static str,
-    pub reason: &'static str,
+    pub from_role: Option<Role>,
+    pub to_role: Role,
+    pub from_status: Option<MembershipStatus>,
+    pub to_status: MembershipStatus,
+    pub reason: MembershipChangeReason,
 }
 
 pub async fn insert_membership_changed(
@@ -325,11 +412,11 @@ pub async fn insert_membership_changed(
         envelope.correlation_id.0,
         envelope.causation_id,
         fact.user_id.0,
-        fact.from_role,
-        fact.to_role,
-        fact.from_status,
-        fact.to_status,
-        fact.reason,
+        fact.from_role.map(|r| r.as_str()),
+        fact.to_role.as_str(),
+        fact.from_status.map(|s| s.as_str()),
+        fact.to_status.as_str(),
+        fact.reason.as_str(),
     )
     .fetch_one(tx)
     .await?;
@@ -361,7 +448,7 @@ pub async fn insert_stage_changed(
         fact.person_id.0,
         fact.from_stage_id.map(|id| id.0),
         fact.to_stage_id.0,
-        fact.reason,
+        fact.reason.as_str(),
     )
     .fetch_one(tx)
     .await?;
@@ -418,4 +505,37 @@ pub async fn insert_call_completed(
     .fetch_one(tx)
     .await?;
     Ok(row.id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// These three micro-enums (hardening chunk S2) are construction-only
+    /// — nothing decodes `assignment_changed`/`stage_changed`/
+    /// `membership_changed`'s `reason` column back into Rust (the history
+    /// read in `person::queries` keeps the raw column string for its JSON
+    /// `detail` blob) — so there is no round trip to pin, only that
+    /// `as_str()` still yields exactly the strings the ledger/history rows
+    /// have always stored.
+    #[test]
+    fn assignment_reason_as_str_matches_the_column_vocabulary() {
+        assert_eq!(AssignmentReason::Intake.as_str(), "intake");
+        assert_eq!(AssignmentReason::Manual.as_str(), "manual");
+    }
+
+    #[test]
+    fn stage_change_reason_as_str_matches_the_column_vocabulary() {
+        assert_eq!(StageChangeReason::Intake.as_str(), "intake");
+        assert_eq!(StageChangeReason::Manual.as_str(), "manual");
+    }
+
+    #[test]
+    fn membership_change_reason_as_str_matches_the_column_vocabulary() {
+        assert_eq!(MembershipChangeReason::Invitation.as_str(), "invitation");
+        assert_eq!(MembershipChangeReason::Promote.as_str(), "promote");
+        assert_eq!(MembershipChangeReason::Demote.as_str(), "demote");
+        assert_eq!(MembershipChangeReason::Deactivate.as_str(), "deactivate");
+        assert_eq!(MembershipChangeReason::Reactivate.as_str(), "reactivate");
+    }
 }

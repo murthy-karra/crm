@@ -326,7 +326,7 @@ async fn the_backfill_expressions_satisfy_the_checks(migrator_pool: PgPool) {
         };
         let rendered = crm_api::domain::intake::IntakeAddress {
             slug: slug.clone(),
-            token: token.clone(),
+            token: crm_api::domain::intake::IntakeToken::new(token.clone()),
         }
         .render(&cfg);
         assert!(crm_api::domain::intake::IntakeAddress::parse_recipient(&rendered, &cfg).is_some());

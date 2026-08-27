@@ -204,7 +204,7 @@ async fn issue_invitation_attempt(
         &envelope,
         InvitationIssuedFact {
             invitation_id,
-            role: role.as_str(),
+            role,
             superseded_invitation_id: superseded,
         },
     )

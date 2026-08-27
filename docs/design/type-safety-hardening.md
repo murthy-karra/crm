@@ -86,7 +86,25 @@ call_id` stay bare (no adjacency; type when Today files next open);
 `ParsedLead.email/phone` can be fully retyped once the identify
 integration lands (zero non-test readers remain) — deleting the
 re-deriving accessors; a construction-monopoly compile_fail doctest
-on NormalizedEmail is worth adding then too.
+on NormalizedEmail is worth adding then too. From S2 (final chunk):
+`InvitationResolvedFact.outcome` and `CallCompletedFact.outcome`
+remain stringly (no single existing enum covers either vocabulary —
+type when a second consumer appears);
+`MembershipChangeReason::Bootstrap` is deliberately absent until a
+real bootstrap writer exists (the DB CHECK allows it).
+
+## LADDER COMPLETE (2026-08-26)
+
+All 8 chunks merged. What is now a compile error that used to
+compile: transposing the tenant key with any id; user-vs-non-user id
+swaps; invalid actor states; both AAD halves; person/inquiry/payload/
+stage/call/contact-method/proposal/invitation/turn/correlation
+confusions; the dedup email/phone swap; fact-vocabulary typos;
+unclassified extraction outcomes; printable/comparable intake
+tokens; out-of-module realtime publications; positional
+same-role routing args. Every chunk was behavior-preserving with
+wire+SQL byte-fidelity machine-proven; residuals above are the
+complete honest remainder.
 
 **Recommended order: as numbered. Start with S1** — smallest,
 zero-wire-risk, kills a real compiling transposition immediately, and

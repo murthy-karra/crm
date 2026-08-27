@@ -3,6 +3,7 @@
 //! display-name bounds, and password bounds.
 
 use super::commands::AdminCommandError;
+use crate::domain::intake::IntakeToken;
 
 const MAX_EMAIL_LEN: usize = 254;
 const MIN_PASSWORD_LEN: usize = 12;
@@ -123,13 +124,14 @@ fn random_suffix(len: usize) -> String {
 
 /// An unguessable 8-char token from `[a-z2-7]` (~40 bits), the anti-
 /// forgery secret in the intake address. Never logged.
-pub fn mint_intake_token() -> String {
+pub fn mint_intake_token() -> IntakeToken {
     use rand::RngExt;
     const ALPHABET: &[u8] = b"abcdefghijklmnopqrstuvwxyz234567";
     let mut rng = rand::rng();
-    (0..8)
+    let token: String = (0..8)
         .map(|_| ALPHABET[rng.random_range(0..ALPHABET.len())] as char)
-        .collect()
+        .collect();
+    IntakeToken::new(token)
 }
 
 #[cfg(test)]
@@ -195,14 +197,17 @@ mod tests {
         let a = mint_intake_token();
         let b = mint_intake_token();
         for t in [&a, &b] {
-            assert_eq!(t.len(), 8);
+            let s = t.reveal();
+            assert_eq!(s.len(), 8);
             assert!(
-                t.bytes()
+                s.bytes()
                     .all(|c| c.is_ascii_lowercase() || (b'2'..=b'7').contains(&c)),
-                "{t}"
+                "{s}"
             );
         }
-        assert_ne!(a, b);
+        // No `PartialEq` on `IntakeToken` (hardening chunk S2) — compare
+        // the revealed strings instead of the values themselves.
+        assert_ne!(a.reveal(), b.reveal());
     }
 
     #[test]

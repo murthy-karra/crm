@@ -10,6 +10,7 @@
 use chrono::{DateTime, Utc};
 use sqlx::{PgConnection, PgPool};
 
+use crate::domain::commands::ContactChannel;
 use crate::domain::envelope::{Actor, FactEnvelope, Origin};
 use crate::domain::facts::{self, CallCompletedFact, ContactAttemptedFact};
 use crate::domain::telephony::queries::{self, CallRow};
@@ -132,8 +133,8 @@ pub async fn settle_in_tx(
             &envelope,
             ContactAttemptedFact {
                 person_id: call.person_id,
-                channel: "call",
-                outcome: outcome.as_str(),
+                channel: ContactChannel::Call,
+                outcome,
                 corrects_id: None,
                 recorded_at: None,
             },

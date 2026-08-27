@@ -5,7 +5,7 @@ use sqlx::PgPool;
 
 use crate::domain::commands::CommandError;
 use crate::domain::envelope::{CommandContext, FactEnvelope};
-use crate::domain::facts::{self, StageChangedFact};
+use crate::domain::facts::{self, StageChangeReason, StageChangedFact};
 use crate::domain::person::model::PersonSummary;
 use crate::domain::person::queries as person_queries;
 use crate::domain::stage;
@@ -91,7 +91,7 @@ async fn change_person_stage_attempt(
                 person_id: cmd.person_id,
                 from_stage_id: Some(person.stage_id),
                 to_stage_id: cmd.stage_id,
-                reason: "manual",
+                reason: StageChangeReason::Manual,
             },
         )
         .await?;

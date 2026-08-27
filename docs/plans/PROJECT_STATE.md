@@ -54,11 +54,20 @@ N4-shared) and reported instead of breaching; completed at
 integration on hardening-v1 after merging hardening-n4 (by-value
 typed identify params + call site + idempotence pin, reviewer-
 blessed shape). Both lanes reviewed READY; serial full check-db per
-lane 285/0 each. Ladder 7/8 done pending the BATCHED merge gate:
-hardening-n4 → main, hardening-v1 → main, one push. Then S2 (final
-chunk, sequential: fact vocab, AttemptOutcome, IntakeToken
-security-review, Publication, Decode→Corrupt carry-over).
-Feature slices may interleave.
+lane 285/0 each. N4+V1 MERGED+PUSHED (`main` `af71668`;
+worktrees removed). S2 (FINAL chunk) IMPLEMENTED on `hardening-s2`:
+typed fact vocabulary (3 micro-enums, write-only, bootstrap variant
+deliberately absent), AttemptOutcome (13 variants matching the CHECK
+exactly; is_transport exhaustive, no wildcard), IntakeToken (no
+Display/PartialEq, redacted Debug, constant-time-only verify; the
+receive.rs auth path line-audited by a security-weighted review —
+timing structure unchanged, dummy branch byte-identical),
+constructor-only Publication (channel AND event private after review
+minor), Decode→Corrupt completed across ALL THREE error types
+(Command/Workbench/AdminCommand). Reviewed READY; review minors all
+folded in; gates green three times (285/0). LADDER COMPLETE 8/8
+pending the final commit+merge gate; closing state written into
+docs/design/type-safety-hardening.md. Feature slices may interleave.
 
 Prior update, 2026-08-25 (SLICE_007h1 COMPLETE, MERGED, PUSHED —
 `main` `105f730`. Detail below; SLICE_007h1 IMPLEMENTED on

@@ -19,7 +19,7 @@ use crate::domain::commands::{CallError, ContactChannel, ContactOutcome};
 use crate::domain::envelope::{Actor, CommandContext, FactEnvelope};
 use crate::domain::facts::{self, ContactAttemptedFact};
 use crate::domain::telephony::queries as call_queries;
-use crate::ids::{OrganizationId, PersonId};
+use crate::ids::{CallId, OrganizationId, PersonId};
 use crate::realtime::{PersonChange, Publication, Publisher, RealtimeEvent};
 
 /// The five values `POST /api/calls/{id}/outcome` accepts
@@ -48,7 +48,7 @@ impl CallOutcomeCorrection {
 }
 
 pub struct CorrectCallOutcome {
-    pub call_id: Uuid,
+    pub call_id: CallId,
     pub outcome: CallOutcomeCorrection,
 }
 
@@ -108,7 +108,7 @@ impl TryFrom<HeadRow> for CorrectedAttemptRef {
 async fn head_attempt(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
-    call_id: Uuid,
+    call_id: CallId,
     person_id: PersonId,
 ) -> Result<Option<HeadRow>, sqlx::Error> {
     sqlx::query_as!(
@@ -120,7 +120,10 @@ async fn head_attempt(
            ORDER BY ca.recorded_at DESC
            LIMIT 1"#,
         organization_id.0,
-        call_id,
+        // `causation_id` is `Option<Uuid>` on the fact side (the cross-
+        // fact-table union) but the column here just names the call —
+        // unwrap explicitly (hardening chunk N4).
+        call_id.as_uuid(),
         person_id.0,
     )
     .fetch_optional(conn)
@@ -237,7 +240,10 @@ async fn correct_call_outcome_attempt(
         origin: ctx.origin,
         occurred_at: head.occurred_at,
         correlation_id: call.correlation_id,
-        causation_id: Some(call.id),
+        // `causation_id` stays `Option<Uuid>` (envelope.rs's cross-fact-
+        // table union) while `call.id` is `CallId` — unwrap explicitly at
+        // this one crossing (hardening chunk N4, mirroring settle.rs).
+        causation_id: Some(call.id.as_uuid()),
     };
     let fact_id = facts::insert_contact_attempted(
         &mut tx,

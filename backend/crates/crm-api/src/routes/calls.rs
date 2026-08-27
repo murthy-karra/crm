@@ -20,7 +20,7 @@ use crate::domain::commands::{self, CallOutcomeCorrection, CorrectCallOutcome, S
 use crate::domain::envelope::CommandContext;
 use crate::domain::telephony::queries as call_queries;
 use crate::error::ApiError;
-use crate::ids::PersonId;
+use crate::ids::{CallId, ContactMethodId, PersonId};
 use crate::state::AppState;
 
 pub fn router() -> Router<AppState> {
@@ -32,17 +32,16 @@ pub fn router() -> Router<AppState> {
         .route("/api/calls/{id}", get(get_call))
 }
 
-/// A `{id}` path segment parsed as a UUID, rejecting straight to 400
-/// `malformed_request` ahead of authentication — the `routes/people.rs`
-/// `PersonIdPath` pattern. Kept bare here (not `PersonId`/a typed id):
-/// this extractor serves both a Person id (`start_call`) and a Call id
-/// (`dial_call`/`hangup_call`/`correct_outcome`/`get_call`) depending on
-/// the route, so a single typed wrapper can't cover both — `start_call`
-/// converts to `PersonId` explicitly at its one call site instead
-/// (hardening chunk N3).
-struct PathId(Uuid);
+/// A `{id}` path segment parsed as a UUID and typed `PersonId`, rejecting
+/// straight to 400 `malformed_request` ahead of authentication — the
+/// `routes/people.rs` `PersonIdPath` pattern, redefined locally (that
+/// struct is private to `routes/people.rs`; the orphan rule forbids
+/// implementing the foreign `FromRequestParts` trait on the foreign
+/// `PersonId` type from here, so each route file owns its own thin
+/// wrapper, as `routes/intake.rs`'s `RawPayloadIdPath` does).
+struct PersonIdPath(PersonId);
 
-impl FromRequestParts<AppState> for PathId {
+impl FromRequestParts<AppState> for PersonIdPath {
     type Rejection = ApiError;
 
     async fn from_request_parts(
@@ -52,21 +51,44 @@ impl FromRequestParts<AppState> for PathId {
         let Path(id) = Path::<Uuid>::from_request_parts(parts, state)
             .await
             .map_err(|_| ApiError::MalformedRequest)?;
-        Ok(PathId(id))
+        Ok(PersonIdPath(PersonId::new(id)))
+    }
+}
+
+/// The `CallId` half of the split (hardening chunk N4): before this chunk
+/// a single bare `PathId` served both this and `PersonIdPath` above,
+/// which meant the `{id}` segment of a call route and a person route were
+/// the same Rust type — swappable at a call site and still compiling.
+/// `dial_call`/`hangup_call`/`correct_outcome`/`get_call` all take this;
+/// `start_call` takes `PersonIdPath` instead, so the two can no longer be
+/// transposed.
+struct CallIdPath(CallId);
+
+impl FromRequestParts<AppState> for CallIdPath {
+    type Rejection = ApiError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let Path(id) = Path::<Uuid>::from_request_parts(parts, state)
+            .await
+            .map_err(|_| ApiError::MalformedRequest)?;
+        Ok(CallIdPath(CallId::new(id)))
     }
 }
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct StartCallRequest {
-    contact_method_id: Uuid,
+    contact_method_id: ContactMethodId,
 }
 
 /// `POST /api/people/{id}/calls` → 201 `{"call", "join": {url, token,
 /// room}}`. The token is serialized here, once, and nowhere else.
 async fn start_call(
     State(state): State<AppState>,
-    PathId(person_id): PathId,
+    PersonIdPath(person_id): PersonIdPath,
     auth: AuthContext,
     body: Result<Json<StartCallRequest>, JsonRejection>,
 ) -> Result<(StatusCode, Json<serde_json::Value>), ApiError> {
@@ -84,7 +106,7 @@ async fn start_call(
         telephony,
         &ctx,
         StartCall {
-            person_id: PersonId::new(person_id),
+            person_id,
             contact_method_id: req.contact_method_id,
         },
     )
@@ -106,7 +128,7 @@ async fn start_call(
 /// `POST /api/calls/{id}/dial` → 202 `{"call"}` (still `placing`).
 async fn dial_call(
     State(state): State<AppState>,
-    PathId(call_id): PathId,
+    CallIdPath(call_id): CallIdPath,
     auth: AuthContext,
 ) -> Result<(StatusCode, Json<serde_json::Value>), ApiError> {
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
@@ -124,7 +146,7 @@ async fn dial_call(
 /// `POST /api/calls/{id}/hangup` → 200 `{"call"}`, idempotent.
 async fn hangup_call(
     State(state): State<AppState>,
-    PathId(call_id): PathId,
+    CallIdPath(call_id): CallIdPath,
     auth: AuthContext,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
@@ -150,7 +172,7 @@ struct CorrectOutcomeRequest {
 /// Needs the database, not telephony.
 async fn correct_outcome(
     State(state): State<AppState>,
-    PathId(call_id): PathId,
+    CallIdPath(call_id): CallIdPath,
     auth: AuthContext,
     body: Result<Json<CorrectOutcomeRequest>, JsonRejection>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
@@ -176,7 +198,7 @@ async fn correct_outcome(
 /// `GET /api/calls/{id}` → 200 `{"call"}` for any member; 404 foreign.
 async fn get_call(
     State(state): State<AppState>,
-    PathId(call_id): PathId,
+    CallIdPath(call_id): CallIdPath,
     auth: AuthContext,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;

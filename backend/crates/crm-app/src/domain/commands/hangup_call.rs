@@ -10,13 +10,13 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use sqlx::PgPool;
-use uuid::Uuid;
 
 use crate::domain::commands::CallError;
 use crate::domain::envelope::CommandContext;
 use crate::domain::telephony::queries::{self as call_queries, CallView};
 use crate::domain::telephony::settle::transition_tag;
 use crate::domain::telephony::{settle, Signal};
+use crate::ids::CallId;
 use crate::realtime::Publisher;
 use crate::telephony::Telephony;
 
@@ -37,7 +37,7 @@ pub async fn hangup_call(
     publisher: &Publisher,
     telephony: &Arc<Telephony>,
     ctx: &CommandContext,
-    call_id: Uuid,
+    call_id: CallId,
 ) -> Result<CallView, CallError> {
     let result = hangup_call_attempt(pool, publisher, telephony, ctx, call_id).await;
     if let Err(err) = &result {
@@ -52,7 +52,7 @@ async fn hangup_call_attempt(
     publisher: &Publisher,
     telephony: &Arc<Telephony>,
     ctx: &CommandContext,
-    call_id: Uuid,
+    call_id: CallId,
 ) -> Result<CallView, CallError> {
     let mut conn = pool.acquire().await?;
     let call = call_queries::call_by_id(&mut conn, ctx.organization_id, call_id)

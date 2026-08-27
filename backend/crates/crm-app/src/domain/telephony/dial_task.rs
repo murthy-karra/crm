@@ -13,13 +13,12 @@ use sqlx::PgPool;
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
 use tracing::Instrument;
-use uuid::Uuid;
 
 use crate::domain::telephony::queries;
 use crate::domain::telephony::settle::{settle, SettleOutcome};
 use crate::domain::telephony::transitions::Signal;
 use crate::domain::telephony::CallStatus;
-use crate::ids::{OrganizationId, PersonId, UserId};
+use crate::ids::{CallId, ContactMethodId, OrganizationId, PersonId, UserId};
 use crate::realtime::Publisher;
 use crate::telephony::livekit::ADMIN_CALL_TIMEOUT;
 use crate::telephony::{
@@ -33,9 +32,9 @@ pub struct DialTask {
     pub publisher: Publisher,
     pub telephony: Arc<Telephony>,
     pub organization_id: OrganizationId,
-    pub call_id: Uuid,
+    pub call_id: CallId,
     pub person_id: PersonId,
-    pub contact_method_id: Uuid,
+    pub contact_method_id: ContactMethodId,
     pub caller_user_id: UserId,
 }
 
@@ -95,7 +94,7 @@ impl DialTask {
     /// `failed{provider_error}` rather than a leaked task.
     pub async fn run(self) -> DialTaskOutcome {
         let budget = self.total_budget();
-        let room = Telephony::room_for(self.call_id);
+        let room = Telephony::room_for(self.call_id.as_uuid());
         let outcome = match tokio::time::timeout(budget, self.run_inner(&room)).await {
             Ok(outcome) => outcome,
             Err(_elapsed) => {
@@ -191,7 +190,7 @@ impl DialTask {
         let request = DialRequest {
             room: room.to_string(),
             to_number: number,
-            participant_identity: Telephony::sip_identity(self.call_id),
+            participant_identity: Telephony::sip_identity(self.call_id.as_uuid()),
             ring_timeout: limits.ring_timeout,
             max_call: limits.max_call,
         };
@@ -215,7 +214,7 @@ impl DialTask {
                     None => return DialTaskOutcome::UnknownCall,
                 }
                 // 5. One re-check: a sub-second answer-and-hangup race.
-                let sip = Telephony::sip_identity(self.call_id);
+                let sip = Telephony::sip_identity(self.call_id.as_uuid());
                 match provider.participant_present(room, &sip).await {
                     Ok(true) => DialTaskOutcome::Answered,
                     Ok(false) => {

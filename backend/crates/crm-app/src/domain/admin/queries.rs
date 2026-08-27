@@ -10,7 +10,7 @@ use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
 use super::{MembershipStatus, Role};
-use crate::ids::{OrganizationId, UserId};
+use crate::ids::{InvitationId, OrganizationId, UserId};
 
 fn decode_role(s: &str) -> Result<Role, sqlx::Error> {
     Role::from_db_str(s).ok_or_else(|| sqlx::Error::Decode(format!("invalid role: {s}").into()))
@@ -498,7 +498,7 @@ pub struct InvitedByRef {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct InvitationView {
-    pub id: Uuid,
+    pub id: InvitationId,
     pub email: String,
     pub role: Role,
     pub status: InvitationStatus,
@@ -550,7 +550,7 @@ pub async fn list_invitations(
     rows.into_iter()
         .map(|r| {
             Ok(InvitationView {
-                id: r.id,
+                id: InvitationId::new(r.id),
                 email: r.email,
                 role: decode_role(&r.role)?,
                 status: derive_invitation_status(r.accepted_at, r.revoked_at, r.expires_at, now),
@@ -569,7 +569,7 @@ pub async fn list_invitations(
 /// Organization (`RevokeInvitation`) or by token hash (public preview/
 /// accept) — one shape, two lookups.
 pub struct InvitationRow {
-    pub id: Uuid,
+    pub id: InvitationId,
     pub organization_id: OrganizationId,
     pub organization_name: String,
     pub email: String,
@@ -599,7 +599,7 @@ struct InvitationFullDbRow {
 impl InvitationFullDbRow {
     fn into_row(self) -> Result<InvitationRow, sqlx::Error> {
         Ok(InvitationRow {
-            id: self.id,
+            id: InvitationId::new(self.id),
             organization_id: OrganizationId::new(self.organization_id),
             organization_name: self.organization_name,
             email: self.email,
@@ -661,7 +661,7 @@ pub async fn lock_invitation_by_token_hash(
 pub async fn lock_invitation_in_org(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
-    invitation_id: Uuid,
+    invitation_id: InvitationId,
 ) -> Result<Option<InvitationRow>, sqlx::Error> {
     let row = sqlx::query_as!(
         InvitationFullDbRow,
@@ -671,7 +671,7 @@ pub async fn lock_invitation_in_org(
            JOIN organization o ON o.id = i.organization_id
            WHERE i.id = $1 AND i.organization_id = $2
            FOR UPDATE OF i"#,
-        invitation_id,
+        invitation_id.0,
         organization_id.0,
     )
     .fetch_optional(conn)
@@ -687,7 +687,7 @@ pub async fn find_open_invitation(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
     normalized_email: &str,
-) -> Result<Option<Uuid>, sqlx::Error> {
+) -> Result<Option<InvitationId>, sqlx::Error> {
     let row = sqlx::query!(
         r#"SELECT id FROM invitation
            WHERE organization_id = $1 AND email = $2
@@ -697,16 +697,16 @@ pub async fn find_open_invitation(
     )
     .fetch_optional(conn)
     .await?;
-    Ok(row.map(|r| r.id))
+    Ok(row.map(|r| InvitationId::new(r.id)))
 }
 
 pub async fn supersede_invitation(
     conn: &mut PgConnection,
-    invitation_id: Uuid,
+    invitation_id: InvitationId,
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
         r#"UPDATE invitation SET revoked_at = now(), revoke_reason = 'superseded' WHERE id = $1"#,
-        invitation_id,
+        invitation_id.0,
     )
     .execute(conn)
     .await?;
@@ -725,7 +725,7 @@ pub struct NewInvitation<'a> {
 pub async fn insert_invitation(
     conn: &mut PgConnection,
     new: NewInvitation<'_>,
-) -> Result<(Uuid, DateTime<Utc>), sqlx::Error> {
+) -> Result<(InvitationId, DateTime<Utc>), sqlx::Error> {
     let role_str = new.role.as_str();
     let row = sqlx::query!(
         r#"INSERT INTO invitation
@@ -741,16 +741,16 @@ pub async fn insert_invitation(
     )
     .fetch_one(conn)
     .await?;
-    Ok((row.id, row.created_at))
+    Ok((InvitationId::new(row.id), row.created_at))
 }
 
 pub async fn revoke_invitation_row(
     conn: &mut PgConnection,
-    invitation_id: Uuid,
+    invitation_id: InvitationId,
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
         r#"UPDATE invitation SET revoked_at = now(), revoke_reason = 'revoked' WHERE id = $1"#,
-        invitation_id,
+        invitation_id.0,
     )
     .execute(conn)
     .await?;
@@ -759,12 +759,12 @@ pub async fn revoke_invitation_row(
 
 pub async fn mark_invitation_accepted(
     conn: &mut PgConnection,
-    invitation_id: Uuid,
+    invitation_id: InvitationId,
     accepted_user_id: UserId,
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
         r#"UPDATE invitation SET accepted_at = now(), accepted_user_id = $2 WHERE id = $1"#,
-        invitation_id,
+        invitation_id.0,
         accepted_user_id.0,
     )
     .execute(conn)

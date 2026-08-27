@@ -5,9 +5,10 @@
 
 use chrono::{DateTime, Utc};
 use serde::Serialize;
+#[cfg(test)]
 use uuid::Uuid;
 
-use crate::ids::{OrganizationId, PersonId, RawPayloadId};
+use crate::ids::{CallId, CorrelationId, OrganizationId, PersonId, RawPayloadId};
 
 /// One Centrifugo channel per Organization (docs/specs/SLICE_003.md §6):
 /// `org:<organization_id>`, lowercase hyphenated UUID.
@@ -40,7 +41,7 @@ pub struct UnresolvedChangedData {
 /// only, published after every committed call transition.
 #[derive(Debug, Clone, Serialize)]
 pub struct CallChangedData {
-    pub call_id: Uuid,
+    pub call_id: CallId,
     pub person_id: PersonId,
 }
 
@@ -58,7 +59,7 @@ pub enum RealtimeEvent {
         v: u8,
         organization_id: OrganizationId,
         occurred_at: DateTime<Utc>,
-        correlation_id: Uuid,
+        correlation_id: CorrelationId,
         data: PersonChangedData,
     },
     #[serde(rename = "intake.unresolved_changed")]
@@ -66,7 +67,7 @@ pub enum RealtimeEvent {
         v: u8,
         organization_id: OrganizationId,
         occurred_at: DateTime<Utc>,
-        correlation_id: Uuid,
+        correlation_id: CorrelationId,
         data: UnresolvedChangedData,
     },
     #[serde(rename = "call.changed")]
@@ -74,7 +75,7 @@ pub enum RealtimeEvent {
         v: u8,
         organization_id: OrganizationId,
         occurred_at: DateTime<Utc>,
-        correlation_id: Uuid,
+        correlation_id: CorrelationId,
         data: CallChangedData,
     },
 }
@@ -83,7 +84,7 @@ impl RealtimeEvent {
     pub fn person_changed(
         organization_id: OrganizationId,
         occurred_at: DateTime<Utc>,
-        correlation_id: Uuid,
+        correlation_id: CorrelationId,
         person_id: PersonId,
         change: PersonChange,
     ) -> Self {
@@ -99,7 +100,7 @@ impl RealtimeEvent {
     pub fn intake_unresolved_changed(
         organization_id: OrganizationId,
         occurred_at: DateTime<Utc>,
-        correlation_id: Uuid,
+        correlation_id: CorrelationId,
         raw_payload_id: RawPayloadId,
     ) -> Self {
         RealtimeEvent::IntakeUnresolvedChanged {
@@ -111,12 +112,15 @@ impl RealtimeEvent {
         }
     }
 
-    /// `call.changed` (docs/specs/SLICE_006.md §6).
+    /// `call.changed` (docs/specs/SLICE_006.md §6). As of hardening chunk
+    /// N4, every parameter here is a distinct type — `organization_id`,
+    /// `correlation_id`, `call_id`, and `person_id` can no longer be
+    /// transposed and still compile.
     pub fn call_changed(
         organization_id: OrganizationId,
         occurred_at: DateTime<Utc>,
-        correlation_id: Uuid,
-        call_id: Uuid,
+        correlation_id: CorrelationId,
+        call_id: CallId,
         person_id: PersonId,
     ) -> Self {
         RealtimeEvent::CallChanged {
@@ -142,7 +146,7 @@ impl RealtimeEvent {
         }
     }
 
-    pub fn correlation_id(&self) -> Uuid {
+    pub fn correlation_id(&self) -> CorrelationId {
         match self {
             RealtimeEvent::PersonChanged { correlation_id, .. }
             | RealtimeEvent::IntakeUnresolvedChanged { correlation_id, .. }
@@ -201,7 +205,7 @@ mod tests {
     #[test]
     fn person_changed_serializes_to_exact_shape() {
         let org_id = OrganizationId::new(Uuid::new_v4());
-        let corr_id = Uuid::new_v4();
+        let corr_id = CorrelationId::new(Uuid::new_v4());
         let person_id = PersonId::new(Uuid::new_v4());
         let event = RealtimeEvent::person_changed(
             org_id,
@@ -235,7 +239,7 @@ mod tests {
             let event = RealtimeEvent::person_changed(
                 OrganizationId::new(Uuid::new_v4()),
                 ts(),
-                Uuid::new_v4(),
+                CorrelationId::new(Uuid::new_v4()),
                 PersonId::new(Uuid::new_v4()),
                 variant,
             );
@@ -247,7 +251,7 @@ mod tests {
     #[test]
     fn intake_unresolved_changed_serializes_to_exact_shape() {
         let org_id = OrganizationId::new(Uuid::new_v4());
-        let corr_id = Uuid::new_v4();
+        let corr_id = CorrelationId::new(Uuid::new_v4());
         let raw_payload_id = RawPayloadId::new(Uuid::new_v4());
         let event = RealtimeEvent::intake_unresolved_changed(org_id, ts(), corr_id, raw_payload_id);
         let value = serde_json::to_value(&event).unwrap();
@@ -267,8 +271,8 @@ mod tests {
     #[test]
     fn call_changed_serializes_to_exact_shape() {
         let org_id = OrganizationId::new(Uuid::new_v4());
-        let corr_id = Uuid::new_v4();
-        let call_id = Uuid::new_v4();
+        let corr_id = CorrelationId::new(Uuid::new_v4());
+        let call_id = CallId::new(Uuid::new_v4());
         let person_id = PersonId::new(Uuid::new_v4());
         let event = RealtimeEvent::call_changed(org_id, ts(), corr_id, call_id, person_id);
         let value = serde_json::to_value(&event).unwrap();
@@ -291,7 +295,7 @@ mod tests {
     #[test]
     fn accessors_return_the_envelope_fields() {
         let org_id = OrganizationId::new(Uuid::new_v4());
-        let corr_id = Uuid::new_v4();
+        let corr_id = CorrelationId::new(Uuid::new_v4());
         let event = RealtimeEvent::person_changed(
             org_id,
             ts(),
@@ -310,7 +314,7 @@ mod tests {
         let event = RealtimeEvent::intake_unresolved_changed(
             org_id,
             ts(),
-            Uuid::new_v4(),
+            CorrelationId::new(Uuid::new_v4()),
             RawPayloadId::new(Uuid::new_v4()),
         );
         let publication = Publication::for_event(event);

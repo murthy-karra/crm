@@ -9,7 +9,7 @@ use crate::domain::admin::queries::{self, MemberView};
 use crate::domain::admin::{AdminActor, MembershipStatus, Role};
 use crate::domain::envelope::{Actor, FactEnvelope};
 use crate::domain::facts::{self, MembershipChangedFact};
-use crate::ids::{OrganizationId, UserId};
+use crate::ids::{CorrelationId, OrganizationId, UserId};
 
 pub struct ChangeMemberRole {
     pub organization_id: OrganizationId,
@@ -96,7 +96,7 @@ async fn change_member_role_attempt(
             on_behalf_of_user_id: None,
             origin: actor.origin,
             occurred_at: Utc::now(),
-            correlation_id: Uuid::new_v4(),
+            correlation_id: CorrelationId::new(Uuid::new_v4()),
             causation_id: None,
         };
         facts::insert_membership_changed(

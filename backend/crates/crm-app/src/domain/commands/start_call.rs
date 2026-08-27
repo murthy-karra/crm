@@ -14,13 +14,13 @@ use crate::domain::envelope::CommandContext;
 use crate::domain::person::queries as person_queries;
 use crate::domain::telephony::queries::{self as call_queries, CallView, NewCall};
 use crate::domain::telephony::{settle, Signal};
-use crate::ids::PersonId;
+use crate::ids::{CallId, ContactMethodId, PersonId};
 use crate::realtime::{Publication, Publisher, RealtimeEvent};
 use crate::telephony::{JoinGrant, Telephony};
 
 pub struct StartCall {
     pub person_id: PersonId,
-    pub contact_method_id: Uuid,
+    pub contact_method_id: ContactMethodId,
 }
 
 /// `(CallView, JoinGrant)`; the grant is returned once and never stored.
@@ -65,8 +65,8 @@ async fn start_call_attempt(
     ctx: &CommandContext,
     cmd: StartCall,
 ) -> Result<(CallView, JoinGrant), CallError> {
-    let call_id = Uuid::new_v4();
-    let room = Telephony::room_for(call_id);
+    let call_id = CallId::new(Uuid::new_v4());
+    let room = Telephony::room_for(call_id.as_uuid());
     let placed_at = Utc::now();
 
     // One bounded retry covers the race where the index rejects us but
@@ -124,7 +124,14 @@ async fn start_call_attempt(
                 )
                 .await?
                 {
-                    return Err(CallError::CallInProgress { call_id: active });
+                    // `CallError::CallInProgress.call_id` stays bare `Uuid`
+                    // (crm-api's `error.rs` — outside this lane's
+                    // ownership — reads it directly into the 409 body, so
+                    // this boundary field is deliberately not typed);
+                    // unwrap explicitly at this one crossing.
+                    return Err(CallError::CallInProgress {
+                        call_id: active.as_uuid(),
+                    });
                 }
                 // The other call ended in between: retry once.
             }

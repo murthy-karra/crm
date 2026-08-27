@@ -11,6 +11,7 @@ use crate::domain::admin::AdminActor;
 use crate::domain::envelope::{Actor, FactEnvelope};
 use crate::domain::facts;
 use crate::domain::stage;
+use crate::ids::CorrelationId;
 
 pub struct CreateOrganization {
     pub name: String,
@@ -92,7 +93,7 @@ async fn create_organization_attempt(
         on_behalf_of_user_id: None,
         origin: actor.origin,
         occurred_at: Utc::now(),
-        correlation_id: Uuid::new_v4(),
+        correlation_id: CorrelationId::new(Uuid::new_v4()),
         causation_id: None,
     };
     facts::insert_organization_created(&mut tx, &envelope).await?;

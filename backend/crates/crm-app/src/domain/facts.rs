@@ -8,7 +8,9 @@ use sqlx::PgConnection;
 use uuid::Uuid;
 
 use crate::domain::envelope::FactEnvelope;
-use crate::ids::{InquiryId, PersonId, RawPayloadId, StageId, UserId};
+use crate::ids::{
+    CallId, ContactMethodId, InquiryId, InvitationId, PersonId, RawPayloadId, StageId, UserId,
+};
 
 pub struct InquiryReceivedFact<'a> {
     pub inquiry_id: InquiryId,
@@ -40,7 +42,7 @@ pub async fn insert_inquiry_received(
         envelope.on_behalf_of_user_id.map(|id| id.0),
         origin,
         envelope.occurred_at,
-        envelope.correlation_id,
+        envelope.correlation_id.0,
         envelope.causation_id,
         fact.inquiry_id.0,
         fact.person_id.0,
@@ -82,7 +84,7 @@ pub async fn insert_routing_decision(
         envelope.on_behalf_of_user_id.map(|id| id.0),
         origin,
         envelope.occurred_at,
-        envelope.correlation_id,
+        envelope.correlation_id.0,
         envelope.causation_id,
         fact.inquiry_id.0,
         fact.person_id.0,
@@ -121,7 +123,7 @@ pub async fn insert_assignment_changed(
         envelope.on_behalf_of_user_id.map(|id| id.0),
         origin,
         envelope.occurred_at,
-        envelope.correlation_id,
+        envelope.correlation_id.0,
         envelope.causation_id,
         fact.person_id.0,
         fact.from_user_id.map(|id| id.0),
@@ -171,7 +173,7 @@ pub async fn insert_contact_attempted(
         envelope.on_behalf_of_user_id.map(|id| id.0),
         origin,
         envelope.occurred_at,
-        envelope.correlation_id,
+        envelope.correlation_id.0,
         envelope.causation_id,
         fact.person_id.0,
         fact.channel,
@@ -211,7 +213,7 @@ pub async fn insert_organization_created(
         envelope.on_behalf_of_user_id.map(|id| id.0),
         origin,
         envelope.occurred_at,
-        envelope.correlation_id,
+        envelope.correlation_id.0,
         envelope.causation_id,
     )
     .fetch_one(tx)
@@ -220,9 +222,9 @@ pub async fn insert_organization_created(
 }
 
 pub struct InvitationIssuedFact {
-    pub invitation_id: Uuid,
+    pub invitation_id: InvitationId,
     pub role: &'static str,
-    pub superseded_invitation_id: Option<Uuid>,
+    pub superseded_invitation_id: Option<InvitationId>,
 }
 
 pub async fn insert_invitation_issued(
@@ -245,11 +247,11 @@ pub async fn insert_invitation_issued(
         envelope.on_behalf_of_user_id.map(|id| id.0),
         origin,
         envelope.occurred_at,
-        envelope.correlation_id,
+        envelope.correlation_id.0,
         envelope.causation_id,
-        fact.invitation_id,
+        fact.invitation_id.0,
         fact.role,
-        fact.superseded_invitation_id,
+        fact.superseded_invitation_id.map(|id| id.0),
     )
     .fetch_one(tx)
     .await?;
@@ -257,7 +259,7 @@ pub async fn insert_invitation_issued(
 }
 
 pub struct InvitationResolvedFact {
-    pub invitation_id: Uuid,
+    pub invitation_id: InvitationId,
     pub outcome: &'static str,
 }
 
@@ -281,9 +283,9 @@ pub async fn insert_invitation_resolved(
         envelope.on_behalf_of_user_id.map(|id| id.0),
         origin,
         envelope.occurred_at,
-        envelope.correlation_id,
+        envelope.correlation_id.0,
         envelope.causation_id,
-        fact.invitation_id,
+        fact.invitation_id.0,
         fact.outcome,
     )
     .fetch_one(tx)
@@ -320,7 +322,7 @@ pub async fn insert_membership_changed(
         envelope.on_behalf_of_user_id.map(|id| id.0),
         origin,
         envelope.occurred_at,
-        envelope.correlation_id,
+        envelope.correlation_id.0,
         envelope.causation_id,
         fact.user_id.0,
         fact.from_role,
@@ -354,7 +356,7 @@ pub async fn insert_stage_changed(
         envelope.on_behalf_of_user_id.map(|id| id.0),
         origin,
         envelope.occurred_at,
-        envelope.correlation_id,
+        envelope.correlation_id.0,
         envelope.causation_id,
         fact.person_id.0,
         fact.from_stage_id.map(|id| id.0),
@@ -369,9 +371,9 @@ pub async fn insert_stage_changed(
 // --- Slice 006 (docs/specs/SLICE_006.md §2) --------------------------------
 
 pub struct CallCompletedFact<'a> {
-    pub call_id: Uuid,
+    pub call_id: CallId,
     pub person_id: PersonId,
-    pub contact_method_id: Uuid,
+    pub contact_method_id: ContactMethodId,
     /// `reached` for every answered call, else the `failure_reason`.
     pub outcome: &'a str,
     pub answered_at: Option<chrono::DateTime<chrono::Utc>>,
@@ -403,11 +405,11 @@ pub async fn insert_call_completed(
         envelope.on_behalf_of_user_id.map(|id| id.0),
         origin,
         envelope.occurred_at,
-        envelope.correlation_id,
+        envelope.correlation_id.0,
         envelope.causation_id,
-        fact.call_id,
+        fact.call_id.0,
         fact.person_id.0,
-        fact.contact_method_id,
+        fact.contact_method_id.0,
         fact.outcome,
         fact.answered_at,
         fact.ended_at,

@@ -9,10 +9,17 @@ use crate::domain::admin::queries::{self, InvitationStatus};
 use crate::domain::admin::AdminActor;
 use crate::domain::envelope::{Actor, FactEnvelope};
 use crate::domain::facts::{self, InvitationResolvedFact};
-use crate::ids::OrganizationId;
+use crate::ids::{CorrelationId, InvitationId, OrganizationId};
 
 pub struct RevokeInvitation {
     pub organization_id: OrganizationId,
+    /// Stays bare `Uuid`, not `InvitationId` (hardening chunk N4): this
+    /// command's callers are `routes/platform.rs` and
+    /// `routes/organization.rs`, both outside this lane's ownership
+    /// boundary (their path extractors — `TwoUuidPathIds`/`UuidPathId` —
+    /// are shared, untyped, and explicitly deferred by the ladder doc's
+    /// "Recorded residuals"). Wrapped explicitly, once, at the top of
+    /// `revoke_invitation_attempt` below.
     pub invitation_id: Uuid,
 }
 
@@ -54,12 +61,15 @@ async fn revoke_invitation_attempt(
     actor: AdminActor,
     cmd: RevokeInvitation,
 ) -> Result<(), AdminCommandError> {
+    // The one crossing from the command's bare-`Uuid` boundary field into
+    // the typed invitation-query/fact layer this lane owns — visible and
+    // explicit, not an implicit `From`/`Into` (hardening chunk N4).
+    let invitation_id = InvitationId::new(cmd.invitation_id);
     let mut tx = pool.begin().await?;
 
-    let invitation =
-        queries::lock_invitation_in_org(&mut tx, cmd.organization_id, cmd.invitation_id)
-            .await?
-            .ok_or(AdminCommandError::NotFound)?;
+    let invitation = queries::lock_invitation_in_org(&mut tx, cmd.organization_id, invitation_id)
+        .await?
+        .ok_or(AdminCommandError::NotFound)?;
 
     let now = Utc::now();
     match invitation.status(now) {
@@ -73,7 +83,7 @@ async fn revoke_invitation_attempt(
         InvitationStatus::Pending | InvitationStatus::Expired => {}
     }
 
-    queries::revoke_invitation_row(&mut tx, cmd.invitation_id).await?;
+    queries::revoke_invitation_row(&mut tx, invitation_id).await?;
 
     let envelope = FactEnvelope {
         organization_id: cmd.organization_id,
@@ -81,14 +91,14 @@ async fn revoke_invitation_attempt(
         on_behalf_of_user_id: None,
         origin: actor.origin,
         occurred_at: now,
-        correlation_id: Uuid::new_v4(),
+        correlation_id: CorrelationId::new(Uuid::new_v4()),
         causation_id: None,
     };
     facts::insert_invitation_resolved(
         &mut tx,
         &envelope,
         InvitationResolvedFact {
-            invitation_id: cmd.invitation_id,
+            invitation_id,
             outcome: "revoked",
         },
     )

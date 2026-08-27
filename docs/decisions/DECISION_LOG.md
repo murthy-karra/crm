@@ -1283,3 +1283,37 @@ Cloudflare Email Routing → Worker delivery DOES stamp
 from the stored raw bytes whenever its first consumer lands.
 
 Blocks: nothing. Feeds the Slice 007h1 specification.
+
+### D-041 — Intake routing modes: three-mode picker with round-robin (2026-08-26)
+
+Accepted (user, during Slice 008 planning). Extends D-035; resolves
+the ladder's deferred round-robin item.
+
+The Organization's intake settings carry an explicit
+`intake_routing_mode`: **`default_assignee` | `round_robin` |
+`unassigned`** (the user chose the three-mode picker over folding
+"unassigned" into the default-assignee dropdown; the dropdown's old
+"Unassigned" entry moves up to become the mode). Round-robin pool =
+**all active members, admins included** (matches the dropdown's
+population; per-member opt-outs are rules-engine territory, later).
+Fairness = **continue-anchored, never reset**: canonical order is
+membership join order (`created_at, user_id`); next = first active
+member strictly after the last-assigned member's (retained)
+membership position, wrapping; deactivated members are skipped, the
+pointer survives its member's deactivation, new members join at the
+end of the cycle. The pointer advances only when round-robin actually
+assigns. Explicit `assign_to_user_id` still overrides in every mode
+and does not consume a rotation turn (D-035 (h) unchanged; strict
+rotation, not least-loaded).
+
+Migration mapping (deterministic under the three-mode choice):
+existing orgs with a default assignee → `default_assignee`; with
+NULL → `unassigned`; new orgs default to `unassigned` (mirrors
+today's initial no-default state). `default_assignee` mode requires
+a non-null active assignee at PUT time; a later-deactivated assignee
+still falls back to the unassigned OUTCOME + warning at routing time
+(007c behavior). The `routing_decision` fact vocabulary gains
+`round_robin` (declared persistence-contract change); the fact
+always records the actual outcome (`unassigned` on an empty pool).
+
+Blocks: nothing. Feeds the Slice 008 specification.

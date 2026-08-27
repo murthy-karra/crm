@@ -65,9 +65,22 @@ timing structure unchanged, dummy branch byte-identical),
 constructor-only Publication (channel AND event private after review
 minor), Decode→Corrupt completed across ALL THREE error types
 (Command/Workbench/AdminCommand). Reviewed READY; review minors all
-folded in; gates green three times (285/0). LADDER COMPLETE 8/8
-pending the final commit+merge gate; closing state written into
-docs/design/type-safety-hardening.md. Feature slices may interleave.
+folded in; gates green three times (285/0). LADDER COMPLETE 8/8,
+MERGED+PUSHED (`main` `069f55a`); closing state in
+docs/design/type-safety-hardening.md.
+
+NEW SLICE: 008 — intake routing modes (round-robin). D-041 accepted
+(three-mode picker default_assignee|round_robin|unassigned;
+all-active-members pool; continue-anchored fairness, reactivation
+resumes original slot). docs/specs/SLICE_008.md APPROVED (user,
+2026-08-26) after independent review (ready-with-fixes, all six
+folded in — incl. the declared PUT supersession of 007c §5 and the
+S1 non-default-mode assignee rule preventing bricked orgs). Next:
+implementation gate → branch `slice-008-round-robin` (single lane,
+one migration 20260903000001, Option A Sonnet-implements workflow
+unless directed otherwise). Also this planning round: fixed
+PROJECT_STATE's erroneous "round-robin" claim in the 007g
+walkthrough narrative (it routed organization_default).
 
 Prior update, 2026-08-25 (SLICE_007h1 COMPLETE, MERGED, PUSHED —
 `main` `105f730`. Detail below; SLICE_007h1 IMPLEMENTED on
@@ -120,7 +133,7 @@ elysianfeld.com) and dev-api was restarted. Live results, all real
 Gmail → Cloudflare → worker → tunnel → `/inbound/email`: (1) freeform
 inquiry to the org address → 200 in 35 ms → unresolved → Groq
 extraction ~5 s → Person created at stage Lead with phone, assigned
-via round-robin; (2) forged-token address → worker Ok, endpoint 200,
+via the D-035 org default; (2) forged-token address → worker Ok, endpoint 200,
 silently discarded — no person, no unresolved row; (3) live rotation
 via the admin API → old address dead (same discard path), fresh mail
 to the minted address → second Person created. WALKTHROUGH FINDING

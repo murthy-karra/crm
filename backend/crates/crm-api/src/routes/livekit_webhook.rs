@@ -95,7 +95,7 @@ fn identity_matches(who: Option<Who>, identity: Option<&str>, call: &CallRow) ->
         Some(Who::Agent) => {
             identity == Some(Telephony::agent_identity(call.caller_user_id.as_uuid()).as_str())
         }
-        Some(Who::Sip) => identity == Some(Telephony::sip_identity(call.id).as_str()),
+        Some(Who::Sip) => identity == Some(Telephony::sip_identity(call.id.as_uuid()).as_str()),
     }
 }
 

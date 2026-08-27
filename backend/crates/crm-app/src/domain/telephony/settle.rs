@@ -9,14 +9,13 @@
 
 use chrono::{DateTime, Utc};
 use sqlx::{PgConnection, PgPool};
-use uuid::Uuid;
 
 use crate::domain::envelope::{Actor, FactEnvelope, Origin};
 use crate::domain::facts::{self, CallCompletedFact, ContactAttemptedFact};
 use crate::domain::telephony::queries::{self, CallRow};
 use crate::domain::telephony::transitions::{apply, Signal, Transition};
 use crate::domain::telephony::CallStatus;
-use crate::ids::OrganizationId;
+use crate::ids::{CallId, OrganizationId};
 use crate::realtime::{PersonChange, Publication, Publisher, RealtimeEvent};
 
 /// What one `settle_in_tx` decided and what to publish after commit.
@@ -41,7 +40,7 @@ impl SettleOutcome {
 pub async fn settle_in_tx(
     tx: &mut PgConnection,
     organization_id: OrganizationId,
-    call_id: Uuid,
+    call_id: CallId,
     signal: &Signal,
     now: DateTime<Utc>,
 ) -> Result<Option<SettleOutcome>, sqlx::Error> {
@@ -88,7 +87,7 @@ pub async fn settle_in_tx(
                ringing_at = $7, answered_at = $8, ended_at = $9, updated_at = $10
            WHERE organization_id = $1 AND id = $2"#,
         organization_id.0,
-        call.id,
+        call.id.0,
         status,
         failure_reason,
         end_reason,
@@ -112,7 +111,11 @@ pub async fn settle_in_tx(
         origin,
         occurred_at: now,
         correlation_id: call.correlation_id,
-        causation_id: Some(call.id),
+        // `causation_id` stays `Option<Uuid>` (the cross-fact-table union,
+        // per envelope.rs's docs) while `call.id` is now `CallId`
+        // (hardening chunk N4) — an explicit, visible unwrap at this one
+        // crossing, not an implicit conversion.
+        causation_id: Some(call.id.as_uuid()),
     };
 
     let mut publications = vec![Publication::for_event(RealtimeEvent::call_changed(
@@ -195,7 +198,7 @@ pub async fn settle(
     pool: &PgPool,
     publisher: &Publisher,
     organization_id: OrganizationId,
-    call_id: Uuid,
+    call_id: CallId,
     signal: &Signal,
     now: DateTime<Utc>,
 ) -> Result<Option<SettleOutcome>, sqlx::Error> {

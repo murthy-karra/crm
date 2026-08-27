@@ -20,7 +20,7 @@ use crate::domain::inquiry::parse::{Source, UnresolvedReason};
 use crate::domain::intake::email;
 use crate::domain::intake::{IntakeActor, IntakeAddress};
 use crate::domain::raw_payload::{crypto, store, PayloadFormat};
-use crate::ids::{InquiryId, OrganizationId, PersonId, RawPayloadId};
+use crate::ids::{CorrelationId, InquiryId, OrganizationId, PersonId, RawPayloadId};
 use crate::realtime::{Publication, Publisher, RealtimeEvent};
 
 /// Presented to `constant_time_eq` on an unknown slug, so that branch does
@@ -146,7 +146,7 @@ pub async fn receive_inbound_email(
     // with the email parse closure — MIME → format detection → field
     // extraction → normalization. The correlation id is fresh per
     // delivery (there is no CommandContext to inherit one from).
-    let correlation_id = Uuid::new_v4();
+    let correlation_id = CorrelationId::new(Uuid::new_v4());
     let actor = IntakeActor::System {
         organization_id: org_id,
         origin: Origin::Webhook,

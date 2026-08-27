@@ -19,7 +19,7 @@ use crate::auth::AuthContext;
 use crate::domain::commands::{self, StartCall};
 use crate::domain::envelope::CommandContext;
 use crate::error::ApiError;
-use crate::ids::PersonId;
+use crate::ids::{CallId, ContactMethodId, PersonId, ProposalId, TurnId};
 use crate::operator::{record_turn, SqlxToolBackend, TurnRecord};
 use crate::state::AppState;
 use crm_operator::{
@@ -80,22 +80,26 @@ struct WireReferences {
 /// card renders from this object only, never from model prose.
 #[derive(Serialize)]
 struct WireProposal {
-    id: Uuid,
+    // Typed even though `ProposalView` hands over bare `Uuid`s (the
+    // D-028 fence): the two wraps in `from_view` are the one place a
+    // transposition could slip through serialize-only code (reviewer
+    // N4 MINOR-1). Wire-identical via serde transparency.
+    id: ProposalId,
     kind: &'static str,
     person: WirePersonCard,
     phone: String,
-    contact_method_id: Uuid,
+    contact_method_id: ContactMethodId,
     expires_at: chrono::DateTime<chrono::Utc>,
 }
 
 impl WireProposal {
     fn from_view(view: &ProposalView) -> Self {
         Self {
-            id: view.proposal_id,
+            id: ProposalId::new(view.proposal_id),
             kind: "start_call",
             person: view.person.to_wire(),
             phone: view.phone.as_str().to_string(),
-            contact_method_id: view.contact_method_id,
+            contact_method_id: ContactMethodId::new(view.contact_method_id),
             expires_at: view.expires_at,
         }
     }
@@ -103,7 +107,7 @@ impl WireProposal {
 
 #[derive(Serialize)]
 struct TurnResponse {
-    turn_id: Uuid,
+    turn_id: TurnId,
     reply: String,
     references: WireReferences,
     tool_calls: Vec<ToolCallRecord>,
@@ -266,7 +270,11 @@ async fn post_turn(
     }
 
     let response = TurnResponse {
-        turn_id,
+        // crm-operator's `OperatorContext.turn_id` keeps a bare `Uuid` at
+        // the tool seam (D-028 §5 crate fence); wrap once here, at the
+        // wire boundary (hardening chunk N4, mirroring the org/user/
+        // person seam conversions elsewhere in this file).
+        turn_id: TurnId::new(turn_id),
         reply: output.reply.unwrap_or_default(),
         references: WireReferences {
             people: output
@@ -303,7 +311,7 @@ async fn post_turn(
 )]
 async fn confirm_proposal(
     State(state): State<AppState>,
-    axum::extract::Path(proposal_id): axum::extract::Path<Uuid>,
+    axum::extract::Path(proposal_id): axum::extract::Path<ProposalId>,
     auth: AuthContext,
 ) -> Result<Response, ApiError> {
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
@@ -317,7 +325,7 @@ async fn confirm_proposal(
            WHERE id = $1 AND organization_id = $2 AND actor_user_id = $3
              AND status = 'proposed' AND expires_at > now()
            RETURNING person_id, contact_method_id, turn_id"#,
-        proposal_id,
+        proposal_id.0,
         auth.active_organization_id.0,
         auth.actor_user_id.0,
     )
@@ -331,7 +339,7 @@ async fn confirm_proposal(
         let probe = sqlx::query!(
             r#"SELECT status, call_id FROM operator_proposal
                WHERE id = $1 AND organization_id = $2 AND actor_user_id = $3"#,
-            proposal_id,
+            proposal_id.0,
             auth.active_organization_id.0,
             auth.actor_user_id.0,
         )
@@ -353,7 +361,13 @@ async fn confirm_proposal(
             }
         };
     };
-    span.record("turn_id", tracing::field::display(row.turn_id));
+    // `operator_proposal.turn_id` is a genuine Operator turn id (hardening
+    // chunk N4) — wrap once here, right after the claim, and use the
+    // typed value for every use below (the span field, the correlation
+    // conversion inside `CommandContext::for_operator`, and the
+    // correlation-chain lookup on the error path).
+    let turn_id = TurnId::new(row.turn_id);
+    span.record("turn_id", tracing::field::display(turn_id));
 
     // 3. Execute the exact command the Call button uses, as the session
     //    user, with the turn id as the correlation id (SLICE_006b §3).
@@ -365,7 +379,7 @@ async fn confirm_proposal(
             return Err(ApiError::TelephonyDisabled);
         }
     };
-    let ctx = CommandContext::for_operator(&auth, row.turn_id);
+    let ctx = CommandContext::for_operator(&auth, turn_id);
     match commands::start_call(
         pool,
         &state.publisher,
@@ -373,7 +387,7 @@ async fn confirm_proposal(
         &ctx,
         StartCall {
             person_id: PersonId::new(row.person_id),
-            contact_method_id: row.contact_method_id,
+            contact_method_id: ContactMethodId::new(row.contact_method_id),
         },
     )
     .await
@@ -387,8 +401,8 @@ async fn confirm_proposal(
                 r#"UPDATE operator_proposal
                    SET status = 'confirmed', call_id = $2, confirmed_at = now()
                    WHERE id = $1 AND status = 'claimed'"#,
-                proposal_id,
-                call.id,
+                proposal_id.0,
+                call.id.0,
             )
             .execute(pool)
             .await;
@@ -416,16 +430,17 @@ async fn confirm_proposal(
             // keeps it. The row is found through the correlation chain —
             // this execution used `correlation_id = turn_id`, and a
             // turn has at most one proposal, so at most one call matches.
-            let failed_call_id = sqlx::query_scalar!(
+            let failed_call_id: Option<CallId> = sqlx::query_scalar!(
                 r#"SELECT id FROM call
                    WHERE organization_id = $1 AND correlation_id = $2"#,
                 auth.active_organization_id.0,
-                row.turn_id,
+                turn_id.as_uuid(),
             )
             .fetch_optional(pool)
             .await
             .ok()
-            .flatten();
+            .flatten()
+            .map(CallId::new);
             finalize_failed(pool, proposal_id, kind, failed_call_id).await;
             Err(ApiError::from(err))
         }
@@ -435,17 +450,17 @@ async fn confirm_proposal(
 /// Best-effort `failed` finalization; the command's error is the truth.
 async fn finalize_failed(
     pool: &sqlx::PgPool,
-    proposal_id: Uuid,
+    proposal_id: ProposalId,
     kind: &str,
-    call_id: Option<Uuid>,
+    call_id: Option<CallId>,
 ) {
     let result = sqlx::query!(
         r#"UPDATE operator_proposal
            SET status = 'failed', failure_code = $2, call_id = $3
            WHERE id = $1 AND status = 'claimed'"#,
-        proposal_id,
+        proposal_id.0,
         kind,
-        call_id,
+        call_id.map(|id| id.0),
     )
     .execute(pool)
     .await;

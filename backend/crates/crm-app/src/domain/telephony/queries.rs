@@ -10,20 +10,20 @@ use uuid::Uuid;
 
 use crate::domain::person::model::UserRef;
 use crate::domain::telephony::{CallStatus, EndReason, FailureReason};
-use crate::ids::{OrganizationId, PersonId, UserId};
+use crate::ids::{CallId, ContactMethodId, CorrelationId, OrganizationId, PersonId, UserId};
 
 /// One `call` row as the application sees it. `status`/reasons are
 /// decoded enums; a value the CHECK constraints allow but the application
 /// does not know is a decode error, never a panic.
 #[derive(Debug, Clone)]
 pub struct CallRow {
-    pub id: Uuid,
+    pub id: CallId,
     pub organization_id: OrganizationId,
     pub person_id: PersonId,
-    pub contact_method_id: Uuid,
+    pub contact_method_id: ContactMethodId,
     pub caller_user_id: UserId,
     pub origin: String,
-    pub correlation_id: Uuid,
+    pub correlation_id: CorrelationId,
     pub status: CallStatus,
     pub failure_reason: Option<FailureReason>,
     pub end_reason: Option<EndReason>,
@@ -90,13 +90,13 @@ impl TryFrom<RawCallRow> for CallRow {
             .map(|v| EndReason::decode(v).ok_or_else(|| corrupt("end_reason", v)))
             .transpose()?;
         Ok(CallRow {
-            id: row.id,
+            id: CallId::new(row.id),
             organization_id: OrganizationId::new(row.organization_id),
             person_id: PersonId::new(row.person_id),
-            contact_method_id: row.contact_method_id,
+            contact_method_id: ContactMethodId::new(row.contact_method_id),
             caller_user_id: UserId::new(row.caller_user_id),
             origin: row.origin,
-            correlation_id: row.correlation_id,
+            correlation_id: CorrelationId::new(row.correlation_id),
             status,
             failure_reason,
             end_reason,
@@ -116,7 +116,7 @@ impl TryFrom<RawCallRow> for CallRow {
 pub async fn call_by_id(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
-    id: Uuid,
+    id: CallId,
 ) -> Result<Option<CallRow>, sqlx::Error> {
     let row = sqlx::query_as!(
         RawCallRow,
@@ -125,7 +125,7 @@ pub async fn call_by_id(
                   provider_call_ref, placed_at, dial_requested_at, ringing_at, answered_at, ended_at
            FROM call WHERE organization_id = $1 AND id = $2"#,
         organization_id.0,
-        id,
+        id.0,
     )
     .fetch_optional(conn)
     .await?;
@@ -138,7 +138,7 @@ pub async fn call_by_id(
 pub async fn lock_call(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
-    id: Uuid,
+    id: CallId,
 ) -> Result<Option<CallRow>, sqlx::Error> {
     let row = sqlx::query_as!(
         RawCallRow,
@@ -147,7 +147,7 @@ pub async fn lock_call(
                   provider_call_ref, placed_at, dial_requested_at, ringing_at, answered_at, ended_at
            FROM call WHERE organization_id = $1 AND id = $2 FOR UPDATE"#,
         organization_id.0,
-        id,
+        id.0,
     )
     .fetch_optional(conn)
     .await?;
@@ -181,7 +181,7 @@ pub async fn active_call_for_user(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
     caller_user_id: UserId,
-) -> Result<Option<Uuid>, sqlx::Error> {
+) -> Result<Option<CallId>, sqlx::Error> {
     let row = sqlx::query!(
         r#"SELECT id FROM call
            WHERE organization_id = $1 AND caller_user_id = $2
@@ -191,17 +191,17 @@ pub async fn active_call_for_user(
     )
     .fetch_optional(conn)
     .await?;
-    Ok(row.map(|r| r.id))
+    Ok(row.map(|r| CallId::new(r.id)))
 }
 
 pub struct NewCall<'a> {
-    pub id: Uuid,
+    pub id: CallId,
     pub organization_id: OrganizationId,
     pub person_id: PersonId,
-    pub contact_method_id: Uuid,
+    pub contact_method_id: ContactMethodId,
     pub caller_user_id: UserId,
     pub origin: &'a str,
-    pub correlation_id: Uuid,
+    pub correlation_id: CorrelationId,
     pub provider: &'a str,
     pub provider_room: &'a str,
     pub placed_at: DateTime<Utc>,
@@ -215,13 +215,13 @@ pub async fn insert_placing(conn: &mut PgConnection, call: NewCall<'_>) -> Resul
             (id, organization_id, person_id, contact_method_id, caller_user_id, origin,
              correlation_id, status, provider, provider_room, placed_at)
            VALUES ($1, $2, $3, $4, $5, $6, $7, 'placing', $8, $9, $10)"#,
-        call.id,
+        call.id.0,
         call.organization_id.0,
         call.person_id.0,
-        call.contact_method_id,
+        call.contact_method_id.0,
         call.caller_user_id.0,
         call.origin,
-        call.correlation_id,
+        call.correlation_id.0,
         call.provider,
         call.provider_room,
         call.placed_at,
@@ -237,7 +237,7 @@ pub async fn insert_placing(conn: &mut PgConnection, call: NewCall<'_>) -> Resul
 pub async fn mark_dial_requested(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
-    id: Uuid,
+    id: CallId,
     now: DateTime<Utc>,
 ) -> Result<bool, sqlx::Error> {
     let result = sqlx::query!(
@@ -245,7 +245,7 @@ pub async fn mark_dial_requested(
            WHERE organization_id = $1 AND id = $2
              AND dial_requested_at IS NULL AND status = 'placing'"#,
         organization_id.0,
-        id,
+        id.0,
         now,
     )
     .execute(conn)
@@ -261,12 +261,12 @@ pub async fn phone_contact_method_normalized(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
     person_id: PersonId,
-    contact_method_id: Uuid,
+    contact_method_id: ContactMethodId,
 ) -> Result<Option<String>, sqlx::Error> {
     let row = sqlx::query!(
         r#"SELECT normalized_value FROM contact_method
            WHERE id = $1 AND person_id = $2 AND organization_id = $3 AND kind = 'phone'"#,
-        contact_method_id,
+        contact_method_id.0,
         person_id.0,
         organization_id.0,
     )
@@ -284,12 +284,12 @@ pub async fn phone_contact_method_exists(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
     person_id: PersonId,
-    contact_method_id: Uuid,
+    contact_method_id: ContactMethodId,
 ) -> Result<bool, sqlx::Error> {
     let row = sqlx::query!(
         r#"SELECT 1 AS "one!" FROM contact_method
            WHERE id = $1 AND person_id = $2 AND organization_id = $3 AND kind = 'phone'"#,
-        contact_method_id,
+        contact_method_id.0,
         person_id.0,
         organization_id.0,
     )
@@ -301,9 +301,9 @@ pub async fn phone_contact_method_exists(
 /// `CallView` (docs/specs/SLICE_006.md §5), PII-free.
 #[derive(Debug, Clone, Serialize)]
 pub struct CallView {
-    pub id: Uuid,
+    pub id: CallId,
     pub person_id: PersonId,
-    pub contact_method_id: Uuid,
+    pub contact_method_id: ContactMethodId,
     pub caller: UserRef,
     pub status: CallStatus,
     pub failure_reason: Option<FailureReason>,
@@ -353,7 +353,7 @@ pub async fn caller_display_name(
 pub async fn call_view_by_id(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
-    id: Uuid,
+    id: CallId,
 ) -> Result<Option<CallView>, sqlx::Error> {
     let Some(row) = call_by_id(conn, organization_id, id).await? else {
         return Ok(None);

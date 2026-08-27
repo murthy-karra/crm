@@ -25,7 +25,7 @@ use crate::domain::intake::extraction::{
 };
 use crate::domain::intake::IntakeActor;
 use crate::domain::raw_payload::{crypto, store, Resolution};
-use crate::ids::{OrganizationId, RawPayloadId};
+use crate::ids::{CorrelationId, OrganizationId, RawPayloadId};
 use crate::realtime::{Publication, Publisher, RealtimeEvent};
 
 pub const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(10);
@@ -242,7 +242,7 @@ async fn attempt_inner(
     report: &mut ExtractionReport,
     span: tracing::Span,
 ) -> Result<(), sqlx::Error> {
-    let correlation_id = Uuid::new_v4();
+    let correlation_id = CorrelationId::new(Uuid::new_v4());
     let started = Instant::now();
     let occurred_at = Utc::now();
 
@@ -737,7 +737,7 @@ struct LedgerRow {
     completion_tokens: Option<u32>,
     duration_ms: i32,
     occurred_at: chrono::DateTime<chrono::Utc>,
-    correlation_id: Uuid,
+    correlation_id: CorrelationId,
 }
 
 /// The ledger INSERT, in the caller's row-locked transaction; `seq` is
@@ -770,7 +770,7 @@ async fn insert_ledger(
         ledger.completion_tokens.map(|t| t as i32),
         ledger.duration_ms,
         ledger.occurred_at,
-        ledger.correlation_id,
+        ledger.correlation_id.0,
     )
     .execute(tx)
     .await?;

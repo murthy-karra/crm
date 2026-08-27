@@ -8,12 +8,12 @@ use std::sync::Arc;
 use chrono::Utc;
 use sqlx::PgPool;
 use tokio::task::JoinHandle;
-use uuid::Uuid;
 
 use crate::domain::commands::CallError;
 use crate::domain::envelope::CommandContext;
 use crate::domain::telephony::dial_task::{DialTask, DialTaskOutcome};
 use crate::domain::telephony::queries::{self as call_queries, CallView};
+use crate::ids::CallId;
 use crate::realtime::Publisher;
 use crate::telephony::Telephony;
 
@@ -37,7 +37,7 @@ pub async fn dial_call(
     publisher: &Publisher,
     telephony: &Arc<Telephony>,
     ctx: &CommandContext,
-    call_id: Uuid,
+    call_id: CallId,
 ) -> Result<(CallView, JoinHandle<DialTaskOutcome>), CallError> {
     let result = dial_call_attempt(pool, publisher, telephony, ctx, call_id).await;
     match &result {
@@ -55,7 +55,7 @@ async fn dial_call_attempt(
     publisher: &Publisher,
     telephony: &Arc<Telephony>,
     ctx: &CommandContext,
-    call_id: Uuid,
+    call_id: CallId,
 ) -> Result<(CallView, JoinHandle<DialTaskOutcome>), CallError> {
     let mut conn = pool.acquire().await?;
     let call = call_queries::call_by_id(&mut conn, ctx.organization_id, call_id)

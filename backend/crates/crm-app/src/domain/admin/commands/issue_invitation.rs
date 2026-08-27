@@ -13,7 +13,7 @@ use crate::domain::admin::validation;
 use crate::domain::admin::{AdminActor, Role};
 use crate::domain::envelope::{Actor, FactEnvelope};
 use crate::domain::facts::{self, InvitationIssuedFact, InvitationResolvedFact};
-use crate::ids::OrganizationId;
+use crate::ids::{CorrelationId, OrganizationId};
 
 pub struct IssueInvitation {
     pub organization_id: OrganizationId,
@@ -145,7 +145,7 @@ async fn issue_invitation_attempt(
             on_behalf_of_user_id: None,
             origin: actor.origin,
             occurred_at: now,
-            correlation_id: Uuid::new_v4(),
+            correlation_id: CorrelationId::new(Uuid::new_v4()),
             causation_id: None,
         };
         facts::insert_invitation_resolved(
@@ -196,7 +196,7 @@ async fn issue_invitation_attempt(
         on_behalf_of_user_id: None,
         origin: actor.origin,
         occurred_at: now,
-        correlation_id: Uuid::new_v4(),
+        correlation_id: CorrelationId::new(Uuid::new_v4()),
         causation_id: None,
     };
     facts::insert_invitation_issued(

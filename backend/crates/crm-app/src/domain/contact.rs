@@ -113,26 +113,21 @@ pub struct IdentifyMatch {
 /// Persons. Callers must hold the per-Organization intake advisory lock
 /// before calling this.
 ///
-/// `email`/`phone` stay plain `Option<&str>`, NOT `Option<&NormalizedEmail>`/
-/// `Option<&NormalizedPhone>` (hardening chunk V1's stated goal — see
-/// docs/tasks/HARDENING_V1.md). This function's only caller in the whole
-/// workspace is `receive_inquiry.rs` (owned by the parallel N4 lane, not
-/// editable from here), which reads `ParsedLead.email`/`.phone` directly
-/// (`parsed.email.as_deref()`) and passes the result straight in; typing
-/// these params is therefore a shared-contract change this lane cannot
-/// make without either editing that file or breaking the workspace build.
-/// Reported as a blocking finding rather than done silently — see the V1
-/// task report for the full writeup and the (trivial, two-line) follow-up
-/// this unblocks once `receive_inquiry.rs` is open for edits again.
+/// The two params are the typed normalized values (hardening chunk V1,
+/// completed at lane integration): both are constructible only via
+/// `normalize_email`/`normalize_phone`, so transposing them — the swap
+/// that would silently break dedup and mint duplicate Persons — no
+/// longer compiles. By-value: each is one small `String`, once per
+/// inquiry (reviewer-recommended shape).
 pub async fn identify(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
-    email: Option<&str>,
-    phone: Option<&str>,
+    email: Option<NormalizedEmail>,
+    phone: Option<NormalizedPhone>,
 ) -> Result<Option<IdentifyMatch>, sqlx::Error> {
     if let Some(email) = email {
         if let Some(person_id) =
-            find_earliest_person(conn, organization_id, ContactKind::Email, email).await?
+            find_earliest_person(conn, organization_id, ContactKind::Email, email.as_str()).await?
         {
             return Ok(Some(IdentifyMatch {
                 person_id,
@@ -142,7 +137,7 @@ pub async fn identify(
     }
     if let Some(phone) = phone {
         if let Some(person_id) =
-            find_earliest_person(conn, organization_id, ContactKind::Phone, phone).await?
+            find_earliest_person(conn, organization_id, ContactKind::Phone, phone.as_str()).await?
         {
             return Ok(Some(IdentifyMatch {
                 person_id,
@@ -178,6 +173,12 @@ async fn find_earliest_person(
 
 #[cfg(test)]
 mod tests {
+    // The accessor design (ParsedLead::normalized_email/phone re-derive
+    // instead of caching) and identify()'s typed params both silently
+    // depend on normalization being IDEMPOTENT: a re-derived value must
+    // equal the stored one, or dedup splits Persons with no compile or
+    // test failure (reviewer V1 MINOR-1). Pin it across representative
+    // inputs.
     use super::*;
 
     #[test]
@@ -257,5 +258,28 @@ mod tests {
         assert_eq!(debug, "NormalizedPhone(REDACTED)");
         assert!(!debug.contains("555"));
         assert_eq!(phone.to_string(), "+15555550100");
+    }
+
+    #[test]
+    fn normalization_is_idempotent_for_every_representative_input() {
+        for raw in [
+            "Ada.Lovelace@Example.COM",
+            "  spaced@example.com ",
+            "İstanbul@example.com", // dotted capital I: multi-byte lowercase
+        ] {
+            let once = normalize_email(raw).expect("normalizes");
+            let twice = normalize_email(once.as_str()).expect("re-normalizes");
+            assert_eq!(twice, once, "email {raw:?}");
+        }
+        for raw in [
+            "(555) 555-0100",   // 10 digits -> +1 prefix
+            "1-555-555-0100",   // 11 with leading 1
+            "+44 20 7946 0958", // international, >11
+            "555.555.0100 x",   // separators stripped
+        ] {
+            let once = normalize_phone(raw).expect("normalizes");
+            let twice = normalize_phone(once.as_str()).expect("re-normalizes");
+            assert_eq!(twice, once, "phone {raw:?}");
+        }
     }
 }

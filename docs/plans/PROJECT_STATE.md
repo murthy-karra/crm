@@ -45,9 +45,19 @@ halves now typed (bytes unchanged), axum extractors renamed
 PersonIdPath/RawPayloadIdPath wrapping typed ids (orphan rule),
 call_changed's call/person adjacency cross-typed (dead one chunk
 early); reviewed READY (one doc-comment minor, folded in); gates
-independently green (285/0) twice. Ladder 5/8 done pending the
-BATCHED merge gate: hardening-a1 → main, hardening-n3 → main, one
-push — awaiting user approval. Then N4 (call cluster), V1, S2.
+independently green (285/0) twice. A1+N3 MERGED+PUSHED (`main` `f942d99`).
+N4 and V1 ran as PARALLEL WORKTREE LANES (user-approved;
+crm-wt-n4/crm-wt-v1) with hard ownership boundaries — held perfectly:
+zero cross-lane edits, zero merge conflicts; V1 correctly
+STOPPED at the identify() retype (sole caller receive_inquiry.rs was
+N4-shared) and reported instead of breaching; completed at
+integration on hardening-v1 after merging hardening-n4 (by-value
+typed identify params + call site + idempotence pin, reviewer-
+blessed shape). Both lanes reviewed READY; serial full check-db per
+lane 285/0 each. Ladder 7/8 done pending the BATCHED merge gate:
+hardening-n4 → main, hardening-v1 → main, one push. Then S2 (final
+chunk, sequential: fact vocab, AttemptOutcome, IntakeToken
+security-review, Publication, Decode→Corrupt carry-over).
 Feature slices may interleave.
 
 Prior update, 2026-08-25 (SLICE_007h1 COMPLETE, MERGED, PUSHED —

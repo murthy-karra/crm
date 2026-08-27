@@ -430,8 +430,8 @@ where
         let identify_match = contact::identify(
             &mut tx,
             organization_id,
-            parsed.email.as_deref(),
-            parsed.phone.as_deref(),
+            parsed.normalized_email(),
+            parsed.normalized_phone(),
         )
         .await?;
 

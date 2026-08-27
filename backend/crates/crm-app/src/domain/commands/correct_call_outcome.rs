@@ -250,8 +250,8 @@ async fn correct_call_outcome_attempt(
         &envelope,
         ContactAttemptedFact {
             person_id: call.person_id,
-            channel: head.channel.as_str(),
-            outcome: requested.as_str(),
+            channel: head.channel,
+            outcome: requested,
             corrects_id: Some(head.id),
             recorded_at: Some(recorded_at),
         },

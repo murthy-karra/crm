@@ -18,7 +18,7 @@ use crate::domain::commands::CommandError;
 use crate::domain::envelope::Origin;
 use crate::domain::inquiry::parse::{Source, UnresolvedReason};
 use crate::domain::intake::email;
-use crate::domain::intake::{IntakeActor, IntakeAddress};
+use crate::domain::intake::{IntakeActor, IntakeAddress, IntakeToken};
 use crate::domain::raw_payload::{crypto, store, PayloadFormat};
 use crate::ids::{CorrelationId, InquiryId, OrganizationId, PersonId, RawPayloadId};
 use crate::realtime::{Publication, Publisher, RealtimeEvent};
@@ -104,13 +104,13 @@ pub async fn receive_inbound_email(
             // fixed dummy token, so this path does the same work as the
             // wrong-token path below (never a shortcut an attacker could
             // distinguish by timing).
-            let _ = constant_time_eq(intake_addr.token.as_bytes(), DUMMY_TOKEN);
+            let _ = constant_time_eq(intake_addr.token.reveal().as_bytes(), DUMMY_TOKEN);
             return Err(ReceiveInboundEmailError::OrgNotFound);
         }
     };
 
     // Constant-time token compare (tenant credential, never logged).
-    if !constant_time_eq(intake_addr.token.as_bytes(), stored_token.as_bytes()) {
+    if !stored_token.verify(intake_addr.token.reveal().as_bytes()) {
         return Ok(InboundEmailOutcome::Rejected);
     }
     let org_id = OrganizationId::new(org_id);
@@ -236,13 +236,14 @@ pub async fn receive_inbound_email(
 async fn organization_by_intake_slug(
     conn: &mut sqlx::pool::PoolConnection<sqlx::Postgres>,
     slug: &str,
-) -> Result<Option<(Uuid, String)>, sqlx::Error> {
-    sqlx::query_as::<_, (Uuid, String)>(
+) -> Result<Option<(Uuid, IntakeToken)>, sqlx::Error> {
+    let row = sqlx::query_as::<_, (Uuid, String)>(
         "SELECT id, intake_token FROM organization WHERE intake_slug = $1",
     )
     .bind(slug)
     .fetch_optional(&mut **conn)
-    .await
+    .await?;
+    Ok(row.map(|(id, token)| (id, IntakeToken::new(token))))
 }
 
 /// Constant-time comparison (never use == on secrets). The presented bytes

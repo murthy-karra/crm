@@ -21,7 +21,7 @@ use crate::domain::commands::CommandError;
 use crate::domain::envelope::Origin;
 use crate::domain::intake::email;
 use crate::domain::intake::extraction::{
-    build_input, validate_reply, ClaimVerdict, ExtractorError, LeadExtractor,
+    build_input, validate_reply, ClaimVerdict, ExtractorError, LeadExtractor, QualityFailure,
 };
 use crate::domain::intake::IntakeActor;
 use crate::domain::raw_payload::{crypto, store, Resolution};
@@ -49,6 +49,112 @@ pub struct ExtractionReport {
     pub failed_terminal: usize,
     pub retryable: usize,
     pub superseded: usize,
+}
+
+/// The `intake_extraction.outcome` ledger tag (hardening chunk S2;
+/// docs/design/type-safety-hardening.md chunk 8), replacing the
+/// `&'static str` every disposition used to carry. Exactly the CHECK
+/// constraint's thirteen values (migration 20260901000001) — confirmed by
+/// tracing every call site that can reach [`insert_ledger`], not just
+/// grepped literals. Deliberately NOT included: `"email_extraction_failed"`
+/// — despite looking ledger-shaped and appearing in the same match arms as
+/// these variants, it is only ever written to `raw_payload.unresolved_reason`
+/// (`Disposition::Terminal.reason`), never to `intake_extraction.outcome`;
+/// it is absent from this table's own CHECK, confirming that read. That
+/// field stays a bare `&'static str` — out of this enum's scope.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AttemptOutcome {
+    /// A lead, successfully completed through `complete_intake`.
+    Extracted,
+    /// Confidently not a lead (`ClaimVerdict::NotALead`).
+    NotALead,
+    /// A concurrent discard/retry/resolve won the row after this attempt
+    /// had already committed its provider call (reset-guard or post-reset
+    /// races).
+    Superseded,
+    /// Provider call exceeded its timeout — transport, never counted.
+    ProviderTimeout,
+    /// Provider returned a non-timeout unavailability signal — transport,
+    /// never counted.
+    ProviderUnavailable,
+    /// Provider rate-limited the request — transport, never counted.
+    RateLimited,
+    /// The provider's reply wasn't parseable at all — quality-class,
+    /// counted.
+    MalformedResponse,
+    /// `QualityFailure::SchemaInvalid` — the reply parsed but violated the
+    /// output schema.
+    SchemaInvalid,
+    /// `QualityFailure::LowConfidence` — below the confidence floor.
+    LowConfidence,
+    /// `QualityFailure::HallucinatedContact` — a contact value not present
+    /// in the model's own input.
+    HallucinatedContact,
+    /// `QualityFailure::NoContactMethod` — neither email nor phone
+    /// survived normalization.
+    NoContactMethod,
+    /// The per-Organization intake advisory lock never freed within
+    /// `complete_intake`'s budget — real contention, never counted.
+    IntakeBusy,
+    /// Any other post-reset `complete_intake` failure, or a crypto/MIME
+    /// decode failure before the provider was ever called — deterministic,
+    /// counted.
+    InternalError,
+}
+
+impl AttemptOutcome {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            AttemptOutcome::Extracted => "extracted",
+            AttemptOutcome::NotALead => "not_a_lead",
+            AttemptOutcome::Superseded => "superseded",
+            AttemptOutcome::ProviderTimeout => "provider_timeout",
+            AttemptOutcome::ProviderUnavailable => "provider_unavailable",
+            AttemptOutcome::RateLimited => "rate_limited",
+            AttemptOutcome::MalformedResponse => "malformed_response",
+            AttemptOutcome::SchemaInvalid => "schema_invalid",
+            AttemptOutcome::LowConfidence => "low_confidence",
+            AttemptOutcome::HallucinatedContact => "hallucinated_contact",
+            AttemptOutcome::NoContactMethod => "no_contact_method",
+            AttemptOutcome::IntakeBusy => "intake_busy",
+            AttemptOutcome::InternalError => "internal_error",
+        }
+    }
+
+    /// The retryability decision (spec §4a): transport-class outcomes wait
+    /// forever, uncounted, on the claim's existing lease — everything else
+    /// is deterministic and quality-accounted. Exhaustive, no wildcard arm:
+    /// a 14th variant added later without a line here is a compile error,
+    /// not a silent fall-through to the wrong retry class (the hazard this
+    /// chunk exists to close).
+    pub fn is_transport(self) -> bool {
+        match self {
+            AttemptOutcome::ProviderTimeout
+            | AttemptOutcome::ProviderUnavailable
+            | AttemptOutcome::RateLimited => true,
+            AttemptOutcome::Extracted
+            | AttemptOutcome::NotALead
+            | AttemptOutcome::Superseded
+            | AttemptOutcome::MalformedResponse
+            | AttemptOutcome::SchemaInvalid
+            | AttemptOutcome::LowConfidence
+            | AttemptOutcome::HallucinatedContact
+            | AttemptOutcome::NoContactMethod
+            | AttemptOutcome::IntakeBusy
+            | AttemptOutcome::InternalError => false,
+        }
+    }
+}
+
+impl From<QualityFailure> for AttemptOutcome {
+    fn from(failure: QualityFailure) -> Self {
+        match failure {
+            QualityFailure::SchemaInvalid => AttemptOutcome::SchemaInvalid,
+            QualityFailure::LowConfidence => AttemptOutcome::LowConfidence,
+            QualityFailure::HallucinatedContact => AttemptOutcome::HallucinatedContact,
+            QualityFailure::NoContactMethod => AttemptOutcome::NoContactMethod,
+        }
+    }
 }
 
 /// Spawns the periodic worker. First pass after one interval (the sweep
@@ -179,23 +285,27 @@ enum Disposition {
     /// Reset to pending happens separately; this records the final ledger
     /// outcome after `complete_intake`.
     LedgerOnly {
-        outcome: &'static str,
+        outcome: AttemptOutcome,
         confidence: Option<f32>,
     },
     Terminal {
+        /// `raw_payload.unresolved_reason` — a distinct vocabulary from
+        /// `outcome` below (see [`AttemptOutcome`]'s doc on
+        /// `"email_extraction_failed"`); stays a bare tag, out of this
+        /// chunk's scope.
         reason: &'static str,
-        outcome: &'static str,
+        outcome: AttemptOutcome,
         confidence: Option<f32>,
         /// Quality-terminal counts the final attempt; `not_a_lead` (a
         /// success-class terminal) does not.
         count_attempt: bool,
     },
     QualityRetry {
-        outcome: &'static str,
+        outcome: AttemptOutcome,
         confidence: Option<f32>,
     },
     TransportRetry {
-        outcome: &'static str,
+        outcome: AttemptOutcome,
     },
 }
 
@@ -248,7 +358,7 @@ async fn attempt_inner(
 
     // Decrypt + rebuild the D-038-scoped input, then call the model.
     type AttemptOk = (ClaimVerdict, Option<u32>, Option<u32>, bool);
-    let attempt_outcome: Result<AttemptOk, &'static str> = {
+    let attempt_outcome: Result<AttemptOk, AttemptOutcome> = {
         match crypto::open(
             key,
             OrganizationId::new(row.organization_id),
@@ -256,9 +366,9 @@ async fn attempt_inner(
             &row.nonce,
             &row.ciphertext,
         ) {
-            Err(_) => Err("internal_error"),
+            Err(_) => Err(AttemptOutcome::InternalError),
             Ok(plaintext) => match email::mime::parse(&plaintext) {
-                None => Err("internal_error"),
+                None => Err(AttemptOutcome::InternalError),
                 Some(mail) => {
                     // The one shared unwrap seam (docs/specs/SLICE_007h1.md
                     // §3/§5): the model sees the same view pinned matching
@@ -278,10 +388,12 @@ async fn attempt_inner(
                     let input = build_input(&resolved.mail);
                     span.record("input_truncated", input.truncated);
                     match extractor.extract(&input).await {
-                        Err(ExtractorError::Timeout) => Err("provider_timeout"),
-                        Err(ExtractorError::Unavailable) => Err("provider_unavailable"),
-                        Err(ExtractorError::RateLimited) => Err("rate_limited"),
-                        Err(ExtractorError::Malformed) => Err("malformed_response"),
+                        Err(ExtractorError::Timeout) => Err(AttemptOutcome::ProviderTimeout),
+                        Err(ExtractorError::Unavailable) => {
+                            Err(AttemptOutcome::ProviderUnavailable)
+                        }
+                        Err(ExtractorError::RateLimited) => Err(AttemptOutcome::RateLimited),
+                        Err(ExtractorError::Malformed) => Err(AttemptOutcome::MalformedResponse),
                         Ok(reply) => Ok((
                             validate_reply(&input, &reply.content),
                             reply.prompt_tokens,
@@ -311,48 +423,45 @@ async fn attempt_inner(
 
     match attempt_outcome {
         Err(outcome_tag) => {
-            span.record("outcome", outcome_tag);
-            match outcome_tag {
+            span.record("outcome", outcome_tag.as_str());
+            if outcome_tag.is_transport() {
                 // Genuine provider outages: never count, never terminal —
                 // the row waits forever (spec §4a). The claim already set
                 // the 60 s retry.
-                "provider_timeout" | "provider_unavailable" | "rate_limited" => {
-                    apply(
-                        pool,
-                        &row,
-                        Disposition::TransportRetry {
-                            outcome: outcome_tag,
-                        },
-                        &ledger,
-                        publisher,
-                    )
-                    .await?;
-                    report.retryable += 1;
-                }
+                apply(
+                    pool,
+                    &row,
+                    Disposition::TransportRetry {
+                        outcome: outcome_tag,
+                    },
+                    &ledger,
+                    publisher,
+                )
+                .await?;
+                report.retryable += 1;
+            } else {
                 // Deterministic failures (corrupt row, unreadable reply):
                 // COUNTED — an unbounded retry here would be an infinite
                 // paid-call loop, not outage patience (adversarial H1).
-                _ => {
-                    let terminal = row.extraction_attempts + 1 >= MAX_QUALITY_ATTEMPTS;
-                    let disposition = if terminal {
-                        Disposition::Terminal {
-                            reason: "email_extraction_failed",
-                            outcome: outcome_tag,
-                            confidence: None,
-                            count_attempt: true,
-                        }
-                    } else {
-                        Disposition::QualityRetry {
-                            outcome: outcome_tag,
-                            confidence: None,
-                        }
-                    };
-                    apply(pool, &row, disposition, &ledger, publisher).await?;
-                    if terminal {
-                        report.failed_terminal += 1;
-                    } else {
-                        report.retryable += 1;
+                let terminal = row.extraction_attempts + 1 >= MAX_QUALITY_ATTEMPTS;
+                let disposition = if terminal {
+                    Disposition::Terminal {
+                        reason: "email_extraction_failed",
+                        outcome: outcome_tag,
+                        confidence: None,
+                        count_attempt: true,
                     }
+                } else {
+                    Disposition::QualityRetry {
+                        outcome: outcome_tag,
+                        confidence: None,
+                    }
+                };
+                apply(pool, &row, disposition, &ledger, publisher).await?;
+                if terminal {
+                    report.failed_terminal += 1;
+                } else {
+                    report.retryable += 1;
                 }
             }
         }
@@ -365,12 +474,12 @@ async fn attempt_inner(
                 // Guarded reset (the workbench template), then the shared
                 // completion path, then the ledger under the row lock.
                 if !reset_to_pending(pool, &row).await? {
-                    span.record("outcome", "superseded");
+                    span.record("outcome", AttemptOutcome::Superseded.as_str());
                     apply(
                         pool,
                         &row,
                         Disposition::LedgerOnly {
-                            outcome: "superseded",
+                            outcome: AttemptOutcome::Superseded,
                             confidence: None,
                         },
                         &ledger,
@@ -401,12 +510,12 @@ async fn attempt_inner(
                 .await;
                 match result {
                     Ok(ReceiveInquiryOutcome::Resolved { .. }) => {
-                        span.record("outcome", "extracted");
+                        span.record("outcome", AttemptOutcome::Extracted.as_str());
                         apply(
                             pool,
                             &row,
                             Disposition::LedgerOnly {
-                                outcome: "extracted",
+                                outcome: AttemptOutcome::Extracted,
                                 confidence: Some(confidence),
                             },
                             &ledger,
@@ -418,12 +527,12 @@ async fn attempt_inner(
                     // The closure never fails, so Unresolved cannot occur;
                     // treat defensively as superseded.
                     Ok(ReceiveInquiryOutcome::Unresolved { .. }) => {
-                        span.record("outcome", "superseded");
+                        span.record("outcome", AttemptOutcome::Superseded.as_str());
                         apply(
                             pool,
                             &row,
                             Disposition::LedgerOnly {
-                                outcome: "superseded",
+                                outcome: AttemptOutcome::Superseded,
                                 confidence: None,
                             },
                             &ledger,
@@ -439,10 +548,10 @@ async fn attempt_inner(
                     // poisoned row cannot loop on paid calls forever.
                     Err(err) => {
                         let (outcome_tag, counted) = match err {
-                            CommandError::IntakeBusy => ("intake_busy", false),
-                            _ => ("internal_error", true),
+                            CommandError::IntakeBusy => (AttemptOutcome::IntakeBusy, false),
+                            _ => (AttemptOutcome::InternalError, true),
                         };
-                        span.record("outcome", outcome_tag);
+                        span.record("outcome", outcome_tag.as_str());
                         let terminal =
                             un_reset(pool, &row, outcome_tag, counted, &ledger, publisher).await?;
                         if terminal {
@@ -454,14 +563,14 @@ async fn attempt_inner(
                 }
             }
             ClaimVerdict::NotALead { confidence } => {
-                span.record("outcome", "not_a_lead");
+                span.record("outcome", AttemptOutcome::NotALead.as_str());
                 span.record("confidence", confidence);
                 apply(
                     pool,
                     &row,
                     Disposition::Terminal {
                         reason: "not_a_lead",
-                        outcome: "not_a_lead",
+                        outcome: AttemptOutcome::NotALead,
                         confidence: Some(confidence),
                         count_attempt: false,
                     },
@@ -475,8 +584,8 @@ async fn attempt_inner(
                 failure,
                 confidence,
             } => {
-                let tag = failure.ledger_tag();
-                span.record("outcome", tag);
+                let outcome_tag = AttemptOutcome::from(failure);
+                span.record("outcome", outcome_tag.as_str());
                 if let Some(c) = confidence {
                     span.record("confidence", c);
                 }
@@ -484,13 +593,13 @@ async fn attempt_inner(
                 let disposition = if terminal {
                     Disposition::Terminal {
                         reason: "email_extraction_failed",
-                        outcome: tag,
+                        outcome: outcome_tag,
                         confidence,
                         count_attempt: true,
                     }
                 } else {
                     Disposition::QualityRetry {
-                        outcome: tag,
+                        outcome: outcome_tag,
                         confidence,
                     }
                 };
@@ -546,7 +655,7 @@ async fn reset_to_pending(pool: &PgPool, row: &ClaimedRow) -> Result<bool, sqlx:
 async fn un_reset(
     pool: &PgPool,
     row: &ClaimedRow,
-    outcome: &'static str,
+    outcome: AttemptOutcome,
     counted: bool,
     ledger: &LedgerRow,
     publisher: &Publisher,
@@ -676,7 +785,7 @@ async fn apply(
                 .await?;
                 (outcome, confidence, true)
             } else {
-                ("superseded", None, false)
+                (AttemptOutcome::Superseded, None, false)
             }
         }
         Disposition::QualityRetry {
@@ -700,7 +809,7 @@ async fn apply(
                 .await?;
                 (outcome, confidence, false)
             } else {
-                ("superseded", None, false)
+                (AttemptOutcome::Superseded, None, false)
             }
         }
         Disposition::TransportRetry { outcome } => {
@@ -746,7 +855,7 @@ struct LedgerRow {
 async fn insert_ledger(
     tx: &mut PgConnection,
     ledger: &LedgerRow,
-    outcome: &'static str,
+    outcome: AttemptOutcome,
     confidence: Option<f32>,
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
@@ -763,7 +872,7 @@ async fn insert_ledger(
         ledger.raw_payload_id,
         ledger.provider,
         ledger.model,
-        outcome,
+        outcome.as_str(),
         confidence,
         ledger.input_truncated,
         ledger.prompt_tokens.map(|t| t as i32),
@@ -775,4 +884,89 @@ async fn insert_ledger(
     .execute(tx)
     .await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod attempt_outcome_tests {
+    use super::*;
+
+    /// `as_str()` must yield exactly the thirteen `intake_extraction.
+    /// outcome` CHECK values (migration 20260901000001) — pinned
+    /// per-variant so a renamed tag would fail this test, not a live
+    /// ledger insert.
+    #[test]
+    fn attempt_outcome_round_trips_every_variant() {
+        for (variant, expected) in [
+            (AttemptOutcome::Extracted, "extracted"),
+            (AttemptOutcome::NotALead, "not_a_lead"),
+            (AttemptOutcome::Superseded, "superseded"),
+            (AttemptOutcome::ProviderTimeout, "provider_timeout"),
+            (AttemptOutcome::ProviderUnavailable, "provider_unavailable"),
+            (AttemptOutcome::RateLimited, "rate_limited"),
+            (AttemptOutcome::MalformedResponse, "malformed_response"),
+            (AttemptOutcome::SchemaInvalid, "schema_invalid"),
+            (AttemptOutcome::LowConfidence, "low_confidence"),
+            (AttemptOutcome::HallucinatedContact, "hallucinated_contact"),
+            (AttemptOutcome::NoContactMethod, "no_contact_method"),
+            (AttemptOutcome::IntakeBusy, "intake_busy"),
+            (AttemptOutcome::InternalError, "internal_error"),
+        ] {
+            assert_eq!(variant.as_str(), expected);
+        }
+    }
+
+    /// The retryability classification, pinned per variant: exactly the
+    /// three provider-transport tags wait forever uncounted; everything
+    /// else — including every quality failure and `intake_busy`/
+    /// `internal_error` — is deterministic and quality-accounted. This is
+    /// the exhaustive match `is_transport()` itself performs; duplicating
+    /// it here as data means a future variant added to one list but not
+    /// the other fails this test immediately.
+    #[test]
+    fn is_transport_matches_exactly_the_three_provider_outage_tags() {
+        let transport = [
+            AttemptOutcome::ProviderTimeout,
+            AttemptOutcome::ProviderUnavailable,
+            AttemptOutcome::RateLimited,
+        ];
+        let not_transport = [
+            AttemptOutcome::Extracted,
+            AttemptOutcome::NotALead,
+            AttemptOutcome::Superseded,
+            AttemptOutcome::MalformedResponse,
+            AttemptOutcome::SchemaInvalid,
+            AttemptOutcome::LowConfidence,
+            AttemptOutcome::HallucinatedContact,
+            AttemptOutcome::NoContactMethod,
+            AttemptOutcome::IntakeBusy,
+            AttemptOutcome::InternalError,
+        ];
+        for variant in transport {
+            assert!(variant.is_transport(), "{variant:?} should be transport");
+        }
+        for variant in not_transport {
+            assert!(
+                !variant.is_transport(),
+                "{variant:?} should not be transport"
+            );
+        }
+    }
+
+    #[test]
+    fn quality_failure_conversion_covers_every_variant() {
+        for (failure, expected) in [
+            (QualityFailure::SchemaInvalid, AttemptOutcome::SchemaInvalid),
+            (QualityFailure::LowConfidence, AttemptOutcome::LowConfidence),
+            (
+                QualityFailure::HallucinatedContact,
+                AttemptOutcome::HallucinatedContact,
+            ),
+            (
+                QualityFailure::NoContactMethod,
+                AttemptOutcome::NoContactMethod,
+            ),
+        ] {
+            assert_eq!(AttemptOutcome::from(failure), expected);
+        }
+    }
 }

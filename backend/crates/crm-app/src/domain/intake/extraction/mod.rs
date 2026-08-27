@@ -163,17 +163,6 @@ pub enum QualityFailure {
     NoContactMethod,
 }
 
-impl QualityFailure {
-    pub fn ledger_tag(self) -> &'static str {
-        match self {
-            QualityFailure::SchemaInvalid => "schema_invalid",
-            QualityFailure::LowConfidence => "low_confidence",
-            QualityFailure::HallucinatedContact => "hallucinated_contact",
-            QualityFailure::NoContactMethod => "no_contact_method",
-        }
-    }
-}
-
 /// The verdict on one model reply.
 pub enum ClaimVerdict {
     /// A lead, gated and validated — ready for `complete_intake`.

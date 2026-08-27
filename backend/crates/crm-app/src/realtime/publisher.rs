@@ -125,18 +125,18 @@ impl Publisher {
     /// failure-path tests (docs/specs/SLICE_003.md §13 criterion 6, §4).
     /// `Recording` is synchronous by construction (spec §6 module layout).
     pub async fn publish_now(&self, publication: &Publication) -> PublishOutcome {
-        let value = serde_json::to_value(&publication.event)
+        let value = serde_json::to_value(publication.event())
             .expect("RealtimeEvent serialization to JSON cannot fail");
         match self {
             Publisher::Recording(recorded, _) => {
                 recorded
                     .lock()
                     .await
-                    .push((publication.channel.clone(), value));
+                    .push((publication.channel().to_string(), value));
                 PublishOutcome::Published
             }
             Publisher::Centrifugo(transport) => {
-                publish_via_http(transport, &publication.channel, &value).await
+                publish_via_http(transport, publication.channel(), &value).await
             }
             Publisher::Disabled => PublishOutcome::Published,
         }
@@ -156,10 +156,10 @@ impl Publisher {
             }
             Publisher::Centrifugo(_) => {
                 let publisher = self.clone();
-                let channel = publication.channel.clone();
-                let event_type = publication.event.type_tag();
-                let organization_id = publication.event.organization_id();
-                let correlation_id = publication.event.correlation_id();
+                let channel = publication.channel().to_string();
+                let event_type = publication.event().type_tag();
+                let organization_id = publication.event().organization_id();
+                let correlation_id = publication.event().correlation_id();
                 let span = tracing::info_span!(
                     "realtime_publish",
                     channel = %channel,
@@ -282,8 +282,8 @@ mod tests {
     async fn recording_publisher_captures_channel_and_exact_wire_value() {
         let publisher = Publisher::recording();
         let publication = sample_publication();
-        let expected_channel = publication.channel.clone();
-        let expected_value = serde_json::to_value(&publication.event).unwrap();
+        let expected_channel = publication.channel().to_string();
+        let expected_value = serde_json::to_value(publication.event()).unwrap();
 
         let outcome = publisher.publish_now(&publication).await;
         assert_eq!(outcome, PublishOutcome::Published);

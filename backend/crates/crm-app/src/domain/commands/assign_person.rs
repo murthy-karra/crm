@@ -5,7 +5,7 @@ use sqlx::PgPool;
 
 use crate::domain::commands::CommandError;
 use crate::domain::envelope::{CommandContext, FactEnvelope};
-use crate::domain::facts::{self, AssignmentChangedFact};
+use crate::domain::facts::{self, AssignmentChangedFact, AssignmentReason};
 use crate::domain::person::model::PersonSummary;
 use crate::domain::person::queries as person_queries;
 use crate::ids::{PersonId, UserId};
@@ -98,7 +98,7 @@ async fn assign_person_attempt(
                 person_id: cmd.person_id,
                 from_user_id: person.assigned_user_id,
                 to_user_id: cmd.assigned_user_id,
-                reason: "manual",
+                reason: AssignmentReason::Manual,
             },
         )
         .await?;

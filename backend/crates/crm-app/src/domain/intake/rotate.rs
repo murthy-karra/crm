@@ -10,6 +10,7 @@ use sqlx::PgPool;
 
 use crate::domain::admin::validation::mint_intake_token;
 use crate::domain::envelope::{CommandContext, FactEnvelope};
+use crate::domain::intake::IntakeToken;
 
 #[derive(Debug)]
 pub enum RotateError {
@@ -39,7 +40,7 @@ impl RotateError {
 pub async fn rotate_intake_token(
     pool: &PgPool,
     ctx: &CommandContext,
-) -> Result<String, RotateError> {
+) -> Result<IntakeToken, RotateError> {
     let mut tx = pool.begin().await?;
 
     let old: Option<String> = sqlx::query_scalar!(
@@ -49,16 +50,22 @@ pub async fn rotate_intake_token(
     .fetch_optional(&mut *tx)
     .await?;
     let old = old.ok_or(RotateError::Database(sqlx::Error::RowNotFound))?;
+    let old = IntakeToken::new(old);
 
+    // `new_token == old` before this chunk; `IntakeToken` has no
+    // `PartialEq` (constant-time `verify` is its only equality), so the
+    // collision-avoidance check goes through it instead — `verify`
+    // returns true exactly when they match, so this loops on the same
+    // condition as the `==` it replaces.
     let mut new_token = mint_intake_token();
-    while new_token == old {
+    while new_token.verify(old.reveal().as_bytes()) {
         new_token = mint_intake_token();
     }
 
     sqlx::query!(
         r#"UPDATE organization SET intake_token = $2 WHERE id = $1"#,
         ctx.organization_id.0,
-        new_token,
+        new_token.reveal(),
     )
     .execute(&mut *tx)
     .await?;

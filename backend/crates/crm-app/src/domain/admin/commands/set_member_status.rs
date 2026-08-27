@@ -8,7 +8,7 @@ use crate::domain::admin::commands::AdminCommandError;
 use crate::domain::admin::queries::{self, MemberView};
 use crate::domain::admin::{AdminActor, MembershipStatus, Role};
 use crate::domain::envelope::{Actor, FactEnvelope};
-use crate::domain::facts::{self, MembershipChangedFact};
+use crate::domain::facts::{self, MembershipChangeReason, MembershipChangedFact};
 use crate::ids::{CorrelationId, OrganizationId, UserId};
 use crate::realtime::Publisher;
 
@@ -88,9 +88,9 @@ async fn set_member_status_attempt(
 
         let reason = if cmd.status == MembershipStatus::Inactive {
             deactivated = true;
-            "deactivate"
+            MembershipChangeReason::Deactivate
         } else {
-            "reactivate"
+            MembershipChangeReason::Reactivate
         };
 
         if deactivated {
@@ -111,10 +111,10 @@ async fn set_member_status_attempt(
             &envelope,
             MembershipChangedFact {
                 user_id: cmd.user_id,
-                from_role: Some(current.role.as_str()),
-                to_role: current.role.as_str(),
-                from_status: Some(current.status.as_str()),
-                to_status: cmd.status.as_str(),
+                from_role: Some(current.role),
+                to_role: current.role,
+                from_status: Some(current.status),
+                to_status: cmd.status,
                 reason,
             },
         )

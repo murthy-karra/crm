@@ -47,7 +47,13 @@ pub enum WorkbenchError {
 
 impl From<sqlx::Error> for WorkbenchError {
     fn from(err: sqlx::Error) -> Self {
-        WorkbenchError::Database(err)
+        match err {
+            // Same S1 carry-over as `CommandError`/`CallError`: a
+            // row-boundary decode failure is corrupt data, not transient
+            // unavailability.
+            sqlx::Error::Decode(_) => WorkbenchError::Corrupt,
+            other => WorkbenchError::Database(other),
+        }
     }
 }
 
@@ -451,5 +457,14 @@ mod tests {
         let debug = format!("{text:?}");
         assert!(!debug.contains("secret"));
         assert!(debug.contains("truncated: true"));
+    }
+
+    /// Hardening chunk S2 (S1 carry-over): `sqlx::Error::Decode` maps to
+    /// `Corrupt` (500-class), not `Database` (503) — pins the
+    /// `From<sqlx::Error>` impl above.
+    #[test]
+    fn decode_error_maps_to_corrupt() {
+        let err = sqlx::Error::Decode("test decode failure".into());
+        assert!(matches!(WorkbenchError::from(err), WorkbenchError::Corrupt));
     }
 }

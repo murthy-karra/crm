@@ -13,7 +13,8 @@ use crate::domain::admin::queries as admin_queries;
 use crate::domain::commands::CommandError;
 use crate::domain::contact;
 use crate::domain::facts::{
-    self, AssignmentChangedFact, InquiryReceivedFact, RoutingDecisionFact, StageChangedFact,
+    self, AssignmentChangedFact, AssignmentReason, InquiryReceivedFact, RoutingDecisionFact,
+    StageChangeReason, StageChangedFact,
 };
 use crate::domain::inquiry::parse::{self, ParsedLead, Source, UnresolvedReason};
 use crate::domain::inquiry::queries as inquiry_queries;
@@ -453,7 +454,7 @@ where
                 (
                     person.id,
                     false,
-                    Some(m.matched_by.as_str()),
+                    Some(m.matched_by),
                     person.assigned_user_id,
                 )
             }
@@ -547,7 +548,7 @@ where
             RoutingDecisionFact {
                 inquiry_id: new_inquiry_id,
                 person_id,
-                strategy: routing_strategy.as_str(),
+                strategy: routing_strategy,
                 assignee_user_id: routing_assignee,
             },
         )
@@ -567,7 +568,7 @@ where
                     person_id,
                     from_user_id: None,
                     to_user_id: routing_assignee,
-                    reason: "intake",
+                    reason: AssignmentReason::Intake,
                 },
             )
             .await?;
@@ -586,7 +587,7 @@ where
                     person_id,
                     from_stage_id: None,
                     to_stage_id: first_stage_id,
-                    reason: "intake",
+                    reason: StageChangeReason::Intake,
                 },
             )
             .await?;

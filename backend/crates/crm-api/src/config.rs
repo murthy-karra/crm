@@ -1694,7 +1694,7 @@ mod tests {
     /// the final address form end-to-end through Config.
     #[test]
     fn d039_local_part_env_values_render_the_final_address_form() {
-        use crm_app::domain::intake::IntakeAddress;
+        use crm_app::domain::intake::{IntakeAddress, IntakeToken};
         let config = Config::from_source(source(&[
             ("CRM_INTAKE_MAIL_DOMAIN", "elysianfeld.com"),
             ("CRM_INTAKE_ADDRESS_SCHEME", "local_part"),
@@ -1702,7 +1702,7 @@ mod tests {
         .unwrap();
         let address = IntakeAddress {
             slug: "acme-realty".into(),
-            token: "k7f3q2wd".into(),
+            token: IntakeToken::new("k7f3q2wd".to_string()),
         }
         .render(&config.intake_mail);
         assert_eq!(address, "acme-realty-k7f3q2wd@leads.elysianfeld.com");

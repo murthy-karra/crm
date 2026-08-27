@@ -48,7 +48,15 @@ pub enum AdminCommandError {
 
 impl From<sqlx::Error> for AdminCommandError {
     fn from(err: sqlx::Error) -> Self {
-        AdminCommandError::Database(err)
+        match err {
+            // A row-boundary decode failure (decode_role/decode_status
+            // manufacture these) is corrupt data, not an unavailable
+            // database — 500, never a retryable-looking 503 (hardening
+            // chunk S2, completing the Decode -> Corrupt mapping across
+            // all three error types; CallError precedent).
+            sqlx::Error::Decode(_) => AdminCommandError::Corrupt,
+            other => AdminCommandError::Database(other),
+        }
     }
 }
 
@@ -83,3 +91,19 @@ impl std::fmt::Display for AdminCommandError {
 }
 
 impl std::error::Error for AdminCommandError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Hardening chunk S2: a decode failure is corrupt data (500), never
+    /// a retryable-looking database error (503) — same pin as
+    /// CommandError's and WorkbenchError's.
+    #[test]
+    fn decode_error_maps_to_corrupt() {
+        let err: AdminCommandError = sqlx::Error::Decode("bad enum value".into()).into();
+        assert!(matches!(err, AdminCommandError::Corrupt));
+        let err: AdminCommandError = sqlx::Error::RowNotFound.into();
+        assert!(matches!(err, AdminCommandError::Database(_)));
+    }
+}

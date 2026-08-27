@@ -56,7 +56,16 @@ pub enum CommandError {
 
 impl From<sqlx::Error> for CommandError {
     fn from(err: sqlx::Error) -> Self {
-        CommandError::Database(err)
+        match err {
+            // A row-boundary decode failure is a data-integrity problem,
+            // not transient unavailability — map it to the same 500-class
+            // `Corrupt` a corrupt enum-like column value already produces
+            // (`RoutingStrategy::from_str`), not the generic `Database`
+            // (503) (hardening chunk S2 carry-over from S1; mirrors
+            // `CallError`'s existing precedent below).
+            sqlx::Error::Decode(_) => CommandError::Corrupt,
+            other => CommandError::Database(other),
+        }
     }
 }
 
@@ -178,3 +187,17 @@ impl std::fmt::Display for CallError {
 }
 
 impl std::error::Error for CallError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Hardening chunk S2 (S1 carry-over): `sqlx::Error::Decode` maps to
+    /// `Corrupt` (500-class `internal_error`), not `Database` (503) —
+    /// pins the `From<sqlx::Error>` impl above.
+    #[test]
+    fn decode_error_maps_to_corrupt() {
+        let err = sqlx::Error::Decode("test decode failure".into());
+        assert!(matches!(CommandError::from(err), CommandError::Corrupt));
+    }
+}

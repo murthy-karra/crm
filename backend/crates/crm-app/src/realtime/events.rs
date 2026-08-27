@@ -165,11 +165,37 @@ impl RealtimeEvent {
 
 /// A channel plus the event to publish on it — what
 /// `Publisher::publish_after_commit`/`publish_now` take
-/// (docs/specs/SLICE_003.md §4 module layout).
+/// (docs/specs/SLICE_003.md §4 module layout). `channel` is private
+/// (hardening chunk S2): [`Publication::for_event`] is the only
+/// constructor, so a cross-org publish (a channel for one Organization
+/// carrying an event for another) is unrepresentable outside this
+/// module — the derived channel and the event's own `organization_id`
+/// can never diverge. `event` stays `pub`; only the channel/event
+/// PAIRING needed locking down.
+///
+/// ```compile_fail,E0451
+/// # use chrono::Utc;
+/// # use crm_app::ids::{CorrelationId, OrganizationId, RawPayloadId};
+/// # use crm_app::realtime::{Publication, RealtimeEvent};
+/// # use uuid::Uuid;
+/// let event = RealtimeEvent::intake_unresolved_changed(
+///     OrganizationId::new(Uuid::new_v4()),
+///     Utc::now(),
+///     CorrelationId::new(Uuid::new_v4()),
+///     RawPayloadId::new(Uuid::new_v4()),
+/// );
+/// // does not compile: `channel` is a private field outside this module —
+/// // a channel for a DIFFERENT Organization than `event`'s own can no
+/// // longer be paired with it from outside `realtime::events`.
+/// let publication = Publication {
+///     channel: "org:some-other-organization".to_string(),
+///     event,
+/// };
+/// ```
 #[derive(Debug, Clone)]
 pub struct Publication {
-    pub channel: String,
-    pub event: RealtimeEvent,
+    channel: String,
+    event: RealtimeEvent,
 }
 
 impl Publication {
@@ -179,6 +205,18 @@ impl Publication {
     pub fn for_event(event: RealtimeEvent) -> Self {
         let channel = channel_for(event.organization_id());
         Publication { channel, event }
+    }
+
+    /// The realtime channel this publication targets. Read-only outside
+    /// this module (see the struct's own doc) — `publisher.rs` reads
+    /// this to actually publish; it cannot construct a `Publication`
+    /// with a mismatched channel.
+    pub fn event(&self) -> &RealtimeEvent {
+        &self.event
+    }
+
+    pub fn channel(&self) -> &str {
+        &self.channel
     }
 }
 

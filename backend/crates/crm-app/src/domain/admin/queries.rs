@@ -10,6 +10,7 @@ use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
 use super::{MembershipStatus, Role};
+use crate::domain::intake::IntakeToken;
 use crate::ids::{InvitationId, OrganizationId, UserId};
 
 fn decode_role(s: &str) -> Result<Role, sqlx::Error> {
@@ -778,14 +779,14 @@ pub async fn insert_organization(
     conn: &mut PgConnection,
     name: &str,
     intake_slug: &str,
-    intake_token: &str,
+    intake_token: &IntakeToken,
 ) -> Result<OrganizationId, sqlx::Error> {
     let row = sqlx::query!(
         r#"INSERT INTO organization (name, intake_slug, intake_token)
            VALUES ($1, $2, $3) RETURNING id"#,
         name,
         intake_slug,
-        intake_token,
+        intake_token.reveal(),
     )
     .fetch_one(conn)
     .await?;
@@ -811,14 +812,14 @@ pub async fn taken_intake_slugs(
 pub async fn organization_intake_address(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
-) -> Result<Option<(String, String)>, sqlx::Error> {
+) -> Result<Option<(String, IntakeToken)>, sqlx::Error> {
     let row = sqlx::query!(
         r#"SELECT intake_slug, intake_token FROM organization WHERE id = $1"#,
         organization_id.0,
     )
     .fetch_optional(conn)
     .await?;
-    Ok(row.map(|r| (r.intake_slug, r.intake_token)))
+    Ok(row.map(|r| (r.intake_slug, IntakeToken::new(r.intake_token))))
 }
 
 // --- Slice 007c: unattended intake routing (docs/specs/SLICE_007c.md §3, §4) ---

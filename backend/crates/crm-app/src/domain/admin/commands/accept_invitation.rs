@@ -10,7 +10,9 @@ use crate::domain::admin::commands::AdminCommandError;
 use crate::domain::admin::queries::{self, InvitationStatus};
 use crate::domain::admin::{validation, MembershipStatus, Role};
 use crate::domain::envelope::{CommandContext, FactEnvelope, Origin};
-use crate::domain::facts::{self, InvitationResolvedFact, MembershipChangedFact};
+use crate::domain::facts::{
+    self, InvitationResolvedFact, MembershipChangeReason, MembershipChangedFact,
+};
 use crate::ids::{CorrelationId, OrganizationId, UserId};
 
 pub struct AcceptInvitation {
@@ -169,10 +171,10 @@ async fn accept_invitation_attempt(
         MembershipChangedFact {
             user_id,
             from_role: None,
-            to_role: invitation.role.as_str(),
+            to_role: invitation.role,
             from_status: None,
-            to_status: MembershipStatus::Active.as_str(),
-            reason: "invitation",
+            to_status: MembershipStatus::Active,
+            reason: MembershipChangeReason::Invitation,
         },
     )
     .await?;

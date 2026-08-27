@@ -23,7 +23,7 @@ use crate::domain::admin::queries as admin_queries;
 use crate::domain::admin::{AdminActor, MembershipStatus, Role};
 use crate::domain::envelope::CommandContext;
 use crate::domain::envelope::Origin;
-use crate::domain::intake::IntakeAddress;
+use crate::domain::intake::{IntakeAddress, IntakeRoutingMode};
 use crate::error::ApiError;
 use crate::ids::UserId;
 use crate::state::AppState;
@@ -320,30 +320,46 @@ async fn intake_address(
     })))
 }
 
-/// `GET /api/organization/intake-settings` (docs/specs/SLICE_007c.md §5):
-/// the Organization's default assignee for unattended intake, whatever its
-/// current membership status — the deactivated-warning state is computed
-/// client-side from `GET /api/organization/members`, not duplicated here.
-/// Org admins only.
+/// `GET /api/organization/intake-settings` (docs/specs/SLICE_008.md §5):
+/// the Organization's routing mode and default assignee for unattended
+/// intake, whatever the assignee's current membership status — the
+/// deactivated-warning state is computed client-side from `GET
+/// /api/organization/members`, not duplicated here. Org admins only.
 async fn intake_settings(
     State(state): State<AppState>,
     ctx: OrgAdminContext,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
     let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
-    let value =
+    let mode = admin_queries::intake_routing_mode(&mut conn, ctx.auth.active_organization_id)
+        .await
+        .map_err(|_| ApiError::Unavailable)?;
+    let assignee =
         admin_queries::intake_default_assignee_user_id(&mut conn, ctx.auth.active_organization_id)
             .await
             .map_err(|_| ApiError::Unavailable)?;
-    Ok(Json(json!({ "intake_default_assignee_user_id": value })))
+    Ok(Json(json!({
+        "intake_routing_mode": mode.as_str(),
+        "intake_default_assignee_user_id": assignee,
+    })))
 }
 
-/// `PUT /api/organization/intake-settings` (docs/specs/SLICE_007c.md §5):
-/// 422 `invalid_assignee` — byte-identical for a nonexistent user, another
-/// Organization's member, and an inactive member (no existence leak) — is
-/// checked before the write. Span records the Organization and whether the
-/// value was set or cleared (§8) — the assignee UUID is an id, not
-/// content, but is not itself recorded here.
+/// `PUT /api/organization/intake-settings` (docs/specs/SLICE_008.md §5):
+/// full-state replace, BOTH keys required — supersedes SLICE_007c §5's
+/// single-key body (a pre-008 body, missing `intake_routing_mode`, is 400
+/// `malformed_request` here, same as any other absent required key;
+/// declared breaking supersession, AGENTS.md §11 / SLICE_007c §5 pointer
+/// amendment). An unrecognized mode string is 400 `malformed_request`.
+/// Validation on the assignee, depending on the (now-parsed) mode
+/// (reviewer S1): `default_assignee` requires a non-null, active member
+/// (422 `invalid_assignee` otherwise — including `null`, since a
+/// default-mode setting can never itself clear the assignee); `round_robin`
+/// / `unassigned` accept `null`, an active member, OR the CURRENTLY-STORED
+/// value verbatim (a stale echo of a since-deactivated default — so an org
+/// whose default deactivated can still flip modes without first clearing
+/// it) — anything else is 422. Span records the Organization, the parsed
+/// mode, and whether the assignee was set or cleared (§8) — the assignee
+/// UUID is an id, not content, but is not itself recorded here.
 ///
 /// The body is parsed as a raw `serde_json::Value`, not a struct with an
 /// `Option<Uuid>` field: serde's derive implicitly defaults *any*
@@ -355,6 +371,7 @@ async fn intake_settings(
     skip_all,
     fields(
         organization_id = %ctx.auth.active_organization_id,
+        routing_mode = tracing::field::Empty,
         assignee_action = tracing::field::Empty,
     )
 )]
@@ -364,15 +381,23 @@ async fn update_intake_settings(
     body: Result<Json<serde_json::Value>, JsonRejection>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let Json(body) = body.map_err(|_| ApiError::MalformedRequest)?;
-    let raw = body
-        .as_object()
-        .and_then(|obj| obj.get("intake_default_assignee_user_id"))
+    let obj = body.as_object().ok_or(ApiError::MalformedRequest)?;
+
+    let mode_raw = obj
+        .get("intake_routing_mode")
+        .and_then(|v| v.as_str())
         .ok_or(ApiError::MalformedRequest)?;
-    let assignee_user_id: Option<UserId> = match raw {
+    let mode = IntakeRoutingMode::parse(mode_raw).ok_or(ApiError::MalformedRequest)?;
+    tracing::Span::current().record("routing_mode", mode.as_str());
+
+    let assignee_raw = obj
+        .get("intake_default_assignee_user_id")
+        .ok_or(ApiError::MalformedRequest)?;
+    let assignee_user_id: Option<UserId> = match assignee_raw {
         serde_json::Value::Null => None,
-        other => {
-            Some(serde_json::from_value(other.clone()).map_err(|_| ApiError::MalformedRequest)?)
-        }
+        other => Some(UserId::new(
+            serde_json::from_value(other.clone()).map_err(|_| ApiError::MalformedRequest)?,
+        )),
     };
     tracing::Span::current().record(
         "assignee_action",
@@ -382,28 +407,52 @@ async fn update_intake_settings(
             "cleared"
         },
     );
+
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
     let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
+    let organization_id = ctx.auth.active_organization_id;
 
-    if let Some(user_id) = assignee_user_id {
-        let is_active =
-            admin_queries::is_active_member(&mut conn, ctx.auth.active_organization_id, user_id)
+    let valid = match mode {
+        IntakeRoutingMode::DefaultAssignee => match assignee_user_id {
+            Some(user_id) => admin_queries::is_active_member(&mut conn, organization_id, user_id)
                 .await
-                .map_err(|_| ApiError::Unavailable)?;
-        if !is_active {
-            return Err(ApiError::InvalidAssignee);
-        }
+                .map_err(|_| ApiError::Unavailable)?,
+            None => false,
+        },
+        IntakeRoutingMode::RoundRobin | IntakeRoutingMode::Unassigned => match assignee_user_id {
+            None => true,
+            Some(user_id) => {
+                let is_active =
+                    admin_queries::is_active_member(&mut conn, organization_id, user_id)
+                        .await
+                        .map_err(|_| ApiError::Unavailable)?;
+                if is_active {
+                    true
+                } else {
+                    let current =
+                        admin_queries::intake_default_assignee_user_id(&mut conn, organization_id)
+                            .await
+                            .map_err(|_| ApiError::Unavailable)?;
+                    current == Some(user_id)
+                }
+            }
+        },
+    };
+    if !valid {
+        return Err(ApiError::InvalidAssignee);
     }
 
-    admin_queries::update_intake_default_assignee(
+    admin_queries::update_intake_routing_settings(
         &mut conn,
-        ctx.auth.active_organization_id,
+        organization_id,
+        mode,
         assignee_user_id,
     )
     .await
     .map_err(|_| ApiError::Unavailable)?;
 
-    Ok(Json(
-        json!({ "intake_default_assignee_user_id": assignee_user_id }),
-    ))
+    Ok(Json(json!({
+        "intake_routing_mode": mode.as_str(),
+        "intake_default_assignee_user_id": assignee_user_id,
+    })))
 }

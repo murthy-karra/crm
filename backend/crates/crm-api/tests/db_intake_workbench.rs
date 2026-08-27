@@ -140,9 +140,14 @@ async fn org_fixture(migrator_pool: &PgPool, name: &str) -> Fixture {
     .await;
     common::add_membership(migrator_pool, org_id, bob).await;
     common::add_membership(migrator_pool, org_id, carol).await;
-    admin_queries::update_intake_default_assignee(
+    // Slice 008 (D-041): mode dispatch replaced the old implicit
+    // "assignee configured => organization_default" behavior — set
+    // `default_assignee` mode alongside the assignee so this fixture's
+    // downstream `organization_default` assertions stay byte-identical.
+    admin_queries::update_intake_routing_settings(
         &mut migrator_pool.acquire().await.unwrap(),
         OrganizationId::new(org_id),
+        crm_api::domain::intake::IntakeRoutingMode::DefaultAssignee,
         Some(UserId::new(bob)),
     )
     .await
@@ -1500,4 +1505,77 @@ async fn retry_resolves_a_pre_existing_forwarded_row_through_the_unwrapper(migra
             .await
             .unwrap();
     assert_eq!(first_name.as_deref(), Some("Jordan"), "the INNER lead");
+}
+
+// ---------------------------------------------------------------------
+// Slice 008 adversarial M2 (retry half): mode dispatch applies to the
+// workbench-retry path too — the System-actor-on-behalf retry in a
+// round_robin org routes via rotation and CONSUMES a turn.
+
+#[sqlx::test]
+#[ignore]
+async fn retry_in_a_round_robin_org_routes_via_rotation_and_consumes_a_turn(migrator_pool: PgPool) {
+    let f = org_fixture(&migrator_pool, "Acme Realty").await;
+    admin_queries::update_intake_routing_settings(
+        &mut migrator_pool.acquire().await.unwrap(),
+        OrganizationId::new(f.org_id),
+        crm_api::domain::intake::IntakeRoutingMode::RoundRobin,
+        Some(UserId::new(f.bob)),
+    )
+    .await
+    .unwrap();
+    let publisher = Publisher::recording();
+    let router = build_router(&migrator_pool, publisher.clone()).await;
+    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let key = test_config().raw_payload_key;
+
+    // A stuck pending row, as in the rescue test.
+    let stuck_id = Uuid::new_v4();
+    let content_hmac = crypto::content_hmac(&key, CYPRESS_EML);
+    let sealed = crypto::seal(
+        &key,
+        OrganizationId::new(f.org_id),
+        RawPayloadId::new(stuck_id),
+        CYPRESS_EML,
+    )
+    .unwrap();
+    sqlx::query(
+        r#"INSERT INTO raw_payload
+            (id, organization_id, source, payload_format, origin, received_at,
+             nonce, ciphertext, content_hmac, byte_len, resolution)
+           VALUES ($1, $2, 'email', 'rfc822_v1', 'webhook', now(), $3, $4, $5, $6, 'pending')"#,
+    )
+    .bind(stuck_id)
+    .bind(f.org_id)
+    .bind(sealed.nonce.to_vec())
+    .bind(sealed.ciphertext)
+    .bind(content_hmac.to_vec())
+    .bind(CYPRESS_EML.len() as i32)
+    .execute(&app_pool)
+    .await
+    .unwrap();
+
+    let slug: String = "Acme Realty".to_lowercase().replace(' ', "");
+    let alice_cookie = common::login_cookie(&router, &format!("alice@{slug}.test"), PW).await;
+    let resp = post_empty_with_cookie(
+        &router,
+        &format!("/api/intake/unresolved/{stuck_id}/retry"),
+        &alice_cookie,
+    )
+    .await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = common::body_json(resp).await;
+    assert_eq!(body["status"], "resolved");
+    assert_eq!(body["routing_strategy"], "round_robin");
+    // Rotation starts at the first member in join order (alice — the
+    // fixture adds her first) and the turn is consumed: pointer set.
+    let assigned = body["assigned_user_id"].as_str().unwrap().to_string();
+    let pointer: Option<Uuid> = sqlx::query_scalar(
+        "SELECT last_assigned_user_id FROM intake_rotation WHERE organization_id = $1",
+    )
+    .bind(f.org_id)
+    .fetch_optional(&migrator_pool)
+    .await
+    .unwrap();
+    assert_eq!(pointer.map(|u| u.to_string()), Some(assigned));
 }

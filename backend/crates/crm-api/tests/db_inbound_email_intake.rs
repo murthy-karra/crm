@@ -110,9 +110,14 @@ async fn org_with_default(migrator_pool: &PgPool, name: &str) -> (Uuid, Uuid, Uu
         common::create_user(migrator_pool, &format!("alice@{slug}.test"), "Alice", PW).await;
     common::add_membership(migrator_pool, org_id, bob).await;
     common::add_membership(migrator_pool, org_id, alice).await;
-    admin_queries::update_intake_default_assignee(
+    // Slice 008 (D-041): mode dispatch replaced the old implicit
+    // "assignee configured => organization_default" behavior — set
+    // `default_assignee` mode alongside the assignee so this fixture's
+    // downstream `organization_default` assertions stay byte-identical.
+    admin_queries::update_intake_routing_settings(
         &mut migrator_pool.acquire().await.unwrap(),
         OrganizationId::new(org_id),
+        crm_api::domain::intake::IntakeRoutingMode::DefaultAssignee,
         Some(UserId::new(bob)),
     )
     .await
@@ -931,9 +936,16 @@ async fn nul_bytes_in_an_in_format_email_complete_without_error_or_poison_row(
 #[ignore]
 async fn email_intake_without_a_default_creates_an_unassigned_person(migrator_pool: PgPool) {
     let (org_id, _bob, _alice) = org_with_default(&migrator_pool, "Acme Realty").await;
-    admin_queries::update_intake_default_assignee(
+    // Slice 008 (D-041): clear back to `unassigned` mode too, not just the
+    // assignee column — otherwise this org would sit in `default_assignee`
+    // mode with no assignee, which still routes `unassigned` (the D-035
+    // stale/NULL fallback, unchanged), but explicitly clearing both is the
+    // faithful equivalent of the old single-column clear this test relies
+    // on.
+    admin_queries::update_intake_routing_settings(
         &mut migrator_pool.acquire().await.unwrap(),
         OrganizationId::new(org_id),
+        crm_api::domain::intake::IntakeRoutingMode::Unassigned,
         None,
     )
     .await
@@ -1297,4 +1309,50 @@ fn real_gmail_structure_unwraps_to_the_inner_view() {
     // level — it is part of the inner body in plain text. The HTML
     // gmail_quote structure could separate it; that is a later rung.
     assert!(body.contains("(555) 555-0100"), "trailing signature stays");
+}
+
+// ---------------------------------------------------------------------
+// Slice 008 adversarial M2 (email half): mode dispatch applies to the
+// real inbound-email path — a pinned-format mail into a round_robin org
+// routes via rotation, not the default assignee.
+
+#[sqlx::test]
+#[ignore]
+async fn inbound_email_in_a_round_robin_org_routes_via_rotation(migrator_pool: PgPool) {
+    let (org_id, bob, _alice) = org_with_default(&migrator_pool, "Acme Realty").await;
+    admin_queries::update_intake_routing_settings(
+        &mut migrator_pool.acquire().await.unwrap(),
+        OrganizationId::new(org_id),
+        crm_api::domain::intake::IntakeRoutingMode::RoundRobin,
+        Some(UserId::new(bob)),
+    )
+    .await
+    .unwrap();
+    let (slug, token) = intake_row(&migrator_pool, org_id).await;
+    let router = build_router(&migrator_pool, Publisher::recording()).await;
+
+    let resp = post_inbound_email(&router, &recipient(&slug, &token), CYPRESS_EML).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    // First rotation starts at the first member in join order (bob — the
+    // helper adds him before alice), recorded as a round_robin decision.
+    let (assigned, strategy): (Option<Uuid>, String) = sqlx::query_as(
+        "SELECT p.assigned_user_id, rd.strategy
+         FROM person p JOIN routing_decision rd ON rd.person_id = p.id
+         WHERE p.organization_id = $1",
+    )
+    .bind(org_id)
+    .fetch_one(&migrator_pool)
+    .await
+    .expect("one person with a routing decision");
+    assert_eq!(strategy, "round_robin");
+    assert_eq!(assigned, Some(bob));
+    let pointer: Option<Uuid> = sqlx::query_scalar(
+        "SELECT last_assigned_user_id FROM intake_rotation WHERE organization_id = $1",
+    )
+    .bind(org_id)
+    .fetch_optional(&migrator_pool)
+    .await
+    .unwrap();
+    assert_eq!(pointer, Some(bob));
 }

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE organization\n           SET intake_routing_mode = $2, intake_default_assignee_user_id = $3, updated_at = now()\n           WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "44536a2f804247d787dc3d06f69d7ae5c65b519181534f25fc0a671e78404f7f"
+}

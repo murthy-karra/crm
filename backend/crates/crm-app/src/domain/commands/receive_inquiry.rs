@@ -18,7 +18,8 @@ use crate::domain::facts::{
 };
 use crate::domain::inquiry::parse::{self, ParsedLead, Source, UnresolvedReason};
 use crate::domain::inquiry::queries as inquiry_queries;
-use crate::domain::intake::IntakeActor;
+use crate::domain::intake::rotation;
+use crate::domain::intake::{IntakeActor, IntakeRoutingMode};
 use crate::domain::person::queries as person_queries;
 use crate::domain::raw_payload::{crypto, store, PayloadFormat, Resolution};
 use crate::domain::stage;
@@ -69,7 +70,16 @@ pub enum RoutingStrategy {
     /// System-actor intake, no default set or the configured default is
     /// not currently an active member — `assignee_user_id` NULL
     /// (docs/specs/SLICE_007c.md §4). Same declared additive extension.
+    /// Also produced by Slice 008's `RoundRobin` mode on an empty active-
+    /// member pool (docs/specs/SLICE_008.md §4).
     Unassigned,
+    /// System-actor intake, `intake_routing_mode = 'round_robin'`, and at
+    /// least one active member (docs/specs/SLICE_008.md §4; D-041).
+    /// Declared additive extension of the `POST /api/inquiries`
+    /// `routing_strategy` vocabulary, same mechanism as `OrganizationDefault`
+    /// — reachable there only via a `duplicate: true` replay of a
+    /// system-routed row.
+    RoundRobin,
 }
 
 impl RoutingStrategy {
@@ -80,6 +90,7 @@ impl RoutingStrategy {
             RoutingStrategy::KeptExisting => "kept_existing",
             RoutingStrategy::OrganizationDefault => "organization_default",
             RoutingStrategy::Unassigned => "unassigned",
+            RoutingStrategy::RoundRobin => "round_robin",
         }
     }
 
@@ -87,7 +98,10 @@ impl RoutingStrategy {
     /// rather than panicking on an unrecognized value: `strategy` is
     /// `CHECK`-constrained at the database, so this should be unreachable
     /// in practice, but a read path must never crash the process on
-    /// unexpected data.
+    /// unexpected data. Without the `round_robin` arm (docs/specs/
+    /// SLICE_008.md §4), a duplicate replay of a round-robin-routed row
+    /// would fail closed as `Corrupt` instead of decoding — the same
+    /// mechanism SLICE_007c §5 handled for its two additions.
     fn from_str(s: &str) -> Result<Self, CommandError> {
         match s {
             "explicit" => Ok(RoutingStrategy::Explicit),
@@ -95,6 +109,7 @@ impl RoutingStrategy {
             "kept_existing" => Ok(RoutingStrategy::KeptExisting),
             "organization_default" => Ok(RoutingStrategy::OrganizationDefault),
             "unassigned" => Ok(RoutingStrategy::Unassigned),
+            "round_robin" => Ok(RoutingStrategy::RoundRobin),
             _ => Err(CommandError::Corrupt),
         }
     }
@@ -129,15 +144,22 @@ struct RoutingAssignees {
 }
 
 /// `assignees` -> `(strategy, assignee)` (docs/specs/SLICE_002.md §3;
-/// routing matrix extended by docs/specs/SLICE_007c.md §4). A Person that
-/// already has an assignee always keeps it (`kept_existing`), regardless of
-/// what the request asked for; otherwise an explicit request wins;
-/// otherwise a User actor's own id (`actor_default`); otherwise (a System
-/// actor) the Organization's configured default, re-checked for active
-/// membership inside this same Phase-B transaction (`organization_default`
-/// if set and active, `unassigned` — NULL assignee — otherwise). Applies
-/// uniformly to a brand-new Person (`current_assignee` always `None`) and a
-/// matched one.
+/// routing matrix extended by docs/specs/SLICE_007c.md §4 and, at step 4
+/// only, by docs/specs/SLICE_008.md §4 / D-041). A Person that already has
+/// an assignee always keeps it (`kept_existing`), regardless of what the
+/// request asked for; otherwise an explicit request wins; otherwise a User
+/// actor's own id (`actor_default`); otherwise (a System actor) dispatch on
+/// the Organization's configured `intake_routing_mode`: `DefaultAssignee`
+/// re-checks the configured default for active membership inside this same
+/// Phase-B transaction (`organization_default` if set and active,
+/// `unassigned` otherwise — unchanged from 007c); `RoundRobin` calls
+/// `rotation::take_next`, which itself re-derives the active-member pool
+/// inside this transaction (`round_robin` with the returned member, or
+/// `unassigned` on an empty pool); `Unassigned` is always `unassigned`.
+/// Applies uniformly to a brand-new Person (`current_assignee` always
+/// `None`) and a matched one. Steps 1-3 above are byte-identical to 007c —
+/// only step 4 (reached only for a System actor with no explicit/kept
+/// assignee) dispatches by mode.
 async fn determine_routing(
     tx: &mut PgConnection,
     actor: &IntakeActor,
@@ -152,11 +174,23 @@ async fn determine_routing(
     if let Some(actor_user_id) = actor.user_actor_id() {
         return Ok((RoutingStrategy::ActorDefault, Some(actor_user_id)));
     }
-    let default =
-        admin_queries::active_intake_default_assignee(tx, actor.organization_id()).await?;
-    Ok(match default {
-        Some(user_id) => (RoutingStrategy::OrganizationDefault, Some(user_id)),
-        None => (RoutingStrategy::Unassigned, None),
+
+    let organization_id = actor.organization_id();
+    let mode = admin_queries::intake_routing_mode(tx, organization_id).await?;
+    Ok(match mode {
+        IntakeRoutingMode::DefaultAssignee => {
+            let default =
+                admin_queries::active_intake_default_assignee(tx, organization_id).await?;
+            match default {
+                Some(user_id) => (RoutingStrategy::OrganizationDefault, Some(user_id)),
+                None => (RoutingStrategy::Unassigned, None),
+            }
+        }
+        IntakeRoutingMode::RoundRobin => match rotation::take_next(tx, organization_id).await? {
+            Some(user_id) => (RoutingStrategy::RoundRobin, Some(user_id)),
+            None => (RoutingStrategy::Unassigned, None),
+        },
+        IntakeRoutingMode::Unassigned => (RoutingStrategy::Unassigned, None),
     })
 }
 
@@ -698,9 +732,10 @@ mod tests {
     use super::*;
 
     /// Round-trips every strategy, including the two Slice 007c additions
-    /// — the declared additive extension to `RoutingStrategy::from_str`
-    /// (docs/specs/SLICE_007c.md §5) that lets a `duplicate: true` replay
-    /// of a system-routed row decode without a 500.
+    /// and Slice 008's `RoundRobin` — the declared additive extension to
+    /// `RoutingStrategy::from_str` (docs/specs/SLICE_007c.md §5,
+    /// docs/specs/SLICE_008.md §4) that lets a `duplicate: true` replay of
+    /// a system-routed row decode without a 500.
     #[test]
     fn routing_strategy_round_trips_every_variant() {
         for strategy in [
@@ -709,6 +744,7 @@ mod tests {
             RoutingStrategy::KeptExisting,
             RoutingStrategy::OrganizationDefault,
             RoutingStrategy::Unassigned,
+            RoutingStrategy::RoundRobin,
         ] {
             assert_eq!(
                 RoutingStrategy::from_str(strategy.as_str()).unwrap(),

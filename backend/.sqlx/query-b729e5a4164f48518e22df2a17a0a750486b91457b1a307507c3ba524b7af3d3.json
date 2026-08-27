@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO intake_rotation (organization_id, last_assigned_user_id, updated_at)\n               VALUES ($1, $2, now())\n               ON CONFLICT (organization_id) DO UPDATE\n                 SET last_assigned_user_id = excluded.last_assigned_user_id,\n                     updated_at = excluded.updated_at",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b729e5a4164f48518e22df2a17a0a750486b91457b1a307507c3ba524b7af3d3"
+}

@@ -1,7 +1,10 @@
 // SLICE_007a §11: the Intake settings page renders the server-rendered
 // address (never composes it client-side), copies it, and surfaces errors.
-// SLICE_007c §10: below that, the "Unattended lead routing" card — dropdown
-// lists active members only, the unset and deactivated-default warnings.
+// SLICE_008 §7 (supersedes SLICE_007c §10): below that, the "Unattended
+// lead routing" card — a three-mode picker (default assignee / round-robin
+// / unassigned); the assignee dropdown (active members only, no
+// "Unassigned" entry — D-041) renders only in `default_assignee` mode; the
+// deactivated-default warning and the round-robin description are pinned.
 import { flushPromises, mount } from '@vue/test-utils'
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import PrimeVue from 'primevue/config'
@@ -72,7 +75,9 @@ interface StubOptions {
 function stub(options: StubOptions = {}) {
   const address = options.address ?? (() => Promise.resolve({ address: ADDRESS, scheme: 'subdomain' as const }))
   const membersFn = options.members ?? (() => Promise.resolve(members()))
-  const settings = options.settings ?? (() => Promise.resolve({ intake_default_assignee_user_id: null }))
+  const settings =
+    options.settings ??
+    (() => Promise.resolve({ intake_routing_mode: 'unassigned', intake_default_assignee_user_id: null }))
   apiFetchMock.mockImplementation((path: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET'
     if (path === '/me') return Promise.resolve(me())
@@ -100,6 +105,10 @@ async function mountView() {
   })
   await flushPromises()
   return wrapper
+}
+
+function selects(wrapper: Awaited<ReturnType<typeof mountView>>) {
+  return wrapper.findAllComponents(Select)
 }
 
 beforeEach(() => {
@@ -133,92 +142,201 @@ describe('IntakeSettingsView', () => {
   })
 })
 
-describe('IntakeSettingsView — unattended lead routing (SLICE_007c §6)', () => {
-  it('unset: shows the unset warning and no deactivated warning', async () => {
-    stub({ settings: () => Promise.resolve({ intake_default_assignee_user_id: null }) })
+describe('IntakeSettingsView — unattended lead routing (SLICE_008 §5, D-041)', () => {
+  it('unassigned mode: shows the unassigned warning, no assignee dropdown, no round-robin description', async () => {
+    stub({
+      settings: () =>
+        Promise.resolve({ intake_routing_mode: 'unassigned', intake_default_assignee_user_id: null }),
+    })
     const wrapper = await mountView()
 
-    expect(wrapper.find('[data-testid="intake-default-assignee-unset-warning"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="intake-unassigned-warning"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="intake-default-assignee"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="intake-round-robin-description"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="intake-default-assignee-deactivated-warning"]').exists()).toBe(false)
   })
 
-  it('set to an active member: no warning at all', async () => {
-    stub({ settings: () => Promise.resolve({ intake_default_assignee_user_id: BOB_ID }) })
+  it('round_robin mode: shows the rotation description, no assignee dropdown, no warnings', async () => {
+    stub({
+      settings: () =>
+        Promise.resolve({ intake_routing_mode: 'round_robin', intake_default_assignee_user_id: null }),
+    })
     const wrapper = await mountView()
 
-    expect(wrapper.find('[data-testid="intake-default-assignee-unset-warning"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="intake-round-robin-description"]').text()).toContain(
+      'Rotates across all active members in join order.',
+    )
+    expect(wrapper.find('[data-testid="intake-default-assignee"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="intake-unassigned-warning"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="intake-default-assignee-deactivated-warning"]').exists()).toBe(false)
   })
 
-  it('set to a since-deactivated member: shows the deactivated warning, not the unset one', async () => {
-    stub({ settings: () => Promise.resolve({ intake_default_assignee_user_id: DAVE_ID }) })
+  it('round_robin mode with a stale stored assignee: still no dropdown or deactivated warning (mode gates it)', async () => {
+    stub({
+      settings: () =>
+        Promise.resolve({ intake_routing_mode: 'round_robin', intake_default_assignee_user_id: DAVE_ID }),
+    })
     const wrapper = await mountView()
 
-    expect(wrapper.find('[data-testid="intake-default-assignee-deactivated-warning"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="intake-default-assignee-unset-warning"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="intake-default-assignee"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="intake-default-assignee-deactivated-warning"]').exists()).toBe(false)
   })
 
-  it('the dropdown lists only active members plus Unassigned', async () => {
+  it('default_assignee mode set to an active member: shows the dropdown, no warning', async () => {
+    stub({
+      settings: () =>
+        Promise.resolve({ intake_routing_mode: 'default_assignee', intake_default_assignee_user_id: BOB_ID }),
+    })
+    const wrapper = await mountView()
+
+    expect(wrapper.find('[data-testid="intake-default-assignee"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="intake-default-assignee-deactivated-warning"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="intake-unassigned-warning"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="intake-round-robin-description"]').exists()).toBe(false)
+  })
+
+  it('default_assignee mode set to a since-deactivated member: shows the deactivated warning', async () => {
+    stub({
+      settings: () =>
+        Promise.resolve({ intake_routing_mode: 'default_assignee', intake_default_assignee_user_id: DAVE_ID }),
+    })
+    const wrapper = await mountView()
+
+    expect(wrapper.get('[data-testid="intake-default-assignee-deactivated-warning"]').text().length).toBeGreaterThan(
+      0,
+    )
+    expect(wrapper.find('[data-testid="intake-unassigned-warning"]').exists()).toBe(false)
+  })
+
+  it('the mode picker lists exactly the three modes', async () => {
     stub({})
     const wrapper = await mountView()
 
-    const options = wrapper.findComponent(Select).props('options') as Array<{ display_name: string }>
-    expect(options.map((o) => o.display_name)).toEqual(['Unassigned', 'Bob'])
+    const modeSelect = selects(wrapper)[0]
+    const options = modeSelect.props('options') as Array<{ value: string; label: string }>
+    expect(options.map((o) => o.value)).toEqual(['default_assignee', 'round_robin', 'unassigned'])
   })
 
-  it('choosing a member PUTs the new value and the warning updates', async () => {
-    let stored: string | null = null
+  it('the assignee dropdown (default_assignee mode) lists active members only — no "Unassigned" entry', async () => {
     stub({
-      settings: () => Promise.resolve({ intake_default_assignee_user_id: stored }),
+      settings: () =>
+        Promise.resolve({ intake_routing_mode: 'default_assignee', intake_default_assignee_user_id: BOB_ID }),
+    })
+    const wrapper = await mountView()
+
+    const assigneeSelect = wrapper.get('[data-testid="intake-default-assignee"]')
+    const options = assigneeSelect.findComponent(Select).props('options') as Array<{ display_name: string }>
+    expect(options.map((o) => o.display_name)).toEqual(['Bob'])
+  })
+
+  it('choosing a mode PUTs both fields, echoing the current assignee', async () => {
+    let stored: IntakeSettingsResponse = {
+      intake_routing_mode: 'unassigned',
+      intake_default_assignee_user_id: null,
+    }
+    stub({
+      settings: () => Promise.resolve(stored),
       update: (body) => {
-        stored = body.intake_default_assignee_user_id
-        return Promise.resolve({ intake_default_assignee_user_id: stored })
+        stored = body
+        return Promise.resolve(stored)
       },
     })
     const wrapper = await mountView()
-    expect(wrapper.find('[data-testid="intake-default-assignee-unset-warning"]').exists()).toBe(true)
 
-    await wrapper.findComponent(Select).vm.$emit('update:model-value', BOB_ID)
+    const modeSelect = selects(wrapper)[0]
+    await modeSelect.vm.$emit('update:model-value', 'round_robin')
     await flushPromises()
 
     expect(apiFetchMock).toHaveBeenCalledWith(
       '/organization/intake-settings',
       expect.objectContaining({
         method: 'PUT',
-        body: JSON.stringify({ intake_default_assignee_user_id: BOB_ID }),
+        body: JSON.stringify({ intake_routing_mode: 'round_robin', intake_default_assignee_user_id: null }),
       }),
     )
+    expect(wrapper.get('[data-testid="intake-round-robin-description"]').text().length).toBeGreaterThan(0)
   })
 
-  it('choosing Unassigned PUTs an explicit null, not an omitted key', async () => {
-    let stored: string | null = BOB_ID
+  it('choosing an assignee (default_assignee mode) PUTs both fields, echoing the current mode', async () => {
+    let stored: IntakeSettingsResponse = {
+      intake_routing_mode: 'default_assignee',
+      intake_default_assignee_user_id: null,
+    }
     stub({
-      settings: () => Promise.resolve({ intake_default_assignee_user_id: stored }),
+      settings: () => Promise.resolve(stored),
       update: (body) => {
-        stored = body.intake_default_assignee_user_id
-        return Promise.resolve({ intake_default_assignee_user_id: stored })
+        stored = body
+        return Promise.resolve(stored)
       },
     })
     const wrapper = await mountView()
-    expect(wrapper.find('[data-testid="intake-default-assignee-unset-warning"]').exists()).toBe(false)
 
-    // The PrimeVue Select emits `null` for the "Unassigned" option (its
-    // `option-value` is `user_id`, which is `null` for that entry).
-    await wrapper.findComponent(Select).vm.$emit('update:model-value', null)
+    const assigneeSelect = wrapper.get('[data-testid="intake-default-assignee"]').findComponent(Select)
+    await assigneeSelect.vm.$emit('update:model-value', BOB_ID)
     await flushPromises()
 
-    // The backend's contract (SLICE_007c §5) treats an absent key as 400
-    // and only an explicit `null` as a clear — the PUT body must carry
-    // the key, not omit it.
-    const call = apiFetchMock.mock.calls.find(
-      ([path, init]) => path === '/organization/intake-settings' && init?.method === 'PUT',
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/organization/intake-settings',
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({ intake_routing_mode: 'default_assignee', intake_default_assignee_user_id: BOB_ID }),
+      }),
     )
-    expect(call).toBeDefined()
-    const body = JSON.parse((call?.[1]?.body as string) ?? '{}')
-    expect(Object.prototype.hasOwnProperty.call(body, 'intake_default_assignee_user_id')).toBe(true)
-    expect(body.intake_default_assignee_user_id).toBeNull()
+    expect(wrapper.find('[data-testid="intake-default-assignee-deactivated-warning"]').exists()).toBe(false)
+  })
 
-    expect(wrapper.find('[data-testid="intake-default-assignee-unset-warning"]').exists()).toBe(true)
+  // Reviewer F1 (SLICE_008 review): picking default_assignee with no
+  // valid stored assignee must NOT PUT (the server would 422 and the
+  // admin could never reach the dropdown — a lockout). The choice is
+  // held locally, the dropdown renders, and the single both-fields PUT
+  // fires only once a member is chosen.
+  it('picking default_assignee with a null stored assignee defers the PUT and renders the dropdown', async () => {
+    const update = vi.fn()
+    stub({
+      settings: () =>
+        Promise.resolve({ intake_routing_mode: 'unassigned', intake_default_assignee_user_id: null }),
+      update,
+    })
+    const wrapper = await mountView()
+
+    const modeSelect = selects(wrapper)[0]
+    await modeSelect.vm.$emit('update:model-value', 'default_assignee')
+    await flushPromises()
+
+    expect(update).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-testid="intake-default-assignee"]').exists()).toBe(true)
+
+    const assigneeSelect = wrapper
+      .findAllComponents({ name: 'Select' })
+      .find((c) => c.attributes('data-testid') === 'intake-default-assignee')!
+    await assigneeSelect.vm.$emit('update:model-value', BOB_ID)
+    await flushPromises()
+
+    expect(update).toHaveBeenCalledWith({
+      intake_routing_mode: 'default_assignee',
+      intake_default_assignee_user_id: BOB_ID,
+    })
+  })
+
+  it('a rejected PUT (e.g. 422 on an immediate-save path) surfaces the mutation error and reverts', async () => {
+    stub({
+      settings: () =>
+        Promise.resolve({
+          intake_routing_mode: 'default_assignee',
+          intake_default_assignee_user_id: BOB_ID,
+        }),
+      update: () => Promise.reject(new ApiError(422, 'invalid_assignee', {})),
+    })
+    const wrapper = await mountView()
+
+    // An immediate-save transition (default_assignee -> unassigned) that
+    // the server rejects: error surfaces, server-truth model reverts.
+    const modeSelect = selects(wrapper)[0]
+    await modeSelect.vm.$emit('update:model-value', 'unassigned')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Could not update the setting.')
+    expect(wrapper.find('[data-testid="intake-default-assignee"]').exists()).toBe(true)
   })
 
   // SLICE_007g §8: break-glass rotation behind a confirm stating the

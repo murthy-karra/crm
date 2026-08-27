@@ -127,8 +127,8 @@ mod tests {
 
         let envelope = actor.envelope(occurred_at);
         assert_eq!(envelope.organization_id, organization_id);
-        assert_eq!(envelope.actor_kind, ActorKind::System);
-        assert_eq!(envelope.actor_user_id, None);
+        assert_eq!(envelope.actor.kind(), ActorKind::System);
+        assert_eq!(envelope.actor.user_id(), None);
         assert_eq!(envelope.on_behalf_of_user_id, None);
         assert_eq!(envelope.origin, Origin::Cli);
         assert_eq!(envelope.occurred_at, occurred_at);
@@ -148,8 +148,8 @@ mod tests {
             on_behalf_of_user_id: Some(admin),
         };
         let envelope = actor.envelope(Utc::now());
-        assert_eq!(envelope.actor_kind, ActorKind::System);
-        assert_eq!(envelope.actor_user_id, None);
+        assert_eq!(envelope.actor.kind(), ActorKind::System);
+        assert_eq!(envelope.actor.user_id(), None);
         assert_eq!(envelope.on_behalf_of_user_id, Some(admin));
         assert_eq!(envelope.origin, Origin::WebSession);
     }
@@ -172,7 +172,7 @@ mod tests {
 
         let occurred_at = Utc::now();
         let envelope = actor.envelope(occurred_at);
-        assert_eq!(envelope.actor_kind, ActorKind::User);
-        assert_eq!(envelope.actor_user_id, Some(ctx.actor_user_id));
+        assert_eq!(envelope.actor.kind(), ActorKind::User);
+        assert_eq!(envelope.actor.user_id(), Some(ctx.actor_user_id));
     }
 }

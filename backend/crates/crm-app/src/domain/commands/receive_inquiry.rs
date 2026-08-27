@@ -115,26 +115,37 @@ pub enum ReceiveInquiryOutcome {
     },
 }
 
-/// `assign_to_user_id`/`current_assignee` -> `(strategy, assignee)`
-/// (docs/specs/SLICE_002.md §3; routing matrix extended by
-/// docs/specs/SLICE_007c.md §4). A Person that already has an assignee
-/// always keeps it (`kept_existing`), regardless of what the request asked
-/// for; otherwise an explicit request wins; otherwise a User actor's own
-/// id (`actor_default`); otherwise (a System actor) the Organization's
-/// configured default, re-checked for active membership inside this same
-/// Phase-B transaction (`organization_default` if set and active,
-/// `unassigned` — NULL assignee — otherwise). Applies uniformly to a
-/// brand-new Person (`current_assignee` always `None`) and a matched one.
+/// The two same-role assignee ids `determine_routing` compares
+/// (docs/design/type-safety-hardening.md, N2 residual): a shared `UserId`
+/// newtype can't stop `assign_to_user_id` and `current_assignee` from being
+/// transposed positionally, so they're named fields instead.
+struct RoutingAssignees {
+    /// The request's explicit assignee, if any.
+    assign_to_user_id: Option<UserId>,
+    /// The Person's assignee *before* this command runs — always `None`
+    /// for a brand-new Person.
+    current_assignee: Option<UserId>,
+}
+
+/// `assignees` -> `(strategy, assignee)` (docs/specs/SLICE_002.md §3;
+/// routing matrix extended by docs/specs/SLICE_007c.md §4). A Person that
+/// already has an assignee always keeps it (`kept_existing`), regardless of
+/// what the request asked for; otherwise an explicit request wins;
+/// otherwise a User actor's own id (`actor_default`); otherwise (a System
+/// actor) the Organization's configured default, re-checked for active
+/// membership inside this same Phase-B transaction (`organization_default`
+/// if set and active, `unassigned` — NULL assignee — otherwise). Applies
+/// uniformly to a brand-new Person (`current_assignee` always `None`) and a
+/// matched one.
 async fn determine_routing(
     tx: &mut PgConnection,
     actor: &IntakeActor,
-    assign_to_user_id: Option<UserId>,
-    current_assignee: Option<UserId>,
+    assignees: RoutingAssignees,
 ) -> Result<(RoutingStrategy, Option<UserId>), CommandError> {
-    if let Some(existing) = current_assignee {
+    if let Some(existing) = assignees.current_assignee {
         return Ok((RoutingStrategy::KeptExisting, Some(existing)));
     }
-    if let Some(explicit) = assign_to_user_id {
+    if let Some(explicit) = assignees.assign_to_user_id {
         return Ok((RoutingStrategy::Explicit, Some(explicit)));
     }
     if let Some(actor_user_id) = actor.user_actor_id() {
@@ -470,8 +481,15 @@ where
             }
         };
 
-        let (routing_strategy, routing_assignee) =
-            determine_routing(&mut tx, actor, params.assign_to_user_id, current_assignee).await?;
+        let (routing_strategy, routing_assignee) = determine_routing(
+            &mut tx,
+            actor,
+            RoutingAssignees {
+                assign_to_user_id: params.assign_to_user_id,
+                current_assignee,
+            },
+        )
+        .await?;
 
         // A repeat lead must not leave a Person ownerless: whenever there
         // was no prior assignee (new Person, or a matched Person nobody

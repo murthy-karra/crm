@@ -8,7 +8,7 @@ use crate::domain::admin::commands::AdminCommandError;
 use crate::domain::admin::queries;
 use crate::domain::admin::validation;
 use crate::domain::admin::AdminActor;
-use crate::domain::envelope::{ActorKind, FactEnvelope};
+use crate::domain::envelope::{Actor, FactEnvelope};
 use crate::domain::facts;
 use crate::domain::stage;
 
@@ -88,8 +88,7 @@ async fn create_organization_attempt(
 
     let envelope = FactEnvelope {
         organization_id,
-        actor_kind: ActorKind::User,
-        actor_user_id: Some(actor.actor_user_id),
+        actor: Actor::User(actor.actor_user_id),
         on_behalf_of_user_id: None,
         origin: actor.origin,
         occurred_at: Utc::now(),

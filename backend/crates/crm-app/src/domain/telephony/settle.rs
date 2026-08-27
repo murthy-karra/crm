@@ -11,7 +11,7 @@ use chrono::{DateTime, Utc};
 use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
-use crate::domain::envelope::{ActorKind, FactEnvelope, Origin};
+use crate::domain::envelope::{Actor, FactEnvelope, Origin};
 use crate::domain::facts::{self, CallCompletedFact, ContactAttemptedFact};
 use crate::domain::telephony::queries::{self, CallRow};
 use crate::domain::telephony::transitions::{apply, Signal, Transition};
@@ -107,8 +107,7 @@ pub async fn settle_in_tx(
     })?;
     let envelope = FactEnvelope {
         organization_id: call.organization_id,
-        actor_kind: ActorKind::User,
-        actor_user_id: Some(call.caller_user_id),
+        actor: Actor::User(call.caller_user_id),
         on_behalf_of_user_id: None,
         origin,
         occurred_at: now,

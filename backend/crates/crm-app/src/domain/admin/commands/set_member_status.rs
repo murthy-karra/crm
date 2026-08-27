@@ -7,7 +7,7 @@ use uuid::Uuid;
 use crate::domain::admin::commands::AdminCommandError;
 use crate::domain::admin::queries::{self, MemberView};
 use crate::domain::admin::{AdminActor, MembershipStatus, Role};
-use crate::domain::envelope::{ActorKind, FactEnvelope};
+use crate::domain::envelope::{Actor, FactEnvelope};
 use crate::domain::facts::{self, MembershipChangedFact};
 use crate::ids::{OrganizationId, UserId};
 use crate::realtime::Publisher;
@@ -99,8 +99,7 @@ async fn set_member_status_attempt(
 
         let envelope = FactEnvelope {
             organization_id: cmd.organization_id,
-            actor_kind: ActorKind::User,
-            actor_user_id: Some(actor.actor_user_id),
+            actor: Actor::User(actor.actor_user_id),
             on_behalf_of_user_id: None,
             origin: actor.origin,
             occurred_at: Utc::now(),

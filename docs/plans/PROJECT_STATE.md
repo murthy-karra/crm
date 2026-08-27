@@ -28,11 +28,20 @@ via `.0`, SQL + `.sqlx` byte-untouched (proven by live
 sqlx-prepare-check); crm-operator zero-diff (D-028 fence); AAD/
 channel/JWT byte-identity verified. Reviewer: READY (20 conversion
 sites audited authoritative; doctest error-code pin applied).
-Deferred to N2 (recorded in ladder doc): session-layer bare island
-(`session::create`, `SessionOrganization.id`) + OrganizationRef/
-PlatformOrganizationItem `.id`. Gates verified independently by
-coordinator (check + check-db 285/0). Awaiting N1 commit gate; then
-N2 (`UserId`). Feature slices may interleave.
+N1 MERGED (`565f997`); N2 (`UserId` + both N1 carry-overs closed:
+session layer typed, org DTOs typed) MERGED + PUSHED (`main`
+`4a75279`) — reviewer ready-with-fixes (record-level only: the
+same-role residuals — determine_routing's two Option<UserId> params,
+platform TwoUuidPathIds — are recorded in the ladder doc as LATER;
+a shared newtype cannot distinguish same-role params). Ladder 3/8 done (S1, N1, N2). BATCHED-AUTONOMY MODE (user,
+2026-08-26): A1 and N3 run without per-chunk approvals; each commits
+on its own branch when review+gates pass; merge+push approval batched
+at the end. A1 (`Actor` enum + `RoutingAssignees` params struct —
+absorbing the determine_routing residual) IMPLEMENTED + reviewed
+READY (zero actionable findings) + gates independently green;
+committed on `hardening-a1`. N3 (PersonId/InquiryId/RawPayloadId/
+StageId cluster) next, branched from `hardening-a1`.
+Feature slices may interleave.
 
 Prior update, 2026-08-25 (SLICE_007h1 COMPLETE, MERGED, PUSHED —
 `main` `105f730`. Detail below; SLICE_007h1 IMPLEMENTED on

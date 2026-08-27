@@ -11,7 +11,7 @@ use crate::domain::admin::commands::AdminCommandError;
 use crate::domain::admin::queries::{self, InvitationStatus, InvitationView, InvitedByRef};
 use crate::domain::admin::validation;
 use crate::domain::admin::{AdminActor, Role};
-use crate::domain::envelope::{ActorKind, FactEnvelope};
+use crate::domain::envelope::{Actor, FactEnvelope};
 use crate::domain::facts::{self, InvitationIssuedFact, InvitationResolvedFact};
 use crate::ids::OrganizationId;
 
@@ -141,8 +141,7 @@ async fn issue_invitation_attempt(
         queries::supersede_invitation(&mut tx, old_id).await?;
         let envelope = FactEnvelope {
             organization_id,
-            actor_kind: ActorKind::User,
-            actor_user_id: Some(actor.actor_user_id),
+            actor: Actor::User(actor.actor_user_id),
             on_behalf_of_user_id: None,
             origin: actor.origin,
             occurred_at: now,
@@ -193,8 +192,7 @@ async fn issue_invitation_attempt(
 
     let envelope = FactEnvelope {
         organization_id,
-        actor_kind: ActorKind::User,
-        actor_user_id: Some(actor.actor_user_id),
+        actor: Actor::User(actor.actor_user_id),
         on_behalf_of_user_id: None,
         origin: actor.origin,
         occurred_at: now,

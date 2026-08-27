@@ -83,6 +83,14 @@ struct RawLead {
 /// A successfully parsed `generic_v1` lead. `email`/`phone` are the
 /// normalized forms used for identify and storage; `raw_email`/`raw_phone`
 /// are the as-received strings stored in `contact_method.value`.
+///
+/// `email`/`phone` stay plain `Option<String>` rather than
+/// `Option<contact::NormalizedEmail>`/`Option<contact::NormalizedPhone>`
+/// (hardening chunk V1; docs/tasks/HARDENING_V1.md): `receive_inquiry.rs`
+/// (a parallel lane's file) reads `parsed.email`/`parsed.phone` directly
+/// via `.as_deref()`, so retyping the fields would force an edit there.
+/// [`Self::normalized_email`]/[`Self::normalized_phone`] give owned callers
+/// (`upsert_contact_methods`) the typed, PII-redacted form instead.
 pub struct ParsedLead {
     pub first_name: Option<String>,
     pub last_name: Option<String>,
@@ -92,6 +100,22 @@ pub struct ParsedLead {
     pub raw_phone: Option<String>,
     pub message: Option<String>,
     pub external_id: Option<String>,
+}
+
+impl ParsedLead {
+    /// The typed, PII-redacted form of the already-normalized `email`
+    /// field. Re-derives via [`contact::normalize_email`] — its only
+    /// constructor — rather than storing it separately; cheap and
+    /// idempotent, since `email` is already normalized.
+    pub fn normalized_email(&self) -> Option<contact::NormalizedEmail> {
+        self.email.as_deref().and_then(contact::normalize_email)
+    }
+
+    /// The typed form of the already-normalized `phone` field. See
+    /// [`Self::normalized_email`].
+    pub fn normalized_phone(&self) -> Option<contact::NormalizedPhone> {
+        self.phone.as_deref().and_then(contact::normalize_phone)
+    }
 }
 
 /// Never derived automatically: must never print plaintext contact
@@ -144,8 +168,8 @@ pub fn parse(bytes: &[u8]) -> Result<ParsedLead, UnresolvedReason> {
     Ok(ParsedLead {
         first_name: non_empty(raw.first_name),
         last_name: non_empty(raw.last_name),
-        email,
-        phone,
+        email: email.map(|e| e.to_string()),
+        phone: phone.map(|p| p.to_string()),
         raw_email: raw.email,
         raw_phone: raw.phone,
         message: raw
@@ -266,5 +290,21 @@ mod tests {
         assert!(!debug_output.contains("call me"));
         assert!(debug_output.contains("has_email: true"));
         assert!(debug_output.contains("has_phone: true"));
+    }
+
+    // --- typed accessors (hardening chunk V1) ---------------------------
+
+    #[test]
+    fn normalized_accessors_expose_the_typed_redacted_values() {
+        let lead = parse(br#"{"email":"Ada@Example.com","phone":"(555) 555-0100"}"#).unwrap();
+        assert_eq!(lead.normalized_email().unwrap().as_str(), "ada@example.com");
+        assert_eq!(lead.normalized_phone().unwrap().as_str(), "+15555550100");
+    }
+
+    #[test]
+    fn normalized_accessors_are_none_when_the_field_is_absent() {
+        let lead = parse(br#"{"email":"ada@example.com"}"#).unwrap();
+        assert!(lead.normalized_email().is_some());
+        assert!(lead.normalized_phone().is_none());
     }
 }

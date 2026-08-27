@@ -87,8 +87,8 @@ pub fn to_parsed_lead(extracted: ExtractedLead) -> Result<(Source, ParsedLead), 
     let lead = ParsedLead {
         first_name: extracted.first_name.filter(|s| !s.trim().is_empty()),
         last_name: extracted.last_name.filter(|s| !s.trim().is_empty()),
-        email,
-        phone,
+        email: email.map(|e| e.to_string()),
+        phone: phone.map(|p| p.to_string()),
         raw_email: extracted.email,
         raw_phone: extracted.phone,
         message: extracted

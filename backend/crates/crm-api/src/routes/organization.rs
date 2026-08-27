@@ -57,7 +57,7 @@ pub fn router() -> Router<AppState> {
 
 /// A `{user_id}`/`{id}` path segment parsed as a UUID, rejecting straight
 /// to `400 malformed_request` rather than axum's default `PathRejection`
-/// body — the same pattern as `routes/people.rs`'s `PersonId`. Used as a
+/// body — the same pattern as `routes/people.rs`'s `PersonIdPath`. Used as a
 /// bare (non-`Result`-wrapped) extractor, listed before the auth extractor
 /// so a malformed id short-circuits ahead of authentication.
 struct UuidPathId(Uuid);

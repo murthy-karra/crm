@@ -93,12 +93,12 @@ mod tests {
 
     fn person(phone: Option<&str>) -> PersonSummary {
         PersonSummary {
-            id: Uuid::new_v4(),
+            id: crate::ids::PersonId::new(Uuid::new_v4()),
             first_name: Some("Ada".to_string()),
             last_name: Some("Lovelace".to_string()),
             display_name: "Ada Lovelace".to_string(),
             stage: StageRef {
-                id: Uuid::new_v4(),
+                id: crate::ids::StageId::new(Uuid::new_v4()),
                 name: "Lead".to_string(),
             },
             assigned_user: Some(UserRef {
@@ -117,7 +117,7 @@ mod tests {
         TodayCandidate {
             person: person(phone),
             latest_inquiry: InquiryRef {
-                id: Uuid::new_v4(),
+                id: crate::ids::InquiryId::new(Uuid::new_v4()),
                 source: "zillow".to_string(),
                 received_at: ts(10),
             },

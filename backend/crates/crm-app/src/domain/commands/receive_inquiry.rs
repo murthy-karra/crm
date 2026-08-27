@@ -21,7 +21,7 @@ use crate::domain::intake::IntakeActor;
 use crate::domain::person::queries as person_queries;
 use crate::domain::raw_payload::{crypto, store, PayloadFormat, Resolution};
 use crate::domain::stage;
-use crate::ids::{OrganizationId, UserId};
+use crate::ids::{InquiryId, OrganizationId, PersonId, RawPayloadId, UserId};
 use crate::realtime::{PersonChange, Publication, Publisher, RealtimeEvent};
 
 pub struct ReceiveInquiry {
@@ -101,15 +101,15 @@ impl RoutingStrategy {
 
 pub enum ReceiveInquiryOutcome {
     Resolved {
-        inquiry_id: Uuid,
-        person_id: Uuid,
+        inquiry_id: InquiryId,
+        person_id: PersonId,
         person_created: bool,
         routing_strategy: RoutingStrategy,
         assigned_user_id: Option<UserId>,
         duplicate: bool,
     },
     Unresolved {
-        raw_payload_id: Uuid,
+        raw_payload_id: RawPayloadId,
         reason: UnresolvedReason,
         duplicate: bool,
     },
@@ -241,7 +241,7 @@ async fn receive_inquiry_attempt(
 
     // --- Phase A: store the encrypted payload before parsing (D-015 §4) ---
     let content_hmac = crypto::content_hmac(key, &cmd.payload);
-    let candidate_id = Uuid::new_v4();
+    let candidate_id = RawPayloadId::new(Uuid::new_v4());
     let sealed = crypto::seal(key, organization_id, candidate_id, &cmd.payload)
         .map_err(|_| CommandError::Crypto)?;
 
@@ -286,7 +286,7 @@ async fn receive_inquiry_attempt(
 /// id from Phase A (which differs from the candidate on a duplicate);
 /// `content_hmac` is only threaded into the `inquiry_received` fact.
 pub(crate) struct CompleteIntake<'a> {
-    pub raw_payload_id: Uuid,
+    pub raw_payload_id: RawPayloadId,
     pub content_hmac: &'a [u8],
     pub received_at: DateTime<Utc>,
     pub assign_to_user_id: Option<UserId>,

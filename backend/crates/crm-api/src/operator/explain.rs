@@ -2,11 +2,9 @@
 //! D-010): pure index arithmetic over `today::query` output. The model
 //! turns this into prose and may not reorder or add to it.
 
-use uuid::Uuid;
-
 use crate::domain::person::model::PersonSummary;
 use crate::domain::today::{TodayItem, TodayList, TodayPriority, TodayReason};
-use crate::ids::UserId;
+use crate::ids::{PersonId, UserId};
 use crm_operator::{Ahead, NotOnTodayReason, PersonCard, PriorityExplanation, ORDERING_RULE};
 
 /// Where `person_id` sits on the list: the 0-based index and how many
@@ -19,7 +17,7 @@ pub struct Placement {
     pub ahead: Ahead,
 }
 
-pub fn placement(items: &[TodayItem], person_id: Uuid) -> Option<Placement> {
+pub fn placement(items: &[TodayItem], person_id: PersonId) -> Option<Placement> {
     let index = items.iter().position(|item| item.person.id == person_id)?;
     let mut ahead = Ahead {
         high: 0,
@@ -140,8 +138,10 @@ mod tests {
     use super::*;
     use crate::domain::person::model::{StageRef, UserRef};
     use crate::domain::today::{InquiryRef, RecommendedAction, TodayReason};
+    use crate::ids::{InquiryId, StageId};
     use chrono::{DateTime, TimeZone, Utc};
     use crm_operator::UntrustedText;
+    use uuid::Uuid;
 
     fn ts(hour: u32) -> DateTime<Utc> {
         Utc.with_ymd_and_hms(2026, 8, 22, hour, 0, 0).unwrap()
@@ -149,12 +149,12 @@ mod tests {
 
     fn summary(id: Uuid, assignee: Option<Uuid>) -> PersonSummary {
         PersonSummary {
-            id,
+            id: PersonId::new(id),
             first_name: Some("Grace".into()),
             last_name: Some("Hopper".into()),
             display_name: "Grace Hopper".into(),
             stage: StageRef {
-                id: Uuid::new_v4(),
+                id: StageId::new(Uuid::new_v4()),
                 name: "Lead".into(),
             },
             assigned_user: assignee.map(|id| UserRef {
@@ -177,7 +177,7 @@ mod tests {
             reasons: vec![TodayReason::NoContactAttempt { since: ts(hour) }],
             waiting_since: ts(hour),
             latest_inquiry: InquiryRef {
-                id: Uuid::new_v4(),
+                id: InquiryId::new(Uuid::new_v4()),
                 source: "zillow".into(),
                 received_at: ts(hour),
             },
@@ -209,7 +209,7 @@ mod tests {
             item(ids[4], TodayPriority::Normal, 3),
         ];
         assert_eq!(
-            placement(&items, ids[0]),
+            placement(&items, PersonId::new(ids[0])),
             Some(Placement {
                 index: 0,
                 ahead: Ahead {
@@ -220,7 +220,7 @@ mod tests {
             })
         );
         assert_eq!(
-            placement(&items, ids[1]),
+            placement(&items, PersonId::new(ids[1])),
             Some(Placement {
                 index: 1,
                 ahead: Ahead {
@@ -232,7 +232,7 @@ mod tests {
         );
         // First normal item: both highs ahead, no normals.
         assert_eq!(
-            placement(&items, ids[2]),
+            placement(&items, PersonId::new(ids[2])),
             Some(Placement {
                 index: 2,
                 ahead: Ahead {
@@ -243,7 +243,7 @@ mod tests {
             })
         );
         assert_eq!(
-            placement(&items, ids[4]),
+            placement(&items, PersonId::new(ids[4])),
             Some(Placement {
                 index: 4,
                 ahead: Ahead {
@@ -253,7 +253,7 @@ mod tests {
                 }
             })
         );
-        assert_eq!(placement(&items, Uuid::new_v4()), None);
+        assert_eq!(placement(&items, PersonId::new(Uuid::new_v4())), None);
     }
 
     #[test]
@@ -315,7 +315,7 @@ mod tests {
             item(ids[2], TodayPriority::Low, 3),
         ];
         assert_eq!(
-            placement(&items, ids[2]),
+            placement(&items, PersonId::new(ids[2])),
             Some(Placement {
                 index: 2,
                 ahead: Ahead {

@@ -17,7 +17,7 @@ use crate::domain::inquiry::queries as inquiry_queries;
 use crate::domain::person::queries as person_queries;
 use crate::domain::person::PersonVisibilityScope;
 use crate::error::ApiError;
-use crate::ids::UserId;
+use crate::ids::{PersonId, StageId, UserId};
 use crate::state::AppState;
 
 pub fn router() -> Router<AppState> {
@@ -29,19 +29,24 @@ pub fn router() -> Router<AppState> {
         .route("/api/people/{id}/contact-attempts", post(log_contact))
 }
 
-/// A `{id}` path segment parsed as a UUID, rejecting straight to `400
-/// malformed_request` (docs/specs/SLICE_002.md §5) rather than axum's
-/// default `PathRejection` body. Used as a *bare* (non-`Result`-wrapped)
-/// extractor and listed before `AuthContext` in every handler below: axum
-/// evaluates extractors in declaration order and stops at the first one
-/// that returns `Err`, so — unlike `Result<Path<Uuid>, _>`, whose own
-/// extraction always "succeeds" and only defers the error into the
-/// handler body — this genuinely short-circuits ahead of authentication,
-/// making a non-UUID id a 400 independent of auth state and, since it
-/// never touches `state.db`, testable service-free.
-struct PersonId(Uuid);
+/// A `{id}` path segment parsed as a UUID and typed as `PersonId`
+/// (hardening chunk N3), rejecting straight to `400 malformed_request`
+/// (docs/specs/SLICE_002.md §5) rather than axum's default `PathRejection`
+/// body. Used as a *bare* (non-`Result`-wrapped) extractor and listed
+/// before `AuthContext` in every handler below: axum evaluates extractors
+/// in declaration order and stops at the first one that returns `Err`, so
+/// — unlike `Result<Path<Uuid>, _>`, whose own extraction always
+/// "succeeds" and only defers the error into the handler body — this
+/// genuinely short-circuits ahead of authentication, making a non-UUID id
+/// a 400 independent of auth state and, since it never touches
+/// `state.db`, testable service-free. Named `PersonIdPath` (not
+/// `PersonId`) to avoid shadowing `crm_app::ids::PersonId`, which the
+/// domain layer now uses for the same value; the two can't be the same
+/// type here because implementing `FromRequestParts` (axum's trait) for a
+/// foreign type (crm-app's `PersonId`) would violate the orphan rule.
+struct PersonIdPath(PersonId);
 
-impl FromRequestParts<AppState> for PersonId {
+impl FromRequestParts<AppState> for PersonIdPath {
     type Rejection = ApiError;
 
     async fn from_request_parts(
@@ -51,7 +56,7 @@ impl FromRequestParts<AppState> for PersonId {
         let Path(id) = Path::<Uuid>::from_request_parts(parts, state)
             .await
             .map_err(|_| ApiError::MalformedRequest)?;
-        Ok(PersonId(id))
+        Ok(PersonIdPath(PersonId::new(id)))
     }
 }
 
@@ -72,7 +77,7 @@ async fn list_people(
 
 async fn get_person(
     State(state): State<AppState>,
-    PersonId(person_id): PersonId,
+    PersonIdPath(person_id): PersonIdPath,
     auth: AuthContext,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
@@ -115,7 +120,7 @@ struct AssignmentRequest {
 
 async fn set_assignment(
     State(state): State<AppState>,
-    PersonId(person_id): PersonId,
+    PersonIdPath(person_id): PersonIdPath,
     auth: AuthContext,
     body: Result<Json<AssignmentRequest>, JsonRejection>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
@@ -140,12 +145,12 @@ async fn set_assignment(
 
 #[derive(Deserialize)]
 struct StageRequest {
-    stage_id: Uuid,
+    stage_id: StageId,
 }
 
 async fn set_stage(
     State(state): State<AppState>,
-    PersonId(person_id): PersonId,
+    PersonIdPath(person_id): PersonIdPath,
     auth: AuthContext,
     body: Result<Json<StageRequest>, JsonRejection>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
@@ -180,7 +185,7 @@ struct ContactAttemptRequest {
 /// `malformed_request` exactly like every other bad body in this file.
 async fn log_contact(
     State(state): State<AppState>,
-    PersonId(person_id): PersonId,
+    PersonIdPath(person_id): PersonIdPath,
     auth: AuthContext,
     body: Result<Json<ContactAttemptRequest>, JsonRejection>,
 ) -> Result<(axum::http::StatusCode, Json<serde_json::Value>), ApiError> {

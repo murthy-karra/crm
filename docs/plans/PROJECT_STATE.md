@@ -37,10 +37,17 @@ a shared newtype cannot distinguish same-role params). Ladder 3/8 done (S1, N1, 
 2026-08-26): A1 and N3 run without per-chunk approvals; each commits
 on its own branch when review+gates pass; merge+push approval batched
 at the end. A1 (`Actor` enum + `RoutingAssignees` params struct —
-absorbing the determine_routing residual) IMPLEMENTED + reviewed
-READY (zero actionable findings) + gates independently green;
-committed on `hardening-a1`. N3 (PersonId/InquiryId/RawPayloadId/
-StageId cluster) next, branched from `hardening-a1`.
+absorbing the determine_routing residual) DONE: reviewed READY (zero
+actionable findings), gates independently green, committed
+`hardening-a1` `76b49d4`. N3 (PersonId/InquiryId/RawPayloadId/
+StageId) DONE on `hardening-n3` (stacked on a1): 39 files, both AAD
+halves now typed (bytes unchanged), axum extractors renamed
+PersonIdPath/RawPayloadIdPath wrapping typed ids (orphan rule),
+call_changed's call/person adjacency cross-typed (dead one chunk
+early); reviewed READY (one doc-comment minor, folded in); gates
+independently green (285/0) twice. Ladder 5/8 done pending the
+BATCHED merge gate: hardening-a1 → main, hardening-n3 → main, one
+push — awaiting user approval. Then N4 (call cluster), V1, S2.
 Feature slices may interleave.
 
 Prior update, 2026-08-25 (SLICE_007h1 COMPLETE, MERGED, PUSHED —

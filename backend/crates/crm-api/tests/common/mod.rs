@@ -25,7 +25,7 @@ use crm_api::domain::admin::{AdminActor, MembershipStatus, Role};
 use crm_api::domain::envelope::Origin;
 use crm_api::domain::raw_payload::crypto;
 use crm_api::domain::stage;
-use crm_api::ids::{OrganizationId, UserId};
+use crm_api::ids::{OrganizationId, RawPayloadId, UserId};
 use crm_api::realtime::Publisher;
 use crm_api::state::AppState;
 
@@ -524,7 +524,7 @@ pub fn seal_fixture(
     let sealed = crypto::seal(
         &config.raw_payload_key,
         OrganizationId::new(organization_id),
-        raw_payload_id,
+        RawPayloadId::new(raw_payload_id),
         &plaintext,
     )
     .unwrap();

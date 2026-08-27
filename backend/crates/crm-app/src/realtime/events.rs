@@ -7,7 +7,7 @@ use chrono::{DateTime, Utc};
 use serde::Serialize;
 use uuid::Uuid;
 
-use crate::ids::OrganizationId;
+use crate::ids::{OrganizationId, PersonId, RawPayloadId};
 
 /// One Centrifugo channel per Organization (docs/specs/SLICE_003.md §6):
 /// `org:<organization_id>`, lowercase hyphenated UUID.
@@ -27,13 +27,13 @@ pub enum PersonChange {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct PersonChangedData {
-    pub person_id: Uuid,
+    pub person_id: PersonId,
     pub change: PersonChange,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct UnresolvedChangedData {
-    pub raw_payload_id: Uuid,
+    pub raw_payload_id: RawPayloadId,
 }
 
 /// `data` on a `call.changed` event (docs/specs/SLICE_006.md §6): ids
@@ -41,7 +41,7 @@ pub struct UnresolvedChangedData {
 #[derive(Debug, Clone, Serialize)]
 pub struct CallChangedData {
     pub call_id: Uuid,
-    pub person_id: Uuid,
+    pub person_id: PersonId,
 }
 
 /// The exact §6 event envelope. `v: 1` always this slice; additive fields
@@ -84,7 +84,7 @@ impl RealtimeEvent {
         organization_id: OrganizationId,
         occurred_at: DateTime<Utc>,
         correlation_id: Uuid,
-        person_id: Uuid,
+        person_id: PersonId,
         change: PersonChange,
     ) -> Self {
         RealtimeEvent::PersonChanged {
@@ -100,7 +100,7 @@ impl RealtimeEvent {
         organization_id: OrganizationId,
         occurred_at: DateTime<Utc>,
         correlation_id: Uuid,
-        raw_payload_id: Uuid,
+        raw_payload_id: RawPayloadId,
     ) -> Self {
         RealtimeEvent::IntakeUnresolvedChanged {
             v: 1,
@@ -117,7 +117,7 @@ impl RealtimeEvent {
         occurred_at: DateTime<Utc>,
         correlation_id: Uuid,
         call_id: Uuid,
-        person_id: Uuid,
+        person_id: PersonId,
     ) -> Self {
         RealtimeEvent::CallChanged {
             v: 1,
@@ -202,7 +202,7 @@ mod tests {
     fn person_changed_serializes_to_exact_shape() {
         let org_id = OrganizationId::new(Uuid::new_v4());
         let corr_id = Uuid::new_v4();
-        let person_id = Uuid::new_v4();
+        let person_id = PersonId::new(Uuid::new_v4());
         let event = RealtimeEvent::person_changed(
             org_id,
             ts(),
@@ -236,7 +236,7 @@ mod tests {
                 OrganizationId::new(Uuid::new_v4()),
                 ts(),
                 Uuid::new_v4(),
-                Uuid::new_v4(),
+                PersonId::new(Uuid::new_v4()),
                 variant,
             );
             let value = serde_json::to_value(&event).unwrap();
@@ -248,7 +248,7 @@ mod tests {
     fn intake_unresolved_changed_serializes_to_exact_shape() {
         let org_id = OrganizationId::new(Uuid::new_v4());
         let corr_id = Uuid::new_v4();
-        let raw_payload_id = Uuid::new_v4();
+        let raw_payload_id = RawPayloadId::new(Uuid::new_v4());
         let event = RealtimeEvent::intake_unresolved_changed(org_id, ts(), corr_id, raw_payload_id);
         let value = serde_json::to_value(&event).unwrap();
         assert_eq!(
@@ -269,7 +269,7 @@ mod tests {
         let org_id = OrganizationId::new(Uuid::new_v4());
         let corr_id = Uuid::new_v4();
         let call_id = Uuid::new_v4();
-        let person_id = Uuid::new_v4();
+        let person_id = PersonId::new(Uuid::new_v4());
         let event = RealtimeEvent::call_changed(org_id, ts(), corr_id, call_id, person_id);
         let value = serde_json::to_value(&event).unwrap();
         assert_eq!(
@@ -296,7 +296,7 @@ mod tests {
             org_id,
             ts(),
             corr_id,
-            Uuid::new_v4(),
+            PersonId::new(Uuid::new_v4()),
             PersonChange::StageChanged,
         );
         assert_eq!(event.organization_id(), org_id);
@@ -307,8 +307,12 @@ mod tests {
     #[test]
     fn publication_for_event_derives_channel_from_organization_id() {
         let org_id = OrganizationId::new(Uuid::new_v4());
-        let event =
-            RealtimeEvent::intake_unresolved_changed(org_id, ts(), Uuid::new_v4(), Uuid::new_v4());
+        let event = RealtimeEvent::intake_unresolved_changed(
+            org_id,
+            ts(),
+            Uuid::new_v4(),
+            RawPayloadId::new(Uuid::new_v4()),
+        );
         let publication = Publication::for_event(event);
         assert_eq!(publication.channel, channel_for(org_id));
     }

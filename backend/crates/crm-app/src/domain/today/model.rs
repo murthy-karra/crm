@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use crate::domain::commands::ContactAttemptRef;
 use crate::domain::person::model::PersonSummary;
+use crate::ids::InquiryId;
 
 /// The strict freshness window (§3): `latest_inquiry.received_at > now -
 /// 24h`. Computed once, in SQL, and never re-evaluated by `rank()`.
@@ -58,7 +59,7 @@ pub enum RecommendedAction {
 /// (docs/specs/SLICE_003.md §5).
 #[derive(Debug, Clone, Serialize)]
 pub struct InquiryRef {
-    pub id: Uuid,
+    pub id: InquiryId,
     pub source: String,
     pub received_at: DateTime<Utc>,
 }

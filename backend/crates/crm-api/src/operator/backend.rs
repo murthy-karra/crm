@@ -16,7 +16,7 @@ use crate::domain::person::model::PersonSummary;
 use crate::domain::person::queries::{self as person_queries, HistoryEntry};
 use crate::domain::person::PersonVisibilityScope;
 use crate::domain::today::{self, TodayItem, TodayList};
-use crate::ids::{OrganizationId, UserId};
+use crate::ids::{OrganizationId, PersonId, UserId};
 use crate::operator::explain;
 use crm_operator::{
     ContactMethodView, HistoryEntryView, InquiryView, NextWorkItem, OperatorContext, PersonCard,
@@ -56,7 +56,12 @@ fn db_error(_: sqlx::Error) -> ToolError {
 
 pub fn card_from_summary(summary: &PersonSummary) -> PersonCard {
     PersonCard {
-        id: summary.id,
+        // crm-operator keeps a bare `Uuid` at the tool seam (D-028 §5
+        // crate fence); this is a conversion point back to bare `Uuid` for
+        // every crm-app -> crm-operator id crossing this file makes
+        // (hardening chunk N3, mirroring N1/N2's org/user seam
+        // conversions below).
+        id: summary.id.as_uuid(),
         display_name: UntrustedText::new(&summary.display_name),
         stage_name: summary.stage.name.clone(),
         assigned_user_display_name: summary
@@ -174,7 +179,7 @@ async fn today_for(conn: &mut PgConnection, ctx: &OperatorContext) -> ToolResult
 async fn visible_summary(
     conn: &mut PgConnection,
     ctx: &OperatorContext,
-    person_id: Uuid,
+    person_id: PersonId,
 ) -> ToolResult<PersonSummary> {
     person_queries::summary_by_id(conn, org_id(ctx), person_id)
         .await
@@ -207,6 +212,11 @@ impl ToolBackend for SqlxToolBackend {
     }
 
     async fn get_person(&self, ctx: &OperatorContext, person_id: Uuid) -> ToolResult<PersonDetail> {
+        // crm-operator's `ToolBackend` trait keeps a bare `Uuid` at the
+        // tool seam (D-028 §5 crate fence); wrap once here, at the trait
+        // boundary, so every crm-app call below this line is typed
+        // (hardening chunk N3, mirroring `org_id`/`user_id` above).
+        let person_id = PersonId::new(person_id);
         let mut conn = self.conn().await?;
         let summary = visible_summary(&mut conn, ctx, person_id).await?;
 
@@ -227,7 +237,7 @@ impl ToolBackend for SqlxToolBackend {
             .into_iter()
             .take(MAX_INQUIRIES)
             .map(|i| InquiryView {
-                id: i.id,
+                id: i.id.as_uuid(),
                 source: i.source,
                 received_at: i.received_at,
                 message: i.message.as_deref().map(UntrustedText::new),
@@ -293,6 +303,8 @@ impl ToolBackend for SqlxToolBackend {
         ctx: &OperatorContext,
         person_id: Uuid,
     ) -> ToolResult<PriorityExplanation> {
+        // Same trait-boundary wrap as `get_person` above.
+        let person_id = PersonId::new(person_id);
         let mut conn = self.conn().await?;
         let summary = visible_summary(&mut conn, ctx, person_id).await?;
         let list = today_for(&mut conn, ctx).await?;
@@ -315,6 +327,9 @@ impl ToolBackend for SqlxToolBackend {
         person_id: Uuid,
         contact_method_id: Option<Uuid>,
     ) -> ToolResult<StartCallProposalOutcome> {
+        // Same trait-boundary wrap as `get_person` above; `.0` at the raw
+        // `operator_proposal` INSERT below converts back for that bind.
+        let person_id = PersonId::new(person_id);
         let mut conn = self.conn().await?;
         let summary = visible_summary(&mut conn, ctx, person_id).await?;
         let methods = person_queries::contact_methods_for_person(&mut conn, org_id(ctx), person_id)
@@ -369,7 +384,7 @@ impl ToolBackend for SqlxToolBackend {
             ctx.organization_id,
             ctx.actor_user_id,
             ctx.turn_id,
-            person_id,
+            person_id.0,
             method.id,
             ttl_secs as f64,
         )

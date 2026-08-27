@@ -20,7 +20,7 @@ use crate::domain::inquiry::parse::{Source, UnresolvedReason};
 use crate::domain::intake::email;
 use crate::domain::intake::{IntakeActor, IntakeAddress};
 use crate::domain::raw_payload::{crypto, store, PayloadFormat};
-use crate::ids::OrganizationId;
+use crate::ids::{InquiryId, OrganizationId, PersonId, RawPayloadId};
 use crate::realtime::{Publication, Publisher, RealtimeEvent};
 
 /// Presented to `constant_time_eq` on an unknown slug, so that branch does
@@ -33,21 +33,21 @@ pub enum InboundEmailOutcome {
     /// A pinned format matched and intake completed: Person, Inquiry,
     /// facts, routing (docs/specs/SLICE_007d.md §4e).
     Completed {
-        person_id: Uuid,
-        inquiry_id: Uuid,
-        raw_payload_id: Uuid,
+        person_id: PersonId,
+        inquiry_id: InquiryId,
+        raw_payload_id: RawPayloadId,
     },
     /// Stored, but a parse gate failed — the row is terminal
     /// `unresolved` with `reason` (docs/specs/SLICE_007d.md §4e).
     Unresolved {
-        raw_payload_id: Uuid,
+        raw_payload_id: RawPayloadId,
         reason: UnresolvedReason,
     },
     /// The advisory-lock budget was exhausted: the row stays `pending`
     /// (queue-visible; a redelivery or 007e's Try-again completes it) and
     /// the response is still 200 accepted — `/inbound/email` can never
     /// return `intake_busy` (docs/specs/SLICE_007d.md §4f).
-    DeferredPending { raw_payload_id: Uuid },
+    DeferredPending { raw_payload_id: RawPayloadId },
     /// Byte-identical redelivery of an already-terminal row: nothing
     /// reprocessed, nothing published.
     Duplicate,
@@ -116,7 +116,7 @@ pub async fn receive_inbound_email(
     let org_id = OrganizationId::new(org_id);
 
     // Phase A: seal + insert pending (unchanged from SLICE_007b).
-    let candidate_id = Uuid::new_v4();
+    let candidate_id = RawPayloadId::new(Uuid::new_v4());
     let content_hmac = crypto::content_hmac(key, raw);
     let sealed = crypto::seal(key, org_id, candidate_id, raw)
         .map_err(|_| ReceiveInboundEmailError::Crypto)?;

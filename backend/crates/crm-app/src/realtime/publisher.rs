@@ -273,7 +273,7 @@ mod tests {
             OrganizationId::new(Uuid::new_v4()),
             chrono::Utc::now(),
             Uuid::new_v4(),
-            Uuid::new_v4(),
+            crate::ids::RawPayloadId::new(Uuid::new_v4()),
         );
         Publication::for_event(event)
     }

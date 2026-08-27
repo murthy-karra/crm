@@ -10,13 +10,13 @@ use crate::domain::contact::{normalize_email, normalize_phone};
 use crate::domain::inquiry::parse::ParsedLead;
 use crate::domain::person::model::{compute_display_name, PersonSummary, StageRef, UserRef};
 use crate::domain::person::visibility::PersonVisibilityScope;
-use crate::ids::{OrganizationId, UserId};
+use crate::ids::{OrganizationId, PersonId, StageId, UserId};
 
 // --- Command-side helpers ------------------------------------------------
 
 pub struct LockedPerson {
-    pub id: Uuid,
-    pub stage_id: Uuid,
+    pub id: PersonId,
+    pub stage_id: StageId,
     pub assigned_user_id: Option<UserId>,
 }
 
@@ -48,21 +48,21 @@ struct LockedPersonRow {
 /// short-lived, non-cascading wait, not a pool-starvation vector.
 pub async fn lock_person(
     conn: &mut PgConnection,
-    person_id: Uuid,
+    person_id: PersonId,
     organization_id: OrganizationId,
 ) -> Result<Option<LockedPerson>, sqlx::Error> {
     let row = sqlx::query_as!(
         LockedPersonRow,
         r#"SELECT id, stage_id, assigned_user_id
            FROM person WHERE id = $1 AND organization_id = $2 FOR UPDATE"#,
-        person_id,
+        person_id.0,
         organization_id.0,
     )
     .fetch_optional(conn)
     .await?;
     Ok(row.map(|r| LockedPerson {
-        id: r.id,
-        stage_id: r.stage_id,
+        id: PersonId::new(r.id),
+        stage_id: StageId::new(r.stage_id),
         assigned_user_id: r.assigned_user_id.map(UserId::new),
     }))
 }
@@ -72,9 +72,9 @@ pub async fn insert_person(
     organization_id: OrganizationId,
     first_name: Option<&str>,
     last_name: Option<&str>,
-    stage_id: Uuid,
+    stage_id: StageId,
     assigned_user_id: Option<UserId>,
-) -> Result<Uuid, sqlx::Error> {
+) -> Result<PersonId, sqlx::Error> {
     let row = sqlx::query!(
         r#"INSERT INTO person (organization_id, first_name, last_name, stage_id, assigned_user_id)
            VALUES ($1, $2, $3, $4, $5)
@@ -82,24 +82,24 @@ pub async fn insert_person(
         organization_id.0,
         first_name,
         last_name,
-        stage_id,
+        stage_id.0,
         assigned_user_id.map(|id| id.0),
     )
     .fetch_one(conn)
     .await?;
-    Ok(row.id)
+    Ok(PersonId::new(row.id))
 }
 
 pub async fn update_assignment(
     conn: &mut PgConnection,
-    person_id: Uuid,
+    person_id: PersonId,
     organization_id: OrganizationId,
     assigned_user_id: Option<UserId>,
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
         r#"UPDATE person SET assigned_user_id = $3, updated_at = now()
            WHERE id = $1 AND organization_id = $2"#,
-        person_id,
+        person_id.0,
         organization_id.0,
         assigned_user_id.map(|id| id.0),
     )
@@ -110,16 +110,16 @@ pub async fn update_assignment(
 
 pub async fn update_stage(
     conn: &mut PgConnection,
-    person_id: Uuid,
+    person_id: PersonId,
     organization_id: OrganizationId,
-    stage_id: Uuid,
+    stage_id: StageId,
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
         r#"UPDATE person SET stage_id = $3, updated_at = now()
            WHERE id = $1 AND organization_id = $2"#,
-        person_id,
+        person_id.0,
         organization_id.0,
-        stage_id,
+        stage_id.0,
     )
     .execute(conn)
     .await?;
@@ -151,7 +151,7 @@ pub async fn is_organization_member(
 /// brand-new Person and a matched one.
 pub async fn upsert_contact_methods(
     conn: &mut PgConnection,
-    person_id: Uuid,
+    person_id: PersonId,
     organization_id: OrganizationId,
     parsed: &ParsedLead,
 ) -> Result<(), sqlx::Error> {
@@ -162,7 +162,7 @@ pub async fn upsert_contact_methods(
                VALUES ($1, $2, 'email', $3, $4)
                ON CONFLICT (person_id, kind, normalized_value) DO NOTHING"#,
             organization_id.0,
-            person_id,
+            person_id.0,
             raw,
             normalized,
         )
@@ -176,7 +176,7 @@ pub async fn upsert_contact_methods(
                VALUES ($1, $2, 'phone', $3, $4)
                ON CONFLICT (person_id, kind, normalized_value) DO NOTHING"#,
             organization_id.0,
-            person_id,
+            person_id.0,
             raw,
             normalized,
         )
@@ -219,12 +219,12 @@ impl From<PersonSummaryRow> for PersonSummary {
             _ => None,
         };
         PersonSummary {
-            id: row.id,
+            id: PersonId::new(row.id),
             first_name: row.first_name,
             last_name: row.last_name,
             display_name,
             stage: StageRef {
-                id: row.stage_id,
+                id: StageId::new(row.stage_id),
                 name: row.stage_name,
             },
             assigned_user,
@@ -367,7 +367,7 @@ pub async fn search_summaries(
 pub async fn summary_by_id(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
-    person_id: Uuid,
+    person_id: PersonId,
 ) -> Result<Option<PersonSummary>, sqlx::Error> {
     let row = sqlx::query_as!(
         PersonSummaryRow,
@@ -388,7 +388,7 @@ pub async fn summary_by_id(
            LEFT JOIN app_user u ON u.id = p.assigned_user_id
            WHERE p.organization_id = $1 AND p.id = $2"#,
         organization_id.0,
-        person_id,
+        person_id.0,
     )
     .fetch_optional(conn)
     .await?;
@@ -407,7 +407,7 @@ pub struct ContactMethodItem {
 pub async fn contact_methods_for_person(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
-    person_id: Uuid,
+    person_id: PersonId,
 ) -> Result<Vec<ContactMethodItem>, sqlx::Error> {
     sqlx::query_as!(
         ContactMethodItem,
@@ -415,7 +415,7 @@ pub async fn contact_methods_for_person(
            WHERE organization_id = $1 AND person_id = $2
            ORDER BY created_at ASC"#,
         organization_id.0,
-        person_id,
+        person_id.0,
     )
     .fetch_all(conn)
     .await
@@ -467,7 +467,7 @@ struct InquiryReceivedHistoryRow {
 async fn inquiry_received_history(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
-    person_id: Uuid,
+    person_id: PersonId,
 ) -> Result<Vec<HistoryEntry>, sqlx::Error> {
     let rows = sqlx::query_as!(
         InquiryReceivedHistoryRow,
@@ -478,7 +478,7 @@ async fn inquiry_received_history(
            LEFT JOIN app_user au ON au.id = ir.actor_user_id
            WHERE ir.organization_id = $1 AND ir.person_id = $2"#,
         organization_id.0,
-        person_id,
+        person_id.0,
     )
     .fetch_all(conn)
     .await?;
@@ -521,7 +521,7 @@ struct RoutingDecisionHistoryRow {
 async fn routing_decision_history(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
-    person_id: Uuid,
+    person_id: PersonId,
 ) -> Result<Vec<HistoryEntry>, sqlx::Error> {
     let rows = sqlx::query_as!(
         RoutingDecisionHistoryRow,
@@ -534,7 +534,7 @@ async fn routing_decision_history(
            LEFT JOIN app_user au2 ON au2.id = rd.assignee_user_id
            WHERE rd.organization_id = $1 AND rd.person_id = $2"#,
         organization_id.0,
-        person_id,
+        person_id.0,
     )
     .fetch_all(conn)
     .await?;
@@ -580,7 +580,7 @@ struct AssignmentChangedHistoryRow {
 async fn assignment_changed_history(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
-    person_id: Uuid,
+    person_id: PersonId,
 ) -> Result<Vec<HistoryEntry>, sqlx::Error> {
     let rows = sqlx::query_as!(
         AssignmentChangedHistoryRow,
@@ -595,7 +595,7 @@ async fn assignment_changed_history(
            LEFT JOIN app_user tu ON tu.id = ac.to_user_id
            WHERE ac.organization_id = $1 AND ac.person_id = $2"#,
         organization_id.0,
-        person_id,
+        person_id.0,
     )
     .fetch_all(conn)
     .await?;
@@ -642,7 +642,7 @@ struct StageChangedHistoryRow {
 async fn stage_changed_history(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
-    person_id: Uuid,
+    person_id: PersonId,
 ) -> Result<Vec<HistoryEntry>, sqlx::Error> {
     let rows = sqlx::query_as!(
         StageChangedHistoryRow,
@@ -657,7 +657,7 @@ async fn stage_changed_history(
            JOIN stage ts ON ts.id = sc.to_stage_id
            WHERE sc.organization_id = $1 AND sc.person_id = $2"#,
         organization_id.0,
-        person_id,
+        person_id.0,
     )
     .fetch_all(conn)
     .await?;
@@ -666,11 +666,14 @@ async fn stage_changed_history(
         .into_iter()
         .map(|r| {
             let from_stage = match (r.from_stage_id, r.from_stage_name) {
-                (Some(id), Some(name)) => Some(StageRef { id, name }),
+                (Some(id), Some(name)) => Some(StageRef {
+                    id: StageId::new(id),
+                    name,
+                }),
                 _ => None,
             };
             let to_stage = StageRef {
-                id: r.to_stage_id,
+                id: StageId::new(r.to_stage_id),
                 name: r.to_stage_name,
             };
             HistoryEntry {
@@ -721,7 +724,7 @@ struct ContactAttemptedHistoryRow {
 async fn contact_attempted_history(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
-    person_id: Uuid,
+    person_id: PersonId,
 ) -> Result<Vec<HistoryEntry>, sqlx::Error> {
     let rows = sqlx::query_as!(
         ContactAttemptedHistoryRow,
@@ -736,7 +739,7 @@ async fn contact_attempted_history(
            LEFT JOIN call cl ON cl.id = ca.causation_id AND cl.organization_id = ca.organization_id
            WHERE ca.organization_id = $1 AND ca.person_id = $2"#,
         organization_id.0,
-        person_id,
+        person_id.0,
     )
     .fetch_all(conn)
     .await?;
@@ -789,7 +792,7 @@ struct CallCompletedHistoryRow {
 async fn call_completed_history(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
-    person_id: Uuid,
+    person_id: PersonId,
 ) -> Result<Vec<HistoryEntry>, sqlx::Error> {
     let rows = sqlx::query_as!(
         CallCompletedHistoryRow,
@@ -800,7 +803,7 @@ async fn call_completed_history(
            LEFT JOIN app_user au ON au.id = cc.actor_user_id
            WHERE cc.organization_id = $1 AND cc.person_id = $2"#,
         organization_id.0,
-        person_id,
+        person_id.0,
     )
     .fetch_all(conn)
     .await?;
@@ -832,7 +835,7 @@ async fn call_completed_history(
 pub async fn history_for_person(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
-    person_id: Uuid,
+    person_id: PersonId,
 ) -> Result<Vec<HistoryEntry>, sqlx::Error> {
     let mut entries = Vec::new();
     entries.extend(inquiry_received_history(conn, organization_id, person_id).await?);

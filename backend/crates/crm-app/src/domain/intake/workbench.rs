@@ -18,6 +18,7 @@ use crate::domain::inquiry::parse::{self, Source};
 use crate::domain::intake::email;
 use crate::domain::intake::IntakeActor;
 use crate::domain::raw_payload::{crypto, store, PayloadFormat, Resolution};
+use crate::ids::RawPayloadId;
 use crate::realtime::{Publication, Publisher, RealtimeEvent};
 
 /// Every text field in a detail response is capped here (raw mail can be
@@ -67,7 +68,7 @@ impl WorkbenchError {
 }
 
 pub struct UnresolvedDetail {
-    pub id: Uuid,
+    pub id: RawPayloadId,
     pub source: String,
     pub payload_format: String,
     pub received_at: DateTime<Utc>,
@@ -142,7 +143,7 @@ pub async fn unresolved_detail(
     pool: &PgPool,
     key: &RawPayloadKey,
     ctx: &CommandContext,
-    id: Uuid,
+    id: RawPayloadId,
 ) -> Result<UnresolvedDetail, WorkbenchError> {
     let mut conn = pool.acquire().await?;
     let row = store::unresolved_row_for_detail(&mut conn, id, ctx.organization_id)
@@ -236,7 +237,7 @@ pub async fn retry_intake(
     key: &RawPayloadKey,
     publisher: &Publisher,
     ctx: &CommandContext,
-    id: Uuid,
+    id: RawPayloadId,
 ) -> Result<ReceiveInquiryOutcome, WorkbenchError> {
     // Step 1: guarded reset in its own transaction.
     let mut tx = pool.begin().await?;
@@ -265,7 +266,7 @@ pub async fn retry_intake(
     let meta = sqlx::query!(
         r#"SELECT payload_format, received_at, content_hmac
            FROM raw_payload WHERE id = $1 AND organization_id = $2"#,
-        id,
+        id.0,
         ctx.organization_id.0,
     )
     .fetch_one(&mut *tx)
@@ -297,7 +298,7 @@ pub async fn retry_intake(
            SET resolution = 'pending', unresolved_reason = NULL, resolved_at = NULL,
                extraction_attempts = 0, extraction_next_attempt_at = NULL
            WHERE id = $1 AND organization_id = $2"#,
-        id,
+        id.0,
         ctx.organization_id.0,
     )
     .execute(&mut *tx)
@@ -360,7 +361,7 @@ pub async fn discard_raw_payload(
     pool: &PgPool,
     publisher: &Publisher,
     ctx: &CommandContext,
-    id: Uuid,
+    id: RawPayloadId,
 ) -> Result<DiscardOutcome, WorkbenchError> {
     let discarded_at = Utc::now();
 
@@ -386,7 +387,7 @@ pub async fn discard_raw_payload(
         r#"UPDATE raw_payload
            SET resolution = 'discarded', discarded_by_user_id = $3, discarded_at = $4
            WHERE id = $1 AND organization_id = $2"#,
-        id,
+        id.0,
         ctx.organization_id.0,
         ctx.actor_user_id.0,
         discarded_at,

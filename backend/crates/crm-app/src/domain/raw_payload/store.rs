@@ -8,7 +8,7 @@ use uuid::Uuid;
 use crate::domain::envelope::Origin;
 use crate::domain::inquiry::parse::Source;
 use crate::domain::raw_payload::{PayloadFormat, Resolution};
-use crate::ids::{OrganizationId, UserId};
+use crate::ids::{InquiryId, OrganizationId, PersonId, RawPayloadId, UserId};
 
 /// A `raw_payload.resolution`/`payload_format` value read back that
 /// doesn't decode into its enum — the `CHECK` constraint on `resolution`
@@ -23,17 +23,17 @@ fn decode_error(column: &'static str, value: &str) -> sqlx::Error {
 }
 
 pub struct LockedRawPayload {
-    pub id: Uuid,
+    pub id: RawPayloadId,
     pub source: String,
     pub nonce: Vec<u8>,
     pub ciphertext: Vec<u8>,
     pub resolution: Resolution,
     pub unresolved_reason: Option<String>,
-    pub inquiry_id: Option<Uuid>,
+    pub inquiry_id: Option<InquiryId>,
 }
 
 pub struct UnresolvedItem {
-    pub id: Uuid,
+    pub id: RawPayloadId,
     pub source: String,
     pub received_at: DateTime<Utc>,
     pub resolution: Resolution,
@@ -42,8 +42,8 @@ pub struct UnresolvedItem {
 }
 
 pub struct ResolvedLookup {
-    pub inquiry_id: Uuid,
-    pub person_id: Uuid,
+    pub inquiry_id: InquiryId,
+    pub person_id: PersonId,
     pub person_created: bool,
     pub strategy: String,
     pub assigned_user_id: Option<UserId>,
@@ -69,7 +69,7 @@ struct ResolvedLookupRow {
 #[allow(clippy::too_many_arguments)]
 pub async fn insert_pending(
     pool: &PgPool,
-    id: Uuid,
+    id: RawPayloadId,
     organization_id: OrganizationId,
     source: &Source,
     payload_format: PayloadFormat,
@@ -79,7 +79,7 @@ pub async fn insert_pending(
     ciphertext: &[u8],
     content_hmac: &[u8],
     byte_len: i32,
-) -> Result<Uuid, sqlx::Error> {
+) -> Result<RawPayloadId, sqlx::Error> {
     let mut tx = pool.begin().await?;
     let source = source.as_str();
     let payload_format = payload_format.as_str();
@@ -91,7 +91,7 @@ pub async fn insert_pending(
              nonce, ciphertext, content_hmac, byte_len, resolution)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending')
            ON CONFLICT (organization_id, source, content_hmac) DO NOTHING"#,
-        id,
+        id.0,
         organization_id.0,
         source,
         payload_format,
@@ -115,7 +115,7 @@ pub async fn insert_pending(
     .await?;
 
     tx.commit().await?;
-    Ok(row.id)
+    Ok(RawPayloadId::new(row.id))
 }
 
 /// Phase B row lock (docs/specs/SLICE_002.md §3): `SELECT … FOR UPDATE`
@@ -123,13 +123,13 @@ pub async fn insert_pending(
 /// until the first finishes.
 pub async fn lock_for_processing(
     tx: &mut PgConnection,
-    id: Uuid,
+    id: RawPayloadId,
     organization_id: OrganizationId,
 ) -> Result<Option<LockedRawPayload>, sqlx::Error> {
     let row = sqlx::query!(
         r#"SELECT id, source, nonce, ciphertext, resolution, unresolved_reason, inquiry_id
            FROM raw_payload WHERE id = $1 AND organization_id = $2 FOR UPDATE"#,
-        id,
+        id.0,
         organization_id.0,
     )
     .fetch_optional(tx)
@@ -140,28 +140,28 @@ pub async fn lock_for_processing(
     let resolution = Resolution::parse(&row.resolution)
         .ok_or_else(|| decode_error("resolution", &row.resolution))?;
     Ok(Some(LockedRawPayload {
-        id: row.id,
+        id: RawPayloadId::new(row.id),
         source: row.source,
         nonce: row.nonce,
         ciphertext: row.ciphertext,
         resolution,
         unresolved_reason: row.unresolved_reason,
-        inquiry_id: row.inquiry_id,
+        inquiry_id: row.inquiry_id.map(InquiryId::new),
     }))
 }
 
 pub async fn mark_resolved(
     tx: &mut PgConnection,
-    id: Uuid,
+    id: RawPayloadId,
     organization_id: OrganizationId,
-    inquiry_id: Uuid,
+    inquiry_id: InquiryId,
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
         r#"UPDATE raw_payload SET resolution = 'resolved', resolved_at = now(), inquiry_id = $3
            WHERE id = $1 AND organization_id = $2"#,
-        id,
+        id.0,
         organization_id.0,
-        inquiry_id,
+        inquiry_id.0,
     )
     .execute(tx)
     .await?;
@@ -170,14 +170,14 @@ pub async fn mark_resolved(
 
 pub async fn mark_unresolved(
     tx: &mut PgConnection,
-    id: Uuid,
+    id: RawPayloadId,
     organization_id: OrganizationId,
     reason: &str,
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
         r#"UPDATE raw_payload SET resolution = 'unresolved', resolved_at = now(), unresolved_reason = $3
            WHERE id = $1 AND organization_id = $2"#,
-        id,
+        id.0,
         organization_id.0,
         reason,
     )
@@ -193,7 +193,7 @@ pub async fn mark_unresolved(
 pub async fn resolved_outcome_for_inquiry(
     tx: &mut PgConnection,
     organization_id: OrganizationId,
-    inquiry_id: Uuid,
+    inquiry_id: InquiryId,
 ) -> Result<ResolvedLookup, sqlx::Error> {
     let row = sqlx::query_as!(
         ResolvedLookupRow,
@@ -204,14 +204,14 @@ pub async fn resolved_outcome_for_inquiry(
            JOIN routing_decision rd ON rd.inquiry_id = i.id
            JOIN person p ON p.id = i.person_id
            WHERE i.id = $1 AND i.organization_id = $2"#,
-        inquiry_id,
+        inquiry_id.0,
         organization_id.0,
     )
     .fetch_one(tx)
     .await?;
     Ok(ResolvedLookup {
-        inquiry_id: row.inquiry_id,
-        person_id: row.person_id,
+        inquiry_id: InquiryId::new(row.inquiry_id),
+        person_id: PersonId::new(row.person_id),
         person_created: row.person_created,
         strategy: row.strategy,
         assigned_user_id: row.assigned_user_id.map(UserId::new),
@@ -247,7 +247,7 @@ pub async fn list_unresolved(
             let resolution = Resolution::parse(&row.resolution)
                 .ok_or_else(|| decode_error("resolution", &row.resolution))?;
             Ok(UnresolvedItem {
-                id: row.id,
+                id: RawPayloadId::new(row.id),
                 source: row.source,
                 received_at: row.received_at,
                 resolution,
@@ -264,7 +264,7 @@ pub async fn list_unresolved(
 /// `resolved`/`discarded`/unknown/cross-org are all the same `None`
 /// (byte-identical 404 upstream). The first reader of `payload_format`.
 pub struct DetailRawPayload {
-    pub id: Uuid,
+    pub id: RawPayloadId,
     pub source: String,
     /// Left as the stored string, not decoded to `PayloadFormat` here:
     /// the detail read stays fail-open for an unrecognized format
@@ -282,7 +282,7 @@ pub struct DetailRawPayload {
 
 pub async fn unresolved_row_for_detail(
     conn: &mut PgConnection,
-    id: Uuid,
+    id: RawPayloadId,
     organization_id: OrganizationId,
 ) -> Result<Option<DetailRawPayload>, sqlx::Error> {
     let row = sqlx::query!(
@@ -291,7 +291,7 @@ pub async fn unresolved_row_for_detail(
            FROM raw_payload
            WHERE id = $1 AND organization_id = $2
              AND resolution IN ('pending', 'unresolved')"#,
-        id,
+        id.0,
         organization_id.0,
     )
     .fetch_optional(conn)
@@ -302,7 +302,7 @@ pub async fn unresolved_row_for_detail(
     let resolution = Resolution::parse(&row.resolution)
         .ok_or_else(|| decode_error("resolution", &row.resolution))?;
     Ok(Some(DetailRawPayload {
-        id: row.id,
+        id: RawPayloadId::new(row.id),
         source: row.source,
         payload_format: row.payload_format,
         received_at: row.received_at,

@@ -196,9 +196,14 @@ async fn org_with_default(migrator_pool: &PgPool, name: &str) -> (Uuid, Uuid) {
     )
     .await;
     common::add_membership(migrator_pool, org_id, bob).await;
-    admin_queries::update_intake_default_assignee(
+    // Slice 008 (D-041): mode dispatch replaced the old implicit
+    // "assignee configured => organization_default" behavior — set
+    // `default_assignee` mode alongside the assignee so this fixture's
+    // downstream `organization_default` assertions stay byte-identical.
+    admin_queries::update_intake_routing_settings(
         &mut migrator_pool.acquire().await.unwrap(),
         OrganizationId::new(org_id),
+        crm_api::domain::intake::IntakeRoutingMode::DefaultAssignee,
         Some(UserId::new(bob)),
     )
     .await

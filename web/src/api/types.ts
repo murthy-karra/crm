@@ -151,9 +151,14 @@ export interface IntakeAddressResponse {
   scheme: IntakeAddressScheme
 }
 
-// --- Slice 007c: unattended intake routing (docs/specs/SLICE_007c.md §5) ---
+// --- Slice 008: intake routing modes (docs/specs/SLICE_008.md §5, D-041) ---
+// Supersedes SLICE_007c §5's single-key `IntakeSettingsResponse` shape
+// (declared breaking change, SLICE_007c §5 pointer amendment).
+
+export type IntakeRoutingMode = 'default_assignee' | 'round_robin' | 'unassigned'
 
 export interface IntakeSettingsResponse {
+  intake_routing_mode: IntakeRoutingMode
   intake_default_assignee_user_id: string | null
 }
 
@@ -271,13 +276,14 @@ export interface InquiryReceivedDetail {
 // /api/inquiries` `routing_strategy` vocabulary: `organization_default`
 // and `unassigned` appear there only on a `duplicate: true` replay of a
 // system-routed row (nothing on the user-actor endpoint ever produces
-// them directly).
+// them directly). SLICE_008 §5 adds `round_robin` the same way.
 export type RoutingStrategy =
   | 'explicit'
   | 'actor_default'
   | 'kept_existing'
   | 'organization_default'
   | 'unassigned'
+  | 'round_robin'
 
 export interface RoutingDecisionDetail {
   inquiry_id: string

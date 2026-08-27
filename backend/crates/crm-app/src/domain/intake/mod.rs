@@ -4,17 +4,21 @@
 //! Rung 007c: `IntakeActor` — the system-actor path through
 //! `receive_inquiry` (docs/specs/SLICE_007c.md §4). Rung 007d: the
 //! pinned-format email module and Phase B on the inbound endpoint
-//! (docs/specs/SLICE_007d.md §4).
+//! (docs/specs/SLICE_007d.md §4). Slice 008: `rotation` — routing modes
+//! and round-robin (docs/specs/SLICE_008.md §4; D-041), distinct from the
+//! pre-existing `rotate` (intake ADDRESS token rotation, SLICE_007g).
 
 pub mod address;
 pub mod email;
 pub mod extraction;
 pub mod receive;
 pub mod rotate;
+pub mod rotation;
 pub mod workbench;
 
 pub use address::{IntakeAddress, IntakeToken};
 pub use receive::{receive_inbound_email, InboundEmailOutcome, ReceiveInboundEmailError};
+pub use rotation::IntakeRoutingMode;
 
 use chrono::{DateTime, Utc};
 #[cfg(test)]

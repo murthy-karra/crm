@@ -248,6 +248,7 @@ const ROUTING_STRATEGY_LABEL: Record<RoutingStrategy, string> = {
   kept_existing: 'the existing assignee',
   organization_default: 'the organization default',
   unassigned: 'no default assignee',
+  round_robin: 'round-robin',
 }
 
 function historySummary(entry: HistoryEntry): string {

@@ -255,6 +255,18 @@ enum must gain both variants). A pointer line is added to SLICE_002 §5,
 
 No other existing endpoint changes shape or behavior.
 
+**Superseded by SLICE_008 §5 (declared breaking change, AGENTS.md §11;
+D-041).** The `GET`/`PUT` bodies above — single key,
+`intake_default_assignee_user_id` only — are SLICE_008's three-mode
+routing picker's starting point, not its current shape. SLICE_008
+replaces the PUT body with a two-key, both-required shape
+(`intake_routing_mode` + `intake_default_assignee_user_id`); a PUT using
+this section's single-key body now gets 400 `malformed_request` (no
+mode key). The GET response gains `intake_routing_mode` alongside the
+unchanged `intake_default_assignee_user_id`. This section is kept as the
+historical record of what this slice shipped; SLICE_008 §5 is the
+current contract for both endpoints.
+
 ## 6. Web
 
 `IntakeSettingsView.vue` (admin-only route already exists) gains the

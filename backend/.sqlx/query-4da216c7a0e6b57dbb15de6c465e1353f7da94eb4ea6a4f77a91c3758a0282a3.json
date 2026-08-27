@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.user_id, m.created_at\n           FROM organization_membership m\n           WHERE m.organization_id = $1 AND m.status = 'active'\n           ORDER BY m.created_at, m.user_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "4da216c7a0e6b57dbb15de6c465e1353f7da94eb4ea6a4f77a91c3758a0282a3"
+}

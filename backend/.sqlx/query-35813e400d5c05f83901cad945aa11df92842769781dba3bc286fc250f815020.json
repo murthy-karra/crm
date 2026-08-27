@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT r.last_assigned_user_id, m.created_at as \"anchor_created_at?\"\n           FROM intake_rotation r\n           LEFT JOIN organization_membership m\n             ON m.organization_id = r.organization_id AND m.user_id = r.last_assigned_user_id\n           WHERE r.organization_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "last_assigned_user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "anchor_created_at?",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "35813e400d5c05f83901cad945aa11df92842769781dba3bc286fc250f815020"
+}

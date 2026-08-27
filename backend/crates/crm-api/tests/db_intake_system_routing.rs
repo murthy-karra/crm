@@ -13,16 +13,30 @@ use crm_api::domain::admin::queries as admin_queries;
 use crm_api::domain::commands::{self, ReceiveInquiry, ReceiveInquiryOutcome, RoutingStrategy};
 use crm_api::domain::envelope::{ActorKind, Origin};
 use crm_api::domain::inquiry::parse::Source;
-use crm_api::domain::intake::IntakeActor;
+use crm_api::domain::intake::{IntakeActor, IntakeRoutingMode};
 use crm_api::ids::{CorrelationId, OrganizationId, UserId};
 use crm_api::realtime::Publisher;
 
 const PW: &str = "pw";
 
+/// Slice 008 (D-041) note: `intake_routing_mode` dispatch replaced the old
+/// implicit "an assignee is configured => organization_default" behavior
+/// this file's 007c criteria were written against — so this fixture
+/// helper now sets the mode alongside the assignee, mirroring the OLD
+/// two-state implicit behavior exactly (`Some` => `default_assignee`
+/// mode, `None` => `unassigned` mode). Every downstream assertion in this
+/// file (fact/routing/Today pins) is unchanged; only this setup helper
+/// adapted to the new schema.
 async fn set_default(pool: &PgPool, org_id: Uuid, user_id: Option<Uuid>) {
-    admin_queries::update_intake_default_assignee(
+    let mode = if user_id.is_some() {
+        IntakeRoutingMode::DefaultAssignee
+    } else {
+        IntakeRoutingMode::Unassigned
+    };
+    admin_queries::update_intake_routing_settings(
         &mut pool.acquire().await.unwrap(),
         OrganizationId::new(org_id),
+        mode,
         user_id.map(UserId::new),
     )
     .await

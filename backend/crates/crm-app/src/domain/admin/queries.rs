@@ -10,7 +10,7 @@ use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
 use super::{MembershipStatus, Role};
-use crate::domain::intake::IntakeToken;
+use crate::domain::intake::{IntakeRoutingMode, IntakeToken};
 use crate::ids::{InvitationId, OrganizationId, UserId};
 
 fn decode_role(s: &str) -> Result<Role, sqlx::Error> {
@@ -20,6 +20,15 @@ fn decode_role(s: &str) -> Result<Role, sqlx::Error> {
 fn decode_status(s: &str) -> Result<MembershipStatus, sqlx::Error> {
     MembershipStatus::from_db_str(s)
         .ok_or_else(|| sqlx::Error::Decode(format!("invalid membership status: {s}").into()))
+}
+
+/// Fails closed (mirrors `decode_role`/`decode_status`): the DB CHECK
+/// (`organization_intake_routing_mode_check`) is defense in depth, not the
+/// only guard — a read path must never crash the process on unexpected
+/// data (docs/specs/SLICE_008.md §4).
+fn decode_intake_routing_mode(s: &str) -> Result<IntakeRoutingMode, sqlx::Error> {
+    IntakeRoutingMode::parse(s)
+        .ok_or_else(|| sqlx::Error::Decode(format!("invalid intake routing mode: {s}").into()))
 }
 
 // --- Organization ----------------------------------------------------
@@ -844,19 +853,48 @@ pub async fn intake_default_assignee_user_id(
         .map(UserId::new))
 }
 
-/// `PUT /api/organization/intake-settings` (§5): sets or clears the
-/// default assignee and maintains `updated_at` (the column-level grant
-/// includes it — the membership-grant precedent).
-pub async fn update_intake_default_assignee(
+/// The Organization's configured `intake_routing_mode` (D-041;
+/// docs/specs/SLICE_008.md §4 routing-matrix step 4) — used both by
+/// `determine_routing`'s dispatch and by `GET
+/// /api/organization/intake-settings`. An Organization row that
+/// (unreachably, in practice) cannot be found reads `Unassigned`, the same
+/// fail-safe the column's own DEFAULT expresses.
+pub async fn intake_routing_mode(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
-    user_id: Option<UserId>,
+) -> Result<IntakeRoutingMode, sqlx::Error> {
+    let row = sqlx::query!(
+        r#"SELECT intake_routing_mode FROM organization WHERE id = $1"#,
+        organization_id.0,
+    )
+    .fetch_optional(conn)
+    .await?;
+    match row {
+        Some(r) => decode_intake_routing_mode(&r.intake_routing_mode),
+        None => Ok(IntakeRoutingMode::Unassigned),
+    }
+}
+
+/// `PUT /api/organization/intake-settings` (docs/specs/SLICE_008.md §5):
+/// the sole write path for both fields together — full-state replace, one
+/// UPDATE, `updated_at` maintained (the column-level grant includes it —
+/// the membership-grant precedent). Supersedes 007c's
+/// `update_intake_default_assignee` (assignee-only); the route validates
+/// the (mode, assignee) combination BEFORE calling this — this function
+/// persists whatever combination it is given.
+pub async fn update_intake_routing_settings(
+    conn: &mut PgConnection,
+    organization_id: OrganizationId,
+    mode: IntakeRoutingMode,
+    assignee_user_id: Option<UserId>,
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
-        r#"UPDATE organization SET intake_default_assignee_user_id = $2, updated_at = now()
+        r#"UPDATE organization
+           SET intake_routing_mode = $2, intake_default_assignee_user_id = $3, updated_at = now()
            WHERE id = $1"#,
         organization_id.0,
-        user_id.map(|id| id.0),
+        mode.as_str(),
+        assignee_user_id.map(|id| id.0),
     )
     .execute(conn)
     .await?;

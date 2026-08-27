@@ -2,9 +2,11 @@
 // SLICE_007a §6: `/manage/intake` — the Organization's email intake
 // address, read-only, with Copy. The token inside it is the anti-forgery
 // secret, so this page and its endpoint are org-admin only.
-// SLICE_007c §6: below that, the "Unattended lead routing" card — the
-// Organization's default assignee for system-actor (unattended) intake.
-import { computed, ref } from 'vue'
+// SLICE_008 §5 (D-041, supersedes SLICE_007c §6): below that, the
+// "Unattended lead routing" card — a three-mode picker (default assignee /
+// round-robin / unassigned) for how the Organization's unattended leads
+// route.
+import { computed, ref, watch } from 'vue'
 import { Check, Copy, RefreshCw } from 'lucide-vue-next'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import Select from 'primevue/select'
@@ -18,6 +20,7 @@ import {
   useMembers,
   useUpdateIntakeSettingsMutation,
 } from '../api/queries'
+import type { IntakeRoutingMode } from '../api/types'
 import { buttonClasses, selectPt } from '../lib/controls'
 import { describeApiError, describeMutationError } from '../lib/errors'
 
@@ -58,14 +61,21 @@ async function copy() {
   }
 }
 
-// --- Unattended lead routing (SLICE_007c §6) --------------------------------
+// --- Unattended lead routing (SLICE_008 §5, D-041) -------------------------
+
+const MODE_OPTIONS: { value: IntakeRoutingMode; label: string }[] = [
+  { value: 'default_assignee', label: 'Default assignee' },
+  { value: 'round_robin', label: 'Round-robin' },
+  { value: 'unassigned', label: 'Unassigned' },
+]
 
 const { data: membersData, isPending: membersPending } = useMembers(orgId)
 const activeMembers = computed(() => (membersData.value?.members ?? []).filter((m) => m.status === 'active'))
-const assigneeOptions = computed(() => [
-  { user_id: null as string | null, display_name: 'Unassigned' },
-  ...activeMembers.value.map((m) => ({ user_id: m.user_id as string | null, display_name: m.display_name })),
-])
+// D-041: the dropdown's old "Unassigned" entry moved up to become its own
+// mode above — this list is active members only now.
+const assigneeOptions = computed(() =>
+  activeMembers.value.map((m) => ({ user_id: m.user_id, display_name: m.display_name })),
+)
 
 const {
   data: settingsData,
@@ -73,6 +83,14 @@ const {
   isError: settingsError,
   error: settingsErrorObj,
 } = useIntakeSettings(orgId)
+const serverMode = computed<IntakeRoutingMode>(() => settingsData.value?.intake_routing_mode ?? 'unassigned')
+// Reviewer F1: picking "Default assignee" when the stored assignee is
+// null/inactive must NOT PUT immediately (the server would 422 per §5's
+// S1 rule and the picker would revert before the dropdown ever
+// rendered — a lockout). Hold the choice locally, render the dropdown,
+// and defer the single both-fields PUT until a member is chosen.
+const pendingMode = ref<IntakeRoutingMode | null>(null)
+const selectedMode = computed<IntakeRoutingMode>(() => pendingMode.value ?? serverMode.value)
 const selectedAssignee = computed(() => settingsData.value?.intake_default_assignee_user_id ?? null)
 const configuredMember = computed(
   () => (membersData.value?.members ?? []).find((m) => m.user_id === selectedAssignee.value) ?? null,
@@ -80,15 +98,39 @@ const configuredMember = computed(
 const isDeactivatedDefault = computed(() => configuredMember.value?.status === 'inactive')
 
 const {
-  mutate: saveDefaultAssignee,
+  mutate: saveSettings,
   isPending: savePending,
   error: saveError,
 } = useUpdateIntakeSettingsMutation(orgId)
 
-function onAssigneeChange(value: unknown) {
-  if (typeof value !== 'string' && value !== null) return
-  saveDefaultAssignee({ intake_default_assignee_user_id: value })
+// One mutation PUTs both fields on any change (§5): each handler supplies
+// the OTHER field's current value alongside the one that actually changed.
+function onModeChange(value: unknown) {
+  if (typeof value !== 'string') return
+  const mode = value as IntakeRoutingMode
+  const storedAssigneeSatisfiesDefaultMode =
+    configuredMember.value !== null && configuredMember.value.status === 'active'
+  if (mode === 'default_assignee' && !storedAssigneeSatisfiesDefaultMode) {
+    pendingMode.value = mode
+    return
+  }
+  pendingMode.value = null
+  saveSettings({
+    intake_routing_mode: mode,
+    intake_default_assignee_user_id: selectedAssignee.value,
+  })
 }
+
+function onAssigneeChange(value: unknown) {
+  if (typeof value !== 'string') return
+  saveSettings({ intake_routing_mode: selectedMode.value, intake_default_assignee_user_id: value })
+}
+
+// The deferred choice completes (or is abandoned) once the server state
+// catches up or the admin navigates the picker elsewhere.
+watch(serverMode, (mode) => {
+  if (pendingMode.value === mode) pendingMode.value = null
+})
 </script>
 
 <template>
@@ -174,35 +216,62 @@ function onAssigneeChange(value: unknown) {
       v-else
       class="mt-6"
       label="Unattended lead routing"
-      description="Default assignee for unattended leads."
+      description="How unattended leads route when nobody explicitly assigns them."
     >
       <Select
-        :model-value="selectedAssignee"
-        :options="assigneeOptions"
-        option-label="display_name"
-        option-value="user_id"
-        aria-label="Default assignee for unattended leads"
+        :model-value="selectedMode"
+        :options="MODE_OPTIONS"
+        option-label="label"
+        option-value="value"
+        aria-label="Unattended lead routing mode"
         :loading="savePending"
         :disabled="savePending"
         :pt="selectPt()"
         class="w-64"
-        data-testid="intake-default-assignee"
-        @update:model-value="onAssigneeChange"
+        data-testid="intake-routing-mode"
+        @update:model-value="onModeChange"
       />
+
+      <template v-if="selectedMode === 'default_assignee'">
+        <Select
+          :model-value="selectedAssignee"
+          :options="assigneeOptions"
+          option-label="display_name"
+          option-value="user_id"
+          aria-label="Default assignee for unattended leads"
+          placeholder="Choose a member"
+          :loading="savePending"
+          :disabled="savePending"
+          :pt="selectPt()"
+          class="mt-3 w-64"
+          data-testid="intake-default-assignee"
+          @update:model-value="onAssigneeChange"
+        />
+        <p
+          v-if="isDeactivatedDefault"
+          class="mt-1.5 text-small text-danger"
+          data-testid="intake-default-assignee-deactivated-warning"
+        >
+          The default assignee is deactivated; unattended leads will be created unassigned.
+        </p>
+      </template>
+
       <p
-        v-if="selectedAssignee === null"
-        class="mt-1.5 text-small text-text-muted"
-        data-testid="intake-default-assignee-unset-warning"
+        v-else-if="selectedMode === 'round_robin'"
+        class="mt-3 text-small text-text-muted"
+        data-testid="intake-round-robin-description"
+      >
+        Rotates across all active members in join order.
+      </p>
+
+      <p
+        v-else
+        class="mt-3 text-small text-text-muted"
+        data-testid="intake-unassigned-warning"
       >
         Unattended leads will be created unassigned and appear on no one's Today.
       </p>
-      <p
-        v-else-if="isDeactivatedDefault"
-        class="mt-1.5 text-small text-danger"
-        data-testid="intake-default-assignee-deactivated-warning"
-      >
-        The default assignee is deactivated; unattended leads will be created unassigned.
-      </p>
+
       <p
         v-if="saveError"
         class="mt-1.5 text-small text-danger"

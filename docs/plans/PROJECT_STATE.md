@@ -75,10 +75,25 @@ all-active-members pool; continue-anchored fairness, reactivation
 resumes original slot). docs/specs/SLICE_008.md APPROVED (user,
 2026-08-26) after independent review (ready-with-fixes, all six
 folded in — incl. the declared PUT supersession of 007c §5 and the
-S1 non-default-mode assignee rule preventing bricked orgs). Next:
-implementation gate → branch `slice-008-round-robin` (single lane,
-one migration 20260903000001, Option A Sonnet-implements workflow
-unless directed otherwise). Also this planning round: fixed
+S1 non-default-mode assignee rule preventing bricked orgs). IMPLEMENTED on
+`slice-008-round-robin` (Option A): migration 20260903000001
+(backfill live-verified on real orgs), rotation.rs, RoundRobin
+strategy, 3-mode PUT/GET + web picker. Reviewed ready-with-fixes —
+F1 BLOCKING (UI lockout: default_assignee unreachable for null-
+assignee orgs; the old Vitest pinned the trap) FIXED with deferred
+local mode state; adversarial pass independently found the same
+(H1), no critical, all M-items pinned (IntakeBusy pointer,
+duplicate-replay pointer with 2 members, email-path + retry-path
+round_robin incl. turn consumption, migration backfill arm,
+mid-order-pointer deactivation discriminator). Clean gates after a
+self-inflicted parallel-run collision (targeted suite raced own
+background gate — lesson: never overlap db runs in one checkout):
+check + check-db 301/0. LIVE WALKTHROUGH PASSED (2026-08-27): real
+org migrated correctly; user set round-robin in the UI; 4 real Gmail
+leads rotated Alice→Carol→Alice→Carol (extraction 2-10s after
+arrival; observed "minutes" delay was upstream Gmail send-pacing);
+CLI lead continued rotation; mid-rotation deactivation skipped
+without reset; member reactivated after. Awaiting commit gate. Also this planning round: fixed
 PROJECT_STATE's erroneous "round-robin" claim in the 007g
 walkthrough narrative (it routed organization_default).
 

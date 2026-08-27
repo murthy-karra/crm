@@ -388,6 +388,15 @@ method list (GET/POST/DELETE) is unchanged.
 | `GET /api/stages` | — | 200 `{"stages":[{id,name,position}]}` in position order | |
 | `GET /api/intake/unresolved` | — | 200 `{"items":[{id,source,received_at,resolution,reason,byte_len}], "truncated": bool}` ordered `received_at DESC`; cap 500. *Amended by SLICE_007e (declared, AGENTS.md §11): the queue lists `resolution IN ('pending','unresolved')` — `discarded` rows (new in 007e) do not appear; shape unchanged.* | |
 
+*`POST /api/inquiries`'s `routing_strategy` response vocabulary (declared
+additive changes, AGENTS.md §11): `explicit` | `actor_default` |
+`kept_existing` from this slice; `organization_default` | `unassigned`
+added by SLICE_007c §5 for system-actor intake; `round_robin` added by
+SLICE_008 §5 for the round-robin routing mode (D-041). All three later
+values are reachable on this user-actor endpoint only via a `duplicate:
+true` replay of a system-routed row — the shape itself (which fields
+exist) is unchanged.*
+
 `primary_email` / `primary_phone` = the earliest-created contact method of
 that kind, or null. `display_name` is derived server-side so both lanes
 agree: `first_name` and `last_name` joined by a space (whichever are

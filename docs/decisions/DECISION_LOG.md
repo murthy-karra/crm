@@ -1032,6 +1032,49 @@ stack call; visibility of captured mail (assigned agent vs broker
 continuity) is a BLOCKING product decision for #2, as is capture scope
 (matched-People threads only — never whole-mailbox — proposed).
 
+**Direction updated 2026-08-27 (user): CC/BCC-first, OAuth
+later-opt-in — flips the paragraph above.** V1 capture = agent-
+addressed: agents CC (preferred over BCC, so client reply-alls are
+also captured) a capture address on our domain for lead/client
+threads. Rationale: agent control makes the privacy boundary
+structural (nothing enters the system except what an agent
+deliberately addressed to it — the whole-mailbox concern dissolves),
+it is provider-agnostic (Gmail/M365/anything), needs no OAuth
+verification or CASA (the external clock vanishes), and reuses the
+proven 007 receiving stack. Accepted limitation, eyes open: BCC
+captures outbound only; CC catches inbound only on reply-all — so
+the "they replied" Today signal is PARTIAL in v1. Per-agent mailbox
+OAuth (metadata-only scopes: gmail.metadata / Mail.ReadBasic)
+remains the recorded LATER opt-in upgrade for automatic two-way
+capture — same pipeline, second feed, per-agent choice.
+
+Mitigations for the partial-inbound limitation (user, same
+discussion):
+
+1. **Reply-all as etiquette**: agents ask clients/leads to always
+   reply-all (the visible CC address makes this natural); the product
+   can reinforce it (connect instructions, a suggested signature
+   snippet) — slice-planning detail.
+2. **Retroactive forwarding**: missed correspondence must be
+   forwardable AFTER the fact — the agent picks the missed emails,
+   forwards them to the capture address, and the system receives,
+   processes, and inserts them into the timeline CORRECTLY. Design
+   requirements this sets for the capture slice: reuse the 007h1
+   forwarded-wrapper unwrapping (`SenderTrust` machinery) to recover
+   the ORIGINAL message — the inner From identifies the client and
+   the direction (inner From = client → inbound; = agent →
+   outbound); timeline placement honors the ORIGINAL correspondence
+   timestamp (the unwrapped inner Date), with capture time recorded
+   separately — a conscious, declared divergence from intake's
+   received_at-is-receipt-time rule (007d §4a); dedup by
+   Message-ID/thread ids so a re-forward, or a forward of something
+   already CC-captured, never duplicates a timeline entry.
+
+Also recorded from the same discussion: if/when OAuth capture is
+built, match-on-headers-then-discard with provider-level body-less
+scopes is the standard to hold (transient header processing for
+filtering, stored only on a matched-Person hit).
+
 Test infrastructure (2026-08-23): **elysianfeld.com is the CRM's own
 domain** — the per-Organization inbound-intake addresses live there.
 Leading candidate (user, 2026-08-23): a **per-brokerage subdomain**,

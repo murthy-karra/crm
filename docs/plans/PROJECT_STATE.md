@@ -93,7 +93,16 @@ org migrated correctly; user set round-robin in the UI; 4 real Gmail
 leads rotated Alice→Carol→Alice→Carol (extraction 2-10s after
 arrival; observed "minutes" delay was upstream Gmail send-pacing);
 CLI lead continued rotation; mid-rotation deactivation skipped
-without reset; member reactivated after. Awaiting commit gate. Also this planning round: fixed
+without reset; member reactivated after. COMMITTED, MERGED, PUSHED
+(`main` `defdab1`, 2026-08-27); all merged local branches deleted.
+Intake capacity notes recorded (docs/design/intake-throughput.md).
+LATEST PLANNING: correspondence capture (O-014 #2) direction updated
+in the decision log — CC/BCC-first with OAuth as a later per-agent
+opt-in, plus two mitigations (reply-all etiquette; retroactive
+forwarding reusing 007h1's unwrapper with inner-Date timeline
+placement and Message-ID dedup). No capture slice opened yet. Next
+candidates unchanged: correspondence capture, FUB migration,
+Operator-over-intake, 007h parsers as fixtures arrive. Also this planning round: fixed
 PROJECT_STATE's erroneous "round-robin" claim in the 007g
 walkthrough narrative (it routed organization_default).
 

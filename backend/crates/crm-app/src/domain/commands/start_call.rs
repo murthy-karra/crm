@@ -14,11 +14,12 @@ use crate::domain::envelope::CommandContext;
 use crate::domain::person::queries as person_queries;
 use crate::domain::telephony::queries::{self as call_queries, CallView, NewCall};
 use crate::domain::telephony::{settle, Signal};
+use crate::ids::PersonId;
 use crate::realtime::{Publication, Publisher, RealtimeEvent};
 use crate::telephony::{JoinGrant, Telephony};
 
 pub struct StartCall {
-    pub person_id: Uuid,
+    pub person_id: PersonId,
     pub contact_method_id: Uuid,
 }
 

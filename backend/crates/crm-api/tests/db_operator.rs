@@ -950,7 +950,7 @@ async fn explain_priority_position_matches_today_query_and_get_api_today(migrato
     )
     .await
     .unwrap();
-    let expected: Vec<Uuid> = list.items.iter().map(|i| i.person.id).collect();
+    let expected: Vec<Uuid> = list.items.iter().map(|i| i.person.id.as_uuid()).collect();
     assert_eq!(
         expected,
         vec![p2, p3, p1],

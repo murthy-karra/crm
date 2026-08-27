@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::domain::person::model::UserRef;
 use crate::domain::telephony::{CallStatus, EndReason, FailureReason};
-use crate::ids::{OrganizationId, UserId};
+use crate::ids::{OrganizationId, PersonId, UserId};
 
 /// One `call` row as the application sees it. `status`/reasons are
 /// decoded enums; a value the CHECK constraints allow but the application
@@ -19,7 +19,7 @@ use crate::ids::{OrganizationId, UserId};
 pub struct CallRow {
     pub id: Uuid,
     pub organization_id: OrganizationId,
-    pub person_id: Uuid,
+    pub person_id: PersonId,
     pub contact_method_id: Uuid,
     pub caller_user_id: UserId,
     pub origin: String,
@@ -92,7 +92,7 @@ impl TryFrom<RawCallRow> for CallRow {
         Ok(CallRow {
             id: row.id,
             organization_id: OrganizationId::new(row.organization_id),
-            person_id: row.person_id,
+            person_id: PersonId::new(row.person_id),
             contact_method_id: row.contact_method_id,
             caller_user_id: UserId::new(row.caller_user_id),
             origin: row.origin,
@@ -197,7 +197,7 @@ pub async fn active_call_for_user(
 pub struct NewCall<'a> {
     pub id: Uuid,
     pub organization_id: OrganizationId,
-    pub person_id: Uuid,
+    pub person_id: PersonId,
     pub contact_method_id: Uuid,
     pub caller_user_id: UserId,
     pub origin: &'a str,
@@ -217,7 +217,7 @@ pub async fn insert_placing(conn: &mut PgConnection, call: NewCall<'_>) -> Resul
            VALUES ($1, $2, $3, $4, $5, $6, $7, 'placing', $8, $9, $10)"#,
         call.id,
         call.organization_id.0,
-        call.person_id,
+        call.person_id.0,
         call.contact_method_id,
         call.caller_user_id.0,
         call.origin,
@@ -260,14 +260,14 @@ pub async fn mark_dial_requested(
 pub async fn phone_contact_method_normalized(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
-    person_id: Uuid,
+    person_id: PersonId,
     contact_method_id: Uuid,
 ) -> Result<Option<String>, sqlx::Error> {
     let row = sqlx::query!(
         r#"SELECT normalized_value FROM contact_method
            WHERE id = $1 AND person_id = $2 AND organization_id = $3 AND kind = 'phone'"#,
         contact_method_id,
-        person_id,
+        person_id.0,
         organization_id.0,
     )
     .fetch_optional(conn)
@@ -283,14 +283,14 @@ pub async fn phone_contact_method_normalized(
 pub async fn phone_contact_method_exists(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
-    person_id: Uuid,
+    person_id: PersonId,
     contact_method_id: Uuid,
 ) -> Result<bool, sqlx::Error> {
     let row = sqlx::query!(
         r#"SELECT 1 AS "one!" FROM contact_method
            WHERE id = $1 AND person_id = $2 AND organization_id = $3 AND kind = 'phone'"#,
         contact_method_id,
-        person_id,
+        person_id.0,
         organization_id.0,
     )
     .fetch_optional(conn)
@@ -302,7 +302,7 @@ pub async fn phone_contact_method_exists(
 #[derive(Debug, Clone, Serialize)]
 pub struct CallView {
     pub id: Uuid,
-    pub person_id: Uuid,
+    pub person_id: PersonId,
     pub contact_method_id: Uuid,
     pub caller: UserRef,
     pub status: CallStatus,

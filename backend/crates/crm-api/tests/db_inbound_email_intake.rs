@@ -20,7 +20,7 @@ use crm_api::config::Config;
 use crm_api::domain::admin::queries as admin_queries;
 use crm_api::domain::commands::receive_inquiry::ADVISORY_LOCK_BUDGET;
 use crm_api::domain::raw_payload::crypto;
-use crm_api::ids::{OrganizationId, UserId};
+use crm_api::ids::{OrganizationId, RawPayloadId, UserId};
 use crm_api::realtime::Publisher;
 use crm_api::state::AppState;
 
@@ -489,7 +489,13 @@ async fn terminal_unresolved_row_is_never_reprocessed_by_redelivery(migrator_poo
     // A 007b-era terminal row for the (now in-format) cypress bytes.
     let old_id = Uuid::new_v4();
     let content_hmac = crypto::content_hmac(&key, CYPRESS_EML);
-    let sealed = crypto::seal(&key, OrganizationId::new(org_id), old_id, CYPRESS_EML).unwrap();
+    let sealed = crypto::seal(
+        &key,
+        OrganizationId::new(org_id),
+        RawPayloadId::new(old_id),
+        CYPRESS_EML,
+    )
+    .unwrap();
     sqlx::query(
         r#"INSERT INTO raw_payload
             (id, organization_id, source, payload_format, origin, received_at,
@@ -542,7 +548,13 @@ async fn stuck_pending_in_format_row_resolves_end_to_end_on_redelivery(migrator_
 
     let stuck_id = Uuid::new_v4();
     let content_hmac = crypto::content_hmac(&key, CYPRESS_EML);
-    let sealed = crypto::seal(&key, OrganizationId::new(org_id), stuck_id, CYPRESS_EML).unwrap();
+    let sealed = crypto::seal(
+        &key,
+        OrganizationId::new(org_id),
+        RawPayloadId::new(stuck_id),
+        CYPRESS_EML,
+    )
+    .unwrap();
     sqlx::query(
         r#"INSERT INTO raw_payload
             (id, organization_id, source, payload_format, origin, received_at,

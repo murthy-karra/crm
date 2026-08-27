@@ -20,6 +20,7 @@ use crate::domain::commands::{self, CallOutcomeCorrection, CorrectCallOutcome, S
 use crate::domain::envelope::CommandContext;
 use crate::domain::telephony::queries as call_queries;
 use crate::error::ApiError;
+use crate::ids::PersonId;
 use crate::state::AppState;
 
 pub fn router() -> Router<AppState> {
@@ -33,7 +34,12 @@ pub fn router() -> Router<AppState> {
 
 /// A `{id}` path segment parsed as a UUID, rejecting straight to 400
 /// `malformed_request` ahead of authentication — the `routes/people.rs`
-/// `PersonId` pattern.
+/// `PersonIdPath` pattern. Kept bare here (not `PersonId`/a typed id):
+/// this extractor serves both a Person id (`start_call`) and a Call id
+/// (`dial_call`/`hangup_call`/`correct_outcome`/`get_call`) depending on
+/// the route, so a single typed wrapper can't cover both — `start_call`
+/// converts to `PersonId` explicitly at its one call site instead
+/// (hardening chunk N3).
 struct PathId(Uuid);
 
 impl FromRequestParts<AppState> for PathId {
@@ -78,7 +84,7 @@ async fn start_call(
         telephony,
         &ctx,
         StartCall {
-            person_id,
+            person_id: PersonId::new(person_id),
             contact_method_id: req.contact_method_id,
         },
     )

@@ -19,6 +19,7 @@ use crate::auth::AuthContext;
 use crate::domain::commands::{self, StartCall};
 use crate::domain::envelope::CommandContext;
 use crate::error::ApiError;
+use crate::ids::PersonId;
 use crate::operator::{record_turn, SqlxToolBackend, TurnRecord};
 use crate::state::AppState;
 use crm_operator::{
@@ -67,7 +68,7 @@ struct HistoryItem {
 struct ContextItem {
     route: ScreenRoute,
     #[serde(default)]
-    person_id: Option<Uuid>,
+    person_id: Option<PersonId>,
 }
 
 #[derive(Serialize)]
@@ -136,7 +137,11 @@ fn validate(req: TurnRequest) -> Result<TurnInput, ApiError> {
     let screen = match req.context {
         Some(ctx) => ScreenContext {
             route: ctx.route,
-            person_id: ctx.person_id,
+            // crm-operator keeps a bare `Uuid` at the tool seam (D-028 §5
+            // crate fence) — convert explicitly at this boundary
+            // (hardening chunk N3, mirroring N1/N2's org/user seam
+            // conversions elsewhere in this file).
+            person_id: ctx.person_id.map(PersonId::as_uuid),
         },
         None => ScreenContext::other(),
     };
@@ -367,7 +372,7 @@ async fn confirm_proposal(
         telephony,
         &ctx,
         StartCall {
-            person_id: row.person_id,
+            person_id: PersonId::new(row.person_id),
             contact_method_id: row.contact_method_id,
         },
     )

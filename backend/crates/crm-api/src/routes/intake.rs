@@ -19,7 +19,7 @@ use crate::domain::intake::workbench::{self, DiscardOutcome, UnresolvedContent};
 use crate::domain::intake::IntakeActor;
 use crate::domain::raw_payload::store;
 use crate::error::ApiError;
-use crate::ids::UserId;
+use crate::ids::{RawPayloadId, UserId};
 use crate::state::AppState;
 
 const MAX_INTAKE_BODY_BYTES: usize = 256 * 1024;
@@ -39,13 +39,16 @@ pub fn router() -> Router<AppState> {
         )
 }
 
-/// A `{id}` path segment parsed as a UUID, rejecting straight to `400
-/// malformed_request` — the `routes/people.rs` `PersonId` pattern
-/// (declared before the auth extractor so a non-UUID id is a 400
-/// independent of auth state, testable service-free).
-struct RawPayloadId(Uuid);
+/// A `{id}` path segment parsed as a UUID and typed as `RawPayloadId`
+/// (hardening chunk N3), rejecting straight to `400 malformed_request` —
+/// the `routes/people.rs` `PersonIdPath` pattern (declared before the auth
+/// extractor so a non-UUID id is a 400 independent of auth state, testable
+/// service-free). Named `RawPayloadIdPath` (not `RawPayloadId`) to avoid
+/// shadowing `crm_app::ids::RawPayloadId` — same orphan-rule reason as
+/// `routes/people.rs`'s `PersonIdPath`.
+struct RawPayloadIdPath(RawPayloadId);
 
-impl FromRequestParts<AppState> for RawPayloadId {
+impl FromRequestParts<AppState> for RawPayloadIdPath {
     type Rejection = ApiError;
 
     async fn from_request_parts(
@@ -55,7 +58,7 @@ impl FromRequestParts<AppState> for RawPayloadId {
         let Path(id) = Path::<Uuid>::from_request_parts(parts, state)
             .await
             .map_err(|_| ApiError::MalformedRequest)?;
-        Ok(RawPayloadId(id))
+        Ok(RawPayloadIdPath(RawPayloadId::new(id)))
     }
 }
 
@@ -190,7 +193,7 @@ async fn list_unresolved(
     )
 )]
 async fn unresolved_detail(
-    id: RawPayloadId,
+    id: RawPayloadIdPath,
     State(state): State<AppState>,
     admin: OrgAdminContext,
 ) -> Result<Json<serde_json::Value>, ApiError> {
@@ -267,7 +270,7 @@ async fn unresolved_detail(
     )
 )]
 async fn retry_unresolved(
-    id: RawPayloadId,
+    id: RawPayloadIdPath,
     State(state): State<AppState>,
     admin: OrgAdminContext,
 ) -> Result<Response, ApiError> {
@@ -350,7 +353,7 @@ async fn retry_unresolved(
     )
 )]
 async fn discard_unresolved(
-    id: RawPayloadId,
+    id: RawPayloadIdPath,
     State(state): State<AppState>,
     admin: OrgAdminContext,
 ) -> Result<Json<serde_json::Value>, ApiError> {

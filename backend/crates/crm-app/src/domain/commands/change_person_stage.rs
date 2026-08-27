@@ -2,7 +2,6 @@
 
 use chrono::Utc;
 use sqlx::PgPool;
-use uuid::Uuid;
 
 use crate::domain::commands::CommandError;
 use crate::domain::envelope::{CommandContext, FactEnvelope};
@@ -10,11 +9,12 @@ use crate::domain::facts::{self, StageChangedFact};
 use crate::domain::person::model::PersonSummary;
 use crate::domain::person::queries as person_queries;
 use crate::domain::stage;
+use crate::ids::{PersonId, StageId};
 use crate::realtime::{PersonChange, Publication, Publisher, RealtimeEvent};
 
 pub struct ChangePersonStage {
-    pub person_id: Uuid,
-    pub stage_id: Uuid,
+    pub person_id: PersonId,
+    pub stage_id: StageId,
 }
 
 /// One transaction; loads the Person through the scope (else

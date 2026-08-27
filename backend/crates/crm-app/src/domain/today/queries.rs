@@ -12,7 +12,7 @@ use crate::domain::commands::{ContactAttemptRef, ContactChannel, ContactOutcome}
 use crate::domain::person::model::{compute_display_name, PersonSummary, StageRef, UserRef};
 use crate::domain::person::visibility::PersonVisibilityScope;
 use crate::domain::today::model::{InquiryRef, OutcomeNeededCall, TodayCandidate};
-use crate::ids::UserId;
+use crate::ids::{InquiryId, PersonId, StageId, UserId};
 
 struct TodayCandidateRow {
     id: Uuid,
@@ -76,12 +76,12 @@ impl TryFrom<TodayCandidateRow> for TodayCandidate {
             required(row.latest_inquiry_received_at, "latest_inquiry.received_at")?;
 
         let person = PersonSummary {
-            id: row.id,
+            id: PersonId::new(row.id),
             first_name: row.first_name,
             last_name: row.last_name,
             display_name,
             stage: StageRef {
-                id: row.stage_id,
+                id: StageId::new(row.stage_id),
                 name: row.stage_name,
             },
             assigned_user,
@@ -93,7 +93,7 @@ impl TryFrom<TodayCandidateRow> for TodayCandidate {
         };
 
         let latest_inquiry = InquiryRef {
-            id: required(row.latest_inquiry_id, "latest_inquiry.id")?,
+            id: InquiryId::new(required(row.latest_inquiry_id, "latest_inquiry.id")?),
             source: required(row.latest_inquiry_source, "latest_inquiry.source")?,
             received_at: latest_inquiry_received_at,
         };

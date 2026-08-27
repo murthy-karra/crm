@@ -20,7 +20,7 @@ use crm_api::domain::admin::queries as admin_queries;
 use crm_api::domain::admin::{MembershipStatus, Role};
 use crm_api::domain::commands::receive_inquiry::ADVISORY_LOCK_BUDGET;
 use crm_api::domain::raw_payload::crypto;
-use crm_api::ids::{OrganizationId, UserId};
+use crm_api::ids::{OrganizationId, RawPayloadId, UserId};
 use crm_api::realtime::Publisher;
 use crm_api::state::AppState;
 
@@ -422,7 +422,7 @@ async fn pending_rows_are_viewable_and_large_bodies_truncate(migrator_pool: PgPo
     let sealed = crypto::seal(
         &key,
         OrganizationId::new(f.org_id),
-        stuck_id,
+        RawPayloadId::new(stuck_id),
         raw.as_bytes(),
     )
     .unwrap();
@@ -473,7 +473,13 @@ async fn retry_rescues_stuck_pending_row_with_system_actor_on_behalf_of_admin(
 
     let stuck_id = Uuid::new_v4();
     let content_hmac = crypto::content_hmac(&key, CYPRESS_EML);
-    let sealed = crypto::seal(&key, OrganizationId::new(f.org_id), stuck_id, CYPRESS_EML).unwrap();
+    let sealed = crypto::seal(
+        &key,
+        OrganizationId::new(f.org_id),
+        RawPayloadId::new(stuck_id),
+        CYPRESS_EML,
+    )
+    .unwrap();
     sqlx::query(
         r#"INSERT INTO raw_payload
             (id, organization_id, source, payload_format, origin, received_at,
@@ -664,7 +670,13 @@ async fn concurrent_retries_yield_one_person_and_a_duplicate_loser(migrator_pool
 
     let stuck_id = Uuid::new_v4();
     let content_hmac = crypto::content_hmac(&key, CYPRESS_EML);
-    let sealed = crypto::seal(&key, OrganizationId::new(f.org_id), stuck_id, CYPRESS_EML).unwrap();
+    let sealed = crypto::seal(
+        &key,
+        OrganizationId::new(f.org_id),
+        RawPayloadId::new(stuck_id),
+        CYPRESS_EML,
+    )
+    .unwrap();
     sqlx::query(
         r#"INSERT INTO raw_payload
             (id, organization_id, source, payload_format, origin, received_at,
@@ -729,7 +741,13 @@ async fn retry_racing_redelivery_yields_one_person(migrator_pool: PgPool) {
 
     let stuck_id = Uuid::new_v4();
     let content_hmac = crypto::content_hmac(&key, CYPRESS_EML);
-    let sealed = crypto::seal(&key, OrganizationId::new(f.org_id), stuck_id, CYPRESS_EML).unwrap();
+    let sealed = crypto::seal(
+        &key,
+        OrganizationId::new(f.org_id),
+        RawPayloadId::new(stuck_id),
+        CYPRESS_EML,
+    )
+    .unwrap();
     sqlx::query(
         r#"INSERT INTO raw_payload
             (id, organization_id, source, payload_format, origin, received_at,
@@ -786,7 +804,13 @@ async fn retry_surfaces_intake_busy_when_lock_held(migrator_pool: PgPool) {
     let key = test_config().raw_payload_key;
     let id = Uuid::new_v4();
     let content_hmac = crypto::content_hmac(&key, CYPRESS_EML);
-    let sealed = crypto::seal(&key, OrganizationId::new(f.org_id), id, CYPRESS_EML).unwrap();
+    let sealed = crypto::seal(
+        &key,
+        OrganizationId::new(f.org_id),
+        RawPayloadId::new(id),
+        CYPRESS_EML,
+    )
+    .unwrap();
     sqlx::query(
         r#"INSERT INTO raw_payload
             (id, organization_id, source, payload_format, origin, received_at,
@@ -860,7 +884,13 @@ async fn failed_retry_publishes_a_queue_invalidation_for_the_reset(migrator_pool
 
     let id = Uuid::new_v4();
     let content_hmac = crypto::content_hmac(&key, CYPRESS_EML);
-    let sealed = crypto::seal(&key, OrganizationId::new(f.org_id), id, CYPRESS_EML).unwrap();
+    let sealed = crypto::seal(
+        &key,
+        OrganizationId::new(f.org_id),
+        RawPayloadId::new(id),
+        CYPRESS_EML,
+    )
+    .unwrap();
     sqlx::query(
         r#"INSERT INTO raw_payload
             (id, organization_id, source, payload_format, origin, received_at,
@@ -920,7 +950,13 @@ async fn unretryable_format_fails_closed_without_destroying_the_reason(migrator_
 
     let id = Uuid::new_v4();
     let content_hmac = crypto::content_hmac(&key, GARBAGE_EML);
-    let sealed = crypto::seal(&key, OrganizationId::new(f.org_id), id, GARBAGE_EML).unwrap();
+    let sealed = crypto::seal(
+        &key,
+        OrganizationId::new(f.org_id),
+        RawPayloadId::new(id),
+        GARBAGE_EML,
+    )
+    .unwrap();
     sqlx::query(
         r#"INSERT INTO raw_payload
             (id, organization_id, source, payload_format, origin, received_at,
@@ -1046,7 +1082,13 @@ async fn corrupted_row_retry_500s_and_stays_discardable(migrator_pool: PgPool) {
     let row_id = Uuid::new_v4();
     let wrong_id = Uuid::new_v4();
     let content_hmac = crypto::content_hmac(&key, CYPRESS_EML);
-    let sealed = crypto::seal(&key, OrganizationId::new(f.org_id), wrong_id, CYPRESS_EML).unwrap();
+    let sealed = crypto::seal(
+        &key,
+        OrganizationId::new(f.org_id),
+        RawPayloadId::new(wrong_id),
+        CYPRESS_EML,
+    )
+    .unwrap();
     sqlx::query(
         r#"INSERT INTO raw_payload
             (id, organization_id, source, payload_format, origin, received_at,
@@ -1230,7 +1272,13 @@ async fn discarded_bytes_never_resurrect_on_redelivery_or_replay(migrator_pool: 
     let key = test_config().raw_payload_key;
     let id = Uuid::new_v4();
     let content_hmac = crypto::content_hmac(&key, CYPRESS_EML);
-    let sealed = crypto::seal(&key, OrganizationId::new(f.org_id), id, CYPRESS_EML).unwrap();
+    let sealed = crypto::seal(
+        &key,
+        OrganizationId::new(f.org_id),
+        RawPayloadId::new(id),
+        CYPRESS_EML,
+    )
+    .unwrap();
     sqlx::query(
         r#"INSERT INTO raw_payload
             (id, organization_id, source, payload_format, origin, received_at,
@@ -1412,7 +1460,7 @@ async fn retry_resolves_a_pre_existing_forwarded_row_through_the_unwrapper(migra
     let sealed = crypto::seal(
         &key,
         OrganizationId::new(f.org_id),
-        old_id,
+        RawPayloadId::new(old_id),
         GMAIL_FWD_CYPRESS_EML_007H1,
     )
     .unwrap();

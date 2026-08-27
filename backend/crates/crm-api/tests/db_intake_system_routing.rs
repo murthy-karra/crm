@@ -117,7 +117,7 @@ async fn default_set_and_active_routes_organization_default_and_lands_on_their_t
         let row: (String, Option<Uuid>, String, Uuid) = sqlx::query_as(&format!(
             "SELECT actor_kind, actor_user_id, origin, correlation_id FROM {table} WHERE person_id = $1"
         ))
-        .bind(person_id)
+        .bind(person_id.0)
         .fetch_one(&migrator_pool)
         .await
         .unwrap();
@@ -131,7 +131,7 @@ async fn default_set_and_active_routes_organization_default_and_lands_on_their_t
          UNION SELECT correlation_id FROM assignment_changed WHERE person_id = $1
          UNION SELECT correlation_id FROM stage_changed WHERE person_id = $1",
     )
-    .bind(person_id)
+    .bind(person_id.0)
     .fetch_all(&migrator_pool)
     .await
     .unwrap();
@@ -139,7 +139,7 @@ async fn default_set_and_active_routes_organization_default_and_lands_on_their_t
 
     let (routing_decision_id,): (Uuid,) =
         sqlx::query_as("SELECT id FROM routing_decision WHERE inquiry_id = $1")
-            .bind(inquiry_id)
+            .bind(inquiry_id.0)
             .fetch_one(&migrator_pool)
             .await
             .unwrap();
@@ -147,7 +147,7 @@ async fn default_set_and_active_routes_organization_default_and_lands_on_their_t
         sqlx::query_as(
             "SELECT from_user_id, to_user_id, causation_id FROM assignment_changed WHERE person_id = $1",
         )
-        .bind(person_id)
+        .bind(person_id.0)
         .fetch_one(&migrator_pool)
         .await
         .unwrap();
@@ -216,7 +216,7 @@ async fn no_default_set_routes_unassigned_with_no_assignment_fact(migrator_pool:
 
     let (db_assigned,): (Option<Uuid>,) =
         sqlx::query_as("SELECT assigned_user_id FROM person WHERE id = $1")
-            .bind(person_id)
+            .bind(person_id.0)
             .fetch_one(&migrator_pool)
             .await
             .unwrap();
@@ -224,7 +224,7 @@ async fn no_default_set_routes_unassigned_with_no_assignment_fact(migrator_pool:
 
     let (assignee_user_id,): (Option<Uuid>,) =
         sqlx::query_as("SELECT assignee_user_id FROM routing_decision WHERE person_id = $1")
-            .bind(person_id)
+            .bind(person_id.0)
             .fetch_one(&migrator_pool)
             .await
             .unwrap();
@@ -232,7 +232,7 @@ async fn no_default_set_routes_unassigned_with_no_assignment_fact(migrator_pool:
 
     let (assignment_count,): (i64,) =
         sqlx::query_as("SELECT count(*) FROM assignment_changed WHERE person_id = $1")
-            .bind(person_id)
+            .bind(person_id.0)
             .fetch_one(&migrator_pool)
             .await
             .unwrap();
@@ -359,7 +359,7 @@ async fn matching_already_assigned_person_keeps_existing(migrator_pool: PgPool) 
 
     let (assignment_count,): (i64,) =
         sqlx::query_as("SELECT count(*) FROM assignment_changed WHERE person_id = $1")
-            .bind(person_id)
+            .bind(person_id.0)
             .fetch_one(&migrator_pool)
             .await
             .unwrap();
@@ -428,7 +428,7 @@ async fn matching_existing_unassigned_person_applies_the_default(migrator_pool: 
     let assignments: Vec<(Option<Uuid>, Option<Uuid>)> = sqlx::query_as(
         "SELECT from_user_id, to_user_id FROM assignment_changed WHERE person_id = $1 ORDER BY recorded_at",
     )
-    .bind(person_id)
+    .bind(person_id.0)
     .fetch_all(&migrator_pool)
     .await
     .unwrap();
@@ -527,7 +527,7 @@ async fn system_actor_intake_into_org_a_writes_zero_rows_in_org_b(migrator_pool:
 
     // Sanity: the Person genuinely exists, just scoped to org A.
     let (person_org,): (Uuid,) = sqlx::query_as("SELECT organization_id FROM person WHERE id = $1")
-        .bind(person_id)
+        .bind(person_id.0)
         .fetch_one(&migrator_pool)
         .await
         .unwrap();

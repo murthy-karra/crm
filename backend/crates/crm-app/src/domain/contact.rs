@@ -2,9 +2,8 @@
 //! (docs/specs/SLICE_002.md §2, §3).
 
 use sqlx::PgConnection;
-use uuid::Uuid;
 
-use crate::ids::OrganizationId;
+use crate::ids::{OrganizationId, PersonId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ContactKind {
@@ -51,7 +50,7 @@ pub fn normalize_phone(raw: &str) -> Option<String> {
 
 #[derive(Debug, Clone, Copy)]
 pub struct IdentifyMatch {
-    pub person_id: Uuid,
+    pub person_id: PersonId,
     pub matched_by: ContactKind,
 }
 
@@ -94,7 +93,7 @@ async fn find_earliest_person(
     organization_id: OrganizationId,
     kind: ContactKind,
     normalized_value: &str,
-) -> Result<Option<Uuid>, sqlx::Error> {
+) -> Result<Option<PersonId>, sqlx::Error> {
     let kind_str = kind.as_str();
     let row = sqlx::query!(
         r#"SELECT p.id
@@ -109,7 +108,7 @@ async fn find_earliest_person(
     )
     .fetch_optional(conn)
     .await?;
-    Ok(row.map(|r| r.id))
+    Ok(row.map(|r| PersonId::new(r.id)))
 }
 
 #[cfg(test)]

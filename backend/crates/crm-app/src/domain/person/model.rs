@@ -3,13 +3,12 @@
 
 use chrono::{DateTime, Utc};
 use serde::Serialize;
-use uuid::Uuid;
 
-use crate::ids::UserId;
+use crate::ids::{PersonId, StageId, UserId};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct StageRef {
-    pub id: Uuid,
+    pub id: StageId,
     pub name: String,
 }
 
@@ -21,7 +20,7 @@ pub struct UserRef {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct PersonSummary {
-    pub id: Uuid,
+    pub id: PersonId,
     pub first_name: Option<String>,
     pub last_name: Option<String>,
     pub display_name: String,

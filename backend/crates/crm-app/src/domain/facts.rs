@@ -8,12 +8,12 @@ use sqlx::PgConnection;
 use uuid::Uuid;
 
 use crate::domain::envelope::FactEnvelope;
-use crate::ids::UserId;
+use crate::ids::{InquiryId, PersonId, RawPayloadId, StageId, UserId};
 
 pub struct InquiryReceivedFact<'a> {
-    pub inquiry_id: Uuid,
-    pub person_id: Uuid,
-    pub raw_payload_id: Uuid,
+    pub inquiry_id: InquiryId,
+    pub person_id: PersonId,
+    pub raw_payload_id: RawPayloadId,
     pub content_hmac: &'a [u8],
     pub source: &'a str,
     pub person_created: bool,
@@ -42,9 +42,9 @@ pub async fn insert_inquiry_received(
         envelope.occurred_at,
         envelope.correlation_id,
         envelope.causation_id,
-        fact.inquiry_id,
-        fact.person_id,
-        fact.raw_payload_id,
+        fact.inquiry_id.0,
+        fact.person_id.0,
+        fact.raw_payload_id.0,
         fact.content_hmac,
         fact.source,
         fact.person_created,
@@ -56,8 +56,8 @@ pub async fn insert_inquiry_received(
 }
 
 pub struct RoutingDecisionFact<'a> {
-    pub inquiry_id: Uuid,
-    pub person_id: Uuid,
+    pub inquiry_id: InquiryId,
+    pub person_id: PersonId,
     pub strategy: &'a str,
     pub assignee_user_id: Option<UserId>,
 }
@@ -84,8 +84,8 @@ pub async fn insert_routing_decision(
         envelope.occurred_at,
         envelope.correlation_id,
         envelope.causation_id,
-        fact.inquiry_id,
-        fact.person_id,
+        fact.inquiry_id.0,
+        fact.person_id.0,
         fact.strategy,
         fact.assignee_user_id.map(|id| id.0),
     )
@@ -95,7 +95,7 @@ pub async fn insert_routing_decision(
 }
 
 pub struct AssignmentChangedFact {
-    pub person_id: Uuid,
+    pub person_id: PersonId,
     pub from_user_id: Option<UserId>,
     pub to_user_id: Option<UserId>,
     pub reason: &'static str,
@@ -123,7 +123,7 @@ pub async fn insert_assignment_changed(
         envelope.occurred_at,
         envelope.correlation_id,
         envelope.causation_id,
-        fact.person_id,
+        fact.person_id.0,
         fact.from_user_id.map(|id| id.0),
         fact.to_user_id.map(|id| id.0),
         fact.reason,
@@ -134,7 +134,7 @@ pub async fn insert_assignment_changed(
 }
 
 pub struct ContactAttemptedFact<'a> {
-    pub person_id: Uuid,
+    pub person_id: PersonId,
     pub channel: &'a str,
     pub outcome: &'a str,
     /// The row this one supersedes (docs/specs/SLICE_006c.md §2): set only
@@ -173,7 +173,7 @@ pub async fn insert_contact_attempted(
         envelope.occurred_at,
         envelope.correlation_id,
         envelope.causation_id,
-        fact.person_id,
+        fact.person_id.0,
         fact.channel,
         fact.outcome,
         fact.corrects_id,
@@ -185,9 +185,9 @@ pub async fn insert_contact_attempted(
 }
 
 pub struct StageChangedFact {
-    pub person_id: Uuid,
-    pub from_stage_id: Option<Uuid>,
-    pub to_stage_id: Uuid,
+    pub person_id: PersonId,
+    pub from_stage_id: Option<StageId>,
+    pub to_stage_id: StageId,
     pub reason: &'static str,
 }
 
@@ -356,9 +356,9 @@ pub async fn insert_stage_changed(
         envelope.occurred_at,
         envelope.correlation_id,
         envelope.causation_id,
-        fact.person_id,
-        fact.from_stage_id,
-        fact.to_stage_id,
+        fact.person_id.0,
+        fact.from_stage_id.map(|id| id.0),
+        fact.to_stage_id.0,
         fact.reason,
     )
     .fetch_one(tx)
@@ -370,7 +370,7 @@ pub async fn insert_stage_changed(
 
 pub struct CallCompletedFact<'a> {
     pub call_id: Uuid,
-    pub person_id: Uuid,
+    pub person_id: PersonId,
     pub contact_method_id: Uuid,
     /// `reached` for every answered call, else the `failure_reason`.
     pub outcome: &'a str,
@@ -406,7 +406,7 @@ pub async fn insert_call_completed(
         envelope.correlation_id,
         envelope.causation_id,
         fact.call_id,
-        fact.person_id,
+        fact.person_id.0,
         fact.contact_method_id,
         fact.outcome,
         fact.answered_at,

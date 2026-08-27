@@ -3,29 +3,31 @@
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use sqlx::PgConnection;
-use uuid::Uuid;
 
-use crate::ids::OrganizationId;
+use crate::ids::{InquiryId, OrganizationId, PersonId, RawPayloadId};
 
 pub struct NewInquiry<'a> {
     pub organization_id: OrganizationId,
-    pub person_id: Uuid,
-    pub raw_payload_id: Uuid,
+    pub person_id: PersonId,
+    pub raw_payload_id: RawPayloadId,
     pub source: &'a str,
     pub source_external_id: Option<&'a str>,
     pub message: Option<&'a str>,
     pub received_at: DateTime<Utc>,
 }
 
-pub async fn insert(conn: &mut PgConnection, new: NewInquiry<'_>) -> Result<Uuid, sqlx::Error> {
+pub async fn insert(
+    conn: &mut PgConnection,
+    new: NewInquiry<'_>,
+) -> Result<InquiryId, sqlx::Error> {
     let row = sqlx::query!(
         r#"INSERT INTO inquiry
             (organization_id, person_id, raw_payload_id, source, source_external_id, message, received_at)
            VALUES ($1, $2, $3, $4, $5, $6, $7)
            RETURNING id"#,
         new.organization_id.0,
-        new.person_id,
-        new.raw_payload_id,
+        new.person_id.0,
+        new.raw_payload_id.0,
         new.source,
         new.source_external_id,
         new.message,
@@ -33,16 +35,41 @@ pub async fn insert(conn: &mut PgConnection, new: NewInquiry<'_>) -> Result<Uuid
     )
     .fetch_one(conn)
     .await?;
-    Ok(row.id)
+    Ok(InquiryId::new(row.id))
 }
 
+/// The direct `query_as!` decode target is this struct itself — `id` stays
+/// the bare row value at construction and is wrapped below at the public
+/// boundary (sqlx strategy: row structs stay bare `Uuid`, but
+/// `InquirySummary` is the returned public struct, not a private mapping
+/// intermediary, so its own `id` field is typed).
 #[derive(Debug, Clone, Serialize)]
 pub struct InquirySummary {
-    pub id: Uuid,
+    pub id: InquiryId,
     pub source: String,
     pub source_external_id: Option<String>,
     pub message: Option<String>,
     pub received_at: DateTime<Utc>,
+}
+
+struct InquirySummaryRow {
+    id: uuid::Uuid,
+    source: String,
+    source_external_id: Option<String>,
+    message: Option<String>,
+    received_at: DateTime<Utc>,
+}
+
+impl From<InquirySummaryRow> for InquirySummary {
+    fn from(row: InquirySummaryRow) -> Self {
+        InquirySummary {
+            id: InquiryId::new(row.id),
+            source: row.source,
+            source_external_id: row.source_external_id,
+            message: row.message,
+            received_at: row.received_at,
+        }
+    }
 }
 
 /// A Person's Inquiries, `received_at DESC` (`GET /api/people/{id}`; spec
@@ -50,17 +77,18 @@ pub struct InquirySummary {
 pub async fn list_for_person(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
-    person_id: Uuid,
+    person_id: PersonId,
 ) -> Result<Vec<InquirySummary>, sqlx::Error> {
-    sqlx::query_as!(
-        InquirySummary,
+    let rows = sqlx::query_as!(
+        InquirySummaryRow,
         r#"SELECT id, source, source_external_id, message, received_at
            FROM inquiry
            WHERE organization_id = $1 AND person_id = $2
            ORDER BY received_at DESC"#,
         organization_id.0,
-        person_id,
+        person_id.0,
     )
     .fetch_all(conn)
-    .await
+    .await?;
+    Ok(rows.into_iter().map(InquirySummary::from).collect())
 }

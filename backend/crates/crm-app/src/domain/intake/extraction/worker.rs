@@ -25,7 +25,7 @@ use crate::domain::intake::extraction::{
 };
 use crate::domain::intake::IntakeActor;
 use crate::domain::raw_payload::{crypto, store, Resolution};
-use crate::ids::OrganizationId;
+use crate::ids::{OrganizationId, RawPayloadId};
 use crate::realtime::{Publication, Publisher, RealtimeEvent};
 
 pub const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(10);
@@ -252,7 +252,7 @@ async fn attempt_inner(
         match crypto::open(
             key,
             OrganizationId::new(row.organization_id),
-            row.id,
+            RawPayloadId::new(row.id),
             &row.nonce,
             &row.ciphertext,
         ) {
@@ -387,7 +387,7 @@ async fn attempt_inner(
                     on_behalf_of_user_id: None,
                 };
                 let params = CompleteIntake {
-                    raw_payload_id: row.id,
+                    raw_payload_id: RawPayloadId::new(row.id),
                     content_hmac: &row.content_hmac,
                     received_at: row.received_at,
                     assign_to_user_id: None,
@@ -510,9 +510,12 @@ async fn attempt_inner(
 /// Returns false when a concurrent discard/retry/resolve superseded us.
 async fn reset_to_pending(pool: &PgPool, row: &ClaimedRow) -> Result<bool, sqlx::Error> {
     let mut tx = pool.begin().await?;
-    let locked =
-        store::lock_for_processing(&mut tx, row.id, OrganizationId::new(row.organization_id))
-            .await?;
+    let locked = store::lock_for_processing(
+        &mut tx,
+        RawPayloadId::new(row.id),
+        OrganizationId::new(row.organization_id),
+    )
+    .await?;
     let still_ours = matches!(
         &locked,
         Some(l) if l.resolution == Resolution::Unresolved
@@ -549,9 +552,12 @@ async fn un_reset(
     publisher: &Publisher,
 ) -> Result<bool, sqlx::Error> {
     let mut tx = pool.begin().await?;
-    let locked =
-        store::lock_for_processing(&mut tx, row.id, OrganizationId::new(row.organization_id))
-            .await?;
+    let locked = store::lock_for_processing(
+        &mut tx,
+        RawPayloadId::new(row.id),
+        OrganizationId::new(row.organization_id),
+    )
+    .await?;
     let mut terminal = false;
     if matches!(&locked, Some(l) if l.resolution == Resolution::Pending) {
         if counted && row.extraction_attempts + 1 >= MAX_QUALITY_ATTEMPTS {
@@ -611,7 +617,7 @@ async fn un_reset(
             OrganizationId::new(row.organization_id),
             ledger.occurred_at,
             ledger.correlation_id,
-            row.id,
+            RawPayloadId::new(row.id),
         );
         publisher
             .publish_after_commit(Publication::for_event(event))
@@ -631,9 +637,12 @@ async fn apply(
 ) -> Result<(), sqlx::Error> {
     let mut tx = pool.begin().await?;
     // Serialize with 007e actions and other workers.
-    let locked =
-        store::lock_for_processing(&mut tx, row.id, OrganizationId::new(row.organization_id))
-            .await?;
+    let locked = store::lock_for_processing(
+        &mut tx,
+        RawPayloadId::new(row.id),
+        OrganizationId::new(row.organization_id),
+    )
+    .await?;
     let still_ours = matches!(
         &locked,
         Some(l) if l.resolution == Resolution::Unresolved
@@ -709,7 +718,7 @@ async fn apply(
             OrganizationId::new(row.organization_id),
             ledger.occurred_at,
             ledger.correlation_id,
-            row.id,
+            RawPayloadId::new(row.id),
         );
         publisher
             .publish_after_commit(Publication::for_event(event))

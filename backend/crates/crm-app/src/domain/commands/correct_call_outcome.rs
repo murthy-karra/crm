@@ -19,7 +19,7 @@ use crate::domain::commands::{CallError, ContactChannel, ContactOutcome};
 use crate::domain::envelope::{Actor, CommandContext, FactEnvelope};
 use crate::domain::facts::{self, ContactAttemptedFact};
 use crate::domain::telephony::queries as call_queries;
-use crate::ids::OrganizationId;
+use crate::ids::{OrganizationId, PersonId};
 use crate::realtime::{PersonChange, Publication, Publisher, RealtimeEvent};
 
 /// The five values `POST /api/calls/{id}/outcome` accepts
@@ -109,7 +109,7 @@ async fn head_attempt(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
     call_id: Uuid,
-    person_id: Uuid,
+    person_id: PersonId,
 ) -> Result<Option<HeadRow>, sqlx::Error> {
     sqlx::query_as!(
         HeadRow,
@@ -121,7 +121,7 @@ async fn head_attempt(
            LIMIT 1"#,
         organization_id.0,
         call_id,
-        person_id,
+        person_id.0,
     )
     .fetch_optional(conn)
     .await

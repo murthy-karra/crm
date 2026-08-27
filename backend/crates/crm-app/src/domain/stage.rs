@@ -8,9 +8,8 @@
 
 use serde::Serialize;
 use sqlx::PgConnection;
-use uuid::Uuid;
 
-use crate::ids::OrganizationId;
+use crate::ids::{OrganizationId, StageId};
 
 /// Follow Up Boss's nine defaults, in D-019 order.
 pub const DEFAULT_STAGE_NAMES: [&str; 9] = [
@@ -27,9 +26,28 @@ pub const DEFAULT_STAGE_NAMES: [&str; 9] = [
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Stage {
-    pub id: Uuid,
+    pub id: StageId,
     pub name: String,
     pub position: i16,
+}
+
+/// The direct `query_as!` decode target for `list` — bare `Uuid` per the
+/// sqlx strategy (private row-boundary struct; `Stage` itself carries the
+/// typed id).
+struct StageRow {
+    id: uuid::Uuid,
+    name: String,
+    position: i16,
+}
+
+impl From<StageRow> for Stage {
+    fn from(row: StageRow) -> Self {
+        Stage {
+            id: StageId::new(row.id),
+            name: row.name,
+            position: row.position,
+        }
+    }
 }
 
 /// Idempotent on `name`: inserts any of the nine D-019 default stages for
@@ -61,13 +79,14 @@ pub async fn list(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
 ) -> Result<Vec<Stage>, sqlx::Error> {
-    sqlx::query_as!(
-        Stage,
+    let rows = sqlx::query_as!(
+        StageRow,
         r#"SELECT id, name, position FROM stage WHERE organization_id = $1 ORDER BY position"#,
         organization_id.0,
     )
     .fetch_all(conn)
-    .await
+    .await?;
+    Ok(rows.into_iter().map(Stage::from).collect())
 }
 
 /// The Organization's position-1 stage id, used to place a newly-created
@@ -76,14 +95,14 @@ pub async fn list(
 pub async fn first_id(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
-) -> Result<Option<Uuid>, sqlx::Error> {
+) -> Result<Option<StageId>, sqlx::Error> {
     let row = sqlx::query!(
         r#"SELECT id FROM stage WHERE organization_id = $1 ORDER BY position LIMIT 1"#,
         organization_id.0,
     )
     .fetch_optional(conn)
     .await?;
-    Ok(row.map(|r| r.id))
+    Ok(row.map(|r| StageId::new(r.id)))
 }
 
 /// Whether `stage_id` belongs to `organization_id` — used to validate
@@ -91,12 +110,12 @@ pub async fn first_id(
 /// nonexistent and other-Organization ids).
 pub async fn exists(
     conn: &mut PgConnection,
-    stage_id: Uuid,
+    stage_id: StageId,
     organization_id: OrganizationId,
 ) -> Result<bool, sqlx::Error> {
     let row = sqlx::query!(
         r#"SELECT 1 as "present!" FROM stage WHERE id = $1 AND organization_id = $2"#,
-        stage_id,
+        stage_id.0,
         organization_id.0,
     )
     .fetch_optional(conn)

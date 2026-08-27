@@ -12,6 +12,7 @@ use crate::domain::envelope::{CommandContext, FactEnvelope};
 use crate::domain::facts::{self, ContactAttemptedFact};
 use crate::domain::person::model::PersonSummary;
 use crate::domain::person::queries as person_queries;
+use crate::ids::PersonId;
 use crate::realtime::{PersonChange, Publication, Publisher, RealtimeEvent};
 
 /// `"call" | "text" | "email" | "other"` (docs/specs/SLICE_003.md §2, §5).
@@ -92,7 +93,7 @@ impl ContactOutcome {
 }
 
 pub struct LogContactAttempt {
-    pub person_id: Uuid,
+    pub person_id: PersonId,
     pub channel: ContactChannel,
     pub outcome: ContactOutcome,
 }

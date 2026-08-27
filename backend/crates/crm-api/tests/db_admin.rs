@@ -82,7 +82,7 @@ async fn crm_app_cannot_mint_platform_admin_or_mutate_invitation_token_hash(migr
 
     let update_token_hash =
         sqlx::query("UPDATE invitation SET token_hash = 'forged' WHERE id = $1")
-            .bind(outcome.invitation.id)
+            .bind(outcome.invitation.id.as_uuid())
             .execute(&app_pool)
             .await;
     assert!(
@@ -90,7 +90,7 @@ async fn crm_app_cannot_mint_platform_admin_or_mutate_invitation_token_hash(migr
         "crm_app must not be able to UPDATE invitation.token_hash"
     );
     let update_email = sqlx::query("UPDATE invitation SET email = 'other@acme.test' WHERE id = $1")
-        .bind(outcome.invitation.id)
+        .bind(outcome.invitation.id.as_uuid())
         .execute(&app_pool)
         .await;
     assert!(
@@ -98,7 +98,7 @@ async fn crm_app_cannot_mint_platform_admin_or_mutate_invitation_token_hash(migr
         "crm_app must not be able to UPDATE invitation.email"
     );
     let update_expires = sqlx::query("UPDATE invitation SET expires_at = now() WHERE id = $1")
-        .bind(outcome.invitation.id)
+        .bind(outcome.invitation.id.as_uuid())
         .execute(&app_pool)
         .await;
     assert!(
@@ -110,7 +110,7 @@ async fn crm_app_cannot_mint_platform_admin_or_mutate_invitation_token_hash(migr
     let allowed = sqlx::query(
         "UPDATE invitation SET revoked_at = now(), revoke_reason = 'revoked' WHERE id = $1",
     )
-    .bind(outcome.invitation.id)
+    .bind(outcome.invitation.id.as_uuid())
     .execute(&app_pool)
     .await;
     assert!(
@@ -164,7 +164,7 @@ async fn admin_fact_rows(migrator_pool: &PgPool, app_pool: &PgPool) -> AdminFact
     .unwrap();
     let (invitation_issued_id,): (Uuid,) =
         sqlx::query_as("SELECT id FROM invitation_issued WHERE invitation_id = $1")
-            .bind(outcome.invitation.id)
+            .bind(outcome.invitation.id.as_uuid())
             .fetch_one(migrator_pool)
             .await
             .unwrap();
@@ -182,7 +182,7 @@ async fn admin_fact_rows(migrator_pool: &PgPool, app_pool: &PgPool) -> AdminFact
     .unwrap();
     let (invitation_resolved_id,): (Uuid,) =
         sqlx::query_as("SELECT id FROM invitation_resolved WHERE invitation_id = $1")
-            .bind(outcome.invitation.id)
+            .bind(outcome.invitation.id.as_uuid())
             .fetch_one(migrator_pool)
             .await
             .unwrap();
@@ -875,7 +875,7 @@ async fn concurrent_double_accept_of_the_same_token_exactly_one_succeeds(migrato
         "SELECT count(*) FROM invitation_resolved
          WHERE invitation_id = $1 AND outcome = 'accepted'",
     )
-    .bind(outcome.invitation.id)
+    .bind(outcome.invitation.id.as_uuid())
     .fetch_one(&migrator_pool)
     .await
     .unwrap();
@@ -1289,7 +1289,7 @@ async fn expired_invitation_returns_410_and_org_state_flips_to_needs_attention(
     // Backdate the invitation's expiry via the migrator connection — a
     // permitted fixture operation (docs/specs/SLICE_004.md §11).
     sqlx::query("UPDATE invitation SET expires_at = now() - interval '1 hour' WHERE id = $1")
-        .bind(outcome.invitation.id)
+        .bind(outcome.invitation.id.as_uuid())
         .execute(&migrator_pool)
         .await
         .unwrap();
@@ -1899,7 +1899,7 @@ async fn revoking_an_accepted_invitation_is_invitation_used(migrator_pool: PgPoo
         owner_actor(alice),
         RevokeInvitation {
             organization_id: OrganizationId::new(org_id),
-            invitation_id: outcome.invitation.id,
+            invitation_id: outcome.invitation.id.as_uuid(),
         },
     )
     .await;

@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::auth::AuthContext;
-use crate::ids::{OrganizationId, UserId};
+use crate::ids::{CorrelationId, OrganizationId, TurnId, UserId};
 
 /// `actor_kind` on every fact row. This slice only ever writes `User` (a
 /// future webhook adapter writes `System` — spec §5's "actor_kind =
@@ -115,7 +115,7 @@ pub struct CommandContext {
     pub organization_id: OrganizationId,
     pub actor_user_id: UserId,
     pub origin: Origin,
-    pub correlation_id: Uuid,
+    pub correlation_id: CorrelationId,
 }
 
 impl CommandContext {
@@ -124,20 +124,23 @@ impl CommandContext {
             organization_id: auth.active_organization_id,
             actor_user_id: auth.actor_user_id,
             origin: Origin::WebSession,
-            correlation_id: Uuid::new_v4(),
+            correlation_id: CorrelationId::new(Uuid::new_v4()),
         }
     }
 
     /// An Operator-proposed command the user confirmed in the UI
     /// (docs/specs/SLICE_006b.md §3): same trusted session identity as
     /// `from_auth`, origin `Operator`, and the Operator turn id as the
-    /// correlation id (the declared amendment above).
-    pub fn for_operator(auth: &AuthContext, turn_id: Uuid) -> Self {
+    /// correlation id (the declared amendment above). `turn_id` and
+    /// `correlation_id` are distinct id types (hardening chunk N4) — this
+    /// is the one place they cross, and it is done visibly, never by an
+    /// implicit `From`/`Into`.
+    pub fn for_operator(auth: &AuthContext, turn_id: TurnId) -> Self {
         Self {
             organization_id: auth.active_organization_id,
             actor_user_id: auth.actor_user_id,
             origin: Origin::Operator,
-            correlation_id: turn_id,
+            correlation_id: CorrelationId::new(turn_id.as_uuid()),
         }
     }
 }
@@ -164,7 +167,11 @@ pub struct FactEnvelope {
     pub on_behalf_of_user_id: Option<UserId>,
     pub origin: Origin,
     pub occurred_at: DateTime<Utc>,
-    pub correlation_id: Uuid,
+    pub correlation_id: CorrelationId,
+    /// The cross-fact-table union described above — deliberately NOT typed
+    /// with an id newtype (hardening chunk N4 scope note): it names a row
+    /// in whichever fact table is semantically the cause, not one fixed
+    /// domain entity.
     pub causation_id: Option<Uuid>,
 }
 
@@ -207,7 +214,7 @@ impl FactEnvelope {
         organization_id: OrganizationId,
         origin: Origin,
         occurred_at: DateTime<Utc>,
-        correlation_id: Uuid,
+        correlation_id: CorrelationId,
         on_behalf_of_user_id: Option<UserId>,
     ) -> Self {
         Self {

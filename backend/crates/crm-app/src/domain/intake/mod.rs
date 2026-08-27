@@ -17,10 +17,11 @@ pub use address::IntakeAddress;
 pub use receive::{receive_inbound_email, InboundEmailOutcome, ReceiveInboundEmailError};
 
 use chrono::{DateTime, Utc};
+#[cfg(test)]
 use uuid::Uuid;
 
 use crate::domain::envelope::{ActorKind, CommandContext, FactEnvelope, Origin};
-use crate::ids::{OrganizationId, UserId};
+use crate::ids::{CorrelationId, OrganizationId, UserId};
 
 /// The actor behind a `receive_inquiry` call (docs/specs/SLICE_007c.md
 /// §4): either an authenticated user's trusted session context, or no
@@ -35,7 +36,7 @@ pub enum IntakeActor {
     System {
         organization_id: OrganizationId,
         origin: Origin,
-        correlation_id: Uuid,
+        correlation_id: CorrelationId,
         /// The human whose action caused this unattended execution
         /// (docs/specs/SLICE_007e.md §4: the retrying admin). Delivery
         /// paths pass `None`.
@@ -60,7 +61,7 @@ impl IntakeActor {
         }
     }
 
-    pub fn correlation_id(&self) -> Uuid {
+    pub fn correlation_id(&self) -> CorrelationId {
         match self {
             IntakeActor::User(ctx) => ctx.correlation_id,
             IntakeActor::System { correlation_id, .. } => *correlation_id,
@@ -110,7 +111,7 @@ mod tests {
     #[test]
     fn system_actor_accessors_and_envelope() {
         let organization_id = OrganizationId::new(Uuid::new_v4());
-        let correlation_id = Uuid::new_v4();
+        let correlation_id = CorrelationId::new(Uuid::new_v4());
         let occurred_at = Utc::now();
         let actor = IntakeActor::System {
             organization_id,
@@ -144,7 +145,7 @@ mod tests {
         let actor = IntakeActor::System {
             organization_id: OrganizationId::new(Uuid::new_v4()),
             origin: Origin::WebSession,
-            correlation_id: Uuid::new_v4(),
+            correlation_id: CorrelationId::new(Uuid::new_v4()),
             on_behalf_of_user_id: Some(admin),
         };
         let envelope = actor.envelope(Utc::now());
@@ -160,7 +161,7 @@ mod tests {
             organization_id: OrganizationId::new(Uuid::new_v4()),
             actor_user_id: UserId::new(Uuid::new_v4()),
             origin: Origin::WebSession,
-            correlation_id: Uuid::new_v4(),
+            correlation_id: CorrelationId::new(Uuid::new_v4()),
         };
         let actor = IntakeActor::User(ctx.clone());
 

@@ -11,7 +11,7 @@ use crate::domain::admin::queries::{self, InvitationStatus};
 use crate::domain::admin::{validation, MembershipStatus, Role};
 use crate::domain::envelope::{CommandContext, FactEnvelope, Origin};
 use crate::domain::facts::{self, InvitationResolvedFact, MembershipChangedFact};
-use crate::ids::{OrganizationId, UserId};
+use crate::ids::{CorrelationId, OrganizationId, UserId};
 
 pub struct AcceptInvitation {
     pub token: String,
@@ -150,7 +150,7 @@ async fn accept_invitation_attempt(
         organization_id: invitation.organization_id,
         actor_user_id: user_id,
         origin: cmd.origin,
-        correlation_id: Uuid::new_v4(),
+        correlation_id: CorrelationId::new(Uuid::new_v4()),
     };
     let envelope = FactEnvelope::for_command(&ctx, now);
 

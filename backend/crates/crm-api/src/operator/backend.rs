@@ -16,7 +16,7 @@ use crate::domain::person::model::PersonSummary;
 use crate::domain::person::queries::{self as person_queries, HistoryEntry};
 use crate::domain::person::PersonVisibilityScope;
 use crate::domain::today::{self, TodayItem, TodayList};
-use crate::ids::{OrganizationId, PersonId, UserId};
+use crate::ids::{ContactMethodId, OrganizationId, PersonId, UserId};
 use crate::operator::explain;
 use crm_operator::{
     ContactMethodView, HistoryEntryView, InquiryView, NextWorkItem, OperatorContext, PersonCard,
@@ -330,6 +330,14 @@ impl ToolBackend for SqlxToolBackend {
         // Same trait-boundary wrap as `get_person` above; `.0` at the raw
         // `operator_proposal` INSERT below converts back for that bind.
         let person_id = PersonId::new(person_id);
+        // Same wrap for the call cluster's `ContactMethodId` (hardening
+        // chunk N4) — `person_id`/`contact_method_id` were the survey's
+        // adjacent-bare-`Uuid` pair at this trait boundary; both are now
+        // distinct types. `ContactMethodItem.id` (the general
+        // contact-method listing, `domain/person/queries.rs` — the V1
+        // lane's territory) stays bare, so the comparison below unwraps
+        // back to `Uuid` rather than typing that struct.
+        let contact_method_id = contact_method_id.map(ContactMethodId::new);
         let mut conn = self.conn().await?;
         let summary = visible_summary(&mut conn, ctx, person_id).await?;
         let methods = person_queries::contact_methods_for_person(&mut conn, org_id(ctx), person_id)
@@ -340,7 +348,7 @@ impl ToolBackend for SqlxToolBackend {
             Some(id) => {
                 let method = methods
                     .iter()
-                    .find(|m| m.id == id)
+                    .find(|m| m.id == id.as_uuid())
                     .ok_or(ToolError::NotFound)?;
                 if method.kind != "phone" {
                     return Err(ToolError::InvalidArguments(

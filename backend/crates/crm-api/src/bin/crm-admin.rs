@@ -22,7 +22,7 @@ use crm_api::domain::commands::{self, ReceiveInquiry, ReceiveInquiryOutcome};
 use crm_api::domain::envelope::Origin;
 use crm_api::domain::inquiry::parse::Source;
 use crm_api::domain::intake::IntakeActor;
-use crm_api::ids::{OrganizationId, UserId};
+use crm_api::ids::{CorrelationId, OrganizationId, UserId};
 use crm_api::realtime::Publisher;
 
 const DEFAULT_INVITATION_TTL: Duration = Duration::from_secs(168 * 3600);
@@ -332,7 +332,7 @@ async fn run_receive_inquiry(mut args: Vec<String>) -> Result<(), Box<dyn std::e
         on_behalf_of_user_id: None,
         organization_id,
         origin: Origin::Cli,
-        correlation_id: Uuid::new_v4(),
+        correlation_id: CorrelationId::new(Uuid::new_v4()),
     };
 
     let outcome = commands::receive_inquiry(

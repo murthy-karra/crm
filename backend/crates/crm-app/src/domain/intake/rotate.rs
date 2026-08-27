@@ -77,7 +77,7 @@ pub async fn rotate_intake_token(
         envelope.on_behalf_of_user_id.map(|id| id.0),
         origin,
         envelope.occurred_at,
-        envelope.correlation_id,
+        envelope.correlation_id.0,
         envelope.causation_id,
     )
     .execute(&mut *tx)

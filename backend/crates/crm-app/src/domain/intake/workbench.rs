@@ -18,7 +18,7 @@ use crate::domain::inquiry::parse::{self, Source};
 use crate::domain::intake::email;
 use crate::domain::intake::IntakeActor;
 use crate::domain::raw_payload::{crypto, store, PayloadFormat, Resolution};
-use crate::ids::RawPayloadId;
+use crate::ids::{CorrelationId, RawPayloadId};
 use crate::realtime::{Publication, Publisher, RealtimeEvent};
 
 /// Every text field in a detail response is capped here (raw mail can be
@@ -310,7 +310,7 @@ pub async fn retry_intake(
     let actor = IntakeActor::System {
         organization_id: ctx.organization_id,
         origin: Origin::WebSession,
-        correlation_id: Uuid::new_v4(),
+        correlation_id: CorrelationId::new(Uuid::new_v4()),
         on_behalf_of_user_id: Some(ctx.actor_user_id),
     };
     let params = CompleteIntake {
@@ -343,7 +343,7 @@ pub async fn retry_intake(
             let event = RealtimeEvent::intake_unresolved_changed(
                 ctx.organization_id,
                 Utc::now(),
-                Uuid::new_v4(),
+                CorrelationId::new(Uuid::new_v4()),
                 id,
             );
             publisher
@@ -401,7 +401,7 @@ pub async fn discard_raw_payload(
     let event = RealtimeEvent::intake_unresolved_changed(
         ctx.organization_id,
         discarded_at,
-        Uuid::new_v4(),
+        CorrelationId::new(Uuid::new_v4()),
         id,
     );
     publisher

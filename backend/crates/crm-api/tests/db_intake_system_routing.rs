@@ -14,7 +14,7 @@ use crm_api::domain::commands::{self, ReceiveInquiry, ReceiveInquiryOutcome, Rou
 use crm_api::domain::envelope::{ActorKind, Origin};
 use crm_api::domain::inquiry::parse::Source;
 use crm_api::domain::intake::IntakeActor;
-use crm_api::ids::{OrganizationId, UserId};
+use crm_api::ids::{CorrelationId, OrganizationId, UserId};
 use crm_api::realtime::Publisher;
 
 const PW: &str = "pw";
@@ -49,7 +49,7 @@ async fn system_intake(
         on_behalf_of_user_id: None,
         organization_id: OrganizationId::new(org_id),
         origin: Origin::Cli,
-        correlation_id: Uuid::new_v4(),
+        correlation_id: CorrelationId::new(Uuid::new_v4()),
     };
     let cmd = ReceiveInquiry {
         source: Source::parse("website").unwrap(),

@@ -10,7 +10,7 @@ use crate::domain::contact::{normalize_email, normalize_phone};
 use crate::domain::inquiry::parse::ParsedLead;
 use crate::domain::person::model::{compute_display_name, PersonSummary, StageRef, UserRef};
 use crate::domain::person::visibility::PersonVisibilityScope;
-use crate::ids::{OrganizationId, PersonId, StageId, UserId};
+use crate::ids::{CorrelationId, OrganizationId, PersonId, StageId, UserId};
 
 // --- Command-side helpers ------------------------------------------------
 
@@ -431,7 +431,7 @@ pub struct HistoryEntry {
     pub recorded_at: DateTime<Utc>,
     pub actor: Option<UserRef>,
     pub origin: String,
-    pub correlation_id: Uuid,
+    pub correlation_id: CorrelationId,
     pub detail: serde_json::Value,
     /// `inquiry_received` = 0 … `stage_changed` = 3
     /// (docs/specs/SLICE_002.md §5), `contact_attempted` = 4 (SLICE_003),
@@ -493,7 +493,7 @@ async fn inquiry_received_history(
             recorded_at: r.recorded_at,
             actor: actor_ref(r.actor_user_id, r.actor_display_name),
             origin: r.origin,
-            correlation_id: r.correlation_id,
+            correlation_id: CorrelationId::new(r.correlation_id),
             detail: serde_json::json!({
                 "inquiry_id": r.inquiry_id,
                 "source": r.source,
@@ -551,7 +551,7 @@ async fn routing_decision_history(
                 recorded_at: r.recorded_at,
                 actor: actor_ref(r.actor_user_id, r.actor_display_name),
                 origin: r.origin,
-                correlation_id: r.correlation_id,
+                correlation_id: CorrelationId::new(r.correlation_id),
                 detail: serde_json::json!({
                     "inquiry_id": r.inquiry_id,
                     "strategy": r.strategy,
@@ -613,7 +613,7 @@ async fn assignment_changed_history(
                 recorded_at: r.recorded_at,
                 actor: actor_ref(r.actor_user_id, r.actor_display_name),
                 origin: r.origin,
-                correlation_id: r.correlation_id,
+                correlation_id: CorrelationId::new(r.correlation_id),
                 detail: serde_json::json!({
                     "from": from,
                     "to": to,
@@ -684,7 +684,7 @@ async fn stage_changed_history(
                 recorded_at: r.recorded_at,
                 actor: actor_ref(r.actor_user_id, r.actor_display_name),
                 origin: r.origin,
-                correlation_id: r.correlation_id,
+                correlation_id: CorrelationId::new(r.correlation_id),
                 detail: serde_json::json!({
                     "from_stage": from_stage,
                     "to_stage": to_stage,
@@ -758,7 +758,7 @@ async fn contact_attempted_history(
             recorded_at: r.recorded_at,
             actor: actor_ref(r.actor_user_id, r.actor_display_name),
             origin: r.origin,
-            correlation_id: r.correlation_id,
+            correlation_id: CorrelationId::new(r.correlation_id),
             detail: serde_json::json!({
                 "channel": r.channel,
                 "outcome": r.outcome,
@@ -818,7 +818,7 @@ async fn call_completed_history(
             recorded_at: r.recorded_at,
             actor: actor_ref(r.actor_user_id, r.actor_display_name),
             origin: r.origin,
-            correlation_id: r.correlation_id,
+            correlation_id: CorrelationId::new(r.correlation_id),
             detail: serde_json::json!({
                 "call_id": r.call_id,
                 "outcome": r.outcome,

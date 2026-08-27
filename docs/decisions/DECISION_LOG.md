@@ -1360,3 +1360,43 @@ still falls back to the unassigned OUTCOME + warning at routing time
 always records the actual outcome (`unassigned` on an empty pool).
 
 Blocks: nothing. Feeds the Slice 008 specification.
+
+### D-042 — Correspondence capture v1: the six scoping decisions (2026-08-27)
+
+Accepted (user, during Slice 009 planning). Executes O-014 #2 under
+the CC/BCC-first direction recorded 2026-08-27; the metadata-only
+posture (bodies parked on O-012) stands throughout.
+
+1. **Visibility**: captured metadata rows (direction + agent + time)
+   are visible org-wide on the Person timeline — consistent with the
+   existing org-wide Person history model and broker continuity. The
+   unmatched held queue is attributed-agent-only; raw content is
+   readable by NOBODY (no endpoint exists in v1).
+2. **Subjects are not stored** outside the encrypted raw. Timeline
+   and history JSON carry no subject, address, or message-id.
+3. **Unmatched correspondents → per-agent held queue**: the
+   attributed agent sees the counterparty address, can link-to-Person
+   (adding the contact method and writing the timeline row) or
+   dismiss. Never auto-creates a Person (match-never-create holds;
+   forged mail to a leaked token must not mint People). This narrowly
+   and deliberately supersedes O-014's original "matched-People
+   threads only" scope — blessed here.
+4. **Outbound capture auto-writes `contact_attempted`(email, sent)**
+   — System actor on behalf of the agent, caused by the
+   correspondence fact, at message time — so a CC'd email clears the
+   Today item like a logged call. Accepted edge: a forged "outbound"
+   can clear one Today item (visible, recoverable).
+5. **Per-agent token capture address** on the existing subdomain:
+   `save-<token12>@leads.elysianfeld.com`, 12-char token (the address
+   is thread-visible, so higher entropy than intake's 8), grammar
+   structurally disjoint from intake addresses by token length;
+   attribution is the address itself; per-agent self-service rotation
+   included. Zero Cloudflare changes (existing catch-all + relay).
+6. **Raw kept, encrypted, in a NEW `correspondence_raw` table** with
+   no read surface — structurally separate from `raw_payload` so
+   client correspondence can never enter the Groq extraction sweep
+   (D-038's scope stays airtight). Preserves the O-012 body upgrade
+   and migration reconstruction; O-012 key-hierarchy migration debt
+   noted.
+
+Blocks: nothing. Feeds the Slice 009 specification.

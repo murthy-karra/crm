@@ -139,8 +139,8 @@ impl ValidatedLead {
         let lead = ParsedLead {
             first_name: self.first_name.clone(),
             last_name: self.last_name.clone(),
-            email,
-            phone,
+            email: email.map(|e| e.to_string()),
+            phone: phone.map(|p| p.to_string()),
             raw_email: self.email_raw.clone(),
             raw_phone: self.phone_raw.clone(),
             message: self

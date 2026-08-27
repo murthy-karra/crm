@@ -155,7 +155,7 @@ pub async fn upsert_contact_methods(
     organization_id: OrganizationId,
     parsed: &ParsedLead,
 ) -> Result<(), sqlx::Error> {
-    if let Some(normalized) = &parsed.email {
+    if let Some(normalized) = parsed.normalized_email() {
         let raw = parsed.raw_email.as_deref().unwrap_or(normalized.as_str());
         sqlx::query!(
             r#"INSERT INTO contact_method (organization_id, person_id, kind, value, normalized_value)
@@ -164,12 +164,12 @@ pub async fn upsert_contact_methods(
             organization_id.0,
             person_id.0,
             raw,
-            normalized,
+            normalized.as_str(),
         )
         .execute(&mut *conn)
         .await?;
     }
-    if let Some(normalized) = &parsed.phone {
+    if let Some(normalized) = parsed.normalized_phone() {
         let raw = parsed.raw_phone.as_deref().unwrap_or(normalized.as_str());
         sqlx::query!(
             r#"INSERT INTO contact_method (organization_id, person_id, kind, value, normalized_value)
@@ -178,7 +178,7 @@ pub async fn upsert_contact_methods(
             organization_id.0,
             person_id.0,
             raw,
-            normalized,
+            normalized.as_str(),
         )
         .execute(&mut *conn)
         .await?;
@@ -346,8 +346,8 @@ pub async fn search_summaries(
            LIMIT $5"#,
         organization_id.0,
         pattern,
-        normalized_email,
-        normalized_phone,
+        normalized_email.as_ref().map(|e| e.as_str()),
+        normalized_phone.as_ref().map(|p| p.as_str()),
         fetch,
     )
     .fetch_all(conn)

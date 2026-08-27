@@ -80,7 +80,13 @@ small params struct, fold into A1 or N3); `routes/platform.rs`'s
 `TwoUuidPathIds` positional org/user path pair (typed path extractor,
 later); the CLI/migrator bootstrap cluster stays bare-Uuid by design
 (no adjacency; type it if it ever grows one, closing N2's
-`find_or_create_app_user` unwrap).
+`find_or_create_app_user` unwrap). From N4/V1 (2026-08-26):
+`today/model.rs`'s `CallOutcomeNeeded.call_id`/`OutcomeNeededCall.
+call_id` stay bare (no adjacency; type when Today files next open);
+`ParsedLead.email/phone` can be fully retyped once the identify
+integration lands (zero non-test readers remain) — deleting the
+re-deriving accessors; a construction-monopoly compile_fail doctest
+on NormalizedEmail is worth adding then too.
 
 **Recommended order: as numbered. Start with S1** — smallest,
 zero-wire-risk, kills a real compiling transposition immediately, and

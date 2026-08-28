@@ -8,6 +8,8 @@ import type {
   AssignmentRequest,
   CallOutcomeCorrection,
   CallResponse,
+  CaptureAddressResponse,
+  CaptureUnmatchedResponse,
   ChangeMemberRoleRequest,
   ContactChannel,
   ContactOutcome,
@@ -23,6 +25,7 @@ import type {
   InvitationsResponse,
   IssueInvitationRequest,
   IssueInvitationResponse,
+  LinkUnmatchedRequest,
   LogContactRequest,
   LogContactResponse,
   MeResponse,
@@ -81,6 +84,9 @@ export const queryKeys = {
   // person key). Under the org branch so reconnect recovery and the
   // mutations' whole-branch invalidation cover it too.
   call: (orgId: string, callId: string) => ['org', orgId, 'call', callId] as const,
+  // SLICE_009 §10: extend the factory, never hand-write a key.
+  captureAddress: (orgId: string) => ['org', orgId, 'capture-address'] as const,
+  captureUnmatched: (orgId: string) => ['org', orgId, 'capture-unmatched'] as const,
   // Keyed by the raw token, not an org id — the public accept page has no
   // Organization context yet (that is exactly what the preview reveals).
   invitationPreview: (token: string) => ['invitation-preview', token] as const,
@@ -684,4 +690,72 @@ export function useCorrectCallOutcome(orgId: MaybeRefOrGetter<string>, queryClie
     },
     queryClient,
   )
+}
+
+// --- Slice 009: Correspondence capture (docs/specs/SLICE_009.md §8, §10) --
+
+/** `GET /api/capture/address` — member-self (the agent's own credential). */
+export function useCaptureAddress(orgId: MaybeRefOrGetter<string>) {
+  return useQuery({
+    queryKey: computed(() => queryKeys.captureAddress(toValue(orgId))),
+    queryFn: () => apiFetch<CaptureAddressResponse>('/capture/address'),
+    enabled: computed(() => toValue(orgId) !== ''),
+  })
+}
+
+/** `POST /api/capture/address/rotate` — break-glass rotation; returns the
+ *  NEW address in the GET shape (mirrors `useRotateIntakeAddressMutation`). */
+export function useRotateCaptureAddressMutation(orgId: MaybeRefOrGetter<string>) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<CaptureAddressResponse>('/capture/address/rotate', { method: 'POST' }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.captureAddress(toValue(orgId)) })
+    },
+  })
+}
+
+/** `GET /api/capture/unmatched` — the viewer's own held queue only. */
+export function useCaptureUnmatched(orgId: MaybeRefOrGetter<string>) {
+  return useQuery({
+    queryKey: computed(() => queryKeys.captureUnmatched(toValue(orgId))),
+    queryFn: () => apiFetch<CaptureUnmatchedResponse>('/capture/unmatched'),
+    enabled: computed(() => toValue(orgId) !== ''),
+  })
+}
+
+/** `POST /api/capture/unmatched/{id}/link` — a resolved link also touches
+ *  the linked Person's timeline/today, so invalidate those alongside the
+ *  held queue, matching `useRetryUnresolvedMutation`'s pattern. */
+export function useLinkUnmatchedMutation(orgId: MaybeRefOrGetter<string>) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, personId, addContactMethod }: { id: string; personId: string; addContactMethod: boolean }) =>
+      apiFetch<{ status: 'linked' }>(`/capture/unmatched/${id}/link`, {
+        method: 'POST',
+        body: JSON.stringify({
+          person_id: personId,
+          add_contact_method: addContactMethod,
+        } satisfies LinkUnmatchedRequest),
+      }),
+    onSuccess: (_data, variables) => {
+      const id = toValue(orgId)
+      void qc.invalidateQueries({ queryKey: queryKeys.captureUnmatched(id) })
+      void qc.invalidateQueries({ queryKey: queryKeys.person(id, variables.personId) })
+      void qc.invalidateQueries({ queryKey: queryKeys.today(id) })
+    },
+  })
+}
+
+/** `POST /api/capture/unmatched/{id}/dismiss` — idempotent. */
+export function useDismissUnmatchedMutation(orgId: MaybeRefOrGetter<string>) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<{ status: 'dismissed' }>(`/capture/unmatched/${id}/dismiss`, { method: 'POST' }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.captureUnmatched(toValue(orgId)) })
+    },
+  })
 }

@@ -170,3 +170,36 @@ describe('TodayView — outcome needed tier (SLICE_006c §5a)', () => {
     expect(router.currentRoute.value.query).toEqual({ outcome: CALL_ID })
   })
 })
+
+// ---- SLICE_009 §6: client_replied ------------------------------------------
+
+function clientRepliedItem(priority: 'high' | 'normal'): TodayItem {
+  const occurredAt = '2026-08-27T09:00:00.000Z'
+  return {
+    person: person('p-replied', 'Maya Lindqvist'),
+    priority,
+    recommended_action: 'call',
+    reasons: [{ code: 'client_replied', occurred_at: occurredAt }],
+    waiting_since: occurredAt,
+    latest_inquiry: { id: 'inq-3', source: 'web', received_at: '2026-08-20T09:00:00.000Z' },
+    last_contact_attempt: null,
+  }
+}
+
+describe('TodayView — client_replied (SLICE_009 §6)', () => {
+  it('renders the Client replied badge as the SOLE reason, winning over the Inquiry trio', async () => {
+    stubApi([clientRepliedItem('high')])
+    const { wrapper } = await mountView()
+    const row = wrapper.get('tbody tr')
+    const cells = row.findAll('td')
+    expect(cells[0].text()).toContain('Maya Lindqvist')
+    expect(cells[1].findAll('span').map((b) => b.text())).toEqual(['Client replied'])
+    expect(cells[2].text()).toBe('High')
+  })
+
+  it('a stale reply renders Normal priority', async () => {
+    stubApi([clientRepliedItem('normal')])
+    const { wrapper } = await mountView()
+    expect(wrapper.get('tbody tr').findAll('td')[2].text()).toBe('Normal')
+  })
+})

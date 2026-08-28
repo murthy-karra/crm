@@ -115,6 +115,7 @@ mod tests {
             subject: None,
             date: None,
             text_body: None,
+            ..Default::default()
         };
         let mut names = std::collections::HashSet::new();
         for format in FORMATS {

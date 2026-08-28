@@ -636,6 +636,7 @@ mod tests {
             subject: Some("s".repeat(SUBJECT_MAX_BYTES * 2)),
             date: None,
             text_body: Some("short body".into()),
+            ..Default::default()
         };
         let input = build_input(&mail);
         assert!(input.truncated);
@@ -697,6 +698,7 @@ Hi, we would love a viewing this week.\r\n"
             subject: Some("New lead".into()),
             date: None,
             text_body: Some("x".repeat(INPUT_MAX_BYTES * 2)),
+            ..Default::default()
         };
         let input = build_input(&mail);
         assert_eq!(input.sender_domain.as_deref(), Some("leads.eospia.com"));

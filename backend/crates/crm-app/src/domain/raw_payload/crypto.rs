@@ -14,7 +14,7 @@ use rand::Rng;
 use sha2::Sha256;
 
 use crate::config::RawPayloadKey;
-use crate::ids::{OrganizationId, RawPayloadId};
+use crate::ids::{CorrespondenceRawId, OrganizationId, RawPayloadId};
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -31,18 +31,40 @@ pub struct Sealed {
 #[derive(Debug)]
 pub struct CryptoError;
 
-/// `organization_id ‖ raw_payload.id` — binds a ciphertext to the exact row
+/// `organization_id ‖ <entity id>` — binds a ciphertext to the exact row
 /// and Organization it was sealed for, so it cannot be re-pointed to
-/// another row (docs/specs/SLICE_002.md §7). Both halves are typed
-/// (org in hardening chunk N1, payload in N3): the bytes are still
-/// exactly the inner `Uuid`s', so a stored ciphertext's AAD is
-/// unaffected — only the Rust call site can no longer transpose these
-/// arguments with each other or with any other id.
-fn associated_data(organization_id: OrganizationId, raw_payload_id: RawPayloadId) -> [u8; 32] {
+/// another row (docs/specs/SLICE_002.md §7). The generalized core of
+/// `associated_data`/`associated_data_correspondence` below (Slice 009,
+/// docs/specs/SLICE_009.md §4 item 2): identical byte layout regardless of
+/// which table's id fills the second half, so a stored `raw_payload`
+/// ciphertext's AAD is completely unaffected by this generalization.
+fn associated_data_bytes(organization_id: OrganizationId, entity_id: uuid::Uuid) -> [u8; 32] {
     let mut out = [0u8; 32];
     out[..16].copy_from_slice(organization_id.as_uuid().as_bytes());
-    out[16..].copy_from_slice(raw_payload_id.as_uuid().as_bytes());
+    out[16..].copy_from_slice(entity_id.as_bytes());
     out
+}
+
+/// `organization_id ‖ raw_payload.id`. Both halves are typed (org in
+/// hardening chunk N1, payload in N3): the bytes are still exactly the
+/// inner `Uuid`s', so a stored ciphertext's AAD is unaffected — only the
+/// Rust call site can no longer transpose these arguments with each other
+/// or with any other id.
+fn associated_data(organization_id: OrganizationId, raw_payload_id: RawPayloadId) -> [u8; 32] {
+    associated_data_bytes(organization_id, raw_payload_id.as_uuid())
+}
+
+/// `organization_id ‖ correspondence_raw.id` (Slice 009). A SEPARATE typed
+/// wrapper, deliberately — `seal`/`open` above stay typed to `RawPayloadId`
+/// specifically, so a `CorrespondenceRawId` can never be smuggled through
+/// them (reviewer note, docs/specs/SLICE_009.md §4 item 2): the two id
+/// types are not interchangeable at any of these functions' call sites,
+/// even though the byte layout they produce is identical.
+fn associated_data_correspondence(
+    organization_id: OrganizationId,
+    correspondence_raw_id: CorrespondenceRawId,
+) -> [u8; 32] {
+    associated_data_bytes(organization_id, correspondence_raw_id.as_uuid())
 }
 
 fn cipher(key: &RawPayloadKey) -> XChaCha20Poly1305 {
@@ -57,10 +79,40 @@ pub fn seal(
     raw_payload_id: RawPayloadId,
     plaintext: &[u8],
 ) -> Result<Sealed, CryptoError> {
+    seal_with_aad(
+        key,
+        associated_data(organization_id, raw_payload_id),
+        plaintext,
+    )
+}
+
+/// The `correspondence_raw` sibling of [`seal`] (Slice 009,
+/// docs/specs/SLICE_009.md §4 item 2). Reuses the SAME `RawPayloadKey` —
+/// no separate correspondence key is provisioned this slice — and the
+/// same AAD construction, just keyed to `CorrespondenceRawId` instead of
+/// `RawPayloadId`, so the two ciphertext families can never be confused
+/// or cross-opened even though they share a key.
+pub fn seal_correspondence(
+    key: &RawPayloadKey,
+    organization_id: OrganizationId,
+    correspondence_raw_id: CorrespondenceRawId,
+    plaintext: &[u8],
+) -> Result<Sealed, CryptoError> {
+    seal_with_aad(
+        key,
+        associated_data_correspondence(organization_id, correspondence_raw_id),
+        plaintext,
+    )
+}
+
+fn seal_with_aad(
+    key: &RawPayloadKey,
+    aad: [u8; 32],
+    plaintext: &[u8],
+) -> Result<Sealed, CryptoError> {
     let mut nonce_bytes = [0u8; NONCE_LEN];
     rand::rng().fill_bytes(&mut nonce_bytes);
     let nonce = XNonce::from_slice(&nonce_bytes);
-    let aad = associated_data(organization_id, raw_payload_id);
 
     let ciphertext = cipher(key)
         .encrypt(
@@ -88,11 +140,42 @@ pub fn open(
     nonce: &[u8],
     ciphertext: &[u8],
 ) -> Result<Vec<u8>, CryptoError> {
+    open_with_aad(
+        key,
+        associated_data(organization_id, raw_payload_id),
+        nonce,
+        ciphertext,
+    )
+}
+
+/// The `correspondence_raw` sibling of [`open`] (Slice 009). See
+/// [`seal_correspondence`]'s doc for why this is a separate typed
+/// function rather than a generic one.
+pub fn open_correspondence(
+    key: &RawPayloadKey,
+    organization_id: OrganizationId,
+    correspondence_raw_id: CorrespondenceRawId,
+    nonce: &[u8],
+    ciphertext: &[u8],
+) -> Result<Vec<u8>, CryptoError> {
+    open_with_aad(
+        key,
+        associated_data_correspondence(organization_id, correspondence_raw_id),
+        nonce,
+        ciphertext,
+    )
+}
+
+fn open_with_aad(
+    key: &RawPayloadKey,
+    aad: [u8; 32],
+    nonce: &[u8],
+    ciphertext: &[u8],
+) -> Result<Vec<u8>, CryptoError> {
     if nonce.len() != NONCE_LEN {
         return Err(CryptoError);
     }
     let nonce = XNonce::from_slice(nonce);
-    let aad = associated_data(organization_id, raw_payload_id);
 
     cipher(key)
         .decrypt(
@@ -200,6 +283,80 @@ mod tests {
             &key,
             OrganizationId::new(Uuid::new_v4()),
             payload_id,
+            &sealed.nonce,
+            &sealed.ciphertext,
+        );
+        assert!(result.is_err());
+    }
+
+    // --- Slice 009: seal_correspondence/open_correspondence (the
+    // correspondence_raw sibling) — mirrors the RawPayloadId suite above
+    // exactly, over the SAME shared key (no separate correspondence key
+    // this slice), so the tests double as proof the generalization
+    // changed no byte on the existing RawPayloadId path. ------------------
+
+    #[test]
+    fn seal_correspondence_open_correspondence_roundtrip() {
+        let key = test_key(0x11);
+        let org_id = OrganizationId::new(Uuid::new_v4());
+        let raw_id = CorrespondenceRawId::new(Uuid::new_v4());
+        let plaintext = b"raw rfc822 bytes go here";
+
+        let sealed = seal_correspondence(&key, org_id, raw_id, plaintext).unwrap();
+        let opened =
+            open_correspondence(&key, org_id, raw_id, &sealed.nonce, &sealed.ciphertext).unwrap();
+        assert_eq!(opened, plaintext);
+    }
+
+    #[test]
+    fn seal_correspondence_tampered_ciphertext_fails_to_open() {
+        let key = test_key(0x22);
+        let org_id = OrganizationId::new(Uuid::new_v4());
+        let raw_id = CorrespondenceRawId::new(Uuid::new_v4());
+        let mut sealed = seal_correspondence(&key, org_id, raw_id, b"hello world").unwrap();
+        let last = sealed.ciphertext.len() - 1;
+        sealed.ciphertext[last] ^= 0xFF;
+
+        let result = open_correspondence(&key, org_id, raw_id, &sealed.nonce, &sealed.ciphertext);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn seal_correspondence_wrong_key_fails_to_open() {
+        let key_a = test_key(0x33);
+        let key_b = test_key(0x44);
+        let org_id = OrganizationId::new(Uuid::new_v4());
+        let raw_id = CorrespondenceRawId::new(Uuid::new_v4());
+        let sealed = seal_correspondence(&key_a, org_id, raw_id, b"hello world").unwrap();
+
+        let result = open_correspondence(&key_b, org_id, raw_id, &sealed.nonce, &sealed.ciphertext);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn seal_correspondence_wrong_aad_fails_to_open() {
+        let key = test_key(0x55);
+        let org_id = OrganizationId::new(Uuid::new_v4());
+        let raw_id = CorrespondenceRawId::new(Uuid::new_v4());
+        let other_raw_id = CorrespondenceRawId::new(Uuid::new_v4());
+        let sealed = seal_correspondence(&key, org_id, raw_id, b"hello world").unwrap();
+
+        // Different correspondence_raw id: AAD mismatch, must fail — a
+        // ciphertext cannot be re-pointed to another row.
+        let result = open_correspondence(
+            &key,
+            org_id,
+            other_raw_id,
+            &sealed.nonce,
+            &sealed.ciphertext,
+        );
+        assert!(result.is_err());
+
+        // Different Organization: same failure mode.
+        let result = open_correspondence(
+            &key,
+            OrganizationId::new(Uuid::new_v4()),
+            raw_id,
             &sealed.nonce,
             &sealed.ciphertext,
         );

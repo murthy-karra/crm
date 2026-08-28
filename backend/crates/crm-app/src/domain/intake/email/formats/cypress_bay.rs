@@ -135,6 +135,7 @@ mod tests {
             subject: subject.map(str::to_string),
             date: None,
             text_body: body.map(str::to_string),
+            ..Default::default()
         }
     }
 

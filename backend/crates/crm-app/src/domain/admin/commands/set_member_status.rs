@@ -7,6 +7,7 @@ use uuid::Uuid;
 use crate::domain::admin::commands::AdminCommandError;
 use crate::domain::admin::queries::{self, MemberView};
 use crate::domain::admin::{AdminActor, MembershipStatus, Role};
+use crate::domain::capture::address::mint_capture_address_if_absent;
 use crate::domain::envelope::{Actor, FactEnvelope};
 use crate::domain::facts::{self, MembershipChangeReason, MembershipChangedFact};
 use crate::ids::{CorrelationId, OrganizationId, UserId};
@@ -95,6 +96,15 @@ async fn set_member_status_attempt(
 
         if deactivated {
             queries::revoke_sessions_for_member(&mut tx, cmd.organization_id, cmd.user_id).await?;
+        } else {
+            // Slice 009 (docs/specs/SLICE_009.md §4 item 1; declared
+            // additive SLICE_004 change): reactivation restores the
+            // member's EXISTING capture address — mint-if-absent is a
+            // no-op here in the common case (the row survived
+            // deactivation untouched); it only actually mints for a
+            // membership that predates this slice's backfill somehow
+            // (handled rather than assumed, criterion 8).
+            mint_capture_address_if_absent(&mut tx, cmd.organization_id, cmd.user_id).await?;
         }
 
         let envelope = FactEnvelope {

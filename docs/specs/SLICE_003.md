@@ -314,7 +314,12 @@ for `intake.unresolved_changed`, which has no fact, it is the
 
 `GET /api/today` values widened by SLICE_006c §5a: `priority` adds
 `low`, `recommended_action` adds `set_outcome`, `reasons[]` adds
-`{code: "call_outcome_needed", call_id, ended_at}`. Additive.
+`{code: "call_outcome_needed", call_id, ended_at}`. Additive. Further
+widened by SLICE_009 §6: `reasons[]` adds `{code: "client_replied",
+occurred_at}`, which wins the reason slot over the Inquiry-based trio
+when a Person qualifies for both (a fresh, i.e. <24h, reply ranks
+`high`, else `normal` — the existing recommended-action rule is
+unchanged).
 
 New endpoints only. All via `AuthContext`; `{"error": code}` envelope;
 401 without a valid session and 503 `unavailable` on database failure
@@ -398,7 +403,12 @@ header `X-API-Key: <CENTRIFUGO_HTTP_API_KEY>`, body
 ```
 
 `data.change` ∈ `inquiry_received | assignment_changed | stage_changed |
-contact_attempted`. Second type:
+contact_attempted`. Widened by SLICE_009 §6 (declared additive change,
+AGENTS.md §11): `data.change` also admits `correspondence_captured`,
+published after every live-matched or link-created capture fact row (no
+held-queue realtime). No new event type — `type` stays `person.changed`,
+so a client that does not recognize the new value still invalidates and
+refetches correctly. Second type:
 
 ```json
 { "v": 1, "type": "intake.unresolved_changed", "organization_id": "…", "occurred_at": "…",

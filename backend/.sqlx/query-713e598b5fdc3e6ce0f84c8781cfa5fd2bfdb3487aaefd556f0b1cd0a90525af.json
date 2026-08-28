@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT ca.organization_id, ca.user_id, ca.token\n           FROM capture_address ca\n           JOIN organization_membership m\n             ON m.organization_id = ca.organization_id AND m.user_id = ca.user_id\n           WHERE ca.token_lookup = $1 AND m.status = 'active'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "organization_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "token",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bytea"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "713e598b5fdc3e6ce0f84c8781cfa5fd2bfdb3487aaefd556f0b1cd0a90525af"
+}

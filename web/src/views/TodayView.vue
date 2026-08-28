@@ -47,6 +47,8 @@ function reasonLabel(reason: TodayReason): string {
       return `Inquired again (${reason.inquiry_count})`
     case 'call_outcome_needed':
       return 'Outcome needed'
+    case 'client_replied':
+      return 'Client replied'
   }
 }
 

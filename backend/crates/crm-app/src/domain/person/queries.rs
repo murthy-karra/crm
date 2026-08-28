@@ -829,6 +829,85 @@ async fn call_completed_history(
         .collect())
 }
 
+struct CorrespondenceHistoryRow {
+    id: Uuid,
+    occurred_at: DateTime<Utc>,
+    recorded_at: DateTime<Utc>,
+    origin: String,
+    correlation_id: Uuid,
+    on_behalf_of_user_id: Option<Uuid>,
+    agent_display_name: Option<String>,
+    direction: String,
+    via: String,
+    backdated: bool,
+}
+
+/// `correspondence` history entries (Slice 009, docs/specs/SLICE_009.md
+/// §8, the declared additive SLICE_002 §5 contract change): `kind_rank`
+/// 6, `detail: {"direction", "agent", "captured_at", "via", "backdated"}`
+/// — deliberately NO address/subject/message-id (D-042.1/2). Org-wide
+/// visible (D-042.1): no `agent_user_id`/attribution filter here, unlike
+/// the held-queue reads in `domain/capture/store.rs`.
+///
+/// The top-level `actor` field is always `None` for these rows (`Actor::
+/// System` per spec §4 — the agent's CC/forward caused an UNATTENDED
+/// capture, so there is no human `actor_user_id`); the attributed agent
+/// instead lives in `detail.agent`, read from `on_behalf_of_user_id`
+/// (spec §4: "on_behalf_of_user_id = agent … agent_user_id is the queried
+/// attribution column, mirrored into on_behalf_of") via the SAME
+/// `actor_ref` shape every other history kind's actor uses. Always
+/// `Some` in practice (the capture pipeline never omits it) — a `None`
+/// here is a data-integrity surprise, so this fails closed
+/// (`sqlx::Error::Decode`) rather than silently rendering a missing
+/// agent.
+async fn correspondence_history(
+    conn: &mut PgConnection,
+    organization_id: OrganizationId,
+    person_id: PersonId,
+) -> Result<Vec<HistoryEntry>, sqlx::Error> {
+    let rows = sqlx::query_as!(
+        CorrespondenceHistoryRow,
+        r#"SELECT cc.id, cc.occurred_at, cc.recorded_at, cc.origin, cc.correlation_id,
+                  cc.on_behalf_of_user_id, au.display_name as "agent_display_name?",
+                  cc.direction, cc.via, cc.backdated
+           FROM correspondence_captured cc
+           LEFT JOIN app_user au ON au.id = cc.on_behalf_of_user_id
+           WHERE cc.organization_id = $1 AND cc.person_id = $2"#,
+        organization_id.0,
+        person_id.0,
+    )
+    .fetch_all(conn)
+    .await?;
+
+    rows.into_iter()
+        .map(|r| {
+            let agent =
+                actor_ref(r.on_behalf_of_user_id, r.agent_display_name).ok_or_else(|| {
+                    sqlx::Error::Decode(
+                        "correspondence_captured: on_behalf_of_user_id must always be set".into(),
+                    )
+                })?;
+            Ok(HistoryEntry {
+                kind: "correspondence",
+                kind_rank: 6,
+                id: r.id,
+                occurred_at: r.occurred_at,
+                recorded_at: r.recorded_at,
+                actor: None,
+                origin: r.origin,
+                correlation_id: CorrelationId::new(r.correlation_id),
+                detail: serde_json::json!({
+                    "direction": r.direction,
+                    "agent": agent,
+                    "captured_at": r.recorded_at,
+                    "via": r.via,
+                    "backdated": r.backdated,
+                }),
+            })
+        })
+        .collect()
+}
+
 /// The full history timeline for `GET /api/people/{id}`, ordered
 /// `occurred_at, recorded_at, kind_rank, id` (docs/specs/SLICE_002.md §5:
 /// required because intake's four facts otherwise share both timestamps).
@@ -844,6 +923,7 @@ pub async fn history_for_person(
     entries.extend(stage_changed_history(conn, organization_id, person_id).await?);
     entries.extend(contact_attempted_history(conn, organization_id, person_id).await?);
     entries.extend(call_completed_history(conn, organization_id, person_id).await?);
+    entries.extend(correspondence_history(conn, organization_id, person_id).await?);
 
     entries.sort_by_key(|e| (e.occurred_at, e.recorded_at, e.kind_rank, e.id));
     Ok(entries)

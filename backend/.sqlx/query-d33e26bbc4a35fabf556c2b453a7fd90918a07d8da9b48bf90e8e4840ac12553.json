@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE capture_message SET status = 'dismissed', counterparty_email = NULL\n           WHERE id = $1 AND organization_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d33e26bbc4a35fabf556c2b453a7fd90918a07d8da9b48bf90e8e4840ac12553"
+}

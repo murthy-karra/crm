@@ -72,6 +72,14 @@ function routes(): RouteRecordRaw[] {
       meta: { title: 'New lead' },
     },
     {
+      // SLICE_009 §8: the agent's own capture address + unmatched queue —
+      // member-self, deliberately NOT under /manage (admin surface).
+      path: '/email-capture',
+      name: 'email-capture',
+      component: () => import('./views/EmailCaptureView.vue'),
+      meta: { title: 'Email capture' },
+    },
+    {
       path: '/intake/unresolved',
       name: 'unresolved',
       component: () => import('./views/UnresolvedView.vue'),

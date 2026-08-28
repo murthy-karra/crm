@@ -44,6 +44,14 @@ describe('invalidationsFor', () => {
     ])
   })
 
+  it('maps correspondence_captured to person, people, and today (SLICE_009 §6, no new event type)', () => {
+    expect(invalidationsFor(personChanged('correspondence_captured'), ORG_ID)).toEqual([
+      queryKeys.person(ORG_ID, PERSON_ID),
+      queryKeys.people(ORG_ID),
+      queryKeys.today(ORG_ID),
+    ])
+  })
+
   it('maps inquiry_received to person, people, today, AND unresolved (§6 special case)', () => {
     expect(invalidationsFor(personChanged('inquiry_received'), ORG_ID)).toEqual([
       queryKeys.person(ORG_ID, PERSON_ID),

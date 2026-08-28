@@ -272,6 +272,16 @@ one transaction, writes its fact(s), and publishes nothing (§6).
 | `SetLocalPassword { user_id, password }` | CLI only | Argon2id re-hash; `UPDATE local_credential`. No fact (credential material is not a business fact; D-015). No route. |
 | `GrantPlatformAdmin { email, display_name, password }` | CLI only, migrator connection | Create `app_user` + `local_credential` if absent (same normalization), insert `platform_admin` if absent; idempotent. |
 
+Widened by SLICE_009 §4 (declared additive change, AGENTS.md §11):
+`AcceptInvitation` and `SetMemberStatus`'s reactivation branch (`to_status:
+active`) both additionally call `mint_capture_address_if_absent
+(organization_id, user_id)` inside their existing transaction — a brand-new
+membership always mints; a reactivated one restores its EXISTING address
+(the row survived deactivation untouched), never a fresh one. Deactivation
+itself is untouched: a capture address keeps existing, only its lookup
+stops resolving (an active-membership JOIN at receive time, not a row
+change here).
+
 Queries (all scoped by Organization id supplied by the extractor or the
 platform path, never by the client):
 

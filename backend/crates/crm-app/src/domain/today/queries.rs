@@ -38,6 +38,10 @@ struct TodayCandidateRow {
     by_inquiry: Option<bool>,
     outcome_call_id: Option<Uuid>,
     outcome_call_ended_at: Option<DateTime<Utc>>,
+    /// Slice 009 (docs/specs/SLICE_009.md §6): the qualifying inbound
+    /// correspondence's `occurred_at`, or `NULL` when the Person does not
+    /// qualify for the `client_replied` arm.
+    client_replied_occurred_at: Option<DateTime<Utc>>,
 }
 
 /// A read path fails closed on unexpected data rather than panicking
@@ -138,9 +142,15 @@ impl TryFrom<TodayCandidateRow> for TodayCandidate {
             }
         };
         let by_inquiry = required(row.by_inquiry, "by_inquiry")?;
-        if !by_inquiry && outcome_needed.is_none() {
+        let client_replied = row.client_replied_occurred_at;
+        // Slice 009 (docs/specs/SLICE_009.md §6): a third qualifying arm
+        // alongside by_inquiry/outcome_needed — TryFrom's own "a candidate
+        // must qualify by SOMETHING the query actually verified" invariant
+        // extends to it rather than being superseded by it.
+        if !by_inquiry && outcome_needed.is_none() && client_replied.is_none() {
             return Err(sqlx::Error::Decode(
-                "today candidates query: a candidate must qualify by inquiry or by call".into(),
+                "today candidates query: a candidate must qualify by inquiry, by call, or by reply"
+                    .into(),
             ));
         }
 
@@ -153,6 +163,7 @@ impl TryFrom<TodayCandidateRow> for TodayCandidate {
             fresh: required(row.fresh, "fresh")?,
             by_inquiry,
             outcome_needed,
+            client_replied,
         })
     }
 }
@@ -235,13 +246,21 @@ pub async fn candidates(
              last_attempt.channel as "last_attempt_channel?",
              last_attempt.outcome as "last_attempt_outcome?",
              last_attempt.occurred_at as "last_attempt_occurred_at?",
-             CASE WHEN membership.by_inquiry THEN waiting.received_at ELSE oc.ended_at END
+             CASE WHEN reply_membership.by_reply THEN last_inbound.occurred_at
+                  WHEN membership.by_inquiry THEN waiting.received_at
+                  ELSE oc.ended_at END
                  as "waiting_since?",
-             (membership.by_inquiry AND latest.received_at > $3::timestamptz - interval '24 hours')
+             (CASE WHEN reply_membership.by_reply
+                        THEN last_inbound.occurred_at > $3::timestamptz - interval '24 hours'
+                   WHEN membership.by_inquiry
+                        THEN latest.received_at > $3::timestamptz - interval '24 hours'
+                   ELSE false END)
                  as "fresh?",
              membership.by_inquiry as "by_inquiry?",
              oc.id as "outcome_call_id?",
-             oc.ended_at as "outcome_call_ended_at?"
+             oc.ended_at as "outcome_call_ended_at?",
+             CASE WHEN reply_membership.by_reply THEN last_inbound.occurred_at ELSE NULL END
+                 as "client_replied_occurred_at?"
            FROM person p
            JOIN stage s ON s.id = p.stage_id
            LEFT JOIN app_user u ON u.id = p.assigned_user_id
@@ -256,6 +275,7 @@ pub async fn candidates(
                SELECT ca.id, ca.channel, ca.outcome, ca.occurred_at
                FROM contact_attempted ca
                WHERE ca.person_id = p.id
+                 AND ca.organization_id = p.organization_id
                  AND NOT EXISTS (SELECT 1 FROM contact_attempted c WHERE c.corrects_id = ca.id)
                ORDER BY ca.occurred_at DESC, ca.id DESC
                LIMIT 1
@@ -269,16 +289,58 @@ pub async fn candidates(
                LIMIT 1
            ) waiting ON true
            LEFT JOIN outcome_call oc ON oc.person_id = p.id
+           -- Slice 009 (docs/specs/SLICE_009.md §6): the latest inbound/
+           -- outbound correspondence per Person, feeding the client_replied
+           -- arm below. No organization_id filter here, matching every
+           -- other LATERAL join in this query (`latest`/`last_attempt`/
+           -- `waiting`) — person_id is trusted as org-consistent by
+           -- construction (the application never writes a fact row whose
+           -- person_id and organization_id disagree); the outer `WHERE
+           -- p.organization_id = $1` is the actual tenant boundary.
+           LEFT JOIN LATERAL (
+               SELECT cc.occurred_at
+               FROM correspondence_captured cc
+               WHERE cc.person_id = p.id
+                 AND cc.organization_id = p.organization_id
+                 AND cc.direction = 'inbound'
+               ORDER BY cc.occurred_at DESC, cc.id DESC
+               LIMIT 1
+           ) last_inbound ON true
+           LEFT JOIN LATERAL (
+               SELECT cc.occurred_at
+               FROM correspondence_captured cc
+               WHERE cc.person_id = p.id
+                 AND cc.organization_id = p.organization_id
+                 AND cc.direction = 'outbound'
+               ORDER BY cc.occurred_at DESC, cc.id DESC
+               LIMIT 1
+           ) last_outbound ON true
            CROSS JOIN LATERAL (
                SELECT (COALESCE(p.assigned_user_id = $2, false) AND waiting.received_at IS NOT NULL) as by_inquiry
            ) membership
+           -- client_replied (spec §6): assigned to the viewer, an inbound
+           -- correspondence exists, and it is later than every effective
+           -- contact_attempted AND every outbound correspondence — checking
+           -- only the LATEST of each is equivalent to "later than every"
+           -- (a later attempt/outbound would itself be the latest, so it
+           -- alone is sufficient to disqualify).
+           CROSS JOIN LATERAL (
+               SELECT (
+                   COALESCE(p.assigned_user_id = $2, false)
+                   AND last_inbound.occurred_at IS NOT NULL
+                   AND last_inbound.occurred_at > COALESCE(last_attempt.occurred_at, '-infinity'::timestamptz)
+                   AND last_inbound.occurred_at > COALESCE(last_outbound.occurred_at, '-infinity'::timestamptz)
+               ) as by_reply
+           ) reply_membership
            WHERE p.organization_id = $1
              AND (p.assigned_user_id = $2 OR p.id IN (SELECT person_id FROM outcome_call))
              AND latest.id IS NOT NULL
-             AND (membership.by_inquiry OR oc.id IS NOT NULL)
-           ORDER BY membership.by_inquiry DESC,
+             AND (membership.by_inquiry OR oc.id IS NOT NULL OR reply_membership.by_reply)
+           ORDER BY (membership.by_inquiry OR reply_membership.by_reply) DESC,
                     "fresh?" DESC,
-                    CASE WHEN membership.by_inquiry THEN waiting.received_at ELSE oc.ended_at END ASC,
+                    CASE WHEN reply_membership.by_reply THEN last_inbound.occurred_at
+                         WHEN membership.by_inquiry THEN waiting.received_at
+                         ELSE oc.ended_at END ASC,
                     p.id ASC
            LIMIT 201"#,
         organization_id.0,

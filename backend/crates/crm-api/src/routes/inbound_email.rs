@@ -163,6 +163,17 @@ async fn inbound_email(
             span.record("outcome", "duplicate");
             Ok((StatusCode::OK, Json(json!({ "status": "accepted" }))).into_response())
         }
+        // Slice 009 (docs/specs/SLICE_009.md §3, §9): the recipient
+        // resolved to a capture address. The entire correspondence
+        // pipeline ran under its own nested `capture.inbound_email` span
+        // (`domain::capture::receive`) — this handler's own span only
+        // records that a capture request was accepted, never which
+        // sub-case occurred (matched/held/duplicate/unparseable), exactly
+        // like every other outcome on this frozen envelope.
+        Ok(InboundEmailOutcome::Captured) => {
+            span.record("outcome", "captured");
+            Ok((StatusCode::OK, Json(json!({ "status": "accepted" }))).into_response())
+        }
         Ok(InboundEmailOutcome::Rejected)
         | Err(ReceiveInboundEmailError::InvalidRecipient)
         | Err(ReceiveInboundEmailError::OrgNotFound) => {

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT 1 as \"present!\"\n           FROM organization_membership m\n           JOIN app_user u ON u.id = m.user_id\n           WHERE m.organization_id = $1 AND m.status = 'active' AND lower(u.email) = lower($2)\n           LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "present!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "921620e8da45d5c5a40c8f748c2bbc38a8d12fe498168358d1fae2cd8da36ef6"
+}

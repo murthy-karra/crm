@@ -11,6 +11,8 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::config::RawPayloadKey;
+use crate::domain::capture::token::CaptureToken;
+use crate::domain::capture::{receive_captured_email, CaptureEmailOutcome};
 use crate::domain::commands::receive_inquiry::{
     complete_intake, CompleteIntake, ReceiveInquiryOutcome,
 };
@@ -53,6 +55,14 @@ pub enum InboundEmailOutcome {
     Duplicate,
     /// Wrong token: stored nowhere.
     Rejected,
+    /// Slice 009 (docs/specs/SLICE_009.md §3): the recipient resolved to a
+    /// capture address, not an intake one — the ENTIRE correspondence
+    /// pipeline (matched, held, duplicate, or unparseable) ran under
+    /// `domain::capture`'s own `capture.inbound_email` span; this variant
+    /// only signals "accept the request" to the frozen HTTP envelope,
+    /// which — like every other stored/duplicate outcome — reveals
+    /// nothing about which sub-case occurred (spec §9).
+    Captured,
 }
 
 #[derive(Debug)]
@@ -73,11 +83,14 @@ impl From<sqlx::Error> for ReceiveInboundEmailError {
     }
 }
 
-/// Phase A (unchanged from SLICE_007b): parse recipient → resolve org by
-/// slug+token → seal + insert. Phase B (SLICE_007d): attempt the
-/// pinned-format parse and complete intake as the System actor. The
-/// per-Organization advisory lock is taken by `complete_intake` only on
-/// the success path — parse-gate failures never contend for it.
+/// The frozen `/inbound/email` dispatcher (docs/specs/SLICE_009.md §3):
+/// intake parse first — byte-identical behavior, `receive_intake_email`
+/// below is the untouched SLICE_007b/d body — else capture parse
+/// (`domain::capture`, an internal routing extension per spec §3, not a
+/// contract change), else the existing 200-rejected. The two address
+/// grammars are STRUCTURALLY disjoint (`CaptureToken::parse_recipient`'s
+/// doc has the proof), so trying intake first is defense in depth, not a
+/// live ambiguity: neither parser can ever accept the other's addresses.
 pub async fn receive_inbound_email(
     pool: &PgPool,
     key: &RawPayloadKey,
@@ -88,10 +101,39 @@ pub async fn receive_inbound_email(
 ) -> Result<InboundEmailOutcome, ReceiveInboundEmailError> {
     let received_at = Utc::now();
 
-    // Parse recipient (syntax validation only; reveals nothing secret).
-    let intake_addr = IntakeAddress::parse_recipient(recipient, mail_cfg)
-        .ok_or(ReceiveInboundEmailError::InvalidRecipient)?;
+    if let Some(intake_addr) = IntakeAddress::parse_recipient(recipient, mail_cfg) {
+        return receive_intake_email(pool, key, publisher, intake_addr, raw, received_at).await;
+    }
 
+    if let Some(token) = CaptureToken::parse_recipient(recipient, mail_cfg) {
+        return match receive_captured_email(pool, key, publisher, mail_cfg, token, raw, received_at)
+            .await?
+        {
+            CaptureEmailOutcome::Captured => Ok(InboundEmailOutcome::Captured),
+            CaptureEmailOutcome::Duplicate => Ok(InboundEmailOutcome::Duplicate),
+            CaptureEmailOutcome::Rejected => Ok(InboundEmailOutcome::Rejected),
+        };
+    }
+
+    Err(ReceiveInboundEmailError::InvalidRecipient)
+}
+
+/// Phase A (unchanged from SLICE_007b): resolve org by slug+token, then
+/// seal and insert. Phase B (SLICE_007d): attempt the pinned-format parse
+/// and complete intake as the System actor. The per-Organization advisory
+/// lock is taken by `complete_intake` only on the success path —
+/// parse-gate failures never contend for it. Extracted verbatim from the
+/// pre-Slice-009 `receive_inbound_email` (only the recipient-parsing
+/// preamble moved to the dispatcher above); every line below is
+/// unchanged.
+async fn receive_intake_email(
+    pool: &PgPool,
+    key: &RawPayloadKey,
+    publisher: &Publisher,
+    intake_addr: IntakeAddress,
+    raw: &[u8],
+    received_at: chrono::DateTime<Utc>,
+) -> Result<InboundEmailOutcome, ReceiveInboundEmailError> {
     // Resolve organization by slug + tenant-only authentication.
     let mut conn = pool.acquire().await?;
     let lookup = organization_by_intake_slug(&mut conn, &intake_addr.slug).await?;

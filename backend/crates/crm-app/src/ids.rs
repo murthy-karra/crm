@@ -1009,3 +1009,201 @@ mod turn_id_tests {
         assert_eq!(TurnId::new(id).as_uuid(), id);
     }
 }
+
+/// The `capture_address` row's own identity (Slice 009, docs/specs/SLICE_009.md
+/// §4 item 1): one per (organization, agent). Same transparent,
+/// no-implicit-conversion shape as every other id in this module.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
+#[repr(transparent)]
+pub struct CaptureAddressId(pub Uuid);
+
+impl CaptureAddressId {
+    pub fn new(id: Uuid) -> Self {
+        Self(id)
+    }
+
+    pub fn as_uuid(self) -> Uuid {
+        self.0
+    }
+}
+
+impl fmt::Display for CaptureAddressId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
+impl fmt::Debug for CaptureAddressId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self, f)
+    }
+}
+
+#[cfg(test)]
+mod capture_address_id_tests {
+    use super::*;
+
+    #[test]
+    fn display_matches_the_inner_uuid() {
+        let id = Uuid::new_v4();
+        assert_eq!(CaptureAddressId::new(id).to_string(), id.to_string());
+    }
+
+    #[test]
+    fn debug_matches_display_not_the_derived_tuple_form() {
+        let id = CaptureAddressId::new(Uuid::new_v4());
+        assert_eq!(format!("{id:?}"), format!("{id}"));
+        assert!(!format!("{id:?}").contains("CaptureAddressId"));
+    }
+
+    #[test]
+    fn serde_round_trip_is_transparent_with_bare_uuid() {
+        let id = Uuid::new_v4();
+        let wrapped = CaptureAddressId::new(id);
+        let wrapped_json = serde_json::to_string(&wrapped).unwrap();
+        let uuid_json = serde_json::to_string(&id).unwrap();
+        assert_eq!(wrapped_json, uuid_json);
+        let round_tripped: CaptureAddressId = serde_json::from_str(&wrapped_json).unwrap();
+        assert_eq!(round_tripped, wrapped);
+    }
+
+    #[test]
+    fn new_and_as_uuid_round_trip() {
+        let id = Uuid::new_v4();
+        assert_eq!(CaptureAddressId::new(id).as_uuid(), id);
+    }
+}
+
+/// The `correspondence_raw` row's own identity (Slice 009, docs/specs/SLICE_009.md
+/// §4 item 2): the payload half of the crypto AAD tenant binding —
+/// `crypto::seal_correspondence`/`open_correspondence(key, organization_id,
+/// correspondence_raw_id, ..)`. A correspondence id must NEVER be passed
+/// where a `RawPayloadId` is expected, or vice versa (reviewer note,
+/// spec §4 item 2) — this type is exactly that compile-time fence.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
+#[repr(transparent)]
+pub struct CorrespondenceRawId(pub Uuid);
+
+impl CorrespondenceRawId {
+    pub fn new(id: Uuid) -> Self {
+        Self(id)
+    }
+
+    pub fn as_uuid(self) -> Uuid {
+        self.0
+    }
+}
+
+impl fmt::Display for CorrespondenceRawId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
+impl fmt::Debug for CorrespondenceRawId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self, f)
+    }
+}
+
+#[cfg(test)]
+mod correspondence_raw_id_tests {
+    use super::*;
+
+    #[test]
+    fn display_matches_the_inner_uuid() {
+        let id = Uuid::new_v4();
+        assert_eq!(CorrespondenceRawId::new(id).to_string(), id.to_string());
+    }
+
+    #[test]
+    fn debug_matches_display_not_the_derived_tuple_form() {
+        let id = CorrespondenceRawId::new(Uuid::new_v4());
+        assert_eq!(format!("{id:?}"), format!("{id}"));
+        assert!(!format!("{id:?}").contains("CorrespondenceRawId"));
+    }
+
+    #[test]
+    fn serde_round_trip_is_transparent_with_bare_uuid() {
+        let id = Uuid::new_v4();
+        let wrapped = CorrespondenceRawId::new(id);
+        let wrapped_json = serde_json::to_string(&wrapped).unwrap();
+        let uuid_json = serde_json::to_string(&id).unwrap();
+        assert_eq!(wrapped_json, uuid_json);
+        let round_tripped: CorrespondenceRawId = serde_json::from_str(&wrapped_json).unwrap();
+        assert_eq!(round_tripped, wrapped);
+    }
+
+    #[test]
+    fn new_and_as_uuid_round_trip() {
+        let id = Uuid::new_v4();
+        assert_eq!(CorrespondenceRawId::new(id).as_uuid(), id);
+    }
+}
+
+/// The `capture_message` (held queue) row's own identity (Slice 009,
+/// docs/specs/SLICE_009.md §4 item 4; §8's `/api/capture/unmatched/{id}`
+/// path id).
+#[derive(Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
+#[repr(transparent)]
+pub struct CaptureMessageId(pub Uuid);
+
+impl CaptureMessageId {
+    pub fn new(id: Uuid) -> Self {
+        Self(id)
+    }
+
+    pub fn as_uuid(self) -> Uuid {
+        self.0
+    }
+}
+
+impl fmt::Display for CaptureMessageId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
+impl fmt::Debug for CaptureMessageId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self, f)
+    }
+}
+
+#[cfg(test)]
+mod capture_message_id_tests {
+    use super::*;
+
+    #[test]
+    fn display_matches_the_inner_uuid() {
+        let id = Uuid::new_v4();
+        assert_eq!(CaptureMessageId::new(id).to_string(), id.to_string());
+    }
+
+    #[test]
+    fn debug_matches_display_not_the_derived_tuple_form() {
+        let id = CaptureMessageId::new(Uuid::new_v4());
+        assert_eq!(format!("{id:?}"), format!("{id}"));
+        assert!(!format!("{id:?}").contains("CaptureMessageId"));
+    }
+
+    #[test]
+    fn serde_round_trip_is_transparent_with_bare_uuid() {
+        let id = Uuid::new_v4();
+        let wrapped = CaptureMessageId::new(id);
+        let wrapped_json = serde_json::to_string(&wrapped).unwrap();
+        let uuid_json = serde_json::to_string(&id).unwrap();
+        assert_eq!(wrapped_json, uuid_json);
+        let round_tripped: CaptureMessageId = serde_json::from_str(&wrapped_json).unwrap();
+        assert_eq!(round_tripped, wrapped);
+    }
+
+    #[test]
+    fn new_and_as_uuid_round_trip() {
+        let id = Uuid::new_v4();
+        assert_eq!(CaptureMessageId::new(id).as_uuid(), id);
+    }
+}

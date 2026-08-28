@@ -6,7 +6,15 @@
 import type { QueryKey } from '@tanstack/vue-query'
 import { queryKeys } from '../api/queries'
 
-export type PersonChange = 'inquiry_received' | 'assignment_changed' | 'stage_changed' | 'contact_attempted'
+// SLICE_009 §6's declared additive variant: no new event type — the
+// `person.changed` handler below already invalidates person/people/today
+// for every change value, so this widening needs no new case.
+export type PersonChange =
+  | 'inquiry_received'
+  | 'assignment_changed'
+  | 'stage_changed'
+  | 'contact_attempted'
+  | 'correspondence_captured'
 
 interface RealtimeEnvelopeBase {
   v: 1

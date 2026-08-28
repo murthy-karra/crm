@@ -17,7 +17,12 @@ pub const FRESH_INQUIRY_WINDOW_HOURS: i64 = 24;
 /// qualifies by Inquiry), `repeat_inquiry` (if the Person's total Inquiry
 /// count >= 2), then `call_outcome_needed` (docs/specs/SLICE_006c.md §5a,
 /// D-033: the viewer's most recent ended/failed call to this Person whose
-/// effective attempt is still the automatic root).
+/// effective attempt is still the automatic root). `client_replied`
+/// (Slice 009, docs/specs/SLICE_009.md §6; declared additive SLICE_003 §5
+/// change) WINS the reason slot in place of the Inquiry-based trio above
+/// when the Person also qualifies for it — see `rank::rank_one` — but
+/// never replaces `call_outcome_needed`, which is always appended last
+/// regardless of which reason(s) precede it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "code", rename_all = "snake_case")]
 pub enum TodayReason {
@@ -34,6 +39,9 @@ pub enum TodayReason {
     CallOutcomeNeeded {
         call_id: Uuid,
         ended_at: DateTime<Utc>,
+    },
+    ClientReplied {
+        occurred_at: DateTime<Utc>,
     },
 }
 
@@ -104,6 +112,17 @@ pub struct TodayCandidate {
     /// The viewer's most recent ended/failed call to this Person that
     /// still has no chosen outcome (D-033), if any.
     pub outcome_needed: Option<OutcomeNeededCall>,
+    /// Slice 009 (docs/specs/SLICE_009.md §6): the qualifying inbound
+    /// correspondence's `occurred_at` when the Person is assigned to the
+    /// viewer AND that inbound is later than every effective
+    /// contact_attempted and every outbound correspondence for them.
+    /// `Some` here WINS the reason slot over `by_inquiry`'s trio (`rank`
+    /// reads this before falling back to Inquiry-based reasons) — the
+    /// reply is the newer, more actionable signal. `fresh`/`waiting_since`
+    /// are already precedence-resolved in SQL (reply > inquiry > call) by
+    /// the time they reach here, exactly like `by_inquiry`'s existing
+    /// fields — `rank` never recomputes them.
+    pub client_replied: Option<DateTime<Utc>>,
 }
 
 /// A call whose effective attempt is still the automatic root
@@ -155,6 +174,19 @@ mod tests {
                 "code": "call_outcome_needed",
                 "call_id": call_id,
                 "ended_at": "2026-08-23T14:30:00Z",
+            })
+        );
+    }
+
+    #[test]
+    fn client_replied_reason_is_exactly_code_occurred_at() {
+        let occurred_at = Utc.with_ymd_and_hms(2026, 8, 27, 9, 0, 0).unwrap();
+        let value = serde_json::to_value(TodayReason::ClientReplied { occurred_at }).unwrap();
+        assert_eq!(
+            value,
+            serde_json::json!({
+                "code": "client_replied",
+                "occurred_at": "2026-08-27T09:00:00Z",
             })
         );
     }

@@ -1,0 +1,77 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT cc.id, cc.occurred_at, cc.recorded_at, cc.origin, cc.correlation_id,\n                  cc.on_behalf_of_user_id, au.display_name as \"agent_display_name?\",\n                  cc.direction, cc.via, cc.backdated\n           FROM correspondence_captured cc\n           LEFT JOIN app_user au ON au.id = cc.on_behalf_of_user_id\n           WHERE cc.organization_id = $1 AND cc.person_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "occurred_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "recorded_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "origin",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "correlation_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "on_behalf_of_user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "agent_display_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "direction",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "via",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "backdated",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "cedf20a398b104c4d7a34824684ef91aa4bb24896f6747787ba63fad7726d1eb"
+}

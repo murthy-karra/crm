@@ -28,9 +28,35 @@ fn rank_one(candidate: TodayCandidate) -> TodayItem {
     // gets the reason appended. `by_inquiry` is trusted as the SQL's
     // verdict; a candidate with neither source cannot come out of the
     // query, and is treated as Inquiry-based rather than invented as low.
-    let low_only = !candidate.by_inquiry && candidate.outcome_needed.is_some();
+    // Slice 009 (docs/specs/SLICE_009.md §6): `client_replied` also keeps
+    // a candidate out of the low-only tier, since it wins the reason slot
+    // below regardless of `by_inquiry`.
+    let low_only = !candidate.by_inquiry
+        && candidate.client_replied.is_none()
+        && candidate.outcome_needed.is_some();
 
-    let (priority, recommended_action) = if low_only {
+    let (priority, recommended_action) = if let Some(occurred_at) = candidate.client_replied {
+        // Slice 009 §6: `client_replied` WINS the reason slot over the
+        // Inquiry-based trio when the Person qualifies for both — the
+        // reply is the newer, more actionable signal. `fresh`/
+        // `waiting_since` are already the SQL's precedence-resolved
+        // values (reply > inquiry > call) by the time they reach here —
+        // this branch reads them exactly like the Inquiry branch below
+        // does, never re-deriving freshness itself (the file's own
+        // standing invariant, restated in its module doc).
+        reasons.push(TodayReason::ClientReplied { occurred_at });
+        let priority = if candidate.fresh {
+            TodayPriority::High
+        } else {
+            TodayPriority::Normal
+        };
+        let recommended_action = if candidate.person.primary_phone.is_some() {
+            RecommendedAction::Call
+        } else {
+            RecommendedAction::Email
+        };
+        (priority, recommended_action)
+    } else if low_only {
         (TodayPriority::Low, RecommendedAction::SetOutcome)
     } else {
         // Fixed order (§3): new_inquiry (if fresh), no_contact_attempt
@@ -62,7 +88,8 @@ fn rank_one(candidate: TodayCandidate) -> TodayItem {
         (priority, recommended_action)
     };
 
-    // `call_outcome_needed` is always last.
+    // `call_outcome_needed` is always last, regardless of which reason(s)
+    // precede it — unaffected by the `client_replied` addition.
     if let Some(OutcomeNeededCall { call_id, ended_at }) = candidate.outcome_needed {
         reasons.push(TodayReason::CallOutcomeNeeded { call_id, ended_at });
     }
@@ -127,6 +154,7 @@ mod tests {
             fresh,
             by_inquiry: true,
             outcome_needed: None,
+            client_replied: None,
         }
     }
 
@@ -138,6 +166,7 @@ mod tests {
                 TodayReason::NoContactAttempt { .. } => "no_contact_attempt",
                 TodayReason::RepeatInquiry { .. } => "repeat_inquiry",
                 TodayReason::CallOutcomeNeeded { .. } => "call_outcome_needed",
+                TodayReason::ClientReplied { .. } => "client_replied",
             })
             .collect()
     }
@@ -299,5 +328,104 @@ mod tests {
         let items = rank(vec![c], ts(12));
         assert_eq!(items[0].waiting_since, ts(11));
         assert!(items[0].last_contact_attempt.is_some());
+    }
+
+    // --- Slice 009: client_replied (docs/specs/SLICE_009.md §6) ---------
+
+    #[test]
+    fn client_replied_wins_the_reason_slot_over_the_inquiry_trio() {
+        // by_inquiry=true (from candidate()'s default) AND client_replied
+        // both qualify: client_replied must be the SOLE reason, not
+        // appended alongside new_inquiry/no_contact_attempt/repeat_inquiry.
+        let mut c = candidate(true, 2, Some("+15555550100"));
+        c.client_replied = Some(ts(11));
+        c.fresh = true; // SQL-computed freshness of the WINNING basis (the reply)
+        c.waiting_since = ts(11); // SQL-computed waiting_since of the WINNING basis
+        let items = rank(vec![c], ts(12));
+        assert_eq!(reason_codes(&items[0]), vec!["client_replied"]);
+        assert_eq!(
+            items[0].reasons[0],
+            TodayReason::ClientReplied {
+                occurred_at: ts(11)
+            }
+        );
+        assert_eq!(items[0].waiting_since, ts(11));
+    }
+
+    #[test]
+    fn client_replied_fresh_is_high_priority_stale_is_normal() {
+        let mut fresh = candidate(false, 1, Some("+15555550100"));
+        fresh.client_replied = Some(ts(11));
+        fresh.fresh = true;
+        let items = rank(vec![fresh], ts(12));
+        assert_eq!(items[0].priority, TodayPriority::High);
+
+        let mut stale = candidate(false, 1, Some("+15555550100"));
+        stale.client_replied = Some(ts(11));
+        stale.fresh = false;
+        let items = rank(vec![stale], ts(12));
+        assert_eq!(items[0].priority, TodayPriority::Normal);
+    }
+
+    #[test]
+    fn client_replied_recommended_action_follows_the_phone_rule() {
+        let mut with_phone = candidate(true, 1, Some("+15555550100"));
+        with_phone.client_replied = Some(ts(11));
+        let items = rank(vec![with_phone], ts(12));
+        assert_eq!(items[0].recommended_action, RecommendedAction::Call);
+
+        let mut without_phone = candidate(true, 1, None);
+        without_phone.client_replied = Some(ts(11));
+        let items = rank(vec![without_phone], ts(12));
+        assert_eq!(items[0].recommended_action, RecommendedAction::Email);
+    }
+
+    #[test]
+    fn client_replied_still_appends_call_outcome_needed_last() {
+        let call_id = Uuid::new_v4();
+        let mut c = candidate(true, 2, Some("+15555550100"));
+        c.client_replied = Some(ts(11));
+        c.outcome_needed = Some(OutcomeNeededCall {
+            call_id,
+            ended_at: ts(8),
+        });
+        let items = rank(vec![c], ts(12));
+        assert_eq!(
+            reason_codes(&items[0]),
+            vec!["client_replied", "call_outcome_needed"]
+        );
+    }
+
+    #[test]
+    fn client_replied_keeps_a_person_out_of_the_low_only_tier_even_without_by_inquiry() {
+        // by_inquiry=false but client_replied=Some: must NOT fall into
+        // the low/set_outcome branch even though outcome_needed is also
+        // present — client_replied's own priority rule applies instead.
+        let mut c = candidate(true, 1, Some("+15555550100"));
+        c.by_inquiry = false;
+        c.client_replied = Some(ts(11));
+        c.fresh = true;
+        c.outcome_needed = Some(OutcomeNeededCall {
+            call_id: Uuid::new_v4(),
+            ended_at: ts(8),
+        });
+        let items = rank(vec![c], ts(12));
+        assert_eq!(items[0].priority, TodayPriority::High);
+        assert_eq!(items[0].recommended_action, RecommendedAction::Call);
+        assert_eq!(
+            reason_codes(&items[0]),
+            vec!["client_replied", "call_outcome_needed"]
+        );
+    }
+
+    #[test]
+    fn absent_client_replied_falls_through_to_the_inquiry_branch_unchanged() {
+        // Regression pin: candidate()'s default (client_replied: None)
+        // must reproduce the pre-009 by_inquiry behavior exactly.
+        let items = rank(vec![candidate(true, 1, Some("+15555550100"))], ts(12));
+        assert_eq!(
+            reason_codes(&items[0]),
+            vec!["new_inquiry", "no_contact_attempt"]
+        );
     }
 }

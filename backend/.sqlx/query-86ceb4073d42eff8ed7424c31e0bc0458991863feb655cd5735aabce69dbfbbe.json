@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO contact_method (organization_id, person_id, kind, value, normalized_value)\n                       VALUES ($1, $2, 'email', $3, $4)\n                       ON CONFLICT (person_id, kind, normalized_value) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "86ceb4073d42eff8ed7424c31e0bc0458991863feb655cd5735aabce69dbfbbe"
+}

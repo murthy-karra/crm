@@ -3,6 +3,8 @@ use axum::response::{IntoResponse, Json, Response};
 use serde_json::json;
 
 use crate::domain::admin::AdminCommandError;
+use crate::domain::capture::address::RotateError as CaptureRotateError;
+use crate::domain::capture::commands::CaptureCommandError;
 use crate::domain::commands::{CallError, CommandError};
 use crate::domain::intake::workbench::WorkbenchError;
 
@@ -84,6 +86,11 @@ pub enum ApiError {
     /// `POST /inbound/email` body over its 2 MiB limit; kept in the shared
     /// error envelope rather than Axum's default plain-text 413.
     PayloadTooLarge,
+    // --- Slice 009 (docs/specs/SLICE_009.md §8) --------------------------
+    /// A held-queue row already reached a terminal state incompatible
+    /// with the requested transition: re-link with a different Person,
+    /// link-after-dismissed, or dismiss-after-linked.
+    CaptureConflict,
 }
 
 impl IntoResponse for ApiError {
@@ -159,6 +166,7 @@ impl IntoResponse for ApiError {
             }
             ApiError::CorrectionConflict => (StatusCode::CONFLICT, "correction_conflict", None),
             ApiError::PayloadTooLarge => (StatusCode::PAYLOAD_TOO_LARGE, "payload_too_large", None),
+            ApiError::CaptureConflict => (StatusCode::CONFLICT, "capture_conflict", None),
         };
 
         let body = Json(json!({ "error": code }));
@@ -245,6 +253,40 @@ impl From<CallError> for ApiError {
             CallError::CorrectionConflict => ApiError::CorrectionConflict,
             CallError::Corrupt => ApiError::InternalError,
             CallError::Database(_) => ApiError::Unavailable,
+        }
+    }
+}
+
+/// `CaptureCommandError` -> `ApiError` for the Slice 009 link/dismiss
+/// routes (docs/specs/SLICE_009.md §8).
+impl From<CaptureCommandError> for ApiError {
+    fn from(err: CaptureCommandError) -> Self {
+        match err {
+            CaptureCommandError::NotFound => ApiError::NotFound,
+            CaptureCommandError::Conflict => ApiError::CaptureConflict,
+            CaptureCommandError::Crypto | CaptureCommandError::Corrupt => ApiError::InternalError,
+            CaptureCommandError::Database(_) => ApiError::Unavailable,
+        }
+    }
+}
+
+/// `domain::capture::address::RotateError` -> `ApiError` for `POST
+/// /api/capture/address/rotate` (docs/specs/SLICE_009.md §8): mirrors
+/// `RotateError` -> `ApiError` handling already established for the
+/// intake token rotation route (`routes/organization.rs`, which maps
+/// unavailable inline rather than via a `From` impl — this one is typed
+/// since the capture route has both a `NotFound` and a `Database` arm to
+/// distinguish).
+impl From<CaptureRotateError> for ApiError {
+    fn from(err: CaptureRotateError) -> Self {
+        match err {
+            // Unreachable for an active member (backfill + mint-if-absent
+            // on every activation path) — a read path fails closed rather
+            // than assuming, so this maps to the generic unavailable
+            // rather than inventing a new client-facing code for a state
+            // that should never occur.
+            CaptureRotateError::NotFound => ApiError::Unavailable,
+            CaptureRotateError::Database(_) => ApiError::Unavailable,
         }
     }
 }

@@ -1,0 +1,162 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH outcome_call AS (\n               SELECT DISTINCT ON (c.person_id) c.person_id, c.id, c.ended_at\n               FROM call c\n               WHERE c.organization_id = $1\n                 AND c.caller_user_id = $2\n                 AND c.status IN ('ended', 'failed')\n                 AND c.ended_at IS NOT NULL\n                 AND EXISTS (\n                     SELECT 1 FROM contact_attempted root\n                     WHERE root.organization_id = $1\n                       AND root.causation_id = c.id\n                       AND root.corrects_id IS NULL\n                       AND NOT EXISTS (SELECT 1 FROM contact_attempted x WHERE x.corrects_id = root.id)\n                 )\n               ORDER BY c.person_id, c.ended_at DESC, c.id DESC\n           )\n           SELECT\n             p.id, p.first_name, p.last_name, p.created_at,\n             s.id as stage_id, s.name as stage_name,\n             u.id as \"assigned_user_id?\", u.display_name as \"assigned_user_display_name?\",\n             (SELECT cm.value FROM contact_method cm\n                WHERE cm.person_id = p.id AND cm.kind = 'email'\n                ORDER BY cm.created_at ASC LIMIT 1) as \"primary_email?\",\n             (SELECT cm.value FROM contact_method cm\n                WHERE cm.person_id = p.id AND cm.kind = 'phone'\n                ORDER BY cm.created_at ASC LIMIT 1) as \"primary_phone?\",\n             (SELECT count(*) FROM inquiry i WHERE i.person_id = p.id) as \"inquiry_count!\",\n             latest.id as \"latest_inquiry_id?\",\n             latest.source as \"latest_inquiry_source?\",\n             latest.received_at as \"latest_inquiry_received_at?\",\n             last_attempt.id as \"last_attempt_id?\",\n             last_attempt.channel as \"last_attempt_channel?\",\n             last_attempt.outcome as \"last_attempt_outcome?\",\n             last_attempt.occurred_at as \"last_attempt_occurred_at?\",\n             CASE WHEN reply_membership.by_reply THEN last_inbound.occurred_at\n                  WHEN membership.by_inquiry THEN waiting.received_at\n                  ELSE oc.ended_at END\n                 as \"waiting_since?\",\n             (CASE WHEN reply_membership.by_reply\n                        THEN last_inbound.occurred_at > $3::timestamptz - interval '24 hours'\n                   WHEN membership.by_inquiry\n                        THEN latest.received_at > $3::timestamptz - interval '24 hours'\n                   ELSE false END)\n                 as \"fresh?\",\n             membership.by_inquiry as \"by_inquiry?\",\n             oc.id as \"outcome_call_id?\",\n             oc.ended_at as \"outcome_call_ended_at?\",\n             CASE WHEN reply_membership.by_reply THEN last_inbound.occurred_at ELSE NULL END\n                 as \"client_replied_occurred_at?\"\n           FROM person p\n           JOIN stage s ON s.id = p.stage_id\n           LEFT JOIN app_user u ON u.id = p.assigned_user_id\n           LEFT JOIN LATERAL (\n               SELECT i.id, i.source, i.received_at\n               FROM inquiry i\n               WHERE i.person_id = p.id\n               ORDER BY i.received_at DESC, i.id DESC\n               LIMIT 1\n           ) latest ON true\n           LEFT JOIN LATERAL (\n               SELECT ca.id, ca.channel, ca.outcome, ca.occurred_at\n               FROM contact_attempted ca\n               WHERE ca.person_id = p.id\n                 AND ca.organization_id = p.organization_id\n                 AND NOT EXISTS (SELECT 1 FROM contact_attempted c WHERE c.corrects_id = ca.id)\n               ORDER BY ca.occurred_at DESC, ca.id DESC\n               LIMIT 1\n           ) last_attempt ON true\n           LEFT JOIN LATERAL (\n               SELECT i2.received_at\n               FROM inquiry i2\n               WHERE i2.person_id = p.id\n                 AND i2.received_at > COALESCE(last_attempt.occurred_at, '-infinity'::timestamptz)\n               ORDER BY i2.received_at ASC\n               LIMIT 1\n           ) waiting ON true\n           LEFT JOIN outcome_call oc ON oc.person_id = p.id\n           -- Slice 009 (docs/specs/SLICE_009.md §6): the latest inbound/\n           -- outbound correspondence per Person, feeding the client_replied\n           -- arm below. No organization_id filter here, matching every\n           -- other LATERAL join in this query (`latest`/`last_attempt`/\n           -- `waiting`) — person_id is trusted as org-consistent by\n           -- construction (the application never writes a fact row whose\n           -- person_id and organization_id disagree); the outer `WHERE\n           -- p.organization_id = $1` is the actual tenant boundary.\n           LEFT JOIN LATERAL (\n               SELECT cc.occurred_at\n               FROM correspondence_captured cc\n               WHERE cc.person_id = p.id\n                 AND cc.organization_id = p.organization_id\n                 AND cc.direction = 'inbound'\n               ORDER BY cc.occurred_at DESC, cc.id DESC\n               LIMIT 1\n           ) last_inbound ON true\n           LEFT JOIN LATERAL (\n               SELECT cc.occurred_at\n               FROM correspondence_captured cc\n               WHERE cc.person_id = p.id\n                 AND cc.organization_id = p.organization_id\n                 AND cc.direction = 'outbound'\n               ORDER BY cc.occurred_at DESC, cc.id DESC\n               LIMIT 1\n           ) last_outbound ON true\n           CROSS JOIN LATERAL (\n               SELECT (COALESCE(p.assigned_user_id = $2, false) AND waiting.received_at IS NOT NULL) as by_inquiry\n           ) membership\n           -- client_replied (spec §6): assigned to the viewer, an inbound\n           -- correspondence exists, and it is later than every effective\n           -- contact_attempted AND every outbound correspondence — checking\n           -- only the LATEST of each is equivalent to \"later than every\"\n           -- (a later attempt/outbound would itself be the latest, so it\n           -- alone is sufficient to disqualify).\n           CROSS JOIN LATERAL (\n               SELECT (\n                   COALESCE(p.assigned_user_id = $2, false)\n                   AND last_inbound.occurred_at IS NOT NULL\n                   AND last_inbound.occurred_at > COALESCE(last_attempt.occurred_at, '-infinity'::timestamptz)\n                   AND last_inbound.occurred_at > COALESCE(last_outbound.occurred_at, '-infinity'::timestamptz)\n               ) as by_reply\n           ) reply_membership\n           WHERE p.organization_id = $1\n             AND (p.assigned_user_id = $2 OR p.id IN (SELECT person_id FROM outcome_call))\n             AND latest.id IS NOT NULL\n             AND (membership.by_inquiry OR oc.id IS NOT NULL OR reply_membership.by_reply)\n           ORDER BY (membership.by_inquiry OR reply_membership.by_reply) DESC,\n                    \"fresh?\" DESC,\n                    CASE WHEN reply_membership.by_reply THEN last_inbound.occurred_at\n                         WHEN membership.by_inquiry THEN waiting.received_at\n                         ELSE oc.ended_at END ASC,\n                    p.id ASC\n           LIMIT 201",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "first_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "last_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "stage_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "stage_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "assigned_user_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "assigned_user_display_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "primary_email?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "primary_phone?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "inquiry_count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 11,
+        "name": "latest_inquiry_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 12,
+        "name": "latest_inquiry_source?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "latest_inquiry_received_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 14,
+        "name": "last_attempt_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 15,
+        "name": "last_attempt_channel?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 16,
+        "name": "last_attempt_outcome?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 17,
+        "name": "last_attempt_occurred_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 18,
+        "name": "waiting_since?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 19,
+        "name": "fresh?",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 20,
+        "name": "by_inquiry?",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 21,
+        "name": "outcome_call_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 22,
+        "name": "outcome_call_ended_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 23,
+        "name": "client_replied_occurred_at?",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null,
+      null,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null,
+      null,
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "86b501b41b5eab790c762548b9668b223b464bd24607cb802ec89274e9bce578"
+}

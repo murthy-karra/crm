@@ -1,0 +1,37 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO correspondence_captured\n            (organization_id, actor_kind, actor_user_id, on_behalf_of_user_id, origin,\n             occurred_at, correlation_id, causation_id,\n             person_id, agent_user_id, direction, message_id, thread_key, via,\n             correspondence_raw_id, backdated)\n           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)\n           ON CONFLICT (organization_id, person_id, message_id) WHERE message_id IS NOT NULL\n           DO NOTHING\n           RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "82ef20e925aefdbf935d39477a33dc7b0805f0ab93b1da36d577bfcb0dfc0bd2"
+}

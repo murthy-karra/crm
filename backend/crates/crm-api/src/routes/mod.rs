@@ -1,4 +1,5 @@
 pub mod calls;
+pub mod capture;
 pub mod health;
 pub mod inbound_email;
 pub mod intake;

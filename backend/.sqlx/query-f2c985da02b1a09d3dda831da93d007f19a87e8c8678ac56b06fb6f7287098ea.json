@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO correspondence_raw\n            (id, organization_id, received_at, nonce, ciphertext, content_hmac, byte_len, processed)\n           VALUES ($1, $2, $3, $4, $5, $6, $7, false)\n           ON CONFLICT (organization_id, content_hmac) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Timestamptz",
+        "Bytea",
+        "Bytea",
+        "Bytea",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f2c985da02b1a09d3dda831da93d007f19a87e8c8678ac56b06fb6f7287098ea"
+}

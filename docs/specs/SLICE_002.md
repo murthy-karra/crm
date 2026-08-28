@@ -411,7 +411,10 @@ by SLICE_003 §5 as a declared additive change (AGENTS.md §11), and
 talk_seconds, answered_at}`), added by SLICE_006 §2 the same way;
 `contact_attempted.detail` gains `call_id`, `corrects_id`, `superseded`
 by SLICE_006c §2 (a correction is a new row with `corrects_id`; in
-history it is placed at its `recorded_at`, i.e. after the call).
+history it is placed at its `recorded_at`, i.e. after the call), and
+`correspondence` (`kind_rank` 6, `detail {direction, agent, captured_at,
+via, backdated}` — no address/subject/message-id, D-042.1/2), added by
+SLICE_009 §8 the same way.
 `detail` per kind (ids always accompanied by resolved names):
 
 - `inquiry_received`: `{inquiry_id, source, person_created, matched_by}`

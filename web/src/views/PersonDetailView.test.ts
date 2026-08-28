@@ -482,6 +482,71 @@ describe('PersonDetailView — call_completed history', () => {
   })
 })
 
+// ---- SLICE_009: correspondence history --------------------------------
+
+describe('PersonDetailView — correspondence history (SLICE_009 §8)', () => {
+  function correspondenceEntry(
+    id: string,
+    direction: 'inbound' | 'outbound',
+    agentName: string,
+    backdated: boolean,
+  ): HistoryEntry {
+    return {
+      kind: 'correspondence',
+      id,
+      occurred_at: '2026-08-27T09:00:00.000Z',
+      recorded_at: '2026-08-27T09:00:05.000Z',
+      // Actor::System — no human actor caused an unattended capture
+      // (spec §4); the agent lives in detail.agent instead.
+      actor: null,
+      origin: 'webhook',
+      correlation_id: 'corr',
+      detail: {
+        direction,
+        agent: { id: 'u-alice', display_name: agentName },
+        captured_at: '2026-08-27T09:00:05.000Z',
+        via: 'cc',
+        backdated,
+      },
+    }
+  }
+
+  it('renders "Outbound email — Alice" and "Inbound email — Bob"', async () => {
+    stubApi(
+      detail(
+        [EMAIL],
+        [
+          correspondenceEntry('h-corr-out', 'outbound', 'Alice', false),
+          correspondenceEntry('h-corr-in', 'inbound', 'Bob', false),
+        ],
+      ),
+    )
+    const { wrapper } = await mountView()
+    const text = wrapper.text()
+    expect(text).toContain('Outbound email — Alice')
+    expect(text).toContain('Inbound email — Bob')
+  })
+
+  it('a backdated (retroactively forwarded) row is labelled "(forwarded)"', async () => {
+    stubApi(detail([EMAIL], [correspondenceEntry('h-corr-bd', 'inbound', 'Alice', true)]))
+    const { wrapper } = await mountView()
+    expect(wrapper.text()).toContain('Inbound email — Alice (forwarded)')
+  })
+
+  it('never renders an address, subject, or message-id (D-042.1/2 shape pin)', async () => {
+    // Phone-only contact methods: the Person's OWN contact card
+    // legitimately renders an email address when one exists (EMAIL
+    // fixture) — using PHONE_A here isolates the assertion to content the
+    // correspondence history row itself could have leaked.
+    stubApi(detail([PHONE_A], [correspondenceEntry('h-corr-shape', 'outbound', 'Alice', false)]))
+    const { wrapper } = await mountView()
+    const html = wrapper.html()
+    expect(html).not.toContain('@example.com')
+    expect(html).not.toContain('message_id')
+    expect(html).not.toContain('subject')
+  })
+})
+
 // ---- SLICE_007c: system-actor routing labels --------------------------------
 
 describe('PersonDetailView — system-actor routing history (SLICE_007c §6)', () => {

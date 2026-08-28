@@ -6,7 +6,7 @@
 // moving anything.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import { Building2, Inbox, LogOut, Mail, Sparkles, Sun, UserCog, UserPlus, Users } from 'lucide-vue-next'
+import { AtSign, Building2, Inbox, LogOut, Mail, Sparkles, Sun, UserCog, UserPlus, Users } from 'lucide-vue-next'
 import { useLogoutMutation, useMe } from '../api/queries'
 import { initials } from '../lib/format'
 import { buttonClasses } from '../lib/controls'
@@ -81,6 +81,9 @@ const navGroups = computed<NavGroup[]>(() => {
       items: [
         { label: 'Today', to: '/today', icon: Sun },
         { label: 'People', to: '/people', icon: Users },
+        // SLICE_009 §8: the agent's own credential — Work, not Manage
+        // (that group is admin/tenant surface only).
+        { label: 'Email capture', to: '/email-capture', icon: AtSign },
       ],
     },
     {

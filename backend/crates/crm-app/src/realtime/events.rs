@@ -17,6 +17,11 @@ pub fn channel_for(organization_id: OrganizationId) -> String {
 }
 
 /// `data.change` on a `person.changed` event (docs/specs/SLICE_003.md §6).
+/// `CorrespondenceCaptured` is Slice 009's declared additive variant
+/// (docs/specs/SLICE_009.md §6, SLICE_003 §6 pointer amendment): no new
+/// event type — the web handler already invalidates person/people/today
+/// for every `person.changed` regardless of `change`, so old clients
+/// degrade correctly.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PersonChange {
@@ -24,6 +29,7 @@ pub enum PersonChange {
     AssignmentChanged,
     StageChanged,
     ContactAttempted,
+    CorrespondenceCaptured,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -273,6 +279,10 @@ mod tests {
             (PersonChange::AssignmentChanged, "assignment_changed"),
             (PersonChange::StageChanged, "stage_changed"),
             (PersonChange::ContactAttempted, "contact_attempted"),
+            (
+                PersonChange::CorrespondenceCaptured,
+                "correspondence_captured",
+            ),
         ] {
             let event = RealtimeEvent::person_changed(
                 OrganizationId::new(Uuid::new_v4()),

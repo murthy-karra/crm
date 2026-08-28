@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT correspondence_raw_id, counterparty_email, direction_hint, status\n           FROM capture_message\n           WHERE id = $1 AND organization_id = $2 AND agent_user_id = $3\n           FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "correspondence_raw_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "counterparty_email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "direction_hint",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "status",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "00716b88055153dad261537dc1fad0e87557337ac5f0692e41f6372dd282c148"
+}

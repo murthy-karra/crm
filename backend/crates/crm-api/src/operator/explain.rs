@@ -58,6 +58,13 @@ pub fn reason_text(reason: &TodayReason) -> String {
         TodayReason::CallOutcomeNeeded { ended_at, .. } => {
             format!("a call at {} has no outcome yet", ended_at.to_rfc3339())
         }
+        // Slice 009 (docs/specs/SLICE_009.md §6): wins the reason slot in
+        // place of the Inquiry-based trio, so this is typically the ONLY
+        // reason on the item — a fixed line built from the coded payload
+        // only, exactly like every other arm here.
+        TodayReason::ClientReplied { occurred_at } => {
+            format!("the client replied at {}", occurred_at.to_rfc3339())
+        }
     }
 }
 
@@ -414,6 +421,27 @@ mod tests {
         assert_eq!(
             serde_json::to_value(it.recommended_action).unwrap(),
             "set_outcome"
+        );
+    }
+
+    #[test]
+    fn client_replied_reason_is_explained_with_the_reply_time() {
+        let occurred_at = ts(9);
+        let reason = TodayReason::ClientReplied { occurred_at };
+        assert_eq!(
+            reason_text(&reason),
+            "the client replied at 2026-08-22T09:00:00+00:00"
+        );
+
+        let mut it = item(Uuid::new_v4(), TodayPriority::High, 9);
+        it.reasons = vec![reason];
+        let json = reasons_json(&it);
+        assert_eq!(json.len(), 1);
+        assert_eq!(json[0]["code"], "client_replied");
+        assert_eq!(json[0]["occurred_at"], "2026-08-22T09:00:00Z");
+        assert_eq!(
+            json[0]["explanation"],
+            "the client replied at 2026-08-22T09:00:00+00:00"
         );
     }
 

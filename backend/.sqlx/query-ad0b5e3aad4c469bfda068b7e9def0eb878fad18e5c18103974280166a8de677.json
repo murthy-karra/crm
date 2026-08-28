@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO capture_token_rotated\n            (organization_id, actor_kind, actor_user_id, on_behalf_of_user_id,\n             origin, occurred_at, correlation_id, causation_id)\n           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ad0b5e3aad4c469bfda068b7e9def0eb878fad18e5c18103974280166a8de677"
+}

@@ -342,6 +342,23 @@ export interface CallCompletedDetail {
   answered_at: string | null
 }
 
+// SLICE_009 §8's declared additive change: `correspondence`, `kind_rank` 6,
+// `detail: {direction, agent, captured_at, via, backdated}` — deliberately
+// no address/subject/message-id (D-042.1/2). `agent` names the attributed
+// member; unlike `HistoryEntryBase.actor` (always null on these rows —
+// Actor::System, no human actor caused an unattended capture), `agent` is
+// always present.
+export type CaptureDirection = 'inbound' | 'outbound'
+export type CaptureVia = 'cc' | 'forward'
+
+export interface CorrespondenceDetail {
+  direction: CaptureDirection
+  agent: ActorRef
+  captured_at: string
+  via: CaptureVia
+  backdated: boolean
+}
+
 export type HistoryEntry =
   | (HistoryEntryBase & { kind: 'inquiry_received'; detail: InquiryReceivedDetail })
   | (HistoryEntryBase & { kind: 'routing_decision'; detail: RoutingDecisionDetail })
@@ -349,6 +366,7 @@ export type HistoryEntry =
   | (HistoryEntryBase & { kind: 'stage_changed'; detail: StageChangedDetail })
   | (HistoryEntryBase & { kind: 'contact_attempted'; detail: ContactAttemptedDetail })
   | (HistoryEntryBase & { kind: 'call_completed'; detail: CallCompletedDetail })
+  | (HistoryEntryBase & { kind: 'correspondence'; detail: CorrespondenceDetail })
 
 export interface PersonDetailResponse {
   person: PersonSummary
@@ -501,11 +519,15 @@ export type RecommendedAction = 'call' | 'email' | 'set_outcome'
 // client-side, same discipline as `history` above. `call_outcome_needed`
 // (SLICE_006c §5a) names the viewer's own call whose outcome is still the
 // automatic root; it may be appended to the inquiry-based reasons.
+// SLICE_009 §6's declared additive change: `client_replied`, which WINS
+// the reason slot in place of the Inquiry-based trio when a Person
+// qualifies for both (the server never emits it alongside them).
 export type TodayReason =
   | { code: 'new_inquiry'; source: string; received_at: string }
   | { code: 'no_contact_attempt'; since: string }
   | { code: 'repeat_inquiry'; inquiry_count: number }
   | { code: 'call_outcome_needed'; call_id: string; ended_at: string }
+  | { code: 'client_replied'; occurred_at: string }
 
 // `latest_inquiry` on a TodayItem — exactly `{id, source, received_at}` (§5),
 // narrower than `PersonInquiry` (which also carries `source_external_id` and
@@ -715,4 +737,37 @@ export interface CorrectedAttemptRef {
 export interface CorrectOutcomeResponse {
   attempt: CorrectedAttemptRef
   changed: boolean
+}
+
+// --- Slice 009: Correspondence capture (docs/specs/SLICE_009.md §8) --------
+
+/** `GET /api/capture/address`, `POST /api/capture/address/rotate` — both
+ * return this same shape (member-self, NOT the admin `IntakeAddressResponse`
+ * shape: no `scheme`, since capture has exactly one grammar). */
+export interface CaptureAddressResponse {
+  address: string
+}
+
+export type CaptureMessageStatus = 'held' | 'linked' | 'dismissed'
+
+/** `GET /api/capture/unmatched` item — the attributed agent's own held
+ * queue only. `status` is always `'held'` in this list (the endpoint only
+ * ever returns held rows) but the field is frozen in the shape regardless. */
+export interface CaptureUnmatchedItem {
+  id: string
+  counterparty_email: string | null
+  captured_at: string
+  direction_hint: CaptureDirection | null
+  status: CaptureMessageStatus
+}
+
+export interface CaptureUnmatchedResponse {
+  items: CaptureUnmatchedItem[]
+  truncated: boolean
+}
+
+/** `deny_unknown_fields` server-side: exactly these two fields. */
+export interface LinkUnmatchedRequest {
+  person_id: string
+  add_contact_method: boolean
 }

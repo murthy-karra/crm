@@ -306,13 +306,25 @@ gains the variant.
 - Isolation pins: org-A token never matches org-B Persons; same
   client email in two orgs → row only in the token's org; cross-org
   held/link/dismiss 404 probes; zero org-B writes.
-- Forged-mail blast radius (stated): one false metadata row, one
-  false Today nudge, one falsely-cleared Today item, held-queue
-  noise, and forged-Message-ID suppression of one later genuine
-  message's row — no content exposure, no privilege, never a
-  Person, and the future-date clamp (§4) bounds every effect to
-  the present. Rotation is the remedy. Spam → agent-dismissible
-  held noise.
+- Forged-mail blast radius (stated honestly, post-adversarial):
+  INBOUND forgery is always ONE false row/nudge (the ladder's step 2
+  matches a single From-Person). OUTBOUND forgery (a forged
+  member-From) creates one row + one auto-attempt PER MATCHED
+  RECIPIENT — up to RECIPIENT_CAP (25) Today items cleared by one
+  message (pinned; the mechanism is correct for legitimate mass-CC
+  and repeated sends grant the same reach). Plus forged-Message-ID
+  suppression of one later genuine row. No content exposure, no
+  privilege, never a Person; occurred_at is clamped to
+  [2000-01-01, receipt] (§4 upper clamp + adversarial floor), so no
+  effect ranks beyond the present or renders degenerate history.
+  Rotation is the remedy. Spam → held noise, agent-dismissible,
+  FLOOD-CAPPED at 500 live held rows per agent (beyond it: raw
+  stored encrypted, no held row, span outcome
+  capture_held_overflow — keeps un-listable plaintext counterparty
+  addresses from accumulating past the agent's reach, D-015 §4).
+  Cross-tenant: the link endpoint org-validates person_id via
+  lock_person (adversarial H1), and the Today person-joins carry
+  org predicates as defense-in-depth.
 - Observability: `capture.inbound_email` span — outcome vocabulary
   (`captured|capture_duplicate|capture_unmatched|rejected|...`),
   direction, matched flag, forwarded/style/depth, byte_len, own ids

@@ -9,6 +9,7 @@ use crate::domain::admin::commands::token;
 use crate::domain::admin::commands::AdminCommandError;
 use crate::domain::admin::queries::{self, InvitationStatus};
 use crate::domain::admin::{validation, MembershipStatus, Role};
+use crate::domain::capture::address::mint_capture_address_if_absent;
 use crate::domain::envelope::{CommandContext, FactEnvelope, Origin};
 use crate::domain::facts::{
     self, InvitationResolvedFact, MembershipChangeReason, MembershipChangedFact,
@@ -147,6 +148,10 @@ async fn accept_invitation_attempt(
     )
     .await?;
     queries::mark_invitation_accepted(&mut tx, invitation.id, user_id).await?;
+    // Slice 009 (docs/specs/SLICE_009.md §4 item 1; declared additive
+    // SLICE_004 change): every new membership gets a capture address.
+    // Always mints (the row cannot already exist for a brand-new user).
+    mint_capture_address_if_absent(&mut tx, invitation.organization_id, user_id).await?;
 
     let ctx = CommandContext {
         organization_id: invitation.organization_id,

@@ -52,6 +52,7 @@ pub fn build_app(state: AppState) -> Router {
             .merge(routes::platform::router())
             .merge(routes::operator::router())
             .merge(routes::calls::router())
+            .merge(routes::capture::router())
             .with_state(state),
     );
 

@@ -85,6 +85,7 @@ const HISTORY_ICON: Record<HistoryEntry['kind'], Component> = {
   stage_changed: Flag,
   contact_attempted: PhoneCall,
   call_completed: PhoneOutgoing,
+  correspondence: Mail,
 }
 
 const logContactOpen = ref(false)
@@ -285,6 +286,14 @@ function historySummary(entry: HistoryEntry): string {
       // SLICE_006 §1 steps 4–5: "Call — reached, 1 min 12 s" / "Call — no answer".
       const { outcome, talk_seconds } = entry.detail
       return callCompletedSummary(outcome, talk_seconds)
+    }
+    case 'correspondence': {
+      // SLICE_009 §8: no address/subject/message-id (D-042.1/2) — direction,
+      // agent, and whether the row is a retroactively-forwarded placement
+      // are the only renderable facts.
+      const { direction, agent, backdated } = entry.detail
+      const label = direction === 'outbound' ? 'Outbound email' : 'Inbound email'
+      return backdated ? `${label} — ${agent.display_name} (forwarded)` : `${label} — ${agent.display_name}`
     }
   }
 }

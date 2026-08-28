@@ -3,6 +3,7 @@
 //! Business mutations pass through `commands::*` only (AGENTS.md §4.8).
 
 pub mod admin;
+pub mod capture;
 pub mod commands;
 pub mod contact;
 pub mod envelope;

@@ -192,7 +192,13 @@ by user decision (authorship still unattributed — watch for a
 recurrence next slice); LIVE WALKTHROUGH DEFERRED BY USER (commit
 approved without it; the §8 walkthrough steps remain listed in the
 spec for later live testing — 009 precedent); commit approved on
-`slice-011a-filter-vocabulary`. Merge gate: pending.
+`slice-011a-filter-vocabulary` (`4aee12d`). MERGED (fast-forward)
++ PUSHED to `origin/main` (`4aee12d`, user-approved 2026-08-28).
+Branch left in place (deletion not yet approved). dev-api still
+runs the pre-011a binary (no migration; rebuild whenever the
+deferred walkthrough happens). NEXT: the queued GATE-SPEEDUP
+chunk (local phase 1 first, per the header entry) → then 011b
+(saved lists) per the ladder.
 
 QUEUED NEXT after 011a merges (user-approved 2026-08-28): a small
 standalone GATE-SPEEDUP chunk, own branch, behavior-identical

@@ -131,6 +131,19 @@ FUB-parity stage seeding). The three ladder-level decisions
 at resume. Building the missing destination models (notes, tasks,
 deals) is itself a path back to 010.
 
+NEW TRACK: SMART LISTS (Slice 011). D-043 accepted (first-class
+FUB-shaped lists; lists feed Today; built-in Today logic becomes
+org-tweakable system feeds — the filter model IS the Today
+configuration language; user rationale: reproduce FUB's great
+points, agents get control vs hardcoding). Ladder ACCEPTED at
+docs/plans/SLICE_011_LADDER.md: 011a vocabulary+ad-hoc filtering →
+011b saved lists → 011c lists-feed-Today → 011d tweakable built-ins
+(STRICT scope per user: all three built-ins incl. call-outcome fully
+in the vocabulary; split-ready) → 011e tags (re-opens part of parked
+010). Source clause = latest inquiry. Next: draft
+docs/specs/SLICE_011a.md → independent review → user approval →
+implementation gate.
+
 Prior update, 2026-08-25 (SLICE_007h1 COMPLETE, MERGED, PUSHED —
 `main` `105f730`. Detail below; SLICE_007h1 IMPLEMENTED on
 `slice-007h1-forwarded-wrapper` (off `main` `9604f76`), uncommitted.

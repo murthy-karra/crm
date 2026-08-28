@@ -1400,3 +1400,39 @@ posture (bodies parked on O-012) stands throughout.
    noted.
 
 Blocks: nothing. Feeds the Slice 009 specification.
+
+### D-043 — Smart lists are first-class and become Today's configurable feed (2026-08-28)
+
+Accepted (user, during Slice 011 planning). A deliberate amendment
+to the thesis §8 posture, with the user's rationale recorded:
+switchers must be able to reproduce Follow Up Boss's genuinely great
+points — smart lists foremost — and "people are notoriously unable
+to change"; equally, lists give agents A SENSE OF CONTROL over what
+appears on Today, rather than the CRM hardcoding it.
+
+1. **Smart lists are first-class, FUB-shaped**: saved, dynamic,
+   filterable People lists. Personal lists are created and edited
+   freely by each agent; shared lists are admin/team-curated and
+   visible org-wide (agents duplicate rather than edit the shared
+   original) — the FUB permission shape (re-verify details at spec
+   time).
+2. **Lists feed Today**: a list can be marked as a work source; its
+   members surface on Today with the list as the explainable reason.
+   Today remains the primary "what should I do next" surface — its
+   INPUTS become visible and configurable instead of compiled-in.
+3. **Today's built-in logic becomes tweakable**: the existing
+   deterministic reasons (new inquiry, no contact attempt, client
+   replied, call outcome needed) become system-provided defaults
+   expressed in the same filter vocabulary — adjustable per org —
+   rather than hardcoded magic. Determinism and explainability stay
+   (thesis §8's "no secret priority" holds; O-008's AI layer remains
+   separate and later).
+
+Consequence: the filter model IS the Today configuration language —
+one vocabulary serves ad-hoc People filtering, saved lists, and
+Today's feeds. Tags (no model today) are an early dependency
+question for FUB-parity filters; building them also re-opens part of
+the parked Slice 010 migration ladder.
+
+Blocks: nothing. Feeds the Slice 011 ladder plan (phased, minimum 4
+rungs per the user's standing sizing rule).

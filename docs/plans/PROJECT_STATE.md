@@ -100,18 +100,25 @@ LATEST PLANNING: correspondence capture (O-014 #2) direction updated
 in the decision log — CC/BCC-first with OAuth as a later per-agent
 opt-in, plus two mitigations (reply-all etiquette; retroactive
 forwarding reusing 007h1's unwrapper with inner-Date timeline
-placement and Message-ID dedup). SLICE 009 OPENED (correspondence capture v1):
-D-042 accepted (six scoping decisions — org-wide visibility, no
-subjects, per-agent held queue, auto contact_attempted, per-agent
-save-<token12> addresses, encrypted raw kept with no read surface);
-docs/specs/SLICE_009.md APPROVED (user, 2026-08-27) after
-independent review (ready-with-fixes; twelve fixes folded incl. the
-future-Date clamp and digest token lookup). Next: implementation
-gate → branch `slice-009-correspondence-capture`, migration
-20260904000001, Option A workflow, size M-L. Live walkthrough will
-need a second real mailbox as the client side. Also this planning round: fixed
-PROJECT_STATE's erroneous "round-robin" claim in the 007g
-walkthrough narrative (it routed organization_default).
+placement and Message-ID dedup). SLICE 009 (correspondence capture v1) COMPLETE, MERGED, PUSHED
+(`main` `807d7c2`, 2026-08-28). D-042 executed in full; largest
+slice yet (78 files, +8800). Verification: review READY-WITH-FIXES
+(3 minors applied); adversarial H1 CROSS-TENANT WRITE via the link
+endpoint's unvalidated person_id FIXED (lock_person guard + org
+predicates on Today person-joins, cross-org 404 pins) plus flood
+cap 500 / year-2000 date floor / References+address caps /
+deny_unknown_fields; 7 adversarial pins added; spec §9 blast radius
+amended honest (multi-recipient outbound bound, inbound never
+amplifies). Final gates: check all-pass, check-db 332/0. LIVE
+WALKTHROUGH PARTIAL: steps 1-2 verified with real mail
+(unmatched→held→link with counterparty NULLed + client address
+registered; matched outbound + auto contact_attempted;
+token-attribution with a non-member real sender per spec §11).
+Steps 3-5 (reply-all→client_replied, retroactive forwards,
+rotation) DEFERRED BY USER to later live testing — all
+db-test-pinned; one stray held row left in the queue for the user
+to dismiss as the dismiss-path exercise. Commit+merge approved with
+that deferral recorded.
 
 Prior update, 2026-08-25 (SLICE_007h1 COMPLETE, MERGED, PUSHED —
 `main` `105f730`. Detail below; SLICE_007h1 IMPLEMENTED on

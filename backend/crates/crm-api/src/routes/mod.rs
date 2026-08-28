@@ -2,6 +2,7 @@ pub mod calls;
 pub mod capture;
 pub mod health;
 pub mod inbound_email;
+pub mod inquiry_sources;
 pub mod intake;
 pub mod invitations;
 pub mod livekit_webhook;

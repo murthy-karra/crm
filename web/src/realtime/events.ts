@@ -84,8 +84,14 @@ export function invalidationsFor(event: unknown, orgId: string): QueryKey[] {
       // §6: a re-POST that resolves a `pending` row removes it from the
       // unresolved queue but publishes only `person.changed` — so the
       // `inquiry_received` change also invalidates the unresolved list.
+      // SLICE_011a M11 (adversarial-review follow-up): the same change can
+      // introduce a brand-new inquiry source, so it also invalidates the
+      // FilterBar's Source picker — `queryKeys.inquirySources` lives
+      // outside the `queryKeys.people` prefix and would otherwise go
+      // stale until an unrelated refetch.
       if (data.change === 'inquiry_received') {
         keys.push(queryKeys.unresolved(orgId))
+        keys.push(queryKeys.inquirySources(orgId))
       }
       return keys
     }

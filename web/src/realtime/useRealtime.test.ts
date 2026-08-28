@@ -235,10 +235,11 @@ describe('useRealtime', () => {
     expect(h.invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.people(ORG_ID) })
     expect(h.invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.today(ORG_ID) })
     expect(h.invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.unresolved(ORG_ID) })
-    // One call per distinct key, not one per event (5 keys total: person(a),
-    // person(b), people, today, unresolved — the last three deduped across
-    // all three events).
-    expect(h.invalidateSpy).toHaveBeenCalledTimes(5)
+    expect(h.invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.inquirySources(ORG_ID) })
+    // One call per distinct key, not one per event (6 keys total: person(a),
+    // person(b), people, today, unresolved, inquiry-sources (SLICE_011a
+    // M11) — the last four deduped across all three events).
+    expect(h.invalidateSpy).toHaveBeenCalledTimes(6)
     scope.stop()
   })
 

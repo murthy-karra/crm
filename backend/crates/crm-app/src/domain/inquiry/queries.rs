@@ -1,4 +1,5 @@
-//! `inquiry` persistence and read queries (docs/specs/SLICE_002.md §2, §5).
+//! `inquiry` persistence and read queries (docs/specs/SLICE_002.md §2, §5;
+//! docs/specs/SLICE_011a.md §5b).
 
 use chrono::{DateTime, Utc};
 use serde::Serialize;
@@ -91,4 +92,25 @@ pub async fn list_for_person(
     .fetch_all(conn)
     .await?;
     Ok(rows.into_iter().map(InquirySummary::from).collect())
+}
+
+/// `GET /api/inquiry-sources` (docs/specs/SLICE_011a.md §5b): the
+/// Organization's distinct inquiry sources, ascending, capped at 500 with
+/// the house truncate-to-500 math. Org from session only (`auth.
+/// active_organization_id`) — Organization data, not Person visibility
+/// (the `GET /api/stages` pattern), so this takes `organization_id`
+/// directly rather than a `PersonVisibilityScope`.
+pub async fn distinct_sources(
+    conn: &mut PgConnection,
+    organization_id: OrganizationId,
+) -> Result<(Vec<String>, bool), sqlx::Error> {
+    let mut rows = sqlx::query_scalar!(
+        r#"SELECT DISTINCT source FROM inquiry WHERE organization_id = $1 ORDER BY source ASC LIMIT 501"#,
+        organization_id.0,
+    )
+    .fetch_all(conn)
+    .await?;
+    let truncated = rows.len() > 500;
+    rows.truncate(500);
+    Ok((rows, truncated))
 }

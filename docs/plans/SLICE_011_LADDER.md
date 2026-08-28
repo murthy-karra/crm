@@ -9,6 +9,41 @@ filter model IS the Today configuration language). Sizing rule
 specs are written when the previous rung merges and absorb what was
 learned. Format per SLICE_007_LADDER.
 
+## In plain language
+
+This ladder builds "smart lists": saved, shareable filters over
+the People list that eventually drive the Today page. It lands in
+five small steps, each shippable on its own:
+
+- **011a — Filtering the People page.** Adds filter chips to the
+  People page: narrow the list by stage, who it's assigned to,
+  where the lead came from, how long since anyone was contacted,
+  whether they have a phone/email, and so on. The filter is
+  reflected in the URL so a link can be shared with a colleague
+  (a filter on "assigned to me" means *them* when they open it).
+  Nothing is saved yet — close the page and the filter is gone.
+  Under the hood this rung defines the filter "language" that
+  every later rung reuses.
+- **011b — Saved lists.** Lets agents save a filter as a named
+  list ("my stale Zillow leads") and come back to it. Personal
+  lists belong to one agent; shared lists are curated by admins,
+  and agents duplicate them rather than editing the original.
+- **011c — Lists feed Today.** An agent can mark any list as a
+  Today source: people matching that list start appearing on
+  their Today page, each labeled with which list put them there.
+- **011d — Tweakable built-ins.** The Today page's three
+  hardcoded rules (unanswered inquiry, client replied, call
+  needs an outcome) are re-expressed as editable filters, so an
+  org admin can adjust them — with a preview before saving and a
+  revert-to-default. The riskiest rung by design, because it
+  changes how Today works for the whole org.
+- **011e — Tags.** Adds free-form tags on people ("investor",
+  "past client") and lets filters match on them — proving the
+  filter language can grow new clause types without a rebuild.
+
+The rest of this document is the precise engineering record of
+the same plan.
+
 ## Decisions taken at ladder acceptance
 
 1. **Order: a → b → c → d → e (tags last).** Tags depend only on b

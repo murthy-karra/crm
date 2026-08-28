@@ -52,12 +52,13 @@ describe('invalidationsFor', () => {
     ])
   })
 
-  it('maps inquiry_received to person, people, today, AND unresolved (§6 special case)', () => {
+  it('maps inquiry_received to person, people, today, unresolved, AND inquiry sources (§6 special case; SLICE_011a M11: a new inquiry can introduce a new source)', () => {
     expect(invalidationsFor(personChanged('inquiry_received'), ORG_ID)).toEqual([
       queryKeys.person(ORG_ID, PERSON_ID),
       queryKeys.people(ORG_ID),
       queryKeys.today(ORG_ID),
       queryKeys.unresolved(ORG_ID),
+      queryKeys.inquirySources(ORG_ID),
     ])
   })
 

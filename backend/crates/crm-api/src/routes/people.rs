@@ -1,5 +1,5 @@
-use axum::extract::rejection::JsonRejection;
-use axum::extract::{FromRequestParts, Path, State};
+use axum::extract::rejection::{JsonRejection, QueryRejection};
+use axum::extract::{FromRequestParts, Path, Query, State};
 use axum::http::request::Parts;
 use axum::response::Json;
 use axum::routing::{get, post};
@@ -14,6 +14,7 @@ use crate::domain::commands::{
 };
 use crate::domain::envelope::CommandContext;
 use crate::domain::inquiry::queries as inquiry_queries;
+use crate::domain::person::filter::FilterDefinition;
 use crate::domain::person::queries as person_queries;
 use crate::domain::person::PersonVisibilityScope;
 use crate::error::ApiError;
@@ -60,17 +61,79 @@ impl FromRequestParts<AppState> for PersonIdPath {
     }
 }
 
+/// `?filter=` (docs/specs/SLICE_011a.md §5a): the query struct has no
+/// `deny_unknown_fields` — unrelated query params (`?foo=bar`) are ignored
+/// exactly as today, per the spec's stated divergence from the filter
+/// JSON's own strict decode discipline. `filter: Option<String>` distinguishes
+/// a truly ABSENT param (`None`, legacy path) from a PRESENT-but-empty one
+/// (`Some("")`, a 400 — empty string is not JSON).
+#[derive(Deserialize)]
+struct ListPeopleQuery {
+    #[serde(default)]
+    filter: Option<String>,
+}
+
+/// `auth: AuthContext` is listed BEFORE the query extractor so a garbage or
+/// unauthenticated-session request gets 401 before any filter parsing runs
+/// (docs/specs/SLICE_011a.md §5a: "401 first" — the substantial-parse
+/// counterpart to `PersonIdPath`'s pre-auth 400 above, a deliberate,
+/// stated divergence from that precedent). `Result<Query<_>, _>` mirrors
+/// the `body: Result<Json<_>, JsonRejection>` pattern used by the mutation
+/// handlers below: extraction itself never short-circuits, so this always
+/// runs after `auth`.
 async fn list_people(
     State(state): State<AppState>,
     auth: AuthContext,
+    query: Result<Query<ListPeopleQuery>, QueryRejection>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
+    let Query(query) = query.map_err(|_| ApiError::MalformedRequest)?;
+
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
     let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
     let scope = PersonVisibilityScope::from_auth(&auth);
 
-    let (people, truncated) = person_queries::list_summaries(&mut conn, &scope)
-        .await
-        .map_err(|_| ApiError::Unavailable)?;
+    let (people, truncated) = match query.filter {
+        // Absent `filter` -> the untouched legacy path: same query, same
+        // `.sqlx` entry, same shape, same order, same cap math (§5a).
+        None => person_queries::list_summaries(&mut conn, &scope)
+            .await
+            .map_err(|_| ApiError::Unavailable)?,
+        Some(raw) => {
+            // Present-but-empty `?filter=` (or `?filter`) is a 400: empty
+            // string is not JSON, and only a truly absent param is the
+            // legacy path (§5a).
+            if raw.is_empty() {
+                return Err(ApiError::MalformedRequest);
+            }
+            // axum's `Query` extractor already percent-decodes both keys
+            // and values (`serde_urlencoded`), so `raw` is the plain JSON
+            // text at this point — no separate percent-decode step needed.
+            let filter: FilterDefinition =
+                serde_json::from_str(&raw).map_err(|_| ApiError::MalformedRequest)?;
+            // Error order (§5a): 401 (already past, via `auth` above) ->
+            // 400 structural -> 422 org-scoped -> 200/503.
+            filter.validate()?;
+            let organization_id = scope.organization_id();
+            filter
+                .validate_references(&mut conn, organization_id)
+                .await?;
+
+            // Observability (§7): `filter_kinds` (static vocabulary,
+            // comma-joined) + `filter_clause_count` on the request span.
+            // NO clause values, ids, sources, or day counts.
+            let span = tracing::Span::current();
+            span.record("filter_kinds", filter.kinds_field());
+            span.record("filter_clause_count", filter.clauses.len());
+
+            // `me` resolves server-side to the caller AFTER validation,
+            // appended to the bound user array — never a wire value
+            // reaching SQL as a token (§4c).
+            let params = filter.to_query_params(auth.actor_user_id);
+            person_queries::filtered_summaries(&mut conn, &scope, &params)
+                .await
+                .map_err(|_| ApiError::Unavailable)?
+        }
+    };
 
     Ok(Json(json!({ "people": people, "truncated": truncated })))
 }

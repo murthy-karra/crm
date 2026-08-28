@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT DISTINCT source FROM inquiry WHERE organization_id = $1 ORDER BY source ASC LIMIT 501",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "source",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f9304984ce0acd1219225bfc3604a28c7fe8e1cc5abdd63206d1025583ed3ef0"
+}

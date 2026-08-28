@@ -11,14 +11,15 @@ pub mod telemetry;
 // these shims keep every existing `crm_api::…`/`crate::…` path valid.
 pub use crm_app::{domain, ids, realtime, telephony};
 
+use axum::extract::Request;
 use axum::http::{HeaderName, HeaderValue, Method};
 use axum::Router;
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::cors::CorsLayer;
 use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
-use tower_http::trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer};
-use tracing::Level;
+use tower_http::trace::{DefaultOnRequest, DefaultOnResponse, TraceLayer};
+use tracing::{Level, Span};
 
 use config::Config;
 use state::AppState;
@@ -44,6 +45,7 @@ pub fn build_app(state: AppState) -> Router {
             .merge(routes::session::router())
             .merge(routes::organization::router())
             .merge(routes::people::router())
+            .merge(routes::inquiry_sources::router())
             .merge(routes::intake::router())
             .merge(routes::stages::router())
             .merge(routes::realtime::router())
@@ -81,6 +83,29 @@ pub fn build_app(state: AppState) -> Router {
     app.merge(webhook).merge(inbound_email)
 }
 
+/// Declared slice-owned trace-layer change (docs/specs/SLICE_011a.md §7,
+/// review fix F1). tower-http's `DefaultMakeSpan` records the FULL URI —
+/// query string included — so a `GET /api/people?filter=<JSON>` request
+/// would land the filter JSON in every request span verbatim, violating
+/// §7's "no clause values, ids, sources, or day counts in spans" posture.
+/// This replaces it: PATH ONLY (`request.uri().path()`, query stripped),
+/// for ALL routes — every other recorded field (`method`, `version`) stays
+/// exactly as `DefaultMakeSpan` recorded it. `filter_kinds`/
+/// `filter_clause_count` are declared here as `Empty` so `routes::people`
+/// can `Span::current().record(...)` them without every other route
+/// paying for unused fields being anything but absent from their output.
+fn make_span_with(request: &Request) -> Span {
+    tracing::span!(
+        Level::INFO,
+        "request",
+        method = %request.method(),
+        uri = %request.uri().path(),
+        version = ?request.version(),
+        filter_kinds = tracing::field::Empty,
+        filter_clause_count = tracing::field::Empty,
+    )
+}
+
 /// The request-id + trace layer stack every route gets.
 fn with_request_tracing(router: Router) -> Router {
     let request_id_header = HeaderName::from_static("x-request-id");
@@ -91,7 +116,7 @@ fn with_request_tracing(router: Router) -> Router {
     // without a RUST_LOG override. on_failure is left at its default
     // (already ERROR-level, already unfiltered).
     let trace_layer = TraceLayer::new_for_http()
-        .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
+        .make_span_with(make_span_with)
         .on_request(DefaultOnRequest::new().level(Level::INFO))
         .on_response(DefaultOnResponse::new().level(Level::INFO));
 

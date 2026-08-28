@@ -7,6 +7,7 @@ use crate::domain::capture::address::RotateError as CaptureRotateError;
 use crate::domain::capture::commands::CaptureCommandError;
 use crate::domain::commands::{CallError, CommandError};
 use crate::domain::intake::workbench::WorkbenchError;
+use crate::domain::person::filter::FilterError;
 
 /// `{"error": "<code>"}` envelope shared across authenticated endpoints
 /// (docs/specs/SLICE_001.md §4). Slice 002 (docs/specs/SLICE_002.md §5)
@@ -270,6 +271,27 @@ impl From<CaptureCommandError> for ApiError {
     }
 }
 
+/// `FilterError` -> `ApiError` for `GET /api/people?filter=`
+/// (docs/specs/SLICE_011a.md §4b, §5a, §7): `Malformed` is the structural
+/// class (400), `InvalidStage`/`InvalidAssignee` are the org-scoped,
+/// non-leaking 422 classes — the same codes `ChangePersonStage`/
+/// `AssignPerson` already use, so a filter naming a cross-Organization or
+/// nonexistent id gets a byte-identical body to those existing routes.
+/// `Database` maps to `Unavailable` (review R2 fix): a transient `sqlx`
+/// failure while checking a stage/assignee reference is a 503, exactly
+/// like every other `Database(_)` arm in this file — never a 422 that
+/// would misreport "this filter is invalid".
+impl From<FilterError> for ApiError {
+    fn from(err: FilterError) -> Self {
+        match err {
+            FilterError::Malformed => ApiError::MalformedRequest,
+            FilterError::InvalidStage => ApiError::InvalidStage,
+            FilterError::InvalidAssignee => ApiError::InvalidAssignee,
+            FilterError::Database(_) => ApiError::Unavailable,
+        }
+    }
+}
+
 /// `domain::capture::address::RotateError` -> `ApiError` for `POST
 /// /api/capture/address/rotate` (docs/specs/SLICE_009.md §8): mirrors
 /// `RotateError` -> `ApiError` handling already established for the
@@ -334,6 +356,33 @@ mod tests {
         assert_eq!(
             status_and_code(CallError::CallNotFound.into()).await,
             (StatusCode::NOT_FOUND, "not_found".into())
+        );
+    }
+
+    /// docs/specs/SLICE_011a.md §7, review R2: every `FilterError` variant
+    /// maps to its declared code — above all, `Database` must be `503
+    /// unavailable`, never a 422, so a transient DB hiccup mid
+    /// `validate_references` is never misreported as "this filter is
+    /// invalid".
+    #[tokio::test]
+    async fn filter_error_codes() {
+        use crate::domain::person::filter::FilterError;
+
+        assert_eq!(
+            status_and_code(FilterError::Malformed.into()).await,
+            (StatusCode::BAD_REQUEST, "malformed_request".into())
+        );
+        assert_eq!(
+            status_and_code(FilterError::InvalidStage.into()).await,
+            (StatusCode::UNPROCESSABLE_ENTITY, "invalid_stage".into())
+        );
+        assert_eq!(
+            status_and_code(FilterError::InvalidAssignee.into()).await,
+            (StatusCode::UNPROCESSABLE_ENTITY, "invalid_assignee".into())
+        );
+        assert_eq!(
+            status_and_code(FilterError::Database(sqlx::Error::RowNotFound).into()).await,
+            (StatusCode::SERVICE_UNAVAILABLE, "unavailable".into())
         );
     }
 }

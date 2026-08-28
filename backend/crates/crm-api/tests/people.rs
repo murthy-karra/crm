@@ -233,3 +233,30 @@ async fn set_stage_returns_503_when_database_unreachable() {
     )
     .await;
 }
+
+// --- SLICE_011a §7, review R2: both new surfaces also 503 without a
+// database (never a 422 that would misreport a valid filter as invalid) ---
+
+#[tokio::test]
+async fn list_people_with_filter_returns_503_when_database_unreachable() {
+    let filter = serde_json::json!({"version": 1, "clauses": []}).to_string();
+    let encoded: String = filter
+        .bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                (b as char).to_string()
+            }
+            _ => format!("%{b:02X}"),
+        })
+        .collect();
+    assert_returns_503(
+        request("GET", &format!("/api/people?filter={encoded}")),
+        Body::empty(),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn inquiry_sources_returns_503_when_database_unreachable() {
+    assert_returns_503(request("GET", "/api/inquiry-sources"), Body::empty()).await;
+}

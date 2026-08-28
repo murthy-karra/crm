@@ -140,9 +140,89 @@ docs/plans/SLICE_011_LADDER.md: 011a vocabulary+ad-hoc filtering →
 011b saved lists → 011c lists-feed-Today → 011d tweakable built-ins
 (STRICT scope per user: all three built-ins incl. call-outcome fully
 in the vocabulary; split-ready) → 011e tags (re-opens part of parked
-010). Source clause = latest inquiry. Next: draft
-docs/specs/SLICE_011a.md → independent review → user approval →
-implementation gate.
+010). Source clause = latest inquiry. 011a IN FLIGHT (2026-08-28):
+the user pre-authorized this rung's implementation ("draft
+SLICE_011a.md but implement in sonnet" — Option A workflow; commit/
+merge approval still collected at the gates). Planner ground-truth
+survey done (people contract, per-axis schema truth incl. the 009
+inbound index, static-SQL + .sqlx discipline, web precedents, 11
+traps folded into the draft). docs/specs/SLICE_011a.md DRAFTED —
+notable shape: age ops within/not_within/never with not_within the
+exact complement (includes never); me symbolic in wire+URL,
+server-resolved; has_replied = simple inbound-existence (derived
+axes stay 011d); structural 400 vs org-scoped non-leaking 422; 401
+before filter parse (stated divergence from the path-id precedent);
+absent ?filter= byte-identical via untouched list_summaries.
+Spec review READY-WITH-FIXES (5 folded, incl. F1: DefaultMakeSpan
+records full URIs — slice now ships a path-only make_span_with for
+ALL routes). IMPLEMENTED on `slice-011a-filter-vocabulary` (Sonnet
+lane per the brief; file list verified against git status both
+rounds). Implementation review + adversarial testing ran in
+parallel on the real diff: BLOCKING web bug found by BOTH (empty
+draft clauses from Add-filter are wire-invalid 400s; the F5
+degrade watch then wiped ALL chips and wedged the editor — the
+Vitest blanket-200 stub hid it) + HIGH (sqlx errors in reference
+validation swallowed into 422s; with the degrade watch a DB hiccup
+silently erased valid filters) + a fail-closed gap (Value-based
+dup-key last-wins let {"kind":"bogus","kind":"stage"} through).
+ALL FIXED in one consolidated round (spec §4b/§6 amended first:
+canonical-uuid-only, dup-keys fail closed, draft-clauses never
+serialized, degrade only for URL-origin filters, 5xx keeps chips,
+back/forward rehydrates): recursive DupSafeValue deserializer,
+FilterError::Database→503, committedClauses/filterOrigin/
+append-if-missing replaceClause, + M-items (id-ASC tie pin,
+structural-beats-422 pin, parser-robustness pins, %FF/repeated-
+param pins, me+own-id pin, inquirySources realtime invalidation,
+i32::try_from bind guard). Lane gates green post-fix (check;
+check-db 49 blocks 0 failed; filter unit 65; db_people_filter 31;
+web 300). RESIDUALS for 011b (recorded, not blocking): M7
+positive span pin (filter_kinds values) skipped; dedicated web
+pins for fractional-days-truncate, router.go(-1) rehydrate, and
+zero-clauses-URL-canonicalize are indirect-only; "20 clauses
+accepted" ceiling is unconstructible (10 kinds × one-per-kind) —
+the two reachable ceilings pinned instead. NOTE: 3 doc files of
+UNKNOWN authorship appeared mid-implementation (plain-language
+additions: SLICE_011_LADDER "In plain language" section,
+SLICE_011a.md preamble, new SLICE_011a_EXPLAINED.md) — the lane
+denies authorship twice; binding spec sections verified intact;
+disposition = user question at the commit gate. Coordinator
+final-tree verification GREEN (check + check-db, own run).
+COMMIT GATE (user, 2026-08-28): the three plain-language docs KEPT
+by user decision (authorship still unattributed — watch for a
+recurrence next slice); LIVE WALKTHROUGH DEFERRED BY USER (commit
+approved without it; the §8 walkthrough steps remain listed in the
+spec for later live testing — 009 precedent); commit approved on
+`slice-011a-filter-vocabulary`. Merge gate: pending.
+
+QUEUED NEXT after 011a merges (user-approved 2026-08-28): a small
+standalone GATE-SPEEDUP chunk, own branch, behavior-identical
+coverage proven by a before/after timing table + identical test
+counts. Levers, by payoff: (1) cargo-nextest for both test steps
+(runs all test binaries in one parallel pool — the 369 per-test-DB
+sqlx tests are embarrassingly parallel on 10 cores; biggest win,
+est. 2-4x on check-db); (2) `debug = "line-tables-only"` in
+dev/test profiles; (3) run the web half of ./scripts/check
+concurrently with the rust half (shares nothing); (4) slow-test
+hygiene — the three 501-sequential-INSERT truncation tests become
+single generate_series inserts; one-time nextest timing report for
+the rest of the tail; (5) scope sqlx prepare --check to
+-p crm-app -p crm-api; (6) sccache (pays on branch/worktree
+switches). Process lever adopted immediately, no code: the
+coordinator verifies gates ONCE on the final tree per slice, not
+mid-cycle baselines. Target: check+check-db pair from ~30 min to
+~10-12. SCOPE DECISION (user, 2026-08-28): do the LOCAL levers
+first and measure before any remote/CI move. PHASE 2 (remote
+gates) DEFERRED pending phase-1 results; survey recorded so it is
+not re-litigated: first choice GitHub Actions with a self-hosted
+runner on the user's 64-core machine (origin is github.com/
+murthy-karra/crm, gh authenticated; default hosted runners are
+too small; GitHub's larger runners need a paid Team org;
+Depot/Blacksmith-class third-party runner vendors are the cheap
+escape hatch with no workflow rewrite; Buildkite the only
+non-Actions product seriously weighed; ssh box / ECS-on-EC2 /
+sccache-dist-from-mac all considered and passed over — details in
+this session's planning discussion, re-verify vendor pricing at
+spec time).
 
 Prior update, 2026-08-25 (SLICE_007h1 COMPLETE, MERGED, PUSHED —
 `main` `105f730`. Detail below; SLICE_007h1 IMPLEMENTED on

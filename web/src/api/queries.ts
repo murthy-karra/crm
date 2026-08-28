@@ -20,6 +20,7 @@ import type {
   CorrectOutcomeRequest,
   CorrectOutcomeResponse,
   CreateOrganizationResponse,
+  InquirySourcesResponse,
   InvitationPreviewRequest,
   InvitationPreviewResponse,
   InvitationsResponse,
@@ -65,7 +66,15 @@ import type {
 export const queryKeys = {
   me: ['me'] as const,
   org: (orgId: string) => ['org', orgId] as const,
-  people: (orgId: string) => ['org', orgId, 'people'] as const,
+  // SLICE_011a §6: the filter element is OMITTED ENTIRELY when unfiltered
+  // — never appended as `undefined` (TanStack would hash that to `null`,
+  // orphaning the existing unfiltered cache entry and its tests, review
+  // F9). Prefix matching then keeps every existing invalidation (realtime
+  // `person.changed`, mutation-driven `['org', orgId]` sweeps — both call
+  // `queryKeys.people(orgId)` with no filter argument) covering filtered
+  // queries with zero changes to realtime/events.ts.
+  people: (orgId: string, serializedFilter?: string) =>
+    serializedFilter ? (['org', orgId, 'people', serializedFilter] as const) : (['org', orgId, 'people'] as const),
   person: (orgId: string, personId: string) => ['org', orgId, 'person', personId] as const,
   stages: (orgId: string) => ['org', orgId, 'stages'] as const,
   unresolved: (orgId: string) => ['org', orgId, 'unresolved'] as const,
@@ -90,6 +99,8 @@ export const queryKeys = {
   // Keyed by the raw token, not an org id — the public accept page has no
   // Organization context yet (that is exactly what the preview reveals).
   invitationPreview: (token: string) => ['invitation-preview', token] as const,
+  // SLICE_011a §10: extend the factory, never hand-write a key.
+  inquirySources: (orgId: string) => ['org', orgId, 'inquiry-sources'] as const,
   platformOrganizations: () => ['platform', 'organizations'] as const,
   platformOrganization: (id: string) => ['platform', 'organizations', id] as const,
 }
@@ -110,10 +121,32 @@ export function useMe() {
   })
 }
 
-export function usePeople(orgId: MaybeRefOrGetter<string>) {
+/**
+ * `GET /api/people` and `GET /api/people?filter=<...>` (docs/specs/SLICE_011a.md
+ * §5a, §6). `serializedFilter` is the SAME percent-encodable JSON string
+ * used for both the query-key element and the URL param
+ * (`lib/filter.ts`'s `serializeFilter`) — pass `undefined`/`''` for the
+ * unfiltered legacy path, whose key stays byte-identical to before this
+ * slice.
+ */
+export function usePeople(orgId: MaybeRefOrGetter<string>, serializedFilter?: MaybeRefOrGetter<string | undefined>) {
   return useQuery({
-    queryKey: computed(() => queryKeys.people(toValue(orgId))),
-    queryFn: () => apiFetch<PeopleResponse>('/people'),
+    queryKey: computed(() => queryKeys.people(toValue(orgId), toValue(serializedFilter) || undefined)),
+    queryFn: () => {
+      const filter = toValue(serializedFilter)
+      const path = filter ? `/people?filter=${encodeURIComponent(filter)}` : '/people'
+      return apiFetch<PeopleResponse>(path)
+    },
+    enabled: computed(() => toValue(orgId) !== ''),
+  })
+}
+
+/** `GET /api/inquiry-sources` (docs/specs/SLICE_011a.md §5b) — feeds the
+ *  FilterBar's Source picker. Any authenticated member. */
+export function useInquirySources(orgId: MaybeRefOrGetter<string>) {
+  return useQuery({
+    queryKey: computed(() => queryKeys.inquirySources(toValue(orgId))),
+    queryFn: () => apiFetch<InquirySourcesResponse>('/inquiry-sources'),
     enabled: computed(() => toValue(orgId) !== ''),
   })
 }

@@ -248,6 +248,57 @@ export interface PeopleResponse {
   truncated: boolean
 }
 
+// --- Slice 011a: Filter vocabulary (docs/specs/SLICE_011a.md §4a) ---------
+// The wire shape backend/crates/crm-app/src/domain/person/filter.rs
+// (de)serializes. Every clause object and the top level are
+// `deny_unknown_fields` server-side — this client only ever constructs
+// well-formed values, so no client-side enforcement is needed here, but
+// the shapes must match exactly.
+
+export type Assignee = 'me' | 'unassigned' | { user_id: string }
+
+export type AgeOp =
+  | { op: 'within_days'; days: number }
+  | { op: 'not_within_days'; days: number }
+  | { op: 'never' }
+
+export type FilterClauseKind =
+  | 'stage'
+  | 'assigned_to'
+  | 'source'
+  | 'created'
+  | 'last_inquiry'
+  | 'last_contact'
+  | 'last_inbound'
+  | 'has_replied'
+  | 'has_phone'
+  | 'has_email'
+
+export type FilterClause =
+  | { kind: 'stage'; stage_ids: string[] }
+  | { kind: 'assigned_to'; assignees: Assignee[] }
+  | { kind: 'source'; sources: string[] }
+  | { kind: 'created'; age: AgeOp }
+  | { kind: 'last_inquiry'; age: AgeOp }
+  | { kind: 'last_contact'; age: AgeOp }
+  | { kind: 'last_inbound'; age: AgeOp }
+  | { kind: 'has_replied'; value: boolean }
+  | { kind: 'has_phone'; value: boolean }
+  | { kind: 'has_email'; value: boolean }
+
+export interface FilterDefinition {
+  version: 1
+  clauses: FilterClause[]
+}
+
+// --- Slice 011a: Inquiry sources (docs/specs/SLICE_011a.md §5b GET
+// /api/inquiry-sources) --------------------------------------------------
+
+export interface InquirySourcesResponse {
+  sources: string[]
+  truncated: boolean
+}
+
 export interface ContactMethod {
   id: string
   kind: 'email' | 'phone'

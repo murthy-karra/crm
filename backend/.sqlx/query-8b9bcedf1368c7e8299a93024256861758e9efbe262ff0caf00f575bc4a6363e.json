@@ -1,0 +1,107 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n             p.id, p.first_name, p.last_name, p.created_at,\n             s.id as stage_id, s.name as stage_name,\n             u.id as \"assigned_user_id?\", u.display_name as \"assigned_user_display_name?\",\n             (SELECT cm.value FROM contact_method cm\n                WHERE cm.person_id = p.id AND cm.organization_id = p.organization_id AND cm.kind = 'email'\n                ORDER BY cm.created_at ASC LIMIT 1) as \"primary_email?\",\n             (SELECT cm.value FROM contact_method cm\n                WHERE cm.person_id = p.id AND cm.organization_id = p.organization_id AND cm.kind = 'phone'\n                ORDER BY cm.created_at ASC LIMIT 1) as \"primary_phone?\",\n             (SELECT count(*) FROM inquiry i\n                WHERE i.person_id = p.id AND i.organization_id = p.organization_id) as \"inquiry_count!\",\n             (SELECT max(i.received_at) FROM inquiry i\n                WHERE i.person_id = p.id AND i.organization_id = p.organization_id) as \"last_inquiry_at?\"\n           FROM person p\n           JOIN stage s ON s.id = p.stage_id\n           LEFT JOIN app_user u ON u.id = p.assigned_user_id\n           LEFT JOIN LATERAL (\n               SELECT i2.source\n               FROM inquiry i2\n               WHERE i2.person_id = p.id AND i2.organization_id = p.organization_id\n               ORDER BY i2.received_at DESC, i2.id DESC\n               LIMIT 1\n           ) latest_src ON true\n           LEFT JOIN LATERAL (\n               SELECT max(i3.received_at) as ts\n               FROM inquiry i3\n               WHERE i3.person_id = p.id AND i3.organization_id = p.organization_id\n           ) last_inquiry_ts ON true\n           LEFT JOIN LATERAL (\n               SELECT max(ca.occurred_at) as ts\n               FROM contact_attempted ca\n               WHERE ca.person_id = p.id AND ca.organization_id = p.organization_id\n           ) last_contact_ts ON true\n           LEFT JOIN LATERAL (\n               SELECT max(cc.occurred_at) as ts\n               FROM correspondence_captured cc\n               WHERE cc.person_id = p.id AND cc.organization_id = p.organization_id\n                 AND cc.direction = 'inbound'\n           ) last_inbound_ts ON true\n           WHERE p.organization_id = $1\n             AND ($2::uuid[] IS NULL OR p.stage_id = ANY($2))\n             AND ($3::uuid[] IS NULL OR p.assigned_user_id = ANY($3)\n                  OR ($4::boolean AND p.assigned_user_id IS NULL))\n             AND ($5::text[] IS NULL OR latest_src.source = ANY($5))\n             AND ($6::int IS NULL\n                  OR COALESCE(p.created_at, '-infinity'::timestamptz) > now() - make_interval(days => $6))\n             AND ($7::int IS NULL\n                  OR COALESCE(p.created_at, '-infinity'::timestamptz) <= now() - make_interval(days => $7))\n             AND ($8::boolean IS NULL OR (p.created_at IS NULL) = $8)\n             AND ($9::int IS NULL\n                  OR COALESCE(last_inquiry_ts.ts, '-infinity'::timestamptz) > now() - make_interval(days => $9))\n             AND ($10::int IS NULL\n                  OR COALESCE(last_inquiry_ts.ts, '-infinity'::timestamptz) <= now() - make_interval(days => $10))\n             AND ($11::boolean IS NULL OR (last_inquiry_ts.ts IS NULL) = $11)\n             AND ($12::int IS NULL\n                  OR COALESCE(last_contact_ts.ts, '-infinity'::timestamptz) > now() - make_interval(days => $12))\n             AND ($13::int IS NULL\n                  OR COALESCE(last_contact_ts.ts, '-infinity'::timestamptz) <= now() - make_interval(days => $13))\n             AND ($14::boolean IS NULL OR (last_contact_ts.ts IS NULL) = $14)\n             AND ($15::int IS NULL\n                  OR COALESCE(last_inbound_ts.ts, '-infinity'::timestamptz) > now() - make_interval(days => $15))\n             AND ($16::int IS NULL\n                  OR COALESCE(last_inbound_ts.ts, '-infinity'::timestamptz) <= now() - make_interval(days => $16))\n             AND ($17::boolean IS NULL OR (last_inbound_ts.ts IS NULL) = $17)\n             AND ($18::boolean IS NULL OR (EXISTS (\n                   SELECT 1 FROM correspondence_captured cc2\n                   WHERE cc2.person_id = p.id AND cc2.organization_id = p.organization_id\n                     AND cc2.direction = 'inbound'\n                 )) = $18)\n             AND ($19::boolean IS NULL OR (EXISTS (\n                   SELECT 1 FROM contact_method cm3\n                   WHERE cm3.person_id = p.id AND cm3.organization_id = p.organization_id\n                     AND cm3.kind = 'phone'\n                 )) = $19)\n             AND ($20::boolean IS NULL OR (EXISTS (\n                   SELECT 1 FROM contact_method cm4\n                   WHERE cm4.person_id = p.id AND cm4.organization_id = p.organization_id\n                     AND cm4.kind = 'email'\n                 )) = $20)\n           ORDER BY p.created_at DESC, p.id ASC\n           LIMIT 501",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "first_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "last_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "stage_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "stage_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "assigned_user_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "assigned_user_display_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "primary_email?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "primary_phone?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "inquiry_count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 11,
+        "name": "last_inquiry_at?",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "UuidArray",
+        "Bool",
+        "TextArray",
+        "Int4",
+        "Int4",
+        "Bool",
+        "Int4",
+        "Int4",
+        "Bool",
+        "Int4",
+        "Int4",
+        "Bool",
+        "Int4",
+        "Int4",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "8b9bcedf1368c7e8299a93024256861758e9efbe262ff0caf00f575bc4a6363e"
+}

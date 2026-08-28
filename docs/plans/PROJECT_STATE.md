@@ -120,6 +120,17 @@ db-test-pinned; one stray held row left in the queue for the user
 to dismiss as the dismiss-path exercise. Commit+merge approved with
 that deferral recorded.
 
+FUB MIGRATION (Slice 010): planner survey completed 2026-08-27,
+then PARKED by the user 2026-08-28 before any decision — too many
+FUB entities lack destination models (notes/tasks/custom
+fields/deals). Full resume artifact at
+docs/plans/SLICE_010_LADDER.md (5-rung ladder, safety model,
+verified ground truths incl. Origin::Migration existing and D-019's
+FUB-parity stage seeding). The three ladder-level decisions
+(rollback posture, scope, credential at-rest) were NOT taken — ask
+at resume. Building the missing destination models (notes, tasks,
+deals) is itself a path back to 010.
+
 Prior update, 2026-08-25 (SLICE_007h1 COMPLETE, MERGED, PUSHED —
 `main` `105f730`. Detail below; SLICE_007h1 IMPLEMENTED on
 `slice-007h1-forwarded-wrapper` (off `main` `9604f76`), uncommitted.

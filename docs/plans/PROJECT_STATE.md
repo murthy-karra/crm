@@ -224,6 +224,45 @@ sccache. Residuals: 4th 501-INSERT test unbatched
 from killed runs (drop at leisure); doctest step now dominates
 check. The original queue text follows for reference.
 
+QUEUED (scoped 2026-08-28, NOT yet approved for implementation —
+awaiting an explicit "go" like gate-speedup got): TEST-BINARY
+CONSOLIDATION chunk, own branch (suggested `test-binary-
+consolidation`). Problem this attacks, distinct from everything
+gate-speedup fixed: `crm-api/tests/` holds ~46 separate `*.rs`
+files, and cargo compiles+LINKS each as its own independent
+binary — so editing crm-app/crm-api triggers ~46 link steps, not
+one. Nextest (execution), line-tables-only (per-link cost), and
+the fingerprint fix (spurious rebuilds) all left this untouched;
+it is the last big lever on edit-to-green latency, not on full
+gate-run latency (today's chunk already fixed that). NOTE:
+crm-app/crm-api's own unit tests (`#[cfg(test)]` inside src/) are
+UNAFFECTED — `cfg(test)` compiles into one harness binary per
+crate already; this chunk is scoped to the `crm-api/tests/`
+integration-test directory only.
+
+Fix: one (or a few) hub file(s) (e.g. `tests/all.rs`) using
+`#[path = "db_people.rs"] mod db_people;` per existing file —
+existing test files need no content rewrite, only a `#[path]`
+reference from the hub — so cargo compiles+links once instead of
+~46 times. Verify before landing: `#[sqlx::test]`'s per-test
+ephemeral-database naming is per-test-FUNCTION not per-binary, so
+consolidation should be a non-issue, but confirm rather than
+assume; `#[ignore]` discovery (nextest's `--run-ignored only`) must
+find every test under the new layout; any test relying on being a
+distinct binary (process isolation, a shared static, `#[ctor]`-
+style setup) would need to be found and flagged, not silently
+broken. Acceptance = same rigor as gate-speedup: before/after
+timing on a REPRESENTATIVE SINGLE-FILE EDIT (not just full-gate
+baselines — this chunk's whole point is edit-to-green latency) +
+identical test counts, incl. `#[ignore]`d ones.
+
+Optional bundled experiment (cheap, ~15 min, keep only if it
+measurably helps): try `rust-lld` as the linker via
+`backend/.cargo/config.toml` rustflags — bundled with the
+toolchain already, fully reversible. Uncertain payoff: Apple's own
+linker has gotten faster in recent Xcode, so this needs measuring,
+not assuming.
+
 QUEUED (original text, now executed): a small
 standalone GATE-SPEEDUP chunk, own branch, behavior-identical
 coverage proven by a before/after timing table + identical test

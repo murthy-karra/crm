@@ -17,6 +17,8 @@ boundary (D-002).
 ## Trust boundaries
 
 - ZITADEL authenticates; the application authorizes (D-003).
+  (Production posture; development uses local username/password behind
+  the same session/identity abstraction, D-016 §3.)
 - Organization is the tenant boundary; every tenant-owned query and mutation
   enforces it, and tests must attempt cross-Organization access (D-004).
 - Person visibility is Organization-wide behind a server-side
@@ -80,5 +82,33 @@ belongs to a future production-deployment slice.
 
 ## Contracts
 
-Shared HTTP, realtime, Operator-tool, and persistence contracts live under
-`contracts/` once created and never change silently (`AGENTS.md` §11).
+Shared HTTP, realtime, Operator-tool, and persistence contracts live in
+the per-slice specifications (`docs/specs/`) and the code itself — a
+separate `contracts/` directory was planned but never created and is not
+used. Contracts never change silently (`AGENTS.md` §11); superseded spec
+sections carry explicit amendment pointers.
+
+## Amendments since baseline (recorded 2026-08-29)
+
+The prose above is frozen at D-015 (2026-08-20). Materially
+architecture-shaped decisions accepted since, one line each — the
+decision log is authoritative:
+
+- D-016: all development is local (MacBook + Docker + Cloudflare tunnel);
+  dev auth is local username/password behind the ZITADEL-shaped
+  abstraction.
+- D-017/D-018: web stack (Tailwind, PrimeVue unstyled, TanStack
+  Table/Query) and production ingress (cloudflared → Cilium Gateway API).
+- D-019: Person stages are an Organization-scoped seeded table, not an
+  enum.
+- D-023: realtime model — one org channel, server-side subscriptions,
+  ids-only invalidation events, recovery by refetch.
+- D-028/D-034: the AI Operator is an in-process crate (`crm-operator`)
+  compiled into `crm-api`, reaching data only through the `ToolBackend`
+  seam; crate-boundary fences are enforced in `./scripts/check`.
+- D-039: a second deployable exists — the `infra/email-worker` Cloudflare
+  Email Worker relaying inbound mail to the API.
+- D-042: correspondence capture v1 (CC/BCC + address book, encrypted
+  bodies pending O-012 key hierarchy).
+- D-043: smart lists are first-class and the filter model is the Today
+  configuration language (Slice 011 ladder).

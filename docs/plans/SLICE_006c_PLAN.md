@@ -1,7 +1,9 @@
 # Slice 006c — Call outcome correction: plan (crm-planner pass, 2026-08-22)
 
-Status: PLAN (not a spec). Driving decision: D-032. Spec to follow once
-the one blocking decision (notes) is resolved.
+Status: SUPERSEDED by docs/specs/SLICE_006c.md (the notes decision was
+resolved as no-notes; spec approved, implemented, and merged —
+`58ecad8`, D-032/D-033). Kept as the planning record. Original status:
+PLAN (not a spec), driving decision D-032.
 
 ## Dependency
 

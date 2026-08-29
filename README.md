@@ -27,28 +27,25 @@ The two primary product goals are:
 
 ## Repository Areas
 
-- `backend/` — Rust application code
+- `backend/` — Rust application code (crates `crm-api`, `crm-app`, `crm-operator`)
 - `web/` — Vue web application
-- `ios/` — native iOS application
-- `android/` — native Android application
-- `infra/` — development and production infrastructure
+- `infra/` — development and production infrastructure (incl. the `email-worker/` Cloudflare Email Worker and the `telephony/` host)
 - `scripts/` — repository automation
 - `docs/product/` — current product thesis and product requirements
-- `docs/architecture/` — current architecture and ADRs
+- `docs/architecture/` — architecture baseline and its amendments
 - `docs/decisions/` — accepted decisions and unresolved decision register
-- `docs/plans/` — implementation and execution plans
-- `docs/specs/` — vertical-slice specifications
+- `docs/plans/` — implementation and execution plans, incl. `PROJECT_STATE.md`
+- `docs/specs/` — vertical-slice specifications (also the canonical record of shared HTTP/realtime/Operator-tool contracts, alongside the code — there is no separate `contracts/` directory)
 - `docs/tasks/` — bounded implementation task briefs
+- `docs/design/` — accepted design documents (incl. `UI_STYLE.md`)
 - `docs/research/` — competitor and technical research
-- `.agents/skills/` — repository-local coding-agent workflows
-- `.codex/agents/` — project-specific Codex subagent definitions
-- `contracts/` — canonical shared HTTP, realtime, Operator-tool, and fixture contracts
+- `ios/`, `android/` — native applications; planned, not yet created
 
 ## Current State
 
-Slice 000 (executable repository foundation) and Slice 001 (identity, tenancy, and database foundation) are implemented: a Rust/Axum API with health/readiness endpoints and local-username/password session authentication, a Vue 3 + Vite web shell with a login flow, Docker Compose for local PostgreSQL and Centrifugo, a migrations harness with distinct application/schema-owner database roles, and the development scripts below. There is no CRM product behavior (Person, Inquiry, and the rest) yet — see `docs/specs/SLICE_000.md` and `docs/specs/SLICE_001.md`.
+Slices 000 through 011a are merged. The product today: lead intake over HTTP and real inbound email (Cloudflare Email Routing on `leads.elysianfeld.com` → the `infra/email-worker` relay → pinned-format parsing, with LLM extraction via Groq for freeform mail and an admin-only Unresolved workbench for everything else); People with stages, assignment, and append-only history; ad-hoc People filtering (the Slice 011 smart-lists ladder is in progress); a deterministic, explainable Today work queue with realtime updates; correspondence capture (CC/BCC); outbound calling (LiveKit + Telnyx SIP) with mandatory call outcomes; a read-only AI Operator (the **Ask** drawer); organization administration (invitations, roles, deactivation, a platform-admin surface); and configurable intake routing (default assignee, round-robin, unassigned).
 
-Current operational status and the next approval gate are recorded in `docs/plans/PROJECT_STATE.md`.
+Current operational status, per-slice history, and the next approval gate are recorded in `docs/plans/PROJECT_STATE.md`; each shipped slice's contract lives in its `docs/specs/SLICE_*.md`.
 
 ## Development
 
@@ -62,13 +59,13 @@ Install the pinned prerequisites before bootstrapping:
 - Node, at the version recorded in `.node-version`;
 - Corepack (ships with Node; run `corepack enable`);
 - pnpm, through Corepack, as pinned by `web/package.json`;
-- Docker Desktop, for PostgreSQL and Centrifugo; and
+- a Docker runtime (e.g. OrbStack or Docker Desktop), for PostgreSQL and Centrifugo; and
 - sqlx-cli, pinned to the workspace's locked `sqlx` minor version, for `scripts/sqlx-prepare` and `scripts/check-db` only (not required for `check`, `dev-api`, or `bootstrap` itself — docs/specs/SLICE_002.md §11):
   ```sh
   cargo install sqlx-cli --version 0.8.6 --locked --no-default-features --features postgres,rustls
   ```
 
-The bootstrap command verifies those exact versions (sqlx-cli's presence and version are checked too, but only as a non-fatal warning). It does not install system toolchains or start services:
+The bootstrap command verifies those exact versions (sqlx-cli's presence and version are checked too, but only as a non-fatal warning). It does not install system toolchains or start services, with one exception: it installs `cargo-nextest` (`cargo install cargo-nextest --locked`) when missing, since `./scripts/check` and `./scripts/check-db` hard-require it:
 
 ```sh
 ./scripts/bootstrap
@@ -78,7 +75,7 @@ It fetches the locked Cargo dependencies and performs a frozen pnpm install. Pac
 
 ### Configuration
 
-Configuration is injected through the process environment. Root `.env.example` is the single canonical, names-only inventory of every variable the development environment requires (D-016): every value is deliberately empty, it contains no useful credential, and nothing loads it automatically. Copy it to `.env` (gitignored) and fill in values locally; never commit `.env`.
+Configuration is injected through the process environment. Root `.env.example` is the single canonical inventory of every variable the development environment requires (D-016), carrying names plus non-credential defaults (D-013 as amended 2026-08-29): credential and machine-specific values are deliberately empty, it contains no useful credential, and nothing loads it automatically. Copy it to `.env` (gitignored) and fill in values locally; never commit `.env`.
 
 Notable defaults and constraints, applied in code:
 
@@ -108,6 +105,10 @@ Notable defaults and constraints, applied in code:
 | `CRM_REALTIME_TOKEN_TTL_SECONDS` | `600`, bounded 60–3600 | Connection-token lifetime |
 | `CRM_WEB_REALTIME_PROXY_TARGET` | `http://127.0.0.1:8000` | Vite's WebSocket proxy target for `/connection` |
 | `CRM_DEMO_API_URL` | `http://127.0.0.1:3000` | Target for `scripts/demo-leads` and `scripts/seed_dev.py` |
+| `CRM_INTAKE_MAIL_DOMAIN` | `elysianfeld.com` | Domain Organization intake addresses render on (docs/specs/SLICE_007a.md) |
+| `CRM_INTAKE_ADDRESS_SCHEME` | `subdomain` | `subdomain` or `local_part`; real receiving uses `local_part` — addresses render `<slug>-<token>@leads.<domain>` (D-039) |
+| `CRM_INBOUND_EMAIL_SECRET` | Unset (endpoint disabled) | Bearer credential for `POST /inbound/email`; every request 401s while unset; at least 32 bytes when set (docs/specs/SLICE_007b.md §6) |
+| `CRM_EXTRACTION_POLL_SECONDS` / `CRM_EXTRACTION_MODEL` / `CRM_EXTRACTION_CALL_TIMEOUT_MS` | `10` / the Operator model / `15000` | The LLM lead-extraction worker (docs/specs/SLICE_007f.md §5); bounds 1–300 s / — / 1000–30000 ms |
 | `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | Unset (calling disabled) | The LiveKit key pair; empty key = calling disabled (503 `telephony_disabled`), not a startup error. With a key, every other `LIVEKIT_*` value is required. Must equal the telephony host's `livekit.yaml` pair — see "Telephony host" |
 | `LIVEKIT_URL` | Required with a key | Browser signaling URL (`ws://`/`wss://`), no trailing slash |
 | `LIVEKIT_API_URL` | Required with a key | The API's Twirp base URL (`https://`; `http://` only for loopback), no trailing slash; the host directly, never a Cloudflare-proxied hostname |
@@ -130,7 +131,7 @@ PostgreSQL and Centrifugo run as loopback-only Docker containers:
 ./scripts/dev-services down -v       # stop and remove containers AND data (true clean slate)
 ```
 
-Plain `down` keeps the PostgreSQL data volume — use it to restart the containers (e.g. to pick up a changed `.env` value like `CENTRIFUGO_TOKEN_HMAC_SECRET`, or to resync Docker Desktop's VM clock) without losing local data. Use `down -v` when you actually want a fresh database; `./scripts/dev-bootstrap` (below) already does this as its first step, so there's no need to run it separately before that.
+Plain `down` keeps the PostgreSQL data volume — use it to restart the containers (e.g. to pick up a changed `.env` value like `CENTRIFUGO_TOKEN_HMAC_SECRET`, or to resync the Docker VM's clock) without losing local data. Use `down -v` when you actually want a fresh database; `./scripts/dev-bootstrap` (below) already does this as its first step, so there's no need to run it separately before that.
 
 Verify both are healthy (outside the main repository gate, since it must stay service-free):
 
@@ -198,7 +199,7 @@ Run the complete repository gate with no services running:
 ./scripts/check
 ```
 
-This runs, in order: `cargo fmt --check`, `cargo clippy` (warnings denied), `cargo test`, web lint, web typecheck, web test (Vitest), and web build. Database-backed tests are compiled here (so fmt/clippy cover them) but `#[ignore]`d, so this stays service-free. `cargo test`/`clippy` type-check every `query!`/`query_as!` macro call offline against the committed `backend/.sqlx/` cache (root `.cargo/config.toml` sets `SQLX_OFFLINE=true` for every cargo invocation) rather than a live database — see "Offline query cache" below.
+The Rust half runs in the foreground, in order: `cargo fmt --check`; `cargo clippy` (warnings denied); a production-shape `cargo check` (no test targets, so test-only symbols can't leak into deploy builds); the crate-boundary dependency fences (`cargo tree`, D-028 §5); `cargo nextest run`; and `cargo test --doc` (nextest cannot run doctests, and the `ids.rs` `compile_fail` doctests are load-bearing type-safety pins). Concurrently, the web half (lint, typecheck, Vitest, build) and the email-worker's `node --test` suite run in the background, their output printed as one block at the end — a web failure still fails the gate. Database-backed tests are compiled here (so fmt/clippy cover them) but `#[ignore]`d, so this stays service-free. Everything type-checks `query!`/`query_as!` macro calls offline against the committed `backend/.sqlx/` cache (root `.cargo/config.toml` sets `SQLX_OFFLINE=true` for every cargo invocation) rather than a live database — see "Offline query cache" below. Requires `cargo-nextest` (bootstrap installs it).
 
 Run the database-backed suite against the running local container (requires `dev-services up`; never prints a credential value):
 
@@ -223,6 +224,12 @@ Gated on `CRM_TEST_LIVEKIT_API_URL` (refuses to run when unset, fails loudly whe
 ### Operator
 
 The AI Operator (`POST /api/operator/turns`, the web **Ask** drawer) needs `GROQ_API_KEY` in `.env`; leave it empty and the Operator is simply disabled (the drawer says so; nothing else is affected). `CRM_OPERATOR_BASE_URL` accepts any OpenAI-compatible endpoint (`https://`, or `http://` for a loopback host such as a local model server) and `CRM_OPERATOR_MODEL` picks the model; the timeouts and concurrency cap in `.env.example` are validated at startup even without a key. Nothing the Operator does changes data, and the ledger it writes (`operator_turn`, `operator_tool_call`) holds no message, reply, or argument text — only outcomes, counts, timings, and Person ids. No test ever calls a real model; `./scripts/check` and `./scripts/check-db` run with the key unset.
+
+### Email intake (Slices 007a–007h1)
+
+Each Organization has an unguessable intake address, shown on its Intake Settings page (`/manage/intake`, org admins only, with token rotation behind a confirm dialog). Mail arriving there becomes a lead: mail matching a pinned format (e.g. the Cypress Bay contact form) creates a Person directly and routes per the Organization's intake routing mode (D-036/D-041); freeform mail is extracted by the LLM worker (Groq, `CRM_EXTRACTION_*`, D-038) with schema validation, anti-hallucination checks, and a confidence gate; everything else lands in the admin-only Unresolved workbench (`/manage/unresolved`: view raw content on demand, Try again, Discard — D-037). Gmail-style forwarded wrappers are unwrapped to the inner message (007h1).
+
+Real receiving (D-039) runs through Cloudflare Email Routing: a catch-all on the registered `leads.elysianfeld.com` subdomain delivers to the committed Email Worker (`infra/email-worker/`, deployed with wrangler), which relays raw MIME to `POST /inbound/email` authenticated by `CRM_INBOUND_EMAIL_SECRET`. Set `CRM_INTAKE_ADDRESS_SCHEME=local_part` for that path. For local testing without any of this, `scripts/inbound-email` posts a fixture `.eml` straight to the endpoint. Leave `CRM_INBOUND_EMAIL_SECRET` unset and the endpoint is simply disabled; leave `GROQ_API_KEY` unset and unextracted freeform mail waits in the queue as pending — a lead is never lost.
 
 ### Demo data
 
@@ -287,5 +294,5 @@ This checks only the network plumbing — not part of `./scripts/check`/`./scrip
 
 ### Troubleshooting
 
-- **Centrifugo rejects a freshly-minted token as expired.** Docker Desktop's VM clock can drift after the host sleeps, so the container's notion of "now" runs ahead of or behind the API process's. Restart Docker Desktop (or just the `centrifugo` container: `./scripts/dev-services down && ./scripts/dev-services up`) to resync the clock.
+- **Centrifugo rejects a freshly-minted token as expired.** The Docker runtime's VM clock can drift after the host sleeps, so the container's notion of "now" runs ahead of or behind the API process's. Restart the Docker runtime (or just the `centrifugo` container: `./scripts/dev-services down && ./scripts/dev-services up`) to resync the clock.
 - **The realtime indicator is stuck on "reconnecting…" through the tunnel, but works on loopback.** Run `./scripts/check-tunnel` first — the dashboard route order (D-025) is the most likely cause, not an app bug. Restarting `cloudflared` does not help; it does not re-read `config.yml`'s ingress for this tunnel.

@@ -106,6 +106,12 @@ loaded by the development workflow. No secrets-manager product is integrated
 for development. `.env` files must never be committed; a names-only
 `.env.example` may be committed.
 
+**Amended 2026-08-29 (user, docs-freshness audit):** `.env.example` may
+carry names AND non-credential defaults (e.g. the Groq base URL/model,
+intake mail domain, timeout bounds) — blessing the drift the file had
+already accumulated. Credentials and machine-specific values stay empty;
+the never-commit-a-real-credential rule is unchanged.
+
 ### D-014 — Production secrets manager is OpenBao (2026-08-20)
 
 Accepted. OpenBao is the production secrets and key authority. Infisical is
@@ -370,6 +376,10 @@ Accepted with the Slice 003 specification (`docs/specs/SLICE_003.md` §6,
    the same as an `HTTPRoute` path match (D-018). Routing realtime to a
    hostname that bypasses Access is a security-boundary change and is
    not adopted without an explicit decision.
+   **Superseded in part 2026-08-22 by D-024/D-025:** Access is removed
+   from the dev tunnel entirely (D-024), and the tunnel turned out to be
+   dashboard-managed — the committed ingress file is documentation, not
+   the applied routing (D-025). The path-routing shape itself stands.
 
 ### D-024 — Cloudflare Access removed from the dev tunnel (2026-08-22)
 
@@ -698,16 +708,16 @@ Rejected: writing nothing until the agent chooses (a closed tab would
 lose the attempt and Today would wait on paperwork); pre-selecting the
 system's guess (it is wrong exactly in the cases that matter).
 
+> **Note:** accepted decisions D-034 through D-043 continue BELOW,
+> appended chronologically among the open items in the next section.
+> D-033 is not the latest accepted decision.
+
 ## Open decisions
 
 ### O-001 — RESOLVED
 
 Resolved by D-013 (development: local `.env`) and D-014 (production:
 OpenBao).
-
-### O-005 — RESOLVED
-
-Resolved by D-015.
 
 ### O-006 — Outbound messaging consent policy (OPEN)
 
@@ -731,7 +741,13 @@ Ownership of communication history and client data when an agent leaves the
 Organization is open (`AGENTS.md` §7; research doc "open questions"). Blocks:
 reassignment/departure workflows beyond simple reassignment.
 
-### O-005 — Role of the event-sourced compliance model (OPEN)
+### O-005 — Role of the event-sourced compliance model (RESOLVED by D-015)
+
+*Resolved 2026-08-20; duplicate RESOLVED stub removed 2026-08-29. D-015
+answers each question below: the ten aggregates are deferred (§1), the
+envelope practices are adopted (§2), and the first history-bearing slice
+ships exactly four typed fact tables (§8). The original question is kept
+as the record of what was asked.*
 
 `docs/research/event-sourced-crm-aggregates-and-events.md` proposes a broad
 event-sourced aggregate model (Party, ConsentRecord, Licensee, Offer,
@@ -744,7 +760,13 @@ practices are adopted for the initial product's immutable-history areas.
 Blocks: nothing immediately; informs the architecture baseline for
 history-bearing facts.
 
-### O-007 — Slice 004 administration design defaults (OPEN — confirm at planning)
+### O-007 — Slice 004 administration design defaults (RESOLVED — confirmed by Slice 004, D-026, D-027)
+
+*Resolved 2026-08-22 (status recorded 2026-08-29): every default below
+shipped in migration `20260823000001_administration.sql` and the Slice
+004 implementation; the two closing questions were answered by D-027
+(revocation → deactivation) and D-026 §5 + D-027 §5 (platform listing /
+suspension reservation).*
 
 D-021 fixes scope and principle. These defaults were proposed on
 2026-08-21 and are adopted unless the Slice 004 plan changes them:
@@ -976,6 +998,12 @@ one-line prediction and the D-028 §5 status note.
 Blocks: nothing. Feeds the Slice 006b specification.
 
 ### O-014 — Email: intake first, then capture; mailbox access models (OPEN — expected to be a major epic)
+
+*Status 2026-08-29: #1 (lead intake) SHIPPED as the 007 ladder,
+007a–007h1 (D-035–D-040); #2 (correspondence capture) v1 SHIPPED as
+Slice 009 (D-042, which supersedes the matched-only scope below).
+Remaining: #3 send (blocked on O-006), #4 transactional, #5 migration
+reconstruction.*
 
 Recorded 2026-08-23 (user, in discussion after 006b). "Email" is five
 products and must not be planned as one slice:

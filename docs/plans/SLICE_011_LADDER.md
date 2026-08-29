@@ -1,7 +1,8 @@
 # Slice 011 — Smart Lists ladder
 
 Status: ACCEPTED (user, 2026-08-28) with the three ladder-level
-decisions taken. Charter: D-043 (smart lists first-class FUB-shaped;
+decisions taken. 011a COMPLETE AND MERGED (`4aee12d`, 2026-08-28);
+011b in spec phase. Charter: D-043 (smart lists first-class FUB-shaped;
 lists feed Today as explainable sources; built-in Today logic
 becomes org-tweakable system feeds in the same vocabulary — the
 filter model IS the Today configuration language). Sizing rule

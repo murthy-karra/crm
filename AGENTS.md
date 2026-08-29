@@ -45,7 +45,9 @@ Unless an accepted decision explicitly changes them, use:
 - Web: Vue 3, TypeScript, Vite
 - iOS: Swift and SwiftUI
 - Android: Kotlin and Jetpack Compose
-- Identity provider: ZITADEL
+- Identity provider: ZITADEL (production; development uses local
+  username/password behind the same session/identity abstraction, D-016
+  §3 — the ZITADEL integration itself is parked)
 - Secrets and keys: local gitignored `.env` file in development (D-013); OpenBao in production (D-014)
 - Realtime delivery: Centrifugo OSS
 - Mobile push: application-owned APNs and FCM integration
@@ -75,7 +77,8 @@ Do not create a service merely because a domain noun exists.
 
 ### 4.2 Authentication and authorization are separate
 
-ZITADEL authenticates identities.
+ZITADEL authenticates identities (in production; development uses the
+local username/password login behind the same abstraction, D-016 §3).
 
 The Rust application owns business authorization.
 
@@ -362,8 +365,9 @@ Do not make routine untracked root SSH mutation the production operating model.
 
 ## 10. Secrets and observability
 
-Development secrets live in a local, gitignored `.env` file (D-013). A
-names-only `.env.example` may be committed. OpenBao is the production
+Development secrets live in a local, gitignored `.env` file (D-013). An
+`.env.example` with names and non-credential defaults may be committed
+(D-013 as amended 2026-08-29); credential values stay empty. OpenBao is the production
 secret authority (D-014); its integration belongs to a future
 production-deployment slice, so do not integrate a secrets-manager product
 before then.

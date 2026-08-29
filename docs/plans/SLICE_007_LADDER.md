@@ -1,6 +1,12 @@
 # Slice 007 — Email lead intake: the ladder
 
-Status: PLANNED + REVIEWED (planner + reviewer 2026-08-23; 007c split applied)
+Status: RUNGS a–h1 ALL COMPLETE AND MERGED (007a…007h1, last merge
+`105f730`, 2026-08-25; see docs/plans/PROJECT_STATE.md ledger). h2+
+(one rung per additional pinned email format) remains open, driven by
+fixtures as they arrive. Round-robin routing, mentioned below as a
+possible later rung, shipped separately as Slice 008 (D-041).
+Original status: PLANNED + REVIEWED (planner + reviewer 2026-08-23;
+007c split applied).
 Source: DECISION_LOG O-014 (all groundwork), D-012, D-021, D-028/D-034.
 Rule (user, 2026-08-23): **small rungs, each fully tested and walked
 through before the next.** Each rung is its own spec (`SLICE_007x.md`),

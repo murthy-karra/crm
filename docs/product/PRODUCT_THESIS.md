@@ -295,6 +295,12 @@ A CRM Person does not automatically receive login access.
 
 ## 8. Today
 
+> Amended by D-043 (2026-08-28): Today's inputs become visible and
+> configurable — smart lists can feed Today as explainable work
+> sources, and the built-in reasons below become org-tweakable system
+> feeds expressed in the same filter vocabulary. Determinism and
+> explainability are retained; "no secret priority" holds.
+
 Today is the agent’s daily work queue.
 
 It should answer:
@@ -610,7 +616,11 @@ These risks should be tested through working vertical slices and real design par
 
 ---
 
-## 16. Immediate product objective
+## 16. Initial product objective (achieved)
+
+> Status 2026-08-29: this objective was met — the proof chain below
+> shipped across Slices 002–005, and calling shipped as Slice 006.
+> Current status lives in `docs/plans/PROJECT_STATE.md`.
 
 The immediate objective is not to build the entire CRM.
 

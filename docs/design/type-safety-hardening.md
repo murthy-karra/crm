@@ -1,7 +1,9 @@
 # Type-Safety Hardening Ladder
 
-Status: SURVEYED 2026-08-26 (full-backend planner sweep at `main`
-`105f730`); ladder accepted as the working plan. One chunk at a time,
+Status: COMPLETE 8/8 (merged through `main` `069f55a`, 2026-08-26 —
+see "LADDER COMPLETE" below for the closing state and residuals).
+Surveyed 2026-08-26 (full-backend planner sweep at `main` `105f730`);
+ladder accepted as the working plan. One chunk at a time,
 each behavior-preserving and independently landable, gates
 (`./scripts/check` + `./scripts/check-db`) green after every chunk.
 External JSON contracts and the DB schema stay byte-identical

@@ -3,7 +3,6 @@
 //! confirm via the model-free endpoint over scripted telephony. Run only
 //! via ./scripts/check-db. The migrator connection is used only to
 //! backdate, force lifecycle states, or probe grants for negative cases.
-mod common;
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -74,7 +73,7 @@ fn steps_start_call(person_id: Uuid, contact_method_id: Option<Uuid>) -> Vec<Scr
 }
 
 async fn fixture(migrator_pool: &PgPool, steps: Vec<ScriptedStep>) -> Fixture {
-    let (org_id, alice_id) = common::create_org_with_stages_and_member(
+    let (org_id, alice_id) = crate::common::create_org_with_stages_and_member(
         migrator_pool,
         "Acme Realty",
         "alice@acme.test",
@@ -83,9 +82,9 @@ async fn fixture(migrator_pool: &PgPool, steps: Vec<ScriptedStep>) -> Fixture {
     )
     .await;
     let _ = org_id;
-    let carol_id = common::create_user(migrator_pool, "carol@acme.test", "Carol", PW).await;
-    common::add_membership(migrator_pool, org_id, carol_id).await;
-    let (_other_org, _bob_id) = common::create_org_with_stages_and_member(
+    let carol_id = crate::common::create_user(migrator_pool, "carol@acme.test", "Carol", PW).await;
+    crate::common::add_membership(migrator_pool, org_id, carol_id).await;
+    let (_other_org, _bob_id) = crate::common::create_org_with_stages_and_member(
         migrator_pool,
         "Best Realty",
         "bob@best.test",
@@ -104,8 +103,8 @@ async fn fixture(migrator_pool: &PgPool, steps: Vec<ScriptedStep>) -> Fixture {
         telephony_limits(),
     ));
 
-    let app_pool = common::connect_as_app(migrator_pool).await;
-    let config = common::test_config();
+    let app_pool = crate::common::connect_as_app(migrator_pool).await;
+    let config = crate::common::test_config();
     let base = AppState::for_tests(app_pool, &config, Publisher::recording());
     let router = crm_api::build_app(
         base.clone()
@@ -115,9 +114,9 @@ async fn fixture(migrator_pool: &PgPool, steps: Vec<ScriptedStep>) -> Fixture {
     let router_no_operator = crm_api::build_app(base.clone().with_telephony(telephony));
     let router_no_telephony = crm_api::build_app(base);
 
-    let alice = common::login_cookie(&router, "alice@acme.test", PW).await;
-    let carol = common::login_cookie(&router, "carol@acme.test", PW).await;
-    let bob = common::login_cookie(&router, "bob@best.test", PW).await;
+    let alice = crate::common::login_cookie(&router, "alice@acme.test", PW).await;
+    let carol = crate::common::login_cookie(&router, "carol@acme.test", PW).await;
+    let bob = crate::common::login_cookie(&router, "bob@best.test", PW).await;
     Fixture {
         migrator_pool: migrator_pool.clone(),
         alice_id,
@@ -132,7 +131,7 @@ async fn fixture(migrator_pool: &PgPool, steps: Vec<ScriptedStep>) -> Fixture {
 
 /// A Person with one phone, via intake, assigned to `assignee`.
 async fn person_with_phone(f: &Fixture, email: &str) -> (Uuid, Uuid) {
-    let resp = common::post_inquiry(
+    let resp = crate::common::post_inquiry(
         &f.router,
         &f.alice,
         "zillow",
@@ -141,13 +140,14 @@ async fn person_with_phone(f: &Fixture, email: &str) -> (Uuid, Uuid) {
     )
     .await;
     assert_eq!(resp.status(), StatusCode::CREATED, "intake fixture");
-    let person_id: Uuid = common::body_json(resp).await["person_id"]
+    let person_id: Uuid = crate::common::body_json(resp).await["person_id"]
         .as_str()
         .unwrap()
         .parse()
         .unwrap();
-    let detail = common::body_json(
-        common::get_with_cookie(&f.router, &format!("/api/people/{person_id}"), &f.alice).await,
+    let detail = crate::common::body_json(
+        crate::common::get_with_cookie(&f.router, &format!("/api/people/{person_id}"), &f.alice)
+            .await,
     )
     .await;
     let phone_id: Uuid = detail["contact_methods"]
@@ -166,7 +166,7 @@ async fn person_with_phone(f: &Fixture, email: &str) -> (Uuid, Uuid) {
 /// Runs a turn whose script proposes a call to `person_id`; returns the
 /// wire `proposal` object.
 async fn propose(f: &Fixture, person_id: Uuid) -> Value {
-    let resp = common::post_json_with_cookie(
+    let resp = crate::common::post_json_with_cookie(
         &f.router,
         "/api/operator/turns",
         &f.alice,
@@ -174,7 +174,7 @@ async fn propose(f: &Fixture, person_id: Uuid) -> Value {
     )
     .await;
     assert_eq!(resp.status(), StatusCode::OK, "turn");
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     assert!(
         !body["proposal"].is_null(),
         "turn response carries the proposal: {body}"
@@ -188,7 +188,7 @@ async fn propose(f: &Fixture, person_id: Uuid) -> Value {
 }
 
 async fn confirm(router: &Router, cookie: &str, proposal_id: &str) -> axum::response::Response {
-    common::post_json_with_cookie(
+    crate::common::post_json_with_cookie(
         router,
         &format!("/api/operator/proposals/{proposal_id}/confirm"),
         cookie,
@@ -241,7 +241,7 @@ async fn propose_then_confirm_places_the_call_with_operator_origin_and_turn_corr
     )
     .await;
     assert_eq!(resp.status(), StatusCode::OK, "confirm");
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     let call_id: Uuid = body["call"]["id"].as_str().unwrap().parse().unwrap();
     assert!(body["join"]["token"].is_string());
     assert!(body["join"]["room"].is_string());
@@ -290,8 +290,8 @@ async fn rebuild_full(
         API_SECRET,
         telephony_limits(),
     ));
-    let app_pool = common::connect_as_app(&f.migrator_pool).await;
-    let config = common::test_config();
+    let app_pool = crate::common::connect_as_app(&f.migrator_pool).await;
+    let config = crate::common::test_config();
     let router = crm_api::build_app(
         AppState::for_tests(app_pool, &config, Publisher::recording())
             .with_operator(runtime)
@@ -319,7 +319,10 @@ async fn foreign_org_other_user_and_nonexistent_confirms_are_byte_identical_404(
     let ghost_resp = confirm(&f.router, &f.alice, &Uuid::new_v4().to_string()).await;
     for resp in [bob_resp, carol_resp, ghost_resp] {
         assert_eq!(resp.status(), StatusCode::NOT_FOUND);
-        assert_eq!(common::body_json(resp).await, json!({"error": "not_found"}));
+        assert_eq!(
+            crate::common::body_json(resp).await,
+            json!({"error": "not_found"})
+        );
     }
     // Nothing was consumed: alice can still confirm.
     let resp = confirm(&f.router, &f.alice, id).await;
@@ -350,7 +353,7 @@ async fn double_confirm_yields_one_call_and_one_consumed(migrator_pool: PgPool) 
     } else {
         b
     };
-    let body = common::body_json(conflict).await;
+    let body = crate::common::body_json(conflict).await;
     assert_eq!(body["error"], "proposal_consumed");
     // Exactly one call row exists for the person.
     let calls: i64 = sqlx::query_scalar("SELECT count(*) FROM call WHERE person_id = $1")
@@ -382,7 +385,7 @@ async fn expired_confirm_is_409_and_executes_nothing(migrator_pool: PgPool) {
     let resp = confirm(&f.router, &f.alice, &id.to_string()).await;
     assert_eq!(resp.status(), StatusCode::CONFLICT);
     assert_eq!(
-        common::body_json(resp).await,
+        crate::common::body_json(resp).await,
         json!({"error": "proposal_expired"})
     );
     let (status, _, call_id, _) = proposal_row(&f.migrator_pool, id).await;
@@ -416,7 +419,7 @@ async fn consumed_beats_expired_and_stuck_claimed_reads_as_consumed(migrator_poo
     let resp = confirm(&f.router, &f.alice, &id.to_string()).await;
     assert_eq!(resp.status(), StatusCode::CONFLICT);
     assert_eq!(
-        common::body_json(resp).await,
+        crate::common::body_json(resp).await,
         json!({"error": "proposal_consumed", "call_id": null})
     );
 }
@@ -436,7 +439,7 @@ async fn confirm_while_already_on_a_call_fails_the_proposal_with_call_in_progres
     let id: Uuid = proposal["id"].as_str().unwrap().parse().unwrap();
 
     // Alice starts a call through the ordinary button first.
-    let resp = common::post_json_with_cookie(
+    let resp = crate::common::post_json_with_cookie(
         &f.router,
         &format!("/api/people/{person_id}/calls"),
         &f.alice,
@@ -444,11 +447,11 @@ async fn confirm_while_already_on_a_call_fails_the_proposal_with_call_in_progres
     )
     .await;
     assert_eq!(resp.status(), StatusCode::CREATED, "button call");
-    let active_call = common::body_json(resp).await["call"]["id"].clone();
+    let active_call = crate::common::body_json(resp).await["call"]["id"].clone();
 
     let resp = confirm(&f.router, &f.alice, &id.to_string()).await;
     assert_eq!(resp.status(), StatusCode::CONFLICT);
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     assert_eq!(body["error"], "call_in_progress");
     assert_eq!(body["call_id"], active_call);
 
@@ -461,7 +464,7 @@ async fn confirm_while_already_on_a_call_fails_the_proposal_with_call_in_progres
     let resp = confirm(&f.router, &f.alice, &id.to_string()).await;
     assert_eq!(resp.status(), StatusCode::CONFLICT);
     assert_eq!(
-        common::body_json(resp).await["error"],
+        crate::common::body_json(resp).await["error"],
         json!("proposal_consumed")
     );
 }
@@ -479,7 +482,7 @@ async fn confirm_with_telephony_disabled_is_503_and_fails_the_proposal(migrator_
     let resp = confirm(&f.router_no_telephony, &f.alice, &id.to_string()).await;
     assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
     assert_eq!(
-        common::body_json(resp).await,
+        crate::common::body_json(resp).await,
         json!({"error": "telephony_disabled"})
     );
     let (status, failure, _, _) = proposal_row(&f.migrator_pool, id).await;
@@ -499,7 +502,7 @@ async fn invented_contact_method_id_is_not_found_and_inserts_no_row(migrator_poo
     let router = rebuild_with_steps(&f, steps_start_call(person_id, Some(Uuid::new_v4()))).await;
     let f = Fixture { router, ..f };
 
-    let resp = common::post_json_with_cookie(
+    let resp = crate::common::post_json_with_cookie(
         &f.router,
         "/api/operator/turns",
         &f.alice,
@@ -507,7 +510,7 @@ async fn invented_contact_method_id_is_not_found_and_inserts_no_row(migrator_poo
     )
     .await;
     assert_eq!(resp.status(), StatusCode::OK);
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     assert!(body["proposal"].is_null());
     assert_eq!(body["tool_calls"][0]["outcome"], "not_found");
 
@@ -523,7 +526,7 @@ async fn invented_contact_method_id_is_not_found_and_inserts_no_row(migrator_poo
 async fn email_only_person_yields_no_phone_and_no_row(migrator_pool: PgPool) {
     let f = fixture(&migrator_pool, Vec::new()).await;
     // Person with an email only.
-    let resp = common::post_inquiry(
+    let resp = crate::common::post_inquiry(
         &f.router,
         &f.alice,
         "zillow",
@@ -532,7 +535,7 @@ async fn email_only_person_yields_no_phone_and_no_row(migrator_pool: PgPool) {
     )
     .await;
     assert_eq!(resp.status(), StatusCode::CREATED);
-    let person_id: Uuid = common::body_json(resp).await["person_id"]
+    let person_id: Uuid = crate::common::body_json(resp).await["person_id"]
         .as_str()
         .unwrap()
         .parse()
@@ -540,7 +543,7 @@ async fn email_only_person_yields_no_phone_and_no_row(migrator_pool: PgPool) {
     let router = rebuild_with_steps(&f, steps_start_call(person_id, None)).await;
     let f = Fixture { router, ..f };
 
-    let resp = common::post_json_with_cookie(
+    let resp = crate::common::post_json_with_cookie(
         &f.router,
         "/api/operator/turns",
         &f.alice,
@@ -548,7 +551,7 @@ async fn email_only_person_yields_no_phone_and_no_row(migrator_pool: PgPool) {
     )
     .await;
     assert_eq!(resp.status(), StatusCode::OK);
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     assert!(body["proposal"].is_null());
     assert_eq!(body["tool_calls"][0]["outcome"], "ok");
 
@@ -571,7 +574,7 @@ async fn app_role_cannot_delete_proposals_or_rewrite_their_identity(migrator_poo
     let proposal = propose(&f, person_id).await;
     let id: Uuid = proposal["id"].as_str().unwrap().parse().unwrap();
 
-    let app_pool = common::connect_as_app(&f.migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&f.migrator_pool).await;
     let denied = sqlx::query("DELETE FROM operator_proposal WHERE id = $1")
         .bind(id)
         .execute(&app_pool)
@@ -609,7 +612,7 @@ async fn room_failure_finalizes_failed_with_the_settled_call_id(migrator_pool: P
     let resp = confirm(&f.router, &f.alice, &id.to_string()).await;
     assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
     assert_eq!(
-        common::body_json(resp).await,
+        crate::common::body_json(resp).await,
         json!({"error": "telephony_unavailable"})
     );
 
@@ -631,7 +634,7 @@ async fn room_failure_finalizes_failed_with_the_settled_call_id(migrator_pool: P
     let resp = confirm(&f.router, &f.alice, &id.to_string()).await;
     assert_eq!(resp.status(), StatusCode::CONFLICT);
     assert_eq!(
-        common::body_json(resp).await,
+        crate::common::body_json(resp).await,
         json!({"error": "proposal_consumed", "call_id": call_id.to_string()})
     );
 }
@@ -725,7 +728,7 @@ async fn two_proposals_from_two_turns_yield_exactly_one_call(migrator_pool: PgPo
     };
     let resp = confirm(&f2.router_no_operator, &f2.alice, winner_id).await;
     assert_eq!(resp.status(), StatusCode::CONFLICT);
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     assert_eq!(body["error"], "proposal_consumed");
     assert!(body["call_id"].is_string(), "winner call id: {body}");
 }
@@ -743,7 +746,7 @@ async fn a_real_but_foreign_persons_phone_id_is_not_found_and_two_phones_need_a_
     // person-bound, so this is byte-identical not_found, no row.
     let router = rebuild_with_steps(&f, steps_start_call(person_a, Some(phone_b))).await;
     let fa = Fixture { router, ..f };
-    let resp = common::post_json_with_cookie(
+    let resp = crate::common::post_json_with_cookie(
         &fa.router,
         "/api/operator/turns",
         &fa.alice,
@@ -751,7 +754,7 @@ async fn a_real_but_foreign_persons_phone_id_is_not_found_and_two_phones_need_a_
     )
     .await;
     assert_eq!(resp.status(), StatusCode::OK);
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     assert!(body["proposal"].is_null());
     assert_eq!(body["tool_calls"][0]["outcome"], "not_found");
     let rows: i64 = sqlx::query_scalar("SELECT count(*) FROM operator_proposal")
@@ -762,7 +765,7 @@ async fn a_real_but_foreign_persons_phone_id_is_not_found_and_two_phones_need_a_
 
     // (b) A second phone on Person A → NeedsNumberChoice: tool ok, no
     // proposal, no row; a follow-up turn with the chosen id pins it.
-    let resp = common::post_json_with_cookie(
+    let resp = crate::common::post_json_with_cookie(
         &fa.router,
         &format!("/api/people/{person_a}/contact-methods"),
         &fa.alice,
@@ -774,7 +777,7 @@ async fn a_real_but_foreign_persons_phone_id_is_not_found_and_two_phones_need_a_
         // Two-phone person via a person whose second number arrives by a
         // second inquiry with the same email but a new phone.
         let email = "lead13@op.test";
-        let resp2 = common::post_inquiry(
+        let resp2 = crate::common::post_inquiry(
             &fa.router,
             &fa.alice,
             "zillow",
@@ -783,9 +786,13 @@ async fn a_real_but_foreign_persons_phone_id_is_not_found_and_two_phones_need_a_
         )
         .await;
         assert_eq!(resp2.status(), StatusCode::CREATED);
-        let detail = common::body_json(
-            common::get_with_cookie(&fa.router, &format!("/api/people/{person_a}"), &fa.alice)
-                .await,
+        let detail = crate::common::body_json(
+            crate::common::get_with_cookie(
+                &fa.router,
+                &format!("/api/people/{person_a}"),
+                &fa.alice,
+            )
+            .await,
         )
         .await;
         let phones: Vec<Uuid> = detail["contact_methods"]
@@ -806,14 +813,14 @@ async fn a_real_but_foreign_persons_phone_id_is_not_found_and_two_phones_need_a_
 
     let router = rebuild_with_steps(&fa, steps_start_call(person_a, None)).await;
     let fb = Fixture { router, ..fa };
-    let resp = common::post_json_with_cookie(
+    let resp = crate::common::post_json_with_cookie(
         &fb.router,
         "/api/operator/turns",
         &fb.alice,
         json!({ "message": "call them", "history": [], "context": { "route": "other" } }),
     )
     .await;
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     assert!(body["proposal"].is_null(), "choice required: {body}");
     assert_eq!(body["tool_calls"][0]["outcome"], "ok");
     let rows: i64 = sqlx::query_scalar("SELECT count(*) FROM operator_proposal")
@@ -852,7 +859,7 @@ async fn contact_method_deleted_between_propose_and_confirm_is_422_and_fails_the
     let resp = confirm(&f.router, &f.alice, &id.to_string()).await;
     assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(
-        common::body_json(resp).await,
+        crate::common::body_json(resp).await,
         json!({"error": "invalid_contact_method"})
     );
     let (status, failure, call_id, _) = proposal_row(&f.migrator_pool, id).await;
@@ -875,7 +882,7 @@ async fn the_phone_number_never_appears_in_spans_or_logs_on_the_proposal_paths(
     // A distinctive number, created before the capture starts.
     let phone = next_phone();
     let digits: String = phone.chars().filter(|c| c.is_ascii_digit()).collect();
-    let resp = common::post_inquiry(
+    let resp = crate::common::post_inquiry(
         &f.router,
         &f.alice,
         "zillow",
@@ -884,7 +891,7 @@ async fn the_phone_number_never_appears_in_spans_or_logs_on_the_proposal_paths(
     )
     .await;
     assert_eq!(resp.status(), StatusCode::CREATED);
-    let person_id: Uuid = common::body_json(resp).await["person_id"]
+    let person_id: Uuid = crate::common::body_json(resp).await["person_id"]
         .as_str()
         .unwrap()
         .parse()

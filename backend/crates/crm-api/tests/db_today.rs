@@ -2,7 +2,6 @@
 //! acceptance criterion 3). Run only via ./scripts/check-db. Backdated
 //! Inquiries and contact attempts are migrator-role fixtures (test setup,
 //! not application data — spec §13).
-mod common;
 
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use serde_json::json;
@@ -110,7 +109,7 @@ fn hours_ago(h: i64) -> DateTime<Utc> {
 #[sqlx::test]
 #[ignore]
 async fn today_is_scoped_to_viewer_and_organization(migrator_pool: PgPool) {
-    let (org_acme, alice_id) = common::create_org_with_stages_and_member(
+    let (org_acme, alice_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Acme Realty",
         "alice@acme.test",
@@ -118,12 +117,13 @@ async fn today_is_scoped_to_viewer_and_organization(migrator_pool: PgPool) {
         "pw",
     )
     .await;
-    let carol_id = common::create_user(&migrator_pool, "carol@acme.test", "Carol", "pw").await;
-    common::add_membership(&migrator_pool, org_acme, carol_id).await;
-    let dave_id = common::create_user(&migrator_pool, "dave@acme.test", "Dave", "pw").await;
-    common::add_membership(&migrator_pool, org_acme, dave_id).await;
+    let carol_id =
+        crate::common::create_user(&migrator_pool, "carol@acme.test", "Carol", "pw").await;
+    crate::common::add_membership(&migrator_pool, org_acme, carol_id).await;
+    let dave_id = crate::common::create_user(&migrator_pool, "dave@acme.test", "Dave", "pw").await;
+    crate::common::add_membership(&migrator_pool, org_acme, dave_id).await;
 
-    let (org_best, bob_id) = common::create_org_with_stages_and_member(
+    let (org_best, bob_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Best Realty",
         "bob@best.test",
@@ -192,12 +192,13 @@ async fn today_is_scoped_to_viewer_and_organization(migrator_pool: PgPool) {
     )
     .await;
 
-    let router = common::build_router(&migrator_pool).await;
+    let router = crate::common::build_router(&migrator_pool).await;
 
-    let alice_cookie = common::login_cookie(&router, "alice@acme.test", "pw").await;
-    let alice_today =
-        common::body_json(common::get_with_cookie(&router, "/api/today", &alice_cookie).await)
-            .await;
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
+    let alice_today = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/today", &alice_cookie).await,
+    )
+    .await;
     let alice_items = alice_today["items"].as_array().unwrap();
     assert_eq!(alice_items.len(), 1, "Alice must see exactly her own item");
     assert_eq!(alice_items[0]["person"]["id"], alice_person.to_string());
@@ -211,26 +212,31 @@ async fn today_is_scoped_to_viewer_and_organization(migrator_pool: PgPool) {
         .collect();
     assert_eq!(alice_codes, vec!["new_inquiry", "no_contact_attempt"]);
 
-    let carol_cookie = common::login_cookie(&router, "carol@acme.test", "pw").await;
-    let carol_today =
-        common::body_json(common::get_with_cookie(&router, "/api/today", &carol_cookie).await)
-            .await;
+    let carol_cookie = crate::common::login_cookie(&router, "carol@acme.test", "pw").await;
+    let carol_today = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/today", &carol_cookie).await,
+    )
+    .await;
     let carol_items = carol_today["items"].as_array().unwrap();
     assert_eq!(carol_items.len(), 1, "Carol must see exactly her own item");
     assert_eq!(carol_items[0]["person"]["id"], carol_person.to_string());
     assert_eq!(carol_items[0]["recommended_action"], "email");
 
-    let bob_cookie = common::login_cookie(&router, "bob@best.test", "pw").await;
-    let bob_today =
-        common::body_json(common::get_with_cookie(&router, "/api/today", &bob_cookie).await).await;
+    let bob_cookie = crate::common::login_cookie(&router, "bob@best.test", "pw").await;
+    let bob_today = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/today", &bob_cookie).await,
+    )
+    .await;
     let bob_items = bob_today["items"].as_array().unwrap();
     assert_eq!(bob_items.len(), 1, "Bob must see exactly his own item");
     assert_eq!(bob_items[0]["person"]["id"], bob_person.to_string());
 
     // Dave has zero assigned People -> an empty list, not an error.
-    let dave_cookie = common::login_cookie(&router, "dave@acme.test", "pw").await;
-    let dave_today =
-        common::body_json(common::get_with_cookie(&router, "/api/today", &dave_cookie).await).await;
+    let dave_cookie = crate::common::login_cookie(&router, "dave@acme.test", "pw").await;
+    let dave_today = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/today", &dave_cookie).await,
+    )
+    .await;
     assert_eq!(dave_today["items"].as_array().unwrap().len(), 0);
     assert_eq!(dave_today["truncated"], false);
 }
@@ -240,7 +246,7 @@ async fn today_is_scoped_to_viewer_and_organization(migrator_pool: PgPool) {
 #[sqlx::test]
 #[ignore]
 async fn unassigned_person_is_on_nobodys_today(migrator_pool: PgPool) {
-    let (org_id, _alice_id) = common::create_org_with_stages_and_member(
+    let (org_id, _alice_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Acme Realty",
         "alice@acme.test",
@@ -260,11 +266,12 @@ async fn unassigned_person_is_on_nobodys_today(migrator_pool: PgPool) {
     )
     .await;
 
-    let router = common::build_router(&migrator_pool).await;
-    let alice_cookie = common::login_cookie(&router, "alice@acme.test", "pw").await;
-    let today =
-        common::body_json(common::get_with_cookie(&router, "/api/today", &alice_cookie).await)
-            .await;
+    let router = crate::common::build_router(&migrator_pool).await;
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
+    let today = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/today", &alice_cookie).await,
+    )
+    .await;
     assert_eq!(today["items"].as_array().unwrap().len(), 0);
 }
 
@@ -273,7 +280,7 @@ async fn unassigned_person_is_on_nobodys_today(migrator_pool: PgPool) {
 #[sqlx::test]
 #[ignore]
 async fn contact_attempt_by_anyone_removes_the_row(migrator_pool: PgPool) {
-    let (org_id, alice_id) = common::create_org_with_stages_and_member(
+    let (org_id, alice_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Acme Realty",
         "alice@acme.test",
@@ -281,24 +288,26 @@ async fn contact_attempt_by_anyone_removes_the_row(migrator_pool: PgPool) {
         "pw",
     )
     .await;
-    let carol_id = common::create_user(&migrator_pool, "carol@acme.test", "Carol", "pw").await;
-    common::add_membership(&migrator_pool, org_id, carol_id).await;
+    let carol_id =
+        crate::common::create_user(&migrator_pool, "carol@acme.test", "Carol", "pw").await;
+    crate::common::add_membership(&migrator_pool, org_id, carol_id).await;
     let stage_id = first_stage_id(&migrator_pool, org_id).await;
 
     let person_id = insert_person(&migrator_pool, org_id, stage_id, Some(alice_id)).await;
     insert_inquiry(&migrator_pool, org_id, person_id, "zillow", hours_ago(1)).await;
 
-    let router = common::build_router(&migrator_pool).await;
-    let alice_cookie = common::login_cookie(&router, "alice@acme.test", "pw").await;
-    let carol_cookie = common::login_cookie(&router, "carol@acme.test", "pw").await;
+    let router = crate::common::build_router(&migrator_pool).await;
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
+    let carol_cookie = crate::common::login_cookie(&router, "carol@acme.test", "pw").await;
 
-    let before =
-        common::body_json(common::get_with_cookie(&router, "/api/today", &alice_cookie).await)
-            .await;
+    let before = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/today", &alice_cookie).await,
+    )
+    .await;
     assert_eq!(before["items"].as_array().unwrap().len(), 1);
 
     // Carol (not the assignee) logs the contact attempt.
-    let log_resp = common::post_json_with_cookie(
+    let log_resp = crate::common::post_json_with_cookie(
         &router,
         &format!("/api/people/{person_id}/contact-attempts"),
         &carol_cookie,
@@ -307,9 +316,10 @@ async fn contact_attempt_by_anyone_removes_the_row(migrator_pool: PgPool) {
     .await;
     assert_eq!(log_resp.status(), axum::http::StatusCode::CREATED);
 
-    let after =
-        common::body_json(common::get_with_cookie(&router, "/api/today", &alice_cookie).await)
-            .await;
+    let after = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/today", &alice_cookie).await,
+    )
+    .await;
     assert_eq!(
         after["items"].as_array().unwrap().len(),
         0,
@@ -327,7 +337,7 @@ async fn contact_attempt_by_anyone_removes_the_row(migrator_pool: PgPool) {
 async fn repeat_inquiry_after_an_answered_one_resets_waiting_since_to_the_repeat(
     migrator_pool: PgPool,
 ) {
-    let (org_id, alice_id) = common::create_org_with_stages_and_member(
+    let (org_id, alice_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Acme Realty",
         "alice@acme.test",
@@ -367,11 +377,12 @@ async fn repeat_inquiry_after_an_answered_one_resets_waiting_since_to_the_repeat
     )
     .await;
 
-    let router = common::build_router(&migrator_pool).await;
-    let alice_cookie = common::login_cookie(&router, "alice@acme.test", "pw").await;
-    let today =
-        common::body_json(common::get_with_cookie(&router, "/api/today", &alice_cookie).await)
-            .await;
+    let router = crate::common::build_router(&migrator_pool).await;
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
+    let today = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/today", &alice_cookie).await,
+    )
+    .await;
     let items = today["items"].as_array().unwrap();
     assert_eq!(items.len(), 1);
     let item = &items[0];
@@ -398,7 +409,7 @@ async fn repeat_inquiry_after_an_answered_one_resets_waiting_since_to_the_repeat
 #[sqlx::test]
 #[ignore]
 async fn waiting_since_is_the_earliest_unanswered_inquiry_not_the_latest(migrator_pool: PgPool) {
-    let (org_id, alice_id) = common::create_org_with_stages_and_member(
+    let (org_id, alice_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Acme Realty",
         "alice@acme.test",
@@ -414,11 +425,12 @@ async fn waiting_since_is_the_earliest_unanswered_inquiry_not_the_latest(migrato
     let latest_at = hours_ago(1);
     insert_inquiry(&migrator_pool, org_id, person_id, "zillow", latest_at).await;
 
-    let router = common::build_router(&migrator_pool).await;
-    let alice_cookie = common::login_cookie(&router, "alice@acme.test", "pw").await;
-    let today =
-        common::body_json(common::get_with_cookie(&router, "/api/today", &alice_cookie).await)
-            .await;
+    let router = crate::common::build_router(&migrator_pool).await;
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
+    let today = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/today", &alice_cookie).await,
+    )
+    .await;
     let item = &today["items"].as_array().unwrap()[0];
 
     let waiting_since: DateTime<Utc> = item["waiting_since"].as_str().unwrap().parse().unwrap();
@@ -431,7 +443,7 @@ async fn waiting_since_is_the_earliest_unanswered_inquiry_not_the_latest(migrato
 #[sqlx::test]
 #[ignore]
 async fn stale_inquiry_has_normal_priority_and_sorts_after_fresh(migrator_pool: PgPool) {
-    let (org_id, alice_id) = common::create_org_with_stages_and_member(
+    let (org_id, alice_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Acme Realty",
         "alice@acme.test",
@@ -454,11 +466,12 @@ async fn stale_inquiry_has_normal_priority_and_sorts_after_fresh(migrator_pool: 
     let fresh_person = insert_person(&migrator_pool, org_id, stage_id, Some(alice_id)).await;
     insert_inquiry(&migrator_pool, org_id, fresh_person, "zillow", hours_ago(1)).await;
 
-    let router = common::build_router(&migrator_pool).await;
-    let alice_cookie = common::login_cookie(&router, "alice@acme.test", "pw").await;
-    let today =
-        common::body_json(common::get_with_cookie(&router, "/api/today", &alice_cookie).await)
-            .await;
+    let router = crate::common::build_router(&migrator_pool).await;
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
+    let today = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/today", &alice_cookie).await,
+    )
+    .await;
     let items = today["items"].as_array().unwrap();
     assert_eq!(items.len(), 2);
 
@@ -482,7 +495,7 @@ async fn stale_inquiry_has_normal_priority_and_sorts_after_fresh(migrator_pool: 
 #[sqlx::test]
 #[ignore]
 async fn fresh_person_survives_the_cap_behind_many_stale_candidates(migrator_pool: PgPool) {
-    let (org_id, alice_id) = common::create_org_with_stages_and_member(
+    let (org_id, alice_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Acme Realty",
         "alice@acme.test",
@@ -508,11 +521,12 @@ async fn fresh_person_survives_the_cap_behind_many_stale_candidates(migrator_poo
     let fresh_person = insert_person(&migrator_pool, org_id, stage_id, Some(alice_id)).await;
     insert_inquiry(&migrator_pool, org_id, fresh_person, "zillow", hours_ago(1)).await;
 
-    let router = common::build_router(&migrator_pool).await;
-    let alice_cookie = common::login_cookie(&router, "alice@acme.test", "pw").await;
-    let today =
-        common::body_json(common::get_with_cookie(&router, "/api/today", &alice_cookie).await)
-            .await;
+    let router = crate::common::build_router(&migrator_pool).await;
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
+    let today = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/today", &alice_cookie).await,
+    )
+    .await;
 
     assert_eq!(today["truncated"], true);
     let items = today["items"].as_array().unwrap();
@@ -531,7 +545,7 @@ async fn fresh_person_survives_the_cap_behind_many_stale_candidates(migrator_poo
 #[sqlx::test]
 #[ignore]
 async fn tie_breaks_are_person_id_then_inquiry_id(migrator_pool: PgPool) {
-    let (org_id, alice_id) = common::create_org_with_stages_and_member(
+    let (org_id, alice_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Acme Realty",
         "alice@acme.test",
@@ -578,11 +592,12 @@ async fn tie_breaks_are_person_id_then_inquiry_id(migrator_pool: PgPool) {
     .await;
     let expected_latest = std::cmp::max(inquiry_a, inquiry_b);
 
-    let router = common::build_router(&migrator_pool).await;
-    let alice_cookie = common::login_cookie(&router, "alice@acme.test", "pw").await;
-    let today =
-        common::body_json(common::get_with_cookie(&router, "/api/today", &alice_cookie).await)
-            .await;
+    let router = crate::common::build_router(&migrator_pool).await;
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
+    let today = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/today", &alice_cookie).await,
+    )
+    .await;
     let items = today["items"].as_array().unwrap();
     assert_eq!(items.len(), 3);
 
@@ -618,7 +633,7 @@ async fn tie_breaks_are_person_id_then_inquiry_id(migrator_pool: PgPool) {
 #[sqlx::test]
 #[ignore]
 async fn client_supplied_viewer_or_organization_is_ignored(migrator_pool: PgPool) {
-    let (org_id, alice_id) = common::create_org_with_stages_and_member(
+    let (org_id, alice_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Acme Realty",
         "alice@acme.test",
@@ -626,7 +641,7 @@ async fn client_supplied_viewer_or_organization_is_ignored(migrator_pool: PgPool
         "pw",
     )
     .await;
-    let (_org_best, bob_id) = common::create_org_with_stages_and_member(
+    let (_org_best, bob_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Best Realty",
         "bob@best.test",
@@ -638,8 +653,8 @@ async fn client_supplied_viewer_or_organization_is_ignored(migrator_pool: PgPool
     let person_id = insert_person(&migrator_pool, org_id, stage_id, Some(alice_id)).await;
     insert_inquiry(&migrator_pool, org_id, person_id, "zillow", hours_ago(1)).await;
 
-    let router = common::build_router(&migrator_pool).await;
-    let alice_cookie = common::login_cookie(&router, "alice@acme.test", "pw").await;
+    let router = crate::common::build_router(&migrator_pool).await;
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
 
     let request = axum::http::Request::builder()
         .method("GET")
@@ -654,7 +669,7 @@ async fn client_supplied_viewer_or_organization_is_ignored(migrator_pool: PgPool
     let response = tower::ServiceExt::oneshot(router.clone(), request)
         .await
         .unwrap();
-    let body = common::body_json(response).await;
+    let body = crate::common::body_json(response).await;
     let items = body["items"].as_array().unwrap();
     assert_eq!(
         items.len(),
@@ -673,7 +688,7 @@ async fn client_supplied_viewer_or_organization_is_ignored(migrator_pool: PgPool
 #[sqlx::test]
 #[ignore]
 async fn last_contact_attempt_is_the_effective_row_never_a_superseded_one(migrator_pool: PgPool) {
-    let (org_id, alice_id) = common::create_org_with_stages_and_member(
+    let (org_id, alice_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Acme Realty",
         "alice@acme.test",
@@ -732,11 +747,12 @@ async fn last_contact_attempt_is_the_effective_row_never_a_superseded_one(migrat
         expected.push((person_id, correction));
     }
 
-    let router = common::build_router(&migrator_pool).await;
-    let alice_cookie = common::login_cookie(&router, "alice@acme.test", "pw").await;
-    let today =
-        common::body_json(common::get_with_cookie(&router, "/api/today", &alice_cookie).await)
-            .await;
+    let router = crate::common::build_router(&migrator_pool).await;
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
+    let today = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/today", &alice_cookie).await,
+    )
+    .await;
     let items = today["items"].as_array().unwrap();
     assert_eq!(items.len(), expected.len());
     for (person_id, correction) in expected {

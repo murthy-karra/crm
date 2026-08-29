@@ -8,7 +8,6 @@
 //! from `tests/common` (Organization/user/membership creation now goes
 //! through the Slice 004 domain functions as `crm_app` — the migrator
 //! connection is used only to backdate timestamps or delete rows).
-mod common;
 
 use std::time::Duration;
 
@@ -20,7 +19,7 @@ use sqlx::PgPool;
 use tower::ServiceExt;
 use uuid::Uuid;
 
-use common::{
+use crate::common::{
     add_membership, body_json, build_router, connect_as_app, create_org, create_platform_admin,
     create_user, extract_cookie, login, login_cookie, post_json_with_cookie,
 };
@@ -183,7 +182,7 @@ async fn expired_session_returns_401(migrator_pool: PgPool) {
     add_membership(&migrator_pool, org, user).await;
 
     let app_pool = connect_as_app(&migrator_pool).await;
-    let config = common::test_config();
+    let config = crate::common::test_config();
     let (token, _expires_at) = crm_api::auth::session::create(
         &app_pool,
         &config.session_secret,
@@ -766,31 +765,31 @@ async fn platform_bootstrap_flow_rejects_repeat_creation(migrator_pool: PgPool) 
     let router = build_router(&migrator_pool).await;
     let platform_cookie = login_cookie(&router, "owner@platform.test", PW).await;
 
-    let acme_id = common::create_org_with_admin_and_member_via_api(
+    let acme_id = crate::common::create_org_with_admin_and_member_via_api(
         &router,
         &platform_cookie,
         PW,
         "Acme Realty",
-        common::SeedPerson {
+        crate::common::SeedPerson {
             email: "alice@acme.test",
             display_name: "Alice Anderson",
         },
-        common::SeedPerson {
+        crate::common::SeedPerson {
             email: "carol@acme.test",
             display_name: "Carol Chen",
         },
     )
     .await;
-    common::create_org_with_admin_and_member_via_api(
+    crate::common::create_org_with_admin_and_member_via_api(
         &router,
         &platform_cookie,
         PW,
         "Best Realty",
-        common::SeedPerson {
+        crate::common::SeedPerson {
             email: "bob@best.test",
             display_name: "Bob Baker",
         },
-        common::SeedPerson {
+        crate::common::SeedPerson {
             email: "dave@best.test",
             display_name: "Dave Diaz",
         },

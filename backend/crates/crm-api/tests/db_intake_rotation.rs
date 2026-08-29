@@ -1,6 +1,5 @@
 //! DB-backed tests for Slice 007g (docs/specs/SLICE_007g.md §9): token
 //! rotation. Run only via ./scripts/check-db.
-mod common;
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
@@ -23,10 +22,10 @@ const TEST_INBOUND_EMAIL_SECRET: &str = "test-inbound-email-secret-value-32b";
 fn test_config() -> Config {
     Config::from_source(|key| match key {
         "CRM_SESSION_SECRET" => Some("a".repeat(32)),
-        "CRM_RAW_PAYLOAD_KEY" => Some(common::TEST_RAW_PAYLOAD_KEY_HEX.to_string()),
-        "CENTRIFUGO_HTTP_API_KEY" => Some(common::TEST_CENTRIFUGO_HTTP_API_KEY.to_string()),
+        "CRM_RAW_PAYLOAD_KEY" => Some(crate::common::TEST_RAW_PAYLOAD_KEY_HEX.to_string()),
+        "CENTRIFUGO_HTTP_API_KEY" => Some(crate::common::TEST_CENTRIFUGO_HTTP_API_KEY.to_string()),
         "CENTRIFUGO_TOKEN_HMAC_SECRET" => {
-            Some(common::TEST_CENTRIFUGO_TOKEN_HMAC_SECRET.to_string())
+            Some(crate::common::TEST_CENTRIFUGO_TOKEN_HMAC_SECRET.to_string())
         }
         "CRM_INBOUND_EMAIL_SECRET" => Some(TEST_INBOUND_EMAIL_SECRET.to_string()),
         _ => None,
@@ -35,7 +34,7 @@ fn test_config() -> Config {
 }
 
 async fn build_router(migrator_pool: &PgPool) -> Router {
-    let app_pool = common::connect_as_app(migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(migrator_pool).await;
     let config = test_config();
     let state = AppState::for_tests(app_pool, &config, Publisher::recording());
     crm_api::build_app(state)
@@ -43,13 +42,14 @@ async fn build_router(migrator_pool: &PgPool) -> Router {
 
 async fn org_with_admin(migrator_pool: &PgPool, name: &str) -> Uuid {
     use crm_api::domain::admin::{MembershipStatus, Role};
-    let org_id = common::create_org(migrator_pool, name).await;
-    common::seed_stages(migrator_pool, org_id).await;
+    let org_id = crate::common::create_org(migrator_pool, name).await;
+    crate::common::seed_stages(migrator_pool, org_id).await;
     let slug: String = name.to_lowercase().replace(' ', "");
     let alice =
-        common::create_user(migrator_pool, &format!("alice@{slug}.test"), "Alice", PW).await;
-    let bob = common::create_user(migrator_pool, &format!("bob@{slug}.test"), "Bob", PW).await;
-    common::add_membership_with(
+        crate::common::create_user(migrator_pool, &format!("alice@{slug}.test"), "Alice", PW).await;
+    let bob =
+        crate::common::create_user(migrator_pool, &format!("bob@{slug}.test"), "Bob", PW).await;
+    crate::common::add_membership_with(
         migrator_pool,
         org_id,
         alice,
@@ -57,7 +57,7 @@ async fn org_with_admin(migrator_pool: &PgPool, name: &str) -> Uuid {
         MembershipStatus::Active,
     )
     .await;
-    common::add_membership(migrator_pool, org_id, bob).await;
+    crate::common::add_membership(migrator_pool, org_id, bob).await;
     org_id
 }
 
@@ -117,7 +117,7 @@ async fn rotate_mints_audits_and_returns_the_new_address(migrator_pool: PgPool) 
     let org_id = org_with_admin(&migrator_pool, "Acme Realty").await;
     let (_slug, old_token) = intake_row(&migrator_pool, org_id).await;
     let router = build_router(&migrator_pool).await;
-    let alice_cookie = common::login_cookie(&router, "alice@acmerealty.test", PW).await;
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acmerealty.test", PW).await;
     let alice: Uuid =
         sqlx::query_scalar("SELECT id FROM app_user WHERE email = 'alice@acmerealty.test'")
             .fetch_one(&migrator_pool)
@@ -131,7 +131,7 @@ async fn rotate_mints_audits_and_returns_the_new_address(migrator_pool: PgPool) 
     )
     .await;
     assert_eq!(resp.status(), StatusCode::OK);
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     assert_eq!(
         body["scheme"], "subdomain",
         "the GET shape, scheme included"
@@ -177,7 +177,7 @@ async fn rotate_mints_audits_and_returns_the_new_address(migrator_pool: PgPool) 
     assert_eq!(count, 2);
 
     // Append-only: crm_app grant denies; the trigger backstops migrator.
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let err = sqlx::query("DELETE FROM intake_token_rotated WHERE organization_id = $1")
         .bind(org_id)
         .execute(&app_pool)
@@ -213,7 +213,7 @@ async fn old_address_dies_and_new_address_flows_after_rotation(migrator_pool: Pg
     let org_id = org_with_admin(&migrator_pool, "Acme Realty").await;
     let (slug, old_token) = intake_row(&migrator_pool, org_id).await;
     let router = build_router(&migrator_pool).await;
-    let alice_cookie = common::login_cookie(&router, "alice@acmerealty.test", PW).await;
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acmerealty.test", PW).await;
 
     let resp = post_empty(
         &router,
@@ -229,7 +229,7 @@ async fn old_address_dies_and_new_address_flows_after_rotation(migrator_pool: Pg
     let resp = deliver(&router, &slug, &old_token, PLAIN_EML).await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert_eq!(
-        common::body_json(resp).await,
+        crate::common::body_json(resp).await,
         json!({ "status": "rejected" })
     );
     let (count,): (i64,) =
@@ -244,7 +244,7 @@ async fn old_address_dies_and_new_address_flows_after_rotation(migrator_pool: Pg
     let resp = deliver(&router, &slug, &new_token, PLAIN_EML).await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert_eq!(
-        common::body_json(resp).await,
+        crate::common::body_json(resp).await,
         json!({ "status": "accepted" })
     );
     let (count,): (i64,) =
@@ -266,7 +266,7 @@ async fn rotation_is_admin_only_and_tenant_isolated(migrator_pool: PgPool) {
     let router = build_router(&migrator_pool).await;
 
     // Member (bob) → 403.
-    let bob_cookie = common::login_cookie(&router, "bob@acmerealty.test", PW).await;
+    let bob_cookie = crate::common::login_cookie(&router, "bob@acmerealty.test", PW).await;
     let resp = post_empty(
         &router,
         "/api/organization/intake-address/rotate",
@@ -276,7 +276,7 @@ async fn rotation_is_admin_only_and_tenant_isolated(migrator_pool: PgPool) {
     assert_eq!(resp.status(), StatusCode::FORBIDDEN);
 
     // Org B's admin rotates: only org B's token changes.
-    let b_admin_cookie = common::login_cookie(&router, "alice@bestrealty.test", PW).await;
+    let b_admin_cookie = crate::common::login_cookie(&router, "alice@bestrealty.test", PW).await;
     let (_, token_b_before) = intake_row(&migrator_pool, org_b).await;
     let resp = post_empty(
         &router,
@@ -330,7 +330,8 @@ async fn rotation_spans_and_logs_carry_no_token_material(migrator_pool: PgPool) 
     let org_id = org_with_admin(&migrator_pool, "Rotation Capture Org").await;
     let (_slug, old_token) = intake_row(&migrator_pool, org_id).await;
     let router = build_router(&migrator_pool).await;
-    let alice_cookie = common::login_cookie(&router, "alice@rotationcaptureorg.test", PW).await;
+    let alice_cookie =
+        crate::common::login_cookie(&router, "alice@rotationcaptureorg.test", PW).await;
 
     let buffer = Arc::new(Mutex::new(Vec::new()));
     let subscriber = tracing_subscriber::registry().with(

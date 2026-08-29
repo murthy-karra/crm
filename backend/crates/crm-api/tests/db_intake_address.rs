@@ -3,7 +3,6 @@
 //! isolation of the admin endpoint, the platform detail field, and the
 //! schema assertions (CHECKs, unique index, no UPDATE grant). Run only via
 //! ./scripts/check-db.
-mod common;
 
 use axum::http::StatusCode;
 use serde_json::json;
@@ -34,7 +33,7 @@ async fn intake_row(pool: &PgPool, org_id: Uuid) -> (String, String) {
 #[sqlx::test]
 #[ignore]
 async fn creation_mints_a_slug_from_the_name_and_an_eight_char_token(migrator_pool: PgPool) {
-    let org_id = common::create_org(&migrator_pool, "Cypress Bay Realty!").await;
+    let org_id = crate::common::create_org(&migrator_pool, "Cypress Bay Realty!").await;
     let (slug, token) = intake_row(&migrator_pool, org_id).await;
     assert_eq!(slug, "cypress-bay-realty");
     assert_eq!(token.len(), 8);
@@ -46,15 +45,15 @@ async fn creation_mints_a_slug_from_the_name_and_an_eight_char_token(migrator_po
 #[sqlx::test]
 #[ignore]
 async fn names_that_slugify_identically_get_a_suffix_and_never_a_name_clash(migrator_pool: PgPool) {
-    let first = common::create_org(&migrator_pool, "Acme Realty").await;
-    let second = common::create_org(&migrator_pool, "Acme-Realty").await;
+    let first = crate::common::create_org(&migrator_pool, "Acme Realty").await;
+    let second = crate::common::create_org(&migrator_pool, "Acme-Realty").await;
     assert_eq!(intake_row(&migrator_pool, first).await.0, "acme-realty");
     assert_eq!(intake_row(&migrator_pool, second).await.0, "acme-realty-2");
 
     // A genuine name clash is still reported as such (constraint
     // discrimination): same name → OrganizationNameTaken, not a slug error.
-    let actor_id = common::fixture_platform_admin(&migrator_pool).await;
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let actor_id = crate::common::fixture_platform_admin(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let err = create_organization(
         &app_pool,
         AdminActor {
@@ -78,13 +77,13 @@ async fn names_that_slugify_identically_get_a_suffix_and_never_a_name_clash(migr
 #[sqlx::test]
 #[ignore]
 async fn admins_read_their_own_address_members_are_403_and_orgs_never_cross(migrator_pool: PgPool) {
-    let acme = common::create_org(&migrator_pool, "Acme Realty").await;
-    let best = common::create_org(&migrator_pool, "Best Realty").await;
-    let alice_id = common::create_user(&migrator_pool, "alice@acme.test", "Alice", PW).await;
-    let bob_id = common::create_user(&migrator_pool, "bob@best.test", "Bob", PW).await;
-    let carol_id = common::create_user(&migrator_pool, "carol@acme.test", "Carol", PW).await;
+    let acme = crate::common::create_org(&migrator_pool, "Acme Realty").await;
+    let best = crate::common::create_org(&migrator_pool, "Best Realty").await;
+    let alice_id = crate::common::create_user(&migrator_pool, "alice@acme.test", "Alice", PW).await;
+    let bob_id = crate::common::create_user(&migrator_pool, "bob@best.test", "Bob", PW).await;
+    let carol_id = crate::common::create_user(&migrator_pool, "carol@acme.test", "Carol", PW).await;
     // Alice and Bob admin their orgs; Carol is a plain member of Acme.
-    common::add_membership_with(
+    crate::common::add_membership_with(
         &migrator_pool,
         acme,
         alice_id,
@@ -92,7 +91,7 @@ async fn admins_read_their_own_address_members_are_403_and_orgs_never_cross(migr
         MembershipStatus::Active,
     )
     .await;
-    common::add_membership_with(
+    crate::common::add_membership_with(
         &migrator_pool,
         best,
         bob_id,
@@ -100,19 +99,20 @@ async fn admins_read_their_own_address_members_are_403_and_orgs_never_cross(migr
         MembershipStatus::Active,
     )
     .await;
-    common::add_membership(&migrator_pool, acme, carol_id).await;
+    crate::common::add_membership(&migrator_pool, acme, carol_id).await;
 
-    let router = common::build_router(&migrator_pool).await;
-    let alice = common::login_cookie(&router, "alice@acme.test", PW).await;
-    let bob = common::login_cookie(&router, "bob@best.test", PW).await;
-    let carol = common::login_cookie(&router, "carol@acme.test", PW).await;
+    let router = crate::common::build_router(&migrator_pool).await;
+    let alice = crate::common::login_cookie(&router, "alice@acme.test", PW).await;
+    let bob = crate::common::login_cookie(&router, "bob@best.test", PW).await;
+    let carol = crate::common::login_cookie(&router, "carol@acme.test", PW).await;
 
     let (acme_slug, acme_token) = intake_row(&migrator_pool, acme).await;
     let (best_slug, best_token) = intake_row(&migrator_pool, best).await;
 
-    let resp = common::get_with_cookie(&router, "/api/organization/intake-address", &alice).await;
+    let resp =
+        crate::common::get_with_cookie(&router, "/api/organization/intake-address", &alice).await;
     assert_eq!(resp.status(), StatusCode::OK);
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     assert_eq!(
         body,
         json!({
@@ -121,8 +121,9 @@ async fn admins_read_their_own_address_members_are_403_and_orgs_never_cross(migr
         })
     );
 
-    let resp = common::get_with_cookie(&router, "/api/organization/intake-address", &bob).await;
-    let body = common::body_json(resp).await;
+    let resp =
+        crate::common::get_with_cookie(&router, "/api/organization/intake-address", &bob).await;
+    let body = crate::common::body_json(resp).await;
     assert_eq!(
         body["address"],
         json!(format!("leads-{best_token}@{best_slug}.elysianfeld.com"))
@@ -130,9 +131,13 @@ async fn admins_read_their_own_address_members_are_403_and_orgs_never_cross(migr
     assert_ne!(acme_slug, best_slug);
     assert_ne!(acme_token, best_token);
 
-    let resp = common::get_with_cookie(&router, "/api/organization/intake-address", &carol).await;
+    let resp =
+        crate::common::get_with_cookie(&router, "/api/organization/intake-address", &carol).await;
     assert_eq!(resp.status(), StatusCode::FORBIDDEN);
-    assert_eq!(common::body_json(resp).await, json!({"error": "forbidden"}));
+    assert_eq!(
+        crate::common::body_json(resp).await,
+        json!({"error": "forbidden"})
+    );
 }
 
 // --- Platform detail -----------------------------------------------------------
@@ -142,7 +147,7 @@ async fn admins_read_their_own_address_members_are_403_and_orgs_never_cross(migr
 async fn platform_detail_carries_the_address_top_level_and_members_cannot_use_it(
     migrator_pool: PgPool,
 ) {
-    let (acme, _) = common::create_org_with_stages_and_member(
+    let (acme, _) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Acme Realty",
         "alice@acme.test",
@@ -150,21 +155,26 @@ async fn platform_detail_carries_the_address_top_level_and_members_cannot_use_it
         PW,
     )
     .await;
-    common::create_platform_admin(&migrator_pool, "owner@platform.test", "Owner", PLATFORM_PW)
-        .await;
-    let router = common::build_router(&migrator_pool).await;
-    let owner = common::login_cookie(&router, "owner@platform.test", PLATFORM_PW).await;
-    let alice = common::login_cookie(&router, "alice@acme.test", PW).await;
+    crate::common::create_platform_admin(
+        &migrator_pool,
+        "owner@platform.test",
+        "Owner",
+        PLATFORM_PW,
+    )
+    .await;
+    let router = crate::common::build_router(&migrator_pool).await;
+    let owner = crate::common::login_cookie(&router, "owner@platform.test", PLATFORM_PW).await;
+    let alice = crate::common::login_cookie(&router, "alice@acme.test", PW).await;
 
     let (slug, token) = intake_row(&migrator_pool, acme).await;
-    let resp = common::get_with_cookie(
+    let resp = crate::common::get_with_cookie(
         &router,
         &format!("/api/platform/organizations/{acme}"),
         &owner,
     )
     .await;
     assert_eq!(resp.status(), StatusCode::OK);
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     assert_eq!(
         body["intake_address"],
         json!(format!("leads-{token}@{slug}.elysianfeld.com"))
@@ -174,7 +184,7 @@ async fn platform_detail_carries_the_address_top_level_and_members_cannot_use_it
         "top-level, not inside"
     );
 
-    let resp = common::get_with_cookie(
+    let resp = crate::common::get_with_cookie(
         &router,
         &format!("/api/platform/organizations/{acme}"),
         &alice,
@@ -188,7 +198,7 @@ async fn platform_detail_carries_the_address_top_level_and_members_cannot_use_it
 #[sqlx::test]
 #[ignore]
 async fn intake_columns_have_their_checks_index_and_no_update_grant(migrator_pool: PgPool) {
-    let org_id = common::create_org(&migrator_pool, "Acme Realty").await;
+    let org_id = crate::common::create_org(&migrator_pool, "Acme Realty").await;
 
     // CHECKs: slug and token formats.
     for (col, bad, constraint) in [
@@ -231,7 +241,7 @@ async fn intake_columns_have_their_checks_index_and_no_update_grant(migrator_poo
     // "later rung" this comment originally deferred to); the rotate flow
     // itself is pinned in db_intake_rotation.rs. Declared amendment of
     // this 007a pin (SLICE_007g §4).
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let err = sqlx::query("UPDATE organization SET intake_slug = $1 WHERE false")
         .bind("whatever")
         .execute(&app_pool)
@@ -281,7 +291,7 @@ async fn the_create_span_carries_the_slug_and_never_the_token(migrator_pool: PgP
     tracing::subscriber::set_global_default(subscriber)
         .expect("the capture test must be the only one installing a subscriber");
 
-    let org_id = common::create_org(&migrator_pool, "Span Check Realty").await;
+    let org_id = crate::common::create_org(&migrator_pool, "Span Check Realty").await;
     let (slug, token) = intake_row(&migrator_pool, org_id).await;
     let captured = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
     assert!(captured.contains("intake_slug="), "span field present");
@@ -343,7 +353,7 @@ async fn ten_orgs_whose_names_all_slugify_to_org_are_all_created(migrator_pool: 
     let mut slugs = Vec::new();
     for i in 0..10 {
         let name = format!("日本不動産{}", "!".repeat(i));
-        let id = common::create_org(&migrator_pool, &name).await;
+        let id = crate::common::create_org(&migrator_pool, &name).await;
         slugs.push(intake_row(&migrator_pool, id).await.0);
     }
     assert_eq!(
@@ -364,10 +374,16 @@ async fn ten_orgs_whose_names_all_slugify_to_org_are_all_created(migrator_pool: 
 #[sqlx::test]
 #[ignore]
 async fn a_platform_only_session_is_401_on_the_intake_address(migrator_pool: PgPool) {
-    common::create_platform_admin(&migrator_pool, "owner@platform.test", "Owner", PLATFORM_PW)
-        .await;
-    let router = common::build_router(&migrator_pool).await;
-    let owner = common::login_cookie(&router, "owner@platform.test", PLATFORM_PW).await;
-    let resp = common::get_with_cookie(&router, "/api/organization/intake-address", &owner).await;
+    crate::common::create_platform_admin(
+        &migrator_pool,
+        "owner@platform.test",
+        "Owner",
+        PLATFORM_PW,
+    )
+    .await;
+    let router = crate::common::build_router(&migrator_pool).await;
+    let owner = crate::common::login_cookie(&router, "owner@platform.test", PLATFORM_PW).await;
+    let resp =
+        crate::common::get_with_cookie(&router, "/api/organization/intake-address", &owner).await;
     assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
 }

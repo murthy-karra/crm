@@ -3,7 +3,6 @@
 //! Uses `Publisher::recording()` to pin the exact §6 envelope each command
 //! publishes, and a `Publisher::Centrifugo` pointed at a closed loopback
 //! port to prove a publish failure never fails the command.
-mod common;
 
 use std::time::Duration;
 
@@ -49,7 +48,7 @@ fn expected_person_changed(
 #[sqlx::test]
 #[ignore]
 async fn intake_new_person_publishes_exactly_one_event(migrator_pool: PgPool) {
-    let (org_id, _alice_id) = common::create_org_with_stages_and_member(
+    let (org_id, _alice_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Acme Realty",
         "alice@acme.test",
@@ -58,10 +57,11 @@ async fn intake_new_person_publishes_exactly_one_event(migrator_pool: PgPool) {
     )
     .await;
     let publisher = Publisher::recording();
-    let router = common::build_router_with_publisher(&migrator_pool, publisher.clone()).await;
-    let cookie = common::login_cookie(&router, "alice@acme.test", "pw").await;
+    let router =
+        crate::common::build_router_with_publisher(&migrator_pool, publisher.clone()).await;
+    let cookie = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
 
-    let resp = common::post_inquiry(
+    let resp = crate::common::post_inquiry(
         &router,
         &cookie,
         "zillow",
@@ -70,7 +70,7 @@ async fn intake_new_person_publishes_exactly_one_event(migrator_pool: PgPool) {
     )
     .await;
     assert_eq!(resp.status(), StatusCode::CREATED);
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     let person_id: Uuid = body["person_id"].as_str().unwrap().parse().unwrap();
 
     let (fact_occurred_at, fact_correlation_id): (DateTime<Utc>, Uuid) = sqlx::query_as(
@@ -104,7 +104,7 @@ async fn intake_new_person_publishes_exactly_one_event(migrator_pool: PgPool) {
 async fn intake_matched_person_publishes_exactly_one_event_despite_two_facts(
     migrator_pool: PgPool,
 ) {
-    let (_org_id, _alice_id) = common::create_org_with_stages_and_member(
+    let (_org_id, _alice_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Acme Realty",
         "alice@acme.test",
@@ -113,10 +113,11 @@ async fn intake_matched_person_publishes_exactly_one_event_despite_two_facts(
     )
     .await;
     let publisher = Publisher::recording();
-    let router = common::build_router_with_publisher(&migrator_pool, publisher.clone()).await;
-    let cookie = common::login_cookie(&router, "alice@acme.test", "pw").await;
+    let router =
+        crate::common::build_router_with_publisher(&migrator_pool, publisher.clone()).await;
+    let cookie = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
 
-    let first = common::post_inquiry(
+    let first = crate::common::post_inquiry(
         &router,
         &cookie,
         "zillow",
@@ -125,14 +126,14 @@ async fn intake_matched_person_publishes_exactly_one_event_despite_two_facts(
     )
     .await;
     assert_eq!(first.status(), StatusCode::CREATED);
-    let person_id: Uuid = common::body_json(first).await["person_id"]
+    let person_id: Uuid = crate::common::body_json(first).await["person_id"]
         .as_str()
         .unwrap()
         .parse()
         .unwrap();
     assert_eq!(recorded(&publisher).await.len(), 1);
 
-    let second = common::post_inquiry(
+    let second = crate::common::post_inquiry(
         &router,
         &cookie,
         "referral",
@@ -142,7 +143,7 @@ async fn intake_matched_person_publishes_exactly_one_event_despite_two_facts(
     .await;
     assert_eq!(second.status(), StatusCode::CREATED);
     assert_eq!(
-        common::body_json(second).await["routing_strategy"],
+        crate::common::body_json(second).await["routing_strategy"],
         "kept_existing"
     );
 
@@ -168,7 +169,7 @@ async fn intake_matched_person_publishes_exactly_one_event_despite_two_facts(
 #[sqlx::test]
 #[ignore]
 async fn intake_unresolved_publishes_with_raw_payload_received_at(migrator_pool: PgPool) {
-    let (org_id, _alice_id) = common::create_org_with_stages_and_member(
+    let (org_id, _alice_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Acme Realty",
         "alice@acme.test",
@@ -177,10 +178,11 @@ async fn intake_unresolved_publishes_with_raw_payload_received_at(migrator_pool:
     )
     .await;
     let publisher = Publisher::recording();
-    let router = common::build_router_with_publisher(&migrator_pool, publisher.clone()).await;
-    let cookie = common::login_cookie(&router, "alice@acme.test", "pw").await;
+    let router =
+        crate::common::build_router_with_publisher(&migrator_pool, publisher.clone()).await;
+    let cookie = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
 
-    let resp = common::post_inquiry(
+    let resp = crate::common::post_inquiry(
         &router,
         &cookie,
         "zillow",
@@ -189,7 +191,7 @@ async fn intake_unresolved_publishes_with_raw_payload_received_at(migrator_pool:
     )
     .await;
     assert_eq!(resp.status(), StatusCode::CREATED);
-    let raw_payload_id: Uuid = common::body_json(resp).await["raw_payload_id"]
+    let raw_payload_id: Uuid = crate::common::body_json(resp).await["raw_payload_id"]
         .as_str()
         .unwrap()
         .parse()
@@ -220,7 +222,7 @@ async fn intake_unresolved_publishes_with_raw_payload_received_at(migrator_pool:
 #[sqlx::test]
 #[ignore]
 async fn duplicate_intake_publishes_nothing_additional(migrator_pool: PgPool) {
-    let (_org_id, _alice_id) = common::create_org_with_stages_and_member(
+    let (_org_id, _alice_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Acme Realty",
         "alice@acme.test",
@@ -229,17 +231,19 @@ async fn duplicate_intake_publishes_nothing_additional(migrator_pool: PgPool) {
     )
     .await;
     let publisher = Publisher::recording();
-    let router = common::build_router_with_publisher(&migrator_pool, publisher.clone()).await;
-    let cookie = common::login_cookie(&router, "alice@acme.test", "pw").await;
+    let router =
+        crate::common::build_router_with_publisher(&migrator_pool, publisher.clone()).await;
+    let cookie = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
 
     let payload = json!({ "email": "dup-lead@example.com" });
-    let first = common::post_inquiry(&router, &cookie, "zillow", payload.clone(), None).await;
+    let first =
+        crate::common::post_inquiry(&router, &cookie, "zillow", payload.clone(), None).await;
     assert_eq!(first.status(), StatusCode::CREATED);
     assert_eq!(recorded(&publisher).await.len(), 1);
 
-    let second = common::post_inquiry(&router, &cookie, "zillow", payload, None).await;
+    let second = crate::common::post_inquiry(&router, &cookie, "zillow", payload, None).await;
     assert_eq!(second.status(), StatusCode::OK);
-    assert_eq!(common::body_json(second).await["duplicate"], true);
+    assert_eq!(crate::common::body_json(second).await["duplicate"], true);
     assert_eq!(
         recorded(&publisher).await.len(),
         1,
@@ -254,7 +258,7 @@ async fn duplicate_intake_publishes_nothing_additional(migrator_pool: PgPool) {
 #[sqlx::test]
 #[ignore]
 async fn assign_stage_and_contact_commands_publish_only_when_changed(migrator_pool: PgPool) {
-    let (org_id, alice_id) = common::create_org_with_stages_and_member(
+    let (org_id, alice_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Acme Realty",
         "alice@acme.test",
@@ -262,14 +266,16 @@ async fn assign_stage_and_contact_commands_publish_only_when_changed(migrator_po
         "pw",
     )
     .await;
-    let carol_id = common::create_user(&migrator_pool, "carol@acme.test", "Carol", "pw").await;
-    common::add_membership(&migrator_pool, org_id, carol_id).await;
+    let carol_id =
+        crate::common::create_user(&migrator_pool, "carol@acme.test", "Carol", "pw").await;
+    crate::common::add_membership(&migrator_pool, org_id, carol_id).await;
 
     let publisher = Publisher::recording();
-    let router = common::build_router_with_publisher(&migrator_pool, publisher.clone()).await;
-    let cookie = common::login_cookie(&router, "alice@acme.test", "pw").await;
+    let router =
+        crate::common::build_router_with_publisher(&migrator_pool, publisher.clone()).await;
+    let cookie = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
 
-    let intake = common::post_inquiry(
+    let intake = crate::common::post_inquiry(
         &router,
         &cookie,
         "zillow",
@@ -277,7 +283,7 @@ async fn assign_stage_and_contact_commands_publish_only_when_changed(migrator_po
         None,
     )
     .await;
-    let person_id: Uuid = common::body_json(intake).await["person_id"]
+    let person_id: Uuid = crate::common::body_json(intake).await["person_id"]
         .as_str()
         .unwrap()
         .parse()
@@ -289,27 +295,30 @@ async fn assign_stage_and_contact_commands_publish_only_when_changed(migrator_po
     );
 
     // Reassign to Carol: changed -> a new event.
-    let reassign = common::post_json_with_cookie(
+    let reassign = crate::common::post_json_with_cookie(
         &router,
         &format!("/api/people/{person_id}/assignment"),
         &cookie,
         json!({ "assigned_user_id": carol_id }),
     )
     .await;
-    assert_eq!(common::body_json(reassign).await["changed"], true);
+    assert_eq!(crate::common::body_json(reassign).await["changed"], true);
     let events = recorded(&publisher).await;
     assert_eq!(events.len(), 2);
     assert_eq!(events[1].1["data"]["change"], "assignment_changed");
 
     // Reassign to the same person again: unchanged -> no new event.
-    let noop_reassign = common::post_json_with_cookie(
+    let noop_reassign = crate::common::post_json_with_cookie(
         &router,
         &format!("/api/people/{person_id}/assignment"),
         &cookie,
         json!({ "assigned_user_id": carol_id }),
     )
     .await;
-    assert_eq!(common::body_json(noop_reassign).await["changed"], false);
+    assert_eq!(
+        crate::common::body_json(noop_reassign).await["changed"],
+        false
+    );
     assert_eq!(
         recorded(&publisher).await.len(),
         2,
@@ -317,32 +326,35 @@ async fn assign_stage_and_contact_commands_publish_only_when_changed(migrator_po
     );
 
     // Change stage: changed -> a new event.
-    let stages_resp = common::get_with_cookie(&router, "/api/stages", &cookie).await;
-    let stages = common::body_json(stages_resp).await;
+    let stages_resp = crate::common::get_with_cookie(&router, "/api/stages", &cookie).await;
+    let stages = crate::common::body_json(stages_resp).await;
     let stages_arr = stages["stages"].as_array().unwrap();
     let second_stage_id = stages_arr[1]["id"].as_str().unwrap();
 
-    let stage_change = common::post_json_with_cookie(
+    let stage_change = crate::common::post_json_with_cookie(
         &router,
         &format!("/api/people/{person_id}/stage"),
         &cookie,
         json!({ "stage_id": second_stage_id }),
     )
     .await;
-    assert_eq!(common::body_json(stage_change).await["changed"], true);
+    assert_eq!(
+        crate::common::body_json(stage_change).await["changed"],
+        true
+    );
     let events = recorded(&publisher).await;
     assert_eq!(events.len(), 3);
     assert_eq!(events[2].1["data"]["change"], "stage_changed");
 
     // Same stage again: unchanged -> no new event.
-    let noop_stage = common::post_json_with_cookie(
+    let noop_stage = crate::common::post_json_with_cookie(
         &router,
         &format!("/api/people/{person_id}/stage"),
         &cookie,
         json!({ "stage_id": second_stage_id }),
     )
     .await;
-    assert_eq!(common::body_json(noop_stage).await["changed"], false);
+    assert_eq!(crate::common::body_json(noop_stage).await["changed"], false);
     assert_eq!(
         recorded(&publisher).await.len(),
         3,
@@ -350,7 +362,7 @@ async fn assign_stage_and_contact_commands_publish_only_when_changed(migrator_po
     );
 
     // Log a contact attempt: always writes a fact -> always publishes.
-    let contact = common::post_json_with_cookie(
+    let contact = crate::common::post_json_with_cookie(
         &router,
         &format!("/api/people/{person_id}/contact-attempts"),
         &cookie,
@@ -371,7 +383,7 @@ async fn assign_stage_and_contact_commands_publish_only_when_changed(migrator_po
 #[sqlx::test]
 #[ignore]
 async fn rejected_commands_publish_nothing(migrator_pool: PgPool) {
-    let (org_a, _alice_id) = common::create_org_with_stages_and_member(
+    let (org_a, _alice_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Acme Realty",
         "alice@acme.test",
@@ -379,7 +391,7 @@ async fn rejected_commands_publish_nothing(migrator_pool: PgPool) {
         "pw",
     )
     .await;
-    let (org_b, bob_id) = common::create_org_with_stages_and_member(
+    let (org_b, bob_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Best Realty",
         "bob@best.test",
@@ -389,11 +401,12 @@ async fn rejected_commands_publish_nothing(migrator_pool: PgPool) {
     .await;
 
     let publisher = Publisher::recording();
-    let router = common::build_router_with_publisher(&migrator_pool, publisher.clone()).await;
-    let alice_cookie = common::login_cookie(&router, "alice@acme.test", "pw").await;
-    let bob_cookie = common::login_cookie(&router, "bob@best.test", "pw").await;
+    let router =
+        crate::common::build_router_with_publisher(&migrator_pool, publisher.clone()).await;
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
+    let bob_cookie = crate::common::login_cookie(&router, "bob@best.test", "pw").await;
 
-    let intake = common::post_inquiry(
+    let intake = crate::common::post_inquiry(
         &router,
         &alice_cookie,
         "zillow",
@@ -401,7 +414,7 @@ async fn rejected_commands_publish_nothing(migrator_pool: PgPool) {
         None,
     )
     .await;
-    let a_person_id: Uuid = common::body_json(intake).await["person_id"]
+    let a_person_id: Uuid = crate::common::body_json(intake).await["person_id"]
         .as_str()
         .unwrap()
         .parse()
@@ -409,7 +422,7 @@ async fn rejected_commands_publish_nothing(migrator_pool: PgPool) {
     assert_eq!(recorded(&publisher).await.len(), 1);
 
     // Invalid assignee (Bob is not in Acme).
-    let invalid_assignee = common::post_json_with_cookie(
+    let invalid_assignee = crate::common::post_json_with_cookie(
         &router,
         &format!("/api/people/{a_person_id}/assignment"),
         &alice_cookie,
@@ -426,7 +439,7 @@ async fn rejected_commands_publish_nothing(migrator_pool: PgPool) {
             .fetch_one(&migrator_pool)
             .await
             .unwrap();
-    let invalid_stage = common::post_json_with_cookie(
+    let invalid_stage = crate::common::post_json_with_cookie(
         &router,
         &format!("/api/people/{a_person_id}/stage"),
         &alice_cookie,
@@ -437,7 +450,7 @@ async fn rejected_commands_publish_nothing(migrator_pool: PgPool) {
     assert_eq!(recorded(&publisher).await.len(), 1);
 
     // Other-Organization Person on every one of the three commands.
-    let cross_assign = common::post_json_with_cookie(
+    let cross_assign = crate::common::post_json_with_cookie(
         &router,
         &format!("/api/people/{a_person_id}/assignment"),
         &bob_cookie,
@@ -445,7 +458,7 @@ async fn rejected_commands_publish_nothing(migrator_pool: PgPool) {
     )
     .await;
     assert_eq!(cross_assign.status(), StatusCode::NOT_FOUND);
-    let cross_stage = common::post_json_with_cookie(
+    let cross_stage = crate::common::post_json_with_cookie(
         &router,
         &format!("/api/people/{a_person_id}/stage"),
         &bob_cookie,
@@ -453,7 +466,7 @@ async fn rejected_commands_publish_nothing(migrator_pool: PgPool) {
     )
     .await;
     assert_eq!(cross_stage.status(), StatusCode::NOT_FOUND);
-    let cross_contact = common::post_json_with_cookie(
+    let cross_contact = crate::common::post_json_with_cookie(
         &router,
         &format!("/api/people/{a_person_id}/contact-attempts"),
         &bob_cookie,
@@ -477,7 +490,7 @@ async fn rejected_commands_publish_nothing(migrator_pool: PgPool) {
 #[sqlx::test]
 #[ignore]
 async fn intake_busy_publishes_nothing(migrator_pool: PgPool) {
-    let (org_id, _user_id) = common::create_org_with_stages_and_member(
+    let (org_id, _user_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Busy Org",
         "busy@busy.test",
@@ -502,10 +515,11 @@ async fn intake_busy_publishes_nothing(migrator_pool: PgPool) {
     tokio::time::sleep(Duration::from_millis(300)).await;
 
     let publisher = Publisher::recording();
-    let router = common::build_router_with_publisher(&migrator_pool, publisher.clone()).await;
-    let cookie = common::login_cookie(&router, "busy@busy.test", "pw").await;
+    let router =
+        crate::common::build_router_with_publisher(&migrator_pool, publisher.clone()).await;
+    let cookie = crate::common::login_cookie(&router, "busy@busy.test", "pw").await;
 
-    let resp = common::post_inquiry(
+    let resp = crate::common::post_inquiry(
         &router,
         &cookie,
         "zillow",
@@ -514,7 +528,7 @@ async fn intake_busy_publishes_nothing(migrator_pool: PgPool) {
     )
     .await;
     assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
-    assert_eq!(common::body_json(resp).await["error"], "intake_busy");
+    assert_eq!(crate::common::body_json(resp).await["error"], "intake_busy");
     assert_eq!(recorded(&publisher).await.len(), 0);
 
     hold_task.abort();
@@ -526,7 +540,7 @@ async fn intake_busy_publishes_nothing(migrator_pool: PgPool) {
 #[sqlx::test]
 #[ignore]
 async fn publish_failure_does_not_fail_the_command(migrator_pool: PgPool) {
-    let (_org_id, _alice_id) = common::create_org_with_stages_and_member(
+    let (_org_id, _alice_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Acme Realty",
         "alice@acme.test",
@@ -543,10 +557,10 @@ async fn publish_failure_does_not_fail_the_command(migrator_pool: PgPool) {
         format!("http://{addr}"),
         "unused-test-key",
     ));
-    let router = common::build_router_with_publisher(&migrator_pool, publisher).await;
-    let cookie = common::login_cookie(&router, "alice@acme.test", "pw").await;
+    let router = crate::common::build_router_with_publisher(&migrator_pool, publisher).await;
+    let cookie = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
 
-    let resp = common::post_inquiry(
+    let resp = crate::common::post_inquiry(
         &router,
         &cookie,
         "zillow",
@@ -555,7 +569,7 @@ async fn publish_failure_does_not_fail_the_command(migrator_pool: PgPool) {
     )
     .await;
     assert_eq!(resp.status(), StatusCode::CREATED);
-    let person_id: Uuid = common::body_json(resp).await["person_id"]
+    let person_id: Uuid = crate::common::body_json(resp).await["person_id"]
         .as_str()
         .unwrap()
         .parse()
@@ -580,7 +594,7 @@ async fn publish_failure_does_not_fail_the_command(migrator_pool: PgPool) {
 async fn two_concurrent_log_contact_attempts_on_same_person_both_write_and_publish(
     migrator_pool: PgPool,
 ) {
-    let (org_id, _alice_id) = common::create_org_with_stages_and_member(
+    let (org_id, _alice_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Acme Realty",
         "alice@acme.test",
@@ -589,10 +603,11 @@ async fn two_concurrent_log_contact_attempts_on_same_person_both_write_and_publi
     )
     .await;
     let publisher = Publisher::recording();
-    let router = common::build_router_with_publisher(&migrator_pool, publisher.clone()).await;
-    let cookie = common::login_cookie(&router, "alice@acme.test", "pw").await;
+    let router =
+        crate::common::build_router_with_publisher(&migrator_pool, publisher.clone()).await;
+    let cookie = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
 
-    let intake = common::post_inquiry(
+    let intake = crate::common::post_inquiry(
         &router,
         &cookie,
         "zillow",
@@ -601,7 +616,7 @@ async fn two_concurrent_log_contact_attempts_on_same_person_both_write_and_publi
     )
     .await;
     assert_eq!(intake.status(), StatusCode::CREATED);
-    let person_id: Uuid = common::body_json(intake).await["person_id"]
+    let person_id: Uuid = crate::common::body_json(intake).await["person_id"]
         .as_str()
         .unwrap()
         .parse()
@@ -610,13 +625,13 @@ async fn two_concurrent_log_contact_attempts_on_same_person_both_write_and_publi
     assert_eq!(events_before_race, 1, "intake published its one event");
 
     let contact_attempts_uri = format!("/api/people/{person_id}/contact-attempts");
-    let fut_a = common::post_json_with_cookie(
+    let fut_a = crate::common::post_json_with_cookie(
         &router,
         &contact_attempts_uri,
         &cookie,
         json!({ "channel": "call", "outcome": "no_answer" }),
     );
-    let fut_b = common::post_json_with_cookie(
+    let fut_b = crate::common::post_json_with_cookie(
         &router,
         &contact_attempts_uri,
         &cookie,
@@ -672,7 +687,7 @@ async fn two_concurrent_log_contact_attempts_on_same_person_both_write_and_publi
 async fn log_contact_attempt_racing_assign_person_on_same_person_both_write_and_publish(
     migrator_pool: PgPool,
 ) {
-    let (org_id, _alice_id) = common::create_org_with_stages_and_member(
+    let (org_id, _alice_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Acme Realty",
         "alice@acme.test",
@@ -680,18 +695,20 @@ async fn log_contact_attempt_racing_assign_person_on_same_person_both_write_and_
         "pw",
     )
     .await;
-    let carol_id = common::create_user(&migrator_pool, "carol@acme.test", "Carol", "pw").await;
-    common::add_membership(&migrator_pool, org_id, carol_id).await;
+    let carol_id =
+        crate::common::create_user(&migrator_pool, "carol@acme.test", "Carol", "pw").await;
+    crate::common::add_membership(&migrator_pool, org_id, carol_id).await;
 
     let publisher = Publisher::recording();
-    let router = common::build_router_with_publisher(&migrator_pool, publisher.clone()).await;
-    let cookie = common::login_cookie(&router, "alice@acme.test", "pw").await;
+    let router =
+        crate::common::build_router_with_publisher(&migrator_pool, publisher.clone()).await;
+    let cookie = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
 
     // New-Person intake assigns to the actor (Alice) and writes its own
     // assignment_changed fact (NULL -> Alice) plus one person.changed
     // event — both are the race's baseline, not part of what we're
     // asserting on.
-    let intake = common::post_inquiry(
+    let intake = crate::common::post_inquiry(
         &router,
         &cookie,
         "zillow",
@@ -700,7 +717,7 @@ async fn log_contact_attempt_racing_assign_person_on_same_person_both_write_and_
     )
     .await;
     assert_eq!(intake.status(), StatusCode::CREATED);
-    let person_id: Uuid = common::body_json(intake).await["person_id"]
+    let person_id: Uuid = crate::common::body_json(intake).await["person_id"]
         .as_str()
         .unwrap()
         .parse()
@@ -722,13 +739,13 @@ async fn log_contact_attempt_racing_assign_person_on_same_person_both_write_and_
 
     let contact_attempts_uri = format!("/api/people/{person_id}/contact-attempts");
     let assignment_uri = format!("/api/people/{person_id}/assignment");
-    let fut_contact = common::post_json_with_cookie(
+    let fut_contact = crate::common::post_json_with_cookie(
         &router,
         &contact_attempts_uri,
         &cookie,
         json!({ "channel": "call", "outcome": "reached" }),
     );
-    let fut_assign = common::post_json_with_cookie(
+    let fut_assign = crate::common::post_json_with_cookie(
         &router,
         &assignment_uri,
         &cookie,
@@ -738,7 +755,7 @@ async fn log_contact_attempt_racing_assign_person_on_same_person_both_write_and_
 
     assert_eq!(contact_resp.status(), StatusCode::CREATED);
     let assign_status = assign_resp.status();
-    let assign_body = common::body_json(assign_resp).await;
+    let assign_body = crate::common::body_json(assign_resp).await;
     assert_eq!(assign_status, StatusCode::OK);
     assert_eq!(
         assign_body["changed"], true,

@@ -2,7 +2,6 @@
 //! inbound-email completion path — a pinned-format email becoming a real
 //! Person/Inquiry through `complete_intake` as the System actor. Run only
 //! via ./scripts/check-db.
-mod common;
 
 use std::time::Duration;
 
@@ -38,10 +37,10 @@ const TEST_INBOUND_EMAIL_SECRET: &str = "test-inbound-email-secret-value-32b";
 fn test_config() -> Config {
     Config::from_source(|key| match key {
         "CRM_SESSION_SECRET" => Some("a".repeat(32)),
-        "CRM_RAW_PAYLOAD_KEY" => Some(common::TEST_RAW_PAYLOAD_KEY_HEX.to_string()),
-        "CENTRIFUGO_HTTP_API_KEY" => Some(common::TEST_CENTRIFUGO_HTTP_API_KEY.to_string()),
+        "CRM_RAW_PAYLOAD_KEY" => Some(crate::common::TEST_RAW_PAYLOAD_KEY_HEX.to_string()),
+        "CENTRIFUGO_HTTP_API_KEY" => Some(crate::common::TEST_CENTRIFUGO_HTTP_API_KEY.to_string()),
         "CENTRIFUGO_TOKEN_HMAC_SECRET" => {
-            Some(common::TEST_CENTRIFUGO_TOKEN_HMAC_SECRET.to_string())
+            Some(crate::common::TEST_CENTRIFUGO_TOKEN_HMAC_SECRET.to_string())
         }
         "CRM_INBOUND_EMAIL_SECRET" => Some(TEST_INBOUND_EMAIL_SECRET.to_string()),
         _ => None,
@@ -50,7 +49,7 @@ fn test_config() -> Config {
 }
 
 async fn build_router(migrator_pool: &PgPool, publisher: Publisher) -> Router {
-    let app_pool = common::connect_as_app(migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(migrator_pool).await;
     let config = test_config();
     let state = AppState::for_tests(app_pool, &config, publisher);
     crm_api::build_app(state)
@@ -102,14 +101,15 @@ async fn post_inbound_email(
 /// An org with seeded stages, an active member `bob@…` set as the intake
 /// default assignee, and a second active member `alice@…`.
 async fn org_with_default(migrator_pool: &PgPool, name: &str) -> (Uuid, Uuid, Uuid) {
-    let org_id = common::create_org(migrator_pool, name).await;
-    common::seed_stages(migrator_pool, org_id).await;
+    let org_id = crate::common::create_org(migrator_pool, name).await;
+    crate::common::seed_stages(migrator_pool, org_id).await;
     let slug: String = name.to_lowercase().replace(' ', "");
-    let bob = common::create_user(migrator_pool, &format!("bob@{slug}.test"), "Bob", PW).await;
+    let bob =
+        crate::common::create_user(migrator_pool, &format!("bob@{slug}.test"), "Bob", PW).await;
     let alice =
-        common::create_user(migrator_pool, &format!("alice@{slug}.test"), "Alice", PW).await;
-    common::add_membership(migrator_pool, org_id, bob).await;
-    common::add_membership(migrator_pool, org_id, alice).await;
+        crate::common::create_user(migrator_pool, &format!("alice@{slug}.test"), "Alice", PW).await;
+    crate::common::add_membership(migrator_pool, org_id, bob).await;
+    crate::common::add_membership(migrator_pool, org_id, alice).await;
     // Slice 008 (D-041): mode dispatch replaced the old implicit
     // "assignee configured => organization_default" behavior — set
     // `default_assignee` mode alongside the assignee so this fixture's
@@ -153,7 +153,7 @@ async fn cypress_fixture_completes_intake_end_to_end(migrator_pool: PgPool) {
     let after = chrono::Utc::now();
     assert_eq!(resp.status(), StatusCode::OK);
     assert_eq!(
-        common::body_json(resp).await,
+        crate::common::body_json(resp).await,
         json!({ "status": "accepted" }),
         "the envelope reveals nothing about the parse outcome"
     );
@@ -285,16 +285,19 @@ async fn cypress_fixture_completes_intake_end_to_end(migrator_pool: PgPool) {
     assert_eq!(strategy, "organization_default");
     assert_eq!(assignee, Some(bob));
 
-    let bob_cookie = common::login_cookie(&router, "bob@acmerealty.test", PW).await;
-    let bob_today =
-        common::body_json(common::get_with_cookie(&router, "/api/today", &bob_cookie).await).await;
+    let bob_cookie = crate::common::login_cookie(&router, "bob@acmerealty.test", PW).await;
+    let bob_today = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/today", &bob_cookie).await,
+    )
+    .await;
     let items = bob_today["items"].as_array().unwrap();
     assert_eq!(items.len(), 1);
     assert_eq!(items[0]["person"]["id"], person_id.to_string());
-    let alice_cookie = common::login_cookie(&router, "alice@acmerealty.test", PW).await;
-    let alice_today =
-        common::body_json(common::get_with_cookie(&router, "/api/today", &alice_cookie).await)
-            .await;
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acmerealty.test", PW).await;
+    let alice_today = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/today", &alice_cookie).await,
+    )
+    .await;
     assert_eq!(alice_today["items"].as_array().unwrap().len(), 0);
 
     // Criterion 5: exactly one person_changed publish, ids-only.
@@ -395,7 +398,7 @@ async fn byte_identical_redelivery_of_a_resolved_row_is_a_noop(migrator_pool: Pg
     let second = post_inbound_email(&router, &addr, CYPRESS_EML).await;
     assert_eq!(second.status(), StatusCode::OK);
     assert_eq!(
-        common::body_json(second).await,
+        crate::common::body_json(second).await,
         json!({ "status": "accepted" })
     );
 
@@ -488,7 +491,7 @@ async fn garbage_bytes_land_email_unparsed(migrator_pool: PgPool) {
 async fn terminal_unresolved_row_is_never_reprocessed_by_redelivery(migrator_pool: PgPool) {
     let (org_id, _bob, _alice) = org_with_default(&migrator_pool, "Acme Realty").await;
     let (slug, token) = intake_row(&migrator_pool, org_id).await;
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let key = test_config().raw_payload_key;
 
     // A 007b-era terminal row for the (now in-format) cypress bytes.
@@ -524,7 +527,7 @@ async fn terminal_unresolved_row_is_never_reprocessed_by_redelivery(migrator_poo
     let resp = post_inbound_email(&router, &recipient(&slug, &token), CYPRESS_EML).await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert_eq!(
-        common::body_json(resp).await,
+        crate::common::body_json(resp).await,
         json!({ "status": "accepted" })
     );
 
@@ -548,7 +551,7 @@ async fn terminal_unresolved_row_is_never_reprocessed_by_redelivery(migrator_poo
 async fn stuck_pending_in_format_row_resolves_end_to_end_on_redelivery(migrator_pool: PgPool) {
     let (org_id, bob, _alice) = org_with_default(&migrator_pool, "Acme Realty").await;
     let (slug, token) = intake_row(&migrator_pool, org_id).await;
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let key = test_config().raw_payload_key;
 
     let stuck_id = Uuid::new_v4();
@@ -677,7 +680,7 @@ async fn lock_held_past_budget_defers_the_row_pending_then_redelivery_completes(
     let resp = post_inbound_email(&router, &addr, CYPRESS_EML).await;
     assert_eq!(resp.status(), StatusCode::OK, "never intake_busy");
     assert_eq!(
-        common::body_json(resp).await,
+        crate::common::body_json(resp).await,
         json!({ "status": "accepted" })
     );
 
@@ -794,10 +797,11 @@ async fn valid_format_mail_writes_nothing_in_another_org(migrator_pool: PgPool) 
     ] {
         assert_eq!(count(&migrator_pool, table, org_b).await, 0, "{table}");
     }
-    let bob_b_cookie = common::login_cookie(&router, "bob@bestrealty.test", PW).await;
-    let people =
-        common::body_json(common::get_with_cookie(&router, "/api/people", &bob_b_cookie).await)
-            .await;
+    let bob_b_cookie = crate::common::login_cookie(&router, "bob@bestrealty.test", PW).await;
+    let people = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/people", &bob_b_cookie).await,
+    )
+    .await;
     assert_eq!(people["people"].as_array().unwrap().len(), 0);
 }
 
@@ -903,7 +907,7 @@ async fn nul_bytes_in_an_in_format_email_complete_without_error_or_poison_row(
     let resp = post_inbound_email(&router, &recipient(&slug, &token), &raw).await;
     assert_eq!(resp.status(), StatusCode::OK, "must not 503");
     assert_eq!(
-        common::body_json(resp).await,
+        crate::common::body_json(resp).await,
         json!({ "status": "accepted" })
     );
 
@@ -973,14 +977,18 @@ async fn email_intake_without_a_default_creates_an_unassigned_person(migrator_po
     assert_eq!(count(&migrator_pool, "assignment_changed", org_id).await, 0);
 
     for member in ["bob@acmerealty.test", "alice@acmerealty.test"] {
-        let cookie = common::login_cookie(&router, member, PW).await;
-        let today =
-            common::body_json(common::get_with_cookie(&router, "/api/today", &cookie).await).await;
+        let cookie = crate::common::login_cookie(&router, member, PW).await;
+        let today = crate::common::body_json(
+            crate::common::get_with_cookie(&router, "/api/today", &cookie).await,
+        )
+        .await;
         assert_eq!(today["items"].as_array().unwrap().len(), 0, "{member}");
     }
-    let cookie = common::login_cookie(&router, "bob@acmerealty.test", PW).await;
-    let people =
-        common::body_json(common::get_with_cookie(&router, "/api/people", &cookie).await).await;
+    let cookie = crate::common::login_cookie(&router, "bob@acmerealty.test", PW).await;
+    let people = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/people", &cookie).await,
+    )
+    .await;
     assert_eq!(people["people"].as_array().unwrap().len(), 1);
 }
 

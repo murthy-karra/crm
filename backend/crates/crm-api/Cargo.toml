@@ -5,6 +5,13 @@ edition.workspace = true
 rust-version.workspace = true
 publish = false
 default-run = "crm-api"
+# Test-binary consolidation chunk (docs/tasks/TEST_BINARY_CONSOLIDATION.md):
+# disables cargo's automatic "every tests/*.rs is its own binary"
+# discovery. Every integration test target below is now explicit: the
+# aggregated hub (`tests/all.rs`, covering every file except
+# `livekit_telephony.rs`) plus the standalone `livekit_telephony`
+# target that must stay out of the default run.
+autotests = false
 
 [lints]
 workspace = true
@@ -51,6 +58,10 @@ futures-util = { workspace = true }
 # plain `cargo test` (so `check` and `check-db`, which runs `--ignored`
 # across every test binary, never reach a network host) and run only by
 # name from scripts/check-telephony.
+[[test]]
+name = "all"
+path = "tests/all.rs"
+
 [[test]]
 name = "livekit_telephony"
 test = false

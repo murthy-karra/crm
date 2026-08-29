@@ -1,7 +1,6 @@
 //! DB-backed tests for `LogContactAttempt` / `POST
 //! /api/people/{id}/contact-attempts` (docs/specs/SLICE_003.md §13,
 //! acceptance criterion 2). Run only via ./scripts/check-db.
-mod common;
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
@@ -11,7 +10,7 @@ use tower::ServiceExt;
 use uuid::Uuid;
 
 async fn create_person_with_inquiry(router: &axum::Router, cookie: &str, email: &str) -> Uuid {
-    let resp = common::post_inquiry(
+    let resp = crate::common::post_inquiry(
         router,
         cookie,
         "zillow",
@@ -19,7 +18,7 @@ async fn create_person_with_inquiry(router: &axum::Router, cookie: &str, email: 
         None,
     )
     .await;
-    common::body_json(resp).await["person_id"]
+    crate::common::body_json(resp).await["person_id"]
         .as_str()
         .unwrap()
         .parse()
@@ -31,7 +30,7 @@ async fn create_person_with_inquiry(router: &axum::Router, cookie: &str, email: 
 #[sqlx::test]
 #[ignore]
 async fn log_contact_attempt_writes_exactly_one_fact_with_full_envelope(migrator_pool: PgPool) {
-    let (_org_id, _alice_id) = common::create_org_with_stages_and_member(
+    let (_org_id, _alice_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Acme Realty",
         "alice@acme.test",
@@ -39,11 +38,11 @@ async fn log_contact_attempt_writes_exactly_one_fact_with_full_envelope(migrator
         "pw",
     )
     .await;
-    let router = common::build_router(&migrator_pool).await;
-    let cookie = common::login_cookie(&router, "alice@acme.test", "pw").await;
+    let router = crate::common::build_router(&migrator_pool).await;
+    let cookie = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
     let person_id = create_person_with_inquiry(&router, &cookie, "lead@example.com").await;
 
-    let resp = common::post_json_with_cookie(
+    let resp = crate::common::post_json_with_cookie(
         &router,
         &format!("/api/people/{person_id}/contact-attempts"),
         &cookie,
@@ -51,7 +50,7 @@ async fn log_contact_attempt_writes_exactly_one_fact_with_full_envelope(migrator
     )
     .await;
     assert_eq!(resp.status(), StatusCode::CREATED);
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     assert_eq!(body["contact_attempt"]["channel"], "call");
     assert_eq!(body["contact_attempt"]["outcome"], "no_answer");
     assert!(body["contact_attempt"]["id"].is_string());
@@ -87,7 +86,7 @@ async fn log_contact_attempt_writes_exactly_one_fact_with_full_envelope(migrator
 #[sqlx::test]
 #[ignore]
 async fn invalid_channel_or_non_json_body_returns_400_and_writes_no_fact(migrator_pool: PgPool) {
-    let (_org_id, _alice_id) = common::create_org_with_stages_and_member(
+    let (_org_id, _alice_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Acme Realty",
         "alice@acme.test",
@@ -95,11 +94,11 @@ async fn invalid_channel_or_non_json_body_returns_400_and_writes_no_fact(migrato
         "pw",
     )
     .await;
-    let router = common::build_router(&migrator_pool).await;
-    let cookie = common::login_cookie(&router, "alice@acme.test", "pw").await;
+    let router = crate::common::build_router(&migrator_pool).await;
+    let cookie = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
     let person_id = create_person_with_inquiry(&router, &cookie, "lead2@example.com").await;
 
-    let bad_channel = common::post_json_with_cookie(
+    let bad_channel = crate::common::post_json_with_cookie(
         &router,
         &format!("/api/people/{person_id}/contact-attempts"),
         &cookie,
@@ -108,11 +107,11 @@ async fn invalid_channel_or_non_json_body_returns_400_and_writes_no_fact(migrato
     .await;
     assert_eq!(bad_channel.status(), StatusCode::BAD_REQUEST);
     assert_eq!(
-        common::body_json(bad_channel).await["error"],
+        crate::common::body_json(bad_channel).await["error"],
         "malformed_request"
     );
 
-    let bad_outcome = common::post_json_with_cookie(
+    let bad_outcome = crate::common::post_json_with_cookie(
         &router,
         &format!("/api/people/{person_id}/contact-attempts"),
         &cookie,
@@ -150,7 +149,7 @@ async fn invalid_channel_or_non_json_body_returns_400_and_writes_no_fact(migrato
 #[sqlx::test]
 #[ignore]
 async fn other_organization_person_returns_404_identical_to_nonexistent(migrator_pool: PgPool) {
-    let (_org_a, _alice_id) = common::create_org_with_stages_and_member(
+    let (_org_a, _alice_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Acme Realty",
         "alice@acme.test",
@@ -158,7 +157,7 @@ async fn other_organization_person_returns_404_identical_to_nonexistent(migrator
         "pw",
     )
     .await;
-    let (_org_b, _bob_id) = common::create_org_with_stages_and_member(
+    let (_org_b, _bob_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Best Realty",
         "bob@best.test",
@@ -167,14 +166,14 @@ async fn other_organization_person_returns_404_identical_to_nonexistent(migrator
     )
     .await;
 
-    let router = common::build_router(&migrator_pool).await;
-    let alice_cookie = common::login_cookie(&router, "alice@acme.test", "pw").await;
-    let bob_cookie = common::login_cookie(&router, "bob@best.test", "pw").await;
+    let router = crate::common::build_router(&migrator_pool).await;
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
+    let bob_cookie = crate::common::login_cookie(&router, "bob@best.test", "pw").await;
 
     let b_person_id =
         create_person_with_inquiry(&router, &bob_cookie, "bobs-lead@example.com").await;
 
-    let cross_org_resp = common::post_json_with_cookie(
+    let cross_org_resp = crate::common::post_json_with_cookie(
         &router,
         &format!("/api/people/{b_person_id}/contact-attempts"),
         &alice_cookie,
@@ -182,10 +181,10 @@ async fn other_organization_person_returns_404_identical_to_nonexistent(migrator
     )
     .await;
     let cross_org_status = cross_org_resp.status();
-    let cross_org_body = common::body_json(cross_org_resp).await;
+    let cross_org_body = crate::common::body_json(cross_org_resp).await;
 
     let nonexistent_id = Uuid::new_v4();
-    let nonexistent_resp = common::post_json_with_cookie(
+    let nonexistent_resp = crate::common::post_json_with_cookie(
         &router,
         &format!("/api/people/{nonexistent_id}/contact-attempts"),
         &alice_cookie,
@@ -193,7 +192,7 @@ async fn other_organization_person_returns_404_identical_to_nonexistent(migrator
     )
     .await;
     let nonexistent_status = nonexistent_resp.status();
-    let nonexistent_body = common::body_json(nonexistent_resp).await;
+    let nonexistent_body = crate::common::body_json(nonexistent_resp).await;
 
     assert_eq!(cross_org_status, StatusCode::NOT_FOUND);
     assert_eq!(cross_org_status, nonexistent_status);
@@ -208,7 +207,7 @@ async fn other_organization_person_returns_404_identical_to_nonexistent(migrator
 #[sqlx::test]
 #[ignore]
 async fn history_sorts_contact_attempted_last_on_identical_timestamps(migrator_pool: PgPool) {
-    let (org_id, _alice_id) = common::create_org_with_stages_and_member(
+    let (org_id, _alice_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Acme Realty",
         "alice@acme.test",
@@ -216,8 +215,8 @@ async fn history_sorts_contact_attempted_last_on_identical_timestamps(migrator_p
         "pw",
     )
     .await;
-    let router = common::build_router(&migrator_pool).await;
-    let cookie = common::login_cookie(&router, "alice@acme.test", "pw").await;
+    let router = crate::common::build_router(&migrator_pool).await;
+    let cookie = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
     let person_id = create_person_with_inquiry(&router, &cookie, "lead3@example.com").await;
 
     let (stage_id,): (Uuid,) =
@@ -266,8 +265,8 @@ async fn history_sorts_contact_attempted_last_on_identical_timestamps(migrator_p
     tx.commit().await.unwrap();
 
     let detail_resp =
-        common::get_with_cookie(&router, &format!("/api/people/{person_id}"), &cookie).await;
-    let detail_body = common::body_json(detail_resp).await;
+        crate::common::get_with_cookie(&router, &format!("/api/people/{person_id}"), &cookie).await;
+    let detail_body = crate::common::body_json(detail_resp).await;
     let history = detail_body["history"].as_array().unwrap();
 
     let stage_changed_index = history
@@ -308,7 +307,7 @@ async fn history_sorts_contact_attempted_last_on_identical_timestamps(migrator_p
 #[sqlx::test]
 #[ignore]
 async fn any_organization_member_may_log_a_contact_attempt(migrator_pool: PgPool) {
-    let (org_id, _alice_id) = common::create_org_with_stages_and_member(
+    let (org_id, _alice_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Acme Realty",
         "alice@acme.test",
@@ -316,17 +315,18 @@ async fn any_organization_member_may_log_a_contact_attempt(migrator_pool: PgPool
         "pw",
     )
     .await;
-    let carol_id = common::create_user(&migrator_pool, "carol@acme.test", "Carol", "pw").await;
-    common::add_membership(&migrator_pool, org_id, carol_id).await;
+    let carol_id =
+        crate::common::create_user(&migrator_pool, "carol@acme.test", "Carol", "pw").await;
+    crate::common::add_membership(&migrator_pool, org_id, carol_id).await;
 
-    let router = common::build_router(&migrator_pool).await;
-    let alice_cookie = common::login_cookie(&router, "alice@acme.test", "pw").await;
-    let carol_cookie = common::login_cookie(&router, "carol@acme.test", "pw").await;
+    let router = crate::common::build_router(&migrator_pool).await;
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
+    let carol_cookie = crate::common::login_cookie(&router, "carol@acme.test", "pw").await;
 
     // Assigned to Alice by intake's actor-default routing.
     let person_id = create_person_with_inquiry(&router, &alice_cookie, "shared@example.com").await;
 
-    let resp = common::post_json_with_cookie(
+    let resp = crate::common::post_json_with_cookie(
         &router,
         &format!("/api/people/{person_id}/contact-attempts"),
         &carol_cookie,
@@ -341,7 +341,7 @@ async fn any_organization_member_may_log_a_contact_attempt(migrator_pool: PgPool
 #[sqlx::test]
 #[ignore]
 async fn manual_route_accepts_busy_and_wrong_number(migrator_pool: PgPool) {
-    let (_org_id, _alice_id) = common::create_org_with_stages_and_member(
+    let (_org_id, _alice_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Acme Realty",
         "alice@acme.test",
@@ -349,12 +349,12 @@ async fn manual_route_accepts_busy_and_wrong_number(migrator_pool: PgPool) {
         "pw",
     )
     .await;
-    let router = common::build_router(&migrator_pool).await;
-    let cookie = common::login_cookie(&router, "alice@acme.test", "pw").await;
+    let router = crate::common::build_router(&migrator_pool).await;
+    let cookie = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
     let person_id = create_person_with_inquiry(&router, &cookie, "lead-006c@example.com").await;
 
     for outcome in ["busy", "wrong_number"] {
-        let resp = common::post_json_with_cookie(
+        let resp = crate::common::post_json_with_cookie(
             &router,
             &format!("/api/people/{person_id}/contact-attempts"),
             &cookie,
@@ -362,7 +362,7 @@ async fn manual_route_accepts_busy_and_wrong_number(migrator_pool: PgPool) {
         )
         .await;
         assert_eq!(resp.status(), StatusCode::CREATED, "{outcome}");
-        let body = common::body_json(resp).await;
+        let body = crate::common::body_json(resp).await;
         assert_eq!(body["contact_attempt"]["outcome"], outcome);
         let id: Uuid = body["contact_attempt"]["id"]
             .as_str()

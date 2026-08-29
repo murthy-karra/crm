@@ -7,7 +7,6 @@
 //! calling `commands::receive_inquiry` directly with `IntakeActor::System`
 //! — the same one change point every entry path funnels through. Run only
 //! via ./scripts/check-db.
-mod common;
 
 use std::collections::HashMap;
 
@@ -42,7 +41,7 @@ async fn system_intake(
     payload: &Value,
     publisher: &Publisher,
 ) -> ReceiveInquiryOutcome {
-    let key = common::test_config().raw_payload_key;
+    let key = crate::common::test_config().raw_payload_key;
     let actor = IntakeActor::System {
         on_behalf_of_user_id: None,
         organization_id: OrganizationId::new(org_id),
@@ -130,20 +129,20 @@ async fn stored_pointer(pool: &PgPool, org_id: Uuid) -> Option<Uuid> {
 #[sqlx::test]
 #[ignore]
 async fn fairness_rotates_a_b_c_a_b_c_with_full_fact_and_today_assertions(migrator_pool: PgPool) {
-    let org_id = common::create_org(&migrator_pool, "Acme Realty").await;
-    common::seed_stages(&migrator_pool, org_id).await;
-    let a = common::create_user(&migrator_pool, "a@acme.test", "Ann", PW).await;
-    let b = common::create_user(&migrator_pool, "b@acme.test", "Bea", PW).await;
-    let c = common::create_user(&migrator_pool, "c@acme.test", "Cid", PW).await;
-    common::add_membership(&migrator_pool, org_id, a).await;
-    common::add_membership(&migrator_pool, org_id, b).await;
-    common::add_membership(&migrator_pool, org_id, c).await;
+    let org_id = crate::common::create_org(&migrator_pool, "Acme Realty").await;
+    crate::common::seed_stages(&migrator_pool, org_id).await;
+    let a = crate::common::create_user(&migrator_pool, "a@acme.test", "Ann", PW).await;
+    let b = crate::common::create_user(&migrator_pool, "b@acme.test", "Bea", PW).await;
+    let c = crate::common::create_user(&migrator_pool, "c@acme.test", "Cid", PW).await;
+    crate::common::add_membership(&migrator_pool, org_id, a).await;
+    crate::common::add_membership(&migrator_pool, org_id, b).await;
+    crate::common::add_membership(&migrator_pool, org_id, c).await;
     backdate_membership(&migrator_pool, org_id, a, 3 * 3600).await;
     backdate_membership(&migrator_pool, org_id, b, 2 * 3600).await;
     backdate_membership(&migrator_pool, org_id, c, 3600).await;
     set_round_robin(&migrator_pool, org_id).await;
 
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let publisher = Publisher::recording();
     let expected = [a, b, c, a, b, c];
 
@@ -210,11 +209,13 @@ async fn fairness_rotates_a_b_c_a_b_c_with_full_fact_and_today_assertions(migrat
 
     // Today: each member ends up with exactly the two People routed to
     // them, and nobody else's.
-    let router = common::build_router(&migrator_pool).await;
+    let router = crate::common::build_router(&migrator_pool).await;
     for (user_id, email) in [(a, "a@acme.test"), (b, "b@acme.test"), (c, "c@acme.test")] {
-        let cookie = common::login_cookie(&router, email, PW).await;
-        let today =
-            common::body_json(common::get_with_cookie(&router, "/api/today", &cookie).await).await;
+        let cookie = crate::common::login_cookie(&router, email, PW).await;
+        let today = crate::common::body_json(
+            crate::common::get_with_cookie(&router, "/api/today", &cookie).await,
+        )
+        .await;
         let items = today["items"].as_array().unwrap();
         assert_eq!(items.len(), 2, "{email}'s Today");
         for item in items {
@@ -236,20 +237,20 @@ async fn fairness_rotates_a_b_c_a_b_c_with_full_fact_and_today_assertions(migrat
 async fn mid_rotation_deactivation_continues_without_resetting_pointer_or_non_pointer(
     migrator_pool: PgPool,
 ) {
-    let org_id = common::create_org(&migrator_pool, "Acme Realty").await;
-    common::seed_stages(&migrator_pool, org_id).await;
-    let a = common::create_user(&migrator_pool, "a@acme.test", "Ann", PW).await;
-    let b = common::create_user(&migrator_pool, "b@acme.test", "Bea", PW).await;
-    let c = common::create_user(&migrator_pool, "c@acme.test", "Cid", PW).await;
-    common::add_membership(&migrator_pool, org_id, a).await;
-    common::add_membership(&migrator_pool, org_id, b).await;
-    common::add_membership(&migrator_pool, org_id, c).await;
+    let org_id = crate::common::create_org(&migrator_pool, "Acme Realty").await;
+    crate::common::seed_stages(&migrator_pool, org_id).await;
+    let a = crate::common::create_user(&migrator_pool, "a@acme.test", "Ann", PW).await;
+    let b = crate::common::create_user(&migrator_pool, "b@acme.test", "Bea", PW).await;
+    let c = crate::common::create_user(&migrator_pool, "c@acme.test", "Cid", PW).await;
+    crate::common::add_membership(&migrator_pool, org_id, a).await;
+    crate::common::add_membership(&migrator_pool, org_id, b).await;
+    crate::common::add_membership(&migrator_pool, org_id, c).await;
     backdate_membership(&migrator_pool, org_id, a, 3 * 3600).await;
     backdate_membership(&migrator_pool, org_id, b, 2 * 3600).await;
     backdate_membership(&migrator_pool, org_id, c, 3600).await;
     set_round_robin(&migrator_pool, org_id).await;
 
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let publisher = Publisher::recording();
 
     // First intake -> a (anchor None, first-rotation start); pointer = a.
@@ -281,17 +282,17 @@ async fn mid_rotation_deactivation_continues_without_resetting_pointer_or_non_po
 #[sqlx::test]
 #[ignore]
 async fn a_newcomer_joins_at_the_end_of_the_cycle(migrator_pool: PgPool) {
-    let org_id = common::create_org(&migrator_pool, "Acme Realty").await;
-    common::seed_stages(&migrator_pool, org_id).await;
-    let a = common::create_user(&migrator_pool, "a@acme.test", "Ann", PW).await;
-    let b = common::create_user(&migrator_pool, "b@acme.test", "Bea", PW).await;
-    common::add_membership(&migrator_pool, org_id, a).await;
-    common::add_membership(&migrator_pool, org_id, b).await;
+    let org_id = crate::common::create_org(&migrator_pool, "Acme Realty").await;
+    crate::common::seed_stages(&migrator_pool, org_id).await;
+    let a = crate::common::create_user(&migrator_pool, "a@acme.test", "Ann", PW).await;
+    let b = crate::common::create_user(&migrator_pool, "b@acme.test", "Bea", PW).await;
+    crate::common::add_membership(&migrator_pool, org_id, a).await;
+    crate::common::add_membership(&migrator_pool, org_id, b).await;
     backdate_membership(&migrator_pool, org_id, a, 2 * 3600).await;
     backdate_membership(&migrator_pool, org_id, b, 3600).await;
     set_round_robin(&migrator_pool, org_id).await;
 
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let publisher = Publisher::recording();
 
     let outcome = system_intake(&app_pool, org_id, &lead("l0@example.com"), &publisher).await;
@@ -299,8 +300,9 @@ async fn a_newcomer_joins_at_the_end_of_the_cycle(migrator_pool: PgPool) {
     let outcome = system_intake(&app_pool, org_id, &lead("l1@example.com"), &publisher).await;
     assert_eq!(assigned(outcome), Some(UserId::new(b)));
 
-    let newcomer = common::create_user(&migrator_pool, "newcomer@acme.test", "Newt", PW).await;
-    common::add_membership(&migrator_pool, org_id, newcomer).await;
+    let newcomer =
+        crate::common::create_user(&migrator_pool, "newcomer@acme.test", "Newt", PW).await;
+    crate::common::add_membership(&migrator_pool, org_id, newcomer).await;
 
     // Next after b is the newcomer, at the end — not a or a mid-cycle
     // insertion.
@@ -317,11 +319,11 @@ async fn a_newcomer_joins_at_the_end_of_the_cycle(migrator_pool: PgPool) {
 #[sqlx::test]
 #[ignore]
 async fn empty_pool_routes_unassigned_with_no_pointer_write(migrator_pool: PgPool) {
-    let org_id = common::create_org(&migrator_pool, "Acme Realty").await;
-    common::seed_stages(&migrator_pool, org_id).await;
+    let org_id = crate::common::create_org(&migrator_pool, "Acme Realty").await;
+    crate::common::seed_stages(&migrator_pool, org_id).await;
     set_round_robin(&migrator_pool, org_id).await;
 
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let outcome = system_intake(
         &app_pool,
         org_id,
@@ -352,11 +354,11 @@ async fn empty_pool_routes_unassigned_with_no_pointer_write(migrator_pool: PgPoo
 #[sqlx::test]
 #[ignore]
 async fn non_round_robin_strategies_never_advance_the_pointer(migrator_pool: PgPool) {
-    let org_id = common::create_org(&migrator_pool, "Acme Realty").await;
-    common::seed_stages(&migrator_pool, org_id).await;
-    let a = common::create_user(&migrator_pool, "a@acme.test", "Ann", PW).await;
-    let b = common::create_user(&migrator_pool, "b@acme.test", "Bea", PW).await;
-    common::add_membership_with(
+    let org_id = crate::common::create_org(&migrator_pool, "Acme Realty").await;
+    crate::common::seed_stages(&migrator_pool, org_id).await;
+    let a = crate::common::create_user(&migrator_pool, "a@acme.test", "Ann", PW).await;
+    let b = crate::common::create_user(&migrator_pool, "b@acme.test", "Bea", PW).await;
+    crate::common::add_membership_with(
         &migrator_pool,
         org_id,
         a,
@@ -364,12 +366,12 @@ async fn non_round_robin_strategies_never_advance_the_pointer(migrator_pool: PgP
         MembershipStatus::Active,
     )
     .await;
-    common::add_membership(&migrator_pool, org_id, b).await;
+    crate::common::add_membership(&migrator_pool, org_id, b).await;
     set_round_robin(&migrator_pool, org_id).await;
 
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let publisher = Publisher::recording();
-    let key = common::test_config().raw_payload_key;
+    let key = crate::common::test_config().raw_payload_key;
 
     // explicit: a System-actor intake WITH assign_to_user_id set.
     let cmd_actor = IntakeActor::System {
@@ -442,9 +444,9 @@ async fn non_round_robin_strategies_never_advance_the_pointer(migrator_pool: PgP
 
     // actor_default: a User-actor intake (via HTTP, brand-new Person) —
     // matrix step 3 returns before mode is ever consulted.
-    let router = common::build_router(&migrator_pool).await;
-    let cookie = common::login_cookie(&router, "a@acme.test", PW).await;
-    let resp = common::post_inquiry(
+    let router = crate::common::build_router(&migrator_pool).await;
+    let cookie = crate::common::login_cookie(&router, "a@acme.test", PW).await;
+    let resp = crate::common::post_inquiry(
         &router,
         &cookie,
         "website",
@@ -453,7 +455,7 @@ async fn non_round_robin_strategies_never_advance_the_pointer(migrator_pool: PgP
     )
     .await;
     assert_eq!(resp.status(), StatusCode::CREATED);
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     assert_eq!(body["routing_strategy"], "actor_default");
     assert_eq!(body["assigned_user_id"], a.to_string());
     assert_eq!(
@@ -472,10 +474,10 @@ async fn non_round_robin_strategies_never_advance_the_pointer(migrator_pool: PgP
 async fn duplicate_repost_of_a_round_robin_routed_payload_reports_its_strategy(
     migrator_pool: PgPool,
 ) {
-    let org_id = common::create_org(&migrator_pool, "Acme Realty").await;
-    common::seed_stages(&migrator_pool, org_id).await;
-    let a = common::create_user(&migrator_pool, "a@acme.test", "Ann", PW).await;
-    common::add_membership_with(
+    let org_id = crate::common::create_org(&migrator_pool, "Acme Realty").await;
+    crate::common::seed_stages(&migrator_pool, org_id).await;
+    let a = crate::common::create_user(&migrator_pool, "a@acme.test", "Ann", PW).await;
+    crate::common::add_membership_with(
         &migrator_pool,
         org_id,
         a,
@@ -485,23 +487,23 @@ async fn duplicate_repost_of_a_round_robin_routed_payload_reports_its_strategy(
     .await;
     // Adversarial M3: a SECOND member, so "the replay advanced the
     // pointer" and "the pointer stayed" are distinguishable states.
-    let b = common::create_user(&migrator_pool, "b@acme.test", "Bea", PW).await;
-    common::add_membership(&migrator_pool, org_id, b).await;
+    let b = crate::common::create_user(&migrator_pool, "b@acme.test", "Bea", PW).await;
+    crate::common::add_membership(&migrator_pool, org_id, b).await;
     backdate_membership(&migrator_pool, org_id, a, 2 * 3600).await;
     backdate_membership(&migrator_pool, org_id, b, 3600).await;
     set_round_robin(&migrator_pool, org_id).await;
 
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let payload = lead("dan@example.com");
     let outcome = system_intake(&app_pool, org_id, &payload, &Publisher::recording()).await;
     assert!(matches!(outcome, ReceiveInquiryOutcome::Resolved { .. }));
     assert_eq!(stored_pointer(&migrator_pool, org_id).await, Some(a));
 
-    let router = common::build_router(&migrator_pool).await;
-    let cookie = common::login_cookie(&router, "a@acme.test", PW).await;
-    let resp = common::post_inquiry(&router, &cookie, "website", payload, None).await;
+    let router = crate::common::build_router(&migrator_pool).await;
+    let cookie = crate::common::login_cookie(&router, "a@acme.test", PW).await;
+    let resp = crate::common::post_inquiry(&router, &cookie, "website", payload, None).await;
     assert_eq!(resp.status(), StatusCode::OK);
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     assert_eq!(body["status"], "resolved");
     assert_eq!(body["duplicate"], true);
     assert_eq!(body["routing_strategy"], "round_robin");
@@ -523,17 +525,17 @@ async fn duplicate_repost_of_a_round_robin_routed_payload_reports_its_strategy(
 #[sqlx::test]
 #[ignore]
 async fn eight_way_concurrency_distributes_fairly_under_the_advisory_budget(migrator_pool: PgPool) {
-    let org_id = common::create_org(&migrator_pool, "Acme Realty").await;
-    common::seed_stages(&migrator_pool, org_id).await;
-    let a = common::create_user(&migrator_pool, "a@acme.test", "Ann", PW).await;
-    let b = common::create_user(&migrator_pool, "b@acme.test", "Bea", PW).await;
-    let c = common::create_user(&migrator_pool, "c@acme.test", "Cid", PW).await;
-    common::add_membership(&migrator_pool, org_id, a).await;
-    common::add_membership(&migrator_pool, org_id, b).await;
-    common::add_membership(&migrator_pool, org_id, c).await;
+    let org_id = crate::common::create_org(&migrator_pool, "Acme Realty").await;
+    crate::common::seed_stages(&migrator_pool, org_id).await;
+    let a = crate::common::create_user(&migrator_pool, "a@acme.test", "Ann", PW).await;
+    let b = crate::common::create_user(&migrator_pool, "b@acme.test", "Bea", PW).await;
+    let c = crate::common::create_user(&migrator_pool, "c@acme.test", "Cid", PW).await;
+    crate::common::add_membership(&migrator_pool, org_id, a).await;
+    crate::common::add_membership(&migrator_pool, org_id, b).await;
+    crate::common::add_membership(&migrator_pool, org_id, c).await;
     set_round_robin(&migrator_pool, org_id).await;
 
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let publisher = Publisher::recording();
 
     // Bound to locals first: `tokio::join!` does not extend an inline
@@ -586,24 +588,24 @@ async fn eight_way_concurrency_distributes_fairly_under_the_advisory_budget(migr
 async fn dual_org_member_rotates_independently_and_org_b_gets_zero_rotation_rows(
     migrator_pool: PgPool,
 ) {
-    let org_a = common::create_org(&migrator_pool, "Acme Realty").await;
-    let org_b = common::create_org(&migrator_pool, "Best Realty").await;
-    common::seed_stages(&migrator_pool, org_a).await;
-    common::seed_stages(&migrator_pool, org_b).await;
+    let org_a = crate::common::create_org(&migrator_pool, "Acme Realty").await;
+    let org_b = crate::common::create_org(&migrator_pool, "Best Realty").await;
+    crate::common::seed_stages(&migrator_pool, org_a).await;
+    crate::common::seed_stages(&migrator_pool, org_b).await;
 
     // A user who is an active member of BOTH organizations.
-    let dual = common::create_user(&migrator_pool, "dual@shared.test", "Dual", PW).await;
-    common::add_membership(&migrator_pool, org_a, dual).await;
-    common::add_membership(&migrator_pool, org_b, dual).await;
+    let dual = crate::common::create_user(&migrator_pool, "dual@shared.test", "Dual", PW).await;
+    crate::common::add_membership(&migrator_pool, org_a, dual).await;
+    crate::common::add_membership(&migrator_pool, org_b, dual).await;
     // A second org_a-only member so org_a's rotation is meaningfully
     // exercised (not just a single-member no-op cycle).
-    let solo = common::create_user(&migrator_pool, "solo@acme.test", "Solo", PW).await;
-    common::add_membership(&migrator_pool, org_a, solo).await;
+    let solo = crate::common::create_user(&migrator_pool, "solo@acme.test", "Solo", PW).await;
+    crate::common::add_membership(&migrator_pool, org_a, solo).await;
 
     set_round_robin(&migrator_pool, org_a).await;
     set_round_robin(&migrator_pool, org_b).await;
 
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let publisher = Publisher::recording();
 
     // Two intakes into org_a only; org_b left completely untouched.
@@ -642,7 +644,7 @@ async fn dual_org_member_rotates_independently_and_org_b_gets_zero_rotation_rows
 
     // A wholly unrelated third org proves an org_a/org_b intake never
     // leaks a row anywhere else.
-    let org_c = common::create_org(&migrator_pool, "Cee Realty").await;
+    let org_c = crate::common::create_org(&migrator_pool, "Cee Realty").await;
     let org_c_rows: i64 =
         sqlx::query_scalar("SELECT count(*) FROM intake_rotation WHERE organization_id = $1")
             .bind(org_c)
@@ -662,20 +664,20 @@ async fn dual_org_member_rotates_independently_and_org_b_gets_zero_rotation_rows
 async fn deactivating_the_mid_order_pointer_member_continues_to_the_next_slot(
     migrator_pool: PgPool,
 ) {
-    let org_id = common::create_org(&migrator_pool, "Acme Realty").await;
-    common::seed_stages(&migrator_pool, org_id).await;
-    let a = common::create_user(&migrator_pool, "a@acme.test", "Ann", PW).await;
-    let b = common::create_user(&migrator_pool, "b@acme.test", "Bea", PW).await;
-    let c = common::create_user(&migrator_pool, "c@acme.test", "Cid", PW).await;
+    let org_id = crate::common::create_org(&migrator_pool, "Acme Realty").await;
+    crate::common::seed_stages(&migrator_pool, org_id).await;
+    let a = crate::common::create_user(&migrator_pool, "a@acme.test", "Ann", PW).await;
+    let b = crate::common::create_user(&migrator_pool, "b@acme.test", "Bea", PW).await;
+    let c = crate::common::create_user(&migrator_pool, "c@acme.test", "Cid", PW).await;
     for user in [a, b, c] {
-        common::add_membership(&migrator_pool, org_id, user).await;
+        crate::common::add_membership(&migrator_pool, org_id, user).await;
     }
     backdate_membership(&migrator_pool, org_id, a, 3 * 3600).await;
     backdate_membership(&migrator_pool, org_id, b, 2 * 3600).await;
     backdate_membership(&migrator_pool, org_id, c, 3600).await;
     set_round_robin(&migrator_pool, org_id).await;
 
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let publisher = Publisher::recording();
 
     // Advance the pointer to b (the middle member).
@@ -705,13 +707,13 @@ async fn intake_busy_leaves_the_rotation_pointer_untouched(migrator_pool: PgPool
     use crm_api::domain::commands::CommandError;
     use std::time::Duration;
 
-    let org_id = common::create_org(&migrator_pool, "Acme Realty").await;
-    common::seed_stages(&migrator_pool, org_id).await;
-    let a = common::create_user(&migrator_pool, "a@acme.test", "Ann", PW).await;
-    common::add_membership(&migrator_pool, org_id, a).await;
+    let org_id = crate::common::create_org(&migrator_pool, "Acme Realty").await;
+    crate::common::seed_stages(&migrator_pool, org_id).await;
+    let a = crate::common::create_user(&migrator_pool, "a@acme.test", "Ann", PW).await;
+    crate::common::add_membership(&migrator_pool, org_id, a).await;
     set_round_robin(&migrator_pool, org_id).await;
 
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let publisher = Publisher::recording();
 
     // Seed the pointer with one successful rotation.
@@ -736,7 +738,7 @@ async fn intake_busy_leaves_the_rotation_pointer_untouched(migrator_pool: PgPool
     });
     tokio::time::sleep(Duration::from_millis(300)).await;
 
-    let key = common::test_config().raw_payload_key;
+    let key = crate::common::test_config().raw_payload_key;
     let actor = IntakeActor::System {
         on_behalf_of_user_id: None,
         organization_id: OrganizationId::new(org_id),
@@ -768,7 +770,7 @@ async fn intake_busy_leaves_the_rotation_pointer_untouched(migrator_pool: PgPool
 #[sqlx::test]
 #[ignore]
 async fn migration_backfill_maps_assignee_set_orgs_to_default_assignee_mode(migrator_pool: PgPool) {
-    let (org_with, user) = common::create_org_with_stages_and_member(
+    let (org_with, user) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Assigned Org",
         "w@assigned.test",
@@ -776,7 +778,7 @@ async fn migration_backfill_maps_assignee_set_orgs_to_default_assignee_mode(migr
         PW,
     )
     .await;
-    let org_without = common::create_org(&migrator_pool, "Bare Org").await;
+    let org_without = crate::common::create_org(&migrator_pool, "Bare Org").await;
     admin_queries::update_intake_routing_settings(
         &mut migrator_pool.acquire().await.unwrap(),
         OrganizationId::new(org_with),

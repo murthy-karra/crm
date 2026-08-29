@@ -1,7 +1,6 @@
 //! DB-backed schema tests for Slice 002 (docs/specs/SLICE_002.md §13,
 //! acceptance criteria 1–2): `crm_app` grants exactly as specified, and the
 //! append-only trigger on each fact table. Run only via ./scripts/check-db.
-mod common;
 
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -10,7 +9,7 @@ use uuid::Uuid;
 #[sqlx::test]
 #[ignore]
 async fn crm_app_has_exactly_the_slice_002_grants(migrator_pool: PgPool) {
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
 
     // `stage`: amended by docs/specs/SLICE_004.md §2 (declared change,
     // AGENTS.md §11) — `crm_app` gains INSERT (`stage::seed_defaults` moves
@@ -28,7 +27,7 @@ async fn crm_app_has_exactly_the_slice_002_grants(migrator_pool: PgPool) {
         .await;
     assert!(select.is_ok(), "stage: SELECT must succeed for crm_app");
 
-    let org_id = common::create_org(&migrator_pool, "Grant Check Realty").await;
+    let org_id = crate::common::create_org(&migrator_pool, "Grant Check Realty").await;
     let stage_insert = sqlx::query(
         "INSERT INTO stage (organization_id, name, position) VALUES ($1, 'Custom Stage', 99)",
     )
@@ -169,10 +168,10 @@ async fn crm_app_has_exactly_the_slice_002_grants(migrator_pool: PgPool) {
 #[sqlx::test]
 #[ignore]
 async fn crm_app_can_actually_write_the_granted_tables(migrator_pool: PgPool) {
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
 
-    let org_id = common::create_org(&migrator_pool, "Acme Realty").await;
-    common::seed_stages(&migrator_pool, org_id).await;
+    let org_id = crate::common::create_org(&migrator_pool, "Acme Realty").await;
+    crate::common::seed_stages(&migrator_pool, org_id).await;
     let (stage_id,): (Uuid,) =
         sqlx::query_as("SELECT id FROM stage WHERE organization_id = $1 ORDER BY position LIMIT 1")
             .bind(org_id)
@@ -341,10 +340,11 @@ async fn insert_one_row_per_fact_table(
 #[sqlx::test]
 #[ignore]
 async fn fact_tables_are_append_only_via_grant_and_trigger(migrator_pool: PgPool) {
-    let org_id = common::create_org(&migrator_pool, "Acme Realty").await;
-    common::seed_stages(&migrator_pool, org_id).await;
-    let user_id = common::create_user(&migrator_pool, "alice@acme.test", "Alice", "pw").await;
-    common::add_membership(&migrator_pool, org_id, user_id).await;
+    let org_id = crate::common::create_org(&migrator_pool, "Acme Realty").await;
+    crate::common::seed_stages(&migrator_pool, org_id).await;
+    let user_id =
+        crate::common::create_user(&migrator_pool, "alice@acme.test", "Alice", "pw").await;
+    crate::common::add_membership(&migrator_pool, org_id, user_id).await;
     let (stage_id,): (Uuid,) =
         sqlx::query_as("SELECT id FROM stage WHERE organization_id = $1 ORDER BY position LIMIT 1")
             .bind(org_id)
@@ -353,7 +353,7 @@ async fn fact_tables_are_append_only_via_grant_and_trigger(migrator_pool: PgPool
             .unwrap();
 
     let rows = insert_one_row_per_fact_table(&migrator_pool, org_id, user_id, stage_id).await;
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
 
     let cases: [(&str, Uuid); 6] = [
         ("inquiry_received", rows.inquiry_received_id),
@@ -421,10 +421,11 @@ async fn fact_tables_are_append_only_via_grant_and_trigger(migrator_pool: PgPool
 #[sqlx::test]
 #[ignore]
 async fn fact_tables_reject_truncate_via_grant_and_trigger(migrator_pool: PgPool) {
-    let org_id = common::create_org(&migrator_pool, "Acme Realty").await;
-    common::seed_stages(&migrator_pool, org_id).await;
-    let user_id = common::create_user(&migrator_pool, "alice@acme.test", "Alice", "pw").await;
-    common::add_membership(&migrator_pool, org_id, user_id).await;
+    let org_id = crate::common::create_org(&migrator_pool, "Acme Realty").await;
+    crate::common::seed_stages(&migrator_pool, org_id).await;
+    let user_id =
+        crate::common::create_user(&migrator_pool, "alice@acme.test", "Alice", "pw").await;
+    crate::common::add_membership(&migrator_pool, org_id, user_id).await;
     let (stage_id,): (Uuid,) =
         sqlx::query_as("SELECT id FROM stage WHERE organization_id = $1 ORDER BY position LIMIT 1")
             .bind(org_id)
@@ -436,7 +437,7 @@ async fn fact_tables_reject_truncate_via_grant_and_trigger(migrator_pool: PgPool
     // detectable, non-vacuous data loss, not just a permission probe
     // against an empty table.
     insert_one_row_per_fact_table(&migrator_pool, org_id, user_id, stage_id).await;
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
 
     let tables = [
         "inquiry_received",
@@ -487,9 +488,10 @@ async fn fact_tables_reject_truncate_via_grant_and_trigger(migrator_pool: PgPool
 async fn contact_attempted_outcome_check_and_corrects_once_index_are_section_2(
     migrator_pool: PgPool,
 ) {
-    let org_id = common::create_org(&migrator_pool, "Acme Realty").await;
-    let user_id = common::create_user(&migrator_pool, "alice@acme.test", "Alice", "pw").await;
-    common::add_membership(&migrator_pool, org_id, user_id).await;
+    let org_id = crate::common::create_org(&migrator_pool, "Acme Realty").await;
+    let user_id =
+        crate::common::create_user(&migrator_pool, "alice@acme.test", "Alice", "pw").await;
+    crate::common::add_membership(&migrator_pool, org_id, user_id).await;
     let person_id = Uuid::new_v4();
 
     let insert = |outcome: &'static str, corrects_id: Option<Uuid>| {
@@ -556,7 +558,7 @@ async fn contact_attempted_outcome_check_and_corrects_once_index_are_section_2(
     // Chaining onto the correction is fine.
     insert("wrong_number", Some(first)).await.unwrap();
     // A correction row is append-only like every other fact row.
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     for pool in [&app_pool, &migrator_pool] {
         assert!(
             sqlx::query("UPDATE contact_attempted SET corrects_id = NULL WHERE id = $1")

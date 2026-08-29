@@ -11,7 +11,6 @@
 //! new Slice 008 schema coverage (the `round_robin` CHECK value, the new
 //! grants) is added as new, separate tests alongside them rather than
 //! folded into the existing ones.
-mod common;
 
 use axum::http::StatusCode;
 use serde_json::json;
@@ -44,12 +43,12 @@ async fn stored_mode(pool: &PgPool, org_id: Uuid) -> String {
 #[sqlx::test]
 #[ignore]
 async fn admins_manage_the_setting_members_are_403_and_orgs_never_cross(migrator_pool: PgPool) {
-    let acme = common::create_org(&migrator_pool, "Acme Realty").await;
-    let best = common::create_org(&migrator_pool, "Best Realty").await;
-    let alice_id = common::create_user(&migrator_pool, "alice@acme.test", "Alice", PW).await;
-    let bob_id = common::create_user(&migrator_pool, "bob@best.test", "Bob", PW).await;
-    let carol_id = common::create_user(&migrator_pool, "carol@acme.test", "Carol", PW).await;
-    common::add_membership_with(
+    let acme = crate::common::create_org(&migrator_pool, "Acme Realty").await;
+    let best = crate::common::create_org(&migrator_pool, "Best Realty").await;
+    let alice_id = crate::common::create_user(&migrator_pool, "alice@acme.test", "Alice", PW).await;
+    let bob_id = crate::common::create_user(&migrator_pool, "bob@best.test", "Bob", PW).await;
+    let carol_id = crate::common::create_user(&migrator_pool, "carol@acme.test", "Carol", PW).await;
+    crate::common::add_membership_with(
         &migrator_pool,
         acme,
         alice_id,
@@ -57,7 +56,7 @@ async fn admins_manage_the_setting_members_are_403_and_orgs_never_cross(migrator
         MembershipStatus::Active,
     )
     .await;
-    common::add_membership_with(
+    crate::common::add_membership_with(
         &migrator_pool,
         best,
         bob_id,
@@ -65,23 +64,24 @@ async fn admins_manage_the_setting_members_are_403_and_orgs_never_cross(migrator
         MembershipStatus::Active,
     )
     .await;
-    common::add_membership(&migrator_pool, acme, carol_id).await;
+    crate::common::add_membership(&migrator_pool, acme, carol_id).await;
 
-    let router = common::build_router(&migrator_pool).await;
-    let alice = common::login_cookie(&router, "alice@acme.test", PW).await;
-    let bob = common::login_cookie(&router, "bob@best.test", PW).await;
-    let carol = common::login_cookie(&router, "carol@acme.test", PW).await;
+    let router = crate::common::build_router(&migrator_pool).await;
+    let alice = crate::common::login_cookie(&router, "alice@acme.test", PW).await;
+    let bob = crate::common::login_cookie(&router, "bob@best.test", PW).await;
+    let carol = crate::common::login_cookie(&router, "carol@acme.test", PW).await;
 
     // Unset initially: unassigned mode, null assignee.
-    let resp = common::get_with_cookie(&router, "/api/organization/intake-settings", &alice).await;
+    let resp =
+        crate::common::get_with_cookie(&router, "/api/organization/intake-settings", &alice).await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert_eq!(
-        common::body_json(resp).await,
+        crate::common::body_json(resp).await,
         json!({ "intake_routing_mode": "unassigned", "intake_default_assignee_user_id": null })
     );
 
     // Alice sets Acme's mode to default_assignee, herself as the assignee.
-    let resp = common::put_json_with_cookie(
+    let resp = crate::common::put_json_with_cookie(
         &router,
         "/api/organization/intake-settings",
         &alice,
@@ -93,7 +93,7 @@ async fn admins_manage_the_setting_members_are_403_and_orgs_never_cross(migrator
     .await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert_eq!(
-        common::body_json(resp).await,
+        crate::common::body_json(resp).await,
         json!({
             "intake_routing_mode": "default_assignee",
             "intake_default_assignee_user_id": alice_id,
@@ -101,10 +101,14 @@ async fn admins_manage_the_setting_members_are_403_and_orgs_never_cross(migrator
     );
 
     // Carol (member, not admin) is 403 on both.
-    let resp = common::get_with_cookie(&router, "/api/organization/intake-settings", &carol).await;
+    let resp =
+        crate::common::get_with_cookie(&router, "/api/organization/intake-settings", &carol).await;
     assert_eq!(resp.status(), StatusCode::FORBIDDEN);
-    assert_eq!(common::body_json(resp).await, json!({"error": "forbidden"}));
-    let resp = common::put_json_with_cookie(
+    assert_eq!(
+        crate::common::body_json(resp).await,
+        json!({"error": "forbidden"})
+    );
+    let resp = crate::common::put_json_with_cookie(
         &router,
         "/api/organization/intake-settings",
         &carol,
@@ -115,10 +119,11 @@ async fn admins_manage_the_setting_members_are_403_and_orgs_never_cross(migrator
 
     // Bob (Best's admin) never sees Acme's setting, and Best's own setting
     // is independently unset.
-    let resp = common::get_with_cookie(&router, "/api/organization/intake-settings", &bob).await;
+    let resp =
+        crate::common::get_with_cookie(&router, "/api/organization/intake-settings", &bob).await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert_eq!(
-        common::body_json(resp).await,
+        crate::common::body_json(resp).await,
         json!({ "intake_routing_mode": "unassigned", "intake_default_assignee_user_id": null })
     );
     assert_eq!(stored_default(&migrator_pool, best).await, None);
@@ -137,12 +142,12 @@ async fn admins_manage_the_setting_members_are_403_and_orgs_never_cross(migrator
 async fn put_default_assignee_mode_rejects_nonexistent_foreign_inactive_and_null_identically(
     migrator_pool: PgPool,
 ) {
-    let acme = common::create_org(&migrator_pool, "Acme Realty").await;
-    let best = common::create_org(&migrator_pool, "Best Realty").await;
-    let alice_id = common::create_user(&migrator_pool, "alice@acme.test", "Alice", PW).await;
-    let dave_id = common::create_user(&migrator_pool, "dave@acme.test", "Dave", PW).await;
-    let erin_id = common::create_user(&migrator_pool, "erin@best.test", "Erin", PW).await;
-    common::add_membership_with(
+    let acme = crate::common::create_org(&migrator_pool, "Acme Realty").await;
+    let best = crate::common::create_org(&migrator_pool, "Best Realty").await;
+    let alice_id = crate::common::create_user(&migrator_pool, "alice@acme.test", "Alice", PW).await;
+    let dave_id = crate::common::create_user(&migrator_pool, "dave@acme.test", "Dave", PW).await;
+    let erin_id = crate::common::create_user(&migrator_pool, "erin@best.test", "Erin", PW).await;
+    crate::common::add_membership_with(
         &migrator_pool,
         acme,
         alice_id,
@@ -150,7 +155,7 @@ async fn put_default_assignee_mode_rejects_nonexistent_foreign_inactive_and_null
         MembershipStatus::Active,
     )
     .await;
-    common::add_membership_with(
+    crate::common::add_membership_with(
         &migrator_pool,
         acme,
         dave_id,
@@ -158,7 +163,7 @@ async fn put_default_assignee_mode_rejects_nonexistent_foreign_inactive_and_null
         MembershipStatus::Inactive,
     )
     .await;
-    common::add_membership_with(
+    crate::common::add_membership_with(
         &migrator_pool,
         best,
         erin_id,
@@ -167,8 +172,8 @@ async fn put_default_assignee_mode_rejects_nonexistent_foreign_inactive_and_null
     )
     .await;
 
-    let router = common::build_router(&migrator_pool).await;
-    let alice = common::login_cookie(&router, "alice@acme.test", PW).await;
+    let router = crate::common::build_router(&migrator_pool).await;
+    let alice = crate::common::login_cookie(&router, "alice@acme.test", PW).await;
 
     let mut bodies = Vec::new();
     for candidate in [
@@ -177,7 +182,7 @@ async fn put_default_assignee_mode_rejects_nonexistent_foreign_inactive_and_null
         json!(dave_id),
         json!(null),
     ] {
-        let resp = common::put_json_with_cookie(
+        let resp = crate::common::put_json_with_cookie(
             &router,
             "/api/organization/intake-settings",
             &alice,
@@ -188,7 +193,7 @@ async fn put_default_assignee_mode_rejects_nonexistent_foreign_inactive_and_null
         )
         .await;
         assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
-        bodies.push(common::body_json(resp).await);
+        bodies.push(crate::common::body_json(resp).await);
     }
     assert!(bodies
         .iter()
@@ -222,12 +227,12 @@ async fn put_default_assignee_mode_rejects_nonexistent_foreign_inactive_and_null
 async fn put_non_default_modes_accept_null_active_or_stale_echo_reject_anything_else(
     migrator_pool: PgPool,
 ) {
-    let acme = common::create_org(&migrator_pool, "Acme Realty").await;
-    let best = common::create_org(&migrator_pool, "Best Realty").await;
-    let alice_id = common::create_user(&migrator_pool, "alice@acme.test", "Alice", PW).await;
-    let dave_id = common::create_user(&migrator_pool, "dave@acme.test", "Dave", PW).await;
-    let erin_id = common::create_user(&migrator_pool, "erin@best.test", "Erin", PW).await;
-    common::add_membership_with(
+    let acme = crate::common::create_org(&migrator_pool, "Acme Realty").await;
+    let best = crate::common::create_org(&migrator_pool, "Best Realty").await;
+    let alice_id = crate::common::create_user(&migrator_pool, "alice@acme.test", "Alice", PW).await;
+    let dave_id = crate::common::create_user(&migrator_pool, "dave@acme.test", "Dave", PW).await;
+    let erin_id = crate::common::create_user(&migrator_pool, "erin@best.test", "Erin", PW).await;
+    crate::common::add_membership_with(
         &migrator_pool,
         acme,
         alice_id,
@@ -235,7 +240,7 @@ async fn put_non_default_modes_accept_null_active_or_stale_echo_reject_anything_
         MembershipStatus::Active,
     )
     .await;
-    common::add_membership_with(
+    crate::common::add_membership_with(
         &migrator_pool,
         acme,
         dave_id,
@@ -243,7 +248,7 @@ async fn put_non_default_modes_accept_null_active_or_stale_echo_reject_anything_
         MembershipStatus::Active,
     )
     .await;
-    common::add_membership_with(
+    crate::common::add_membership_with(
         &migrator_pool,
         best,
         erin_id,
@@ -252,12 +257,12 @@ async fn put_non_default_modes_accept_null_active_or_stale_echo_reject_anything_
     )
     .await;
 
-    let router = common::build_router(&migrator_pool).await;
-    let alice = common::login_cookie(&router, "alice@acme.test", PW).await;
+    let router = crate::common::build_router(&migrator_pool).await;
+    let alice = crate::common::login_cookie(&router, "alice@acme.test", PW).await;
 
     // Establish dave as the stored default_assignee-mode value, then
     // deactivate him — a stale-but-stored value.
-    let resp = common::put_json_with_cookie(
+    let resp = crate::common::put_json_with_cookie(
         &router,
         "/api/organization/intake-settings",
         &alice,
@@ -268,7 +273,7 @@ async fn put_non_default_modes_accept_null_active_or_stale_echo_reject_anything_
     )
     .await;
     assert_eq!(resp.status(), StatusCode::OK);
-    let deactivate = common::put_json_with_cookie(
+    let deactivate = crate::common::put_json_with_cookie(
         &router,
         &format!("/api/organization/members/{dave_id}/status"),
         &alice,
@@ -279,7 +284,7 @@ async fn put_non_default_modes_accept_null_active_or_stale_echo_reject_anything_
 
     // Switching to round_robin, echoing dave (now inactive) back
     // verbatim: accepted.
-    let resp = common::put_json_with_cookie(
+    let resp = crate::common::put_json_with_cookie(
         &router,
         "/api/organization/intake-settings",
         &alice,
@@ -295,7 +300,7 @@ async fn put_non_default_modes_accept_null_active_or_stale_echo_reject_anything_
     assert_eq!(stored_default(&migrator_pool, acme).await, Some(dave_id));
 
     // Switching to unassigned with null: accepted.
-    let resp = common::put_json_with_cookie(
+    let resp = crate::common::put_json_with_cookie(
         &router,
         "/api/organization/intake-settings",
         &alice,
@@ -306,7 +311,7 @@ async fn put_non_default_modes_accept_null_active_or_stale_echo_reject_anything_
     assert_eq!(stored_default(&migrator_pool, acme).await, None);
 
     // Switching to round_robin with an ACTIVE member: accepted.
-    let resp = common::put_json_with_cookie(
+    let resp = crate::common::put_json_with_cookie(
         &router,
         "/api/organization/intake-settings",
         &alice,
@@ -320,7 +325,7 @@ async fn put_non_default_modes_accept_null_active_or_stale_echo_reject_anything_
     // no longer the stored value) — is 422 identically; nothing changes.
     let mut bodies = Vec::new();
     for candidate in [json!(erin_id), json!(Uuid::new_v4()), json!(dave_id)] {
-        let resp = common::put_json_with_cookie(
+        let resp = crate::common::put_json_with_cookie(
             &router,
             "/api/organization/intake-settings",
             &alice,
@@ -331,7 +336,7 @@ async fn put_non_default_modes_accept_null_active_or_stale_echo_reject_anything_
         )
         .await;
         assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
-        bodies.push(common::body_json(resp).await);
+        bodies.push(crate::common::body_json(resp).await);
     }
     assert!(bodies
         .iter()
@@ -361,10 +366,10 @@ async fn put_non_default_modes_accept_null_active_or_stale_echo_reject_anything_
 async fn put_requires_both_keys_rejects_the_old_007c_body_and_get_survives_deactivation(
     migrator_pool: PgPool,
 ) {
-    let org_id = common::create_org(&migrator_pool, "Acme Realty").await;
-    common::seed_stages(&migrator_pool, org_id).await;
-    let alice_id = common::create_user(&migrator_pool, "alice@acme.test", "Alice", PW).await;
-    common::add_membership_with(
+    let org_id = crate::common::create_org(&migrator_pool, "Acme Realty").await;
+    crate::common::seed_stages(&migrator_pool, org_id).await;
+    let alice_id = crate::common::create_user(&migrator_pool, "alice@acme.test", "Alice", PW).await;
+    crate::common::add_membership_with(
         &migrator_pool,
         org_id,
         alice_id,
@@ -372,14 +377,14 @@ async fn put_requires_both_keys_rejects_the_old_007c_body_and_get_survives_deact
         MembershipStatus::Active,
     )
     .await;
-    let bob_id = common::create_user(&migrator_pool, "bob@acme.test", "Bob", PW).await;
-    common::add_membership(&migrator_pool, org_id, bob_id).await;
+    let bob_id = crate::common::create_user(&migrator_pool, "bob@acme.test", "Bob", PW).await;
+    crate::common::add_membership(&migrator_pool, org_id, bob_id).await;
 
-    let router = common::build_router(&migrator_pool).await;
-    let alice = common::login_cookie(&router, "alice@acme.test", PW).await;
+    let router = crate::common::build_router(&migrator_pool).await;
+    let alice = crate::common::login_cookie(&router, "alice@acme.test", PW).await;
 
     // Both keys absent.
-    let resp = common::put_json_with_cookie(
+    let resp = crate::common::put_json_with_cookie(
         &router,
         "/api/organization/intake-settings",
         &alice,
@@ -389,7 +394,7 @@ async fn put_requires_both_keys_rejects_the_old_007c_body_and_get_survives_deact
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
 
     // Mode present, assignee key absent.
-    let resp = common::put_json_with_cookie(
+    let resp = crate::common::put_json_with_cookie(
         &router,
         "/api/organization/intake-settings",
         &alice,
@@ -400,7 +405,7 @@ async fn put_requires_both_keys_rejects_the_old_007c_body_and_get_survives_deact
 
     // The pre-008 007c single-key body (mode key absent): 400, never
     // silently interpreted as "keep the current mode".
-    let resp = common::put_json_with_cookie(
+    let resp = crate::common::put_json_with_cookie(
         &router,
         "/api/organization/intake-settings",
         &alice,
@@ -415,7 +420,7 @@ async fn put_requires_both_keys_rejects_the_old_007c_body_and_get_survives_deact
     );
 
     // Unknown mode string -> 400.
-    let resp = common::put_json_with_cookie(
+    let resp = crate::common::put_json_with_cookie(
         &router,
         "/api/organization/intake-settings",
         &alice,
@@ -425,7 +430,7 @@ async fn put_requires_both_keys_rejects_the_old_007c_body_and_get_survives_deact
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
 
     // Malformed UUID -> 400.
-    let resp = common::put_json_with_cookie(
+    let resp = crate::common::put_json_with_cookie(
         &router,
         "/api/organization/intake-settings",
         &alice,
@@ -439,7 +444,7 @@ async fn put_requires_both_keys_rejects_the_old_007c_body_and_get_survives_deact
 
     // Set to bob (default_assignee mode), then deactivate bob: GET still
     // reflects bob (retained).
-    let resp = common::put_json_with_cookie(
+    let resp = crate::common::put_json_with_cookie(
         &router,
         "/api/organization/intake-settings",
         &alice,
@@ -451,7 +456,7 @@ async fn put_requires_both_keys_rejects_the_old_007c_body_and_get_survives_deact
     .await;
     assert_eq!(resp.status(), StatusCode::OK);
 
-    let deactivate = common::put_json_with_cookie(
+    let deactivate = crate::common::put_json_with_cookie(
         &router,
         &format!("/api/organization/members/{bob_id}/status"),
         &alice,
@@ -460,9 +465,10 @@ async fn put_requires_both_keys_rejects_the_old_007c_body_and_get_survives_deact
     .await;
     assert_eq!(deactivate.status(), StatusCode::OK);
 
-    let resp = common::get_with_cookie(&router, "/api/organization/intake-settings", &alice).await;
+    let resp =
+        crate::common::get_with_cookie(&router, "/api/organization/intake-settings", &alice).await;
     assert_eq!(
-        common::body_json(resp).await,
+        crate::common::body_json(resp).await,
         json!({
             "intake_routing_mode": "default_assignee",
             "intake_default_assignee_user_id": bob_id,
@@ -472,7 +478,7 @@ async fn put_requires_both_keys_rejects_the_old_007c_body_and_get_survives_deact
 
     // Remaining in default_assignee mode can never clear (422) — clearing
     // is expressed by switching mode.
-    let resp = common::put_json_with_cookie(
+    let resp = crate::common::put_json_with_cookie(
         &router,
         "/api/organization/intake-settings",
         &alice,
@@ -482,7 +488,7 @@ async fn put_requires_both_keys_rejects_the_old_007c_body_and_get_survives_deact
     assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
 
     // Switching mode WITH null clears.
-    let resp = common::put_json_with_cookie(
+    let resp = crate::common::put_json_with_cookie(
         &router,
         "/api/organization/intake-settings",
         &alice,
@@ -505,8 +511,8 @@ async fn put_requires_both_keys_rejects_the_old_007c_body_and_get_survives_deact
 #[sqlx::test]
 #[ignore]
 async fn crm_app_update_grant_is_scoped_to_the_new_column_and_updated_at(migrator_pool: PgPool) {
-    let org_id = common::create_org(&migrator_pool, "Acme Realty").await;
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let org_id = crate::common::create_org(&migrator_pool, "Acme Realty").await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
 
     // Allowed.
     sqlx::query("UPDATE organization SET intake_default_assignee_user_id = NULL, updated_at = now() WHERE id = $1")
@@ -537,7 +543,7 @@ async fn crm_app_update_grant_is_scoped_to_the_new_column_and_updated_at(migrato
 async fn routing_decision_strategy_check_accepts_new_values_and_rejects_unknown(
     migrator_pool: PgPool,
 ) {
-    let (org_id, user_id) = common::create_org_with_stages_and_member(
+    let (org_id, user_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Acme Realty",
         "alice@acme.test",
@@ -607,7 +613,7 @@ async fn routing_decision_strategy_check_accepts_new_values_and_rejects_unknown(
 #[sqlx::test]
 #[ignore]
 async fn routing_decision_strategy_check_accepts_round_robin(migrator_pool: PgPool) {
-    let (org_id, user_id) = common::create_org_with_stages_and_member(
+    let (org_id, user_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Acme Realty",
         "alice@acme.test",
@@ -656,10 +662,10 @@ async fn routing_decision_strategy_check_accepts_round_robin(migrator_pool: PgPo
 #[sqlx::test]
 #[ignore]
 async fn crm_app_can_write_intake_routing_mode_and_the_rotation_table(migrator_pool: PgPool) {
-    let org_id = common::create_org(&migrator_pool, "Acme Realty").await;
-    let alice_id = common::create_user(&migrator_pool, "alice@acme.test", "Alice", PW).await;
-    common::add_membership(&migrator_pool, org_id, alice_id).await;
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let org_id = crate::common::create_org(&migrator_pool, "Acme Realty").await;
+    let alice_id = crate::common::create_user(&migrator_pool, "alice@acme.test", "Alice", PW).await;
+    crate::common::add_membership(&migrator_pool, org_id, alice_id).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
 
     sqlx::query("UPDATE organization SET intake_routing_mode = 'round_robin' WHERE id = $1")
         .bind(org_id)

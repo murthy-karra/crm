@@ -5,7 +5,6 @@
 //! tracing-capture, the future-Date clamp, concurrency, the
 //! multi-recipient blast-radius bound, and the held-queue flood cap. Run
 //! only via ./scripts/check-db.
-mod common;
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
@@ -29,10 +28,10 @@ const TEST_INBOUND_EMAIL_SECRET: &str = "test-inbound-email-secret-value-32b";
 fn test_config() -> Config {
     Config::from_source(|key| match key {
         "CRM_SESSION_SECRET" => Some("a".repeat(32)),
-        "CRM_RAW_PAYLOAD_KEY" => Some(common::TEST_RAW_PAYLOAD_KEY_HEX.to_string()),
-        "CENTRIFUGO_HTTP_API_KEY" => Some(common::TEST_CENTRIFUGO_HTTP_API_KEY.to_string()),
+        "CRM_RAW_PAYLOAD_KEY" => Some(crate::common::TEST_RAW_PAYLOAD_KEY_HEX.to_string()),
+        "CENTRIFUGO_HTTP_API_KEY" => Some(crate::common::TEST_CENTRIFUGO_HTTP_API_KEY.to_string()),
         "CENTRIFUGO_TOKEN_HMAC_SECRET" => {
-            Some(common::TEST_CENTRIFUGO_TOKEN_HMAC_SECRET.to_string())
+            Some(crate::common::TEST_CENTRIFUGO_TOKEN_HMAC_SECRET.to_string())
         }
         "CRM_INBOUND_EMAIL_SECRET" => Some(TEST_INBOUND_EMAIL_SECRET.to_string()),
         _ => None,
@@ -41,7 +40,7 @@ fn test_config() -> Config {
 }
 
 async fn build_router(migrator_pool: &PgPool, publisher: Publisher) -> Router {
-    let app_pool = common::connect_as_app(migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(migrator_pool).await;
     let config = test_config();
     let state = AppState::for_tests(app_pool, &config, publisher);
     crm_api::build_app(state)
@@ -60,7 +59,7 @@ fn capture_recipient(token: &str) -> String {
 
 /// Mint-if-absent + read back the plaintext token — mirrors what
 /// `AcceptInvitation`/`SetMemberStatus` do in production; fixture users
-/// created via `common::add_membership` bypass those commands, so tests
+/// created via `crate::common::add_membership` bypass those commands, so tests
 /// mint explicitly.
 async fn capture_token_for(pool: &PgPool, org_id: Uuid, user_id: Uuid) -> String {
     let mut tx = pool.begin().await.unwrap();
@@ -190,7 +189,8 @@ async fn fixture(pool: &PgPool, org_name: &str, client_email: &str) -> Fixture {
     let slug: String = org_name.to_lowercase().replace(' ', "");
     let alice_email = format!("alice@{slug}.test");
     let (org_id, alice_id) =
-        common::create_org_with_stages_and_member(pool, org_name, &alice_email, "Alice", PW).await;
+        crate::common::create_org_with_stages_and_member(pool, org_name, &alice_email, "Alice", PW)
+            .await;
     let stage_id = first_stage_id(pool, org_id).await;
     let person_id = insert_person(pool, org_id, stage_id, Some(alice_id)).await;
     insert_contact_method(pool, org_id, person_id, "email", client_email).await;
@@ -207,8 +207,10 @@ async fn fixture(pool: &PgPool, org_name: &str, client_email: &str) -> Fixture {
 }
 
 async fn today_reason_codes(router: &Router, cookie: &str, person_id: Uuid) -> Option<Vec<String>> {
-    let today =
-        common::body_json(common::get_with_cookie(router, "/api/today", cookie).await).await;
+    let today = crate::common::body_json(
+        crate::common::get_with_cookie(router, "/api/today", cookie).await,
+    )
+    .await;
     let items = today["items"].as_array().unwrap();
     items
         .iter()
@@ -224,8 +226,8 @@ async fn today_reason_codes(router: &Router, cookie: &str, person_id: Uuid) -> O
 }
 
 async fn person_history(router: &Router, cookie: &str, person_id: Uuid) -> Vec<Value> {
-    let detail = common::body_json(
-        common::get_with_cookie(router, &format!("/api/people/{person_id}"), cookie).await,
+    let detail = crate::common::body_json(
+        crate::common::get_with_cookie(router, &format!("/api/people/{person_id}"), cookie).await,
     )
     .await;
     detail["history"].as_array().unwrap().clone()
@@ -248,7 +250,7 @@ async fn cc_from_agent_login_creates_outbound_row_clears_today_and_shape_pins_hi
     let f = fixture(&migrator_pool, "Acme Realty Cc", "client-cc@example.com").await;
     let publisher = Publisher::recording();
     let router = build_router(&migrator_pool, publisher.clone()).await;
-    let alice_cookie = common::login_cookie(&router, &f.alice_email, PW).await;
+    let alice_cookie = crate::common::login_cookie(&router, &f.alice_email, PW).await;
 
     // Before: the Person is on alice's Today (unanswered Inquiry).
     assert!(today_reason_codes(&router, &alice_cookie, f.person_id)
@@ -265,7 +267,7 @@ async fn cc_from_agent_login_creates_outbound_row_clears_today_and_shape_pins_hi
         post_inbound_email(&router, &capture_recipient(&f.alice_token), raw.as_bytes()).await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert_eq!(
-        common::body_json(resp).await,
+        crate::common::body_json(resp).await,
         json!({ "status": "accepted" })
     );
 
@@ -367,7 +369,7 @@ async fn client_reply_all_creates_inbound_row_and_arms_client_replied(migrator_p
     .await;
     let publisher = Publisher::recording();
     let router = build_router(&migrator_pool, publisher.clone()).await;
-    let alice_cookie = common::login_cookie(&router, &f.alice_email, PW).await;
+    let alice_cookie = crate::common::login_cookie(&router, &f.alice_email, PW).await;
 
     // First, an outbound CC clears the Inquiry-based Today arm so the
     // subsequent inbound reply is unambiguously what re-arms it.
@@ -534,8 +536,8 @@ async fn retroactive_forward_backdates_and_dedups_both_layers(migrator_pool: PgP
 #[sqlx::test]
 #[ignore]
 async fn forged_token_is_rejected_and_nothing_stored(migrator_pool: PgPool) {
-    let org_id = common::create_org(&migrator_pool, "Acme Realty Forge").await;
-    common::seed_stages(&migrator_pool, org_id).await;
+    let org_id = crate::common::create_org(&migrator_pool, "Acme Realty Forge").await;
+    crate::common::seed_stages(&migrator_pool, org_id).await;
     let router = build_router(&migrator_pool, Publisher::recording()).await;
 
     let resp = post_inbound_email(
@@ -546,7 +548,7 @@ async fn forged_token_is_rejected_and_nothing_stored(migrator_pool: PgPool) {
     .await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert_eq!(
-        common::body_json(resp).await,
+        crate::common::body_json(resp).await,
         json!({ "status": "rejected" })
     );
     assert_eq!(count(&migrator_pool, "correspondence_raw", org_id).await, 0);
@@ -565,8 +567,8 @@ async fn org_a_token_never_matches_an_org_b_person_with_the_same_email(migrator_
     let f = fixture(&migrator_pool, "Acme Realty Iso A", shared_email).await;
 
     // Org B has a DIFFERENT Person with the identical email address.
-    let org_b = common::create_org(&migrator_pool, "Acme Realty Iso B").await;
-    common::seed_stages(&migrator_pool, org_b).await;
+    let org_b = crate::common::create_org(&migrator_pool, "Acme Realty Iso B").await;
+    crate::common::seed_stages(&migrator_pool, org_b).await;
     let stage_b = first_stage_id(&migrator_pool, org_b).await;
     let person_b = insert_person(&migrator_pool, org_b, stage_b, None).await;
     insert_contact_method(&migrator_pool, org_b, person_b, "email", shared_email).await;
@@ -861,7 +863,7 @@ async fn multi_recipient_outbound_creates_one_row_and_attempt_per_matched_person
 ) {
     let org_name = "Acme Realty Multi";
     let alice_email = "alice@acmerealtymulti.test";
-    let (org_id, alice_id) = common::create_org_with_stages_and_member(
+    let (org_id, alice_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         org_name,
         alice_email,
@@ -1072,7 +1074,7 @@ async fn held_queue_flood_cap_admits_no_new_row_past_500(migrator_pool: PgPool) 
     let resp = post_inbound_email(&router, &capture_addr, raw.as_bytes()).await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert_eq!(
-        common::body_json(resp).await,
+        crate::common::body_json(resp).await,
         json!({ "status": "accepted" }),
         "the frozen envelope is unaffected by the overflow"
     );

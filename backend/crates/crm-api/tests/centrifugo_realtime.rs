@@ -13,7 +13,6 @@
 //! Centrifugo` publish is a detached `tokio::spawn`, which only progresses
 //! at await points, so every assertion below awaits the WebSocket receipt
 //! itself rather than asserting a publish "happened" without awaiting.
-mod common;
 
 use std::env;
 use std::time::Duration;
@@ -79,7 +78,7 @@ async fn assert_centrifugo_reachable() {
 fn real_config() -> Config {
     Config::from_source(|key| match key {
         "CRM_SESSION_SECRET" => Some("a".repeat(32)),
-        "CRM_RAW_PAYLOAD_KEY" => Some(common::TEST_RAW_PAYLOAD_KEY_HEX.to_string()),
+        "CRM_RAW_PAYLOAD_KEY" => Some(crate::common::TEST_RAW_PAYLOAD_KEY_HEX.to_string()),
         "CENTRIFUGO_HTTP_API_KEY" => env::var("CENTRIFUGO_HTTP_API_KEY").ok(),
         "CENTRIFUGO_TOKEN_HMAC_SECRET" => env::var("CENTRIFUGO_TOKEN_HMAC_SECRET").ok(),
         "CRM_CENTRIFUGO_API_URL" => env::var("CRM_CENTRIFUGO_API_URL").ok(),
@@ -163,7 +162,7 @@ async fn centrifugo_delivers_scoped_events_denies_cross_org_and_never_replays(
 ) {
     assert_centrifugo_reachable().await;
 
-    let (org_a_id, alice_id) = common::create_org_with_stages_and_member(
+    let (org_a_id, alice_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Acme Realty",
         "alice@acme.test",
@@ -173,14 +172,14 @@ async fn centrifugo_delivers_scoped_events_denies_cross_org_and_never_replays(
     .await;
 
     let config = real_config();
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let publisher = Publisher::Centrifugo(CentrifugoTransport::new(
         config.centrifugo_api_url.clone(),
         &config.centrifugo_api_key,
     ));
     let state = AppState::for_tests(app_pool, &config, publisher);
     let router = crm_api::build_app(state);
-    let alice_cookie = common::login_cookie(&router, "alice@acme.test", "pw").await;
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
 
     // Two live connections: A holds a real Organization's token; B holds a
     // token for an unrelated, random Organization (Centrifugo is
@@ -226,7 +225,7 @@ async fn centrifugo_delivers_scoped_events_denies_cross_org_and_never_replays(
     // Trigger a real command: creates a Person assigned to Alice with a
     // fresh Inquiry, publishing person.changed{inquiry_received} to A's
     // channel.
-    let intake = common::post_inquiry(
+    let intake = crate::common::post_inquiry(
         &router,
         &alice_cookie,
         "zillow",
@@ -235,7 +234,7 @@ async fn centrifugo_delivers_scoped_events_denies_cross_org_and_never_replays(
     )
     .await;
     assert_eq!(intake.status(), axum::http::StatusCode::CREATED);
-    let person_id: Uuid = common::body_json(intake).await["person_id"]
+    let person_id: Uuid = crate::common::body_json(intake).await["person_id"]
         .as_str()
         .unwrap()
         .parse()
@@ -291,7 +290,7 @@ async fn centrifugo_delivers_scoped_events_denies_cross_org_and_never_replays(
 
     let wrong_secret_config = Config::from_source(|key| match key {
         "CRM_SESSION_SECRET" => Some("a".repeat(32)),
-        "CRM_RAW_PAYLOAD_KEY" => Some(common::TEST_RAW_PAYLOAD_KEY_HEX.to_string()),
+        "CRM_RAW_PAYLOAD_KEY" => Some(crate::common::TEST_RAW_PAYLOAD_KEY_HEX.to_string()),
         "CENTRIFUGO_HTTP_API_KEY" => Some("unused".to_string()),
         "CENTRIFUGO_TOKEN_HMAC_SECRET" => Some("z".repeat(32)),
         _ => None,
@@ -313,7 +312,7 @@ async fn centrifugo_delivers_scoped_events_denies_cross_org_and_never_replays(
     // the change over plain HTTP.
     ws_a.close(None).await.ok();
 
-    let log_contact = common::post_json_with_cookie(
+    let log_contact = crate::common::post_json_with_cookie(
         &router,
         &format!("/api/people/{person_id}/contact-attempts"),
         &alice_cookie,
@@ -340,9 +339,10 @@ async fn centrifugo_delivers_scoped_events_denies_cross_org_and_never_replays(
         "no replay of the missed contact_attempted event: got {missed_push:?}"
     );
 
-    let today =
-        common::body_json(common::get_with_cookie(&router, "/api/today", &alice_cookie).await)
-            .await;
+    let today = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/today", &alice_cookie).await,
+    )
+    .await;
     assert_eq!(
         today["items"].as_array().unwrap().len(),
         0,

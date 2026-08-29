@@ -3,7 +3,6 @@
 //! (docs/specs/SLICE_006.md §13 item 2), plus the sweep (`run_once`,
 //! driven directly with backdated rows) and the `call_completed` history
 //! kind. Run only via ./scripts/check-db.
-mod common;
 
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -70,8 +69,8 @@ async fn build_router_with_telephony(
     publisher: Publisher,
     telephony: Option<Arc<Telephony>>,
 ) -> Router {
-    let app_pool = common::connect_as_app(migrator_pool).await;
-    let config = common::test_config();
+    let app_pool = crate::common::connect_as_app(migrator_pool).await;
+    let config = crate::common::test_config();
     let mut state = AppState::for_tests(app_pool, &config, publisher);
     if let Some(telephony) = telephony {
         state = state.with_telephony(telephony);
@@ -82,7 +81,7 @@ async fn build_router_with_telephony(
 /// Acme (alice, carol) and Best (bob); a scripted telephony runtime with
 /// short dial-task timeouts; logged-in cookies for all three.
 async fn fixture(migrator_pool: &PgPool) -> Fixture {
-    let (org_id, alice_id) = common::create_org_with_stages_and_member(
+    let (org_id, alice_id) = crate::common::create_org_with_stages_and_member(
         migrator_pool,
         "Acme Realty",
         "alice@acme.test",
@@ -90,9 +89,9 @@ async fn fixture(migrator_pool: &PgPool) -> Fixture {
         PW,
     )
     .await;
-    let carol_id = common::create_user(migrator_pool, "carol@acme.test", "Carol", PW).await;
-    common::add_membership(migrator_pool, org_id, carol_id).await;
-    let (other_org_id, _bob_id) = common::create_org_with_stages_and_member(
+    let carol_id = crate::common::create_user(migrator_pool, "carol@acme.test", "Carol", PW).await;
+    crate::common::add_membership(migrator_pool, org_id, carol_id).await;
+    let (other_org_id, _bob_id) = crate::common::create_org_with_stages_and_member(
         migrator_pool,
         "Best Realty",
         "bob@best.test",
@@ -113,9 +112,9 @@ async fn fixture(migrator_pool: &PgPool) -> Fixture {
     let router =
         build_router_with_telephony(migrator_pool, publisher.clone(), Some(telephony.clone()))
             .await;
-    let alice = common::login_cookie(&router, "alice@acme.test", PW).await;
-    let carol = common::login_cookie(&router, "carol@acme.test", PW).await;
-    let bob = common::login_cookie(&router, "bob@best.test", PW).await;
+    let alice = crate::common::login_cookie(&router, "alice@acme.test", PW).await;
+    let carol = crate::common::login_cookie(&router, "carol@acme.test", PW).await;
+    let bob = crate::common::login_cookie(&router, "bob@best.test", PW).await;
     Fixture {
         org_id,
         alice_id,
@@ -152,7 +151,7 @@ async fn create_person_with_phone_digits(
     assignee: Option<Uuid>,
 ) -> ((Uuid, Uuid, Uuid), String) {
     let (phone, digits) = next_phone();
-    let resp = common::post_inquiry(
+    let resp = crate::common::post_inquiry(
         router,
         cookie,
         "zillow",
@@ -161,13 +160,13 @@ async fn create_person_with_phone_digits(
     )
     .await;
     assert_eq!(resp.status(), StatusCode::CREATED);
-    let person_id: Uuid = common::body_json(resp).await["person_id"]
+    let person_id: Uuid = crate::common::body_json(resp).await["person_id"]
         .as_str()
         .unwrap()
         .parse()
         .unwrap();
-    let detail = common::body_json(
-        common::get_with_cookie(router, &format!("/api/people/{person_id}"), cookie).await,
+    let detail = crate::common::body_json(
+        crate::common::get_with_cookie(router, &format!("/api/people/{person_id}"), cookie).await,
     )
     .await;
     let methods = detail["contact_methods"].as_array().unwrap();
@@ -187,7 +186,7 @@ async fn start(
     person_id: Uuid,
     cm: Uuid,
 ) -> axum::response::Response {
-    common::post_json_with_cookie(
+    crate::common::post_json_with_cookie(
         router,
         &format!("/api/people/{person_id}/calls"),
         cookie,
@@ -220,9 +219,10 @@ async fn hangup(router: &Router, cookie: &str, call_id: Uuid) -> axum::response:
 }
 
 async fn get_call(router: &Router, cookie: &str, call_id: Uuid) -> Value {
-    let resp = common::get_with_cookie(router, &format!("/api/calls/{call_id}"), cookie).await;
+    let resp =
+        crate::common::get_with_cookie(router, &format!("/api/calls/{call_id}"), cookie).await;
     assert_eq!(resp.status(), StatusCode::OK);
-    common::body_json(resp).await["call"].clone()
+    crate::common::body_json(resp).await["call"].clone()
 }
 
 /// Polls `GET /api/calls/{id}` until `status`, or panics after 5 s.
@@ -257,7 +257,7 @@ async fn start_as_with_agent_present(
 ) -> (Uuid, Value) {
     let resp = start(&f.router, cookie, person_id, cm).await;
     assert_eq!(resp.status(), StatusCode::CREATED);
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     let call_id: Uuid = body["call"]["id"].as_str().unwrap().parse().unwrap();
     f.provider.set_present(
         &Telephony::room_for(call_id),
@@ -374,7 +374,10 @@ async fn today_has(router: &Router, cookie: &str, person_id: Uuid) -> bool {
 
 /// `person_id`'s `TodayItem` on `cookie`'s Today, if any.
 async fn today_item(router: &Router, cookie: &str, person_id: Uuid) -> Option<Value> {
-    let body = common::body_json(common::get_with_cookie(router, "/api/today", cookie).await).await;
+    let body = crate::common::body_json(
+        crate::common::get_with_cookie(router, "/api/today", cookie).await,
+    )
+    .await;
     body["items"]
         .as_array()
         .unwrap()
@@ -397,7 +400,7 @@ async fn today_priority(router: &Router, cookie: &str, person_id: Uuid) -> Optio
 #[sqlx::test]
 #[ignore]
 async fn crm_app_call_grants_are_exactly_section_2(migrator_pool: PgPool) {
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     assert!(sqlx::query("SELECT * FROM call")
         .fetch_all(&app_pool)
         .await
@@ -466,7 +469,7 @@ async fn start_returns_201_with_a_join_grant_whose_claims_are_exactly_section_3(
 
     let resp = start(&f.router, &f.alice, person_id, phone).await;
     assert_eq!(resp.status(), StatusCode::CREATED);
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     let call = &body["call"];
     let call_id: Uuid = call["id"].as_str().unwrap().parse().unwrap();
     assert_eq!(call["status"], "placing");
@@ -612,7 +615,7 @@ async fn start_with_an_invalid_contact_method_is_an_identical_422(migrator_pool:
     );
 
     // Unknown field and non-JSON are 400 `malformed_request`.
-    let resp = common::post_json_with_cookie(
+    let resp = crate::common::post_json_with_cookie(
         &f.router,
         &format!("/api/people/{person_id}/calls"),
         &f.alice,
@@ -620,7 +623,10 @@ async fn start_with_an_invalid_contact_method_is_an_identical_422(migrator_pool:
     )
     .await;
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
-    assert_eq!(common::body_json(resp).await["error"], "malformed_request");
+    assert_eq!(
+        crate::common::body_json(resp).await["error"],
+        "malformed_request"
+    );
 
     let (count,): (i64,) = sqlx::query_as("SELECT count(*) FROM call")
         .fetch_one(&migrator_pool)
@@ -651,8 +657,8 @@ async fn a_real_concurrent_second_call_is_409_from_the_unique_index(migrator_poo
     } else {
         (b, a)
     };
-    let created = common::body_json(created).await;
-    let conflict = common::body_json(conflict).await;
+    let created = crate::common::body_json(created).await;
+    let conflict = crate::common::body_json(conflict).await;
     assert_eq!(conflict["error"], "call_in_progress");
     assert_eq!(conflict["call_id"], created["call"]["id"]);
 
@@ -682,7 +688,7 @@ async fn provider_create_room_failure_settles_provider_error_and_is_503(migrator
     let resp = start(&f.router, &f.alice, person_id, phone).await;
     assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
     assert_eq!(
-        common::body_json(resp).await["error"],
+        crate::common::body_json(resp).await["error"],
         "telephony_unavailable"
     );
 
@@ -724,7 +730,10 @@ async fn answered_call_writes_exactly_one_reached_attempt_and_advances_today(
     let (call_id, _) = start_with_agent_present(&f, person_id, phone).await;
     let resp = dial(&f.router, &f.alice, call_id).await;
     assert_eq!(resp.status(), StatusCode::ACCEPTED);
-    assert_eq!(common::body_json(resp).await["call"]["status"], "placing");
+    assert_eq!(
+        crate::common::body_json(resp).await["call"]["status"],
+        "placing"
+    );
 
     let call = wait_for_status(&f.router, &f.alice, call_id, "answered").await;
     assert!(call["ringing_at"].is_string());
@@ -835,7 +844,8 @@ async fn answered_call_advances_a_non_caller_members_today(migrator_pool: PgPool
     // (other Organization) cannot.
     let carol_view = get_call(&f.router, &f.carol, call_id).await;
     assert_eq!(carol_view["status"], "answered");
-    let resp = common::get_with_cookie(&f.router, &format!("/api/calls/{call_id}"), &f.bob).await;
+    let resp =
+        crate::common::get_with_cookie(&f.router, &format!("/api/calls/{call_id}"), &f.bob).await;
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
 }
 
@@ -905,7 +915,7 @@ async fn agent_not_joined_and_provider_error_write_no_attempt(migrator_pool: PgP
     let (person_id, phone, _) =
         create_person_with_phone(&f.router, &f.alice, "lead9@example.com", Some(f.alice_id)).await;
     let resp = start(&f.router, &f.alice, person_id, phone).await;
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     let call_id: Uuid = body["call"]["id"].as_str().unwrap().parse().unwrap();
     assert_eq!(
         dial(&f.router, &f.alice, call_id).await.status(),
@@ -959,13 +969,13 @@ async fn hangup_before_ringing_is_cancelled_without_an_attempt(migrator_pool: Pg
     let (person_id, phone, _) =
         create_person_with_phone(&f.router, &f.alice, "lead10@example.com", Some(f.alice_id)).await;
     let resp = start(&f.router, &f.alice, person_id, phone).await;
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     let call_id: Uuid = body["call"]["id"].as_str().unwrap().parse().unwrap();
 
     // Mic denied: the client hangs up before ever dialing.
     let resp = hangup(&f.router, &f.alice, call_id).await;
     assert_eq!(resp.status(), StatusCode::OK);
-    let call = common::body_json(resp).await["call"].clone();
+    let call = crate::common::body_json(resp).await["call"].clone();
     assert_eq!(call["status"], "failed");
     assert_eq!(call["failure_reason"], "cancelled");
     assert!(call["ended_at"].is_string());
@@ -985,7 +995,7 @@ async fn hangup_before_ringing_is_cancelled_without_an_attempt(migrator_pool: Pg
     // deletes the room best-effort, writes nothing new.
     let resp = hangup(&f.router, &f.alice, call_id).await;
     assert_eq!(resp.status(), StatusCode::OK);
-    let again = common::body_json(resp).await["call"].clone();
+    let again = crate::common::body_json(resp).await["call"].clone();
     assert_eq!(again, call);
     assert_eq!(completed_for(&migrator_pool, call_id).await.len(), 1);
     let hangups = f
@@ -1000,7 +1010,10 @@ async fn hangup_before_ringing_is_cancelled_without_an_attempt(migrator_pool: Pg
     // to start a new call.
     let resp = dial(&f.router, &f.alice, call_id).await;
     assert_eq!(resp.status(), StatusCode::CONFLICT);
-    assert_eq!(common::body_json(resp).await["error"], "invalid_call_state");
+    assert_eq!(
+        crate::common::body_json(resp).await["error"],
+        "invalid_call_state"
+    );
     let resp = start(&f.router, &f.alice, person_id, phone).await;
     assert_eq!(resp.status(), StatusCode::CREATED);
 }
@@ -1025,12 +1038,15 @@ async fn hangup_while_the_dial_is_in_flight_is_cancelled_with_one_attempt_and_th
     // Double dial while ringing → 409.
     let resp = dial(&f.router, &f.alice, call_id).await;
     assert_eq!(resp.status(), StatusCode::CONFLICT);
-    assert_eq!(common::body_json(resp).await["error"], "invalid_call_state");
+    assert_eq!(
+        crate::common::body_json(resp).await["error"],
+        "invalid_call_state"
+    );
 
     // Hang up while the provider's dial is parked.
     let resp = hangup(&f.router, &f.alice, call_id).await;
     assert_eq!(resp.status(), StatusCode::OK);
-    let call = common::body_json(resp).await["call"].clone();
+    let call = crate::common::body_json(resp).await["call"].clone();
     assert_eq!(call["status"], "failed");
     assert_eq!(call["failure_reason"], "cancelled");
     let attempts = attempts_for(&migrator_pool, person_id).await;
@@ -1105,7 +1121,7 @@ async fn hangup_on_an_answered_call_ends_it_with_agent_hangup_and_talk_seconds(
 
     let resp = hangup(&f.router, &f.alice, call_id).await;
     assert_eq!(resp.status(), StatusCode::OK);
-    let call = common::body_json(resp).await["call"].clone();
+    let call = crate::common::body_json(resp).await["call"].clone();
     assert_eq!(call["status"], "ended");
     assert_eq!(call["end_reason"], "agent_hangup");
     assert!(call["failure_reason"].is_null());
@@ -1133,7 +1149,7 @@ async fn hangup_and_dial_are_caller_only_and_foreign_is_404(migrator_pool: PgPoo
     let (person_id, phone, _) =
         create_person_with_phone(&f.router, &f.alice, "lead13@example.com", None).await;
     let resp = start(&f.router, &f.alice, person_id, phone).await;
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     let call_id: Uuid = body["call"]["id"].as_str().unwrap().parse().unwrap();
 
     for (label, cookie, expected) in [
@@ -1151,7 +1167,7 @@ async fn hangup_and_dial_are_caller_only_and_foreign_is_404(migrator_pool: PgPoo
         assert_eq!(resp.status(), expected, "{label}");
     }
     let resp = hangup(&f.router, &f.carol, call_id).await;
-    assert_eq!(common::body_json(resp).await["error"], "forbidden");
+    assert_eq!(crate::common::body_json(resp).await["error"], "forbidden");
     let resp = hangup(&f.router, &f.bob, Uuid::new_v4()).await;
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
 
@@ -1194,7 +1210,7 @@ async fn webhook_remote_hangup_ends_an_answered_call_and_duplicates_are_noops(
     )
     .await;
     assert_eq!(resp.status(), StatusCode::OK);
-    assert_eq!(common::body_json(resp).await, json!({}));
+    assert_eq!(crate::common::body_json(resp).await, json!({}));
     let call = get_call(&f.router, &f.alice, call_id).await;
     assert_eq!(call["status"], "ended");
     assert_eq!(call["end_reason"], "remote_hangup");
@@ -1223,7 +1239,7 @@ async fn webhook_remote_hangup_ends_an_answered_call_and_duplicates_are_noops(
     // The caller's own (late) hangup is idempotent too.
     let resp = hangup(&f.router, &f.alice, call_id).await;
     assert_eq!(resp.status(), StatusCode::OK);
-    assert_eq!(common::body_json(resp).await["call"], call);
+    assert_eq!(crate::common::body_json(resp).await["call"], call);
 }
 
 #[sqlx::test]
@@ -1233,7 +1249,7 @@ async fn webhook_unknown_room_is_200_and_writes_nothing(migrator_pool: PgPool) {
     let (person_id, phone, _) =
         create_person_with_phone(&f.router, &f.alice, "lead15@example.com", None).await;
     let resp = start(&f.router, &f.alice, person_id, phone).await;
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     let call_id: Uuid = body["call"]["id"].as_str().unwrap().parse().unwrap();
     let before = recorded(&f.publisher).await.len();
 
@@ -1248,7 +1264,7 @@ async fn webhook_unknown_room_is_200_and_writes_nothing(migrator_pool: PgPool) {
     ] {
         let resp = webhook(&f.router, &f.telephony, event).await;
         assert_eq!(resp.status(), StatusCode::OK);
-        assert_eq!(common::body_json(resp).await, json!({}));
+        assert_eq!(crate::common::body_json(resp).await, json!({}));
     }
     let (status, _, _, _) = call_row(&migrator_pool, call_id).await;
     assert_eq!(status, "placing");
@@ -1312,7 +1328,7 @@ async fn webhook_with_a_tampered_body_wrong_secret_or_expired_token_is_401(migra
             .unwrap();
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED, "{label}");
         assert_eq!(
-            common::body_json(resp).await["error"],
+            crate::common::body_json(resp).await["error"],
             "unauthenticated",
             "{label}"
         );
@@ -1516,13 +1532,14 @@ async fn reads_work_and_writes_are_503_with_telephony_disabled(migrator_pool: Pg
     hangup(&f.router, &f.alice, call_id).await;
 
     let disabled = build_router_with_telephony(&migrator_pool, Publisher::recording(), None).await;
-    let cookie = common::login_cookie(&disabled, "alice@acme.test", PW).await;
+    let cookie = crate::common::login_cookie(&disabled, "alice@acme.test", PW).await;
     let call = get_call(&disabled, &cookie, call_id).await;
     assert_eq!(call["status"], "ended");
     assert_eq!(call["end_reason"], "agent_hangup");
     // The Person page (history included) still loads.
     let resp =
-        common::get_with_cookie(&disabled, &format!("/api/people/{person_id}"), &cookie).await;
+        crate::common::get_with_cookie(&disabled, &format!("/api/people/{person_id}"), &cookie)
+            .await;
     assert_eq!(resp.status(), StatusCode::OK);
 
     for (label, resp) in [
@@ -1532,7 +1549,7 @@ async fn reads_work_and_writes_are_503_with_telephony_disabled(migrator_pool: Pg
     ] {
         assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE, "{label}");
         assert_eq!(
-            common::body_json(resp).await["error"],
+            crate::common::body_json(resp).await["error"],
             "telephony_disabled",
             "{label}"
         );
@@ -1672,7 +1689,7 @@ async fn sweep_expires_a_backdated_placing_call_without_an_attempt(migrator_pool
         create_person_with_phone(&f.router, &f.alice, "lead30@example.com", Some(f.alice_id)).await;
     let resp = start(&f.router, &f.alice, person_id, phone).await;
     assert_eq!(resp.status(), StatusCode::CREATED);
-    let call_id: Uuid = common::body_json(resp).await["call"]["id"]
+    let call_id: Uuid = crate::common::body_json(resp).await["call"]["id"]
         .as_str()
         .unwrap()
         .parse()
@@ -1893,14 +1910,15 @@ async fn history_call_completed_sorts_after_a_same_instant_contact_attempted(
         ),
     ] {
         let cookie = if cookie.is_empty() {
-            common::login_cookie(&router, "carol@acme.test", PW).await
+            crate::common::login_cookie(&router, "carol@acme.test", PW).await
         } else {
             cookie
         };
         let resp =
-            common::get_with_cookie(&router, &format!("/api/people/{person_id}"), &cookie).await;
+            crate::common::get_with_cookie(&router, &format!("/api/people/{person_id}"), &cookie)
+                .await;
         assert_eq!(resp.status(), StatusCode::OK, "{label}");
-        let body = common::body_json(resp).await;
+        let body = crate::common::body_json(resp).await;
         let raw = body.to_string();
         assert!(!raw.contains(&digits), "{label}: history must be PII-free");
         let history = body["history"].as_array().unwrap();
@@ -2036,7 +2054,7 @@ async fn two_concurrent_dials_yield_one_202_and_one_recorded_dial(migrator_pool:
         b
     };
     assert_eq!(
-        common::body_json(conflict).await["error"],
+        crate::common::body_json(conflict).await["error"],
         "invalid_call_state"
     );
 
@@ -2062,13 +2080,15 @@ async fn alice_cannot_see_dial_or_hang_up_bobs_call(migrator_pool: PgPool) {
         create_person_with_phone(&f.router, &f.bob, "lead42@best.test", None).await;
     let resp = start(&f.router, &f.bob, bob_person, bob_phone).await;
     assert_eq!(resp.status(), StatusCode::CREATED);
-    let bob_call: Uuid = common::body_json(resp).await["call"]["id"]
+    let bob_call: Uuid = crate::common::body_json(resp).await["call"]["id"]
         .as_str()
         .unwrap()
         .parse()
         .unwrap();
 
-    let get = common::get_with_cookie(&f.router, &format!("/api/calls/{bob_call}"), &f.alice).await;
+    let get =
+        crate::common::get_with_cookie(&f.router, &format!("/api/calls/{bob_call}"), &f.alice)
+            .await;
     assert_eq!(get.status(), StatusCode::NOT_FOUND);
     let get_body = get.into_body().collect_bytes().await;
     let dial_resp = dial(&f.router, &f.alice, bob_call).await;
@@ -2122,7 +2142,7 @@ async fn webhook_with_a_valid_signature_but_non_json_body_is_200_and_writes_noth
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
-    assert_eq!(common::body_json(resp).await, json!({}));
+    assert_eq!(crate::common::body_json(resp).await, json!({}));
     assert_eq!(
         get_call(&f.router, &f.alice, call_id).await["status"],
         "answered"
@@ -2140,7 +2160,7 @@ async fn correct(
     call_id: Uuid,
     outcome: &str,
 ) -> axum::response::Response {
-    common::post_json_with_cookie(
+    crate::common::post_json_with_cookie(
         router,
         &format!("/api/calls/{call_id}/outcome"),
         cookie,
@@ -2220,7 +2240,7 @@ async fn correcting_an_answered_call_writes_one_correction_row_with_the_call_env
 
     let resp = correct(&f.router, &f.alice, call_id, "left_message").await;
     assert_eq!(resp.status(), StatusCode::OK);
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     assert_eq!(body["changed"], true);
     let attempt = &body["attempt"];
     assert_eq!(attempt.as_object().unwrap().len(), 6, "{attempt}");
@@ -2284,8 +2304,9 @@ async fn correcting_an_answered_call_writes_one_correction_row_with_the_call_env
 
     // History: original (superseded, call_id) → correction (corrects_id,
     // call_id) → call_completed; same occurred_at for the two attempts.
-    let detail = common::body_json(
-        common::get_with_cookie(&f.router, &format!("/api/people/{person_id}"), &f.alice).await,
+    let detail = crate::common::body_json(
+        crate::common::get_with_cookie(&f.router, &format!("/api/people/{person_id}"), &f.alice)
+            .await,
     )
     .await;
     let history = detail["history"].as_array().unwrap();
@@ -2347,7 +2368,7 @@ async fn same_outcome_is_unchanged_and_writes_and_publishes_nothing(migrator_poo
     // "same outcome" — see `choosing_the_observed_outcome_still_writes…`).
     let resp = correct(&f.router, &f.alice, call_id, "busy").await;
     assert_eq!(resp.status(), StatusCode::OK);
-    let correction_id = common::body_json(resp).await["attempt"]["id"].clone();
+    let correction_id = crate::common::body_json(resp).await["attempt"]["id"].clone();
     assert_eq!(attempt_rows(&migrator_pool, person_id).await.len(), 2);
     let before = recorded(&f.publisher).await.len();
 
@@ -2355,7 +2376,7 @@ async fn same_outcome_is_unchanged_and_writes_and_publishes_nothing(migrator_poo
     // the head: nothing written, nothing published.
     let resp = correct(&f.router, &f.alice, call_id, "busy").await;
     assert_eq!(resp.status(), StatusCode::OK);
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     assert_eq!(body["changed"], false);
     assert_eq!(body["attempt"]["id"], correction_id);
     assert_eq!(body["attempt"]["outcome"], "busy");
@@ -2390,7 +2411,7 @@ async fn choosing_the_observed_outcome_still_writes_the_agents_row_and_clears_th
 
     let resp = correct(&f.router, &f.alice, call_id, "reached").await;
     assert_eq!(resp.status(), StatusCode::OK);
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     assert_eq!(body["changed"], true);
     assert_eq!(body["attempt"]["outcome"], "reached");
     assert_eq!(body["attempt"]["corrects_id"], original[0].id.to_string());
@@ -2405,8 +2426,9 @@ async fn choosing_the_observed_outcome_still_writes_the_agents_row_and_clears_th
     // The Today `low` item is gone.
     assert!(!today_has(&f.router, &f.alice, person_id).await);
     // History: the root is superseded, the agent's row is the chosen one.
-    let detail = common::body_json(
-        common::get_with_cookie(&f.router, &format!("/api/people/{person_id}"), &f.alice).await,
+    let detail = crate::common::body_json(
+        crate::common::get_with_cookie(&f.router, &format!("/api/people/{person_id}"), &f.alice)
+            .await,
     )
     .await;
     let attempts = history_of_kind(detail["history"].as_array().unwrap(), "contact_attempted");
@@ -2422,7 +2444,7 @@ async fn choosing_the_observed_outcome_still_writes_the_agents_row_and_clears_th
     let before = recorded(&f.publisher).await.len();
     let resp = correct(&f.router, &f.alice, call_id, "reached").await;
     assert_eq!(resp.status(), StatusCode::OK);
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     assert_eq!(body["changed"], false);
     assert_eq!(body["attempt"]["id"], rows[1].id.to_string());
     assert_eq!(attempt_rows(&migrator_pool, person_id).await.len(), 2);
@@ -2440,7 +2462,7 @@ async fn choosing_the_observed_outcome_still_writes_the_agents_row_and_clears_th
     );
     let resp = correct(&f.router, &f.alice, call2, "no_answer").await;
     assert_eq!(resp.status(), StatusCode::OK);
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     assert_eq!(body["changed"], true);
     let rows = attempt_rows(&migrator_pool, person2).await;
     assert_eq!(rows.len(), 2, "{rows:?}");
@@ -2450,14 +2472,16 @@ async fn choosing_the_observed_outcome_still_writes_the_agents_row_and_clears_th
     assert_eq!(rows[1].corrects_id, Some(rows[0].id));
     assert_eq!(body["attempt"]["id"], rows[1].id.to_string());
     assert!(!today_has(&f.router, &f.alice, person2).await);
-    let detail = common::body_json(
-        common::get_with_cookie(&f.router, &format!("/api/people/{person2}"), &f.alice).await,
+    let detail = crate::common::body_json(
+        crate::common::get_with_cookie(&f.router, &format!("/api/people/{person2}"), &f.alice)
+            .await,
     )
     .await;
     let attempts = history_of_kind(detail["history"].as_array().unwrap(), "contact_attempted");
     assert_eq!(attempts[1]["id"], rows[1].id.to_string());
     assert_eq!(attempts[1]["detail"]["superseded"], false);
-    let body = common::body_json(correct(&f.router, &f.alice, call2, "no_answer").await).await;
+    let body =
+        crate::common::body_json(correct(&f.router, &f.alice, call2, "no_answer").await).await;
     assert_eq!(body["changed"], false);
     assert_eq!(attempt_rows(&migrator_pool, person2).await.len(), 2);
 }
@@ -2471,9 +2495,9 @@ async fn a_second_correction_chains_onto_the_first_with_strictly_increasing_reco
     let (call_id, person_id, _) = answered_and_ended(&f, "lead32@example.com", None).await;
 
     let first =
-        common::body_json(correct(&f.router, &f.alice, call_id, "left_message").await).await;
+        crate::common::body_json(correct(&f.router, &f.alice, call_id, "left_message").await).await;
     let second =
-        common::body_json(correct(&f.router, &f.alice, call_id, "wrong_number").await).await;
+        crate::common::body_json(correct(&f.router, &f.alice, call_id, "wrong_number").await).await;
     assert_eq!(second["changed"], true);
     assert_eq!(second["attempt"]["corrects_id"], first["attempt"]["id"]);
 
@@ -2490,14 +2514,16 @@ async fn a_second_correction_chains_onto_the_first_with_strictly_increasing_reco
 
     // The head lookup returns the second correction (a no-op save of the
     // same value echoes it).
-    let head = common::body_json(correct(&f.router, &f.alice, call_id, "wrong_number").await).await;
+    let head =
+        crate::common::body_json(correct(&f.router, &f.alice, call_id, "wrong_number").await).await;
     assert_eq!(head["changed"], false);
     assert_eq!(head["attempt"]["id"], rows[2].id.to_string());
 
     // History: every attempt but the head is superseded; order is
     // original, first, second, then call_completed.
-    let detail = common::body_json(
-        common::get_with_cookie(&f.router, &format!("/api/people/{person_id}"), &f.alice).await,
+    let detail = crate::common::body_json(
+        crate::common::get_with_cookie(&f.router, &format!("/api/people/{person_id}"), &f.alice)
+            .await,
     )
     .await;
     let history = detail["history"].as_array().unwrap();
@@ -2540,8 +2566,8 @@ async fn two_concurrent_corrections_serialize_on_the_call_lock_into_a_chain(migr
     );
     assert_eq!(a.status(), StatusCode::OK);
     assert_eq!(b.status(), StatusCode::OK);
-    let a = common::body_json(a).await;
-    let b = common::body_json(b).await;
+    let a = crate::common::body_json(a).await;
+    let b = crate::common::body_json(b).await;
     assert_eq!(a["changed"], true);
     assert_eq!(b["changed"], true);
 
@@ -2581,7 +2607,7 @@ async fn correction_is_caller_only_foreign_404_active_409_and_no_attempt_422(
     // direction: alice on bob's call → 404.
     let resp = correct(&f.router, &f.carol, call_id, "left_message").await;
     assert_eq!(resp.status(), StatusCode::FORBIDDEN);
-    assert_eq!(common::body_json(resp).await["error"], "forbidden");
+    assert_eq!(crate::common::body_json(resp).await["error"], "forbidden");
     let resp = correct(&f.router, &f.bob, call_id, "left_message").await;
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
     let foreign_body = resp.into_body().collect_bytes().await;
@@ -2591,7 +2617,7 @@ async fn correction_is_caller_only_foreign_404_active_409_and_no_attempt_422(
     let (bob_person, bob_phone, _) =
         create_person_with_phone(&f.router, &f.bob, "lead34b@example.com", None).await;
     let resp = start(&f.router, &f.bob, bob_person, bob_phone).await;
-    let bob_call: Uuid = common::body_json(resp).await["call"]["id"]
+    let bob_call: Uuid = crate::common::body_json(resp).await["call"]["id"]
         .as_str()
         .unwrap()
         .parse()
@@ -2602,8 +2628,11 @@ async fn correction_is_caller_only_foreign_404_active_409_and_no_attempt_422(
     // `sent` and unknown fields are 400 before any command runs.
     let resp = correct(&f.router, &f.alice, call_id, "sent").await;
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
-    assert_eq!(common::body_json(resp).await["error"], "malformed_request");
-    let resp = common::post_json_with_cookie(
+    assert_eq!(
+        crate::common::body_json(resp).await["error"],
+        "malformed_request"
+    );
+    let resp = crate::common::post_json_with_cookie(
         &f.router,
         &format!("/api/calls/{call_id}/outcome"),
         &f.alice,
@@ -2621,7 +2650,10 @@ async fn correction_is_caller_only_foreign_404_active_409_and_no_attempt_422(
     wait_for_status(&f.router, &f.alice, active, "answered").await;
     let resp = correct(&f.router, &f.alice, active, "left_message").await;
     assert_eq!(resp.status(), StatusCode::CONFLICT);
-    assert_eq!(common::body_json(resp).await["error"], "invalid_call_state");
+    assert_eq!(
+        crate::common::body_json(resp).await["error"],
+        "invalid_call_state"
+    );
     hangup(&f.router, &f.alice, active).await;
 
     // A call where nothing reached the callee → 422 no_contact_attempt.
@@ -2635,7 +2667,10 @@ async fn correction_is_caller_only_foreign_404_active_409_and_no_attempt_422(
     assert_eq!(call["failure_reason"], "provider_error");
     let resp = correct(&f.router, &f.alice, failed, "left_message").await;
     assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
-    assert_eq!(common::body_json(resp).await["error"], "no_contact_attempt");
+    assert_eq!(
+        crate::common::body_json(resp).await["error"],
+        "no_contact_attempt"
+    );
     assert!(attempt_rows(&migrator_pool, person2).await.is_empty());
 }
 
@@ -2646,9 +2681,9 @@ async fn today_shows_the_effective_outcome_for_a_member_who_has_the_person_by_as
 ) {
     let f = fixture(&migrator_pool).await;
     // Dave: a third member, neither caller nor carol.
-    let dave_id = common::create_user(&migrator_pool, "dave@acme.test", "Dave", PW).await;
-    common::add_membership(&migrator_pool, f.org_id, dave_id).await;
-    let dave = common::login_cookie(&f.router, "dave@acme.test", PW).await;
+    let dave_id = crate::common::create_user(&migrator_pool, "dave@acme.test", "Dave", PW).await;
+    crate::common::add_membership(&migrator_pool, f.org_id, dave_id).await;
+    let dave = crate::common::login_cookie(&f.router, "dave@acme.test", PW).await;
 
     let ((person_id, phone, _), digits) =
         create_person_with_phone_digits(&f.router, &f.alice, "lead35@example.com", Some(dave_id))
@@ -2684,7 +2719,7 @@ async fn today_shows_the_effective_outcome_for_a_member_who_has_the_person_by_as
 
     // A repeat Inquiry puts the Person back on dave's Today, whose
     // `last_contact_attempt` is the effective (corrected) row.
-    let resp = common::post_inquiry(
+    let resp = crate::common::post_inquiry(
         &f.router,
         &f.alice,
         "zillow",
@@ -2694,11 +2729,13 @@ async fn today_shows_the_effective_outcome_for_a_member_who_has_the_person_by_as
     .await;
     assert_eq!(resp.status(), StatusCode::CREATED);
     assert_eq!(
-        common::body_json(resp).await["person_id"],
+        crate::common::body_json(resp).await["person_id"],
         person_id.to_string()
     );
-    let body =
-        common::body_json(common::get_with_cookie(&f.router, "/api/today", &dave).await).await;
+    let body = crate::common::body_json(
+        crate::common::get_with_cookie(&f.router, "/api/today", &dave).await,
+    )
+    .await;
     let item = body["items"]
         .as_array()
         .unwrap()
@@ -2722,10 +2759,10 @@ async fn today_shows_the_effective_outcome_for_a_member_who_has_the_person_by_as
 async fn a_correction_row_is_append_only_for_crm_app_and_the_owner(migrator_pool: PgPool) {
     let f = fixture(&migrator_pool).await;
     let (call_id, person_id, _) = answered_and_ended(&f, "lead36@example.com", None).await;
-    let body = common::body_json(correct(&f.router, &f.alice, call_id, "busy").await).await;
+    let body = crate::common::body_json(correct(&f.router, &f.alice, call_id, "busy").await).await;
     let correction_id: Uuid = body["attempt"]["id"].as_str().unwrap().parse().unwrap();
 
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     for (label, pool) in [("crm_app", &app_pool), ("owner", &migrator_pool)] {
         let update = sqlx::query("UPDATE contact_attempted SET outcome = 'reached' WHERE id = $1")
             .bind(correction_id)
@@ -2760,10 +2797,10 @@ async fn the_outcome_route_works_with_telephony_disabled(migrator_pool: PgPool) 
 
     let publisher = Publisher::recording();
     let disabled = build_router_with_telephony(&migrator_pool, publisher.clone(), None).await;
-    let cookie = common::login_cookie(&disabled, "alice@acme.test", PW).await;
+    let cookie = crate::common::login_cookie(&disabled, "alice@acme.test", PW).await;
     let resp = correct(&disabled, &cookie, call_id, "no_answer").await;
     assert_eq!(resp.status(), StatusCode::OK);
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     assert_eq!(body["changed"], true);
     assert_eq!(body["attempt"]["outcome"], "no_answer");
     let rows = attempt_rows(&migrator_pool, person_id).await;
@@ -2781,7 +2818,7 @@ async fn a_manual_attempt_has_no_call_id_and_is_never_a_correction_head(migrator
     let f = fixture(&migrator_pool).await;
     let (person_id, _, _) =
         create_person_with_phone(&f.router, &f.alice, "lead38@example.com", None).await;
-    let resp = common::post_json_with_cookie(
+    let resp = crate::common::post_json_with_cookie(
         &f.router,
         &format!("/api/people/{person_id}/contact-attempts"),
         &f.alice,
@@ -2790,8 +2827,9 @@ async fn a_manual_attempt_has_no_call_id_and_is_never_a_correction_head(migrator
     .await;
     assert_eq!(resp.status(), StatusCode::CREATED);
 
-    let detail = common::body_json(
-        common::get_with_cookie(&f.router, &format!("/api/people/{person_id}"), &f.alice).await,
+    let detail = crate::common::body_json(
+        crate::common::get_with_cookie(&f.router, &format!("/api/people/{person_id}"), &f.alice)
+            .await,
     )
     .await;
     let attempts = history_of_kind(detail["history"].as_array().unwrap(), "contact_attempted");
@@ -2825,7 +2863,7 @@ async fn busy_call_correction_chains_onto_the_no_answer_row_and_cancelled_has_no
 
     let resp = correct(&f.router, &f.alice, call_id, "busy").await;
     assert_eq!(resp.status(), StatusCode::OK);
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     assert_eq!(body["changed"], true);
     let rows = attempt_rows(&migrator_pool, person_id).await;
     assert_eq!(rows.len(), 2);
@@ -2837,8 +2875,9 @@ async fn busy_call_correction_chains_onto_the_no_answer_row_and_cancelled_has_no
     // The automatic attempt and call_completed share both timestamps, so
     // kind_rank orders them and the correction (later recorded_at) sorts
     // after call_completed — adjacency is not guaranteed (SLICE_006c §2).
-    let detail = common::body_json(
-        common::get_with_cookie(&f.router, &format!("/api/people/{person_id}"), &f.alice).await,
+    let detail = crate::common::body_json(
+        crate::common::get_with_cookie(&f.router, &format!("/api/people/{person_id}"), &f.alice)
+            .await,
     )
     .await;
     let history = detail["history"].as_array().unwrap();
@@ -2865,19 +2904,22 @@ async fn busy_call_correction_chains_onto_the_no_answer_row_and_cancelled_has_no
     let (person2, phone2, _) =
         create_person_with_phone(&f.router, &f.alice, "lead39b@example.com", None).await;
     let resp = start(&f.router, &f.alice, person2, phone2).await;
-    let cancelled: Uuid = common::body_json(resp).await["call"]["id"]
+    let cancelled: Uuid = crate::common::body_json(resp).await["call"]["id"]
         .as_str()
         .unwrap()
         .parse()
         .unwrap();
     let resp = hangup(&f.router, &f.alice, cancelled).await;
     assert_eq!(
-        common::body_json(resp).await["call"]["failure_reason"],
+        crate::common::body_json(resp).await["call"]["failure_reason"],
         "cancelled"
     );
     let resp = correct(&f.router, &f.alice, cancelled, "busy").await;
     assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
-    assert_eq!(common::body_json(resp).await["error"], "no_contact_attempt");
+    assert_eq!(
+        crate::common::body_json(resp).await["error"],
+        "no_contact_attempt"
+    );
     assert!(attempt_rows(&migrator_pool, person2).await.is_empty());
 }
 
@@ -2895,7 +2937,7 @@ async fn a_non_caller_on_an_active_call_is_403_not_409(migrator_pool: PgPool) {
 
     let resp = correct(&f.router, &f.carol, call_id, "left_message").await;
     assert_eq!(resp.status(), StatusCode::FORBIDDEN);
-    assert_eq!(common::body_json(resp).await["error"], "forbidden");
+    assert_eq!(crate::common::body_json(resp).await["error"], "forbidden");
     assert_eq!(attempt_rows(&migrator_pool, person_id).await.len(), 1);
     hangup(&f.router, &f.alice, call_id).await;
 }
@@ -2923,11 +2965,14 @@ async fn concurrent_hangup_and_correction_yield_at_most_one_correction_of_the_re
     assert_eq!(rows[0].outcome, "reached");
     match c.status() {
         StatusCode::CONFLICT => {
-            assert_eq!(common::body_json(c).await["error"], "invalid_call_state");
+            assert_eq!(
+                crate::common::body_json(c).await["error"],
+                "invalid_call_state"
+            );
             assert_eq!(rows.len(), 1);
         }
         StatusCode::OK => {
-            let body = common::body_json(c).await;
+            let body = crate::common::body_json(c).await;
             assert_eq!(body["changed"], true);
             assert_eq!(rows.len(), 2);
             assert_eq!(rows[1].corrects_id, Some(rows[0].id));
@@ -2959,9 +3004,9 @@ async fn busy_call(f: &Fixture, person_id: Uuid, phone: Uuid) -> Uuid {
 #[ignore]
 async fn an_ended_call_without_an_outcome_is_a_low_item_for_the_caller_only(migrator_pool: PgPool) {
     let f = fixture(&migrator_pool).await;
-    let dave_id = common::create_user(&migrator_pool, "dave@acme.test", "Dave", PW).await;
-    common::add_membership(&migrator_pool, f.org_id, dave_id).await;
-    let dave = common::login_cookie(&f.router, "dave@acme.test", PW).await;
+    let dave_id = crate::common::create_user(&migrator_pool, "dave@acme.test", "Dave", PW).await;
+    crate::common::add_membership(&migrator_pool, f.org_id, dave_id).await;
+    let dave = crate::common::login_cookie(&f.router, "dave@acme.test", PW).await;
 
     // Assigned to carol, called by alice.
     let (call_id, person_id, _) =
@@ -3009,8 +3054,10 @@ async fn an_ended_call_without_an_outcome_is_a_low_item_for_the_caller_only(migr
         ],
         "TodayItem gains no field"
     );
-    let today =
-        common::body_json(common::get_with_cookie(&f.router, "/api/today", &f.alice).await).await;
+    let today = crate::common::body_json(
+        crate::common::get_with_cookie(&f.router, "/api/today", &f.alice).await,
+    )
+    .await;
     assert_eq!(today["truncated"], false);
 
     // Assignee, another member, a foreign member: never.
@@ -3051,8 +3098,10 @@ async fn low_items_sort_under_every_inquiry_item_by_ended_at(migrator_pool: PgPo
         create_person_with_phone(&f.router, &f.alice, "lead41c@example.com", Some(f.alice_id))
             .await;
 
-    let today =
-        common::body_json(common::get_with_cookie(&f.router, "/api/today", &f.alice).await).await;
+    let today = crate::common::body_json(
+        crate::common::get_with_cookie(&f.router, "/api/today", &f.alice).await,
+    )
+    .await;
     let items = today["items"].as_array().unwrap();
     let order: Vec<(String, String)> = items
         .iter()
@@ -3079,8 +3128,10 @@ async fn low_items_sort_under_every_inquiry_item_by_ended_at(migrator_pool: PgPo
     // A second incomplete call to the same Person yields one item, for the
     // most recent call.
     let call_third = busy_call(&f, p_first, phone_first).await;
-    let today =
-        common::body_json(common::get_with_cookie(&f.router, "/api/today", &f.alice).await).await;
+    let today = crate::common::body_json(
+        crate::common::get_with_cookie(&f.router, "/api/today", &f.alice).await,
+    )
+    .await;
     let items = today["items"].as_array().unwrap();
     let for_first: Vec<&Value> = items
         .iter()
@@ -3123,7 +3174,7 @@ async fn a_person_qualifying_both_ways_keeps_the_inquiry_tier_with_the_reason_ap
         .to_string();
 
     // A repeat Inquiry after the call: back on Today by Inquiry.
-    let resp = common::post_inquiry(
+    let resp = crate::common::post_inquiry(
         &f.router,
         &f.alice,
         "realtor",
@@ -3298,8 +3349,10 @@ async fn a_low_item_is_the_first_to_fall_off_the_cap(migrator_pool: PgPool) {
         .unwrap();
     }
 
-    let today =
-        common::body_json(common::get_with_cookie(&f.router, "/api/today", &f.alice).await).await;
+    let today = crate::common::body_json(
+        crate::common::get_with_cookie(&f.router, "/api/today", &f.alice).await,
+    )
+    .await;
     assert_eq!(today["truncated"], true);
     let items = today["items"].as_array().unwrap();
     assert_eq!(items.len(), 200);

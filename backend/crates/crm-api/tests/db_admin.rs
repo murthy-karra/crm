@@ -1,6 +1,5 @@
 //! DB-backed tests for Slice 004 administration (docs/specs/SLICE_004.md
 //! §13). Run only via ./scripts/check-db.
-mod common;
 
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -10,7 +9,7 @@ use axum::Router;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use common::{
+use crate::common::{
     add_membership_with, body_json, build_router, build_router_with_publisher, connect_as_app,
     create_org, create_org_with_stages_and_member, create_platform_admin, create_user,
     delete_with_cookie, get_with_cookie, login, login_cookie, post_json_with_cookie,

@@ -1,7 +1,6 @@
 //! DB-backed tests for Slice 007e (docs/specs/SLICE_007e.md §10-§11):
 //! the Unresolved workbench — admin-only detail, Try again, Discard.
 //! Run only via ./scripts/check-db.
-mod common;
 
 use std::time::Duration;
 
@@ -34,10 +33,10 @@ const TEST_INBOUND_EMAIL_SECRET: &str = "test-inbound-email-secret-value-32b";
 fn test_config() -> Config {
     Config::from_source(|key| match key {
         "CRM_SESSION_SECRET" => Some("a".repeat(32)),
-        "CRM_RAW_PAYLOAD_KEY" => Some(common::TEST_RAW_PAYLOAD_KEY_HEX.to_string()),
-        "CENTRIFUGO_HTTP_API_KEY" => Some(common::TEST_CENTRIFUGO_HTTP_API_KEY.to_string()),
+        "CRM_RAW_PAYLOAD_KEY" => Some(crate::common::TEST_RAW_PAYLOAD_KEY_HEX.to_string()),
+        "CENTRIFUGO_HTTP_API_KEY" => Some(crate::common::TEST_CENTRIFUGO_HTTP_API_KEY.to_string()),
         "CENTRIFUGO_TOKEN_HMAC_SECRET" => {
-            Some(common::TEST_CENTRIFUGO_TOKEN_HMAC_SECRET.to_string())
+            Some(crate::common::TEST_CENTRIFUGO_TOKEN_HMAC_SECRET.to_string())
         }
         "CRM_INBOUND_EMAIL_SECRET" => Some(TEST_INBOUND_EMAIL_SECRET.to_string()),
         _ => None,
@@ -46,7 +45,7 @@ fn test_config() -> Config {
 }
 
 async fn build_router(migrator_pool: &PgPool, publisher: Publisher) -> Router {
-    let app_pool = common::connect_as_app(migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(migrator_pool).await;
     let config = test_config();
     let state = AppState::for_tests(app_pool, &config, publisher);
     crm_api::build_app(state)
@@ -122,15 +121,16 @@ struct Fixture {
 }
 
 async fn org_fixture(migrator_pool: &PgPool, name: &str) -> Fixture {
-    let org_id = common::create_org(migrator_pool, name).await;
-    common::seed_stages(migrator_pool, org_id).await;
+    let org_id = crate::common::create_org(migrator_pool, name).await;
+    crate::common::seed_stages(migrator_pool, org_id).await;
     let slug: String = name.to_lowercase().replace(' ', "");
     let alice =
-        common::create_user(migrator_pool, &format!("alice@{slug}.test"), "Alice", PW).await;
-    let bob = common::create_user(migrator_pool, &format!("bob@{slug}.test"), "Bob", PW).await;
+        crate::common::create_user(migrator_pool, &format!("alice@{slug}.test"), "Alice", PW).await;
+    let bob =
+        crate::common::create_user(migrator_pool, &format!("bob@{slug}.test"), "Bob", PW).await;
     let carol =
-        common::create_user(migrator_pool, &format!("carol@{slug}.test"), "Carol", PW).await;
-    common::add_membership_with(
+        crate::common::create_user(migrator_pool, &format!("carol@{slug}.test"), "Carol", PW).await;
+    crate::common::add_membership_with(
         migrator_pool,
         org_id,
         alice,
@@ -138,8 +138,8 @@ async fn org_fixture(migrator_pool: &PgPool, name: &str) -> Fixture {
         MembershipStatus::Active,
     )
     .await;
-    common::add_membership(migrator_pool, org_id, bob).await;
-    common::add_membership(migrator_pool, org_id, carol).await;
+    crate::common::add_membership(migrator_pool, org_id, bob).await;
+    crate::common::add_membership(migrator_pool, org_id, carol).await;
     // Slice 008 (D-041): mode dispatch replaced the old implicit
     // "assignee configured => organization_default" behavior — set
     // `default_assignee` mode alongside the assignee so this fixture's
@@ -186,7 +186,7 @@ async fn migration_check_and_grants_hold(migrator_pool: PgPool) {
     let f = org_fixture(&migrator_pool, "Acme Realty").await;
     let router = build_router(&migrator_pool, Publisher::recording()).await;
     let id = deliver(&router, &migrator_pool, f.org_id, PLAIN_EML).await;
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
 
     // discarded without attribution → pair-CHECK rejects.
     let err = sqlx::query("UPDATE raw_payload SET resolution = 'discarded' WHERE id = $1")
@@ -255,8 +255,8 @@ async fn detail_content_authorization_and_404s(migrator_pool: PgPool) {
     // A garbage row (email_unparsed → text fallback).
     let garbage_id = deliver(&router, &migrator_pool, f.org_id, GARBAGE_EML).await;
     // A generic_v1 unresolved row via /api/inquiries (no contact method).
-    let alice_cookie = common::login_cookie(&router, "alice@acmerealty.test", PW).await;
-    let resp = common::post_json_with_cookie(
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acmerealty.test", PW).await;
+    let resp = crate::common::post_json_with_cookie(
         &router,
         "/api/inquiries",
         &alice_cookie,
@@ -264,21 +264,21 @@ async fn detail_content_authorization_and_404s(migrator_pool: PgPool) {
     )
     .await;
     assert_eq!(resp.status(), StatusCode::CREATED);
-    let generic_id: Uuid = common::body_json(resp).await["raw_payload_id"]
+    let generic_id: Uuid = crate::common::body_json(resp).await["raw_payload_id"]
         .as_str()
         .unwrap()
         .parse()
         .unwrap();
 
     // Email detail: subject/from/date/body from the fixture.
-    let resp = common::get_with_cookie(
+    let resp = crate::common::get_with_cookie(
         &router,
         &format!("/api/intake/unresolved/{email_id}"),
         &alice_cookie,
     )
     .await;
     assert_eq!(resp.status(), StatusCode::OK);
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     assert_eq!(body["payload_format"], "rfc822_v1");
     assert_eq!(body["content"]["kind"], "email");
     assert_eq!(
@@ -295,13 +295,13 @@ async fn detail_content_authorization_and_404s(migrator_pool: PgPool) {
     assert_eq!(body["content"]["truncated"], false);
 
     // Garbage: text fallback.
-    let resp = common::get_with_cookie(
+    let resp = crate::common::get_with_cookie(
         &router,
         &format!("/api/intake/unresolved/{garbage_id}"),
         &alice_cookie,
     )
     .await;
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     assert_eq!(body["content"]["kind"], "text");
     assert!(body["content"]["text"]
         .as_str()
@@ -309,20 +309,20 @@ async fn detail_content_authorization_and_404s(migrator_pool: PgPool) {
         .contains("hello world"));
 
     // Generic: pretty-printed JSON.
-    let resp = common::get_with_cookie(
+    let resp = crate::common::get_with_cookie(
         &router,
         &format!("/api/intake/unresolved/{generic_id}"),
         &alice_cookie,
     )
     .await;
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     assert_eq!(body["content"]["kind"], "text");
     let text = body["content"]["text"].as_str().unwrap();
     assert!(text.contains("\"first_name\": \"NoContact\""), "{text}");
 
     // Member (bob) → 403 on all three endpoints; list stays visible.
-    let bob_cookie = common::login_cookie(&router, "bob@acmerealty.test", PW).await;
-    let resp = common::get_with_cookie(
+    let bob_cookie = crate::common::login_cookie(&router, "bob@acmerealty.test", PW).await;
+    let resp = crate::common::get_with_cookie(
         &router,
         &format!("/api/intake/unresolved/{email_id}"),
         &bob_cookie,
@@ -343,7 +343,7 @@ async fn detail_content_authorization_and_404s(migrator_pool: PgPool) {
     )
     .await;
     assert_eq!(resp.status(), StatusCode::FORBIDDEN);
-    let resp = common::get_with_cookie(&router, "/api/intake/unresolved", &bob_cookie).await;
+    let resp = crate::common::get_with_cookie(&router, "/api/intake/unresolved", &bob_cookie).await;
     assert_eq!(resp.status(), StatusCode::OK);
 
     // 404 set, byte-identical: unknown, cross-org, resolved, discarded.
@@ -351,7 +351,7 @@ async fn detail_content_authorization_and_404s(migrator_pool: PgPool) {
     let (resolution, _) = row_state(&migrator_pool, cypress_id).await;
     assert_eq!(resolution, "resolved");
     let discarded_id = deliver(&router, &migrator_pool, other.org_id, PLAIN_EML).await;
-    let other_admin = common::login_cookie(&router, "alice@bestrealty.test", PW).await;
+    let other_admin = crate::common::login_cookie(&router, "alice@bestrealty.test", PW).await;
     let resp = post_empty_with_cookie(
         &router,
         &format!("/api/intake/unresolved/{discarded_id}/discard"),
@@ -366,24 +366,24 @@ async fn detail_content_authorization_and_404s(migrator_pool: PgPool) {
         discarded_id,   // cross-org (org B's row, and discarded)
         cypress_id,     // resolved
     ] {
-        let resp = common::get_with_cookie(
+        let resp = crate::common::get_with_cookie(
             &router,
             &format!("/api/intake/unresolved/{id}"),
             &alice_cookie,
         )
         .await;
         assert_eq!(resp.status(), StatusCode::NOT_FOUND, "{id}");
-        bodies.push(common::body_json(resp).await);
+        bodies.push(crate::common::body_json(resp).await);
     }
     // Org B's own admin also 404s on its now-discarded row.
-    let resp = common::get_with_cookie(
+    let resp = crate::common::get_with_cookie(
         &router,
         &format!("/api/intake/unresolved/{discarded_id}"),
         &other_admin,
     )
     .await;
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
-    bodies.push(common::body_json(resp).await);
+    bodies.push(crate::common::body_json(resp).await);
     // Cross-org retry and discard probes 404 byte-identically too (the
     // §5 promise covers all three endpoints): org A's admin against org
     // B's row.
@@ -395,7 +395,7 @@ async fn detail_content_authorization_and_404s(migrator_pool: PgPool) {
         )
         .await;
         assert_eq!(resp.status(), StatusCode::NOT_FOUND, "{action}");
-        bodies.push(common::body_json(resp).await);
+        bodies.push(crate::common::body_json(resp).await);
     }
     for body in &bodies {
         assert_eq!(body, &json!({ "error": "not_found" }));
@@ -403,7 +403,8 @@ async fn detail_content_authorization_and_404s(migrator_pool: PgPool) {
 
     // Non-UUID id → 400 malformed_request.
     let resp =
-        common::get_with_cookie(&router, "/api/intake/unresolved/not-a-uuid", &alice_cookie).await;
+        crate::common::get_with_cookie(&router, "/api/intake/unresolved/not-a-uuid", &alice_cookie)
+            .await;
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
 }
 
@@ -414,7 +415,7 @@ async fn detail_content_authorization_and_404s(migrator_pool: PgPool) {
 async fn pending_rows_are_viewable_and_large_bodies_truncate(migrator_pool: PgPool) {
     let f = org_fixture(&migrator_pool, "Acme Realty").await;
     let router = build_router(&migrator_pool, Publisher::recording()).await;
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let key = test_config().raw_payload_key;
 
     // A stuck-pending row with a large plain-text email body.
@@ -447,15 +448,15 @@ async fn pending_rows_are_viewable_and_large_bodies_truncate(migrator_pool: PgPo
     .await
     .unwrap();
 
-    let alice_cookie = common::login_cookie(&router, "alice@acmerealty.test", PW).await;
-    let resp = common::get_with_cookie(
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acmerealty.test", PW).await;
+    let resp = crate::common::get_with_cookie(
         &router,
         &format!("/api/intake/unresolved/{stuck_id}"),
         &alice_cookie,
     )
     .await;
     assert_eq!(resp.status(), StatusCode::OK, "pending rows are viewable");
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     assert_eq!(body["resolution"], "pending");
     assert_eq!(body["content"]["truncated"], true);
     let text = body["content"]["text"].as_str().unwrap();
@@ -473,7 +474,7 @@ async fn retry_rescues_stuck_pending_row_with_system_actor_on_behalf_of_admin(
     let f = org_fixture(&migrator_pool, "Acme Realty").await;
     let publisher = Publisher::recording();
     let router = build_router(&migrator_pool, publisher.clone()).await;
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let key = test_config().raw_payload_key;
 
     let stuck_id = Uuid::new_v4();
@@ -501,7 +502,7 @@ async fn retry_rescues_stuck_pending_row_with_system_actor_on_behalf_of_admin(
     .await
     .unwrap();
 
-    let alice_cookie = common::login_cookie(&router, "alice@acmerealty.test", PW).await;
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acmerealty.test", PW).await;
     let alice: Uuid =
         sqlx::query_scalar("SELECT id FROM app_user WHERE email = 'alice@acmerealty.test'")
             .fetch_one(&migrator_pool)
@@ -515,7 +516,7 @@ async fn retry_rescues_stuck_pending_row_with_system_actor_on_behalf_of_admin(
     )
     .await;
     assert_eq!(resp.status(), StatusCode::OK);
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     assert_eq!(body["status"], "resolved");
     assert_eq!(body["routing_strategy"], "organization_default");
     assert_eq!(body["assigned_user_id"], f.bob.to_string());
@@ -556,13 +557,16 @@ async fn retry_rescues_stuck_pending_row_with_system_actor_on_behalf_of_admin(
     assert_eq!(events[0].1["type"], "person.changed");
 
     // On bob's Today, not alice's.
-    let bob_cookie = common::login_cookie(&router, "bob@acmerealty.test", PW).await;
-    let bob_today =
-        common::body_json(common::get_with_cookie(&router, "/api/today", &bob_cookie).await).await;
+    let bob_cookie = crate::common::login_cookie(&router, "bob@acmerealty.test", PW).await;
+    let bob_today = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/today", &bob_cookie).await,
+    )
+    .await;
     assert_eq!(bob_today["items"].as_array().unwrap().len(), 1);
-    let alice_today =
-        common::body_json(common::get_with_cookie(&router, "/api/today", &alice_cookie).await)
-            .await;
+    let alice_today = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/today", &alice_cookie).await,
+    )
+    .await;
     assert_eq!(alice_today["items"].as_array().unwrap().len(), 0);
 }
 
@@ -585,7 +589,7 @@ async fn retry_on_still_unparseable_bytes_rerecords_the_reason(migrator_pool: Pg
             .unwrap();
     let events_before = recorded(&publisher).await.len();
 
-    let alice_cookie = common::login_cookie(&router, "alice@acmerealty.test", PW).await;
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acmerealty.test", PW).await;
     let resp = post_empty_with_cookie(
         &router,
         &format!("/api/intake/unresolved/{id}/retry"),
@@ -593,7 +597,7 @@ async fn retry_on_still_unparseable_bytes_rerecords_the_reason(migrator_pool: Pg
     )
     .await;
     assert_eq!(resp.status(), StatusCode::OK);
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     assert_eq!(body["status"], "unresolved");
     assert_eq!(body["reason"], "email_unrecognized_format");
     assert_eq!(body["duplicate"], false);
@@ -626,9 +630,9 @@ async fn retry_on_still_unparseable_bytes_rerecords_the_reason(migrator_pool: Pg
 async fn generic_v1_retry_reruns_with_the_stored_source(migrator_pool: PgPool) {
     let _f = org_fixture(&migrator_pool, "Acme Realty").await;
     let router = build_router(&migrator_pool, Publisher::recording()).await;
-    let alice_cookie = common::login_cookie(&router, "alice@acmerealty.test", PW).await;
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acmerealty.test", PW).await;
 
-    let resp = common::post_json_with_cookie(
+    let resp = crate::common::post_json_with_cookie(
         &router,
         "/api/inquiries",
         &alice_cookie,
@@ -636,7 +640,7 @@ async fn generic_v1_retry_reruns_with_the_stored_source(migrator_pool: PgPool) {
     )
     .await;
     assert_eq!(resp.status(), StatusCode::CREATED);
-    let id: Uuid = common::body_json(resp).await["raw_payload_id"]
+    let id: Uuid = crate::common::body_json(resp).await["raw_payload_id"]
         .as_str()
         .unwrap()
         .parse()
@@ -649,7 +653,7 @@ async fn generic_v1_retry_reruns_with_the_stored_source(migrator_pool: PgPool) {
     )
     .await;
     assert_eq!(resp.status(), StatusCode::OK);
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     assert_eq!(body["status"], "unresolved");
     assert_eq!(body["reason"], "no_contact_method");
 
@@ -670,7 +674,7 @@ async fn concurrent_retries_yield_one_person_and_a_duplicate_loser(migrator_pool
     let f = org_fixture(&migrator_pool, "Acme Realty").await;
     let publisher = Publisher::recording();
     let router = build_router(&migrator_pool, publisher.clone()).await;
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let key = test_config().raw_payload_key;
 
     let stuck_id = Uuid::new_v4();
@@ -698,7 +702,7 @@ async fn concurrent_retries_yield_one_person_and_a_duplicate_loser(migrator_pool
     .await
     .unwrap();
 
-    let alice_cookie = common::login_cookie(&router, "alice@acmerealty.test", PW).await;
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acmerealty.test", PW).await;
     let uri = format!("/api/intake/unresolved/{stuck_id}/retry");
     let (a, b) = tokio::join!(
         post_empty_with_cookie(&router, &uri, &alice_cookie),
@@ -706,7 +710,10 @@ async fn concurrent_retries_yield_one_person_and_a_duplicate_loser(migrator_pool
     );
     assert_eq!(a.status(), StatusCode::OK);
     assert_eq!(b.status(), StatusCode::OK);
-    let (body_a, body_b) = (common::body_json(a).await, common::body_json(b).await);
+    let (body_a, body_b) = (
+        crate::common::body_json(a).await,
+        crate::common::body_json(b).await,
+    );
     let duplicates = [&body_a, &body_b]
         .iter()
         .filter(|b| b["duplicate"] == true)
@@ -741,7 +748,7 @@ async fn concurrent_retries_yield_one_person_and_a_duplicate_loser(migrator_pool
 async fn retry_racing_redelivery_yields_one_person(migrator_pool: PgPool) {
     let f = org_fixture(&migrator_pool, "Acme Realty").await;
     let router = build_router(&migrator_pool, Publisher::recording()).await;
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let key = test_config().raw_payload_key;
 
     let stuck_id = Uuid::new_v4();
@@ -769,7 +776,7 @@ async fn retry_racing_redelivery_yields_one_person(migrator_pool: PgPool) {
     .await
     .unwrap();
 
-    let alice_cookie = common::login_cookie(&router, "alice@acmerealty.test", PW).await;
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acmerealty.test", PW).await;
     let (slug, token) = intake_row(&migrator_pool, f.org_id).await;
     let addr = recipient(&slug, &token);
     let uri = format!("/api/intake/unresolved/{stuck_id}/retry");
@@ -805,7 +812,7 @@ async fn retry_surfaces_intake_busy_when_lock_held(migrator_pool: PgPool) {
     let router = build_router(&migrator_pool, Publisher::recording()).await;
     // A stuck-pending in-format row (parse succeeds, so the retry
     // genuinely attempts the advisory lock).
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let key = test_config().raw_payload_key;
     let id = Uuid::new_v4();
     let content_hmac = crypto::content_hmac(&key, CYPRESS_EML);
@@ -847,7 +854,7 @@ async fn retry_surfaces_intake_busy_when_lock_held(migrator_pool: PgPool) {
     });
     tokio::time::sleep(Duration::from_millis(200)).await;
 
-    let alice_cookie = common::login_cookie(&router, "alice@acmerealty.test", PW).await;
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acmerealty.test", PW).await;
     let resp = post_empty_with_cookie(
         &router,
         &format!("/api/intake/unresolved/{id}/retry"),
@@ -857,7 +864,7 @@ async fn retry_surfaces_intake_busy_when_lock_held(migrator_pool: PgPool) {
     assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
     assert!(resp.headers().get("retry-after").is_some());
     assert_eq!(
-        common::body_json(resp).await,
+        crate::common::body_json(resp).await,
         json!({ "error": "intake_busy" })
     );
 
@@ -884,7 +891,7 @@ async fn failed_retry_publishes_a_queue_invalidation_for_the_reset(migrator_pool
     let f = org_fixture(&migrator_pool, "Acme Realty").await;
     let publisher = Publisher::recording();
     let router = build_router(&migrator_pool, publisher.clone()).await;
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let key = test_config().raw_payload_key;
 
     let id = Uuid::new_v4();
@@ -927,7 +934,7 @@ async fn failed_retry_publishes_a_queue_invalidation_for_the_reset(migrator_pool
     });
     tokio::time::sleep(Duration::from_millis(200)).await;
 
-    let alice_cookie = common::login_cookie(&router, "alice@acmerealty.test", PW).await;
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acmerealty.test", PW).await;
     let resp = post_empty_with_cookie(
         &router,
         &format!("/api/intake/unresolved/{id}/retry"),
@@ -950,7 +957,7 @@ async fn failed_retry_publishes_a_queue_invalidation_for_the_reset(migrator_pool
 async fn unretryable_format_fails_closed_without_destroying_the_reason(migrator_pool: PgPool) {
     let f = org_fixture(&migrator_pool, "Acme Realty").await;
     let router = build_router(&migrator_pool, Publisher::recording()).await;
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let key = test_config().raw_payload_key;
 
     let id = Uuid::new_v4();
@@ -980,7 +987,7 @@ async fn unretryable_format_fails_closed_without_destroying_the_reason(migrator_
     .await
     .unwrap();
 
-    let alice_cookie = common::login_cookie(&router, "alice@acmerealty.test", PW).await;
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acmerealty.test", PW).await;
     let resp = post_empty_with_cookie(
         &router,
         &format!("/api/intake/unresolved/{id}/retry"),
@@ -1006,7 +1013,7 @@ async fn retry_on_a_resolved_row_returns_the_stored_outcome_as_duplicate(migrato
     let (resolution, _) = row_state(&migrator_pool, id).await;
     assert_eq!(resolution, "resolved");
 
-    let alice_cookie = common::login_cookie(&router, "alice@acmerealty.test", PW).await;
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acmerealty.test", PW).await;
     let resp = post_empty_with_cookie(
         &router,
         &format!("/api/intake/unresolved/{id}/retry"),
@@ -1014,7 +1021,7 @@ async fn retry_on_a_resolved_row_returns_the_stored_outcome_as_duplicate(migrato
     )
     .await;
     assert_eq!(resp.status(), StatusCode::OK);
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     assert_eq!(body["status"], "resolved");
     assert_eq!(body["duplicate"], true);
     assert_eq!(body["routing_strategy"], "organization_default");
@@ -1032,15 +1039,19 @@ async fn api_inquiries_replay_of_a_discarded_row_gets_the_duplicate_envelope(
     let _f = org_fixture(&migrator_pool, "Acme Realty").await;
     let publisher = Publisher::recording();
     let router = build_router(&migrator_pool, publisher.clone()).await;
-    let alice_cookie = common::login_cookie(&router, "alice@acmerealty.test", PW).await;
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acmerealty.test", PW).await;
 
     // A generic no-contact row via the real endpoint.
     let payload = json!({ "source": "website", "payload": { "first_name": "NoContact" } });
-    let resp =
-        common::post_json_with_cookie(&router, "/api/inquiries", &alice_cookie, payload.clone())
-            .await;
+    let resp = crate::common::post_json_with_cookie(
+        &router,
+        "/api/inquiries",
+        &alice_cookie,
+        payload.clone(),
+    )
+    .await;
     assert_eq!(resp.status(), StatusCode::CREATED);
-    let id: Uuid = common::body_json(resp).await["raw_payload_id"]
+    let id: Uuid = crate::common::body_json(resp).await["raw_payload_id"]
         .as_str()
         .unwrap()
         .parse()
@@ -1057,9 +1068,10 @@ async fn api_inquiries_replay_of_a_discarded_row_gets_the_duplicate_envelope(
 
     // Byte-identical replay through the user endpoint.
     let resp =
-        common::post_json_with_cookie(&router, "/api/inquiries", &alice_cookie, payload).await;
+        crate::common::post_json_with_cookie(&router, "/api/inquiries", &alice_cookie, payload)
+            .await;
     assert_eq!(resp.status(), StatusCode::OK, "no panic, duplicate status");
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     assert_eq!(body["status"], "unresolved");
     assert_eq!(body["duplicate"], true);
 
@@ -1079,7 +1091,7 @@ async fn api_inquiries_replay_of_a_discarded_row_gets_the_duplicate_envelope(
 async fn corrupted_row_retry_500s_and_stays_discardable(migrator_pool: PgPool) {
     let f = org_fixture(&migrator_pool, "Acme Realty").await;
     let router = build_router(&migrator_pool, Publisher::recording()).await;
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let key = test_config().raw_payload_key;
 
     // Seal against a DIFFERENT id than the row's — AAD mismatch, decrypt
@@ -1110,9 +1122,9 @@ async fn corrupted_row_retry_500s_and_stays_discardable(migrator_pool: PgPool) {
     .await
     .unwrap();
 
-    let alice_cookie = common::login_cookie(&router, "alice@acmerealty.test", PW).await;
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acmerealty.test", PW).await;
     // Detail also 500s (decrypt-on-demand).
-    let resp = common::get_with_cookie(
+    let resp = crate::common::get_with_cookie(
         &router,
         &format!("/api/intake/unresolved/{row_id}"),
         &alice_cookie,
@@ -1153,7 +1165,7 @@ async fn discard_attributes_removes_and_is_idempotent(migrator_pool: PgPool) {
     let id = deliver(&router, &migrator_pool, f.org_id, PLAIN_EML).await;
     let events_before = recorded(&publisher).await.len();
 
-    let alice_cookie = common::login_cookie(&router, "alice@acmerealty.test", PW).await;
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acmerealty.test", PW).await;
     let alice: Uuid =
         sqlx::query_scalar("SELECT id FROM app_user WHERE email = 'alice@acmerealty.test'")
             .fetch_one(&migrator_pool)
@@ -1168,7 +1180,7 @@ async fn discard_attributes_removes_and_is_idempotent(migrator_pool: PgPool) {
     .await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert_eq!(
-        common::body_json(resp).await,
+        crate::common::body_json(resp).await,
         json!({ "status": "discarded" })
     );
 
@@ -1185,9 +1197,9 @@ async fn discard_attributes_removes_and_is_idempotent(migrator_pool: PgPool) {
     assert!(at.is_some());
 
     // Gone from the member queue.
-    let bob_cookie = common::login_cookie(&router, "bob@acmerealty.test", PW).await;
-    let queue = common::body_json(
-        common::get_with_cookie(&router, "/api/intake/unresolved", &bob_cookie).await,
+    let bob_cookie = crate::common::login_cookie(&router, "bob@acmerealty.test", PW).await;
+    let queue = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/intake/unresolved", &bob_cookie).await,
     )
     .await;
     assert_eq!(queue["items"].as_array().unwrap().len(), 0);
@@ -1201,8 +1213,8 @@ async fn discard_attributes_removes_and_is_idempotent(migrator_pool: PgPool) {
     );
 
     // Repeat discard by a DIFFERENT admin: 200, attribution unchanged.
-    let dora = common::create_user(&migrator_pool, "dora@acmerealty.test", "Dora", PW).await;
-    common::add_membership_with(
+    let dora = crate::common::create_user(&migrator_pool, "dora@acmerealty.test", "Dora", PW).await;
+    crate::common::add_membership_with(
         &migrator_pool,
         f.org_id,
         dora,
@@ -1210,7 +1222,7 @@ async fn discard_attributes_removes_and_is_idempotent(migrator_pool: PgPool) {
         MembershipStatus::Active,
     )
     .await;
-    let dora_cookie = common::login_cookie(&router, "dora@acmerealty.test", PW).await;
+    let dora_cookie = crate::common::login_cookie(&router, "dora@acmerealty.test", PW).await;
     let resp = post_empty_with_cookie(
         &router,
         &format!("/api/intake/unresolved/{id}/discard"),
@@ -1240,7 +1252,7 @@ async fn discard_attributes_removes_and_is_idempotent(migrator_pool: PgPool) {
     .await;
     assert_eq!(resp.status(), StatusCode::CONFLICT);
     assert_eq!(
-        common::body_json(resp).await,
+        crate::common::body_json(resp).await,
         json!({ "error": "discarded" })
     );
 
@@ -1256,7 +1268,7 @@ async fn discard_attributes_removes_and_is_idempotent(migrator_pool: PgPool) {
     .await;
     assert_eq!(resp.status(), StatusCode::CONFLICT);
     assert_eq!(
-        common::body_json(resp).await,
+        crate::common::body_json(resp).await,
         json!({ "error": "already_resolved" })
     );
 }
@@ -1273,7 +1285,7 @@ async fn discarded_bytes_never_resurrect_on_redelivery_or_replay(migrator_pool: 
     // A stuck-pending in-format row, discarded before it ever completed
     // — the strongest resurrection bait: its bytes WOULD create a Person
     // if reprocessed.
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let key = test_config().raw_payload_key;
     let id = Uuid::new_v4();
     let content_hmac = crypto::content_hmac(&key, CYPRESS_EML);
@@ -1299,7 +1311,7 @@ async fn discarded_bytes_never_resurrect_on_redelivery_or_replay(migrator_pool: 
     .execute(&app_pool)
     .await
     .unwrap();
-    let alice_cookie = common::login_cookie(&router, "alice@acmerealty.test", PW).await;
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acmerealty.test", PW).await;
     let resp = post_empty_with_cookie(
         &router,
         &format!("/api/intake/unresolved/{id}/discard"),
@@ -1314,7 +1326,7 @@ async fn discarded_bytes_never_resurrect_on_redelivery_or_replay(migrator_pool: 
     let resp = post_inbound_email(&router, &recipient(&slug, &token), CYPRESS_EML).await;
     assert_eq!(resp.status(), StatusCode::OK, "no panic");
     assert_eq!(
-        common::body_json(resp).await,
+        crate::common::body_json(resp).await,
         json!({ "status": "accepted" })
     );
     let (resolution, _) = row_state(&migrator_pool, id).await;
@@ -1364,7 +1376,8 @@ async fn workbench_spans_and_logs_carry_no_content(migrator_pool: PgPool) {
     let f = org_fixture(&migrator_pool, "Workbench Capture Org").await;
     let router = build_router(&migrator_pool, Publisher::recording()).await;
     let id = deliver(&router, &migrator_pool, f.org_id, PLAIN_EML).await;
-    let alice_cookie = common::login_cookie(&router, "alice@workbenchcaptureorg.test", PW).await;
+    let alice_cookie =
+        crate::common::login_cookie(&router, "alice@workbenchcaptureorg.test", PW).await;
 
     let buffer = Arc::new(Mutex::new(Vec::new()));
     let subscriber = tracing_subscriber::registry().with(
@@ -1377,7 +1390,7 @@ async fn workbench_spans_and_logs_carry_no_content(migrator_pool: PgPool) {
         .expect("the capture test must be the only one installing a subscriber");
 
     // Detail (email content), failed retry, discard.
-    let _ = common::get_with_cookie(
+    let _ = crate::common::get_with_cookie(
         &router,
         &format!("/api/intake/unresolved/{id}"),
         &alice_cookie,
@@ -1423,7 +1436,7 @@ async fn queue_lists_pending_and_unresolved_never_discarded(migrator_pool: PgPoo
     let unresolved_id = deliver(&router, &migrator_pool, f.org_id, PLAIN_EML).await;
     let discarded_id = deliver(&router, &migrator_pool, f.org_id, GARBAGE_EML).await;
 
-    let alice_cookie = common::login_cookie(&router, "alice@acmerealty.test", PW).await;
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acmerealty.test", PW).await;
     let resp = post_empty_with_cookie(
         &router,
         &format!("/api/intake/unresolved/{discarded_id}/discard"),
@@ -1432,8 +1445,8 @@ async fn queue_lists_pending_and_unresolved_never_discarded(migrator_pool: PgPoo
     .await;
     assert_eq!(resp.status(), StatusCode::OK);
 
-    let queue = common::body_json(
-        common::get_with_cookie(&router, "/api/intake/unresolved", &alice_cookie).await,
+    let queue = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/intake/unresolved", &alice_cookie).await,
     )
     .await;
     let items = queue["items"].as_array().unwrap();
@@ -1455,7 +1468,7 @@ const GMAIL_FWD_CYPRESS_EML_007H1: &[u8] =
 async fn retry_resolves_a_pre_existing_forwarded_row_through_the_unwrapper(migrator_pool: PgPool) {
     let f = org_fixture(&migrator_pool, "Acme Realty").await;
     let router = build_router(&migrator_pool, Publisher::recording()).await;
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let key = test_config().raw_payload_key;
 
     // A pre-007h1 leftover: the forwarded bytes stored unresolved as
@@ -1487,7 +1500,7 @@ async fn retry_resolves_a_pre_existing_forwarded_row_through_the_unwrapper(migra
     .await
     .unwrap();
 
-    let alice_cookie = common::login_cookie(&router, "alice@acmerealty.test", PW).await;
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acmerealty.test", PW).await;
     let resp = post_empty_with_cookie(
         &router,
         &format!("/api/intake/unresolved/{old_id}/retry"),
@@ -1495,7 +1508,7 @@ async fn retry_resolves_a_pre_existing_forwarded_row_through_the_unwrapper(migra
     )
     .await;
     assert_eq!(resp.status(), StatusCode::OK);
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     assert_eq!(body["status"], "resolved");
 
     let (first_name,): (Option<String>,) =
@@ -1526,7 +1539,7 @@ async fn retry_in_a_round_robin_org_routes_via_rotation_and_consumes_a_turn(migr
     .unwrap();
     let publisher = Publisher::recording();
     let router = build_router(&migrator_pool, publisher.clone()).await;
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let key = test_config().raw_payload_key;
 
     // A stuck pending row, as in the rescue test.
@@ -1556,7 +1569,8 @@ async fn retry_in_a_round_robin_org_routes_via_rotation_and_consumes_a_turn(migr
     .unwrap();
 
     let slug: String = "Acme Realty".to_lowercase().replace(' ', "");
-    let alice_cookie = common::login_cookie(&router, &format!("alice@{slug}.test"), PW).await;
+    let alice_cookie =
+        crate::common::login_cookie(&router, &format!("alice@{slug}.test"), PW).await;
     let resp = post_empty_with_cookie(
         &router,
         &format!("/api/intake/unresolved/{stuck_id}/retry"),
@@ -1564,7 +1578,7 @@ async fn retry_in_a_round_robin_org_routes_via_rotation_and_consumes_a_turn(migr
     )
     .await;
     assert_eq!(resp.status(), StatusCode::OK);
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     assert_eq!(body["status"], "resolved");
     assert_eq!(body["routing_strategy"], "round_robin");
     // Rotation starts at the first member in join order (alice — the

@@ -6,7 +6,6 @@
 //! migration runs — `#[sqlx::test]`'s normal "migrate first, then hand me
 //! an empty pool" flow can never exercise this, so that one test drives
 //! its own migration sequence by hand). Run only via ./scripts/check-db.
-mod common;
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
@@ -23,10 +22,10 @@ const PW: &str = "pw";
 fn test_config() -> Config {
     Config::from_source(|key| match key {
         "CRM_SESSION_SECRET" => Some("a".repeat(32)),
-        "CRM_RAW_PAYLOAD_KEY" => Some(common::TEST_RAW_PAYLOAD_KEY_HEX.to_string()),
-        "CENTRIFUGO_HTTP_API_KEY" => Some(common::TEST_CENTRIFUGO_HTTP_API_KEY.to_string()),
+        "CRM_RAW_PAYLOAD_KEY" => Some(crate::common::TEST_RAW_PAYLOAD_KEY_HEX.to_string()),
+        "CENTRIFUGO_HTTP_API_KEY" => Some(crate::common::TEST_CENTRIFUGO_HTTP_API_KEY.to_string()),
         "CENTRIFUGO_TOKEN_HMAC_SECRET" => {
-            Some(common::TEST_CENTRIFUGO_TOKEN_HMAC_SECRET.to_string())
+            Some(crate::common::TEST_CENTRIFUGO_TOKEN_HMAC_SECRET.to_string())
         }
         _ => None,
     })
@@ -34,7 +33,7 @@ fn test_config() -> Config {
 }
 
 async fn build_router(migrator_pool: &PgPool) -> Router {
-    let app_pool = common::connect_as_app(migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(migrator_pool).await;
     let config = test_config();
     let state = AppState::for_tests(app_pool, &config, Publisher::recording());
     crm_api::build_app(state)
@@ -70,7 +69,7 @@ async fn capture_row(pool: &PgPool, org_id: Uuid, user_id: Uuid) -> Option<(Stri
 // --- GET / rotate ----------------------------------------------------------
 
 /// `GET /api/capture/address` renders `save-<token>@leads.elysianfeld.com`
-/// (backfilled at membership creation — `common::create_org_with_stages_
+/// (backfilled at membership creation — `crate::common::create_org_with_stages_
 /// and_member` goes through `AcceptInvitation`-equivalent... actually it
 /// uses the lower-level queries directly, so this pins the GET route's
 /// OWN self-healing mint-if-absent, not the AcceptInvitation hook —
@@ -79,7 +78,7 @@ async fn capture_row(pool: &PgPool, org_id: Uuid, user_id: Uuid) -> Option<(Stri
 #[sqlx::test]
 #[ignore]
 async fn get_self_heals_and_rotate_flips_live(migrator_pool: PgPool) {
-    let (org_id, alice_id) = common::create_org_with_stages_and_member(
+    let (org_id, alice_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Acme Realty Addr",
         "alice@acmerealtyaddr.test",
@@ -88,15 +87,16 @@ async fn get_self_heals_and_rotate_flips_live(migrator_pool: PgPool) {
     )
     .await;
     let router = build_router(&migrator_pool).await;
-    let cookie = common::login_cookie(&router, "alice@acmerealtyaddr.test", PW).await;
+    let cookie = crate::common::login_cookie(&router, "alice@acmerealtyaddr.test", PW).await;
 
     // No row yet (fixture bypassed AcceptInvitation) — GET self-heals.
     assert!(capture_row(&migrator_pool, org_id, alice_id)
         .await
         .is_none());
-    let get1 =
-        common::body_json(common::get_with_cookie(&router, "/api/capture/address", &cookie).await)
-            .await;
+    let get1 = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/capture/address", &cookie).await,
+    )
+    .await;
     let address1 = get1["address"].as_str().unwrap().to_string();
     assert!(address1.starts_with("save-"));
     assert!(address1.ends_with("@leads.elysianfeld.com"));
@@ -105,21 +105,23 @@ async fn get_self_heals_and_rotate_flips_live(migrator_pool: PgPool) {
         .is_some());
 
     // A second GET returns the SAME address (no re-mint).
-    let get2 =
-        common::body_json(common::get_with_cookie(&router, "/api/capture/address", &cookie).await)
-            .await;
+    let get2 = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/capture/address", &cookie).await,
+    )
+    .await;
     assert_eq!(get2["address"], address1);
 
     // Rotate: new address, old token dead.
     let resp = post_empty(&router, "/api/capture/address/rotate", &cookie).await;
     assert_eq!(resp.status(), StatusCode::OK);
-    let rotated = common::body_json(resp).await;
+    let rotated = crate::common::body_json(resp).await;
     let address2 = rotated["address"].as_str().unwrap().to_string();
     assert_ne!(address2, address1);
 
-    let get3 =
-        common::body_json(common::get_with_cookie(&router, "/api/capture/address", &cookie).await)
-            .await;
+    let get3 = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/capture/address", &cookie).await,
+    )
+    .await;
     assert_eq!(
         get3["address"], address2,
         "GET reflects the rotated address"
@@ -157,7 +159,7 @@ async fn get_self_heals_and_rotate_flips_live(migrator_pool: PgPool) {
 async fn deactivated_member_token_stops_resolving_reactivation_restores_the_same_address(
     migrator_pool: PgPool,
 ) {
-    let (org_id, alice_id) = common::create_org_with_stages_and_member(
+    let (org_id, alice_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Acme Realty Deact",
         "admin@acmerealtydeact.test",
@@ -173,23 +175,24 @@ async fn deactivated_member_token_stops_resolving_reactivation_restores_the_same
         .execute(&migrator_pool)
         .await
         .unwrap();
-    let bob_id = common::create_user(&migrator_pool, "bob@acmerealtydeact.test", "Bob", PW).await;
-    common::add_membership(&migrator_pool, org_id, bob_id).await;
+    let bob_id =
+        crate::common::create_user(&migrator_pool, "bob@acmerealtydeact.test", "Bob", PW).await;
+    crate::common::add_membership(&migrator_pool, org_id, bob_id).await;
 
     let router = build_router(&migrator_pool).await;
-    let admin_cookie = common::login_cookie(&router, "admin@acmerealtydeact.test", PW).await;
-    let bob_cookie = common::login_cookie(&router, "bob@acmerealtydeact.test", PW).await;
+    let admin_cookie = crate::common::login_cookie(&router, "admin@acmerealtydeact.test", PW).await;
+    let bob_cookie = crate::common::login_cookie(&router, "bob@acmerealtydeact.test", PW).await;
 
     // Bob mints his address.
-    let get1 = common::body_json(
-        common::get_with_cookie(&router, "/api/capture/address", &bob_cookie).await,
+    let get1 = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/capture/address", &bob_cookie).await,
     )
     .await;
     let bob_address = get1["address"].as_str().unwrap().to_string();
     let (token_before, _) = capture_row(&migrator_pool, org_id, bob_id).await.unwrap();
 
     // Deactivate bob (admin action).
-    let resp = common::put_json_with_cookie(
+    let resp = crate::common::put_json_with_cookie(
         &router,
         &format!("/api/organization/members/{bob_id}/status"),
         &admin_cookie,
@@ -220,7 +223,7 @@ async fn deactivated_member_token_stops_resolving_reactivation_restores_the_same
     );
 
     // Reactivate.
-    let resp = common::put_json_with_cookie(
+    let resp = crate::common::put_json_with_cookie(
         &router,
         &format!("/api/organization/members/{bob_id}/status"),
         &admin_cookie,
@@ -251,9 +254,9 @@ async fn deactivated_member_token_stops_resolving_reactivation_restores_the_same
     // deactivation_revokes_sessions_... pins this), so bob's pre-
     // deactivation cookie is permanently dead — reactivation restores the
     // membership, not the old session. A fresh login is required here.
-    let bob_cookie = common::login_cookie(&router, "bob@acmerealtydeact.test", PW).await;
-    let get2 = common::body_json(
-        common::get_with_cookie(&router, "/api/capture/address", &bob_cookie).await,
+    let bob_cookie = crate::common::login_cookie(&router, "bob@acmerealtydeact.test", PW).await;
+    let get2 = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/capture/address", &bob_cookie).await,
     )
     .await;
     assert_eq!(

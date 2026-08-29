@@ -1,7 +1,6 @@
 //! DB-backed tests for Slice 007b (docs/specs/SLICE_007b.md §11):
 //! `POST /inbound/email`, acceptance criteria 1-9, 11-15, 19-20. Run only
 //! via ./scripts/check-db.
-mod common;
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
@@ -28,10 +27,10 @@ const TEST_INBOUND_EMAIL_SECRET: &str = "test-inbound-email-secret-value-32b";
 fn test_config() -> Config {
     Config::from_source(|key| match key {
         "CRM_SESSION_SECRET" => Some("a".repeat(32)),
-        "CRM_RAW_PAYLOAD_KEY" => Some(common::TEST_RAW_PAYLOAD_KEY_HEX.to_string()),
-        "CENTRIFUGO_HTTP_API_KEY" => Some(common::TEST_CENTRIFUGO_HTTP_API_KEY.to_string()),
+        "CRM_RAW_PAYLOAD_KEY" => Some(crate::common::TEST_RAW_PAYLOAD_KEY_HEX.to_string()),
+        "CENTRIFUGO_HTTP_API_KEY" => Some(crate::common::TEST_CENTRIFUGO_HTTP_API_KEY.to_string()),
         "CENTRIFUGO_TOKEN_HMAC_SECRET" => {
-            Some(common::TEST_CENTRIFUGO_TOKEN_HMAC_SECRET.to_string())
+            Some(crate::common::TEST_CENTRIFUGO_TOKEN_HMAC_SECRET.to_string())
         }
         "CRM_INBOUND_EMAIL_SECRET" => Some(TEST_INBOUND_EMAIL_SECRET.to_string()),
         _ => None,
@@ -40,7 +39,7 @@ fn test_config() -> Config {
 }
 
 async fn build_router(migrator_pool: &PgPool, publisher: Publisher) -> Router {
-    let app_pool = common::connect_as_app(migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(migrator_pool).await;
     let config = test_config();
     let state = AppState::for_tests(app_pool, &config, publisher);
     crm_api::build_app(state)
@@ -49,7 +48,7 @@ async fn build_router(migrator_pool: &PgPool, publisher: Publisher) -> Router {
 /// A router with `CRM_INBOUND_EMAIL_SECRET` unset — the endpoint-disabled
 /// case (criterion 8, "secret unset behaves identically" to a wrong bearer).
 async fn build_router_no_secret(migrator_pool: &PgPool, publisher: Publisher) -> Router {
-    common::build_router_with_publisher(migrator_pool, publisher).await
+    crate::common::build_router_with_publisher(migrator_pool, publisher).await
 }
 
 async fn recorded(publisher: &Publisher) -> Vec<(String, Value)> {
@@ -167,7 +166,7 @@ async fn raw_payload_count(pool: &PgPool, org_id: Uuid) -> i64 {
 #[sqlx::test]
 #[ignore]
 async fn valid_delivery_stores_one_row_that_decrypts_to_the_exact_bytes(migrator_pool: PgPool) {
-    let org_id = common::create_org(&migrator_pool, "Acme Realty").await;
+    let org_id = crate::common::create_org(&migrator_pool, "Acme Realty").await;
     let (slug, token) = intake_row(&migrator_pool, org_id).await;
     let router = build_router(&migrator_pool, Publisher::recording()).await;
 
@@ -181,7 +180,7 @@ async fn valid_delivery_stores_one_row_that_decrypts_to_the_exact_bytes(migrator
     .await;
     let after = chrono::Utc::now();
     assert_eq!(resp.status(), StatusCode::OK);
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     assert_eq!(body, json!({ "status": "accepted" }));
 
     assert_eq!(raw_payload_count(&migrator_pool, org_id).await, 1);
@@ -224,7 +223,7 @@ async fn valid_delivery_stores_one_row_that_decrypts_to_the_exact_bytes(migrator
 #[sqlx::test]
 #[ignore]
 async fn valid_delivery_creates_nothing_beyond_the_raw_payload_row(migrator_pool: PgPool) {
-    let org_id = common::create_org(&migrator_pool, "Acme Realty").await;
+    let org_id = crate::common::create_org(&migrator_pool, "Acme Realty").await;
     let (slug, token) = intake_row(&migrator_pool, org_id).await;
     let router = build_router(&migrator_pool, Publisher::recording()).await;
 
@@ -264,7 +263,7 @@ async fn valid_delivery_creates_nothing_beyond_the_raw_payload_row(migrator_pool
 #[sqlx::test]
 #[ignore]
 async fn byte_identical_redelivery_is_a_noop(migrator_pool: PgPool) {
-    let org_id = common::create_org(&migrator_pool, "Acme Realty").await;
+    let org_id = crate::common::create_org(&migrator_pool, "Acme Realty").await;
     let (slug, token) = intake_row(&migrator_pool, org_id).await;
     let publisher = Publisher::recording();
     let router = build_router(&migrator_pool, publisher.clone()).await;
@@ -277,7 +276,7 @@ async fn byte_identical_redelivery_is_a_noop(migrator_pool: PgPool) {
         post_inbound_email(&router, Some(TEST_INBOUND_EMAIL_SECRET), &addr, PLAIN_EML).await;
     assert_eq!(second.status(), StatusCode::OK);
     assert_eq!(
-        common::body_json(second).await,
+        crate::common::body_json(second).await,
         json!({ "status": "accepted" })
     );
 
@@ -290,8 +289,8 @@ async fn byte_identical_redelivery_is_a_noop(migrator_pool: PgPool) {
 #[sqlx::test]
 #[ignore]
 async fn same_bytes_to_two_orgs_store_one_row_each(migrator_pool: PgPool) {
-    let org_a = common::create_org(&migrator_pool, "Acme Realty").await;
-    let org_b = common::create_org(&migrator_pool, "Best Realty").await;
+    let org_a = crate::common::create_org(&migrator_pool, "Acme Realty").await;
+    let org_b = crate::common::create_org(&migrator_pool, "Best Realty").await;
     let (slug_a, token_a) = intake_row(&migrator_pool, org_a).await;
     let (slug_b, token_b) = intake_row(&migrator_pool, org_b).await;
     let router = build_router(&migrator_pool, Publisher::recording()).await;
@@ -322,8 +321,8 @@ async fn same_bytes_to_two_orgs_store_one_row_each(migrator_pool: PgPool) {
 #[sqlx::test]
 #[ignore]
 async fn every_rejection_shape_is_byte_identical_and_stores_nothing(migrator_pool: PgPool) {
-    let org_a = common::create_org(&migrator_pool, "Acme Realty").await;
-    let org_b = common::create_org(&migrator_pool, "Best Realty").await;
+    let org_a = crate::common::create_org(&migrator_pool, "Acme Realty").await;
+    let org_b = crate::common::create_org(&migrator_pool, "Best Realty").await;
     let (slug_a, _token_a) = intake_row(&migrator_pool, org_a).await;
     let (_slug_b, token_b) = intake_row(&migrator_pool, org_b).await;
     let router = build_router(&migrator_pool, Publisher::recording()).await;
@@ -338,7 +337,7 @@ async fn every_rejection_shape_is_byte_identical_and_stores_nothing(migrator_poo
         let resp =
             post_inbound_email(&router, Some(TEST_INBOUND_EMAIL_SECRET), case, PLAIN_EML).await;
         assert_eq!(resp.status(), StatusCode::OK, "{case}");
-        bodies.push(common::body_json(resp).await);
+        bodies.push(crate::common::body_json(resp).await);
     }
     for body in &bodies {
         assert_eq!(body, &json!({ "status": "rejected" }));
@@ -353,7 +352,7 @@ async fn every_rejection_shape_is_byte_identical_and_stores_nothing(migrator_poo
 #[sqlx::test]
 #[ignore]
 async fn bad_or_missing_or_disabled_bearer_is_401_and_stores_nothing(migrator_pool: PgPool) {
-    let org_id = common::create_org(&migrator_pool, "Acme Realty").await;
+    let org_id = crate::common::create_org(&migrator_pool, "Acme Realty").await;
     let (slug, token) = intake_row(&migrator_pool, org_id).await;
     let addr = recipient(&slug, &token);
 
@@ -362,7 +361,7 @@ async fn bad_or_missing_or_disabled_bearer_is_401_and_stores_nothing(migrator_po
         let resp = post_inbound_email(&router, bearer, &addr, PLAIN_EML).await;
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED, "{bearer:?}");
         assert_eq!(
-            common::body_json(resp).await,
+            crate::common::body_json(resp).await,
             json!({ "error": "unauthenticated" })
         );
     }
@@ -379,7 +378,7 @@ async fn bad_or_missing_or_disabled_bearer_is_401_and_stores_nothing(migrator_po
 #[sqlx::test]
 #[ignore]
 async fn malformed_json_base64_and_empty_raw_are_400(migrator_pool: PgPool) {
-    let org_id = common::create_org(&migrator_pool, "Acme Realty").await;
+    let org_id = crate::common::create_org(&migrator_pool, "Acme Realty").await;
     let (slug, token) = intake_row(&migrator_pool, org_id).await;
     let addr = recipient(&slug, &token);
     let router = build_router(&migrator_pool, Publisher::recording()).await;
@@ -389,7 +388,7 @@ async fn malformed_json_base64_and_empty_raw_are_400(migrator_pool: PgPool) {
         post_inbound_email_raw_body(&router, Some(TEST_INBOUND_EMAIL_SECRET), not_json).await;
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     assert_eq!(
-        common::body_json(resp).await,
+        crate::common::body_json(resp).await,
         json!({ "error": "malformed_request" })
     );
 
@@ -398,7 +397,7 @@ async fn malformed_json_base64_and_empty_raw_are_400(migrator_pool: PgPool) {
         post_inbound_email_raw_body(&router, Some(TEST_INBOUND_EMAIL_SECRET), &bad_base64).await;
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     assert_eq!(
-        common::body_json(resp).await,
+        crate::common::body_json(resp).await,
         json!({ "error": "malformed_request" })
     );
 
@@ -407,7 +406,7 @@ async fn malformed_json_base64_and_empty_raw_are_400(migrator_pool: PgPool) {
         post_inbound_email_raw_body(&router, Some(TEST_INBOUND_EMAIL_SECRET), &empty_raw).await;
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     assert_eq!(
-        common::body_json(resp).await,
+        crate::common::body_json(resp).await,
         json!({ "error": "malformed_request" })
     );
 
@@ -419,7 +418,7 @@ async fn malformed_json_base64_and_empty_raw_are_400(migrator_pool: PgPool) {
 #[sqlx::test]
 #[ignore]
 async fn first_storage_publishes_exactly_one_event(migrator_pool: PgPool) {
-    let org_id = common::create_org(&migrator_pool, "Acme Realty").await;
+    let org_id = crate::common::create_org(&migrator_pool, "Acme Realty").await;
     let (slug, token) = intake_row(&migrator_pool, org_id).await;
     let publisher = Publisher::recording();
     let router = build_router(&migrator_pool, publisher.clone()).await;
@@ -461,7 +460,7 @@ async fn first_storage_publishes_exactly_one_event(migrator_pool: PgPool) {
 #[sqlx::test]
 #[ignore]
 async fn stored_row_appears_in_unresolved_for_its_own_org_only(migrator_pool: PgPool) {
-    let (org_a, _alice_id) = common::create_org_with_stages_and_member(
+    let (org_a, _alice_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Acme Realty",
         "alice@acme.test",
@@ -469,7 +468,7 @@ async fn stored_row_appears_in_unresolved_for_its_own_org_only(migrator_pool: Pg
         "pw",
     )
     .await;
-    let (_org_b, _bob_id) = common::create_org_with_stages_and_member(
+    let (_org_b, _bob_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Best Realty",
         "bob@best.test",
@@ -489,17 +488,18 @@ async fn stored_row_appears_in_unresolved_for_its_own_org_only(migrator_pool: Pg
     .await;
     assert_eq!(resp.status(), StatusCode::OK);
 
-    let alice_cookie = common::login_cookie(&router, "alice@acme.test", "pw").await;
-    let resp = common::get_with_cookie(&router, "/api/intake/unresolved", &alice_cookie).await;
-    let body = common::body_json(resp).await;
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
+    let resp =
+        crate::common::get_with_cookie(&router, "/api/intake/unresolved", &alice_cookie).await;
+    let body = crate::common::body_json(resp).await;
     let items = body["items"].as_array().unwrap();
     assert_eq!(items.len(), 1);
     assert_eq!(items[0]["source"], "email");
     assert_eq!(items[0]["reason"], "email_unrecognized_format");
 
-    let bob_cookie = common::login_cookie(&router, "bob@best.test", "pw").await;
-    let resp = common::get_with_cookie(&router, "/api/intake/unresolved", &bob_cookie).await;
-    let body = common::body_json(resp).await;
+    let bob_cookie = crate::common::login_cookie(&router, "bob@best.test", "pw").await;
+    let resp = crate::common::get_with_cookie(&router, "/api/intake/unresolved", &bob_cookie).await;
+    let body = crate::common::body_json(resp).await;
     assert_eq!(body["items"].as_array().unwrap().len(), 0);
 }
 
@@ -540,7 +540,7 @@ async fn no_span_or_log_line_ever_carries_secret_or_content(migrator_pool: PgPoo
     // every thread's tracing output, not just this test's — a same-named
     // concurrent org's own (legitimate, per SLICE_007a.md §9) slug-bearing
     // creation span would otherwise produce a false "leaked" failure.
-    let org_id = common::create_org(&migrator_pool, "Tracing Capture Test Org").await;
+    let org_id = crate::common::create_org(&migrator_pool, "Tracing Capture Test Org").await;
     let (slug, token) = intake_row(&migrator_pool, org_id).await;
     let addr = recipient(&slug, &token);
     let router = build_router(&migrator_pool, Publisher::recording()).await;
@@ -607,9 +607,9 @@ async fn no_span_or_log_line_ever_carries_secret_or_content(migrator_pool: PgPoo
 #[sqlx::test]
 #[ignore]
 async fn stuck_pending_row_is_rescued_and_published_once(migrator_pool: PgPool) {
-    let org_id = common::create_org(&migrator_pool, "Acme Realty").await;
+    let org_id = crate::common::create_org(&migrator_pool, "Acme Realty").await;
     let (slug, token) = intake_row(&migrator_pool, org_id).await;
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let key = test_config().raw_payload_key;
 
     let stuck_id = Uuid::new_v4();
@@ -668,7 +668,7 @@ async fn stuck_pending_row_is_rescued_and_published_once(migrator_pool: PgPool) 
 #[sqlx::test]
 #[ignore]
 async fn concurrent_identical_posts_yield_one_row_and_one_publish(migrator_pool: PgPool) {
-    let org_id = common::create_org(&migrator_pool, "Acme Realty").await;
+    let org_id = crate::common::create_org(&migrator_pool, "Acme Realty").await;
     let (slug, token) = intake_row(&migrator_pool, org_id).await;
     let publisher = Publisher::recording();
     let router = build_router(&migrator_pool, publisher.clone()).await;
@@ -691,7 +691,7 @@ async fn concurrent_identical_posts_yield_one_row_and_one_publish(migrator_pool:
 #[sqlx::test]
 #[ignore]
 async fn legacy_hex_token_org_accepts_mail(migrator_pool: PgPool) {
-    let org_id = common::create_org(&migrator_pool, "Acme Realty").await;
+    let org_id = crate::common::create_org(&migrator_pool, "Acme Realty").await;
     let (slug, _token) = intake_row(&migrator_pool, org_id).await;
     let legacy_token = "9f86d081"; // hex, outside [a-z2-7], inside [a-z0-9]
     sqlx::query("UPDATE organization SET intake_token = $1 WHERE id = $2")
@@ -711,7 +711,7 @@ async fn legacy_hex_token_org_accepts_mail(migrator_pool: PgPool) {
     .await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert_eq!(
-        common::body_json(resp).await,
+        crate::common::body_json(resp).await,
         json!({ "status": "accepted" })
     );
     assert_eq!(raw_payload_count(&migrator_pool, org_id).await, 1);

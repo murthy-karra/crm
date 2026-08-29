@@ -2,7 +2,6 @@
 //! (docs/specs/SLICE_009.md §8, §4.4's transition matrix, criterion 4),
 //! plus §9's cross-org isolation pins and the link-vs-dismiss concurrent
 //! race. Run only via ./scripts/check-db.
-mod common;
 
 use axum::http::StatusCode;
 use axum::Router;
@@ -21,10 +20,10 @@ const PW: &str = "pw";
 fn test_config() -> Config {
     Config::from_source(|key| match key {
         "CRM_SESSION_SECRET" => Some("a".repeat(32)),
-        "CRM_RAW_PAYLOAD_KEY" => Some(common::TEST_RAW_PAYLOAD_KEY_HEX.to_string()),
-        "CENTRIFUGO_HTTP_API_KEY" => Some(common::TEST_CENTRIFUGO_HTTP_API_KEY.to_string()),
+        "CRM_RAW_PAYLOAD_KEY" => Some(crate::common::TEST_RAW_PAYLOAD_KEY_HEX.to_string()),
+        "CENTRIFUGO_HTTP_API_KEY" => Some(crate::common::TEST_CENTRIFUGO_HTTP_API_KEY.to_string()),
         "CENTRIFUGO_TOKEN_HMAC_SECRET" => {
-            Some(common::TEST_CENTRIFUGO_TOKEN_HMAC_SECRET.to_string())
+            Some(crate::common::TEST_CENTRIFUGO_TOKEN_HMAC_SECRET.to_string())
         }
         _ => None,
     })
@@ -32,7 +31,7 @@ fn test_config() -> Config {
 }
 
 async fn build_router(migrator_pool: &PgPool, publisher: Publisher) -> Router {
-    let app_pool = common::connect_as_app(migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(migrator_pool).await;
     let config = test_config();
     let state = AppState::for_tests(app_pool, &config, publisher);
     crm_api::build_app(state)
@@ -58,7 +57,7 @@ async fn insert_person(pool: &PgPool, org_id: Uuid, stage_id: Uuid) -> Uuid {
 }
 
 /// The suite's fixed raw-payload key, decoded (mirrors
-/// `common::TEST_RAW_PAYLOAD_KEY_HEX`'s value: 32 bytes of `0x11`) — this
+/// `crate::common::TEST_RAW_PAYLOAD_KEY_HEX`'s value: 32 bytes of `0x11`) — this
 /// file seals real correspondence content directly rather than going
 /// through the HTTP endpoint, so it needs the key `test_config()`'s
 /// `AppState` will also use to decrypt it.
@@ -126,7 +125,8 @@ async fn held_fixture(pool: &PgPool, org_name: &str, direction_hint: &str) -> He
     let slug: String = org_name.to_lowercase().replace(' ', "");
     let alice_email = format!("alice@{slug}.test");
     let (org_id, alice_id) =
-        common::create_org_with_stages_and_member(pool, org_name, &alice_email, "Alice", PW).await;
+        crate::common::create_org_with_stages_and_member(pool, org_name, &alice_email, "Alice", PW)
+            .await;
     let stage_id = first_stage_id(pool, org_id).await;
     let person_a = insert_person(pool, org_id, stage_id).await;
     let person_b = insert_person(pool, org_id, stage_id).await;
@@ -164,7 +164,7 @@ async fn link(
     person_id: Uuid,
     add_contact_method: bool,
 ) -> axum::response::Response {
-    common::post_json_with_cookie(
+    crate::common::post_json_with_cookie(
         router,
         &format!("/api/capture/unmatched/{id}/link"),
         cookie,
@@ -174,7 +174,7 @@ async fn link(
 }
 
 async fn dismiss(router: &Router, cookie: &str, id: Uuid) -> axum::response::Response {
-    common::post_json_with_cookie(
+    crate::common::post_json_with_cookie(
         router,
         &format!("/api/capture/unmatched/{id}/dismiss"),
         cookie,
@@ -200,19 +200,19 @@ async fn status_of(pool: &PgPool, id: Uuid) -> (String, Option<String>) {
 #[ignore]
 async fn held_row_is_visible_only_to_the_attributed_agent(migrator_pool: PgPool) {
     let f = held_fixture(&migrator_pool, "Acme Realty Held Vis", "inbound").await;
-    let bob_id = common::create_user(
+    let bob_id = crate::common::create_user(
         &migrator_pool,
         &format!("bob-{}@x.test", f.org_id),
         "Bob",
         PW,
     )
     .await;
-    common::add_membership(&migrator_pool, f.org_id, bob_id).await;
+    crate::common::add_membership(&migrator_pool, f.org_id, bob_id).await;
     let router = build_router(&migrator_pool, Publisher::recording()).await;
 
-    let alice_cookie = common::login_cookie(&router, &f.alice_email, PW).await;
-    let alice_list = common::body_json(
-        common::get_with_cookie(&router, "/api/capture/unmatched", &alice_cookie).await,
+    let alice_cookie = crate::common::login_cookie(&router, &f.alice_email, PW).await;
+    let alice_list = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/capture/unmatched", &alice_cookie).await,
     )
     .await;
     let items = alice_list["items"].as_array().unwrap();
@@ -222,9 +222,10 @@ async fn held_row_is_visible_only_to_the_attributed_agent(migrator_pool: PgPool)
     assert_eq!(items[0]["direction_hint"], "inbound");
     assert_eq!(items[0]["status"], "held");
 
-    let bob_cookie = common::login_cookie(&router, &format!("bob-{}@x.test", f.org_id), PW).await;
-    let bob_list = common::body_json(
-        common::get_with_cookie(&router, "/api/capture/unmatched", &bob_cookie).await,
+    let bob_cookie =
+        crate::common::login_cookie(&router, &format!("bob-{}@x.test", f.org_id), PW).await;
+    let bob_list = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/capture/unmatched", &bob_cookie).await,
     )
     .await;
     assert_eq!(bob_list["items"].as_array().unwrap().len(), 0);
@@ -237,8 +238,8 @@ async fn held_row_is_visible_only_to_the_attributed_agent(migrator_pool: PgPool)
 async fn link_and_dismiss_are_404_for_non_attributed_agents_admins_included(migrator_pool: PgPool) {
     let f = held_fixture(&migrator_pool, "Acme Realty Held 404", "inbound").await;
     let admin_email = format!("admin-{}@x.test", f.org_id);
-    let admin_id = common::create_user(&migrator_pool, &admin_email, "Admin", PW).await;
-    common::add_membership_with(
+    let admin_id = crate::common::create_user(&migrator_pool, &admin_email, "Admin", PW).await;
+    crate::common::add_membership_with(
         &migrator_pool,
         f.org_id,
         admin_id,
@@ -247,7 +248,7 @@ async fn link_and_dismiss_are_404_for_non_attributed_agents_admins_included(migr
     )
     .await;
     let router = build_router(&migrator_pool, Publisher::recording()).await;
-    let admin_cookie = common::login_cookie(&router, &admin_email, PW).await;
+    let admin_cookie = crate::common::login_cookie(&router, &admin_email, PW).await;
 
     let resp = link(&router, &admin_cookie, f.held_id, f.person_a, false).await;
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
@@ -273,7 +274,7 @@ async fn link_writes_direction_from_the_stored_hint_and_outbound_writes_the_auto
     for (hint, expect_attempt) in [("inbound", false), ("outbound", true)] {
         let f = held_fixture(&migrator_pool, &format!("Acme Realty Link {hint}"), hint).await;
         let router = build_router(&migrator_pool, Publisher::recording()).await;
-        let cookie = common::login_cookie(&router, &f.alice_email, PW).await;
+        let cookie = crate::common::login_cookie(&router, &f.alice_email, PW).await;
 
         let resp = link(&router, &cookie, f.held_id, f.person_a, false).await;
         assert_eq!(resp.status(), StatusCode::OK);
@@ -318,7 +319,7 @@ async fn link_writes_direction_from_the_stored_hint_and_outbound_writes_the_auto
 async fn link_optionally_adds_the_counterparty_as_a_contact_method(migrator_pool: PgPool) {
     let f = held_fixture(&migrator_pool, "Acme Realty Link CM", "inbound").await;
     let router = build_router(&migrator_pool, Publisher::recording()).await;
-    let cookie = common::login_cookie(&router, &f.alice_email, PW).await;
+    let cookie = crate::common::login_cookie(&router, &f.alice_email, PW).await;
 
     let resp = link(&router, &cookie, f.held_id, f.person_a, true).await;
     assert_eq!(resp.status(), StatusCode::OK);
@@ -343,7 +344,7 @@ async fn link_optionally_adds_the_counterparty_as_a_contact_method(migrator_pool
 async fn relink_same_person_is_a_noop_different_person_is_409(migrator_pool: PgPool) {
     let f = held_fixture(&migrator_pool, "Acme Realty Relink", "inbound").await;
     let router = build_router(&migrator_pool, Publisher::recording()).await;
-    let cookie = common::login_cookie(&router, &f.alice_email, PW).await;
+    let cookie = crate::common::login_cookie(&router, &f.alice_email, PW).await;
 
     let resp = link(&router, &cookie, f.held_id, f.person_a, false).await;
     assert_eq!(resp.status(), StatusCode::OK);
@@ -383,7 +384,7 @@ async fn relink_same_person_is_a_noop_different_person_is_409(migrator_pool: PgP
 async fn dismiss_is_idempotent_and_cross_terminal_transitions_conflict(migrator_pool: PgPool) {
     let f1 = held_fixture(&migrator_pool, "Acme Realty X1", "inbound").await;
     let router = build_router(&migrator_pool, Publisher::recording()).await;
-    let cookie1 = common::login_cookie(&router, &f1.alice_email, PW).await;
+    let cookie1 = crate::common::login_cookie(&router, &f1.alice_email, PW).await;
 
     let resp = dismiss(&router, &cookie1, f1.held_id).await;
     assert_eq!(resp.status(), StatusCode::OK);
@@ -398,7 +399,7 @@ async fn dismiss_is_idempotent_and_cross_terminal_transitions_conflict(migrator_
     assert_eq!(resp.status(), StatusCode::CONFLICT, "link-after-dismissed");
 
     let f2 = held_fixture(&migrator_pool, "Acme Realty X2", "outbound").await;
-    let cookie2 = common::login_cookie(&router, &f2.alice_email, PW).await;
+    let cookie2 = crate::common::login_cookie(&router, &f2.alice_email, PW).await;
     let resp = link(&router, &cookie2, f2.held_id, f2.person_a, false).await;
     assert_eq!(resp.status(), StatusCode::OK);
     let resp = dismiss(&router, &cookie2, f2.held_id).await;
@@ -413,7 +414,7 @@ async fn dismiss_is_idempotent_and_cross_terminal_transitions_conflict(migrator_
 async fn counterparty_email_is_nulled_on_dismiss(migrator_pool: PgPool) {
     let f = held_fixture(&migrator_pool, "Acme Realty Null", "inbound").await;
     let router = build_router(&migrator_pool, Publisher::recording()).await;
-    let cookie = common::login_cookie(&router, &f.alice_email, PW).await;
+    let cookie = crate::common::login_cookie(&router, &f.alice_email, PW).await;
 
     let resp = dismiss(&router, &cookie, f.held_id).await;
     assert_eq!(resp.status(), StatusCode::OK);
@@ -448,9 +449,9 @@ async fn unmatched_list_caps_at_200_with_truncated_flag(migrator_pool: PgPool) {
     }
     // 1 (from held_fixture) + 200 = 201 total held rows.
     let router = build_router(&migrator_pool, Publisher::recording()).await;
-    let cookie = common::login_cookie(&router, &f.alice_email, PW).await;
-    let list = common::body_json(
-        common::get_with_cookie(&router, "/api/capture/unmatched", &cookie).await,
+    let cookie = crate::common::login_cookie(&router, &f.alice_email, PW).await;
+    let list = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/capture/unmatched", &cookie).await,
     )
     .await;
     assert_eq!(list["items"].as_array().unwrap().len(), 200);
@@ -473,7 +474,7 @@ async fn cross_org_link_and_dismiss_are_404_and_write_nothing(migrator_pool: PgP
     let org_b = held_fixture(&migrator_pool, "Acme Realty Cross B", "inbound").await;
 
     let router = build_router(&migrator_pool, Publisher::recording()).await;
-    let alice_cookie = common::login_cookie(&router, &f.alice_email, PW).await;
+    let alice_cookie = crate::common::login_cookie(&router, &f.alice_email, PW).await;
 
     // (a) link org-A's held row to an ORG-B Person -> 404, nothing written
     // for that Person in either org.
@@ -531,7 +532,7 @@ async fn cross_org_link_and_dismiss_are_404_and_write_nothing(migrator_pool: PgP
 async fn concurrent_link_and_dismiss_on_the_same_row_exactly_one_wins(migrator_pool: PgPool) {
     let f = held_fixture(&migrator_pool, "Acme Realty Race Link Dismiss", "inbound").await;
     let router = build_router(&migrator_pool, Publisher::recording()).await;
-    let cookie = common::login_cookie(&router, &f.alice_email, PW).await;
+    let cookie = crate::common::login_cookie(&router, &f.alice_email, PW).await;
 
     let r1 = router.clone();
     let r2 = router.clone();

@@ -263,6 +263,43 @@ toolchain already, fully reversible. Uncertain payoff: Apple's own
 linker has gotten faster in recent Xcode, so this needs measuring,
 not assuming.
 
+TEST-BINARY CONSOLIDATION CHUNK COMPLETE on
+`test-binary-consolidation` (2026-08-28, Sonnet lane, same day as
+scoping — user said "go" immediately). All 40 non-livekit
+`crm-api/tests/*.rs` files consolidated into one binary
+(`tests/all.rs`, `#[path]` hub; `autotests = false` +
+`[[test]] name = "all"`); `livekit_telephony` correctly stays its
+own isolated target (real network host, excluded from the default
+run, invoked only by scripts/check-telephony — preserved).
+FINDING THAT CORRECTED THE BRIEF'S PREDICTION: the anticipated
+`mod common;` path-resolution gotcha did NOT reproduce on this
+toolchain (rustc 1.98/edition 2021) — a bare `mod common;` inside
+a `#[path]`-loaded file resolves relative to the FILE'S OWN DISK
+DIRECTORY, not its logical module position. The actual blocker was
+`clippy::duplicate_mod` (loading tests/common/mod.rs as 26 separate
+modules) — fixed by declaring `common` once in the hub and having
+the 26 files reach it via `crate::common::` instead of a local
+`mod common;` (two-line diff per file: drop the mod line, prefix
+call sites). Rigorous test reconciliation keyed on (file,
+test-name) not just totals: 439/363 before = 439/363 after, exact,
+0 mismatches. Live-DB full run: 647 fast + 363 ignored, 0
+failures, no ephemeral-database-name collisions. TIMING (the
+chunk's real metric, single-file crm-app edit,
+--no-run compile+link only): wall-clock ~25-30% faster (11.2s ->
+8s — smaller than a naive "41x" story since this 10-core machine
+already parallelizes old relinks and line-tables-only had already
+cut per-link cost); CPU-seconds ~3.6x lower (62.5 -> 17.4) — the
+more robust cross-machine/CI signal, disclosed honestly alongside
+the modest wall-clock number rather than leading with the bigger
+figure. lld linker experiment (optional, step 8): attempted,
+failed cleanly (clang doesn't recognize bundled rust-lld as `lld`
+on this Xcode/clang version), reverted immediately, confirmed
+empty diff — not pursued further per the brief's "don't ship
+unverified" instruction. Coordinator's own final-tree verification
+(diff-reviewed + both gates re-run independently): check 14s warm,
+check-db 2:11 (363/363, in line with post-gate-speedup steady
+state, no regression) — both green.
+
 QUEUED (original text, now executed): a small
 standalone GATE-SPEEDUP chunk, own branch, behavior-identical
 coverage proven by a before/after timing table + identical test

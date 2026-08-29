@@ -3,7 +3,6 @@
 //! primary proof is calling `commands::receive_inquiry` directly with
 //! `IntakeActor::System` — nothing in the HTTP surface triggers this path
 //! yet (§4). Run only via ./scripts/check-db.
-mod common;
 
 use serde_json::{json, Value};
 use sqlx::PgPool;
@@ -58,7 +57,7 @@ async fn system_intake(
     payload: &Value,
     publisher: &Publisher,
 ) -> ReceiveInquiryOutcome {
-    let key = common::test_config().raw_payload_key;
+    let key = crate::common::test_config().raw_payload_key;
     let actor = IntakeActor::System {
         on_behalf_of_user_id: None,
         organization_id: OrganizationId::new(org_id),
@@ -93,15 +92,15 @@ async fn recorded(publisher: &Publisher) -> Vec<(String, Value)> {
 async fn default_set_and_active_routes_organization_default_and_lands_on_their_today(
     migrator_pool: PgPool,
 ) {
-    let org_id = common::create_org(&migrator_pool, "Acme Realty").await;
-    common::seed_stages(&migrator_pool, org_id).await;
-    let bob = common::create_user(&migrator_pool, "bob@acme.test", "Bob", PW).await;
-    let alice = common::create_user(&migrator_pool, "alice@acme.test", "Alice", PW).await;
-    common::add_membership(&migrator_pool, org_id, bob).await;
-    common::add_membership(&migrator_pool, org_id, alice).await;
+    let org_id = crate::common::create_org(&migrator_pool, "Acme Realty").await;
+    crate::common::seed_stages(&migrator_pool, org_id).await;
+    let bob = crate::common::create_user(&migrator_pool, "bob@acme.test", "Bob", PW).await;
+    let alice = crate::common::create_user(&migrator_pool, "alice@acme.test", "Alice", PW).await;
+    crate::common::add_membership(&migrator_pool, org_id, bob).await;
+    crate::common::add_membership(&migrator_pool, org_id, alice).await;
     set_default(&migrator_pool, org_id, Some(bob)).await;
 
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let publisher = Publisher::recording();
     let outcome = system_intake(&app_pool, org_id, &lead("ada@example.com"), &publisher).await;
 
@@ -170,18 +169,21 @@ async fn default_set_and_active_routes_organization_default_and_lands_on_their_t
     assert_eq!(causation_id, Some(routing_decision_id));
 
     // Today: bob only.
-    let router = common::build_router(&migrator_pool).await;
-    let bob_cookie = common::login_cookie(&router, "bob@acme.test", PW).await;
-    let bob_today =
-        common::body_json(common::get_with_cookie(&router, "/api/today", &bob_cookie).await).await;
+    let router = crate::common::build_router(&migrator_pool).await;
+    let bob_cookie = crate::common::login_cookie(&router, "bob@acme.test", PW).await;
+    let bob_today = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/today", &bob_cookie).await,
+    )
+    .await;
     let bob_items = bob_today["items"].as_array().unwrap();
     assert_eq!(bob_items.len(), 1);
     assert_eq!(bob_items[0]["person"]["id"], person_id.to_string());
 
-    let alice_cookie = common::login_cookie(&router, "alice@acme.test", PW).await;
-    let alice_today =
-        common::body_json(common::get_with_cookie(&router, "/api/today", &alice_cookie).await)
-            .await;
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acme.test", PW).await;
+    let alice_today = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/today", &alice_cookie).await,
+    )
+    .await;
     assert_eq!(alice_today["items"].as_array().unwrap().len(), 0);
 
     // Exactly one realtime event, ids-only.
@@ -198,7 +200,7 @@ async fn default_set_and_active_routes_organization_default_and_lands_on_their_t
 #[sqlx::test]
 #[ignore]
 async fn no_default_set_routes_unassigned_with_no_assignment_fact(migrator_pool: PgPool) {
-    let (org_id, _alice) = common::create_org_with_stages_and_member(
+    let (org_id, _alice) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Acme Realty",
         "alice@acme.test",
@@ -207,7 +209,7 @@ async fn no_default_set_routes_unassigned_with_no_assignment_fact(migrator_pool:
     )
     .await;
 
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let outcome = system_intake(
         &app_pool,
         org_id,
@@ -252,17 +254,21 @@ async fn no_default_set_routes_unassigned_with_no_assignment_fact(migrator_pool:
             .unwrap();
     assert_eq!(assignment_count, 0, "NULL->NULL assignment fact is noise");
 
-    let router = common::build_router(&migrator_pool).await;
-    let cookie = common::login_cookie(&router, "alice@acme.test", PW).await;
-    let people =
-        common::body_json(common::get_with_cookie(&router, "/api/people", &cookie).await).await;
+    let router = crate::common::build_router(&migrator_pool).await;
+    let cookie = crate::common::login_cookie(&router, "alice@acme.test", PW).await;
+    let people = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/people", &cookie).await,
+    )
+    .await;
     assert!(people["people"]
         .as_array()
         .unwrap()
         .iter()
         .any(|p| p["id"] == person_id.to_string()));
-    let today =
-        common::body_json(common::get_with_cookie(&router, "/api/today", &cookie).await).await;
+    let today = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/today", &cookie).await,
+    )
+    .await;
     assert_eq!(today["items"].as_array().unwrap().len(), 0);
 }
 
@@ -274,10 +280,10 @@ async fn no_default_set_routes_unassigned_with_no_assignment_fact(migrator_pool:
 async fn default_member_deactivated_routes_unassigned_and_setting_is_retained(
     migrator_pool: PgPool,
 ) {
-    let org_id = common::create_org(&migrator_pool, "Acme Realty").await;
-    common::seed_stages(&migrator_pool, org_id).await;
-    let bob = common::create_user(&migrator_pool, "bob@acme.test", "Bob", PW).await;
-    common::add_membership(&migrator_pool, org_id, bob).await;
+    let org_id = crate::common::create_org(&migrator_pool, "Acme Realty").await;
+    crate::common::seed_stages(&migrator_pool, org_id).await;
+    let bob = crate::common::create_user(&migrator_pool, "bob@acme.test", "Bob", PW).await;
+    crate::common::add_membership(&migrator_pool, org_id, bob).await;
     set_default(&migrator_pool, org_id, Some(bob)).await;
 
     sqlx::query("UPDATE organization_membership SET status = 'inactive' WHERE organization_id = $1 AND user_id = $2")
@@ -287,7 +293,7 @@ async fn default_member_deactivated_routes_unassigned_and_setting_is_retained(
         .await
         .unwrap();
 
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let outcome = system_intake(
         &app_pool,
         org_id,
@@ -326,13 +332,13 @@ async fn default_member_deactivated_routes_unassigned_and_setting_is_retained(
 #[sqlx::test]
 #[ignore]
 async fn matching_already_assigned_person_keeps_existing(migrator_pool: PgPool) {
-    let org_id = common::create_org(&migrator_pool, "Acme Realty").await;
-    common::seed_stages(&migrator_pool, org_id).await;
-    let bob = common::create_user(&migrator_pool, "bob@acme.test", "Bob", PW).await;
-    common::add_membership(&migrator_pool, org_id, bob).await;
+    let org_id = crate::common::create_org(&migrator_pool, "Acme Realty").await;
+    crate::common::seed_stages(&migrator_pool, org_id).await;
+    let bob = crate::common::create_user(&migrator_pool, "bob@acme.test", "Bob", PW).await;
+    crate::common::add_membership(&migrator_pool, org_id, bob).await;
     set_default(&migrator_pool, org_id, Some(bob)).await;
 
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let first = system_intake(
         &app_pool,
         org_id,
@@ -389,12 +395,12 @@ async fn matching_already_assigned_person_keeps_existing(migrator_pool: PgPool) 
 #[sqlx::test]
 #[ignore]
 async fn matching_existing_unassigned_person_applies_the_default(migrator_pool: PgPool) {
-    let org_id = common::create_org(&migrator_pool, "Acme Realty").await;
-    common::seed_stages(&migrator_pool, org_id).await;
-    let bob = common::create_user(&migrator_pool, "bob@acme.test", "Bob", PW).await;
-    common::add_membership(&migrator_pool, org_id, bob).await;
+    let org_id = crate::common::create_org(&migrator_pool, "Acme Realty").await;
+    crate::common::seed_stages(&migrator_pool, org_id).await;
+    let bob = crate::common::create_user(&migrator_pool, "bob@acme.test", "Bob", PW).await;
+    crate::common::add_membership(&migrator_pool, org_id, bob).await;
 
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let first = system_intake(
         &app_pool,
         org_id,
@@ -460,14 +466,14 @@ async fn matching_existing_unassigned_person_applies_the_default(migrator_pool: 
 #[sqlx::test]
 #[ignore]
 async fn system_actor_intake_into_org_a_writes_zero_rows_in_org_b(migrator_pool: PgPool) {
-    let org_a = common::create_org(&migrator_pool, "Acme Realty").await;
-    let org_b = common::create_org(&migrator_pool, "Best Realty").await;
-    common::seed_stages(&migrator_pool, org_a).await;
-    common::seed_stages(&migrator_pool, org_b).await;
-    let alice = common::create_user(&migrator_pool, "alice@acme.test", "Alice", PW).await;
-    let bob = common::create_user(&migrator_pool, "bob@best.test", "Bob", PW).await;
-    common::add_membership(&migrator_pool, org_a, alice).await;
-    common::add_membership(&migrator_pool, org_b, bob).await;
+    let org_a = crate::common::create_org(&migrator_pool, "Acme Realty").await;
+    let org_b = crate::common::create_org(&migrator_pool, "Best Realty").await;
+    crate::common::seed_stages(&migrator_pool, org_a).await;
+    crate::common::seed_stages(&migrator_pool, org_b).await;
+    let alice = crate::common::create_user(&migrator_pool, "alice@acme.test", "Alice", PW).await;
+    let bob = crate::common::create_user(&migrator_pool, "bob@best.test", "Bob", PW).await;
+    crate::common::add_membership(&migrator_pool, org_a, alice).await;
+    crate::common::add_membership(&migrator_pool, org_b, bob).await;
     set_default(&migrator_pool, org_a, Some(alice)).await;
     set_default(&migrator_pool, org_b, Some(bob)).await;
 
@@ -479,7 +485,7 @@ async fn system_actor_intake_into_org_a_writes_zero_rows_in_org_b(migrator_pool:
             .unwrap();
     assert_eq!(org_b_people_before, 0);
 
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let outcome = system_intake(
         &app_pool,
         org_a,
@@ -533,10 +539,12 @@ async fn system_actor_intake_into_org_a_writes_zero_rows_in_org_b(migrator_pool:
     .unwrap();
     assert_eq!(org_b_default, Some(UserId::new(bob)));
 
-    let router = common::build_router(&migrator_pool).await;
-    let bob_cookie = common::login_cookie(&router, "bob@best.test", PW).await;
-    let bob_today =
-        common::body_json(common::get_with_cookie(&router, "/api/today", &bob_cookie).await).await;
+    let router = crate::common::build_router(&migrator_pool).await;
+    let bob_cookie = crate::common::login_cookie(&router, "bob@best.test", PW).await;
+    let bob_today = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/today", &bob_cookie).await,
+    )
+    .await;
     assert_eq!(bob_today["items"].as_array().unwrap().len(), 0);
 
     // Sanity: the Person genuinely exists, just scoped to org A.
@@ -555,24 +563,24 @@ async fn system_actor_intake_into_org_a_writes_zero_rows_in_org_b(migrator_pool:
 #[sqlx::test]
 #[ignore]
 async fn duplicate_repost_of_a_system_routed_payload_reports_its_strategy(migrator_pool: PgPool) {
-    let org_id = common::create_org(&migrator_pool, "Acme Realty").await;
-    common::seed_stages(&migrator_pool, org_id).await;
-    let bob = common::create_user(&migrator_pool, "bob@acme.test", "Bob", PW).await;
-    let alice = common::create_user(&migrator_pool, "alice@acme.test", "Alice", PW).await;
-    common::add_membership(&migrator_pool, org_id, bob).await;
-    common::add_membership(&migrator_pool, org_id, alice).await;
+    let org_id = crate::common::create_org(&migrator_pool, "Acme Realty").await;
+    crate::common::seed_stages(&migrator_pool, org_id).await;
+    let bob = crate::common::create_user(&migrator_pool, "bob@acme.test", "Bob", PW).await;
+    let alice = crate::common::create_user(&migrator_pool, "alice@acme.test", "Alice", PW).await;
+    crate::common::add_membership(&migrator_pool, org_id, bob).await;
+    crate::common::add_membership(&migrator_pool, org_id, alice).await;
     set_default(&migrator_pool, org_id, Some(bob)).await;
 
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let payload = lead("dan@example.com");
     let outcome = system_intake(&app_pool, org_id, &payload, &Publisher::recording()).await;
     assert!(matches!(outcome, ReceiveInquiryOutcome::Resolved { .. }));
 
-    let router = common::build_router(&migrator_pool).await;
-    let cookie = common::login_cookie(&router, "alice@acme.test", PW).await;
-    let resp = common::post_inquiry(&router, &cookie, "website", payload, None).await;
+    let router = crate::common::build_router(&migrator_pool).await;
+    let cookie = crate::common::login_cookie(&router, "alice@acme.test", PW).await;
+    let resp = crate::common::post_inquiry(&router, &cookie, "website", payload, None).await;
     assert_eq!(resp.status(), axum::http::StatusCode::OK);
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     assert_eq!(body["status"], "resolved");
     assert_eq!(body["duplicate"], true);
     assert_eq!(body["routing_strategy"], "organization_default");

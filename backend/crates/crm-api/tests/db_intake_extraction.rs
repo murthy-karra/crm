@@ -1,7 +1,6 @@
 //! DB-backed tests for Slice 007f (docs/specs/SLICE_007f.md §10): the
 //! extraction worker driven directly via `run_once` with a scripted fake
 //! extractor — no network, no Groq. Run only via ./scripts/check-db.
-mod common;
 
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
@@ -121,10 +120,10 @@ impl LeadExtractor for FakeExtractor {
 fn test_config() -> Config {
     Config::from_source(|key| match key {
         "CRM_SESSION_SECRET" => Some("a".repeat(32)),
-        "CRM_RAW_PAYLOAD_KEY" => Some(common::TEST_RAW_PAYLOAD_KEY_HEX.to_string()),
-        "CENTRIFUGO_HTTP_API_KEY" => Some(common::TEST_CENTRIFUGO_HTTP_API_KEY.to_string()),
+        "CRM_RAW_PAYLOAD_KEY" => Some(crate::common::TEST_RAW_PAYLOAD_KEY_HEX.to_string()),
+        "CENTRIFUGO_HTTP_API_KEY" => Some(crate::common::TEST_CENTRIFUGO_HTTP_API_KEY.to_string()),
         "CENTRIFUGO_TOKEN_HMAC_SECRET" => {
-            Some(common::TEST_CENTRIFUGO_TOKEN_HMAC_SECRET.to_string())
+            Some(crate::common::TEST_CENTRIFUGO_TOKEN_HMAC_SECRET.to_string())
         }
         "CRM_INBOUND_EMAIL_SECRET" => Some(TEST_INBOUND_EMAIL_SECRET.to_string()),
         _ => None,
@@ -133,7 +132,7 @@ fn test_config() -> Config {
 }
 
 async fn build_router(migrator_pool: &PgPool, publisher: Publisher) -> Router {
-    let app_pool = common::connect_as_app(migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(migrator_pool).await;
     let config = test_config();
     let state = AppState::for_tests(app_pool, &config, publisher);
     crm_api::build_app(state)
@@ -181,13 +180,14 @@ async fn post_inbound_email(
 /// Org with stages, alice admin, bob active member as default assignee.
 async fn org_with_default(migrator_pool: &PgPool, name: &str) -> (Uuid, Uuid) {
     use crm_api::domain::admin::{MembershipStatus, Role};
-    let org_id = common::create_org(migrator_pool, name).await;
-    common::seed_stages(migrator_pool, org_id).await;
+    let org_id = crate::common::create_org(migrator_pool, name).await;
+    crate::common::seed_stages(migrator_pool, org_id).await;
     let slug: String = name.to_lowercase().replace(' ', "");
     let alice =
-        common::create_user(migrator_pool, &format!("alice@{slug}.test"), "Alice", PW).await;
-    let bob = common::create_user(migrator_pool, &format!("bob@{slug}.test"), "Bob", PW).await;
-    common::add_membership_with(
+        crate::common::create_user(migrator_pool, &format!("alice@{slug}.test"), "Alice", PW).await;
+    let bob =
+        crate::common::create_user(migrator_pool, &format!("bob@{slug}.test"), "Bob", PW).await;
+    crate::common::add_membership_with(
         migrator_pool,
         org_id,
         alice,
@@ -195,7 +195,7 @@ async fn org_with_default(migrator_pool: &PgPool, name: &str) -> (Uuid, Uuid) {
         MembershipStatus::Active,
     )
     .await;
-    common::add_membership(migrator_pool, org_id, bob).await;
+    crate::common::add_membership(migrator_pool, org_id, bob).await;
     // Slice 008 (D-041): mode dispatch replaced the old implicit
     // "assignee configured => organization_default" behavior — set
     // `default_assignee` mode alongside the assignee so this fixture's
@@ -254,7 +254,7 @@ async fn run_pass(
     publisher: &Publisher,
     fake: &FakeExtractor,
 ) -> ExtractionReport {
-    let app_pool = common::connect_as_app(migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(migrator_pool).await;
     let key = test_config().raw_payload_key;
     run_once(&app_pool, &key, publisher, fake).await.unwrap()
 }
@@ -373,7 +373,7 @@ async fn valid_lead_reply_resolves_end_to_end(migrator_pool: PgPool) {
     // Criterion 1: the ledger is append-only. As crm_app the grant
     // denies first; as crm_migrator the trigger is the backstop — both
     // directions pinned.
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let err = sqlx::query(
         "UPDATE intake_extraction SET outcome = 'not_a_lead' WHERE raw_payload_id = $1",
     )
@@ -443,7 +443,7 @@ async fn confident_spam_lands_not_a_lead(migrator_pool: PgPool) {
     assert_eq!(report.claimed, 0);
 
     // Still discardable via 007e.
-    let alice_cookie = common::login_cookie(&router, "alice@acmerealty.test", PW).await;
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acmerealty.test", PW).await;
     let resp = router
         .clone()
         .oneshot(
@@ -627,7 +627,7 @@ async fn discard_mid_extraction_supersedes(migrator_pool: PgPool) {
     // Wait until the worker is inside extract(), then discard the row
     // (as crm_app, the columns discard writes).
     let _ = fake.entered.acquire().await.unwrap();
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let alice: Uuid =
         sqlx::query_scalar("SELECT id FROM app_user WHERE email = 'alice@acmerealty.test'")
             .fetch_one(&migrator_pool)
@@ -708,8 +708,8 @@ async fn only_eligible_rows_are_claimed(migrator_pool: PgPool) {
     let router = build_router(&migrator_pool, publisher.clone()).await;
 
     // A generic_v1 unresolved row (no contact method).
-    let alice_cookie = common::login_cookie(&router, "alice@acmerealty.test", PW).await;
-    let resp = common::post_json_with_cookie(
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acmerealty.test", PW).await;
+    let resp = crate::common::post_json_with_cookie(
         &router,
         "/api/inquiries",
         &alice_cookie,
@@ -754,7 +754,7 @@ async fn workbench_retry_rearms_extraction(migrator_pool: PgPool) {
 
     // Admin Try-again re-runs the deterministic parse (unknown format →
     // email_unrecognized_format) and re-arms extraction.
-    let alice_cookie = common::login_cookie(&router, "alice@acmerealty.test", PW).await;
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acmerealty.test", PW).await;
     let resp = router
         .clone()
         .oneshot(
@@ -768,7 +768,7 @@ async fn workbench_retry_rearms_extraction(migrator_pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
-    let body = common::body_json(resp).await;
+    let body = crate::common::body_json(resp).await;
     assert_eq!(body["reason"], "email_unrecognized_format");
 
     let (_, reason, attempts) = row_state(&migrator_pool, id).await;
@@ -852,7 +852,7 @@ async fn duplicate_replay_of_not_a_lead_decodes_faithfully(migrator_pool: PgPool
     .await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert_eq!(
-        common::body_json(resp).await,
+        crate::common::body_json(resp).await,
         json!({ "status": "accepted" })
     );
     let (_, reason, _) = row_state(&migrator_pool, id).await;
@@ -945,7 +945,7 @@ async fn deterministic_internal_errors_are_bounded_not_infinite(migrator_pool: P
     use crm_api::domain::raw_payload::crypto;
     let (org_id, _bob) = org_with_default(&migrator_pool, "Acme Realty").await;
     let publisher = Publisher::recording();
-    let app_pool = common::connect_as_app(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let key = test_config().raw_payload_key;
 
     // Sealed against a DIFFERENT id — decrypt fails forever.
@@ -1018,7 +1018,7 @@ async fn unparsed_and_discarded_rows_are_never_claimed(migrator_pool: PgPool) {
 
     // A discarded unrecognized-format row.
     let discarded = deliver_eligible(&router, &migrator_pool, org_id, SPAM_EML).await;
-    let alice_cookie = common::login_cookie(&router, "alice@acmerealty.test", PW).await;
+    let alice_cookie = crate::common::login_cookie(&router, "alice@acmerealty.test", PW).await;
     let resp = router
         .clone()
         .oneshot(

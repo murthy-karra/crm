@@ -141,10 +141,22 @@ bootstrap; backend/Cargo.toml; the two batched test files), then
 commit gate → merge gate (user approvals). (4) Completion sync
 must record: the three 011a plain-language docs were authored by
 the user's crm-db session AT THE USER'S REQUEST (authorship
-closed); crm-db holds a STAGED doc-only patch fixing SIX gaps in
-SLICE_011a_EXPLAINED.md (code-verified, symbols cited) and is
-frozen until signaled that this checkout is free — signal it via
-cross-session message after merge. (5) Residuals: a fourth
+closed); crm-db held a STAGED doc-only patch fixing SIX gaps in
+SLICE_011a_EXPLAINED.md (code-verified, symbols cited). POST-MERGE
+NOTE (2026-08-28 ~20:55): the crm-db session did NOT survive the
+VS Code restart (socket gone, no live peers), so the free-signal
+was undeliverable. To land the patch: resume that session if its
+transcript survives, or have any session redo it — the six gaps:
+(1) §4b canonical-uuid-only wire forms, (2) §4b duplicate-JSON-
+keys fail closed anywhere, (3) §6 drop-and-clear degrade is
+URL-origin-only and 400/422-only — 5xx keeps chips+URL (the
+walkthrough's one true correctness defect), (4) §6 back/forward
+re-rehydrates via a route.query.filter watcher (loop-guarded by
+lastWrittenFilterParam), (5) §6 empty-array draft clauses never
+serialize (fetch on first committed value; degrade gate also
+requires ≥1 committed clause), (6) §6 zero-clause decodable
+filters also canonicalize the URL param away (all four
+rehydrateFromUrlValue cases clear it). (5) Residuals: a fourth
 501-INSERT test (db_people.rs unresolved-queue truncation) left
 unbatched per scope; the killed runs may have left stray sqlx
 ephemeral test databases in local Postgres (harmless; drop at

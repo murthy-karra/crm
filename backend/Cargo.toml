@@ -44,3 +44,11 @@ mail-parser = "0.11"
 
 [workspace.lints.clippy]
 all = { level = "deny", priority = -1 }
+
+# Gate-speedup lever 2: line-tables-only debug info still gives accurate
+# panic/backtrace line numbers but skips the full variable/type DWARF that
+# dominates link time for the workspace's many separate integration-test
+# binaries. dev inherits into test, so this covers both `cargo check`/
+# `cargo build` and `cargo test`/`cargo nextest run`.
+[profile.dev]
+debug = "line-tables-only"

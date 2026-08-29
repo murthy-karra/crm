@@ -105,6 +105,33 @@ async fn insert_inquiry(
     id
 }
 
+/// Gate-speedup lever 4: single-statement equivalent of calling
+/// `insert_inquiry` `count` times against the same person with sources
+/// `source0000..source{count-1:04}` (matches the `format!("source{i:04}")`
+/// naming the sequential version used) and the same `received_at` for
+/// every row, exactly as the original loop's repeated `received_at`
+/// argument did.
+async fn insert_inquiries_batch(
+    pool: &PgPool,
+    org_id: Uuid,
+    person_id: Uuid,
+    received_at: DateTime<Utc>,
+    count: i64,
+) {
+    sqlx::query(
+        "INSERT INTO inquiry (organization_id, person_id, raw_payload_id, source, received_at)
+         SELECT $1, $2, gen_random_uuid(), 'source' || lpad(s.i::text, 4, '0'), $3
+         FROM generate_series(0, $4 - 1) AS s(i)",
+    )
+    .bind(org_id)
+    .bind(person_id)
+    .bind(received_at)
+    .bind(count)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
 async fn insert_contact_attempt(
     pool: &PgPool,
     org_id: Uuid,
@@ -223,13 +250,24 @@ async fn insert_contact_method(
     .unwrap();
 }
 
-async fn insert_bare_person(pool: &PgPool, org_id: Uuid, stage_id: Uuid) {
-    sqlx::query("INSERT INTO person (organization_id, stage_id) VALUES ($1, $2)")
-        .bind(org_id)
-        .bind(stage_id)
-        .execute(pool)
-        .await
-        .unwrap();
+/// Gate-speedup lever 4: single-statement equivalent of `count` sequential
+/// bare-person inserts, one per caller (`cap_truncates_to_500_...`). Each
+/// row gets a distinct `created_at` (`count` seconds apart) so the
+/// caller's `created_at DESC` ordering assertion stays meaningful — a
+/// single-transaction batch would otherwise give every row an identical
+/// `now()` and make that assertion vacuous.
+async fn insert_bare_people_batch(pool: &PgPool, org_id: Uuid, stage_id: Uuid, count: i64) {
+    sqlx::query(
+        "INSERT INTO person (organization_id, stage_id, created_at)
+         SELECT $1, $2, now() - make_interval(secs => s.i)
+         FROM generate_series(0, $3 - 1) AS s(i)",
+    )
+    .bind(org_id)
+    .bind(stage_id)
+    .bind(count)
+    .execute(pool)
+    .await
+    .unwrap();
 }
 
 async fn people_ids(router: &axum::Router, cookie: &str, uri: &str) -> Vec<String> {
@@ -887,9 +925,7 @@ async fn cap_truncates_to_500_with_created_at_desc_id_asc_ordering_under_a_filte
     )
     .await;
     let stage_id = first_stage_id(&migrator_pool, org_id).await;
-    for _ in 0..501 {
-        insert_bare_person(&migrator_pool, org_id, stage_id).await;
-    }
+    insert_bare_people_batch(&migrator_pool, org_id, stage_id, 501).await;
 
     let router = common::build_router(&migrator_pool).await;
     let cookie = common::login_cookie(&router, "alice@acmef12.test", "pw").await;
@@ -1516,16 +1552,7 @@ async fn inquiry_sources_endpoint_reports_truncated_past_500(migrator_pool: PgPo
     .await;
     let stage_id = first_stage_id(&migrator_pool, org_id).await;
     let person_id = insert_person(&migrator_pool, org_id, stage_id, Some(alice_id)).await;
-    for i in 0..501 {
-        insert_inquiry(
-            &migrator_pool,
-            org_id,
-            person_id,
-            &format!("source{i:04}"),
-            days_ago(1),
-        )
-        .await;
-    }
+    insert_inquiries_batch(&migrator_pool, org_id, person_id, days_ago(1), 501).await;
 
     let router = common::build_router(&migrator_pool).await;
     let cookie = common::login_cookie(&router, "alice@acmef23.test", "pw").await;

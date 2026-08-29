@@ -5,17 +5,78 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/.." && pwd)"
 
+total_start=$SECONDS
+step_start=$SECONDS
+step_done() { echo "==> [$((SECONDS - step_start))s]"; step_start=$SECONDS; }
+
+if ! command -v cargo-nextest >/dev/null 2>&1; then
+  echo "cargo-nextest not found. Run ./scripts/bootstrap first." >&2
+  exit 1
+fi
+
+# Gate-speedup lever 3: the web/node half (lint, typecheck, vitest, build,
+# email-worker tests) shares nothing with the rust half — separate
+# toolchains, separate directories — so it runs concurrently in the
+# background while the rust steps below run in the foreground. Its output
+# is captured to a log and printed as one block once the rust steps finish
+# (never interleaved with rust output); `wait`ing on its PID surfaces a web
+# failure's exit code so it still fails the gate under set -euo pipefail.
+# The EXIT trap kills it if the rust half fails first, so a rust failure
+# never leaves a pnpm/vite process running in the background (today's
+# behavior when a step fails: nothing after it ever starts).
+web_log="$(mktemp)"
+web_pid=""
+cleanup_web() {
+  if [ -n "$web_pid" ] && kill -0 "$web_pid" 2>/dev/null; then
+    kill "$web_pid" 2>/dev/null || true
+  fi
+  rm -f "$web_log"
+}
+trap cleanup_web EXIT
+
+(
+  set -euo pipefail
+  step_start=$SECONDS
+  echo "==> web lint"
+  (cd "$repo_root/web" && pnpm run lint)
+  echo "==> [$((SECONDS - step_start))s]"
+  step_start=$SECONDS
+
+  echo "==> web typecheck"
+  (cd "$repo_root/web" && pnpm run typecheck)
+  echo "==> [$((SECONDS - step_start))s]"
+  step_start=$SECONDS
+
+  echo "==> web test"
+  (cd "$repo_root/web" && pnpm run test)
+  echo "==> [$((SECONDS - step_start))s]"
+  step_start=$SECONDS
+
+  echo "==> web build"
+  (cd "$repo_root/web" && pnpm run build)
+  echo "==> [$((SECONDS - step_start))s]"
+  step_start=$SECONDS
+
+  echo "==> email-worker tests"
+  (cd "$repo_root" && node --test infra/email-worker/worker.test.mjs)
+  echo "==> [$((SECONDS - step_start))s]"
+) > "$web_log" 2>&1 &
+web_pid=$!
+
 echo "==> cargo fmt --check"
 (cd "$repo_root/backend" && cargo fmt --all --check)
+step_done
 
 echo "==> cargo clippy"
 (cd "$repo_root/backend" && cargo clippy --workspace --all-targets --locked -- -D warnings)
+step_done
 
 echo "==> cargo check (production shape, no test features)"
 # Without --all-targets: compiles crm-app/crm-api once as a deploy build
 # would, so non-gated use of a test-support-only symbol fails here rather
 # than only at deploy time (SLICE_006a review).
 (cd "$repo_root/backend" && cargo check --workspace --locked)
+step_done
 
 echo "==> crate-boundary fences (resolved graph)"
 # The authoritative complement to the string fences in
@@ -26,23 +87,27 @@ echo "==> crate-boundary fences (resolved graph)"
   fi &&   if cargo tree -p crm-operator -e normal --prefix none --locked | grep -qE '^(sqlx|axum|crm-api|crm-app) '; then
     echo "crm-operator must not depend on sqlx/axum/crm-api/crm-app (D-028 §5)" >&2; exit 1
   fi)
+step_done
 
-echo "==> cargo test"
-(cd "$repo_root/backend" && cargo test --workspace --locked)
+echo "==> cargo nextest run"
+(cd "$repo_root/backend" && cargo nextest run --workspace --locked)
+step_done
 
-echo "==> web lint"
-(cd "$repo_root/web" && pnpm run lint)
+echo "==> cargo test --doc"
+# cargo-nextest does not run doctests (upstream limitation) — the ids.rs
+# compile_fail doctests are load-bearing type-safety pins (newtype-ID
+# mixups must fail to compile), so they run here as their own step rather
+# than being silently dropped.
+(cd "$repo_root/backend" && cargo test --doc --workspace --locked)
+step_done
 
-echo "==> web typecheck"
-(cd "$repo_root/web" && pnpm run typecheck)
+echo "==> web + email-worker tests (background result)"
+web_rc=0
+wait "$web_pid" || web_rc=$?
+cat "$web_log"
+if [ "$web_rc" -ne 0 ]; then
+  echo "web/email-worker checks failed (see above)" >&2
+  exit "$web_rc"
+fi
 
-echo "==> web test"
-(cd "$repo_root/web" && pnpm run test)
-
-echo "==> web build"
-(cd "$repo_root/web" && pnpm run build)
-
-echo "==> email-worker tests"
-(cd "$repo_root" && node --test infra/email-worker/worker.test.mjs)
-
-echo "==> all checks passed"
+echo "==> all checks passed [total $((SECONDS - total_start))s]"

@@ -380,6 +380,25 @@ async fn insert_bare_person(pool: &PgPool, org_id: Uuid, stage_id: Uuid, name: &
         .unwrap();
 }
 
+/// Gate-speedup lever 4: single-statement equivalent of calling
+/// `insert_bare_person` `count` times with names `Person0..Person{count-1}`
+/// — same rows, same distinct-per-row `created_at` (each `count` seconds
+/// apart, so ordering-sensitive assertions elsewhere in the file are
+/// unaffected), one round trip instead of `count`.
+async fn insert_bare_people_batch(pool: &PgPool, org_id: Uuid, stage_id: Uuid, count: i64) {
+    sqlx::query(
+        "INSERT INTO person (organization_id, first_name, stage_id, created_at)
+         SELECT $1, 'Person' || s.i, $2, now() - make_interval(secs => s.i)
+         FROM generate_series(0, $3 - 1) AS s(i)",
+    )
+    .bind(org_id)
+    .bind(stage_id)
+    .bind(count)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
 /// Criterion 19 (people list): `truncated: true` past 500 rows.
 #[sqlx::test]
 #[ignore]
@@ -399,9 +418,7 @@ async fn people_list_reports_truncated_past_500_rows(migrator_pool: PgPool) {
             .await
             .unwrap();
 
-    for i in 0..501 {
-        insert_bare_person(&migrator_pool, org_id, stage_id, &format!("Person{i}")).await;
-    }
+    insert_bare_people_batch(&migrator_pool, org_id, stage_id, 501).await;
 
     let router = common::build_router(&migrator_pool).await;
     let cookie = common::login_cookie(&router, "alice@acme.test", "pw").await;

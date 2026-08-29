@@ -23,6 +23,15 @@ if [ -z "${MIGRATION_DATABASE_URL:-}" ]; then
   exit 1
 fi
 
+if ! command -v cargo-nextest >/dev/null 2>&1; then
+  echo "cargo-nextest not found. Run ./scripts/bootstrap first." >&2
+  exit 1
+fi
+
+total_start=$SECONDS
+step_start=$SECONDS
+step_done() { echo "==> [$((SECONDS - step_start))s]"; step_start=$SECONDS; }
+
 # Step 0: Centrifugo reachability precheck (docs/specs/SLICE_003.md §13).
 # This suite now includes a Centrifugo-backed test that must fail loudly,
 # never skip, when the container is down (tests/centrifugo_realtime.rs
@@ -35,11 +44,22 @@ if ! curl -fsS --max-time 2 "$centrifugo_health_url" >/dev/null 2>&1; then
   echo "Centrifugo not reachable at $centrifugo_health_url. Run ./scripts/dev-services up first." >&2
   exit 1
 fi
+step_done
 
 # Step 1: verify backend/.sqlx/ still matches the real schema (catches
 # nullability/type drift an offline compile cannot) — a throwaway,
 # freshly-migrated database, never the dev database (docs/specs/SLICE_002.md
 # §11). The subsequent test run stays offline.
+#
+# Gate-speedup lever 5 (recorded skip): the installed sqlx-cli 0.8.6's
+# `cargo sqlx prepare` has no -p/--package filter (only --workspace or
+# "current crate"), so scoping this to the two query-bearing crates
+# (crm-api, crm-app) isn't possible without fighting the tool — skipped per
+# the brief ("do not fight the tool"). crm-operator carries no query!/
+# query_as! macros and is sqlx-fenced (D-028 §5, enforced by the
+# crate-boundary-fences step in ./scripts/check and
+# tests/operator_deps.rs), so --workspace's coverage over it is unchanged
+# by construction either way.
 echo "==> cargo sqlx prepare --check --workspace"
 prepare_check_url="${MIGRATION_DATABASE_URL%/*}/crm_sqlx_prepare_check"
 
@@ -52,19 +72,51 @@ trap cleanup EXIT
   cd "$repo_root/backend"
   cargo sqlx database create --database-url "$prepare_check_url"
   cargo sqlx migrate run --source crates/crm-api/migrations --database-url "$prepare_check_url"
-  DATABASE_URL="$prepare_check_url" SQLX_OFFLINE=false cargo sqlx prepare --check --workspace
+  # Fingerprint isolation (gate-speedup lever 1 follow-up): this is the one
+  # command in the whole gate that deliberately runs SQLX_OFFLINE=false
+  # against a real, throwaway DATABASE_URL, so the query! macros expand
+  # against live schema instead of the .sqlx cache. Building that under
+  # the SAME target dir as step 2's SQLX_OFFLINE=true/DATABASE_URL=
+  # migrator build makes cargo's fingerprints for crm-app/crm-api
+  # (SQLX_OFFLINE=false here vs =true there) overwrite each other on every
+  # run, forcing step 2 to relink all ~46 test binaries from scratch even
+  # though nothing source-level changed — and freshly-linked binaries pay
+  # a macOS first-launch security-scan tax nextest's silent listing phase
+  # concentrates into one large stall. A dedicated CARGO_TARGET_DIR for
+  # this one command keeps its artifacts out of step 2's way entirely, at
+  # the cost of one extra (smaller) target dir on disk.
+  CARGO_TARGET_DIR="$repo_root/backend/target/sqlx-prepare-check" \
+    DATABASE_URL="$prepare_check_url" SQLX_OFFLINE=false cargo sqlx prepare --check --workspace
 )
 
 cleanup
 trap - EXIT
+step_done
 
 # Step 2: the DB-backed test suite. #[sqlx::test] reads its master
 # connection from DATABASE_URL specifically (not a configurable attribute),
 # so it is overridden here to the crm_migrator URL for this process only —
 # the one documented exception to "tests never read ambient environment"
-# (docs/specs/SLICE_001.md §9).
+# (docs/specs/SLICE_001.md §9). SQLX_OFFLINE=true here is compile-time
+# only (pins the query! macros to the .sqlx cache instead of introspecting
+# this DATABASE_URL live); backend/.cargo/config.toml already defaults it
+# to true for every cargo invocation in this workspace, this export just
+# keeps it explicit and identical alongside DATABASE_URL at the one place
+# a real, reachable DATABASE_URL is in scope for this script.
 export DATABASE_URL="$MIGRATION_DATABASE_URL"
+export SQLX_OFFLINE=true
 
-echo "==> cargo test -- --ignored"
+echo "==> cargo nextest run --run-ignored only"
+# Gate-speedup lever 1: nextest runs every test binary's tests in one
+# process-per-test pool across all CPUs, instead of cargo test's one
+# process per binary run to completion before the next starts. Each
+# #[sqlx::test] owns its own ephemeral database, so process-per-test
+# isolation is safe by construction. Does not run doctests (upstream
+# nextest limitation) — irrelevant here, since none of this workspace's
+# doctests are #[ignore]d; they run once, for real, in
+# `cargo test --doc` from ./scripts/check.
 cd "$repo_root/backend"
-exec cargo test --manifest-path Cargo.toml --workspace --locked -- --ignored
+cargo nextest run --workspace --locked --run-ignored only
+step_done
+
+echo "==> all checks passed [total $((SECONDS - total_start))s]"

@@ -69,6 +69,9 @@ echo "==> applying migrations (CLI migrator; no compilation required)"
 cargo sqlx migrate run --source crates/crm-api/migrations --database-url "$prepare_url"
 
 echo "==> preparing offline query cache (backend/.sqlx/)"
+# Shares the main target dir (unlike scripts/check-db's isolated one) because
+# this only runs when queries actually changed, so the SQLX_OFFLINE=false
+# fingerprint clobber it causes forces a relink that was already justified.
 DATABASE_URL="$prepare_url" SQLX_OFFLINE=false cargo sqlx prepare --workspace
 
 echo "==> sqlx-prepare complete"

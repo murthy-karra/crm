@@ -63,6 +63,15 @@ else
   echo "    install it: cargo install sqlx-cli --version ${locked_minor}.6 --locked --no-default-features --features postgres,rustls" >&2
 fi
 
+echo "==> checking cargo-nextest (required for scripts/check and scripts/check-db)"
+if command -v cargo-nextest >/dev/null 2>&1; then
+  nextest_version="$(cargo nextest --version 2>&1 | head -1 | awk '{print $2}')"
+  echo "    cargo-nextest $nextest_version ready"
+else
+  echo "    installing cargo-nextest"
+  cargo install cargo-nextest --locked
+fi
+
 echo "==> fetching Cargo dependencies"
 (cd "$repo_root/backend" && cargo fetch --locked)
 

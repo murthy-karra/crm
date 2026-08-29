@@ -200,7 +200,31 @@ deferred walkthrough happens). NEXT: the queued GATE-SPEEDUP
 chunk (local phase 1 first, per the header entry) → then 011b
 (saved lists) per the ladder.
 
-QUEUED NEXT after 011a merges (user-approved 2026-08-28): a small
+GATE-SPEEDUP CHUNK COMPLETE on `gate-speedup` (2026-08-28,
+Sonnet lane + coordinator close-out across a VS Code restart;
+resume artifact in docs/tasks/GATE_SPEEDUP.md). STEADY-STATE
+MEASURED SAME-DAY: ./scripts/check 2096s → 79s (nextest 5s;
+doctests 73s now dominate — future micro-lever: scope --doc);
+./scripts/check-db 2248s → ~120s clean (isolated prepare 3s, ZERO
+recompile proven by a 0.16s --no-run fingerprint check, 363 db
+tests in 115s); pair ~72 min → ~3.3 min (~22x). Coverage 1324 →
+1324, zero shrinkage, 5 compile_fail doctests preserved as their
+own step. Landed: nextest both gates + doc step, line-tables-only,
+concurrent web half (failure path proven), 3 batched 501-INSERT
+fixtures, SQLX_OFFLINE=true unification (.cargo/config.toml [env])
++ ISOLATED CARGO_TARGET_DIR for prepare --check (root cause: the
+two gate steps clobbered each other's sqlx-env fingerprints every
+run, forcing full test-binary relinks whose macOS first-launch
+scans were the "execution time" all along). Machine side: user
+enabled the Developer Tools exemption (19:21, screenshot-verified,
+effective after app relaunch) — scan gap confirmed dead post-
+restart. Skipped as recorded: prepare -p scoping (sqlx-cli 0.8.6),
+sccache. Residuals: 4th 501-INSERT test unbatched
+(db_people.rs unresolved-queue); stray sqlx ephemeral test DBs
+from killed runs (drop at leisure); doctest step now dominates
+check. The original queue text follows for reference.
+
+QUEUED (original text, now executed): a small
 standalone GATE-SPEEDUP chunk, own branch, behavior-identical
 coverage proven by a before/after timing table + identical test
 counts. Levers, by payoff: (1) cargo-nextest for both test steps

@@ -1,0 +1,14 @@
+[env]
+# Gate-speedup lever 1 fix: pins the sqlx macros to the offline .sqlx cache
+# for every cargo invocation in this workspace by default, so
+# scripts/check and scripts/check-db compile crm-app/crm-api under an
+# identical fingerprint and share build artifacts instead of recompiling
+# on every DATABASE_URL change (DATABASE_URL itself stays a pure runtime
+# read for #[sqlx::test]'s master connection — unaffected by this).
+#
+# The one deliberate online check (scripts/check-db's
+# `SQLX_OFFLINE=false cargo sqlx prepare --check`) keeps working: an
+# environment variable set directly on that command line overrides this
+# default (cargo's own [env] precedence — `force` is not set here), so
+# drift checking stays online.
+SQLX_OFFLINE = "true"

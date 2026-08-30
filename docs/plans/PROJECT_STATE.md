@@ -136,6 +136,52 @@ notes).
   workflow rewrite; Buildkite the only non-Actions product seriously
   weighed). Re-verify vendor pricing at spec time.
 
+**QUEUED: PERCEIVED-LATENCY chunk (web, not yet approved for
+implementation).** Scale baselines measured 2026-08-29 against a
+"Perf Test Realty" org seeded via the live API (dev DB only; wiped by
+the next dev-bootstrap), first at 5k people, then at **100k people +
+66,589 contact attempts + ~5k repeat inquiries** (the mature-FUB-team
+case; write path held 104–107 leads/s across the whole 15-minute
+seed, no degradation). At 100k: core filters stay FLAT (people
+unfiltered 23 ms, assigned_to 21 ms, source 25 ms, last_contact-
+within-7d 22 ms — the fixed matrix + indexes hold); ABSENCE-proving
+filters degrade (has_phone-false 43 ms; last_contact-never 234 ms;
+4-clause combo with a never clause 318 ms); **Today = 966 ms admin /
+590 ms member** (linear in org size × history — ~97 ms at 5k). The
+ladder's "fine to ~50k" holds for filters but NOT for Today (~500 ms
+at 50k extrapolated). Consequence: the recorded denormalized
+last-activity-columns lever (person.last_contact_at /
+last_inbound_at / last_inquiry_at maintained at write time) now has a
+measured trigger and should be its own small chunk BEFORE or WITH
+011c (which multiplies Today's cost); it also collapses the
+never-filters to indexed column tests. Tunnel-path measurements
+(2026-08-29): ~60 ms edge floor per request; browser-realistic
+People ≈ 90–140 ms; payloads edge-compressed 229 KB→27 KB (origin
+CompressionLayer would shrink only the Mac→edge leg). Since the
+backend is flat and fast, perceived speed work is web-side:
+`placeholderData: keepPreviousData` on people/filter queries (kills
+the Loading… flash on every chip edit), optimistic updates on
+stage/assignment mutations, hover prefetch of person detail, collapse
+the me→org-queries waterfall (2 sequential RTTs over the tunnel), and
+prod-build web serving for the tunnel (dev Vite ships hundreds of
+unbundled modules through it). Bundles naturally with the FilterBar
+UX polish items (draft-chip affordance, anchored editors, clear-all).
+100-AGENT CONCURRENCY TEST (same org, 2026-08-29): STRESS (no think
+time) saturates the sqlx-default 10-connection pool — every request
+queues to ~2.3–2.8 s and 9% 503 via the 2 s acquire timeout, Today the
+biggest consumer; REALISTIC (2–5 s think time, ~24 req/s) is healthy
+at p50 (people/filters 23–60 ms) but Today p50 612 ms / p95 1.8 s and
+a 1.2% 503 rate — 100 active agents in one 100k-person org is past
+comfort TODAY. Root cause is capacity = pool(10) / Today(~1 s);
+the denormalization chunk multiplies capacity ~40x and is the fix;
+explicit pool sizing (max_connections currently sqlx default 10,
+state.rs) is the cheap secondary lever. Login (Argon2id) 236 ms avg
+sequential — by design, fine. THE HARNESS IS COMMITTED: ./scripts/perf
+(seed | bench | agents) + docs/design/PERF_BASELINE.md (full tables,
+EXPLAIN anatomy of Today, method caveats: debug build, skewed books,
+Python client) — re-run bench after any query/index/pool change and
+compare against the baseline doc.
+
 ## Live residuals and follow-ups
 
 Carried forward; everything else previously listed here was resolved
@@ -226,6 +272,18 @@ and now lives only in git history.
 - **O-013 "Delete my data"**: Person erasure on O-012 crypto-shred;
   must be addressed before the first external customer holds real
   consumer data.
+
+- **O-015 blob size / storage / retention** (recorded 2026-08-29):
+  raw MIME incl. attachments lives in Postgres BYTEA today, capped at
+  1.4 MiB by the email worker — too small for real-estate disclosure
+  packets (5–20 MB), so legitimate client mail with a signed PDF is
+  BOUNCED. Cap raise is actionable NOW and independent of the rest.
+  Settled in the entry: whole-message relocation to object storage
+  (not per-attachment extraction) when recordings force that slice;
+  junk stripping REJECTED (error asymmetry + content_hmac determinism
+  trap); infrequent-access tier via bucket lifecycle rules, not deep
+  archive. Genuinely open: the cap value, and RETENTION (legal weight,
+  sequenced with O-013).
 - **O-008 AI next-step suggestions**: after every communication and
   daily; reminder only; no work before the communication slices.
 - O-006 (outbound messaging consent) blocks the SMS slice; O-002

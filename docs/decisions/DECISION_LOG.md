@@ -1464,3 +1464,91 @@ the parked Slice 010 migration ladder.
 
 Blocks: nothing. Feeds the Slice 011 ladder plan (phased, minimum 4
 rungs per the user's standing sizing rule).
+
+### O-015 — Correspondence/payload blob size, storage location, and retention (OPEN)
+
+Recorded 2026-08-29 (user, in discussion after the perf baseline work).
+Three coupled questions about the encrypted raw blobs
+(`raw_payload.ciphertext`, `correspondence_raw.ciphertext`). Most of
+the analysis is settled below so the eventual slice starts from facts;
+what remains genuinely open is marked.
+
+**Ground truth today.** There is NO object storage anywhere in the
+system: raw MIME — attachments included, since they are part of that
+MIME — is stored as an encrypted `BYTEA` in PostgreSQL. Hard caps: the
+Email Worker bounces mail over **1.4 MiB** raw
+(`infra/email-worker/worker.js`, an explicit "honest bounce beats
+silent truncation" choice), `POST /inbound/email` caps HTTP bodies at
+2 MiB, generic intake JSON at 256 KiB. D-015 §4 already anticipates the
+exit: "large media moves to object storage when recordings ship."
+
+1. **Size cap (nearest-term, product-visible).** 1.4 MiB is small for
+   real-estate mail: disclosure packets, signed contracts, and
+   inspection reports routinely run 5–20 MB. Under Slice 009 capture, a
+   client emailing a signed PDF to an agent's capture address is
+   BOUNCED — the thread silently misses the timeline and the client
+   sees a bounce from our domain. Raising the worker threshold and the
+   endpoint limit (a two-constant change) is available today,
+   independent of questions 2 and 3, at a Postgres-bytes cost that is
+   negligible at design-partner scale. **OPEN: what cap?**
+
+2. **Storage location.** Recommendation, reasoned through: when
+   recordings force object storage into existence, move the **whole
+   encrypted raw MIME** there with a pointer row in Postgres — NOT
+   per-attachment extraction. Whole-message relocation preserves D-012
+   raw preservation byte-for-byte, keeps `content_hmac` (the delivery
+   idempotency key, `UNIQUE (organization_id, source, content_hmac)`)
+   unchanged, removes ALL blob bytes from WAL rather than the
+   attachment fraction, and needs no MIME surgery. Nothing in the
+   product serves individual attachments today
+   (`correspondence_raw` has no read endpoint at all, D-042.6;
+   `raw_payload`'s only reader is the admin workbench), so part-level
+   extraction buys nothing until a "download this attachment" feature
+   exists. Write the object BEFORE committing the row (a crash then
+   orphans a reapable object rather than leaving a pointer to nothing).
+   Blob bytes are incompressible (encrypted), so under CNPG each stored
+   byte is ~1 byte of WAL × N replicas + archive — the multiplier
+   object storage removes.
+
+   **Junk stripping (signature logos, tracking pixels, inline GIFs) is
+   REJECTED, not deferred.** The error asymmetry is unacceptable
+   (keeping junk costs fractions of a cent; dropping a scanned
+   signature page is silent data loss in a system of record), the
+   `Content-Disposition` field that should classify it is unreliable
+   across mail clients, and stripping before hashing freezes the
+   stripper into a permanent versioned contract — retuning it changes
+   `content_hmac` and breaks redelivery dedup. Storage economics
+   (~8x lever, order-of-$100/month at 200-org scale) do not justify a
+   permanent correctness hazard. Storing raw preserves the option to
+   strip later; stripping forecloses recovery.
+
+3. **Lifecycle and retention.** Tiering: prefer an
+   INFREQUENT-ACCESS class (immediate retrieval, small read fee) over
+   deep-archive/Cold-Archive classes, whose asynchronous
+   minutes-to-hours retrieval would infect the workbench and any
+   re-processing path with a restore state machine — the extra savings
+   are tens of dollars a month against real permanent complexity.
+   Implement transitions as BUCKET LIFECYCLE RULES (pure configuration,
+   pointers unaffected since the key does not change), not application
+   logic; state-based tiering (archive as soon as a payload is resolved
+   or discarded — nothing reads those) is a later refinement needing
+   code. Note the elegant composition with O-012 crypto-shred: with a
+   per-object/per-person key in Postgres, erasure deletes a key row and
+   the archived ciphertext becomes permanently unreadable in place —
+   no retrieval, no early-deletion fee, no cross-system delete
+   coordination. Also verify object-storage backup/versioning is
+   aligned with Postgres PITR, or a point-in-time restore yields rows
+   pointing at since-changed objects.
+
+   **OPEN, and the part with legal weight: retention.** "Archive after
+   a year" implies "keep forever", which is itself a policy choice —
+   brokerage transaction-record retention obligations (multi-year,
+   state-dependent) push one way; CCPA/GDPR deletion schedules push the
+   other. Determines whether the lifecycle rule ends in "transition" or
+   "transition, then expire". Sequenced with O-013 (erasure), which
+   owns the same territory; O-012 (per-Person keys) is the mechanism.
+
+Blocks: nothing immediately. Question 1 is actionable now; questions 2
+and 3 are forced by the recordings slice (O-012 territory), which
+should absorb whole-message relocation in the same slice rather than
+building object storage twice.

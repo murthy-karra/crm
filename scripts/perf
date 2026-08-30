@@ -1,0 +1,311 @@
+#!/usr/bin/env python3
+"""Performance harness: seed a dedicated load-test Organization and
+measure query latency and concurrency behavior against the running dev
+API -- entirely through the live HTTP API (D-021: no direct database
+writes; the intake dedup path makes overlapping re-runs converge rather
+than duplicate). Baseline numbers and interpretation live in
+docs/design/PERF_BASELINE.md; re-run after any change that could move
+them (query shape, indexes, pool sizing, denormalization).
+
+Subcommands:
+  ./scripts/perf seed   [--target N] [--start I] [--attempts]   seed people
+  ./scripts/perf bench                                          latency table
+  ./scripts/perf agents [--agents N] [--seconds S]              concurrency test
+
+Requires the dev API running (./scripts/dev-api) and `requests`
+(pip install -r scripts/requirements.txt). Reads CRM_DEV_SEED_PASSWORD
+and CRM_DEMO_API_URL from the environment (source .env first); the
+password is never placed on argv or printed (scripts/seed_dev.py
+discipline). Everything lands in one Organization ("Perf Test Realty"),
+never Acme/Best; ./scripts/dev-bootstrap wipes it like everything else.
+"""
+import argparse
+import json
+import os
+import random
+import sys
+import threading
+import time
+import urllib.parse
+from collections import defaultdict
+
+try:
+    import requests
+except ImportError:
+    sys.exit("the 'requests' package is required: pip install -r scripts/requirements.txt")
+
+API_URL = os.environ.get("CRM_DEMO_API_URL", "http://127.0.0.1:3000")
+ORG_NAME = "Perf Test Realty"
+ADMIN_EMAIL = "perf-admin@perftest.test"
+MEMBER_EMAILS = ["perf-m1@perftest.test", "perf-m2@perftest.test"]
+SOURCES = ["zillow", "realtor_com", "website", "referral", "manual"]
+CHANNELS = ["call", "text", "email", "other"]
+OUTCOMES = ["reached", "no_answer", "left_message", "sent", "busy", "wrong_number"]
+
+
+def password():
+    value = os.environ.get("CRM_DEV_SEED_PASSWORD")
+    if not value:
+        sys.exit("CRM_DEV_SEED_PASSWORD is not set (source .env first)")
+    return value
+
+
+class Actor:
+    """One logged-in user, identified purely by its session cookie string,
+    replayed by hand (not requests' jar) so a Secure cookie still rides
+    plain-http loopback -- see scripts/seed_dev.py's rationale. Uses a
+    Session for connection keep-alive: the seed loop makes ~10^5 calls."""
+
+    def __init__(self):
+        self._cookie = None
+        self._s = requests.Session()
+
+    def req(self, method, path, body=None, retries=3):
+        headers = {"Cookie": self._cookie} if self._cookie else {}
+        for attempt in range(retries):
+            resp = self._s.request(method, f"{API_URL}{path}", json=body, headers=headers, timeout=30)
+            if resp.status_code == 503 and attempt < retries - 1:
+                time.sleep(0.5)  # intake_busy / pool pressure -- back off
+                continue
+            if not resp.ok:
+                sys.exit(f"{method} {path} -> {resp.status_code}: {resp.text[:200]}")
+            sc = resp.headers.get("set-cookie")
+            if sc:
+                self._cookie = sc.split(";", 1)[0]
+            return resp
+        sys.exit(f"{method} {path}: retries exhausted")
+
+    def timed(self, method, path, body=None):
+        """Load-phase request: never exits; returns (response_or_None, seconds)."""
+        headers = {"Cookie": self._cookie} if self._cookie else {}
+        start = time.time()
+        try:
+            resp = self._s.request(method, f"{API_URL}{path}", json=body, headers=headers, timeout=30)
+            return resp, time.time() - start
+        except requests.exceptions.RequestException:
+            return None, time.time() - start
+
+    def login(self, email):
+        self.req("POST", "/api/session", {"email": email, "password": password()})
+        return self
+
+
+def flt(clauses):
+    return urllib.parse.quote(json.dumps({"version": 1, "clauses": clauses}))
+
+
+def ensure_org():
+    """Create the perf org + admin + two members if absent; return a
+    logged-in admin Actor and the member id list."""
+    probe = Actor()
+    resp = probe._s.post(f"{API_URL}/api/session",
+                         json={"email": ADMIN_EMAIL, "password": password()}, timeout=30)
+    if resp.ok:
+        admin = Actor()
+        admin.login(ADMIN_EMAIL)
+    else:
+        platform = Actor().login("owner@platform.test")
+        org_id = platform.req("POST", "/api/platform/organizations", {"name": ORG_NAME}).json()["organization"]["id"]
+        tok = platform.req("POST", f"/api/platform/organizations/{org_id}/invitations",
+                           {"email": ADMIN_EMAIL, "role": "admin"}).json()["accept_path"].rsplit("/", 1)[-1]
+        admin = Actor()
+        admin.req("POST", "/api/invitations/accept",
+                  {"token": tok, "display_name": "Perf Admin", "password": password()})
+        for i, email in enumerate(MEMBER_EMAILS):
+            t = admin.req("POST", "/api/organization/invitations",
+                          {"email": email, "role": "member"}).json()["accept_path"].rsplit("/", 1)[-1]
+            Actor().req("POST", "/api/invitations/accept",
+                        {"token": t, "display_name": ["Mona Lopez", "Ned Okoro"][i], "password": password()})
+        print(f"created {ORG_NAME}", flush=True)
+    members = admin.req("GET", "/api/organization/members").json()["members"]
+    return admin, members
+
+
+def cmd_seed(args):
+    admin, members = ensure_org()
+    assignees = [m["user_id"] for m in members]
+    t0 = time.time()
+    n_attempts = 0
+    rng = random.Random(42)
+    for i in range(args.start, args.target):
+        payload = {"first_name": f"Lead{i}", "last_name": f"Perf{i % 97}",
+                   "message": "Perf-test synthetic lead.", "submission_id": f"perf-{i}"}
+        if i % 10 < 7:
+            payload["email"] = f"perf-lead-{i}@example.test"
+        if i % 10 < 6 or "email" not in payload:
+            payload["phone"] = f"+1555{7000000 + i}"
+        body = {"source": SOURCES[i % len(SOURCES)], "payload": payload}
+        # Explicit round-robin assignment: without assign_to_user_id the
+        # manual API routes actor_default (to the POSTing admin), which
+        # concentrates the whole org on one book -- pathological, not
+        # realistic (the 2026-08-29 baseline measured exactly that as an
+        # accidental worst case; see PERF_BASELINE.md).
+        body["assign_to_user_id"] = assignees[i % len(assignees)]
+        pid = admin.req("POST", "/api/inquiries", body).json()["person_id"]
+        if args.attempts and i % 20 < 7:
+            for _ in range(rng.randint(1, 3)):
+                admin.req("POST", f"/api/people/{pid}/contact-attempts",
+                          {"channel": rng.choice(CHANNELS), "outcome": rng.choice(OUTCOMES)})
+                n_attempts += 1
+        if args.attempts and i % 20 == 0 and "email" in payload:
+            admin.req("POST", "/api/inquiries", {
+                "source": SOURCES[(i + 1) % len(SOURCES)],
+                "payload": {"first_name": payload["first_name"], "last_name": payload["last_name"],
+                            "email": payload["email"], "message": "Following up.",
+                            "submission_id": f"perf-again-{i}"}})
+        done = i + 1 - args.start
+        if done % 5000 == 0:
+            rate = done / (time.time() - t0)
+            eta = (args.target - i - 1) / rate / 60
+            print(f"  {i + 1}/{args.target} (+{n_attempts} attempts, {rate:.0f}/s, eta {eta:.0f}m)", flush=True)
+    print(f"seeded [{args.start}, {args.target}) (+{n_attempts} attempts) in {(time.time() - t0) / 60:.1f}m", flush=True)
+
+
+def bench_cases(member_ids):
+    return [
+        ("admin", "people unfiltered (500 cap)", "/api/people"),
+        ("admin", "assigned_to me", f"/api/people?filter={flt([{'kind': 'assigned_to', 'assignees': ['me']}])}"),
+        ("admin", "assigned_to one user",
+         f"/api/people?filter={flt([{'kind': 'assigned_to', 'assignees': [{'user_id': member_ids[0]}]}])}"),
+        ("admin", "source zillow", f"/api/people?filter={flt([{'kind': 'source', 'sources': ['zillow']}])}"),
+        ("admin", "has_phone false", f"/api/people?filter={flt([{'kind': 'has_phone', 'value': False}])}"),
+        ("admin", "last_contact never", f"/api/people?filter={flt([{'kind': 'last_contact', 'age': {'op': 'never'}}])}"),
+        ("admin", "last_contact within 7d",
+         f"/api/people?filter={flt([{'kind': 'last_contact', 'age': {'op': 'within_days', 'days': 7}}])}"),
+        ("admin", "4-clause combo",
+         f"/api/people?filter={flt([{'kind': 'assigned_to', 'assignees': ['me', 'unassigned']}, {'kind': 'source', 'sources': ['zillow', 'website']}, {'kind': 'has_email', 'value': True}, {'kind': 'last_inbound', 'age': {'op': 'never'}}])}"),
+        ("admin", "today (admin)", "/api/today"),
+        ("member", "today (member m1)", "/api/today"),
+    ]
+
+
+def cmd_bench(args):
+    admin, members = ensure_org()
+    member_ids = [m["user_id"] for m in members if m["email"] in MEMBER_EMAILS]
+    member = Actor().login(MEMBER_EMAILS[0])
+    print(f"=== bench: {len(members)} members, 15 iters, ms ===")
+    for who, name, path in bench_cases(member_ids):
+        actor = admin if who == "admin" else member
+        times = []
+        for _ in range(15):
+            s = time.time()
+            r = actor.req("GET", path)
+            times.append((time.time() - s) * 1000)
+        d = r.json()
+        n = len(d.get("people", d.get("items", [])))
+        trunc = " TRUNC" if d.get("truncated") else ""
+        times.sort()
+        print(f"{name:30s} avg {sum(times)/len(times):7.1f}  p95 {times[13]:7.1f}  rows {n}{trunc}", flush=True)
+
+
+def cmd_agents(args):
+    admin, members = ensure_org()
+    existing = {m["email"] for m in members}
+    for i in range(args.agents):
+        email = f"perf-agent-{i}@perftest.test"
+        if email in existing:
+            continue
+        tok = admin.req("POST", "/api/organization/invitations",
+                        {"email": email, "role": "member"}).json()["accept_path"].rsplit("/", 1)[-1]
+        Actor().req("POST", "/api/invitations/accept",
+                    {"token": tok, "display_name": f"Agent {i}", "password": password()})
+    members = admin.req("GET", "/api/organization/members").json()["members"]
+    emails = [m["email"] for m in members][:args.agents]
+
+    t0 = time.time()
+    login_ms = []
+    actors = []
+    for e in emails:
+        s = time.time()
+        actors.append(Actor().login(e))
+        login_ms.append((time.time() - s) * 1000)
+    login_ms.sort()
+    print(f"logged in {len(actors)} agents in {time.time() - t0:.0f}s "
+          f"(login avg {sum(login_ms)/len(login_ms):.0f}ms, p95 {login_ms[int(len(login_ms)*.95)]:.0f}ms)", flush=True)
+
+    filters = [
+        f"/api/people?filter={flt([{'kind': 'assigned_to', 'assignees': ['me']}])}",
+        f"/api/people?filter={flt([{'kind': 'source', 'sources': ['zillow']}])}",
+        f"/api/people?filter={flt([{'kind': 'has_email', 'value': True}])}",
+        f"/api/people?filter={flt([{'kind': 'last_contact', 'age': {'op': 'within_days', 'days': 7}}])}",
+    ]
+
+    def run_phase(name, think_min, think_max):
+        stats = defaultdict(list)
+        errors = defaultdict(int)
+        stop = time.time() + args.seconds
+        lock = threading.Lock()
+
+        def loop(actor, idx):
+            rng = random.Random(idx)
+            my_people = []
+            while time.time() < stop:
+                acts = [("today", "GET", "/api/today", None),
+                        ("people", "GET", "/api/people", None),
+                        ("filter", "GET", rng.choice(filters), None)]
+                label, method, path, body = rng.choice(acts + acts[:1])
+                if my_people and rng.random() < 0.15:
+                    label, method = "log_contact", "POST"
+                    path = f"/api/people/{rng.choice(my_people)}/contact-attempts"
+                    body = {"channel": rng.choice(["call", "text", "email"]),
+                            "outcome": rng.choice(["reached", "no_answer", "left_message"])}
+                resp, secs = actor.timed(method, path, body)
+                with lock:
+                    if resp is None:
+                        errors[(label, "net")] += 1
+                    elif resp.ok:
+                        stats[label].append(secs * 1000)
+                        if label == "people" and not my_people:
+                            try:
+                                my_people = [p["id"] for p in resp.json()["people"][:50]]
+                            except Exception:
+                                pass
+                    else:
+                        errors[(label, resp.status_code)] += 1
+                if think_max > 0:
+                    time.sleep(rng.uniform(think_min, think_max))
+
+        threads = [threading.Thread(target=loop, args=(a, i)) for i, a in enumerate(actors)]
+        s0 = time.time()
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        wall = time.time() - s0
+        ok = sum(len(v) for v in stats.values())
+        err = sum(errors.values())
+        print(f"\n=== {name}: {len(actors)} agents, {wall:.0f}s, {ok} ok ({ok/wall:.0f} req/s), {err} errors ===")
+        for label in sorted(stats):
+            v = sorted(stats[label])
+            n = len(v)
+            print(f"{label:12s} n={n:5d}  avg {sum(v)/n:7.0f}ms  p50 {v[n//2]:7.0f}  p95 {v[int(n*.95)]:7.0f}  p99 {v[int(n*.99)]:7.0f}", flush=True)
+        for (label, status), c in sorted(errors.items()):
+            print(f"  ERROR {label} {status}: {c}")
+
+    run_phase("STRESS (no think time)", 0, 0)
+    time.sleep(5)
+    run_phase("REALISTIC (2-5s think time)", 2.0, 5.0)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    sub = parser.add_subparsers(dest="cmd", required=True)
+    p_seed = sub.add_parser("seed", help="seed people into the perf org via POST /api/inquiries")
+    p_seed.add_argument("--target", type=int, default=100000, help="seed people up to this index (default 100000)")
+    p_seed.add_argument("--start", type=int, default=0,
+                        help="first index to seed (re-seeding an existing range converges via intake dedup, just slowly)")
+    p_seed.add_argument("--attempts", action="store_true", default=True,
+                        help="also log 1-3 contact attempts for ~35%% of people and repeat inquiries for 5%%")
+    sub.add_parser("bench", help="15-iteration latency table for the standard query shapes")
+    p_ag = sub.add_parser("agents", help="concurrency test: STRESS + REALISTIC phases")
+    p_ag.add_argument("--agents", type=int, default=100)
+    p_ag.add_argument("--seconds", type=int, default=60, help="duration of each phase")
+    args = parser.parse_args()
+    {"seed": cmd_seed, "bench": cmd_bench, "agents": cmd_agents}[args.cmd](args)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except requests.exceptions.RequestException as err:
+        sys.exit(f"could not reach the API at {API_URL}: {err}")

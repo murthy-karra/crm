@@ -1,0 +1,645 @@
+<title>Glow &amp; Rise</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --ink: #0c0a32;
+    --ink-2: #14123f;
+    --ink-3: #1b184c;
+    --violet: #443afd;
+    --violet-deep: #5b3fd1;
+    --lavender: #c3c0ff;
+    --text: #eeecff;
+    --text-dim: rgba(238,236,255,.66);
+    --text-faint: rgba(238,236,255,.4);
+    --border: rgba(255,255,255,.12);
+    --border-soft: rgba(255,255,255,.07);
+    --swatch-paper: #f3f3f3;
+    --swatch-paper-2: #f7f7f9;
+    --font-display: 'Geist', Arial, sans-serif;
+    --font-mono: 'Geist Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html { color-scheme: dark; }
+
+  body {
+    margin: 0;
+    background: var(--ink);
+    color: var(--text);
+    font-family: var(--font-display);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a { color: inherit; }
+
+  img { max-width: 100%; }
+
+  ::selection { background: var(--violet); color: #fff; }
+
+  :focus-visible {
+    outline: 2px solid var(--lavender);
+    outline-offset: 3px;
+  }
+
+  h1, h2, h3 { text-wrap: balance; margin: 0; font-weight: 600; }
+
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: .72rem;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+  }
+
+  .wrap {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 0 clamp(1.25rem, 4vw, 2.5rem);
+  }
+
+  /* ---------- hero ---------- */
+
+  .hero {
+    position: relative;
+    overflow: hidden;
+    padding: clamp(4.5rem, 12vw, 7.5rem) 0 clamp(3.5rem, 8vw, 5rem);
+    border-bottom: 1px solid var(--border-soft);
+  }
+
+  .hero::before {
+    content: "";
+    position: absolute;
+    top: -30%;
+    right: -18%;
+    width: 60rem;
+    height: 60rem;
+    background: linear-gradient(170deg, var(--violet) 29%, var(--lavender) 121%);
+    filter: blur(90px);
+    opacity: .35;
+    border-radius: 50%;
+    animation: drift 22s ease-in-out infinite alternate;
+    pointer-events: none;
+  }
+
+  @keyframes drift {
+    from { transform: translate3d(0,0,0) scale(1); opacity: .3; }
+    to   { transform: translate3d(-4%, 3%, 0) scale(1.08); opacity: .42; }
+  }
+
+  .hero-inner { position: relative; display: grid; gap: 1.1rem; max-width: 42rem; }
+
+  .hero .eyebrow.reveal-on-load { animation-delay: 0ms; }
+
+  .hero h1 {
+    font-size: clamp(2.6rem, 6vw, 4.2rem);
+    line-height: 1.03;
+    letter-spacing: -.02em;
+    background: linear-gradient(170deg, #fff 20%, var(--lavender) 130%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .hero p {
+    color: var(--text-dim);
+    font-size: 1.08rem;
+    max-width: 34rem;
+    margin: 0;
+  }
+
+  .reveal-on-load {
+    opacity: 0;
+    animation: rise .7s cubic-bezier(.22,1,.36,1) forwards;
+  }
+  .hero .eyebrow.reveal-on-load { animation-delay: 40ms; }
+  .hero h1.reveal-on-load { animation-delay: 140ms; }
+  .hero p.reveal-on-load { animation-delay: 260ms; }
+
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(.75rem); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  /* ---------- sections ---------- */
+
+  section.recipe {
+    padding: clamp(3.5rem, 7vw, 5rem) 0;
+    border-bottom: 1px solid var(--border-soft);
+  }
+
+  .recipe-head {
+    display: grid;
+    gap: .55rem;
+    max-width: 38rem;
+    margin-bottom: clamp(2rem, 4vw, 2.75rem);
+  }
+
+  .recipe-head h2 { font-size: clamp(1.5rem, 3vw, 1.9rem); }
+  .recipe-head p { color: var(--text-dim); margin: 0; max-width: 60ch; }
+
+  .panel {
+    background: var(--ink-2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+  }
+
+  /* ---------- code blocks ---------- */
+
+  .code-block { position: relative; }
+
+  .code-block pre {
+    margin: 0;
+    padding: 1.1rem 1.2rem;
+    overflow-x: auto;
+    background: var(--ink-3);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-family: var(--font-mono);
+    font-size: .82rem;
+    line-height: 1.65;
+    color: var(--text-dim);
+  }
+
+  .code-block .copy-btn {
+    position: absolute;
+    top: .55rem;
+    right: .55rem;
+    font-family: var(--font-mono);
+    font-size: .68rem;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    background: rgba(255,255,255,.05);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: .3rem .55rem;
+    cursor: pointer;
+  }
+  .code-block .copy-btn:hover { background: rgba(255,255,255,.1); color: var(--text); }
+
+  .tok-prop { color: #b9b3ff; }
+  .tok-at   { color: var(--lavender); }
+  .tok-val  { color: #8fe3c4; }
+
+  /* ---------- gradients section ---------- */
+
+  .swatch-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1.4rem;
+  }
+
+  .swatch-card { display: grid; gap: .6rem; }
+
+  .swatch {
+    height: 8.5rem;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+  }
+
+  .swatch--hero { background: linear-gradient(170deg, var(--violet) 29%, var(--lavender) 121%); }
+
+  .swatch--vignette {
+    background: var(--lavender);
+    position: relative;
+    overflow: hidden;
+  }
+  .swatch--vignette::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      var(--ink) 0%,
+      rgba(12,10,50,.94) 26%,
+      rgba(12,10,50,.55) 62%,
+      rgba(12,10,50,.12) 88%,
+      transparent 100%
+    );
+  }
+
+  .swatch--card {
+    background: linear-gradient(var(--swatch-paper-2), #fff);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .swatch--card .mini-card {
+    width: 70%;
+    height: 55%;
+    border-radius: 10px;
+    background: linear-gradient(#ffffff, var(--swatch-paper-2));
+    box-shadow: 0 12px 24px rgba(12,10,50,.18), inset 0 1px 0 #fff;
+  }
+
+  .swatch-label { font-size: .88rem; color: var(--text-dim); }
+  .swatch-label b { color: var(--text); font-weight: 500; }
+
+  /* ---------- glow button ---------- */
+
+  .glow-demo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: clamp(3rem, 8vw, 4.5rem) 1.5rem;
+  }
+
+  .button--glow {
+    font-family: var(--font-display);
+    font-size: 1rem;
+    font-weight: 600;
+    color: #fff;
+    background: linear-gradient(180deg, var(--violet) 0%, var(--violet-deep) 100%);
+    border: none;
+    border-radius: 999px;
+    padding: .95rem 2.1rem;
+    cursor: pointer;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.6),
+      0 0 0 4px var(--violet-deep),
+      0 0 16px 2px rgba(68,58,253,.45),
+      0 0 34px 6px rgba(68,58,253,.22);
+    transition: box-shadow .25s ease, transform .25s ease;
+  }
+  .button--glow:hover {
+    transform: translateY(-1px);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.7),
+      0 0 0 4px var(--violet-deep),
+      0 0 22px 4px rgba(68,58,253,.55),
+      0 0 46px 10px rgba(68,58,253,.3);
+  }
+
+  /* ---------- scroll reveal cards ---------- */
+
+  .reveal-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 1.2rem;
+  }
+
+  .reveal-card {
+    padding: 1.5rem;
+    display: grid;
+    gap: .5rem;
+  }
+  .reveal-card h3 { font-size: 1.02rem; }
+  .reveal-card p { margin: 0; color: var(--text-dim); font-size: .92rem; }
+
+  .reveal { opacity: 0; }
+  .reveal.in-view { animation: rise .7s cubic-bezier(.22,1,.36,1) forwards; }
+
+  /* ---------- marquee ---------- */
+
+  .marquee {
+    overflow: hidden;
+    padding: 1.6rem 0;
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+            mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+  }
+
+  .marquee-track {
+    display: flex;
+    width: max-content;
+    gap: .75rem;
+    animation: scroll 26s linear infinite;
+  }
+
+  @keyframes scroll {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
+  }
+
+  .pill {
+    font-family: var(--font-mono);
+    font-size: .82rem;
+    color: var(--text-dim);
+    background: var(--ink-2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: .5rem 1.1rem;
+    white-space: nowrap;
+  }
+
+  /* ---------- fill bar ---------- */
+
+  .fill-demo { padding: 1.75rem; display: grid; gap: .7rem; }
+  .fill-demo .fill-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: .9rem;
+    color: var(--text-dim);
+  }
+  .fill-demo .fill-label b { color: var(--text); font-family: var(--font-mono); }
+
+  .fill-track {
+    height: 10px;
+    border-radius: 999px;
+    background: rgba(255,255,255,.08);
+    overflow: hidden;
+  }
+  .fill-bar {
+    height: 100%;
+    width: 0%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--violet-deep), var(--lavender));
+  }
+  .fill-bar.in-view {
+    animation: fill 1.8s cubic-bezier(.22,1,.36,1) forwards;
+  }
+  @keyframes fill {
+    from { width: 0%; }
+    to   { width: var(--fill-to, 92%); }
+  }
+
+  /* ---------- footer ---------- */
+
+  footer {
+    padding: 2.5rem 0 3.5rem;
+    text-align: center;
+  }
+  footer p {
+    font-family: var(--font-mono);
+    font-size: .78rem;
+    color: var(--text-faint);
+    margin: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: .001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: .001ms !important;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .code-block pre { font-size: .76rem; }
+  }
+</style>
+
+<div class="hero">
+  <div class="wrap hero-inner">
+    <p class="eyebrow reveal-on-load">CSS cookbook &middot; sourced from litellm.ai/ai-gateway</p>
+    <h1 class="reveal-on-load">Glow &amp; Rise</h1>
+    <p class="reveal-on-load">Five techniques behind that page's premium feel — a diagonal gradient, a layered glow shadow, scroll-triggered reveals, a marquee, and a fill bar. Live below each one, with the exact CSS to lift.</p>
+  </div>
+</div>
+
+<section class="recipe">
+  <div class="wrap">
+    <div class="recipe-head">
+      <span class="eyebrow">Gradients</span>
+      <h2>Three gradients do most of the work</h2>
+      <p>A diagonal blend for hero sections, a vertical vignette that fades dark panels to nothing, and a near-invisible depth gradient on light cards.</p>
+    </div>
+    <div class="swatch-grid">
+      <div class="swatch-card">
+        <div class="swatch swatch--hero"></div>
+        <p class="swatch-label"><b>Hero diagonal</b> — violet into lavender</p>
+      </div>
+      <div class="swatch-card">
+        <div class="swatch swatch--vignette"></div>
+        <p class="swatch-label"><b>Vignette fade</b> — ink to transparent, shown over lavender</p>
+      </div>
+      <div class="swatch-card">
+        <div class="swatch swatch--card"><div class="mini-card"></div></div>
+        <p class="swatch-label"><b>Card depth</b> — white into off-white</p>
+      </div>
+    </div>
+    <div class="code-block" style="margin-top:1.4rem;">
+      <button class="copy-btn" data-copy="gradAll">Copy</button>
+      <pre><code data-snippet="gradAll"></code></pre>
+    </div>
+  </div>
+</section>
+
+<section class="recipe">
+  <div class="wrap">
+    <div class="recipe-head">
+      <span class="eyebrow">Glow shadow</span>
+      <h2>A layered box-shadow, not a filter</h2>
+      <p>Four shadows stacked: an inset white top-highlight for glassiness, a solid ring in the deep violet, then two soft colored blooms that read as a glow. Hover intensifies the last two.</p>
+    </div>
+    <div class="panel glow-demo">
+      <button class="button--glow">Get started</button>
+    </div>
+    <div class="code-block" style="margin-top:1.4rem;">
+      <button class="copy-btn" data-copy="glow">Copy</button>
+      <pre><code data-snippet="glow"></code></pre>
+    </div>
+  </div>
+</section>
+
+<section class="recipe">
+  <div class="wrap">
+    <div class="recipe-head">
+      <span class="eyebrow">Scroll reveal</span>
+      <h2>Fade up, once, on the way into view</h2>
+      <p>Elements start faded and dropped a touch. An IntersectionObserver adds a class that plays a 0.7s ease-out-expo rise, staggered per card. Scroll this section back into view to replay it.</p>
+    </div>
+    <div class="reveal-grid">
+      <div class="panel reveal-card reveal">
+        <h3>Consistent glow</h3>
+        <p>Every accent — button, chip, bar — draws from the same two violets.</p>
+      </div>
+      <div class="panel reveal-card reveal">
+        <h3>Layered depth</h3>
+        <p>Shadows stack an inset highlight under a colored bloom, never just one blur.</p>
+      </div>
+      <div class="panel reveal-card reveal">
+        <h3>Deliberate motion</h3>
+        <p>Each animation demonstrates the thing it's selling — nothing moves just to move.</p>
+      </div>
+    </div>
+    <div class="code-block" style="margin-top:1.4rem;">
+      <button class="copy-btn" data-copy="reveal">Copy</button>
+      <pre><code data-snippet="reveal"></code></pre>
+    </div>
+    <div class="code-block" style="margin-top:.9rem;">
+      <button class="copy-btn" data-copy="revealJs">Copy</button>
+      <pre><code data-snippet="revealJs"></code></pre>
+    </div>
+  </div>
+</section>
+
+<section class="recipe">
+  <div class="wrap">
+    <div class="recipe-head">
+      <span class="eyebrow">Marquee</span>
+      <h2>Loop the content, not the illusion</h2>
+      <p>Duplicate the row's children once, then animate translateX from 0 to -50% on a linear loop. Because the second half is identical to the first, the seam is invisible.</p>
+    </div>
+    <div class="panel marquee">
+      <div class="marquee-track">
+        <span class="pill">OpenAI</span><span class="pill">Anthropic</span><span class="pill">Bedrock</span>
+        <span class="pill">Vertex AI</span><span class="pill">Azure OpenAI</span><span class="pill">Groq</span>
+        <span class="pill">Mistral</span><span class="pill">Cohere</span>
+        <span class="pill">OpenAI</span><span class="pill">Anthropic</span><span class="pill">Bedrock</span>
+        <span class="pill">Vertex AI</span><span class="pill">Azure OpenAI</span><span class="pill">Groq</span>
+        <span class="pill">Mistral</span><span class="pill">Cohere</span>
+      </div>
+    </div>
+    <div class="code-block" style="margin-top:1.4rem;">
+      <button class="copy-btn" data-copy="marquee">Copy</button>
+      <pre><code data-snippet="marquee"></code></pre>
+    </div>
+  </div>
+</section>
+
+<section class="recipe" style="border-bottom:none;">
+  <div class="wrap">
+    <div class="recipe-head">
+      <span class="eyebrow">Fill bar</span>
+      <h2>A width animation, triggered on view</h2>
+      <p>Same observer as the scroll reveal, a different target: width goes from 0 to its final value once the bar enters the viewport.</p>
+    </div>
+    <div class="panel fill-demo">
+      <div class="fill-label"><span>Time to first glow</span><b>92%</b></div>
+      <div class="fill-track"><div class="fill-bar reveal" style="--fill-to:92%"></div></div>
+    </div>
+    <div class="code-block" style="margin-top:1.4rem;">
+      <button class="copy-btn" data-copy="fill">Copy</button>
+      <pre><code data-snippet="fill"></code></pre>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p>Extracted from litellm.ai/ai-gateway, 2026-09-01 &middot; set in Geist</p>
+</footer>
+
+<script>
+  const SNIPPETS = {
+    gradAll:
+`.hero { background: linear-gradient(170deg, #443afd 29%, #c3c0ff 121%); }
+
+.dark-panel {
+  background: linear-gradient(
+    #0c0a32 0%,
+    rgba(12,10,50,.94) 26%,
+    rgba(12,10,50,.55) 62%,
+    rgba(12,10,50,.12) 88%,
+    transparent 100%
+  );
+}
+
+.card { background: linear-gradient(#ffffff, #f7f7f9); }`,
+
+    glow:
+`.button--glow {
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.6),
+    0 0 0 4px #5b3fd1,
+    0 0 16px 2px rgba(68,58,253,.45),
+    0 0 34px 6px rgba(68,58,253,.22);
+}
+
+.button--glow:hover {
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.7),
+    0 0 0 4px #5b3fd1,
+    0 0 22px 4px rgba(68,58,253,.55),
+    0 0 46px 10px rgba(68,58,253,.3);
+}`,
+
+    reveal:
+`@keyframes rise {
+  from { opacity: 0; transform: translateY(.75rem); }
+  to   { opacity: 1; transform: none; }
+}
+
+.reveal { opacity: 0; }
+.reveal.in-view {
+  animation: rise .7s cubic-bezier(.22,1,.36,1) forwards;
+}`,
+
+    revealJs:
+`const io = new IntersectionObserver((entries) => {
+  entries.forEach((entry, i) => {
+    if (entry.isIntersecting) {
+      entry.target.style.animationDelay = i * 90 + 'ms';
+      entry.target.classList.add('in-view');
+      io.unobserve(entry.target);
+    }
+  });
+}, { threshold: .3 });
+
+document.querySelectorAll('.reveal').forEach(el => io.observe(el));`,
+
+    marquee:
+`@keyframes scroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: scroll 26s linear infinite;
+}
+/* duplicate the row's children once so -50% loops seamlessly */`,
+
+    fill:
+`@keyframes fill {
+  from { width: 0%; }
+  to   { width: var(--fill-to, 92%); }
+}
+
+.fill-bar.in-view {
+  animation: fill 1.8s cubic-bezier(.22,1,.36,1) forwards;
+}`
+  };
+
+  function highlightCSS(code) {
+    const esc = code
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    return esc.replace(
+      /(@[\w-]+)|(#[0-9a-fA-F]{3,8})|(rgba?\([^)]*\))|(\b[\w-]+(?=\s*:))/g,
+      (m, at, hex, rgba, prop) => {
+        if (at) return '<span class="tok-at">' + at + '</span>';
+        if (hex) return '<span class="tok-val">' + hex + '</span>';
+        if (rgba) return '<span class="tok-val">' + rgba + '</span>';
+        if (prop) return '<span class="tok-prop">' + prop + '</span>';
+        return m;
+      }
+    );
+  }
+
+  document.querySelectorAll('[data-snippet]').forEach((el) => {
+    const key = el.getAttribute('data-snippet');
+    if (SNIPPETS[key]) el.innerHTML = highlightCSS(SNIPPETS[key]);
+  });
+
+  document.querySelectorAll('.copy-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const key = btn.getAttribute('data-copy');
+      const text = SNIPPETS[key] || '';
+      const original = btn.textContent;
+      try {
+        await navigator.clipboard.writeText(text);
+        btn.textContent = 'Copied';
+      } catch (e) {
+        btn.textContent = 'Select & copy';
+      }
+      setTimeout(() => { btn.textContent = original; }, 1400);
+    });
+  });
+
+  try {
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((entry, i) => {
+        if (entry.isIntersecting) {
+          entry.target.style.animationDelay = (i % 3) * 90 + 'ms';
+          entry.target.classList.add('in-view');
+          io.unobserve(entry.target);
+        }
+      });
+    }, { threshold: .3 });
+    document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
+  } catch (e) {}
+</script>

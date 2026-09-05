@@ -209,8 +209,14 @@ function logout() {
 <template>
   <div class="flex min-h-screen bg-surface-1">
     <aside class="flex w-[280px] shrink-0 flex-col border-r border-border bg-surface-0">
-      <div class="px-6 py-5">
-        <span class="text-[17px] font-semibold text-text">CRM</span>
+      <div class="px-6 py-3">
+        <img
+          src="/brand/elysium-lockup-horizontal-name-indigo.svg"
+          alt="Elysium CRM"
+          width="164"
+          height="48"
+          class="h-12 w-[164px]"
+        >
       </div>
 
       <nav class="flex-1 space-y-6 overflow-y-auto px-3 py-2">

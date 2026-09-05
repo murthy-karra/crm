@@ -708,7 +708,7 @@ Rejected: writing nothing until the agent chooses (a closed tab would
 lose the attempt and Today would wait on paperwork); pre-selecting the
 system's guess (it is wrong exactly in the cases that matter).
 
-> **Note:** accepted decisions D-034 through D-043 continue BELOW,
+> **Note:** accepted decisions D-034 through D-044 continue BELOW,
 > appended chronologically among the open items in the next section.
 > D-033 is not the latest accepted decision.
 
@@ -1464,6 +1464,34 @@ the parked Slice 010 migration ladder.
 
 Blocks: nothing. Feeds the Slice 011 ladder plan (phased, minimum 4
 rungs per the user's standing sizing rule).
+
+### D-044 — Elysium CRM identity and Threshold E logo direction (2026-09-03)
+
+Accepted (user, after review of the logo-system concept and vector
+direction).
+
+1. **The customer-facing product name is Elysium CRM.** Product chrome,
+   browser metadata, install surfaces, and future native clients use that
+   name. The existing `elysianfeld.com` intake-mail domain remains
+   infrastructure and is not renamed by this decision.
+2. **The Threshold E is the approved identity direction.** A continuous
+   geometric ribbon forms an abstract `E`; its open edge and negative space
+   suggest a doorway without using literal real-estate or AI iconography.
+3. **The primary identity is one-color-first.** Deep indigo `#1E1B4B` on
+   light surfaces, white reversed on indigo, and black for one-color production.
+   The mark has no gradient, glow, bevel, texture, or decorative shadow.
+4. **The system includes distinct standard and micro marks.** The optically
+   simplified micro mark is used below 32 px. Horizontal, stacked, app-tile,
+   favicon, reversed, and monochrome forms share the same core geometry.
+5. **SVG is authoritative.** Wordmarks are outlined paths with no runtime font
+   dependency; raster and platform exports are derived artifacts. Canonical
+   masters and usage rules live under `docs/design/branding/`.
+
+This is a visual/product-chrome decision only. It changes no HTTP, realtime,
+Operator-tool, or persistence contract.
+
+Blocks: nothing. Authorizes the web-brand integration and future native asset
+exports from the same masters.
 
 ### O-015 — Correspondence/payload blob size, storage location, and retention (OPEN)
 

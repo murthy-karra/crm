@@ -49,8 +49,14 @@ function onSubmit() {
   <div class="flex min-h-screen items-center justify-center bg-surface-1 px-4">
     <Card class="w-full max-w-sm">
       <div class="mb-6 text-center">
-        <h1 class="text-section font-semibold text-text">
-          CRM
+        <h1>
+          <img
+            src="/brand/elysium-lockup-stacked-name-indigo.svg"
+            alt="Elysium CRM"
+            width="160"
+            height="140"
+            class="mx-auto h-[140px] w-40"
+          >
         </h1>
         <p class="mt-1 text-body text-text-muted">
           Sign in to continue

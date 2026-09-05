@@ -78,6 +78,14 @@ afterEach(() => {
 })
 
 describe('AppShell Ask drawer', () => {
+  it('renders the approved Elysium CRM lockup', async () => {
+    const { wrapper } = await mountShell('/today', orgSession())
+    const logo = wrapper.get('img[alt="Elysium CRM"]')
+    expect(logo.attributes('width')).toBe('164')
+    expect(logo.attributes('height')).toBe('48')
+    wrapper.unmount()
+  })
+
   it('toggles with the button and persists across route changes while open', async () => {
     const { wrapper, router } = await mountShell('/today', orgSession())
     expect(wrapper.get('[data-testid="operator-panel"]').isVisible()).toBe(false)

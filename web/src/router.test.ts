@@ -74,6 +74,13 @@ describe('router guards (SLICE_004 §10)', () => {
       expect(router.currentRoute.value.path).toBe('/today')
     })
 
+    it('uses the Elysium CRM product name in document titles', async () => {
+      vi.mocked(fetchMe).mockResolvedValue(MEMBER)
+      const router = freshRouter()
+      await router.push('/people')
+      expect(document.title).toBe('People · Elysium CRM')
+    })
+
     it('is bounced from /manage/members to /today (not an admin)', async () => {
       vi.mocked(fetchMe).mockResolvedValue(MEMBER)
       const router = freshRouter()

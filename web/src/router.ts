@@ -22,7 +22,7 @@ declare module 'vue-router' {
     requiresOrgAdmin?: boolean
     /** SLICE_004 §10: `/platform/*` — requires `platform_admin === true`. */
     requiresPlatformAdmin?: boolean
-    /** Document title, rendered as "<title> · CRM". */
+    /** Document title, rendered as "<title> · Elysium CRM". */
     title?: string
   }
 }
@@ -236,7 +236,7 @@ export function createAppRouter(history: RouterHistory): Router {
 
   router.afterEach((to) => {
     if (typeof document !== 'undefined') {
-      document.title = to.meta.title ? `${to.meta.title} · CRM` : 'CRM'
+      document.title = to.meta.title ? `${to.meta.title} · Elysium CRM` : 'Elysium CRM'
     }
   })
 

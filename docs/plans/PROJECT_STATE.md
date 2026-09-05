@@ -75,12 +75,14 @@ this planning edit. Undeleted merged branches:
 
 ## Last accepted decision
 
-D-043 (2026-08-28) — smart lists are first-class and FUB-shaped;
-lists feed Today; built-in Today logic becomes org-tweakable system
-feeds; the filter model IS the Today configuration language. Plus the
-three ladder-acceptance decisions in SLICE_011_LADDER.md (order a→e;
-D-043 §3 strict; Source = latest inquiry) and the 2026-08-29 sort-rung
-decision above.
+D-044 (2026-09-03) — the customer-facing product name is Elysium CRM;
+the one-color Threshold E direction and SVG-master logo system are
+approved. D-043 remains the current slice-shaping product decision:
+smart lists are first-class and FUB-shaped; lists feed Today; built-in
+Today logic becomes org-tweakable system feeds; the filter model IS the
+Today configuration language. Plus the three ladder-acceptance decisions
+in SLICE_011_LADDER.md (order a→e; D-043 §3 strict; Source = latest inquiry)
+and the 2026-08-29 sort-rung decision above.
 
 ## Slice ledger (all COMPLETE, merged to main, pushed)
 

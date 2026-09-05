@@ -1,6 +1,6 @@
-# AI-First Real Estate Relationship Platform
+# Elysium CRM
 
-This repository contains an AI-first real-estate CRM and relationship platform.
+Elysium CRM is an AI-first real-estate CRM and relationship platform.
 
 The product is being designed as a modern alternative to Follow Up Boss.
 

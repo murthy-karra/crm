@@ -319,19 +319,56 @@ the new row) ride with this slice's implementation.
 
 ## 6. Web — PeopleView FilterBar
 
-- New `FilterBar.vue` above the DataTable: an "Add filter" control
-  (existing `Select`/popover primitives, `controls.ts`
-  pass-throughs) opening one small editor per axis; active clauses
-  render as removable chips built on `Badge.vue` — neutral tint
-  (UI_STYLE §3 tint table: warm stays reserved for source/origin
-  accents, one accent color, no new palette).
+**Frontend amendment, 2026-09-06:** the user authorized an incremental
+bug-fix/UX pass after the People-filter review. These updates only
+change Web interaction; §4's vocabulary and semantics, §5's HTTP
+contracts, and server-side authorization are unchanged. No new
+dependency, persistence, People search, sort, or saved-list surface.
+
+- `FilterBar.vue` above the DataTable has compact Assignee and Stage
+  buttons plus a Filters control for the remaining supported axes.
+  One installed PrimeVue popover presents the field picker/editor;
+  existing design tokens and neutral chip styling are retained.
+  Applied chips are editable and individually removable; Clear all
+  removes every clause. No full-width filter-builder row.
 - Chip labels client-side from data already loaded: stages
   (`GET /api/stages`), members (existing members query), sources
-  (new `useInquirySources`), "Me"/"Unassigned" literals.
-- Live count = the existing DataTable footer (`N people` +
-  truncated notice) — under the 500 cap that is `min(matches,
-  500)`, and the truncated notice already says so. No new count
-  surface.
+  (`useInquirySources`), "Me"/"Unassigned" literals. Labels make the
+  field/value relationship explicit and abbreviate long multi-selects
+  while making complete values accessible. Source is labeled as
+  latest inquiry source; contact age describes attempts; inbound/reply
+  labels describe recorded received email, not unanswered work.
+- Stage/member/source editors use searchable vertical option lists.
+  Search is local to options, never client-side search of People rows.
+  Me and Unassigned remain first-class choices; inactive members remain
+  available. Empty, loading, error/retry, and truncated source-list
+  states are distinguished. The UI enforces the 50-value cap.
+- Opening an editor does not apply a default filter. Drafts remain
+  local to the editor; only valid, complete clauses become chips and
+  reach the page/URL. Clearing the last selected value removes that
+  criterion but leaves the editor open. Done validates before closing;
+  Escape, the close button, and outside click can always dismiss an
+  invalid draft while preserving the committed filter. Untouched drafts
+  are discarded. External navigation
+  resets transient editors. Invalid numeric input is explained inline
+  and never replaces an applied clause with a clamped/truncated number.
+  Created cannot offer Never. Valid day input commits on blur/Enter;
+  presets and other complete value selections apply live.
+- Controls have programmatic labels and selection/expanded semantics,
+  focus handling, and UI_STYLE's minimum target sizes. The existing
+  StageLabel renders the Hot Prospect marker in Stage choices.
+- A count near the filters reuses the same capped People response:
+  `N matches` (including zero) or `500+ matches` with a first-500
+  notice when truncated. It introduces no COUNT query or endpoint.
+  Unfiltered counts say People. Multiple clauses carry a "Match all
+  filters" hint; selections within a clause retain OR semantics.
+  Filtered zero results explain that no People match and point to
+  changing/clearing filters; only an empty unfiltered list uses the
+  lead-creation onboarding empty state.
+- While a new filter request is pending, the last table may remain
+  visible as explicitly labeled, non-interactive previous results.
+  Never present its count as matching the new criteria. Retained data
+  must belong to the same Organization; errors have a retry action.
 - URL sync: the serialized filter lives at `/people?filter=<same
   percent-encoded JSON as the API>`; chip edits `router.replace`
   the query (PersonDetailView `?outcome=` precedent); mounting
@@ -346,11 +383,15 @@ the new row) ride with this slice's implementation.
   filters arriving FROM the URL; a 5xx on any filtered fetch keeps
   chips and URL intact (error banner, the F5 complement). History
   navigation (back/forward) re-rehydrates chips from the URL, not
-  just mount (watcher on `route.query.filter`). DRAFT clauses
-  with empty value arrays are never serialized to the URL or the
-  wire (they are wire-invalid §4b; chips render while editing,
-  the fetch fires on the first committed value). `me` stays
-  symbolic in the URL: the same link is viewer-relative.
+  just mount (watcher on `route.query.filter`). An absent filter on
+  navigation clears active criteria; empty/bare/repeated parameters
+  normalize away. Unrelated query parameters and the hash are preserved.
+  Read the initial URL before enabling the first People query, avoiding
+  an initial unfiltered request when the session is already cached.
+  URL writes from user edits must supersede earlier pending writes,
+  including a rapid selection followed by Clear all. Editor drafts
+  never reach the URL or wire. `me` stays symbolic in the URL: the same
+  link is viewer-relative.
 - Data flow: `queryKeys.people(orgId)` gains an optional
   normalized-filter component — `['org', orgId, 'people',
   serializedFilter?]` — extended IN THE FACTORY (SLICE_002 §10
@@ -362,6 +403,9 @@ the new row) ride with this slice's implementation.
   every existing invalidation (realtime `person.changed`,
   mutation-driven `['org', orgId]` sweeps) covering filtered
   queries with zero changes to `realtime/events.ts`.
+  Build each request from its query key and use TanStack's cancellation
+  signal, so an inactive query's refetch cannot use a newer filter and
+  superseded requests cannot overwrite current results.
 - No debounce complexity: chips change discretely; the days input
   applies on commit (blur/Enter), not per keystroke.
 
@@ -443,14 +487,24 @@ migrator-pool fixture rows for correspondence):
     member-allowed, cap math.
 
 Web (Vitest, colocated):
-11. FilterBar: add/remove chip → refetch with the new factory key;
-    count + truncated notice render; days input commits on blur.
+11. FilterBar: add/remove/clear chips → refetch with the new factory key;
+    zero and capped counts render near filters; valid days commit on
+    blur/Enter; Created never is unavailable; stale drafts and values
+    outside caps cannot change the applied filter. Clearing the final
+    selected option keeps its editor open; closing an untouched editor
+    applies nothing. Cover option search and keyboard/focus behavior.
 12. URL: mount with `?filter=` rehydrates chips; chip edit
     `router.replace`s the query; invalid URL filter → dropped +
     param cleared; decodable-but-server-rejected filter (mocked
     422) → same drop/clear/refetch degradation (§6); `me`
-    serialized symbolically.
-13. Sources picker populated from the new query.
+    serialized symbolically. Include cached-session first fetch, invalid
+    raw query shapes, unfiltered navigation, Back/Forward, detail/Back,
+    rapid select/clear, preserving unrelated query/hash, and retaining
+    user-origin errors after the router echoes an edit.
+13. Sources picker populated from its query; loading, retry, and
+    truncation states are distinct. Pending filters retain clearly
+    labeled previous rows only within the same Organization; late
+    responses/errors cannot overwrite the latest filter's result.
 
 Live walkthrough (before the commit gate): on the real dev stack —
 filter seeded people by stage + assigned-to-me + a source; share
@@ -475,7 +529,8 @@ approvals as always.
 (a) Error split: structural → 400 `malformed_request`, org-scoped
 id failures → existing non-leaking 422 codes; (b) `me` symbolic in
 wire + URL, resolved server-side (viewer-relative shared links);
-(c) live count = capped footer count + truncated notice, no COUNT
+(c) live count = capped response count + truncated notice (near the
+filters as amended in §6 on 2026-09-06), no COUNT
 surface; (d) `has_replied` = simple inbound-existence (derived
 unanswered axis is 011d's); (e) age ops are
 `within_days`/`not_within_days`/`never` with `not_within` the

@@ -1,24 +1,7 @@
 <script setup lang="ts">
-// UI_STYLE.md §10: page header with "New lead" as the primary action, one
-// card containing the table (name over primary email, stage badge,
-// assignee, inquiry count, last inquiry, row click -> detail).
-//
-// SLICE_011a §6 (amended by the adversarial-review fix round — R1/M2/M3):
-// a FilterBar above the table. URL sync — mounting with `?filter=`
-// present rehydrates the chips; back/forward navigation re-rehydrates too
-// (M2); a chip edit `router.replace`s the query (PersonDetailView
-// `?outcome=` precedent). DRAFT clauses (an empty value array — the state
-// right after "Add filter" is clicked, before a value is picked) are
-// NEVER serialized to the URL or the wire (§6 amended; `committedClauses`
-// below) — only a committed filter can ever reach the server, so a fresh
-// draft can never itself trigger a 400. A DECODABLE filter the server
-// still rejects (400/422) degrades — drop, clear, refetch the plain list,
-// no error toast (review F5) — but ONLY when that filter came from the
-// URL (`filterOrigin`, amended §6): a user actively composing a filter
-// through the FilterBar is never wiped out from under them, and a 5xx on
-// any filtered fetch (URL-origin or not) NEVER degrades — chips and URL
-// stay intact, error banner only (the F5 complement).
-import { computed, h, onMounted, ref, watch } from 'vue'
+// People filtering stays in the existing v1 URL/API representation.
+// The page owns committed filters; FilterBar owns only its open editor.
+import { computed, h, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { Plus, Users } from 'lucide-vue-next'
 import type { ColumnDef } from '@tanstack/vue-table'
@@ -38,150 +21,92 @@ import { committedClauses, parseFilter, serializeFilter } from '../lib/filter'
 const { data: me } = useMe()
 const orgId = computed(() => me.value?.organization?.id ?? '')
 
-const { data: stagesData } = useStages(orgId)
-const stages = computed(() => stagesData.value?.stages ?? [])
-const { data: membersData } = useMembers(orgId)
-const members = computed(() => membersData.value?.members ?? [])
-const { data: sourcesData } = useInquirySources(orgId)
-const sources = computed(() => sourcesData.value?.sources ?? [])
+const stagesQuery = useStages(orgId)
+const stages = computed(() => stagesQuery.data.value?.stages ?? [])
+const membersQuery = useMembers(orgId)
+const members = computed(() => membersQuery.data.value?.members ?? [])
+const sourcesQuery = useInquirySources(orgId)
+const sources = computed(() => sourcesQuery.data.value?.sources ?? [])
+
+function retryOptions(kind: 'stage' | 'assigned_to' | 'source') {
+  const query = kind === 'stage' ? stagesQuery : kind === 'assigned_to' ? membersQuery : sourcesQuery
+  void query.refetch()
+}
 
 const route = useRoute()
 const router = useRouter()
-
 const clauses = ref<FilterClause[]>([])
-/** Set when `clauses` was last populated by reading the URL (mount or
- * back/forward); cleared the moment the user genuinely edits via
- * FilterBar (`onClausesUpdate`). Gates the 400/422 degrade path (amended
- * §6): only a URL-origin filter is ever auto-dropped. */
 const filterOrigin = ref<'url' | null>(null)
-
-/** What actually reaches the wire/URL — draft (empty-array) clauses are
- * filtered out (R1 fix, amended §6). */
-const serializedFilter = computed(() => {
-  const committed = committedClauses(clauses.value)
-  return committed.length > 0 ? serializeFilter(committed) : undefined
-})
-
-function onClausesUpdate(next: FilterClause[]) {
-  clauses.value = next
-  filterOrigin.value = null
-}
-
-// --- URL <-> chips sync (M2/M3 rewrite) -------------------------------
-
-/** The last value THIS component itself wrote to the URL — lets the
- * inbound watcher (M2) tell "the router just echoed our own
- * `router.replace`" apart from a genuine back/forward navigation,
- * without an infinite replace loop (the handled-flag pattern
- * PersonDetailView's `?outcome=` sync uses). */
-const lastWrittenFilterParam = ref<string | undefined>(undefined)
-
-function currentFilterParam(): string | undefined {
-  const v = route.query.filter
-  return typeof v === 'string' && v !== '' ? v : undefined
-}
+const editorRevision = ref(0)
+const serializedFilter = computed(() => clauses.value.length > 0 ? serializeFilter(clauses.value) : undefined)
+const hasFilter = computed(() => serializedFilter.value !== undefined)
+let pendingWrite: { value: string | undefined } | null = null
 
 function writeFilterParam(value: string | undefined) {
-  if (value === currentFilterParam()) return
+  // Compare the raw value: empty, bare, and repeated params still need
+  // removal even though none represents an applied filter.
+  // Even if the URL already matches, a newer clear must supersede an
+  // earlier navigation that has not finished yet.
+  if (value === route.query.filter && !pendingWrite) return
   const query = { ...route.query }
   if (value === undefined) delete query.filter
   else query.filter = value
-  lastWrittenFilterParam.value = value
-  void router.replace({ query })
+  const write = { value }
+  pendingWrite = write
+  void router.replace({ query, hash: route.hash }).finally(() => {
+    if (pendingWrite === write) pendingWrite = null
+  })
 }
 
-/**
- * Rehydrates `clauses` from one raw `route.query.filter` value — shared by
- * mount and the M2 back/forward watcher. Handles every edge (M3): truly
- * absent (`undefined`, the caller's job to skip calling this at all);
- * present-but-empty-or-repeated (not a string — vue-router represents a
- * bare `?filter` as `null` and a repeated `?filter=a&filter=b` as an
- * array, neither is `typeof … === 'string'`); undecodable JSON; and a
- * DECODABLE filter with zero clauses — all four canonicalize the URL to
- * "no `filter` param at all" (M3: previously only the undecodable case
- * cleared the param, so the other three left it lingering while the
- * legacy list quietly loaded underneath).
- */
-function rehydrateFromUrlValue(raw: unknown) {
-  if (typeof raw !== 'string' || raw === '') {
-    clauses.value = []
-    filterOrigin.value = null
-    writeFilterParam(undefined)
-    return
-  }
-  const parsed = parseFilter(raw)
-  if (parsed === null || parsed.length === 0) {
-    clauses.value = []
-    filterOrigin.value = null
-    writeFilterParam(undefined)
-    return
-  }
-  clauses.value = parsed
-  filterOrigin.value = 'url'
+function onClausesUpdate(next: FilterClause[]) {
+  clauses.value = committedClauses(next)
+  filterOrigin.value = null
+  writeFilterParam(serializedFilter.value)
 }
 
-// Mount rehydrate (§6): an invalid/undecodable URL filter is dropped
-// (chips empty, query param cleared, no error toast) — a shared broken
-// link degrades to the plain People page.
-onMounted(() => {
-  const raw = route.query.filter
-  if (raw === undefined) return // truly absent — nothing to rehydrate or clear
-  rehydrateFromUrlValue(raw)
-})
-
-// M2: history navigation (back/forward) re-rehydrates chips from the URL
-// too, not just mount — guarded against the outbound watcher's own
-// `router.replace` echoing back through here (would otherwise loop).
+// Run before usePeople so a cached session and a shared URL issue only
+// the filtered request. A router echo of our own edit keeps its origin;
+// actual navigation (including to /people without a filter) restores it.
 watch(
   () => route.query.filter,
   (raw) => {
-    const current = typeof raw === 'string' ? raw : undefined
-    if (current === lastWrittenFilterParam.value) return
-    if (raw === undefined) return // truly absent — nothing to rehydrate
-    rehydrateFromUrlValue(raw)
+    if (route.path !== '/people' || raw === serializedFilter.value) return
+    const parsed = typeof raw === 'string' && raw !== '' ? parseFilter(raw) : null
+    clauses.value = parsed ?? []
+    filterOrigin.value = hasFilter.value ? 'url' : null
+    editorRevision.value++
+    if (!hasFilter.value) writeFilterParam(undefined)
   },
+  { immediate: true },
 )
 
-// Outbound sync: a genuine chip edit replaces the URL query (never a push
-// — the PersonDetailView `?outcome=` precedent). No-op if nothing
-// actually changed.
-watch(serializedFilter, (value) => {
-  writeFilterParam(value)
-})
-
-const { data: peopleData, isPending, isError, error } = usePeople(orgId, serializedFilter)
+const {
+  data: peopleData, isPending, isFetching, isPlaceholderData, isError, error, refetch,
+} = usePeople(orgId, serializedFilter)
 const people = computed(() => peopleData.value?.people ?? [])
 
-/** True for exactly the one render frame where a URL-origin filtered
- * fetch has 400/422'd and the degrade-clear below is about to run —
- * suppressed from the error banner so the drop/clear/refetch never
- * flashes an error toast (§6, review F5: "no error toast"). Gated on
- * `filterOrigin === 'url'` (amended §6): a user-composed filter's 400/422
- * (which R1's draft-exclusion makes practically unreachable, but the gate
- * holds regardless) shows the ordinary error banner instead — its chips
- * are never auto-wiped. */
+// Preserve the existing §6 policy: only a URL-origin 400/422 drops the
+// filter. User-created filters and all 5xx failures remain recoverable.
 const filterWillDegrade = computed(
-  () =>
-    isError.value &&
-    filterOrigin.value === 'url' &&
-    committedClauses(clauses.value).length > 0 &&
-    error.value instanceof ApiError &&
-    (error.value.status === 400 || error.value.status === 422),
+  () => isError.value && filterOrigin.value === 'url' && hasFilter.value &&
+    error.value instanceof ApiError && [400, 422].includes(error.value.status),
 )
-
-// A decodable-but-server-rejected URL-origin filter (400/422 on the
-// rehydrated fetch — e.g. a link shared across Organizations carrying
-// org-B stage ids) degrades IDENTICALLY to an invalid URL filter: drop,
-// clear, refetch the plain list (§6, review F5). Never fires for a
-// user-composed filter (`filterOrigin !== 'url'`) or for a 5xx (checked
-// separately below, status 400/422 only) — both keep chips and URL intact.
-watch([isError, error], ([failed, err]) => {
-  if (!failed || filterOrigin.value !== 'url') return
-  if (committedClauses(clauses.value).length === 0) return
-  if (err instanceof ApiError && (err.status === 400 || err.status === 422)) {
-    clauses.value = []
-    filterOrigin.value = null
+watch(filterWillDegrade, (degrade) => {
+  if (degrade) {
+    editorRevision.value++
+    onClausesUpdate([])
   }
+})
+
+const resultLabel = computed(() => {
+  if (isPlaceholderData.value) return people.value.length > 0
+    ? 'Updating results… Previous results are shown below.'
+    : 'Updating results…'
+  if (isPending.value || filterWillDegrade.value) return 'Loading people…'
+  if (!peopleData.value) return ''
+  const count = people.value.length
+  const noun = hasFilter.value ? (count === 1 ? 'match' : 'matches') : (count === 1 ? 'person' : 'people')
+  return `${count}${peopleData.value.truncated ? '+' : ''} ${noun}`
 })
 
 const columns: ColumnDef<PersonSummary>[] = [
@@ -250,39 +175,75 @@ const columns: ColumnDef<PersonSummary>[] = [
     </PageHeader>
 
     <FilterBar
+      :key="editorRevision"
       :clauses="clauses"
       :stages="stages"
       :members="members"
       :sources="sources"
+      :stages-pending="stagesQuery.isPending.value"
+      :stages-error="stagesQuery.isError.value"
+      :members-pending="membersQuery.isPending.value"
+      :members-error="membersQuery.isError.value"
+      :sources-pending="sourcesQuery.isPending.value"
+      :sources-error="sourcesQuery.isError.value"
+      :sources-truncated="sourcesQuery.data.value?.truncated ?? false"
       @update:clauses="onClausesUpdate"
+      @retry-options="retryOptions"
     />
+
+    <div class="mb-3 flex min-h-6 flex-wrap items-center justify-between gap-2 text-small text-text-muted">
+      <span>{{ clauses.length > 1 ? 'Match all filters' : '' }}</span>
+      <p
+        data-testid="people-result-count"
+        role="status"
+        aria-live="polite"
+      >
+        {{ resultLabel }}
+        <span v-if="peopleData?.truncated && !isPlaceholderData"> · Showing the first {{ people.length }}</span>
+        <span v-if="isFetching && !isPending && !isPlaceholderData"> · Refreshing…</span>
+      </p>
+    </div>
 
     <div
       v-if="isError && !filterWillDegrade"
-      class="rounded-xl border border-border bg-surface-0 p-5 text-body text-danger"
+      role="alert"
+      class="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface-0 p-5 text-body text-danger"
     >
-      {{ describeApiError(error, 'Could not load people.') }}
+      <span>{{ describeApiError(error, 'Could not load people.') }}</span>
+      <button
+        type="button"
+        :class="buttonClasses('secondary')"
+        @click="refetch()"
+      >
+        Try again
+      </button>
     </div>
     <div
-      v-else-if="isPending || filterWillDegrade"
+      v-if="((isPending || filterWillDegrade) && !peopleData) || (isPlaceholderData && people.length === 0)"
       class="rounded-xl border border-border bg-surface-0 p-5 text-body text-text-muted"
     >
-      Loading…
+      {{ isPlaceholderData ? 'Updating results…' : 'Loading…' }}
     </div>
-    <DataTable
-      v-else
-      :data="people"
-      :columns="columns"
-      :row-key="(person) => person.id"
-      :row-to="(person) => `/people/${person.id}`"
-      count-noun="people"
-      count-noun-singular="person"
-      :truncated="peopleData?.truncated ?? false"
-      empty-title="No people yet"
-      empty-message="Leads you add or receive will appear here."
-      :empty-icon="Users"
-      empty-action-label="Add a lead"
-      empty-action-to="/intake/new"
-    />
+    <div
+      v-else-if="peopleData"
+      :aria-busy="isFetching"
+      :inert="isPlaceholderData"
+      :class="{ 'opacity-60': isPlaceholderData }"
+    >
+      <DataTable
+        :data="people"
+        :columns="columns"
+        :row-key="(person) => person.id"
+        :row-to="(person) => `/people/${person.id}`"
+        count-noun="people"
+        count-noun-singular="person"
+        :truncated="peopleData.truncated"
+        :empty-title="hasFilter ? 'No people match these filters' : 'No people yet'"
+        :empty-message="hasFilter ? 'Change or clear your filters to see more people.' : 'Leads you add or receive will appear here.'"
+        :empty-icon="Users"
+        :empty-action-label="hasFilter ? undefined : 'Add a lead'"
+        :empty-action-to="hasFilter ? undefined : '/intake/new'"
+      />
+    </div>
   </div>
 </template>

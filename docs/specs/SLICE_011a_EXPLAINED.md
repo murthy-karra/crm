@@ -356,6 +356,9 @@ along with everything else.
 
 `usePeople(orgId, serializedFilter?)` appends
 `?filter=<encodeURIComponent(json)>` when a filter is set;
+the request reads its filter from its own query key and passes the
+query's cancellation signal. Previous results can remain visible
+while the next filter loads, but only within the same Organization.
 `useInquirySources(orgId)` backs the Source picker.
 
 ### `web/src/lib/filter.ts`
@@ -371,29 +374,44 @@ is explicitly not required.
 
 ### `FilterBar.vue` and PeopleView behavior
 
-The bar sits above the DataTable: an "Add filter" control opens a
-small editor per axis; active clauses render as removable chips
-(built on `Badge.vue`, neutral tint per UI_STYLE — no new colors).
-The day-count input applies on commit (blur/Enter), not per
-keystroke — chips change discretely, so there is no debouncing.
+The bar sits above the DataTable with compact Assignee, Stage, and
+Filters controls. They share a PrimeVue Popover; active clauses
+render as editable, removable chips with Clear all. Opening an
+editor creates no applied filter, and removing its last selection
+keeps the editor open. Option search searches picker values only.
+Loading, failed requests, empty options, and truncated sources each
+have distinct feedback.
 
-The live count is just the existing table footer ("N people" plus
-the truncated notice). Under the 500 cap that is `min(matches,
-500)` — there is deliberately no true-COUNT surface in this slice.
+Day-count drafts stay inside the editor and apply only when valid
+on blur or Enter, not per keystroke. Presets offer common ranges,
+and Created never offers the unsupported Never operator. Labels
+explain the existing API semantics, including missing activity in
+"not within" filters.
 
-URL sync: chip edits `router.replace` the `?filter=` query param;
-mounting with `?filter=` present rehydrates the chips. Failure
-degrades gracefully in both directions, identically:
+The response count appears near the filters. At the cap it shows
+"500+ matches" and "Showing the first 500"; there is deliberately
+no true-COUNT surface in this slice. During a filter change,
+previous rows are labeled as updating and cannot be opened. A
+previous empty result never becomes an empty-state claim for a
+request still loading. Failed requests offer retry; zero matches
+offers filter-recovery guidance instead of lead creation.
+
+URL sync: chip edits `router.replace` the `?filter=` query param,
+preserving unrelated parameters and the hash. The URL is read
+before the first People query and on Back/Forward or navigation to
+plain People. Empty, bare, and repeated filter parameters normalize
+to plain People. Failure follows the existing URL-origin policy:
 
 - An **unparseable** URL filter (truncated paste, hand-mangled
   JSON) → chips empty, param cleared via `router.replace`, no
   error toast — the page behaves as plain People.
-- A **parseable filter the server rejects** (400/422 — e.g. a link
+- A **parseable URL filter the server rejects** (400/422 — e.g. a link
   shared across orgs carrying the other org's stage ids) → same
   degradation: drop the filter, clear the param, refetch unfiltered.
 
-A shared broken link lands you on the ordinary People page, never
-an error screen. `me` stays symbolic in the URL throughout.
+A rejected user-composed filter remains available to edit or retry,
+and server failures retain either origin's filter. `me` stays
+symbolic in the URL throughout.
 
 ### `describe()` — built, not yet wired
 

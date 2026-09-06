@@ -132,11 +132,17 @@ export function useMe() {
 export function usePeople(orgId: MaybeRefOrGetter<string>, serializedFilter?: MaybeRefOrGetter<string | undefined>) {
   return useQuery({
     queryKey: computed(() => queryKeys.people(toValue(orgId), toValue(serializedFilter) || undefined)),
-    queryFn: () => {
-      const filter = toValue(serializedFilter)
+    queryFn: ({ queryKey, signal }) => {
+      // A retry belongs to the key that started it, even if the user has
+      // since selected another filter.
+      const filter = queryKey[3]
       const path = filter ? `/people?filter=${encodeURIComponent(filter)}` : '/people'
-      return apiFetch<PeopleResponse>(path)
+      return apiFetch<PeopleResponse>(path, { signal })
     },
+    // Keep the table steady between filters, but never retain another
+    // Organization's rows. PeopleView labels placeholder rows as updating.
+    placeholderData: (previousData, previousQuery) =>
+      toValue(orgId) !== '' && previousQuery?.queryKey[1] === toValue(orgId) ? previousData : undefined,
     enabled: computed(() => toValue(orgId) !== ''),
   })
 }

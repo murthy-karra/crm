@@ -26,6 +26,8 @@ If two authoritative files still conflict, stop and report the conflict before i
 - `design/` — accepted UI style reference (`UI_STYLE.md`) and the sample
   screens it was derived from; binds the web client, subordinate to specs
 - `tasks/` — bounded implementation task briefs
+- [prompts/](prompts/README.md) — reusable engineering workflow prompts and
+  model/effort guidance; subordinate to the authoritative documents above
 - `research/` — competitor and technical research; not accepted policy
 
 ## Operational status

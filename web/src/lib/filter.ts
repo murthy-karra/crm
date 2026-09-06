@@ -21,13 +21,13 @@ export const FILTER_CLAUSE_KINDS: FilterClauseKind[] = [
 
 export const CLAUSE_KIND_LABEL: Record<FilterClauseKind, string> = {
   stage: 'Stage',
-  assigned_to: 'Assigned to',
-  source: 'Source',
+  assigned_to: 'Assignee',
+  source: 'Source (latest inquiry)',
   created: 'Created',
   last_inquiry: 'Last inquiry',
-  last_contact: 'Last contact',
-  last_inbound: 'Last inbound',
-  has_replied: 'Has replied',
+  last_contact: 'Last contact attempt',
+  last_inbound: 'Last received email',
+  has_replied: 'Received email',
   has_phone: 'Has phone',
   has_email: 'Has email',
 }
@@ -62,9 +62,8 @@ export function defaultClauseFor(kind: FilterClauseKind): FilterClause {
  * clicked, before the user has picked anything (amended §6, review R1
  * fix). Draft clauses are wire-invalid (§4b: an empty value array is a
  * structural 400) and must never be serialized to the URL or the `?filter=`
- * API param — only [`committedClauses`] may be. They still render as
- * chips (the editor needs somewhere to attach to) via
- * [`describeClause`]'s placeholder text.
+ * API param. Kept for callers restoring older in-progress state;
+ * FilterBar now keeps its drafts local and emits committed clauses only.
  */
 export function isDraftClause(clause: FilterClause): boolean {
   if (clause.kind === 'stage') return clause.stage_ids.length === 0
@@ -74,8 +73,8 @@ export function isDraftClause(clause: FilterClause): boolean {
 }
 
 /** `clauses` with every [`isDraftClause`] entry removed — what's actually
- * eligible for the wire/URL (amended §6). Age/bool clauses always carry a
- * committed default and are never draft. */
+ * eligible for the wire/URL (amended §6). An age/bool clause is already a
+ * complete value; merely opening those editors does not create one. */
 export function committedClauses(clauses: FilterClause[]): FilterClause[] {
   return clauses.filter((c) => !isDraftClause(c))
 }
@@ -155,53 +154,52 @@ export interface FilterNames {
   memberNames: Record<string, string>
 }
 
-function joinOr(items: string[]): string {
-  return items.join(' or ')
+function joinOr(items: string[], maxValues: number): string {
+  const visible = items.slice(0, maxValues).join(' or ')
+  return items.length > maxValues ? `${visible} +${items.length - maxValues}` : visible
 }
 
-function ageLabel(axis: string, neverPhrase: string, age: AgeOp): string {
-  if (age.op === 'within_days') return `${axis} within the last ${age.days} days`
-  if (age.op === 'not_within_days') return `${axis} not within the last ${age.days} days (or never)`
-  return neverPhrase
+function ageLabel(axis: string, age: AgeOp, nullable = true): string {
+  if (age.op === 'within_days') return `${axis}: In the last ${age.days} days`
+  if (age.op === 'not_within_days') return `${axis}: Not in the last ${age.days} days${nullable ? ' (or never)' : ''}`
+  return `${axis}: Never`
 }
 
-/** A short, human-readable chip label for one clause — this component's
- * own rendering, not a call into the backend's `describe()` (§4d). A
- * DRAFT clause (empty value array — amended §6) renders a "choose a
- * value" placeholder instead of an empty join, since it still renders as
- * a chip while its editor is open. */
-export function describeClause(clause: FilterClause, names: FilterNames): string {
+/** Property/value labels are independent of backend describe() (§4d).
+ * Chips can limit visible values; accessible labels retain the full list.
+ * Unknown ids never appear as raw UUIDs. */
+export function describeClause(clause: FilterClause, names: FilterNames, maxValues = Infinity): string {
   switch (clause.kind) {
     case 'stage': {
-      if (clause.stage_ids.length === 0) return `${CLAUSE_KIND_LABEL.stage} — choose a value`
-      const labels = clause.stage_ids.map((id) => names.stageNames[id] ?? 'an unknown stage')
-      return `Stage is ${joinOr(labels)}`
+      if (clause.stage_ids.length === 0) return 'Stage: Choose a value'
+      const labels = clause.stage_ids.map((id) => names.stageNames[id] ?? 'Unknown stage')
+      return `Stage: ${joinOr(labels, maxValues)}`
     }
     case 'assigned_to': {
-      if (clause.assignees.length === 0) return `${CLAUSE_KIND_LABEL.assigned_to} — choose a value`
+      if (clause.assignees.length === 0) return 'Assignee: Choose a value'
       const labels = clause.assignees.map((a) => {
-        if (a === 'me') return 'me'
-        if (a === 'unassigned') return 'unassigned'
-        return names.memberNames[a.user_id] ?? 'an unknown person'
+        if (a === 'me') return 'Me'
+        if (a === 'unassigned') return 'Unassigned'
+        return names.memberNames[a.user_id] ?? 'Unknown member'
       })
-      return `Assigned to ${joinOr(labels)}`
+      return `Assignee: ${joinOr(labels, maxValues)}`
     }
     case 'source':
-      if (clause.sources.length === 0) return `${CLAUSE_KIND_LABEL.source} — choose a value`
-      return `Source is ${joinOr(clause.sources)}`
+      if (clause.sources.length === 0) return 'Source (latest inquiry): Choose a value'
+      return `Source (latest inquiry): ${joinOr(clause.sources, maxValues)}`
     case 'created':
-      return ageLabel('Created', 'Created never (invalid)', clause.age)
+      return ageLabel('Created', clause.age, false)
     case 'last_inquiry':
-      return ageLabel('Last inquiry', 'Never inquired', clause.age)
+      return ageLabel('Last inquiry', clause.age)
     case 'last_contact':
-      return ageLabel('Last contact', 'Never contacted', clause.age)
+      return ageLabel('Last contact attempt', clause.age)
     case 'last_inbound':
-      return ageLabel('Last inbound message', 'Never received an inbound message', clause.age)
+      return ageLabel('Last received email', clause.age)
     case 'has_replied':
-      return clause.value ? 'Has replied' : 'Has not replied'
+      return `Received email: ${clause.value ? 'Yes' : 'No'}`
     case 'has_phone':
-      return clause.value ? 'Has a phone number' : 'No phone number'
+      return `Has phone: ${clause.value ? 'Yes' : 'No'}`
     case 'has_email':
-      return clause.value ? 'Has an email address' : 'No email address'
+      return `Has email: ${clause.value ? 'Yes' : 'No'}`
   }
 }

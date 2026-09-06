@@ -1,423 +1,687 @@
 <script setup lang="ts">
-// PeopleView's FilterBar (docs/specs/SLICE_011a.md §6): an "Add filter"
-// control opening one small editor per axis; active clauses render as
-// removable chips on Badge.vue — neutral tint (UI_STYLE §3: warm stays
-// reserved for source/origin accents). Purely presentational + emits — all
-// URL sync and server-degrade handling lives in PeopleView.vue.
-import { computed, ref, watch } from 'vue'
-import Select from 'primevue/select'
-import { Plus, X } from 'lucide-vue-next'
-import Badge from './Badge.vue'
-import type { AgeOp, Assignee, FilterClause, FilterClauseKind, Member, Stage } from '../api/types'
-import { buttonClasses, INPUT_CLASSES, selectPt } from '../lib/controls'
+// Presentational filter controls. PeopleView owns URL synchronization and
+// fetching; opening an editor never changes its committed clauses.
+import { computed, nextTick, ref, useId, watch } from 'vue'
+import Popover, { type PopoverPassThroughOptions } from 'primevue/popover'
+import { ChevronDown, ChevronRight, SlidersHorizontal, X } from 'lucide-vue-next'
+import StageLabel from './StageLabel.vue'
+import type { AgeOp, Assignee, FilterClause, FilterClauseKind, Member, Stage, StageRef } from '../api/types'
+import { buttonClasses, INPUT_CLASSES } from '../lib/controls'
 import {
   CLAUSE_KIND_LABEL,
   FILTER_CLAUSE_KINDS,
-  defaultClauseFor,
+  committedClauses,
   describeClause,
   type FilterNames,
 } from '../lib/filter'
 
-type StageClause = Extract<FilterClause, { kind: 'stage' }>
-type AssignedToClause = Extract<FilterClause, { kind: 'assigned_to' }>
-type SourceClause = Extract<FilterClause, { kind: 'source' }>
-type AgeClauseKind = 'created' | 'last_inquiry' | 'last_contact' | 'last_inbound'
-type AgeClause = Extract<FilterClause, { kind: AgeClauseKind }>
-type BoolClauseKind = 'has_replied' | 'has_phone' | 'has_email'
-type BoolClause = Extract<FilterClause, { kind: BoolClauseKind }>
-
-function isAgeKind(kind: FilterClauseKind): kind is AgeClauseKind {
-  return kind === 'created' || kind === 'last_inquiry' || kind === 'last_contact' || kind === 'last_inbound'
-}
-function isBoolKind(kind: FilterClauseKind): kind is BoolClauseKind {
-  return kind === 'has_replied' || kind === 'has_phone' || kind === 'has_email'
-}
+type AgeKind = 'created' | 'last_inquiry' | 'last_contact' | 'last_inbound'
+type AgeClause = Extract<FilterClause, { kind: AgeKind }>
+type BoolKind = 'has_replied' | 'has_phone' | 'has_email'
+type BoolClause = Extract<FilterClause, { kind: BoolKind }>
+type OptionKind = 'stage' | 'assigned_to' | 'source'
+type OptionValue = string | { user_id: string }
+type Option = { key: string; label: string; value: OptionValue; stage?: StageRef; inactive?: boolean }
 
 const props = defineProps<{
   clauses: FilterClause[]
   stages: Stage[]
   members: Member[]
   sources: string[]
+  stagesPending?: boolean
+  stagesError?: boolean
+  membersPending?: boolean
+  membersError?: boolean
+  sourcesPending?: boolean
+  sourcesError?: boolean
+  sourcesTruncated?: boolean
+}>()
+const emit = defineEmits<{
+  'update:clauses': [FilterClause[]]
+  'retry-options': [OptionKind]
 }>()
 
-const emit = defineEmits<{ 'update:clauses': [FilterClause[]] }>()
-
-const names = computed<FilterNames>(() => ({
-  stageNames: Object.fromEntries(props.stages.map((s) => [s.id, s.name])),
-  memberNames: Object.fromEntries(props.members.map((m) => [m.user_id, m.display_name])),
-}))
-
-const usedKinds = computed(() => new Set(props.clauses.map((c) => c.kind)))
-const addableKinds = computed(() => FILTER_CLAUSE_KINDS.filter((k) => !usedKinds.value.has(k)))
-const addKindOptions = computed(() => addableKinds.value.map((k) => ({ value: k, label: CLAUSE_KIND_LABEL[k] })))
-
+const id = useId()
+const popover = ref<InstanceType<typeof Popover> | null>(null)
+const panel = ref<HTMLElement | null>(null)
+const toolbar = ref<HTMLElement | null>(null)
+const open = ref(false)
 const editingKind = ref<FilterClauseKind | null>(null)
-const editingAgeKind = computed(() => (editingKind.value && isAgeKind(editingKind.value) ? editingKind.value : null))
-const editingBoolKind = computed(() => (editingKind.value && isBoolKind(editingKind.value) ? editingKind.value : null))
+const search = ref('')
+let trigger: HTMLElement | null = null
+let restoreFocus = false
+const applied = computed(() => committedClauses(props.clauses))
+const names = computed<FilterNames>(() => ({
+  stageNames: Object.fromEntries(props.stages.map((stage) => [stage.id, stage.name])),
+  memberNames: Object.fromEntries(props.members.map((member) => [member.user_id, member.display_name])),
+}))
+const menuKinds = computed(() => FILTER_CLAUSE_KINDS.filter((kind) =>
+  kind !== 'stage' && kind !== 'assigned_to' && matchesSearch(CLAUSE_KIND_LABEL[kind]),
+))
+const title = computed(() => editingKind.value ? CLAUSE_KIND_LABEL[editingKind.value] : 'Filters')
+const activeClause = computed(() => applied.value.find((clause) => clause.kind === editingKind.value))
+const ageKind = computed(() => {
+  const kind = editingKind.value
+  return kind === 'created' || kind === 'last_inquiry' || kind === 'last_contact' || kind === 'last_inbound' ? kind : null
+})
+const boolKind = computed(() => {
+  const kind = editingKind.value
+  return kind === 'has_replied' || kind === 'has_phone' || kind === 'has_email' ? kind : null
+})
+const optionKind = computed<OptionKind | null>(() => {
+  const kind = editingKind.value
+  return kind === 'stage' || kind === 'assigned_to' || kind === 'source' ? kind : null
+})
+const activeAge = computed(() => ageKind.value ? activeClause.value as AgeClause | undefined : undefined)
+const activeBool = computed(() => boolKind.value ? activeClause.value as BoolClause | undefined : undefined)
+const optionPending = computed(() => optionKind.value === 'stage' ? props.stagesPending : optionKind.value === 'assigned_to' ? props.membersPending : props.sourcesPending)
+const optionError = computed(() => optionKind.value === 'stage' ? props.stagesError : optionKind.value === 'assigned_to' ? props.membersError : props.sourcesError)
+const optionNoun = computed(() => optionKind.value === 'stage' ? 'stages' : optionKind.value === 'assigned_to' ? 'assignees' : 'sources')
+
+const popoverPt: PopoverPassThroughOptions = {
+  root: 'z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-border bg-surface-0 text-text shadow-floating',
+  content: 'p-4',
+}
+const rowClasses = 'flex min-h-10 w-full items-center gap-3 rounded-lg px-2 py-2 text-left text-body text-text hover:bg-surface-1'
+const checkboxClasses = 'h-4 w-4 shrink-0 accent-accent focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:opacity-40'
+
+function matchesSearch(value: string) {
+  return value.toLocaleLowerCase().includes(search.value.trim().toLocaleLowerCase())
+}
+function stageFor(id: string): StageRef {
+  return props.stages.find((stage) => stage.id === id) ?? { id, name: 'Unknown stage' }
+}
+function selectedValues(kind: OptionKind): OptionValue[] {
+  const clause = applied.value.find((item) => item.kind === kind)
+  if (clause?.kind === 'stage') return clause.stage_ids
+  if (clause?.kind === 'source') return clause.sources
+  return clause?.kind === 'assigned_to' ? clause.assignees : []
+}
+function optionEquals(a: OptionValue, b: OptionValue) {
+  return typeof a === 'string' || typeof b === 'string' ? a === b : a.user_id === b.user_id
+}
+function isSelected(option: Option) {
+  return optionKind.value !== null && selectedValues(optionKind.value).some((value) => optionEquals(value, option.value))
+}
+const selectionCount = computed(() => optionKind.value ? selectedValues(optionKind.value).length : 0)
+const options = computed<Option[]>(() => {
+  if (optionKind.value === 'stage') {
+    const ids = [...new Set([...props.stages.map((stage) => stage.id), ...selectedValues('stage') as string[]])]
+    return ids.map((id) => ({ key: id, label: stageFor(id).name, value: id, stage: stageFor(id) }))
+  }
+  if (optionKind.value === 'assigned_to') {
+    const memberIds = new Set(props.members.map((member) => member.user_id))
+    const missingMembers = selectedValues('assigned_to').filter(
+      (value): value is { user_id: string } => typeof value !== 'string' && !memberIds.has(value.user_id),
+    )
+    return [
+      { key: 'me', label: 'Me', value: 'me' },
+      { key: 'unassigned', label: 'Unassigned', value: 'unassigned' },
+      ...props.members.map((member) => ({ key: `user-${member.user_id}`, label: member.display_name, value: { user_id: member.user_id }, inactive: member.status === 'inactive' })),
+      ...missingMembers.map((value) => ({ key: `user-${value.user_id}`, label: 'Unknown member', value })),
+    ]
+  }
+  if (optionKind.value === 'source') {
+    return [...new Set([...props.sources, ...selectedValues('source') as string[]])].map((source) => ({ key: source, label: source, value: source }))
+  }
+  return []
+})
+const visibleOptions = computed(() => options.value.filter((option) => matchesSearch(`${option.label}${option.inactive ? ' inactive' : ''}`)))
 
 function updateClauses(next: FilterClause[]) {
-  emit('update:clauses', next)
+  if (JSON.stringify(next) !== JSON.stringify(props.clauses)) emit('update:clauses', next)
 }
-
-function addClause(kind: FilterClauseKind | null) {
-  if (!kind) return
-  updateClauses([...props.clauses, defaultClauseFor(kind)])
-  editingKind.value = kind
-}
-
-function removeClause(kind: FilterClauseKind) {
-  updateClauses(props.clauses.filter((c) => c.kind !== kind))
-  if (editingKind.value === kind) editingKind.value = null
-}
-
-function toggleEditor(kind: FilterClauseKind) {
-  editingKind.value = editingKind.value === kind ? null : kind
-}
-
-/**
- * Review R1 fix: APPEND-IF-MISSING. `props.clauses` can legitimately no
- * longer contain `kind` while its editor is still open (e.g. the parent
- * cleared the filter out from under an open editor — a URL-origin
- * degrade, or any future reason) — the old `.map()`-only version silently
- * no-op'd in that case (no matching element to replace), so ticking a
- * checkbox produced no `update:clauses` change at all and the editor was
- * permanently wedged. Appending when `kind` isn't found makes that class
- * of bug structurally impossible: a commit always lands somewhere.
- */
 function replaceClause(kind: FilterClauseKind, clause: FilterClause | null) {
-  if (clause === null) {
-    removeClause(kind)
+  const next = applied.value.filter((item) => item.kind !== kind)
+  if (clause) {
+    const index = applied.value.findIndex((item) => item.kind === kind)
+    next.splice(index < 0 ? next.length : index, 0, clause)
+  }
+  updateClauses(next)
+}
+function removeClause(kind: FilterClauseKind) {
+  if (kind === editingKind.value) resetAgeDraft()
+  replaceClause(kind, null)
+}
+function clearAll() {
+  resetAgeDraft()
+  updateClauses([])
+}
+function toggleOption(option: Option) {
+  const kind = optionKind.value
+  if (!kind) return
+  const current = selectedValues(kind)
+  const selected = isSelected(option)
+  if (!selected && current.length >= 50) return
+  const next = selected ? current.filter((value) => !optionEquals(value, option.value)) : [...current, option.value]
+  if (!next.length) replaceClause(kind, null)
+  else if (kind === 'stage') replaceClause(kind, { kind, stage_ids: next as string[] })
+  else if (kind === 'source') replaceClause(kind, { kind, sources: next as string[] })
+  else replaceClause(kind, { kind, assignees: next as Assignee[] })
+}
+
+// One local age draft follows the currently open field and resynchronizes
+// on external clause changes; unfinished or invalid values never emit.
+const daysDraft = ref('30')
+const ageOp = ref<AgeOp['op'] | null>(null)
+const daysDirty = ref(false)
+const daysError = ref(false)
+const ageOps = computed(() => [
+  { value: 'within_days' as const, label: 'In the last' },
+  { value: 'not_within_days' as const, label: 'Not in the last' },
+  ...(ageKind.value === 'created' ? [] : [{ value: 'never' as const, label: 'Never' }]),
+])
+function resetAgeDraft() {
+  daysDraft.value = '30'
+  ageOp.value = null
+  daysDirty.value = false
+  daysError.value = false
+}
+function syncAgeDraft() {
+  resetAgeDraft()
+  const age = activeAge.value?.age
+  if (!age) return
+  ageOp.value = age.op
+  if (age.op !== 'never') daysDraft.value = String(age.days)
+}
+watch([editingKind, activeAge], syncAgeDraft)
+function validDays() {
+  const days = Number(daysDraft.value)
+  const valid = daysDraft.value.trim() !== '' && Number.isInteger(days) && days >= 1 && days <= 3650
+  daysError.value = !valid
+  return valid ? days : null
+}
+function commitAge(op: AgeOp['op']) {
+  const kind = ageKind.value
+  if (!kind || (kind === 'created' && op === 'never')) return false
+  ageOp.value = op
+  if (op === 'never') {
+    daysDirty.value = false
+    daysError.value = false
+    replaceClause(kind, { kind, age: { op } })
+    return true
+  }
+  const days = validDays()
+  if (days === null) return false
+  daysDirty.value = false
+  replaceClause(kind, { kind, age: { op, days } })
+  return true
+}
+function commitDays() {
+  if (!daysDirty.value || !ageKind.value || ageOp.value === 'never') return true
+  return commitAge(ageOp.value ?? 'within_days')
+}
+function setPreset(days: number) {
+  daysDraft.value = String(days)
+  commitAge(ageOp.value === 'not_within_days' ? 'not_within_days' : 'within_days')
+}
+function setBool(value: boolean) {
+  if (boolKind.value) replaceClause(boolKind.value, { kind: boolKind.value, value })
+}
+const ageHint = computed(() => {
+  if (ageOp.value !== 'not_within_days' || !ageKind.value || ageKind.value === 'created') return ''
+  if (ageKind.value === 'last_contact') return 'Includes people with no recorded contact attempt.'
+  if (ageKind.value === 'last_inbound') return 'Includes people with no received email recorded.'
+  return 'Includes people with no inquiry.'
+})
+
+async function focusEditor() {
+  await nextTick()
+  panel.value?.querySelector<HTMLElement>('[data-editor-focus]')?.focus()
+}
+function selectKind(kind: FilterClauseKind | null) {
+  editingKind.value = kind
+  search.value = ''
+  syncAgeDraft()
+  void focusEditor()
+}
+async function openEditor(kind: FilterClauseKind | null, event: Event) {
+  if (open.value && editingKind.value === kind && trigger === event.currentTarget) {
+    closeEditor()
     return
   }
-  const exists = props.clauses.some((c) => c.kind === kind)
-  updateClauses(
-    exists ? props.clauses.map((c) => (c.kind === kind ? clause : c)) : [...props.clauses, clause],
-  )
+  if (!commitDays()) return
+  trigger = event.currentTarget as HTMLElement
+  restoreFocus = false
+  selectKind(kind)
+  open.value = true
+  popover.value?.show(event)
+  await nextTick()
+  popover.value?.alignOverlay()
 }
-
-// ---- Multi-value axes (stage / assigned_to / source) ---------------------
-
-const stageClause = computed<StageClause>(
-  () => (props.clauses.find((c): c is StageClause => c.kind === 'stage') ?? { kind: 'stage', stage_ids: [] }),
-)
-const assignedToClause = computed<AssignedToClause>(
-  () =>
-    props.clauses.find((c): c is AssignedToClause => c.kind === 'assigned_to') ?? {
-      kind: 'assigned_to',
-      assignees: [],
-    },
-)
-const sourceClause = computed<SourceClause>(
-  () => props.clauses.find((c): c is SourceClause => c.kind === 'source') ?? { kind: 'source', sources: [] },
-)
-
-function toggleStage(stageId: string) {
-  const current = stageClause.value.stage_ids
-  const has = current.includes(stageId)
-  const next = has ? current.filter((id) => id !== stageId) : [...current, stageId]
-  replaceClause('stage', next.length > 0 ? { kind: 'stage', stage_ids: next } : null)
+function closeEditor() {
+  if (!commitDays()) return
+  restoreFocus = true
+  popover.value?.hide()
 }
-
-function assigneeEquals(a: Assignee, b: Assignee): boolean {
-  if (typeof a === 'string' || typeof b === 'string') return a === b
-  return a.user_id === b.user_id
+function dismissEditor() {
+  // Escape/X must remain an exit even for an unfinished invalid value.
+  // Flush a valid edit; otherwise retain only the last committed filter.
+  commitDays()
+  daysDirty.value = false
+  restoreFocus = true
+  popover.value?.hide()
 }
-function isAssigneeSelected(value: Assignee): boolean {
-  return assignedToClause.value.assignees.some((a) => assigneeEquals(a, value))
-}
-function toggleAssignee(value: Assignee) {
-  const current = assignedToClause.value.assignees
-  const has = isAssigneeSelected(value)
-  const next = has ? current.filter((a) => !assigneeEquals(a, value)) : [...current, value]
-  replaceClause('assigned_to', next.length > 0 ? { kind: 'assigned_to', assignees: next } : null)
-}
-
-function toggleSource(source: string) {
-  const current = sourceClause.value.sources
-  const has = current.includes(source)
-  const next = has ? current.filter((s) => s !== source) : [...current, source]
-  replaceClause('source', next.length > 0 ? { kind: 'source', sources: next } : null)
-}
-
-// ---- Age axes --------------------------------------------------------------
-
-const AGE_OPS: { value: AgeOp['op']; label: string }[] = [
-  { value: 'within_days', label: 'within' },
-  { value: 'not_within_days', label: 'not within' },
-  { value: 'never', label: 'never' },
-]
-
-const activeAgeClause = computed<AgeClause | null>(() => {
-  const kind = editingAgeKind.value
-  if (!kind) return null
-  return props.clauses.find((c): c is AgeClause => c.kind === kind) ?? null
-})
-
-/** Local draft so the days input commits on blur/Enter, not per keystroke
- * (§6). Keyed by clause kind since at most one clause per kind exists. */
-const daysDraft = ref<Record<string, string>>({})
-
-watch(activeAgeClause, (clause) => {
-  if (clause && clause.age.op !== 'never' && daysDraft.value[clause.kind] === undefined) {
-    daysDraft.value[clause.kind] = String(clause.age.days)
+function onHide() {
+  // Outside-click/scroll dismissal can precede blur. Flush a valid draft,
+  // while retaining the last committed filter if the draft is invalid.
+  commitDays()
+  open.value = false
+  editingKind.value = null
+  if (restoreFocus || document.activeElement === document.body || panel.value?.contains(document.activeElement)) {
+    const target = trigger?.isConnected ? trigger : toolbar.value?.querySelector<HTMLElement>('button')
+    target?.focus()
   }
-})
-
-function onDaysInput(event: Event) {
-  const kind = editingAgeKind.value
-  if (!kind) return
-  daysDraft.value[kind] = (event.target as HTMLInputElement).value
-}
-
-function setAgeOp(op: AgeOp['op']) {
-  const kind = editingAgeKind.value
-  if (!kind) return
-  // M1: Math.trunc — a fractional draft (e.g. "7.5" mid-edit) must never
-  // serialize as a float; the server 400s a non-integer `days` (§4b),
-  // which would otherwise wipe the filter via the degrade path.
-  const age: AgeOp =
-    op === 'never' ? { op: 'never' } : { op, days: Math.trunc(Number(daysDraft.value[kind] ?? 30)) || 30 }
-  replaceClause(kind, { kind, age } as AgeClause)
-}
-
-function commitDays() {
-  const kind = editingAgeKind.value
-  const clause = activeAgeClause.value
-  if (!kind || !clause || clause.age.op === 'never') return
-  // M1: Math.trunc before clamping — integers only ever reach the model.
-  const days = Math.max(1, Math.min(3650, Math.trunc(Number(daysDraft.value[kind])) || 1))
-  daysDraft.value[kind] = String(days)
-  replaceClause(kind, { kind, age: { op: clause.age.op, days } } as AgeClause)
-}
-
-// ---- Boolean axes -----------------------------------------------------------
-
-const activeBoolClause = computed<BoolClause | null>(() => {
-  const kind = editingBoolKind.value
-  if (!kind) return null
-  return props.clauses.find((c): c is BoolClause => c.kind === kind) ?? null
-})
-
-function setBoolValue(value: boolean) {
-  const kind = editingBoolKind.value
-  if (!kind) return
-  replaceClause(kind, { kind, value } as BoolClause)
+  restoreFocus = false
 }
 </script>
 
 <template>
   <div class="mb-4 flex flex-col gap-3">
-    <div class="flex flex-wrap items-center gap-2">
-      <Badge
-        v-for="clause in clauses"
-        :key="clause.kind"
-        tint="neutral"
+    <div
+      ref="toolbar"
+      class="flex flex-wrap items-center gap-2"
+      aria-label="People filters"
+    >
+      <button
+        v-for="kind in (['assigned_to', 'stage'] as const)"
+        :key="kind"
+        type="button"
+        :data-testid="`filter-trigger-${kind}`"
+        :class="buttonClasses()"
+        :aria-expanded="open && editingKind === kind"
+        :aria-controls="`${id}-popover`"
+        aria-haspopup="dialog"
+        @click="openEditor(kind, $event)"
       >
-        <span :data-testid="`filter-chip-${clause.kind}`">
-          <button
-            type="button"
-            class="mr-1"
-            @click="toggleEditor(clause.kind)"
-          >
-            {{ describeClause(clause, names) }}
-          </button>
-          <button
-            type="button"
-            :data-testid="`filter-chip-remove-${clause.kind}`"
-            class="inline-flex items-center"
-            :aria-label="`Remove ${CLAUSE_KIND_LABEL[clause.kind]} filter`"
-            @click="removeClause(clause.kind)"
-          >
-            <X
-              class="h-3 w-3"
-              stroke-width="2"
-            />
-          </button>
-        </span>
-      </Badge>
-
-      <Select
-        v-if="addableKinds.length > 0"
+        {{ CLAUSE_KIND_LABEL[kind] }}
+        <ChevronDown
+          class="h-4 w-4"
+          stroke-width="1.5"
+          aria-hidden="true"
+        />
+      </button>
+      <button
+        type="button"
         data-testid="filter-add"
-        :model-value="null"
-        :options="addKindOptions"
-        option-label="label"
-        option-value="value"
-        placeholder="Add filter"
-        :pt="selectPt()"
-        class="w-40"
-        @update:model-value="addClause"
+        :class="buttonClasses()"
+        :aria-expanded="open && editingKind !== 'stage' && editingKind !== 'assigned_to'"
+        :aria-controls="`${id}-popover`"
+        aria-haspopup="dialog"
+        @click="openEditor(null, $event)"
       >
-        <template #dropdownicon>
-          <Plus
-            class="h-4 w-4"
-            stroke-width="1.5"
-          />
-        </template>
-      </Select>
+        <SlidersHorizontal
+          class="h-4 w-4"
+          stroke-width="1.5"
+          aria-hidden="true"
+        />
+        Filters
+      </button>
     </div>
 
     <div
-      v-if="editingKind"
-      :data-testid="`filter-editor-${editingKind}`"
-      class="rounded-xl border border-border bg-surface-0 p-4"
+      v-if="applied.length"
+      class="flex flex-wrap items-center gap-2"
+      aria-label="Applied filters"
     >
-      <template v-if="editingKind === 'stage'">
-        <p class="mb-2 text-small font-medium text-text-muted">
-          Stage
-        </p>
-        <div class="flex flex-wrap gap-3">
-          <label
-            v-for="stage in stages"
-            :key="stage.id"
-            class="flex items-center gap-1.5 text-body text-text"
-          >
-            <input
-              type="checkbox"
-              :checked="stageClause.stage_ids.includes(stage.id)"
-              @change="toggleStage(stage.id)"
-            >
-            {{ stage.name }}
-          </label>
-        </div>
-      </template>
-
-      <template v-else-if="editingKind === 'assigned_to'">
-        <p class="mb-2 text-small font-medium text-text-muted">
-          Assigned to
-        </p>
-        <div class="flex flex-wrap gap-3">
-          <label class="flex items-center gap-1.5 text-body text-text">
-            <input
-              type="checkbox"
-              data-testid="filter-assignee-me"
-              :checked="isAssigneeSelected('me')"
-              @change="toggleAssignee('me')"
-            >
-            Me
-          </label>
-          <label class="flex items-center gap-1.5 text-body text-text">
-            <input
-              type="checkbox"
-              data-testid="filter-assignee-unassigned"
-              :checked="isAssigneeSelected('unassigned')"
-              @change="toggleAssignee('unassigned')"
-            >
-            Unassigned
-          </label>
-          <label
-            v-for="member in members"
-            :key="member.user_id"
-            class="flex items-center gap-1.5 text-body text-text"
-          >
-            <input
-              type="checkbox"
-              :data-testid="`filter-assignee-user-${member.user_id}`"
-              :checked="isAssigneeSelected({ user_id: member.user_id })"
-              @change="toggleAssignee({ user_id: member.user_id })"
-            >
-            {{ member.display_name }}<span
-              v-if="member.status === 'inactive'"
-              class="text-text-muted"
-            > (inactive)</span>
-          </label>
-        </div>
-      </template>
-
-      <template v-else-if="editingKind === 'source'">
-        <p class="mb-2 text-small font-medium text-text-muted">
-          Source
-        </p>
-        <div
-          v-if="sources.length === 0"
-          class="text-body text-text-muted"
+      <span
+        v-for="clause in applied"
+        :key="clause.kind"
+        :data-testid="`filter-chip-${clause.kind}`"
+        class="inline-flex max-w-full items-stretch rounded-lg border border-border bg-surface-0 text-small text-text"
+      >
+        <button
+          type="button"
+          class="flex min-h-10 min-w-0 flex-wrap items-center gap-1 rounded-l-lg px-3 py-2 text-left hover:bg-surface-1 focus-visible:ring-2 focus-visible:ring-focus"
+          :aria-label="`Edit ${describeClause(clause, names)}`"
+          :aria-expanded="open && editingKind === clause.kind"
+          :aria-controls="`${id}-popover`"
+          aria-haspopup="dialog"
+          @click="openEditor(clause.kind, $event)"
         >
-          No inquiry sources yet.
-        </div>
-        <div
-          v-else
-          class="flex flex-wrap gap-3"
-        >
-          <label
-            v-for="source in sources"
-            :key="source"
-            class="flex items-center gap-1.5 text-body text-text"
-          >
-            <input
-              type="checkbox"
-              :checked="sourceClause.sources.includes(source)"
-              @change="toggleSource(source)"
+          <template v-if="clause.kind === 'stage'">
+            <span>Stage:</span>
+            <template
+              v-for="(stageId, index) in clause.stage_ids.slice(0, 2)"
+              :key="stageId"
             >
-            {{ source }}
-          </label>
-        </div>
-      </template>
-
-      <template v-else-if="editingAgeKind && activeAgeClause">
-        <p class="mb-2 text-small font-medium text-text-muted">
-          {{ CLAUSE_KIND_LABEL[editingAgeKind] }}
-        </p>
-        <div class="flex items-center gap-2">
-          <Select
-            :data-testid="`filter-age-op-${editingAgeKind}`"
-            :model-value="activeAgeClause.age.op"
-            :options="AGE_OPS"
-            option-label="label"
-            option-value="value"
-            :pt="selectPt()"
-            class="w-36"
-            @update:model-value="setAgeOp"
-          />
-          <template v-if="activeAgeClause.age.op !== 'never'">
-            <input
-              :data-testid="`filter-days-${editingAgeKind}`"
-              type="number"
-              min="1"
-              max="3650"
-              :class="INPUT_CLASSES"
-              class="w-20"
-              :value="daysDraft[editingAgeKind]"
-              @input="onDaysInput"
-              @blur="commitDays"
-              @keydown.enter="commitDays"
-            >
-            <span class="text-body text-text-muted">days</span>
+              <span v-if="index">or</span>
+              <StageLabel :stage="stageFor(stageId)" />
+            </template>
+            <span v-if="clause.stage_ids.length > 2">+{{ clause.stage_ids.length - 2 }}</span>
           </template>
-        </div>
-      </template>
-
-      <template v-else-if="editingBoolKind && activeBoolClause">
-        <p class="mb-2 text-small font-medium text-text-muted">
-          {{ CLAUSE_KIND_LABEL[editingBoolKind] }}
-        </p>
-        <div class="flex gap-2">
-          <button
-            type="button"
-            :data-testid="`filter-bool-yes-${editingBoolKind}`"
-            :class="buttonClasses(activeBoolClause.value === true ? 'primary' : 'secondary')"
-            @click="setBoolValue(true)"
-          >
-            Yes
-          </button>
-          <button
-            type="button"
-            :data-testid="`filter-bool-no-${editingBoolKind}`"
-            :class="buttonClasses(activeBoolClause.value === false ? 'primary' : 'secondary')"
-            @click="setBoolValue(false)"
-          >
-            No
-          </button>
-        </div>
-      </template>
-
+          <span
+            v-else
+            class="min-w-0 break-words"
+          >{{ describeClause(clause, names, 2) }}</span>
+        </button>
+        <button
+          type="button"
+          :data-testid="`filter-chip-remove-${clause.kind}`"
+          class="inline-flex min-h-10 w-10 shrink-0 items-center justify-center rounded-r-lg hover:bg-surface-1 focus-visible:ring-2 focus-visible:ring-focus"
+          :aria-label="`Remove ${CLAUSE_KIND_LABEL[clause.kind]} filter`"
+          @click="removeClause(clause.kind)"
+        >
+          <X
+            class="h-4 w-4"
+            stroke-width="1.5"
+            aria-hidden="true"
+          />
+        </button>
+      </span>
       <button
         type="button"
-        data-testid="filter-editor-done"
-        class="mt-3 text-small font-medium text-accent"
-        @click="editingKind = null"
+        data-testid="filter-clear-all"
+        :class="buttonClasses('ghost')"
+        @click="clearAll"
       >
-        Done
+        Clear all
       </button>
     </div>
+
+    <Popover
+      :id="`${id}-popover`"
+      ref="popover"
+      :pt="popoverPt"
+      :aria-labelledby="`${id}-title`"
+      @show="focusEditor"
+      @hide="onHide"
+    >
+      <div
+        ref="panel"
+        @keydown.esc.stop.prevent="dismissEditor"
+      >
+        <div class="mb-3 flex items-center justify-between gap-2">
+          <h2
+            :id="`${id}-title`"
+            class="text-body font-medium text-text"
+          >
+            {{ title }}
+          </h2>
+          <button
+            type="button"
+            :class="buttonClasses('ghost')"
+            aria-label="Close filter editor"
+            @click="dismissEditor"
+          >
+            <X
+              class="h-4 w-4"
+              stroke-width="1.5"
+              aria-hidden="true"
+            />
+          </button>
+        </div>
+
+        <template v-if="!editingKind">
+          <label
+            :for="`${id}-search`"
+            class="sr-only"
+          >Search filters</label>
+          <input
+            :id="`${id}-search`"
+            v-model="search"
+            type="search"
+            data-testid="filter-search"
+            data-editor-focus
+            :class="INPUT_CLASSES"
+            placeholder="Search filters"
+            autocomplete="off"
+          >
+          <div class="mt-2 max-h-64 overflow-y-auto">
+            <button
+              v-for="kind in menuKinds"
+              :key="kind"
+              type="button"
+              :data-testid="`filter-add-${kind}`"
+              :class="rowClasses"
+              @click="selectKind(kind)"
+            >
+              <span class="min-w-0 flex-1">{{ CLAUSE_KIND_LABEL[kind] }}</span>
+              <span
+                v-if="applied.some((clause) => clause.kind === kind)"
+                class="text-small text-text-muted"
+              >Active</span>
+              <ChevronRight
+                class="h-4 w-4 shrink-0"
+                stroke-width="1.5"
+                aria-hidden="true"
+              />
+            </button>
+            <p
+              v-if="!menuKinds.length"
+              class="px-2 py-3 text-small text-text-muted"
+            >
+              No matching filters.
+            </p>
+          </div>
+        </template>
+
+        <div
+          v-else
+          :data-testid="`filter-editor-${editingKind}`"
+        >
+          <template v-if="optionKind">
+            <p
+              v-if="optionKind === 'source'"
+              class="mb-3 text-small text-text-muted"
+            >
+              Matches the latest inquiry's source.
+            </p>
+            <label
+              :for="`${id}-search`"
+              class="sr-only"
+            >Search {{ optionNoun }}</label>
+            <input
+              :id="`${id}-search`"
+              v-model="search"
+              type="search"
+              data-testid="filter-option-search"
+              data-editor-focus
+              :class="INPUT_CLASSES"
+              :placeholder="`Search ${optionNoun}`"
+              autocomplete="off"
+            >
+            <p
+              v-if="optionPending"
+              role="status"
+              class="mt-3 text-small text-text-muted"
+            >
+              Loading {{ optionNoun }}…
+            </p>
+            <div
+              v-else-if="optionError"
+              role="alert"
+              class="mt-3 text-small text-danger"
+            >
+              Couldn't load {{ optionNoun }}.
+              <button
+                type="button"
+                :class="buttonClasses('ghost')"
+                @click="emit('retry-options', optionKind)"
+              >
+                Retry
+              </button>
+            </div>
+            <div class="mt-2 max-h-64 overflow-y-auto">
+              <label
+                v-for="option in visibleOptions"
+                :key="option.key"
+                :class="rowClasses"
+              >
+                <input
+                  type="checkbox"
+                  :data-testid="optionKind === 'assigned_to' ? `filter-assignee-${option.key}` : `filter-option-${option.key}`"
+                  :class="checkboxClasses"
+                  :checked="isSelected(option)"
+                  :disabled="selectionCount >= 50 && !isSelected(option)"
+                  @change="toggleOption(option)"
+                >
+                <StageLabel
+                  v-if="option.stage"
+                  :stage="option.stage"
+                />
+                <span
+                  v-else
+                  class="min-w-0 break-words"
+                >{{ option.label }}<span
+                  v-if="option.inactive"
+                  class="text-text-muted"
+                > (inactive)</span></span>
+              </label>
+              <p
+                v-if="!visibleOptions.length && !optionPending && !optionError"
+                class="px-2 py-3 text-small text-text-muted"
+              >
+                {{ search ? 'No matching options.' : `No ${optionNoun} available.` }}
+              </p>
+            </div>
+            <p
+              v-if="selectionCount >= 50"
+              role="status"
+              class="mt-2 text-small text-text-muted"
+            >
+              50 values selected. Remove one to select another.
+            </p>
+            <p
+              v-else
+              class="mt-2 text-small text-text-muted"
+            >
+              Any selected value · Changes apply immediately
+            </p>
+            <p
+              v-if="optionKind === 'source' && sourcesTruncated"
+              class="mt-2 text-small text-text-muted"
+            >
+              Showing the first 500 sources. Search covers these options.
+            </p>
+          </template>
+
+          <template v-else-if="ageKind">
+            <fieldset>
+              <legend class="sr-only">
+                {{ title }} time window
+              </legend>
+              <label
+                v-for="op in ageOps"
+                :key="op.value"
+                :class="rowClasses"
+              >
+                <input
+                  type="radio"
+                  :name="`${id}-age-op`"
+                  :data-testid="`filter-age-op-${ageKind}-${op.value}`"
+                  :data-editor-focus="op.value === 'within_days' ? '' : undefined"
+                  :class="checkboxClasses"
+                  :checked="ageOp === op.value"
+                  @click="commitAge(op.value)"
+                >
+                {{ op.label }}
+              </label>
+            </fieldset>
+            <template v-if="ageOp !== 'never'">
+              <div class="my-3 grid grid-cols-2 gap-2">
+                <button
+                  v-for="days in [7, 14, 30, 90]"
+                  :key="days"
+                  type="button"
+                  :data-testid="`filter-days-preset-${days}`"
+                  :class="buttonClasses('secondary')"
+                  class="px-2"
+                  :aria-pressed="Number(daysDraft) === days"
+                  @click="setPreset(days)"
+                >
+                  {{ days }} days
+                </button>
+              </div>
+              <label
+                :for="`${id}-days`"
+                class="mb-1.5 block text-small font-medium"
+              >Custom window</label>
+              <div class="flex items-center gap-2">
+                <input
+                  :id="`${id}-days`"
+                  :data-testid="`filter-days-${ageKind}`"
+                  type="number"
+                  min="1"
+                  max="3650"
+                  step="1"
+                  :class="INPUT_CLASSES"
+                  class="max-w-24"
+                  :value="daysDraft"
+                  :aria-invalid="daysError"
+                  :aria-describedby="daysError ? `${id}-days-error` : undefined"
+                  @input="daysDraft = ($event.target as HTMLInputElement).value; daysDirty = true"
+                  @blur="commitDays"
+                  @keydown.enter.prevent="commitDays"
+                >
+                <span class="text-body text-text-muted">days</span>
+              </div>
+              <p
+                v-if="daysError"
+                :id="`${id}-days-error`"
+                role="alert"
+                class="mt-2 text-small text-danger"
+              >
+                Enter a whole number from 1 to 3,650.
+              </p>
+            </template>
+            <p
+              v-if="ageHint"
+              class="mt-3 text-small text-text-muted"
+            >
+              {{ ageHint }}
+            </p>
+          </template>
+
+          <template v-else-if="boolKind">
+            <p
+              v-if="boolKind === 'has_replied'"
+              class="mb-3 text-small text-text-muted"
+            >
+              A received email was recorded, whether answered or not.
+            </p>
+            <div
+              class="flex gap-2"
+              role="group"
+              :aria-label="title"
+            >
+              <button
+                v-for="value in [true, false]"
+                :key="String(value)"
+                type="button"
+                :data-testid="`filter-bool-${value ? 'yes' : 'no'}-${boolKind}`"
+                :data-editor-focus="value ? '' : undefined"
+                :aria-pressed="activeBool?.value === value"
+                :class="buttonClasses(activeBool?.value === value ? 'primary' : 'secondary')"
+                @click="setBool(value)"
+              >
+                {{ value ? 'Yes' : 'No' }}
+              </button>
+            </div>
+          </template>
+
+          <div class="mt-4 flex items-center justify-between gap-2 border-t border-border pt-3">
+            <button
+              v-if="activeClause"
+              type="button"
+              data-testid="filter-clear-selection"
+              :class="buttonClasses('ghost')"
+              @click="removeClause(editingKind)"
+            >
+              Clear selection
+            </button>
+            <button
+              type="button"
+              data-testid="filter-editor-done"
+              :class="buttonClasses()"
+              class="ml-auto"
+              @click="closeEditor"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      </div>
+    </Popover>
   </div>
 </template>

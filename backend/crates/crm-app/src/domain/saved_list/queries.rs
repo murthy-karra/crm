@@ -1,0 +1,408 @@
+use std::collections::HashMap;
+
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use sqlx::PgConnection;
+use uuid::Uuid;
+
+use crate::auth::AuthContext;
+use crate::domain::admin::{queries as admin_queries, Role};
+use crate::domain::person::filter::{FilterDefinition, FilterError, FilterNames};
+use crate::domain::person::queries as person_queries;
+use crate::domain::person::PersonVisibilityScope;
+use crate::domain::stage;
+use crate::ids::{OrganizationId, SavedListId, UserId};
+
+use super::error::SavedListError;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SavedListScope {
+    Personal,
+    Shared,
+}
+
+impl SavedListScope {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Personal => "personal",
+            Self::Shared => "shared",
+        }
+    }
+
+    pub(crate) fn from_db(value: &str) -> Result<Self, SavedListError> {
+        match value {
+            "personal" => Ok(Self::Personal),
+            "shared" => Ok(Self::Shared),
+            _ => Err(SavedListError::Corrupt),
+        }
+    }
+}
+
+/// The exact public metadata shape. It intentionally omits organization,
+/// owner, retry token and filter content.
+#[derive(Debug, Clone, Serialize)]
+pub struct SavedListMetadata {
+    pub id: SavedListId,
+    pub name: String,
+    pub scope: SavedListScope,
+    pub revision: i64,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub can_edit: bool,
+    pub can_delete: bool,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SavedListFilterError {
+    UnsupportedFilter,
+    InvalidStage,
+    InvalidAssignee,
+}
+
+impl SavedListFilterError {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::UnsupportedFilter => "unsupported_filter",
+            Self::InvalidStage => "invalid_stage",
+            Self::InvalidAssignee => "invalid_assignee",
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SavedListDetail {
+    pub list: SavedListMetadata,
+    /// `None` only for structurally unsupported stored content. Reference
+    /// stale typed definitions remain visible so their writer can repair.
+    pub filter: Option<FilterDefinition>,
+    pub description: Vec<String>,
+    pub filter_error: Option<SavedListFilterError>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SavedListCount {
+    pub list_id: SavedListId,
+    pub revision: i64,
+    pub count: i64,
+    pub truncated: bool,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct SavedListStoredRow {
+    pub id: SavedListId,
+    pub created_by_user_id: UserId,
+    pub scope: SavedListScope,
+    pub name: String,
+    /// A JSONB value may be valid PostgreSQL JSON yet exceed serde_json's
+    /// supported depth/number representation. Keep that decode failure local
+    /// to definition evaluation so metadata, tombstone protection, and a
+    /// create replay never turn into an availability error.
+    pub filter: Option<serde_json::Value>,
+    pub revision: i64,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+pub(crate) struct SavedListStoredRowDb {
+    pub(crate) id: Uuid,
+    pub(crate) created_by_user_id: Uuid,
+    pub(crate) scope: String,
+    pub(crate) name: String,
+    pub(crate) filter: String,
+    pub(crate) revision: i64,
+    pub(crate) created_at: DateTime<Utc>,
+    pub(crate) updated_at: DateTime<Utc>,
+}
+
+impl TryFrom<SavedListStoredRowDb> for SavedListStoredRow {
+    type Error = SavedListError;
+
+    fn try_from(value: SavedListStoredRowDb) -> Result<Self, Self::Error> {
+        Ok(Self {
+            id: SavedListId::new(value.id),
+            created_by_user_id: UserId::new(value.created_by_user_id),
+            scope: SavedListScope::from_db(&value.scope)?,
+            name: value.name,
+            filter: serde_json::from_str(&value.filter).ok(),
+            revision: value.revision,
+            created_at: value.created_at,
+            updated_at: value.updated_at,
+        })
+    }
+}
+
+struct SavedListMetadataRowDb {
+    id: Uuid,
+    created_by_user_id: Uuid,
+    scope: String,
+    name: String,
+    revision: i64,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+}
+
+fn metadata_from_metadata_row(
+    value: SavedListMetadataRowDb,
+    actor_user_id: UserId,
+    role: Role,
+) -> Result<SavedListMetadata, SavedListError> {
+    let scope = SavedListScope::from_db(&value.scope)?;
+    let can_manage = match scope {
+        SavedListScope::Personal => value.created_by_user_id == actor_user_id.0,
+        SavedListScope::Shared => role == Role::Admin,
+    };
+    Ok(SavedListMetadata {
+        id: SavedListId::new(value.id),
+        name: value.name,
+        scope,
+        revision: value.revision,
+        created_at: value.created_at,
+        updated_at: value.updated_at,
+        can_edit: can_manage,
+        can_delete: can_manage,
+    })
+}
+
+pub(crate) fn metadata_for(
+    row: &SavedListStoredRow,
+    actor_user_id: UserId,
+    role: Role,
+) -> SavedListMetadata {
+    let can_manage = match row.scope {
+        SavedListScope::Personal => row.created_by_user_id == actor_user_id,
+        SavedListScope::Shared => role == Role::Admin,
+    };
+    SavedListMetadata {
+        id: row.id,
+        name: row.name.clone(),
+        scope: row.scope,
+        revision: row.revision,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        can_edit: can_manage,
+        can_delete: can_manage,
+    }
+}
+
+/// Metadata-only index: no filter deserialization, validation, or membership
+/// evaluation occurs here.
+pub async fn list_saved_lists(
+    conn: &mut PgConnection,
+    auth: &AuthContext,
+) -> Result<Vec<SavedListMetadata>, SavedListError> {
+    let rows = sqlx::query_as!(
+        SavedListMetadataRowDb,
+        r#"SELECT id, created_by_user_id, scope,
+                  name as "name!",
+                  revision, created_at, updated_at
+           FROM saved_list
+           WHERE organization_id = $1
+             AND deleted_at IS NULL
+             AND (scope = 'shared' OR created_by_user_id = $2)
+           ORDER BY created_at ASC, id ASC
+           LIMIT 250"#,
+        auth.active_organization_id.0,
+        auth.actor_user_id.0,
+    )
+    .fetch_all(&mut *conn)
+    .await?;
+
+    rows.into_iter()
+        .map(|row| metadata_from_metadata_row(row, auth.actor_user_id, auth.role))
+        .collect()
+}
+
+/// Normal visible live lookup. Literal tenant and scope predicates make
+/// foreign, hidden and nonexistent IDs observationally identical.
+pub(crate) async fn visible_live_row(
+    conn: &mut PgConnection,
+    organization_id: OrganizationId,
+    actor_user_id: UserId,
+    list_id: SavedListId,
+) -> Result<Option<SavedListStoredRow>, SavedListError> {
+    let row = sqlx::query_as!(
+        SavedListStoredRowDb,
+        r#"SELECT id, created_by_user_id, scope,
+                  name as "name!", filter::text as "filter!",
+                  revision, created_at, updated_at
+           FROM saved_list
+           WHERE id = $1
+             AND organization_id = $2
+             AND deleted_at IS NULL
+             AND (scope = 'shared' OR created_by_user_id = $3)"#,
+        list_id.0,
+        organization_id.0,
+        actor_user_id.0,
+    )
+    .fetch_optional(&mut *conn)
+    .await?;
+    row.map(SavedListStoredRow::try_from).transpose()
+}
+
+/// Mutation lookup, used only after command-local membership and advisory
+/// locks are held.
+pub(crate) async fn visible_live_row_for_update(
+    conn: &mut PgConnection,
+    organization_id: OrganizationId,
+    actor_user_id: UserId,
+    list_id: SavedListId,
+) -> Result<Option<SavedListStoredRow>, SavedListError> {
+    let row = sqlx::query_as!(
+        SavedListStoredRowDb,
+        r#"SELECT id, created_by_user_id, scope,
+                  name as "name!", filter::text as "filter!",
+                  revision, created_at, updated_at
+           FROM saved_list
+           WHERE id = $1
+             AND organization_id = $2
+             AND deleted_at IS NULL
+             AND (scope = 'shared' OR created_by_user_id = $3)
+           FOR UPDATE"#,
+        list_id.0,
+        organization_id.0,
+        actor_user_id.0,
+    )
+    .fetch_optional(&mut *conn)
+    .await?;
+    row.map(SavedListStoredRow::try_from).transpose()
+}
+
+/// Detail is fail-closed by stored definition. Metadata stays available for
+/// an unsupported row, but raw invalid JSON never reaches a client.
+pub async fn saved_list_detail(
+    conn: &mut PgConnection,
+    auth: &AuthContext,
+    list_id: SavedListId,
+) -> Result<Option<SavedListDetail>, SavedListError> {
+    let Some(row) = visible_live_row(
+        conn,
+        auth.active_organization_id,
+        auth.actor_user_id,
+        list_id,
+    )
+    .await?
+    else {
+        return Ok(None);
+    };
+
+    let list = metadata_for(&row, auth.actor_user_id, auth.role);
+    let Some(filter) = row.filter.as_ref().and_then(decode_structural_filter) else {
+        return Ok(Some(SavedListDetail {
+            list,
+            filter: None,
+            description: Vec::new(),
+            filter_error: Some(SavedListFilterError::UnsupportedFilter),
+        }));
+    };
+
+    // Resolve labels before references so stale IDs produce neutral
+    // placeholders rather than disappearing from a repairable definition.
+    let names = filter_names(conn, auth.active_organization_id).await?;
+    let description = filter.describe(&names);
+    let filter_error = match filter
+        .validate_references(conn, auth.active_organization_id)
+        .await
+    {
+        Ok(()) => None,
+        Err(FilterError::InvalidStage) => Some(SavedListFilterError::InvalidStage),
+        Err(FilterError::InvalidAssignee) => Some(SavedListFilterError::InvalidAssignee),
+        Err(FilterError::Database(error)) => return Err(SavedListError::Database(error)),
+        Err(FilterError::Malformed) => Some(SavedListFilterError::UnsupportedFilter),
+    };
+
+    Ok(Some(SavedListDetail {
+        list,
+        filter: Some(filter),
+        description,
+        filter_error,
+    }))
+}
+
+/// The index never invokes this. Detail uses existing Organization-scoped
+/// lookups solely to turn stable IDs into display labels.
+async fn filter_names(
+    conn: &mut PgConnection,
+    organization_id: OrganizationId,
+) -> Result<FilterNames, SavedListError> {
+    let stages = stage::list(conn, organization_id).await?;
+    let members = admin_queries::members(conn, organization_id).await?;
+    let stage_names = stages
+        .into_iter()
+        .map(|stage| (stage.id, stage.name))
+        .collect::<HashMap<_, _>>();
+    let user_names = members
+        .into_iter()
+        .map(|member| (member.user_id, member.display_name))
+        .collect::<HashMap<_, _>>();
+    Ok(FilterNames {
+        stage_names,
+        user_names,
+    })
+}
+
+/// Stored malformed, unknown-version, or unknown-clause JSON is never
+/// interpreted as an empty/all-People filter.
+pub(crate) fn decode_structural_filter(value: &serde_json::Value) -> Option<FilterDefinition> {
+    let filter = serde_json::from_value::<FilterDefinition>(value.clone()).ok()?;
+    if filter.version != 1 || filter.validate().is_err() {
+        return None;
+    }
+    Some(filter)
+}
+
+/// Count after a fresh visible lookup and revision check. `me` resolves from
+/// the requesting actor at read time just as it does for ad-hoc People.
+pub async fn count_saved_list_matches(
+    conn: &mut PgConnection,
+    auth: &AuthContext,
+    list_id: SavedListId,
+    expected_revision: i64,
+) -> Result<Option<SavedListCount>, SavedListError> {
+    let Some(row) = visible_live_row(
+        conn,
+        auth.active_organization_id,
+        auth.actor_user_id,
+        list_id,
+    )
+    .await?
+    else {
+        return Ok(None);
+    };
+
+    if row.revision != expected_revision {
+        return Err(SavedListError::Conflict);
+    }
+    let filter = row
+        .filter
+        .as_ref()
+        .and_then(decode_structural_filter)
+        .ok_or(SavedListError::UnsupportedFilter)?;
+    match filter
+        .validate_references(conn, auth.active_organization_id)
+        .await
+    {
+        Ok(()) => {}
+        Err(FilterError::InvalidStage) => return Err(SavedListError::InvalidStage),
+        Err(FilterError::InvalidAssignee) => return Err(SavedListError::InvalidAssignee),
+        Err(FilterError::Database(error)) => return Err(SavedListError::Database(error)),
+        Err(FilterError::Malformed) => return Err(SavedListError::UnsupportedFilter),
+    }
+
+    // Count evaluation deliberately records only the static filter-kind
+    // vocabulary. It never records the definition JSON, values, ids,
+    // sources, or the resulting membership count.
+    tracing::Span::current().record("filter_kinds", filter.kinds_field());
+    tracing::Span::current().record("filter_clause_count", filter.clauses.len());
+
+    let scope = PersonVisibilityScope::from_auth(auth);
+    let params = filter.to_query_params(auth.actor_user_id);
+    let (count, truncated) = person_queries::count_filtered_matches(conn, &scope, &params).await?;
+    Ok(Some(SavedListCount {
+        list_id: row.id,
+        revision: row.revision,
+        count,
+        truncated,
+    }))
+}

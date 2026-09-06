@@ -424,6 +424,12 @@ applied to the wire), which is what makes the token-TTL exposure window in
 **Client invalidation mapping (exact query keys, `web/src/api/queries.ts`
 factory):**
 
+**Additive amendment (approved 2026-09-06):** [SLICE_011b §7](SLICE_011b.md#7-cache-refresh-privacy-and-operations)
+extends `person.changed` handling to invalidate the Organization's saved-list
+count prefix. All count fetch paths share the declared concurrency limit.
+The wire event stays unchanged; saved-list mutations publish no private list
+identifiers or criteria. Recovery behavior is defined in that section.
+
 - `person.changed` → `['org', orgId, 'person', person_id]`,
   `['org', orgId, 'people']`, `['org', orgId, 'today']`; when `change ===
   'inquiry_received'` also `['org', orgId, 'unresolved']` (a re-POST that

@@ -87,6 +87,29 @@ export function serializeFilter(clauses: FilterClause[]): string {
   return JSON.stringify(filter)
 }
 
+/**
+ * Stable deep JSON form used only when comparing saved definitions. The API
+ * can deserialize a typed clause through `serde_json::Value`, whose object
+ * member order need not match the local object literal order. Sort object
+ * keys recursively, while deliberately retaining clause and value-array
+ * order because those are part of the saved definition's request identity.
+ *
+ * Do not use this for URL/query-key serialization: [`serializeFilter`] keeps
+ * the established People URL bytes intact.
+ */
+function canonicalJson(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalJson)
+  if (typeof value !== 'object' || value === null) return value
+  const record = value as Record<string, unknown>
+  return Object.fromEntries(
+    Object.keys(record).sort().map((key) => [key, canonicalJson(record[key])]),
+  )
+}
+
+export function canonicalFilterDefinition(filter: FilterDefinition): string {
+  return JSON.stringify(canonicalJson(filter))
+}
+
 function isAgeOp(value: unknown): value is AgeOp {
   if (typeof value !== 'object' || value === null) return false
   const v = value as Record<string, unknown>

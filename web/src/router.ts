@@ -59,6 +59,19 @@ function routes(): RouteRecordRaw[] {
       meta: { title: 'People' },
     },
     {
+      path: '/lists',
+      name: 'saved-lists',
+      component: () => import('./views/ListsView.vue'),
+      meta: { title: 'Lists' },
+    },
+    {
+      path: '/lists/:savedListId',
+      name: 'saved-list',
+      component: () => import('./views/PeopleView.vue'),
+      props: (route) => ({ savedListId: String(route.params.savedListId) }),
+      meta: { title: 'Saved list' },
+    },
+    {
       path: '/people/:id',
       name: 'person-detail',
       component: () => import('./views/PersonDetailView.vue'),

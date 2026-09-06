@@ -2,7 +2,8 @@
 
 Status: ACCEPTED (user, 2026-08-28) with the three ladder-level
 decisions taken. 011a COMPLETE AND MERGED (`4aee12d`, 2026-08-28);
-011b in spec phase. Charter: D-043 (smart lists first-class FUB-shaped;
+011b COMPLETE AND MERGED LOCALLY (implementation `2af023c`, 2026-09-06; privacy and separate limits
+accepted in D-046). Charter: D-043 (smart lists first-class FUB-shaped;
 lists feed Today as explainable sources; built-in Today logic
 becomes org-tweakable system feeds in the same vocabulary — the
 filter model IS the Today configuration language). Sizing rule
@@ -14,7 +15,7 @@ learned. Format per SLICE_007_LADDER.
 
 This ladder builds "smart lists": saved, shareable filters over
 the People list that eventually drive the Today page. It lands in
-five small steps, each shippable on its own:
+six small steps, each shippable on its own:
 
 - **011a — Filtering the People page.** Adds filter chips to the
   People page: narrow the list by stage, who it's assigned to,
@@ -29,6 +30,9 @@ five small steps, each shippable on its own:
   list ("my stale Zillow leads") and come back to it. Personal
   lists belong to one agent; shared lists are curated by admins,
   and agents duplicate them rather than editing the original.
+- **011b-sort — Sorting saved lists.** A separate follow-up immediately after
+  saved lists, restricted initially to non-derived columns. Sorting applies
+  before the 500-Person display limit. Detailed choices belong to its own spec.
 - **011c — Lists feed Today.** An agent can mark any list as a
   Today source: people matching that list start appearing on
   their Today page, each labeled with which list put them there.
@@ -64,17 +68,27 @@ the same plan.
    working-intent reading; D-006's original attribution remains
    untouched in the data and available to future reporting).
 
+## Later accepted amendment
+
+On 2026-08-29 the user kept sorting outside 011b and requested a separate small
+rung immediately afterward. Recorded at 011b specification approval on
+2026-09-06: **011b-sort**, initially limited to non-derived columns. Its spec
+must define sorting before the 500-result cap while preserving static SQL
+verification. This records sequencing, not an approved sort/API contract.
+
 ## The rungs
 
 | Rung | Outcome | Schema | Size |
 |---|---|---|---|
 | **011a** Filter vocabulary + ad-hoc People filtering | Typed versioned `FilterDefinition` (AND of clauses: Stage, AssignedTo incl. Me/Unassigned, Source [latest-inquiry], Created/LastInquiry/LastContact/LastInbound ages incl. Never, HasReplied, HasPhone/HasEmail) + validation (caps ≤20 clauses/≤50 values, org-scoped id checks, deny_unknown_fields, unknown-clause-fails-closed on read) + `describe()` human-readable clauses + `filtered_summaries()` as FIXED-MATRIX STATIC SQL (NULL-guarded optional predicates; org boundary stays literal text; `.sqlx` discipline intact) + `GET /api/people?filter=` (declared additive SLICE_002 §5; absent = byte-identical) + `GET /api/inquiry-sources` + PeopleView FilterBar with chips, live count, URL-synced shareable filters. No persistence. Split seam if hot: a1 backend, a2 web. | none | M |
-| **011b** Saved lists | `saved_list` CRUD via typed commands: personal (owner-only) + shared (admin-curated; agents DUPLICATE, never edit the shared original — FUB shape, re-verified at spec time); Lists nav + index with membership counts; list view = PeopleView preloaded + Save/Save-as/Duplicate/Delete. Limits: 200/org, 50/owner. | `saved_list` | M |
+| **011b** Saved lists | `saved_list` CRUD via typed commands: personal (creator-only, including from admins; D-046) + shared (admin-curated; agents DUPLICATE, never edit the shared original — FUB shape, re-verified at spec time); Lists nav + index with membership counts; list view = PeopleView preloaded + Save/Save-as/Duplicate/Delete. Limits (D-046): 200 shared/org plus 50 personal/creator/org; no combined cap. | `saved_list` | M |
+| **011b-sort** Per-list sorting | Separate follow-up after 011b; v1 uses non-derived columns only. Define persisted sort choices and deterministic ordering before result truncation in its own specification. | Determined by its spec | S |
 | **011c** Lists feed Today | Per-viewer "Use as a Today source" on any visible list (agent-for-self v1; admin org-push deferred); Today evaluates marked lists at QUERY TIME (no materialization — derived-truth posture; per-feed static evaluation, merge+dedup in Rust); additive `TodayReason::ListMember {list_id, name}` (declared SLICE_003 §5); list-only band below stale built-ins, above the low outcome tier, oldest-effective-contact-first with the key displayed (no secret priority); multi-qualification = one item, list reasons appended; 200 cap, list band sheds first. Known footgun stated: a no-activity-clause list has no organic exit but stage change — guidance, not enforcement. | `today_work_source` | M |
 | **011d** Tweakable built-ins | Vocabulary gains the named derived axes: `AwaitingResponse`, `ClientRepliedUnanswered`, and (decision 2) `AwaitingCallOutcome` with its payload plumbing. The three built-ins become seeded per-org `today_system_feed` rows (seed on create_organization + backfill migration), managed on an admin "Today feeds" surface: enable/disable, edit clause values + freshness-window param, PREVIEW before save, REVERT-to-default (canonical regenerated from code), `today_feed_changed` audit fact. Acceptance gate: equivalence db tests prove feed-evaluation ≡ the old hardcoded arms (items, reasons, priorities, order) BEFORE arm deletion. Priority-tier order stays fixed system policy v1 (orgs tweak membership, not tiers). Pre-declared split d1/d2 per decision 2. | `today_system_feed` + backfill + fact table | M (split-ready) |
 | **011e** Tags | `tag` + `person_tag` model, chips on PersonDetail (monochrome per UI_STYLE), `Tags`/`NotTags` clause variants proving additive vocabulary extension; re-opens part of parked 010f (tags import — noted in SLICE_010_LADDER). Creation: any member inline; rename/delete admin (confirm at spec). | `tag`, `person_tag` | S–M |
 
-Dependencies: a → b → c → d; e after b (parallelizable with c/d).
+Delivery order: a → b → b-sort → c → d → e. Functional dependencies remain
+a → b → c → d; e depends on b and may parallelize with c/d.
 
 ## Standing tensions (carried into rung specs)
 
@@ -97,5 +111,5 @@ Dependencies: a → b → c → d; e after b (parallelizable with c/d).
 
 Snooze/dismiss (thesis §8, separate), O-008 AI suggestions, O-010
 search, an Operator `filter_people` tool (natural post-ladder
-extension), custom fields, OR-groups/absolute dates/per-list sorts,
+extension), custom fields, OR-groups/absolute dates,
 realtime count push, org-pushed work sources, mobile.

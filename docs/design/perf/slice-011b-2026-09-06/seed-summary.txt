@@ -1,0 +1,3 @@
+people=50000
+with_phone=49500
+without_phone=500

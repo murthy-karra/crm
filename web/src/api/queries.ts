@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/vue-query'
-import { type MaybeRefOrGetter, computed, toValue } from 'vue'
+import { type MaybeRefOrGetter, computed, toValue, watch } from 'vue'
 import { queryClient } from '../query-client'
 import { apiFetch } from './client'
 import type {
@@ -13,8 +13,15 @@ import type {
   ChangeMemberRoleRequest,
   ContactChannel,
   ContactOutcome,
+  CreateSavedListRequest,
+  CreateSavedListResponse,
+  DeleteSavedListRequest,
+  DeleteSavedListResponse,
   DiscardUnresolvedResponse,
   RetryUnresolvedResponse,
+  SavedListCountResponse,
+  SavedListDetailResponse,
+  SavedListsResponse,
   UnresolvedDetailResponse,
   CreateOrganizationRequest,
   CorrectOutcomeRequest,
@@ -56,6 +63,8 @@ import type {
   StartCallResponse,
   TodayResponse,
   UnresolvedResponse,
+  UpdateSavedListRequest,
+  UpdateSavedListResponse,
 } from './types'
 
 // Key factory (docs/specs/SLICE_002.md §10): every Organization-scoped
@@ -101,6 +110,20 @@ export const queryKeys = {
   invitationPreview: (token: string) => ['invitation-preview', token] as const,
   // SLICE_011a §10: extend the factory, never hand-write a key.
   inquirySources: (orgId: string) => ['org', orgId, 'inquiry-sources'] as const,
+  // SLICE_011b §7: saved-list cache keys include the actor wherever the
+  // response can differ by ownership/capability. Count prefixes deliberately
+  // sit under a separate org branch so `person.changed` can invalidate every
+  // actor's visible-count cache without naming list IDs on realtime.
+  savedLists: (orgId: string, actorId: string) => ['org', orgId, 'saved-lists', actorId] as const,
+  savedList: (orgId: string, actorId: string, listId: string) =>
+    ['org', orgId, 'saved-lists', actorId, 'detail', listId] as const,
+  savedListCounts: (orgId: string) => ['org', orgId, 'saved-list-counts'] as const,
+  savedListCountsForActor: (orgId: string, actorId: string) =>
+    ['org', orgId, 'saved-list-counts', actorId] as const,
+  savedListCountsForList: (orgId: string, actorId: string, listId: string) =>
+    ['org', orgId, 'saved-list-counts', actorId, listId] as const,
+  savedListCount: (orgId: string, actorId: string, listId: string, revision: number) =>
+    ['org', orgId, 'saved-list-counts', actorId, listId, revision] as const,
   platformOrganizations: () => ['platform', 'organizations'] as const,
   platformOrganization: (id: string) => ['platform', 'organizations', id] as const,
 }
@@ -129,7 +152,12 @@ export function useMe() {
  * unfiltered legacy path, whose key stays byte-identical to before this
  * slice.
  */
-export function usePeople(orgId: MaybeRefOrGetter<string>, serializedFilter?: MaybeRefOrGetter<string | undefined>) {
+export function usePeople(
+  orgId: MaybeRefOrGetter<string>,
+  serializedFilter?: MaybeRefOrGetter<string | undefined>,
+  enabled?: MaybeRefOrGetter<boolean>,
+  forceFresh?: MaybeRefOrGetter<boolean>,
+) {
   return useQuery({
     queryKey: computed(() => queryKeys.people(toValue(orgId), toValue(serializedFilter) || undefined)),
     queryFn: ({ queryKey, signal }) => {
@@ -140,11 +168,231 @@ export function usePeople(orgId: MaybeRefOrGetter<string>, serializedFilter?: Ma
       return apiFetch<PeopleResponse>(path, { signal })
     },
     // Keep the table steady between filters, but never retain another
-    // Organization's rows. PeopleView labels placeholder rows as updating.
+    // Organization's rows. A saved-list detail that is missing, hidden, or
+    // not yet evaluable explicitly disables this query and must not show a
+    // previous list's cached People underneath its recovery state.
     placeholderData: (previousData, previousQuery) =>
-      toValue(orgId) !== '' && previousQuery?.queryKey[1] === toValue(orgId) ? previousData : undefined,
-    enabled: computed(() => toValue(orgId) !== ''),
+      toValue(orgId) !== '' && (enabled === undefined || toValue(enabled)) &&
+        previousQuery?.queryKey[1] === toValue(orgId) ? previousData : undefined,
+    enabled: computed(() => toValue(orgId) !== '' && (enabled === undefined || toValue(enabled))),
+    // Named definitions can contain relative-time clauses. Their workspace
+    // calls this with `forceFresh` so an unchanged cached filter still gets a
+    // new People result after route entry/focus; ordinary /people preserves
+    // its established cache policy.
+    refetchOnMount: computed(() => toValue(forceFresh) ? 'always' : true),
+    refetchOnWindowFocus: computed(() => toValue(forceFresh) ? 'always' : true),
   })
+}
+
+/** `GET /api/saved-lists` — metadata only; criteria stay out of the index. */
+export function useSavedLists(
+  orgId: MaybeRefOrGetter<string>,
+  actorId: MaybeRefOrGetter<string>,
+) {
+  const qc = useQueryClient()
+  const query = useQuery({
+    queryKey: computed(() => queryKeys.savedLists(toValue(orgId), toValue(actorId))),
+    queryFn: ({ signal }) => apiFetch<SavedListsResponse>('/saved-lists', { signal }),
+    enabled: computed(() => toValue(orgId) !== '' && toValue(actorId) !== ''),
+    // Saved definitions may change in another browser without a new realtime
+    // payload. The index intentionally revalidates on each entry/focus.
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always',
+  })
+  function discard(queryKey: readonly unknown[], exact = true) {
+    // Abort before evicting. A test transport (and a real intermediary) can
+    // resolve after AbortSignal; cancellation keeps that late value from
+    // recreating a removed private cache entry.
+    // Do not await cancellation: an intermediary may ignore AbortSignal and
+    // never settle. The obsolete private result still has to leave the cache
+    // immediately; query-core ignores a later cancelled completion.
+    void qc.cancelQueries({ queryKey, exact })
+    qc.removeQueries({ queryKey, exact })
+  }
+
+  watch(() => query.data.value, (data) => {
+    if (!data) return
+    const identity = currentSavedListIdentity(qc)
+    const org = toValue(orgId)
+    const actor = toValue(actorId)
+    // An observer can receive a late result after its owning view has
+    // switched session. Do not resurrect or remove private cache entries
+    // under the newly active identity.
+    if (!identity || identity.orgId !== org || identity.actorId !== actor) return
+
+    const authoritative = new Map(data.lists.map((list) => [list.id, list]))
+    // Compare every cached detail/count row, not only metadata observed in
+    // this mount. Returning to Lists after a removal must evict the old
+    // workspace cache just as a live index refresh would.
+    for (const cached of qc.getQueryCache().findAll({ queryKey: queryKeys.savedLists(org, actor) })) {
+      const key = cached.queryKey
+      if (key[4] !== 'detail' || typeof key[5] !== 'string') continue
+      const next = authoritative.get(key[5])
+      const detail = cached.state.data as SavedListDetailResponse | undefined
+      if (!next || detail?.list.revision !== next.revision) discard(key)
+    }
+    for (const cached of qc.getQueryCache().findAll({ queryKey: queryKeys.savedListCountsForActor(org, actor) })) {
+      const key = cached.queryKey
+      if (typeof key[4] !== 'string' || typeof key[5] !== 'number') continue
+      const next = authoritative.get(key[4])
+      if (!next || key[5] !== next.revision) discard(key)
+    }
+  }, { immediate: true })
+  return query
+}
+
+/** `GET /api/saved-lists/{id}` — identity and actor are both in the cache key. */
+export function useSavedList(
+  orgId: MaybeRefOrGetter<string>,
+  actorId: MaybeRefOrGetter<string>,
+  listId: MaybeRefOrGetter<string>,
+) {
+  return useQuery({
+    queryKey: computed(() => queryKeys.savedList(toValue(orgId), toValue(actorId), toValue(listId))),
+    queryFn: ({ queryKey, signal }) => apiFetch<SavedListDetailResponse>(
+      `/saved-lists/${encodeURIComponent(queryKey[5])}`,
+      { signal },
+    ),
+    enabled: computed(() => toValue(orgId) !== '' && toValue(actorId) !== '' && toValue(listId) !== ''),
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always',
+  })
+}
+
+/** A direct count request used only through the bounded count scheduler. */
+export function fetchSavedListCount(
+  listId: string,
+  revision: number,
+  signal?: AbortSignal,
+): Promise<SavedListCountResponse> {
+  return apiFetch<SavedListCountResponse>(
+    `/saved-lists/${encodeURIComponent(listId)}/count?revision=${encodeURIComponent(String(revision))}`,
+    { signal },
+  )
+}
+
+/** Single active workspace count. Index rows instead use the four-wide scheduler. */
+export function useSavedListCount(
+  orgId: MaybeRefOrGetter<string>,
+  actorId: MaybeRefOrGetter<string>,
+  listId: MaybeRefOrGetter<string>,
+  revision: MaybeRefOrGetter<number>,
+  enabled: MaybeRefOrGetter<boolean>,
+) {
+  return useQuery({
+    queryKey: computed(() => queryKeys.savedListCount(
+      toValue(orgId), toValue(actorId), toValue(listId), toValue(revision),
+    )),
+    queryFn: ({ queryKey, signal }) => fetchSavedListCount(queryKey[4], queryKey[5], signal),
+    enabled: computed(() =>
+      toValue(orgId) !== '' && toValue(actorId) !== '' && toValue(listId) !== '' && toValue(enabled),
+    ),
+    retry: false,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always',
+  })
+}
+
+interface SavedListMutationIdentity {
+  orgId: string
+  actorId: string
+  // Object identity is a small in-memory session generation: A → logout → A
+  // gets a fresh `/me` object even though its public IDs are identical.
+  // That prevents a late old-session mutation from repopulating a cache
+  // cleared at logout.
+  session: MeResponse | undefined
+}
+
+function currentSavedListIdentity(queryClient: QueryClient): SavedListMutationIdentity | undefined {
+  const me = queryClient.getQueryData<MeResponse>(queryKeys.me)
+  if (!me?.organization) return undefined
+  return { orgId: me.organization.id, actorId: me.user.id, session: me }
+}
+
+function hasCurrentSavedListIdentity(queryClient: QueryClient, submitted: SavedListMutationIdentity | undefined) {
+  const current = currentSavedListIdentity(queryClient)
+  return submitted !== undefined && current?.orgId === submitted.orgId &&
+    current.actorId === submitted.actorId && current.session === submitted.session
+}
+
+function invalidateSavedListCaches(queryClient: QueryClient, orgId: string, actorId: string, listId?: string) {
+  void queryClient.invalidateQueries({ queryKey: queryKeys.savedLists(orgId, actorId) })
+  void queryClient.invalidateQueries({ queryKey: queryKeys.savedListCountsForActor(orgId, actorId) })
+  if (listId) void queryClient.invalidateQueries({ queryKey: queryKeys.savedList(orgId, actorId, listId) })
+}
+
+/** Create/Save as/Duplicate share the same explicit no-retry mutation path. */
+export function useCreateSavedListMutation(
+  orgId: MaybeRefOrGetter<string>,
+  actorId: MaybeRefOrGetter<string>,
+  providedQueryClient?: QueryClient,
+) {
+  const qc = providedQueryClient ?? useQueryClient()
+  return useMutation({
+    mutationFn: (body: CreateSavedListRequest) => apiFetch<CreateSavedListResponse>('/saved-lists', {
+      method: 'POST', body: JSON.stringify(body),
+    }),
+    retry: false,
+    // Capture identity at submission. A late response after logout or a
+    // same-org actor switch must not repopulate a private cache that was
+    // deliberately cleared, nor invalidate the newly active actor's data.
+    onMutate: (): SavedListMutationIdentity => currentSavedListIdentity(qc) ?? {
+      orgId: toValue(orgId), actorId: toValue(actorId), session: undefined,
+    },
+    onSuccess: (result, _variables, submitted) => {
+      if (!hasCurrentSavedListIdentity(qc, submitted)) return
+      invalidateSavedListCaches(qc, submitted.orgId, submitted.actorId, result.list.id)
+    },
+  }, providedQueryClient)
+}
+
+export function useUpdateSavedListMutation(
+  orgId: MaybeRefOrGetter<string>,
+  actorId: MaybeRefOrGetter<string>,
+  providedQueryClient?: QueryClient,
+) {
+  const qc = providedQueryClient ?? useQueryClient()
+  return useMutation({
+    mutationFn: ({ listId, body }: { listId: string; body: UpdateSavedListRequest }) =>
+      apiFetch<UpdateSavedListResponse>(`/saved-lists/${encodeURIComponent(listId)}`, {
+        method: 'PUT', body: JSON.stringify(body),
+    }),
+    retry: false,
+    onMutate: (): SavedListMutationIdentity => currentSavedListIdentity(qc) ?? {
+      orgId: toValue(orgId), actorId: toValue(actorId), session: undefined,
+    },
+    onSuccess: (result, variables, submitted) => {
+      if (!hasCurrentSavedListIdentity(qc, submitted)) return
+      invalidateSavedListCaches(qc, submitted.orgId, submitted.actorId, variables.listId)
+      qc.setQueryData<SavedListDetailResponse>(
+        queryKeys.savedList(submitted.orgId, submitted.actorId, variables.listId),
+        (previous) => previous ? { ...previous, list: result.list, filter: variables.body.filter, filter_error: null } : previous,
+      )
+    },
+  }, providedQueryClient)
+}
+
+export function useDeleteSavedListMutation(
+  orgId: MaybeRefOrGetter<string>,
+  actorId: MaybeRefOrGetter<string>,
+  providedQueryClient?: QueryClient,
+) {
+  const qc = providedQueryClient ?? useQueryClient()
+  return useMutation({
+    mutationFn: ({ listId, body }: { listId: string; body: DeleteSavedListRequest }) =>
+      apiFetch<DeleteSavedListResponse>(`/saved-lists/${encodeURIComponent(listId)}`, {
+        method: 'DELETE', body: JSON.stringify(body),
+    }),
+    retry: false,
+    onMutate: (): SavedListMutationIdentity => currentSavedListIdentity(qc) ?? {
+      orgId: toValue(orgId), actorId: toValue(actorId), session: undefined,
+    },
+    onSuccess: (_result, variables, submitted) => {
+      if (!hasCurrentSavedListIdentity(qc, submitted)) return
+      invalidateSavedListCaches(qc, submitted.orgId, submitted.actorId, variables.listId)
+      qc.removeQueries({ queryKey: queryKeys.savedList(submitted.orgId, submitted.actorId, variables.listId) })
+    },
+  }, providedQueryClient)
 }
 
 /** `GET /api/inquiry-sources` (docs/specs/SLICE_011a.md §5b) — feeds the

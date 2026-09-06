@@ -1207,3 +1207,51 @@ mod capture_message_id_tests {
         assert_eq!(CaptureMessageId::new(id).as_uuid(), id);
     }
 }
+
+/// A saved-list definition identity (Slice 011b). Kept distinct from every
+/// other UUID so a Person, Organization, or retry token cannot accidentally
+/// cross a saved-list query boundary at compile time.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
+#[repr(transparent)]
+pub struct SavedListId(pub Uuid);
+
+impl SavedListId {
+    pub fn new(id: Uuid) -> Self {
+        Self(id)
+    }
+
+    pub fn as_uuid(self) -> Uuid {
+        self.0
+    }
+}
+
+impl fmt::Display for SavedListId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
+impl fmt::Debug for SavedListId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self, f)
+    }
+}
+
+#[cfg(test)]
+mod saved_list_id_tests {
+    use super::*;
+
+    #[test]
+    fn saved_list_id_is_transparent_and_readable() {
+        let raw = Uuid::new_v4();
+        let id = SavedListId::new(raw);
+        assert_eq!(id.as_uuid(), raw);
+        assert_eq!(id.to_string(), raw.to_string());
+        assert_eq!(format!("{id:?}"), raw.to_string());
+        assert_eq!(
+            serde_json::to_string(&id).unwrap(),
+            serde_json::to_string(&raw).unwrap()
+        );
+    }
+}

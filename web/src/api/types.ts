@@ -291,6 +291,75 @@ export interface FilterDefinition {
   clauses: FilterClause[]
 }
 
+// --- Slice 011b: saved People definitions ---------------------------------
+// Saved lists retain the existing v1 filter vocabulary verbatim. The server
+// derives visibility and capabilities; no owner or Organization identifier is
+// ever accepted or returned by this surface.
+
+export type SavedListScope = 'personal' | 'shared'
+
+export interface SavedListMetadata {
+  id: string
+  name: string
+  scope: SavedListScope
+  revision: number
+  created_at: string
+  updated_at: string
+  can_edit: boolean
+  can_delete: boolean
+}
+
+export type SavedListFilterError = 'unsupported_filter' | 'invalid_stage' | 'invalid_assignee'
+
+export interface SavedListsResponse {
+  lists: SavedListMetadata[]
+}
+
+export interface SavedListDetailResponse {
+  list: SavedListMetadata
+  filter: FilterDefinition | null
+  description: string[]
+  filter_error: SavedListFilterError | null
+}
+
+export interface SavedListCountResponse {
+  list_id: string
+  revision: number
+  count: number
+  truncated: boolean
+}
+
+export interface CreateSavedListRequest {
+  request_id: string
+  scope: SavedListScope
+  name: string
+  filter: FilterDefinition
+}
+
+export interface CreateSavedListResponse {
+  list: SavedListMetadata
+  created: boolean
+}
+
+export interface UpdateSavedListRequest {
+  expected_revision: number
+  name: string
+  filter: FilterDefinition
+}
+
+export interface UpdateSavedListResponse {
+  list: SavedListMetadata
+  changed: boolean
+}
+
+export interface DeleteSavedListRequest {
+  expected_revision: number
+}
+
+export interface DeleteSavedListResponse {
+  deleted: boolean
+}
+
 // --- Slice 011a: Inquiry sources (docs/specs/SLICE_011a.md §5b GET
 // /api/inquiry-sources) --------------------------------------------------
 

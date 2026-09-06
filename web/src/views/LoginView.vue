@@ -1,8 +1,7 @@
 <script setup lang="ts">
-// UI_STYLE.md §10: "Login — a single centered card."
+// UI_STYLE.md §7: a quiet, centered glass sign-in panel.
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import Card from '../components/Card.vue'
 import FormField from '../components/FormField.vue'
 import { useLoginMutation } from '../api/queries'
 import { ApiError } from '../api/client'
@@ -46,25 +45,29 @@ function onSubmit() {
 </script>
 
 <template>
-  <div class="flex min-h-screen items-center justify-center bg-surface-1 px-4">
-    <Card class="w-full max-w-sm">
-      <div class="mb-6 text-center">
-        <h1>
-          <img
-            src="/brand/elysium-lockup-stacked-name-indigo.svg"
-            alt="Elysium CRM"
-            width="160"
-            height="140"
-            class="mx-auto h-[140px] w-40"
-          >
+  <main class="flex min-h-dvh items-center justify-center bg-surface-0 px-5 py-10">
+    <section
+      aria-labelledby="login-heading"
+      class="glass-panel w-full max-w-[400px] px-6 py-8 sm:px-9 sm:py-10"
+    >
+      <div class="mb-7 text-center">
+        <img
+          src="/brand/elysium-lockup-horizontal-name-black.svg"
+          alt="Elysium CRM"
+          width="164"
+          height="48"
+          class="mx-auto mb-7 h-12 w-[164px]"
+        >
+        <h1
+          id="login-heading"
+          class="text-title font-medium tracking-tight text-text"
+        >
+          Sign in
         </h1>
-        <p class="mt-1 text-body text-text-muted">
-          Sign in to continue
-        </p>
       </div>
 
       <form
-        class="space-y-4"
+        class="login-form space-y-5"
         @submit.prevent="onSubmit"
       >
         <FormField
@@ -111,9 +114,24 @@ function onSubmit() {
           :class="buttonClasses('primary')"
           :disabled="isPending"
         >
-          {{ isPending ? 'Signing in…' : 'Log in' }}
+          {{ isPending ? 'Signing in…' : 'Sign in' }}
         </button>
       </form>
-    </Card>
-  </div>
+    </section>
+  </main>
 </template>
+
+<style scoped>
+.login-form :deep(label) {
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+  font-weight: 400;
+}
+
+/* Keep iOS from zooming the viewport when a credential field receives focus. */
+@media (max-width: 639px) {
+  .login-form input {
+    font-size: 16px;
+  }
+}
+</style>

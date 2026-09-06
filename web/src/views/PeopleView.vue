@@ -1,19 +1,19 @@
 <script setup lang="ts">
 // People filtering stays in the existing v1 URL/API representation.
 // The page owns committed filters; FilterBar owns only its open editor.
-import { computed, h, ref, watch } from 'vue'
+import { computed, h, nextTick, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { Plus, Users } from 'lucide-vue-next'
 import type { ColumnDef } from '@tanstack/vue-table'
 import PageHeader from '../components/PageHeader.vue'
 import DataTable from '../components/DataTable.vue'
-import Badge from '../components/Badge.vue'
+import PersonPreview from '../components/PersonPreview.vue'
 import StageLabel from '../components/StageLabel.vue'
 import FilterBar from '../components/FilterBar.vue'
 import { useInquirySources, useMe, useMembers, usePeople, useStages } from '../api/queries'
 import { ApiError } from '../api/client'
 import type { FilterClause, PersonSummary } from '../api/types'
-import { formatAbsoluteTime, formatRelativeTime } from '../lib/format'
+import { formatAbsoluteTime, formatRelativeTime, initials } from '../lib/format'
 import { buttonClasses } from '../lib/controls'
 import { describeApiError } from '../lib/errors'
 import { committedClauses, parseFilter, serializeFilter } from '../lib/filter'
@@ -109,17 +109,38 @@ const resultLabel = computed(() => {
   return `${count}${peopleData.value.truncated ? '+' : ''} ${noun}`
 })
 
+const selectedId = ref('')
+const preview = ref<InstanceType<typeof PersonPreview> | null>(null)
+let previewTrigger: HTMLElement | null = null
+const selectedPerson = computed(() => people.value.find((person) => person.id === selectedId.value))
+
+function selectPerson(person: PersonSummary) {
+  previewTrigger = document.querySelector<HTMLElement>(`a[href="/people/${CSS.escape(person.id)}"]`) ?? null
+  selectedId.value = person.id
+  void nextTick(() => preview.value?.focus())
+}
+function closePreview() {
+  selectedId.value = ''
+  void nextTick(() => {
+    if (previewTrigger?.isConnected) previewTrigger.focus()
+  })
+}
+watch([orgId, serializedFilter], () => { selectedId.value = '' }, { flush: 'sync' })
+watch(selectedPerson, (person) => { if (!person) selectedId.value = '' })
+
+const myPeople = computed(() => clauses.value.length === 1 &&
+  clauses.value[0]?.kind === 'assigned_to' && clauses.value[0].assignees.length === 1 &&
+  clauses.value[0].assignees[0] === 'me')
+
 const columns: ColumnDef<PersonSummary>[] = [
   {
     id: 'name',
     header: 'Name',
     cell: (info) => {
       const person = info.row.original
-      return h('div', [
-        h('p', { class: 'text-body font-medium text-text' }, person.display_name),
-        person.primary_email
-          ? h('p', { class: 'text-small text-text-muted' }, person.primary_email)
-          : null,
+      return h('div', { class: 'flex min-w-[150px] items-center gap-2.5', title: person.primary_email ?? undefined }, [
+        h('span', { class: 'avatar-surface h-7 w-7', 'aria-hidden': 'true' }, initials(person.display_name)),
+        h('span', { class: 'text-body text-text' }, person.display_name),
       ])
     },
   },
@@ -127,7 +148,7 @@ const columns: ColumnDef<PersonSummary>[] = [
     id: 'stage',
     header: 'Stage',
     cell: (info) =>
-      h(Badge, { tint: 'neutral' }, () => h(StageLabel, { stage: info.row.original.stage })),
+      h(StageLabel, { stage: info.row.original.stage, badge: true }),
   },
   {
     id: 'assignee',
@@ -135,7 +156,7 @@ const columns: ColumnDef<PersonSummary>[] = [
     cell: (info) => {
       const assignee = info.row.original.assigned_user
       return assignee
-        ? h('span', { class: 'text-text' }, assignee.display_name)
+        ? h('span', { class: 'text-text-muted' }, assignee.display_name)
         : h('span', { class: 'text-text-muted' }, 'Unassigned')
     },
   },
@@ -158,92 +179,133 @@ const columns: ColumnDef<PersonSummary>[] = [
 </script>
 
 <template>
-  <div>
-    <PageHeader title="People">
-      <template #action>
-        <RouterLink
-          to="/intake/new"
-          :class="buttonClasses('primary')"
+  <div class="people-layout">
+    <div class="people-list">
+      <PageHeader title="People">
+        <template #action>
+          <RouterLink
+            to="/intake/new"
+            :class="buttonClasses('primary')"
+          >
+            <Plus
+              class="h-4 w-4"
+              stroke-width="1.5"
+            />
+            New lead
+          </RouterLink>
+        </template>
+      </PageHeader>
+
+      <div
+        class="people-tabs"
+        aria-label="People views"
+      >
+        <button
+          type="button"
+          class="people-tab"
+          :aria-pressed="!hasFilter"
+          @click="onClausesUpdate([])"
         >
-          <Plus
-            class="h-4 w-4"
-            stroke-width="1.5"
-          />
-          New lead
-        </RouterLink>
-      </template>
-    </PageHeader>
+          All people
+        </button>
+        <button
+          type="button"
+          class="people-tab"
+          :aria-pressed="myPeople"
+          @click="onClausesUpdate([{ kind: 'assigned_to', assignees: ['me'] }])"
+        >
+          My people
+        </button>
+        <span
+          v-if="hasFilter && !myPeople"
+          class="flex items-center text-small text-text-muted"
+        >Filtered view</span>
+      </div>
 
-    <FilterBar
-      :key="editorRevision"
-      :clauses="clauses"
-      :stages="stages"
-      :members="members"
-      :sources="sources"
-      :stages-pending="stagesQuery.isPending.value"
-      :stages-error="stagesQuery.isError.value"
-      :members-pending="membersQuery.isPending.value"
-      :members-error="membersQuery.isError.value"
-      :sources-pending="sourcesQuery.isPending.value"
-      :sources-error="sourcesQuery.isError.value"
-      :sources-truncated="sourcesQuery.data.value?.truncated ?? false"
-      @update:clauses="onClausesUpdate"
-      @retry-options="retryOptions"
+      <div class="people-tools">
+        <FilterBar
+          :key="editorRevision"
+          :clauses="clauses"
+          :stages="stages"
+          :members="members"
+          :sources="sources"
+          :stages-pending="stagesQuery.isPending.value"
+          :stages-error="stagesQuery.isError.value"
+          :members-pending="membersQuery.isPending.value"
+          :members-error="membersQuery.isError.value"
+          :sources-pending="sourcesQuery.isPending.value"
+          :sources-error="sourcesQuery.isError.value"
+          :sources-truncated="sourcesQuery.data.value?.truncated ?? false"
+          @update:clauses="onClausesUpdate"
+          @retry-options="retryOptions"
+        />
+
+        <div class="flex min-h-10 flex-col items-end justify-center gap-1 text-small text-text-muted">
+          <span v-if="clauses.length > 1">Match all filters</span>
+          <p
+            data-testid="people-result-count"
+            role="status"
+            aria-live="polite"
+          >
+            {{ resultLabel }}
+            <span v-if="peopleData?.truncated && !isPlaceholderData"> · Showing the first {{ people.length }}</span>
+            <span v-if="isFetching && !isPending && !isPlaceholderData"> · Refreshing…</span>
+          </p>
+        </div>
+      </div>
+
+      <div
+        v-if="isError && !filterWillDegrade"
+        role="alert"
+        class="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface-0 p-5 text-body text-danger"
+      >
+        <span>{{ describeApiError(error, 'Could not load people.') }}</span>
+        <button
+          type="button"
+          :class="buttonClasses('secondary')"
+          @click="refetch()"
+        >
+          Try again
+        </button>
+      </div>
+      <div
+        v-if="((isPending || filterWillDegrade) && !peopleData) || (isPlaceholderData && people.length === 0)"
+        class="rounded-xl border border-border bg-surface-0 p-5 text-body text-text-muted"
+      >
+        {{ isPlaceholderData ? 'Updating results…' : 'Loading…' }}
+      </div>
+      <div
+        v-else-if="peopleData"
+        :aria-busy="isFetching"
+        :inert="isPlaceholderData"
+        :class="{ 'opacity-60': isPlaceholderData }"
+      >
+        <DataTable
+          class="people-table"
+          :on-row-click="selectPerson"
+          :selected-row-key="selectedId"
+          :data="people"
+          :columns="columns"
+          :row-key="(person) => person.id"
+          :row-to="(person) => `/people/${person.id}`"
+          count-noun="people"
+          count-noun-singular="person"
+          :truncated="peopleData.truncated"
+          :empty-title="hasFilter ? 'No people match these filters' : 'No people yet'"
+          :empty-message="hasFilter ? 'Change or clear your filters to see more people.' : 'Leads you add or receive will appear here.'"
+          :empty-icon="Users"
+          :empty-action-label="hasFilter ? undefined : 'Add a lead'"
+          :empty-action-to="hasFilter ? undefined : '/intake/new'"
+        />
+      </div>
+    </div>
+    <PersonPreview
+      v-if="selectedPerson"
+      :key="`${orgId}:${selectedPerson.id}`"
+      ref="preview"
+      :org-id="orgId"
+      :summary="selectedPerson"
+      @close="closePreview"
     />
-
-    <div class="mb-3 flex min-h-6 flex-wrap items-center justify-between gap-2 text-small text-text-muted">
-      <span>{{ clauses.length > 1 ? 'Match all filters' : '' }}</span>
-      <p
-        data-testid="people-result-count"
-        role="status"
-        aria-live="polite"
-      >
-        {{ resultLabel }}
-        <span v-if="peopleData?.truncated && !isPlaceholderData"> · Showing the first {{ people.length }}</span>
-        <span v-if="isFetching && !isPending && !isPlaceholderData"> · Refreshing…</span>
-      </p>
-    </div>
-
-    <div
-      v-if="isError && !filterWillDegrade"
-      role="alert"
-      class="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface-0 p-5 text-body text-danger"
-    >
-      <span>{{ describeApiError(error, 'Could not load people.') }}</span>
-      <button
-        type="button"
-        :class="buttonClasses('secondary')"
-        @click="refetch()"
-      >
-        Try again
-      </button>
-    </div>
-    <div
-      v-if="((isPending || filterWillDegrade) && !peopleData) || (isPlaceholderData && people.length === 0)"
-      class="rounded-xl border border-border bg-surface-0 p-5 text-body text-text-muted"
-    >
-      {{ isPlaceholderData ? 'Updating results…' : 'Loading…' }}
-    </div>
-    <div
-      v-else-if="peopleData"
-      :aria-busy="isFetching"
-      :inert="isPlaceholderData"
-      :class="{ 'opacity-60': isPlaceholderData }"
-    >
-      <DataTable
-        :data="people"
-        :columns="columns"
-        :row-key="(person) => person.id"
-        :row-to="(person) => `/people/${person.id}`"
-        count-noun="people"
-        count-noun-singular="person"
-        :truncated="peopleData.truncated"
-        :empty-title="hasFilter ? 'No people match these filters' : 'No people yet'"
-        :empty-message="hasFilter ? 'Change or clear your filters to see more people.' : 'Leads you add or receive will appear here.'"
-        :empty-icon="Users"
-        :empty-action-label="hasFilter ? undefined : 'Add a lead'"
-        :empty-action-to="hasFilter ? undefined : '/intake/new'"
-      />
-    </div>
   </div>
 </template>

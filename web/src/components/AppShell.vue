@@ -1,10 +1,6 @@
 <script setup lang="ts">
-// UI_STYLE.md §1: fixed 280px sidebar, white, 1px hairline separator (no
-// shadow); nav groups Work / Intake (§10). The icon rail shown in the
-// reference screens is deliberately not shipped this slice (§1) — the
-// sidebar's internal layout is left so a rail can be added later without
-// moving anything.
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue'
+// D-045: compact white navigation; shared session, Operator and call ownership.
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch, type Component } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { AtSign, Building2, Inbox, LogOut, Mail, Sparkles, Sun, UserCog, UserPlus, Users } from 'lucide-vue-next'
 import { useLogoutMutation, useMe } from '../api/queries'
@@ -19,6 +15,7 @@ import { useRealtime } from '../realtime/useRealtime'
 import { provideCallHost } from '../telephony/callHost'
 import { createLiveKitRoom } from '../telephony/client'
 import type { CallRoomFactory } from '../telephony/useCall'
+import { OPERATOR_LAUNCHER } from '../lib/operatorLauncher'
 
 // SLICE_006b §6: the one call session for the whole app lives here, so
 // the Person page's Call button and the Ask drawer's Confirm share it and
@@ -145,7 +142,7 @@ const { status: realtimeStatus } = useRealtime({
 
 const navItemClass =
   'flex h-10 items-center gap-2 rounded-lg px-3 text-body text-text-muted transition-colors duration-150 ease-out hover:bg-surface-2/60'
-const navItemActiveClass = 'bg-surface-2 font-semibold text-text hover:bg-surface-2'
+const navItemActiveClass = 'glass-control font-medium text-text'
 
 // A platform-only session has no Organization to name; label it instead so
 // the footer identity row is never blank.
@@ -161,6 +158,20 @@ const orgLabel = computed(() => me.value?.organization?.name ?? (me.value?.platf
 const askAvailable = computed(() => me.value?.organization != null && isOrganizationRoute(route.path))
 const askOpen = ref(false)
 const operatorPanel = ref<InstanceType<typeof OperatorPanel> | null>(null)
+
+provide(OPERATOR_LAUNCHER, (personId) => {
+  if (!askAvailable.value) return
+  const open = () => {
+    askOpen.value = true
+    void nextTick(() => operatorPanel.value?.focus())
+  }
+  if (personId) {
+    const organization = orgId.value
+    void router.push(`/people/${encodeURIComponent(personId)}`).then(() => {
+      if (organization === orgId.value && askAvailable.value) open()
+    }).catch(() => {})
+  } else open()
+})
 
 function toggleAsk() {
   if (!askAvailable.value) return
@@ -189,7 +200,7 @@ function onWindowKeydown(event: KeyboardEvent) {
   // Esc closes the drawer only when no floating surface (PrimeVue Dialog,
   // Select menu) is open — those listen on `document` without stopping
   // propagation, and one Esc must not dismiss both.
-  if (event.key === 'Escape' && askOpen.value && !document.querySelector('[role="dialog"], [role="listbox"]')) {
+  if (event.key === 'Escape' && askOpen.value && !document.querySelector('[role="dialog"]:not([data-testid="person-preview"]), [role="listbox"]')) {
     closeAsk()
   }
 }
@@ -207,30 +218,43 @@ function logout() {
 </script>
 
 <template>
-  <div class="flex min-h-screen bg-surface-1">
-    <aside class="flex w-[280px] shrink-0 flex-col border-r border-border bg-surface-0">
-      <div class="px-6 py-3">
+  <div class="flex min-h-screen bg-surface-0">
+    <aside class="app-sidebar sticky top-0 flex h-dvh shrink-0 flex-col border-r border-border bg-surface-1">
+      <div class="sidebar-brand px-5 py-4">
         <img
-          src="/brand/elysium-lockup-horizontal-name-indigo.svg"
+          src="/brand/elysium-lockup-horizontal-name-black.svg"
           alt="Elysium CRM"
           width="164"
           height="48"
-          class="h-12 w-[164px]"
+          class="h-10 w-[140px]"
         >
       </div>
 
-      <nav class="flex-1 space-y-6 overflow-y-auto px-3 py-2">
+      <div class="sidebar-org mb-4 flex items-center gap-2.5 px-5 text-small text-text-muted">
+        <span class="glass-control flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-text">{{ initials(orgLabel) }}</span>
+        <span
+          class="truncate"
+          :title="orgLabel"
+        >{{ orgLabel }}</span>
+      </div>
+
+      <nav
+        aria-label="Main navigation"
+        class="flex-1 space-y-5 overflow-y-auto px-2 py-3 md:px-3 md:py-2"
+      >
         <div
           v-for="group in navGroups"
           :key="group.label"
         >
-          <p class="mb-1 px-3 text-small font-medium text-text-muted">
+          <p class="sidebar-group-label mb-1 px-3 text-small text-text-subtle">
             {{ group.label }}
           </p>
           <RouterLink
             v-for="item in group.items"
             :key="item.to"
             :to="item.to"
+            :title="item.label"
+            :aria-label="item.label"
             :class="navItemClass"
             :active-class="navItemActiveClass"
           >
@@ -239,7 +263,7 @@ function logout() {
               class="h-[18px] w-[18px] shrink-0"
               stroke-width="1.5"
             />
-            {{ item.label }}
+            <span class="sidebar-label">{{ item.label }}</span>
           </RouterLink>
         </div>
       </nav>
@@ -270,26 +294,23 @@ function logout() {
             class="h-[18px] w-[18px] shrink-0"
             stroke-width="1.5"
           />
-          Platform
+          <span class="sidebar-label">Platform</span>
         </RouterLink>
       </div>
 
       <div
         v-if="me"
-        class="border-t border-border p-3"
+        class="border-t border-border p-1 md:p-3"
       >
-        <div class="flex items-center gap-3 rounded-lg p-2">
+        <div class="flex flex-wrap items-center justify-center gap-2 rounded-lg p-1 md:justify-start md:p-2">
           <div
-            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-2 text-small font-medium text-text-muted"
+            class="avatar-surface h-8 w-8"
           >
             {{ initials(me.user.display_name) }}
           </div>
-          <div class="min-w-0 flex-1">
+          <div class="sidebar-user-copy min-w-0 flex-1">
             <p class="truncate text-body font-medium text-text">
               {{ me.user.display_name }}
-            </p>
-            <p class="truncate text-small text-text-muted">
-              {{ orgLabel }}
             </p>
           </div>
           <button
@@ -312,7 +333,7 @@ function logout() {
     <div class="flex min-w-0 flex-1">
       <div class="relative min-w-0 flex-1 overflow-y-auto">
         <div
-          class="mx-auto max-w-[1280px] px-10 py-10"
+          class="app-content mx-auto max-w-[1800px]"
           :class="askAvailable ? 'pb-24' : ''"
         >
           <div
@@ -352,11 +373,11 @@ function logout() {
       >
         <div
           v-if="askAvailable && !askOpen"
-          class="pointer-events-none fixed bottom-6 left-[280px] right-0 z-40 flex justify-center"
+          class="pointer-events-none fixed bottom-5 left-16 right-0 z-30 flex justify-center md:left-[220px]"
         >
           <button
             type="button"
-            class="pointer-events-auto inline-flex h-12 items-center gap-2.5 rounded-full bg-accent pl-4 pr-5 text-body font-medium text-white shadow-floating transition-all duration-150 ease-out hover:-translate-y-0.5 hover:bg-accent-hover hover:shadow-[0_12px_32px_rgb(0_0_0_/_0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface-1 active:translate-y-0"
+            class="glass-control pointer-events-auto inline-flex h-11 items-center gap-2.5 rounded-full pl-4 pr-5 text-small text-text-muted shadow-floating transition-colors duration-150 hover:text-text focus-visible:ring-2 focus-visible:ring-focus"
             data-testid="ask-toggle"
             @click="toggleAsk"
           >
@@ -365,7 +386,7 @@ function logout() {
               stroke-width="1.75"
             />
             Ask AI Operator
-            <kbd class="ml-1 rounded-md bg-white/15 px-1.5 text-[11px] font-medium text-white/80">⌘K</kbd>
+            <kbd class="ml-1 rounded-md border border-border px-1.5 text-small text-text-subtle">⌘K</kbd>
           </button>
         </div>
       </Transition>
@@ -379,7 +400,7 @@ function logout() {
           v-if="askAvailable"
           v-show="askOpen"
           ref="operatorPanel"
-          class="sticky top-0 h-screen"
+
           @close="closeAsk"
         />
       </Transition>

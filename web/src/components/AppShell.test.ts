@@ -3,7 +3,8 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { createMemoryHistory, createRouter, type Router } from 'vue-router'
-import { ref } from 'vue'
+import { defineComponent, h, inject, ref, type Component } from 'vue'
+import { OPERATOR_LAUNCHER } from '../lib/operatorLauncher'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { MeResponse } from '../api/types'
 import AppShell from './AppShell.vue'
@@ -46,7 +47,7 @@ function platformSession(): MeResponse {
   } as unknown as MeResponse
 }
 
-async function mountShell(path: string, me: MeResponse): Promise<{ wrapper: ReturnType<typeof mount>; router: Router }> {
+async function mountShell(path: string, me: MeResponse, content: string | Component = '<p>content</p>'): Promise<{ wrapper: ReturnType<typeof mount>; router: Router }> {
   meRef.value = me
   const router = createRouter({
     history: createMemoryHistory(),
@@ -62,7 +63,7 @@ async function mountShell(path: string, me: MeResponse): Promise<{ wrapper: Retu
   await router.isReady()
   const wrapper = mount(AppShell, {
     global: { plugins: [router, [VueQueryPlugin, { queryClient: new QueryClient() }]] },
-    slots: { default: '<p>content</p>' },
+    slots: { default: typeof content === 'string' ? content : () => h(content) },
     attachTo: document.body,
   })
   await flushPromises()
@@ -151,4 +152,32 @@ describe('AppShell Ask drawer', () => {
     expect(b.wrapper.find('[data-testid="ask-toggle"]').exists()).toBe(false)
     b.wrapper.unmount()
   })
+})
+
+
+it('opens the person route before launching the Operator without sending a turn', async () => {
+  const personId = '55555555-5555-5555-5555-555555555555'
+  const Launcher = defineComponent({
+    setup() { return { launch: inject(OPERATOR_LAUNCHER)!, personId } },
+    template: '<button data-testid="preview-ask" @click="launch(personId)">Ask about person</button>',
+  })
+  const { wrapper, router } = await mountShell('/people', orgSession(), Launcher)
+  await wrapper.get('[data-testid="preview-ask"]').trigger('click')
+  await flushPromises()
+  expect(router.currentRoute.value.path).toBe(`/people/${personId}`)
+  expect(wrapper.get('[data-testid="operator-panel"]').isVisible()).toBe(true)
+  expect(wrapper.get('[data-testid="operator-input"]').element).toBe(document.activeElement)
+  expect(wrapper.get('[data-testid="operator-input"]').text()).toBe('')
+  wrapper.unmount()
+})
+
+
+it('allows Escape to close Operator over the non-modal person inspector', async () => {
+  const { wrapper } = await mountShell('/people', orgSession(), '<section role="dialog" data-testid="person-preview">Person</section>')
+  await wrapper.get('[data-testid="ask-toggle"]').trigger('click')
+  keydown({ key: 'Escape' })
+  await flushPromises()
+  expect(wrapper.get('[data-testid="operator-panel"]').isVisible()).toBe(false)
+  expect(wrapper.find('[data-testid="person-preview"]').exists()).toBe(true)
+  wrapper.unmount()
 })

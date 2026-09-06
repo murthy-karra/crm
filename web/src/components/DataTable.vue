@@ -1,16 +1,7 @@
 <script setup lang="ts" generic="TData extends object">
-// Shared TanStack Table wrapper per docs/design/UI_STYLE.md §6 ("Sample 2
-// is the reference"). No pagination this slice (spec §12 explicit
-// exclusion) — the footer shows only a row count and a `truncated` notice.
-//
-// Row navigation (only when `rowTo` is given — the Unresolved queue has no
-// detail view this slice, spec §12, so its rows are plain data): the row
-// is a real link, not a button. The first cell's content is wrapped in an
-// actual <RouterLink> (real tab order, Enter-to-activate, screen-reader
-// "link" role, ctrl/cmd-click and right-click "open in new tab" all work
-// natively). The rest of the row additionally forwards a plain click to
-// the same destination as a mouse convenience — a harmless duplicate
-// navigation to the row's own target.
+// Shared TanStack table. People uses D-045's inspector on plain activation;
+// real hrefs preserve new-tab/context-menu behavior. Other tables keep their
+// existing navigation or action callbacks. Counts come from returned rows.
 import { computed, type Component } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { FlexRender, getCoreRowModel, useVueTable, type ColumnDef } from '@tanstack/vue-table'
@@ -25,6 +16,7 @@ const props = defineProps<{
   /** Row click as an action (e.g. open a dialog) instead of a route.
    *  SLICE_007e: the Unresolved table's admin-only detail dialog. */
   onRowClick?: (row: TData) => void
+  selectedRowKey?: string
   /** Noun for the footer count, e.g. "people", "unresolved leads". */
   countNoun: string
   /** Singular form used when the count is exactly 1, e.g. "person", "unresolved lead". Defaults to `countNoun`. */
@@ -61,6 +53,19 @@ function navigate(row: TData) {
     // first cell's real <RouterLink> may have already triggered it) —
     // nothing to report.
   })
+}
+
+function clickRow(event: MouseEvent, row: TData) {
+  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+  if (event.target instanceof Element && event.target.closest('a,button,input,select,textarea')) return
+  navigate(row)
+}
+
+function clickLink(event: MouseEvent, row: TData) {
+  event.stopPropagation()
+  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+  event.preventDefault()
+  navigate(row)
 }
 </script>
 
@@ -134,7 +139,8 @@ function navigate(row: TData) {
               :key="rowKey(row.original)"
               class="h-14 border-t border-border"
               :class="rowTo || onRowClick ? 'cursor-pointer hover:bg-surface-1' : ''"
-              @click="navigate(row.original)"
+              :data-selected="selectedRowKey === rowKey(row.original)"
+              @click="clickRow($event, row.original)"
             >
               <td
                 v-for="(cell, index) in row.getVisibleCells()"
@@ -142,17 +148,29 @@ function navigate(row: TData) {
                 class="px-5 align-middle text-body text-text"
                 :class="cell.column.columnDef.meta?.align === 'right' ? 'text-right tabular-nums' : ''"
               >
-                <RouterLink
+                <a
                   v-if="rowTo && index === 0"
-                  :to="rowTo(row.original)"
-                  tabindex="-1"
-                  class="contents"
+                  :href="router.resolve(rowTo(row.original)).href"
+                  class="flex min-h-10 items-center rounded-md"
+                  :aria-haspopup="onRowClick ? 'dialog' : undefined"
+                  @click="clickLink($event, row.original)"
                 >
                   <FlexRender
                     :render="cell.column.columnDef.cell"
                     :props="cell.getContext()"
                   />
-                </RouterLink>
+                </a>
+                <button
+                  v-else-if="onRowClick && index === 0"
+                  type="button"
+                  class="flex min-h-10 items-center text-left"
+                  @click.stop="navigate(row.original)"
+                >
+                  <FlexRender
+                    :render="cell.column.columnDef.cell"
+                    :props="cell.getContext()"
+                  />
+                </button>
                 <FlexRender
                   v-else
                   :render="cell.column.columnDef.cell"

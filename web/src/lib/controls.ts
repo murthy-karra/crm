@@ -15,8 +15,8 @@ export type BadgeTint = 'warm' | 'neutral' | 'indigo' | 'green' | 'red'
 const BUTTON_BASE = `inline-flex items-center justify-center gap-2 h-10 px-4 rounded-lg text-body font-medium whitespace-nowrap transition-colors duration-150 ease-out disabled:opacity-50 disabled:pointer-events-none ${FOCUS_RING} focus-visible:ring-offset-surface-1`
 
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
-  primary: `${BUTTON_BASE} bg-accent text-white hover:bg-accent-hover`,
-  secondary: `${BUTTON_BASE} bg-surface-0 text-text border border-border hover:bg-surface-1`,
+  primary: `${BUTTON_BASE} glass-primary bg-accent text-white hover:bg-accent-hover`,
+  secondary: `${BUTTON_BASE} glass-control text-text-muted hover:text-text`,
   ghost: `${BUTTON_BASE} bg-transparent text-text hover:bg-surface-2`,
   // SLICE_004: the confirm action for Deactivate/Revoke. Not in UI_STYLE.md
   // §5's control list, but built from its own §3 token ("danger: destructive
@@ -48,7 +48,7 @@ export function selectPt(): SelectPassThroughOptions {
     root: `${INPUT_CLASSES} flex items-center justify-between gap-2 cursor-pointer text-left`,
     label: 'truncate',
     dropdownIcon: 'w-4 h-4 text-text-muted shrink-0',
-    overlay: 'bg-surface-0 border border-border rounded-xl shadow-floating py-1 z-50',
+    overlay: 'glass-panel py-1 z-50',
     // The scroll belongs on `listContainer`, not on the `list` <ul>.
     // PrimeVue puts an inline `max-height: {scrollHeight}` (14rem) on the
     // container but, unstyled, ships no `overflow` for it, so a taller
@@ -71,21 +71,14 @@ export function selectPt(): SelectPassThroughOptions {
   }
 }
 
-/**
- * PT object for PrimeVue's unstyled `Dialog` (UI_STYLE.md §2 "Floating
- * surfaces (dialogs, popovers, select menus): white, radius 12px, 1px
- * border plus a soft shadow — the only place shadows appear"; §8 "150ms
- * ease-out on ... menus"). `closable: false` on every caller (no styled
- * close-button pt needed) — a Cancel button in the footer plus the default
- * mask-click/Escape dismissal cover it.
- */
+/** D-045 glass dialog; PrimeVue retains focus and dismissal behavior. */
 export function dialogPt(): DialogPassThroughOptions {
   return {
     mask: {
       class: 'fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4',
     },
     root: {
-      class: 'w-full max-w-md rounded-xl border border-border bg-surface-0 shadow-floating',
+      class: 'glass-panel w-full max-w-md',
     },
     header: {
       class: 'flex items-center justify-between gap-4 px-5 pt-5',

@@ -79,7 +79,7 @@ const optionError = computed(() => optionKind.value === 'stage' ? props.stagesEr
 const optionNoun = computed(() => optionKind.value === 'stage' ? 'stages' : optionKind.value === 'assigned_to' ? 'assignees' : 'sources')
 
 const popoverPt: PopoverPassThroughOptions = {
-  root: 'z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-border bg-surface-0 text-text shadow-floating',
+  root: 'glass-panel z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] text-text',
   content: 'p-4',
 }
 const rowClasses = 'flex min-h-10 w-full items-center gap-3 rounded-lg px-2 py-2 text-left text-body text-text hover:bg-surface-1'
@@ -277,7 +277,7 @@ function onHide() {
 </script>
 
 <template>
-  <div class="mb-4 flex flex-col gap-3">
+  <div class="mb-3 flex flex-col gap-3">
     <div
       ref="toolbar"
       class="flex flex-wrap items-center gap-2"

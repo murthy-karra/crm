@@ -261,6 +261,10 @@ editing stages is a later broker-administration feature.
 
 ### D-020 — Hot Prospect carries a stage marker; no other stage does (2026-08-21)
 
+**Visual policy amended by D-045 (2026-09-06):** muted tints are now
+authorized for Lead, Active Client, Nurture and Hot Prospect. Name matching
+and neutral treatment of custom stages remain unchanged.
+
 Accepted. The Hot Prospect stage renders a 16 px Lucide `Flame` in `danger`
 red before its name everywhere a stage name appears: the People table's
 stage badge, and the Person detail stage `Select`'s value and its options.
@@ -1580,3 +1584,29 @@ Blocks: nothing immediately. Question 1 is actionable now; questions 2
 and 3 are forced by the recordings slice (O-012 territory), which
 should absorb whole-message relocation in the same slice rather than
 building object storage twice.
+
+
+### D-045 — Attio-inspired white workspace with selective glass (2026-09-06)
+
+Accepted (user, after iterative screenshot review; explicitly requested a
+checkpoint commit before applying). Approved reference:
+`docs/design/concepts/people-attio-glass-approved.png`.
+
+- Preserve a minimal white/black foundation. Use compact headings, muted but
+  readable text, fewer redundant labels, fine borders and flat data tables.
+- Add Apple-inspired glass selectively to navigation selection, controls,
+  badges and the floating person inspector: translucent white, reflective
+  edges and shallow shadows. No colorful backgrounds or heavy refraction.
+- Stage badges may use muted blue (Lead), sage (Active Client), lavender
+  (Nurture), and clay (Hot Prospect). Hot Prospect retains its flame. This
+  supersedes D-020's no-other-stage-color restriction; normalized-name matching
+  still applies, with neutral custom/renamed stages. No stage schema changes.
+- People gains a preview alongside the table without losing list context;
+  full-profile links remain available. Use current data and capabilities only.
+- Black primary controls and the existing black D-044 brand assets are
+  authorized. The underlying Threshold E identity remains unchanged.
+- This supersedes UI_STYLE's previous fixed typography, card-only layout and
+  shadow/no-gradient restrictions for the approved glass surfaces. Functional
+  specifications, authorization and shared wire contracts are unchanged.
+
+Implementation brief: `docs/tasks/UI_REFRESH.md`.

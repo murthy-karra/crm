@@ -5,7 +5,7 @@ import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, apiFetch } from '../api/client'
 import { queryKeys } from '../api/queries'
-import type { FilterClause, InquirySourcesResponse, MeResponse, PeopleResponse } from '../api/types'
+import type { FilterClause, InquirySourcesResponse, MeResponse, PeopleResponse, PersonDetailResponse } from '../api/types'
 import FilterBar from '../components/FilterBar.vue'
 import PeopleView from './PeopleView.vue'
 
@@ -55,6 +55,7 @@ function deferred<T>() {
 interface StubOptions {
   people?: (filter: string | null) => PeopleResponse | Promise<PeopleResponse> | ApiError
   sources?: () => InquirySourcesResponse | Promise<InquirySourcesResponse>
+  person?: (id: string) => PersonDetailResponse | Promise<PersonDetailResponse> | ApiError
 }
 function stub(options: StubOptions = {}) {
   apiFetchMock.mockImplementation(async (path: string) => {
@@ -62,6 +63,11 @@ function stub(options: StubOptions = {}) {
     if (path === '/stages') return { stages: [{ id: STAGE_ID, name: 'Lead', position: 1 }] }
     if (path === '/organization/members') return { members: [] }
     if (path === '/inquiry-sources') return options.sources?.() ?? { sources: ['website', 'zillow'], truncated: false }
+    if (path.startsWith('/people/')) {
+      const response = options.person?.(path.slice('/people/'.length)) ?? detail()
+      if (response instanceof ApiError) throw response
+      return response
+    }
     if (path.startsWith('/people')) {
       const filter = new URL(path, 'http://test').searchParams.get('filter')
       const response = options.people?.(filter) ?? result()
@@ -384,5 +390,104 @@ describe('People result feedback and failures', () => {
     expect(wrapper.findComponent(FilterBar).props('sources')).toEqual(['referral'])
     expect(wrapper.findComponent(FilterBar).props('sourcesTruncated')).toBe(true)
     expect(wrapper.findComponent(FilterBar).props('sourcesError')).toBe(false)
+  })
+})
+
+
+function detail(name = 'Grace Hopper', id = PERSON_ID): PersonDetailResponse {
+  return {
+    person: { ...result(name).people[0]!, id },
+    contact_methods: [{ id: 'email-1', kind: 'email', value: 'grace@example.com' }],
+    inquiries: [{ id: 'inquiry-1', source: 'website', source_external_id: null, message: null, received_at: '2026-08-22T09:00:00.000Z' }],
+    history: [],
+  }
+}
+
+describe('People inspector', () => {
+  it('loads on selection, preserves filtered URL, and returns focus on Escape', async () => {
+    stub()
+    const { wrapper, router, queryClient } = await mountView(filteredPath(phoneFilter))
+    const link = wrapper.get(`a[href="/people/${PERSON_ID}"]`)
+    expect(wrapper.find('[data-testid="person-preview"]').exists()).toBe(false)
+    expect(peoplePaths().some((path) => path.startsWith('/people/'))).toBe(false)
+    await link.trigger('click')
+    await flushPromises()
+    const preview = wrapper.get('[data-testid="person-preview"]')
+    expect(preview.text()).toContain('Grace Hopper')
+    expect(preview.text()).toContain('Latest source')
+    expect(preview.text()).toContain('website')
+    expect(preview.get('a[aria-label="Open full profile"]').attributes('href')).toBe(`/people/${PERSON_ID}`)
+    expect(router.currentRoute.value.path).toBe('/people')
+    expect(router.currentRoute.value.query.filter).toBe(serialized(phoneFilter))
+    expect(queryClient.getQueryData(queryKeys.person(ORG_ID, PERSON_ID))).toEqual(detail())
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await flushPromises()
+    expect(wrapper.find('[data-testid="person-preview"]').exists()).toBe(false)
+    expect(document.activeElement).toBe(link.element)
+  })
+
+  it('does not intercept modified links and keeps full-profile navigation available', async () => {
+    stub()
+    const { wrapper, router } = await mountView()
+    await wrapper.get(`a[href="/people/${PERSON_ID}"]`).trigger('click', { ctrlKey: true })
+    expect(wrapper.find('[data-testid="person-preview"]').exists()).toBe(false)
+    await wrapper.get(`a[href="/people/${PERSON_ID}"]`).trigger('click')
+    await flushPromises()
+    await wrapper.get('[aria-label="Open full profile"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe(`/people/${PERSON_ID}`)
+  })
+
+  it('does not show a slow previous person after switching, and clears on organization changes', async () => {
+    const secondId = '66666666-6666-6666-6666-666666666666'
+    const pending = deferred<PersonDetailResponse>()
+    stub({
+      people: () => ({ people: [detail().person, detail('Ada Lovelace', secondId).person], truncated: false }),
+      person: (id) => id === PERSON_ID ? pending.promise : detail('Ada Lovelace', secondId),
+    })
+    const { wrapper, queryClient } = await mountView()
+    await wrapper.get(`a[href="/people/${PERSON_ID}"]`).trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="person-preview"]').text()).toContain('Loading person')
+    await wrapper.get(`a[href="/people/${secondId}"]`).trigger('click')
+    await flushPromises()
+    pending.resolve(detail())
+    await flushPromises()
+    expect(wrapper.get('[data-testid="person-preview"]').text()).toContain('Ada Lovelace')
+    expect(wrapper.get('[data-testid="person-preview"]').text()).not.toContain('Grace Hopper')
+    queryClient.setQueryData(queryKeys.me, me('another-organization'))
+    await flushPromises()
+    expect(wrapper.find('[data-testid="person-preview"]').exists()).toBe(false)
+    expect(queryClient.getQueryData(queryKeys.person('another-organization', secondId))).toBeUndefined()
+  })
+
+  it('closes the preview when the filter changes', async () => {
+    stub()
+    const { wrapper } = await mountView()
+    await wrapper.get(`a[href="/people/${PERSON_ID}"]`).trigger('click')
+    await flushPromises()
+    edit(wrapper, phoneFilter)
+    await flushPromises()
+    expect(wrapper.find('[data-testid="person-preview"]').exists()).toBe(false)
+  })
+
+  it('shows a retryable error and never exposes details after access is lost', async () => {
+    let failure = true
+    stub({ person: () => failure ? new ApiError(503, 'unavailable') : detail() })
+    const { wrapper, queryClient } = await mountView()
+    await wrapper.get(`a[href="/people/${PERSON_ID}"]`).trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="person-preview"] [role="alert"]').exists()).toBe(true)
+    expect(wrapper.find('[aria-label="Open email app"]').exists()).toBe(false)
+    failure = false
+    await wrapper.get('[data-testid="person-preview"] [role="alert"] button').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[aria-label="Open email app"]').exists()).toBe(true)
+    stub({ person: () => new ApiError(404, 'not_found') })
+    await queryClient.invalidateQueries({ queryKey: queryKeys.person(ORG_ID, PERSON_ID) })
+    await flushPromises()
+    expect(wrapper.get('[data-testid="person-preview"]').text()).toContain('no longer available')
+    expect(wrapper.get('[data-testid="person-preview"]').text()).not.toContain('Grace Hopper')
+    expect(wrapper.find('[aria-label="Open email app"]').exists()).toBe(false)
   })
 })

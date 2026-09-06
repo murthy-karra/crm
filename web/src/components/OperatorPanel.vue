@@ -198,7 +198,7 @@ defineExpose({ focus: () => textarea.value?.focus() })
 
 <template>
   <aside
-    class="flex h-full w-[420px] shrink-0 flex-col border-l border-border bg-surface-0"
+    class="glass-panel fixed inset-y-3 right-3 z-40 flex w-[min(420px,calc(100vw-88px))] flex-col overflow-hidden xl:sticky xl:top-3 xl:my-3 xl:mr-3 xl:h-[calc(100dvh-24px)] xl:shrink-0"
     aria-label="Ask the Operator"
     data-testid="operator-panel"
   >

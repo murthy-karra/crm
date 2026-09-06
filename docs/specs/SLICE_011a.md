@@ -319,6 +319,11 @@ the new row) ride with this slice's implementation.
 
 ## 6. Web — PeopleView FilterBar
 
+**Visual amendment (D-045, 2026-09-06):** the compact People workspace and
+read-only inspector follow `docs/tasks/UI_REFRESH.md`. All filter semantics
+and state handling below remain unchanged; glass styling adds no new filter
+axes, People search, sorting or saved lists.
+
 **Frontend amendment, 2026-09-06:** the user authorized an incremental
 bug-fix/UX pass after the People-filter review. These updates only
 change Web interaction; §4's vocabulary and semantics, §5's HTTP

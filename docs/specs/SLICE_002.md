@@ -580,6 +580,11 @@ views/{LoginView, PeopleView, PersonDetailView, UnresolvedView, NewInquiryView}.
 App.vue                    shell + <RouterView/>
 ```
 
+**Visual amendment (D-045, 2026-09-06):** People uses the compact table and
+person inspector specified in `docs/tasks/UI_REFRESH.md`. Shared visual
+metrics follow the current UI_STYLE. The inspector reuses GET Person; all
+original data and command contracts below remain unchanged.
+
 Screens, per `UI_STYLE.md` §6–7: **People** — page header with "New
 lead" as the primary action, one card containing the table (name over
 primary email, stage badge, assignee, inquiry count, last inquiry, row

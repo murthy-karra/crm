@@ -45,6 +45,7 @@ pub fn build_app(state: AppState) -> Router {
             .merge(routes::session::router())
             .merge(routes::organization::router())
             .merge(routes::people::router())
+            .merge(routes::saved_lists::router())
             .merge(routes::inquiry_sources::router())
             .merge(routes::intake::router())
             .merge(routes::stages::router())

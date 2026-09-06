@@ -110,6 +110,9 @@ mod db_realtime;
 #[path = "db_schema.rs"]
 mod db_schema;
 
+#[path = "db_saved_lists.rs"]
+mod db_saved_lists;
+
 #[path = "db_today.rs"]
 mod db_today;
 
@@ -142,6 +145,9 @@ mod people;
 
 #[path = "realtime.rs"]
 mod realtime;
+
+#[path = "saved_lists.rs"]
+mod saved_lists;
 
 #[path = "session.rs"]
 mod session;

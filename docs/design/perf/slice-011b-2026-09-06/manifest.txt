@@ -1,0 +1,13 @@
+Slice 011b targeted plan evidence
+source_revision=1635fc4
+database_name=crm_011b_perf_20260906_132832_42737
+fixture_people=50000
+fixture_with_phone=49500
+fixture_without_phone=500
+predicates=dense has_phone=true; sparse/absence has_phone=false
+plans=count + existing filtered_summaries shape, same matrix values per predicate
+psql_transport=docker
+results_note=No timing or plan claim is pre-recorded. metrics.txt is generated only from this run's JSON plans.
+source_revision_note=HEAD above is the base revision; this run measured the uncommitted Slice 011b implementation.
+source_sha256 27cc0b0ba55cd73934f5cd351817f330357a1347122f59dbb74391232a87c2e2 backend/crates/crm-app/src/domain/person/queries.rs
+source_sha256 e6b2bfd82e6687ceb0fe17dea4017b8ad5bb8ca00cd02b64e5cf4b94e8ac13e4 backend/crates/crm-api/migrations/20260906000001_saved_list.sql

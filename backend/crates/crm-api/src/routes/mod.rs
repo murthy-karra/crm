@@ -11,6 +11,7 @@ pub mod organization;
 pub mod people;
 pub mod platform;
 pub mod realtime;
+pub mod saved_lists;
 pub mod session;
 pub mod stages;
 pub mod today;

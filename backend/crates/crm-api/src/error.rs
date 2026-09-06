@@ -8,6 +8,7 @@ use crate::domain::capture::commands::CaptureCommandError;
 use crate::domain::commands::{CallError, CommandError};
 use crate::domain::intake::workbench::WorkbenchError;
 use crate::domain::person::filter::FilterError;
+use crate::domain::saved_list::SavedListError;
 
 /// `{"error": "<code>"}` envelope shared across authenticated endpoints
 /// (docs/specs/SLICE_001.md §4). Slice 002 (docs/specs/SLICE_002.md §5)
@@ -92,6 +93,12 @@ pub enum ApiError {
     /// with the requested transition: re-link with a different Person,
     /// link-after-dismissed, or dismiss-after-linked.
     CaptureConflict,
+    // --- Slice 011b (docs/specs/SLICE_011b.md §5) ----------------------
+    SavedListConflict,
+    SavedListRequestConflict,
+    SavedListDeleted,
+    SavedListLimitReached,
+    UnsupportedFilter,
 }
 
 impl IntoResponse for ApiError {
@@ -168,6 +175,17 @@ impl IntoResponse for ApiError {
             ApiError::CorrectionConflict => (StatusCode::CONFLICT, "correction_conflict", None),
             ApiError::PayloadTooLarge => (StatusCode::PAYLOAD_TOO_LARGE, "payload_too_large", None),
             ApiError::CaptureConflict => (StatusCode::CONFLICT, "capture_conflict", None),
+            ApiError::SavedListConflict => (StatusCode::CONFLICT, "saved_list_conflict", None),
+            ApiError::SavedListRequestConflict => {
+                (StatusCode::CONFLICT, "saved_list_request_conflict", None)
+            }
+            ApiError::SavedListDeleted => (StatusCode::CONFLICT, "saved_list_deleted", None),
+            ApiError::SavedListLimitReached => {
+                (StatusCode::CONFLICT, "saved_list_limit_reached", None)
+            }
+            ApiError::UnsupportedFilter => {
+                (StatusCode::UNPROCESSABLE_ENTITY, "unsupported_filter", None)
+            }
         };
 
         let body = Json(json!({ "error": code }));
@@ -288,6 +306,31 @@ impl From<FilterError> for ApiError {
             FilterError::InvalidStage => ApiError::InvalidStage,
             FilterError::InvalidAssignee => ApiError::InvalidAssignee,
             FilterError::Database(_) => ApiError::Unavailable,
+        }
+    }
+}
+
+/// Saved-list command/read errors use the existing envelope and preserve the
+/// resource's intentionally non-leaking authorization semantics. Corrupt
+/// stored definition data and a revision ceiling are operational failures,
+/// never user-input or information-bearing errors.
+impl From<SavedListError> for ApiError {
+    fn from(err: SavedListError) -> Self {
+        match err {
+            SavedListError::Unauthenticated => ApiError::Unauthenticated,
+            SavedListError::NotFound => ApiError::NotFound,
+            SavedListError::Forbidden => ApiError::Forbidden,
+            SavedListError::MalformedRequest => ApiError::MalformedRequest,
+            SavedListError::Conflict => ApiError::SavedListConflict,
+            SavedListError::RequestConflict => ApiError::SavedListRequestConflict,
+            SavedListError::Deleted => ApiError::SavedListDeleted,
+            SavedListError::LimitReached => ApiError::SavedListLimitReached,
+            SavedListError::InvalidStage => ApiError::InvalidStage,
+            SavedListError::InvalidAssignee => ApiError::InvalidAssignee,
+            SavedListError::UnsupportedFilter => ApiError::UnsupportedFilter,
+            SavedListError::RevisionExhausted
+            | SavedListError::Corrupt
+            | SavedListError::Database(_) => ApiError::Unavailable,
         }
     }
 }

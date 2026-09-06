@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) as \"count!\"\n                   FROM saved_list\n                   WHERE organization_id = $1\n                     AND created_by_user_id = $2\n                     AND scope = 'personal'\n                     AND deleted_at IS NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "6c4dc978e83821a2680d7a8f5957a235019d03f517e433786cf828e2c16f35f9"
+}

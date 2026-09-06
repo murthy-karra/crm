@@ -80,7 +80,14 @@ export function invalidationsFor(event: unknown, orgId: string): QueryKey[] {
     case 'person.changed': {
       const personId = typeof data.person_id === 'string' ? data.person_id : ''
       if (personId === '') return []
-      const keys: QueryKey[] = [queryKeys.person(orgId, personId), queryKeys.people(orgId), queryKeys.today(orgId)]
+      const keys: QueryKey[] = [
+        queryKeys.person(orgId, personId),
+        queryKeys.people(orgId),
+        queryKeys.today(orgId),
+        // Saved-list counts are current query results. No saved-list id or
+        // criteria travels on the Organization realtime channel.
+        queryKeys.savedListCounts(orgId),
+      ]
       // §6: a re-POST that resolves a `pending` row removes it from the
       // unresolved queue but publishes only `person.changed` — so the
       // `inquiry_received` change also invalidates the unresolved list.

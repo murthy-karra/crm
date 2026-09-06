@@ -1,37 +1,48 @@
 # Project State
 
-Last updated: 2026-08-29 (file restructured: stale per-slice
-narratives compressed into the ledger below; every still-operational
-residual preserved under "Live residuals". Full history remains in
-this file's git history and in the per-slice specs.)
+Last updated: 2026-09-06 (Slice 011b implemented and verified locally;
+Terra/ultra implementation, Astra/ultra coordination/review).
 
 ## Current phase
 
-**Slice 011b (saved lists) — SPEC PHASE, in progress (2026-08-29).**
-Planner ground-truth survey complete (schema/command/HTTP/web
-precedents, viewer-relative `me` confirmed workable for shared lists,
-stale-reference posture, count-query shape). FUB details re-verified
-per D-043's spec-time instruction: FUB personal (unshared) smart
-lists are creator-only; admins fully manage shared lists; a saved
-sort order is part of a FUB list's definition.
+**Slice 011b (saved lists) — IMPLEMENTED AND VERIFIED LOCALLY.**
+The user authorized starting the slice with **Astra / ultra** for
+specification, coordination, and independent review, and **Terra / ultra**
+for implementation, tests, and fixes. This supersedes the older
+Sonnet/Fable assignment for this slice. The spec and implementation brief
+were drafted against `1635fc4`, which includes the 011a filter UX
+fixes (`0117b87`) and D-045 workspace/Person-preview changes. Independent Astra/ultra specification review is **READY** after corrections.
+The user approved the slice after reading the plain-language companion;
+implementation, tests and fixes are authorized.
+
+The implementation now passes the full repository and database gates, the
+synthetic browser walkthrough and independent source/performance review.
+Personal/shared lists, counts, copy/edit/delete flows, privacy and recovery are
+implemented. The user approved local commit and merge on 2026-09-06. See
+[verification evidence](../tasks/SLICE_011b_VERIFICATION.md) for actual results
+and limits, including the 50k-Person query plans.
+
+Official FUB guidance was rechecked on 2026-09-06: creating lists from
+People filters, explicit save/update, admin management of shared lists,
+independent duplication, and deletion of only the definition all remain
+supported patterns. D-046, not an inferred FUB policy, is authoritative
+for personal-list privacy and the separate limits.
 
 Decisions taken this phase (user, 2026-08-29):
 
 - **Per-list sort stays OUT of 011b** and becomes its own small
   follow-up rung immediately after 011b (v1 restricted to non-derived
-  columns). Ladder amendment to be recorded when the 011b spec is
-  approved. Rationale recorded: variable ORDER BY vs the fixed-matrix
+  columns). Ladder amendment recorded at 011b spec approval as **011b-sort**.
+  Rationale recorded: variable ORDER BY vs the fixed-matrix
   static-SQL discipline, and sort determines WHICH 500 rows survive
   truncation on >500-match lists.
 
-Decisions still pending (asked, awaiting the user):
+Decisions accepted at restart (user, 2026-09-06; **D-046**):
 
-- List-cap shape. Recommended: shared ≤200/org, personal ≤50/owner,
-  no combined cap (caps are counts of saved lists — engineering
-  guardrails bounding the Lists-index/Today evaluation cost, not
-  product limits).
-- Personal-list privacy. Recommended: owner-only, admins included
-  (matches FUB; private-then-open is reversible, the reverse is not).
+- Personal list names and criteria are creator-only, including from admins.
+  Organization-wide Person visibility is unchanged.
+- Shared lists ≤200/Organization plus personal lists ≤50/creator/Organization;
+  no combined cap. These count definitions, not People matching a list.
 
 Also 2026-08-29: a three-agent docs-freshness audit ran over the whole
 docs tree; the spec supersession-pointer chain verified fully intact
@@ -61,23 +72,23 @@ clear-all.
 
 ## Current slice
 
-Slice 011b — Saved lists — spec being drafted (docs/specs/
-SLICE_011b.md does not exist yet). Ladder:
-docs/plans/SLICE_011_LADDER.md (011a done → **011b** → 011c
-lists-feed-Today → 011d tweakable built-ins → 011e tags; plus the
-newly-decided sort rung after 011b).
+Slice 011b — Saved lists — specification `docs/specs/SLICE_011b.md`
+and brief `docs/tasks/SLICE_011b_IMPL.md` are implemented and verified locally. Ladder:
+docs/plans/SLICE_011_LADDER.md (011a done → **011b** → 011b-sort →
+011c lists-feed-Today → 011d tweakable built-ins → 011e tags).
 
 ## Current branch
 
-`main` (`6427ee8`, pushed to origin). Working tree clean apart from
-this planning edit. Undeleted merged branches:
-`slice-011a-filter-vocabulary` (deletion not yet approved).
+`codex/slice-011b-saved-lists`, created from `main` at `1635fc4` after approval.
+Existing uncommitted specification/decision/planning documents were preserved.
+Local commit and merge are approved. Push and deployment remain outside
+the authorization; remote and old-branch cleanup were not performed.
 
 ## Last accepted decision
 
-D-044 (2026-09-03) — the customer-facing product name is Elysium CRM;
-the one-color Threshold E direction and SVG-master logo system are
-approved. D-043 remains the current slice-shaping product decision:
+D-046 (2026-09-06) — creator-only personal lists and separate shared/personal
+caps. D-045 governs the current white/glass Web design; D-044 establishes
+the Elysium CRM identity. D-043 remains the slice-shaping product decision:
 smart lists are first-class and FUB-shaped; lists feed Today; built-in
 Today logic becomes org-tweakable system feeds; the filter model IS the
 Today configuration language. Plus the three ladder-acceptance decisions
@@ -191,17 +202,17 @@ and now lives only in git history.
 
 **For the 011b spec (recorded 2026-08-28, not blocking):**
 - M7 positive span pin (`filter_kinds` values) was skipped in 011a.
-- Dedicated web pins missing (indirect coverage only):
-  `router.go(-1)` rehydrate; zero-clauses-URL-canonicalize;
-  fractional-days-truncate.
+- Resolved in the 2026-09-06 filter UX pass (`0117b87`): dedicated
+  Back/Forward, empty-filter URL normalization, and invalid fractional-day
+  regressions. Fractions are rejected, not truncated, under amended 011a §6.
 - "20 clauses accepted" ceiling is unconstructible (10 kinds ×
   one-per-kind) — record as closed/wontfix; the two reachable
   ceilings are pinned.
 
 **Deferred live walkthroughs (user's choice, test-pinned meanwhile):**
-- 011a §8 walkthrough deferred at the commit gate (2026-08-28) —
-  2026-08-29's filter verification covered the API path live; the
-  browser walkthrough remains open.
+- 011a §8 functional walkthrough completed in the 2026-09-06 filter UX
+  pass before D-045's visual refresh: combined Stage + Me + Source,
+  reload, Clear all, navigation, and invalid-day dismissal verified live.
 - 009 walkthrough steps 3–5 (reply-all→client_replied, retroactive
   forwards, rotation) deferred 2026-08-28; one stray held row was
   left in the capture queue deliberately, for the user to dismiss as
@@ -293,6 +304,23 @@ and now lives only in git history.
 
 ## Latest verification
 
+- 2026-09-06, 011b final implementation tree on
+  `codex/slice-011b-saved-lists`, base `1635fc4`: Terra ran
+  `./scripts/check` (30s; 651 Rust tests, 5 doctests, 388 Web tests,
+  9 email-worker tests, lint/type checking/build) and then
+  `./scripts/check-db` (139s; SQLx prepare check and 379 DB tests), all passing.
+  Astra source/performance review found no remaining actionable finding.
+  Coordinator completed the isolated browser walkthrough and verified both
+  existing People queries plus all 147 prior SQLx files unchanged. Full
+  [evidence and criterion mapping](../tasks/SLICE_011b_VERIFICATION.md) includes
+  the 50k dense/sparse plans and the native-confirm automation limitation.
+- 2026-09-06, 011b documentation phase at `1635fc4`: independent
+  Astra/ultra review READY after A1/A2 and R1–R3 corrections (typed version
+  validation, membership freshness, dirty-copy preservation, uncertain
+  create handling and count concurrency). Coordinator verified all nine
+  relative Markdown file links in the five changed documents and
+  `git diff --check`. No application/DB tests were run for this docs-only
+  change; implementation and performance evidence remain future work.
 - 2026-08-28, test-binary consolidation on `main`: coordinator's own
   final-tree run — check 14s warm; check-db 2:11 (363/363). Test
   reconciliation keyed on (file, test-name): 439/363 before = after,
@@ -307,19 +335,14 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. Finish the two pending 011b decisions (caps shape, privacy) →
-   draft docs/specs/SLICE_011b.md → independent review
-   (crm-reviewer) → user approval → implementation gate (Option A:
-   Sonnet implements, Fable coordinates — the proven workflow).
-2. At 011b spec approval, amend SLICE_011_LADDER.md to add the
-   per-list-sort rung after 011b.
-3. Later, unordered: 011a browser walkthrough + 009 steps 3–5;
-   Telnyx SIP rotation; FilterBar UX polish pass; delete
+1. Commit and merge the verified 011b working tree locally, as approved by
+   the user on 2026-09-06.
+2. Specify the separate **011b-sort** rung when requested.
+3. Later, unordered: 009 walkthrough steps 3–5;
+   Telnyx SIP rotation; delete
    `slice-011a-filter-vocabulary` (needs approval).
 
 ## Approval currently required
 
-- The two 011b spec decisions above (caps shape; personal-list
-  privacy).
-- Nothing else outstanding: all merged slices were committed, merged,
-  and pushed with explicit user approval at their gates.
+- Local commit and merge were approved on 2026-09-06. No further 011b
+  implementation approval is required. Push and deployment are not authorized.

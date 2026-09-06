@@ -48,6 +48,11 @@ it. Saved lists are 011b.
 
 ## 2. In / out of scope
 
+**Additive amendment (approved 2026-09-06):** [SLICE_011b](SLICE_011b.md)
+persists this unchanged v1 vocabulary as named saved lists and adds a capped
+count projection and named-list workspace. The exclusions below describe 011a's
+original scope; Today, new filter axes, search and sorting remain outside 011b.
+
 **In:** the typed versioned `FilterDefinition` + validation +
 `describe()` in crm-app; `filtered_summaries()` as one fixed-matrix
 static query; `GET /api/people?filter=` (declared additive
@@ -225,6 +230,12 @@ from data it already has.
 
 ### 4e. `filtered_summaries()` (person/queries.rs)
 
+**Count amendment (approved 2026-09-06):** [SLICE_011b §4](SLICE_011b.md#4-typed-commands-reads-and-filter-evaluation)
+adds an ID-only static projection capped at 501 matches, using the same filter
+parameters and semantics. The existing summary SQL and its offline cache stay
+unchanged; the new projection supports saved-list counts without fetching People
+summaries for every list.
+
 One `query_as!` with ONE static SQL string — the fixed matrix. No
 `QueryBuilder`, no format!, no per-combination variants. Every
 clause axis appears as a NULL-guarded optional predicate over bound
@@ -318,6 +329,12 @@ pointer amendments (filter param on the `GET /api/people` row +
 the new row) ride with this slice's implementation.
 
 ## 6. Web — PeopleView FilterBar
+
+**Saved-list amendment (approved 2026-09-06):** [SLICE_011b §6](SLICE_011b.md#6-web-flows-and-state)
+adds Save as list on People, a Lists index, and `/lists/:id` around the same
+People workspace. Existing `/people?filter=` behavior remains binding. Named
+lists use their saved definition, preserve unsaved drafts and fail closed on
+unavailable/invalid definitions, as specified in 011b.
 
 **Visual amendment (D-045, 2026-09-06):** the compact People workspace and
 read-only inspector follow `docs/tasks/UI_REFRESH.md`. All filter semantics

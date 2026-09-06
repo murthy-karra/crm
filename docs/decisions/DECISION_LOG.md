@@ -1610,3 +1610,25 @@ checkpoint commit before applying). Approved reference:
   specifications, authorization and shared wire contracts are unchanged.
 
 Implementation brief: `docs/tasks/UI_REFRESH.md`.
+
+### D-046 — Saved-list privacy and separate personal/shared limits (2026-09-06)
+
+Accepted (user, answering both pending Slice 011b questions during kickoff).
+Refines D-043 and resolves the two open items in PROJECT_STATE.
+
+1. **Personal saved lists are creator-only, including from admins.** Only
+   the creator can discover, read, edit, or delete the personal definition.
+   There is no admin visibility or management exception. This protects the
+   list's name and filter criteria; it does not change Organization-wide
+   Person visibility (D-005) or grant access to People through a shared list.
+2. **Separate limits:** at most **200 shared lists per Organization** and
+   **50 personal lists per creator per Organization**, with **no combined
+   Organization cap**. These count saved definitions, not matching People.
+   They replace the ladder's ambiguous "200/org, 50/owner" wording.
+
+Shared lists remain admin-curated and visible Organization-wide; agents
+duplicate a shared definition into their own list rather than editing the
+shared original (D-043). No other 011b contract or implementation is approved
+by this decision; the concrete draft still receives its planned review.
+
+Blocks: nothing. Feeds the Slice 011b specification and implementation brief.

@@ -20,43 +20,48 @@ function personChanged(change: PersonChange, organizationId = ORG_ID) {
 }
 
 describe('invalidationsFor', () => {
-  it('maps assignment_changed to person, people, and today', () => {
+  it('maps assignment_changed to person, people, today, and saved-list counts', () => {
     expect(invalidationsFor(personChanged('assignment_changed'), ORG_ID)).toEqual([
       queryKeys.person(ORG_ID, PERSON_ID),
       queryKeys.people(ORG_ID),
       queryKeys.today(ORG_ID),
+      queryKeys.savedListCounts(ORG_ID),
     ])
   })
 
-  it('maps stage_changed to person, people, and today', () => {
+  it('maps stage_changed to person, people, today, and saved-list counts', () => {
     expect(invalidationsFor(personChanged('stage_changed'), ORG_ID)).toEqual([
       queryKeys.person(ORG_ID, PERSON_ID),
       queryKeys.people(ORG_ID),
       queryKeys.today(ORG_ID),
+      queryKeys.savedListCounts(ORG_ID),
     ])
   })
 
-  it('maps contact_attempted to person, people, and today', () => {
+  it('maps contact_attempted to person, people, today, and saved-list counts', () => {
     expect(invalidationsFor(personChanged('contact_attempted'), ORG_ID)).toEqual([
       queryKeys.person(ORG_ID, PERSON_ID),
       queryKeys.people(ORG_ID),
       queryKeys.today(ORG_ID),
+      queryKeys.savedListCounts(ORG_ID),
     ])
   })
 
-  it('maps correspondence_captured to person, people, and today (SLICE_009 §6, no new event type)', () => {
+  it('maps correspondence_captured to person, people, today, and saved-list counts', () => {
     expect(invalidationsFor(personChanged('correspondence_captured'), ORG_ID)).toEqual([
       queryKeys.person(ORG_ID, PERSON_ID),
       queryKeys.people(ORG_ID),
       queryKeys.today(ORG_ID),
+      queryKeys.savedListCounts(ORG_ID),
     ])
   })
 
-  it('maps inquiry_received to person, people, today, unresolved, AND inquiry sources (§6 special case; SLICE_011a M11: a new inquiry can introduce a new source)', () => {
+  it('maps inquiry_received to person, people, today, saved-list counts, unresolved, and inquiry sources', () => {
     expect(invalidationsFor(personChanged('inquiry_received'), ORG_ID)).toEqual([
       queryKeys.person(ORG_ID, PERSON_ID),
       queryKeys.people(ORG_ID),
       queryKeys.today(ORG_ID),
+      queryKeys.savedListCounts(ORG_ID),
       queryKeys.unresolved(ORG_ID),
       queryKeys.inquirySources(ORG_ID),
     ])

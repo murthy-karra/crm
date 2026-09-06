@@ -1,0 +1,36 @@
+count-dense_has_phone_true.json
+  planning_ms: 0.54
+  execution_ms: 12.489
+  root_actual_rows: 1.0
+  root_actual_loops: 1
+  root_shared_hit_blocks: 1728
+  root_shared_read_blocks: 0
+  root_temp_read_blocks: 0
+  root_temp_written_blocks: 0
+count-sparse_has_phone_false.json
+  planning_ms: 0.57
+  execution_ms: 21.841
+  root_actual_rows: 1.0
+  root_actual_loops: 1
+  root_shared_hit_blocks: 2385
+  root_shared_read_blocks: 0
+  root_temp_read_blocks: 0
+  root_temp_written_blocks: 0
+summary-dense_has_phone_true.json
+  planning_ms: 0.889
+  execution_ms: 17.01
+  root_actual_rows: 501.0
+  root_actual_loops: 1
+  root_shared_hit_blocks: 7869
+  root_shared_read_blocks: 0
+  root_temp_read_blocks: 0
+  root_temp_written_blocks: 0
+summary-sparse_has_phone_false.json
+  planning_ms: 1.265
+  execution_ms: 30.72
+  root_actual_rows: 500.0
+  root_actual_loops: 1
+  root_shared_hit_blocks: 56766
+  root_shared_read_blocks: 0
+  root_temp_read_blocks: 0
+  root_temp_written_blocks: 0

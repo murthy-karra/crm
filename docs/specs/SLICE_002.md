@@ -372,6 +372,11 @@ server; the request span logs both it and the request id.
 
 ## 5. HTTP contracts
 
+**Additive amendment (approved 2026-09-06):** [SLICE_011b §5](SLICE_011b.md#5-http-contract)
+adds saved-list index/detail/count reads and typed create/update/delete endpoints.
+Its §8 records the old/new contracts and compatibility impact. Existing People
+responses, filter vocabulary and ordering remain unchanged.
+
 All endpoints authenticate via the existing `AuthContext`; `{"error":
 code}` envelope; 401 without a valid session and 503 `unavailable` on
 database failure exactly as Slice 001. Path parameters that are not UUIDs
@@ -447,6 +452,11 @@ and the future webhook hostname (D-016 §4) adds a second *adapter*
 bytes, provider delivery-id idempotency) onto the same `receive_inquiry`.
 
 ## 6. Authorization and tenant isolation
+
+**Saved-list amendment (approved 2026-09-06):** [SLICE_011b §2](SLICE_011b.md#2-ownership-permissions-and-limits)
+defines creator-only personal definitions (including hidden from admins),
+Organization-visible shared definitions and admin-only shared writes, per D-046.
+These definition permissions do not alter Organization-wide Person visibility.
 
 - Organization enters every query only from `AuthContext` →
   `PersonVisibilityScope` / `CommandContext`. Client-supplied Organization

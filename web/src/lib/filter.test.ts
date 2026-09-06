@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { FilterClause } from '../api/types'
-import { describeClause, type FilterNames } from './filter'
+import type { FilterClause, FilterDefinition } from '../api/types'
+import { canonicalFilterDefinition, describeClause, type FilterNames } from './filter'
 
 const names: FilterNames = {
   stageNames: { lead: 'Lead', hot: 'Hot Prospect', nurture: 'Nurture' },
@@ -43,5 +43,61 @@ describe('People filter descriptions', () => {
   it('never displays unresolved identifiers as names', () => {
     expect(describeClause({ kind: 'stage', stage_ids: ['missing-private-id'] }, names)).toBe('Stage: Unknown stage')
     expect(describeClause({ kind: 'assigned_to', assignees: [{ user_id: 'missing-private-id' }] }, names)).toBe('Assignee: Unknown member')
+  })
+})
+
+describe('People filter canonical serialization', () => {
+  it('treats recursively reordered object keys as the same filter', () => {
+    const first: FilterDefinition = {
+      version: 1,
+      clauses: [
+        { kind: 'assigned_to', assignees: ['me', { user_id: 'member-1' }, 'unassigned'] },
+        { kind: 'last_contact', age: { op: 'within_days', days: 14 } },
+        { kind: 'has_phone', value: true },
+      ],
+    }
+    const sameFilterWithDifferentObjectInsertionOrder: FilterDefinition = {
+      clauses: [
+        { assignees: ['me', { user_id: 'member-1' }, 'unassigned'], kind: 'assigned_to' },
+        { age: { days: 14, op: 'within_days' }, kind: 'last_contact' },
+        { value: true, kind: 'has_phone' },
+      ],
+      version: 1,
+    }
+
+    expect(canonicalFilterDefinition(sameFilterWithDifferentObjectInsertionOrder)).toBe(canonicalFilterDefinition(first))
+  })
+
+  it('preserves clause and value-array order while canonicalizing object keys', () => {
+    const first: FilterDefinition = {
+      version: 1,
+      clauses: [
+        { kind: 'assigned_to', assignees: ['me', { user_id: 'member-1' }, 'unassigned'] },
+        { kind: 'last_contact', age: { op: 'within_days', days: 14 } },
+      ],
+    }
+    const clausesReordered: FilterDefinition = {
+      clauses: [
+        { age: { days: 14, op: 'within_days' }, kind: 'last_contact' },
+        { assignees: ['me', { user_id: 'member-1' }, 'unassigned'], kind: 'assigned_to' },
+      ],
+      version: 1,
+    }
+    const assigneesReordered: FilterDefinition = {
+      clauses: [
+        { assignees: ['unassigned', { user_id: 'member-1' }, 'me'], kind: 'assigned_to' },
+        { age: { days: 14, op: 'within_days' }, kind: 'last_contact' },
+      ],
+      version: 1,
+    }
+
+    expect(canonicalFilterDefinition(clausesReordered)).not.toBe(canonicalFilterDefinition(first))
+    expect(canonicalFilterDefinition(assigneesReordered)).not.toBe(canonicalFilterDefinition(first))
+
+    const parsed = JSON.parse(canonicalFilterDefinition(first)) as { clauses: FilterClause[] }
+    expect(parsed.clauses.map((clause) => clause.kind)).toEqual(['assigned_to', 'last_contact'])
+    expect((parsed.clauses[0] as Extract<FilterClause, { kind: 'assigned_to' }>).assignees).toEqual([
+      'me', { user_id: 'member-1' }, 'unassigned',
+    ])
   })
 })

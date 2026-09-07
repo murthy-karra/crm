@@ -186,16 +186,26 @@ WITH ranked AS (
 qualifying AS (
     SELECT
         r.id,
-        (COALESCE($48::boolean, false) AND r.matrix_a) AS by_inquiry,
-        (COALESCE($49::boolean, false) AND r.matrix_b) AS by_reply,
+        -- F1 fix: for an unassigned Person under an assigned_to matrix that
+        -- includes `unassigned`, the assigned-term OR chain
+        -- (`p.assigned_user_id = ANY($3) OR ($4::boolean AND
+        -- p.assigned_user_id IS NULL)`) can itself evaluate to NULL rather
+        -- than true/false (NULL OR (false AND true) = NULL), which makes
+        -- the whole matrix_a/matrix_b AND-chain NULL — `true AND NULL` is
+        -- NULL, not false. COALESCE(..., false) here makes by_inquiry/
+        -- by_reply TOTAL booleans (never NULL), matching their `"!"`-forced
+        -- non-null projection in the outer SELECT; no admitted row changes,
+        -- since a NULL matrix never qualified a candidate before either.
+        (COALESCE($48::boolean, false) AND COALESCE(r.matrix_a, false)) AS by_inquiry,
+        (COALESCE($49::boolean, false) AND COALESCE(r.matrix_b, false)) AS by_reply,
         r.latest_inquiry_id,
         r.latest_inquiry_source,
         r.latest_inquiry_received_at,
         r.last_inbound_at,
         r.waiting_received_at
     FROM ranked r
-    WHERE (COALESCE($48::boolean, false) AND r.matrix_a)
-       OR (COALESCE($49::boolean, false) AND r.matrix_b)
+    WHERE (COALESCE($48::boolean, false) AND COALESCE(r.matrix_a, false))
+       OR (COALESCE($49::boolean, false) AND COALESCE(r.matrix_b, false))
 ),
 capped AS (
     SELECT

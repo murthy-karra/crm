@@ -16,7 +16,8 @@ use sqlx::postgres::PgPoolOptions;
 use crm_api::domain::admin::{MembershipStatus, Role};
 use crm_api::domain::envelope::{CommandContext, Origin};
 use crm_api::domain::person::filter::{
-    AssignedToClause, Assignee, BoolClause, Clause, FilterDefinition, StageClause,
+    AgeClause, AgeSpec, AssignedToClause, Assignee, BoolClause, Clause, FilterDefinition,
+    StageClause,
 };
 use crm_api::domain::today::system_feeds::commands::{
     self, PreviewTodaySystemFeed, RevertTodaySystemFeed, SetTodaySystemFeedEnabled,
@@ -1150,6 +1151,342 @@ async fn a_person_in_both_feeds_shifts_to_inquiry_reasons_when_feed_b_is_disable
         .reasons
         .iter()
         .any(|r| matches!(r, crm_api::domain::today::TodayReason::ClientReplied { .. })));
+}
+
+/// Review round 1, F1 (BLOCKING): for an unassigned Person, the
+/// `assigned_to` matrix term (`p.assigned_user_id = ANY($n) OR ($m AND
+/// p.assigned_user_id IS NULL)`) evaluates to SQL NULL, not false, whenever
+/// the OTHER feed's assignee list does not include `unassigned` — NULL
+/// poisons that feed's whole matrix, and `by_inquiry!`/`by_reply!`'s
+/// non-null projection then fails row decode, a 503 for the whole
+/// Organization. Person qualifies via feed A (customized to admit
+/// unassigned) with an inquiry AND an unanswered reply; feed B stays
+/// canonical (`assigned_to: [me]` only, no `unassigned`) — its matrix is
+/// NULL for this same unassigned Person, exercising exactly the fixed
+/// `COALESCE(r.matrix_b, false)` path. Today must succeed with
+/// inquiry-based reasons (feed A wins since feed B's by_reply is false,
+/// not NULL).
+#[sqlx::test]
+#[ignore]
+async fn an_unassigned_person_matching_only_the_customized_feed_does_not_503_feed_a(
+    migrator_pool: PgPool,
+) {
+    let (organization_id, admin_id) = create_org_with_admin(
+        &migrator_pool,
+        "011d f1 unassigned feed a",
+        "admin@d011-f1-unassigned-a.test",
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let stage_id = first_stage_id(&app_pool, organization_id).await;
+    let now = Utc::now();
+
+    let unassigned = insert_person(&app_pool, organization_id, stage_id, None).await;
+    insert_inquiry(&app_pool, organization_id, unassigned).await; // received_at = now - 2h
+    insert_correspondence(
+        &app_pool,
+        organization_id,
+        unassigned,
+        admin_id,
+        "inbound",
+        now - ChronoDuration::hours(1),
+    )
+    .await;
+
+    commands::update_today_system_feed(
+        &app_pool,
+        &command_context(organization_id, admin_id),
+        UpdateTodaySystemFeed {
+            feed_key: FeedKey::UnansweredInquiry,
+            expected_revision: 1,
+            filter: FilterDefinition {
+                version: 1,
+                clauses: vec![
+                    Clause::AssignedTo(AssignedToClause {
+                        assignees: vec![Assignee::Me, Assignee::Unassigned],
+                    }),
+                    Clause::AwaitingResponse(BoolClause { value: true }),
+                ],
+            },
+            fresh_within_hours: Some(24),
+        },
+    )
+    .await
+    .unwrap();
+
+    let scope = crm_api::domain::person::PersonVisibilityScope::Organization(OrganizationId::new(
+        organization_id,
+    ));
+    let mut conn = app_pool.acquire().await.unwrap();
+    let list = crm_api::domain::today::query_at(&mut conn, &scope, UserId::new(admin_id), now)
+        .await
+        .expect("Today must succeed, not 503, for this unassigned Person");
+    let item = list
+        .items
+        .iter()
+        .find(|i| i.person.id.as_uuid() == unassigned)
+        .expect("the unassigned Person qualifies via the customized feed A");
+    assert!(
+        item.reasons.iter().any(|r| matches!(
+            r,
+            crm_api::domain::today::TodayReason::NewInquiry { .. }
+        ) || matches!(
+            r,
+            crm_api::domain::today::TodayReason::RepeatInquiry { .. }
+        ) || matches!(
+            r,
+            crm_api::domain::today::TodayReason::NoContactAttempt { .. }
+        )),
+        "feed A (customized, admits unassigned) wins: inquiry-based reasons"
+    );
+    assert!(
+        !item
+            .reasons
+            .iter()
+            .any(|r| matches!(r, crm_api::domain::today::TodayReason::ClientReplied { .. })),
+        "feed B (canonical, excludes unassigned) must NOT contribute — its matrix was NULL, \
+         now correctly coalesced to false, not true"
+    );
+}
+
+/// F1 mirror case: feed B customized to admit unassigned, feed A stays
+/// canonical — exercises the fixed `COALESCE(r.matrix_a, false)` path.
+#[sqlx::test]
+#[ignore]
+async fn an_unassigned_person_matching_only_the_customized_feed_does_not_503_feed_b(
+    migrator_pool: PgPool,
+) {
+    let (organization_id, admin_id) = create_org_with_admin(
+        &migrator_pool,
+        "011d f1 unassigned feed b",
+        "admin@d011-f1-unassigned-b.test",
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let stage_id = first_stage_id(&app_pool, organization_id).await;
+    let now = Utc::now();
+
+    let unassigned = insert_person(&app_pool, organization_id, stage_id, None).await;
+    insert_inquiry(&app_pool, organization_id, unassigned).await;
+    insert_correspondence(
+        &app_pool,
+        organization_id,
+        unassigned,
+        admin_id,
+        "inbound",
+        now - ChronoDuration::hours(1),
+    )
+    .await;
+
+    commands::update_today_system_feed(
+        &app_pool,
+        &command_context(organization_id, admin_id),
+        UpdateTodaySystemFeed {
+            feed_key: FeedKey::ClientReplied,
+            expected_revision: 1,
+            filter: FilterDefinition {
+                version: 1,
+                clauses: vec![
+                    Clause::AssignedTo(AssignedToClause {
+                        assignees: vec![Assignee::Me, Assignee::Unassigned],
+                    }),
+                    Clause::ClientRepliedUnanswered(BoolClause { value: true }),
+                ],
+            },
+            fresh_within_hours: Some(24),
+        },
+    )
+    .await
+    .unwrap();
+
+    let scope = crm_api::domain::person::PersonVisibilityScope::Organization(OrganizationId::new(
+        organization_id,
+    ));
+    let mut conn = app_pool.acquire().await.unwrap();
+    let list = crm_api::domain::today::query_at(&mut conn, &scope, UserId::new(admin_id), now)
+        .await
+        .expect("Today must succeed, not 503, for this unassigned Person");
+    let item = list
+        .items
+        .iter()
+        .find(|i| i.person.id.as_uuid() == unassigned)
+        .expect("the unassigned Person qualifies via the customized feed B");
+    assert!(
+        item.reasons
+            .iter()
+            .any(|r| matches!(r, crm_api::domain::today::TodayReason::ClientReplied { .. })),
+        "feed B (customized, admits unassigned) wins: client_replied reason"
+    );
+}
+
+/// Review round 1, F2: `call_membership.sql`/`call_only.sql` used
+/// `now()` for age clauses instead of a bound clock, so `query_at`'s fixed
+/// test clock was silently ignored for the call feed's own age axes.
+/// `fixed_now` is deliberately far from real wall-clock time (3 real days
+/// in the past) so the bug (real `now()` instead of the bound clock) would
+/// visibly change the outcome. Covers both `call_membership` (the Person
+/// is ALSO independently retained via person-state, so the call feed only
+/// appends a reason) and `call_only` (the Person's inquiry is already
+/// answered — not retained via person-state — so the call feed is the
+/// SOLE reason the Person appears at all).
+#[sqlx::test]
+#[ignore]
+async fn call_feed_customized_last_contact_window_honors_the_bound_clock_not_real_now(
+    migrator_pool: PgPool,
+) {
+    let (organization_id, admin_id) = create_org_with_admin(
+        &migrator_pool,
+        "011d f2 call clock",
+        "admin@d011-f2-call-clock.test",
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let stage_id = first_stage_id(&app_pool, organization_id).await;
+    let now_real = Utc::now();
+    let fixed_now = now_real - ChronoDuration::days(3);
+
+    commands::update_today_system_feed(
+        &app_pool,
+        &command_context(organization_id, admin_id),
+        UpdateTodaySystemFeed {
+            feed_key: FeedKey::CallOutcomeNeeded,
+            expected_revision: 1,
+            filter: FilterDefinition {
+                version: 1,
+                clauses: vec![
+                    Clause::AwaitingCallOutcome(BoolClause { value: true }),
+                    Clause::LastContact(AgeClause {
+                        age: AgeSpec::WithinDays(1),
+                    }),
+                ],
+            },
+            fresh_within_hours: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    // call_membership: retained via feed A (fresh, unanswered inquiry at
+    // real "now"), independent of the call's own age.
+    let membership_included =
+        insert_person(&app_pool, organization_id, stage_id, Some(admin_id)).await;
+    insert_inquiry(&app_pool, organization_id, membership_included).await;
+    let membership_included_call = insert_call(
+        &app_pool,
+        organization_id,
+        membership_included,
+        admin_id,
+        fixed_now - ChronoDuration::days(1) + ChronoDuration::seconds(1),
+    )
+    .await;
+
+    let membership_excluded =
+        insert_person(&app_pool, organization_id, stage_id, Some(admin_id)).await;
+    insert_inquiry(&app_pool, organization_id, membership_excluded).await;
+    insert_call(
+        &app_pool,
+        organization_id,
+        membership_excluded,
+        admin_id,
+        fixed_now - ChronoDuration::days(1) - ChronoDuration::seconds(1),
+    )
+    .await;
+
+    // call_only: the inquiry PRECEDES the call's own automatic contact, so
+    // awaiting_response is false and the Person is not retained via
+    // person-state at all — the call feed is the only path onto Today.
+    let call_only_included =
+        insert_person(&app_pool, organization_id, stage_id, Some(admin_id)).await;
+    sqlx::query(
+        "INSERT INTO inquiry (organization_id, person_id, raw_payload_id, source, received_at) \
+         VALUES ($1, $2, $3, 'f2-call-only', $4)",
+    )
+    .bind(organization_id)
+    .bind(call_only_included)
+    .bind(Uuid::new_v4())
+    .bind(now_real - ChronoDuration::days(10))
+    .execute(&app_pool)
+    .await
+    .unwrap();
+    let call_only_included_call = insert_call(
+        &app_pool,
+        organization_id,
+        call_only_included,
+        admin_id,
+        fixed_now - ChronoDuration::days(1) + ChronoDuration::seconds(1),
+    )
+    .await;
+
+    let call_only_excluded =
+        insert_person(&app_pool, organization_id, stage_id, Some(admin_id)).await;
+    sqlx::query(
+        "INSERT INTO inquiry (organization_id, person_id, raw_payload_id, source, received_at) \
+         VALUES ($1, $2, $3, 'f2-call-only', $4)",
+    )
+    .bind(organization_id)
+    .bind(call_only_excluded)
+    .bind(Uuid::new_v4())
+    .bind(now_real - ChronoDuration::days(10))
+    .execute(&app_pool)
+    .await
+    .unwrap();
+    insert_call(
+        &app_pool,
+        organization_id,
+        call_only_excluded,
+        admin_id,
+        fixed_now - ChronoDuration::days(1) - ChronoDuration::seconds(1),
+    )
+    .await;
+
+    let scope = crm_api::domain::person::PersonVisibilityScope::Organization(OrganizationId::new(
+        organization_id,
+    ));
+    let mut conn = app_pool.acquire().await.unwrap();
+    let list =
+        crm_api::domain::today::query_at(&mut conn, &scope, UserId::new(admin_id), fixed_now)
+            .await
+            .unwrap();
+
+    let membership_included_item = list
+        .items
+        .iter()
+        .find(|i| i.person.id.as_uuid() == membership_included)
+        .expect("retained via person-state regardless of the call feed");
+    assert!(membership_included_item.reasons.iter().any(
+        |r| matches!(r, crm_api::domain::today::TodayReason::CallOutcomeNeeded { call_id, .. } if *call_id == membership_included_call)
+    ), "the call, 1s inside the 1-day window from the BOUND clock, is included");
+
+    let membership_excluded_item = list
+        .items
+        .iter()
+        .find(|i| i.person.id.as_uuid() == membership_excluded)
+        .expect("still retained via person-state");
+    assert!(
+        !membership_excluded_item.reasons.iter().any(|r| matches!(
+            r,
+            crm_api::domain::today::TodayReason::CallOutcomeNeeded { .. }
+        )),
+        "the call, 1s outside the 1-day window from the BOUND clock, must be excluded"
+    );
+
+    let call_only_ids: Vec<Uuid> = list.items.iter().map(|i| i.person.id.as_uuid()).collect();
+    assert!(
+        call_only_ids.contains(&call_only_included),
+        "call_only: 1s inside the window, the Person's only path onto Today"
+    );
+    let call_only_item = list
+        .items
+        .iter()
+        .find(|i| i.person.id.as_uuid() == call_only_included)
+        .unwrap();
+    assert!(call_only_item.reasons.iter().any(
+        |r| matches!(r, crm_api::domain::today::TodayReason::CallOutcomeNeeded { call_id, .. } if *call_id == call_only_included_call)
+    ));
+    assert!(
+        !call_only_ids.contains(&call_only_excluded),
+        "call_only: 1s outside the window, excluded entirely (no person-state path either)"
+    );
 }
 
 /// Coordinator decision (round 3): the call feed's matrix statements now

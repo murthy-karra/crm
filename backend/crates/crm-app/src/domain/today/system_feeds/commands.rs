@@ -834,6 +834,7 @@ async fn preview_today_system_feed_attempt(
                 &candidate,
                 &[],
                 201,
+                now,
             )
             .await?;
             let truncated = call_only.len() > 200;

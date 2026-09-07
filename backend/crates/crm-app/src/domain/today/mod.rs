@@ -1388,6 +1388,7 @@ async fn evaluate_feeds_builtins(
                 viewer,
                 feed_call,
                 &retained_ids,
+                now,
             )
             .await?;
             #[cfg(feature = "test-support")]
@@ -1413,6 +1414,7 @@ async fn evaluate_feeds_builtins(
                     feed_call,
                     &retained_ids,
                     limit,
+                    now,
                 )
                 .await?
             };

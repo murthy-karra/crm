@@ -258,6 +258,7 @@ pub(crate) async fn call_membership(
     viewer: UserId,
     call_feed: &ResolvedFeed,
     retained_ids: &[Uuid],
+    now: DateTime<Utc>,
 ) -> Result<Vec<(Uuid, Uuid, DateTime<Utc>)>, sqlx::Error> {
     if retained_ids.is_empty() {
         return Ok(Vec::new());
@@ -291,6 +292,7 @@ pub(crate) async fn call_membership(
         params.awaiting_call_outcome,
         viewer.0,
         retained_ids,
+        now,
     )
     .fetch_all(conn)
     .await?;
@@ -397,6 +399,7 @@ pub(crate) async fn call_only_candidates(
     call_feed: &ResolvedFeed,
     retained_ids: &[Uuid],
     limit: i64,
+    now: DateTime<Utc>,
 ) -> Result<Vec<TodayCandidate>, sqlx::Error> {
     let params = call_feed.filter.to_query_params(viewer);
     let rows = sqlx::query_file_as!(
@@ -428,6 +431,7 @@ pub(crate) async fn call_only_candidates(
         viewer.0,
         retained_ids,
         limit,
+        now,
     )
     .fetch_all(conn)
     .await?;

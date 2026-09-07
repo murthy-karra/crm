@@ -1,12 +1,21 @@
 # Project State
 
-Last updated: 2026-09-07 (Slice 011e specification approved and committed;
-e1 awaits the implementation gate).
+Last updated: 2026-09-07 (Slice 011e rung e1 implementation started in a
+worktree after the Phase 6 gate).
 
 ## Current phase
 
-**Slice 011e (tags) — SPECIFICATION APPROVED AND COMMITTED 2026-09-07
-(`97b889f`, local `main`, not pushed); e1 AWAITS THE IMPLEMENTATION GATE.** Amendment pointers
+**Slice 011e (tags) — RUNG e1 IN IMPLEMENTATION.** The user passed the Phase 6
+gate on 2026-09-07 ("proceed in a worktree"). Branch `slice-011e-tags` from
+`main` at `ad1c33b`, worktree `../crm-worktrees/011e-e1` (gitignored `.env`
+copied in; Web dependencies installed). One lane, one writer: Claude Sonnet 5
+(`implement` profile) follows `docs/tasks/SLICE_011e_IMPL.md` e1 steps 1–6,
+backend first, then Web against its own routes; Claude Fable 5.1 coordinates,
+audits the changed-file list against `git status` each round, runs the
+once-only final-tree gates and the reviewer/tester rounds (two maximum,
+D-050), and holds the commit and merge gates. The shared development runtime
+in the main checkout is untouched until merge. Specification approved and
+committed as `97b889f`. Amendment pointers
 written in 002 §§2/5, 003 §6, 005 §3 view types, 011a §4, 011b §§4/5, 011c
 §§3/5 and 011d §§2/6. The user said "start the plan for 011e" on 2026-09-07 (an earlier
 session that began the same planning was closed after 45 seconds of reads and
@@ -590,8 +599,8 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. **011e (tags): run the Phase 6 gate and start e1** on `slice-011e-tags`
-   from `main` at `97b889f` or later (one lane,
+1. **011e (tags): e1 in progress** on `slice-011e-tags` in
+   `../crm-worktrees/011e-e1` (one lane,
    `implement` profile, backend then Web). The small LATER items from the 011d
    verification record can still be batched before or between the rungs:
    the person-state 503 test, two equivalence pins, the feeds page
@@ -625,9 +634,10 @@ and now lives only in git history.
 
 ## Approval currently required
 
-- **Phase 6 implementation gate for e1** ("Proceed with implementation?").
-  The spec and brief were approved and committed (`97b889f`) on 2026-09-07;
-  push and deployment are not authorized.
+- None while e1 is in implementation. Next gates: the lane's step 3
+  checkpoint (routes live before Web work), then review, commit and merge
+  approval for `slice-011e-tags` into `main`. Push, shared-runtime migration
+  and deployment are not authorized.
 - None for 011d: merged, pushed, and the dev runtime updated with approval
   on 2026-09-07. Deployment is not authorized.
 - All three 011c decisions were taken on 2026-09-06 (late evening): the §8

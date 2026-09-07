@@ -116,8 +116,44 @@ mod db_saved_lists;
 #[path = "db_today.rs"]
 mod db_today;
 
+#[path = "db_today_builtin_parity.rs"]
+mod db_today_builtin_parity;
+
 #[path = "db_today_client_replied.rs"]
 mod db_today_client_replied;
+
+#[path = "db_today_sources.rs"]
+mod db_today_sources;
+
+#[path = "db_today_source_acceptance.rs"]
+mod db_today_source_acceptance;
+
+#[path = "db_today_source_contracts.rs"]
+mod db_today_source_contracts;
+
+#[path = "db_today_source_filter_parity.rs"]
+mod db_today_source_filter_parity;
+
+#[path = "db_today_source_operator.rs"]
+mod db_today_source_operator;
+
+#[path = "db_today_source_races.rs"]
+mod db_today_source_races;
+
+#[path = "db_today_source_failures.rs"]
+mod db_today_source_failures;
+
+#[path = "db_today_source_hooks.rs"]
+mod db_today_source_hooks;
+
+#[path = "db_today_source_settings.rs"]
+mod db_today_source_settings;
+
+#[path = "db_today_source_deadlines.rs"]
+mod db_today_source_deadlines;
+
+#[path = "db_today_source_telemetry.rs"]
+mod db_today_source_telemetry;
 
 #[path = "health.rs"]
 mod health;

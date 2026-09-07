@@ -1,5 +1,12 @@
 # Slice 006c — Call outcome correction
 
+**Approved amendment — Slice 011c (2026-09-06):**
+[SLICE_011c §§4/6](SLICE_011c.md) extend §5a's Today/API/Operator shapes
+with list work and nullable list-only fields. Built-in work retains admission
+priority at the queue cap; display order becomes high, normal, list, low.
+The existing caller-owned call-outcome rules remain, and `call_outcome_needed`
+stays the last reason when a Person also matches saved lists.
+
 Status: APPROVED (user, 2026-08-22; planner pass in
 `docs/plans/SLICE_006c_PLAN.md`, independent review — 11 findings, all
 applied as safe defaults / implementation details).

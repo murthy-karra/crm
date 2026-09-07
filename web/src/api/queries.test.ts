@@ -7,11 +7,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { apiFetch } from './client'
 import {
   queryKeys,
+  fetchMe,
   useCorrectCallOutcome,
   useCreateSavedListMutation,
   useDeleteSavedListMutation,
   useUpdateSavedListMutation,
 } from './queries'
+import { beginSessionTransition, settleSessionTransition } from '../sessionLifecycle'
 import type {
   CorrectOutcomeResponse,
   CreateSavedListResponse,
@@ -116,6 +118,29 @@ describe('useCorrectCallOutcome', () => {
     await expect(mutation.mutateAsync({ callId: CALL_ID, personId: PERSON_ID, outcome: 'busy' })).rejects.toThrow('nope')
     expect(invalidate).not.toHaveBeenCalled()
     scope.stop()
+  })
+})
+
+describe('session lifecycle verification', () => {
+  it('lets a pending cached /me reader consume the coordinator verification without a second request', async () => {
+    const verification = deferred<MeResponse>()
+    apiFetchMock.mockImplementation((path: string) => {
+      expect(path).toBe('/me')
+      return verification.promise as Promise<never>
+    })
+    const transition = beginSessionTransition()
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const waiting = queryClient.fetchQuery({ queryKey: queryKeys.me, queryFn: () => fetchMe() })
+    await Promise.resolve()
+
+    settleSessionTransition(transition)
+    await Promise.resolve()
+    expect(apiFetchMock).toHaveBeenCalledTimes(1)
+
+    const verified = savedMe('org-new', 'actor-new')
+    verification.resolve(verified)
+    await expect(waiting).resolves.toEqual(verified)
+    expect(apiFetchMock).toHaveBeenCalledTimes(1)
   })
 })
 

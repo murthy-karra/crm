@@ -1,0 +1,15 @@
+2026-09-06 targeted DB evidence
+
+Command:
+set -a; source .env; set +a
+export DATABASE_URL="$MIGRATION_DATABASE_URL"
+export SQLX_OFFLINE=true
+cd backend
+cargo nextest run -p crm-api --test all --run-ignored only today_source --no-fail-fast
+
+Environment variable names only: DATABASE_URL, MIGRATION_DATABASE_URL, SQLX_OFFLINE.
+No credential values were printed or retained.
+
+Result: 11 tests run, 11 passed, 458 skipped.
+Coverage: source command/privacy/idempotence/deletion/cap race/source-only nullable action;
+source ordering, overlap reasons, 199/200/201 reservation, beyond-People-500, viewer-relative me/other/unassigned parity.

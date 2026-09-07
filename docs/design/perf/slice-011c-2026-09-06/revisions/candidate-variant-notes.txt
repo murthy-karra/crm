@@ -1,0 +1,4 @@
+Prototype-only candidate SQL changes, after baseline reports/plans were captured:
+1. source_prefix.sql: the latest-source LATERAL join executes only when sources ($5) is non-NULL. The existing predicate still admits every person when $5 is NULL; a LEFT JOIN with a false ON condition produces NULL latest_src, so it preserves that outcome while avoiding an unused probe.
+2. builtin.sql: add organization_id = p.organization_id to the latest-inquiry, waiting-inquiry, and inquiry-count probes. With valid organization-consistent fact rows, result values are unchanged; the predicate exposes the existing organization-leading index path.
+No application or repository source was changed. Baseline SQL/harness hashes are in baseline-artifact-sha256.txt.

@@ -1,0 +1,14 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.12s
+────────────
+ Nextest run ID 397d9f87-bc75-4315-b3d9-0a41eeef6e45 with nextest profile: default
+    Starting 8 tests across 1 binary (514 tests skipped)
+        PASS [   1.248s] (1/8) crm-api::all db_today_source_deadlines::today_source_recovery_deadline_survives_a_malformed_tail_until_final_commit
+        PASS [   1.772s] (2/8) crm-api::all db_today_source_deadlines::today_source_uses_one_absolute_deadline_through_savepoint_membership_and_release
+        PASS [   1.220s] (3/8) crm-api::all db_today_source_hooks::today_source_after_builtins_gate_keeps_one_snapshot_across_list_and_contact_mutations
+        PASS [   1.300s] (4/8) crm-api::all db_today_source_hooks::today_source_backend_termination_marks_current_and_remaining_sources_unavailable
+        PASS [   1.255s] (5/8) crm-api::all db_today_source_hooks::today_source_membership_checkpoint_sql_failure_discards_only_that_source
+        PASS [   1.368s] (6/8) crm-api::all db_today_source_hooks::today_source_recovery_checkpoint_exhaustion_uses_cleanup_grace_and_discards_connection
+        PASS [   2.184s] (7/8) crm-api::all db_today_source_settings::operator_turn_timeout_cancels_owned_today_query_and_replaces_its_connection
+        PASS [   1.262s] (8/8) crm-api::all db_today_source_settings::today_owned_query_restores_pool_settings_after_normal_partial_and_recovered_source_error
+────────────
+     Summary [  11.613s] 8 tests run: 8 passed, 514 skipped

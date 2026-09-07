@@ -3,7 +3,15 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch, type Component } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { AtSign, Building2, Inbox, ListFilter, LogOut, Mail, Sparkles, Sun, UserCog, UserPlus, Users } from 'lucide-vue-next'
-import { useLogoutMutation, useMe } from '../api/queries'
+import { useAuthSessionLifetime, useLogoutMutation, useMe } from '../api/queries'
+import {
+  resetSessionCoordination,
+  SessionCoordinationUnavailableError,
+  useRouteAuthorizationReplayPending,
+  useSessionBlockedByOutstandingAttempt,
+  useSessionCoordinationUnavailable,
+  useSessionVerificationInFlight,
+} from '../sessionLifecycle'
 import { initials } from '../lib/format'
 import { buttonClasses } from '../lib/controls'
 import { describeApiError } from '../lib/errors'
@@ -121,10 +129,33 @@ const showPlatformFooterLink = computed(() => me.value?.organization !== null &&
 // Guarded on `me` having no data at all: a background refetch (TanStack's
 // `refetchOnWindowFocus`) that fails while the cached session is still good
 // must not replace a working screen with an error.
-const sessionUnavailable = computed(() => meIsError.value && me.value === undefined)
+const sessionCoordinationUnavailable = useSessionCoordinationUnavailable()
+// F1/F3: distinguish "blocked by another tab's unfinished attempt" (a
+// recovery control applies) from "this generation's own /me round trip is
+// in flight" (an ordinary, non-alarming wait — no control).
+const sessionBlockedByOutstandingAttempt = useSessionBlockedByOutstandingAttempt()
+const sessionVerificationInFlight = useSessionVerificationInFlight()
+const routeAuthorizationReplayPending = useRouteAuthorizationReplayPending()
+const sessionUnavailable = computed(() =>
+  sessionCoordinationUnavailable.value || sessionBlockedByOutstandingAttempt.value ||
+  sessionVerificationInFlight.value || routeAuthorizationReplayPending.value ||
+  (meIsError.value && me.value === undefined),
+)
 
 function retrySession() {
   void refetchMe()
+}
+
+// F1: user-driven recovery, never a timer — only this click reaches
+// `resetSessionCoordination()`. On `SessionCoordinationUnavailableError` the
+// reactive `sessionCoordinationUnavailable` ref (set by the same call) takes
+// over the box on the next render with its own existing copy/control.
+function resetSession() {
+  try {
+    resetSessionCoordination()
+  } catch (error) {
+    if (!(error instanceof SessionCoordinationUnavailableError)) throw error
+  }
 }
 
 // AppShell mounts once for every non-public route (App.vue) and stays
@@ -135,6 +166,9 @@ function retrySession() {
 // reconnects rather than resubscribing (D-023 §1's channel is fixed per
 // connection).
 const orgId = computed(() => me.value?.organization?.id ?? '')
+const actorId = computed(() => me.value?.user.id ?? '')
+const authSessionLifetime = useAuthSessionLifetime()
+const operatorIdentityKey = computed(() => `${orgId.value}:${actorId.value}:${authSessionLifetime.value}`)
 const { status: realtimeStatus } = useRealtime({
   orgId,
   createClient: createRealtimeClient,
@@ -156,7 +190,9 @@ const orgLabel = computed(() => me.value?.organization?.name ?? (me.value?.platf
 // closes. The transcript is OperatorPanel's own state and is discarded when
 // the drawer closes (v-if), matching "local history ... component state
 // only".
-const askAvailable = computed(() => me.value?.organization != null && isOrganizationRoute(route.path))
+const askAvailable = computed(() =>
+  !sessionUnavailable.value && me.value?.organization != null && isOrganizationRoute(route.path),
+)
 const askOpen = ref(false)
 const operatorPanel = ref<InstanceType<typeof OperatorPanel> | null>(null)
 
@@ -168,8 +204,10 @@ provide(OPERATOR_LAUNCHER, (personId) => {
   }
   if (personId) {
     const organization = orgId.value
+    const actor = actorId.value
+    const session = operatorIdentityKey.value
     void router.push(`/people/${encodeURIComponent(personId)}`).then(() => {
-      if (organization === orgId.value && askAvailable.value) open()
+      if (organization === orgId.value && actor === actorId.value && session === operatorIdentityKey.value && askAvailable.value) open()
     }).catch(() => {})
   } else open()
 })
@@ -186,6 +224,9 @@ function toggleAsk() {
 // its transcript; coming back starts fresh.
 watch(askAvailable, (available) => {
   if (!available) askOpen.value = false
+})
+watch([orgId, actorId, authSessionLifetime], ([nextOrg, nextActor, nextSession], [previousOrg, previousActor, previousSession]) => {
+  if (nextOrg !== previousOrg || nextActor !== previousActor || nextSession !== previousSession) askOpen.value = false
 })
 
 function closeAsk() {
@@ -342,24 +383,42 @@ function logout() {
             class="rounded-xl border border-border bg-surface-0 p-5"
           >
             <p class="text-body text-danger">
-              {{ describeApiError(meError, 'Could not load your session.') }}
+              {{ sessionCoordinationUnavailable
+                ? 'Browser storage is unavailable. Enable site storage, then reload.'
+                : sessionBlockedByOutstandingAttempt
+                  ? 'A sign-in or sign-out started in another tab has not finished. If that tab is closed or stuck, reset to continue.'
+                  : sessionVerificationInFlight
+                    ? 'Loading your session…'
+                    : routeAuthorizationReplayPending
+                      ? 'Updating access…'
+                      : describeApiError(meError, 'Could not load your session.') }}
             </p>
             <button
+              v-if="sessionBlockedByOutstandingAttempt"
+              type="button"
+              class="mt-4"
+              :class="buttonClasses('secondary')"
+              data-testid="session-reset"
+              @click="resetSession"
+            >
+              Reset and continue
+            </button>
+            <button
+              v-else-if="!sessionVerificationInFlight"
               type="button"
               class="mt-4"
               :class="buttonClasses('secondary')"
               :disabled="meIsFetching"
               @click="retrySession"
             >
-              {{ meIsFetching ? 'Retrying…' : 'Try again' }}
+              {{ meIsFetching ? 'Retrying…' : sessionCoordinationUnavailable ? 'Check again' : 'Try again' }}
             </button>
           </div>
           <slot v-else />
         </div>
       </div>
-      <!-- v-show while available: closing mid-turn must not discard the
-           answer or the transcript (component state survives until the
-           drawer stops being available, e.g. on /platform). -->
+      <!-- Closing preserves same-session state; an actor, Organization, or
+           auth-session lifetime change remounts and discards it. -->
       <!-- The Operator is the product's headline feature (thesis §16), so
            its trigger is a floating pill, bottom-centre of the content
            area — the one intentional exception to UI_STYLE §2/§9's
@@ -400,8 +459,9 @@ function logout() {
         <OperatorPanel
           v-if="askAvailable"
           v-show="askOpen"
+          :key="operatorIdentityKey"
           ref="operatorPanel"
-
+          :identity-key="operatorIdentityKey"
           @close="closeAsk"
         />
       </Transition>

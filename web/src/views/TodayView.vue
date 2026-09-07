@@ -9,32 +9,48 @@
 // Person page with `?outcome=<call_id>` (the Set-outcome dialog). Server
 // order is the only order (§3: `rank()` preserves SQL order; `low` arrives
 // last) — this view never sorts `items` itself.
-import { computed, h, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { Mail, Phone, PhoneOutgoing, Sun } from 'lucide-vue-next'
 import type { ColumnDef } from '@tanstack/vue-table'
 import PageHeader from '../components/PageHeader.vue'
 import DataTable from '../components/DataTable.vue'
 import Badge from '../components/Badge.vue'
 import LogContactDialog from '../components/LogContactDialog.vue'
-import { useMe, useToday } from '../api/queries'
+import { useAuthSessionLifetime, useDisableTodaySourceMutation, useMe, useToday, useTodaySources } from '../api/queries'
 import type { TodayItem, TodayReason } from '../api/types'
 import { formatAbsoluteTime, formatRelativeTime } from '../lib/format'
 import { buttonClasses } from '../lib/controls'
 import { describeApiError } from '../lib/errors'
 
+const route = useRoute()
 const router = useRouter()
 const { data: me } = useMe()
 const orgId = computed(() => me.value?.organization?.id ?? '')
+const actorId = computed(() => me.value?.user.id ?? '')
+const authSessionLifetime = useAuthSessionLifetime()
 
-const { data: todayData, dataUpdatedAt, isPending, isError, error } = useToday(orgId)
+const todayQuery = useToday(orgId, actorId)
+const { data: todayData, dataUpdatedAt, isPending, isError, error } = todayQuery
+const sourcesQuery = useTodaySources(orgId, actorId)
+const disableSource = useDisableTodaySourceMutation(orgId, actorId)
 const items = computed(() => todayData.value?.items ?? [])
+const showSources = ref(false)
+const removing = ref<string | null>(null)
+const sourceNotice = ref<string | null>(null)
+const sourceManager = ref<HTMLElement | null>(null)
+const removalFocus = ref<{
+  listId: string
+  index: number
+  orgId: string
+  actorId: string
+  authSession: number
+} | null>(null)
 
 const subtitle = computed(() => {
   if (isPending.value || isError.value) return undefined
   const count = items.value.length
-  const need = count === 1 ? 'needs' : 'need'
-  return `Updated ${formatRelativeTime(dataUpdatedAt.value)} · ${count} ${need} a response`
+  return `Updated ${formatRelativeTime(dataUpdatedAt.value)} · ${count} ${count === 1 ? 'item' : 'items'} of work`
 })
 
 function reasonLabel(reason: TodayReason): string {
@@ -49,10 +65,113 @@ function reasonLabel(reason: TodayReason): string {
       return 'Outcome needed'
     case 'client_replied':
       return 'Client replied'
+    case 'list_member':
+      return reason.name
   }
 }
 
-const PRIORITY_LABEL: Record<TodayItem['priority'], string> = { high: 'High', normal: 'Normal', low: 'Low' }
+const PRIORITY_LABEL: Record<TodayItem['priority'], string> = { high: 'High', normal: 'Normal', list: 'From your lists', low: 'Low' }
+
+function sourceError(error: string | null) {
+  if (error === 'unsupported_filter') return 'This list definition is no longer supported.'
+  if (error === 'invalid_stage') return 'This list refers to a stage that no longer exists.'
+  if (error === 'invalid_assignee') return 'This list refers to a member who no longer exists.'
+  return null
+}
+
+function removeSource(listId: string) {
+  if (removing.value === listId) return
+  const identity = {
+    orgId: orgId.value,
+    actorId: actorId.value,
+    authSession: authSessionLifetime.value,
+  }
+  const stillCurrent = () => orgId.value === identity.orgId && actorId.value === identity.actorId &&
+    authSessionLifetime.value === identity.authSession
+  const index = sourcesQuery.data.value?.sources.findIndex((source) => source.list_id === listId) ?? -1
+  removalFocus.value = {
+    listId,
+    index: Math.max(0, index),
+    ...identity,
+  }
+  removing.value = listId
+  sourceNotice.value = null
+  disableSource.mutate(listId, {
+    onError: async () => {
+      removalFocus.value = null
+      if (!stillCurrent()) return
+      const refreshed = await sourcesQuery.refetch()
+      if (!stillCurrent()) return
+      const stillEnabled = refreshed.data?.sources.some((source) => source.list_id === listId) ?? true
+      sourceNotice.value = stillEnabled
+        ? 'Could not confirm removal. Try again.'
+        : 'Removal completed, but the response was lost.'
+    },
+    onSettled: () => { if (stillCurrent() && removing.value === listId) removing.value = null },
+  })
+}
+
+watch(
+  () => sourcesQuery.data.value?.sources.map((source) => source.list_id),
+  async (sourceIds) => {
+    const pending = removalFocus.value
+    if (!pending) return
+    const stillCurrent = orgId.value === pending.orgId && actorId.value === pending.actorId &&
+      authSessionLifetime.value === pending.authSession
+    if (!stillCurrent || sourceIds?.includes(pending.listId)) {
+      if (!stillCurrent) removalFocus.value = null
+      return
+    }
+    removalFocus.value = null
+    await nextTick()
+    const removeButtons = sourceManager.value?.querySelectorAll<HTMLButtonElement>('[data-source-remove]')
+    const nextButton = removeButtons?.item(Math.min(pending.index, (removeButtons.length ?? 1) - 1))
+    ;(nextButton ?? sourceManager.value?.querySelector<HTMLElement>('a[href="/lists"]'))?.focus()
+  },
+)
+
+function retrySources() {
+  sourceNotice.value = null
+  void sourcesQuery.refetch()
+}
+
+function refreshToday() {
+  sourceNotice.value = null
+  void Promise.all([todayQuery.refetch(), sourcesQuery.refetch()])
+}
+
+const emptyTitle = computed(() =>
+  todayData.value?.sources.status === 'complete' ? "You're all caught up" : 'No available work to show',
+)
+const emptyMessage = computed(() =>
+  todayData.value?.sources.status === 'complete'
+    ? 'No work matches your current Today rules or sources.'
+    : 'Some sources could not load. Retry when they are available.',
+)
+
+watch([orgId, actorId, authSessionLifetime], () => {
+  sourceNotice.value = null
+  removing.value = null
+  removalFocus.value = null
+  showSources.value = false
+})
+
+// The cap notice may link directly to this panel. This is view-local route
+// state only: ordinary Today navigation and the normal Manager button keep
+// their existing behavior.
+watch(
+  () => route.query.sources,
+  (value) => {
+    if (value === '1') showSources.value = true
+  },
+  { immediate: true },
+)
+
+function refreshOnWindowFocus() {
+  refreshToday()
+}
+onMounted(() => window.addEventListener('focus', refreshOnWindowFocus))
+onBeforeUnmount(() => window.removeEventListener('focus', refreshOnWindowFocus))
 
 /** The item's `call_outcome_needed` reason, if any (§5a). */
 function outcomeNeededReason(item: TodayItem): { call_id: string; ended_at: string } | null {
@@ -125,8 +244,9 @@ const columns: ColumnDef<TodayItem>[] = [
       h(
         'div',
         { class: 'flex flex-wrap gap-1.5' },
-        info.row.original.reasons.map((reason) =>
-          h(Badge, { key: reason.code, tint: 'neutral' }, () => reasonLabel(reason)),
+        info.row.original.reasons.map((reason) => reason.code === 'list_member'
+          ? h(RouterLink, { key: `${reason.code}-${reason.list_id}`, to: `/lists/${reason.list_id}`, class: 'inline-flex' }, () => h(Badge, { tint: 'neutral' }, () => reasonLabel(reason)))
+          : h(Badge, { key: reason.code, tint: 'neutral' }, () => reasonLabel(reason)),
         ),
       ),
   },
@@ -142,8 +262,13 @@ const columns: ColumnDef<TodayItem>[] = [
     id: 'waiting_since',
     header: 'Waiting',
     cell: (info) => {
-      const value = info.row.original.waiting_since
-      return h('span', { title: formatAbsoluteTime(value) }, formatRelativeTime(value))
+      const item = info.row.original
+      const value = item.priority === 'list'
+        ? item.last_contact_attempt?.occurred_at ?? null
+        : item.waiting_since
+      return value
+        ? h('span', { title: formatAbsoluteTime(value) }, formatRelativeTime(value))
+        : h('span', { class: 'text-text-muted' }, 'Never contacted')
     },
   },
   {
@@ -157,6 +282,11 @@ const columns: ColumnDef<TodayItem>[] = [
           h(PhoneOutgoing, { class: 'h-4 w-4 shrink-0 text-text-muted', 'stroke-width': 1.5 }),
           h('span', { class: 'text-text' }, 'Set outcome'),
           h('span', { class: 'text-text-muted', title: formatAbsoluteTime(needed.ended_at) }, `Call ${formatRelativeTime(needed.ended_at)} has no outcome yet`),
+        ])
+      }
+      if (item.recommended_action === 'review_person') {
+        return h('div', { class: 'flex items-center gap-1.5' }, [
+          h('span', { class: 'text-text' }, 'Review person'),
         ])
       }
       const isCall = item.recommended_action === 'call'
@@ -205,7 +335,162 @@ const columns: ColumnDef<TodayItem>[] = [
     <PageHeader
       title="Today"
       :subtitle="subtitle"
-    />
+      stack-action-on-narrow
+    >
+      <template #action>
+        <div class="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            :class="buttonClasses('secondary')"
+            @click="refreshToday"
+          >
+            Refresh
+          </button>
+          <button
+            type="button"
+            :class="buttonClasses('secondary')"
+            @click="showSources = !showSources"
+          >
+            Manage sources
+          </button>
+        </div>
+      </template>
+    </PageHeader>
+
+    <section
+      v-if="showSources"
+      ref="sourceManager"
+      class="mb-5 rounded-xl border border-border bg-surface-0 p-4"
+      aria-label="Today sources"
+    >
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <h2 class="text-body font-semibold text-text">
+            Today sources
+          </h2>
+          <p class="mt-1 text-small text-text-muted">
+            Your saved lists can add current matches to Today, including colleagues’ or unassigned People. Broad lists stay active after contact unless their criteria no longer match. Urgent and normal work stay first; list work then shows never-contacted People before the oldest contact. Built-in work keeps its place when Today is full.
+          </p>
+        </div>
+        <RouterLink
+          to="/lists"
+          class="shrink-0 text-small font-medium text-accent hover:underline"
+        >
+          Lists
+        </RouterLink>
+      </div>
+      <p
+        v-if="sourcesQuery.data.value"
+        class="mt-3 text-small text-text-muted"
+      >
+        {{ sourcesQuery.data.value.sources.length }} of {{ sourcesQuery.data.value.limit }} sources
+      </p>
+      <div
+        v-if="sourcesQuery.isError.value"
+        class="mt-3 text-small text-danger"
+        role="status"
+      >
+        Could not load your source settings.
+        <button
+          type="button"
+          class="font-medium text-accent hover:underline"
+          @click="retrySources"
+        >
+          Try again
+        </button>
+      </div>
+      <p
+        v-if="sourceNotice"
+        class="mt-3 text-small text-danger"
+        role="status"
+      >
+        {{ sourceNotice }}
+      </p>
+      <p
+        v-if="sourcesQuery.isPending.value && !sourcesQuery.data.value"
+        class="mt-3 text-small text-text-muted"
+      >
+        Loading sources…
+      </p>
+      <ul
+        v-else-if="sourcesQuery.data.value"
+        class="mt-3 divide-y divide-border rounded-lg border border-border"
+      >
+        <li
+          v-for="source in sourcesQuery.data.value.sources"
+          :key="source.list_id"
+          class="flex items-center gap-3 px-3 py-2"
+        >
+          <RouterLink
+            :to="`/lists/${source.list_id}`"
+            class="min-w-0 flex-1 truncate text-body font-medium text-text"
+          >
+            {{ source.name }}
+          </RouterLink>
+          <span
+            v-if="sourceError(source.filter_error)"
+            class="text-small text-danger"
+          >{{ sourceError(source.filter_error) }}</span>
+          <button
+            type="button"
+            :class="buttonClasses('secondary')"
+            :disabled="removing === source.list_id"
+            :aria-label="`Remove ${source.name} source`"
+            data-source-remove
+            @click="removeSource(source.list_id)"
+          >
+            Remove
+          </button>
+        </li>
+        <li
+          v-if="sourcesQuery.data.value.sources.length === 0"
+          class="px-3 py-3 text-small text-text-muted"
+        >
+          No saved lists are feeding Today.
+        </li>
+      </ul>
+    </section>
+
+    <div
+      v-if="todayData && todayData.sources.status !== 'complete'"
+      class="mb-5 rounded-xl border border-border bg-surface-0 p-4 text-body text-text-muted"
+      role="status"
+    >
+      Some Today sources could not load. Available work is shown.
+      <ul
+        v-if="todayData.sources.issues.length > 0"
+        class="mt-2 list-disc space-y-1 pl-5 text-small"
+      >
+        <li
+          v-for="issue in todayData.sources.issues"
+          :key="issue.list_id"
+        >
+          <RouterLink
+            :to="`/lists/${issue.list_id}`"
+            class="font-medium text-accent hover:underline"
+          >
+            {{ issue.name }}
+          </RouterLink>
+          <span> could not load.</span>
+        </li>
+      </ul>
+      <div class="mt-3 flex items-center gap-2">
+        <button
+          type="button"
+          :class="buttonClasses('secondary')"
+          @click="refreshToday"
+        >
+          Retry
+        </button>
+        <button
+          type="button"
+          :class="buttonClasses('secondary')"
+          @click="showSources = true"
+        >
+          Manage sources
+        </button>
+      </div>
+    </div>
 
     <div
       v-if="isError"
@@ -228,8 +513,8 @@ const columns: ColumnDef<TodayItem>[] = [
       count-noun="items"
       count-noun-singular="item"
       :truncated="todayData?.truncated ?? false"
-      empty-title="You're all caught up"
-      empty-message="Nothing assigned to you is waiting for a response."
+      :empty-title="emptyTitle"
+      :empty-message="emptyMessage"
       :empty-icon="Sun"
     />
 

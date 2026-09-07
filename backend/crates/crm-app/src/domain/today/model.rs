@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use crate::domain::commands::ContactAttemptRef;
 use crate::domain::person::model::PersonSummary;
-use crate::ids::InquiryId;
+use crate::ids::{InquiryId, SavedListId};
 
 /// The strict freshness window (§3): `latest_inquiry.received_at > now -
 /// 24h`. Computed once, in SQL, and never re-evaluated by `rank()`.
@@ -43,6 +43,10 @@ pub enum TodayReason {
     ClientReplied {
         occurred_at: DateTime<Utc>,
     },
+    ListMember {
+        list_id: SavedListId,
+        name: String,
+    },
 }
 
 /// Tiers in list order: `high`, `normal`, then `low` (D-033's "outcome
@@ -52,6 +56,7 @@ pub enum TodayReason {
 pub enum TodayPriority {
     High,
     Normal,
+    List,
     Low,
 }
 
@@ -60,6 +65,7 @@ pub enum TodayPriority {
 pub enum RecommendedAction {
     Call,
     Email,
+    ReviewPerson,
     SetOutcome,
 }
 
@@ -78,8 +84,8 @@ pub struct TodayItem {
     pub priority: TodayPriority,
     pub recommended_action: RecommendedAction,
     pub reasons: Vec<TodayReason>,
-    pub waiting_since: DateTime<Utc>,
-    pub latest_inquiry: InquiryRef,
+    pub waiting_since: Option<DateTime<Utc>>,
+    pub latest_inquiry: Option<InquiryRef>,
     pub last_contact_attempt: Option<ContactAttemptRef>,
 }
 
@@ -89,6 +95,38 @@ pub struct TodayList {
     pub generated_at: DateTime<Utc>,
     pub items: Vec<TodayItem>,
     pub truncated: bool,
+    pub sources: TodaySources,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TodaySources {
+    pub status: TodaySourcesStatus,
+    pub issues: Vec<TodaySourceIssue>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TodaySourcesStatus {
+    Complete,
+    Partial,
+    Unavailable,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TodaySourceIssue {
+    pub list_id: SavedListId,
+    pub name: String,
+    pub revision: i64,
+    pub error: TodaySourceIssueError,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TodaySourceIssueError {
+    UnsupportedFilter,
+    InvalidStage,
+    InvalidAssignee,
+    Unavailable,
 }
 
 /// One raw candidate row (docs/specs/SLICE_003.md §4): everything `rank()`
@@ -145,6 +183,7 @@ mod tests {
             serde_json::to_value(TodayPriority::Normal).unwrap(),
             "normal"
         );
+        assert_eq!(serde_json::to_value(TodayPriority::List).unwrap(), "list");
         assert_eq!(serde_json::to_value(TodayPriority::Low).unwrap(), "low");
         assert!(TodayPriority::High < TodayPriority::Normal);
         assert!(TodayPriority::Normal < TodayPriority::Low);
@@ -159,6 +198,10 @@ mod tests {
         assert_eq!(
             serde_json::to_value(RecommendedAction::Call).unwrap(),
             "call"
+        );
+        assert_eq!(
+            serde_json::to_value(RecommendedAction::ReviewPerson).unwrap(),
+            "review_person"
         );
     }
 

@@ -20,6 +20,10 @@ workspace = true
 # `telephony::ScriptedProvider` for the integration tests (docs/specs/
 # SLICE_006.md §3, §14 item 7), mirroring crm-operator's feature.
 test-support = ["crm-app/test-support"]
+# The retained Phase B authenticated HTTP benchmark is an explicit release
+# command, never a normal ignored test: `scripts/check-db` runs every ignored
+# target and must not launch load while validating the ordinary DB suite.
+perf-harness = ["test-support"]
 
 [dependencies]
 axum = { workspace = true }
@@ -61,6 +65,14 @@ futures-util = { workspace = true }
 [[test]]
 name = "all"
 path = "tests/all.rs"
+
+# Opt-in only. The source is intentionally outside `tests/all.rs` and this
+# target is absent unless `--features perf-harness` is supplied to the one
+# documented Phase B release command.
+[[test]]
+name = "db_today_http_perf"
+path = "tests/db_today_http_perf.rs"
+required-features = ["perf-harness"]
 
 [[test]]
 name = "livekit_telephony"

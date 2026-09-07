@@ -1,0 +1,55 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.13s
+────────────
+ Nextest run ID 139b520d-973f-4fe3-b0a1-e8ea593c3a6d with nextest profile: default
+    Starting 29 tests across 1 binary (458 tests skipped)
+        PASS [   2.934s] ( 1/29) crm-api::all db_today_source_contracts::today_source_path_precedence_is_malformed_before_authentication
+        PASS [   2.994s] ( 2/29) crm-api::all db_today_source_contracts::today_source_enable_http_rejects_noncanonical_or_non_strict_bodies_before_mutation
+        PASS [   3.005s] ( 3/29) crm-api::all db_today_source_contracts::today_source_membership_deactivation_retains_preferences_and_reactivation_restores_them
+        PASS [   3.028s] ( 4/29) crm-api::all db_today_source_acceptance::today_source_deduplicates_overlap_and_keeps_builtin_reasons_beyond_prefix
+        PASS [   3.028s] ( 5/29) crm-api::all db_today_source_acceptance::today_source_evaluates_a_match_beyond_the_people_500_display_cap
+        PASS [   3.038s] ( 6/29) crm-api::all db_today_source_acceptance::today_source_resolves_me_per_viewer_and_matches_other_and_unassigned_people
+        PASS [   3.042s] ( 7/29) crm-api::all db_today_source_acceptance::today_source_orders_list_only_people_by_never_contacted_last_contact_and_uuid
+        PASS [   3.046s] ( 8/29) crm-api::all db_today_source_acceptance::today_source_reserves_builtin_capacity_at_199_200_and_201
+        PASS [   3.048s] ( 9/29) crm-api::all db_today_source_contracts::five_rollback_tombstones_are_invisible_and_leave_all_five_source_slots_available
+        FAIL [   1.403s] (10/29) crm-api::all db_today_source_filter_parity::today_source_parity_uses_latest_source_ties_and_excludes_stale_or_absent_sources
+  stdout ───
+
+    running 1 test
+    test db_today_source_filter_parity::today_source_parity_uses_latest_source_ties_and_excludes_stale_or_absent_sources ... FAILED
+
+    failures:
+
+    failures:
+        db_today_source_filter_parity::today_source_parity_uses_latest_source_ties_and_excludes_stale_or_absent_sources
+
+    test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 486 filtered out; finished in 1.39s
+
+  stderr ───
+
+    thread 'db_today_source_filter_parity::today_source_parity_uses_latest_source_ties_and_excludes_stale_or_absent_sources' (4508095) panicked at crates/crm-api/tests/db_today_source_filter_parity.rs:248:6:
+    called `Result::unwrap()` on an `Err` value: MalformedRequest
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+        PASS [   5.600s] (11/29) crm-api::all db_today_source_contracts::today_source_private_foreign_and_missing_ids_are_indistinguishable_to_members_and_admins
+        PASS [   2.934s] (12/29) crm-api::all db_today_source_filter_parity::today_source_parity_covers_every_v1_clause_kind_and_built_in_and_prefix_paths
+        PASS [   2.904s] (13/29) crm-api::all db_today_source_operator::today_source_operator_exposes_partial_empty_metadata_and_wraps_issue_name
+        PASS [   2.908s] (14/29) crm-api::all db_today_source_operator::today_source_operator_reports_bounded_absence_after_source_cap
+        PASS [   3.034s] (15/29) crm-api::all db_today_source_contracts::today_source_schema_enforces_composite_tenants_and_app_role_grants
+        PASS [   2.956s] (16/29) crm-api::all db_today_source_filter_parity::today_source_parity_covers_null_ages_corrections_and_captured_facts
+        PASS [   2.994s] (17/29) crm-api::all db_today_source_filter_parity::today_source_fixed_clock_age_boundaries_are_strict_and_not_within_is_inclusive
+        PASS [   2.952s] (18/29) crm-api::all db_today_source_operator::today_source_operator_and_http_share_order_positions_and_list_only_card
+        PASS [   2.966s] (19/29) crm-api::all db_today_source_filter_parity::today_source_parity_resolves_shared_me_and_unassigned_for_each_viewer
+        PASS [   2.389s] (20/29) crm-api::all db_today_source_races::today_source_enable_checks_revision_before_idempotence_and_cap
+        PASS [   2.243s] (21/29) crm-api::all db_today_source_races::today_source_enable_delete_race_leaves_no_preference_or_discoverable_configuration
+        PASS [   1.908s] (22/29) crm-api::all db_today_sources::today_source_cap_excludes_stale_tombstones
+        PASS [   1.933s] (23/29) crm-api::all db_today_sources::deleting_saved_list_removes_all_today_source_preferences
+        PASS [   1.904s] (24/29) crm-api::all db_today_sources::today_source_five_live_source_cap_holds_under_concurrent_enables
+        PASS [   1.912s] (25/29) crm-api::all db_today_sources::today_source_commands_are_idempotent_and_disable_stored_invalid_source
+        PASS [   1.949s] (26/29) crm-api::all db_today_source_races::today_source_opposing_enable_disable_race_has_a_serialized_final_state
+        PASS [   1.907s] (27/29) crm-api::all db_today_sources::today_source_only_person_keeps_nullable_fields_and_review_action
+        PASS [   1.963s] (28/29) crm-api::all db_today_source_races::today_source_http_mutations_and_list_delete_publish_no_organization_event
+        PASS [   2.529s] (29/29) crm-api::all db_today_sources::today_sources_are_private_and_organization_scoped
+────────────
+     Summary [   8.524s] 29 tests run: 28 passed, 1 failed, 458 skipped
+        FAIL [   1.403s] (10/29) crm-api::all db_today_source_filter_parity::today_source_parity_uses_latest_source_ties_and_excludes_stale_or_absent_sources
+error: test run failed

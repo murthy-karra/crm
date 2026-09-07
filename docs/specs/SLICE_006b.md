@@ -1,5 +1,11 @@
 # Slice 006b — Operator `start_call`: propose → confirm → receipt
 
+**Approved amendment — Slice 011c (2026-09-06):**
+[SLICE_011c §6](SLICE_011c.md) supplements §6's browser privacy/recovery
+behavior: conversation and proposal display state belong to one session, and
+late callbacks must not restore them after an identity/session replacement.
+Server proposal authorization, confirmation and execution semantics are unchanged.
+
 Status: REVIEWED (planner + reviewer 2026-08-23; claim-state fix applied)
 Targets: D-030 (006b), D-009 (application-enforced action risk), D-008,
 D-028 §1, D-029 (PII-free ledger), D-034 (no `crm-operator -> crm-app`

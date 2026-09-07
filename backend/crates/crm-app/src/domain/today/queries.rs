@@ -238,7 +238,8 @@ pub async fn candidates(
              (SELECT cm.value FROM contact_method cm
                 WHERE cm.person_id = p.id AND cm.kind = 'phone'
                 ORDER BY cm.created_at ASC LIMIT 1) as "primary_phone?",
-             (SELECT count(*) FROM inquiry i WHERE i.person_id = p.id) as "inquiry_count!",
+             (SELECT count(*) FROM inquiry i
+                WHERE i.person_id = p.id AND i.organization_id = p.organization_id) as "inquiry_count!",
              latest.id as "latest_inquiry_id?",
              latest.source as "latest_inquiry_source?",
              latest.received_at as "latest_inquiry_received_at?",
@@ -267,7 +268,7 @@ pub async fn candidates(
            LEFT JOIN LATERAL (
                SELECT i.id, i.source, i.received_at
                FROM inquiry i
-               WHERE i.person_id = p.id
+               WHERE i.person_id = p.id AND i.organization_id = p.organization_id
                ORDER BY i.received_at DESC, i.id DESC
                LIMIT 1
            ) latest ON true
@@ -283,7 +284,7 @@ pub async fn candidates(
            LEFT JOIN LATERAL (
                SELECT i2.received_at
                FROM inquiry i2
-               WHERE i2.person_id = p.id
+               WHERE i2.person_id = p.id AND i2.organization_id = p.organization_id
                  AND i2.received_at > COALESCE(last_attempt.occurred_at, '-infinity'::timestamptz)
                ORDER BY i2.received_at ASC
                LIMIT 1
@@ -291,12 +292,10 @@ pub async fn candidates(
            LEFT JOIN outcome_call oc ON oc.person_id = p.id
            -- Slice 009 (docs/specs/SLICE_009.md §6): the latest inbound/
            -- outbound correspondence per Person, feeding the client_replied
-           -- arm below. No organization_id filter here, matching every
-           -- other LATERAL join in this query (`latest`/`last_attempt`/
-           -- `waiting`) — person_id is trusted as org-consistent by
-           -- construction (the application never writes a fact row whose
-           -- person_id and organization_id disagree); the outer `WHERE
-           -- p.organization_id = $1` is the actual tenant boundary.
+           -- arm below. Every fact probe includes its organization predicate
+           -- (`latest`/`waiting`/count, effective attempts, and both
+           -- correspondence directions), while the outer
+           -- `p.organization_id = $1` remains the Person tenant boundary.
            LEFT JOIN LATERAL (
                SELECT cc.occurred_at
                FROM correspondence_captured cc

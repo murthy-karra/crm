@@ -1,0 +1,8 @@
+   Compiling crm-api v0.1.0 (/Users/karrad/projects/crm/backend/crates/crm-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.28s
+────────────
+ Nextest run ID 08ac03f3-9562-41c2-90c8-21c0ca9c5b99 with nextest profile: default
+    Starting 1 test across 1 binary (486 tests skipped)
+        PASS [   1.414s] (1/1) crm-api::all db_today_source_filter_parity::today_source_parity_uses_latest_source_ties_and_excludes_stale_or_absent_sources
+────────────
+     Summary [   1.415s] 1 test run: 1 passed, 486 skipped

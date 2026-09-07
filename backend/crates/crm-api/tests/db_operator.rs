@@ -1005,10 +1005,12 @@ async fn explain_priority_position_matches_today_query_and_get_api_today(migrato
         assert_eq!(r["total"], 3);
         assert_eq!(r["ahead"]["high"], want_high);
         assert_eq!(r["ahead"]["normal"], want_normal);
+        assert_eq!(r["ahead"]["list"], 0);
         assert_eq!(
             r["ordering_rule"],
-            "high_before_normal_before_low, then waiting_since ascending (ended_at for low), then id"
+            "built_in_work_is_admitted_before_list_matches_at_the_200_item_cap; display_high_then_normal_then_list_then_low; list_matches_sort_by_last_contact_attempt_ascending_with_never_contacted_first_then_person_id; built_in_high_and_normal_sort_by_waiting_since_then_id; low_sorts_by_ended_at_then_id"
         );
+        assert_eq!(r["sources"]["status"], "complete");
         assert_eq!(r["person"]["id"], person.to_string());
         assert!(r["reasons"]
             .as_array()
@@ -1018,9 +1020,8 @@ async fn explain_priority_position_matches_today_query_and_get_api_today(migrato
     }
     let _ = provider;
 
-    // A Person assigned to someone else is NotAssignedToYou with the
-    // assignee's display name; one assigned to me but answered is
-    // AlreadyContacted.
+    // Absence is only absence from the bounded response. Assignment and
+    // contact history do not prove why a Person was omitted.
     let for_carol = create_person(
         &router,
         &alice,
@@ -1052,8 +1053,9 @@ async fn explain_priority_position_matches_today_query_and_get_api_today(migrato
         .unwrap();
     let result: Value = serde_json::from_str(&tool_msg).unwrap();
     assert_eq!(result["result"]["status"], "not_on_today");
-    assert_eq!(result["result"]["reason"], "not_assigned_to_you");
-    assert_eq!(result["result"]["assigned_user_display_name"], "Carol");
+    assert_eq!(result["result"]["reason"], "not_in_returned_today");
+    assert_eq!(result["result"]["truncated"], false);
+    assert_eq!(result["result"]["sources"]["status"], "complete");
 
     let attempt = crate::common::post_json_with_cookie(
         &router,
@@ -1087,7 +1089,7 @@ async fn explain_priority_position_matches_today_query_and_get_api_today(migrato
         .unwrap();
     let result: Value = serde_json::from_str(&tool_msg).unwrap();
     assert_eq!(result["result"]["status"], "not_on_today");
-    assert_eq!(result["result"]["reason"], "already_contacted");
+    assert_eq!(result["result"]["reason"], "not_in_returned_today");
 }
 
 // --- Prompt-injection containment -----------------------------------------

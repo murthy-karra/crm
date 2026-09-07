@@ -7,6 +7,8 @@ use rand::Rng;
 use sha2::Sha256;
 use sqlx::PgPool;
 use std::time::Duration;
+#[cfg(feature = "test-support")]
+use std::time::Instant;
 use uuid::Uuid;
 
 use crate::config::SessionSecret;
@@ -116,6 +118,31 @@ pub async fn verify(
 ) -> Result<Option<SessionIdentity>, sqlx::Error> {
     let token_hash = hash_token(secret, token);
 
+    #[cfg(feature = "test-support")]
+    let acquire_started = Instant::now();
+    let mut connection = match pool.acquire().await {
+        Ok(connection) => {
+            #[cfg(feature = "test-support")]
+            crate::domain::today::test_support::record_authentication_pool_acquisition(
+                crate::domain::today::test_support::PoolAcquisitionOutcome::Acquired,
+                acquire_started.elapsed(),
+            );
+            connection
+        }
+        Err(error) => {
+            #[cfg(feature = "test-support")]
+            crate::domain::today::test_support::record_authentication_pool_acquisition(
+                if matches!(&error, sqlx::Error::PoolTimedOut) {
+                    crate::domain::today::test_support::PoolAcquisitionOutcome::TimedOut
+                } else {
+                    crate::domain::today::test_support::PoolAcquisitionOutcome::Failed
+                },
+                acquire_started.elapsed(),
+            );
+            return Err(error);
+        }
+    };
+
     let row = sqlx::query_as::<_, SessionIdentityRow>(
         "SELECT u.id AS user_id, u.email, u.display_name,
                 o.id AS organization_id, o.name AS organization_name,
@@ -134,7 +161,7 @@ pub async fn verify(
                 OR (m.status = 'active'))",
     )
     .bind(&token_hash)
-    .fetch_optional(pool)
+    .fetch_optional(&mut *connection)
     .await?;
 
     let Some(row) = row else {

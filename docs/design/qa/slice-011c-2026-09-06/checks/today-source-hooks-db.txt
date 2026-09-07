@@ -1,0 +1,51 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.13s
+────────────
+ Nextest run ID 81d0367d-d8f2-4862-9a07-a59b5788a493 with nextest profile: default
+    Starting 4 tests across 1 binary (514 tests skipped)
+        FAIL [   1.288s] (1/4) crm-api::all db_today_source_hooks::today_source_after_builtins_gate_keeps_one_snapshot_across_list_and_contact_mutations
+  stdout ───
+
+    running 1 test
+    test db_today_source_hooks::today_source_after_builtins_gate_keeps_one_snapshot_across_list_and_contact_mutations ... FAILED
+
+    failures:
+
+    failures:
+        db_today_source_hooks::today_source_after_builtins_gate_keeps_one_snapshot_across_list_and_contact_mutations
+
+    test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 517 filtered out; finished in 1.28s
+
+  stderr ───
+
+    thread 'db_today_source_hooks::today_source_after_builtins_gate_keeps_one_snapshot_across_list_and_contact_mutations' (4600230) panicked at crates/crm-api/tests/db_today_source_hooks.rs:491:5:
+    the snapshot must retain the old list definition
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+        FAIL [   1.213s] (2/4) crm-api::all db_today_source_hooks::today_source_backend_termination_marks_current_and_remaining_sources_unavailable
+  stdout ───
+
+    running 1 test
+    test db_today_source_hooks::today_source_backend_termination_marks_current_and_remaining_sources_unavailable ... FAILED
+
+    failures:
+
+    failures:
+        db_today_source_hooks::today_source_backend_termination_marks_current_and_remaining_sources_unavailable
+
+    test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 517 filtered out; finished in 1.20s
+
+  stderr ───
+
+    thread 'db_today_source_hooks::today_source_backend_termination_marks_current_and_remaining_sources_unavailable' (4600245) panicked at crates/crm-api/tests/db_today_source_hooks.rs:644:5:
+    assertion `left == right` failed: B and the unattempted C source are explicitly unavailable
+      left: [8e9094a0-5491-4773-bca7-0f312a9def21]
+     right: [8e9094a0-5491-4773-bca7-0f312a9def21, ed15bde9-3df0-4828-8d28-68febd5a7c2f]
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+        PASS [   2.106s] (3/4) crm-api::all db_today_source_hooks::today_source_membership_checkpoint_sql_failure_discards_only_that_source
+        PASS [   1.425s] (4/4) crm-api::all db_today_source_hooks::today_source_recovery_checkpoint_exhaustion_uses_cleanup_grace_and_discards_connection
+────────────
+     Summary [   6.037s] 4 tests run: 2 passed, 2 failed, 514 skipped
+        FAIL [   1.288s] (1/4) crm-api::all db_today_source_hooks::today_source_after_builtins_gate_keeps_one_snapshot_across_list_and_contact_mutations
+        FAIL [   1.213s] (2/4) crm-api::all db_today_source_hooks::today_source_backend_termination_marks_current_and_remaining_sources_unavailable
+error: test run failed

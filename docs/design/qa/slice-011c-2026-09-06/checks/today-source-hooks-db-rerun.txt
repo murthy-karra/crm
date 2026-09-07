@@ -1,0 +1,42 @@
+   Compiling crm-api v0.1.0 (/Users/karrad/projects/crm/backend/crates/crm-api)
+warning: unused variable: `c`
+   --> crates/crm-api/tests/db_today_source_hooks.rs:611:9
+    |
+611 |     let c = sources[2].list.id;
+    |         ^ help: if this is intentional, prefix it with an underscore: `_c`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: `crm-api` (test "all") generated 1 warning (run `cargo fix --test "all" -p crm-api` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 8.83s
+────────────
+ Nextest run ID c4142520-589c-4efb-bd20-2bc8d0f0ed43 with nextest profile: default
+    Starting 4 tests across 1 binary (514 tests skipped)
+        PASS [   1.388s] (1/4) crm-api::all db_today_source_hooks::today_source_after_builtins_gate_keeps_one_snapshot_across_list_and_contact_mutations
+        FAIL [   1.239s] (2/4) crm-api::all db_today_source_hooks::today_source_backend_termination_marks_current_and_remaining_sources_unavailable
+  stdout ───
+
+    running 1 test
+    test db_today_source_hooks::today_source_backend_termination_marks_current_and_remaining_sources_unavailable ... FAILED
+
+    failures:
+
+    failures:
+        db_today_source_hooks::today_source_backend_termination_marks_current_and_remaining_sources_unavailable
+
+    test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 517 filtered out; finished in 1.23s
+
+  stderr ───
+
+    thread 'db_today_source_hooks::today_source_backend_termination_marks_current_and_remaining_sources_unavailable' (4603253) panicked at crates/crm-api/tests/db_today_source_hooks.rs:664:5:
+    assertion `left != right` failed: unrecoverable source cleanup must dispose the old owned connection
+      left: 204601
+     right: 204601
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+        PASS [   1.779s] (3/4) crm-api::all db_today_source_hooks::today_source_membership_checkpoint_sql_failure_discards_only_that_source
+        PASS [   1.430s] (4/4) crm-api::all db_today_source_hooks::today_source_recovery_checkpoint_exhaustion_uses_cleanup_grace_and_discards_connection
+────────────
+     Summary [   5.837s] 4 tests run: 3 passed, 1 failed, 514 skipped
+        FAIL [   1.239s] (2/4) crm-api::all db_today_source_hooks::today_source_backend_termination_marks_current_and_remaining_sources_unavailable
+error: test run failed

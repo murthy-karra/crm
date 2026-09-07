@@ -1,5 +1,13 @@
 # Slice 011b — Saved lists
 
+**Approved amendment — Slice 011c (2026-09-06):**
+[SLICE_011c §§2–6](SLICE_011c.md) extend §§3–7 with per-agent Today source
+controls/routes, live saved-definition evaluation, atomic source-preference
+cleanup on list deletion, and actor-aware cache/refresh behavior. Existing
+personal-list privacy, definition limits and save/copy permissions remain.
+Only the viewer's saved baseline can be enabled; unsaved filter edits do not
+silently change a source.
+
 **Status: APPROVED — user, 2026-09-06, after independent Astra/ultra review
 and the plain-language companion. Implementation is authorized.** Drafted
 against `main` at `1635fc4`; D-046 supplies the accepted privacy and limits.
@@ -32,7 +40,7 @@ validation. Membership is evaluated when read against authoritative PostgreSQL
 data. Saving, copying or deleting a list never mutates a Person or its history.
 
 Out of scope: Today integration (011c), built-in feeds (011d), tags (011e),
-per-list sorting (the separately accepted follow-up immediately after 011b),
+per-list sorting (the separately queued 011b-sort follow-up),
 People search, OR groups, collections, manual member selection, pinned/default
 lists, shared-list ownership transfer, personal-to-shared conversion in place,
 bulk operations, mobile and Operator tools. No new dependency, service, general

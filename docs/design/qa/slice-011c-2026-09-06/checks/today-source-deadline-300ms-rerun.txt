@@ -1,0 +1,9 @@
+   Compiling crm-app v0.1.0 (/Users/karrad/projects/crm/backend/crates/crm-app)
+   Compiling crm-api v0.1.0 (/Users/karrad/projects/crm/backend/crates/crm-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 28.35s
+────────────
+ Nextest run ID 4d45f89c-1f58-44d8-b85b-ead829c87958 with nextest profile: default
+    Starting 1 test across 1 binary (521 tests skipped)
+        PASS [   1.885s] (1/1) crm-api::all db_today_source_deadlines::today_source_uses_one_absolute_deadline_through_savepoint_membership_and_release
+────────────
+     Summary [   1.885s] 1 test run: 1 passed, 521 skipped

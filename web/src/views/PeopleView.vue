@@ -14,7 +14,10 @@ import FilterBar from '../components/FilterBar.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import SavedListDialog from '../components/SavedListDialog.vue'
 import {
+  useAuthSessionLifetime,
   useCreateSavedListMutation,
+  useDisableTodaySourceMutation,
+  useEnableTodaySourceMutation,
   useDeleteSavedListMutation,
   useInquirySources,
   useMe,
@@ -23,6 +26,7 @@ import {
   useSavedList,
   useSavedListCount,
   useStages,
+  useTodaySources,
   useUpdateSavedListMutation,
   queryKeys,
 } from '../api/queries'
@@ -39,6 +43,12 @@ const { data: me } = useMe()
 const queryClient = useQueryClient()
 const orgId = computed(() => me.value?.organization?.id ?? '')
 const actorId = computed(() => me.value?.user.id ?? '')
+const authSessionLifetime = useAuthSessionLifetime()
+const todaySourcesQuery = useTodaySources(orgId, actorId)
+const enableTodaySource = useEnableTodaySourceMutation(orgId, actorId)
+const disableTodaySource = useDisableTodaySourceMutation(orgId, actorId)
+const todaySourceError = ref<string | null>(null)
+const todaySourceLimitReached = ref(false)
 
 const stagesQuery = useStages(orgId)
 const stages = computed(() => stagesQuery.data.value?.stages ?? [])
@@ -160,6 +170,76 @@ const workingReferencesResolvable = computed(() => {
 const namedDefinitionUsable = computed(() =>
   namedDefinitionReadable.value && workingReferencesResolvable.value,
 )
+// Source commands operate on the reviewed persisted baseline. A local
+// repair/preview can keep the People table useful, but it must never enable
+// an unreviewed definition or submit a newer revision observed behind a
+// dirty draft.
+const todaySourceConfigurationKnown = computed(() =>
+  todaySourcesQuery.data.value !== undefined && !todaySourcesQuery.isError.value,
+)
+const namedSourceEligible = computed(() => {
+  const detail = savedListQuery.data.value
+  const baseline = savedBaseline.value
+  return namedDefinitionReadable.value && baseline?.id === props.savedListId &&
+    detail?.filter_error === null && todaySourceConfigurationKnown.value
+})
+const namedTodaySource = computed(() => todaySourcesQuery.data.value?.sources
+  .find((source) => source.list_id === props.savedListId) ?? null)
+const todaySourcePending = computed(() => enableTodaySource.isPending.value || disableTodaySource.isPending.value)
+
+function retryTodaySourceSettings() {
+  todaySourceError.value = null
+  todaySourceLimitReached.value = false
+  void todaySourcesQuery.refetch()
+}
+
+function toggleTodaySource() {
+  if (todaySourcePending.value) return
+  const identity = captureViewIdentity()
+  const source = namedTodaySource.value
+  todaySourceError.value = null
+  todaySourceLimitReached.value = false
+  if (source) {
+    disableTodaySource.mutate(source.list_id, {
+      onError: async () => {
+        if (!currentIdentityMatches(identity)) return
+        const refreshed = await todaySourcesQuery.refetch()
+        if (!currentIdentityMatches(identity)) return
+        const stillEnabled = refreshed.data?.sources.some((item) => item.list_id === source.list_id) ?? true
+        todaySourceError.value = stillEnabled
+          ? 'Could not confirm removal. Try again.'
+          : 'Removal completed, but the response was lost.'
+      },
+    })
+    return
+  }
+  const list = savedBaseline.value
+  if (!list || !currentIdentityMatches(identity)) return
+  if (!namedSourceEligible.value) {
+    todaySourceError.value = 'Reload the saved version and review it before enabling Today.'
+    return
+  }
+  enableTodaySource.mutate({ listId: list.id, body: { expected_list_revision: list.revision } }, {
+    onError: async (error) => {
+      if (!currentIdentityMatches(identity)) return
+      if (error instanceof ApiError && error.code === 'saved_list_conflict') {
+        todaySourceError.value = 'This list changed. Reload the saved version and review it before enabling Today.'
+        await savedListQuery.refetch()
+        if (!currentIdentityMatches(identity)) return
+      } else if (error instanceof ApiError && error.code === 'today_source_limit_reached') {
+        todaySourceLimitReached.value = true
+        todaySourceError.value = 'You have reached the five-source limit.'
+      } else {
+        const refreshed = await todaySourcesQuery.refetch()
+        if (!currentIdentityMatches(identity)) return
+        const enabled = refreshed.data?.sources.some((source) => source.list_id === list.id) ?? false
+        todaySourceError.value = enabled
+          ? 'Source enabled, but the response was lost.'
+          : 'Could not add this Today source. Try again.'
+      }
+    },
+  })
+}
 const namedPeopleEnabled = computed(() => {
   if (!isNamedList.value) return true
   // A failed detail request can retain old TanStack data. It is never an
@@ -269,16 +349,29 @@ const namedCount = useSavedListCount(
 async function refreshNamedWorkspace() {
   const identity = captureViewIdentity()
   const response = await savedListQuery.refetch()
-  if (response.isError || !response.data || !currentIdentityMatches(identity) || !namedDefinitionUsable.value) return
+  if (response.isError || !response.data || !currentIdentityMatches(identity)) return
+  // Source state is its own actor-private read. It remains refreshable even
+  // when this saved definition is no longer usable for the People table so
+  // an enabled invalid source can still be removed accurately.
+  void queryClient.invalidateQueries({ queryKey: queryKeys.today(identity.orgId) })
+  const sourceRefresh = todaySourcesQuery.refetch()
+  if (!namedDefinitionUsable.value) {
+    await sourceRefresh
+    return
+  }
   // Detail is the authority for readable criteria. Refresh both dependent
   // reads even when the revision/filter string is unchanged: relative-time
   // filters and cached counts may have crossed a boundary.
-  await Promise.allSettled([refetch(), namedCount.refetch()])
+  await Promise.allSettled([refetch(), namedCount.refetch(), sourceRefresh])
 }
 
 watch(() => savedListQuery.dataUpdatedAt.value, (updatedAt, previous) => {
   if (updatedAt === 0 || updatedAt === previous) return
   void nextTick(() => {
+    if (isNamedList.value) {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.today(orgId.value) })
+      void todaySourcesQuery.refetch()
+    }
     if (isNamedList.value && namedDefinitionUsable.value) {
       void refetch()
       void namedCount.refetch()
@@ -291,6 +384,7 @@ interface SavedListViewIdentity {
   orgId: string
   actorId: string
   session: MeResponse | undefined
+  authSession: number
   viewEpoch: number
   listId: string
 }
@@ -326,6 +420,7 @@ function captureViewIdentity(): SavedListViewIdentity {
     orgId: orgId.value,
     actorId: actorId.value,
     session: me.value,
+    authSession: authSessionLifetime.value,
     viewEpoch,
     listId: props.savedListId,
   }
@@ -334,6 +429,7 @@ function captureViewIdentity(): SavedListViewIdentity {
 function currentIdentityMatches(identity: SavedListViewIdentity) {
   return activeView && me.value === identity.session &&
     orgId.value === identity.orgId && actorId.value === identity.actorId &&
+    authSessionLifetime.value === identity.authSession &&
     viewEpoch === identity.viewEpoch && props.savedListId === identity.listId
 }
 
@@ -358,6 +454,8 @@ async function reconcileSavedUpdate(
     saveNotice.value = draftChangedDuringRequest
       ? 'The saved version includes the submitted changes. Your newer local edits are still unsaved.'
       : 'The saved version already includes those changes.'
+    void queryClient.invalidateQueries({ queryKey: queryKeys.today(identity.orgId) })
+    void todaySourcesQuery.refetch()
     return
   }
   // Rebase the draft on the reviewed current revision without changing its
@@ -711,12 +809,13 @@ onBeforeRouteUpdate((to, from) => {
 // completion captures this epoch, so an old mutation/reset cannot navigate
 // or alter the new workspace even when the actor and Organization match.
 watch(
-  () => [props.savedListId, orgId.value, actorId.value, me.value] as const,
-  ([nextListId, nextOrgId, nextActorId, nextSession], [previousListId, previousOrgId, previousActorId, previousSession]) => {
+  () => [props.savedListId, orgId.value, actorId.value, me.value, authSessionLifetime.value] as const,
+  ([nextListId, nextOrgId, nextActorId, nextSession, nextAuthSession], [previousListId, previousOrgId, previousActorId, previousSession, previousAuthSession]) => {
     viewEpoch++
     const listChanged = nextListId !== previousListId
     const publicIdentityChanged = previousOrgId !== nextOrgId || previousActorId !== nextActorId
     const loggedOut = previousSession !== undefined && nextSession === undefined
+    const authLifetimeChanged = nextAuthSession !== previousAuthSession
     // A route switch closes view-local controls even when A and B serialize
     // identically. A same-actor `/me` refresh still advances the epoch (late
     // mutations are suppressed), but deliberately preserves an accessible
@@ -731,15 +830,17 @@ watch(
     pendingDelete.value = null
     saveError.value = undefined
     saveNotice.value = ''
+    todaySourceError.value = null
+    todaySourceLimitReached.value = false
     deleteConflictMessage.value = ''
-    if (listChanged || (isNamedList.value && previousSession !== undefined && (publicIdentityChanged || loggedOut))) {
+    if (listChanged || (isNamedList.value && previousSession !== undefined && (publicIdentityChanged || loggedOut || authLifetimeChanged))) {
       savedBaseline.value = null
       nameDraft.value = ''
       clauses.value = []
       filterOrigin.value = null
       editorRevision.value++
     }
-    if ((publicIdentityChanged || loggedOut) && previousOrgId !== '' && previousActorId !== '') {
+    if ((publicIdentityChanged || loggedOut || authLifetimeChanged) && previousOrgId !== '' && previousActorId !== '') {
       const listPrefix = queryKeys.savedLists(previousOrgId, previousActorId)
       const countPrefix = queryKeys.savedListCountsForActor(previousOrgId, previousActorId)
       void queryClient.cancelQueries({ queryKey: listPrefix })
@@ -909,6 +1010,15 @@ const columns: ColumnDef<PersonSummary>[] = [
                 />
                 Delete
               </button>
+              <button
+                v-if="currentSavedMetadata && (namedDefinitionUsable || namedTodaySource)"
+                type="button"
+                :class="buttonClasses('secondary')"
+                :disabled="todaySourcePending || (!namedTodaySource && !namedSourceEligible)"
+                @click="toggleTodaySource"
+              >
+                {{ namedTodaySource ? 'Remove from Today' : 'Use as a Today source' }}
+              </button>
             </template>
             <template v-else>
               <button
@@ -1052,6 +1162,52 @@ const columns: ColumnDef<PersonSummary>[] = [
             {{ currentSavedMetadata.scope === 'shared'
               ? 'Shared with everyone in this Organization'
               : 'Personal list — only you can use it' }}
+          </p>
+          <p
+            v-if="currentSavedMetadata"
+            class="mt-2 text-small text-text-muted"
+          >
+            For your Today only. Today uses the saved version; broad stage or source lists can continue showing a person after contact. Add an activity criterion for repeat-contact work.
+          </p>
+          <p
+            v-if="todaySourcesQuery.data.value"
+            class="mt-2 text-small text-text-muted"
+          >
+            {{ todaySourcesQuery.data.value.sources.length }} of {{ todaySourcesQuery.data.value.limit }} Today sources in use.
+          </p>
+          <p
+            v-if="todaySourcesQuery.isError.value"
+            class="mt-2 text-small text-danger"
+            role="status"
+          >
+            Could not load your Today source settings.
+            <button
+              type="button"
+              class="font-medium text-accent hover:underline"
+              @click="retryTodaySourceSettings"
+            >
+              Try again
+            </button>
+          </p>
+          <p
+            v-if="isDirty"
+            class="mt-2 text-small text-text-muted"
+          >
+            Today uses the saved version. Save your draft before enabling it if you want these changes to apply.
+          </p>
+          <p
+            v-if="todaySourceError"
+            role="alert"
+            class="mt-2 text-small text-danger"
+          >
+            {{ todaySourceError }}
+            <RouterLink
+              v-if="todaySourceLimitReached"
+              to="/?sources=1"
+              class="font-medium text-accent hover:underline"
+            >
+              Manage sources
+            </RouterLink>
           </p>
           <div
             v-if="isDirty"

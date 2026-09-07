@@ -53,6 +53,32 @@ async fn crm_app_has_exactly_the_slice_002_grants(migrator_pool: PgPool) {
         "stage: DELETE must be denied for crm_app"
     );
 
+    // Slice 011c source preferences are ordinary private configuration:
+    // crm_app can read/insert/delete through typed commands but cannot
+    // update in place or truncate another actor's settings.
+    let source_select = sqlx::query("SELECT * FROM today_work_source")
+        .fetch_all(&app_pool)
+        .await;
+    assert!(
+        source_select.is_ok(),
+        "today_work_source: SELECT must succeed for crm_app"
+    );
+    let source_update =
+        sqlx::query("UPDATE today_work_source SET created_at = created_at WHERE false")
+            .execute(&app_pool)
+            .await;
+    assert!(
+        source_update.is_err(),
+        "today_work_source: UPDATE must be denied for crm_app"
+    );
+    let source_truncate = sqlx::query("TRUNCATE today_work_source")
+        .execute(&app_pool)
+        .await;
+    assert!(
+        source_truncate.is_err(),
+        "today_work_source: TRUNCATE must be denied for crm_app"
+    );
+
     // `contact_method`, `inquiry`, and the fact tables (the five from
     // Slices 002/003 plus `call_completed`, docs/specs/SLICE_006.md §2):
     // SELECT + INSERT, no UPDATE/DELETE.

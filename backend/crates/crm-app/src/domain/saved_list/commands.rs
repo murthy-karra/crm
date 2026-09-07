@@ -407,6 +407,18 @@ async fn delete_saved_list_attempt(
     if changed.rows_affected() != 1 {
         return Err(SavedListError::Conflict);
     }
+    // A live definition is the source of truth for every actor's Today
+    // preference. Deleting it removes all such preferences atomically with
+    // its tombstone, so a later read cannot see a name/filter that deletion
+    // has already withdrawn.
+    sqlx::query!(
+        r#"DELETE FROM today_work_source
+           WHERE organization_id = $1 AND list_id = $2"#,
+        ctx.organization_id.0,
+        cmd.list_id.0,
+    )
+    .execute(&mut *tx)
+    .await?;
     tx.commit().await?;
     Ok(DeleteSavedListOutcome { deleted: true })
 }
@@ -414,7 +426,7 @@ async fn delete_saved_list_attempt(
 /// Membership authorization must be decided inside every mutation
 /// transaction; the `FOR SHARE` lock remains held through commit and blocks
 /// a concurrent role/status UPDATE from slipping between check and write.
-async fn lock_current_membership(
+pub(crate) async fn lock_current_membership(
     conn: &mut PgConnection,
     organization_id: crate::ids::OrganizationId,
     actor_user_id: UserId,
@@ -441,7 +453,7 @@ async fn lock_current_membership(
 /// One namespace for all saved-list writes in an Organization. This makes
 /// quota count+insert atomic and gives create/update/delete a single lock
 /// order after membership, without contending with admin or intake locks.
-async fn acquire_saved_lists_lock(
+pub(crate) async fn acquire_saved_lists_lock(
     conn: &mut PgConnection,
     organization_id: crate::ids::OrganizationId,
 ) -> Result<(), SavedListError> {

@@ -1,0 +1,16 @@
+
+running 1 test
+test slice_011c_authenticated_http_performance_harness ... 
+thread 'slice_011c_authenticated_http_performance_harness' (4872815) panicked at crates/crm-api/tests/db_today_http_perf.rs:2415:5:
+Phase B HTTP acceptance failed; retained safe evidence at /Users/karrad/projects/crm/backend/crates/crm-api/../../target/slice-011c-http/run-1788748995137601000.json
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    slice_011c_authenticated_http_performance_harness
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 21 filtered out; finished in 234.55s
+
+RUN_EXIT=101

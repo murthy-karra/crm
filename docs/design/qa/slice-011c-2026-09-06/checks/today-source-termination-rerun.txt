@@ -1,0 +1,28 @@
+   Compiling crm-api v0.1.0 (/Users/karrad/projects/crm/backend/crates/crm-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 10.51s
+────────────
+ Nextest run ID 50fed157-b16d-41e1-857e-1f62f1822beb with nextest profile: default
+    Starting 1 test across 1 binary (517 tests skipped)
+        FAIL [   1.318s] (1/1) crm-api::all db_today_source_hooks::today_source_backend_termination_marks_current_and_remaining_sources_unavailable
+  stdout ───
+
+    running 1 test
+    test db_today_source_hooks::today_source_backend_termination_marks_current_and_remaining_sources_unavailable ... FAILED
+
+    failures:
+
+    failures:
+        db_today_source_hooks::today_source_backend_termination_marks_current_and_remaining_sources_unavailable
+
+    test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 517 filtered out; finished in 1.30s
+
+  stderr ───
+
+    thread 'db_today_source_hooks::today_source_backend_termination_marks_current_and_remaining_sources_unavailable' (4610154) panicked at crates/crm-api/tests/db_today_source_hooks.rs:647:10:
+    [Database debug structure omitted from archive: SQLSTATE 42501; test control role lacked permission to terminate the target backend.]
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+────────────
+     Summary [   1.319s] 1 test run: 0 passed, 1 failed, 517 skipped
+        FAIL [   1.318s] (1/1) crm-api::all db_today_source_hooks::today_source_backend_termination_marks_current_and_remaining_sources_unavailable
+error: test run failed

@@ -49,6 +49,7 @@ export default defineConfig(({ mode }) => {
       // service-free (SLICE_003 §10/§13 criterion 8) — no network, no real
       // SDK; happy-dom never talks to anything.
       environment: 'happy-dom',
+      setupFiles: ['./src/testSetup.ts'],
     },
   }
 })

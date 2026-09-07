@@ -1,14 +1,15 @@
 # Project State
 
-Last updated: 2026-09-06, late evening (Slice 011c complete: verified under the
-Claude takeover, three user decisions taken, committed and merged locally).
+Last updated: 2026-09-06, late evening (Slice 011c complete and pushed; 011b and
+011c branches deleted after the merge).
 
 ## Current phase
 
 **Slice 011c (saved lists feed Today) — COMPLETE AND MERGED TO LOCAL MAIN.**
 The user approved the §8 planner amendment, accepted the Phase B pairing
 limitation and approved the local commit and merge on 2026-09-06 (late
-evening); push and deployment were not authorized.
+evening). Both 011b and 011c were then pushed to `origin/main` at the user's
+request; deployment was not authorized.
 
 How it got here: the Codex lanes (Astra / Terra, `xhigh`) specified, built,
 reviewed and browser-walked the slice, then ran out of usage on the evening of
@@ -142,10 +143,10 @@ docs/plans/SLICE_011_LADDER.md (011a done → 011b done → **011c** →
 
 ## Current branch
 
-`main`, after the approved local merge of `codex/slice-011c-today-sources`.
-Implementation commit: `6117b4a`, based on `9d62e86` (the full file inventory
-is in the verification record). The slice branch is retained. Neither 011b
-nor 011c has been pushed; deployment was not authorized. The shared
+`main` at `929b6ab`, pushed to `origin/main` on 2026-09-06 (the push carried
+011b's `2af023c`/`9d62e86` and 011c's `6117b4a`/`b4c4226`/`929b6ab`). The
+011b and 011c slice branches were deleted locally after the merge; they never
+existed on the remote. Deployment was not authorized. The shared
 development runtime still runs the pre-011b binary and `crm_dev` lacks both
 new migrations; restarting it needs `./scripts/db-migrate` first.
 
@@ -163,8 +164,8 @@ and the 2026-08-29 sort-rung decision above.
 
 ## Slice ledger
 
-All entries are complete and merged to main. Through 011a they were pushed;
-011b and 011c are merged locally only.
+All entries are complete, merged to main and pushed (011b and 011c were pushed
+together on 2026-09-06).
 
 | Slice | What | Merge |
 |---|---|---|
@@ -191,8 +192,8 @@ All entries are complete and merged to main. Through 011a they were pushed;
 | 008 | Intake routing modes / round-robin (D-041) | `defdab1` |
 | 009 | Correspondence capture v1 (D-042; largest slice, 78 files) | `807d7c2` |
 | 011a | Filter vocabulary + ad-hoc People filtering (D-043) | `4aee12d` |
-| 011b | Personal and shared saved People lists (D-046) | Local merge; implementation `2af023c` (not pushed) |
-| 011c | Saved lists feed Today (D-047; §8 planner amendment approved) | Local merge; implementation `6117b4a` (not pushed) |
+| 011b | Personal and shared saved People lists (D-046) | `9d62e86` (implementation `2af023c`) |
+| 011c | Saved lists feed Today (D-047; §8 planner amendment approved) | `929b6ab` (implementation `6117b4a`) |
 | — | Gate-speedup chunk (check 35m→79s, check-db 37m→~2m) | 2026-08-28 |
 | — | Test-binary consolidation (40 files → 1 binary) | `6427ee8` |
 
@@ -427,7 +428,7 @@ and now lives only in git history.
 
 - All three 011c decisions were taken on 2026-09-06 (late evening): the §8
   planner amendment is approved, the Phase B pairing limitation accepted, and
-  the local commit and merge performed. **Push and deployment are not
+  the local commit and merge performed, then the push. **Deployment is not
   authorized.** Updating the shared development runtime is a separate action.
 - R1 (auto-hangup of a live call on identity change) is a product choice for
   a later slice, not blocking.

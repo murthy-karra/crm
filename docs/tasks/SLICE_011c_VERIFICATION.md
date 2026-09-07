@@ -13,8 +13,8 @@ commit, merge, push and deployment are outside the current scope.
 
 - Branch: `codex/slice-011c-today-sources`, based on local `main` at
   `9d62e8692fa52d97b206f45870c3fac0972738ad`.
-  Implementation commit `6117b4a` (2026-09-06), merged to local `main` with
-  a merge commit; not pushed.
+  Implementation commit `6117b4a` (2026-09-06), merged to `main` as `929b6ab`
+  and pushed to `origin/main` the same evening at the user's request.
 - Primary implementation, tests and serialized database operations:
   `/root/slice_011c_implement`, `gpt-5.6-terra` / `xhigh`.
 - Independent review: `/root/slice_011c_review`, `gpt-6-astra` / `xhigh`.

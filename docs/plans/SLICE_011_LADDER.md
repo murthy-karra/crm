@@ -2,7 +2,7 @@
 
 Status: ACCEPTED (user, 2026-08-28) with the three ladder-level
 decisions taken. 011a COMPLETE AND MERGED (`4aee12d`, 2026-08-28);
-011b COMPLETE AND MERGED LOCALLY (implementation `2af023c`, 2026-09-06; privacy and separate limits
+011b COMPLETE, MERGED AND PUSHED (implementation `2af023c`, 2026-09-06; privacy and separate limits
 accepted in D-046). Charter: D-043 (smart lists first-class FUB-shaped;
 lists feed Today as explainable sources; built-in Today logic
 becomes org-tweakable system feeds in the same vocabulary — the
@@ -19,9 +19,9 @@ The complete [011c specification](../specs/SLICE_011c.md) and implementation
 brief were independently reviewed READY and approved by the user on
 2026-09-06. Terra / `xhigh` implemented and Astra / `xhigh` reviewed until Codex
 usage ran out; Claude finished verification the same evening (see
-PROJECT_STATE). 011c COMPLETE AND MERGED LOCALLY (implementation `6117b4a`,
-2026-09-06; the §8 planner amendment and the Phase B pairing limitation were
-accepted by the user before the merge).
+PROJECT_STATE). 011c COMPLETE, MERGED AND PUSHED (implementation `6117b4a`,
+merge `929b6ab`, 2026-09-06; the §8 planner amendment and the Phase B pairing
+limitation were accepted by the user before the merge).
 
 ## In plain language
 

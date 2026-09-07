@@ -194,6 +194,25 @@ the three new absent clauses. This satisfies D-050's plan-shape gate
 ("index use..., no super-linear growth with People") for every new or
 changed hot statement.
 
+## Record consistency (coordinator note, review round 2)
+
+- Parts 1–4 were captured at lane head `145335a`; Part 5 at `a0413cd`. Two
+  later changes post-date the Part 4 plans: the F1 fix (`30e1e5a`) wraps the
+  `qualifying` CTE's matrices in `COALESCE(..., false)` (plan-shape neutral;
+  no statement in the plans changed structure) and step 6 (`8884815`) deleted
+  the `Legacy` provider and its test-clock router. `source-sha256.txt` was
+  refreshed for `person_state.sql` after F1 but four of its entries
+  (`db_today_feeds_http_perf.rs`, `today_http_perf_fixture.rs`,
+  `today/mod.rs`, `routes/today.rs`) describe the pre-step-6 tree; the
+  hashes are retained as captured, not regenerated, so they fingerprint the
+  tree the runs actually executed on.
+- Part 1 is a **retained artifact**: after step 6 the harness can no longer
+  run `Legacy` live, and `db_today_feeds_http_perf.rs` carries the measured
+  Part 1 row forward verbatim (`legacy_p95_ms: 204`, `feeds_p95_ms: 177`,
+  allowance 229 ms, payload-equal) from `run.json` at `145335a`. A future
+  run of the harness re-measures Parts 2–5 only; the Part 1 row it emits is
+  this historical record, not a new measurement.
+
 ## Limits
 
 - Single run, not the 011c archive's two-run failed/passed pair — no

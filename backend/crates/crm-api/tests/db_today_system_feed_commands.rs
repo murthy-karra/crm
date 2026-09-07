@@ -11,8 +11,6 @@ use tokio::sync::Barrier;
 use tokio::time::timeout;
 use uuid::Uuid;
 
-use sqlx::postgres::PgPoolOptions;
-
 use crm_api::domain::admin::{MembershipStatus, Role};
 use crm_api::domain::envelope::{CommandContext, Origin};
 use crm_api::domain::person::filter::{
@@ -55,24 +53,6 @@ async fn create_org_with_admin(pool: &PgPool, org_name: &str, email: &str) -> (U
     )
     .await;
     (org_id, user_id)
-}
-
-/// A single-connection `crm_app` pool, used to exercise a real DB-local
-/// failure (a revoked GRANT) without borrowing a connection out of the
-/// shared pool other assertions rely on — the same technique
-/// `db_today_source_failures.rs` uses.
-async fn connect_as_one_app(migrator_pool: &PgPool) -> PgPool {
-    let options = migrator_pool
-        .connect_options()
-        .as_ref()
-        .clone()
-        .username("crm_app")
-        .password(&crate::common::app_password());
-    PgPoolOptions::new()
-        .max_connections(1)
-        .connect_with(options)
-        .await
-        .expect("single-connection crm_app pool")
 }
 
 fn canonical_unanswered_filter() -> FilterDefinition {
@@ -240,6 +220,151 @@ async fn fact_count(pool: &PgPool, organization_id: Uuid) -> i64 {
         .fetch_one(pool)
         .await
         .unwrap()
+}
+
+// --- Tester round 1, T4: a deterministic revert-fact sequence ---------------
+
+/// update (1→2, a stage clause and window 48) → revert (2→3): exactly two
+/// facts ordered by `to_revision`, the second `change = 'reverted'` with
+/// `filter_after`/`fresh_within_hours_after` NULL; then disable (3→4)
+/// with `enabled_after = false`. Every fact's envelope columns
+/// (actor_kind, actor_user_id, origin, correlation_id) equal the
+/// `CommandContext` used for the write that produced it.
+#[sqlx::test]
+#[ignore]
+async fn a_deterministic_update_revert_disable_sequence_writes_exactly_three_ordered_facts(
+    migrator_pool: PgPool,
+) {
+    let (organization_id, admin_id) = create_org_with_admin(
+        &migrator_pool,
+        "011d t4 revert facts",
+        "admin@d011-t4-revert-facts.test",
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let stage_id = first_stage_id(&app_pool, organization_id).await;
+
+    let update_ctx = command_context(organization_id, admin_id);
+    let customized = FilterDefinition {
+        version: 1,
+        clauses: vec![
+            Clause::AssignedTo(AssignedToClause {
+                assignees: vec![Assignee::Me],
+            }),
+            Clause::AwaitingResponse(BoolClause { value: true }),
+            Clause::Stage(StageClause {
+                stage_ids: vec![StageId::new(stage_id)],
+            }),
+        ],
+    };
+    let update_outcome = commands::update_today_system_feed(
+        &app_pool,
+        &update_ctx,
+        UpdateTodaySystemFeed {
+            feed_key: FeedKey::UnansweredInquiry,
+            expected_revision: 1,
+            filter: customized,
+            fresh_within_hours: Some(48),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(update_outcome.changed);
+    assert_eq!(update_outcome.feed.revision, 2);
+
+    let revert_ctx = command_context(organization_id, admin_id);
+    let revert_outcome = commands::revert_today_system_feed(
+        &app_pool,
+        &revert_ctx,
+        commands::RevertTodaySystemFeed {
+            feed_key: FeedKey::UnansweredInquiry,
+            expected_revision: 2,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(revert_outcome.changed);
+    assert_eq!(revert_outcome.feed.revision, 3);
+
+    let disable_ctx = command_context(organization_id, admin_id);
+    let disable_outcome = commands::set_today_system_feed_enabled(
+        &app_pool,
+        &disable_ctx,
+        SetTodaySystemFeedEnabled {
+            feed_key: FeedKey::UnansweredInquiry,
+            expected_revision: 3,
+            enabled: false,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(disable_outcome.changed);
+    assert_eq!(disable_outcome.feed.revision, 4);
+
+    #[derive(sqlx::FromRow, Debug)]
+    struct FactRow {
+        change: String,
+        from_revision: i64,
+        to_revision: i64,
+        enabled_after: bool,
+        filter_after: Option<String>,
+        fresh_within_hours_after: Option<i32>,
+        actor_kind: String,
+        actor_user_id: Option<Uuid>,
+        origin: String,
+        correlation_id: Uuid,
+    }
+    let facts: Vec<FactRow> = sqlx::query_as(
+        "SELECT change, from_revision, to_revision, enabled_after, \
+                filter_after::text as filter_after, \
+                fresh_within_hours_after, actor_kind, actor_user_id, origin, correlation_id \
+         FROM today_feed_changed WHERE organization_id = $1 ORDER BY to_revision",
+    )
+    .bind(organization_id)
+    .fetch_all(&app_pool)
+    .await
+    .unwrap();
+    assert_eq!(facts.len(), 3, "exactly three facts, one per real change");
+
+    let update_fact = &facts[0];
+    assert_eq!(update_fact.change, "updated");
+    assert_eq!(update_fact.from_revision, 1);
+    assert_eq!(update_fact.to_revision, 2);
+    assert!(update_fact.enabled_after);
+    assert!(update_fact.filter_after.is_some());
+    assert_eq!(update_fact.fresh_within_hours_after, Some(48));
+    assert_eq!(update_fact.actor_kind, "user");
+    assert_eq!(update_fact.actor_user_id, Some(admin_id));
+    assert_eq!(update_fact.origin, "web_session");
+    assert_eq!(update_fact.correlation_id, update_ctx.correlation_id.0);
+
+    let revert_fact = &facts[1];
+    assert_eq!(revert_fact.change, "reverted");
+    assert_eq!(revert_fact.from_revision, 2);
+    assert_eq!(revert_fact.to_revision, 3);
+    assert!(revert_fact.enabled_after);
+    assert!(
+        revert_fact.filter_after.is_none(),
+        "reverted collapses filter_after to NULL"
+    );
+    assert!(
+        revert_fact.fresh_within_hours_after.is_none(),
+        "reverted collapses fresh_within_hours_after to NULL"
+    );
+    assert_eq!(revert_fact.actor_kind, "user");
+    assert_eq!(revert_fact.actor_user_id, Some(admin_id));
+    assert_eq!(revert_fact.origin, "web_session");
+    assert_eq!(revert_fact.correlation_id, revert_ctx.correlation_id.0);
+
+    let disable_fact = &facts[2];
+    assert_eq!(disable_fact.change, "disabled");
+    assert_eq!(disable_fact.from_revision, 3);
+    assert_eq!(disable_fact.to_revision, 4);
+    assert!(!disable_fact.enabled_after);
+    assert_eq!(disable_fact.actor_kind, "user");
+    assert_eq!(disable_fact.actor_user_id, Some(admin_id));
+    assert_eq!(disable_fact.origin, "web_session");
+    assert_eq!(disable_fact.correlation_id, disable_ctx.correlation_id.0);
 }
 
 // --- §9.3: no-op, canonical collapse, revision, facts -----------------------
@@ -1995,67 +2120,49 @@ async fn a_stored_feed_with_unsupported_json_falls_back_to_canonical_in_evaluati
     assert!(issue.fallback);
 }
 
-/// spec §9.5: the call feed's own failure, together with a SEPARATE
-/// list-source enumeration failure, must still yield `unavailable` (011c
-/// precedence) with the call feed's `system_feed_issues` entry present.
+/// Tester round 1, T5 (part): revoking SELECT on `today_system_feed`
+/// itself must surface as a genuine `today::query` error (not a silent
+/// canonical fallback), and the same failure must reach `GET /api/today`
+/// as 503 `unavailable`.
 #[sqlx::test]
 #[ignore]
-async fn call_feed_failure_and_list_source_enumeration_failure_yields_unavailable_with_the_system_feed_issue_present(
-    migrator_pool: PgPool,
-) {
+async fn revoking_select_on_today_system_feed_is_a_query_error_and_a_503(migrator_pool: PgPool) {
     let (organization_id, admin_id) = create_org_with_admin(
         &migrator_pool,
-        "011d evaluation dual failure",
-        "admin@d011-eval-dual-failure.test",
+        "011d t5 revoke today_system_feed",
+        "admin@d011-t5-revoke-feed.test",
     )
     .await;
     let app_pool = crate::common::connect_as_app(&migrator_pool).await;
-    let stage_id = first_stage_id(&app_pool, organization_id).await;
-    let person = insert_person(&app_pool, organization_id, stage_id, Some(admin_id)).await;
-    insert_inquiry(&app_pool, organization_id, person).await;
 
-    // Break enumeration by revoking crm_app's SELECT on today_work_source
-    // (the same technique db_today_source_failures.rs uses for a metadata
-    // failure), and independently force the call feed to fail via a
-    // corrupted stored call-feed filter that decodes but is never reached
-    // (the call feed itself has no filter-driven failure mode from step 3;
-    // instead this exercises the SAME code path db_today_system_feed_call_
-    // failures.rs's hook-based tests cover — here, proving the OUTER
-    // precedence with a real enumeration failure is the addition).
-    sqlx::query("REVOKE SELECT ON TABLE today_work_source FROM crm_app")
+    sqlx::query("REVOKE SELECT ON TABLE today_system_feed FROM crm_app")
         .execute(&migrator_pool)
         .await
         .unwrap();
 
-    let one_app_pool = connect_as_one_app(&migrator_pool).await;
     let scope = crm_api::domain::person::PersonVisibilityScope::Organization(OrganizationId::new(
         organization_id,
     ));
-    let result = crm_api::domain::today::query_owned(
-        one_app_pool.acquire().await.unwrap(),
-        &scope,
-        UserId::new(admin_id),
-        Utc::now(),
-    )
-    .await
-    .unwrap();
+    let mut conn = app_pool.acquire().await.unwrap();
+    let result =
+        crm_api::domain::today::query(&mut conn, &scope, UserId::new(admin_id), Utc::now()).await;
+    assert!(
+        result.is_err(),
+        "today::query must surface the revoked-grant failure, not fall back"
+    );
+    drop(conn);
 
-    assert!(matches!(
-        result.sources.status,
-        crm_api::domain::today::TodaySourcesStatus::Unavailable
-    ));
-    assert!(result.sources.issues.is_empty());
-    // The call feed is enabled by default and has no matching call in this
-    // fixture, so it contributes no issue on its own here — this test's
-    // primary assertion is that enumeration failure alone still correctly
-    // reports Unavailable with system_feed_issues threaded through (empty
-    // in this instance, matching correction (a) — a healthy call feed
-    // reports nothing). The dedicated call-feed failure cases (with a real
-    // system_feed_issues entry surviving into Unavailable) are covered by
-    // `db_today_system_feed_call_failures.rs`.
-    assert!(result.sources.system_feed_issues.is_empty());
+    let router = crate::common::build_router(&migrator_pool).await;
+    let cookie = crate::common::login_cookie(&router, "admin@d011-t5-revoke-feed.test", PW).await;
+    let response = crate::common::get_with_cookie(&router, "/api/today", &cookie).await;
+    assert_eq!(
+        response.status(),
+        axum::http::StatusCode::SERVICE_UNAVAILABLE
+    );
+    let body = crate::common::body_json(response).await;
+    assert_eq!(body["error"], "unavailable");
 
-    sqlx::query("GRANT SELECT ON TABLE today_work_source TO crm_app")
+    sqlx::query("GRANT SELECT ON TABLE today_system_feed TO crm_app")
         .execute(&migrator_pool)
         .await
         .unwrap();
@@ -2350,6 +2457,16 @@ async fn today_feed_command_and_preview_spans_never_carry_the_definition_or_subj
         "admin@d011-telemetry.test",
     )
     .await;
+    let bob_id =
+        crate::common::create_user(&migrator_pool, "bob@d011-telemetry.test", "Bob", PW).await;
+    crate::common::add_membership_with(
+        &migrator_pool,
+        organization_id,
+        bob_id,
+        Role::Member,
+        MembershipStatus::Active,
+    )
+    .await;
     let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let stage_id = first_stage_id(&app_pool, organization_id).await;
     let person = insert_person(&app_pool, organization_id, stage_id, Some(admin_id)).await;
@@ -2397,23 +2514,43 @@ async fn today_feed_command_and_preview_spans_never_carry_the_definition_or_subj
         .await
         .unwrap();
 
-    let _ = commands::update_today_system_feed(
+    // A REAL customization referencing the renamed stage AND a second
+    // real user (Bob) — the previous version of this test submitted the
+    // canonical filter, which never references the stage at all, making
+    // the secret-marker assertion vacuously true regardless of what the
+    // telemetry code actually does. This filter genuinely exercises the
+    // definition-content path.
+    let customized = FilterDefinition {
+        version: 1,
+        clauses: vec![
+            Clause::AssignedTo(AssignedToClause {
+                assignees: vec![Assignee::Me, Assignee::User(UserId::new(bob_id))],
+            }),
+            Clause::AwaitingResponse(BoolClause { value: true }),
+            Clause::Stage(StageClause {
+                stage_ids: vec![StageId::new(stage_id)],
+            }),
+        ],
+    };
+
+    let update_outcome = commands::update_today_system_feed(
         &app_pool,
         &command_context(organization_id, admin_id),
         UpdateTodaySystemFeed {
             feed_key: FeedKey::UnansweredInquiry,
             expected_revision: 1,
-            filter: canonical_unanswered_filter(),
+            filter: customized.clone(),
             fresh_within_hours: Some(24),
         },
     )
     .await;
+    assert!(update_outcome.is_ok());
     let _ = commands::preview_today_system_feed(
         &app_pool,
         &command_context(organization_id, admin_id),
         PreviewTodaySystemFeed {
             feed_key: FeedKey::UnansweredInquiry,
-            filter: canonical_unanswered_filter(),
+            filter: customized,
             fresh_within_hours: Some(24),
             subject: UserId::new(admin_id),
         },
@@ -2427,6 +2564,22 @@ async fn today_feed_command_and_preview_spans_never_carry_the_definition_or_subj
         crm_api::domain::today::query(&mut conn, &scope, UserId::new(admin_id), Utc::now()).await;
     drop(conn);
 
+    // A failing command (`expected_revision: 0`, out of the declared
+    // `1..=MAX_WIRE_REVISION` range): its span must record only
+    // `error_kind`/`outcome`, never the (rejected) definition.
+    let failing = commands::update_today_system_feed(
+        &app_pool,
+        &command_context(organization_id, admin_id),
+        UpdateTodaySystemFeed {
+            feed_key: FeedKey::UnansweredInquiry,
+            expected_revision: 0,
+            filter: customized_for_failure(),
+            fresh_within_hours: Some(24),
+        },
+    )
+    .await;
+    assert!(matches!(failing, Err(TodayFeedError::MalformedRequest)));
+
     drop(_guard);
     let captured = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
     assert!(
@@ -2434,11 +2587,375 @@ async fn today_feed_command_and_preview_spans_never_carry_the_definition_or_subj
         "feed command spans must be recorded: {captured}"
     );
     assert!(
+        captured.contains("filter_kinds"),
+        "the safe filter_kinds summary must be present: {captured}"
+    );
+    assert!(
         !captured.contains(secret_marker),
-        "no stage/definition content ever reaches a span: {captured}"
+        "no stage name/definition content ever reaches a span: {captured}"
+    );
+    assert!(
+        !captured.contains(&stage_id.to_string()),
+        "no stage UUID ever reaches a span: {captured}"
+    );
+    assert!(
+        !captured.contains(&bob_id.to_string()),
+        "no assignee UUID ever reaches a span: {captured}"
     );
     assert!(
         !captured.contains(&person.to_string()),
-        "no subject/item id ever reaches a span: {captured}"
+        "no subject/item Person UUID ever reaches a span: {captured}"
+    );
+    assert!(
+        !captured.contains("\"version\":1") && !captured.contains("\"clauses\""),
+        "no serialized definition JSON ever reaches a span: {captured}"
+    );
+    assert!(
+        captured.contains("malformed_request") || captured.contains("error_kind"),
+        "the failing command's outcome must be recorded: {captured}"
+    );
+}
+
+/// A different, deliberately out-of-range revision (999 > `MAX_WIRE_
+/// REVISION`) is rejected at `validate_expected_revision` before the
+/// definition is ever touched — used only to exercise the failing-command
+/// telemetry path above; its exact clauses are irrelevant.
+fn customized_for_failure() -> FilterDefinition {
+    FilterDefinition {
+        version: 1,
+        clauses: vec![
+            Clause::AssignedTo(AssignedToClause {
+                assignees: vec![Assignee::Me],
+            }),
+            Clause::AwaitingResponse(BoolClause { value: true }),
+        ],
+    }
+}
+
+// --- Tester round 1: T7, T10, T13 -------------------------------------------
+
+/// T7: a real dual-membership fail-closed test. User U is a member of
+/// Organization A and admin of Organization B. With a B session/context,
+/// `preview_today_system_feed` for a subject who is A's own member (U),
+/// with a call feed reaching for an A-only Person, must return an empty
+/// result — never leaking A's data through B's admin session — and A's
+/// feed rows must stay untouched (revision 1). `admin_feed_view` for B
+/// never exposes A's filter (B's own rows are independent, canonical).
+#[sqlx::test]
+#[ignore]
+async fn dual_membership_admin_of_b_cannot_reach_organization_a_through_preview(
+    migrator_pool: PgPool,
+) {
+    let org_a = crate::common::create_org(&migrator_pool, "011d t7 org a").await;
+    crate::common::seed_stages(&migrator_pool, org_a).await;
+    let org_b = crate::common::create_org(&migrator_pool, "011d t7 org b").await;
+    crate::common::seed_stages(&migrator_pool, org_b).await;
+
+    let user_u = crate::common::create_user(&migrator_pool, "u@d011-t7.test", "U", PW).await;
+    crate::common::add_membership_with(
+        &migrator_pool,
+        org_a,
+        user_u,
+        Role::Member,
+        MembershipStatus::Active,
+    )
+    .await;
+    crate::common::add_membership_with(
+        &migrator_pool,
+        org_b,
+        user_u,
+        Role::Admin,
+        MembershipStatus::Active,
+    )
+    .await;
+
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let stage_a = first_stage_id(&app_pool, org_a).await;
+    let a_only_person = insert_person(&app_pool, org_a, stage_a, Some(user_u)).await;
+    insert_inquiry(&app_pool, org_a, a_only_person).await;
+    insert_call(
+        &app_pool,
+        org_a,
+        a_only_person,
+        user_u,
+        Utc::now() - ChronoDuration::hours(1),
+    )
+    .await;
+
+    // A B-scoped context: U acting as B's admin.
+    let b_ctx = command_context(org_b, user_u);
+    let preview = commands::preview_today_system_feed(
+        &app_pool,
+        &b_ctx,
+        PreviewTodaySystemFeed {
+            feed_key: FeedKey::CallOutcomeNeeded,
+            filter: FilterDefinition {
+                version: 1,
+                clauses: vec![Clause::AwaitingCallOutcome(BoolClause { value: true })],
+            },
+            fresh_within_hours: None,
+            subject: UserId::new(user_u),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(
+        preview.items.is_empty(),
+        "org B's preview must never surface org A's Person, even for the same user"
+    );
+
+    let (_, _, _, revision_a) = feed_row(&app_pool, org_a, FeedKey::CallOutcomeNeeded).await;
+    assert_eq!(
+        revision_a, 1,
+        "org A's feed row is untouched by a B-scoped preview"
+    );
+
+    let mut conn = app_pool.acquire().await.unwrap();
+    let b_admin_view = crm_api::domain::today::system_feeds::queries::admin_feed_view(
+        &mut conn,
+        OrganizationId::new(org_b),
+    )
+    .await
+    .unwrap();
+    for feed in &b_admin_view {
+        assert!(
+            feed.is_default,
+            "org B's feeds are untouched, canonical defaults"
+        );
+    }
+}
+
+/// T10: feed B narrowed by an edit (a stage clause that excludes a
+/// Person who otherwise qualifies for both feeds) shifts that Person to
+/// inquiry-based reasons, and `waiting_since` becomes the inquiry's
+/// `received_at` (the inquiry-arm basis), not the reply arm's.
+#[sqlx::test]
+#[ignore]
+async fn feed_b_narrowed_by_a_stage_clause_shifts_a_dual_person_to_inquiry_reasons(
+    migrator_pool: PgPool,
+) {
+    let (organization_id, admin_id) = create_org_with_admin(
+        &migrator_pool,
+        "011d t10 narrow feed b",
+        "admin@d011-t10-narrow.test",
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let stages: Vec<Uuid> =
+        sqlx::query_scalar("SELECT id FROM stage WHERE organization_id = $1 ORDER BY position")
+            .bind(organization_id)
+            .fetch_all(&app_pool)
+            .await
+            .unwrap();
+    let (in_stage, other_stage) = (stages[0], stages[1]);
+    let now = Utc::now();
+
+    let dual = insert_person(&app_pool, organization_id, other_stage, Some(admin_id)).await;
+    insert_inquiry(&app_pool, organization_id, dual).await; // received_at = now - 2h
+    insert_correspondence(
+        &app_pool,
+        organization_id,
+        dual,
+        admin_id,
+        "inbound",
+        now - ChronoDuration::hours(1),
+    )
+    .await;
+
+    // Both feeds enabled/canonical: reply wins (dual qualifies for both).
+    let scope = crm_api::domain::person::PersonVisibilityScope::Organization(OrganizationId::new(
+        organization_id,
+    ));
+    let mut conn = app_pool.acquire().await.unwrap();
+    let before = crm_api::domain::today::query_at(&mut conn, &scope, UserId::new(admin_id), now)
+        .await
+        .unwrap();
+    drop(conn);
+    let before_item = before
+        .items
+        .iter()
+        .find(|i| i.person.id.as_uuid() == dual)
+        .unwrap();
+    assert!(before_item
+        .reasons
+        .iter()
+        .any(|r| matches!(r, crm_api::domain::today::TodayReason::ClientReplied { .. })));
+
+    // Narrow feed B to `in_stage` (excludes `dual`, who is in `other_stage`).
+    commands::update_today_system_feed(
+        &app_pool,
+        &command_context(organization_id, admin_id),
+        UpdateTodaySystemFeed {
+            feed_key: FeedKey::ClientReplied,
+            expected_revision: 1,
+            filter: FilterDefinition {
+                version: 1,
+                clauses: vec![
+                    Clause::AssignedTo(AssignedToClause {
+                        assignees: vec![Assignee::Me],
+                    }),
+                    Clause::ClientRepliedUnanswered(BoolClause { value: true }),
+                    Clause::Stage(StageClause {
+                        stage_ids: vec![StageId::new(in_stage)],
+                    }),
+                ],
+            },
+            fresh_within_hours: Some(24),
+        },
+    )
+    .await
+    .unwrap();
+
+    let mut conn = app_pool.acquire().await.unwrap();
+    let after = crm_api::domain::today::query_at(&mut conn, &scope, UserId::new(admin_id), now)
+        .await
+        .unwrap();
+    let after_item = after
+        .items
+        .iter()
+        .find(|i| i.person.id.as_uuid() == dual)
+        .unwrap();
+    assert!(
+        !after_item
+            .reasons
+            .iter()
+            .any(|r| matches!(r, crm_api::domain::today::TodayReason::ClientReplied { .. })),
+        "feed B no longer qualifies dual (narrowed to a different stage)"
+    );
+    assert!(after_item.reasons.iter().any(|r| matches!(
+        r,
+        crm_api::domain::today::TodayReason::NoContactAttempt { .. }
+    )));
+    let expected_waiting_since = now - ChronoDuration::hours(2);
+    let diff = (after_item.waiting_since.unwrap() - expected_waiting_since)
+        .num_milliseconds()
+        .abs();
+    assert!(
+        diff < 1000,
+        "waiting_since must equal the inquiry's received_at, not the reply's occurred_at: \
+         got {:?}, expected ~{:?}",
+        after_item.waiting_since,
+        expected_waiting_since
+    );
+}
+
+/// T13: a stale resend after a successful change must return `Conflict`
+/// with the fact count unchanged (no double-write, no double-fact); then,
+/// after deleting an Organization's feed rows directly (migrator-only —
+/// simulating a corrupted/missing-row state, not a supported application
+/// path), `admin_feed_view` must still return three revision-1 canonical
+/// defaults, and a subsequent update must succeed to revision 2 with
+/// exactly one fact.
+#[sqlx::test]
+#[ignore]
+async fn stale_resend_is_conflict_and_deleted_feed_rows_resolve_as_defaults(migrator_pool: PgPool) {
+    let (organization_id, admin_id) = create_org_with_admin(
+        &migrator_pool,
+        "011d t13 stale resend",
+        "admin@d011-t13-stale.test",
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+
+    let first = commands::update_today_system_feed(
+        &app_pool,
+        &command_context(organization_id, admin_id),
+        UpdateTodaySystemFeed {
+            feed_key: FeedKey::UnansweredInquiry,
+            expected_revision: 1,
+            filter: FilterDefinition {
+                version: 1,
+                clauses: vec![
+                    Clause::AssignedTo(AssignedToClause {
+                        assignees: vec![Assignee::Me],
+                    }),
+                    Clause::AwaitingResponse(BoolClause { value: true }),
+                    Clause::HasPhone(BoolClause { value: true }),
+                ],
+            },
+            fresh_within_hours: Some(24),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(first.changed);
+    assert_eq!(fact_count(&app_pool, organization_id).await, 1);
+
+    // A stale resend of the SAME (now-superseded) expected_revision.
+    let resend = commands::update_today_system_feed(
+        &app_pool,
+        &command_context(organization_id, admin_id),
+        UpdateTodaySystemFeed {
+            feed_key: FeedKey::UnansweredInquiry,
+            expected_revision: 1,
+            filter: FilterDefinition {
+                version: 1,
+                clauses: vec![
+                    Clause::AssignedTo(AssignedToClause {
+                        assignees: vec![Assignee::Me],
+                    }),
+                    Clause::AwaitingResponse(BoolClause { value: true }),
+                    Clause::HasEmail(BoolClause { value: true }),
+                ],
+            },
+            fresh_within_hours: Some(24),
+        },
+    )
+    .await;
+    assert!(matches!(resend, Err(TodayFeedError::Conflict)));
+    assert_eq!(
+        fact_count(&app_pool, organization_id).await,
+        1,
+        "the stale resend must not write a second fact"
+    );
+
+    sqlx::query("DELETE FROM today_system_feed WHERE organization_id = $1")
+        .bind(organization_id)
+        .execute(&migrator_pool)
+        .await
+        .unwrap();
+
+    let mut conn = app_pool.acquire().await.unwrap();
+    let view = crm_api::domain::today::system_feeds::queries::admin_feed_view(
+        &mut conn,
+        OrganizationId::new(organization_id),
+    )
+    .await
+    .unwrap();
+    drop(conn);
+    assert_eq!(view.len(), 3);
+    for feed in &view {
+        assert!(feed.is_default);
+        assert_eq!(feed.revision, 1);
+    }
+
+    let after_delete = commands::update_today_system_feed(
+        &app_pool,
+        &command_context(organization_id, admin_id),
+        UpdateTodaySystemFeed {
+            feed_key: FeedKey::UnansweredInquiry,
+            expected_revision: 1,
+            filter: FilterDefinition {
+                version: 1,
+                clauses: vec![
+                    Clause::AssignedTo(AssignedToClause {
+                        assignees: vec![Assignee::Me],
+                    }),
+                    Clause::AwaitingResponse(BoolClause { value: true }),
+                    Clause::HasPhone(BoolClause { value: true }),
+                ],
+            },
+            fresh_within_hours: Some(24),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(after_delete.changed);
+    assert_eq!(after_delete.feed.revision, 2);
+    assert_eq!(
+        fact_count(&app_pool, organization_id).await,
+        2,
+        "exactly one NEW fact for this update on top of the earlier successful one \
+         (the stale resend and the row deletion wrote none)"
     );
 }

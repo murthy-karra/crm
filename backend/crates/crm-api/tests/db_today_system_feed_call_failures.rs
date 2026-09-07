@@ -508,6 +508,84 @@ async fn call_feed_unrecoverable_failure_marks_the_response_unavailable_and_disc
     );
 }
 
+/// Tester round 1, T5: the call feed's own failure (via the same hook the
+/// tests above use) TOGETHER with a separate list-source enumeration
+/// failure — the 011c precedence (enumeration failure -> `Unavailable`,
+/// no per-list `issues`) still applies, and the call feed's own
+/// `system_feed_issues` entry survives into that `Unavailable` result.
+#[sqlx::test]
+#[ignore]
+async fn call_feed_failure_and_list_source_enumeration_failure_yields_unavailable_with_the_system_feed_issue_present(
+    migrator_pool: PgPool,
+) {
+    let (organization_id, viewer_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Call feed plus enumeration failure",
+        "call-plus-enumeration-failure@example.test",
+        "Alice",
+        "pw",
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let stage = stage_id(&app_pool, organization_id).await;
+    let builtin_person = insert_person(&app_pool, organization_id, stage, Some(viewer_id)).await;
+    insert_inquiry(&app_pool, organization_id, builtin_person).await;
+
+    sqlx::query("REVOKE SELECT ON TABLE today_work_source FROM crm_app")
+        .execute(&migrator_pool)
+        .await
+        .unwrap();
+
+    let hooks = TodayQueryHooks::new(Arc::new(FailCallFeedAfterSavepoint));
+    let one_app_pool = connect_as_one_app(&migrator_pool).await;
+    let result = with_today_hooks(
+        hooks,
+        today::query_owned_at(
+            one_app_pool.acquire().await.unwrap(),
+            &visibility_scope(organization_id),
+            UserId::new(viewer_id),
+            Utc::now(),
+        ),
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        matches!(result.sources.status, TodaySourcesStatus::Unavailable),
+        "enumeration failure wins the 011c precedence over the call feed's own partial-recoverable failure"
+    );
+    assert!(
+        result.sources.issues.is_empty(),
+        "enumeration itself never produced a list to report per-list issues for"
+    );
+    assert_eq!(
+        result.sources.system_feed_issues.len(),
+        1,
+        "the call feed's own failure issue must survive into the Unavailable result"
+    );
+    assert_eq!(
+        result.sources.system_feed_issues[0].feed_key,
+        "call_outcome_needed"
+    );
+    assert_eq!(
+        result.sources.system_feed_issues[0].error,
+        crm_api::domain::today::SystemFeedIssueError::Unavailable
+    );
+    assert!(!result.sources.system_feed_issues[0].fallback);
+    assert!(
+        item_for(&result.items, builtin_person)
+            .reasons
+            .iter()
+            .any(|r| matches!(r, TodayReason::NoContactAttempt { .. })),
+        "the person-state item captured before the call feed's failure is still returned"
+    );
+
+    sqlx::query("GRANT SELECT ON TABLE today_work_source TO crm_app")
+        .execute(&migrator_pool)
+        .await
+        .unwrap();
+}
+
 // --- Coverage gap (2): preview's real statement timeout ---------------------
 
 /// Injects a genuinely slow query (`pg_sleep`) at the checkpoint preview
@@ -608,4 +686,218 @@ async fn preview_statement_timeout_is_unavailable_and_never_partial(migrator_poo
     assert!(enabled);
     assert!(filter.is_none());
     assert_eq!(revision, 1);
+}
+
+// --- Tester round 1, T8: SET LOCAL restoration --------------------------
+
+async fn show_pg_settings(pool: &PgPool) -> (String, String, String) {
+    let jit: String = sqlx::query_scalar("SHOW jit")
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    let enable_mergejoin: String = sqlx::query_scalar("SHOW enable_mergejoin")
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    let statement_timeout: String = sqlx::query_scalar("SHOW statement_timeout")
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    (jit, enable_mergejoin, statement_timeout)
+}
+
+fn assert_default_settings(label: &str, settings: (String, String, String)) {
+    let (jit, enable_mergejoin, statement_timeout) = settings;
+    assert_eq!(
+        jit, "on",
+        "{label}: jit must be restored to the session default"
+    );
+    assert_eq!(
+        enable_mergejoin, "on",
+        "{label}: enable_mergejoin must be restored to the session default"
+    );
+    assert_eq!(
+        statement_timeout, "0",
+        "{label}: statement_timeout must be restored to the session default (no timeout)"
+    );
+}
+
+/// After a recoverable call-only failure, the transaction-local `SET
+/// LOCAL jit/enable_mergejoin` and preview's `statement_timeout` never
+/// leak past the transaction boundary — proven on the SAME one-connection
+/// pool the query ran on (a fresh acquire from a max-one pool can only
+/// return that same underlying connection).
+#[sqlx::test]
+#[ignore]
+async fn set_local_settings_restore_after_call_only_failure(migrator_pool: PgPool) {
+    let (organization_id, viewer_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "T8 call-only restore",
+        "t8-call-only-restore@example.test",
+        "Alice",
+        "pw",
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let stage = stage_id(&app_pool, organization_id).await;
+    let builtin_person = insert_person(&app_pool, organization_id, stage, Some(viewer_id)).await;
+    insert_inquiry(&app_pool, organization_id, builtin_person).await;
+
+    let hooks = TodayQueryHooks::new(Arc::new(FailCallFeedAfterMembership));
+    let one_app_pool = connect_as_one_app(&migrator_pool).await;
+    let _partial = with_today_hooks(
+        hooks,
+        today::query_owned_at(
+            one_app_pool.acquire().await.unwrap(),
+            &visibility_scope(organization_id),
+            UserId::new(viewer_id),
+            Utc::now(),
+        ),
+    )
+    .await
+    .unwrap();
+
+    assert_default_settings("call-only failure", show_pg_settings(&one_app_pool).await);
+}
+
+/// After the call feed's UNrecoverable failure (the old connection is
+/// discarded, never pooled), the REPLACEMENT connection the pool hands
+/// back has default settings — it was never touched by the failed
+/// transaction's `SET LOCAL`s at all.
+#[sqlx::test]
+#[ignore]
+async fn set_local_settings_are_default_on_the_replacement_after_an_unrecoverable_failure(
+    migrator_pool: PgPool,
+) {
+    let (organization_id, viewer_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "T8 unrecoverable restore",
+        "t8-unrecoverable-restore@example.test",
+        "Alice",
+        "pw",
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let stage = stage_id(&app_pool, organization_id).await;
+    let builtin_person = insert_person(&app_pool, organization_id, stage, Some(viewer_id)).await;
+    insert_inquiry(&app_pool, organization_id, builtin_person).await;
+
+    let one_app_pool = connect_as_one_app(&migrator_pool).await;
+    let owned_connection = one_app_pool.acquire().await.unwrap();
+    let (recovery_started_tx, recovery_started_rx) = oneshot::channel();
+    let hooks = TodayQueryHooks::new(Arc::new(ExhaustCallFeedRecoveryBudget {
+        recovery_started: Mutex::new(Some(recovery_started_tx)),
+    }));
+    let query = tokio::spawn(async move {
+        with_today_hooks(
+            hooks,
+            today::query_owned_at(
+                owned_connection,
+                &visibility_scope(organization_id),
+                UserId::new(viewer_id),
+                Utc::now(),
+            ),
+        )
+        .await
+    });
+    let _ = recovery_started_rx
+        .await
+        .expect("rollback checkpoint reached after the call feed's failure");
+    let _unavailable = tokio::time::timeout(Duration::from_secs(1), query)
+        .await
+        .expect("the 100 ms cleanup budget bounds the query")
+        .unwrap()
+        .unwrap();
+
+    assert_default_settings(
+        "replacement connection after an unrecoverable failure",
+        show_pg_settings(&one_app_pool).await,
+    );
+}
+
+/// After a successful preview (read-only, explicitly rolled back), its
+/// `SET LOCAL jit/enable_mergejoin`/`statement_timeout` never leak.
+#[sqlx::test]
+#[ignore]
+async fn set_local_settings_restore_after_a_successful_preview(migrator_pool: PgPool) {
+    let (organization_id, admin_id) = create_org_with_admin(
+        &migrator_pool,
+        "T8 preview success restore",
+        "t8-preview-success@example.test",
+    )
+    .await;
+    let one_app_pool = connect_as_one_app(&migrator_pool).await;
+
+    commands::preview_today_system_feed(
+        &one_app_pool,
+        &command_context(organization_id, admin_id),
+        PreviewTodaySystemFeed {
+            feed_key: FeedKey::UnansweredInquiry,
+            filter: FilterDefinition {
+                version: 1,
+                clauses: vec![
+                    Clause::AssignedTo(AssignedToClause {
+                        assignees: vec![Assignee::Me],
+                    }),
+                    Clause::AwaitingResponse(BoolClause { value: true }),
+                ],
+            },
+            fresh_within_hours: Some(24),
+            subject: UserId::new(admin_id),
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_default_settings("successful preview", show_pg_settings(&one_app_pool).await);
+}
+
+/// After preview's real statement_timeout cancels a genuinely slow query
+/// (the same `SleepPastPreviewTimeout` hook the timeout-coverage test
+/// uses), the connection's settings are still restored — a cancelled
+/// statement still ends its transaction (rolled back), which reverts
+/// every `SET LOCAL`.
+#[sqlx::test]
+#[ignore]
+async fn set_local_settings_restore_after_a_preview_timeout(migrator_pool: PgPool) {
+    let (organization_id, admin_id) = create_org_with_admin(
+        &migrator_pool,
+        "T8 preview timeout restore",
+        "t8-preview-timeout@example.test",
+    )
+    .await;
+    let one_app_pool = connect_as_one_app(&migrator_pool).await;
+
+    let hooks = TodayQueryHooks::new(Arc::new(SleepPastPreviewTimeout));
+    let result = with_today_hooks(
+        hooks,
+        commands::preview_today_system_feed(
+            &one_app_pool,
+            &command_context(organization_id, admin_id),
+            PreviewTodaySystemFeed {
+                feed_key: FeedKey::UnansweredInquiry,
+                filter: FilterDefinition {
+                    version: 1,
+                    clauses: vec![
+                        Clause::AssignedTo(AssignedToClause {
+                            assignees: vec![Assignee::Me],
+                        }),
+                        Clause::AwaitingResponse(BoolClause { value: true }),
+                    ],
+                },
+                fresh_within_hours: Some(24),
+                subject: UserId::new(admin_id),
+            },
+        ),
+    )
+    .await;
+    assert!(
+        result.is_err(),
+        "the real statement_timeout must cancel the sleep"
+    );
+
+    assert_default_settings(
+        "after a cancelled preview statement",
+        show_pg_settings(&one_app_pool).await,
+    );
 }

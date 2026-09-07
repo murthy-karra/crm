@@ -1,7 +1,7 @@
 # Project State
 
-Last updated: 2026-09-07 (Slice 011d: Lane W steps 1–4 done; Lane B steps
-1–3 done with the equivalence suite green; Lane B step 4 in progress).
+Last updated: 2026-09-07 (Slice 011d: Lane W steps 1–4 done; Lane B step 4
+done; Lane B on the call-feed matrix fix, coverage gaps and step 5 perf).
 
 ## Current phase
 
@@ -38,11 +38,24 @@ Progress so far (2026-09-07):
   (699 tests), `check-db` (471 of 471). Coordinator audited the 56 changed
   files: all under `backend/`. A machine-sleep interruption was resumed
   without loss. The `Legacy` provider stays until step 6.
-- **Lane B step 4 assigned** (commands, preview, routes, Operator field,
-  telemetry, authorization tests) together with three corrections from its
-  own report: no issue entry for a disabled feed (spec §5), count and sorted-
-  statement parity for the three axes (spec §9.1), and the 011c connection-
-  recovery mechanism plus failure-injection tests for the call feed.
+- **Lane B corrections and step 4 complete** (`5ffeb2e`, `a4dc96b`,
+  `c0f9bd6`): the three corrections verified by the coordinator (no issue for
+  a disabled feed; per-axis parity tests in `db_people_filter.rs`; call-feed
+  connection recovery with three failure-injection tests in
+  `db_today_system_feed_call_failures.rs`); commands, preview, the six routes
+  in `routes/today_feeds.rs`, the Operator field, telemetry, and
+  `db_today_system_feed_commands.rs` (15 tests). Lane B found and fixed a
+  real preview bug (read-only set before the `FOR SHARE` membership lock,
+  which PostgreSQL rejects). Gates on the lane tree: `check` green,
+  `check-db` 493 of 493.
+- **Coordinator decision (2026-09-07):** the call feed's two statements
+  bound no filter matrix, so extra clauses on that feed were ignored, which
+  contradicts spec §1 rule 4. Decision: extend both call statements with the
+  full matrix (spec §5 "feed C matrix params"), not restrict validation.
+  Assigned to Lane B with the remaining §9 coverage gaps (deleted-stage and
+  unsupported-JSON fallback evaluation tests, preview timeout 503, Operator
+  parity under customized/disabled/fallback feeds) and then step 5
+  performance evidence paired against `Legacy`.
 
 Planning history follows. On 2026-09-06 the user asked to look at 011d. The read-only planner
 analysed the rung against the code and found that the ladder's pre-declared
@@ -490,8 +503,8 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. **011d in progress:** wait for Lane B's step 4 report and audit it;
-   then step 5 (performance evidence, paired against `Legacy`); merge both
+1. **011d in progress:** wait for Lane B's call-feed-matrix, coverage and
+   step 5 performance report and audit it; merge both
    lanes into `slice-011d-today-system-feeds`; Lane W step 5 walkthrough
    against real routes; independent reviewer confirmation of the equivalence
    evidence, then Lane B step 6 (delete `Legacy`, freeze SQL under

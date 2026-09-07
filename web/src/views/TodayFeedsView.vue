@@ -133,11 +133,22 @@ async function saveEdit() {
   } catch (error) {
     if (!identityMatches(identity)) return
     if (error instanceof ApiError && error.status === 409) {
+      // §6: "a 409 reloads the feed for review and needs a new click" — the
+      // reload must be explicit and honest about what happened, and a
+      // failed reload must never silently close the editor (that would read
+      // as a discarded edit succeeding). `editing.value` is never set to
+      // `null` in this branch: either the reload lands and the editor shows
+      // the true current row, or it doesn't and the editor stays open on
+      // the old (now-known-stale) draft with an error notice.
       const refreshed = await feedsQuery.refetch()
       if (!identityMatches(identity)) return
-      const fresh = refreshed.data?.feeds.find((f) => f.feed_key === draft.feedKey)
-      editing.value = fresh ? draftFromFeed(fresh) : null
-      editNotice.value = 'This rule changed. Review it, then choose Save again.'
+      const fresh = refreshed.isError ? undefined : refreshed.data?.feeds.find((f) => f.feed_key === draft.feedKey)
+      if (!fresh) {
+        editNotice.value = 'This rule was changed by someone else, and the latest version could not be loaded. Try Save again.'
+        return
+      }
+      editing.value = draftFromFeed(fresh)
+      editNotice.value = 'This rule was changed by someone else. The saved version has been reloaded and your draft was discarded.'
     }
     // Every other failure (422 validation, 503, network) is rendered inline
     // below from `updateMutation.error`; the draft is retained untouched.
@@ -245,8 +256,14 @@ const feeds = computed(() => TODAY_FEED_ORDER.map((key) => {
       subtitle="Adjust the three built-in rules that put People on every member's Today."
     />
 
+    <!-- Only blocks the whole page when there is truly nothing to show yet
+         (the very first load failed). A background refetch failure — e.g.
+         the reload `saveEdit()` triggers after a 409 — keeps TanStack's
+         last-known-good `data` in place; gating on `isError` alone would
+         replace the open editor and its error notice with this full-page
+         error the instant that reload failed. -->
     <div
-      v-if="feedsQuery.isError.value"
+      v-if="feedsQuery.isError.value && !feedsQuery.data.value"
       class="rounded-xl border border-border bg-surface-0 p-5 text-body text-danger"
       data-testid="today-feeds-error"
     >

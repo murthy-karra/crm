@@ -246,6 +246,67 @@ describe('TodayView incomplete sources', () => {
   })
 })
 
+describe('TodayView Rules section markers and system_feed_issues notice (SLICE_011d §6)', () => {
+  it('renders Changed by your admin and Off for the corresponding MemberFeed states', async () => {
+    stub({
+      feeds: () => ({
+        feeds: [
+          { feed_key: 'unanswered_inquiry', enabled: true, is_default: false, description: ['Assignee: Me', 'Awaiting a response', 'Stage is Lead'] },
+          { feed_key: 'client_replied', enabled: false, is_default: true, description: ['Client replied, unanswered'] },
+          { feed_key: 'call_outcome_needed', enabled: true, is_default: true, description: ['A call of mine needs an outcome'] },
+        ],
+      }),
+    })
+    const { wrapper } = await mountView()
+    await wrapper.findAll('button').find((button) => button.text() === 'Manage sources')!.trigger('click')
+    await flushPromises()
+
+    const unanswered = wrapper.get('[data-testid="today-rules-unanswered_inquiry"]')
+    expect(unanswered.text()).toContain('Changed by your admin')
+    expect(unanswered.text()).toContain('Stage is Lead')
+    const clientReplied = wrapper.get('[data-testid="today-rules-client_replied"]')
+    expect(clientReplied.text()).toContain('Off')
+    const callFeed = wrapper.get('[data-testid="today-rules-call_outcome_needed"]')
+    expect(callFeed.text()).toContain('Default')
+  })
+
+  it('shows the partial notice from system_feed_issues alone, with no list-source issues present', async () => {
+    stub({
+      today: () => ({
+        ...completeToday(),
+        sources: {
+          status: 'partial',
+          issues: [],
+          system_feed_issues: [{ feed_key: 'client_replied', error: 'invalid_definition', fallback: true }],
+        },
+      }),
+    })
+    const { wrapper } = await mountView()
+
+    const notice = wrapper.get('[role="status"]')
+    expect(notice.text()).toContain('Some Today rules or sources could not load')
+    expect(notice.text()).toContain('The client replied rule is invalid; the default rule is being used.')
+    // No list-source-shaped bullet leaked in from an empty `issues` array.
+    expect(notice.findAll('li')).toHaveLength(1)
+  })
+
+  it('reads "<feed> could not load" for a non-fallback (unavailable) system feed issue', async () => {
+    stub({
+      today: () => ({
+        ...completeToday(),
+        sources: {
+          status: 'partial',
+          issues: [],
+          system_feed_issues: [{ feed_key: 'call_outcome_needed', error: 'unavailable', fallback: false }],
+        },
+      }),
+    })
+    const { wrapper } = await mountView()
+
+    expect(wrapper.get('[role="status"]').text()).toContain('Call outcome needed could not load.')
+  })
+})
+
 describe('TodayView source-removal reconciliation', () => {
   it('keeps keyboard focus in the manager after a removed source row disappears', async () => {
     let firstEnabled = true

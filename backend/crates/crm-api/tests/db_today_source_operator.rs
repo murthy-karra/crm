@@ -12,6 +12,7 @@ use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use crm_api::domain::envelope::{CommandContext, Origin};
 use crm_api::domain::person::filter::{Clause, FilterDefinition, StageClause};
 use crm_api::domain::saved_list::{self, CreateSavedList, SavedListScope};
+use crm_api::domain::today::system_feeds::commands;
 use crm_api::domain::today::{self, EnableTodayWorkSource};
 use crm_api::ids::{CorrelationId, OrganizationId, SavedListId, StageId, UserId};
 use crm_api::operator::{OperatorRuntime, SqlxToolBackend};
@@ -706,4 +707,362 @@ async fn today_source_operator_exposes_partial_empty_metadata_and_wraps_issue_na
         json!({ "untrusted_text": issue_name })
     );
     assert_eq!(occurrences(tool_message, issue_name), 1);
+}
+
+// --- Coverage gap (3): §9.8 Operator parity under customized/disabled/ ------
+// fallback system feeds ------------------------------------------------------
+
+async fn create_org_with_admin(pool: &PgPool, org_name: &str, email: &str) -> (Uuid, Uuid) {
+    let org_id = crate::common::create_org(pool, org_name).await;
+    crate::common::seed_stages(pool, org_id).await;
+    let user_id = crate::common::create_user(pool, email, "Admin", PW).await;
+    crate::common::add_membership_with(
+        pool,
+        org_id,
+        user_id,
+        crm_api::domain::admin::Role::Admin,
+        crm_api::domain::admin::MembershipStatus::Active,
+    )
+    .await;
+    (org_id, user_id)
+}
+
+fn issue_shape(issues: &[Value]) -> Vec<(String, String, bool)> {
+    issues
+        .iter()
+        .map(|i| {
+            (
+                i["feed_key"].as_str().unwrap().to_string(),
+                i["error"].as_str().unwrap().to_string(),
+                i["fallback"].as_bool().unwrap(),
+            )
+        })
+        .collect()
+}
+
+fn operator_issue_shape(
+    issues: &[crm_operator::SystemFeedIssueView],
+) -> Vec<(String, String, bool)> {
+    issues
+        .iter()
+        .map(|i| (i.feed_key.clone(), i.error.clone(), i.fallback))
+        .collect()
+}
+
+/// §9.8: `get_today`, `get_next_work_item`, `get_person` and
+/// `explain_priority` all agree with `GET /api/today` under a feed A
+/// customized with an EXTRA stage clause — `system_feed_issues` is empty
+/// everywhere (a valid customization is not an issue).
+#[sqlx::test]
+#[ignore]
+async fn operator_parity_under_a_customized_feed_a(migrator_pool: PgPool) {
+    let (organization_id, admin_id) = create_org_with_admin(
+        &migrator_pool,
+        "011d operator parity customized",
+        "admin@d011-operator-customized.test",
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let referenced_stage = stage_id(&app_pool, organization_id, 0).await;
+    let other_stage = stage_id(&app_pool, organization_id, 1).await;
+    let now = Utc::now();
+
+    let in_stage = Uuid::from_u128(0x301);
+    insert_person(
+        &app_pool,
+        organization_id,
+        referenced_stage,
+        in_stage,
+        Some(admin_id),
+        now - ChronoDuration::days(1),
+    )
+    .await;
+    insert_inquiry(
+        &app_pool,
+        organization_id,
+        in_stage,
+        now - ChronoDuration::hours(1),
+    )
+    .await;
+
+    let other_stage_person = Uuid::from_u128(0x302);
+    insert_person(
+        &app_pool,
+        organization_id,
+        other_stage,
+        other_stage_person,
+        Some(admin_id),
+        now - ChronoDuration::days(1),
+    )
+    .await;
+    insert_inquiry(
+        &app_pool,
+        organization_id,
+        other_stage_person,
+        now - ChronoDuration::hours(1),
+    )
+    .await;
+
+    commands::update_today_system_feed(
+        &app_pool,
+        &command_context(organization_id, admin_id),
+        commands::UpdateTodaySystemFeed {
+            feed_key: crm_api::domain::today::system_feeds::FeedKey::UnansweredInquiry,
+            expected_revision: 1,
+            filter: FilterDefinition {
+                version: 1,
+                clauses: vec![
+                    Clause::AssignedTo(crm_api::domain::person::filter::AssignedToClause {
+                        assignees: vec![crm_api::domain::person::filter::Assignee::Me],
+                    }),
+                    Clause::AwaitingResponse(crm_api::domain::person::filter::BoolClause {
+                        value: true,
+                    }),
+                    Clause::Stage(StageClause {
+                        stage_ids: vec![StageId::new(referenced_stage)],
+                    }),
+                ],
+            },
+            fresh_within_hours: Some(24),
+        },
+    )
+    .await
+    .unwrap();
+
+    let router = crate::common::build_router(&migrator_pool).await;
+    let cookie =
+        crate::common::login_cookie(&router, "admin@d011-operator-customized.test", PW).await;
+    let http = today_http(&router, &cookie).await;
+    assert_eq!(
+        item_ids(http["items"].as_array().unwrap()),
+        vec![in_stage.to_string()]
+    );
+    assert!(issue_shape(http["sources"]["system_feed_issues"].as_array().unwrap()).is_empty());
+
+    let backend = SqlxToolBackend::new(app_pool.clone(), Duration::from_secs(120));
+    let ctx = operator_context(organization_id, admin_id);
+
+    let today = backend.get_today(&ctx, 20).await.unwrap();
+    assert_eq!(
+        today.items.iter().map(|i| i.person.id).collect::<Vec<_>>(),
+        vec![in_stage]
+    );
+    assert!(operator_issue_shape(&today.sources.system_feed_issues).is_empty());
+
+    let next = backend.get_next_work_item(&ctx).await.unwrap();
+    assert_eq!(next.item.unwrap().person.id, in_stage);
+    assert!(operator_issue_shape(&next.sources.system_feed_issues).is_empty());
+
+    let detail = backend.get_person(&ctx, in_stage).await.unwrap();
+    assert!(detail.on_your_today);
+    assert!(operator_issue_shape(&detail.sources.system_feed_issues).is_empty());
+
+    let excluded_detail = backend.get_person(&ctx, other_stage_person).await.unwrap();
+    assert!(!excluded_detail.on_your_today);
+    assert!(operator_issue_shape(&excluded_detail.sources.system_feed_issues).is_empty());
+
+    let explanation = backend.explain_priority(&ctx, in_stage).await.unwrap();
+    let json = serde_json::to_value(&explanation).unwrap();
+    assert_eq!(json["status"], "on_today");
+    assert!(issue_shape(json["sources"]["system_feed_issues"].as_array().unwrap()).is_empty());
+}
+
+/// §9.8: with `unanswered_inquiry` disabled, every view agrees the Person
+/// who would otherwise match is simply absent — `system_feed_issues` stays
+/// empty (a disabled feed contributes no issue, spec §5).
+#[sqlx::test]
+#[ignore]
+async fn operator_parity_under_a_disabled_feed(migrator_pool: PgPool) {
+    let (organization_id, admin_id) = create_org_with_admin(
+        &migrator_pool,
+        "011d operator parity disabled",
+        "admin@d011-operator-disabled.test",
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let stage = stage_id(&app_pool, organization_id, 0).await;
+    let now = Utc::now();
+
+    let would_match = Uuid::from_u128(0x311);
+    insert_person(
+        &app_pool,
+        organization_id,
+        stage,
+        would_match,
+        Some(admin_id),
+        now - ChronoDuration::days(1),
+    )
+    .await;
+    insert_inquiry(
+        &app_pool,
+        organization_id,
+        would_match,
+        now - ChronoDuration::hours(1),
+    )
+    .await;
+
+    commands::set_today_system_feed_enabled(
+        &app_pool,
+        &command_context(organization_id, admin_id),
+        commands::SetTodaySystemFeedEnabled {
+            feed_key: crm_api::domain::today::system_feeds::FeedKey::UnansweredInquiry,
+            expected_revision: 1,
+            enabled: false,
+        },
+    )
+    .await
+    .unwrap();
+
+    let router = crate::common::build_router(&migrator_pool).await;
+    let cookie =
+        crate::common::login_cookie(&router, "admin@d011-operator-disabled.test", PW).await;
+    let http = today_http(&router, &cookie).await;
+    assert_eq!(http["items"].as_array().unwrap().len(), 0);
+    assert!(issue_shape(http["sources"]["system_feed_issues"].as_array().unwrap()).is_empty());
+
+    let backend = SqlxToolBackend::new(app_pool.clone(), Duration::from_secs(120));
+    let ctx = operator_context(organization_id, admin_id);
+
+    let today = backend.get_today(&ctx, 20).await.unwrap();
+    assert_eq!(today.items.len(), 0);
+    assert!(operator_issue_shape(&today.sources.system_feed_issues).is_empty());
+
+    let next = backend.get_next_work_item(&ctx).await.unwrap();
+    assert!(next.item.is_none());
+    assert!(operator_issue_shape(&next.sources.system_feed_issues).is_empty());
+
+    let detail = backend.get_person(&ctx, would_match).await.unwrap();
+    assert!(!detail.on_your_today);
+    assert!(operator_issue_shape(&detail.sources.system_feed_issues).is_empty());
+
+    let explanation = backend.explain_priority(&ctx, would_match).await.unwrap();
+    let json = serde_json::to_value(&explanation).unwrap();
+    assert_eq!(json["status"], "not_on_today");
+    assert!(issue_shape(json["sources"]["system_feed_issues"].as_array().unwrap()).is_empty());
+}
+
+/// §9.8: a stored feed definition that falls back to canonical (its
+/// referenced stage was deleted) reports the SAME `system_feed_issues`
+/// entry, byte-shape-identical modulo the crm-app -> Operator wrapper, on
+/// EVERY view — HTTP, `get_today`, `get_next_work_item`, `get_person` and
+/// `explain_priority` alike.
+#[sqlx::test]
+#[ignore]
+async fn operator_parity_under_a_fallback_feed(migrator_pool: PgPool) {
+    let (organization_id, admin_id) = create_org_with_admin(
+        &migrator_pool,
+        "011d operator parity fallback",
+        "admin@d011-operator-fallback.test",
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let referenced_stage = stage_id(&app_pool, organization_id, 8).await;
+    let other_stage = stage_id(&app_pool, organization_id, 0).await;
+    let now = Utc::now();
+
+    commands::update_today_system_feed(
+        &app_pool,
+        &command_context(organization_id, admin_id),
+        commands::UpdateTodaySystemFeed {
+            feed_key: crm_api::domain::today::system_feeds::FeedKey::UnansweredInquiry,
+            expected_revision: 1,
+            filter: FilterDefinition {
+                version: 1,
+                clauses: vec![
+                    Clause::AssignedTo(crm_api::domain::person::filter::AssignedToClause {
+                        assignees: vec![crm_api::domain::person::filter::Assignee::Me],
+                    }),
+                    Clause::AwaitingResponse(crm_api::domain::person::filter::BoolClause {
+                        value: true,
+                    }),
+                    Clause::Stage(StageClause {
+                        stage_ids: vec![StageId::new(referenced_stage)],
+                    }),
+                ],
+            },
+            fresh_within_hours: Some(24),
+        },
+    )
+    .await
+    .unwrap();
+    // No Person is ever placed in `referenced_stage`, so this hits no FK.
+    sqlx::query("DELETE FROM stage WHERE id = $1")
+        .bind(referenced_stage)
+        .execute(&migrator_pool)
+        .await
+        .unwrap();
+
+    let canonical_match = Uuid::from_u128(0x321);
+    insert_person(
+        &app_pool,
+        organization_id,
+        other_stage,
+        canonical_match,
+        Some(admin_id),
+        now - ChronoDuration::days(1),
+    )
+    .await;
+    insert_inquiry(
+        &app_pool,
+        organization_id,
+        canonical_match,
+        now - ChronoDuration::hours(1),
+    )
+    .await;
+
+    let router = crate::common::build_router(&migrator_pool).await;
+    let cookie =
+        crate::common::login_cookie(&router, "admin@d011-operator-fallback.test", PW).await;
+    let http = today_http(&router, &cookie).await;
+    assert_eq!(
+        item_ids(http["items"].as_array().unwrap()),
+        vec![canonical_match.to_string()]
+    );
+    let http_issues = issue_shape(http["sources"]["system_feed_issues"].as_array().unwrap());
+    assert_eq!(
+        http_issues,
+        vec![(
+            "unanswered_inquiry".to_string(),
+            "invalid_definition".to_string(),
+            true
+        )]
+    );
+
+    let backend = SqlxToolBackend::new(app_pool.clone(), Duration::from_secs(120));
+    let ctx = operator_context(organization_id, admin_id);
+
+    let today = backend.get_today(&ctx, 20).await.unwrap();
+    assert_eq!(
+        today.items.iter().map(|i| i.person.id).collect::<Vec<_>>(),
+        vec![canonical_match]
+    );
+    assert_eq!(
+        operator_issue_shape(&today.sources.system_feed_issues),
+        http_issues
+    );
+
+    let next = backend.get_next_work_item(&ctx).await.unwrap();
+    assert_eq!(next.item.unwrap().person.id, canonical_match);
+    assert_eq!(
+        operator_issue_shape(&next.sources.system_feed_issues),
+        http_issues
+    );
+
+    let detail = backend.get_person(&ctx, canonical_match).await.unwrap();
+    assert!(detail.on_your_today);
+    assert_eq!(
+        operator_issue_shape(&detail.sources.system_feed_issues),
+        http_issues
+    );
+
+    let explanation = backend
+        .explain_priority(&ctx, canonical_match)
+        .await
+        .unwrap();
+    let json = serde_json::to_value(&explanation).unwrap();
+    assert_eq!(json["status"], "on_today");
+    assert_eq!(
+        issue_shape(json["sources"]["system_feed_issues"].as_array().unwrap()),
+        http_issues
+    );
 }

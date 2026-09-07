@@ -1002,11 +1002,52 @@ pub async fn query_owned_at(
     query_owned_with_clock(connection, scope, viewer, EvaluationClock::Fixed(now)).await
 }
 
+/// Test-only owned-connection equivalent of [`query_at_with_provider`],
+/// mirroring [`query_owned_at`] but with a selectable provider — used only
+/// by the Slice 011d Phase B performance harness to pair `Legacy` against
+/// `Feeds` through the SAME owned-connection HTTP path production uses
+/// (never a client-selected value; the harness builds a dedicated
+/// test-support-gated router, exactly like `router_with_test_clock`).
+#[cfg(feature = "test-support")]
+pub async fn query_owned_at_with_provider(
+    connection: PoolConnection<Postgres>,
+    scope: &PersonVisibilityScope,
+    viewer: UserId,
+    now: DateTime<Utc>,
+    provider: TodayProvider,
+) -> Result<TodayList, sqlx::Error> {
+    query_owned_with_clock_and_provider(
+        connection,
+        scope,
+        viewer,
+        EvaluationClock::Fixed(now),
+        provider,
+    )
+    .await
+}
+
 async fn query_owned_with_clock(
     connection: PoolConnection<Postgres>,
     scope: &PersonVisibilityScope,
     viewer: UserId,
     evaluation_clock: EvaluationClock,
+) -> Result<TodayList, sqlx::Error> {
+    query_owned_with_clock_and_provider(
+        connection,
+        scope,
+        viewer,
+        evaluation_clock,
+        TodayProvider::Feeds,
+    )
+    .await
+}
+
+async fn query_owned_with_clock_and_provider(
+    connection: PoolConnection<Postgres>,
+    scope: &PersonVisibilityScope,
+    viewer: UserId,
+    evaluation_clock: EvaluationClock,
+    provider: TodayProvider,
 ) -> Result<TodayList, sqlx::Error> {
     struct Guard(Option<PoolConnection<Postgres>>);
     impl Guard {
@@ -1036,7 +1077,7 @@ async fn query_owned_with_clock(
         scope,
         viewer,
         evaluation_clock,
-        TodayProvider::Feeds,
+        provider,
     )
     .await;
     if matches!(

@@ -62,6 +62,27 @@ pub fn router_with_test_clock(now: chrono::DateTime<chrono::Utc>) -> Router<AppS
         .merge(source_control_router_inner())
 }
 
+/// Test-only variant used by the Slice 011d Phase B performance harness to
+/// pair `Legacy` against `Feeds` through the SAME owned-connection HTTP
+/// path production uses — the provider is fixed at router construction,
+/// never selected by a client, mirroring `router_with_test_clock`'s clock
+/// seam exactly.
+#[cfg(feature = "test-support")]
+pub fn router_with_test_clock_and_provider(
+    now: chrono::DateTime<chrono::Utc>,
+    provider: today::TodayProvider,
+) -> Router<AppState> {
+    Router::new()
+        .route(
+            "/api/today",
+            get(move |state: State<AppState>, auth: AuthContext| {
+                let now = now;
+                async move { get_today_at_with_provider(state, auth, now, provider).await }
+            }),
+        )
+        .merge(source_control_router_inner())
+}
+
 /// Match saved-list's path precedence: a malformed UUID is a bare 400 before
 /// session lookup, while a syntactically valid invisible ID stays a 404.
 struct SourceListIdPath(SavedListId);
@@ -93,6 +114,23 @@ async fn get_today(
     auth: AuthContext,
 ) -> Result<Json<today::TodayList>, ApiError> {
     get_today_with_clock(state, auth, None).await
+}
+
+#[cfg(feature = "test-support")]
+async fn get_today_at_with_provider(
+    state: State<AppState>,
+    auth: AuthContext,
+    now: chrono::DateTime<chrono::Utc>,
+    provider: today::TodayProvider,
+) -> Result<Json<today::TodayList>, ApiError> {
+    let State(state) = state;
+    let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
+    let conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
+    let scope = PersonVisibilityScope::from_auth(&auth);
+    let list = today::query_owned_at_with_provider(conn, &scope, auth.actor_user_id, now, provider)
+        .await
+        .map_err(|_| ApiError::Unavailable)?;
+    Ok(Json(list))
 }
 
 #[cfg(feature = "test-support")]

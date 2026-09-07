@@ -1,0 +1,158 @@
+Nested Loop Left Join  (cost=782899.50..791925.78 rows=201 width=288) (actual time=472.890..473.925 rows=100.00 loops=1)
+  Buffers: shared hit=393019
+  ->  Nested Loop Left Join  (cost=782882.74..784257.66 rows=201 width=210) (actual time=472.836..473.079 rows=100.00 loops=1)
+        Buffers: shared hit=391648
+        ->  Nested Loop  (cost=782882.58..784251.81 rows=201 width=178) (actual time=472.828..473.044 rows=100.00 loops=1)
+              Buffers: shared hit=391646
+              ->  Nested Loop  (cost=782882.42..784246.45 rows=201 width=146) (actual time=472.815..473.005 rows=100.00 loops=1)
+                    Buffers: shared hit=391644
+                    ->  Limit  (cost=782882.13..782882.63 rows=201 width=74) (actual time=472.775..472.789 rows=100.00 loops=1)
+                          Buffers: shared hit=391344
+                          ->  Sort  (cost=782882.13..782956.93 rows=29922 width=74) (actual time=222.520..222.527 rows=100.00 loops=1)
+                                Sort Key: (CASE WHEN ((p_1.assigned_user_id = ANY ('{616bb746-1466-4333-8296-641cd17a1409}'::uuid[])) AND (((InitPlan 5).col1) IS NOT NULL) AND (((InitPlan 5).col1) > COALESCE(((InitPlan 4).col1), '-infinity'::timestamp with time zone)) AND (((InitPlan 5).col1) > COALESCE(((InitPlan 6).col1), '-infinity'::timestamp with time zone))) THEN (((InitPlan 5).col1) > ('2026-09-07 15:43:29.615032+00'::timestamp with time zone - '24:00:00'::interval)) WHEN ((p_1.assigned_user_id = ANY ('{616bb746-1466-4333-8296-641cd17a1409}'::uuid[])) AND (i2.received_at IS NOT NULL)) THEN (latest.received_at > ('2026-09-07 15:43:29.615032+00'::timestamp with time zone - '24:00:00'::interval)) ELSE false END) DESC, (CASE WHEN ((p_1.assigned_user_id = ANY ('{616bb746-1466-4333-8296-641cd17a1409}'::uuid[])) AND (((InitPlan 5).col1) IS NOT NULL) AND (((InitPlan 5).col1) > COALESCE(((InitPlan 4).col1), '-infinity'::timestamp with time zone)) AND (((InitPlan 5).col1) > COALESCE(((InitPlan 6).col1), '-infinity'::timestamp with time zone))) THEN ((InitPlan 5).col1) WHEN ((p_1.assigned_user_id = ANY ('{616bb746-1466-4333-8296-641cd17a1409}'::uuid[])) AND (i2.received_at IS NOT NULL)) THEN i2.received_at ELSE NULL::timestamp with time zone END), p_1.id
+                                Sort Method: quicksort  Memory: 38kB
+                                Buffers: shared hit=391344
+                                ->  Nested Loop Left Join  (cost=21.90..781587.84 rows=29922 width=74) (actual time=0.134..222.459 rows=100.00 loops=1)
+                                      Filter: ((i2.received_at IS NOT NULL) OR ((((InitPlan 5).col1) IS NOT NULL) AND (((InitPlan 5).col1) > COALESCE(((InitPlan 4).col1), '-infinity'::timestamp with time zone)) AND (((InitPlan 5).col1) > COALESCE(((InitPlan 6).col1), '-infinity'::timestamp with time zone))))
+                                      Rows Removed by Filter: 27182
+                                      Buffers: shared hit=391344
+                                      ->  Nested Loop Left Join  (cost=21.48..647387.67 rows=29922 width=103) (actual time=0.119..192.936 rows=27282.00 loops=1)
+                                            Buffers: shared hit=309497
+                                            ->  Nested Loop Left Join  (cost=17.18..518049.83 rows=29922 width=95) (actual time=0.108..163.958 rows=27282.00 loops=1)
+                                                  Buffers: shared hit=254933
+                                                  ->  Nested Loop Left Join  (cost=12.88..388711.99 rows=29922 width=87) (actual time=0.097..129.140 rows=27282.00 loops=1)
+                                                        Buffers: shared hit=200369
+                                                        ->  Nested Loop  (cost=8.45..255409.48 rows=29922 width=79) (actual time=0.081..75.453 rows=27282.00 loops=1)
+                                                              Buffers: shared hit=118522
+                                                              ->  Seq Scan on person p_1  (cost=0.00..1446.50 rows=29922 width=48) (actual time=0.023..4.713 rows=30000.00 loops=1)
+                                                                    Filter: ((assigned_user_id = ANY ('{616bb746-1466-4333-8296-641cd17a1409}'::uuid[])) AND (organization_id = '92cd3dbe-a2b8-4a10-9fea-017d05ba7653'::uuid))
+                                                                    Rows Removed by Filter: 20000
+                                                                    Buffers: shared hit=759
+                                                              ->  Subquery Scan on latest  (cost=8.45..8.48 rows=1 width=31) (actual time=0.002..0.002 rows=0.91 loops=30000)
+                                                                    Filter: (latest.id IS NOT NULL)
+                                                                    Buffers: shared hit=117763
+                                                                    ->  Limit  (cost=8.45..8.47 rows=1 width=31) (actual time=0.002..0.002 rows=0.91 loops=30000)
+                                                                          Buffers: shared hit=117763
+                                                                          ->  Incremental Sort  (cost=8.45..8.49 rows=2 width=31) (actual time=0.002..0.002 rows=0.91 loops=30000)
+                                                                                Sort Key: i.received_at DESC, i.id DESC
+                                                                                Presorted Key: i.received_at
+                                                                                Full-sort Groups: 30000  Sort Method: quicksort  Average Memory: 25kB  Peak Memory: 25kB
+                                                                                Buffers: shared hit=117763
+                                                                                ->  Index Scan Backward using inquiry_org_person_received_idx on inquiry i  (cost=0.41..8.43 rows=1 width=31) (actual time=0.001..0.002 rows=0.91 loops=30000)
+                                                                                      Index Cond: ((organization_id = p_1.organization_id) AND (person_id = p_1.id))
+                                                                                      Index Searches: 30000
+                                                                                      Buffers: shared hit=117763
+                                                        ->  Result  (cost=4.43..4.44 rows=1 width=8) (actual time=0.002..0.002 rows=1.00 loops=27282)
+                                                              Buffers: shared hit=81847
+                                                              InitPlan 4
+                                                                ->  Limit  (cost=0.41..4.43 rows=1 width=8) (actual time=0.002..0.002 rows=1.00 loops=27282)
+                                                                      Buffers: shared hit=81847
+                                                                      ->  Index Only Scan Backward using contact_attempted_org_person_occurred_idx on contact_attempted ca_1  (cost=0.41..4.43 rows=1 width=8) (actual time=0.001..0.001 rows=1.00 loops=27282)
+                                                                            Index Cond: ((organization_id = p_1.organization_id) AND (person_id = p_1.id))
+                                                                            Heap Fetches: 0
+                                                                            Index Searches: 27282
+                                                                            Buffers: shared hit=81847
+                                                  ->  Result  (cost=4.30..4.31 rows=1 width=8) (actual time=0.001..0.001 rows=1.00 loops=27282)
+                                                        Buffers: shared hit=54564
+                                                        InitPlan 5
+                                                          ->  Limit  (cost=0.28..4.30 rows=1 width=8) (actual time=0.001..0.001 rows=0.00 loops=27282)
+                                                                Buffers: shared hit=54564
+                                                                ->  Index Only Scan using correspondence_captured_org_person_direction_occurred_idx on correspondence_captured cc  (cost=0.28..4.30 rows=1 width=8) (actual time=0.001..0.001 rows=0.00 loops=27282)
+                                                                      Index Cond: ((organization_id = p_1.organization_id) AND (person_id = p_1.id) AND (direction = 'inbound'::text))
+                                                                      Heap Fetches: 0
+                                                                      Index Searches: 27282
+                                                                      Buffers: shared hit=54564
+                                            ->  Result  (cost=4.30..4.31 rows=1 width=8) (actual time=0.001..0.001 rows=1.00 loops=27282)
+                                                  Buffers: shared hit=54564
+                                                  InitPlan 6
+                                                    ->  Limit  (cost=0.28..4.30 rows=1 width=8) (actual time=0.001..0.001 rows=0.00 loops=27282)
+                                                          Buffers: shared hit=54564
+                                                          ->  Index Only Scan using correspondence_captured_org_person_direction_occurred_idx on correspondence_captured cc5  (cost=0.28..4.30 rows=1 width=8) (actual time=0.001..0.001 rows=0.00 loops=27282)
+                                                                Index Cond: ((organization_id = p_1.organization_id) AND (person_id = p_1.id) AND (direction = 'outbound'::text))
+                                                                Heap Fetches: 0
+                                                                Index Searches: 27282
+                                                                Buffers: shared hit=54564
+                                      ->  Limit  (cost=0.41..4.44 rows=1 width=8) (actual time=0.001..0.001 rows=0.00 loops=27282)
+                                            Buffers: shared hit=81847
+                                            ->  Index Only Scan using inquiry_org_person_received_idx on inquiry i2  (cost=0.41..4.44 rows=1 width=8) (actual time=0.001..0.001 rows=0.00 loops=27282)
+                                                  Index Cond: ((organization_id = p_1.organization_id) AND (person_id = p_1.id) AND (received_at > COALESCE(((InitPlan 4).col1), '-infinity'::timestamp with time zone)))
+                                                  Heap Fetches: 0
+                                                  Index Searches: 27282
+                                                  Buffers: shared hit=81847
+                    ->  Index Scan using person_pkey on person p  (cost=0.29..6.78 rows=1 width=88) (actual time=0.002..0.002 rows=1.00 loops=100)
+                          Index Cond: (id = p_1.id)
+                          Index Searches: 100
+                          Buffers: shared hit=300
+              ->  Memoize  (cost=0.16..0.18 rows=1 width=48) (actual time=0.000..0.000 rows=1.00 loops=100)
+                    Cache Key: p.stage_id
+                    Cache Mode: logical
+                    Hits: 99  Misses: 1  Evictions: 0  Overflows: 0  Memory Usage: 1kB
+                    Buffers: shared hit=2
+                    ->  Index Scan using stage_id_organization_id_key on stage s  (cost=0.15..0.17 rows=1 width=48) (actual time=0.005..0.005 rows=1.00 loops=1)
+                          Index Cond: (id = p.stage_id)
+                          Index Searches: 1
+                          Buffers: shared hit=2
+        ->  Memoize  (cost=0.16..0.18 rows=1 width=48) (actual time=0.000..0.000 rows=1.00 loops=100)
+              Cache Key: p.assigned_user_id
+              Cache Mode: logical
+              Hits: 99  Misses: 1  Evictions: 0  Overflows: 0  Memory Usage: 1kB
+              Buffers: shared hit=2
+              ->  Index Scan using app_user_pkey on app_user u  (cost=0.15..0.17 rows=1 width=48) (actual time=0.004..0.004 rows=1.00 loops=1)
+                    Index Cond: (id = p.assigned_user_id)
+                    Index Searches: 1
+                    Buffers: shared hit=2
+  ->  Limit  (cost=16.76..16.78 rows=1 width=38) (actual time=0.002..0.002 rows=0.00 loops=100)
+        Buffers: shared hit=300
+        ->  Incremental Sort  (cost=16.76..16.80 rows=2 width=38) (actual time=0.001..0.001 rows=0.00 loops=100)
+              Sort Key: ca.occurred_at DESC, ca.id DESC
+              Presorted Key: ca.occurred_at
+              Full-sort Groups: 100  Sort Method: quicksort  Average Memory: 25kB  Peak Memory: 25kB
+              Buffers: shared hit=300
+              ->  Nested Loop Anti Join  (cost=0.70..16.75 rows=1 width=38) (actual time=0.001..0.001 rows=0.00 loops=100)
+                    Buffers: shared hit=300
+                    ->  Index Scan Backward using contact_attempted_org_person_occurred_idx on contact_attempted ca  (cost=0.41..8.43 rows=1 width=38) (actual time=0.001..0.001 rows=0.00 loops=100)
+                          Index Cond: ((organization_id = p.organization_id) AND (person_id = p.id))
+                          Index Searches: 100
+                          Buffers: shared hit=300
+                    ->  Index Only Scan using contact_attempted_corrects_once on contact_attempted x2  (cost=0.28..4.30 rows=1 width=16) (never executed)
+                          Index Cond: (corrects_id = ca.id)
+                          Heap Fetches: 0
+                          Index Searches: 0
+  SubPlan 1
+    ->  Limit  (cost=8.45..8.46 rows=1 width=29) (actual time=0.003..0.003 rows=0.80 loops=100)
+          Buffers: shared hit=380
+          ->  Sort  (cost=8.45..8.46 rows=1 width=29) (actual time=0.003..0.003 rows=0.80 loops=100)
+                Sort Key: cm.created_at
+                Sort Method: quicksort  Memory: 25kB
+                Buffers: shared hit=380
+                ->  Index Scan using contact_method_person_id_kind_normalized_value_key on contact_method cm  (cost=0.42..8.44 rows=1 width=29) (actual time=0.002..0.002 rows=0.80 loops=100)
+                      Index Cond: ((person_id = p.id) AND (kind = 'email'::text))
+                      Filter: (organization_id = p.organization_id)
+                      Index Searches: 100
+                      Buffers: shared hit=380
+  SubPlan 2
+    ->  Limit  (cost=8.45..8.46 rows=1 width=29) (actual time=0.001..0.002 rows=0.90 loops=100)
+          Buffers: shared hit=390
+          ->  Sort  (cost=8.45..8.46 rows=1 width=29) (actual time=0.001..0.001 rows=0.90 loops=100)
+                Sort Key: cm_1.created_at
+                Sort Method: quicksort  Memory: 25kB
+                Buffers: shared hit=390
+                ->  Index Scan using contact_method_person_id_kind_normalized_value_key on contact_method cm_1  (cost=0.42..8.44 rows=1 width=29) (actual time=0.001..0.001 rows=0.90 loops=100)
+                      Index Cond: ((person_id = p.id) AND (kind = 'phone'::text))
+                      Filter: (organization_id = p.organization_id)
+                      Index Searches: 100
+                      Buffers: shared hit=390
+  SubPlan 3
+    ->  Aggregate  (cost=4.44..4.45 rows=1 width=8) (actual time=0.002..0.002 rows=1.00 loops=100)
+          Buffers: shared hit=301
+          ->  Index Only Scan using inquiry_org_person_received_idx on inquiry i_1  (cost=0.41..4.43 rows=1 width=0) (actual time=0.001..0.001 rows=1.91 loops=100)
+                Index Cond: ((organization_id = p.organization_id) AND (person_id = p.id))
+                Heap Fetches: 0
+                Index Searches: 100
+                Buffers: shared hit=301
+Planning Time: 1.079 ms
+JIT:
+  Functions: 102
+  Options: Inlining true, Optimization true, Expressions true, Deforming true
+  Timing: Generation 1.904 ms (Deform 0.621 ms), Inlining 8.276 ms, Optimization 109.924 ms, Emission 132.134 ms, Total 252.238 ms
+Execution Time: 475.966 ms

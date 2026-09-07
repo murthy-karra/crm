@@ -158,6 +158,7 @@ mod db_today_source_deadlines;
 #[path = "db_today_source_telemetry.rs"]
 mod db_today_source_telemetry;
 
+mod db_today_system_feed_commands;
 #[path = "db_today_system_feeds.rs"]
 mod db_today_system_feeds;
 

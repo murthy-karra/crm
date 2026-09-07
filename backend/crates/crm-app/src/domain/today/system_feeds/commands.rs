@@ -709,6 +709,20 @@ async fn preview_today_system_feed_attempt(
     cmd: PreviewTodaySystemFeed,
 ) -> Result<PreviewOutcome, TodayFeedError> {
     let mut tx = pool.begin().await?;
+    // PostgreSQL requires `SET TRANSACTION ISOLATION LEVEL` to be the FIRST
+    // statement of a transaction ("SET TRANSACTION ISOLATION LEVEL must be
+    // called before any query", error 25001), so it runs alone, before the
+    // membership lock. The READ ONLY access mode is set SEPARATELY, only
+    // after the membership `FOR SHARE` lock and the validation/subject
+    // reads below — `SELECT ... FOR SHARE` is itself rejected once a
+    // transaction is already read-only ("cannot execute SELECT FOR SHARE
+    // in a read-only transaction", error 25006), so those checks must run
+    // in the still-read-write window. Only the heavy evaluation queries
+    // after this point need the read-only/timeout guarantees.
+    sqlx::query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+        .execute(&mut *tx)
+        .await?;
+
     lock_current_membership_require_admin(&mut tx, ctx.organization_id, ctx.actor_user_id).await?;
     validate_feed_definition(
         &mut tx,
@@ -720,7 +734,7 @@ async fn preview_today_system_feed_attempt(
     .await?;
     require_current_active_member(&mut tx, ctx.organization_id, cmd.subject).await?;
 
-    sqlx::query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
+    sqlx::query("SET TRANSACTION READ ONLY")
         .execute(&mut *tx)
         .await?;
     sqlx::query("SET LOCAL jit = off").execute(&mut *tx).await?;

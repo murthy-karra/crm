@@ -65,6 +65,12 @@ struct QueryTelemetry {
     list_candidate_count: Option<usize>,
     list_item_count: Option<usize>,
     list_truncated: Option<bool>,
+    /// docs/specs/SLICE_011d.md §8/§9.9: per-feed status classification
+    /// only (`default|customized|disabled|fallback`) — never the
+    /// definition itself. `None` under the `Legacy` provider.
+    feed_statuses: Option<[(&'static str, &'static str); 3]>,
+    person_state_candidate_count: Option<usize>,
+    call_candidate_count: Option<usize>,
 }
 
 struct QuerySpanGuard {
@@ -205,6 +211,14 @@ async fn query_inner(
         list_truncated = tracing::field::Empty,
         sources_status = tracing::field::Empty,
         source_issue_count = tracing::field::Empty,
+        // docs/specs/SLICE_011d.md §8/§9.9: per-feed status classification
+        // (default|customized|disabled|fallback) and candidate counts —
+        // never the definition JSON, subject items, or bound parameters.
+        feed_status_unanswered_inquiry = tracing::field::Empty,
+        feed_status_client_replied = tracing::field::Empty,
+        feed_status_call_outcome_needed = tracing::field::Empty,
+        person_state_candidate_count = tracing::field::Empty,
+        call_candidate_count = tracing::field::Empty,
     );
     let mut trace = QuerySpanGuard::new(span.clone());
     let result =
@@ -253,6 +267,32 @@ async fn query_inner(
                 sources_status_label(outcome.list.sources.status),
             );
             span.record("source_issue_count", outcome.list.sources.issues.len());
+            if let Some(feed_statuses) = outcome.telemetry.feed_statuses {
+                for (feed_key, status) in feed_statuses {
+                    match feed_key {
+                        "unanswered_inquiry" => {
+                            span.record("feed_status_unanswered_inquiry", status);
+                        }
+                        "client_replied" => {
+                            span.record("feed_status_client_replied", status);
+                        }
+                        "call_outcome_needed" => {
+                            span.record("feed_status_call_outcome_needed", status);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            record_optional_usize(
+                &span,
+                "person_state_candidate_count",
+                outcome.telemetry.person_state_candidate_count,
+            );
+            record_optional_usize(
+                &span,
+                "call_candidate_count",
+                outcome.telemetry.call_candidate_count,
+            );
             trace.finish(match outcome.list.sources.status {
                 TodaySourcesStatus::Complete => "complete",
                 TodaySourcesStatus::Partial => "sources_partial",
@@ -310,6 +350,9 @@ async fn query_inner_untraced(
                 system_feed_issues: Vec::new(),
                 call_feed_recovery_deadline: None,
                 call_feed_unrecoverable: false,
+                feed_statuses: None,
+                person_state_candidate_count: None,
+                call_candidate_count: None,
             }
         }
         TodayProvider::Feeds => evaluate_feeds_builtins(&mut tx, scope, viewer, now).await?,
@@ -344,6 +387,9 @@ async fn query_inner_untraced(
                 list_candidate_count: None,
                 list_item_count: None,
                 list_truncated: None,
+                feed_statuses: feeds_result.feed_statuses,
+                person_state_candidate_count: feeds_result.person_state_candidate_count,
+                call_candidate_count: feeds_result.call_candidate_count,
             },
         });
     }
@@ -351,6 +397,9 @@ async fn query_inner_untraced(
         items: mut builtins,
         truncated: builtin_truncated,
         candidate_count: builtin_candidate_count,
+        feed_statuses,
+        person_state_candidate_count,
+        call_candidate_count,
         system_feed_issues,
         call_feed_recovery_deadline,
         ..
@@ -467,6 +516,9 @@ async fn query_inner_untraced(
                     list_candidate_count: None,
                     list_item_count: None,
                     list_truncated: None,
+                    feed_statuses,
+                    person_state_candidate_count,
+                    call_candidate_count,
                 },
             });
         }
@@ -515,6 +567,9 @@ async fn query_inner_untraced(
                     list_candidate_count: None,
                     list_item_count: None,
                     list_truncated: None,
+                    feed_statuses,
+                    person_state_candidate_count,
+                    call_candidate_count,
                 },
             });
         }
@@ -913,6 +968,9 @@ async fn query_inner_untraced(
             list_candidate_count: Some(list_candidate_count),
             list_item_count: Some(list_item_count),
             list_truncated: Some(source_truncated),
+            feed_statuses,
+            person_state_candidate_count,
+            call_candidate_count,
         },
     })
 }
@@ -1145,6 +1203,19 @@ struct FeedsBuiltins {
     /// the whole Today response unavailable (mirrors a source-metadata
     /// failure that itself fails to recover).
     call_feed_unrecoverable: bool,
+    /// docs/specs/SLICE_011d.md §8: per-feed status for `today.query`'s
+    /// span, in `system_feeds::ALL_FEED_KEYS` order — never the definition
+    /// itself, only its classification. `None` under the `Legacy` provider
+    /// (no feed rows are consulted there).
+    feed_statuses: Option<[(&'static str, &'static str); 3]>,
+    /// The person-state statement's candidate count (spec §8/§9.9),
+    /// distinct from `candidate_count` above (which also covers `Legacy`).
+    /// `None` under `Legacy`.
+    person_state_candidate_count: Option<usize>,
+    /// The call feed's evaluated candidate count (its `call_only`
+    /// statement), present only when the call feed is enabled and its
+    /// evaluation succeeded.
+    call_candidate_count: Option<usize>,
 }
 
 /// The `Feeds` provider's builtins computation (docs/specs/SLICE_011d.md
@@ -1168,6 +1239,18 @@ struct FeedsBuiltins {
 /// `builtins` after BOTH succeed — never an uncertain partial call-feed
 /// result (`call_membership` succeeding while `call_only` then fails must
 /// not leave a half-applied set of `call_outcome_needed` reasons).
+fn feed_status_label(feed: &system_feeds::ResolvedFeed) -> &'static str {
+    if !feed.enabled {
+        "disabled"
+    } else if feed.fallback {
+        "fallback"
+    } else if feed.is_default {
+        "default"
+    } else {
+        "customized"
+    }
+}
+
 async fn evaluate_feeds_builtins(
     tx: &mut PgConnection,
     scope: &PersonVisibilityScope,
@@ -1203,6 +1286,20 @@ async fn evaluate_feeds_builtins(
     debug_assert_eq!(feed_replied.feed_key, system_feeds::FeedKey::ClientReplied);
     debug_assert_eq!(feed_call.feed_key, system_feeds::FeedKey::CallOutcomeNeeded);
 
+    // docs/specs/SLICE_011d.md §8/§9.9: a per-feed CLASSIFICATION only
+    // (never the definition itself) for `today.query`'s span.
+    let feed_statuses: [(&'static str, &'static str); 3] = [
+        (
+            feed_unanswered.feed_key.as_str(),
+            feed_status_label(feed_unanswered),
+        ),
+        (
+            feed_replied.feed_key.as_str(),
+            feed_status_label(feed_replied),
+        ),
+        (feed_call.feed_key.as_str(), feed_status_label(feed_call)),
+    ];
+
     let (candidates, truncated_p) = system_feeds::evaluate::person_state_candidates(
         tx,
         organization_id,
@@ -1221,6 +1318,7 @@ async fn evaluate_feeds_builtins(
 
     let mut truncated_call = false;
     let mut call_feed_recovery_deadline = None;
+    let mut call_candidate_count: Option<usize> = None;
     if feed_call.enabled {
         // The savepoint's own creation must be inside the SAME recoverable
         // region as every statement after it: `evaluate_source` follows the
@@ -1298,12 +1396,17 @@ async fn evaluate_feeds_builtins(
                     );
                 }
                 if !truncated_p {
+                    call_candidate_count = Some(call_only.len());
                     let k = 200usize.saturating_sub(builtins.len());
                     truncated_call = call_only.len() > k;
                     let mut call_only_items = rank(call_only, now);
                     call_only_items.truncate(k);
                     builtins.extend(call_only_items);
                 }
+                // else: the call-only statement never ran (spec §5 step 4b —
+                // the person-state statement was already truncated), so
+                // `call_candidate_count` stays `None` rather than falsely
+                // claiming zero candidates.
             }
             Ok(Err(_)) | Err(_) => {
                 // Never merge an uncertain partial call-feed result (see the
@@ -1337,6 +1440,9 @@ async fn evaluate_feeds_builtins(
                         system_feed_issues,
                         call_feed_recovery_deadline: None,
                         call_feed_unrecoverable: true,
+                        feed_statuses: Some(feed_statuses),
+                        person_state_candidate_count: Some(builtin_candidate_count),
+                        call_candidate_count: None,
                     });
                 }
             }
@@ -1350,6 +1456,9 @@ async fn evaluate_feeds_builtins(
         system_feed_issues,
         call_feed_recovery_deadline,
         call_feed_unrecoverable: false,
+        feed_statuses: Some(feed_statuses),
+        person_state_candidate_count: Some(builtin_candidate_count),
+        call_candidate_count,
     })
 }
 

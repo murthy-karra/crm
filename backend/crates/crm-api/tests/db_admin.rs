@@ -441,6 +441,60 @@ async fn every_org_admin_route_is_403_for_a_member(migrator_pool: PgPool) {
     .await;
     assert_eq!(delete_resp.status(), StatusCode::FORBIDDEN);
 
+    // docs/specs/SLICE_011d.md §9.4: every admin today-feeds route is 403
+    // for a member. `GET /api/today/feeds` (any active member) is
+    // deliberately excluded — it is not an admin route.
+    let feeds_list_resp = get_with_cookie(&router, "/api/organization/today-feeds", &cookie).await;
+    assert_eq!(feeds_list_resp.status(), StatusCode::FORBIDDEN);
+
+    let feeds_update_resp = put_json_with_cookie(
+        &router,
+        "/api/organization/today-feeds/unanswered_inquiry",
+        &cookie,
+        serde_json::json!({
+            "expected_revision": 1,
+            "filter": {"version": 1, "clauses": [
+                {"kind": "assigned_to", "assignees": ["me"]},
+                {"kind": "awaiting_response", "value": true}
+            ]},
+            "fresh_within_hours": 24
+        }),
+    )
+    .await;
+    assert_eq!(feeds_update_resp.status(), StatusCode::FORBIDDEN);
+
+    let feeds_revert_resp = post_json_with_cookie(
+        &router,
+        "/api/organization/today-feeds/unanswered_inquiry/revert",
+        &cookie,
+        serde_json::json!({ "expected_revision": 1 }),
+    )
+    .await;
+    assert_eq!(feeds_revert_resp.status(), StatusCode::FORBIDDEN);
+
+    let feeds_enabled_resp = put_json_with_cookie(
+        &router,
+        "/api/organization/today-feeds/unanswered_inquiry/enabled",
+        &cookie,
+        serde_json::json!({ "expected_revision": 1, "enabled": false }),
+    )
+    .await;
+    assert_eq!(feeds_enabled_resp.status(), StatusCode::FORBIDDEN);
+
+    let feeds_preview_resp = post_json_with_cookie(
+        &router,
+        "/api/organization/today-feeds/unanswered_inquiry/preview",
+        &cookie,
+        serde_json::json!({
+            "filter": {"version": 1, "clauses": [
+                {"kind": "assigned_to", "assignees": ["me"]},
+                {"kind": "awaiting_response", "value": true}
+            ]}
+        }),
+    )
+    .await;
+    assert_eq!(feeds_preview_resp.status(), StatusCode::FORBIDDEN);
+
     let _ = (org_id, app_pool);
 }
 

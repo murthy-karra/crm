@@ -1,0 +1,76 @@
+Nested Loop Left Join  (cost=37.68..60.46 rows=1 width=40) (actual time=3.190..4.030 rows=191.00 loops=1)
+  Buffers: shared hit=8294
+  ->  Nested Loop  (cost=29.24..51.98 rows=1 width=72) (actual time=3.175..3.668 rows=191.00 loops=1)
+        Buffers: shared hit=7431
+        ->  Unique  (cost=28.95..28.95 rows=1 width=40) (actual time=1.334..1.361 rows=191.00 loops=1)
+              Buffers: shared hit=1826
+              ->  Sort  (cost=28.95..28.95 rows=1 width=40) (actual time=1.334..1.342 rows=191.00 loops=1)
+                    Sort Key: c.person_id, c.ended_at DESC, c.id DESC
+                    Sort Method: quicksort  Memory: 35kB
+                    Buffers: shared hit=1826
+                    ->  Nested Loop Semi Join  (cost=1.63..28.94 rows=1 width=40) (actual time=0.057..1.275 rows=191.00 loops=1)
+                          Buffers: shared hit=1820
+                          ->  Nested Loop Semi Join  (cost=1.21..15.21 rows=1 width=56) (actual time=0.039..0.651 rows=200.00 loops=1)
+                                Buffers: shared hit=1029
+                                ->  Index Scan using call_org_caller_ended_idx on call c  (cost=0.64..8.67 rows=1 width=56) (actual time=0.012..0.205 rows=200.00 loops=1)
+                                      Index Cond: ((organization_id = 'd259c2f4-c3ae-4193-be41-794c27b3cc55'::uuid) AND (caller_user_id = 'a02943b0-0787-43a5-aaca-d425acecc418'::uuid) AND (ended_at IS NOT NULL))
+                                      Filter: (person_id = ANY ('{f1db3bda-5c8e-e318-5350-c7acf8af06aa,25f0d333-ebcd-9ddc-9265-491db4d4048c,a092f9f9-8641-836d-b78e-8b544904844d,ac811b7d-cac5-8f20-8613-d03a962dd938,0bae91b5-31a1-0632-a14f-1c10d3d8bdc1,c460f753-c775-ed25-000d-64d4b655cc8f,4992ab77-1b38-1fd9-0a05-532a9076ed77,9342ccd8-ecf8-2ca9-63ba-0c735107698d,6a4a391f-a023-345e-14f5-c3bba1477942,37b14873-25d9-e1a1-9306-d8e3d23b930e,a50c0d58-2437-831e-1ec0-5c6f6d2c51dc,7419bf39-d9fd-3230-6e4a-45670ac885ed,5e3b1ffa-6b91-ec72-dc76-659fa3b6a361,3f05b3cb-4823-4e5d-679b-860a546dca9f,fdd63f4d-338c-05c6-f589-0a520efda66b,182be7ab-382d-7de6-4140-14168a1b1de6,b5649fee-f930-55c6-e3e6-58a6a22e14bc,9e1a867e-be19-3e77-c7dd-97de6895ec25,666999dd-daa4-81f6-2737-563de02663cc,5940d64e-a459-d973-bfcb-85b23c206a8b,a422d22f-6e2a-ac57-c81a-c669740f7c2f,5d10a867-1062-9729-3ec3-2cc20bb30531,77123b92-403b-d85d-6820-1dc13a9f1cde,86433f4b-b30a-2e99-ff10-be6b46c1b3e3,ba14564c-0e40-f789-da77-4a06a1205118,5bca1ada-aacb-eeaa-8268-7c9d396ae985,82c9df92-cca2-39b4-4856-63d9b1c4dc0c,81d9e31c-7ea6-a9af-f47c-39de99422b48,127c5b6c-3d4f-9485-babf-ab807e6a71b4,027cb02a-aa97-b2f8-7aa9-29e1ee598e0f,dc1fb2b2-7840-5ab4-7ba4-efc01ec82ce3,a32af49a-f2d0-fd84-022d-05c35f5826b3,a4e5bf6b-1371-f55a-0ad3-fa4d697dce7f,eaa0abce-92cc-8c52-295e-f73c46514aa2,7915fd9a-22a2-c6b7-bcf3-b35edff75a95,a0aec139-f379-6ace-c646-c6ad87fcb0b3,de785437-2573-6277-dc4b-802d23589b34,c86ecfd5-1d6b-0aa9-082e-5c2f5e27f86e,57482b14-3fef-f2d5-d223-8e1d3360896d,904aa8ea-75fb-8ef4-0700-49b50528b7ee,9542f73b-d70b-3629-e919-013303081ec5,ca68848e-f960-3963-98d9-de7da79934a4,b41ba46a-4bea-84e9-bdab-12af34aca882,a4785967-c207-a262-2f1f-267017343fa5,97ed0047-dd88-c28b-1330-0214e9511539,2d7bb431-6563-c93a-80fe-1d0016534fb6,09394d9f-ae7f-3270-7381-1786a26c3075,c695bf17-6b35-2284-2836-82ce0238c67b,1970f7e5-ea2c-0457-aec1-acd8f85e7e06,e106ac3c-edac-8d69-42ee-5f6b27487670,6f41b13d-739b-2abc-da3a-b6708bd77fab,2a3006bc-77f0-7094-45af-f3cb00a81ad3,1e90b5e6-882b-da29-f2b5-6b842be7d76c,9e1da2db-ab2b-c75c-828a-6326ae27bd5a,35e22de2-85d6-7908-b6c9-18645cf6b4ce,47976fa2-9f7f-7acc-eff3-f000cb3db593,c1d0d45f-fc42-dcd9-8c7e-64820b813e62,90263a3a-f1e0-cac8-b72f-767a3979b095,9bbf4682-01bb-8925-6c55-1ed6d251f83a,ff78c2f8-223d-0d7f-944e-728c00498979,f386d057-4e08-1766-f615-92adbc2ea433,b42ce936-d048-0df6-614c-2b28e0476ae4,adb0ae7f-fb6c-5e38-3a2c-0d48598fc8b7,453b877a-0fe7-ff8c-0af0-515973980e4b,4d974ad4-8a92-9f1e-42cf-10c44a4be5ae,02317e0a-a9b3-fa62-a83f-c5594daa1139,c40c24b4-9ac2-b3d5-608a-082c1b52cccb,d5ecd3d4-cb6f-8979-3805-8b7233f8f549,430ad1b8-9663-7848-10b9-8df41fe61da4,7abf98bc-c175-98e8-677e-bb6fc215b350,3361aaf4-995f-fa30-1536-de5de669c032,930957ad-ca3b-6b53-018c-92e6271c27e7,f4a2dcb7-344e-e50a-73aa-519e16fd9d9c,94989027-0f13-dc4a-335a-51351e40ce7e,016a8de9-e4e8-7a09-a4c6-45ba7b2c084f,769e9ada-226f-0d2f-e99c-7143af738ff8,1b3d1c06-ff4e-57ee-786d-e948297475e9,d7665732-6a7e-4a01-9310-f984df593b5f,18cc2d72-c2fd-4672-a212-8d81b584dc6c,7d41197c-68ec-b59a-f483-553a3a7b8056,1e3d9b48-9a6d-aadc-4067-e9e5d764965f,5fe4c4fa-c494-aed2-be60-53560b7ab754,5ed9ab7e-b70e-ff36-74b2-559d7ebc8cb4,04a5bfb4-3d18-f7d6-ee08-c8f1daa1087c,2e5e2314-db53-2681-86a5-49b49a523601,71456d41-9216-e29c-4998-5afdcb2e56f0,91f36a4a-641b-993d-3776-6635eec36ae4,10aab7bf-37e1-c332-e004-aca918beb155,dfd08fb1-71d3-02a2-3fc9-d2e79dca471b,7f29944e-68dc-4ddc-f86f-6f080f5c3c54,f82d6026-140e-1f46-46cb-2cc811170cac,40d5e5f3-9958-aaaf-7c7b-3f2e9435518a,c4bc2e6a-d20a-06e2-c0ab-c935ec20fbf4,3b039f3f-cf94-430d-d174-214cccf6a763,e4039e54-0cf1-7c6e-0f18-7b65f74b918d,ac4f1c8b-fe73-15b2-1a40-37ec80fd0afd,a10401bc-80d7-f104-b25c-26739fc8831b,c9cbe926-7f88-6134-1f9e-c03ef02004c9,802a35dd-83e4-d7e7-e4d8-04c5121faeec,21c361f1-507e-2727-4b07-2d97bf1c2d2c,cf46c7d9-1894-2162-15de-346c4d023b70,3283d344-3655-53cd-f7d7-c332d0ceef45,e87ff5bc-e7a4-1768-31c7-107c9e7a74fc,7b101492-4740-ee41-129a-4c628d931e8b,b2d00363-f0e7-25d2-9588-514123887349,0bac7bd0-23fe-7629-bc3f-a494edec731e,ab351cc8-39e5-0ed1-2ebf-a9c293586939,2b3e7c9c-ddad-5494-6b02-b9f2495b8b41,8b9b3a0c-3248-10ea-0ff5-edbca6f71613,64a2f1e1-8d16-20be-c9a8-e8ddff673395,c3e944cb-b26c-1b9b-79a4-02ec9020147d,e9f49c1f-c4bb-268c-9484-31cfd7369792,d2b79e69-fcf1-1bcf-8617-95e0b2630aac,0e8d4bea-2ef6-9601-d979-40d1e6f0c00a,e3272047-9df9-e971-83b2-1f39f03934e8,d4e2a1d1-58d2-86df-ba92-ba8aff3513ed,d38c0a12-0c59-2937-a829-e41cab2e66d8,6c876cf5-7e80-4c59-e9ab-f716e006c6d7,64f77f32-dee5-a953-cc3b-f3fb038fd11a,ea77e4d5-b4d8-8886-0009-f1a974f75bd0,16a2d1f0-2c11-bd6d-ea50-aedddf4b249f,5b27a07b-cbb6-5b65-e5b9-f0863eedbd0d,f2ec3a26-6f89-1490-5e3a-7696b87f97b2,b47b8a78-0af7-52b3-56f2-cd3342204f2b,96037b04-9b83-85df-7a47-89e9eb269c37,aeb6a909-9534-e80a-21e7-8532c2798b28,666c2ce7-8117-627b-65a2-85ccbf716968,18926552-cfa0-1ee4-36fc-5c0814ab4c5c,6c0c88cb-fe30-29c9-dd00-3834b1952fab,59a8904d-7ae1-c8c4-4994-5c3c0a029c53,50e3b4de-e70f-eb73-c94b-eae4328ec466,f750fbcf-9ce7-7214-cefe-d02a8067c4bf,8c053339-0f32-6d6d-7963-7f7c99dd293b,feb644ee-6bd5-95f8-e2b9-28349f665843,0e1d3d7d-cb46-3ca9-7d1f-c1a2d32d6422,853fdccd-f760-b8ca-5311-ab51e308ff3d,770f8dd5-1cc9-0697-d335-4c8591eacdad,951a8656-ef1f-7a90-258d-b12d785279a3,cf1e0984-04f6-f2a1-1794-39b8d038de8c,d153e3e8-d0cd-47f4-3306-8ddb9dada7a9,8700eec5-4eff-c7cf-cfbc-7353615cc2c5,718f0d17-68f3-bd20-3fde-47366a2b8ffc,9605e865-111f-d127-aea1-6270cde0ffc8,eb4feec5-f0d2-760a-7785-2b8d856338dc,1bedc888-1ef9-acfb-cd6c-791f83ee1fcd,24ce3797-bf44-88b2-b29e-e25005ae834f,e1af6a44-0941-f5d0-43a2-c5f282df2b39,bf439389-c0ef-279c-70f7-639aa265e3e8,2e0f95ca-fea3-5552-c360-ef393f0fd698,b512adce-13a5-1742-9066-8680ef22c105,c685afc7-82d8-1fe2-c21b-625a4b1ac252,734e3109-b5c9-776c-641f-8b019ca48c06,b82596df-abff-f340-65a5-54f8c8b057f6,18bfa8f4-761b-4814-bfba-9bd4fb25f159,8a150e97-24ab-8e4a-9bb0-18557742ac23,f5b4633b-da1f-dbb7-53b9-b49903b05813,37f032d6-3232-bc11-9deb-62cf6b7679a8,a6da22e4-b99b-9083-fbcd-69320bc4d28a,08df254f-5809-40c6-970d-b9b71edc1bb0,db786d01-02d6-8c83-c608-26116cc73aae,1eb5b9a3-0154-628a-4f50-e731ac37a470,bc81744a-6414-d40f-2a84-09e5141196e9,f464c0b5-8655-2599-b76b-32e806b63ae4,b464d9c4-83ee-15bd-b28d-ba48f0fc6e01,87d5e143-974b-a288-c91c-1f938d858093,ae2226a2-9d8c-ea63-fa0e-a7f7fbb6937b,f4f950c2-cec4-d890-0495-59344440f717,5330bf4e-4bda-7579-08ac-69b30128dc03,22c99f0b-a7ef-7026-8dc6-c9beeff14acb,e6e6c98a-2d46-af11-cb53-309c06da3874,d67a4245-ebf6-c3bc-6d2f-265275264501,09fad9cd-d5e3-d532-ffaa-c6cb91cc95d1,3e7f9aa1-d318-859e-18e1-e780e727fde6,fad778dd-71e3-96fb-32bc-b64eb5cecf29,607ba109-0716-852d-f653-c7f568ed0c63,eb2bad0a-dd0c-78c0-2f2a-26d7c8b4cc92,5f631b6e-18f1-cb15-3324-9cd1dea7a835,1bb3d478-e187-a477-e98d-e5b2567e0161,4187d311-696a-8eb8-4c2e-65684835fbad,6f822af4-5a5f-a205-0e46-701759928ac3,bd123a67-2e24-c56d-c092-6572e563fc4f,a8c1aec4-096d-05e7-c92a-0753533abd13,0789a2b2-0422-7961-c070-6e0ee8e078ce,71164a6e-35d3-218f-8c1f-57e7a4dce5e9,5c07b4ed-a1bf-731b-d20f-96e36e564226,a537d670-9b73-379e-9d5e-a1c5320c99f8,51f3722a-95ec-a93e-b4a9-a7ff00f0bd4c,dfc8a191-0df8-f419-d08a-a4c73a28c82e,147dccee-7381-9746-ef45-bccfdd2f364d,aa33d575-579c-17e8-f973-ba2e337cd05b,25f00f10-9f04-39ea-6edb-3633d726475d,05e187e6-369a-4afa-b480-a4743cd255ae,1846af22-ffad-4242-e17f-d73a7db0d1ac,8a8f3c5e-059a-10db-12cd-2574cbb24919,399221fc-d0a9-b538-ee7c-bba0cd5028ab,13ab6ec8-4ad9-d8b5-df04-576ec1cd732b,191d8958-fde4-2f1e-c4e2-cf75c20bafce,cf11fa94-e258-f9b2-a4f5-abe84c0242bc,719c5df5-259c-cb9c-7028-b30b44449b91,2a8494ed-9057-c044-7443-1cef9ff242c7}'::uuid[]))
+                                      Rows Removed by Filter: 800
+                                      Index Searches: 1
+                                      Buffers: shared hit=29
+                                ->  Nested Loop Anti Join  (cost=0.57..6.53 rows=1 width=32) (actual time=0.002..0.002 rows=1.00 loops=200)
+                                      Buffers: shared hit=1000
+                                      ->  Index Scan using contact_attempted_org_causation_idx on contact_attempted root  (cost=0.29..6.06 rows=1 width=48) (actual time=0.001..0.001 rows=1.00 loops=200)
+                                            Index Cond: ((organization_id = 'd259c2f4-c3ae-4193-be41-794c27b3cc55'::uuid) AND (causation_id = c.id))
+                                            Filter: (corrects_id IS NULL)
+                                            Index Searches: 200
+                                            Buffers: shared hit=600
+                                      ->  Index Only Scan using contact_attempted_corrects_once on contact_attempted x  (cost=0.28..0.38 rows=1 width=16) (actual time=0.001..0.001 rows=0.00 loops=200)
+                                            Index Cond: (corrects_id = root.id)
+                                            Heap Fetches: 0
+                                            Index Searches: 200
+                                            Buffers: shared hit=400
+                          ->  Index Only Scan using inquiry_org_person_received_idx on inquiry i  (cost=0.41..8.43 rows=1 width=32) (actual time=0.003..0.003 rows=0.95 loops=200)
+                                Index Cond: ((organization_id = 'd259c2f4-c3ae-4193-be41-794c27b3cc55'::uuid) AND (person_id = c.person_id))
+                                Heap Fetches: 191
+                                Index Searches: 200
+                                Buffers: shared hit=791
+        ->  Index Scan using person_pkey on person p  (cost=0.29..23.02 rows=1 width=32) (actual time=0.012..0.012 rows=1.00 loops=191)
+              Index Cond: (id = c.person_id)
+              Filter: ((organization_id = 'd259c2f4-c3ae-4193-be41-794c27b3cc55'::uuid) AND (ANY ((organization_id = (hashed SubPlan 2).col1) AND (id = (hashed SubPlan 2).col2))))
+              Index Searches: 191
+              Buffers: shared hit=5605
+              SubPlan 2
+                ->  Nested Loop Semi Join  (cost=0.71..14.76 rows=1 width=32) (actual time=0.022..1.646 rows=1000.00 loops=1)
+                      Buffers: shared hit=5032
+                      ->  Index Scan using call_org_caller_ended_idx on call c2  (cost=0.14..8.21 rows=1 width=48) (actual time=0.016..0.087 rows=1000.00 loops=1)
+                            Index Cond: ((caller_user_id = 'a02943b0-0787-43a5-aaca-d425acecc418'::uuid) AND (ended_at IS NOT NULL))
+                            Index Searches: 1
+                            Buffers: shared hit=32
+                      ->  Nested Loop Anti Join  (cost=0.57..6.53 rows=1 width=32) (actual time=0.001..0.001 rows=1.00 loops=1000)
+                            Buffers: shared hit=5000
+                            ->  Index Scan using contact_attempted_org_causation_idx on contact_attempted root2  (cost=0.29..6.06 rows=1 width=48) (actual time=0.001..0.001 rows=1.00 loops=1000)
+                                  Index Cond: ((organization_id = c2.organization_id) AND (causation_id = c2.id))
+                                  Filter: (corrects_id IS NULL)
+                                  Index Searches: 1000
+                                  Buffers: shared hit=3000
+                            ->  Index Only Scan using contact_attempted_corrects_once on contact_attempted x2  (cost=0.28..0.38 rows=1 width=16) (actual time=0.000..0.000 rows=0.00 loops=1000)
+                                  Index Cond: (corrects_id = root2.id)
+                                  Heap Fetches: 0
+                                  Index Searches: 1000
+                                  Buffers: shared hit=2000
+  ->  Limit  (cost=8.45..8.47 rows=1 width=56) (actual time=0.002..0.002 rows=1.00 loops=191)
+        Buffers: shared hit=863
+        ->  Incremental Sort  (cost=8.45..8.49 rows=2 width=56) (actual time=0.002..0.002 rows=1.00 loops=191)
+              Sort Key: i2.received_at DESC, i2.id DESC
+              Presorted Key: i2.received_at
+              Full-sort Groups: 191  Sort Method: quicksort  Average Memory: 25kB  Peak Memory: 25kB
+              Buffers: shared hit=863
+              ->  Index Scan Backward using inquiry_org_person_received_idx on inquiry i2  (cost=0.41..8.43 rows=1 width=56) (actual time=0.001..0.001 rows=1.48 loops=191)
+                    Index Cond: ((organization_id = p.organization_id) AND (person_id = p.id))
+                    Index Searches: 191
+                    Buffers: shared hit=860
+Planning:
+  Buffers: shared hit=373 read=1
+Planning Time: 1.145 ms
+Execution Time: 4.112 ms

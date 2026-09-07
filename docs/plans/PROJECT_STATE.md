@@ -79,7 +79,8 @@ review and adversarial analysis found no P1/P2 defect and their test and
 hardening items were applied by two fix lanes, and the final gates passed
 once on the final tree (Rust 689 + 5 doctests, Web 518, database 459 of 459).
 Full evidence: [SLICE_011b_SORT_VERIFICATION.md](../tasks/SLICE_011b_SORT_VERIFICATION.md).
-**Uncommitted; awaiting the user's commit approval, then merge.**
+Implementation commit `bd23f42` on the branch (user-approved). **Awaiting merge
+approval.**
 
 ## Previous completed slice
 
@@ -215,6 +216,7 @@ together on 2026-09-06).
 | 011a | Filter vocabulary + ad-hoc People filtering (D-043) | `4aee12d` |
 | 011b | Personal and shared saved People lists (D-046) | `9d62e86` (implementation `2af023c`) |
 | 011c | Saved lists feed Today (D-047; §8 planner amendment approved) | `929b6ab` (implementation `6117b4a`) |
+| 011b-sort | Per-list sorting for saved People lists (D-048) | branch `slice-011b-sort`, implementation `bd23f42`; merge pending |
 | — | Gate-speedup chunk (check 35m→79s, check-db 37m→~2m) | 2026-08-28 |
 | — | Test-binary consolidation (40 files → 1 binary) | `6427ee8` |
 

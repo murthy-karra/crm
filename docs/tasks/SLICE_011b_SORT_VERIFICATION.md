@@ -6,7 +6,8 @@ result. Push and deployment are separate approvals.
 
 ## Target and runners
 
-- Branch `slice-011b-sort` from `main` at `31c9980`; uncommitted working tree.
+- Branch `slice-011b-sort` from `main` at `31c9980`; implementation commit
+  `bd23f42` (2026-09-06, user-approved).
 - Specification [SLICE_011b_SORT.md](../specs/SLICE_011b_SORT.md) (planner:
   `crm-planner` subagent; independent specification review: `crm-reviewer`,
   READY-WITH-FIXES, eight corrections applied before approval); decision

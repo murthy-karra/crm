@@ -5,8 +5,8 @@ reviewed; awaiting the user's rule-1 decision and approval).
 
 ## Current phase
 
-**Slice 011e (tags) — SPECIFICATION APPROVED 2026-09-07; PLANNING DOCUMENTS
-AWAIT THE COMMIT GATE, THEN THE e1 IMPLEMENTATION GATE.** Amendment pointers
+**Slice 011e (tags) — SPECIFICATION APPROVED AND COMMITTED 2026-09-07
+(`97b889f`, local `main`, not pushed); e1 AWAITS THE IMPLEMENTATION GATE.** Amendment pointers
 written in 002 §§2/5, 003 §6, 005 §3 view types, 011a §4, 011b §§4/5, 011c
 §§3/5 and 011d §§2/6. The user said "start the plan for 011e" on 2026-09-07 (an earlier
 session that began the same planning was closed after 45 seconds of reads and
@@ -22,9 +22,9 @@ ignored in feed evaluation. The spec pre-declares two S–M rungs (e1 model,
 commands, routes, Person page, admin Tags page; e2 the `tags`/`not_tags`
 clauses across the fourteen statements) per the ladder's standing sizing rule.
 The one genuine decision (who renames or deletes a tag) was taken the same
-day as D-051: admins, plus the creator while the tag is unused. Nothing is
-committed; the working tree holds the three new documents, D-051, this file
-and the ladder.
+day as D-051: admins, plus the creator while the tag is unused. The planning
+documents, D-051 and the amendment pointers were committed with the user's
+approval as `97b889f`.
 
 Previous phase: **Slice 011d (tweakable built-in Today rules) — COMPLETE AND MERGED TO
 LOCAL MAIN** at `b8b53e2` (2026-09-07, with the user's approval; not pushed,
@@ -324,7 +324,7 @@ new migrations; restarting it needs `./scripts/db-migrate` first.
 
 ## Last accepted decision
 
-D-051 (2026-09-07, uncommitted) — tag rename and delete by Organization admins,
+D-051 (2026-09-07, `97b889f`) — tag rename and delete by Organization admins,
 plus the creator while the tag is unused; hard delete with `invalid_tag`
 through the existing stale-reference paths. Any member creates and applies.
 D-050 (2026-09-07, `1d951a6`) — operating envelope (25k People, 50 members,
@@ -590,8 +590,8 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. **011e (tags): commit the planning documents with approval, then run the
-   Phase 6 gate and start e1** on `slice-011e-tags` from `main` (one lane,
+1. **011e (tags): run the Phase 6 gate and start e1** on `slice-011e-tags`
+   from `main` at `97b889f` or later (one lane,
    `implement` profile, backend then Web). The small LATER items from the 011d
    verification record can still be batched before or between the rungs:
    the person-state 503 test, two equivalence pins, the feeds page
@@ -625,10 +625,9 @@ and now lives only in git history.
 
 ## Approval currently required
 
-- **Commit of the 011e planning documents** (spec, companion, brief, D-051,
-  amendment pointers, ladder, this file) on `main`; then the **Phase 6
-  implementation gate for e1** ("Proceed with implementation?"). The spec
-  and brief were approved on 2026-09-07; deployment is not authorized.
+- **Phase 6 implementation gate for e1** ("Proceed with implementation?").
+  The spec and brief were approved and committed (`97b889f`) on 2026-09-07;
+  push and deployment are not authorized.
 - None for 011d: merged, pushed, and the dev runtime updated with approval
   on 2026-09-07. Deployment is not authorized.
 - All three 011c decisions were taken on 2026-09-06 (late evening): the §8

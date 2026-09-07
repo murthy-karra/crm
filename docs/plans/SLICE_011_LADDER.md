@@ -19,8 +19,9 @@ The complete [011c specification](../specs/SLICE_011c.md) and implementation
 brief were independently reviewed READY and approved by the user on
 2026-09-06. Terra / `xhigh` implemented and Astra / `xhigh` reviewed until Codex
 usage ran out; Claude finished verification the same evening (see
-PROJECT_STATE). 011c is implemented and verified, uncommitted, awaiting the
-user's decisions on one proposed planner amendment and the commit/merge.
+PROJECT_STATE). 011c COMPLETE AND MERGED LOCALLY (implementation `6117b4a`,
+2026-09-06; the §8 planner amendment and the Phase B pairing limitation were
+accepted by the user before the merge).
 
 ## In plain language
 

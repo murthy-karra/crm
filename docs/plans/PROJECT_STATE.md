@@ -142,13 +142,12 @@ docs/plans/SLICE_011_LADDER.md (011a done → 011b done → **011c** →
 
 ## Current branch
 
-`codex/slice-011c-today-sources`, created from clean local `main` at `9d62e86`,
-carrying the whole slice as an uncommitted working tree (about 105 changed or
-new paths, all listed in the verification record's file audit). 011b's merge
-`9d62e86` remains local. No 011c commit, merge, push or deployment has been
-performed or authorized. The shared development runtime still runs the
-pre-011b binary and `crm_dev` lacks both new migrations; restarting it needs
-`./scripts/db-migrate` first.
+`main`, after the approved local merge of `codex/slice-011c-today-sources`.
+Implementation commit: `6117b4a`, based on `9d62e86` (the full file inventory
+is in the verification record). The slice branch is retained. Neither 011b
+nor 011c has been pushed; deployment was not authorized. The shared
+development runtime still runs the pre-011b binary and `crm_dev` lacks both
+new migrations; restarting it needs `./scripts/db-migrate` first.
 
 ## Last accepted decision
 
@@ -165,7 +164,7 @@ and the 2026-08-29 sort-rung decision above.
 ## Slice ledger
 
 All entries are complete and merged to main. Through 011a they were pushed;
-011b is merged locally only.
+011b and 011c are merged locally only.
 
 | Slice | What | Merge |
 |---|---|---|
@@ -193,6 +192,7 @@ All entries are complete and merged to main. Through 011a they were pushed;
 | 009 | Correspondence capture v1 (D-042; largest slice, 78 files) | `807d7c2` |
 | 011a | Filter vocabulary + ad-hoc People filtering (D-043) | `4aee12d` |
 | 011b | Personal and shared saved People lists (D-046) | Local merge; implementation `2af023c` (not pushed) |
+| 011c | Saved lists feed Today (D-047; §8 planner amendment approved) | Local merge; implementation `6117b4a` (not pushed) |
 | — | Gate-speedup chunk (check 35m→79s, check-db 37m→~2m) | 2026-08-28 |
 | — | Test-binary consolidation (40 files → 1 binary) | `6427ee8` |
 

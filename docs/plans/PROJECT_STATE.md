@@ -1,7 +1,8 @@
 # Project State
 
-Last updated: 2026-09-07 (Slice 011d: Lane W steps 1–4 done; Lane B step 4
-done; Lane B on the call-feed matrix fix, coverage gaps and step 5 perf).
+Last updated: 2026-09-07 (Slice 011d: lanes merged on the integration
+branch; review round 1 done; Lane B on the fix round plus Legacy deletion;
+Lane W on the browser walkthrough).
 
 ## Current phase
 
@@ -56,6 +57,44 @@ Progress so far (2026-09-07):
   unsupported-JSON fallback evaluation tests, preview timeout 503, Operator
   parity under customized/disabled/fallback feeds) and then step 5
   performance evidence paired against `Legacy`.
+
+- **Lane B round 3 complete** (`401c18e`, `549243a`, `145335a`, `97cdbec`):
+  call feed bound to the full filter matrix; fallback, preview-timeout and
+  Operator-parity coverage; step 5 evidence at
+  `docs/design/perf/slice-011d-2026-09-07/` (paired Legacy vs Feeds serial p95
+  204 ms vs 177 ms, payload-identical apart from `system_feed_issues`; the
+  011c matrix all complete; person-state EXPLAIN a nested-loop anti join with
+  index use with and without the merge-join toggle). Gates on the lane tree:
+  `check` green, `check-db` 504 of 504.
+- **Lanes merged** into `slice-011d-today-system-feeds` at `3496d71` via the
+  third worktree `../crm-worktrees/011d-integration` (113 files, no
+  conflicts).
+- **D-050 applied** (committed on main as `1d951a6` by a peer session; spec
+  §8 pointer `ae449ad`): step 5 gates only on the paired regression and the
+  person-state plan shape, both already met; the 1/10/20 matrix and pool wait
+  are trend data; the merge-join toggle question is closed as keep both
+  settings; at most two review-then-fix rounds.
+- **Review round 1 (of two) complete** on the merged tree. Reviewer:
+  equivalence gate CONFIRMED by SQL analysis and both suites; READY WITH
+  FIXES. One BLOCKING defect: `person_state.sql` projects a nullable boolean
+  into a non-null decode, so a customized feed with `unassigned` plus one
+  unassigned replied Person would 503 the whole Organization's Today. Plus:
+  call-feed statements use `now()` instead of the bound clock; Update
+  validates references before the revision check (422 before 409); no
+  HTTP-level route tests; five §9.2 cases missing. Tester: the same clock and
+  precedence defects, the 199/200/201 × call-only cap case, a mislabeled
+  failure test, a weak revert-fact test, a vacuous telemetry test, and
+  several cheap boundary/idempotency tests; Operator parity had no gap.
+  Beyond-envelope items (concurrency 20, pool wait) recorded as trend only.
+- **Lane B fix round assigned** with every in-envelope finding, the
+  call-statement EXPLAINs D-050 asks for, and then step 6: delete the
+  `Legacy` provider and freeze its SQL under `tests/fixtures/today_f51bff8/`.
+- **Lane W step 5 assigned**: browser walkthrough on the merged tree in a
+  scratch QA runtime (011c pattern, scratch database, the user's dev
+  processes untouched). Two Web items from the tester wait for its report:
+  a session-identity fence on the preview dialog, and the 409 flow's draft
+  handling (coordinator choice: keep the reload but say so explicitly in the
+  notice, and keep the editor open if the refetch fails).
 
 Planning history follows. On 2026-09-06 the user asked to look at 011d. The read-only planner
 analysed the rung against the code and found that the ladder's pre-declared
@@ -244,6 +283,9 @@ new migrations; restarting it needs `./scripts/db-migrate` first.
 
 ## Last accepted decision
 
+D-050 (2026-09-07, `1d951a6`) — operating envelope (25k People, 50 members,
+5 concurrent Today loads, one active tab), two review rounds per slice, and
+performance gating on paired regression plus plan shape only.
 D-049 (2026-09-06) — Slice 011d ships as one L rung with parallel backend and
 web lanes; a one-time exception to the S–M rung rule, not a change to it.
 D-048 (2026-09-06) — a saved list's sort order is part of its definition.
@@ -503,12 +545,11 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. **011d in progress:** wait for Lane B's call-feed-matrix, coverage and
-   step 5 performance report and audit it; merge both
-   lanes into `slice-011d-today-system-feeds`; Lane W step 5 walkthrough
-   against real routes; independent reviewer confirmation of the equivalence
-   evidence, then Lane B step 6 (delete `Legacy`, freeze SQL under
-   `tests/fixtures/today_f51bff8/`); tester pass; final-tree gates once;
+1. **011d in progress:** wait for Lane B's fix-round report (includes the
+   `Legacy` deletion) and Lane W's walkthrough report; audit both; assign
+   the two Web items to Lane W; re-merge both lanes into the integration
+   branch; review round 2 (the last allowed) limited to the fixes; write
+   `docs/tasks/SLICE_011d_VERIFICATION.md`; run the final-tree gates once;
    commit and merge gates with the user.
    The equivalence gate (Lane B step 3) and the merge-join toggle question
    (step 5) return to the coordinator. The shared development runtime is

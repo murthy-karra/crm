@@ -1326,3 +1326,612 @@ async fn a_disabled_feed_with_an_invalid_stored_definition_reports_no_issue(migr
         crm_api::domain::today::TodaySourcesStatus::Complete
     ));
 }
+
+// --- Review round 1, F5: equivalence cases to pin BEFORE deleting Legacy ---
+
+use crm_api::domain::envelope::{CommandContext, Origin};
+use crm_api::domain::person::filter::{
+    AssignedToClause, Assignee, BoolClause, Clause, FilterDefinition,
+};
+use crm_api::domain::today::system_feeds::commands::{self, UpdateTodaySystemFeed};
+use crm_api::domain::today::system_feeds::FeedKey;
+use crm_api::ids::CorrelationId;
+
+fn f5_command_context(organization_id: Uuid, actor_user_id: Uuid) -> CommandContext {
+    CommandContext {
+        organization_id: OrganizationId::new(organization_id),
+        actor_user_id: UserId::new(actor_user_id),
+        origin: Origin::WebSession,
+        correlation_id: CorrelationId::new(Uuid::new_v4()),
+    }
+}
+
+/// `create_org_with_stages_and_member` already inserted this user's
+/// membership row as a plain member; UPDATE its role rather than
+/// re-inserting (which would collide with the existing primary key).
+async fn f5_promote_to_admin(pool: &PgPool, organization_id: Uuid, user_id: Uuid) {
+    sqlx::query(
+        "UPDATE organization_membership SET role = 'admin' \
+         WHERE organization_id = $1 AND user_id = $2",
+    )
+    .bind(organization_id)
+    .bind(user_id)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+/// F5.1: the fresh boundary is STRICT (`>`, not `>=`) for BOTH
+/// person-state feeds at the canonical 24 h window — an inquiry/reply at
+/// EXACTLY `now - 24h` is normal priority; one second later is high.
+/// Legacy and Feeds must agree at both sides of the boundary.
+#[sqlx::test]
+#[ignore]
+async fn fresh_boundary_at_exactly_24_hours_is_normal_one_second_later_is_high(
+    migrator_pool: PgPool,
+) {
+    let (organization_id, alice_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "011d f5 fresh boundary 24h",
+        "alice@d011-f5-boundary-24h.test",
+        "Alice",
+        "correct horse battery staple",
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let stage_id = first_stage_id(&app_pool, organization_id).await;
+    let now = Utc::now();
+
+    // Feed A (inquiry-based).
+    let a_at_boundary = insert_person(&app_pool, organization_id, stage_id, Some(alice_id)).await;
+    insert_inquiry(
+        &app_pool,
+        organization_id,
+        a_at_boundary,
+        "zillow",
+        now - ChronoDuration::hours(24),
+    )
+    .await;
+    let a_inside = insert_person(&app_pool, organization_id, stage_id, Some(alice_id)).await;
+    insert_inquiry(
+        &app_pool,
+        organization_id,
+        a_inside,
+        "zillow",
+        now - ChronoDuration::hours(24) + ChronoDuration::seconds(1),
+    )
+    .await;
+
+    // Feed B (reply-based): each needs an inquiry too (rule 7) plus an
+    // inbound reply at the boundary/inside it.
+    let b_at_boundary = insert_person(&app_pool, organization_id, stage_id, Some(alice_id)).await;
+    insert_inquiry(
+        &app_pool,
+        organization_id,
+        b_at_boundary,
+        "zillow",
+        now - ChronoDuration::days(10),
+    )
+    .await;
+    insert_correspondence(
+        &app_pool,
+        organization_id,
+        b_at_boundary,
+        alice_id,
+        "inbound",
+        now - ChronoDuration::hours(24),
+    )
+    .await;
+    let b_inside = insert_person(&app_pool, organization_id, stage_id, Some(alice_id)).await;
+    insert_inquiry(
+        &app_pool,
+        organization_id,
+        b_inside,
+        "zillow",
+        now - ChronoDuration::days(10),
+    )
+    .await;
+    insert_correspondence(
+        &app_pool,
+        organization_id,
+        b_inside,
+        alice_id,
+        "inbound",
+        now - ChronoDuration::hours(24) + ChronoDuration::seconds(1),
+    )
+    .await;
+
+    let (legacy, feeds) = compare_providers(&app_pool, organization_id, alice_id, now).await;
+    assert_providers_equal(&legacy, &feeds, "fresh boundary at exactly 24h, both feeds");
+
+    let priority_of = |value: &Value, person_id: Uuid| -> String {
+        value["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|item| item["person"]["id"] == Value::String(person_id.to_string()))
+            .unwrap_or_else(|| panic!("Person {person_id} missing from items"))["priority"]
+            .as_str()
+            .unwrap()
+            .to_string()
+    };
+    assert_eq!(
+        priority_of(&feeds, a_at_boundary),
+        "normal",
+        "feed A at exactly the boundary"
+    );
+    assert_eq!(
+        priority_of(&feeds, a_inside),
+        "high",
+        "feed A one second inside the boundary"
+    );
+    assert_eq!(
+        priority_of(&feeds, b_at_boundary),
+        "normal",
+        "feed B at exactly the boundary"
+    );
+    assert_eq!(
+        priority_of(&feeds, b_inside),
+        "high",
+        "feed B one second inside the boundary"
+    );
+}
+
+/// F5.1 (customized window): the SAME strict boundary holds for a
+/// customized 1 h window — Feeds-only (Legacy has no customizable
+/// window), co-located here for the same boundary-family coverage.
+#[sqlx::test]
+#[ignore]
+async fn fresh_boundary_at_exactly_a_customized_1_hour_window_is_normal_one_second_later_is_high(
+    migrator_pool: PgPool,
+) {
+    let (organization_id, alice_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "011d f5 fresh boundary 1h",
+        "alice@d011-f5-boundary-1h.test",
+        "Alice",
+        "correct horse battery staple",
+    )
+    .await;
+    f5_promote_to_admin(&migrator_pool, organization_id, alice_id).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let stage_id = first_stage_id(&app_pool, organization_id).await;
+    let now = Utc::now();
+
+    commands::update_today_system_feed(
+        &app_pool,
+        &f5_command_context(organization_id, alice_id),
+        UpdateTodaySystemFeed {
+            feed_key: FeedKey::UnansweredInquiry,
+            expected_revision: 1,
+            filter: FilterDefinition {
+                version: 1,
+                clauses: vec![
+                    Clause::AssignedTo(AssignedToClause {
+                        assignees: vec![Assignee::Me],
+                    }),
+                    Clause::AwaitingResponse(BoolClause { value: true }),
+                ],
+            },
+            fresh_within_hours: Some(1),
+        },
+    )
+    .await
+    .unwrap();
+
+    let at_boundary = insert_person(&app_pool, organization_id, stage_id, Some(alice_id)).await;
+    insert_inquiry(
+        &app_pool,
+        organization_id,
+        at_boundary,
+        "zillow",
+        now - ChronoDuration::hours(1),
+    )
+    .await;
+    let inside = insert_person(&app_pool, organization_id, stage_id, Some(alice_id)).await;
+    insert_inquiry(
+        &app_pool,
+        organization_id,
+        inside,
+        "zillow",
+        now - ChronoDuration::hours(1) + ChronoDuration::seconds(1),
+    )
+    .await;
+
+    let scope = PersonVisibilityScope::Organization(OrganizationId::new(organization_id));
+    let mut conn = app_pool.acquire().await.unwrap();
+    let list = today::query_at(&mut conn, &scope, UserId::new(alice_id), now)
+        .await
+        .unwrap();
+    let priority_of = |person_id: Uuid| -> crm_api::domain::today::TodayPriority {
+        list.items
+            .iter()
+            .find(|i| i.person.id.as_uuid() == person_id)
+            .unwrap()
+            .priority
+    };
+    assert_eq!(
+        priority_of(at_boundary),
+        crm_api::domain::today::TodayPriority::Normal
+    );
+    assert_eq!(
+        priority_of(inside),
+        crm_api::domain::today::TodayPriority::High
+    );
+}
+
+/// F5.2: an inbound reply exactly EQUAL to the latest outbound must be
+/// EXCLUDED (the predicate is strict `>`, not `>=`) — Legacy and Feeds
+/// agree that this Person does not qualify by reply.
+#[sqlx::test]
+#[ignore]
+async fn reply_equal_to_the_latest_outbound_is_excluded(migrator_pool: PgPool) {
+    let (organization_id, alice_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "011d f5 reply eq outbound",
+        "alice@d011-f5-reply-eq.test",
+        "Alice",
+        "correct horse battery staple",
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let stage_id = first_stage_id(&app_pool, organization_id).await;
+    let now = Utc::now();
+    let tie = now - ChronoDuration::hours(1);
+
+    let person = insert_person(&app_pool, organization_id, stage_id, Some(alice_id)).await;
+    insert_inquiry(
+        &app_pool,
+        organization_id,
+        person,
+        "zillow",
+        now - ChronoDuration::days(10),
+    )
+    .await;
+    // Already answered (a contact attempt after the inquiry, before the
+    // tie), so this Person does NOT independently qualify via feed A —
+    // isolating the reply-vs-outbound tie as the only signal under test.
+    insert_contact_attempt(
+        &app_pool,
+        organization_id,
+        person,
+        now - ChronoDuration::days(9),
+    )
+    .await;
+    insert_correspondence(&app_pool, organization_id, person, alice_id, "inbound", tie).await;
+    insert_correspondence(
+        &app_pool,
+        organization_id,
+        person,
+        alice_id,
+        "outbound",
+        tie,
+    )
+    .await;
+
+    let (legacy, feeds) = compare_providers(&app_pool, organization_id, alice_id, now).await;
+    assert_providers_equal(&legacy, &feeds, "reply equal to the latest outbound");
+    let ids: Vec<Value> = feeds["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item["person"]["id"].clone())
+        .collect();
+    assert!(
+        !ids.contains(&Value::String(person.to_string())),
+        "a reply exactly equal to the latest outbound must not qualify by reply, and the \
+         already-answered inquiry must not qualify by inquiry either"
+    );
+}
+
+/// F5.3: with more than 201 dual-qualifying (inquiry AND reply) People,
+/// Legacy and Feeds must truncate to the identical top-200 set and agree
+/// on `truncated: true` — proving the cap and tie-break ordering (`fresh
+/// DESC, order_key ASC, id ASC`) behave identically past the boundary.
+#[sqlx::test]
+#[ignore]
+async fn dual_qualifying_people_beyond_the_201_cap_truncate_identically(migrator_pool: PgPool) {
+    let (organization_id, alice_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "011d f5 dual beyond cap",
+        "alice@d011-f5-dual-cap.test",
+        "Alice",
+        "correct horse battery staple",
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let stage_id = first_stage_id(&app_pool, organization_id).await;
+    let now = Utc::now();
+
+    // 205 People, each qualifying for BOTH feeds (reply wins), each with
+    // a DISTINCT reply timestamp so the tie-break order is deterministic
+    // and identical between the two providers.
+    let person_ids: Vec<Uuid> = sqlx::query_scalar(
+        "INSERT INTO person (organization_id, stage_id, assigned_user_id)
+         SELECT $1, $2, $3 FROM generate_series(1, 205) RETURNING id",
+    )
+    .bind(organization_id)
+    .bind(stage_id)
+    .bind(alice_id)
+    .fetch_all(&app_pool)
+    .await
+    .unwrap();
+    for (offset, person_id) in person_ids.iter().enumerate() {
+        insert_inquiry(
+            &app_pool,
+            organization_id,
+            *person_id,
+            "zillow",
+            now - ChronoDuration::days(10),
+        )
+        .await;
+        insert_correspondence(
+            &app_pool,
+            organization_id,
+            *person_id,
+            alice_id,
+            "inbound",
+            now - ChronoDuration::minutes(offset as i64),
+        )
+        .await;
+    }
+
+    let (legacy, feeds) = compare_providers(&app_pool, organization_id, alice_id, now).await;
+    assert_providers_equal(
+        &legacy,
+        &feeds,
+        "205 dual-qualifying People beyond the 201 cap",
+    );
+    assert_eq!(feeds["truncated"], true);
+    assert_eq!(feeds["items"].as_array().unwrap().len(), 200);
+}
+
+/// F5.4: person-state row counts at 199/200/201 (spanning the internal
+/// 201-fetch/200-cap boundary) combined with 0..3 call-only rows (which
+/// only ever run when person-state was NOT truncated, spec §5 step 4b) —
+/// Legacy and Feeds must agree on the full item set and `truncated` at
+/// every one of the twelve combinations.
+#[sqlx::test]
+#[ignore]
+async fn person_state_and_call_only_counts_near_the_boundary_match_legacy(migrator_pool: PgPool) {
+    for person_state_count in [199usize, 200, 201] {
+        for call_only_count in [0usize, 1, 2, 3] {
+            let (organization_id, alice_id) = crate::common::create_org_with_stages_and_member(
+                &migrator_pool,
+                &format!("011d f5 boundary {person_state_count} {call_only_count}"),
+                &format!("alice-{person_state_count}-{call_only_count}@d011-f5-boundary.test"),
+                "Alice",
+                "correct horse battery staple",
+            )
+            .await;
+            let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+            let stage_id = first_stage_id(&app_pool, organization_id).await;
+            let now = Utc::now();
+
+            let person_ids: Vec<Uuid> = sqlx::query_scalar(
+                "INSERT INTO person (organization_id, stage_id, assigned_user_id)
+                 SELECT $1, $2, $3 FROM generate_series(1, $4) RETURNING id",
+            )
+            .bind(organization_id)
+            .bind(stage_id)
+            .bind(alice_id)
+            .bind(person_state_count as i64)
+            .fetch_all(&app_pool)
+            .await
+            .unwrap();
+            for (offset, person_id) in person_ids.iter().enumerate() {
+                insert_inquiry(
+                    &app_pool,
+                    organization_id,
+                    *person_id,
+                    "zillow",
+                    now - ChronoDuration::hours(1) - ChronoDuration::seconds(offset as i64),
+                )
+                .await;
+            }
+
+            let call_only_person_ids: Vec<Uuid> = if call_only_count > 0 {
+                sqlx::query_scalar(
+                    "INSERT INTO person (organization_id, stage_id, assigned_user_id)
+                     SELECT $1, $2, $3 FROM generate_series(1, $4) RETURNING id",
+                )
+                .bind(organization_id)
+                .bind(stage_id)
+                .bind(alice_id)
+                .bind(call_only_count as i64)
+                .fetch_all(&app_pool)
+                .await
+                .unwrap()
+            } else {
+                Vec::new()
+            };
+            for (offset, person_id) in call_only_person_ids.iter().enumerate() {
+                // An answered inquiry (not awaiting_response) plus a
+                // qualifying call: call-only, not person-state.
+                insert_inquiry(
+                    &app_pool,
+                    organization_id,
+                    *person_id,
+                    "zillow",
+                    now - ChronoDuration::days(10),
+                )
+                .await;
+                insert_contact_attempt(
+                    &app_pool,
+                    organization_id,
+                    *person_id,
+                    now - ChronoDuration::days(9),
+                )
+                .await;
+                insert_call(
+                    &app_pool,
+                    organization_id,
+                    *person_id,
+                    alice_id,
+                    now - ChronoDuration::hours(2) - ChronoDuration::seconds(offset as i64),
+                    false,
+                )
+                .await;
+            }
+
+            let (legacy, feeds) =
+                compare_providers(&app_pool, organization_id, alice_id, now).await;
+            assert_providers_equal(
+                &legacy,
+                &feeds,
+                &format!("person_state={person_state_count} call_only={call_only_count}"),
+            );
+        }
+    }
+}
+
+/// F5.5: the call feed's `caller_user_id` axis is independent of the
+/// Person's `assigned_user_id` — across two viewers, a Person assigned to
+/// one but called by the other qualifies ONLY for the actual caller's
+/// Today, at both viewers, in agreement between Legacy and Feeds.
+#[sqlx::test]
+#[ignore]
+async fn caller_not_equal_to_assignee_across_two_viewers(migrator_pool: PgPool) {
+    let (organization_id, alice_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "011d f5 caller ne assignee",
+        "alice@d011-f5-caller-ne.test",
+        "Alice",
+        "correct horse battery staple",
+    )
+    .await;
+    let bob_id = crate::common::create_user(
+        &migrator_pool,
+        "bob@d011-f5-caller-ne.test",
+        "Bob",
+        "correct horse battery staple",
+    )
+    .await;
+    crate::common::add_membership_with(
+        &migrator_pool,
+        organization_id,
+        bob_id,
+        Role::Member,
+        MembershipStatus::Active,
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let stage_id = first_stage_id(&app_pool, organization_id).await;
+    let now = Utc::now();
+
+    // Assigned to Bob, but the call was placed by Alice.
+    let callee = insert_person(&app_pool, organization_id, stage_id, Some(bob_id)).await;
+    insert_inquiry(
+        &app_pool,
+        organization_id,
+        callee,
+        "zillow",
+        now - ChronoDuration::days(10),
+    )
+    .await;
+    let call_id = insert_call(
+        &app_pool,
+        organization_id,
+        callee,
+        alice_id,
+        now - ChronoDuration::hours(1),
+        false,
+    )
+    .await;
+
+    let (alice_legacy, alice_feeds) =
+        compare_providers(&app_pool, organization_id, alice_id, now).await;
+    assert_providers_equal(&alice_legacy, &alice_feeds, "caller (Alice)'s Today");
+    let alice_ids: Vec<Value> = alice_feeds["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item["person"]["id"].clone())
+        .collect();
+    assert!(
+        alice_ids.contains(&Value::String(callee.to_string())),
+        "the CALLER sees the callout, regardless of assignment"
+    );
+
+    let (bob_legacy, bob_feeds) = compare_providers(&app_pool, organization_id, bob_id, now).await;
+    assert_providers_equal(&bob_legacy, &bob_feeds, "assignee (Bob)'s Today");
+    let bob_ids: Vec<Value> = bob_feeds["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item["person"]["id"].clone())
+        .collect();
+    assert!(
+        !bob_ids.contains(&Value::String(callee.to_string())),
+        "the ASSIGNEE, who did not place the call, must not see the call_outcome_needed item"
+    );
+    let _ = call_id;
+}
+
+/// F5.7: preview's own call-only cap (200/truncated) is exercised on the
+/// call feed specifically (existing coverage only exercised
+/// `unanswered_inquiry`'s preview cap).
+#[sqlx::test]
+#[ignore]
+async fn preview_of_the_call_feed_caps_at_200_with_truncated(migrator_pool: PgPool) {
+    let (organization_id, alice_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "011d f5 preview call cap",
+        "alice@d011-f5-preview-call-cap.test",
+        "Alice",
+        "correct horse battery staple",
+    )
+    .await;
+    f5_promote_to_admin(&migrator_pool, organization_id, alice_id).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let stage_id = first_stage_id(&app_pool, organization_id).await;
+    let now = Utc::now();
+
+    let person_ids: Vec<Uuid> = sqlx::query_scalar(
+        "INSERT INTO person (organization_id, stage_id, assigned_user_id)
+         SELECT $1, $2, $3 FROM generate_series(1, 205) RETURNING id",
+    )
+    .bind(organization_id)
+    .bind(stage_id)
+    .bind(alice_id)
+    .fetch_all(&app_pool)
+    .await
+    .unwrap();
+    for (offset, person_id) in person_ids.iter().enumerate() {
+        insert_inquiry(
+            &app_pool,
+            organization_id,
+            *person_id,
+            "zillow",
+            now - ChronoDuration::days(10),
+        )
+        .await;
+        insert_call(
+            &app_pool,
+            organization_id,
+            *person_id,
+            alice_id,
+            now - ChronoDuration::hours(1) - ChronoDuration::seconds(offset as i64),
+            false,
+        )
+        .await;
+    }
+
+    let preview = commands::preview_today_system_feed(
+        &app_pool,
+        &f5_command_context(organization_id, alice_id),
+        crm_api::domain::today::system_feeds::commands::PreviewTodaySystemFeed {
+            feed_key: FeedKey::CallOutcomeNeeded,
+            filter: FilterDefinition {
+                version: 1,
+                clauses: vec![Clause::AwaitingCallOutcome(BoolClause { value: true })],
+            },
+            fresh_within_hours: None,
+            subject: UserId::new(alice_id),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(preview.items.len(), 200);
+    assert!(preview.truncated);
+}

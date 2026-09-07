@@ -1,0 +1,16 @@
+faa3fd68a6bfc24e180465ec9d4fcca19109e4e82be316e30c8735573863e71c  01-admin-today-feeds-default.png
+ade57478d337abed8f9c6108f9874d67615544213bcc7ee0fbc5a3fbf6126e17  02-admin-edit-stage-clause-added.png
+3b2d4492cf83ef80e8b9e0e3aca5e329d61433e72f54285274e0d29fe8d38d55  03-admin-preview-for-carol.png
+688fe5d52683655f9d3a39a7f1406d5f690878d62d19c96903ee1dde80f181dc  04-admin-after-save-customized.png
+d497a132dee93673e346cf3fda3a986071ada34fcc8305f4f4d763d136016fd4  05-agent-today-rules-changed.png
+6c7843f71b2ed28e58d622b060990caaa0af428dd2b996b2a19a7a6610411f1e  06-member-bounced-from-admin-route.png
+b989f9dfefd5ff815e6dc2b656773249366327c4fee165e85b5c94c91ad729a8  07-admin-after-revert-default.png
+b300bfe056f9e9f46bf43fa0af416ef1c841fed9858d0ce1b8cb2b4498464ae8  08-admin-typed-confirm-turn-off.png
+3e6c0c1f877a26e2c55fd07375290c4a7041a8bb525687c0cb4b1e1d5e20c09d  09-admin-after-turn-off.png
+4a3e7be5dd4eb41b358561fd5a18875d797fc1c7bb51a0d2c067af95d4e1ebd5  10-agent-today-after-turn-off.png
+1d931cce36e2a13d6030276cbe933eb4eca2d6222993a520ae70cd5497adb7b5  11-admin-client-replied-1h-window.png
+af9521994b5997021f4a66a39bfb295884db2fc7d7deb3bcb99ae3e8a8863fb1  12-people-awaiting-call-outcome-chip.png
+06707e3a663d3bbf6e502e6da080900226dd6d98d78b8aa9f328b22f9152e92e  13-saved-list-with-new-chip.png
+00d1053fa781fe3a61d5745a112d59f1f02e9802c75b9d2158e1d74f6016626f  14-saved-list-enabled-as-today-source.png
+19a0ecf35a9126ad81f65c479b52eb5f6b84c03fb1e87de03d61545b054afdce  15-second-org-admin-defaults.png
+41918363595e1c152a03975110bd52968684da3e90f810912ef52bafad480623  16-second-org-agent-today-unaffected.png

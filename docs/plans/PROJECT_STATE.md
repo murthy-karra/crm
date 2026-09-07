@@ -1,7 +1,7 @@
 # Project State
 
-Last updated: 2026-09-07 (Slice 011e specification drafted and independently
-reviewed; awaiting the user's rule-1 decision and approval).
+Last updated: 2026-09-07 (Slice 011e specification approved and committed;
+e1 awaits the implementation gate).
 
 ## Current phase
 

@@ -3,16 +3,25 @@
 //! `PersonVisibilityScope::Organization`, not a new scope variant
 //! (AGENTS.md §4.4) — nothing here adds an `AssignedUser` variant to
 //! `visibility.rs`.
+//!
+//! Frozen verbatim from `backend/crates/crm-app/src/domain/today/queries.rs`
+//! at commit `f51bff8` (the tree immediately before Slice 011d began) — see
+//! `README.md` in this directory for the hash and the freeze rationale.
+//! Only Rust import paths changed (`crm_api::` instead of `crate::`, since
+//! this is now an integration-test fixture); the shared model/person types
+//! it depends on (`TodayCandidate`, `PersonSummary`, …) are the SAME live
+//! types Slice 011d's `Feeds` provider still uses — they were never
+//! Legacy-specific, so no separate frozen copy of them exists.
 
 use chrono::{DateTime, Utc};
 use sqlx::PgConnection;
 use uuid::Uuid;
 
-use crate::domain::commands::{ContactAttemptRef, ContactChannel, ContactOutcome};
-use crate::domain::person::model::{compute_display_name, PersonSummary, StageRef, UserRef};
-use crate::domain::person::visibility::PersonVisibilityScope;
-use crate::domain::today::model::{InquiryRef, OutcomeNeededCall, TodayCandidate};
-use crate::ids::{InquiryId, PersonId, StageId, UserId};
+use crm_api::domain::commands::{ContactAttemptRef, ContactChannel, ContactOutcome};
+use crm_api::domain::person::model::{compute_display_name, PersonSummary, StageRef, UserRef};
+use crm_api::domain::person::visibility::PersonVisibilityScope;
+use crm_api::domain::today::model::{InquiryRef, OutcomeNeededCall, TodayCandidate};
+use crm_api::ids::{InquiryId, PersonId, StageId, UserId};
 
 struct TodayCandidateRow {
     id: Uuid,

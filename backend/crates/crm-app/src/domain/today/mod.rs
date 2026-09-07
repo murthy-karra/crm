@@ -6,7 +6,6 @@
 //! queue and enabled live sources.
 
 pub mod model;
-pub mod queries;
 pub mod rank;
 pub mod sources;
 pub mod system_feeds;
@@ -67,7 +66,7 @@ struct QueryTelemetry {
     list_truncated: Option<bool>,
     /// docs/specs/SLICE_011d.md §8/§9.9: per-feed status classification
     /// only (`default|customized|disabled|fallback`) — never the
-    /// definition itself. `None` under the `Legacy` provider.
+    /// definition itself.
     feed_statuses: Option<[(&'static str, &'static str); 3]>,
     person_state_candidate_count: Option<usize>,
     call_candidate_count: Option<usize>,
@@ -112,23 +111,15 @@ pub async fn query(
     viewer: UserId,
     _now: DateTime<Utc>,
 ) -> Result<TodayList, sqlx::Error> {
-    Ok(query_inner(
-        conn,
-        scope,
-        viewer,
-        EvaluationClock::Database,
-        TodayProvider::Feeds,
-    )
-    .await?
-    .list)
+    Ok(query_inner(conn, scope, viewer, EvaluationClock::Database)
+        .await?
+        .list)
 }
 
 /// Test-only common-clock seam for filter parity and paired-baseline tests.
 /// The request still reads PostgreSQL's snapshot clock first; the fixture
 /// value then replaces only Today evaluation boundaries. HTTP callers can
-/// neither provide nor select a clock. Always the `Feeds` provider — the
-/// default and the only one every non-equivalence test needs (matches the
-/// production `query` entry point's semantics).
+/// neither provide nor select a clock.
 #[cfg(feature = "test-support")]
 pub async fn query_at(
     conn: &mut PgConnection,
@@ -136,44 +127,8 @@ pub async fn query_at(
     viewer: UserId,
     now: DateTime<Utc>,
 ) -> Result<TodayList, sqlx::Error> {
-    Ok(query_inner(
-        conn,
-        scope,
-        viewer,
-        EvaluationClock::Fixed(now),
-        TodayProvider::Feeds,
-    )
-    .await?
-    .list)
-}
-
-/// The built-in provider seam (docs/specs/SLICE_011d.md §5, §9.2): `Legacy`
-/// keeps the compiled-in `queries::candidates` statement unchanged (the
-/// comparison fixture the equivalence gate proves `Feeds` reproduces
-/// item-for-item, reason-for-reason, in order, at the cap); `Feeds`
-/// evaluates the three per-Organization system feeds. Selectable only
-/// under `test-support` (via [`query_at_with_provider`]) — every
-/// production caller ([`query`], [`query_owned`]) and every ordinary test
-/// caller ([`query_at`], [`query_owned_at`]) gets `Feeds`, the default.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TodayProvider {
-    Legacy,
-    Feeds,
-}
-
-/// Test-only provider-selection seam for the equivalence gate (spec §9.2):
-/// otherwise identical to [`query_at`]. No production or ordinary-test
-/// caller can reach `TodayProvider::Legacy` through any other function.
-#[cfg(feature = "test-support")]
-pub async fn query_at_with_provider(
-    conn: &mut PgConnection,
-    scope: &PersonVisibilityScope,
-    viewer: UserId,
-    now: DateTime<Utc>,
-    provider: TodayProvider,
-) -> Result<TodayList, sqlx::Error> {
     Ok(
-        query_inner(conn, scope, viewer, EvaluationClock::Fixed(now), provider)
+        query_inner(conn, scope, viewer, EvaluationClock::Fixed(now))
             .await?
             .list,
     )
@@ -190,7 +145,6 @@ async fn query_inner(
     scope: &PersonVisibilityScope,
     viewer: UserId,
     evaluation_clock: EvaluationClock,
-    provider: TodayProvider,
 ) -> Result<QueryOutcome, sqlx::Error> {
     let span = tracing::info_span!(
         "today.query",
@@ -221,10 +175,9 @@ async fn query_inner(
         call_candidate_count = tracing::field::Empty,
     );
     let mut trace = QuerySpanGuard::new(span.clone());
-    let result =
-        async { query_inner_untraced(conn, scope, viewer, evaluation_clock, provider).await }
-            .instrument(span.clone())
-            .await;
+    let result = async { query_inner_untraced(conn, scope, viewer, evaluation_clock).await }
+        .instrument(span.clone())
+        .await;
     match &result {
         Ok(outcome) => {
             span.record("item_count", outcome.list.items.len());
@@ -311,7 +264,6 @@ async fn query_inner_untraced(
     scope: &PersonVisibilityScope,
     viewer: UserId,
     evaluation_clock: EvaluationClock,
-    provider: TodayProvider,
 ) -> Result<QueryOutcome, sqlx::Error> {
     // One snapshot and one server-selected clock bind built-ins and all
     // source age filters together. `READ ONLY` keeps a malformed/slow source
@@ -339,24 +291,7 @@ async fn query_inner_untraced(
         #[cfg(feature = "test-support")]
         EvaluationClock::Fixed(now) => now,
     };
-    let feeds_result = match provider {
-        TodayProvider::Legacy => {
-            let (candidates, truncated) = queries::candidates(&mut tx, scope, viewer, now).await?;
-            let count = candidates.len();
-            FeedsBuiltins {
-                items: rank(candidates, now),
-                truncated,
-                candidate_count: count,
-                system_feed_issues: Vec::new(),
-                call_feed_recovery_deadline: None,
-                call_feed_unrecoverable: false,
-                feed_statuses: None,
-                person_state_candidate_count: None,
-                call_candidate_count: None,
-            }
-        }
-        TodayProvider::Feeds => evaluate_feeds_builtins(&mut tx, scope, viewer, now).await?,
-    };
+    let feeds_result = evaluate_feeds_builtins(&mut tx, scope, viewer, now).await?;
     if feeds_result.call_feed_unrecoverable {
         // Mirrors the source-metadata-unavailable early return exactly: the
         // call feed's own savepoint recovery could not complete inside its
@@ -1002,52 +937,11 @@ pub async fn query_owned_at(
     query_owned_with_clock(connection, scope, viewer, EvaluationClock::Fixed(now)).await
 }
 
-/// Test-only owned-connection equivalent of [`query_at_with_provider`],
-/// mirroring [`query_owned_at`] but with a selectable provider — used only
-/// by the Slice 011d Phase B performance harness to pair `Legacy` against
-/// `Feeds` through the SAME owned-connection HTTP path production uses
-/// (never a client-selected value; the harness builds a dedicated
-/// test-support-gated router, exactly like `router_with_test_clock`).
-#[cfg(feature = "test-support")]
-pub async fn query_owned_at_with_provider(
-    connection: PoolConnection<Postgres>,
-    scope: &PersonVisibilityScope,
-    viewer: UserId,
-    now: DateTime<Utc>,
-    provider: TodayProvider,
-) -> Result<TodayList, sqlx::Error> {
-    query_owned_with_clock_and_provider(
-        connection,
-        scope,
-        viewer,
-        EvaluationClock::Fixed(now),
-        provider,
-    )
-    .await
-}
-
 async fn query_owned_with_clock(
     connection: PoolConnection<Postgres>,
     scope: &PersonVisibilityScope,
     viewer: UserId,
     evaluation_clock: EvaluationClock,
-) -> Result<TodayList, sqlx::Error> {
-    query_owned_with_clock_and_provider(
-        connection,
-        scope,
-        viewer,
-        evaluation_clock,
-        TodayProvider::Feeds,
-    )
-    .await
-}
-
-async fn query_owned_with_clock_and_provider(
-    connection: PoolConnection<Postgres>,
-    scope: &PersonVisibilityScope,
-    viewer: UserId,
-    evaluation_clock: EvaluationClock,
-    provider: TodayProvider,
 ) -> Result<TodayList, sqlx::Error> {
     struct Guard(Option<PoolConnection<Postgres>>);
     impl Guard {
@@ -1072,14 +966,7 @@ async fn query_owned_with_clock_and_provider(
     }
 
     let mut guard = Guard(Some(connection));
-    let result = query_inner(
-        guard.connection(),
-        scope,
-        viewer,
-        evaluation_clock,
-        provider,
-    )
-    .await;
+    let result = query_inner(guard.connection(), scope, viewer, evaluation_clock).await;
     if matches!(
         &result,
         Ok(QueryOutcome {
@@ -1223,9 +1110,8 @@ async fn evaluate_source(
     Ok(SourceEvaluation::Data { members, prefix })
 }
 
-/// [`evaluate_feeds_builtins`]'s result: the same `(items, truncated,
-/// candidate_count)` trio the `Legacy` provider's `queries::candidates` +
-/// `rank()` pair produces, plus any `system_feed_issues`, plus the two
+/// [`evaluate_feeds_builtins`]'s result: `(items, truncated,
+/// candidate_count)`, plus any `system_feed_issues`, plus the two
 /// call-feed recovery signals `query_inner_untraced` must fold into its own
 /// connection-health/final-commit bookkeeping exactly as a list source's
 /// recovery does.
@@ -1246,12 +1132,9 @@ struct FeedsBuiltins {
     call_feed_unrecoverable: bool,
     /// docs/specs/SLICE_011d.md §8: per-feed status for `today.query`'s
     /// span, in `system_feeds::ALL_FEED_KEYS` order — never the definition
-    /// itself, only its classification. `None` under the `Legacy` provider
-    /// (no feed rows are consulted there).
+    /// itself, only its classification.
     feed_statuses: Option<[(&'static str, &'static str); 3]>,
-    /// The person-state statement's candidate count (spec §8/§9.9),
-    /// distinct from `candidate_count` above (which also covers `Legacy`).
-    /// `None` under `Legacy`.
+    /// The person-state statement's candidate count (spec §8/§9.9).
     person_state_candidate_count: Option<usize>,
     /// The call feed's evaluated candidate count (its `call_only`
     /// statement), present only when the call feed is enabled and its

@@ -16,8 +16,14 @@
 //! not on reconstructing a frozen historical module.
 //!
 //! Four parts, run sequentially against the SAME seeded database:
-//! (1) paired zero-source regression, `Legacy` vs `Feeds`, same fixture,
-//!     clock and build;
+//! (1) STEP 6 UPDATE: the paired zero-source `Legacy`-vs-`Feeds`
+//!     regression is no longer runnable live — `TodayProvider::Legacy`
+//!     and its seam (`router_with_test_clock_and_provider`,
+//!     `query_owned_at_with_provider`) were deleted once the DB-level
+//!     equivalence suite proved `Legacy` byte-identical to the frozen
+//!     `tests/fixtures/today_f51bff8/` fixture. `regression` below is now
+//!     a hardcoded carry-forward of the ONE comparison actually captured
+//!     (docs/design/perf/slice-011d-2026-09-07/run.json), not a live run;
 //! (2) the 011c matrix at concurrency 1/10/20 (four concentrated source
 //!     modes, three supplemental books at zero/five sources, and the
 //!     independent five-source concurrency-20 repeat) against `Feeds`;
@@ -54,7 +60,6 @@ use crm_api::domain::today::system_feeds::FeedKey;
 use crm_api::domain::today::test_support::{
     HttpPerfCollector, HttpPerfTelemetry, PoolAcquisitionOutcome,
 };
-use crm_api::domain::today::TodayProvider;
 use crm_api::ids::{CorrelationId, OrganizationId, StageId, UserId};
 use crm_api::realtime::Publisher;
 use crm_api::state::AppState;
@@ -508,13 +513,6 @@ async fn org_and_admin(pool: &PgPool, email: &str) -> (Uuid, Uuid) {
     (row.0, row.1)
 }
 
-fn strip_sources(mut value: Value) -> Value {
-    if let Some(obj) = value.as_object_mut() {
-        obj.remove("sources");
-    }
-    value
-}
-
 #[derive(Debug, Serialize)]
 struct RegressionReport {
     case: String,
@@ -574,129 +572,26 @@ async fn slice_011d_authenticated_http_performance_harness(migrator_pool: PgPool
     let (organization_id, admin_id) = org_and_admin(&setup_pool, concentrated_email).await;
     setup_pool.close().await;
 
-    // ==== Part 1: paired zero-source regression, Legacy vs Feeds ========
-    let regression = {
-        let viewer = fixture.viewer(TodayHttpPerfCase::Concentrated).clone();
-
-        let legacy_pool = fixture.arm_pool().await;
-        let legacy_collector = HttpPerfCollector::default();
-        let legacy_router = crm_api::build_app_with_today_router_and_perf_collector(
-            AppState::for_tests(
-                legacy_pool.clone(),
-                fixture.config(),
-                Publisher::recording(),
-            ),
-            crm_api::routes::today::router_with_test_clock_and_provider(
-                fixture.fixed_clock(),
-                TodayProvider::Legacy,
-            ),
-            legacy_collector.clone(),
-        );
-        let legacy_server = LoopbackServer::start(legacy_router).await;
-        let legacy_session =
-            authenticate(&legacy_server.base_url, &viewer.email, &viewer.password).await;
-        fixture
-            .assert_sources_via_http(
-                &legacy_server.base_url,
-                &legacy_session.cookie,
-                TodayHttpPerfCase::Concentrated,
-                PerfSourceMode::Zero,
-            )
-            .await;
-        // One dedicated GET (outside the measured driver waves) whose raw
-        // body is retained for payload-parity comparison.
-        let legacy_payload = {
-            let response = legacy_session
-                .client
-                .get(format!("{}/api/today", legacy_server.base_url))
-                .header(COOKIE, &legacy_session.cookie)
-                .send()
-                .await
-                .expect("legacy payload GET");
-            let bytes = response.bytes().await.expect("legacy payload body");
-            serde_json::from_slice::<Value>(&bytes).expect("legacy payload JSON")
-        };
-        let request = dispatch_factory(
-            legacy_session.clone(),
-            legacy_server.base_url.clone(),
-            legacy_collector.clone(),
-            10_000_000,
-        );
-        let (_waves, legacy_report) = run_case(
-            "regression_concentrated_zero_legacy",
-            &mut ids,
-            QueryArm::FrozenOriginal,
-            CRITICAL_SAMPLE_SHAPE.serial_attempts,
-            CRITICAL_SAMPLE_SHAPE.waves_at_10,
-            CRITICAL_SAMPLE_SHAPE.waves_at_20,
-            request,
-        )
-        .await;
-        legacy_server.stop().await;
-        legacy_pool.close().await;
-
-        let feeds_pool = fixture.arm_pool().await;
-        let feeds_collector = HttpPerfCollector::default();
-        let feeds_router = crm_api::build_app_with_today_router_and_perf_collector(
-            AppState::for_tests(feeds_pool.clone(), fixture.config(), Publisher::recording()),
-            crm_api::routes::today::router_with_test_clock(fixture.fixed_clock()),
-            feeds_collector.clone(),
-        );
-        let feeds_server = LoopbackServer::start(feeds_router).await;
-        let feeds_session =
-            authenticate(&feeds_server.base_url, &viewer.email, &viewer.password).await;
-        fixture
-            .assert_sources_via_http(
-                &feeds_server.base_url,
-                &feeds_session.cookie,
-                TodayHttpPerfCase::Concentrated,
-                PerfSourceMode::Zero,
-            )
-            .await;
-        let feeds_payload = {
-            let response = feeds_session
-                .client
-                .get(format!("{}/api/today", feeds_server.base_url))
-                .header(COOKIE, &feeds_session.cookie)
-                .send()
-                .await
-                .expect("feeds payload GET");
-            let bytes = response.bytes().await.expect("feeds payload body");
-            serde_json::from_slice::<Value>(&bytes).expect("feeds payload JSON")
-        };
-        let request = dispatch_factory(
-            feeds_session,
-            feeds_server.base_url.clone(),
-            feeds_collector.clone(),
-            11_000_000,
-        );
-        let (_waves, feeds_report) = run_case(
-            "regression_concentrated_zero_feeds",
-            &mut ids,
-            QueryArm::Final,
-            CRITICAL_SAMPLE_SHAPE.serial_attempts,
-            CRITICAL_SAMPLE_SHAPE.waves_at_10,
-            CRITICAL_SAMPLE_SHAPE.waves_at_20,
-            request,
-        )
-        .await;
-        feeds_server.stop().await;
-        feeds_pool.close().await;
-
-        let payload_equal = strip_sources(legacy_payload) == strip_sources(feeds_payload);
-        let legacy_p95 = legacy_report.serial_p95_ms;
-        let feeds_p95 = feeds_report.serial_p95_ms;
-        let allowed = legacy_p95
-            .map(|l| ((l as f64 * 1.10).max(l as f64 + 25.0)) as u64)
-            .unwrap_or(u64::MAX);
-        RegressionReport {
-            case: "concentrated_zero_source_serial".to_string(),
-            legacy_p95_ms: legacy_p95,
-            feeds_p95_ms: feeds_p95,
-            allowed_ms: allowed,
-            within_allowed: feeds_p95.map(|f| f <= allowed).unwrap_or(false),
-            payload_equal_excluding_sources: payload_equal,
-        }
+    // ==== Part 1: paired zero-source regression, retained historical =====
+    // `TodayProvider::Legacy` and its seam (`router_with_test_clock_and_
+    // provider`, `query_owned_at_with_provider`) were deleted in Slice
+    // 011d step 6, once the DB-level equivalence suite
+    // (`db_today_feed_equivalence.rs`) proved `Legacy`'s compiled-in
+    // statement byte-identical to a frozen fixture of the pre-011d source
+    // (`tests/fixtures/today_f51bff8/`). Re-running a live Legacy-vs-Feeds
+    // HTTP pairing is no longer possible (there is nothing left to serve
+    // `Legacy` through), so this retained artifact carries forward the
+    // ONE regression comparison actually captured, byte-for-byte, from
+    // docs/design/perf/slice-011d-2026-09-07/run.json (also reproduced in
+    // that archive's README Part 1 table) rather than fabricating a new
+    // number or silently dropping the row from `Evidence`.
+    let regression = RegressionReport {
+        case: "concentrated_zero_source_serial".to_string(),
+        legacy_p95_ms: Some(204),
+        feeds_p95_ms: Some(177),
+        allowed_ms: 229,
+        within_allowed: true,
+        payload_equal_excluding_sources: true,
     };
 
     // ==== Part 2: the 011c matrix at 1/10/20 concurrency, Feeds =========

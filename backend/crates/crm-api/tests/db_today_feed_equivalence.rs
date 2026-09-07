@@ -1,18 +1,27 @@
-//! Slice 011d §9.2 equivalence gate: `today::query_at_with_provider(...,
-//! Feeds)` must equal `..., Legacy)` in full item JSON, order, and
-//! `truncated`, both with zero list sources and with sources enabled.
-//! `Legacy` is the compiled-in `queries::candidates` statement, unchanged;
-//! `Feeds` is the new person-state statement plus the call feed. Both sides
-//! return the SAME `TodayList` type (unlike the frozen-fixture parity in
-//! `db_today_builtin_parity.rs`), so comparison is a direct JSON equality
-//! with no field-stripping.
+//! Slice 011d §9.2 equivalence gate — STEP 6 UPDATE: `TodayProvider::
+//! Legacy` and its seam (`query_at_with_provider`,
+//! `query_owned_at_with_provider`, `router_with_test_clock_and_provider`,
+//! and the compiled-in `queries::candidates` statement itself) have been
+//! deleted from production now that this equivalence gate is exhaustively
+//! proven. The "Legacy" side of every comparison below now runs the
+//! FROZEN `fixtures/today_f51bff8` copy of that exact statement (see its
+//! README) instead — the same "load a frozen fixture rather than keep a
+//! live provider seam" pattern `db_today_builtin_parity.rs` already uses
+//! for the older `today_9d62e86` freeze.
+//!
+//! The frozen fixture's `query()` returns only `(items, truncated)` — no
+//! `sources` field (list-source evaluation was always 100% shared
+//! plumbing between Legacy and Feeds, never a Legacy-vs-Feeds difference
+//! in itself, so it was never the load-bearing part of this comparison).
+//! `compare_providers` therefore compares `{"items": …, "truncated": …}`
+//! on both sides — the frozen side and a RESTRICTED view of the live
+//! `Feeds` `TodayList` (dropping `generated_at`/`sources`) — full item
+//! JSON, order and truncation, item-for-item and reason-for-reason,
+//! exactly as before.
 //!
 //! Every fixture Person here is deliberately at the CANONICAL feed
-//! definition (`[assigned_to: [me], awaiting_response: true]` etc.) — no
-//! command exists yet to store an edited definition (that lands with brief
-//! step 4), so this file proves the feed PATH reproduces the built-in
-//! item-for-item, not yet a customized-feed scenario (spec §9.5, a later
-//! round).
+//! definition (`[assigned_to: [me], awaiting_response: true]` etc.)
+//! except where a test explicitly customizes one (spec §9.5, round 3).
 
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use serde_json::Value;
@@ -21,8 +30,11 @@ use uuid::Uuid;
 
 use crm_api::domain::admin::{MembershipStatus, Role};
 use crm_api::domain::person::visibility::PersonVisibilityScope;
-use crm_api::domain::today::{self, TodayProvider};
+use crm_api::domain::today;
 use crm_api::ids::{OrganizationId, UserId};
+
+#[path = "fixtures/today_f51bff8/mod.rs"]
+mod today_f51bff8;
 
 async fn first_stage_id(pool: &PgPool, organization_id: Uuid) -> Uuid {
     sqlx::query_scalar(
@@ -220,6 +232,11 @@ async fn insert_call(
     call_id
 }
 
+/// Restricted comparison shape: `items` and `truncated` only. Both the
+/// frozen fixture and (deliberately) the live `Feeds` side use it —
+/// `generated_at` is a clock echo, not a comparison target, and
+/// `sources` was always shared plumbing between Legacy and Feeds, never
+/// itself the Legacy-vs-Feeds question this file answers.
 async fn compare_providers(
     app_pool: &PgPool,
     organization_id: Uuid,
@@ -229,34 +246,27 @@ async fn compare_providers(
     let scope = PersonVisibilityScope::Organization(OrganizationId::new(organization_id));
 
     let mut legacy_conn = app_pool.acquire().await.unwrap();
-    let legacy = today::query_at_with_provider(
-        &mut legacy_conn,
-        &scope,
-        UserId::new(viewer_id),
-        fixed_now,
-        TodayProvider::Legacy,
-    )
-    .await
-    .unwrap();
+    let (legacy_items, legacy_truncated) =
+        today_f51bff8::query(&mut legacy_conn, &scope, UserId::new(viewer_id), fixed_now)
+            .await
+            .unwrap();
     drop(legacy_conn);
 
     let mut feeds_conn = app_pool.acquire().await.unwrap();
-    let feeds = today::query_at_with_provider(
-        &mut feeds_conn,
-        &scope,
-        UserId::new(viewer_id),
-        fixed_now,
-        TodayProvider::Feeds,
-    )
-    .await
-    .unwrap();
-
-    assert_eq!(legacy.generated_at, fixed_now);
+    let feeds = today::query_at(&mut feeds_conn, &scope, UserId::new(viewer_id), fixed_now)
+        .await
+        .unwrap();
     assert_eq!(feeds.generated_at, fixed_now);
-    (
-        serde_json::to_value(legacy).unwrap(),
-        serde_json::to_value(feeds).unwrap(),
-    )
+
+    let legacy_value = serde_json::json!({
+        "items": legacy_items,
+        "truncated": legacy_truncated,
+    });
+    let feeds_value = serde_json::json!({
+        "items": feeds.items,
+        "truncated": feeds.truncated,
+    });
+    (legacy_value, feeds_value)
 }
 
 fn assert_providers_equal(legacy: &Value, feeds: &Value, context: &str) {
@@ -791,9 +801,14 @@ async fn feeds_equals_legacy_with_a_deactivated_caller(migrator_pool: PgPool) {
 }
 
 /// With a saved list enabled as a Today source, the built-in band (which
-/// Feeds now produces) must still match Legacy's, and the list-only band
-/// stays correctly appended — proving the seam runs the WHOLE path,
-/// list-source merge included, both ways.
+/// Feeds now produces) must still match the frozen statement's, and the
+/// list-only band stays correctly appended. List-source merging itself
+/// was always shared plumbing between Legacy and Feeds (never a
+/// Legacy-vs-Feeds difference), so this compares only the ONE Person the
+/// frozen builtins-only fixture and Feeds can both independently
+/// produce, plus the list-only Person's presence (a Feeds-pipeline-only
+/// fact — the frozen fixture never evaluates sources at all, by design;
+/// see this file's header note).
 #[sqlx::test]
 #[ignore]
 async fn feeds_equals_legacy_with_a_list_source_enabled(migrator_pool: PgPool) {
@@ -878,17 +893,49 @@ async fn feeds_equals_legacy_with_a_list_source_enabled(migrator_pool: PgPool) {
     .await
     .unwrap();
 
-    let (legacy, feeds) = compare_providers(&app_pool, organization_id, alice_id, now).await;
-    assert_providers_equal(&legacy, &feeds, "with a list source enabled");
+    // The frozen fixture never touches sources (it is builtins-only, see
+    // this file's header note), so it cannot be compared item-for-item
+    // against `Feeds`' FULL merged result here — list-source merging was
+    // always 100% shared plumbing between Legacy and Feeds, never itself
+    // a Legacy-vs-Feeds question. Instead: the builtin band is compared
+    // directly (the ONE Person both sides can independently produce), and
+    // the list-only Person's presence (which only `Feeds`' full pipeline,
+    // sources included, can produce at all) is asserted separately.
+    let scope = PersonVisibilityScope::Organization(OrganizationId::new(organization_id));
+    let mut legacy_conn = app_pool.acquire().await.unwrap();
+    let (legacy_items, legacy_truncated) =
+        today_f51bff8::query(&mut legacy_conn, &scope, UserId::new(alice_id), now)
+            .await
+            .unwrap();
+    drop(legacy_conn);
+    let mut feeds_conn = app_pool.acquire().await.unwrap();
+    let feeds = today::query_at(&mut feeds_conn, &scope, UserId::new(alice_id), now)
+        .await
+        .unwrap();
 
-    let ids: Vec<Value> = feeds["items"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|item| item["person"]["id"].clone())
-        .collect();
-    assert!(ids.contains(&Value::String(builtin_person.to_string())));
-    assert!(ids.contains(&Value::String(list_only_person.to_string())));
+    assert_eq!(
+        serde_json::to_value(&legacy_items).unwrap(),
+        serde_json::to_value(
+            feeds
+                .items
+                .iter()
+                .filter(|item| item.person.id.as_uuid() == builtin_person)
+                .cloned()
+                .collect::<Vec<_>>()
+        )
+        .unwrap(),
+        "the builtin band (the ONE Person both the frozen statement and Feeds independently \
+         produce) must match exactly"
+    );
+    assert_eq!(legacy_truncated, feeds.truncated);
+
+    let ids: Vec<Uuid> = feeds.items.iter().map(|i| i.person.id.as_uuid()).collect();
+    assert!(ids.contains(&builtin_person));
+    assert!(
+        ids.contains(&list_only_person),
+        "the list-only Person is a Feeds-pipeline-only fact — the frozen builtins-only \
+         fixture never produces it, by design"
+    );
 }
 
 /// spec §9.5 ("call feed disabled/enabled"): disabling the call feed is a
@@ -988,15 +1035,9 @@ async fn feeds_call_feed_disabled_omits_call_items_and_reasons_re_enabling_resto
 
     {
         let mut conn = app_pool.acquire().await.unwrap();
-        let feeds_disabled = today::query_at_with_provider(
-            &mut conn,
-            &scope,
-            UserId::new(alice_id),
-            now,
-            TodayProvider::Feeds,
-        )
-        .await
-        .unwrap();
+        let feeds_disabled = today::query_at(&mut conn, &scope, UserId::new(alice_id), now)
+            .await
+            .unwrap();
         let ids: Vec<String> = feeds_disabled
             .items
             .iter()

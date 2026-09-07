@@ -1,7 +1,7 @@
 # Project State
 
-Last updated: 2026-09-06, late evening (Slice 011b-sort verified on branch
-`slice-011b-sort`, awaiting commit and merge; 011c complete and pushed).
+Last updated: 2026-09-06, late evening (Slice 011b-sort complete, merged and
+pushed; 011c complete and pushed).
 
 ## Current phase
 
@@ -61,7 +61,7 @@ queued; it is not a functional prerequisite for 011c. The approved specification
 preserves built-in Today work, private-list visibility and deterministic order,
 and addresses the measured cost of evaluating filters against a large history.
 
-## Now planning: Slice 011b-sort
+## Just completed: Slice 011b-sort
 
 Started 2026-09-06 (late evening) at the user's request. The planner's
 recommendation is reconciled into a draft specification
@@ -79,8 +79,9 @@ review and adversarial analysis found no P1/P2 defect and their test and
 hardening items were applied by two fix lanes, and the final gates passed
 once on the final tree (Rust 689 + 5 doctests, Web 518, database 459 of 459).
 Full evidence: [SLICE_011b_SORT_VERIFICATION.md](../tasks/SLICE_011b_SORT_VERIFICATION.md).
-Implementation commit `bd23f42` on the branch (user-approved). **Awaiting merge
-approval.**
+Implementation commit `bd23f42`, merged to `main` as `d52a0ad` and pushed to
+`origin/main` on 2026-09-06 at the user's request; the slice branch was deleted
+locally and never existed on the remote. Deployment was not authorized.
 
 ## Previous completed slice
 
@@ -216,7 +217,7 @@ together on 2026-09-06).
 | 011a | Filter vocabulary + ad-hoc People filtering (D-043) | `4aee12d` |
 | 011b | Personal and shared saved People lists (D-046) | `9d62e86` (implementation `2af023c`) |
 | 011c | Saved lists feed Today (D-047; §8 planner amendment approved) | `929b6ab` (implementation `6117b4a`) |
-| 011b-sort | Per-list sorting for saved People lists (D-048) | branch `slice-011b-sort`, implementation `bd23f42`; merge pending |
+| 011b-sort | Per-list sorting for saved People lists (D-048) | `d52a0ad` (implementation `bd23f42`) |
 | — | Gate-speedup chunk (check 35m→79s, check-db 37m→~2m) | 2026-08-28 |
 | — | Test-binary consolidation (40 files → 1 binary) | `6427ee8` |
 
@@ -431,8 +432,8 @@ and now lives only in git history.
 ## Next recommended action
 
 1. Specify the next rung when requested: **011d** (tweakable built-ins) is
-   next on the ladder, with 011b-sort separately queued. When the shared
-   development runtime is next restarted, run `./scripts/db-migrate` first.
+   next on the ladder; 011b-sort is done. The shared development runtime is
+   already migrated and serving the merged code.
 2. Post-merge polish landed on main (2026-09-06): the People page explains
    list creation when reached from Lists (three steps plus a recorded
    walkthrough video in a wide dialog), and a direct load of any protected URL no longer bounces to

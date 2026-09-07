@@ -74,3 +74,25 @@ A finding that is an actual defect is always applied regardless of tag.
 were applied and deferred, and watch test-file size: a single test file
 growing by more than a few hundred lines in one rung is a signal to filter
 harder or to split the file, not a sign of rigour.
+
+## Practical envelope and round cap (D-050, 2026-09-07)
+
+Correctness, tenant isolation and privacy hold everywhere. Seamlessness and
+measured performance are owed only inside the v1 operating envelope recorded
+in [D-050](../decisions/DECISION_LOG.md): 25,000 People and 50 members per
+Organization, 5 concurrent Today loads, one active browser tab per agent.
+
+- **Tag `BEYOND_ENVELOPE`** for any finding whose triggering scenario needs
+  load, data volume, tab count or timing outside that envelope. Its default
+  disposition is LATER at every slice size. A `TRUST` finding beyond the
+  envelope is still applied, but the required correction is fail-closed
+  behaviour (no leak, no corruption, an honest error), not seamless recovery.
+- **Two rounds, then stop.** A slice gets at most two review-then-fix rounds.
+  Findings still open afterwards are listed as LATER in the verification
+  record, one line each. A third round needs the user's explicit approval.
+- **Performance gates are relative, not absolute.** Gate only on the paired
+  regression against the previous code on the same machine
+  (max(25 ms, 10%)) and on plan shape from one `EXPLAIN (ANALYZE, BUFFERS)`
+  per changed hot statement. Report absolute latency, concurrency above 5,
+  pool wait and planner toggles without pass/fail. Laptop numbers do not
+  predict production hardware; capacity is measured once on real hardware.

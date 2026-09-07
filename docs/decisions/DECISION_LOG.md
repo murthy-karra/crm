@@ -1719,3 +1719,71 @@ commit only; implementation, commit of code, merge, push and deployment need
 their own gates.
 
 Blocks: nothing. Feeds the Slice 011d implementation gate.
+
+### D-050 — Operating envelope, verification budget and performance gating (2026-09-07)
+
+Accepted by the user on 2026-09-07 after Slices 011b-sort, 011c and the first
+eight hours of 011d showed review, adversarial-test and performance effort
+spent on scenarios outside any practical timeframe: twenty simultaneous
+worst-case Today loads, eight review rounds on multi-tab authentication races,
+collation and tie tests for a sort column, and absolute latency caps measured
+on a developer laptop that also ran Postgres in Docker, Vite, browsers and
+several coding agents. The user's rule: time is acceptable when necessary,
+never for scenarios that will not exist in practical timeframes.
+
+**Principle.** Correctness, tenant isolation and privacy hold everywhere.
+Seamlessness and measured performance are owed only inside the declared
+operating envelope. Outside it the product must fail closed, must not corrupt
+or leak data, and must return an honest error. Nothing more is required.
+
+**v1 operating envelope (twelve months from this decision).**
+
+| Dimension | Envelope |
+|---|---|
+| People per Organization | 25,000 |
+| Members per Organization | 50 |
+| Concurrent Today loads per Organization | 5 |
+| Browser sessions per agent | one active tab; other tabs must never show another actor's data but need not recover seamlessly |
+
+**Verification budget.**
+
+- Reviewer and tester findings carry the tags in
+  `docs/prompts/06-verify-and-review.md`, now including `BEYOND_ENVELOPE`,
+  whose default disposition is LATER regardless of slice size. A `TRUST`
+  finding beyond the envelope is still applied, but the required fix is
+  fail-closed behaviour, not seamless recovery.
+- At most **two** review-then-fix rounds per slice. Findings still open after
+  round two are recorded as LATER in the verification record; a third round
+  requires the user's explicit approval.
+
+**Performance gating.** Laptop measurements cannot predict production on
+dedicated EPYC hosts with several API replicas, and API replicas do not
+relieve the single Postgres. Therefore a slice gates on exactly two things:
+
+1. **Paired relative regression** — new code against the previous code in
+   the same build, machine, fixture and clock, request p95 within
+   max(25 ms, 10%), payloads equal apart from declared envelope fields.
+2. **Plan shape** — one `EXPLAIN (ANALYZE, BUFFERS)` of each new or changed
+   hot statement on the worst realistic book, showing index use and no
+   super-linear growth with People.
+
+Absolute p95, concurrency above 5, pool-wait headroom and planner-toggle
+comparisons are **reported for trend-watching, never gated**. Real capacity
+testing happens once, on the production-shaped hardware with a
+production-shaped dataset, using `./scripts/perf`; that run becomes the
+capacity baseline and replaces laptop capacity inference. Until then no slice
+spends more than one benchmark run on performance unless the paired
+regression fails.
+
+**Applied immediately to Slice 011d step 5:** gate on the paired Legacy
+comparison and the person-state EXPLAIN; report the 1/10/20 matrix and pool
+wait without caps; record the `enable_mergejoin` pair and drop the toggle
+question from the gate. Spec §8's absolute caps are superseded by this
+decision; the spec text is amended by pointer, not rewritten.
+
+**Unchanged:** tenant-isolation and authorization tests, migration rules
+(AGENTS §8), the rule that no check is claimed passed unless run, and the
+once-only final-tree gates.
+
+Blocks: nothing. Supersedes the absolute performance caps in 011c §8 and
+011d §8 and the open-ended review loop in the coordinator skill's Phase 8.

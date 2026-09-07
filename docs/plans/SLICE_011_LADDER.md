@@ -92,6 +92,13 @@ On 2026-09-06, after merging 011b, the user requested **011c next**. It has no
 functional dependency on saved-list sorting, so 011b-sort remains separate
 and queued while 011c proceeds. No sort behavior is folded into 011c.
 
+On 2026-09-06, after 011c merged, planning 011d against the code showed the
+pre-declared d1/d2 seam (decision 2) does not exist: the three arms are one
+statement with one precedence rule and one cap. The user chose to deliver
+**011d as one L rung with parallel backend and web lanes** (D-049), a
+one-time explicit exception to the S–M sizing rule. Specification:
+[SLICE_011d.md](../specs/SLICE_011d.md) (draft, under review).
+
 ## The rungs
 
 | Rung | Outcome | Schema | Size |

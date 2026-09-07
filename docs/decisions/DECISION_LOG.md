@@ -1685,3 +1685,37 @@ The concrete contracts belong to `docs/specs/SLICE_011b_SORT.md`. This
 decision does not authorize implementation, commit, merge, push or deployment.
 
 Blocks: nothing. Feeds the Slice 011b-sort implementation gate.
+
+### D-049 — Slice 011d ships as one L rung with parallel backend and web lanes (2026-09-06)
+
+Accepted by the user while planning Slice 011d. The ladder pre-declared a
+d1/d2 split (two person-state feeds first, the call-state axis second) if the
+rung ran past M. Planning against the code showed that seam does not exist:
+the three compiled-in Today arms are one SQL statement sharing one precedence
+rule and one 201-row cap, so serving two arms as feeds while keeping the third
+compiled in would need a throwaway transitional query, and the call-outcome
+payload plumbing must exist from the first commit to keep reasons identical.
+Offered the choices of (a) a feeds-as-code rung followed by an admin-editing
+rung, (b) a backend rung followed by a web rung, or (c) one L rung with two
+parallel lanes, the user chose **(c)**: 011d is delivered whole, with a
+backend lane owning the migration, vocabulary, feed path, commands, routes and
+equivalence gate, and a web lane owning the admin surface, filter chips and
+Today markers, coordinated through short-lived worktrees. This is a one-time,
+explicit exception to the user's standing S–M rung rule, not a change to it.
+
+The product rules the specification adopts as veto-able safe defaults
+(admin-only editing, disabling allowed with typed confirmation for the
+unanswered-inquiry rule, viewer-relative `assigned_to: me` locked on the two
+person-state feeds, the anchor clause locked, preview for a chosen member,
+canonical fallback for an invalid stored rule, and the v1 at-least-one-inquiry
+feed constraint) are recorded in `docs/specs/SLICE_011d.md` §1. This decision records only the sizing
+and delivery shape.
+
+Follow-up, 2026-09-07: after independent review (READY WITH CORRECTIONS, all
+applied), the user approved the complete `SLICE_011d.md`, including its
+declared contracts and the seven §1 safe defaults, and chose to **hold
+implementation for a later session**. This authorizes the planning documents'
+commit only; implementation, commit of code, merge, push and deployment need
+their own gates.
+
+Blocks: nothing. Feeds the Slice 011d implementation gate.

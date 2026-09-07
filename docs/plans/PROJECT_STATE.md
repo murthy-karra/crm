@@ -1,11 +1,31 @@
 # Project State
 
-Last updated: 2026-09-06, late evening (Slice 011b-sort complete, merged and
-pushed; 011c complete and pushed).
+Last updated: 2026-09-07, early (Slice 011d specification approved;
+implementation held).
 
 ## Current phase
 
-**Slice 011c (saved lists feed Today) — COMPLETE AND MERGED TO LOCAL MAIN.**
+**Slice 011d (tweakable built-in Today rules) — SPECIFICATION APPROVED,
+IMPLEMENTATION HELD.** On 2026-09-06 the user asked to look at 011d. The read-only planner
+analysed the rung against the code and found that the ladder's pre-declared
+d1/d2 seam does not exist (the three Today arms are one statement with one
+precedence rule and one cap). Offered three cuts, the user chose **one L rung
+with parallel backend and web lanes** (D-049). Claude Fable 5.1 then wrote
+[SLICE_011d.md](../specs/SLICE_011d.md), its
+[companion](../specs/SLICE_011d_EXPLAINED.md) and the two-lane
+[brief](../tasks/SLICE_011d_IMPL.md); the independent reviewer returned READY
+WITH CORRECTIONS with no blocking decision, and all eight corrections were
+applied (migration version, rule 7 on the call feed, the call-only sentinel
+gating, the invalid-definition example, 403-before-400 precedence, `Feed.filter`
+semantics under `filter_error`, a `Legacy | Feeds` provider seam for the
+equivalence and paired-perf gates, `unavailable` precedence over `partial`).
+The user then approved the specification with its seven §1 safe defaults on
+2026-09-07 and chose to hold implementation for a later session. Nothing is
+implemented; no branch exists yet.
+
+Previous phase, for context:
+
+**Slice 011c (saved lists feed Today) — COMPLETE, MERGED AND PUSHED.**
 The user approved the §8 planner amendment, accepted the Phase B pairing
 limitation and approved the local commit and merge on 2026-09-06 (late
 evening). Both 011b and 011c were then pushed to `origin/main` at the user's
@@ -153,19 +173,19 @@ clear-all.
 
 ## Current slice
 
-Slice 011c — Lists feed Today — `docs/specs/SLICE_011c.md` (approved, with
-one proposed §8 planning amendment pending), companion
-`docs/specs/SLICE_011c_EXPLAINED.md`, brief `docs/tasks/SLICE_011c_IMPL.md`.
-Phase A SQL evidence: `docs/design/perf/slice-011c-2026-09-06/`; Phase B HTTP
-evidence: `docs/design/perf/slice-011c-http-2026-09-06/`; browser evidence:
-`docs/design/qa/slice-011c-2026-09-06/`. Implementation complete; verified.
-Ladder:
-docs/plans/SLICE_011_LADDER.md (011a done → 011b done → **011c** →
-011d tweakable built-ins → 011e tags; 011b-sort separately queued).
+Slice 011d — Tweakable built-in Today rules — `docs/specs/SLICE_011d.md`
+(approved 2026-09-07; implementation held), companion `docs/specs/SLICE_011d_EXPLAINED.md`,
+brief `docs/tasks/SLICE_011d_IMPL.md` (Lane B backend owns the migration and
+SQLx; Lane W web). Planned integration branch `slice-011d-today-system-feeds`
+from `main` at `f51bff8`. Ladder: docs/plans/SLICE_011_LADDER.md (011a → 011b →
+011b-sort → 011c all done → **011d** → 011e tags).
 
 ## Current branch
 
-`main` at `929b6ab`, pushed to `origin/main` on 2026-09-06 (the push carried
+`main` at `f51bff8` (one docs-only commit after the pushed `929b6ab`). The
+011d planning documents (spec, companion, brief, D-049, ladder amendment, this
+file) are committed on `main` with the user's approval; not pushed. Earlier: `main`
+at `929b6ab`, pushed to `origin/main` on 2026-09-06 (the push carried
 011b's `2af023c`/`9d62e86` and 011c's `6117b4a`/`b4c4226`/`929b6ab`). The
 011b and 011c slice branches were deleted locally after the merge; they never
 existed on the remote. Deployment was not authorized. The shared
@@ -174,6 +194,8 @@ new migrations; restarting it needs `./scripts/db-migrate` first.
 
 ## Last accepted decision
 
+D-049 (2026-09-06) — Slice 011d ships as one L rung with parallel backend and
+web lanes; a one-time exception to the S–M rung rule, not a change to it.
 D-048 (2026-09-06) — a saved list's sort order is part of its definition.
 D-047 (2026-09-06) — up to five Today sources per agent and explicit partial
 availability. D-046 preserves creator-only personal lists and separate
@@ -431,9 +453,14 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. Specify the next rung when requested: **011d** (tweakable built-ins) is
-   next on the ladder; 011b-sort is done. The shared development runtime is
-   already migrated and serving the merged code.
+1. **Start 011d implementation when requested** (spec approved, held): set
+   the model assignment in `docs/tasks/SLICE_011d_IMPL.md`, confirm the base
+   is current `main`, create `slice-011d-today-system-feeds` and two lane
+   worktrees, and start Lane B step 1 (vocabulary) and Lane W step 1 (types)
+   in parallel.
+   The equivalence gate (Lane B step 3) and the merge-join toggle question
+   (step 5) return to the coordinator. The shared development runtime is
+   already migrated and serving the merged 011c code.
 2. Post-merge polish landed on main (2026-09-06): the People page explains
    list creation when reached from Lists (three steps plus a recorded
    walkthrough video in a wide dialog), and a direct load of any protected URL no longer bounces to
@@ -457,6 +484,10 @@ and now lives only in git history.
 
 ## Approval currently required
 
+- None for 011d planning: the specification is approved and its documents
+  committed. The next approval is the implementation start (branch and
+  worktree creation) when the user asks to begin; push of the planning
+  commit is separate and not authorized.
 - All three 011c decisions were taken on 2026-09-06 (late evening): the §8
   planner amendment is approved, the Phase B pairing limitation accepted, and
   the local commit and merge performed, then the push. **Deployment is not

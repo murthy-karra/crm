@@ -535,6 +535,113 @@ async fn update_and_revert_racing_the_same_expected_revision_exactly_one_wins(
     );
 }
 
+// --- Review round 1, F3: 409-before-422 / 404-before-422 precedence ---------
+
+/// Update: a stale `expected_revision` must return `Conflict` (409) even
+/// when the submitted definition would ALSO fail the §1 rules (422) — the
+/// revision check now runs (and this test proves it runs) BEFORE
+/// reference/rule validation. Real revision is 1; the command claims 2 AND
+/// removes the anchor clause; if validation ran first, this would
+/// (wrongly) surface `InvalidFeedRule` instead of `Conflict`.
+#[sqlx::test]
+#[ignore]
+async fn update_returns_conflict_before_invalid_feed_rule_on_a_stale_revision(
+    migrator_pool: PgPool,
+) {
+    let (organization_id, admin_id) = create_org_with_admin(
+        &migrator_pool,
+        "011d f3 update precedence",
+        "admin@d011-f3-update.test",
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+
+    let no_anchor = FilterDefinition {
+        version: 1,
+        clauses: vec![Clause::AssignedTo(AssignedToClause {
+            assignees: vec![Assignee::Me],
+        })],
+    };
+    let err = commands::update_today_system_feed(
+        &app_pool,
+        &command_context(organization_id, admin_id),
+        UpdateTodaySystemFeed {
+            feed_key: FeedKey::UnansweredInquiry,
+            expected_revision: 2, // stale: the real revision is 1
+            filter: no_anchor,
+            fresh_within_hours: Some(24),
+        },
+    )
+    .await
+    .unwrap_err();
+    assert!(
+        matches!(err, TodayFeedError::Conflict),
+        "the stale revision must win over the ALSO-invalid definition: {err:?}"
+    );
+}
+
+/// Preview: an inactive/unknown subject must return `NotFound` (404) even
+/// when the submitted definition would ALSO fail reference validation
+/// (422 `invalid_stage`) — the subject check now runs (and this test
+/// proves it runs) BEFORE reference validation.
+#[sqlx::test]
+#[ignore]
+async fn preview_returns_not_found_before_invalid_stage_on_an_inactive_subject(
+    migrator_pool: PgPool,
+) {
+    let (organization_id, admin_id) = create_org_with_admin(
+        &migrator_pool,
+        "011d f3 preview precedence",
+        "admin@d011-f3-preview.test",
+    )
+    .await;
+    let inactive_id = crate::common::create_user(
+        &migrator_pool,
+        "inactive@d011-f3-preview.test",
+        "Inactive",
+        PW,
+    )
+    .await;
+    crate::common::add_membership_with(
+        &migrator_pool,
+        organization_id,
+        inactive_id,
+        Role::Member,
+        MembershipStatus::Inactive,
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+
+    let invalid_stage_filter = FilterDefinition {
+        version: 1,
+        clauses: vec![
+            Clause::AssignedTo(AssignedToClause {
+                assignees: vec![Assignee::Me],
+            }),
+            Clause::AwaitingResponse(BoolClause { value: true }),
+            Clause::Stage(StageClause {
+                stage_ids: vec![StageId::new(Uuid::new_v4())],
+            }),
+        ],
+    };
+    let err = commands::preview_today_system_feed(
+        &app_pool,
+        &command_context(organization_id, admin_id),
+        PreviewTodaySystemFeed {
+            feed_key: FeedKey::UnansweredInquiry,
+            filter: invalid_stage_filter,
+            fresh_within_hours: Some(24),
+            subject: UserId::new(inactive_id),
+        },
+    )
+    .await
+    .unwrap_err();
+    assert!(
+        matches!(err, TodayFeedError::NotFound),
+        "the inactive subject must win over the ALSO-invalid stage reference: {err:?}"
+    );
+}
+
 // --- §4 feed rule validation -------------------------------------------------
 
 #[sqlx::test]

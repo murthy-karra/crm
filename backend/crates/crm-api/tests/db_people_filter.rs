@@ -1682,3 +1682,483 @@ async fn people_filter_request_span_records_path_only_with_the_query_string_stri
         "no filter value ever reaches a span: {captured}"
     );
 }
+
+// --- 011d correction (b): per-axis parity across People, count, every ------
+// --- sort, for the three derived clause kinds (spec §9.1) ------------------
+
+mod derived_axis_full_matrix_parity {
+    use std::collections::HashSet;
+
+    use chrono::{Duration as ChronoDuration, Utc};
+    use crm_api::domain::admin::{MembershipStatus, Role};
+    use crm_api::domain::person::filter::{BoolClause, Clause, FilterDefinition};
+    use crm_api::domain::person::sort::{PersonSort, SortDirection, SortKey};
+    use crm_api::domain::person::{queries as person_queries, PersonVisibilityScope};
+    use crm_api::ids::{OrganizationId, UserId};
+    use sqlx::PgPool;
+    use uuid::Uuid;
+
+    use super::{insert_contact_attempt, insert_correspondence, insert_inquiry, insert_person};
+
+    #[allow(clippy::too_many_arguments)]
+    async fn insert_call(
+        pool: &PgPool,
+        organization_id: Uuid,
+        person_id: Uuid,
+        caller_user_id: Uuid,
+        ended_at: chrono::DateTime<Utc>,
+        corrected: bool,
+    ) -> Uuid {
+        let call_id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO call \
+                (id, organization_id, person_id, contact_method_id, caller_user_id, origin, \
+                 correlation_id, status, end_reason, provider, provider_room, placed_at, ended_at) \
+             VALUES \
+                ($1, $2, $3, $4, $5, 'web_session', $6, 'ended', 'agent_hangup', \
+                 'scripted', 'axis-matrix-fixture', $7, $7)",
+        )
+        .bind(call_id)
+        .bind(organization_id)
+        .bind(person_id)
+        .bind(Uuid::new_v4())
+        .bind(caller_user_id)
+        .bind(Uuid::new_v4())
+        .bind(ended_at)
+        .execute(pool)
+        .await
+        .unwrap();
+
+        let root_id: Uuid = sqlx::query_scalar(
+            "INSERT INTO contact_attempted \
+                (organization_id, actor_kind, actor_user_id, origin, occurred_at, correlation_id, \
+                 causation_id, person_id, channel, outcome) \
+             VALUES ($1, 'system', NULL, 'migration', $2, $3, $4, $5, 'call', 'reached') \
+             RETURNING id",
+        )
+        .bind(organization_id)
+        .bind(ended_at)
+        .bind(Uuid::new_v4())
+        .bind(call_id)
+        .bind(person_id)
+        .fetch_one(pool)
+        .await
+        .unwrap();
+
+        if corrected {
+            sqlx::query(
+                "INSERT INTO contact_attempted \
+                    (organization_id, actor_kind, actor_user_id, origin, occurred_at, \
+                     correlation_id, corrects_id, person_id, channel, outcome) \
+                 VALUES ($1, 'user', $2, 'web_session', $3, $4, $5, $6, 'call', 'left_message')",
+            )
+            .bind(organization_id)
+            .bind(caller_user_id)
+            .bind(ended_at)
+            .bind(Uuid::new_v4())
+            .bind(root_id)
+            .bind(person_id)
+            .execute(pool)
+            .await
+            .unwrap();
+        }
+
+        call_id
+    }
+
+    /// Every People-shaped read path a clause can be evaluated through
+    /// (spec §9.1): `filtered_summaries` (People), `count_filtered_matches`
+    /// (count), and all seven sorted statements — set-equality only (sort
+    /// ORDER correctness is pinned elsewhere; this proves membership is
+    /// identical across all eleven statements' shared predicate matrix).
+    async fn assert_axis_parity(
+        pool: &PgPool,
+        organization_id: Uuid,
+        viewer_id: Uuid,
+        filter: &FilterDefinition,
+        expected: &HashSet<Uuid>,
+        context: &str,
+    ) {
+        let scope = PersonVisibilityScope::Organization(OrganizationId::new(organization_id));
+        let params = filter.to_query_params(UserId::new(viewer_id));
+        let mut conn = pool.acquire().await.unwrap();
+
+        let (summaries, truncated) = person_queries::filtered_summaries(&mut conn, &scope, &params)
+            .await
+            .unwrap();
+        assert!(
+            !truncated,
+            "{context}: People fixture is well below the cap"
+        );
+        let people_ids: HashSet<Uuid> = summaries.into_iter().map(|p| p.id.as_uuid()).collect();
+        assert_eq!(
+            &people_ids, expected,
+            "{context}: People (filtered_summaries)"
+        );
+
+        let (count, count_truncated) =
+            person_queries::count_filtered_matches(&mut conn, &scope, &params)
+                .await
+                .unwrap();
+        assert!(
+            !count_truncated,
+            "{context}: count fixture is well below the cap"
+        );
+        assert_eq!(
+            count as usize,
+            expected.len(),
+            "{context}: count_filtered_matches"
+        );
+
+        for (key, direction) in [
+            (SortKey::Created, SortDirection::Asc),
+            (SortKey::Name, SortDirection::Asc),
+            (SortKey::Name, SortDirection::Desc),
+            (SortKey::Stage, SortDirection::Asc),
+            (SortKey::Stage, SortDirection::Desc),
+            (SortKey::Assignee, SortDirection::Asc),
+            (SortKey::Assignee, SortDirection::Desc),
+        ] {
+            let sort = PersonSort { key, direction };
+            let (sorted, sorted_truncated) =
+                person_queries::filtered_summaries_sorted(&mut conn, &scope, &params, sort)
+                    .await
+                    .unwrap();
+            assert!(
+                !sorted_truncated,
+                "{context}: sort {key:?}.{direction:?} fixture below cap"
+            );
+            let sorted_ids: HashSet<Uuid> = sorted.into_iter().map(|p| p.id.as_uuid()).collect();
+            assert_eq!(
+                &sorted_ids, expected,
+                "{context}: sort {key:?}.{direction:?}"
+            );
+        }
+    }
+
+    fn bool_clause(kind: fn(BoolClause) -> Clause, value: bool) -> FilterDefinition {
+        FilterDefinition {
+            version: 1,
+            clauses: vec![kind(BoolClause { value })],
+        }
+    }
+
+    #[sqlx::test]
+    #[ignore]
+    async fn awaiting_response_present_true_false_and_absent(migrator_pool: PgPool) {
+        let (organization_id, alice_id) = crate::common::create_org_with_stages_and_member(
+            &migrator_pool,
+            "Axis matrix awaiting_response",
+            "alice@axis-matrix-awaiting.test",
+            "Alice",
+            "pw",
+        )
+        .await;
+        let stage_id = super::first_stage_id(&migrator_pool, organization_id).await;
+        let now = Utc::now();
+
+        // True: an inquiry after the (only) contact attempt.
+        let awaiting_true =
+            insert_person(&migrator_pool, organization_id, stage_id, Some(alice_id)).await;
+        insert_contact_attempt(
+            &migrator_pool,
+            organization_id,
+            awaiting_true,
+            now - ChronoDuration::hours(4),
+        )
+        .await;
+        insert_inquiry(
+            &migrator_pool,
+            organization_id,
+            awaiting_true,
+            "zillow",
+            now - ChronoDuration::hours(3),
+        )
+        .await;
+
+        // False: the (only) inquiry is answered by a LATER contact attempt.
+        let awaiting_false =
+            insert_person(&migrator_pool, organization_id, stage_id, Some(alice_id)).await;
+        insert_inquiry(
+            &migrator_pool,
+            organization_id,
+            awaiting_false,
+            "zillow",
+            now - ChronoDuration::hours(4),
+        )
+        .await;
+        insert_contact_attempt(
+            &migrator_pool,
+            organization_id,
+            awaiting_false,
+            now - ChronoDuration::hours(3),
+        )
+        .await;
+
+        // Zero-inquiry: never matches true; matches false.
+        let zero_inquiry =
+            insert_person(&migrator_pool, organization_id, stage_id, Some(alice_id)).await;
+
+        let all_ids: HashSet<Uuid> = [awaiting_true, awaiting_false, zero_inquiry]
+            .into_iter()
+            .collect();
+
+        assert_axis_parity(
+            &migrator_pool,
+            organization_id,
+            alice_id,
+            &bool_clause(Clause::AwaitingResponse, true),
+            &HashSet::from([awaiting_true]),
+            "awaiting_response:true",
+        )
+        .await;
+        assert_axis_parity(
+            &migrator_pool,
+            organization_id,
+            alice_id,
+            &bool_clause(Clause::AwaitingResponse, false),
+            &HashSet::from([awaiting_false, zero_inquiry]),
+            "awaiting_response:false",
+        )
+        .await;
+        assert_axis_parity(
+            &migrator_pool,
+            organization_id,
+            alice_id,
+            &FilterDefinition {
+                version: 1,
+                clauses: vec![],
+            },
+            &all_ids,
+            "awaiting_response absent (empty filter)",
+        )
+        .await;
+    }
+
+    #[sqlx::test]
+    #[ignore]
+    async fn client_replied_unanswered_present_true_false_and_absent(migrator_pool: PgPool) {
+        let (organization_id, alice_id) = crate::common::create_org_with_stages_and_member(
+            &migrator_pool,
+            "Axis matrix client_replied",
+            "alice@axis-matrix-replied.test",
+            "Alice",
+            "pw",
+        )
+        .await;
+        let stage_id = super::first_stage_id(&migrator_pool, organization_id).await;
+        let now = Utc::now();
+
+        // True: inbound later than both the last contact attempt and the
+        // latest outbound correspondence.
+        let replied_true =
+            insert_person(&migrator_pool, organization_id, stage_id, Some(alice_id)).await;
+        insert_correspondence(
+            &migrator_pool,
+            organization_id,
+            replied_true,
+            alice_id,
+            "outbound",
+            now - ChronoDuration::hours(4),
+            false,
+        )
+        .await;
+        insert_correspondence(
+            &migrator_pool,
+            organization_id,
+            replied_true,
+            alice_id,
+            "inbound",
+            now - ChronoDuration::hours(3),
+            false,
+        )
+        .await;
+
+        // False: outbound-only (no inbound at all).
+        let replied_false_outbound_only =
+            insert_person(&migrator_pool, organization_id, stage_id, Some(alice_id)).await;
+        insert_correspondence(
+            &migrator_pool,
+            organization_id,
+            replied_false_outbound_only,
+            alice_id,
+            "outbound",
+            now - ChronoDuration::hours(3),
+            false,
+        )
+        .await;
+
+        // False: the inbound reply was already answered by a later attempt.
+        let replied_false_answered =
+            insert_person(&migrator_pool, organization_id, stage_id, Some(alice_id)).await;
+        insert_correspondence(
+            &migrator_pool,
+            organization_id,
+            replied_false_answered,
+            alice_id,
+            "inbound",
+            now - ChronoDuration::hours(4),
+            false,
+        )
+        .await;
+        insert_contact_attempt(
+            &migrator_pool,
+            organization_id,
+            replied_false_answered,
+            now - ChronoDuration::hours(3),
+        )
+        .await;
+
+        let all_ids: HashSet<Uuid> = [
+            replied_true,
+            replied_false_outbound_only,
+            replied_false_answered,
+        ]
+        .into_iter()
+        .collect();
+
+        assert_axis_parity(
+            &migrator_pool,
+            organization_id,
+            alice_id,
+            &bool_clause(Clause::ClientRepliedUnanswered, true),
+            &HashSet::from([replied_true]),
+            "client_replied_unanswered:true",
+        )
+        .await;
+        assert_axis_parity(
+            &migrator_pool,
+            organization_id,
+            alice_id,
+            &bool_clause(Clause::ClientRepliedUnanswered, false),
+            &HashSet::from([replied_false_outbound_only, replied_false_answered]),
+            "client_replied_unanswered:false",
+        )
+        .await;
+        assert_axis_parity(
+            &migrator_pool,
+            organization_id,
+            alice_id,
+            &FilterDefinition {
+                version: 1,
+                clauses: vec![],
+            },
+            &all_ids,
+            "client_replied_unanswered absent (empty filter)",
+        )
+        .await;
+    }
+
+    #[sqlx::test]
+    #[ignore]
+    async fn awaiting_call_outcome_present_true_false_and_absent(migrator_pool: PgPool) {
+        let (organization_id, alice_id) = crate::common::create_org_with_stages_and_member(
+            &migrator_pool,
+            "Axis matrix call outcome",
+            "alice@axis-matrix-call.test",
+            "Alice",
+            "pw",
+        )
+        .await;
+        let bob_id =
+            crate::common::create_user(&migrator_pool, "bob@axis-matrix-call.test", "Bob", "pw")
+                .await;
+        crate::common::add_membership_with(
+            &migrator_pool,
+            organization_id,
+            bob_id,
+            Role::Member,
+            MembershipStatus::Active,
+        )
+        .await;
+        let stage_id = super::first_stage_id(&migrator_pool, organization_id).await;
+        let now = Utc::now();
+
+        // True for Alice: Alice called, ended, root attempt uncorrected.
+        let call_true =
+            insert_person(&migrator_pool, organization_id, stage_id, Some(alice_id)).await;
+        insert_call(
+            &migrator_pool,
+            organization_id,
+            call_true,
+            alice_id,
+            now - ChronoDuration::hours(1),
+            false,
+        )
+        .await;
+
+        // False for Alice: Bob called (a different caller).
+        let call_by_bob =
+            insert_person(&migrator_pool, organization_id, stage_id, Some(alice_id)).await;
+        insert_call(
+            &migrator_pool,
+            organization_id,
+            call_by_bob,
+            bob_id,
+            now - ChronoDuration::hours(1),
+            false,
+        )
+        .await;
+
+        // False for Alice: Alice's call outcome was corrected.
+        let call_corrected =
+            insert_person(&migrator_pool, organization_id, stage_id, Some(alice_id)).await;
+        insert_call(
+            &migrator_pool,
+            organization_id,
+            call_corrected,
+            alice_id,
+            now - ChronoDuration::hours(1),
+            true,
+        )
+        .await;
+
+        let all_ids: HashSet<Uuid> = [call_true, call_by_bob, call_corrected]
+            .into_iter()
+            .collect();
+
+        assert_axis_parity(
+            &migrator_pool,
+            organization_id,
+            alice_id,
+            &bool_clause(Clause::AwaitingCallOutcome, true),
+            &HashSet::from([call_true]),
+            "awaiting_call_outcome:true (alice)",
+        )
+        .await;
+        assert_axis_parity(
+            &migrator_pool,
+            organization_id,
+            alice_id,
+            &bool_clause(Clause::AwaitingCallOutcome, false),
+            &HashSet::from([call_by_bob, call_corrected]),
+            "awaiting_call_outcome:false (alice)",
+        )
+        .await;
+        assert_axis_parity(
+            &migrator_pool,
+            organization_id,
+            alice_id,
+            &FilterDefinition {
+                version: 1,
+                clauses: vec![],
+            },
+            &all_ids,
+            "awaiting_call_outcome absent (empty filter)",
+        )
+        .await;
+
+        // Viewer-relative check: the SAME true clause, evaluated as Bob's
+        // own axis, matches Bob's call instead — never the wire, always
+        // the bound viewer.
+        assert_axis_parity(
+            &migrator_pool,
+            organization_id,
+            bob_id,
+            &bool_clause(Clause::AwaitingCallOutcome, true),
+            &HashSet::from([call_by_bob]),
+            "awaiting_call_outcome:true (bob)",
+        )
+        .await;
+    }
+}

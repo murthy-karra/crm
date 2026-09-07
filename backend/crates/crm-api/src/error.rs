@@ -100,6 +100,9 @@ pub enum ApiError {
     SavedListLimitReached,
     TodaySourceLimitReached,
     UnsupportedFilter,
+    // --- Slice 011d (docs/specs/SLICE_011d.md §6) ----------------------
+    TodayFeedConflict,
+    InvalidFeedRule,
 }
 
 impl IntoResponse for ApiError {
@@ -189,6 +192,10 @@ impl IntoResponse for ApiError {
             }
             ApiError::UnsupportedFilter => {
                 (StatusCode::UNPROCESSABLE_ENTITY, "unsupported_filter", None)
+            }
+            ApiError::TodayFeedConflict => (StatusCode::CONFLICT, "today_feed_conflict", None),
+            ApiError::InvalidFeedRule => {
+                (StatusCode::UNPROCESSABLE_ENTITY, "invalid_feed_rule", None)
             }
         };
 
@@ -336,6 +343,27 @@ impl From<SavedListError> for ApiError {
             SavedListError::RevisionExhausted
             | SavedListError::Corrupt
             | SavedListError::Database(_) => ApiError::Unavailable,
+        }
+    }
+}
+
+/// `today::system_feeds::error::TodayFeedError` -> `ApiError`
+/// (docs/specs/SLICE_011d.md §6 error precedence).
+impl From<crate::domain::today::system_feeds::error::TodayFeedError> for ApiError {
+    fn from(err: crate::domain::today::system_feeds::error::TodayFeedError) -> Self {
+        use crate::domain::today::system_feeds::error::TodayFeedError;
+        match err {
+            TodayFeedError::Unauthenticated => ApiError::Unauthenticated,
+            TodayFeedError::Forbidden => ApiError::Forbidden,
+            TodayFeedError::MalformedRequest => ApiError::MalformedRequest,
+            TodayFeedError::NotFound => ApiError::NotFound,
+            TodayFeedError::Conflict => ApiError::TodayFeedConflict,
+            TodayFeedError::InvalidStage => ApiError::InvalidStage,
+            TodayFeedError::InvalidAssignee => ApiError::InvalidAssignee,
+            TodayFeedError::InvalidFeedRule => ApiError::InvalidFeedRule,
+            TodayFeedError::RevisionExhausted
+            | TodayFeedError::Corrupt
+            | TodayFeedError::Database(_) => ApiError::Unavailable,
         }
     }
 }

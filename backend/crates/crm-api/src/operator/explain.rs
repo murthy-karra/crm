@@ -6,8 +6,8 @@ use crate::domain::person::model::PersonSummary;
 use crate::domain::today::{TodayItem, TodayList, TodayPriority, TodayReason};
 use crate::ids::{PersonId, UserId};
 use crm_operator::{
-    Ahead, NotOnTodayReason, PersonCard, PriorityExplanation, TodaySourceIssueView,
-    TodaySourcesView, UntrustedText, ORDERING_RULE,
+    Ahead, NotOnTodayReason, PersonCard, PriorityExplanation, SystemFeedIssueView,
+    TodaySourceIssueView, TodaySourcesView, UntrustedText, ORDERING_RULE,
 };
 
 /// Where `person_id` sits on the list: the 0-based index and how many
@@ -130,6 +130,19 @@ pub fn sources_view(list: &TodayList) -> TodaySourcesView {
                     .unwrap_or_else(|| "unavailable".to_string()),
             })
             .collect(),
+        system_feed_issues: list
+            .sources
+            .system_feed_issues
+            .iter()
+            .map(|issue| SystemFeedIssueView {
+                feed_key: issue.feed_key.to_string(),
+                error: serde_json::to_value(issue.error)
+                    .ok()
+                    .and_then(|value| value.as_str().map(str::to_string))
+                    .unwrap_or_else(|| "unavailable".to_string()),
+                fallback: issue.fallback,
+            })
+            .collect(),
     }
 }
 
@@ -247,6 +260,7 @@ mod tests {
         TodaySources {
             status: TodaySourcesStatus::Complete,
             issues: vec![],
+            system_feed_issues: vec![],
         }
     }
 

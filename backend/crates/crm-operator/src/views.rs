@@ -204,6 +204,10 @@ pub struct PersonDetail {
 pub struct TodaySourcesView {
     pub status: String,
     pub issues: Vec<TodaySourceIssueView>,
+    /// docs/specs/SLICE_011d.md §5, §6: additive. `feed_key` is a static
+    /// token from the fixed vocabulary, never user-authored — unlike
+    /// `TodaySourceIssueView::name`, it is a plain trusted `String`.
+    pub system_feed_issues: Vec<SystemFeedIssueView>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -212,6 +216,13 @@ pub struct TodaySourceIssueView {
     pub name: UntrustedText,
     pub revision: i64,
     pub error: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SystemFeedIssueView {
+    pub feed_key: String,
+    pub error: String,
+    pub fallback: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -380,6 +391,7 @@ mod tests {
             sources: TodaySourcesView {
                 status: "complete".to_string(),
                 issues: vec![],
+                system_feed_issues: vec![],
             },
         })
         .unwrap();

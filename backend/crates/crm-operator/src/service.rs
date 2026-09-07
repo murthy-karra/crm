@@ -890,6 +890,7 @@ mod tests {
         TodaySourcesView {
             status: "complete".to_string(),
             issues: vec![],
+            system_feed_issues: vec![],
         }
     }
 

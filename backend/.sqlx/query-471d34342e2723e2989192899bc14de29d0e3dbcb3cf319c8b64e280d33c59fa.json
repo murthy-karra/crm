@@ -1,0 +1,57 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE today_system_feed\n           SET filter = CAST($4 AS text)::jsonb, fresh_within_hours = $5, revision = revision + 1,\n               updated_by_user_id = $6, updated_at = now()\n           WHERE organization_id = $1 AND feed_key = $2 AND revision = $3\n           RETURNING enabled, filter::text as filter, fresh_within_hours, revision,\n                     updated_at, updated_by_user_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "enabled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "filter",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "fresh_within_hours",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "updated_by_user_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8",
+        "Text",
+        "Int4",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      true,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "471d34342e2723e2989192899bc14de29d0e3dbcb3cf319c8b64e280d33c59fa"
+}

@@ -432,6 +432,14 @@ permission, D-042 capture behavior or `PersonVisibilityScope` changes.
 
 ## 8. Performance and observability
 
+*Amendment pointer (D-050, 2026-09-07):* this section's absolute request-p95
+caps, whole-source limit, pool-wait headroom and the merge-join toggle
+question are superseded by [D-050](../decisions/DECISION_LOG.md). The slice
+gates only on evidence item 1 (paired `Legacy` versus `Feeds` regression) and
+the person-state `EXPLAIN` in item 4 showing index use and no super-linear
+growth; items 2 and 3 and the toggle comparison are reported for trend-
+watching, never gated, and both `SET LOCAL` settings stay as they are.
+
 Baselines: [PERF_BASELINE](../design/PERF_BASELINE.md) and the 011c
 [Phase B archive](../design/perf/slice-011c-http-2026-09-06/README.md) (50k
 People, 30k-Person concentrated book, five-source concurrency-20 p95 2,710 ms

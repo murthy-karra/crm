@@ -164,6 +164,9 @@ mod db_today_system_feeds;
 #[path = "db_today_feed_equivalence.rs"]
 mod db_today_feed_equivalence;
 
+#[path = "db_today_system_feed_call_failures.rs"]
+mod db_today_system_feed_call_failures;
+
 #[path = "health.rs"]
 mod health;
 

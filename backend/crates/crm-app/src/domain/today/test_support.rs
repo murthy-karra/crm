@@ -25,6 +25,16 @@ pub enum TodayQueryPhase {
     BeforeSourceRelease,
     RecoveryAfterRollback,
     BeforeFinalCommit,
+    /// docs/specs/SLICE_011d.md §5 step 4: the call feed's own checkpoints,
+    /// mirroring the list-source `SourceAfter*`/`BeforeSourceRelease` triad.
+    /// The call feed has no list id, so it always passes `source_id: None`
+    /// — including at the shared `RecoveryAfterRollback` and
+    /// `BeforeFinalCommit` phases it reuses, which a hook can therefore
+    /// still target specifically by matching `source_id.is_none()` (every
+    /// list source always passes `Some(id)` there).
+    CallFeedAfterSavepoint,
+    CallFeedAfterMembership,
+    BeforeCallFeedRelease,
 }
 
 pub type HookFuture<'a> = Pin<Box<dyn Future<Output = Result<(), sqlx::Error>> + Send + 'a>>;

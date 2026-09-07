@@ -1044,3 +1044,81 @@ async fn feeds_call_feed_disabled_omits_call_items_and_reasons_re_enabling_resto
     let (legacy, feeds) = compare_providers(&app_pool, organization_id, alice_id, now).await;
     assert_providers_equal(&legacy, &feeds, "call feed re-enabled");
 }
+
+/// Correction (a): spec §5 — "a disabled feed contributes nothing and no
+/// issue" covers fallback reporting too. A disabled feed with an invalid
+/// stored definition must produce no `system_feed_issues` entry; the
+/// "invalid stored rule" belongs on the admin page via `Feed.filter_error`
+/// (step 4), not here.
+#[sqlx::test]
+#[ignore]
+async fn a_disabled_feed_with_an_invalid_stored_definition_reports_no_issue(migrator_pool: PgPool) {
+    let (organization_id, alice_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "011d correction a",
+        "alice@d011-correction-a.test",
+        "Alice",
+        "correct horse battery staple",
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let now = Utc::now();
+
+    // A stored definition referencing a stage that does not exist —
+    // structurally valid, reference-invalid, so `load_feed_rows` marks it
+    // `fallback: true` regardless of `enabled`.
+    let broken_filter = serde_json::json!({
+        "version": 1,
+        "clauses": [
+            {"kind": "assigned_to", "assignees": ["me"]},
+            {"kind": "awaiting_response", "value": true},
+            {"kind": "stage", "stage_ids": [Uuid::new_v4()]},
+        ]
+    });
+
+    // Enabled + invalid: DOES report an issue (existing, already-tested
+    // behavior — pinned again here as the contrasting baseline).
+    sqlx::query(
+        "UPDATE today_system_feed SET filter = $1, enabled = true, revision = revision + 1
+         WHERE organization_id = $2 AND feed_key = 'unanswered_inquiry'",
+    )
+    .bind(&broken_filter)
+    .bind(organization_id)
+    .execute(&app_pool)
+    .await
+    .unwrap();
+    let scope = PersonVisibilityScope::Organization(OrganizationId::new(organization_id));
+    let mut conn = app_pool.acquire().await.unwrap();
+    let enabled_and_invalid = today::query_at(&mut conn, &scope, UserId::new(alice_id), now)
+        .await
+        .unwrap();
+    drop(conn);
+    assert_eq!(enabled_and_invalid.sources.system_feed_issues.len(), 1);
+    assert_eq!(
+        enabled_and_invalid.sources.system_feed_issues[0].feed_key,
+        "unanswered_inquiry"
+    );
+    assert!(enabled_and_invalid.sources.system_feed_issues[0].fallback);
+
+    // Disabled + the SAME invalid definition: no issue at all.
+    sqlx::query(
+        "UPDATE today_system_feed SET enabled = false, revision = revision + 1
+         WHERE organization_id = $1 AND feed_key = 'unanswered_inquiry'",
+    )
+    .bind(organization_id)
+    .execute(&app_pool)
+    .await
+    .unwrap();
+    let mut conn = app_pool.acquire().await.unwrap();
+    let disabled_and_invalid = today::query_at(&mut conn, &scope, UserId::new(alice_id), now)
+        .await
+        .unwrap();
+    assert!(
+        disabled_and_invalid.sources.system_feed_issues.is_empty(),
+        "a disabled feed's invalid stored rule must not surface as a system_feed_issues entry"
+    );
+    assert!(matches!(
+        disabled_and_invalid.sources.status,
+        crm_api::domain::today::TodaySourcesStatus::Complete
+    ));
+}

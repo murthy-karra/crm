@@ -7,10 +7,10 @@ shared development runtime).
 
 **Slice 011d (tweakable built-in Today rules) — COMPLETE AND MERGED TO
 LOCAL MAIN** at `b8b53e2` (2026-09-07, with the user's approval; not pushed,
-not deployed). The two lane branches and all three worktrees were deleted
-with that approval; the merged integration branch
-`slice-011d-today-system-feeds` (`77a8963`) still exists locally and can be
-deleted on request. Verification summary: 144 files against the previous
+not deployed). The two lane branches, all three worktrees and, on 2026-09-07 at the
+user's request, the merged integration branch
+`slice-011d-today-system-feeds` (was `77a8963`) were deleted; no 011d
+branch remains locally or on the remote. Verification summary: 144 files against the previous
 `main`. Final-tree gates run once by the coordinator:
 `sqlx-prepare` clean, `check` green (699 Rust, 572 Web tests), `check-db`
 541 of 541 on the second run after a pre-existing `db_calls` timing flake
@@ -596,8 +596,7 @@ and now lives only in git history.
 ## Approval currently required
 
 - None for 011d: merged, pushed, and the dev runtime updated with approval
-  on 2026-09-07. Deployment is not authorized; deleting the merged
-  `slice-011d-today-system-feeds` branch needs a word.
+  on 2026-09-07. Deployment is not authorized.
 - All three 011c decisions were taken on 2026-09-06 (late evening): the §8
   planner amendment is approved, the Phase B pairing limitation accepted, and
   the local commit and merge performed, then the push. **Deployment is not

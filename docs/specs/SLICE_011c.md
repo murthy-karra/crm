@@ -136,6 +136,10 @@ cannot contribute a name, reason or Person even if persistence is corrupt.
 
 ## 3. Configuration HTTP
 
+*Amendment pointer (Slice 011e, 2026-09-07, declared additive, AGENTS.md
+§11):* `Source.filter_error` and the 422 filter-error codes on the source
+routes also admit `invalid_tag`. See [SLICE_011e.md](SLICE_011e.md) §4.
+
 Add authenticated routes with the existing `{"error":"<code>"}` envelope:
 
 | Method/path | Input | Success |
@@ -264,6 +268,11 @@ failure is represented separately; `truncated:false` under incomplete source
 evaluation is not a claim that all potential work was evaluated.
 
 ## 5. Today response and partial availability
+
+*Amendment pointer (Slice 011e, 2026-09-07, declared additive, AGENTS.md
+§11):* `SourceIssue.error` also admits `invalid_tag`, reported both when the
+tag was deleted before enumeration and when it vanishes during evaluation;
+never collapsed into `unsupported_filter`. See [SLICE_011e.md](SLICE_011e.md) §4.
 
 `GET /api/today` keeps no client viewer/filter parameters. Its response becomes:
 

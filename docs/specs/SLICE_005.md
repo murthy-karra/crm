@@ -266,6 +266,11 @@ integration tests can drive it).
 
 ### View types (the tool outputs; narrower than the HTTP read models)
 
+*Amendment pointer (Slice 011e, 2026-09-07, declared additive, AGENTS.md
+§11):* `PersonDetail` gains `tags: Vec<UntrustedText>` (tag names are
+user-authored text); `PersonCard` is unchanged and no tag tools are added. See
+[SLICE_011e.md](SLICE_011e.md) §5.
+
 ```rust
 pub struct PersonCard { id, display_name: UntrustedText, stage_name, assigned_user_display_name: Option<String>,
                         primary_email: Option<UntrustedText>, primary_phone: Option<UntrustedText>,

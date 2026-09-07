@@ -1787,3 +1787,33 @@ once-only final-tree gates.
 
 Blocks: nothing. Supersedes the absolute performance caps in 011c §8 and
 011d §8 and the open-ended review loop in the coordinator skill's Phase 8.
+
+### D-051 — Tag rename and delete: admins, plus the creator while the tag is unused (2026-09-07)
+
+Accepted (user, answering the Slice 011e ladder item "rename/delete admin —
+confirm at spec"). Refines D-043's tag dependency into a permission rule.
+
+1. **Any active member creates tags, applies them to People and removes them
+   from People.** Creation is inline and create-or-get by case-insensitive
+   name, so two members typing the same tag get one definition.
+2. **A tag is renamed or deleted by an Organization admin, or by its creator
+   while no Person carries it.** Once any Person carries the tag, changing
+   or removing the definition is an admin action, because it affects every
+   Person and every saved list or Today rule that names the tag. The
+   creator path lets a member fix a typo before anyone depends on it. The
+   check is made inside the command under the tag row's lock, so a tag
+   applied concurrently by another member is already "in use".
+3. **Deleting a tag is a hard delete** (safe default accepted with the
+   decision): its Person links go with it, and saved lists, list Today
+   sources and system feeds naming the id report `invalid_tag` through the
+   existing stale-reference paths until edited. Delete is not blocked while
+   referenced: D-046 hides personal lists from admins, so a block could be
+   neither shown nor repaired by the admin and would leak that a private
+   list exists.
+
+Platform admins have no tenant access and cannot manage tags. Tags are
+relational CRUD (AGENTS §4.6); no history fact is written. No other 011e
+contract is approved by this decision; the specification receives its own
+approval.
+
+Blocks: nothing. Feeds the Slice 011e specification and implementation brief.

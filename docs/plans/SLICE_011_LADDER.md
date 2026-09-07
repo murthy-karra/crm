@@ -111,8 +111,16 @@ one-time explicit exception to the S–M sizing rule. Specification:
 | **011d** Tweakable built-ins | Vocabulary gains the named derived axes: `AwaitingResponse`, `ClientRepliedUnanswered`, and (decision 2) `AwaitingCallOutcome` with its payload plumbing. The three built-ins become seeded per-org `today_system_feed` rows (seed on create_organization + backfill migration), managed on an admin "Today feeds" surface: enable/disable, edit clause values + freshness-window param, PREVIEW before save, REVERT-to-default (canonical regenerated from code), `today_feed_changed` audit fact. Acceptance gate: equivalence db tests prove feed-evaluation ≡ the old hardcoded arms (items, reasons, priorities, order) BEFORE arm deletion. Priority-tier order stays fixed system policy v1 (orgs tweak membership, not tiers). Pre-declared split d1/d2 per decision 2. | `today_system_feed` + backfill + fact table | M (split-ready) |
 | **011e** Tags | `tag` + `person_tag` model, chips on PersonDetail (monochrome per UI_STYLE), `Tags`/`NotTags` clause variants proving additive vocabulary extension; re-opens part of parked 010f (tags import — noted in SLICE_010_LADDER). Creation: any member inline; rename/delete admin (confirm at spec). | `tag`, `person_tag` | S–M |
 
-Delivery so far: a → b → c → b-sort → d, all merged (011d `b8b53e2`,
-2026-09-07, local main); next e.
+Delivery so far: a → b → c → b-sort → d, all merged and pushed (011d
+`b8b53e2`, 2026-09-07). **011e specified, independently reviewed and
+APPROVED on 2026-09-07** ([spec](../specs/SLICE_011e.md),
+[brief](../tasks/SLICE_011e_IMPL.md)); the "confirm at spec" item is decided
+as D-051 (admins, plus the creator while the tag is unused; hard delete).
+The spec pre-declares two S–M rungs, e1 (model, commands, routes, Person
+page, admin Tags page) then e2 (the `tags`/`not_tags` clauses), honouring the
+sizing rule without a D-049-style exception. Review found that **fourteen**
+statements now bind the filter parameters (011d §5 added three feed
+statements after its §2 counted eleven); e2 must extend all fourteen.
 Functional dependencies remain a → b → c → d; e depends on b and may
 parallelize with c/d.
 

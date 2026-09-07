@@ -376,6 +376,12 @@ across two specs (AGENTS.md §11 item 6).
 
 ## 6. Realtime contracts
 
+*Amendment pointer (Slice 011e, 2026-09-07, declared additive, AGENTS.md
+§11):* `data.change` also admits `tags_changed`, published on `person.changed`
+after a tag is applied to or removed from a Person (only when a row changed;
+rename and delete of a tag publish nothing). See
+[SLICE_011e.md](SLICE_011e.md) §5.
+
 **Channel.** `org:<organization_id>` (lowercase hyphenated UUID),
 namespace `org`. One channel per Organization. No per-user channel this
 slice (nothing targets a user yet; additive later).

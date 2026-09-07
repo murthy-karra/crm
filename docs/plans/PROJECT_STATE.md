@@ -1,11 +1,32 @@
 # Project State
 
-Last updated: 2026-09-07 (Slice 011d merged, pushed, and serving on the
-shared development runtime).
+Last updated: 2026-09-07 (Slice 011e specification drafted and independently
+reviewed; awaiting the user's rule-1 decision and approval).
 
 ## Current phase
 
-**Slice 011d (tweakable built-in Today rules) — COMPLETE AND MERGED TO
+**Slice 011e (tags) — SPECIFICATION APPROVED 2026-09-07; PLANNING DOCUMENTS
+AWAIT THE COMMIT GATE, THEN THE e1 IMPLEMENTATION GATE.** Amendment pointers
+written in 002 §§2/5, 003 §6, 005 §3 view types, 011a §4, 011b §§4/5, 011c
+§§3/5 and 011d §§2/6. The user said "start the plan for 011e" on 2026-09-07 (an earlier
+session that began the same planning was closed after 45 seconds of reads and
+left nothing behind). Planner analysis, then
+[SLICE_011e.md](../specs/SLICE_011e.md), its
+[plain-language companion](../specs/SLICE_011e_EXPLAINED.md) and the
+[implementation brief](../tasks/SLICE_011e_IMPL.md) were drafted and
+independently reviewed the same day: READY WITH CORRECTIONS, all applied. The
+load-bearing correction: **fourteen** static statements bind the filter
+parameters on `main`, not the eleven 011d §2 states, because 011d §5 added
+three system-feed statements; a tag clause left out of them would be silently
+ignored in feed evaluation. The spec pre-declares two S–M rungs (e1 model,
+commands, routes, Person page, admin Tags page; e2 the `tags`/`not_tags`
+clauses across the fourteen statements) per the ladder's standing sizing rule.
+The one genuine decision (who renames or deletes a tag) was taken the same
+day as D-051: admins, plus the creator while the tag is unused. Nothing is
+committed; the working tree holds the three new documents, D-051, this file
+and the ladder.
+
+Previous phase: **Slice 011d (tweakable built-in Today rules) — COMPLETE AND MERGED TO
 LOCAL MAIN** at `b8b53e2` (2026-09-07, with the user's approval; not pushed,
 not deployed). The two lane branches, all three worktrees and, on 2026-09-07 at the
 user's request, the merged integration branch
@@ -273,13 +294,18 @@ clear-all.
 
 ## Current slice
 
-Slice 011d — Tweakable built-in Today rules — `docs/specs/SLICE_011d.md`
+Slice 011e — Tags — `docs/specs/SLICE_011e.md` (reviewed 2026-09-07, not yet
+approved), companion `docs/specs/SLICE_011e_EXPLAINED.md`, brief
+`docs/tasks/SLICE_011e_IMPL.md` (two sequential single-lane rungs: e1 on
+`slice-011e-tags`, e2 on `slice-011e-tag-clauses`, each from `main`; the e1
+lane owns the only migration, `20260909000001_tag.sql`). Ladder:
+docs/plans/SLICE_011_LADDER.md (011a → 011b → 011b-sort → 011c → 011d all
+done → **011e**, the last rung).
+
+Previous: Slice 011d — Tweakable built-in Today rules — `docs/specs/SLICE_011d.md`
 (approved and delivered 2026-09-07; verification record
 `docs/tasks/SLICE_011d_VERIFICATION.md`), companion `docs/specs/SLICE_011d_EXPLAINED.md`,
-brief `docs/tasks/SLICE_011d_IMPL.md` (Lane B backend owns the migration and
-SQLx; Lane W web). Planned integration branch `slice-011d-today-system-feeds`
-from `main` at `f51bff8`. Ladder: docs/plans/SLICE_011_LADDER.md (011a → 011b →
-011b-sort → 011c all done → **011d** → 011e tags).
+brief `docs/tasks/SLICE_011d_IMPL.md`.
 
 ## Current branch
 
@@ -298,6 +324,9 @@ new migrations; restarting it needs `./scripts/db-migrate` first.
 
 ## Last accepted decision
 
+D-051 (2026-09-07, uncommitted) — tag rename and delete by Organization admins,
+plus the creator while the tag is unused; hard delete with `invalid_tag`
+through the existing stale-reference paths. Any member creates and applies.
 D-050 (2026-09-07, `1d951a6`) — operating envelope (25k People, 50 members,
 5 concurrent Today loads, one active tab), two review rounds per slice, and
 performance gating on paired regression plus plan shape only.
@@ -561,12 +590,13 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. **Next rung when requested: 011e (tags)**, the last rung of the ladder;
-   write its spec just in time per the ladder rule. Before that, the small
-   LATER items from the 011d verification record can be batched: the
-   person-state 503 test, two equivalence pins, the feeds page first-load
-   error test, the `db_calls` timing flake (pre-existing, fails on `main`
-   1 in 3), and splitting the three largest test files.
+1. **011e (tags): commit the planning documents with approval, then run the
+   Phase 6 gate and start e1** on `slice-011e-tags` from `main` (one lane,
+   `implement` profile, backend then Web). The small LATER items from the 011d
+   verification record can still be batched before or between the rungs:
+   the person-state 503 test, two equivalence pins, the feeds page
+   first-load error test, the `db_calls` timing flake (pre-existing, fails
+   on `main` 1 in 3), and splitting the three largest test files.
 2. Deployment remains a separate action needing approval; the shared
    development runtime and the remote are current as of 2026-09-07.
    The equivalence gate (Lane B step 3) and the merge-join toggle question
@@ -595,6 +625,10 @@ and now lives only in git history.
 
 ## Approval currently required
 
+- **Commit of the 011e planning documents** (spec, companion, brief, D-051,
+  amendment pointers, ladder, this file) on `main`; then the **Phase 6
+  implementation gate for e1** ("Proceed with implementation?"). The spec
+  and brief were approved on 2026-09-07; deployment is not authorized.
 - None for 011d: merged, pushed, and the dev runtime updated with approval
   on 2026-09-07. Deployment is not authorized.
 - All three 011c decisions were taken on 2026-09-06 (late evening): the §8

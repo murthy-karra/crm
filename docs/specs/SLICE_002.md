@@ -65,6 +65,10 @@ On the D-016 Mac (and through the tunnel):
 > (`CreateOrganization` → `stage::seed_defaults`, `crm_app` INSERT
 > granted); "never by the application" below is superseded.
 
+*Amendment pointer (Slice 011e, 2026-09-07):* two additive relational tables,
+`tag` and `person_tag` (Organization-scoped, composite FKs to `person`, no
+history fact per AGENTS §4.6). See [SLICE_011e.md](SLICE_011e.md) §2.
+
 ### Classification (D-007, D-015)
 
 - **Erasable CRUD set** (plaintext, D-015 §3/§6): `person`,
@@ -375,6 +379,13 @@ server; the request span logs both it and the request id.
 *Amendment pointer (Slice 011b-sort, 2026-09-06):* `GET /api/people` accepts
 an optional `sort=<key>.<direction>` parameter; absent or `created.desc` is
 byte-identical to this section. See [SLICE_011b_SORT.md](SLICE_011b_SORT.md) §6.
+
+*Amendment pointer (Slice 011e, 2026-09-07, declared additive, AGENTS.md
+§11):* `GET /api/people/{id}` gains a top-level `tags: [{id,name}]`; six new
+routes `GET|POST /api/tags`, `PUT|DELETE /api/tags/{tag_id}` and
+`PUT|DELETE /api/people/{person_id}/tags/{tag_id}`; `GET /api/people` rows are
+unchanged. Permission for rename/delete is D-051. See
+[SLICE_011e.md](SLICE_011e.md) §5.
 
 
 **Additive amendment (approved 2026-09-06):** [SLICE_011b §5](SLICE_011b.md#5-http-contract)

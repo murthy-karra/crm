@@ -188,6 +188,12 @@ Two simultaneous identical requests return one ID and consume one slot.
 
 ## 4. Typed commands, reads and filter evaluation
 
+*Amendment pointer (Slice 011e, 2026-09-07, declared additive, AGENTS.md
+§11):* the `filter_error` code set gains `invalid_tag` (a stored definition
+naming a tag that was deleted or belongs to another Organization); it follows
+the `invalid_stage` paths exactly, here and in §5, and is the first such code
+produced by a real deletion. See [SLICE_011e.md](SLICE_011e.md) §§1/4.
+
 Add `SavedListId` under the existing typed-ID discipline and a small
 `domain/saved_list` module. Public command inputs, alongside server-built
 `CommandContext`, are:
@@ -305,7 +311,8 @@ No Organization ID, owner name/ID or creation retry token is returned.
 | DELETE `/api/saved-lists/{id}` | `{"expected_revision":1}` | 200 `{"deleted":true}` |
 
 Detail `filter_error` is one of `unsupported_filter`, `invalid_stage`,
-`invalid_assignee`; null means evaluable. `description` is `describe()` for a
+`invalid_assignee` (and, from Slice 011e, `invalid_tag`; see the §4 pointer);
+null means evaluable. `description` is `describe()` for a
 structurally valid filter (neutral placeholders for missing references), empty
 for unsupported content. DB failure during validation/names loading is 503,
 never an invalid-definition label. Count on an invalid definition is 422 with

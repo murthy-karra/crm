@@ -86,6 +86,15 @@ byte-identical.
 
 ## 4. Domain — `FilterDefinition` (new `crm-app/src/domain/person/filter.rs`)
 
+*Amendment pointer (Slice 011e, 2026-09-07, declared additive, AGENTS.md
+§11):* two value-array clause kinds join the vocabulary, `tags` (any of) and
+`not_tags` (none of), each `{"kind": K, "tag_ids": [uuid, …]}`: §4a wire shape;
+§4b validation as for `stage_ids` plus an Organization-scoped reference check
+yielding 422 `invalid_tag`; §4c semantics `EXISTS` / `NOT EXISTS` over
+`person_tag`; §4d `describe()` lines "Tagged …" / "Not tagged …" with
+`FilterNames.tag_names`; §4e the predicates appended to all **fourteen**
+statements that bind the parameter set. See [SLICE_011e.md](SLICE_011e.md) §4.
+
 ### 4a. Wire shape (the contract; serde derives are detail)
 
 ```json

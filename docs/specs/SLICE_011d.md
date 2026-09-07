@@ -126,6 +126,13 @@ pinned by parity tests per axis across People, count, every sort and both
 Today source statements. No dynamic SQL; the Organization predicate stays
 literal text; `.sqlx` metadata is regenerated for the eleven statements.
 
+*Amendment pointer (Slice 011e, 2026-09-07):* the statement count above is
+superseded. §5 of this specification added three system-feed statements
+(`person_state.sql`, carrying the parameter chain twice, `call_membership.sql`
+and `call_only.sql`) that bind the same `PersonFilterParams`, so **fourteen**
+statements share the parameter set on `main`. Slice 011e appends its `tags`
+and `not_tags` predicates to all fourteen. See [SLICE_011e.md](SLICE_011e.md) §4.
+
 The Web filter bar gains three boolean chips (§6). Saved lists and list
 sources accept the kinds with no further change; a list using
 `awaiting_call_outcome` as a Today source binds the viewer as the caller, like
@@ -337,6 +344,11 @@ admin route) → 400 `malformed_request` → 404 `not_found` (unknown
 `feed_key`) → 409 `today_feed_conflict` →
 422 with the filter-error code (`unsupported_filter|invalid_stage|invalid_assignee`)
 or `invalid_feed_rule` (anchor/`me`/window violations) → 503 `unavailable`.
+
+*Amendment pointer (Slice 011e, 2026-09-07, declared additive, AGENTS.md
+§11):* the filter-error code set here and in `Feed.filter_error` also admits
+`invalid_tag`; a stored feed definition naming a deleted tag falls back to the
+canonical default like a deleted stage. See [SLICE_011e.md](SLICE_011e.md) §4.
 
 | Method/path | Input | Success |
 |---|---|---|

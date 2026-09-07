@@ -710,7 +710,13 @@ fn current_source_hash() -> String {
         include_str!("today_http_perf_manifest.txt"),
         include_str!("../../../crm-app/src/domain/today/mod.rs"),
         include_str!("../../../crm-app/src/domain/today/model.rs"),
-        include_str!("../../../crm-app/src/domain/today/queries.rs"),
+        // STEP 6: `crm-app`'s `queries.rs` (Legacy's compiled-in statement)
+        // was deleted once the DB-level equivalence suite proved it
+        // byte-identical to this frozen copy (see
+        // `tests/fixtures/today_f51bff8/README.md`) — included from its new
+        // location so this manifest keeps fingerprinting the same text,
+        // not a deleted path.
+        include_str!("today_f51bff8/queries.rs"),
         include_str!("../../../crm-app/src/domain/today/rank.rs"),
         include_str!("../../../crm-app/src/domain/today/sources.rs"),
         include_str!("../../../crm-app/src/domain/today/source_candidates.sql"),

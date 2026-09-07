@@ -149,6 +149,51 @@ still tip it — the existing unconditional `SET LOCAL enable_mergejoin =
 off` (already applied to every Today query, this statement included) is
 the correct standing protection regardless.
 
+**Caveat (added for D-050):** neither of this Part's two runs set `SET
+LOCAL jit = off` — both ran with **JIT ON** (the PostgreSQL session
+default). Production applies `SET LOCAL jit = off` unconditionally to
+every Today query (the pre-existing, approved planning change this Part
+never touched). The 533.8 ms/476.0 ms absolute execution times above
+therefore **overstate** what production actually spends on this
+statement; only the plan-SHAPE comparison (both chose `Nested Loop Anti
+Join`) is the load-bearing conclusion, per D-050's plan-shape gate.
+
+## Part 5 — D-050 plan-shape evidence: `call_only.sql`, `call_membership.sql`, `filtered_summaries.sql`
+
+Added per the coordinator's explicit review-round instruction ("no new
+benchmark run"): a SEPARATE, smaller `#[sqlx::test]`
+(`d050_plan_shape_evidence_call_statements_and_filtered_summaries`, same
+file, same fixture builder) that seeds the concentrated book, builds the
+fixture ONCE, but never re-runs the HTTP request matrix — only EXPLAIN
+captures. The fixture's `call` table is normally empty (the Phase B
+fixture never seeds calls), so 1,000 real qualifying calls were inserted
+for the concentrated viewer as caller before `VACUUM (ANALYZE)` on
+`person`, `inquiry`, `contact_attempted`, `call`, `correspondence_captured`
+and `contact_method` — giving the plan real volume to reason about,
+unlike an empty-table scan. Both `SET LOCAL jit = off` and `SET LOCAL
+enable_mergejoin = off` were applied for all three captures (matching
+production exactly, not a toggle comparison this time — D-050 dropped the
+toggle question from the gate).
+
+| Statement | Binding | Key plan facts | Execution time |
+|---|---|---|---:|
+| `call_membership.sql` | canonical (anchor only), 200 real retained ids | `Index Scan using call_org_caller_ended_idx on call` (Index Cond includes `caller_user_id`); the correction-chain guard is an `Index Scan using contact_attempted_org_causation_idx`, one indexed point-lookup per call (loops=200/1000), never a table-wide re-scan | 4.1 ms |
+| `call_only.sql` | canonical, same 200 retained ids (so the other 800 called Persons are call-only candidates) | same `call_org_caller_ended_idx` index scan and per-call indexed correction lookup (loops=800/1000); hydration joins (`person_pkey`, `stage`, `app_user`, `contact_method`) all index scans | 11.5 ms |
+| `filtered_summaries.sql` | the concentrated viewer's own book, the three NEW clauses (`awaiting_response`/`client_replied_unanswered`/`awaiting_call_outcome`) all **absent** (NULL) | `Index Scan Backward using person_organization_created_idx`, all LATERAL joins index scans (`inquiry_org_person_received_idx`, `contact_method_...`) — the same shape as before the three axes existed; their NULL-guarded predicates add no scan or join | 6.8 ms |
+
+Full plans: [plans/call_membership.txt](plans/call_membership.txt),
+[plans/call_only.txt](plans/call_only.txt),
+[plans/filtered_summaries_no_new_clauses.txt](plans/filtered_summaries_no_new_clauses.txt).
+
+**Verdict:** all three statements use real indexes for every hot path —
+`call(organization_id, caller_user_id, ended_at)` for the call feed's own
+membership probe (confirming no per-Person re-scan of `call` or
+`contact_attempted`; each correction-chain check is one indexed lookup,
+not a scan), and `filtered_summaries.sql`'s plan shape is unchanged by
+the three new absent clauses. This satisfies D-050's plan-shape gate
+("index use..., no super-linear growth with People") for every new or
+changed hot statement.
+
 ## Limits
 
 - Single run, not the 011c archive's two-run failed/passed pair — no
@@ -167,6 +212,15 @@ the correct standing protection regardless.
 - The EXPLAIN comparison used one representative parameter binding
   (canonical definitions, no admin customization); it does not explore the
   full predicate-matrix parameter space.
+- Part 4's person_state EXPLAIN pair ran with JIT ON (see that Part's
+  caveat) — its absolute times overstate production, which always runs
+  with `jit = off`. Part 5's three captures ran with both `SET LOCAL`
+  settings applied, matching production.
+- D-050 supersedes the absolute performance caps this archive's Parts 2
+  and 3 still report against (1,250/2,500/4,500 ms, 450 ms whole-source);
+  those numbers are retained for trend-watching per D-050, not as pass/
+  fail gates — the actual gate is Part 1's paired regression and Parts 4
+  and 5's plan shape.
 
 ## Retained files
 
@@ -174,7 +228,12 @@ the correct standing protection regardless.
   regression, matrix, independent repeat, new cases, EXPLAIN plans).
 - [harness-stdout.txt](harness-stdout.txt) — full harness stdout,
   including `test result: ok. 1 passed; 0 failed; ... finished in 113.75s`.
-- [plans/](plans/) — the two full `EXPLAIN (ANALYZE, BUFFERS)` plan texts.
+- [plans/](plans/) — five full `EXPLAIN (ANALYZE, BUFFERS)` plan texts:
+  the `person_state.sql` default/`enable_mergejoin off` pair (Part 4) and
+  `call_membership.sql`/`call_only.sql`/`filtered_summaries.sql` (Part 5,
+  a second, much smaller `#[sqlx::test]` run — `test result: ok. 1
+  passed; ... finished in 5.96s` — EXPLAIN-only, never a repeated HTTP
+  benchmark).
 - [environment.txt](environment.txt) — host, build, binary hash, git head.
 - [source-sha256.txt](source-sha256.txt) — SHA-256 of every source file
   this harness and the measured statements depend on.
@@ -196,3 +255,11 @@ DATABASE_URL="$MIGRATION_DATABASE_URL" CRM_SLICE_011C_BUILD_HASH="$h" \
 011c (unmodified fixture file); it accepts any 64-char lowercase hex
 string and is used only as a build-identity assertion, not a real 011c
 comparison.
+
+Part 5 (D-050 evidence) reuses the SAME built binary; only the test name
+changes:
+
+```
+"$bin" --ignored --exact d050_plan_shape_evidence_call_statements_and_filtered_summaries \
+  --nocapture --test-threads=1
+```

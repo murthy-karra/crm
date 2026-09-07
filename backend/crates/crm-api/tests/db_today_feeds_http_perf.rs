@@ -16,8 +16,14 @@
 //! not on reconstructing a frozen historical module.
 //!
 //! Four parts, run sequentially against the SAME seeded database:
-//! (1) paired zero-source regression, `Legacy` vs `Feeds`, same fixture,
-//!     clock and build;
+//! (1) STEP 6 UPDATE: the paired zero-source `Legacy`-vs-`Feeds`
+//!     regression is no longer runnable live — `TodayProvider::Legacy`
+//!     and its seam (`router_with_test_clock_and_provider`,
+//!     `query_owned_at_with_provider`) were deleted once the DB-level
+//!     equivalence suite proved `Legacy` byte-identical to the frozen
+//!     `tests/fixtures/today_f51bff8/` fixture. `regression` below is now
+//!     a hardcoded carry-forward of the ONE comparison actually captured
+//!     (docs/design/perf/slice-011d-2026-09-07/run.json), not a live run;
 //! (2) the 011c matrix at concurrency 1/10/20 (four concentrated source
 //!     modes, three supplemental books at zero/five sources, and the
 //!     independent five-source concurrency-20 repeat) against `Feeds`;
@@ -54,7 +60,6 @@ use crm_api::domain::today::system_feeds::FeedKey;
 use crm_api::domain::today::test_support::{
     HttpPerfCollector, HttpPerfTelemetry, PoolAcquisitionOutcome,
 };
-use crm_api::domain::today::TodayProvider;
 use crm_api::ids::{CorrelationId, OrganizationId, StageId, UserId};
 use crm_api::realtime::Publisher;
 use crm_api::state::AppState;
@@ -508,13 +513,6 @@ async fn org_and_admin(pool: &PgPool, email: &str) -> (Uuid, Uuid) {
     (row.0, row.1)
 }
 
-fn strip_sources(mut value: Value) -> Value {
-    if let Some(obj) = value.as_object_mut() {
-        obj.remove("sources");
-    }
-    value
-}
-
 #[derive(Debug, Serialize)]
 struct RegressionReport {
     case: String,
@@ -574,129 +572,26 @@ async fn slice_011d_authenticated_http_performance_harness(migrator_pool: PgPool
     let (organization_id, admin_id) = org_and_admin(&setup_pool, concentrated_email).await;
     setup_pool.close().await;
 
-    // ==== Part 1: paired zero-source regression, Legacy vs Feeds ========
-    let regression = {
-        let viewer = fixture.viewer(TodayHttpPerfCase::Concentrated).clone();
-
-        let legacy_pool = fixture.arm_pool().await;
-        let legacy_collector = HttpPerfCollector::default();
-        let legacy_router = crm_api::build_app_with_today_router_and_perf_collector(
-            AppState::for_tests(
-                legacy_pool.clone(),
-                fixture.config(),
-                Publisher::recording(),
-            ),
-            crm_api::routes::today::router_with_test_clock_and_provider(
-                fixture.fixed_clock(),
-                TodayProvider::Legacy,
-            ),
-            legacy_collector.clone(),
-        );
-        let legacy_server = LoopbackServer::start(legacy_router).await;
-        let legacy_session =
-            authenticate(&legacy_server.base_url, &viewer.email, &viewer.password).await;
-        fixture
-            .assert_sources_via_http(
-                &legacy_server.base_url,
-                &legacy_session.cookie,
-                TodayHttpPerfCase::Concentrated,
-                PerfSourceMode::Zero,
-            )
-            .await;
-        // One dedicated GET (outside the measured driver waves) whose raw
-        // body is retained for payload-parity comparison.
-        let legacy_payload = {
-            let response = legacy_session
-                .client
-                .get(format!("{}/api/today", legacy_server.base_url))
-                .header(COOKIE, &legacy_session.cookie)
-                .send()
-                .await
-                .expect("legacy payload GET");
-            let bytes = response.bytes().await.expect("legacy payload body");
-            serde_json::from_slice::<Value>(&bytes).expect("legacy payload JSON")
-        };
-        let request = dispatch_factory(
-            legacy_session.clone(),
-            legacy_server.base_url.clone(),
-            legacy_collector.clone(),
-            10_000_000,
-        );
-        let (_waves, legacy_report) = run_case(
-            "regression_concentrated_zero_legacy",
-            &mut ids,
-            QueryArm::FrozenOriginal,
-            CRITICAL_SAMPLE_SHAPE.serial_attempts,
-            CRITICAL_SAMPLE_SHAPE.waves_at_10,
-            CRITICAL_SAMPLE_SHAPE.waves_at_20,
-            request,
-        )
-        .await;
-        legacy_server.stop().await;
-        legacy_pool.close().await;
-
-        let feeds_pool = fixture.arm_pool().await;
-        let feeds_collector = HttpPerfCollector::default();
-        let feeds_router = crm_api::build_app_with_today_router_and_perf_collector(
-            AppState::for_tests(feeds_pool.clone(), fixture.config(), Publisher::recording()),
-            crm_api::routes::today::router_with_test_clock(fixture.fixed_clock()),
-            feeds_collector.clone(),
-        );
-        let feeds_server = LoopbackServer::start(feeds_router).await;
-        let feeds_session =
-            authenticate(&feeds_server.base_url, &viewer.email, &viewer.password).await;
-        fixture
-            .assert_sources_via_http(
-                &feeds_server.base_url,
-                &feeds_session.cookie,
-                TodayHttpPerfCase::Concentrated,
-                PerfSourceMode::Zero,
-            )
-            .await;
-        let feeds_payload = {
-            let response = feeds_session
-                .client
-                .get(format!("{}/api/today", feeds_server.base_url))
-                .header(COOKIE, &feeds_session.cookie)
-                .send()
-                .await
-                .expect("feeds payload GET");
-            let bytes = response.bytes().await.expect("feeds payload body");
-            serde_json::from_slice::<Value>(&bytes).expect("feeds payload JSON")
-        };
-        let request = dispatch_factory(
-            feeds_session,
-            feeds_server.base_url.clone(),
-            feeds_collector.clone(),
-            11_000_000,
-        );
-        let (_waves, feeds_report) = run_case(
-            "regression_concentrated_zero_feeds",
-            &mut ids,
-            QueryArm::Final,
-            CRITICAL_SAMPLE_SHAPE.serial_attempts,
-            CRITICAL_SAMPLE_SHAPE.waves_at_10,
-            CRITICAL_SAMPLE_SHAPE.waves_at_20,
-            request,
-        )
-        .await;
-        feeds_server.stop().await;
-        feeds_pool.close().await;
-
-        let payload_equal = strip_sources(legacy_payload) == strip_sources(feeds_payload);
-        let legacy_p95 = legacy_report.serial_p95_ms;
-        let feeds_p95 = feeds_report.serial_p95_ms;
-        let allowed = legacy_p95
-            .map(|l| ((l as f64 * 1.10).max(l as f64 + 25.0)) as u64)
-            .unwrap_or(u64::MAX);
-        RegressionReport {
-            case: "concentrated_zero_source_serial".to_string(),
-            legacy_p95_ms: legacy_p95,
-            feeds_p95_ms: feeds_p95,
-            allowed_ms: allowed,
-            within_allowed: feeds_p95.map(|f| f <= allowed).unwrap_or(false),
-            payload_equal_excluding_sources: payload_equal,
-        }
+    // ==== Part 1: paired zero-source regression, retained historical =====
+    // `TodayProvider::Legacy` and its seam (`router_with_test_clock_and_
+    // provider`, `query_owned_at_with_provider`) were deleted in Slice
+    // 011d step 6, once the DB-level equivalence suite
+    // (`db_today_feed_equivalence.rs`) proved `Legacy`'s compiled-in
+    // statement byte-identical to a frozen fixture of the pre-011d source
+    // (`tests/fixtures/today_f51bff8/`). Re-running a live Legacy-vs-Feeds
+    // HTTP pairing is no longer possible (there is nothing left to serve
+    // `Legacy` through), so this retained artifact carries forward the
+    // ONE regression comparison actually captured, byte-for-byte, from
+    // docs/design/perf/slice-011d-2026-09-07/run.json (also reproduced in
+    // that archive's README Part 1 table) rather than fabricating a new
+    // number or silently dropping the row from `Evidence`.
+    let regression = RegressionReport {
+        case: "concentrated_zero_source_serial".to_string(),
+        legacy_p95_ms: Some(204),
+        feeds_p95_ms: Some(177),
+        allowed_ms: 229,
+        within_allowed: true,
+        payload_equal_excluding_sources: true,
     };
 
     // ==== Part 2: the 011c matrix at 1/10/20 concurrency, Feeds =========
@@ -1164,4 +1059,237 @@ async fn run_explain(
         .map(|(line,)| line)
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+// --- D-050 plan-shape evidence: call_only.sql, call_membership.sql, ------
+// filtered_summaries.sql (no new benchmark run — EXPLAIN-only, reusing
+// the same fixture builder, never re-measuring HTTP performance). -------
+
+#[sqlx::test]
+#[ignore = "Phase B only: opt-in, isolated database, real HTTP load"]
+async fn d050_plan_shape_evidence_call_statements_and_filtered_summaries(migrator_pool: PgPool) {
+    let fixture = TodayHttpPerfFixture::create(migrator_pool).await;
+    let pool = fixture.arm_pool().await;
+    let viewer = fixture.viewer(TodayHttpPerfCase::Concentrated);
+    let (organization_id, viewer_id): (Uuid, Uuid) = sqlx::query_as(
+        "SELECT om.organization_id, au.id FROM app_user au \
+         JOIN organization_membership om ON om.user_id = au.id WHERE au.email = $1",
+    )
+    .bind(&viewer.email)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    // Give the `call` table real volume for the concentrated viewer (the
+    // fixture otherwise never inserts any Call) so the plan reflects a
+    // realistic caller_user_id lookup, not a scan of an empty table.
+    let call_person_ids: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT id FROM person WHERE organization_id = $1 AND assigned_user_id = $2 LIMIT 1000",
+    )
+    .bind(organization_id)
+    .bind(viewer_id)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    for person_id in &call_person_ids {
+        let call_id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO call \
+                (id, organization_id, person_id, contact_method_id, caller_user_id, origin, \
+                 correlation_id, status, end_reason, provider, provider_room, placed_at, ended_at) \
+             VALUES \
+                ($1, $2, $3, $4, $5, 'web_session', $6, 'ended', 'agent_hangup', \
+                 'scripted', 'd050-fixture', $7, $7)",
+        )
+        .bind(call_id)
+        .bind(organization_id)
+        .bind(person_id)
+        .bind(Uuid::new_v4())
+        .bind(viewer_id)
+        .bind(Uuid::new_v4())
+        .bind(fixture.fixed_clock() - chrono::Duration::hours(2))
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO contact_attempted \
+                (organization_id, actor_kind, actor_user_id, origin, occurred_at, correlation_id, \
+                 causation_id, person_id, channel, outcome) \
+             VALUES ($1, 'system', NULL, 'migration', $2, $3, $4, $5, 'call', 'reached')",
+        )
+        .bind(organization_id)
+        .bind(fixture.fixed_clock() - chrono::Duration::hours(2))
+        .bind(Uuid::new_v4())
+        .bind(call_id)
+        .bind(person_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+
+    for relation in [
+        "person",
+        "inquiry",
+        "contact_attempted",
+        "call",
+        "correspondence_captured",
+        "contact_method",
+    ] {
+        sqlx::query(&format!("VACUUM (ANALYZE) {relation}"))
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query("SET LOCAL jit = off")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    sqlx::query("SET LOCAL enable_mergejoin = off")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+
+    // call_membership.sql: canonical (no extra clauses), retained_ids =
+    // the first 200 called Persons (as if person-state already retained
+    // them) — exercises the JOIN against a real retained set.
+    let retained: Vec<Uuid> = call_person_ids.iter().take(200).copied().collect();
+    let call_membership_sql = std::fs::read_to_string(
+        "crates/crm-app/src/domain/today/system_feeds/sql/call_membership.sql",
+    )
+    .unwrap();
+    let explain_membership = format!("EXPLAIN (ANALYZE, BUFFERS) {call_membership_sql}");
+    let rows: Vec<(String,)> = sqlx::query_as(&explain_membership)
+        .bind(organization_id)
+        .bind(None::<Vec<Uuid>>) // $2 stage_ids
+        .bind(None::<Vec<Uuid>>) // $3 assigned_user_ids
+        .bind(None::<bool>) // $4 assigned_include_unassigned
+        .bind(None::<Vec<String>>) // $5 sources
+        .bind(None::<i32>)
+        .bind(None::<i32>)
+        .bind(None::<bool>) // $6-8 created
+        .bind(None::<i32>)
+        .bind(None::<i32>)
+        .bind(None::<bool>) // $9-11 last_inquiry
+        .bind(None::<i32>)
+        .bind(None::<i32>)
+        .bind(None::<bool>) // $12-14 last_contact
+        .bind(None::<i32>)
+        .bind(None::<i32>)
+        .bind(None::<bool>) // $15-17 last_inbound
+        .bind(None::<bool>) // $18 has_replied
+        .bind(None::<bool>) // $19 has_phone
+        .bind(None::<bool>) // $20 has_email
+        .bind(None::<bool>) // $21 awaiting_response
+        .bind(None::<bool>) // $22 client_replied_unanswered
+        .bind(Some(true)) // $23 awaiting_call_outcome (anchor)
+        .bind(viewer_id) // $24 viewer
+        .bind(&retained) // $25 retained_ids
+        .bind(fixture.fixed_clock()) // $26 clock
+        .fetch_all(&mut *tx)
+        .await
+        .unwrap();
+    let membership_plan = rows
+        .into_iter()
+        .map(|(l,)| l)
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    // call_only.sql: canonical, retained_ids = the SAME 200 (so the other
+    // 800 called-but-not-retained Persons are the call-only candidates).
+    let call_only_sql =
+        std::fs::read_to_string("crates/crm-app/src/domain/today/system_feeds/sql/call_only.sql")
+            .unwrap();
+    let explain_only = format!("EXPLAIN (ANALYZE, BUFFERS) {call_only_sql}");
+    let rows: Vec<(String,)> = sqlx::query_as(&explain_only)
+        .bind(organization_id)
+        .bind(None::<Vec<Uuid>>)
+        .bind(None::<Vec<Uuid>>)
+        .bind(None::<bool>)
+        .bind(None::<Vec<String>>)
+        .bind(None::<i32>)
+        .bind(None::<i32>)
+        .bind(None::<bool>)
+        .bind(None::<i32>)
+        .bind(None::<i32>)
+        .bind(None::<bool>)
+        .bind(None::<i32>)
+        .bind(None::<i32>)
+        .bind(None::<bool>)
+        .bind(None::<i32>)
+        .bind(None::<i32>)
+        .bind(None::<bool>)
+        .bind(None::<bool>)
+        .bind(None::<bool>)
+        .bind(None::<bool>)
+        .bind(None::<bool>)
+        .bind(None::<bool>)
+        .bind(Some(true))
+        .bind(viewer_id)
+        .bind(&retained)
+        .bind(201_i64) // limit
+        .bind(fixture.fixed_clock())
+        .fetch_all(&mut *tx)
+        .await
+        .unwrap();
+    let call_only_plan = rows
+        .into_iter()
+        .map(|(l,)| l)
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    // filtered_summaries.sql: the pre-existing statement, three NEW
+    // clauses ABSENT (NULL) — proving they add no cost when unused.
+    let filtered_summaries_sql =
+        std::fs::read_to_string("crates/crm-app/src/domain/person/sql/filtered_summaries.sql")
+            .unwrap();
+    let explain_filtered = format!("EXPLAIN (ANALYZE, BUFFERS) {filtered_summaries_sql}");
+    let rows: Vec<(String,)> = sqlx::query_as(&explain_filtered)
+        .bind(organization_id)
+        .bind(None::<Vec<Uuid>>) // $2 stage_ids
+        .bind(Some(vec![viewer_id])) // $3 assigned_user_ids
+        .bind(false) // $4 assigned_include_unassigned
+        .bind(None::<Vec<String>>) // $5 sources
+        .bind(None::<i32>)
+        .bind(None::<i32>)
+        .bind(None::<bool>) // $6-8
+        .bind(None::<i32>)
+        .bind(None::<i32>)
+        .bind(None::<bool>) // $9-11
+        .bind(None::<i32>)
+        .bind(None::<i32>)
+        .bind(None::<bool>) // $12-14
+        .bind(None::<i32>)
+        .bind(None::<i32>)
+        .bind(None::<bool>) // $15-17
+        .bind(None::<bool>) // $18
+        .bind(None::<bool>) // $19
+        .bind(None::<bool>) // $20
+        .bind(None::<chrono::DateTime<chrono::Utc>>) // $21 reference_now
+        .bind(None::<bool>) // $22 awaiting_response (ABSENT)
+        .bind(None::<bool>) // $23 client_replied_unanswered (ABSENT)
+        .bind(None::<bool>) // $24 awaiting_call_outcome (ABSENT)
+        .bind(viewer_id) // $25 viewer_id
+        .fetch_all(&mut *tx)
+        .await
+        .unwrap();
+    let filtered_summaries_plan = rows
+        .into_iter()
+        .map(|(l,)| l)
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    tx.rollback().await.unwrap();
+    fixture.cleanup().await;
+
+    println!("D050_PLAN_CALL_MEMBERSHIP_START");
+    println!("{membership_plan}");
+    println!("D050_PLAN_CALL_MEMBERSHIP_END");
+    println!("D050_PLAN_CALL_ONLY_START");
+    println!("{call_only_plan}");
+    println!("D050_PLAN_CALL_ONLY_END");
+    println!("D050_PLAN_FILTERED_SUMMARIES_START");
+    println!("{filtered_summaries_plan}");
+    println!("D050_PLAN_FILTERED_SUMMARIES_END");
 }

@@ -47,23 +47,45 @@ fn assigned_to_me_present(filter: &FilterDefinition) -> bool {
     })
 }
 
-/// docs/specs/SLICE_011d.md §4: version 1, structural `validate()`,
-/// Organization-scoped `validate_references`, then the §1 feed rules — in
-/// exactly this order. The anchor clause (§1 rule 4) can never be negated
-/// or removed; the two person-state feeds must keep `assigned_to: [me]`
-/// (§1 rule 3); `fresh_within_hours` is required `1..=8760` for those two
-/// feeds and forbidden for the call feed (§3).
-async fn validate_feed_definition(
+/// docs/specs/SLICE_011d.md §4/§6: version 1 and structural `validate()`
+/// ONLY — no database access, no revision/reference dependency. Review
+/// round 1, F3: this stays split from
+/// [`validate_feed_definition_references_and_rules`] and runs BEFORE the
+/// row lock/revision check, so a genuinely malformed body still fails
+/// closed at 400 before anything DB-dependent runs; the reference and §1
+/// rule checks (422-class) are deliberately NOT here — see F3 below for
+/// why they must run AFTER the revision check instead.
+fn validate_feed_definition_structural(filter: &FilterDefinition) -> Result<(), TodayFeedError> {
+    if filter.version != 1 {
+        return Err(TodayFeedError::MalformedRequest);
+    }
+    filter.validate().map_err(TodayFeedError::from)?;
+    Ok(())
+}
+
+/// docs/specs/SLICE_011d.md §4: Organization-scoped `validate_references`,
+/// then the §1 feed rules — in exactly this order. The anchor clause (§1
+/// rule 4) can never be negated or removed; the two person-state feeds
+/// must keep `assigned_to: [me]` (§1 rule 3); `fresh_within_hours` is
+/// required `1..=8760` for those two feeds and forbidden for the call feed
+/// (§3).
+///
+/// Review round 1, F3: for `update_today_system_feed`, this must run
+/// AFTER the `FOR UPDATE` row lock and its revision check (spec §6 error
+/// precedence: 409 `today_feed_conflict` before 422 `invalid_feed_rule`,
+/// mirroring `saved_list`'s command shape) — a stale `expected_revision`
+/// must fail with `Conflict` even when the submitted definition would
+/// ALSO have failed 422 for an unrelated reason; validating first would
+/// silently prefer 422 over the caller's real problem, a stale revision.
+/// For `preview_today_system_feed`, spec §4 has a different order: the
+/// subject's membership (404) is checked AFTER this — see that function.
+async fn validate_feed_definition_references_and_rules(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
     feed_key: FeedKey,
     filter: &FilterDefinition,
     fresh_within_hours: Option<i32>,
 ) -> Result<(), TodayFeedError> {
-    if filter.version != 1 {
-        return Err(TodayFeedError::MalformedRequest);
-    }
-    filter.validate().map_err(TodayFeedError::from)?;
     filter
         .validate_references(conn, organization_id)
         .await
@@ -293,12 +315,20 @@ async fn update_today_system_feed_attempt(
     cmd: UpdateTodaySystemFeed,
 ) -> Result<TodaySystemFeedOutcome, TodayFeedError> {
     validate_expected_revision(cmd.expected_revision)?;
+    validate_feed_definition_structural(&cmd.filter)?;
 
     let mut tx = pool.begin().await?;
     lock_current_membership_require_admin(&mut tx, ctx.organization_id, ctx.actor_user_id).await?;
     acquire_today_feeds_lock(&mut tx, ctx.organization_id).await?;
 
-    validate_feed_definition(
+    let row = lock_feed_row_for_update(&mut tx, ctx.organization_id, cmd.feed_key).await?;
+    if row.revision != cmd.expected_revision {
+        return Err(TodayFeedError::Conflict);
+    }
+
+    // F3: reference validation and the §1 rules run HERE, after the
+    // revision check — a stale revision must win over an unrelated 422.
+    validate_feed_definition_references_and_rules(
         &mut tx,
         ctx.organization_id,
         cmd.feed_key,
@@ -306,11 +336,6 @@ async fn update_today_system_feed_attempt(
         cmd.fresh_within_hours,
     )
     .await?;
-
-    let row = lock_feed_row_for_update(&mut tx, ctx.organization_id, cmd.feed_key).await?;
-    if row.revision != cmd.expected_revision {
-        return Err(TodayFeedError::Conflict);
-    }
 
     let (filter_value, window) =
         collapse_for_storage(cmd.feed_key, &cmd.filter, cmd.fresh_within_hours);
@@ -724,7 +749,15 @@ async fn preview_today_system_feed_attempt(
         .await?;
 
     lock_current_membership_require_admin(&mut tx, ctx.organization_id, ctx.actor_user_id).await?;
-    validate_feed_definition(
+    validate_feed_definition_structural(&cmd.filter)?;
+    // F3: the subject's membership (404) is checked BEFORE reference
+    // validation/the §1 rules (422) — spec §4 orders preview's subject
+    // check ahead of definition-reference validation, the opposite of
+    // update's revision-before-references ordering above (preview has no
+    // revision to protect; its distinguishing early check is WHO the
+    // preview is for).
+    require_current_active_member(&mut tx, ctx.organization_id, cmd.subject).await?;
+    validate_feed_definition_references_and_rules(
         &mut tx,
         ctx.organization_id,
         cmd.feed_key,
@@ -732,7 +765,6 @@ async fn preview_today_system_feed_attempt(
         cmd.fresh_within_hours,
     )
     .await?;
-    require_current_active_member(&mut tx, ctx.organization_id, cmd.subject).await?;
 
     sqlx::query("SET TRANSACTION READ ONLY")
         .execute(&mut *tx)
@@ -834,6 +866,7 @@ async fn preview_today_system_feed_attempt(
                 &candidate,
                 &[],
                 201,
+                now,
             )
             .await?;
             let truncated = call_only.len() > 200;

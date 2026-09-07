@@ -58,6 +58,19 @@ fn decode_feed_key(raw: &str) -> Result<FeedKey, ApiError> {
     FeedKey::decode(raw).ok_or(ApiError::NotFound)
 }
 
+/// Body-size failures (axum's `BytesRejection`, wrapped inside
+/// `JsonRejection` since `Json<T>` buffers through `Bytes` first under
+/// `DefaultBodyLimit`) must map to `ApiError::PayloadTooLarge` (413), the
+/// SAME mapping every other oversize-body route in this codebase uses
+/// (`routes/inbound_email.rs`) — not the blanket 400 a bare `map_err`
+/// would give every JsonRejection variant alike.
+fn map_body_rejection(rejection: JsonRejection) -> ApiError {
+    match rejection {
+        JsonRejection::BytesRejection(_) => ApiError::PayloadTooLarge,
+        _ => ApiError::MalformedRequest,
+    }
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct UpdateTodayFeedRequest {
@@ -118,7 +131,7 @@ async fn update_today_feed(
     Path(raw_feed_key): Path<String>,
     body: Result<Json<UpdateTodayFeedRequest>, JsonRejection>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    let Json(req) = body.map_err(|_| ApiError::MalformedRequest)?;
+    let Json(req) = body.map_err(map_body_rejection)?;
     let feed_key = decode_feed_key(&raw_feed_key)?;
 
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
@@ -144,7 +157,7 @@ async fn revert_today_feed(
     Path(raw_feed_key): Path<String>,
     body: Result<Json<RevertTodayFeedRequest>, JsonRejection>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    let Json(req) = body.map_err(|_| ApiError::MalformedRequest)?;
+    let Json(req) = body.map_err(map_body_rejection)?;
     let feed_key = decode_feed_key(&raw_feed_key)?;
 
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
@@ -168,7 +181,7 @@ async fn set_today_feed_enabled(
     Path(raw_feed_key): Path<String>,
     body: Result<Json<SetTodayFeedEnabledRequest>, JsonRejection>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    let Json(req) = body.map_err(|_| ApiError::MalformedRequest)?;
+    let Json(req) = body.map_err(map_body_rejection)?;
     let feed_key = decode_feed_key(&raw_feed_key)?;
 
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
@@ -193,7 +206,7 @@ async fn preview_today_feed(
     Path(raw_feed_key): Path<String>,
     body: Result<Json<PreviewTodayFeedRequest>, JsonRejection>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    let Json(req) = body.map_err(|_| ApiError::MalformedRequest)?;
+    let Json(req) = body.map_err(map_body_rejection)?;
     let feed_key = decode_feed_key(&raw_feed_key)?;
     // Defaults to the admin themself (spec §4).
     let subject = req

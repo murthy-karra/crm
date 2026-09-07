@@ -357,7 +357,16 @@ async fn platform_admin_with_zero_memberships_has_null_organization_and_is_401_o
     assert_eq!(me["organization"], serde_json::Value::Null);
     assert_eq!(me["platform_admin"], true);
 
-    for uri in ["/api/people", "/api/today", "/api/stages"] {
+    for uri in [
+        "/api/people",
+        "/api/today",
+        "/api/stages",
+        // Review round 1, F4: a platform-only session (no Organization
+        // membership) must be 401 on the today-feeds admin index and the
+        // member feed-state read too.
+        "/api/organization/today-feeds",
+        "/api/today/feeds",
+    ] {
         let resp = get_with_cookie(&router, uri, &cookie).await;
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED, "GET {uri}");
     }

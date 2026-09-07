@@ -247,6 +247,7 @@ mod tests {
         TodaySources {
             status: TodaySourcesStatus::Complete,
             issues: vec![],
+            system_feed_issues: vec![],
         }
     }
 

@@ -539,9 +539,7 @@ impl<'de> Deserialize<'de> for Clause {
             "has_phone" => Ok(Clause::HasPhone(decode(remaining)?)),
             "has_email" => Ok(Clause::HasEmail(decode(remaining)?)),
             "awaiting_response" => Ok(Clause::AwaitingResponse(decode(remaining)?)),
-            "client_replied_unanswered" => {
-                Ok(Clause::ClientRepliedUnanswered(decode(remaining)?))
-            }
+            "client_replied_unanswered" => Ok(Clause::ClientRepliedUnanswered(decode(remaining)?)),
             "awaiting_call_outcome" => Ok(Clause::AwaitingCallOutcome(decode(remaining)?)),
             other => Err(DeError::custom(format!("unknown clause kind: {other:?}"))),
         }

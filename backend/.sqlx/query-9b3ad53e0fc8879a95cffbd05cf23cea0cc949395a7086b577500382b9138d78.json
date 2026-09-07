@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- docs/specs/SLICE_011d.md §5 step 4a: for every retained P id, the viewer's\n-- one qualifying call (ended DESC, id DESC — the most recent), exactly the\n-- compiled-in outcome_call membership, carrying the §1 rule 7 inquiry\n-- constraint. Used to APPEND the call_outcome_needed reason to an\n-- already-ranked person-state item, never to re-rank it.\nSELECT DISTINCT ON (c.person_id)\n    c.person_id AS \"person_id!\",\n    c.id AS \"call_id!\",\n    c.ended_at AS \"ended_at!\"\nFROM call c\nWHERE c.organization_id = $1\n  AND c.caller_user_id = $2\n  AND c.status IN ('ended', 'failed')\n  AND c.ended_at IS NOT NULL\n  AND c.person_id = ANY($3::uuid[])\n  AND EXISTS (\n      SELECT 1 FROM inquiry i\n      WHERE i.person_id = c.person_id AND i.organization_id = c.organization_id\n  )\n  AND EXISTS (\n      SELECT 1 FROM contact_attempted root\n      WHERE root.organization_id = c.organization_id\n        AND root.causation_id = c.id\n        AND root.corrects_id IS NULL\n        AND NOT EXISTS (SELECT 1 FROM contact_attempted x WHERE x.corrects_id = root.id)\n  )\nORDER BY c.person_id, c.ended_at DESC, c.id DESC\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "person_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "call_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "ended_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "9b3ad53e0fc8879a95cffbd05cf23cea0cc949395a7086b577500382b9138d78"
+}

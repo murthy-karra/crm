@@ -1982,7 +1982,10 @@ async fn derived_axis_parity_awaiting_response_client_replied_and_call_outcome(
         &today_items(&app_pool, organization_id, alice_id).await,
         client_replied_false_list,
     );
-    assert_eq!(false_source, false_ids, "Today source must agree with People filter");
+    assert_eq!(
+        false_source, false_ids,
+        "Today source must agree with People filter"
+    );
 
     // --- awaiting_call_outcome (viewer-relative: the caller is the viewer) ---
 

@@ -90,11 +90,10 @@ async fn crm_app_has_exactly_the_slice_002_grants(migrator_pool: PgPool) {
         feed_select.is_ok(),
         "today_system_feed: SELECT must succeed for crm_app"
     );
-    let feed_update = sqlx::query(
-        "UPDATE today_system_feed SET updated_at = updated_at WHERE false",
-    )
-    .execute(&app_pool)
-    .await;
+    let feed_update =
+        sqlx::query("UPDATE today_system_feed SET updated_at = updated_at WHERE false")
+            .execute(&app_pool)
+            .await;
     assert!(
         feed_update.is_ok(),
         "today_system_feed: UPDATE must succeed for crm_app"

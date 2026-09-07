@@ -6,6 +6,8 @@
 //! commands, preview and routes are a later round (spec §4, brief step 4);
 //! this module only supports reads (seed + load) through step 3.
 
+pub(crate) mod evaluate;
+
 use chrono::{DateTime, Utc};
 use sqlx::PgConnection;
 
@@ -317,7 +319,10 @@ mod tests {
             call.clauses[0],
             Clause::AwaitingCallOutcome(BoolClause { value: true })
         ));
-        assert_eq!(canonical_fresh_within_hours(FeedKey::CallOutcomeNeeded), None);
+        assert_eq!(
+            canonical_fresh_within_hours(FeedKey::CallOutcomeNeeded),
+            None
+        );
     }
 
     #[test]

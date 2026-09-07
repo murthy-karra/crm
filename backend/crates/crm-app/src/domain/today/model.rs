@@ -102,6 +102,27 @@ pub struct TodayList {
 pub struct TodaySources {
     pub status: TodaySourcesStatus,
     pub issues: Vec<TodaySourceIssue>,
+    /// docs/specs/SLICE_011d.md §5: additive. One entry per system feed
+    /// whose stored definition fell back to canonical
+    /// (`error: invalid_definition, fallback: true`) or whose evaluation
+    /// failed (`error: unavailable, fallback: false` — only the call feed
+    /// can fail this way; a person-state failure is a 503, never reported
+    /// here). A disabled feed contributes no entry.
+    pub system_feed_issues: Vec<SystemFeedIssue>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SystemFeedIssue {
+    pub feed_key: &'static str,
+    pub error: SystemFeedIssueError,
+    pub fallback: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SystemFeedIssueError {
+    Unavailable,
+    InvalidDefinition,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]

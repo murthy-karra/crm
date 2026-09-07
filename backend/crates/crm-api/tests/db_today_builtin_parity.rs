@@ -281,7 +281,15 @@ async fn original_and_current_payloads(
         .unwrap()
         .remove("sources")
         .expect("source-aware response must contain its declared envelope");
-    assert_eq!(sources, json!({ "status": "complete", "issues": [] }));
+    // docs/specs/SLICE_011d.md §5: `system_feed_issues` is an additive
+    // field on `sources`, empty here (no fallback/unavailable feed) — the
+    // frozen `today_9d62e86` fixture predates it entirely, so it is
+    // stripped from `current_payload`'s `sources` above rather than
+    // compared against the frozen payload.
+    assert_eq!(
+        sources,
+        json!({ "status": "complete", "issues": [], "system_feed_issues": [] })
+    );
     assert_eq!(
         serde_json::to_string(&current_payload).unwrap(),
         serde_json::to_string(&original_payload).unwrap(),

@@ -11,7 +11,10 @@ use uuid::Uuid;
 use crm_api::domain::today::system_feeds::{self, FeedKey, ALL_FEED_KEYS};
 use crm_api::ids::OrganizationId;
 
-async fn feed_rows(pool: &PgPool, organization_id: Uuid) -> Vec<(String, bool, Option<String>, Option<i32>, i64)> {
+async fn feed_rows(
+    pool: &PgPool,
+    organization_id: Uuid,
+) -> Vec<(String, bool, Option<String>, Option<i32>, i64)> {
     sqlx::query_as(
         "SELECT feed_key, enabled, filter::text, fresh_within_hours, revision
          FROM today_system_feed WHERE organization_id = $1 ORDER BY feed_key",
@@ -36,7 +39,11 @@ async fn seed_on_create_inserts_exactly_three_default_enabled_rows(migrator_pool
     keys.sort();
     assert_eq!(
         keys,
-        vec!["call_outcome_needed", "client_replied", "unanswered_inquiry"]
+        vec![
+            "call_outcome_needed",
+            "client_replied",
+            "unanswered_inquiry"
+        ]
     );
     for (_, enabled, filter, fresh_within_hours, revision) in &rows {
         assert!(*enabled, "seeded rows are enabled by default");
@@ -78,7 +85,11 @@ async fn missing_row_resolves_as_canonical_enabled(migrator_pool: PgPool) {
 
     for (feed_key, resolved_feed) in ALL_FEED_KEYS.iter().zip(resolved.iter()) {
         assert_eq!(resolved_feed.feed_key, *feed_key);
-        assert!(resolved_feed.enabled, "{:?}: missing row reads as enabled", feed_key);
+        assert!(
+            resolved_feed.enabled,
+            "{:?}: missing row reads as enabled",
+            feed_key
+        );
         assert!(
             resolved_feed.is_default,
             "{:?}: missing row reads as default",
@@ -163,8 +174,14 @@ async fn is_default_true_for_seeded_rows_false_for_a_valid_custom_definition(
         .iter()
         .find(|f| f.feed_key == FeedKey::UnansweredInquiry)
         .unwrap();
-    assert!(!unanswered.is_default, "a non-NULL stored filter is not default");
-    assert!(!unanswered.fallback, "a valid stored filter is not a fallback");
+    assert!(
+        !unanswered.is_default,
+        "a non-NULL stored filter is not default"
+    );
+    assert!(
+        !unanswered.fallback,
+        "a valid stored filter is not a fallback"
+    );
     assert_eq!(unanswered.filter.clauses.len(), 3);
 
     // The other two feeds remain untouched/default.
@@ -246,7 +263,10 @@ async fn invalid_stage_reference_falls_back_to_canonical(migrator_pool: PgPool) 
         .iter()
         .find(|f| f.feed_key == FeedKey::ClientReplied)
         .unwrap();
-    assert!(replied.fallback, "unsupported stored JSON must also fall back");
+    assert!(
+        replied.fallback,
+        "unsupported stored JSON must also fall back"
+    );
     assert_eq!(
         replied.filter,
         system_feeds::canonical_default(FeedKey::ClientReplied)
@@ -267,7 +287,10 @@ async fn today_system_feed_check_constraints(migrator_pool: PgPool) {
     .bind(org_id)
     .execute(&app_pool)
     .await;
-    assert!(bad_key.is_ok(), "a no-op update of an existing valid key must succeed");
+    assert!(
+        bad_key.is_ok(),
+        "a no-op update of an existing valid key must succeed"
+    );
 
     // Out-of-bounds fresh_within_hours.
     for bad_hours in [0i32, 8761] {
@@ -342,7 +365,10 @@ async fn backfill_statement_inserts_three_null_rows_per_organization_and_is_idem
     .fetch_one(&migrator_pool)
     .await
     .unwrap();
-    assert_eq!(feed_rows(&migrator_pool, pre_existing_org_id).await.len(), 0);
+    assert_eq!(
+        feed_rows(&migrator_pool, pre_existing_org_id).await.len(),
+        0
+    );
 
     let backfill = "INSERT INTO today_system_feed (organization_id, feed_key)
          SELECT o.id, k.feed_key
@@ -363,6 +389,9 @@ async fn backfill_statement_inserts_three_null_rows_per_organization_and_is_idem
     // create-time seeded rows.
     let seeded_org_id = crate::common::create_org(&migrator_pool, "Already seeded org").await;
     sqlx::query(backfill).execute(&migrator_pool).await.unwrap();
-    assert_eq!(feed_rows(&migrator_pool, pre_existing_org_id).await.len(), 3);
+    assert_eq!(
+        feed_rows(&migrator_pool, pre_existing_org_id).await.len(),
+        3
+    );
     assert_eq!(feed_rows(&migrator_pool, seeded_org_id).await.len(), 3);
 }

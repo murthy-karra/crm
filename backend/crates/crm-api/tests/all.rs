@@ -161,6 +161,9 @@ mod db_today_source_telemetry;
 #[path = "db_today_system_feeds.rs"]
 mod db_today_system_feeds;
 
+#[path = "db_today_feed_equivalence.rs"]
+mod db_today_feed_equivalence;
+
 #[path = "health.rs"]
 mod health;
 

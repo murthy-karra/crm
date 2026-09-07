@@ -14,9 +14,9 @@ pub mod system_feeds;
 pub mod test_support;
 
 pub use model::{
-    InquiryRef, RecommendedAction, TodayCandidate, TodayItem, TodayList, TodayPriority,
-    TodayReason, TodaySourceIssue, TodaySourceIssueError, TodaySources, TodaySourcesStatus,
-    FRESH_INQUIRY_WINDOW_HOURS,
+    InquiryRef, RecommendedAction, SystemFeedIssue, SystemFeedIssueError, TodayCandidate,
+    TodayItem, TodayList, TodayPriority, TodayReason, TodaySourceIssue, TodaySourceIssueError,
+    TodaySources, TodaySourcesStatus, FRESH_INQUIRY_WINDOW_HOURS,
 };
 pub use rank::rank;
 pub use sources::{
@@ -106,15 +106,23 @@ pub async fn query(
     viewer: UserId,
     _now: DateTime<Utc>,
 ) -> Result<TodayList, sqlx::Error> {
-    Ok(query_inner(conn, scope, viewer, EvaluationClock::Database)
-        .await?
-        .list)
+    Ok(query_inner(
+        conn,
+        scope,
+        viewer,
+        EvaluationClock::Database,
+        TodayProvider::Feeds,
+    )
+    .await?
+    .list)
 }
 
 /// Test-only common-clock seam for filter parity and paired-baseline tests.
 /// The request still reads PostgreSQL's snapshot clock first; the fixture
 /// value then replaces only Today evaluation boundaries. HTTP callers can
-/// neither provide nor select a clock.
+/// neither provide nor select a clock. Always the `Feeds` provider — the
+/// default and the only one every non-equivalence test needs (matches the
+/// production `query` entry point's semantics).
 #[cfg(feature = "test-support")]
 pub async fn query_at(
     conn: &mut PgConnection,
@@ -122,8 +130,44 @@ pub async fn query_at(
     viewer: UserId,
     now: DateTime<Utc>,
 ) -> Result<TodayList, sqlx::Error> {
+    Ok(query_inner(
+        conn,
+        scope,
+        viewer,
+        EvaluationClock::Fixed(now),
+        TodayProvider::Feeds,
+    )
+    .await?
+    .list)
+}
+
+/// The built-in provider seam (docs/specs/SLICE_011d.md §5, §9.2): `Legacy`
+/// keeps the compiled-in `queries::candidates` statement unchanged (the
+/// comparison fixture the equivalence gate proves `Feeds` reproduces
+/// item-for-item, reason-for-reason, in order, at the cap); `Feeds`
+/// evaluates the three per-Organization system feeds. Selectable only
+/// under `test-support` (via [`query_at_with_provider`]) — every
+/// production caller ([`query`], [`query_owned`]) and every ordinary test
+/// caller ([`query_at`], [`query_owned_at`]) gets `Feeds`, the default.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TodayProvider {
+    Legacy,
+    Feeds,
+}
+
+/// Test-only provider-selection seam for the equivalence gate (spec §9.2):
+/// otherwise identical to [`query_at`]. No production or ordinary-test
+/// caller can reach `TodayProvider::Legacy` through any other function.
+#[cfg(feature = "test-support")]
+pub async fn query_at_with_provider(
+    conn: &mut PgConnection,
+    scope: &PersonVisibilityScope,
+    viewer: UserId,
+    now: DateTime<Utc>,
+    provider: TodayProvider,
+) -> Result<TodayList, sqlx::Error> {
     Ok(
-        query_inner(conn, scope, viewer, EvaluationClock::Fixed(now))
+        query_inner(conn, scope, viewer, EvaluationClock::Fixed(now), provider)
             .await?
             .list,
     )
@@ -140,6 +184,7 @@ async fn query_inner(
     scope: &PersonVisibilityScope,
     viewer: UserId,
     evaluation_clock: EvaluationClock,
+    provider: TodayProvider,
 ) -> Result<QueryOutcome, sqlx::Error> {
     let span = tracing::info_span!(
         "today.query",
@@ -162,9 +207,10 @@ async fn query_inner(
         source_issue_count = tracing::field::Empty,
     );
     let mut trace = QuerySpanGuard::new(span.clone());
-    let result = async { query_inner_untraced(conn, scope, viewer, evaluation_clock).await }
-        .instrument(span.clone())
-        .await;
+    let result =
+        async { query_inner_untraced(conn, scope, viewer, evaluation_clock, provider).await }
+            .instrument(span.clone())
+            .await;
     match &result {
         Ok(outcome) => {
             span.record("item_count", outcome.list.items.len());
@@ -225,6 +271,7 @@ async fn query_inner_untraced(
     scope: &PersonVisibilityScope,
     viewer: UserId,
     evaluation_clock: EvaluationClock,
+    provider: TodayProvider,
 ) -> Result<QueryOutcome, sqlx::Error> {
     // One snapshot and one server-selected clock bind built-ins and all
     // source age filters together. `READ ONLY` keeps a malformed/slow source
@@ -252,9 +299,16 @@ async fn query_inner_untraced(
         #[cfg(feature = "test-support")]
         EvaluationClock::Fixed(now) => now,
     };
-    let (candidates, builtin_truncated) = queries::candidates(&mut tx, scope, viewer, now).await?;
-    let builtin_candidate_count = candidates.len();
-    let mut builtins = rank(candidates, now);
+    let (mut builtins, builtin_truncated, builtin_candidate_count, system_feed_issues) =
+        match provider {
+            TodayProvider::Legacy => {
+                let (candidates, truncated) =
+                    queries::candidates(&mut tx, scope, viewer, now).await?;
+                let count = candidates.len();
+                (rank(candidates, now), truncated, count, Vec::new())
+            }
+            TodayProvider::Feeds => evaluate_feeds_builtins(&mut tx, scope, viewer, now).await?,
+        };
     let builtin_ids: Vec<Uuid> = builtins
         .iter()
         .map(|item| item.person.id.as_uuid())
@@ -353,6 +407,7 @@ async fn query_inner_untraced(
                     sources: TodaySources {
                         status: TodaySourcesStatus::Unavailable,
                         issues: Vec::new(),
+                        system_feed_issues: system_feed_issues.clone(),
                     },
                 },
                 connection_healthy,
@@ -400,6 +455,7 @@ async fn query_inner_untraced(
                     sources: TodaySources {
                         status: TodaySourcesStatus::Unavailable,
                         issues: Vec::new(),
+                        system_feed_issues: system_feed_issues.clone(),
                     },
                 },
                 connection_healthy,
@@ -771,7 +827,7 @@ async fn query_inner_untraced(
             .cloned(),
     );
 
-    let status = if issues.is_empty() {
+    let status = if issues.is_empty() && system_feed_issues.is_empty() {
         TodaySourcesStatus::Complete
     } else {
         TodaySourcesStatus::Partial
@@ -780,7 +836,11 @@ async fn query_inner_untraced(
         generated_at: now,
         items: final_items,
         truncated: builtin_truncated || source_truncated,
-        sources: TodaySources { status, issues },
+        sources: TodaySources {
+            status,
+            issues,
+            system_feed_issues,
+        },
     };
     let commit_deadline =
         final_recovery_deadline.unwrap_or_else(|| Instant::now() + RECOVERY_BUDGET);
@@ -863,7 +923,14 @@ async fn query_owned_with_clock(
     }
 
     let mut guard = Guard(Some(connection));
-    let result = query_inner(guard.connection(), scope, viewer, evaluation_clock).await;
+    let result = query_inner(
+        guard.connection(),
+        scope,
+        viewer,
+        evaluation_clock,
+        TodayProvider::Feeds,
+    )
+    .await;
     if matches!(
         &result,
         Ok(QueryOutcome {
@@ -1005,6 +1072,159 @@ async fn evaluate_source(
         .execute(&mut *conn)
         .await?;
     Ok(SourceEvaluation::Data { members, prefix })
+}
+
+/// The `Feeds` provider's builtins computation (docs/specs/SLICE_011d.md
+/// §5): loads the three feed rows, evaluates the person-state statement,
+/// ranks it with the UNCHANGED [`rank`] function, then evaluates the call
+/// feed under its own savepoint with the 011c 500 ms whole-source budget.
+/// Returns the same `(items, truncated, candidate_count)` trio the
+/// `Legacy` provider's `queries::candidates` + `rank()` pair produces, plus
+/// any `system_feed_issues`. A feed-load or person-state failure
+/// propagates as `sqlx::Error` — a 503 at the caller, exactly like a
+/// built-in failure today (spec §5 step 2); only the call feed's own
+/// failure is caught and reported as a `system_feed_issues` entry with
+/// available work returned (D-047).
+async fn evaluate_feeds_builtins(
+    tx: &mut PgConnection,
+    scope: &PersonVisibilityScope,
+    viewer: UserId,
+    now: DateTime<Utc>,
+) -> Result<(Vec<TodayItem>, bool, usize, Vec<SystemFeedIssue>), sqlx::Error> {
+    let organization_id = scope.organization_id();
+    let feeds = system_feeds::load_feed_rows(tx, organization_id).await?;
+
+    let mut system_feed_issues = Vec::new();
+    for feed in &feeds {
+        if feed.fallback {
+            system_feed_issues.push(SystemFeedIssue {
+                feed_key: feed.feed_key.as_str(),
+                error: SystemFeedIssueError::InvalidDefinition,
+                fallback: true,
+            });
+        }
+    }
+
+    // `system_feeds::ALL_FEED_KEYS` fixes this order: unanswered_inquiry,
+    // client_replied, call_outcome_needed.
+    let feed_unanswered = &feeds[0];
+    let feed_replied = &feeds[1];
+    let feed_call = &feeds[2];
+    debug_assert_eq!(
+        feed_unanswered.feed_key,
+        system_feeds::FeedKey::UnansweredInquiry
+    );
+    debug_assert_eq!(feed_replied.feed_key, system_feeds::FeedKey::ClientReplied);
+    debug_assert_eq!(feed_call.feed_key, system_feeds::FeedKey::CallOutcomeNeeded);
+
+    let (candidates, truncated_p) = system_feeds::evaluate::person_state_candidates(
+        tx,
+        organization_id,
+        viewer,
+        now,
+        feed_unanswered,
+        feed_replied,
+    )
+    .await?;
+    let builtin_candidate_count = candidates.len();
+    let mut builtins = rank(candidates, now);
+    let retained_ids: Vec<Uuid> = builtins
+        .iter()
+        .map(|item| item.person.id.as_uuid())
+        .collect();
+
+    let mut truncated_call = false;
+    if feed_call.enabled {
+        sqlx::query("SAVEPOINT today_call_feed")
+            .execute(&mut *tx)
+            .await?;
+        let call_deadline = Instant::now() + SOURCE_BUDGET;
+        let outcome = tokio::time::timeout(SOURCE_BUDGET, async {
+            set_source_statement_timeout_until(tx, call_deadline).await?;
+            let membership =
+                system_feeds::evaluate::call_membership(tx, organization_id, viewer, &retained_ids)
+                    .await?;
+            for (person_id, call_id, ended_at) in membership {
+                system_feeds::evaluate::append_call_outcome_reason(
+                    &mut builtins,
+                    person_id,
+                    call_id,
+                    ended_at,
+                );
+            }
+            let mut truncated = false;
+            // Only if the person-state statement was NOT truncated (spec
+            // §5 step 4b) — never admit a discarded person-state row.
+            if !truncated_p {
+                let k = 200usize.saturating_sub(builtins.len());
+                let limit = i64::try_from(k.saturating_add(1)).unwrap_or(201);
+                set_source_statement_timeout_until(tx, call_deadline).await?;
+                let call_only = system_feeds::evaluate::call_only_candidates(
+                    tx,
+                    organization_id,
+                    viewer,
+                    &retained_ids,
+                    limit,
+                )
+                .await?;
+                truncated = call_only.len() > k;
+                let mut call_only_items = rank(call_only, now);
+                call_only_items.truncate(k);
+                builtins.extend(call_only_items);
+            }
+            Ok::<bool, sqlx::Error>(truncated)
+        })
+        .await;
+
+        match outcome {
+            Ok(Ok(truncated)) => {
+                truncated_call = truncated;
+                sqlx::query("RELEASE SAVEPOINT today_call_feed")
+                    .execute(&mut *tx)
+                    .await?;
+            }
+            Ok(Err(_)) | Err(_) => {
+                // Never merge an uncertain partial call-feed result. Roll
+                // back its statement(s) under the shared 100 ms recovery
+                // grace; if that too fails, the final transaction commit
+                // at the end of the whole request will itself fail closed
+                // (the existing `connection_healthy` safety net), so no
+                // separate signal is threaded back from here.
+                system_feed_issues.push(SystemFeedIssue {
+                    feed_key: feed_call.feed_key.as_str(),
+                    error: SystemFeedIssueError::Unavailable,
+                    fallback: false,
+                });
+                let recovery_started = Instant::now();
+                if let Ok(remaining) = recovery_remaining(recovery_started) {
+                    let _ = rollback_call_feed_within(tx, remaining).await;
+                }
+            }
+        }
+    }
+
+    Ok((
+        builtins,
+        truncated_p || truncated_call,
+        builtin_candidate_count,
+        system_feed_issues,
+    ))
+}
+
+async fn rollback_call_feed_within(conn: &mut PgConnection, budget: Duration) -> bool {
+    matches!(
+        tokio::time::timeout(budget, async {
+            sqlx::query("ROLLBACK TO SAVEPOINT today_call_feed")
+                .execute(&mut *conn)
+                .await?;
+            sqlx::query("RELEASE SAVEPOINT today_call_feed")
+                .execute(&mut *conn)
+                .await?;
+            Ok::<(), sqlx::Error>(())
+        })
+        .await,
+        Ok(Ok(()))
+    )
 }
 
 async fn rollback_source_within(

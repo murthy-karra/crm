@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Records the "create a list" walkthrough shown by CreateListGuide.vue and
-// writes web/public/guides/create-list.gif plus create-list-poster.png.
+// writes web/public/guides/create-list.mp4 (H.264, 2x device scale, still
+// frames held about two seconds each) plus create-list-poster.png.
 //
 // Requirements: the dev stack running (./scripts/dev-services, ./scripts/dev-api,
 // ./scripts/dev-web), a seeded organization, an installed Google Chrome
@@ -29,7 +30,7 @@ const frames = mkdtempSync(join(tmpdir(), 'create-list-guide-'))
 mkdirSync(outDir, { recursive: true })
 
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
-const page = await browser.newPage({ viewport: { width: 1000, height: 625 }, deviceScaleFactor: 1 })
+const page = await browser.newPage({ viewport: { width: 1120, height: 700 }, deviceScaleFactor: 2 })
 let frame = 0
 const shoot = async (label) => {
   await page.waitForTimeout(400)
@@ -97,16 +98,19 @@ try {
   copyFileSync(join(frames, `frame-${String(frame - 1).padStart(2, '0')}.png`), join(frames, `frame-${String(frame).padStart(2, '0')}.png`))
   frame += 1
 
-  copyFileSync(poster, join(outDir, 'create-list-poster.png'))
-  const gif = join(outDir, 'create-list.gif')
+  // Poster at CSS size (the video itself keeps the 2x frames).
+  const posterOut = spawnSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', poster, '-vf', 'scale=1120:-1:flags=lanczos', join(outDir, 'create-list-poster.png')], { stdio: 'inherit' })
+  if (posterOut.status !== 0) throw new Error(`ffmpeg (poster) exited with ${posterOut.status}`)
+  const video = join(outDir, 'create-list.mp4')
   const ffmpeg = spawnSync('ffmpeg', [
     '-y', '-loglevel', 'error',
-    '-framerate', '1/1.6', '-i', join(frames, 'frame-%02d.png'),
-    '-vf', 'scale=1000:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=3',
-    '-loop', '0', gif,
+    '-framerate', '1/2.4', '-i', join(frames, 'frame-%02d.png'),
+    '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p',
+    '-c:v', 'libx264', '-preset', 'slow', '-crf', '20', '-r', '30', '-tune', 'stillimage',
+    '-movflags', '+faststart', video,
   ], { stdio: 'inherit' })
   if (ffmpeg.status !== 0) throw new Error(`ffmpeg exited with ${ffmpeg.status}`)
-  console.log(`wrote ${gif} (${Math.round(statSync(gif).size / 1024)} KB)`)
+  console.log(`wrote ${video} (${Math.round(statSync(video).size / 1024)} KB)`)
 } finally {
   if (createdListId) {
     // The delete command needs the saved revision (SLICE_011b §"Delete").

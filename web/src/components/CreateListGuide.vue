@@ -4,8 +4,8 @@
 // as and Duplicate"). Nothing on /people said so, which read as a misroute.
 // This card appears only when the URL carries `guide=create-list`, explains
 // the three steps, and offers a recorded walkthrough on demand. UI_STYLE §8:
-// no ambient animation, so the animated image loads only inside the dialog
-// and only after an explicit choice when reduced motion is preferred.
+// no ambient animation, so the video lives inside a wide dialog, plays with
+// native controls, and autoplays (muted) only when motion is not reduced.
 import Dialog from 'primevue/dialog'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -15,7 +15,7 @@ const CREATE_LIST_GUIDE_QUERY = 'guide'
 const CREATE_LIST_GUIDE_VALUE = 'create-list'
 // Served from web/public; bound dynamically so the build does not try to
 // resolve the recorded assets at compile time.
-const GIF_SRC = '/guides/create-list.gif'
+const VIDEO_SRC = '/guides/create-list.mp4'
 const POSTER_SRC = '/guides/create-list-poster.png'
 
 const route = useRoute()
@@ -24,7 +24,6 @@ const router = useRouter()
 const active = computed(() => route.query[CREATE_LIST_GUIDE_QUERY] === CREATE_LIST_GUIDE_VALUE)
 const showWalkthrough = ref(false)
 const reducedMotion = ref(false)
-const playAnyway = ref(false)
 let motionQuery: MediaQueryList | null = null
 const onMotionChange = (event: MediaQueryListEvent) => { reducedMotion.value = event.matches }
 
@@ -36,7 +35,15 @@ onMounted(() => {
 })
 onBeforeUnmount(() => motionQuery?.removeEventListener('change', onMotionChange))
 
-const animated = computed(() => !reducedMotion.value || playAnyway.value)
+const autoplay = computed(() => !reducedMotion.value)
+// The shared dialog shell is sized for confirmations; the walkthrough needs
+// the width its frames were recorded at to stay legible.
+const walkthroughPt = computed(() => ({
+  ...dialogPt(),
+  // Width follows the viewport height too (video aspect 1.6, about 14rem of
+  // header, steps and footer), so the dialog never exceeds the viewport.
+  root: { class: 'glass-panel w-full max-w-[min(96vw,1240px,calc((100vh-14rem)*1.6))] max-h-[calc(100vh-2rem)] overflow-y-auto' },
+}))
 
 function dismiss() {
   const query = { ...route.query }
@@ -97,7 +104,7 @@ const STEPS = [
       :closable="false"
       close-on-escape
       dismissable-mask
-      :pt="dialogPt()"
+      :pt="walkthroughPt"
       @update:visible="(value: boolean) => { if (!value) showWalkthrough = false }"
     >
       <template #header>
@@ -106,30 +113,22 @@ const STEPS = [
         </h2>
       </template>
 
-      <img
-        v-if="animated"
-        :src="GIF_SRC"
-        alt="Recorded walkthrough: the Lists page, then People with a stage filter applied, then the Save as list dialog with a name entered, then the new list's page."
-        class="w-full rounded-lg border border-border"
-        width="1000"
-        height="625"
+      <video
+        :src="VIDEO_SRC"
+        :poster="POSTER_SRC"
+        :autoplay="autoplay"
+        controls
+        muted
+        loop
+        playsinline
+        preload="metadata"
+        class="w-full rounded-lg border border-border bg-surface-0"
+        width="1120"
+        height="700"
+        aria-label="Recorded walkthrough: the Lists page, then People with a stage filter applied, then the Save as list dialog with a name entered, then the new list's page."
       >
-      <div v-else>
-        <img
-          :src="POSTER_SRC"
-          alt="First frame of the recorded walkthrough: the Lists page with the Create a list button."
-          class="w-full rounded-lg border border-border"
-          width="1000"
-          height="625"
-        >
-        <button
-          type="button"
-          :class="[buttonClasses('secondary'), 'mt-3']"
-          @click="playAnyway = true"
-        >
-          Play the animation
-        </button>
-      </div>
+        Your browser cannot play this video. The steps are listed below.
+      </video>
       <ol class="mt-3 list-decimal space-y-0.5 pl-5 text-small text-text-muted">
         <li
           v-for="step in STEPS"

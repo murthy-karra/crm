@@ -351,9 +351,9 @@ shared/personal limit messages. “Create a list” leads to `/people?guide=crea
 agent composes criteria. Empty state explains how to save a filter.
 *Polish, 2026-09-06 (user request, after the merge):* that `guide` flag makes
 `/people` show a three-step “Creating a list” card with a Dismiss control and
-a “Show me” dialog that plays a recorded walkthrough (`web/public/guides/`,
-regenerable with `pnpm run guide:capture`; poster plus explicit Play under
-reduced motion). The flag survives filter edits and disappears on navigation.
+a “Show me” dialog that plays a recorded walkthrough video with native
+controls (`web/public/guides/`, regenerable with `pnpm run guide:capture`;
+no autoplay under reduced motion). The flag survives filter edits and disappears on navigation.
 
 Fetch metadata once, then counts only for the current 25 rows, with at most
 four count requests in flight. This bound applies to **every fetch path**:

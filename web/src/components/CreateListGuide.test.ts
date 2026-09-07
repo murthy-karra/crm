@@ -59,27 +59,29 @@ describe('CreateListGuide', () => {
     expect(wrapper.find('[data-testid="create-list-guide"]').exists()).toBe(false)
   })
 
-  it('Show me opens the walkthrough with the animated image and described steps', async () => {
+  it('Show me opens a wide walkthrough dialog with the video, poster and described steps', async () => {
     const { wrapper } = await mountAt('/people?guide=create-list')
     await wrapper.get('button:not([aria-label])').trigger('click')
     await flushPromises()
     const dialog = document.body.querySelector('[role="dialog"]')
     expect(dialog).not.toBeNull()
-    const img = dialog!.querySelector('img') as HTMLImageElement
-    expect(img.getAttribute('src')).toBe('/guides/create-list.gif')
-    expect(img.getAttribute('alt')).toMatch(/Recorded walkthrough/)
+    expect(dialog!.className).toContain('max-w-[min(96vw,1240px,calc((100vh-14rem)*1.6))]')
+    const video = dialog!.querySelector('video') as HTMLVideoElement
+    expect(video.getAttribute('src')).toBe('/guides/create-list.mp4')
+    expect(video.getAttribute('poster')).toBe('/guides/create-list-poster.png')
+    expect(video.hasAttribute('controls')).toBe(true)
+    expect(video.hasAttribute('autoplay')).toBe(true)
+    expect(video.getAttribute('aria-label')).toMatch(/Recorded walkthrough/)
     expect(dialog!.querySelectorAll('li')).toHaveLength(3)
   })
 
-  it('offers the poster and an explicit Play choice when reduced motion is preferred', async () => {
+  it('does not autoplay when reduced motion is preferred, leaving the native controls', async () => {
     const { wrapper } = await mountAt('/people?guide=create-list', true)
     await wrapper.get('button:not([aria-label])').trigger('click')
     await flushPromises()
-    const dialog = document.body.querySelector('[role="dialog"]')!
-    expect((dialog.querySelector('img') as HTMLImageElement).getAttribute('src')).toBe('/guides/create-list-poster.png')
-    const play = Array.from(dialog.querySelectorAll('button')).find((b) => b.textContent?.includes('Play the animation'))!
-    play.click()
-    await flushPromises()
-    expect((dialog.querySelector('img') as HTMLImageElement).getAttribute('src')).toBe('/guides/create-list.gif')
+    const video = document.body.querySelector('[role="dialog"] video') as HTMLVideoElement
+    expect(video.hasAttribute('autoplay')).toBe(false)
+    expect(video.hasAttribute('controls')).toBe(true)
+    expect(video.getAttribute('poster')).toBe('/guides/create-list-poster.png')
   })
 })

@@ -412,7 +412,7 @@ and now lives only in git history.
    development runtime is next restarted, run `./scripts/db-migrate` first.
 2. Post-merge polish landed on main (2026-09-06): the People page explains
    list creation when reached from Lists (three steps plus a recorded
-   walkthrough), and a direct load of any protected URL no longer bounces to
+   walkthrough video in a wide dialog), and a direct load of any protected URL no longer bounces to
    Today when session verification settles mid-navigation (replay now waits
    for the initial navigation); a named list's header now wraps its toolbar
    below a long title instead of squeezing the title. `playwright-core` was

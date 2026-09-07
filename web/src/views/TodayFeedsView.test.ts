@@ -4,7 +4,7 @@
 // confirmation for `unanswered_inquiry`; the 409 reload flow requiring a new
 // explicit Save click. Lane W codes against §6's contracts (SLICE_011d_IMPL.md
 // "Lane W ... may stub the API in tests until Lane B's routes exist").
-import { flushPromises, mount } from '@vue/test-utils'
+import { DOMWrapper, flushPromises, mount } from '@vue/test-utils'
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import PrimeVue from 'primevue/config'
 import Select from 'primevue/select'
@@ -304,7 +304,10 @@ describe('TodayFeedsView preview (SLICE_011d §4, §6)', () => {
     await wrapper.get('[data-testid="feed-preview-unanswered_inquiry"]').trigger('click')
     await flushPromises()
 
-    const select = wrapper.get('[data-testid="preview-subject"]').findComponent(Select)
+    // The Dialog is teleported to document.body, outside the wrapper's own
+    // root element, so it must be queried there (matches FilterBar.test.ts's
+    // `body()` pattern for its own teleported Popover).
+    const select = new DOMWrapper(document.body).get('[data-testid="preview-subject"]').findComponent(Select)
     await select.vm.$emit('update:model-value', BOB_ID)
     await flushPromises()
 

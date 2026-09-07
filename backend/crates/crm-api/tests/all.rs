@@ -158,6 +158,19 @@ mod db_today_source_deadlines;
 #[path = "db_today_source_telemetry.rs"]
 mod db_today_source_telemetry;
 
+mod db_today_system_feed_commands;
+#[path = "db_today_system_feeds.rs"]
+mod db_today_system_feeds;
+
+#[path = "db_today_feed_equivalence.rs"]
+mod db_today_feed_equivalence;
+
+#[path = "db_today_system_feed_call_failures.rs"]
+mod db_today_system_feed_call_failures;
+
+#[path = "db_today_feeds_http.rs"]
+mod db_today_feeds_http;
+
 #[path = "health.rs"]
 mod health;
 

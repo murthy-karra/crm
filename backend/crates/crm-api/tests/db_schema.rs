@@ -79,6 +79,40 @@ async fn crm_app_has_exactly_the_slice_002_grants(migrator_pool: PgPool) {
         "today_work_source: TRUNCATE must be denied for crm_app"
     );
 
+    // docs/specs/SLICE_011d.md §3: today_system_feed is ordinary
+    // configuration (like saved_list) — crm_app gets SELECT/INSERT/UPDATE
+    // but never DELETE/TRUNCATE (feeds are seeded and reverted, never
+    // removed).
+    let feed_select = sqlx::query("SELECT * FROM today_system_feed")
+        .fetch_all(&app_pool)
+        .await;
+    assert!(
+        feed_select.is_ok(),
+        "today_system_feed: SELECT must succeed for crm_app"
+    );
+    let feed_update =
+        sqlx::query("UPDATE today_system_feed SET updated_at = updated_at WHERE false")
+            .execute(&app_pool)
+            .await;
+    assert!(
+        feed_update.is_ok(),
+        "today_system_feed: UPDATE must succeed for crm_app"
+    );
+    let feed_delete = sqlx::query("DELETE FROM today_system_feed WHERE false")
+        .execute(&app_pool)
+        .await;
+    assert!(
+        feed_delete.is_err(),
+        "today_system_feed: DELETE must be denied for crm_app"
+    );
+    let feed_truncate = sqlx::query("TRUNCATE today_system_feed")
+        .execute(&app_pool)
+        .await;
+    assert!(
+        feed_truncate.is_err(),
+        "today_system_feed: TRUNCATE must be denied for crm_app"
+    );
+
     // `contact_method`, `inquiry`, and the fact tables (the five from
     // Slices 002/003 plus `call_completed`, docs/specs/SLICE_006.md §2):
     // SELECT + INSERT, no UPDATE/DELETE.
@@ -91,6 +125,7 @@ async fn crm_app_has_exactly_the_slice_002_grants(migrator_pool: PgPool) {
         "stage_changed",
         "contact_attempted",
         "call_completed",
+        "today_feed_changed",
     ] {
         let select = sqlx::query(&format!("SELECT * FROM {table}"))
             .fetch_all(&app_pool)
@@ -242,6 +277,7 @@ struct FactRowIds {
     stage_changed_id: Uuid,
     contact_attempted_id: Uuid,
     call_completed_id: Uuid,
+    today_feed_changed_id: Uuid,
 }
 
 async fn insert_one_row_per_fact_table(
@@ -349,6 +385,21 @@ async fn insert_one_row_per_fact_table(
     .await
     .unwrap();
 
+    let (today_feed_changed_id,): (Uuid,) = sqlx::query_as(
+        r#"INSERT INTO today_feed_changed
+            (organization_id, actor_kind, actor_user_id, origin, occurred_at, correlation_id,
+             feed_key, change, from_revision, to_revision, enabled_after)
+           VALUES ($1, 'user', $2, 'web_session', now(), $3,
+                   'unanswered_inquiry', 'updated', 1, 2, true)
+           RETURNING id"#,
+    )
+    .bind(org_id)
+    .bind(user_id)
+    .bind(correlation_id)
+    .fetch_one(migrator_pool)
+    .await
+    .unwrap();
+
     FactRowIds {
         inquiry_received_id,
         routing_decision_id,
@@ -356,6 +407,7 @@ async fn insert_one_row_per_fact_table(
         stage_changed_id,
         contact_attempted_id,
         call_completed_id,
+        today_feed_changed_id,
     }
 }
 
@@ -381,13 +433,14 @@ async fn fact_tables_are_append_only_via_grant_and_trigger(migrator_pool: PgPool
     let rows = insert_one_row_per_fact_table(&migrator_pool, org_id, user_id, stage_id).await;
     let app_pool = crate::common::connect_as_app(&migrator_pool).await;
 
-    let cases: [(&str, Uuid); 6] = [
+    let cases: [(&str, Uuid); 7] = [
         ("inquiry_received", rows.inquiry_received_id),
         ("routing_decision", rows.routing_decision_id),
         ("assignment_changed", rows.assignment_changed_id),
         ("stage_changed", rows.stage_changed_id),
         ("contact_attempted", rows.contact_attempted_id),
         ("call_completed", rows.call_completed_id),
+        ("today_feed_changed", rows.today_feed_changed_id),
     ];
 
     for (table, id) in cases {
@@ -472,6 +525,7 @@ async fn fact_tables_reject_truncate_via_grant_and_trigger(migrator_pool: PgPool
         "stage_changed",
         "contact_attempted",
         "call_completed",
+        "today_feed_changed",
     ];
 
     for table in tables {

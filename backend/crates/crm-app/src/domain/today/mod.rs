@@ -6,16 +6,16 @@
 //! queue and enabled live sources.
 
 pub mod model;
-pub mod queries;
 pub mod rank;
 pub mod sources;
+pub mod system_feeds;
 #[cfg(feature = "test-support")]
 pub mod test_support;
 
 pub use model::{
-    InquiryRef, RecommendedAction, TodayCandidate, TodayItem, TodayList, TodayPriority,
-    TodayReason, TodaySourceIssue, TodaySourceIssueError, TodaySources, TodaySourcesStatus,
-    FRESH_INQUIRY_WINDOW_HOURS,
+    InquiryRef, RecommendedAction, SystemFeedIssue, SystemFeedIssueError, TodayCandidate,
+    TodayItem, TodayList, TodayPriority, TodayReason, TodaySourceIssue, TodaySourceIssueError,
+    TodaySources, TodaySourcesStatus, FRESH_INQUIRY_WINDOW_HOURS,
 };
 pub use rank::rank;
 pub use sources::{
@@ -64,6 +64,12 @@ struct QueryTelemetry {
     list_candidate_count: Option<usize>,
     list_item_count: Option<usize>,
     list_truncated: Option<bool>,
+    /// docs/specs/SLICE_011d.md §8/§9.9: per-feed status classification
+    /// only (`default|customized|disabled|fallback`) — never the
+    /// definition itself.
+    feed_statuses: Option<[(&'static str, &'static str); 3]>,
+    person_state_candidate_count: Option<usize>,
+    call_candidate_count: Option<usize>,
 }
 
 struct QuerySpanGuard {
@@ -159,6 +165,14 @@ async fn query_inner(
         list_truncated = tracing::field::Empty,
         sources_status = tracing::field::Empty,
         source_issue_count = tracing::field::Empty,
+        // docs/specs/SLICE_011d.md §8/§9.9: per-feed status classification
+        // (default|customized|disabled|fallback) and candidate counts —
+        // never the definition JSON, subject items, or bound parameters.
+        feed_status_unanswered_inquiry = tracing::field::Empty,
+        feed_status_client_replied = tracing::field::Empty,
+        feed_status_call_outcome_needed = tracing::field::Empty,
+        person_state_candidate_count = tracing::field::Empty,
+        call_candidate_count = tracing::field::Empty,
     );
     let mut trace = QuerySpanGuard::new(span.clone());
     let result = async { query_inner_untraced(conn, scope, viewer, evaluation_clock).await }
@@ -206,6 +220,32 @@ async fn query_inner(
                 sources_status_label(outcome.list.sources.status),
             );
             span.record("source_issue_count", outcome.list.sources.issues.len());
+            if let Some(feed_statuses) = outcome.telemetry.feed_statuses {
+                for (feed_key, status) in feed_statuses {
+                    match feed_key {
+                        "unanswered_inquiry" => {
+                            span.record("feed_status_unanswered_inquiry", status);
+                        }
+                        "client_replied" => {
+                            span.record("feed_status_client_replied", status);
+                        }
+                        "call_outcome_needed" => {
+                            span.record("feed_status_call_outcome_needed", status);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            record_optional_usize(
+                &span,
+                "person_state_candidate_count",
+                outcome.telemetry.person_state_candidate_count,
+            );
+            record_optional_usize(
+                &span,
+                "call_candidate_count",
+                outcome.telemetry.call_candidate_count,
+            );
             trace.finish(match outcome.list.sources.status {
                 TodaySourcesStatus::Complete => "complete",
                 TodaySourcesStatus::Partial => "sources_partial",
@@ -251,9 +291,54 @@ async fn query_inner_untraced(
         #[cfg(feature = "test-support")]
         EvaluationClock::Fixed(now) => now,
     };
-    let (candidates, builtin_truncated) = queries::candidates(&mut tx, scope, viewer, now).await?;
-    let builtin_candidate_count = candidates.len();
-    let mut builtins = rank(candidates, now);
+    let feeds_result = evaluate_feeds_builtins(&mut tx, scope, viewer, now).await?;
+    if feeds_result.call_feed_unrecoverable {
+        // Mirrors the source-metadata-unavailable early return exactly: the
+        // call feed's own savepoint recovery could not complete inside its
+        // shared grace, so the connection's state past that point is
+        // unknown. Never attempt list-source work on it; report the whole
+        // Today response as unavailable, with the call feed's issue still
+        // present, and let `tx` drop uncommitted — the owned-connection
+        // guard detaches rather than pools it (`connection_healthy: false`).
+        return Ok(QueryOutcome {
+            list: TodayList {
+                generated_at: now,
+                items: feeds_result.items,
+                truncated: feeds_result.truncated,
+                sources: TodaySources {
+                    status: TodaySourcesStatus::Unavailable,
+                    issues: Vec::new(),
+                    system_feed_issues: feeds_result.system_feed_issues,
+                },
+            },
+            connection_healthy: false,
+            telemetry: QueryTelemetry {
+                builtin_candidate_count: feeds_result.candidate_count,
+                builtin_truncated: feeds_result.truncated,
+                metadata_outcome: SourceMetadataOutcome::Unavailable,
+                enabled_source_count: None,
+                successful_source_count: None,
+                failed_source_count: None,
+                list_candidate_count: None,
+                list_item_count: None,
+                list_truncated: None,
+                feed_statuses: feeds_result.feed_statuses,
+                person_state_candidate_count: feeds_result.person_state_candidate_count,
+                call_candidate_count: feeds_result.call_candidate_count,
+            },
+        });
+    }
+    let FeedsBuiltins {
+        items: mut builtins,
+        truncated: builtin_truncated,
+        candidate_count: builtin_candidate_count,
+        feed_statuses,
+        person_state_candidate_count,
+        call_candidate_count,
+        system_feed_issues,
+        call_feed_recovery_deadline,
+        ..
+    } = feeds_result;
     let builtin_ids: Vec<Uuid> = builtins
         .iter()
         .map(|item| item.person.id.as_uuid())
@@ -352,6 +437,7 @@ async fn query_inner_untraced(
                     sources: TodaySources {
                         status: TodaySourcesStatus::Unavailable,
                         issues: Vec::new(),
+                        system_feed_issues: system_feed_issues.clone(),
                     },
                 },
                 connection_healthy,
@@ -365,6 +451,9 @@ async fn query_inner_untraced(
                     list_candidate_count: None,
                     list_item_count: None,
                     list_truncated: None,
+                    feed_statuses,
+                    person_state_candidate_count,
+                    call_candidate_count,
                 },
             });
         }
@@ -399,6 +488,7 @@ async fn query_inner_untraced(
                     sources: TodaySources {
                         status: TodaySourcesStatus::Unavailable,
                         issues: Vec::new(),
+                        system_feed_issues: system_feed_issues.clone(),
                     },
                 },
                 connection_healthy,
@@ -412,6 +502,9 @@ async fn query_inner_untraced(
                     list_candidate_count: None,
                     list_item_count: None,
                     list_truncated: None,
+                    feed_statuses,
+                    person_state_candidate_count,
+                    call_candidate_count,
                 },
             });
         }
@@ -432,7 +525,11 @@ async fn query_inner_untraced(
     // Once a recovery operation cannot complete inside its shared 100 ms
     // grace, no later query or transaction completion may reuse this socket.
     let mut connection_healthy = true;
-    let mut final_recovery_deadline = None;
+    // Seeded from a recovered call-feed failure (spec §5 step 4), so the
+    // final commit uses whatever remains of THAT recovery's shared grace
+    // when no list source runs afterward to reset it — recoveries share one
+    // total budget, never stack a fresh one per stage.
+    let mut final_recovery_deadline = call_feed_recovery_deadline;
     let mut configured = configured.into_iter();
     while let Some(configured_source) = configured.next() {
         let source = configured_source.source;
@@ -770,7 +867,7 @@ async fn query_inner_untraced(
             .cloned(),
     );
 
-    let status = if issues.is_empty() {
+    let status = if issues.is_empty() && system_feed_issues.is_empty() {
         TodaySourcesStatus::Complete
     } else {
         TodaySourcesStatus::Partial
@@ -779,7 +876,11 @@ async fn query_inner_untraced(
         generated_at: now,
         items: final_items,
         truncated: builtin_truncated || source_truncated,
-        sources: TodaySources { status, issues },
+        sources: TodaySources {
+            status,
+            issues,
+            system_feed_issues,
+        },
     };
     let commit_deadline =
         final_recovery_deadline.unwrap_or_else(|| Instant::now() + RECOVERY_BUDGET);
@@ -802,6 +903,9 @@ async fn query_inner_untraced(
             list_candidate_count: Some(list_candidate_count),
             list_item_count: Some(list_item_count),
             list_truncated: Some(source_truncated),
+            feed_statuses,
+            person_state_candidate_count,
+            call_candidate_count,
         },
     })
 }
@@ -1004,6 +1108,320 @@ async fn evaluate_source(
         .execute(&mut *conn)
         .await?;
     Ok(SourceEvaluation::Data { members, prefix })
+}
+
+/// [`evaluate_feeds_builtins`]'s result: `(items, truncated,
+/// candidate_count)`, plus any `system_feed_issues`, plus the two
+/// call-feed recovery signals `query_inner_untraced` must fold into its own
+/// connection-health/final-commit bookkeeping exactly as a list source's
+/// recovery does.
+struct FeedsBuiltins {
+    items: Vec<TodayItem>,
+    truncated: bool,
+    candidate_count: usize,
+    system_feed_issues: Vec<SystemFeedIssue>,
+    /// `Some` iff the call feed failed and recovered — the shared 100 ms
+    /// recovery grace's remaining deadline, to seed the caller's
+    /// `final_recovery_deadline` (recoveries share one budget, never stack).
+    call_feed_recovery_deadline: Option<Instant>,
+    /// The call feed failed and its savepoint rollback ALSO could not
+    /// complete inside the grace — the connection's state past that point
+    /// is unknown. The caller must skip all list-source work and report
+    /// the whole Today response unavailable (mirrors a source-metadata
+    /// failure that itself fails to recover).
+    call_feed_unrecoverable: bool,
+    /// docs/specs/SLICE_011d.md §8: per-feed status for `today.query`'s
+    /// span, in `system_feeds::ALL_FEED_KEYS` order — never the definition
+    /// itself, only its classification.
+    feed_statuses: Option<[(&'static str, &'static str); 3]>,
+    /// The person-state statement's candidate count (spec §8/§9.9).
+    person_state_candidate_count: Option<usize>,
+    /// The call feed's evaluated candidate count (its `call_only`
+    /// statement), present only when the call feed is enabled and its
+    /// evaluation succeeded.
+    call_candidate_count: Option<usize>,
+}
+
+/// The `Feeds` provider's builtins computation (docs/specs/SLICE_011d.md
+/// §5): loads the three feed rows, evaluates the person-state statement,
+/// ranks it with the UNCHANGED [`rank`] function, then evaluates the call
+/// feed under its own savepoint with the 011c 500 ms whole-source budget —
+/// the SAME connection-recovery mechanism as a list source (§4 of the
+/// correction round): actual SQL cancellation via a tight
+/// `statement_timeout`, a savepoint rollback under the shared 100 ms grace,
+/// and (only if that recovery itself fails) an unrecoverable signal that
+/// makes the caller skip list-source work and detach the connection rather
+/// than pool it — never a poisoned connection returned to the pool or
+/// corrupted later list-source work. A feed-load or person-state failure
+/// still propagates as `sqlx::Error` — a 503 at the caller, exactly like a
+/// built-in failure today (spec §5 step 2); only the call feed's own
+/// failure is caught and reported as a `system_feed_issues` entry with
+/// available work returned (D-047).
+///
+/// All-or-nothing like a list source's `evaluate_source`: the call feed's
+/// two statements' results are collected locally and only merged into
+/// `builtins` after BOTH succeed — never an uncertain partial call-feed
+/// result (`call_membership` succeeding while `call_only` then fails must
+/// not leave a half-applied set of `call_outcome_needed` reasons).
+fn feed_status_label(feed: &system_feeds::ResolvedFeed) -> &'static str {
+    if !feed.enabled {
+        "disabled"
+    } else if feed.fallback {
+        "fallback"
+    } else if feed.is_default {
+        "default"
+    } else {
+        "customized"
+    }
+}
+
+async fn evaluate_feeds_builtins(
+    tx: &mut PgConnection,
+    scope: &PersonVisibilityScope,
+    viewer: UserId,
+    now: DateTime<Utc>,
+) -> Result<FeedsBuiltins, sqlx::Error> {
+    let organization_id = scope.organization_id();
+    let feeds = system_feeds::load_feed_rows(tx, organization_id).await?;
+
+    // Spec §5: "a disabled feed contributes nothing and no issue" — this
+    // covers fallback reporting too. A disabled feed's invalid stored rule
+    // belongs on the admin page via `Feed.filter_error` (step 4), never here.
+    let mut system_feed_issues = Vec::new();
+    for feed in &feeds {
+        if feed.fallback && feed.enabled {
+            system_feed_issues.push(SystemFeedIssue {
+                feed_key: feed.feed_key.as_str(),
+                error: SystemFeedIssueError::InvalidDefinition,
+                fallback: true,
+            });
+        }
+    }
+
+    // `system_feeds::ALL_FEED_KEYS` fixes this order: unanswered_inquiry,
+    // client_replied, call_outcome_needed.
+    let feed_unanswered = &feeds[0];
+    let feed_replied = &feeds[1];
+    let feed_call = &feeds[2];
+    debug_assert_eq!(
+        feed_unanswered.feed_key,
+        system_feeds::FeedKey::UnansweredInquiry
+    );
+    debug_assert_eq!(feed_replied.feed_key, system_feeds::FeedKey::ClientReplied);
+    debug_assert_eq!(feed_call.feed_key, system_feeds::FeedKey::CallOutcomeNeeded);
+
+    // docs/specs/SLICE_011d.md §8/§9.9: a per-feed CLASSIFICATION only
+    // (never the definition itself) for `today.query`'s span.
+    let feed_statuses: [(&'static str, &'static str); 3] = [
+        (
+            feed_unanswered.feed_key.as_str(),
+            feed_status_label(feed_unanswered),
+        ),
+        (
+            feed_replied.feed_key.as_str(),
+            feed_status_label(feed_replied),
+        ),
+        (feed_call.feed_key.as_str(), feed_status_label(feed_call)),
+    ];
+
+    let (candidates, truncated_p) = system_feeds::evaluate::person_state_candidates(
+        tx,
+        organization_id,
+        viewer,
+        now,
+        feed_unanswered,
+        feed_replied,
+    )
+    .await?;
+    let builtin_candidate_count = candidates.len();
+    let mut builtins = rank(candidates, now);
+    let retained_ids: Vec<Uuid> = builtins
+        .iter()
+        .map(|item| item.person.id.as_uuid())
+        .collect();
+
+    let mut truncated_call = false;
+    let mut call_feed_recovery_deadline = None;
+    let mut call_candidate_count: Option<usize> = None;
+    if feed_call.enabled {
+        // The savepoint's own creation must be inside the SAME recoverable
+        // region as every statement after it: `evaluate_source` follows the
+        // identical shape (its first statement, also a SAVEPOINT, runs
+        // inside the `tokio::time::timeout`-wrapped call). A failure at any
+        // point — including here — must surface as `Ok(Err(_))` from this
+        // block, never propagate a raw `sqlx::Error` straight out of
+        // `evaluate_feeds_builtins` past the recovery logic below.
+        let call_deadline = Instant::now() + SOURCE_BUDGET;
+        let outcome = tokio::time::timeout(SOURCE_BUDGET, async {
+            sqlx::query("SAVEPOINT today_call_feed")
+                .execute(&mut *tx)
+                .await?;
+            #[cfg(feature = "test-support")]
+            test_support::checkpoint(
+                test_support::TodayQueryPhase::CallFeedAfterSavepoint,
+                None,
+                Some(call_deadline),
+                tx,
+            )
+            .await?;
+            set_source_statement_timeout_until(tx, call_deadline).await?;
+            let membership = system_feeds::evaluate::call_membership(
+                tx,
+                organization_id,
+                viewer,
+                feed_call,
+                &retained_ids,
+                now,
+            )
+            .await?;
+            #[cfg(feature = "test-support")]
+            test_support::checkpoint(
+                test_support::TodayQueryPhase::CallFeedAfterMembership,
+                None,
+                Some(call_deadline),
+                tx,
+            )
+            .await?;
+            // Only if the person-state statement was NOT truncated (spec
+            // §5 step 4b) — never admit a discarded person-state row.
+            let call_only = if truncated_p {
+                Vec::new()
+            } else {
+                let k = 200usize.saturating_sub(builtins.len());
+                let limit = i64::try_from(k.saturating_add(1)).unwrap_or(201);
+                set_source_statement_timeout_until(tx, call_deadline).await?;
+                system_feeds::evaluate::call_only_candidates(
+                    tx,
+                    organization_id,
+                    viewer,
+                    feed_call,
+                    &retained_ids,
+                    limit,
+                    now,
+                )
+                .await?
+            };
+            #[cfg(feature = "test-support")]
+            test_support::checkpoint(
+                test_support::TodayQueryPhase::BeforeCallFeedRelease,
+                None,
+                Some(call_deadline),
+                tx,
+            )
+            .await?;
+            set_source_statement_timeout_until(tx, call_deadline).await?;
+            sqlx::query("RELEASE SAVEPOINT today_call_feed")
+                .execute(&mut *tx)
+                .await?;
+            Ok::<_, sqlx::Error>((membership, call_only))
+        })
+        .await;
+
+        match outcome {
+            Ok(Ok((membership, call_only))) => {
+                for (person_id, call_id, ended_at) in membership {
+                    system_feeds::evaluate::append_call_outcome_reason(
+                        &mut builtins,
+                        person_id,
+                        call_id,
+                        ended_at,
+                    );
+                }
+                if !truncated_p {
+                    call_candidate_count = Some(call_only.len());
+                    let k = 200usize.saturating_sub(builtins.len());
+                    truncated_call = call_only.len() > k;
+                    let mut call_only_items = rank(call_only, now);
+                    call_only_items.truncate(k);
+                    builtins.extend(call_only_items);
+                }
+                // else: the call-only statement never ran (spec §5 step 4b —
+                // the person-state statement was already truncated), so
+                // `call_candidate_count` stays `None` rather than falsely
+                // claiming zero candidates.
+            }
+            Ok(Err(_)) | Err(_) => {
+                // Never merge an uncertain partial call-feed result (see the
+                // function doc): nothing above mutated `builtins`, so a
+                // failure here — at any point in the call feed's two
+                // statements — leaves the person-state items exactly as
+                // `rank()` produced them. Roll back the savepoint under the
+                // shared 100 ms recovery grace; an unrecoverable rollback
+                // marks the connection unhealthy and stops all further work
+                // for this request, exactly like list-source recovery.
+                system_feed_issues.push(SystemFeedIssue {
+                    feed_key: feed_call.feed_key.as_str(),
+                    error: SystemFeedIssueError::Unavailable,
+                    fallback: false,
+                });
+                let recovery_started = Instant::now();
+                let recovered = match recovery_remaining(recovery_started) {
+                    Ok(remaining) => {
+                        rollback_call_feed_within(tx, remaining, recovery_started + RECOVERY_BUDGET)
+                            .await
+                    }
+                    Err(_) => false,
+                };
+                if recovered {
+                    call_feed_recovery_deadline = Some(recovery_started + RECOVERY_BUDGET);
+                } else {
+                    return Ok(FeedsBuiltins {
+                        items: builtins,
+                        truncated: truncated_p,
+                        candidate_count: builtin_candidate_count,
+                        system_feed_issues,
+                        call_feed_recovery_deadline: None,
+                        call_feed_unrecoverable: true,
+                        feed_statuses: Some(feed_statuses),
+                        person_state_candidate_count: Some(builtin_candidate_count),
+                        call_candidate_count: None,
+                    });
+                }
+            }
+        }
+    }
+
+    Ok(FeedsBuiltins {
+        items: builtins,
+        truncated: truncated_p || truncated_call,
+        candidate_count: builtin_candidate_count,
+        system_feed_issues,
+        call_feed_recovery_deadline,
+        call_feed_unrecoverable: false,
+        feed_statuses: Some(feed_statuses),
+        person_state_candidate_count: Some(builtin_candidate_count),
+        call_candidate_count,
+    })
+}
+
+async fn rollback_call_feed_within(
+    conn: &mut PgConnection,
+    budget: Duration,
+    deadline: Instant,
+) -> bool {
+    #[cfg(not(feature = "test-support"))]
+    let _ = deadline;
+    matches!(
+        tokio::time::timeout(budget, async {
+            sqlx::query("ROLLBACK TO SAVEPOINT today_call_feed")
+                .execute(&mut *conn)
+                .await?;
+            #[cfg(feature = "test-support")]
+            test_support::checkpoint(
+                test_support::TodayQueryPhase::RecoveryAfterRollback,
+                None,
+                Some(deadline),
+                conn,
+            )
+            .await?;
+            sqlx::query("RELEASE SAVEPOINT today_call_feed")
+                .execute(&mut *conn)
+                .await?;
+            Ok::<(), sqlx::Error>(())
+        })
+        .await,
+        Ok(Ok(()))
+    )
 }
 
 async fn rollback_source_within(

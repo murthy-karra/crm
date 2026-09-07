@@ -137,6 +137,10 @@ pub(crate) async fn source_candidates(
         builtin_ids,
         members_only,
         limit,
+        params.awaiting_response,
+        params.client_replied_unanswered,
+        params.awaiting_call_outcome,
+        params.viewer_id,
     )
     .fetch_all(&mut *conn)
     .await?;
@@ -244,6 +248,10 @@ pub(crate) async fn source_membership(
         params.has_email,
         now,
         builtin_ids,
+        params.awaiting_response,
+        params.client_replied_unanswered,
+        params.awaiting_call_outcome,
+        params.viewer_id,
     )
     .fetch_all(&mut *conn)
     .await?;

@@ -2,7 +2,7 @@
 // D-045: compact white navigation; shared session, Operator and call ownership.
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch, type Component } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import { AtSign, Building2, Inbox, ListFilter, LogOut, Mail, Sparkles, Sun, UserCog, UserPlus, Users } from 'lucide-vue-next'
+import { AtSign, Building2, Inbox, ListChecks, ListFilter, LogOut, Mail, Sparkles, Sun, UserCog, UserPlus, Users } from 'lucide-vue-next'
 import { useAuthSessionLifetime, useLogoutMutation, useMe } from '../api/queries'
 import {
   resetSessionCoordination,
@@ -106,6 +106,8 @@ const navGroups = computed<NavGroup[]>(() => {
       items: [
         { label: 'Members', to: '/manage/members', icon: UserCog },
         { label: 'Intake', to: '/manage/intake', icon: Mail },
+        // SLICE_011d §6: "nav beside Intake and Members".
+        { label: 'Today rules', to: '/manage/today-feeds', icon: ListChecks },
       ],
     })
   }

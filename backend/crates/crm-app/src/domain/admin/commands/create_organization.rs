@@ -11,6 +11,7 @@ use crate::domain::admin::AdminActor;
 use crate::domain::envelope::{Actor, FactEnvelope};
 use crate::domain::facts;
 use crate::domain::stage;
+use crate::domain::today::system_feeds;
 use crate::ids::CorrelationId;
 
 pub struct CreateOrganization {
@@ -86,6 +87,9 @@ async fn create_organization_attempt(
         };
 
     stage::seed_defaults(&mut tx, organization_id).await?;
+    // docs/specs/SLICE_011d.md §3: the three system feeds, seeded beside
+    // stage seeding with the same ON CONFLICT DO NOTHING posture.
+    system_feeds::seed_defaults(&mut tx, organization_id).await?;
 
     let envelope = FactEnvelope {
         organization_id,

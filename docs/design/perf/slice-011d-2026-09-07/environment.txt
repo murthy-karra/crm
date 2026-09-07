@@ -1,0 +1,13 @@
+captured_at=2026-09-07T15:44:18Z
+git_head=145335aa9ceed15e71855b92c9f3f45a40ada356
+git_branch=slice-011d-lane-b
+git_status_lines=4
+profile=release (cargo default; no custom profile)
+features=perf-harness (implies test-support)
+binary=target/release/deps/db_today_feeds_http_perf-a1b55b8c76b43bc3
+binary_sha256=13615679100af0b11ab30577f060c4b3df8170c98836c9261cea3d681ecc09eb
+rustc=rustc 1.98.0 (88d9e12ae 2026-08-18)
+cargo=cargo 1.98.0 (797e8a9bc 2026-08-05)
+os=26.6.2 build 25G83 arm64
+cpus=10 mem_bytes=68719476736
+loadavg={ 5.27 6.91 6.00 }

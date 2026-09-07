@@ -74,6 +74,13 @@ name = "db_today_http_perf"
 path = "tests/db_today_http_perf.rs"
 required-features = ["perf-harness"]
 
+# Slice 011d §8 Phase B evidence. Same opt-in shape as db_today_http_perf
+# above: outside tests/all.rs, absent unless --features perf-harness.
+[[test]]
+name = "db_today_feeds_http_perf"
+path = "tests/db_today_feeds_http_perf.rs"
+required-features = ["perf-harness"]
+
 [[test]]
 name = "livekit_telephony"
 test = false

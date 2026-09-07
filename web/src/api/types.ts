@@ -262,6 +262,11 @@ export type AgeOp =
   | { op: 'not_within_days'; days: number }
   | { op: 'never' }
 
+// --- Slice 011d: derived boolean clause kinds (docs/specs/SLICE_011d.md §2) -
+// Three more `{"kind": K, "value": bool}` clauses, one per system feed axis.
+// Counted against the existing 20-clause cap server-side; no client-side cap
+// enforcement here, matching the rest of this vocabulary (§4a note above).
+
 export type FilterClauseKind =
   | 'stage'
   | 'assigned_to'
@@ -273,6 +278,9 @@ export type FilterClauseKind =
   | 'has_replied'
   | 'has_phone'
   | 'has_email'
+  | 'awaiting_response'
+  | 'client_replied_unanswered'
+  | 'awaiting_call_outcome'
 
 export type FilterClause =
   | { kind: 'stage'; stage_ids: string[] }
@@ -285,6 +293,9 @@ export type FilterClause =
   | { kind: 'has_replied'; value: boolean }
   | { kind: 'has_phone'; value: boolean }
   | { kind: 'has_email'; value: boolean }
+  | { kind: 'awaiting_response'; value: boolean }
+  | { kind: 'client_replied_unanswered'; value: boolean }
+  | { kind: 'awaiting_call_outcome'; value: boolean }
 
 export interface FilterDefinition {
   version: 1
@@ -704,6 +715,20 @@ export interface TodayResponse {
   sources: TodaySourcesStatus
 }
 
+// --- Slice 011d: system feed issues on the Today `sources` envelope
+// (docs/specs/SLICE_011d.md §5, §6) — additive field, `sources` shape
+// otherwise unchanged. -------------------------------------------------
+
+export type SystemFeedIssueError = 'unavailable' | 'invalid_definition'
+export interface SystemFeedIssue {
+  feed_key: TodayFeedKey
+  error: SystemFeedIssueError
+  /** `true` when the canonical default was evaluated in place of an invalid
+   * stored definition (`invalid_definition`); `false` when the feed
+   * contributed nothing (`unavailable`, §5 rule 6). */
+  fallback: boolean
+}
+
 export type TodaySourceStatus = 'complete' | 'partial' | 'unavailable'
 export type TodaySourceIssueError = 'unsupported_filter' | 'invalid_stage' | 'invalid_assignee' | 'unavailable'
 export interface TodaySourceIssue {
@@ -715,6 +740,8 @@ export interface TodaySourceIssue {
 export interface TodaySourcesStatus {
   status: TodaySourceStatus
   issues: TodaySourceIssue[]
+  // SLICE_011d §5, §6: additive.
+  system_feed_issues: SystemFeedIssue[]
 }
 export interface TodaySource {
   list_id: string
@@ -729,6 +756,104 @@ export interface TodaySourcesResponse {
 }
 export interface EnableTodaySourceRequest { expected_list_revision: number }
 export interface TodaySourceChange { enabled: boolean; changed: boolean }
+
+// --- Slice 011d: Today system feeds (docs/specs/SLICE_011d.md §3, §4, §6) --
+// The three built-in Today rules re-expressed as per-Organization,
+// admin-editable feeds in the same filter vocabulary. Mirrors §6's wire
+// shapes verbatim; this file owns the contract for the web lane
+// (SLICE_011d_IMPL.md "Lane W").
+
+export type TodayFeedKey = 'unanswered_inquiry' | 'client_replied' | 'call_outcome_needed'
+
+export interface UserRef {
+  id: string
+  display_name: string
+}
+
+// Same three codes as `SavedListFilterError` (§6: "the 011b neutral
+// placeholders" reuse); aliased rather than duplicated so the two contracts
+// cannot silently drift apart in this file.
+export type TodayFeedFilterError = SavedListFilterError
+
+/** The admin-only shape returned by `GET /api/organization/today-feeds` and
+ * every admin mutation (§6). `filter` is the stored typed definition — the
+ * canonical one when `is_default` — and is `null` only when the stored JSON
+ * is `unsupported_filter`. `fresh_within_hours` is absent/null for the call
+ * feed (both mean "none"); a person-state feed always carries a number. */
+export interface Feed {
+  feed_key: TodayFeedKey
+  enabled: boolean
+  revision: number
+  is_default: boolean
+  filter: FilterDefinition | null
+  fresh_within_hours: number | null
+  description: string[]
+  filter_error: TodayFeedFilterError | null
+  updated_at: string
+  updated_by: UserRef | null
+  default: { filter: FilterDefinition; fresh_within_hours: number | null }
+}
+
+/** The member-visible shape returned by `GET /api/today/feeds` (§6) —
+ * reflects the EFFECTIVE rule (canonical under fallback); no editor
+ * identity, revision or raw JSON. The fallback itself is reported through
+ * Today's `system_feed_issues`, not here. */
+export interface MemberFeed {
+  feed_key: TodayFeedKey
+  enabled: boolean
+  is_default: boolean
+  description: string[]
+}
+
+export interface TodayFeedsResponse {
+  feeds: Feed[]
+}
+
+export interface MemberTodayFeedsResponse {
+  feeds: MemberFeed[]
+}
+
+/** `PUT /api/organization/today-feeds/{feed_key}` body. `fresh_within_hours`
+ * is `null` for the call feed and a `1..=8760` integer for the two
+ * person-state feeds (§4). */
+export interface UpdateTodayFeedRequest {
+  expected_revision: number
+  filter: FilterDefinition
+  fresh_within_hours: number | null
+}
+
+/** `POST /api/organization/today-feeds/{feed_key}/revert` and
+ * `PUT .../enabled`'s shared envelope, plus the enable/disable-only field. */
+export interface RevertTodayFeedRequest {
+  expected_revision: number
+}
+
+export interface SetTodayFeedEnabledRequest {
+  expected_revision: number
+  enabled: boolean
+}
+
+/** Response body shared by update/revert/enable-disable (§6). */
+export interface TodayFeedMutationResponse {
+  feed: Feed
+  changed: boolean
+}
+
+/** `POST /api/organization/today-feeds/{feed_key}/preview` body — never
+ * persisted (§4). `subject_user_id` omitted defaults server-side to the
+ * requesting admin; the Web client always sends it explicitly. */
+export interface PreviewTodayFeedRequest {
+  filter: FilterDefinition
+  fresh_within_hours: number | null
+  subject_user_id?: string
+}
+
+export interface PreviewTodayFeedResponse {
+  subject: UserRef
+  items: TodayItem[]
+  truncated: boolean
+  description: string[]
+}
 
 // ---- Contact attempts (SLICE_003 §5 POST /api/people/{id}/contact-attempts)
 

@@ -408,6 +408,19 @@ pub enum Clause {
     HasReplied(BoolClause),
     HasPhone(BoolClause),
     HasEmail(BoolClause),
+    /// docs/specs/SLICE_011d.md §2: derived, viewer-independent. True when
+    /// the Person has at least one inquiry after the effective last contact
+    /// attempt by any member (or has inquiries and no attempt at all).
+    AwaitingResponse(BoolClause),
+    /// docs/specs/SLICE_011d.md §2: derived, viewer-independent. True when
+    /// the latest inbound correspondence is later than both the effective
+    /// last contact attempt and the latest outbound correspondence.
+    ClientRepliedUnanswered(BoolClause),
+    /// docs/specs/SLICE_011d.md §2: derived, VIEWER-relative (the viewer is
+    /// the caller). True when a call of the viewer's to the Person is
+    /// `ended`/`failed` with a non-null `ended_at` and its root automatic
+    /// contact attempt has no correction.
+    AwaitingCallOutcome(BoolClause),
 }
 
 impl Clause {
@@ -426,6 +439,9 @@ impl Clause {
             Clause::HasReplied(_) => "has_replied",
             Clause::HasPhone(_) => "has_phone",
             Clause::HasEmail(_) => "has_email",
+            Clause::AwaitingResponse(_) => "awaiting_response",
+            Clause::ClientRepliedUnanswered(_) => "client_replied_unanswered",
+            Clause::AwaitingCallOutcome(_) => "awaiting_call_outcome",
         }
     }
 }
@@ -458,6 +474,9 @@ impl Serialize for Clause {
             Clause::HasReplied(c) => merged("has_replied", c),
             Clause::HasPhone(c) => merged("has_phone", c),
             Clause::HasEmail(c) => merged("has_email", c),
+            Clause::AwaitingResponse(c) => merged("awaiting_response", c),
+            Clause::ClientRepliedUnanswered(c) => merged("client_replied_unanswered", c),
+            Clause::AwaitingCallOutcome(c) => merged("awaiting_call_outcome", c),
         };
         value.serialize(serializer)
     }
@@ -519,6 +538,9 @@ impl<'de> Deserialize<'de> for Clause {
             "has_replied" => Ok(Clause::HasReplied(decode(remaining)?)),
             "has_phone" => Ok(Clause::HasPhone(decode(remaining)?)),
             "has_email" => Ok(Clause::HasEmail(decode(remaining)?)),
+            "awaiting_response" => Ok(Clause::AwaitingResponse(decode(remaining)?)),
+            "client_replied_unanswered" => Ok(Clause::ClientRepliedUnanswered(decode(remaining)?)),
+            "awaiting_call_outcome" => Ok(Clause::AwaitingCallOutcome(decode(remaining)?)),
             other => Err(DeError::custom(format!("unknown clause kind: {other:?}"))),
         }
     }
@@ -639,6 +661,9 @@ impl FilterDefinition {
                     validate_age(&c.age, true)?
                 }
                 Clause::HasReplied(_) | Clause::HasPhone(_) | Clause::HasEmail(_) => {}
+                Clause::AwaitingResponse(_)
+                | Clause::ClientRepliedUnanswered(_)
+                | Clause::AwaitingCallOutcome(_) => {}
             }
         }
         Ok(())
@@ -799,6 +824,20 @@ pub struct PersonFilterParams {
     pub has_replied: Option<bool>,
     pub has_phone: Option<bool>,
     pub has_email: Option<bool>,
+    /// docs/specs/SLICE_011d.md §2.
+    pub awaiting_response: Option<bool>,
+    /// docs/specs/SLICE_011d.md §2.
+    pub client_replied_unanswered: Option<bool>,
+    /// docs/specs/SLICE_011d.md §2.
+    pub awaiting_call_outcome: Option<bool>,
+    /// The bound viewer id, used ONLY by the `awaiting_call_outcome` probe
+    /// (§2: "for the first time, a bound viewer id"). Always set by
+    /// [`to_query_params`](FilterDefinition::to_query_params) regardless of
+    /// which clauses are present; every eleven-statement predicate that
+    /// reads it is itself NULL-guarded on `awaiting_call_outcome`, so an
+    /// absent clause never lets an unrelated nil/default value leak into a
+    /// query result — this field is inert whenever that clause is absent.
+    pub viewer_id: uuid::Uuid,
 }
 
 /// A lossless `i32` conversion for a `days` value that has already been
@@ -834,7 +873,10 @@ impl FilterDefinition {
     /// be called after both [`validate`](Self::validate) and
     /// [`validate_references`](Self::validate_references) have succeeded.
     pub fn to_query_params(&self, viewer: UserId) -> PersonFilterParams {
-        let mut params = PersonFilterParams::default();
+        let mut params = PersonFilterParams {
+            viewer_id: viewer.0,
+            ..PersonFilterParams::default()
+        };
         for clause in &self.clauses {
             match clause {
                 Clause::Stage(c) => {
@@ -883,6 +925,11 @@ impl FilterDefinition {
                 Clause::HasReplied(c) => params.has_replied = Some(c.value),
                 Clause::HasPhone(c) => params.has_phone = Some(c.value),
                 Clause::HasEmail(c) => params.has_email = Some(c.value),
+                Clause::AwaitingResponse(c) => params.awaiting_response = Some(c.value),
+                Clause::ClientRepliedUnanswered(c) => {
+                    params.client_replied_unanswered = Some(c.value)
+                }
+                Clause::AwaitingCallOutcome(c) => params.awaiting_call_outcome = Some(c.value),
             }
         }
         params
@@ -978,6 +1025,27 @@ impl FilterDefinition {
                         "Has an email address".to_string()
                     } else {
                         "No email address".to_string()
+                    }
+                }
+                Clause::AwaitingResponse(c) => {
+                    if c.value {
+                        "Awaiting a response".to_string()
+                    } else {
+                        "Not awaiting a response".to_string()
+                    }
+                }
+                Clause::ClientRepliedUnanswered(c) => {
+                    if c.value {
+                        "Client replied, unanswered".to_string()
+                    } else {
+                        "No unanswered client reply".to_string()
+                    }
+                }
+                Clause::AwaitingCallOutcome(c) => {
+                    if c.value {
+                        "A call of mine needs an outcome".to_string()
+                    } else {
+                        "No call of mine needs an outcome".to_string()
                     }
                 }
             })
@@ -1733,6 +1801,153 @@ mod tests {
             })],
         };
         let _ = filter.to_query_params(UserId::new(Uuid::new_v4()));
+    }
+
+    // --- 011d: derived clause kinds (docs/specs/SLICE_011d.md §2) --------
+
+    #[test]
+    fn round_trips_the_three_derived_clause_kinds() {
+        let json = serde_json::json!({
+            "version": 1,
+            "clauses": [
+                {"kind": "awaiting_response", "value": true},
+                {"kind": "client_replied_unanswered", "value": false},
+                {"kind": "awaiting_call_outcome", "value": true},
+            ]
+        })
+        .to_string();
+        let parsed: FilterDefinition = parse(&json).unwrap();
+        assert_eq!(parsed.clauses.len(), 3);
+        assert_eq!(
+            parsed.clauses[0],
+            Clause::AwaitingResponse(BoolClause { value: true })
+        );
+        assert_eq!(
+            parsed.clauses[1],
+            Clause::ClientRepliedUnanswered(BoolClause { value: false })
+        );
+        assert_eq!(
+            parsed.clauses[2],
+            Clause::AwaitingCallOutcome(BoolClause { value: true })
+        );
+        let serialized = serde_json::to_string(&parsed).unwrap();
+        let reparsed: FilterDefinition = parse(&serialized).unwrap();
+        assert_eq!(parsed, reparsed);
+    }
+
+    #[test]
+    fn derived_clause_kind_labels() {
+        assert_eq!(
+            Clause::AwaitingResponse(BoolClause { value: true }).kind_label(),
+            "awaiting_response"
+        );
+        assert_eq!(
+            Clause::ClientRepliedUnanswered(BoolClause { value: true }).kind_label(),
+            "client_replied_unanswered"
+        );
+        assert_eq!(
+            Clause::AwaitingCallOutcome(BoolClause { value: true }).kind_label(),
+            "awaiting_call_outcome"
+        );
+    }
+
+    #[test]
+    fn derived_clauses_validate_with_no_extra_rules() {
+        for clause in [
+            Clause::AwaitingResponse(BoolClause { value: true }),
+            Clause::ClientRepliedUnanswered(BoolClause { value: false }),
+            Clause::AwaitingCallOutcome(BoolClause { value: true }),
+        ] {
+            let filter = FilterDefinition {
+                version: 1,
+                clauses: vec![clause],
+            };
+            assert!(filter.validate().is_ok());
+        }
+    }
+
+    #[test]
+    fn derived_clauses_cannot_duplicate_kind_with_each_other_axis() {
+        // A duplicate of ITS OWN kind is still malformed, same as every
+        // other clause kind (§4b one-per-kind rule) — this is not a special
+        // case, just a pin that the new kinds went through the same
+        // `seen_kinds` check.
+        let filter = FilterDefinition {
+            version: 1,
+            clauses: vec![
+                Clause::AwaitingResponse(BoolClause { value: true }),
+                Clause::AwaitingResponse(BoolClause { value: false }),
+            ],
+        };
+        assert!(matches!(filter.validate(), Err(FilterError::Malformed)));
+    }
+
+    #[test]
+    fn describe_derived_clauses_true_and_false() {
+        let names = FilterNames::default();
+        let cases: [(Clause, &str); 6] = [
+            (
+                Clause::AwaitingResponse(BoolClause { value: true }),
+                "Awaiting a response",
+            ),
+            (
+                Clause::AwaitingResponse(BoolClause { value: false }),
+                "Not awaiting a response",
+            ),
+            (
+                Clause::ClientRepliedUnanswered(BoolClause { value: true }),
+                "Client replied, unanswered",
+            ),
+            (
+                Clause::ClientRepliedUnanswered(BoolClause { value: false }),
+                "No unanswered client reply",
+            ),
+            (
+                Clause::AwaitingCallOutcome(BoolClause { value: true }),
+                "A call of mine needs an outcome",
+            ),
+            (
+                Clause::AwaitingCallOutcome(BoolClause { value: false }),
+                "No call of mine needs an outcome",
+            ),
+        ];
+        for (clause, expected) in cases {
+            let filter = FilterDefinition {
+                version: 1,
+                clauses: vec![clause],
+            };
+            assert_eq!(filter.describe(&names), vec![expected.to_string()]);
+        }
+    }
+
+    #[test]
+    fn to_query_params_binds_the_three_derived_axes_and_always_binds_viewer_id() {
+        let viewer = UserId::new(Uuid::new_v4());
+        let filter = FilterDefinition {
+            version: 1,
+            clauses: vec![
+                Clause::AwaitingResponse(BoolClause { value: true }),
+                Clause::AwaitingCallOutcome(BoolClause { value: true }),
+            ],
+        };
+        let params = filter.to_query_params(viewer);
+        assert_eq!(params.awaiting_response, Some(true));
+        assert_eq!(params.client_replied_unanswered, None);
+        assert_eq!(params.awaiting_call_outcome, Some(true));
+        assert_eq!(params.viewer_id, viewer.0);
+
+        // Absent clauses: viewer_id is STILL bound (§2 — "always set",
+        // inert because every reader of it is itself NULL-guarded on
+        // awaiting_call_outcome).
+        let empty = FilterDefinition {
+            version: 1,
+            clauses: vec![],
+        };
+        let params = empty.to_query_params(viewer);
+        assert_eq!(params.awaiting_response, None);
+        assert_eq!(params.client_replied_unanswered, None);
+        assert_eq!(params.awaiting_call_outcome, None);
+        assert_eq!(params.viewer_id, viewer.0);
     }
 
     // --- M10: "me" alongside the viewer's own explicit {"user_id"} -------

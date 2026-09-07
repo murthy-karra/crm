@@ -4,7 +4,7 @@ import PrimeVue from 'primevue/config'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, apiFetch } from '../api/client'
-import type { MeResponse, PersonSummary, TodayItem, TodayResponse, TodaySourcesResponse } from '../api/types'
+import type { MeResponse, MemberTodayFeedsResponse, PersonSummary, TodayItem, TodayResponse, TodaySourcesResponse } from '../api/types'
 import TodayView from './TodayView.vue'
 
 vi.mock('../api/client', async (importOriginal) => {
@@ -66,7 +66,17 @@ function completeToday(items: TodayItem[] = []): TodayResponse {
     generated_at: new Date().toISOString(),
     items,
     truncated: false,
-    sources: { status: 'complete', issues: [] },
+    sources: { status: 'complete', issues: [], system_feed_issues: [] },
+  }
+}
+
+function defaultFeeds(): MemberTodayFeedsResponse {
+  return {
+    feeds: [
+      { feed_key: 'unanswered_inquiry', enabled: true, is_default: true, description: ['Awaiting a response'] },
+      { feed_key: 'client_replied', enabled: true, is_default: true, description: ['Client replied, unanswered'] },
+      { feed_key: 'call_outcome_needed', enabled: true, is_default: true, description: ['A call of mine needs an outcome'] },
+    ],
   }
 }
 
@@ -87,6 +97,7 @@ interface StubOptions {
   today?: () => TodayResponse
   sources?: () => TodaySourcesResponse | ApiError
   disable?: () => { enabled: false; changed: boolean } | ApiError
+  feeds?: () => MemberTodayFeedsResponse | ApiError
 }
 
 function stub(options: StubOptions = {}) {
@@ -95,6 +106,11 @@ function stub(options: StubOptions = {}) {
     if (path === '/today') return options.today?.() ?? completeToday()
     if (path === '/today/sources') {
       const response = options.sources?.() ?? sourceConfig(false)
+      if (response instanceof ApiError) throw response
+      return response
+    }
+    if (path === '/today/feeds') {
+      const response = options.feeds?.() ?? defaultFeeds()
       if (response instanceof ApiError) throw response
       return response
     }
@@ -199,6 +215,7 @@ describe('TodayView incomplete sources', () => {
         sources: {
           status: 'partial',
           issues: [{ list_id: LIST_A, name: 'Slow personal queue', revision: 4, error: 'unavailable' }],
+          system_feed_issues: [],
         },
       }),
     })
@@ -207,7 +224,7 @@ describe('TodayView incomplete sources', () => {
     expect(wrapper.text()).toContain('No available work to show')
     expect(wrapper.text()).not.toContain("You're all caught up")
     const notice = wrapper.get('[role="status"]')
-    expect(notice.text()).toContain('Some Today sources could not load')
+    expect(notice.text()).toContain('Some Today rules or sources could not load')
     expect(notice.get(`a[href="/lists/${LIST_A}"]`).text()).toBe('Slow personal queue')
     await notice.get('button').trigger('click')
     await flushPromises()
@@ -219,13 +236,74 @@ describe('TodayView incomplete sources', () => {
 
   it('renders the truthful unavailable-empty state without inventing source-specific issues', async () => {
     stub({
-      today: () => ({ ...completeToday(), sources: { status: 'unavailable', issues: [] } }),
+      today: () => ({ ...completeToday(), sources: { status: 'unavailable', issues: [], system_feed_issues: [] } }),
     })
     const { wrapper } = await mountView()
 
     expect(wrapper.text()).toContain('No available work to show')
     expect(wrapper.text()).toContain('Some sources could not load. Retry when they are available.')
     expect(wrapper.find('[role="status"] ul').exists()).toBe(false)
+  })
+})
+
+describe('TodayView Rules section markers and system_feed_issues notice (SLICE_011d §6)', () => {
+  it('renders Changed by your admin and Off for the corresponding MemberFeed states', async () => {
+    stub({
+      feeds: () => ({
+        feeds: [
+          { feed_key: 'unanswered_inquiry', enabled: true, is_default: false, description: ['Assignee: Me', 'Awaiting a response', 'Stage is Lead'] },
+          { feed_key: 'client_replied', enabled: false, is_default: true, description: ['Client replied, unanswered'] },
+          { feed_key: 'call_outcome_needed', enabled: true, is_default: true, description: ['A call of mine needs an outcome'] },
+        ],
+      }),
+    })
+    const { wrapper } = await mountView()
+    await wrapper.findAll('button').find((button) => button.text() === 'Manage sources')!.trigger('click')
+    await flushPromises()
+
+    const unanswered = wrapper.get('[data-testid="today-rules-unanswered_inquiry"]')
+    expect(unanswered.text()).toContain('Changed by your admin')
+    expect(unanswered.text()).toContain('Stage is Lead')
+    const clientReplied = wrapper.get('[data-testid="today-rules-client_replied"]')
+    expect(clientReplied.text()).toContain('Off')
+    const callFeed = wrapper.get('[data-testid="today-rules-call_outcome_needed"]')
+    expect(callFeed.text()).toContain('Default')
+  })
+
+  it('shows the partial notice from system_feed_issues alone, with no list-source issues present', async () => {
+    stub({
+      today: () => ({
+        ...completeToday(),
+        sources: {
+          status: 'partial',
+          issues: [],
+          system_feed_issues: [{ feed_key: 'client_replied', error: 'invalid_definition', fallback: true }],
+        },
+      }),
+    })
+    const { wrapper } = await mountView()
+
+    const notice = wrapper.get('[role="status"]')
+    expect(notice.text()).toContain('Some Today rules or sources could not load')
+    expect(notice.text()).toContain('The client replied rule is invalid; the default rule is being used.')
+    // No list-source-shaped bullet leaked in from an empty `issues` array.
+    expect(notice.findAll('li')).toHaveLength(1)
+  })
+
+  it('reads "<feed> could not load" for a non-fallback (unavailable) system feed issue', async () => {
+    stub({
+      today: () => ({
+        ...completeToday(),
+        sources: {
+          status: 'partial',
+          issues: [],
+          system_feed_issues: [{ feed_key: 'call_outcome_needed', error: 'unavailable', fallback: false }],
+        },
+      }),
+    })
+    const { wrapper } = await mountView()
+
+    expect(wrapper.get('[role="status"]').text()).toContain('Call outcome needed could not load.')
   })
 })
 

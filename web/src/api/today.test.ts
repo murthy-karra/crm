@@ -30,7 +30,7 @@ function today(sentinel: string): TodayResponse {
     generated_at: sentinel,
     items: [],
     truncated: false,
-    sources: { status: 'complete', issues: [] },
+    sources: { status: 'complete', issues: [], system_feed_issues: [] },
   }
 }
 

@@ -507,6 +507,61 @@ pub async fn insert_call_completed(
     Ok(row.id)
 }
 
+/// docs/specs/SLICE_011d.md §3: one fact per REAL admin change to a system
+/// feed (`updated`/`reverted`/`enabled`/`disabled`); never written on a
+/// no-op, seed, or backfill. PII-free: ids, clause JSON (ids and tokens
+/// only) and integers.
+pub struct TodayFeedChangedFact {
+    pub feed_key: &'static str,
+    pub change: &'static str,
+    pub from_revision: i64,
+    pub to_revision: i64,
+    pub enabled_after: bool,
+    /// `None` = canonical (the stored row's `filter` column, already
+    /// collapsed to `NULL` when it equals the canonical definition).
+    /// Pre-serialized JSON text, bound via `CAST(... AS text)::jsonb` —
+    /// this workspace's established pattern for binding a JSONB column
+    /// without the `sqlx` `json` feature (see `saved_list::commands`).
+    pub filter_after: Option<String>,
+    pub fresh_within_hours_after: Option<i32>,
+}
+
+pub async fn insert_today_feed_changed(
+    tx: &mut PgConnection,
+    envelope: &FactEnvelope,
+    fact: TodayFeedChangedFact,
+) -> Result<Uuid, sqlx::Error> {
+    let actor_kind = envelope.actor.kind().as_str();
+    let origin = envelope.origin.as_str();
+    let row = sqlx::query!(
+        r#"INSERT INTO today_feed_changed
+            (organization_id, actor_kind, actor_user_id, on_behalf_of_user_id, origin,
+             occurred_at, correlation_id, causation_id,
+             feed_key, change, from_revision, to_revision, enabled_after,
+             filter_after, fresh_within_hours_after)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,CAST($14 AS text)::jsonb,$15)
+           RETURNING id"#,
+        envelope.organization_id.0,
+        actor_kind,
+        envelope.actor.user_id().map(|id| id.0),
+        envelope.on_behalf_of_user_id.map(|id| id.0),
+        origin,
+        envelope.occurred_at,
+        envelope.correlation_id.0,
+        envelope.causation_id,
+        fact.feed_key,
+        fact.change,
+        fact.from_revision,
+        fact.to_revision,
+        fact.enabled_after,
+        fact.filter_after,
+        fact.fresh_within_hours_after,
+    )
+    .fetch_one(tx)
+    .await?;
+    Ok(row.id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

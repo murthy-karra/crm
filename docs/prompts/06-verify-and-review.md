@@ -42,3 +42,35 @@ returns to 02-specify.md. Do not edit the same files concurrently or repair
 code during a read-only review. Once fixes land, verify affected behavior and
 any required final-tree gates. Hand off the result and remaining release gate.
 ```
+
+## Calibrating review and adversarial findings to slice size
+
+Recorded 2026-09-06 after Slice 011b-sort, where about a third of the
+review-driven test additions guarded states that were unreachable by
+construction. Reviews and adversarial analyses are meant to produce long lists;
+the coordinator's job is to filter them, not to apply them wholesale.
+
+**Ask each reviewer and tester to tag every finding** with exactly one of:
+
+- `SEEN_HERE`: maps to a failure mode this codebase has actually had (cite the
+  verification record or decision that recorded it);
+- `BOUNDARY`: a customer-visible boundary such as a cap, an ordering key, a
+  quota, a revision, or money;
+- `TRUST`: tenant isolation, authorization, privacy, or an untrusted-input path;
+- `CONTRACT`: the wire shape or error precedence of an HTTP, realtime or tool
+  contract;
+- `RESTATES`: the same behaviour already proven one step away;
+- `UNREACHABLE`: a state blocked by a CHECK constraint, a typed enum, or a
+  server that never emits it, or behaviour a framework already guarantees.
+
+**Disposition by slice size.** For a size-S rung apply `SEEN_HERE`, `BOUNDARY`,
+`TRUST` and `CONTRACT` items; apply `RESTATES` and `UNREACHABLE` items only when
+the test is a few lines with no new fixture, and otherwise record them as
+LATER in one line each. For M and larger rungs, or any rung touching money,
+history or erasure, apply `RESTATES` too and decide `UNREACHABLE` case by case.
+A finding that is an actual defect is always applied regardless of tag.
+
+**Keep the cost visible.** Note in the verification record how many findings
+were applied and deferred, and watch test-file size: a single test file
+growing by more than a few hundred lines in one rung is a signal to filter
+harder or to split the file, not a sign of rigour.

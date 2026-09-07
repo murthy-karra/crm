@@ -112,6 +112,10 @@ copyable prompt explicitly brings these instructions into scope.
    database-backed runs in one checkout. Reuse applicable evidence, identifying
    whose run it was and which tree it covered. Repeat checks when changes,
    failures, or explicit gate requirements justify it, not just for ceremony.
+   Filter review and adversarial findings by slice size before applying them
+   (see the calibration section of [06-verify-and-review.md](06-verify-and-review.md)):
+   tests should guard failure modes this codebase has had, customer-visible
+   boundaries, trust checks and contracts, not states unreachable by construction.
 8. Send concise progress updates on findings, decisions, and blockers. Finish
    with the outcome, evidence, important limits, and the next action. Never mark
    skipped checks as passed, a draft as approved, or a prepared release as deployed.

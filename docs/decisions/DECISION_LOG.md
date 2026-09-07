@@ -1667,3 +1667,21 @@ zero-source HTTP pairing rests on run 1, run 2's frozen baseline series for it
 being disrupted by the same hazard); (3) the local commit and merge of the
 slice. Push and deployment were not authorized. The planner hazard itself is a
 pre-existing Slice 003/009 property; a durable fix is queued in PROJECT_STATE.
+
+### D-048 — A saved list's sort order is part of its definition (2026-09-06)
+
+Accepted by the user while specifying Slice 011b-sort. A saved People list's
+sort (one of Added, Name, Stage, Assignee, ascending or descending, applied by
+the server before the 500-row cap) is stored with the list, changes bump the
+list's revision, and editing it needs the list's write rights: the creator for
+a personal list, a current admin for a shared list. Everyone opening a shared
+list therefore sees the same first 500 rows; a member who wants another order
+duplicates the list, as for criteria. A per-viewer sort preference was
+declined for v1 (it needs a second table and mutation path and makes "which
+500" viewer-dependent). The user also accepted the default control: clickable
+column headers plus a compact "Added" column, a cheap-to-reverse UI choice.
+
+The concrete contracts belong to `docs/specs/SLICE_011b_SORT.md`. This
+decision does not authorize implementation, commit, merge, push or deployment.
+
+Blocks: nothing. Feeds the Slice 011b-sort implementation gate.

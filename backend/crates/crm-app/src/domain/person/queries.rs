@@ -10,6 +10,7 @@ use crate::domain::contact::{normalize_email, normalize_phone};
 use crate::domain::inquiry::parse::ParsedLead;
 use crate::domain::person::filter::PersonFilterParams;
 use crate::domain::person::model::{compute_display_name, PersonSummary, StageRef, UserRef};
+use crate::domain::person::sort::{PersonSort, SortDirection, SortKey};
 use crate::domain::person::visibility::PersonVisibilityScope;
 use crate::ids::{CorrelationId, OrganizationId, PersonId, StageId, UserId};
 
@@ -315,90 +316,9 @@ async fn filtered_summaries_with_reference_now(
     reference_now: Option<DateTime<Utc>>,
 ) -> Result<(Vec<PersonSummary>, bool), sqlx::Error> {
     let organization_id = scope.organization_id();
-    let mut rows = sqlx::query_as!(
+    let mut rows = sqlx::query_file_as!(
         PersonSummaryRow,
-        r#"SELECT
-             p.id, p.first_name, p.last_name, p.created_at,
-             s.id as stage_id, s.name as stage_name,
-             u.id as "assigned_user_id?", u.display_name as "assigned_user_display_name?",
-             (SELECT cm.value FROM contact_method cm
-                WHERE cm.person_id = p.id AND cm.organization_id = p.organization_id AND cm.kind = 'email'
-                ORDER BY cm.created_at ASC LIMIT 1) as "primary_email?",
-             (SELECT cm.value FROM contact_method cm
-                WHERE cm.person_id = p.id AND cm.organization_id = p.organization_id AND cm.kind = 'phone'
-                ORDER BY cm.created_at ASC LIMIT 1) as "primary_phone?",
-             (SELECT count(*) FROM inquiry i
-                WHERE i.person_id = p.id AND i.organization_id = p.organization_id) as "inquiry_count!",
-             (SELECT max(i.received_at) FROM inquiry i
-                WHERE i.person_id = p.id AND i.organization_id = p.organization_id) as "last_inquiry_at?"
-           FROM person p
-           JOIN stage s ON s.id = p.stage_id
-           LEFT JOIN app_user u ON u.id = p.assigned_user_id
-           LEFT JOIN LATERAL (
-               SELECT i2.source
-               FROM inquiry i2
-               WHERE i2.person_id = p.id AND i2.organization_id = p.organization_id
-               ORDER BY i2.received_at DESC, i2.id DESC
-               LIMIT 1
-           ) latest_src ON true
-           LEFT JOIN LATERAL (
-               SELECT max(i3.received_at) as ts
-               FROM inquiry i3
-               WHERE i3.person_id = p.id AND i3.organization_id = p.organization_id
-           ) last_inquiry_ts ON true
-           LEFT JOIN LATERAL (
-               SELECT max(ca.occurred_at) as ts
-               FROM contact_attempted ca
-               WHERE ca.person_id = p.id AND ca.organization_id = p.organization_id
-           ) last_contact_ts ON true
-           LEFT JOIN LATERAL (
-               SELECT max(cc.occurred_at) as ts
-               FROM correspondence_captured cc
-               WHERE cc.person_id = p.id AND cc.organization_id = p.organization_id
-                 AND cc.direction = 'inbound'
-           ) last_inbound_ts ON true
-           WHERE p.organization_id = $1
-             AND ($2::uuid[] IS NULL OR p.stage_id = ANY($2))
-             AND ($3::uuid[] IS NULL OR p.assigned_user_id = ANY($3)
-                  OR ($4::boolean AND p.assigned_user_id IS NULL))
-             AND ($5::text[] IS NULL OR latest_src.source = ANY($5))
-             AND ($6::int IS NULL
-                  OR COALESCE(p.created_at, '-infinity'::timestamptz) > COALESCE($21, now()) - make_interval(days => $6))
-             AND ($7::int IS NULL
-                  OR COALESCE(p.created_at, '-infinity'::timestamptz) <= COALESCE($21, now()) - make_interval(days => $7))
-             AND ($8::boolean IS NULL OR (p.created_at IS NULL) = $8)
-             AND ($9::int IS NULL
-                  OR COALESCE(last_inquiry_ts.ts, '-infinity'::timestamptz) > COALESCE($21, now()) - make_interval(days => $9))
-             AND ($10::int IS NULL
-                  OR COALESCE(last_inquiry_ts.ts, '-infinity'::timestamptz) <= COALESCE($21, now()) - make_interval(days => $10))
-             AND ($11::boolean IS NULL OR (last_inquiry_ts.ts IS NULL) = $11)
-             AND ($12::int IS NULL
-                  OR COALESCE(last_contact_ts.ts, '-infinity'::timestamptz) > COALESCE($21, now()) - make_interval(days => $12))
-             AND ($13::int IS NULL
-                  OR COALESCE(last_contact_ts.ts, '-infinity'::timestamptz) <= COALESCE($21, now()) - make_interval(days => $13))
-             AND ($14::boolean IS NULL OR (last_contact_ts.ts IS NULL) = $14)
-             AND ($15::int IS NULL
-                  OR COALESCE(last_inbound_ts.ts, '-infinity'::timestamptz) > COALESCE($21, now()) - make_interval(days => $15))
-             AND ($16::int IS NULL
-                  OR COALESCE(last_inbound_ts.ts, '-infinity'::timestamptz) <= COALESCE($21, now()) - make_interval(days => $16))
-             AND ($17::boolean IS NULL OR (last_inbound_ts.ts IS NULL) = $17)
-             AND ($18::boolean IS NULL OR (EXISTS (
-                   SELECT 1 FROM correspondence_captured cc2
-                   WHERE cc2.person_id = p.id AND cc2.organization_id = p.organization_id
-                     AND cc2.direction = 'inbound'
-                 )) = $18)
-             AND ($19::boolean IS NULL OR (EXISTS (
-                   SELECT 1 FROM contact_method cm3
-                   WHERE cm3.person_id = p.id AND cm3.organization_id = p.organization_id
-                     AND cm3.kind = 'phone'
-                 )) = $19)
-             AND ($20::boolean IS NULL OR (EXISTS (
-                   SELECT 1 FROM contact_method cm4
-                   WHERE cm4.person_id = p.id AND cm4.organization_id = p.organization_id
-                     AND cm4.kind = 'email'
-                 )) = $20)
-           ORDER BY p.created_at DESC, p.id ASC
-           LIMIT 501"#,
+        "src/domain/person/sql/filtered_summaries.sql",
         organization_id.0,
         params.stage_ids.as_deref(),
         params.assigned_user_ids.as_deref(),
@@ -423,6 +343,92 @@ async fn filtered_summaries_with_reference_now(
     )
     .fetch_all(conn)
     .await?;
+
+    let truncated = rows.len() > 500;
+    rows.truncate(500);
+    Ok((
+        rows.into_iter().map(PersonSummary::from).collect(),
+        truncated,
+    ))
+}
+
+/// `GET /api/people?sort=<...>` / a saved list's stored sort
+/// (docs/specs/SLICE_011b_SORT.md §4): dispatches to one of the seven
+/// static sorted statements, or — for [`PersonSort::DEFAULT`] (`created.desc`,
+/// which [`PersonSort::normalized`] maps to `None`) — falls back to the
+/// UNCHANGED [`filtered_summaries`] statement, so `sort=created.desc` stays
+/// byte-identical to an absent sort (spec §6). A sort with no ad-hoc filter
+/// still calls this with all-NULL clause parameters (`PersonFilterParams::
+/// default()`), which 011a pins as equal to the full list (spec §4).
+pub async fn filtered_summaries_sorted(
+    conn: &mut PgConnection,
+    scope: &PersonVisibilityScope,
+    params: &PersonFilterParams,
+    sort: PersonSort,
+) -> Result<(Vec<PersonSummary>, bool), sqlx::Error> {
+    let Some(sort) = sort.normalized() else {
+        return filtered_summaries(conn, scope, params).await;
+    };
+    let organization_id = scope.organization_id();
+
+    macro_rules! run_sorted {
+        ($path:literal) => {
+            sqlx::query_file_as!(
+                PersonSummaryRow,
+                $path,
+                organization_id.0,
+                params.stage_ids.as_deref(),
+                params.assigned_user_ids.as_deref(),
+                params.assigned_include_unassigned,
+                params.sources.as_deref(),
+                params.created_within_days,
+                params.created_not_within_days,
+                params.created_never,
+                params.last_inquiry_within_days,
+                params.last_inquiry_not_within_days,
+                params.last_inquiry_never,
+                params.last_contact_within_days,
+                params.last_contact_not_within_days,
+                params.last_contact_never,
+                params.last_inbound_within_days,
+                params.last_inbound_not_within_days,
+                params.last_inbound_never,
+                params.has_replied,
+                params.has_phone,
+                params.has_email,
+                None::<DateTime<Utc>>,
+            )
+            .fetch_all(&mut *conn)
+            .await?
+        };
+    }
+
+    let mut rows = match (sort.key, sort.direction) {
+        (SortKey::Created, SortDirection::Asc) => {
+            run_sorted!("src/domain/person/sql/filtered_summaries_created_asc.sql")
+        }
+        (SortKey::Created, SortDirection::Desc) => {
+            unreachable!("created.desc normalizes to None and is handled above")
+        }
+        (SortKey::Name, SortDirection::Asc) => {
+            run_sorted!("src/domain/person/sql/filtered_summaries_name_asc.sql")
+        }
+        (SortKey::Name, SortDirection::Desc) => {
+            run_sorted!("src/domain/person/sql/filtered_summaries_name_desc.sql")
+        }
+        (SortKey::Stage, SortDirection::Asc) => {
+            run_sorted!("src/domain/person/sql/filtered_summaries_stage_asc.sql")
+        }
+        (SortKey::Stage, SortDirection::Desc) => {
+            run_sorted!("src/domain/person/sql/filtered_summaries_stage_desc.sql")
+        }
+        (SortKey::Assignee, SortDirection::Asc) => {
+            run_sorted!("src/domain/person/sql/filtered_summaries_assignee_asc.sql")
+        }
+        (SortKey::Assignee, SortDirection::Desc) => {
+            run_sorted!("src/domain/person/sql/filtered_summaries_assignee_desc.sql")
+        }
+    };
 
     let truncated = rows.len() > 500;
     rows.truncate(500);
@@ -1201,5 +1207,115 @@ mod tests {
     fn escape_like_escapes_wildcards_and_backslash() {
         assert_eq!(escape_like("100%_done\\"), "100\\%\\_done\\\\");
         assert_eq!(escape_like("grace"), "grace");
+    }
+}
+
+/// Service-free text-parity check (docs/specs/SLICE_011b_SORT.md §4, §11.2):
+/// every sorted statement, with its top-level `ORDER BY` line (the one
+/// immediately preceding `LIMIT 501`) removed, is textually identical to
+/// the canonical `filtered_summaries.sql` after per-line trimming. Other
+/// `ORDER BY` lines inside subselects/LATERAL probes are left untouched by
+/// this strip and so must match verbatim between every file.
+#[cfg(test)]
+mod sort_sql_parity_tests {
+    const CANONICAL: &str = include_str!("sql/filtered_summaries.sql");
+    const CREATED_ASC: &str = include_str!("sql/filtered_summaries_created_asc.sql");
+    const NAME_ASC: &str = include_str!("sql/filtered_summaries_name_asc.sql");
+    const NAME_DESC: &str = include_str!("sql/filtered_summaries_name_desc.sql");
+    const STAGE_ASC: &str = include_str!("sql/filtered_summaries_stage_asc.sql");
+    const STAGE_DESC: &str = include_str!("sql/filtered_summaries_stage_desc.sql");
+    const ASSIGNEE_ASC: &str = include_str!("sql/filtered_summaries_assignee_asc.sql");
+    const ASSIGNEE_DESC: &str = include_str!("sql/filtered_summaries_assignee_desc.sql");
+
+    /// Removes exactly the top-level `ORDER BY ...` line (the one
+    /// immediately preceding the statement's `LIMIT 501`), returning every
+    /// other line unchanged and in order.
+    fn without_top_level_order_by(sql: &str) -> Vec<&str> {
+        let lines: Vec<&str> = sql.lines().collect();
+        let limit_idx = lines
+            .iter()
+            .position(|line| line.trim() == "LIMIT 501")
+            .expect("statement must end with a top-level LIMIT 501");
+        assert!(limit_idx > 0, "LIMIT 501 must not be the first line");
+        let order_idx = limit_idx - 1;
+        assert!(
+            lines[order_idx].trim_start().starts_with("ORDER BY"),
+            "the line immediately preceding LIMIT 501 must be the top-level ORDER BY"
+        );
+        let mut out = lines;
+        out.remove(order_idx);
+        out
+    }
+
+    fn trimmed_lines(sql: &str) -> Vec<String> {
+        without_top_level_order_by(sql)
+            .into_iter()
+            .map(|line| line.trim().to_string())
+            .collect()
+    }
+
+    #[test]
+    fn every_sorted_statement_matches_the_canonical_text_apart_from_its_order_by() {
+        let canonical = trimmed_lines(CANONICAL);
+        for (name, text) in [
+            ("created.asc", CREATED_ASC),
+            ("name.asc", NAME_ASC),
+            ("name.desc", NAME_DESC),
+            ("stage.asc", STAGE_ASC),
+            ("stage.desc", STAGE_DESC),
+            ("assignee.asc", ASSIGNEE_ASC),
+            ("assignee.desc", ASSIGNEE_DESC),
+        ] {
+            assert_eq!(
+                trimmed_lines(text),
+                canonical,
+                "{name}'s body (minus its ORDER BY line) must match the canonical text"
+            );
+        }
+    }
+
+    /// Pins each file's own top-level `ORDER BY` line to the exact text
+    /// spec §4 declares — the one permitted difference from canonical.
+    #[test]
+    fn each_sorted_statement_has_its_declared_order_by_line() {
+        let expected: [(&str, &str); 7] = [
+            (CREATED_ASC, "ORDER BY p.created_at ASC, p.id ASC"),
+            (
+                NAME_ASC,
+                "ORDER BY p.last_name ASC  NULLS LAST, p.first_name ASC  NULLS LAST, p.created_at DESC, p.id ASC",
+            ),
+            (
+                NAME_DESC,
+                "ORDER BY p.last_name DESC NULLS LAST, p.first_name DESC NULLS LAST, p.created_at DESC, p.id ASC",
+            ),
+            (STAGE_ASC, "ORDER BY s.position ASC,  p.created_at DESC, p.id ASC"),
+            (STAGE_DESC, "ORDER BY s.position DESC, p.created_at DESC, p.id ASC"),
+            (
+                ASSIGNEE_ASC,
+                "ORDER BY u.display_name ASC  NULLS LAST, p.created_at DESC, p.id ASC",
+            ),
+            (
+                ASSIGNEE_DESC,
+                "ORDER BY u.display_name DESC NULLS LAST, p.created_at DESC, p.id ASC",
+            ),
+        ];
+        for (text, expected_order_by) in expected {
+            let lines: Vec<&str> = text.lines().collect();
+            let limit_idx = lines
+                .iter()
+                .position(|line| line.trim() == "LIMIT 501")
+                .unwrap();
+            assert_eq!(lines[limit_idx - 1].trim(), expected_order_by);
+        }
+        // The canonical file's own (unsorted-request) ORDER BY is unchanged.
+        let canonical_lines: Vec<&str> = CANONICAL.lines().collect();
+        let limit_idx = canonical_lines
+            .iter()
+            .position(|line| line.trim() == "LIMIT 501")
+            .unwrap();
+        assert_eq!(
+            canonical_lines[limit_idx - 1].trim(),
+            "ORDER BY p.created_at DESC, p.id ASC"
+        );
     }
 }

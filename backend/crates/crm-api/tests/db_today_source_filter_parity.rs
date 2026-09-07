@@ -244,6 +244,7 @@ async fn create_and_enable_source(
             scope,
             name: name.to_string(),
             filter,
+            sort: None,
         },
     )
     .await
@@ -1053,6 +1054,7 @@ async fn today_source_parity_resolves_shared_me_and_unassigned_for_each_viewer(
             scope: SavedListScope::Shared,
             name: "Viewer-relative phone queue".to_string(),
             filter: filter.clone(),
+            sort: None,
         },
     )
     .await

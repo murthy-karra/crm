@@ -1,7 +1,7 @@
 # Project State
 
-Last updated: 2026-09-06, late evening (Slice 011c complete and pushed; 011b and
-011c branches deleted after the merge).
+Last updated: 2026-09-06, late evening (Slice 011b-sort verified on branch
+`slice-011b-sort`, awaiting commit and merge; 011c complete and pushed).
 
 ## Current phase
 
@@ -60,6 +60,26 @@ an explicit notice when one source fails** (D-047). 011b-sort remains separately
 queued; it is not a functional prerequisite for 011c. The approved specification
 preserves built-in Today work, private-list visibility and deterministic order,
 and addresses the measured cost of evaluating filters against a large history.
+
+## Now planning: Slice 011b-sort
+
+Started 2026-09-06 (late evening) at the user's request. The planner's
+recommendation is reconciled into a draft specification
+[SLICE_011b_SORT.md](../specs/SLICE_011b_SORT.md) and brief
+[SLICE_011b_SORT_IMPL.md](../tasks/SLICE_011b_SORT_IMPL.md); independent
+review returned READY-WITH-FIXES and the eight corrections are applied. The
+user took the one genuine decision, **D-048**: sort is part of the list
+definition, with clickable headers plus an "Added" column as the accepted
+control. The user approved implementation the same evening. Branch
+`slice-011b-sort` from `main` at `31c9980`: two Claude Sonnet 5 lanes built the
+backend and Web halves in parallel, the coordinator passed the 100k
+performance gate (sorted p95 20–132 ms against the same-run 343.6 ms
+four-clause baseline; custom plans retained; no lever needed), independent
+review and adversarial analysis found no P1/P2 defect and their test and
+hardening items were applied by two fix lanes, and the final gates passed
+once on the final tree (Rust 689 + 5 doctests, Web 518, database 459 of 459).
+Full evidence: [SLICE_011b_SORT_VERIFICATION.md](../tasks/SLICE_011b_SORT_VERIFICATION.md).
+**Uncommitted; awaiting the user's commit approval, then merge.**
 
 ## Previous completed slice
 
@@ -152,6 +172,7 @@ new migrations; restarting it needs `./scripts/db-migrate` first.
 
 ## Last accepted decision
 
+D-048 (2026-09-06) — a saved list's sort order is part of its definition.
 D-047 (2026-09-06) — up to five Today sources per agent and explicit partial
 availability. D-046 preserves creator-only personal lists and separate
 shared/personal caps. D-045 governs the current white/glass Web design; D-044 establishes

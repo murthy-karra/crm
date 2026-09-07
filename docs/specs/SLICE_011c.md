@@ -228,6 +228,11 @@ fan-out and memory but does not establish performance feasibility (§8).
 
 ### Membership and ordering
 
+*Pointer (Slice 011b-sort, 2026-09-06):* a saved list's own sort (D-048) is
+explicitly not an ordering input here; source evaluation reads the filter only,
+and a parity test pins identical Today bodies for a sorted list and its
+unsorted duplicate.
+
 Existing inquiry/reply candidates keep their current priority, action,
 `waiting_since` and precedence. A B member qualifying only by outcome keeps
 `low`/`set_outcome`, even if it also matches a list. A new list-only item uses

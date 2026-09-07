@@ -16,6 +16,7 @@ use crm_api::auth::AuthContext;
 use crm_api::domain::admin::{MembershipStatus, Role};
 use crm_api::domain::envelope::{CommandContext, Origin};
 use crm_api::domain::person::filter::FilterDefinition;
+use crm_api::domain::person::sort::PersonSort;
 use crm_api::domain::person::PersonVisibilityScope;
 use crm_api::domain::saved_list::{
     self, CreateSavedList, DeleteSavedList, SavedListError, SavedListScope,
@@ -62,6 +63,17 @@ async fn create_list(
     scope: SavedListScope,
     name: &str,
 ) -> saved_list::CreateSavedListOutcome {
+    create_list_with_sort(app_pool, organization_id, actor_user_id, scope, name, None).await
+}
+
+async fn create_list_with_sort(
+    app_pool: &PgPool,
+    organization_id: Uuid,
+    actor_user_id: Uuid,
+    scope: SavedListScope,
+    name: &str,
+    sort: Option<PersonSort>,
+) -> saved_list::CreateSavedListOutcome {
     saved_list::create_saved_list(
         app_pool,
         &command_context(organization_id, actor_user_id),
@@ -70,6 +82,7 @@ async fn create_list(
             scope,
             name: name.to_string(),
             filter: empty_filter(),
+            sort,
         },
     )
     .await
@@ -757,4 +770,163 @@ async fn deleting_saved_list_removes_all_today_source_preferences(migrator_pool:
     .await
     .unwrap();
     assert_eq!(remaining_preferences, 0);
+}
+
+/// docs/specs/SLICE_011b_SORT.md §7, §11.10: Today never uses list order —
+/// source evaluation reads the filter only (`today/sources.rs`'s
+/// `evaluated_sources_raw` selects `filter`, never `sort_key`/
+/// `sort_direction`). A sorted list and its unsorted duplicate (same
+/// filter, only the stored sort differs) are therefore indistinguishable
+/// Today sources: identical items, identical `ListMember` reasons for both
+/// list ids on every matching Person. A list whose stored sort is
+/// unreadable still evaluates as a source, because evaluation never reads
+/// sort at all.
+#[sqlx::test]
+#[ignore]
+async fn sorted_list_and_its_unsorted_duplicate_produce_identical_today_bodies(
+    migrator_pool: PgPool,
+) {
+    let (organization_id, owner_id) = create_org_with_stages_and_member(
+        &migrator_pool,
+        "Today sort parity",
+        "owner@today-sort-parity.test",
+        "Owner",
+        PW,
+    )
+    .await;
+    let app_pool = connect_as_app(&migrator_pool).await;
+    let stage_id: Uuid = sqlx::query_scalar(
+        "SELECT id FROM stage WHERE organization_id = $1 ORDER BY position, id LIMIT 1",
+    )
+    .bind(organization_id)
+    .fetch_one(&migrator_pool)
+    .await
+    .unwrap();
+    let mut person_ids = Vec::new();
+    for name in ["Amelia", "Zeke"] {
+        let person_id: Uuid = sqlx::query_scalar(
+            "INSERT INTO person (organization_id, stage_id, first_name, created_at)\
+             VALUES ($1, $2, $3, now()) RETURNING id",
+        )
+        .bind(organization_id)
+        .bind(stage_id)
+        .bind(name)
+        .fetch_one(&migrator_pool)
+        .await
+        .unwrap();
+        person_ids.push(person_id);
+    }
+
+    // Same (empty, matches-everything) filter; only the stored sort
+    // differs between the two lists.
+    let unsorted = create_list(
+        &app_pool,
+        organization_id,
+        owner_id,
+        SavedListScope::Personal,
+        "Unsorted duplicate",
+    )
+    .await;
+    let sorted = create_list_with_sort(
+        &app_pool,
+        organization_id,
+        owner_id,
+        SavedListScope::Personal,
+        "Sorted duplicate",
+        Some(PersonSort::parse("name.asc").unwrap()),
+    )
+    .await;
+    for list in [&unsorted, &sorted] {
+        assert_change(
+            enable(
+                &app_pool,
+                organization_id,
+                owner_id,
+                list.list.id,
+                list.list.revision,
+            )
+            .await
+            .unwrap(),
+            true,
+            true,
+        );
+    }
+
+    let mut conn = app_pool.acquire().await.unwrap();
+    let today = today::query(
+        &mut conn,
+        &PersonVisibilityScope::Organization(OrganizationId::new(organization_id)),
+        UserId::new(owner_id),
+        Utc::now(),
+    )
+    .await
+    .unwrap();
+    drop(conn);
+    assert_eq!(
+        today.sources.status,
+        crm_api::domain::today::TodaySourcesStatus::Complete,
+        "source evaluation should be complete: {:#?}",
+        today.sources
+    );
+    assert_eq!(today.items.len(), 2);
+    for item in &today.items {
+        assert!(person_ids.contains(&item.person.id.as_uuid()));
+        let reason_list_ids: std::collections::HashSet<_> = item
+            .reasons
+            .iter()
+            .filter_map(|reason| match reason {
+                TodayReason::ListMember { list_id, .. } => Some(*list_id),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            reason_list_ids,
+            [unsorted.list.id, sorted.list.id].into_iter().collect(),
+            "both the sorted list and its unsorted duplicate must match every Person identically"
+        );
+    }
+
+    // A list whose stored sort is unreadable still evaluates as a Today
+    // source — source evaluation reads the filter only.
+    sqlx::query("ALTER TABLE saved_list DROP CONSTRAINT saved_list_sort_key_check")
+        .execute(&migrator_pool)
+        .await
+        .unwrap();
+    sqlx::query(
+        "UPDATE saved_list SET sort_key = 'distance', sort_direction = 'asc' WHERE id = $1",
+    )
+    .bind(sorted.list.id.as_uuid())
+    .execute(&migrator_pool)
+    .await
+    .unwrap();
+
+    let mut conn = app_pool.acquire().await.unwrap();
+    let today_after_skew = today::query(
+        &mut conn,
+        &PersonVisibilityScope::Organization(OrganizationId::new(organization_id)),
+        UserId::new(owner_id),
+        Utc::now(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        today_after_skew.sources.status,
+        crm_api::domain::today::TodaySourcesStatus::Complete,
+        "an unreadable stored sort must not degrade source evaluation"
+    );
+    assert_eq!(today_after_skew.items.len(), 2);
+    for item in &today_after_skew.items {
+        let reason_list_ids: std::collections::HashSet<_> = item
+            .reasons
+            .iter()
+            .filter_map(|reason| match reason {
+                TodayReason::ListMember { list_id, .. } => Some(*list_id),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            reason_list_ids.contains(&sorted.list.id),
+            "the unreadable-sort list must still evaluate as a source"
+        );
+    }
 }

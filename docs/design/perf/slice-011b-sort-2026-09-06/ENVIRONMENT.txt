@@ -1,0 +1,8 @@
+captured_at=2026-09-07T05:58:48Z
+branch=slice-011b-sort base=31c9980 tree=uncommitted
+api_binary=backend/target/debug/crm-api (debug profile, as PERF_BASELINE; pid 54346, started 22:56 local)
+database=PostgreSQL 18.6 (Debian 18.6-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit
+org=Perf Test Realty people=100060 (seeded 2026-08-29, retained)
+host=MacBook Pro M1 Max 10 cores 64 GB, macOS 26.6.2, on battery; load before bench { 5.45 5.45 4.99 }
+bench=./scripts/perf bench (15 iterations per case, p95 = 14th sample), all cases in one run
+plans=psql PREPARE/EXECUTE x6 then EXPLAIN (ANALYZE, BUFFERS, TIMING OFF) on the 7th execution, jit off, per statement, unfiltered and with one assigned_to clause

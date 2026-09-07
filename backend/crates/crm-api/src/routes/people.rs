@@ -14,8 +14,9 @@ use crate::domain::commands::{
 };
 use crate::domain::envelope::CommandContext;
 use crate::domain::inquiry::queries as inquiry_queries;
-use crate::domain::person::filter::FilterDefinition;
+use crate::domain::person::filter::{FilterDefinition, PersonFilterParams};
 use crate::domain::person::queries as person_queries;
+use crate::domain::person::sort::PersonSort;
 use crate::domain::person::PersonVisibilityScope;
 use crate::error::ApiError;
 use crate::ids::{PersonId, StageId, UserId};
@@ -61,16 +62,24 @@ impl FromRequestParts<AppState> for PersonIdPath {
     }
 }
 
-/// `?filter=` (docs/specs/SLICE_011a.md §5a): the query struct has no
+/// `?filter=` (docs/specs/SLICE_011a.md §5a) and `?sort=`
+/// (docs/specs/SLICE_011b_SORT.md §6): the query struct has no
 /// `deny_unknown_fields` — unrelated query params (`?foo=bar`) are ignored
 /// exactly as today, per the spec's stated divergence from the filter
 /// JSON's own strict decode discipline. `filter: Option<String>` distinguishes
 /// a truly ABSENT param (`None`, legacy path) from a PRESENT-but-empty one
-/// (`Some("")`, a 400 — empty string is not JSON).
+/// (`Some("")`, a 400 — empty string is not JSON). `sort: Option<PersonSort>`
+/// decodes through `PersonSort`'s own `TryFrom<String>`-backed `Deserialize`
+/// directly in this typed extractor, so a malformed, empty, or repeated
+/// `sort` fails EXTRACTION itself — a 400 before any pool acquisition (spec
+/// §6) — exactly like axum's existing scalar-field handling already gives
+/// `filter` for a repeated param.
 #[derive(Deserialize)]
 struct ListPeopleQuery {
     #[serde(default)]
     filter: Option<String>,
+    #[serde(default)]
+    sort: Option<PersonSort>,
 }
 
 /// `auth: AuthContext` is listed BEFORE the query extractor so a garbage or
@@ -92,13 +101,33 @@ async fn list_people(
     let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
     let scope = PersonVisibilityScope::from_auth(&auth);
 
-    let (people, truncated) = match query.filter {
-        // Absent `filter` -> the untouched legacy path: same query, same
-        // `.sqlx` entry, same shape, same order, same cap math (§5a).
-        None => person_queries::list_summaries(&mut conn, &scope)
+    // Observability (docs/specs/SLICE_011b_SORT.md §6): the static sort
+    // token, beside `filter_kinds` — NEVER a clause value. Recorded for any
+    // successfully-decoded `sort`, including an explicit `created.desc`
+    // (which still normalizes to the legacy query path below).
+    if let Some(sort) = query.sort {
+        tracing::Span::current().record("sort", sort.token());
+    }
+    // `None` here means "no sort" OR "sort=created.desc" — both take the
+    // byte-identical legacy path (spec §4, §6).
+    let sort = query.sort.and_then(PersonSort::normalized);
+
+    let (people, truncated) = match (query.filter, sort) {
+        // Absent `filter`, no (or default) `sort` -> the untouched legacy
+        // path: same query, same `.sqlx` entry, same shape, same order,
+        // same cap math (§5a).
+        (None, None) => person_queries::list_summaries(&mut conn, &scope)
             .await
             .map_err(|_| ApiError::Unavailable)?,
-        Some(raw) => {
+        // A sort with no ad-hoc filter still runs a sorted statement, with
+        // all-NULL clause parameters — pinned equal to the full list (§4).
+        (None, Some(sort)) => {
+            let params = PersonFilterParams::default();
+            person_queries::filtered_summaries_sorted(&mut conn, &scope, &params, sort)
+                .await
+                .map_err(|_| ApiError::Unavailable)?
+        }
+        (Some(raw), sort) => {
             // Present-but-empty `?filter=` (or `?filter`) is a 400: empty
             // string is not JSON, and only a truly absent param is the
             // legacy path (§5a).
@@ -129,9 +158,16 @@ async fn list_people(
             // appended to the bound user array — never a wire value
             // reaching SQL as a token (§4c).
             let params = filter.to_query_params(auth.actor_user_id);
-            person_queries::filtered_summaries(&mut conn, &scope, &params)
-                .await
-                .map_err(|_| ApiError::Unavailable)?
+            match sort {
+                None => person_queries::filtered_summaries(&mut conn, &scope, &params)
+                    .await
+                    .map_err(|_| ApiError::Unavailable)?,
+                Some(sort) => {
+                    person_queries::filtered_summaries_sorted(&mut conn, &scope, &params, sort)
+                        .await
+                        .map_err(|_| ApiError::Unavailable)?
+                }
+            }
         }
     };
 

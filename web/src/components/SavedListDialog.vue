@@ -15,6 +15,10 @@ const props = withDefaults(defineProps<{
   submitLabel: string
   initialName: string
   description?: string
+  /** SLICE_011b_SORT.md §9: "one summary line, e.g. 'Sorted by Name (A–Z)'".
+   *  Omitted (empty/absent) for the default order — pass `lib/sort.ts`'s
+   *  `normalizeSort`+`sortLabel` result, never the raw working sort. */
+  sortSummary?: string
   initialScope?: SavedListScope
   allowShared: boolean
   isPending: boolean
@@ -24,6 +28,7 @@ const props = withDefaults(defineProps<{
 }>(), {
   initialScope: 'personal',
   description: undefined,
+  sortSummary: undefined,
   error: undefined,
 })
 
@@ -108,6 +113,13 @@ function errorMessage(error: unknown) {
         class="mb-4 text-small text-text-muted"
       >
         {{ description }}
+      </p>
+      <p
+        v-if="sortSummary"
+        class="mb-4 text-small text-text-muted"
+        data-testid="saved-list-sort-summary"
+      >
+        {{ sortSummary }}
       </p>
       <label class="block">
         <span :class="LABEL_CLASSES">List name</span>

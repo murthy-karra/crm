@@ -9,6 +9,7 @@ use crate::auth::AuthContext;
 use crate::domain::admin::{queries as admin_queries, Role};
 use crate::domain::person::filter::{FilterDefinition, FilterError, FilterNames};
 use crate::domain::person::queries as person_queries;
+use crate::domain::person::sort::{PersonSort, SortDecodeResult};
 use crate::domain::person::PersonVisibilityScope;
 use crate::domain::stage;
 use crate::ids::{OrganizationId, SavedListId, UserId};
@@ -77,6 +78,12 @@ pub struct SavedListDetail {
     /// `None` only for structurally unsupported stored content. Reference
     /// stale typed definitions remain visible so their writer can repair.
     pub filter: Option<FilterDefinition>,
+    /// `None` for the default order OR an unreadable stored sort (spec §5;
+    /// the latter also forces `filter: None` and
+    /// `filter_error: Some(UnsupportedFilter)` even when the filter itself
+    /// is otherwise valid — one fail-closed disposition for the whole
+    /// definition).
+    pub sort: Option<PersonSort>,
     pub description: Vec<String>,
     pub filter_error: Option<SavedListFilterError>,
 }
@@ -100,9 +107,20 @@ pub(crate) struct SavedListStoredRow {
     /// to definition evaluation so metadata, tombstone protection, and a
     /// create replay never turn into an availability error.
     pub filter: Option<serde_json::Value>,
+    /// Raw stored sort columns (docs/specs/SLICE_011b_SORT.md §5) — decode
+    /// on demand via [`Self::sort_decode`], mirroring `filter`'s
+    /// decode-on-demand `serde_json::Value` above.
+    pub sort_key: Option<String>,
+    pub sort_direction: Option<String>,
     pub revision: i64,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+impl SavedListStoredRow {
+    pub(crate) fn sort_decode(&self) -> SortDecodeResult {
+        PersonSort::decode_stored(self.sort_key.as_deref(), self.sort_direction.as_deref())
+    }
 }
 
 pub(crate) struct SavedListStoredRowDb {
@@ -111,6 +129,8 @@ pub(crate) struct SavedListStoredRowDb {
     pub(crate) scope: String,
     pub(crate) name: String,
     pub(crate) filter: String,
+    pub(crate) sort_key: Option<String>,
+    pub(crate) sort_direction: Option<String>,
     pub(crate) revision: i64,
     pub(crate) created_at: DateTime<Utc>,
     pub(crate) updated_at: DateTime<Utc>,
@@ -126,6 +146,8 @@ impl TryFrom<SavedListStoredRowDb> for SavedListStoredRow {
             scope: SavedListScope::from_db(&value.scope)?,
             name: value.name,
             filter: serde_json::from_str(&value.filter).ok(),
+            sort_key: value.sort_key,
+            sort_direction: value.sort_direction,
             revision: value.revision,
             created_at: value.created_at,
             updated_at: value.updated_at,
@@ -226,6 +248,7 @@ pub(crate) async fn visible_live_row(
         SavedListStoredRowDb,
         r#"SELECT id, created_by_user_id, scope,
                   name as "name!", filter::text as "filter!",
+                  sort_key, sort_direction,
                   revision, created_at, updated_at
            FROM saved_list
            WHERE id = $1
@@ -253,6 +276,7 @@ pub(crate) async fn visible_live_row_for_update(
         SavedListStoredRowDb,
         r#"SELECT id, created_by_user_id, scope,
                   name as "name!", filter::text as "filter!",
+                  sort_key, sort_direction,
                   revision, created_at, updated_at
            FROM saved_list
            WHERE id = $1
@@ -288,10 +312,31 @@ pub async fn saved_list_detail(
     };
 
     let list = metadata_for(&row, auth.actor_user_id, auth.role);
+
+    // A stored sort this binary cannot read fails the WHOLE definition
+    // closed (spec §5): `filter: null, sort: null,
+    // filter_error: unsupported_filter`, even when the filter itself is
+    // otherwise perfectly valid — one fail-closed disposition, checked
+    // before the filter is even decoded.
+    let sort = match row.sort_decode() {
+        SortDecodeResult::Unreadable => {
+            return Ok(Some(SavedListDetail {
+                list,
+                filter: None,
+                sort: None,
+                description: Vec::new(),
+                filter_error: Some(SavedListFilterError::UnsupportedFilter),
+            }));
+        }
+        SortDecodeResult::Default => None,
+        SortDecodeResult::Sort(sort) => Some(sort),
+    };
+
     let Some(filter) = row.filter.as_ref().and_then(decode_structural_filter) else {
         return Ok(Some(SavedListDetail {
             list,
             filter: None,
+            sort: None,
             description: Vec::new(),
             filter_error: Some(SavedListFilterError::UnsupportedFilter),
         }));
@@ -315,6 +360,7 @@ pub async fn saved_list_detail(
     Ok(Some(SavedListDetail {
         list,
         filter: Some(filter),
+        sort,
         description,
         filter_error,
     }))
@@ -373,6 +419,11 @@ pub async fn count_saved_list_matches(
 
     if row.revision != expected_revision {
         return Err(SavedListError::Conflict);
+    }
+    // Count ignores sort's VALUE, but an unreadable stored sort still fails
+    // the whole definition closed (spec §5) — 422, never `count: 0`.
+    if row.sort_decode() == SortDecodeResult::Unreadable {
+        return Err(SavedListError::UnsupportedFilter);
     }
     let filter = row
         .filter

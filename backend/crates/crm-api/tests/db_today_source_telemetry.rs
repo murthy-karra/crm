@@ -138,6 +138,7 @@ async fn today_source_spans_record_safe_structured_fields_without_private_conten
                     sources: vec![SOURCE_VALUE.to_string()],
                 })],
             },
+            sort: None,
         },
     )
     .await

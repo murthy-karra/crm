@@ -161,6 +161,36 @@ def cmd_seed(args):
     print(f"seeded [{args.start}, {args.target}) (+{n_attempts} attempts) in {(time.time() - t0) / 60:.1f}m", flush=True)
 
 
+# Slice 011b-sort §4 performance gate: every non-default sort (all seven —
+# `created.asc` included; only `created.desc` is the untouched default and
+# needs no separate case) run BOTH unfiltered and with one positive clause,
+# reusing `assigned_to one user`'s clause shape as the "one positive
+# clause" case throughout so the six unindexed sorts' extra LATERAL-probe
+# cost is measured against the same clause every time.
+SORTS = [
+    "created.asc",
+    "name.asc",
+    "name.desc",
+    "stage.asc",
+    "stage.desc",
+    "assignee.asc",
+    "assignee.desc",
+]
+
+
+def _sort_cases(member_ids):
+    one_clause = flt([{"kind": "assigned_to", "assignees": [{"user_id": member_ids[0]}]}])
+    cases = []
+    for sort in SORTS:
+        cases.append(("admin", f"sort {sort} unfiltered", f"/api/people?sort={sort}"))
+        cases.append((
+            "admin",
+            f"sort {sort} + assigned_to one user",
+            f"/api/people?filter={one_clause}&sort={sort}",
+        ))
+    return cases
+
+
 def bench_cases(member_ids):
     return [
         ("admin", "people unfiltered (500 cap)", "/api/people"),
@@ -174,6 +204,7 @@ def bench_cases(member_ids):
          f"/api/people?filter={flt([{'kind': 'last_contact', 'age': {'op': 'within_days', 'days': 7}}])}"),
         ("admin", "4-clause combo",
          f"/api/people?filter={flt([{'kind': 'assigned_to', 'assignees': ['me', 'unassigned']}, {'kind': 'source', 'sources': ['zillow', 'website']}, {'kind': 'has_email', 'value': True}, {'kind': 'last_inbound', 'age': {'op': 'never'}}])}"),
+        *_sort_cases(member_ids),
         ("admin", "today (admin)", "/api/today"),
         ("member", "today (member m1)", "/api/today"),
     ]

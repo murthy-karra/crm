@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE saved_list\n           SET name = NULL, filter = NULL, revision = revision + 1,\n               deleted_at = now(), updated_at = now(),\n               sort_key = NULL, sort_direction = NULL\n           WHERE id = $1\n             AND organization_id = $2\n             AND deleted_at IS NULL\n             AND revision = $3\n             AND (scope = 'shared' OR created_by_user_id = $4)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "70bd41ea6a65f69182a9d02decb9000a392e187af095b40c37f57a965a29a06a"
+}

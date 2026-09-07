@@ -37,6 +37,17 @@ import { formatAbsoluteTime, formatRelativeTime, initials } from '../lib/format'
 import { buttonClasses } from '../lib/controls'
 import { describeApiError } from '../lib/errors'
 import { canonicalFilterDefinition, committedClauses, parseFilter, serializeFilter } from '../lib/filter'
+import {
+  DEFAULT_SORT,
+  isSortKey,
+  normalizeSort,
+  parseSortToken,
+  serializeSort,
+  sortLabel,
+  sortsEqual,
+  type PersonSort,
+} from '../lib/sort'
+import type { TableSort } from '../components/DataTable.vue'
 
 const props = withDefaults(defineProps<{ savedListId?: string }>(), { savedListId: '' })
 
@@ -66,6 +77,11 @@ function retryOptions(kind: 'stage' | 'assigned_to' | 'source') {
 const route = useRoute()
 const router = useRouter()
 const clauses = ref<FilterClause[]>([])
+// SLICE_011b_SORT.md §9: the working sort, mirroring `clauses` — URL-synced
+// on plain /people, loaded from (and reset by) the saved definition on a
+// named list, and always `undefined` for the default order (`created.desc`)
+// per `normalizeSort`.
+const sortState = ref<PersonSort | undefined>(undefined)
 const filterOrigin = ref<'url' | null>(null)
 const editorRevision = ref(0)
 const isNamedList = computed(() => props.savedListId !== '')
@@ -75,6 +91,7 @@ interface SavedListBaseline {
   revision: number
   name: string
   filter: FilterDefinition
+  sort: PersonSort | undefined
 }
 
 function cloneFilter(filter: FilterDefinition): FilterDefinition {
@@ -92,10 +109,23 @@ const savedListQuery = useSavedList(orgId, actorId, computed(() => props.savedLi
 const savedBaseline = ref<SavedListBaseline | null>(null)
 const nameDraft = ref('')
 
+function parseStoredSort(token: SavedListDetailResponse['sort']): PersonSort | undefined {
+  return token ? (parseSortToken(token) ?? undefined) : undefined
+}
+
+// A non-null stored sort this binary cannot parse (e.g. a key added by a
+// newer release) must fail closed exactly like an unreadable filter — never
+// silently coerced to the default order, which would let an unrelated Save
+// submit `sort: null` and clobber the author's actual sort (§8, §10).
+function storedSortUnreadable(detail: SavedListDetailResponse): boolean {
+  return detail.sort !== null && parseSortToken(detail.sort) === null
+}
+
 function installSavedDetail(detail: SavedListDetailResponse, preserveLocalDraft = false) {
-  if (detail.filter === null) {
+  if (detail.filter === null || storedSortUnreadable(detail)) {
     savedBaseline.value = null
     clauses.value = []
+    sortState.value = undefined
     nameDraft.value = detail.list.name
     return
   }
@@ -104,10 +134,12 @@ function installSavedDetail(detail: SavedListDetailResponse, preserveLocalDraft 
     revision: detail.list.revision,
     name: detail.list.name,
     filter: cloneFilter(detail.filter),
+    sort: parseStoredSort(detail.sort),
   }
   if (preserveLocalDraft) return
   nameDraft.value = detail.list.name
   clauses.value = committedClauses(cloneFilter(detail.filter).clauses)
+  sortState.value = savedBaseline.value.sort
   filterOrigin.value = null
   editorRevision.value++
 }
@@ -135,10 +167,25 @@ const serializedFilter = computed(() => {
   return workingFilter.value.clauses.length > 0 ? serializeFilter(workingFilter.value.clauses) : undefined
 })
 const hasFilter = computed(() => serializedFilter.value !== undefined)
+// SLICE_011b_SORT.md §6, §9: the normalized wire token — `undefined` for the
+// default order, byte-identical to omitting `sort` everywhere (query key,
+// `?sort=` URL param, saved-list request body).
+const sortToken = computed(() => {
+  const normalized = normalizeSort(sortState.value)
+  return normalized ? serializeSort(normalized) : undefined
+})
+// The sort actually applied server-side, including the unlabeled default —
+// used only to keep the Added column visibly "active" by default (§2
+// decision 2: "a new compact Added column ... so the default order has a
+// visible header") and to always name the truncation cap's order. Never used
+// for the dirty/URL/save comparisons below, which stay on the normalized form.
+const displaySort = computed<PersonSort>(() => sortState.value ?? DEFAULT_SORT)
+const truncatedSortLabel = computed(() => sortLabel(displaySort.value))
 const isDirty = computed(() => {
   if (!isNamedList.value || !savedBaseline.value) return false
   return nameDraft.value.trim() !== savedBaseline.value.name ||
-    !filtersEqual(workingFilter.value, savedBaseline.value.filter)
+    !filtersEqual(workingFilter.value, savedBaseline.value.filter) ||
+    !sortsEqual(sortState.value, savedBaseline.value.sort)
 })
 const workingFilterChanged = computed(() => savedBaseline.value !== null &&
   !filtersEqual(workingFilter.value, savedBaseline.value.filter),
@@ -263,61 +310,105 @@ watch(
   },
   { immediate: true },
 )
-let pendingWrite: { value: string | undefined } | null = null
+let pendingUrlWrite: { filter: string | undefined; sort: string | undefined } | null = null
 
-function writeFilterParam(value: string | undefined) {
+// SLICE_011b_SORT.md §9: sort is URL-synced through the SAME replace path as
+// filter — one navigation carries both, so a filter edit and a sort click
+// (or the recovery clear below) can never race each other's `router.replace`
+// and drop one axis's value.
+function syncUrlParams() {
   if (isNamedList.value) return
-  // Compare the raw value: empty, bare, and repeated params still need
-  // removal even though none represents an applied filter.
-  // Even if the URL already matches, a newer clear must supersede an
+  const filterValue = serializedFilter.value
+  const sortValue = sortToken.value
+  // Compare the raw values: empty, bare, and repeated params still need
+  // removal even though none represents an applied filter/sort.
+  // Even if the URL already matches, a newer write must supersede an
   // earlier navigation that has not finished yet.
-  if (value === route.query.filter && !pendingWrite) return
+  if (filterValue === route.query.filter && sortValue === route.query.sort && !pendingUrlWrite) return
   const query = { ...route.query }
-  if (value === undefined) delete query.filter
-  else query.filter = value
-  const write = { value }
-  pendingWrite = write
+  if (filterValue === undefined) delete query.filter
+  else query.filter = filterValue
+  if (sortValue === undefined) delete query.sort
+  else query.sort = sortValue
+  const write = { filter: filterValue, sort: sortValue }
+  pendingUrlWrite = write
   void router.replace({ query, hash: route.hash }).finally(() => {
-    if (pendingWrite === write) pendingWrite = null
+    if (pendingUrlWrite === write) pendingUrlWrite = null
   })
 }
 
 function onClausesUpdate(next: FilterClause[]) {
   clauses.value = committedClauses(next)
   filterOrigin.value = null
-  if (!isNamedList.value) writeFilterParam(serializedFilter.value)
+  if (!isNamedList.value) syncUrlParams()
 }
 
-// Run before usePeople so a cached session and a shared URL issue only
-// the filtered request. A router echo of our own edit keeps its origin;
-// actual navigation (including to /people without a filter) restores it.
+function onSortUpdate(next: TableSort) {
+  if (!isSortKey(next.key)) return
+  sortState.value = normalizeSort({ key: next.key, direction: next.direction })
+  // Deliberately does not touch filterOrigin: a sort click never makes a
+  // URL-origin filter user-origin, so a URL-origin filter that later
+  // 400/422s must still auto-degrade (SLICE_011b_SORT.md §8).
+  if (!isNamedList.value) syncUrlParams()
+}
+
+// Run before usePeople so a cached session and a shared URL issue only one
+// request. A router echo of our own edit keeps its origin; actual
+// navigation (including to /people with neither param, and Back/Forward)
+// re-rehydrates both from the URL. Filter and sort are read together so an
+// invalid one never clears the other's not-yet-processed valid URL value
+// (both live on the same `route.query`, evaluated in the same tick).
 watch(
-  () => route.query.filter,
-  (raw) => {
-    if (isNamedList.value || route.path !== '/people' || raw === serializedFilter.value) return
-    const parsed = typeof raw === 'string' && raw !== '' ? parseFilter(raw) : null
-    clauses.value = parsed ?? []
-    filterOrigin.value = hasFilter.value ? 'url' : null
-    editorRevision.value++
-    if (!hasFilter.value) writeFilterParam(undefined)
+  () => [route.query.filter, route.query.sort] as const,
+  ([rawFilter, rawSort]) => {
+    if (isNamedList.value || route.path !== '/people') return
+    let changed = false
+    let originsFromUrl = false
+    if (rawFilter !== serializedFilter.value) {
+      const parsed = typeof rawFilter === 'string' && rawFilter !== '' ? parseFilter(rawFilter) : null
+      clauses.value = parsed ?? []
+      editorRevision.value++
+      changed = true
+      if (hasFilter.value) originsFromUrl = true
+    }
+    if (rawSort !== sortToken.value) {
+      const parsedSort = typeof rawSort === 'string' && rawSort !== '' ? parseSortToken(rawSort) : null
+      sortState.value = normalizeSort(parsedSort ?? undefined)
+      changed = true
+      if (sortToken.value !== undefined) originsFromUrl = true
+    }
+    // Only a genuinely new raw value (re)tags the origin as 'url' — the
+    // echo of our own `syncUrlParams()` write leaves both unchanged here
+    // (`rawFilter === serializedFilter.value` etc.) and must never
+    // overwrite the `null` a user-composed edit already set (review-critical:
+    // "a user-composed 400/422 rejection remains user-origin after its
+    // router echo").
+    if (changed) {
+      filterOrigin.value = originsFromUrl ? 'url' : null
+      syncUrlParams()
+    }
   },
   { immediate: true },
 )
 
 const {
   data: peopleData, isPending, isFetching, isPlaceholderData, isError, error, refetch,
-} = usePeople(orgId, serializedFilter, namedPeopleEnabled, isNamedList)
+} = usePeople(orgId, serializedFilter, namedPeopleEnabled, isNamedList, sortToken)
 const people = computed(() => peopleData.value?.people ?? [])
 
 // Preserve the existing §6 policy: only a URL-origin 400/422 drops the
-// filter. User-created filters and all 5xx failures remain recoverable.
+// filter and sort. User-created edits and all 5xx failures remain
+// recoverable (SLICE_011b_SORT.md §8: "the server does not say which
+// failed").
 const filterWillDegrade = computed(
-  () => !isNamedList.value && isError.value && filterOrigin.value === 'url' && hasFilter.value &&
+  () => !isNamedList.value && isError.value && filterOrigin.value === 'url' &&
+    (hasFilter.value || sortToken.value !== undefined) &&
     error.value instanceof ApiError && [400, 422].includes(error.value.status),
 )
 watch(filterWillDegrade, (degrade) => {
   if (degrade) {
     editorRevision.value++
+    sortState.value = undefined
     onClausesUpdate([])
   }
 })
@@ -434,22 +525,28 @@ function currentIdentityMatches(identity: SavedListViewIdentity) {
     viewEpoch === identity.viewEpoch && props.savedListId === identity.listId
 }
 
-function sameSavedDefinition(detail: SavedListDetailResponse, name: string, filter: FilterDefinition) {
+function sameSavedDefinition(
+  detail: SavedListDetailResponse,
+  name: string,
+  filter: FilterDefinition,
+  sort: PersonSort | undefined,
+) {
   return detail.filter !== null && detail.list.name === name &&
-    filtersEqual(detail.filter, filter)
+    filtersEqual(detail.filter, filter) && sortsEqual(parseStoredSort(detail.sort), sort)
 }
 
 async function reconcileSavedUpdate(
   identity: SavedListViewIdentity,
   submittedName: string,
   submittedFilter: FilterDefinition,
+  submittedSort: PersonSort | undefined,
 ) {
   const response = await savedListQuery.refetch()
   const detail = response.data
   if (response.isError || !detail || !currentIdentityMatches(identity) || detail.list.id !== identity.listId) return
   const draftChangedDuringRequest = nameDraft.value.trim() !== submittedName ||
-    !filtersEqual(workingFilter.value, submittedFilter)
-  if (sameSavedDefinition(detail, submittedName, submittedFilter)) {
+    !filtersEqual(workingFilter.value, submittedFilter) || !sortsEqual(sortState.value, submittedSort)
+  if (sameSavedDefinition(detail, submittedName, submittedFilter, submittedSort)) {
     installSavedDetail(detail, draftChangedDuringRequest)
     saveError.value = undefined
     saveNotice.value = draftChangedDuringRequest
@@ -507,6 +604,13 @@ const createDialogDescription = computed(() => {
   return includesMe
     ? `${source} “Me” stays symbolic, so it follows the person using the list.`
     : source
+})
+// SLICE_011b_SORT.md §9: "one summary line ... omitted for the default
+// order" — Save as uses the working sort, Duplicate the baseline's.
+const createDialogSortSummary = computed(() => {
+  const sort = createMode.value === 'duplicate' ? savedBaseline.value?.sort : sortState.value
+  const normalized = normalizeSort(sort)
+  return normalized ? `Sorted by ${sortLabel(normalized)}` : ''
 })
 const canChooseShared = computed(() => me.value?.organization?.role === 'admin')
 
@@ -618,6 +722,9 @@ function onCreateSubmit(payload: { name: string; scope: 'personal' | 'shared' })
   const filter = createMode.value === 'duplicate'
     ? savedBaseline.value?.filter
     : workingFilter.value
+  // SLICE_011b_SORT.md §9: "Save as uses the working sort; Duplicate uses
+  // the baseline sort" — mirrors the filter selection immediately above.
+  const sort = normalizeSort(createMode.value === 'duplicate' ? savedBaseline.value?.sort : sortState.value)
   if (!filter || orgId.value === '' || actorId.value === '') return
   const intent: CreateIntent = {
     ...captureViewIdentity(),
@@ -628,6 +735,7 @@ function onCreateSubmit(payload: { name: string; scope: 'personal' | 'shared' })
       scope: payload.scope,
       name: payload.name,
       filter: cloneFilter(filter),
+      sort: sort ? serializeSort(sort) : null,
     },
   }
   pendingCreate.value = intent
@@ -649,21 +757,28 @@ async function saveSavedList() {
   if (!baseline || !namedCanEdit.value || !namedDefinitionUsable.value || !currentIdentityMatches(identity)) return
   const submittedName = nameDraft.value.trim()
   const submittedFilter = cloneFilter(workingFilter.value)
+  const submittedSort = normalizeSort(sortState.value)
   saveError.value = undefined
   saveNotice.value = ''
   try {
     const result = await updateMutation.mutateAsync({
       listId: baseline.id,
-      body: { expected_revision: baseline.revision, name: submittedName, filter: submittedFilter },
+      body: {
+        expected_revision: baseline.revision,
+        name: submittedName,
+        filter: submittedFilter,
+        sort: submittedSort ? serializeSort(submittedSort) : null,
+      },
     })
     if (!currentIdentityMatches(identity)) return
     const draftChangedDuringRequest = nameDraft.value.trim() !== submittedName ||
-      !filtersEqual(workingFilter.value, submittedFilter)
+      !filtersEqual(workingFilter.value, submittedFilter) || !sortsEqual(sortState.value, submittedSort)
     savedBaseline.value = {
       id: result.list.id,
       revision: result.list.revision,
       name: result.list.name,
       filter: submittedFilter,
+      sort: submittedSort,
     }
     if (!draftChangedDuringRequest) nameDraft.value = result.list.name
     void savedListQuery.refetch()
@@ -680,7 +795,7 @@ async function saveSavedList() {
       return
     }
     try {
-      await reconcileSavedUpdate(identity, submittedName, submittedFilter)
+      await reconcileSavedUpdate(identity, submittedName, submittedFilter, submittedSort)
     } catch {
       // Keep the submitted draft and original error if the reconciliation
       // read is also unavailable. It is never an automatic retry.
@@ -697,9 +812,13 @@ const currentSavedMetadata = computed(() =>
 )
 const namedCanEdit = computed(() => currentSavedMetadata.value?.can_edit === true)
 const namedCanDelete = computed(() => currentSavedMetadata.value?.can_delete === true)
-const namedFilterUnavailable = computed(() =>
-  isNamedList.value && savedListQuery.data.value?.list.id === props.savedListId && savedListQuery.data.value.filter === null,
-)
+const namedFilterUnavailable = computed(() => {
+  const detail = savedListQuery.data.value
+  if (!isNamedList.value || detail?.list.id !== props.savedListId) return false
+  // A stored sort this binary cannot parse fails closed exactly like an
+  // unreadable filter (§8, §10) — same banner, same disabled Save/Save as.
+  return detail.filter === null || storedSortUnreadable(detail)
+})
 const namedReferenceError = computed(() =>
   isNamedList.value && savedListQuery.data.value?.list.id === props.savedListId &&
     savedListQuery.data.value.filter_error && !workingReferencesResolvable.value,
@@ -712,6 +831,7 @@ watch(
     if (error instanceof ApiError && error.status === 404) {
       savedBaseline.value = null
       clauses.value = []
+      sortState.value = undefined
       const key = queryKeys.savedList(orgId.value, actorId.value, props.savedListId)
       void queryClient.cancelQueries({ queryKey: key, exact: true })
       queryClient.removeQueries({ queryKey: key, exact: true })
@@ -838,6 +958,7 @@ watch(
       savedBaseline.value = null
       nameDraft.value = ''
       clauses.value = []
+      sortState.value = undefined
       filterOrigin.value = null
       editorRevision.value++
     }
@@ -899,10 +1020,15 @@ const myPeople = computed(() => clauses.value.length === 1 &&
   clauses.value[0]?.kind === 'assigned_to' && clauses.value[0].assignees.length === 1 &&
   clauses.value[0].assignees[0] === 'me')
 
+// SLICE_011b_SORT.md §9: Name/Stage/Assignee are sortable, each ascending on
+// its first click; Inquiries and Last inquiry stay plain (derived columns,
+// out of scope per §1). Added is new: a compact created_at column, sortable,
+// descending on its first click — the default order's own visible header.
 const columns: ColumnDef<PersonSummary>[] = [
   {
     id: 'name',
     header: 'Name',
+    meta: { sortKey: 'name', sortNaturalDirection: 'asc' },
     cell: (info) => {
       const person = info.row.original
       return h('div', { class: 'flex min-w-[150px] items-center gap-2.5', title: person.primary_email ?? undefined }, [
@@ -914,12 +1040,14 @@ const columns: ColumnDef<PersonSummary>[] = [
   {
     id: 'stage',
     header: 'Stage',
+    meta: { sortKey: 'stage', sortNaturalDirection: 'asc' },
     cell: (info) =>
       h(StageLabel, { stage: info.row.original.stage, badge: true }),
   },
   {
     id: 'assignee',
     header: 'Assignee',
+    meta: { sortKey: 'assignee', sortNaturalDirection: 'asc' },
     cell: (info) => {
       const assignee = info.row.original.assigned_user
       return assignee
@@ -939,6 +1067,15 @@ const columns: ColumnDef<PersonSummary>[] = [
     cell: (info) => {
       const value = info.row.original.last_inquiry_at
       if (!value) return h('span', { class: 'text-text-muted' }, '—')
+      return h('span', { title: formatAbsoluteTime(value) }, formatRelativeTime(value))
+    },
+  },
+  {
+    id: 'created_at',
+    header: 'Added',
+    meta: { sortKey: 'created', sortNaturalDirection: 'desc' },
+    cell: (info) => {
+      const value = info.row.original.created_at
       return h('span', { title: formatAbsoluteTime(value) }, formatRelativeTime(value))
     },
   },
@@ -1383,11 +1520,14 @@ const columns: ColumnDef<PersonSummary>[] = [
               count-noun="people"
               count-noun-singular="person"
               :truncated="peopleData.truncated"
+              :sort="displaySort"
+              :truncated-sort-label="truncatedSortLabel"
               :empty-title="hasFilter ? 'No people match these filters' : 'No people yet'"
               :empty-message="hasFilter ? 'Change or clear your filters to see more people.' : 'Leads you add or receive will appear here.'"
               :empty-icon="Users"
               :empty-action-label="hasFilter ? undefined : 'Add a lead'"
               :empty-action-to="hasFilter ? undefined : '/intake/new'"
+              @update:sort="onSortUpdate"
             />
           </div>
         </template>
@@ -1407,6 +1547,7 @@ const columns: ColumnDef<PersonSummary>[] = [
       :submit-label="createMode === 'duplicate' ? 'Duplicate list' : 'Save list'"
       :initial-name="createDialogName"
       :description="createDialogDescription"
+      :sort-summary="createDialogSortSummary"
       initial-scope="personal"
       :allow-shared="canChooseShared"
       :is-pending="createMutation.isPending.value"

@@ -372,6 +372,11 @@ server; the request span logs both it and the request id.
 
 ## 5. HTTP contracts
 
+*Amendment pointer (Slice 011b-sort, 2026-09-06):* `GET /api/people` accepts
+an optional `sort=<key>.<direction>` parameter; absent or `created.desc` is
+byte-identical to this section. See [SLICE_011b_SORT.md](SLICE_011b_SORT.md) §6.
+
+
 **Additive amendment (approved 2026-09-06):** [SLICE_011b §5](SLICE_011b.md#5-http-contract)
 adds saved-list index/detail/count reads and typed create/update/delete endpoints.
 Its §8 records the old/new contracts and compatibility impact. Existing People

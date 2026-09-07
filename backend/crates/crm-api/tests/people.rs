@@ -260,3 +260,66 @@ async fn list_people_with_filter_returns_503_when_database_unreachable() {
 async fn inquiry_sources_returns_503_when_database_unreachable() {
     assert_returns_503(request("GET", "/api/inquiry-sources"), Body::empty()).await;
 }
+
+// --- SLICE_011b_SORT §6/§11.7: `auth: AuthContext` is listed BEFORE the
+// query extractor in `list_people` (routes/people.rs), so axum resolves
+// AuthContext first and its 401/503 short-circuit happens BEFORE `sort`
+// is decoded — an unauthenticated or database-down request never even
+// reaches sort parsing. These are the only §11.7 claims a service-free
+// (no real session) test can observe; the substantive 400-for-malformed-sort
+// behavior needs a real authenticated session and lives in
+// tests/db_people_sort.rs, mirroring how tests/db_people_filter.rs (not
+// this file) covers the equivalent malformed-`filter` cases per this
+// file's own header comment.
+
+#[tokio::test]
+async fn list_people_with_malformed_sort_and_no_cookie_still_returns_401() {
+    let state = AppState::new(&test_config(&[])).unwrap();
+    let app = crm_api::build_app(state);
+    let response = app
+        .oneshot(
+            request("GET", "/api/people?sort=NOT-A-VALID-TOKEN")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::UNAUTHORIZED,
+        "auth precedes sort parsing even when sort is malformed"
+    );
+}
+
+#[tokio::test]
+async fn list_people_with_malformed_sort_returns_503_when_database_unreachable() {
+    assert_returns_503(
+        request("GET", "/api/people?sort=NOT-A-VALID-TOKEN"),
+        Body::empty(),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn list_people_with_empty_sort_returns_503_when_database_unreachable() {
+    assert_returns_503(request("GET", "/api/people?sort="), Body::empty()).await;
+}
+
+#[tokio::test]
+async fn list_people_with_repeated_sort_returns_503_when_database_unreachable() {
+    assert_returns_503(
+        request("GET", "/api/people?sort=name.asc&sort=stage.desc"),
+        Body::empty(),
+    )
+    .await;
+}
+
+// A *valid* sort must reach the same 503, not a 400: sort decoding itself
+// never needs the database, so a well-formed token proves the unreachable
+// database is what actually failed the request, distinct from the
+// malformed/empty/repeated cases above which are 503 only because auth
+// short-circuits before sort parsing is ever reached.
+#[tokio::test]
+async fn list_people_with_valid_sort_returns_503_when_database_unreachable() {
+    assert_returns_503(request("GET", "/api/people?sort=name.asc"), Body::empty()).await;
+}

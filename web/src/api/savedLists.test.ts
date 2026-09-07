@@ -43,6 +43,7 @@ function detail(revision = 1): SavedListDetailResponse {
   return {
     list: metadata(revision),
     filter: { version: 1, clauses: [] },
+    sort: null,
     description: ['All people'],
     filter_error: null,
   }

@@ -1,0 +1,25 @@
+=== bench: 100 members, 15 iters, ms ===
+people unfiltered (500 cap)    avg    25.6  p95    20.6  rows 500 TRUNC
+assigned_to me                 avg    20.0  p95    20.1  rows 500 TRUNC
+assigned_to one user           avg    21.2  p95    20.8  rows 500 TRUNC
+source zillow                  avg    27.2  p95    28.5  rows 500 TRUNC
+has_phone false                avg    43.5  p95    42.7  rows 500 TRUNC
+last_contact never             avg   245.5  p95   292.9  rows 500 TRUNC
+last_contact within 7d         avg   340.6  p95   368.4  rows 0
+4-clause combo                 avg   332.8  p95   343.6  rows 500 TRUNC
+sort created.asc unfiltered    avg    18.9  p95    20.0  rows 500 TRUNC
+sort created.asc + assigned_to one user avg    19.3  p95    19.8  rows 500 TRUNC
+sort name.asc unfiltered       avg   126.1  p95   132.0  rows 500 TRUNC
+sort name.asc + assigned_to one user avg    53.2  p95    55.8  rows 500 TRUNC
+sort name.desc unfiltered      avg   124.0  p95   126.9  rows 500 TRUNC
+sort name.desc + assigned_to one user avg    53.5  p95    54.5  rows 500 TRUNC
+sort stage.asc unfiltered      avg    63.2  p95    64.5  rows 500 TRUNC
+sort stage.asc + assigned_to one user avg    36.3  p95    37.6  rows 500 TRUNC
+sort stage.desc unfiltered     avg    63.6  p95    65.1  rows 500 TRUNC
+sort stage.desc + assigned_to one user avg    36.3  p95    37.9  rows 500 TRUNC
+sort assignee.asc unfiltered   avg    70.5  p95    72.1  rows 500 TRUNC
+sort assignee.asc + assigned_to one user avg    37.6  p95    38.4  rows 500 TRUNC
+sort assignee.desc unfiltered  avg    72.3  p95    72.8  rows 500 TRUNC
+sort assignee.desc + assigned_to one user avg    34.8  p95    36.9  rows 500 TRUNC
+today (admin)                  avg   433.6  p95   450.1  rows 200 TRUNC
+today (member m1)              avg   166.3  p95   173.0  rows 200 TRUNC

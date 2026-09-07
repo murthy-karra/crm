@@ -13,5 +13,16 @@ declare module '@tanstack/table-core' {
   interface ColumnMeta<TData extends RowData, TValue> {
     /** Right-align numeric columns per UI_STYLE.md §4 ("tabular-nums, right-aligned when numeric"). */
     align?: 'left' | 'right'
+    /** SLICE_011b_SORT.md §9: set only on People's sortable columns (Added,
+     * Name, Stage, Assignee). DataTable.vue renders a clickable header with
+     * `aria-sort` only when this is present; every other column, and every
+     * other table's columns, are unaffected. The value is the server-facing
+     * sort key (`lib/sort.ts`'s `SortKey`), kept as a plain `string` here so
+     * this shared component stays domain-agnostic. */
+    sortKey?: string
+    /** This column's first-click direction (§9: "Name, Stage and Assignee
+     * ascending; Added descending"). Defaults to `'asc'` when a `sortKey` is
+     * set without it. */
+    sortNaturalDirection?: 'asc' | 'desc'
   }
 }

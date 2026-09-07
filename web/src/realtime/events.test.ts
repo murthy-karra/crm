@@ -1,3 +1,4 @@
+import { QueryClient } from '@tanstack/vue-query'
 import { describe, expect, it, vi } from 'vitest'
 import { queryKeys } from '../api/queries'
 import { invalidationsFor, reconnectInvalidations, type PersonChange } from './events'
@@ -150,6 +151,23 @@ describe('invalidationsFor', () => {
     expect(invalidationsFor(undefined, ORG_ID)).toEqual([])
     expect(invalidationsFor('not an object', ORG_ID)).toEqual([])
     expect(invalidationsFor({ type: 'person.changed', organization_id: ORG_ID }, ORG_ID)).toEqual([])
+  })
+
+  // SLICE_011b_SORT.md §9: the sort element only ever extends the factory —
+  // `queryKeys.people(ORG_ID)` is still a valid PREFIX of a sorted key, so
+  // every existing `person.changed` invalidation keeps covering sorted
+  // People caches with zero changes to this mapping.
+  it('invalidates a cached sorted People query through the unqualified people prefix', () => {
+    const queryClient = new QueryClient()
+    const sortedKey = queryKeys.people(ORG_ID, undefined, 'name.asc')
+    queryClient.setQueryData(sortedKey, { people: [], truncated: false })
+    expect(queryClient.getQueryState(sortedKey)?.isInvalidated).toBe(false)
+
+    for (const key of invalidationsFor(personChanged('stage_changed'), ORG_ID)) {
+      void queryClient.invalidateQueries({ queryKey: key })
+    }
+
+    expect(queryClient.getQueryState(sortedKey)?.isInvalidated).toBe(true)
   })
 })
 

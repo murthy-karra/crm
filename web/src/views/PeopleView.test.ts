@@ -74,6 +74,7 @@ function savedDetail(id: string, filter: FilterClause[] = []): SavedListDetailRe
       can_delete: false,
     },
     filter: { version: 1, clauses: filter },
+    sort: null,
     description: filter.length === 0 ? ['All people'] : ['Assigned to me'],
     filter_error: null,
   }
@@ -96,6 +97,17 @@ function serialized(clauses: FilterClause[]) {
 function filteredPath(clauses: FilterClause[]) {
   return `/people?filter=${encodeURIComponent(serialized(clauses))}`
 }
+// SLICE_011b_SORT.md §9: matches usePeople's own path construction
+// (filter, then sort) exactly.
+function sortedPath(clauses: FilterClause[], sortToken: string) {
+  const params: string[] = []
+  if (clauses.length > 0) params.push(`filter=${encodeURIComponent(serialized(clauses))}`)
+  params.push(`sort=${encodeURIComponent(sortToken)}`)
+  return `/people?${params.join('&')}`
+}
+function sortButton(wrapper: VueWrapper, label: string) {
+  return wrapper.findAll('button').find((button) => button.attributes('aria-label') === label)!
+}
 function deferred<T>() {
   let resolve!: (value: T) => void
   let reject!: (reason: unknown) => void
@@ -103,7 +115,7 @@ function deferred<T>() {
   return { promise, resolve, reject }
 }
 interface StubOptions {
-  people?: (filter: string | null) => PeopleResponse | Promise<PeopleResponse> | ApiError
+  people?: (filter: string | null, sort: string | null) => PeopleResponse | Promise<PeopleResponse> | ApiError
   sources?: () => InquirySourcesResponse | Promise<InquirySourcesResponse>
   person?: (id: string) => PersonDetailResponse | Promise<PersonDetailResponse> | ApiError
   savedList?: (id: string) => SavedListDetailResponse | Promise<SavedListDetailResponse> | ApiError
@@ -152,8 +164,10 @@ function stub(options: StubOptions = {}) {
       return response
     }
     if (path.startsWith('/people')) {
-      const filter = new URL(path, 'http://test').searchParams.get('filter')
-      const response = options.people?.(filter) ?? result()
+      const url = new URL(path, 'http://test')
+      const filter = url.searchParams.get('filter')
+      const sort = url.searchParams.get('sort')
+      const response = options.people?.(filter, sort) ?? result()
       if (response instanceof ApiError) throw response
       return response
     }
@@ -510,6 +524,22 @@ describe('Saved-list workspace safety', () => {
     expect(wrapper.text()).not.toContain('Updating match count…')
   })
 
+  it('a stored sort this binary cannot parse fails closed exactly like an unreadable filter', async () => {
+    const updateSavedList = vi.fn()
+    stub({
+      savedList: (id) => ({ ...editableSavedDetail(id, [], 1, 'X'), sort: 'distance.asc' as never }),
+      updateSavedList,
+    })
+    const { wrapper } = await mountView(`/lists/${SAVED_LIST_A}`)
+    expect(peoplePaths()).toEqual([])
+    expect(wrapper.text()).toContain('People are not loaded because this saved definition cannot be evaluated safely.')
+    const saveButton = wrapper.findAll('button').find((button) => button.text() === 'Save')
+    expect(!saveButton || saveButton.attributes('disabled') !== undefined).toBe(true)
+    expect(wrapper.findAll('button').some((button) => button.text() === 'Save as')).toBe(false)
+    expect(wrapper.findAll('button').some((button) => button.text() === 'Delete')).toBe(true)
+    expect(updateSavedList).not.toHaveBeenCalled()
+  })
+
   it('does not fall back to an unfiltered People request during a cached-list switch', async () => {
     const second = deferred<SavedListDetailResponse>()
     stub({
@@ -567,6 +597,35 @@ describe('Saved-list workspace safety', () => {
     await flushPromises()
 
     expect(requests).toHaveLength(2)
+    expect(requests[1]?.expected_revision).toBe(1)
+  })
+
+  it('a sort-only 409 also keeps the dirty sort draft, retrying with the same revision', async () => {
+    const requests: UpdateSavedListRequest[] = []
+    stub({
+      savedList: () => editableSavedDetail(SAVED_LIST_A, [], 1, 'Sorted list'),
+      updateSavedList: (_id, body) => {
+        requests.push(body)
+        return new ApiError(409, 'saved_list_conflict')
+      },
+    })
+    const { wrapper } = await mountView(`/lists/${SAVED_LIST_A}`)
+    await sortButton(wrapper, 'Sort by Name, ascending').trigger('click')
+    await flushPromises()
+    const save = () => wrapper.findAll('button').find((button) => button.text() === 'Save')!
+
+    await save().trigger('click')
+    await flushPromises()
+    expect(requests).toHaveLength(1)
+    expect(requests[0]?.expected_revision).toBe(1)
+    expect(requests[0]?.sort).toBe('name.asc')
+    expect(wrapper.text()).toContain('Unsaved changes')
+    expect(wrapper.findAll('th')[0]!.attributes('aria-sort')).toBe('ascending')
+
+    await save().trigger('click')
+    await flushPromises()
+    expect(requests).toHaveLength(2)
+    expect(requests[1]?.sort).toBe('name.asc')
     expect(requests[1]?.expected_revision).toBe(1)
   })
 
@@ -829,6 +888,23 @@ describe('Saved-list workspace safety', () => {
 
     expect(wrapper.findComponent(SavedListDialog).props('description')).toContain('“Me” stays symbolic')
   })
+
+  it('an Organization switch on a named list resets a dirty header-driven sort to the default', async () => {
+    stub({ savedList: (id) => editableSavedDetail(id, [], 1, 'Sorted list') })
+    const { wrapper, queryClient } = await mountView(`/lists/${SAVED_LIST_A}`)
+    await sortButton(wrapper, 'Sort by Name, ascending').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('Unsaved changes')
+
+    queryClient.setQueryData(queryKeys.me, me('99999999-9999-9999-9999-999999999999'))
+    await flushPromises()
+
+    // Only the default Added column may still carry a non-"none" aria-sort.
+    const activeHeaders = wrapper.findAll('th')
+      .filter((th) => ['ascending', 'descending'].includes(th.attributes('aria-sort') ?? ''))
+    expect(activeHeaders.every((th) => th.text().includes('Added'))).toBe(true)
+    expect(peoplePaths().at(-1)).not.toContain('sort=')
+  })
 })
 
 
@@ -927,5 +1003,408 @@ describe('People inspector', () => {
     expect(wrapper.get('[data-testid="person-preview"]').text()).toContain('no longer available')
     expect(wrapper.get('[data-testid="person-preview"]').text()).not.toContain('Grace Hopper')
     expect(wrapper.find('[aria-label="Open email app"]').exists()).toBe(false)
+  })
+})
+
+// docs/specs/SLICE_011b_SORT.md §9, §11.12 item 12.
+describe('People sort', () => {
+  it('shows Added as the active default sort with no explicit sort chosen', async () => {
+    stub()
+    const { wrapper } = await mountView()
+    const addedHeader = wrapper.findAll('th').find((th) => th.text().includes('Added'))!
+    expect(addedHeader.attributes('aria-sort')).toBe('descending')
+    expect(addedHeader.get('button').attributes('aria-label')).toBe('Sort by Added, ascending')
+  })
+
+  it('clicking a column header refetches with the five-element key and &sort=', async () => {
+    stub()
+    const { wrapper, queryClient } = await mountView()
+    await sortButton(wrapper, 'Sort by Name, ascending').trigger('click')
+    await flushPromises()
+    expect(peoplePaths().at(-1)).toBe(sortedPath([], 'name.asc'))
+    expect(queryClient.getQueryData(queryKeys.people(ORG_ID, undefined, 'name.asc'))).toBeDefined()
+  })
+
+  it('carries an active filter alongside &sort=, and toggles direction on a second click', async () => {
+    stub()
+    const { wrapper, router } = await mountView(filteredPath(phoneFilter))
+    await sortButton(wrapper, 'Sort by Stage, ascending').trigger('click')
+    await flushPromises()
+    expect(peoplePaths().at(-1)).toBe(sortedPath(phoneFilter, 'stage.asc'))
+    expect(router.currentRoute.value.query.sort).toBe('stage.asc')
+
+    await sortButton(wrapper, 'Sort by Stage, descending').trigger('click')
+    await flushPromises()
+    expect(peoplePaths().at(-1)).toBe(sortedPath(phoneFilter, 'stage.desc'))
+  })
+
+  it('a stale out-of-order sort response never overwrites the currently selected sort', async () => {
+    const nameResponse = deferred<PeopleResponse>()
+    const stageResponse = deferred<PeopleResponse>()
+    stub({
+      people: (_filter, sort) => {
+        if (sort === 'name.asc') return nameResponse.promise
+        if (sort === 'stage.asc') return stageResponse.promise
+        return result()
+      },
+    })
+    const { wrapper } = await mountView()
+    await sortButton(wrapper, 'Sort by Name, ascending').trigger('click')
+    await flushPromises()
+    await sortButton(wrapper, 'Sort by Stage, ascending').trigger('click')
+    await flushPromises()
+
+    // Resolve the currently selected (Stage) request first, then the now-stale
+    // Name request — the stale response must not clobber the newer one.
+    stageResponse.resolve(result('Stage Winner'))
+    await flushPromises()
+    nameResponse.resolve(result('Name Loser'))
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Stage Winner')
+    expect(wrapper.text()).not.toContain('Name Loser')
+    const stageHeader = wrapper.findAll('th')[1]!
+    expect(stageHeader.attributes('aria-sort')).toBe('ascending')
+  })
+
+  it('a rapid double sort click before either navigation settles lands on the last selection', async () => {
+    stub()
+    const { wrapper, router } = await mountView()
+    await sortButton(wrapper, 'Sort by Name, ascending').trigger('click')
+    await sortButton(wrapper, 'Sort by Stage, ascending').trigger('click')
+    await flushPromises()
+    await flushPromises()
+    expect(router.currentRoute.value.query.sort).toBe('stage.asc')
+    expect(wrapper.findAll('th')[1]!.attributes('aria-sort')).toBe('ascending')
+    expect(wrapper.findAll('th')[0]!.attributes('aria-sort')).toBe('none')
+  })
+
+  it('clicking Added while Name is active returns to the default order, dropping sort from the URL and the wire', async () => {
+    stub()
+    // Mounted directly on the sorted URL so the only prior request is the
+    // sorted one — the subsequent default-order request is a genuine new
+    // fetch, not a cache hit against an earlier plain `/people` request.
+    const { wrapper, router } = await mountView('/people?sort=name.asc')
+    expect(router.currentRoute.value.query.sort).toBe('name.asc')
+
+    await sortButton(wrapper, 'Sort by Added, descending').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query.sort).toBeUndefined()
+    expect(peoplePaths().at(-1)).toBe('/people')
+  })
+
+  it('rehydrates a shared ?sort= on mount, including through a reload', async () => {
+    stub()
+    const { wrapper, router } = await mountView('/people?sort=name.desc')
+    const nameHeader = wrapper.findAll('th')[0]!
+    expect(nameHeader.attributes('aria-sort')).toBe('descending')
+    expect(peoplePaths()).toEqual([sortedPath([], 'name.desc')])
+    expect(router.currentRoute.value.query.sort).toBe('name.desc')
+
+    const reloaded = await mountView(router.currentRoute.value.fullPath)
+    expect(reloaded.wrapper.findAll('th')[0]!.attributes('aria-sort')).toBe('descending')
+  })
+
+  it.each(['sort', 'sort=', 'sort=NAME.asc', 'sort=name.up', 'sort=name.asc&sort=stage.asc', 'sort=created.desc'])(
+    'normalizes invalid/empty %s without losing unrelated query state', async (param) => {
+      stub()
+      const { wrapper, router } = await mountView(`/people?${param}&context=team#list`)
+      expect(router.currentRoute.value.query.sort).toBeUndefined()
+      expect(router.currentRoute.value.query).toEqual({ context: 'team' })
+      expect(router.currentRoute.value.hash).toBe('#list')
+      expect(peoplePaths()).toEqual(['/people'])
+      // The default order is still visibly active on the Added column even
+      // though nothing reached the wire.
+      expect(wrapper.findAll('th').find((th) => th.text().includes('Added'))!.attributes('aria-sort'))
+        .toBe('descending')
+    },
+  )
+
+  it.each([400, 422])('a URL-origin %s clears both filter and sort together', async (status) => {
+    stub({ people: (filter) => filter ? new ApiError(status, 'invalid_stage') : result() })
+    const { wrapper, router } = await mountView(`${filteredPath(phoneFilter)}&sort=name.asc`)
+    expect(router.currentRoute.value.query.filter).toBeUndefined()
+    expect(router.currentRoute.value.query.sort).toBeUndefined()
+    expect(wrapper.text()).toContain('Grace Hopper')
+    expect(peoplePaths()).toEqual([sortedPath(phoneFilter, 'name.asc'), '/people'])
+  })
+
+  it('Back/Forward restores sort alone', async () => {
+    stub()
+    const { wrapper, router } = await mountView()
+    await router.push('/people?sort=name.asc')
+    await flushPromises()
+    await router.push('/people?sort=stage.asc')
+    await flushPromises()
+    // Both sorted requests already went out on the way here — Back/Forward
+    // within this window are cache hits, not new fetches (staleTime), so
+    // the fetched-path evidence is that each was fetched at all, not that
+    // it is the most recent call.
+    expect(peoplePaths()).toEqual(['/people', sortedPath([], 'name.asc'), sortedPath([], 'stage.asc')])
+
+    router.back()
+    await flushPromises()
+    expect(router.currentRoute.value.query.sort).toBe('name.asc')
+    expect(wrapper.findAll('th')[0]!.attributes('aria-sort')).toBe('ascending')
+    expect(peoplePaths()).toEqual(['/people', sortedPath([], 'name.asc'), sortedPath([], 'stage.asc')])
+
+    router.forward()
+    await flushPromises()
+    expect(router.currentRoute.value.query.sort).toBe('stage.asc')
+    expect(wrapper.findAll('th')[1]!.attributes('aria-sort')).toBe('ascending')
+    expect(peoplePaths()).toEqual(['/people', sortedPath([], 'name.asc'), sortedPath([], 'stage.asc')])
+  })
+
+  it('a shared filtered link still degrades when a sort click, not the filter, triggers the 422', async () => {
+    // SLICE_011b_SORT.md §8: a sort click must never turn a URL-origin
+    // filter into a user-origin one — otherwise a filter that only fails
+    // once sort is added would stick around instead of auto-degrading.
+    const crossOrgStageFilter: FilterClause[] = [{ kind: 'stage', stage_ids: ['99999999-0000-0000-0000-000000000000'] }]
+    const sorted = deferred<PeopleResponse>()
+    stub({ people: (filter, sort) => (filter && sort) ? sorted.promise : result() })
+    const { wrapper, router } = await mountView(filteredPath(crossOrgStageFilter))
+    expect(wrapper.text()).toContain('Grace Hopper')
+
+    await sortButton(wrapper, 'Sort by Name, ascending').trigger('click')
+    await flushPromises()
+    // The sort-triggered request is still outstanding: nothing has degraded yet.
+    expect(router.currentRoute.value.query.filter).toBeDefined()
+    expect(router.currentRoute.value.query.sort).toBe('name.asc')
+
+    sorted.reject(new ApiError(422, 'invalid_stage'))
+    await flushPromises()
+    expect(router.currentRoute.value.query.filter).toBeUndefined()
+    expect(router.currentRoute.value.query.sort).toBeUndefined()
+    expect(wrapper.text()).not.toContain('Could not load people')
+    expect(wrapper.text()).toContain('Grace Hopper')
+    expect(peoplePaths()).toEqual([
+      filteredPath(crossOrgStageFilter),
+      sortedPath(crossOrgStageFilter, 'name.asc'),
+      '/people',
+    ])
+  })
+
+  it('a sort-only URL-origin 400 degrades to the default order', async () => {
+    stub({ people: (_filter, sort) => sort ? new ApiError(400, 'malformed_request') : result() })
+    const { router } = await mountView('/people?sort=name.asc')
+    expect(router.currentRoute.value.query.sort).toBeUndefined()
+    expect(peoplePaths()).toEqual([sortedPath([], 'name.asc'), '/people'])
+  })
+
+  it('a same-actor /me refresh preserves an active sort on plain /people (matching the filter policy)', async () => {
+    stub()
+    const { wrapper, router, queryClient } = await mountView('/people?sort=name.asc')
+    expect(router.currentRoute.value.query.sort).toBe('name.asc')
+
+    queryClient.setQueryData(queryKeys.me, me())
+    await flushPromises()
+
+    expect(router.currentRoute.value.query.sort).toBe('name.asc')
+    expect(wrapper.findAll('th')[0]!.attributes('aria-sort')).toBe('ascending')
+  })
+
+  it('a user-composed sort change survives a 400/422, staying user-origin after its router echo', async () => {
+    const response = deferred<PeopleResponse>()
+    stub({ people: (_filter, sort) => sort ? response.promise : result() })
+    const { wrapper, router } = await mountView()
+    await sortButton(wrapper, 'Sort by Name, ascending').trigger('click')
+    await flushPromises()
+    response.reject(new ApiError(400, 'malformed_request'))
+    await flushPromises()
+    expect(router.currentRoute.value.query.sort).toBe('name.asc')
+    expect(wrapper.text()).toContain('Could not load people')
+  })
+
+  it('names the active sort in the truncated cap message and updates it on a new sort', async () => {
+    const capped = result()
+    capped.people = Array.from({ length: 500 }, (_, i) => ({ ...capped.people[0]!, id: String(i) }))
+    capped.truncated = true
+    stub({ people: () => capped })
+    const { wrapper } = await mountView()
+    expect(wrapper.text()).toContain('Showing the first 500 by Added newest first — more exist.')
+
+    await sortButton(wrapper, 'Sort by Name, ascending').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('Showing the first 500 by Name (A–Z) — more exist.')
+  })
+
+  // The dialog's own rendering of this prop into a data-testid paragraph is
+  // covered by components/SavedListDialog.test.ts (which stubs PrimeVue's
+  // Dialog to expose its slotted content); here it is enough to prove
+  // PeopleView computes and passes the right value, the same way the
+  // existing "explains symbolic Me ..." test checks `description` above.
+  it('omits the Save as dialog sort summary prop for the default order', async () => {
+    stub()
+    const { wrapper } = await mountView()
+    await wrapper.findAll('button').find((button) => button.text() === 'Save as list')!.trigger('click')
+    await flushPromises()
+    expect(wrapper.findComponent(SavedListDialog).props('sortSummary')).toBe('')
+  })
+
+  it('passes the Save as dialog sort summary prop for a chosen sort', async () => {
+    stub()
+    const { wrapper } = await mountView()
+    await sortButton(wrapper, 'Sort by Stage, ascending').trigger('click')
+    await flushPromises()
+    await wrapper.findAll('button').find((button) => button.text() === 'Save as list')!.trigger('click')
+    await flushPromises()
+    expect(wrapper.findComponent(SavedListDialog).props('sortSummary')).toBe('Sorted by Stage (pipeline order)')
+  })
+
+  it('a named route ignores ?sort=, using the saved list\'s own sort', async () => {
+    stub({ savedList: (id) => ({ ...savedDetail(id, []), sort: 'name.asc' }) })
+    const { wrapper, router } = await mountView(`/lists/${SAVED_LIST_A}?sort=stage.desc`)
+    // A named list always sends its own explicit (possibly empty) filter, so
+    // its People request looks like `filteredPath([])`, not the omitted-filter
+    // shorthand plain /people uses (`sortedPath` above).
+    expect(peoplePaths()).toContain(`${filteredPath([])}&sort=name.asc`)
+    expect(peoplePaths().some((path) => path.includes('stage.desc'))).toBe(false)
+    expect(router.currentRoute.value.query.sort).toBe('stage.desc')
+    const nameHeader = wrapper.findAll('th')[0]!
+    expect(nameHeader.attributes('aria-sort')).toBe('ascending')
+  })
+
+  it('a shared reader can sort locally, but a header click never touches the URL and Save never appears', async () => {
+    stub({ savedList: (id) => savedDetail(id, []) })
+    const { wrapper, router } = await mountView(`/lists/${SAVED_LIST_A}`)
+    await sortButton(wrapper, 'Sort by Name, ascending').trigger('click')
+    await flushPromises()
+    expect(peoplePaths().at(-1)).toBe(`${filteredPath([])}&sort=name.asc`)
+    expect(router.currentRoute.value.query.sort).toBeUndefined()
+    expect(wrapper.findAll('button').some((button) => button.text() === 'Save')).toBe(false)
+  })
+
+  it('a header-driven sort dirties a named list; Save submits the working sort', async () => {
+    const requests: UpdateSavedListRequest[] = []
+    stub({
+      savedList: () => editableSavedDetail(SAVED_LIST_A, [], 1, 'Sorted list'),
+      updateSavedList: (_id, body) => {
+        requests.push(body)
+        return { list: { ...editableSavedDetail(SAVED_LIST_A, [], 2, 'Sorted list').list }, changed: true }
+      },
+    })
+    const { wrapper } = await mountView(`/lists/${SAVED_LIST_A}`)
+    expect(wrapper.text()).not.toContain('Unsaved changes')
+
+    await sortButton(wrapper, 'Sort by Name, ascending').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('Unsaved changes')
+
+    await wrapper.findAll('button').find((button) => button.text() === 'Save')!.trigger('click')
+    await flushPromises()
+    expect(requests).toHaveLength(1)
+    expect(requests[0]?.sort).toBe('name.asc')
+    expect(wrapper.text()).not.toContain('Unsaved changes')
+  })
+
+  it('Reset changes restores the saved sort after a header-driven change', async () => {
+    stub({ savedList: (id) => ({ ...editableSavedDetail(id, [], 1, 'Sorted list'), sort: 'stage.desc' }) })
+    const { wrapper } = await mountView(`/lists/${SAVED_LIST_A}`)
+    await sortButton(wrapper, 'Sort by Name, ascending').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('Unsaved changes')
+
+    await wrapper.findAll('button').find((button) => button.text() === 'Reset changes')!.trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('Unsaved changes')
+    const stageHeader = wrapper.findAll('th')[1]!
+    expect(stageHeader.attributes('aria-sort')).toBe('descending')
+  })
+
+  it('Save as uses the working (dirty) sort, not the saved baseline', async () => {
+    const createRequests: CreateSavedListRequest[] = []
+    stub({
+      savedList: (id) => ({ ...editableSavedDetail(id, [], 1, 'Sorted list'), sort: 'stage.desc' }),
+      createSavedList: (body) => {
+        createRequests.push(body)
+        return { list: { ...editableSavedDetail('new-copy-a').list, id: 'new-copy-a' }, created: true }
+      },
+    })
+    const { wrapper } = await mountView(`/lists/${SAVED_LIST_A}`)
+    await sortButton(wrapper, 'Sort by Name, ascending').trigger('click')
+    await flushPromises()
+    await wrapper.findAll('button').find((button) => button.text() === 'Save as')!.trigger('click')
+    await flushPromises()
+    wrapper.findComponent(SavedListDialog).vm.$emit('submit', { name: 'Copy A', scope: 'personal' })
+    await flushPromises()
+    expect(createRequests).toHaveLength(1)
+    expect(createRequests[0]?.sort).toBe('name.asc')
+  })
+
+  it('Duplicate uses the last saved (baseline) sort, ignoring an in-progress dirty draft', async () => {
+    const createRequests: CreateSavedListRequest[] = []
+    stub({
+      savedList: (id) => ({ ...editableSavedDetail(id, [], 1, 'Sorted list'), sort: 'stage.desc' }),
+      createSavedList: (body) => {
+        createRequests.push(body)
+        return { list: { ...editableSavedDetail('new-copy-b').list, id: 'new-copy-b' }, created: true }
+      },
+    })
+    const { wrapper } = await mountView(`/lists/${SAVED_LIST_A}`)
+    await sortButton(wrapper, 'Sort by Name, ascending').trigger('click')
+    await flushPromises()
+    await wrapper.findAll('button').find((button) => button.text() === 'Duplicate')!.trigger('click')
+    await flushPromises()
+    wrapper.findComponent(SavedListDialog).vm.$emit('submit', { name: 'Copy B', scope: 'personal' })
+    await flushPromises()
+    expect(createRequests).toHaveLength(1)
+    expect(createRequests[0]?.sort).toBe('stage.desc')
+  })
+
+  it('an uncertain Save reconciliation compares sort: an unmatched sort rebases the draft instead of claiming success', async () => {
+    const original = editableSavedDetail(SAVED_LIST_A, [], 1, 'Original')
+    stub({
+      // The write never actually reached the server: it still reports the
+      // original default sort, not the submitted name.asc.
+      savedList: () => original,
+      updateSavedList: () => new ApiError(0, 'network_error'),
+    })
+    const { wrapper } = await mountView(`/lists/${SAVED_LIST_A}`)
+    await sortButton(wrapper, 'Sort by Name, ascending').trigger('click')
+    await flushPromises()
+    await wrapper.findAll('button').find((button) => button.text() === 'Save')!.trigger('click')
+    await flushPromises()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('The saved version changed. Your draft is still here; review it and choose Save again.')
+    expect(wrapper.text()).toContain('Unsaved changes')
+  })
+
+  it('an uncertain Save reconciliation reports success when the reloaded sort matches what was submitted', async () => {
+    let latest = editableSavedDetail(SAVED_LIST_A, [], 1, 'Original')
+    stub({
+      savedList: () => latest,
+      updateSavedList: (_id, body) => {
+        latest = { ...editableSavedDetail(SAVED_LIST_A, [], 2, 'Original'), sort: body.sort ?? null }
+        return new ApiError(0, 'network_error')
+      },
+    })
+    const { wrapper } = await mountView(`/lists/${SAVED_LIST_A}`)
+    await sortButton(wrapper, 'Sort by Name, ascending').trigger('click')
+    await flushPromises()
+    await wrapper.findAll('button').find((button) => button.text() === 'Save')!.trigger('click')
+    await flushPromises()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('The saved version already includes those changes.')
+    expect(wrapper.text()).not.toContain('Unsaved changes')
+  })
+
+  // §11.12 item 12 "the narrow layout with the Added column and the Person
+  // inspector open": layout narrowing itself is pure CSS (media queries in
+  // style.css), invisible to happy-dom, so this exercises the DOM structure
+  // that layout depends on — the sortable Added column and its active state
+  // rendering correctly alongside the inspector panel, matching the existing
+  // "People inspector" tests' pattern of opening the preview beside the table.
+  it('renders the Added column and its active sort control together with the Person inspector open', async () => {
+    stub()
+    const { wrapper } = await mountView()
+    await wrapper.get(`a[href="/people/${PERSON_ID}"]`).trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="person-preview"]').exists()).toBe(true)
+    const addedHeader = wrapper.findAll('th').find((th) => th.text().includes('Added'))!
+    expect(addedHeader.attributes('aria-sort')).toBe('descending')
+    expect(addedHeader.get('button').attributes('aria-label')).toBe('Sort by Added, ascending')
+    expect(wrapper.text()).toContain('Grace Hopper')
   })
 })

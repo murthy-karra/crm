@@ -236,6 +236,12 @@ from data it already has.
 
 ### 4e. `filtered_summaries()` (person/queries.rs)
 
+*Amendment pointer (Slice 011b-sort, 2026-09-06):* the matrix text now lives
+in `person/sql/filtered_summaries.sql` and seven sorted copies beside it, each
+differing only in its top-level `ORDER BY`; `GET /api/people` gains an
+optional `sort` parameter. Absent or `created.desc` is byte-identical to this
+section. See [SLICE_011b_SORT.md](SLICE_011b_SORT.md) §4 and §6.
+
 **Count amendment (approved 2026-09-06):** [SLICE_011b §4](SLICE_011b.md#4-typed-commands-reads-and-filter-evaluation)
 adds an ID-only static projection capped at 501 matches, using the same filter
 parameters and semantics. The existing summary SQL and its offline cache stay

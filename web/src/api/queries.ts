@@ -98,8 +98,17 @@ export const queryKeys = {
   // `person.changed`, mutation-driven `['org', orgId]` sweeps — both call
   // `queryKeys.people(orgId)` with no filter argument) covering filtered
   // queries with zero changes to realtime/events.ts.
-  people: (orgId: string, serializedFilter?: string) =>
-    serializedFilter ? (['org', orgId, 'people', serializedFilter] as const) : (['org', orgId, 'people'] as const),
+  // SLICE_011b_SORT.md §9: extended in the factory only. Without a sort the
+  // key stays byte-identical to today (3 or 4 elements). With a normalized
+  // sort token, the key is always 5 elements — `['org', orgId, 'people',
+  // filter ?? '', sortToken]` — so the filter slot is forced to `''` rather
+  // than omitted; `usePeople`'s queryFn already treats `''` as "no filter".
+  people: (orgId: string, serializedFilter?: string, sortToken?: string) =>
+    sortToken
+      ? (['org', orgId, 'people', serializedFilter ?? '', sortToken] as const)
+      : serializedFilter
+        ? (['org', orgId, 'people', serializedFilter] as const)
+        : (['org', orgId, 'people'] as const),
   person: (orgId: string, personId: string) => ['org', orgId, 'person', personId] as const,
   stages: (orgId: string) => ['org', orgId, 'stages'] as const,
   unresolved: (orgId: string) => ['org', orgId, 'unresolved'] as const,
@@ -205,26 +214,35 @@ export function useMe() {
 }
 
 /**
- * `GET /api/people` and `GET /api/people?filter=<...>` (docs/specs/SLICE_011a.md
- * §5a, §6). `serializedFilter` is the SAME percent-encodable JSON string
- * used for both the query-key element and the URL param
- * (`lib/filter.ts`'s `serializeFilter`) — pass `undefined`/`''` for the
- * unfiltered legacy path, whose key stays byte-identical to before this
- * slice.
+ * `GET /api/people`, `GET /api/people?filter=<...>` and `&sort=<...>`
+ * (docs/specs/SLICE_011a.md §5a, §6; docs/specs/SLICE_011b_SORT.md §6, §9).
+ * `serializedFilter` is the SAME percent-encodable JSON string used for both
+ * the query-key element and the URL param (`lib/filter.ts`'s
+ * `serializeFilter`) — pass `undefined`/`''` for the unfiltered legacy path.
+ * `sortToken` is the normalized wire token (`lib/sort.ts`'s `serializeSort`
+ * after `normalizeSort`) — pass `undefined` for the default order, whose key
+ * and request stay byte-identical to before this slice.
  */
 export function usePeople(
   orgId: MaybeRefOrGetter<string>,
   serializedFilter?: MaybeRefOrGetter<string | undefined>,
   enabled?: MaybeRefOrGetter<boolean>,
   forceFresh?: MaybeRefOrGetter<boolean>,
+  sortToken?: MaybeRefOrGetter<string | undefined>,
 ) {
   return useQuery({
-    queryKey: computed(() => queryKeys.people(toValue(orgId), toValue(serializedFilter) || undefined)),
+    queryKey: computed(() => queryKeys.people(
+      toValue(orgId), toValue(serializedFilter) || undefined, toValue(sortToken) || undefined,
+    )),
     queryFn: ({ queryKey, signal }) => {
       // A retry belongs to the key that started it, even if the user has
-      // since selected another filter.
+      // since selected another filter/sort.
       const filter = queryKey[3]
-      const path = filter ? `/people?filter=${encodeURIComponent(filter)}` : '/people'
+      const sort = queryKey[4]
+      const params: string[] = []
+      if (filter) params.push(`filter=${encodeURIComponent(filter)}`)
+      if (sort !== undefined) params.push(`sort=${encodeURIComponent(sort)}`)
+      const path = params.length > 0 ? `/people?${params.join('&')}` : '/people'
       return apiFetch<PeopleResponse>(path, { signal })
     },
     // Keep the table steady between filters, but never retain another
@@ -427,7 +445,9 @@ export function useUpdateSavedListMutation(
       invalidateSavedListCaches(qc, submitted.orgId, submitted.actorId, variables.listId)
       qc.setQueryData<SavedListDetailResponse>(
         queryKeys.savedList(submitted.orgId, submitted.actorId, variables.listId),
-        (previous) => previous ? { ...previous, list: result.list, filter: variables.body.filter, filter_error: null } : previous,
+        (previous) => previous
+          ? { ...previous, list: result.list, filter: variables.body.filter, sort: variables.body.sort ?? null, filter_error: null }
+          : previous,
       )
     },
   }, providedQueryClient)

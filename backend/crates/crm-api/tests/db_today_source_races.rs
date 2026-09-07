@@ -71,6 +71,7 @@ async fn create_list(
             scope: SavedListScope::Personal,
             name: name.to_string(),
             filter: empty_filter(),
+            sort: None,
         },
     )
     .await
@@ -232,6 +233,7 @@ async fn today_source_enable_checks_revision_before_idempotence_and_cap(migrator
             expected_revision: target.list.revision,
             name: "Target source renamed".to_string(),
             filter: empty_filter(),
+            sort: None,
         },
     )
     .await

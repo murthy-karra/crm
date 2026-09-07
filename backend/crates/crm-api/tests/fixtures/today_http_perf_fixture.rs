@@ -485,6 +485,7 @@ async fn create_source_lists(
                 scope: SavedListScope::Personal,
                 name: format!("Phase B source {}", index + 1),
                 filter: filter(stage_id, clauses),
+                sort: None,
             },
         )
         .await

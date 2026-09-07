@@ -600,3 +600,96 @@ async fn contact_attempted_outcome_check_and_corrects_once_index_are_section_2(
             .is_err());
     }
 }
+
+/// docs/specs/SLICE_011b_SORT.md §5, §11.9: the `saved_list.sort_key`/
+/// `sort_direction` CHECK constraints — an out-of-vocabulary key or
+/// direction, and a half pair (one `NULL`, one not) in either direction —
+/// are all rejected, while every one of the eight legal pairs and the
+/// all-`NULL` default pair succeed.
+#[sqlx::test]
+#[ignore]
+async fn saved_list_sort_columns_check_constraints_reject_bad_values_and_half_pairs(
+    migrator_pool: PgPool,
+) {
+    let (organization_id, owner_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Saved sort schema",
+        "owner@saved-sort-schema.test",
+        "Owner",
+        "pw",
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+
+    let insert = |sort_key: Option<&'static str>, sort_direction: Option<&'static str>| {
+        let app_pool = app_pool.clone();
+        async move {
+            sqlx::query(
+                r#"INSERT INTO saved_list
+                     (organization_id, created_by_user_id, scope, name, filter,
+                      create_request_id, create_fingerprint, sort_key, sort_direction)
+                   VALUES ($1, $2, 'personal', 'X', '{"version":1,"clauses":[]}'::jsonb,
+                           $3, decode(repeat('02', 32), 'hex'), $4, $5)"#,
+            )
+            .bind(organization_id)
+            .bind(owner_id)
+            .bind(Uuid::new_v4())
+            .bind(sort_key)
+            .bind(sort_direction)
+            .execute(&app_pool)
+            .await
+        }
+    };
+
+    // Every legal pair succeeds.
+    for (key, direction) in [
+        ("created", "asc"),
+        ("created", "desc"),
+        ("name", "asc"),
+        ("name", "desc"),
+        ("stage", "asc"),
+        ("stage", "desc"),
+        ("assignee", "asc"),
+        ("assignee", "desc"),
+    ] {
+        let result = insert(Some(key), Some(direction)).await;
+        assert!(result.is_ok(), "{key}.{direction} must be accepted");
+    }
+    // The all-NULL default pair succeeds.
+    assert!(
+        insert(None, None).await.is_ok(),
+        "NULL, NULL must be accepted"
+    );
+
+    // Out-of-vocabulary key/direction.
+    let bad_key = insert(Some("distance"), Some("asc")).await.unwrap_err();
+    assert_eq!(
+        bad_key
+            .as_database_error()
+            .and_then(|db| db.constraint().map(str::to_string)),
+        Some("saved_list_sort_key_check".to_string())
+    );
+    let bad_direction = insert(Some("name"), Some("sideways")).await.unwrap_err();
+    assert_eq!(
+        bad_direction
+            .as_database_error()
+            .and_then(|db| db.constraint().map(str::to_string)),
+        Some("saved_list_sort_direction_check".to_string())
+    );
+
+    // Half pairs, in both directions.
+    let half_a = insert(Some("name"), None).await.unwrap_err();
+    assert_eq!(
+        half_a
+            .as_database_error()
+            .and_then(|db| db.constraint().map(str::to_string)),
+        Some("saved_list_sort_pair_check".to_string())
+    );
+    let half_b = insert(None, Some("asc")).await.unwrap_err();
+    assert_eq!(
+        half_b
+            .as_database_error()
+            .and_then(|db| db.constraint().map(str::to_string)),
+        Some("saved_list_sort_pair_check".to_string())
+    );
+}

@@ -103,6 +103,7 @@ async fn create_list(
             scope: SavedListScope::Personal,
             name: name.to_owned(),
             filter,
+            sort: None,
         },
     )
     .await

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, created_by_user_id, scope, name,\n                  filter::text as \"filter: String\",\n                  revision, created_at, updated_at, deleted_at, create_fingerprint\n           FROM saved_list\n           WHERE organization_id = $1\n             AND created_by_user_id = $2\n             AND create_request_id = $3\n           FOR UPDATE",
+  "query": "SELECT id, created_by_user_id, scope,\n                  name as \"name!\", filter::text as \"filter!\",\n                  sort_key, sort_direction,\n                  revision, created_at, updated_at\n           FROM saved_list\n           WHERE id = $1\n             AND organization_id = $2\n             AND deleted_at IS NULL\n             AND (scope = 'shared' OR created_by_user_id = $3)\n           FOR UPDATE",
   "describe": {
     "columns": [
       {
@@ -20,38 +20,38 @@
       },
       {
         "ordinal": 3,
-        "name": "name",
+        "name": "name!",
         "type_info": "Text"
       },
       {
         "ordinal": 4,
-        "name": "filter: String",
+        "name": "filter!",
         "type_info": "Text"
       },
       {
         "ordinal": 5,
+        "name": "sort_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "sort_direction",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
         "name": "revision",
         "type_info": "Int8"
       },
       {
-        "ordinal": 6,
+        "ordinal": 8,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 9,
         "name": "updated_at",
         "type_info": "Timestamptz"
-      },
-      {
-        "ordinal": 8,
-        "name": "deleted_at",
-        "type_info": "Timestamptz"
-      },
-      {
-        "ordinal": 9,
-        "name": "create_fingerprint",
-        "type_info": "Bytea"
       }
     ],
     "parameters": {
@@ -67,12 +67,12 @@
       false,
       true,
       null,
-      false,
-      false,
-      false,
       true,
+      true,
+      false,
+      false,
       false
     ]
   },
-  "hash": "2cacd8852737787619e6b33d4f58db2b0fe1d183772c2bb8b29a875483469b04"
+  "hash": "521263a2ea3ad85783d12ce13ebd13cb0e901d221ac24dde88fc3752fb8b4065"
 }

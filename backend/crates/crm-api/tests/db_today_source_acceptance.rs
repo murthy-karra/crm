@@ -77,6 +77,7 @@ async fn create_list(
             scope,
             name: name.to_string(),
             filter,
+            sort: None,
         },
     )
     .await

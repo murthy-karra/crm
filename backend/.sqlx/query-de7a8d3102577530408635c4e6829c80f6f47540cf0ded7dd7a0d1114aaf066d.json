@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, created_by_user_id, scope,\n                  name as \"name!\", filter::text as \"filter!\",\n                  revision, created_at, updated_at\n           FROM saved_list\n           WHERE id = $1\n             AND organization_id = $2\n             AND deleted_at IS NULL\n             AND (scope = 'shared' OR created_by_user_id = $3)\n           FOR UPDATE",
+  "query": "INSERT INTO saved_list\n              (organization_id, created_by_user_id, scope, name, filter,\n               create_request_id, create_fingerprint, sort_key, sort_direction)\n           VALUES ($1, $2, $3, $4, CAST($5 AS text)::jsonb, $6, $7, $8, $9)\n           RETURNING id, created_by_user_id, scope,\n                     name as \"name!\", filter::text as \"filter!\",\n                     sort_key, sort_direction,\n                     revision, created_at, updated_at",
   "describe": {
     "columns": [
       {
@@ -30,16 +30,26 @@
       },
       {
         "ordinal": 5,
+        "name": "sort_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "sort_direction",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
         "name": "revision",
         "type_info": "Int8"
       },
       {
-        "ordinal": 6,
+        "ordinal": 8,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 9,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -48,7 +58,13 @@
       "Left": [
         "Uuid",
         "Uuid",
-        "Uuid"
+        "Text",
+        "Text",
+        "Text",
+        "Uuid",
+        "Bytea",
+        "Text",
+        "Text"
       ]
     },
     "nullable": [
@@ -57,10 +73,12 @@
       false,
       true,
       null,
+      true,
+      true,
       false,
       false,
       false
     ]
   },
-  "hash": "69db1bb187b984b3732789fe750b62b5ec89d5e81409418f9ab8384da8724e0b"
+  "hash": "de7a8d3102577530408635c4e6829c80f6f47540cf0ded7dd7a0d1114aaf066d"
 }

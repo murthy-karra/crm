@@ -17,6 +17,7 @@ use uuid::Uuid;
 use crate::auth::AuthContext;
 use crate::domain::envelope::CommandContext;
 use crate::domain::person::filter::FilterDefinition;
+use crate::domain::person::sort::PersonSort;
 use crate::domain::saved_list::{
     self, CreateSavedList, DeleteSavedList, SavedListScope, UpdateSavedList,
 };
@@ -86,6 +87,10 @@ fn deserialize_canonical_uuid<'de, D: Deserializer<'de>>(
     Uuid::parse_str(&raw).map_err(D::Error::custom)
 }
 
+/// `sort` is optional (`null`/absent means default) but `deny_unknown_fields`
+/// is kept — an invalid token is a 400 `malformed_request` straight out of
+/// the decoder, after 401 and before the 403/404 resource checks
+/// (docs/specs/SLICE_011b_SORT.md §6).
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct CreateSavedListRequest {
@@ -94,6 +99,8 @@ struct CreateSavedListRequest {
     scope: SavedListScope,
     name: String,
     filter: FilterDefinition,
+    #[serde(default)]
+    sort: Option<PersonSort>,
 }
 
 #[derive(Deserialize)]
@@ -102,6 +109,8 @@ struct UpdateSavedListRequest {
     expected_revision: i64,
     name: String,
     filter: FilterDefinition,
+    #[serde(default)]
+    sort: Option<PersonSort>,
 }
 
 #[derive(Deserialize)]
@@ -152,6 +161,7 @@ async fn get_saved_list(
     Ok(Json(json!({
         "list": detail.list,
         "filter": detail.filter,
+        "sort": detail.sort,
         "description": detail.description,
         "filter_error": detail.filter_error.map(|error| error.as_str()),
     })))
@@ -179,6 +189,7 @@ async fn create_saved_list(
             scope: req.scope,
             name: req.name,
             filter: req.filter,
+            sort: req.sort,
         },
     )
     .await?;
@@ -212,6 +223,7 @@ async fn update_saved_list(
             expected_revision: req.expected_revision,
             name: req.name,
             filter: req.filter,
+            sort: req.sort,
         },
     )
     .await?;

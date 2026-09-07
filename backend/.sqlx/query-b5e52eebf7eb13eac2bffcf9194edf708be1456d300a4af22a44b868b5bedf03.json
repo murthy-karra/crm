@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO saved_list\n              (organization_id, created_by_user_id, scope, name, filter,\n               create_request_id, create_fingerprint)\n           VALUES ($1, $2, $3, $4, CAST($5 AS text)::jsonb, $6, $7)\n           RETURNING id, created_by_user_id, scope,\n                     name as \"name!\", filter::text as \"filter!\",\n                     revision, created_at, updated_at",
+  "query": "UPDATE saved_list\n           SET name = $4, filter = CAST($5 AS text)::jsonb, revision = revision + 1, updated_at = now(),\n               sort_key = $7, sort_direction = $8\n           WHERE id = $1\n             AND organization_id = $2\n             AND deleted_at IS NULL\n             AND revision = $3\n             AND (scope = 'shared' OR created_by_user_id = $6)\n           RETURNING id, created_by_user_id, scope,\n                     name as \"name!\", filter::text as \"filter!\",\n                     sort_key, sort_direction,\n                     revision, created_at, updated_at",
   "describe": {
     "columns": [
       {
@@ -30,16 +30,26 @@
       },
       {
         "ordinal": 5,
+        "name": "sort_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "sort_direction",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
         "name": "revision",
         "type_info": "Int8"
       },
       {
-        "ordinal": 6,
+        "ordinal": 8,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 9,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -48,11 +58,12 @@
       "Left": [
         "Uuid",
         "Uuid",
-        "Text",
+        "Int8",
         "Text",
         "Text",
         "Uuid",
-        "Bytea"
+        "Text",
+        "Text"
       ]
     },
     "nullable": [
@@ -61,10 +72,12 @@
       false,
       true,
       null,
+      true,
+      true,
       false,
       false,
       false
     ]
   },
-  "hash": "2628c59ac453fc3ff0680777f1b2d5ce67ea16fc921bca4f6ead6e2cd05ba020"
+  "hash": "b5e52eebf7eb13eac2bffcf9194edf708be1456d300a4af22a44b868b5bedf03"
 }

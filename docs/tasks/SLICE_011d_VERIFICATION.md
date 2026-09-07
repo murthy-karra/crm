@@ -1,9 +1,8 @@
 # Slice 011d — Verification record
 
-Status: IN PROGRESS (2026-09-07). Coordinator: Claude Fable 5.1. Lanes:
-Claude Sonnet 5. This record holds every actual result; nothing here is
-claimed without having been run. Sections marked *pending* are filled when
-the corresponding step completes.
+Status: VERIFIED (2026-09-07), awaiting the user's merge approval.
+Coordinator: Claude Fable 5.1. Lanes: Claude Sonnet 5. This record holds
+every actual result; nothing here is claimed without having been run.
 
 Specification: [SLICE_011d.md](../specs/SLICE_011d.md) (approved 2026-09-07;
 §8 amended by pointer to D-050). Brief: [SLICE_011d_IMPL.md](SLICE_011d_IMPL.md).
@@ -19,8 +18,9 @@ Base: `main` at `66b44ff`. Integration branch: `slice-011d-today-system-feeds`.
 | 3 | B | `401c18e`, `549243a`, `145335a`, `97cdbec` | Call feed bound to the full filter matrix (coordinator decision); fallback and preview-timeout tests; Operator parity tests; step 5 performance evidence | `check` green; `check-db` 504 of 504 |
 | merge | coordinator | `3fa7ca8`, `3496d71` | Both lanes merged into the integration branch, 113 files, no conflicts | not run at merge (final-tree gates run once at the end) |
 | 4 | W | `00f35f6` | Step 5 browser walkthrough evidence | Web gate green on the lane tree |
-| 5 | B | *pending* | Review round 1 fixes and step 6 (`Legacy` deletion, frozen fixture) | *pending* |
-| 5 | W | *pending* | Preview session fence; explicit 409 reload notice; rendering pins | *pending* |
+| 5 | B | `30e1e5a`, `26984cc`, `febf080`, `46a87bd`, `cfba96a`, `a0413cd`, `8884815` | Review round 1 fixes F1–F5 and T4–T13, a 413 body-cap mapping bug found and fixed, D-050 call-statement EXPLAINs, step 6 (`Legacy` deletion, SQL frozen under `tests/fixtures/today_f51bff8/`) | `check` green; `check-db` 541 of 541 (lane run) |
+| 5 | W | `02c2842` | Preview session-identity fence; explicit 409 reload notice with the editor kept open on refetch failure (a page-blanking bug on failed background refetch found and fixed); marker and typed-confirm pins | lint, typecheck, Vitest 45 files / 572 tests, build: all green |
+| merge | coordinator | `3bc0d8c`, `72130ab`, `77a8963` | Final rounds merged (144 files against main); perf-archive consistency note (docs only, after the gates started) | see Final-tree gates |
 
 Coordinator file-list audits: every lane round was diffed against the
 integration branch; Lane B touched only `backend/` and the perf archive, Lane
@@ -46,12 +46,21 @@ once mid-round (its report was re-verified against git).
    a person-state feed customized with `assigned_to: [me, unassigned]` plus
    one unassigned Person with an inquiry and an unanswered reply would make
    Today a 503 for the whole Organization. Found by the reviewer in round 1
-   (BLOCKING). Fix: *pending* (Lane B round 5).
+   (BLOCKING). Fixed in `30e1e5a`; pinned by two regression tests that
+   reach the NULL path; closed by review round 2.
 4. The two call-feed statements evaluated age clauses at `now()` rather than
    the bound evaluation clock, breaking the one-clock rule for that feed.
-   Found by the tester and reviewer. Fix: *pending* (Lane B round 5).
+   Found by the tester and reviewer. Fixed in `30e1e5a` (bound clock in
+   both statements and preview); closed by review round 2.
 5. `UpdateTodaySystemFeed` validated references before the revision check,
-   returning 422 where spec §6 requires 409. Fix: *pending* (Lane B round 5).
+   returning 422 where spec §6 requires 409. Fixed in `26984cc`; closed by
+   review round 2.
+6. Oversize request bodies on the feed routes mapped to 400 instead of the
+   413 the rest of the API uses. Found by Lane B while writing the HTTP
+   wire tests; fixed in `febf080`.
+7. A failed background refetch blanked the whole Today rules page,
+   including an open editor, although good data was still cached. Found by
+   Lane W while testing the 409 flow; fixed in `02c2842`.
 
 ## Equivalence gate (spec §9.2)
 
@@ -69,8 +78,12 @@ without a list source; `db_today_builtin_parity.rs` (frozen `today_9d62e86`
 SQL) runs against `Feeds`. Cases the reviewer found missing (fresh boundary
 at exactly `now − window`, reply equal to the latest outbound, dual People
 beyond 201, 2–3 call-only rows at the 199/200/201 boundary, caller ≠
-assignee with an assigned callee) are assigned to the `Legacy`-deletion
-commit. `Legacy` deletion: *pending*.
+assignee with an assigned callee) were pinned in `cfba96a` before the
+deletion. `Legacy` deleted in `8884815`; the compiled-in statement is frozen
+under `tests/fixtures/today_f51bff8/` (SQL byte-identical to `f51bff8`, with
+import paths and a doc comment adjusted as the README discloses), and the
+equivalence suite now compares `Feeds` against that fixture. Review round 2
+confirmed no provider seam remains in production code.
 
 ## Performance (D-050 gates)
 
@@ -89,7 +102,12 @@ disabled) 101–158 ms serial; preview 125 ms at the command layer. Both
 `SET LOCAL` settings are kept unchanged; the toggle question is closed by
 D-050. Disclosures: the harness is smaller than 011c's; the EXPLAIN pair ran
 with JIT on (production runs `jit = off`), so its absolute times overstate;
-call-statement EXPLAINs: *pending* (Lane B round 5).
+call-statement EXPLAINs (`call_only.sql`, `call_membership.sql`,
+`filtered_summaries.sql` with the new clauses absent) were added in
+`a0413cd`: index scan on `call_org_caller_ended_idx` with the caller in the
+index condition and per-call indexed correction lookups, no table re-scan.
+The archive's capture heads and the retained Part 1 row are annotated in
+`77a8963`.
 
 ## Browser walkthrough (spec §9.12)
 
@@ -118,14 +136,36 @@ vacuous telemetry test, cheap boundary and idempotency tests, two Web items;
 Operator parity had no gap; concurrency-20 items tagged BEYOND_ENVELOPE.
 Disposition: all in-envelope items assigned (Lane B round 5, Lane W round 5).
 
-**Round 2**: *pending* (limited to the fixes).
+**Round 2** on `72130ab`, limited to the fixes: **READY**, no fix
+required. Every round-1 item was verified CLOSED with file references.
+Recorded as LATER under the two-round cap: a person-state-statement 503
+test (cheap via revoking a table grant; the feed-row 503 is covered), an
+equal-timestamp correction pin and the preview exact-200 pin, the feeds
+page's first-load error branch test, a spinner that stays after a discarded
+preview settlement on a real session change (fail-closed), and a comment
+wording nit in `person_state.sql`.
 
 ## Final-tree gates (once, coordinator)
 
-*pending*: `./scripts/sqlx-prepare`, `./scripts/check`, `./scripts/check-db`
-on the final integration tree.
+Run by the coordinator in `../crm-worktrees/011d-integration` at `72130ab`
+(the later `77a8963` is a README-only change):
+
+| Gate | Result |
+|---|---|
+| `./scripts/sqlx-prepare` | complete; zero `.sqlx` drift files afterwards |
+| `./scripts/check` | all checks passed, 95 s: 699 Rust tests, Web lint/typecheck/build, Vitest 45 files / 572 tests |
+| `./scripts/check-db`, first run | FAILED at 35 of 541: `db_calls::a_second_correction_chains_onto_the_first_with_strictly_increasing_recorded_at` (history ordering assertion); nextest stopped fail-fast |
+| Same test in isolation | integration tree: failed 2 of 3 runs; **main: failed 1 of 3 runs**. The file is untouched by 011d and the only production diff in that area is the additive fact type. Pre-existing timing flake, not a regression |
+| `./scripts/check-db`, second run | all checks passed, 180 s: **541 tests run, 541 passed**, 699 skipped |
 
 ## Residuals (LATER)
+
+- `db_calls::a_second_correction_chains_onto_the_first_with_strictly_increasing_recorded_at`
+  is a pre-existing intermittent failure on `main` (1 of 3 isolated runs);
+  it should get its own fix outside this slice.
+- The three largest test files grew substantially this slice
+  (`db_today_system_feed_commands.rs` about 2,950 lines); consider splitting
+  in the next Today rung.
 
 - Preview has no fixed-clock test seam; §9.6 parity is verified as id-set
   containment, not payload equality (reviewer F6).

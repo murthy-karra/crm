@@ -1,12 +1,19 @@
 # Project State
 
-Last updated: 2026-09-07 (Slice 011d: lanes merged on the integration
-branch; review round 1 done; Lane B on the fix round plus Legacy deletion;
-Lane W on the browser walkthrough).
+Last updated: 2026-09-07 (Slice 011d verified on the integration branch;
+awaiting the user's merge approval).
 
 ## Current phase
 
-**Slice 011d (tweakable built-in Today rules) — IMPLEMENTATION IN PROGRESS.**
+**Slice 011d (tweakable built-in Today rules) — VERIFIED, AWAITING MERGE
+APPROVAL.** Integration branch `slice-011d-today-system-feeds` at `77a8963`
+(144 files against `main`). Final-tree gates run once by the coordinator:
+`sqlx-prepare` clean, `check` green (699 Rust, 572 Web tests), `check-db`
+541 of 541 on the second run after a pre-existing `db_calls` timing flake
+that also fails on `main`. Review round 2: READY. Full evidence in the
+[verification record](../tasks/SLICE_011d_VERIFICATION.md). Seven production
+defects were found and fixed before merge (listed there). Implementation
+history follows.
 The user said "start 011d" on 2026-09-07. Integration branch
 `slice-011d-today-system-feeds` from `main` at `66b44ff`; Lane B (Claude
 Sonnet 5) in `../crm-worktrees/011d-lane-b` on `slice-011d-lane-b` doing brief
@@ -545,12 +552,12 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. **011d in progress:** wait for Lane B's fix-round report (includes the
-   `Legacy` deletion) and Lane W's walkthrough report; audit both; assign
-   the two Web items to Lane W; re-merge both lanes into the integration
-   branch; review round 2 (the last allowed) limited to the fixes; write
-   `docs/tasks/SLICE_011d_VERIFICATION.md`; run the final-tree gates once;
-   commit and merge gates with the user.
+1. **Merge 011d on the user's approval:** `slice-011d-today-system-feeds`
+   (`77a8963`) into `main` with `--no-ff`; then delete the three worktrees
+   and the two lane branches (needs approval), run `./scripts/db-migrate`
+   before restarting the shared development runtime (migration
+   `20260908000001`), and record the merge here. Push and deployment are
+   separate approvals.
    The equivalence gate (Lane B step 3) and the merge-join toggle question
    (step 5) return to the coordinator. The shared development runtime is
    already migrated and serving the merged 011c code.
@@ -577,10 +584,9 @@ and now lives only in git history.
 
 ## Approval currently required
 
-- None right now: implementation is authorized and running. Coming gates:
-  arm deletion (coordinator, on equivalence evidence), the merge-join toggle
-  (coordinator, on §8 evidence), then commit and merge approval from the
-  user. Push and deployment are not authorized.
+- **Merge approval for 011d** (source `slice-011d-today-system-feeds` at
+  `77a8963`, destination `main`). Also: approval to delete the lane branches
+  and worktrees after the merge. Push and deployment are not authorized.
 - All three 011c decisions were taken on 2026-09-06 (late evening): the §8
   planner amendment is approved, the Phase B pairing limitation accepted, and
   the local commit and merge performed, then the push. **Deployment is not

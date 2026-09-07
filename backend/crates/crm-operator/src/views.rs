@@ -15,7 +15,7 @@ pub const UNTRUSTED_CLIP_CHARS: usize = 500;
 /// (D-033): the `low` "outcome needed" tier sorts under both Inquiry
 /// tiers, by the call's `ended_at`.
 pub const ORDERING_RULE: &str =
-    "high_before_normal_before_low, then waiting_since ascending (ended_at for low), then id";
+    "built_in_work_is_admitted_before_list_matches_at_the_200_item_cap; display_high_then_normal_then_list_then_low; list_matches_sort_by_last_contact_attempt_ascending_with_never_contacted_first_then_person_id; built_in_high_and_normal_sort_by_waiting_since_then_id; low_sorts_by_ended_at_then_id";
 
 /// Zero-width and bidirectional formatting characters: invisible in a
 /// rendered reply but able to reorder or hide text in a prompt.
@@ -191,6 +191,27 @@ pub struct PersonDetail {
     /// Latest 20.
     pub history: Vec<HistoryEntryView>,
     pub on_your_today: bool,
+    /// True only when the Person is in the bounded, returned Today queue.
+    /// It does not make an uncapped membership claim.
+    pub today_truncated: bool,
+    pub sources: TodaySourcesView,
+}
+
+/// Source evaluation state shared by every Today-derived Operator output.
+/// List names are user-authored, so they are never serialized as trusted
+/// strings in model-facing tool results.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TodaySourcesView {
+    pub status: String,
+    pub issues: Vec<TodaySourceIssueView>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TodaySourceIssueView {
+    pub list_id: Uuid,
+    pub name: UntrustedText,
+    pub revision: i64,
+    pub error: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -204,7 +225,7 @@ pub struct TodayItemView {
     /// coded fields), each carrying an additional `explanation` line built
     /// from the coded payload only (docs/specs/SLICE_006c.md §5a).
     pub reasons: Vec<serde_json::Value>,
-    pub waiting_since: DateTime<Utc>,
+    pub waiting_since: Option<DateTime<Utc>>,
     pub last_contact_attempt: Option<DateTime<Utc>>,
 }
 
@@ -213,6 +234,7 @@ pub struct TodayView {
     pub generated_at: DateTime<Utc>,
     pub total: usize,
     pub truncated: bool,
+    pub sources: TodaySourcesView,
     pub items: Vec<TodayItemView>,
 }
 
@@ -220,12 +242,16 @@ pub struct TodayView {
 pub struct NextWorkItem {
     pub item: Option<TodayItemView>,
     pub total: usize,
+    pub truncated: bool,
+    pub sources: TodaySourcesView,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Ahead {
     pub high: usize,
     pub normal: usize,
+    /// List-only saved-list items ahead of this item (Slice 011c).
+    pub list: usize,
     /// `low` "outcome needed" items ahead (SLICE_006c §5a, D-033; additive).
     pub low: usize,
 }
@@ -233,10 +259,7 @@ pub struct Ahead {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "reason", rename_all = "snake_case")]
 pub enum NotOnTodayReason {
-    NotAssignedToYou {
-        assigned_user_display_name: Option<String>,
-    },
-    AlreadyContacted,
+    NotInReturnedToday,
 }
 
 /// `explain_priority`'s result (docs/specs/SLICE_005.md §3). `person` is
@@ -253,15 +276,19 @@ pub enum PriorityExplanation {
         total: usize,
         priority: String,
         reasons: Vec<serde_json::Value>,
-        waiting_since: DateTime<Utc>,
+        waiting_since: Option<DateTime<Utc>>,
+        last_contact_attempt: Option<DateTime<Utc>>,
         recommended_action: String,
         ordering_rule: &'static str,
         ahead: Ahead,
+        sources: TodaySourcesView,
     },
     NotOnToday {
         person: PersonCard,
         #[serde(flatten)]
         reason: NotOnTodayReason,
+        truncated: bool,
+        sources: TodaySourcesView,
     },
 }
 
@@ -348,10 +375,15 @@ mod tests {
         };
         let v = serde_json::to_value(PriorityExplanation::NotOnToday {
             person: card,
-            reason: NotOnTodayReason::AlreadyContacted,
+            reason: NotOnTodayReason::NotInReturnedToday,
+            truncated: true,
+            sources: TodaySourcesView {
+                status: "complete".to_string(),
+                issues: vec![],
+            },
         })
         .unwrap();
         assert_eq!(v["status"], "not_on_today");
-        assert_eq!(v["reason"], "already_contacted");
+        assert_eq!(v["reason"], "not_in_returned_today");
     }
 }

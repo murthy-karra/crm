@@ -1,0 +1,73 @@
+{
+  "builtin_cases": [
+    {
+      "case": "concentrated_spare_B",
+      "rows": 100
+    },
+    {
+      "case": "representative_full_B",
+      "rows": 201
+    },
+    {
+      "case": "partial_B",
+      "rows": 100
+    },
+    {
+      "case": "empty_B",
+      "rows": 0
+    }
+  ],
+  "comparison": "full selected row payload plus explicit Today/source order; source output includes last_contact_at sort key",
+  "result": "equal",
+  "source_cases": [
+    {
+      "case": "one_dense",
+      "label": "stage,source",
+      "position": 1,
+      "rows": 101
+    },
+    {
+      "case": "one_absence",
+      "label": "stage,last_contact",
+      "position": 1,
+      "rows": 101
+    },
+    {
+      "case": "five_overlap",
+      "label": "stage,source",
+      "position": 1,
+      "rows": 101
+    },
+    {
+      "case": "five_overlap",
+      "label": "stage,source,has_phone",
+      "position": 2,
+      "rows": 101
+    },
+    {
+      "case": "five_overlap",
+      "label": "stage,last_contact",
+      "position": 3,
+      "rows": 101
+    },
+    {
+      "case": "five_overlap",
+      "label": "stage,source,last_contact",
+      "position": 4,
+      "rows": 101
+    },
+    {
+      "case": "five_overlap",
+      "label": "stage,has_phone",
+      "position": 5,
+      "rows": 101
+    },
+    {
+      "case": "narrow_me_source",
+      "label": "narrow_me_source",
+      "position": 1,
+      "rows": 101
+    }
+  ],
+  "transaction": "one read-only repeatable-read snapshot with one server transaction_timestamp"
+}

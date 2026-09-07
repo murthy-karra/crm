@@ -1,0 +1,8 @@
+fixture_people=50000
+fixture_inquiries=46064
+fixture_contact_attempts=52306
+fixture_contact_corrections=2906
+fixture_inbound=2843
+builtin_concentrated_candidates=100
+builtin_representative_candidates=400
+builtin_partial_candidates=100

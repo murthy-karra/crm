@@ -76,7 +76,8 @@ function lowItem(): TodayItem {
 function stubApi(items: TodayItem[]) {
   apiFetchMock.mockImplementation(async (path: string) => {
     if (path === '/me') return me()
-    if (path === '/today') return { generated_at: ENDED_AT, items, truncated: false } satisfies TodayResponse
+    if (path === '/today') return { generated_at: ENDED_AT, items, truncated: false, sources: { status: 'complete', issues: [] } } satisfies TodayResponse
+    if (path === '/today/sources') return { limit: 5, sources: [] }
     throw new Error(`unexpected ${path}`)
   })
 }

@@ -1,0 +1,21 @@
+   Compiling crm-api v0.1.0 (/Users/karrad/projects/crm/backend/crates/crm-api)
+error[E0507]: cannot move out of `*connection` which is behind a mutable reference
+   --> crates/crm-api/tests/db_today_source_hooks.rs:315:13
+    |
+275 |         connection: &'a mut PgConnection,
+    |                     -------------------- move occurs because `*connection` has type `PgConnection`, which does not implement the `Copy` trait
+...
+315 |             connection.close().await?;
+    |             ^^^^^^^^^^ ------- `*connection` moved due to this method call
+    |             |
+    |             `*connection` is moved here
+    |
+note: `sqlx::Connection::close` takes ownership of the receiver `self`, which moves `*connection`
+   --> /Users/karrad/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/connection.rs:35:14
+    |
+ 35 |     fn close(self) -> BoxFuture<'static, Result<(), Error>>;
+    |              ^^^^
+
+For more information about this error, try `rustc --explain E0507`.
+error: could not compile `crm-api` (test "all") due to 1 previous error
+error: command `/Users/karrad/.rustup/toolchains/1.98.0-aarch64-apple-darwin/bin/cargo test --no-run --message-format json-render-diagnostics --package crm-api --test all` exited with code 101

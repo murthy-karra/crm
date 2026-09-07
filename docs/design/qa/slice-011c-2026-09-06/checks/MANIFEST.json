@@ -1,0 +1,153 @@
+{
+  "scope": "Retained intermediate verification outputs; these are not final-tree gates. No command was rerun during archival.",
+  "files": [
+    {
+      "file": "today-source-and-baseline-db-final-rerun.txt",
+      "source_sha256": "6fbf5b9ad2ea983a69d95bec3ebb1053fdb0915076c349a259f9b8a6051b70f0",
+      "archived_sha256": "6fbf5b9ad2ea983a69d95bec3ebb1053fdb0915076c349a259f9b8a6051b70f0",
+      "transformations": []
+    },
+    {
+      "file": "today-source-and-baseline-db-final.txt",
+      "source_sha256": "a012cef5bb670fd76162073afa29a1d9338925c73e9c0cb4206a679dbbc0352f",
+      "archived_sha256": "a012cef5bb670fd76162073afa29a1d9338925c73e9c0cb4206a679dbbc0352f",
+      "transformations": []
+    },
+    {
+      "file": "today-source-db-nextest-final-rerun.txt",
+      "source_sha256": "a59f952c92957a12d63536be481a9db7f8efdb6cbab1deb2ddb5c7280d3d97ea",
+      "archived_sha256": "a59f952c92957a12d63536be481a9db7f8efdb6cbab1deb2ddb5c7280d3d97ea",
+      "transformations": []
+    },
+    {
+      "file": "today-source-db-nextest-final.txt",
+      "source_sha256": "c440eb37d8e5228f0f1ffd24ab21e26234d5b7277638e802211ca2645878e8ae",
+      "archived_sha256": "c440eb37d8e5228f0f1ffd24ab21e26234d5b7277638e802211ca2645878e8ae",
+      "transformations": []
+    },
+    {
+      "file": "today-source-db-nextest.txt",
+      "source_sha256": "b6673adf1d03887aed4cb2358e8bff1c07d830b8ce36f12e4082c5189838a817",
+      "archived_sha256": "b6673adf1d03887aed4cb2358e8bff1c07d830b8ce36f12e4082c5189838a817",
+      "transformations": [
+        "Input is the previously reconstructed sanitized command/result summary, not raw process stdout."
+      ]
+    },
+    {
+      "file": "today-source-deadline-300ms-rerun.txt",
+      "source_sha256": "5e4ea64eabb37ba4d3f6ad6a31662ab813c532ab1f9ded532f24e349e15a0e84",
+      "archived_sha256": "5e4ea64eabb37ba4d3f6ad6a31662ab813c532ab1f9ded532f24e349e15a0e84",
+      "transformations": []
+    },
+    {
+      "file": "today-source-hooks-db-rerun-2.txt",
+      "source_sha256": "f95d260454a187059b5f43af29c431e5d3ef29d7a53ae276a361d75e7e5ebc3d",
+      "archived_sha256": "f95d260454a187059b5f43af29c431e5d3ef29d7a53ae276a361d75e7e5ebc3d",
+      "transformations": []
+    },
+    {
+      "file": "today-source-hooks-db-rerun-3.txt",
+      "source_sha256": "3db11cd8f3c3c71a40d413c44e21bccf342d1ee32d5bd9e87a84ef898e3eae3c",
+      "archived_sha256": "3db11cd8f3c3c71a40d413c44e21bccf342d1ee32d5bd9e87a84ef898e3eae3c",
+      "transformations": []
+    },
+    {
+      "file": "today-source-hooks-db-rerun.txt",
+      "source_sha256": "6d4d439d5749f63148b8a61f448564481c3113ebc720adadc978b3c4569135a8",
+      "archived_sha256": "6d4d439d5749f63148b8a61f448564481c3113ebc720adadc978b3c4569135a8",
+      "transformations": []
+    },
+    {
+      "file": "today-source-hooks-db.txt",
+      "source_sha256": "859141af4820301987c26dd499eb8554e53c39ab22298d07930fe3599d3baa02",
+      "archived_sha256": "859141af4820301987c26dd499eb8554e53c39ab22298d07930fe3599d3baa02",
+      "transformations": []
+    },
+    {
+      "file": "today-source-hooks-settings-deadlines-db-final.txt",
+      "source_sha256": "867aea6267de36988f8419683c1ab5c41b0b1cd6b2da6f54e0d755854718284c",
+      "archived_sha256": "867aea6267de36988f8419683c1ab5c41b0b1cd6b2da6f54e0d755854718284c",
+      "transformations": []
+    },
+    {
+      "file": "today-source-hooks-settings-deadlines-db-rerun.txt",
+      "source_sha256": "6539aa9baa455c2180571b7f7844355383144d3488da9c5c763fbe89468e9570",
+      "archived_sha256": "6539aa9baa455c2180571b7f7844355383144d3488da9c5c763fbe89468e9570",
+      "transformations": []
+    },
+    {
+      "file": "today-source-hooks-settings-deadlines-db-strengthened-rerun.txt",
+      "source_sha256": "6c27e1face4e92159330f39f6b600cffe3a16af43e53e340935aa76f88008654",
+      "archived_sha256": "6c27e1face4e92159330f39f6b600cffe3a16af43e53e340935aa76f88008654",
+      "transformations": []
+    },
+    {
+      "file": "today-source-hooks-settings-deadlines-db-strengthened.txt",
+      "source_sha256": "e0f123364fd75f135cf8df4aa2d9babcbdffb6bfe7f338b321801b33f93a11fb",
+      "archived_sha256": "e0f123364fd75f135cf8df4aa2d9babcbdffb6bfe7f338b321801b33f93a11fb",
+      "transformations": []
+    },
+    {
+      "file": "today-source-hooks-snapshot-rerun.txt",
+      "source_sha256": "b6f762849eef6b382a15b84a6eb2452539e25090af401dadbf6f7132c9ad48ec",
+      "archived_sha256": "b6f762849eef6b382a15b84a6eb2452539e25090af401dadbf6f7132c9ad48ec",
+      "transformations": []
+    },
+    {
+      "file": "today-source-parity-rerun.txt",
+      "source_sha256": "8132f6b4ba1d461ac08efaf8c83f2f2e5b6af88eb0b82e7cb4be371e59da3f54",
+      "archived_sha256": "8132f6b4ba1d461ac08efaf8c83f2f2e5b6af88eb0b82e7cb4be371e59da3f54",
+      "transformations": []
+    },
+    {
+      "file": "today-source-recovery-rerun-2.txt",
+      "source_sha256": "55490611b673320f4c47b9c1f95134a2f98ae2f2964d4c7769f7d78d2aa751be",
+      "archived_sha256": "55490611b673320f4c47b9c1f95134a2f98ae2f2964d4c7769f7d78d2aa751be",
+      "transformations": []
+    },
+    {
+      "file": "today-source-recovery-rerun.txt",
+      "source_sha256": "b693b17c8617ef7e33237c8d9c3b6a2eed30a34d4433f64c214a0161aafc4ee8",
+      "archived_sha256": "b693b17c8617ef7e33237c8d9c3b6a2eed30a34d4433f64c214a0161aafc4ee8",
+      "transformations": []
+    },
+    {
+      "file": "today-source-termination-rerun-2.txt",
+      "source_sha256": "83c122fab6de2635cac9d214a70bc873a71d18153cc223d86011017357662ec9",
+      "archived_sha256": "83c122fab6de2635cac9d214a70bc873a71d18153cc223d86011017357662ec9",
+      "transformations": []
+    },
+    {
+      "file": "today-source-termination-rerun-3.txt",
+      "source_sha256": "185019d35d051185af92a03a5d722b572f04f5fc71561b0f845776fcf3de28e3",
+      "archived_sha256": "185019d35d051185af92a03a5d722b572f04f5fc71561b0f845776fcf3de28e3",
+      "transformations": []
+    },
+    {
+      "file": "today-source-termination-rerun.txt",
+      "source_sha256": "6a331c76685ef5f7d8938f70f53e03624a1c17a168457551759d696465aab9f1",
+      "archived_sha256": "02a54fef7b62b41a9c0d06b91aacd54841a9f30f68f9aa8f7b4d72067f8957c9",
+      "transformations": [
+        "Replaced one database debug structure with its static SQLSTATE/failure explanation; raw original retained privately."
+      ]
+    },
+    {
+      "file": "web-i16-and-today-final.txt",
+      "source_sha256": "f04378cb48a41cc938a2701091a50586f10062fbf7f752f29a1a3f7e9a4cd2ed",
+      "archived_sha256": "f04378cb48a41cc938a2701091a50586f10062fbf7f752f29a1a3f7e9a4cd2ed",
+      "transformations": []
+    },
+    {
+      "file": "web-router-replay-and-isolation.txt",
+      "source_sha256": "2889d13a3a651aa1258f47e9e829436c439ed5e0db786d29799a80fb2caae4e6",
+      "archived_sha256": "2889d13a3a651aa1258f47e9e829436c439ed5e0db786d29799a80fb2caae4e6",
+      "transformations": []
+    },
+    {
+      "file": "sqlx-prepare-after-hooks-and-comments.txt",
+      "source_sha256": "a752602e2234f46f063a65f7ebd6fb5ac91db09c87b130f1c112946693c35a2a",
+      "archived_sha256": "a752602e2234f46f063a65f7ebd6fb5ac91db09c87b130f1c112946693c35a2a",
+      "transformations": []
+    }
+  ]
+}

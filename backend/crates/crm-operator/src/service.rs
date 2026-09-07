@@ -881,8 +881,15 @@ mod tests {
             priority: "high".to_string(),
             recommended_action: "call".to_string(),
             reasons: vec![json!({"code": "no_contact_attempt"})],
-            waiting_since: Utc.with_ymd_and_hms(2026, 8, 22, 11, 0, 0).unwrap(),
+            waiting_since: Some(Utc.with_ymd_and_hms(2026, 8, 22, 11, 0, 0).unwrap()),
             last_contact_attempt: None,
+        }
+    }
+
+    fn sources() -> TodaySourcesView {
+        TodaySourcesView {
+            status: "complete".to_string(),
+            issues: vec![],
         }
     }
 
@@ -946,6 +953,8 @@ mod tests {
                 inquiries: vec![],
                 history: vec![],
                 on_your_today: true,
+                today_truncated: false,
+                sources: sources(),
             })
         }
         async fn get_today(
@@ -965,6 +974,7 @@ mod tests {
                 generated_at: ctx.now,
                 total: self.today_ids.len(),
                 truncated: false,
+                sources: sources(),
                 items,
             })
         }
@@ -976,6 +986,8 @@ mod tests {
             Ok(NextWorkItem {
                 item: self.today_ids.first().map(|id| item(1, *id, "N")),
                 total: self.today_ids.len(),
+                truncated: false,
+                sources: sources(),
             })
         }
         async fn explain_priority(
@@ -990,14 +1002,17 @@ mod tests {
                 total: 1,
                 priority: "high".to_string(),
                 reasons: vec![],
-                waiting_since: ctx.now,
+                waiting_since: Some(ctx.now),
+                last_contact_attempt: None,
                 recommended_action: "call".to_string(),
                 ordering_rule: ORDERING_RULE,
                 ahead: Ahead {
                     high: 0,
                     normal: 0,
+                    list: 0,
                     low: 0,
                 },
+                sources: sources(),
             })
         }
         async fn propose_start_call(

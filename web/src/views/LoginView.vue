@@ -5,6 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 import FormField from '../components/FormField.vue'
 import { useLoginMutation } from '../api/queries'
 import { ApiError } from '../api/client'
+import { SessionCoordinationUnavailableError } from '../sessionLifecycle'
 import { buttonClasses, INPUT_CLASSES } from '../lib/controls'
 
 const route = useRoute()
@@ -16,6 +17,9 @@ const password = ref('')
 const { mutate: login, isPending, error } = useLoginMutation()
 
 function loginErrorMessage(err: unknown): string {
+  if (err instanceof SessionCoordinationUnavailableError) {
+    return 'Browser storage is unavailable. Enable site storage, then reload.'
+  }
   if (err instanceof ApiError) {
     switch (err.code) {
       case 'invalid_credentials':

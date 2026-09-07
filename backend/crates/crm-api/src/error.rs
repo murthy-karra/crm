@@ -98,6 +98,7 @@ pub enum ApiError {
     SavedListRequestConflict,
     SavedListDeleted,
     SavedListLimitReached,
+    TodaySourceLimitReached,
     UnsupportedFilter,
 }
 
@@ -182,6 +183,9 @@ impl IntoResponse for ApiError {
             ApiError::SavedListDeleted => (StatusCode::CONFLICT, "saved_list_deleted", None),
             ApiError::SavedListLimitReached => {
                 (StatusCode::CONFLICT, "saved_list_limit_reached", None)
+            }
+            ApiError::TodaySourceLimitReached => {
+                (StatusCode::CONFLICT, "today_source_limit_reached", None)
             }
             ApiError::UnsupportedFilter => {
                 (StatusCode::UNPROCESSABLE_ENTITY, "unsupported_filter", None)
@@ -325,6 +329,7 @@ impl From<SavedListError> for ApiError {
             SavedListError::RequestConflict => ApiError::SavedListRequestConflict,
             SavedListError::Deleted => ApiError::SavedListDeleted,
             SavedListError::LimitReached => ApiError::SavedListLimitReached,
+            SavedListError::TodaySourceLimitReached => ApiError::TodaySourceLimitReached,
             SavedListError::InvalidStage => ApiError::InvalidStage,
             SavedListError::InvalidAssignee => ApiError::InvalidAssignee,
             SavedListError::UnsupportedFilter => ApiError::UnsupportedFilter,

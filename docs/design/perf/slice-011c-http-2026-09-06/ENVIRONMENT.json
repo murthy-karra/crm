@@ -1,0 +1,37 @@
+{
+  "scope": "Read-only host/toolchain inventory before the Phase B HTTP run; not a measurement or database inspection.",
+  "captured_at_utc": "2026-09-07T00:03:00Z",
+  "host": {
+    "os": "macOS",
+    "version": "26.6.2",
+    "build": "25G83",
+    "architecture": "arm64",
+    "logical_cpus": 10,
+    "memory_bytes": 68719476736
+  },
+  "tools": {
+    "rustc": "1.98.0 (88d9e12ae 2026-08-18)",
+    "cargo": "1.98.0 (797e8a9bc 2026-08-05)",
+    "pnpm": "11.19.0",
+    "node": "v26.8.1"
+  },
+  "commands": [
+    "sw_vers",
+    "uname -m",
+    "sysctl -n hw.ncpu hw.memsize",
+    "rustc --version",
+    "cargo --version",
+    "pnpm --version",
+    "node --version"
+  ],
+  "still_required": [
+    "Database version and exact isolated fixture counts from the sole database lane",
+    "Actual executable, source hashes, build profile and enabled features",
+    "Measured pool configuration, clock and runtime configuration",
+    "Raw run evidence and owned runtime/database cleanup"
+  ],
+  "execution": {
+    "note": "Pre-execution inventory above; execution facts are in MANIFEST.json and each run directory's environment.txt",
+    "still_required_resolved_by": "MANIFEST.json, run-1-failed/, run-2/"
+  }
+}

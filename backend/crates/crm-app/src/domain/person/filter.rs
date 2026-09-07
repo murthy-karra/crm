@@ -36,6 +36,7 @@
 
 use std::collections::HashSet;
 use std::fmt;
+use std::time::{Duration, Instant};
 
 use serde::de::{Error as DeError, MapAccess, Visitor};
 use serde::ser::SerializeMap;
@@ -700,6 +701,75 @@ impl FilterDefinition {
         }
         Ok(())
     }
+
+    /// The Today source evaluator validates each source inside one absolute
+    /// wall-clock allowance. Re-arm PostgreSQL's transaction-local statement
+    /// timeout before every reference probe so a late probe receives only the
+    /// source's remaining time, never a fresh full-source budget.
+    pub async fn validate_references_until(
+        &self,
+        conn: &mut PgConnection,
+        organization_id: OrganizationId,
+        deadline: Instant,
+    ) -> Result<(), FilterError> {
+        for clause in &self.clauses {
+            match clause {
+                Clause::Stage(c) => {
+                    for id in &c.stage_ids {
+                        set_statement_timeout_until(conn, deadline).await?;
+                        let exists = stage::exists(conn, *id, organization_id)
+                            .await
+                            .map_err(FilterError::Database)?;
+                        if !exists {
+                            return Err(FilterError::InvalidStage);
+                        }
+                    }
+                }
+                Clause::AssignedTo(c) => {
+                    for a in &c.assignees {
+                        if let Assignee::User(user_id) = a {
+                            set_statement_timeout_until(conn, deadline).await?;
+                            let is_member = person_queries::is_organization_member(
+                                conn,
+                                organization_id,
+                                *user_id,
+                            )
+                            .await
+                            .map_err(FilterError::Database)?;
+                            if !is_member {
+                                return Err(FilterError::InvalidAssignee);
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+}
+
+async fn set_statement_timeout_until(
+    conn: &mut PgConnection,
+    deadline: Instant,
+) -> Result<(), FilterError> {
+    let remaining = deadline
+        .checked_duration_since(Instant::now())
+        .ok_or_else(|| FilterError::Database(sqlx::Error::PoolTimedOut))?;
+    // Keep the Today source wall-clock deadline authoritative while giving
+    // PostgreSQL enough time to report a statement cancellation before its
+    // caller's outer timeout begins savepoint recovery.
+    let milliseconds = remaining
+        .saturating_sub(Duration::from_millis(10))
+        .as_millis()
+        .clamp(1, 500)
+        .to_string();
+    sqlx::query("SELECT set_config('statement_timeout', $1, true)")
+        .bind(milliseconds)
+        .execute(conn)
+        .await
+        .map_err(FilterError::Database)?;
+    Ok(())
 }
 
 // --- SQL binding params (person/queries.rs's `filtered_summaries`) --------

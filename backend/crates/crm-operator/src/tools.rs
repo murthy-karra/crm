@@ -51,7 +51,7 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: GET_PERSON,
-            description: "Get one Person's card, contact methods, latest inquiries, recent history, and whether they are on the user's Today list. Use an id from a previous tool result.",
+            description: "Get one Person's card, contact methods, latest inquiries, recent history, and their membership in the bounded Today results, including source availability. Use an id from a previous tool result.",
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -67,7 +67,7 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: GET_TODAY,
-            description: "The user's Today list: People assigned to them who are waiting for a contact attempt, in the exact order the CRM shows them. Report the order as given; never reorder.",
+            description: "The user's bounded Today results: built-in work and enabled saved-list matches in the exact CRM order, with source availability. Report the order as given; never reorder or infer omitted membership.",
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -85,7 +85,7 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: GET_NEXT_WORK_ITEM,
-            description: "The first item on the user's Today list (who to contact next) and the total number of items.",
+            description: "The first available item in the user's bounded Today results, plus truncation and source availability.",
             parameters: json!({
                 "type": "object",
                 "properties": {},
@@ -116,7 +116,7 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: EXPLAIN_PRIORITY,
-            description: "Why a Person is (or is not) on the user's Today list and at what position: priority tier, reasons, the ordering rule, and how many People are ahead in each tier.",
+            description: "Explain a Person's returned Today position, tier, reasons, ordering keys, truncation, and source availability. If absent, do not infer why they are not in the returned results.",
             parameters: json!({
                 "type": "object",
                 "properties": {

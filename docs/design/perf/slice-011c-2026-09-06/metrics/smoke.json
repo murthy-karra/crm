@@ -1,0 +1,72 @@
+{
+  "case": "smoke_five_overlap_concentrated_spare_B",
+  "viewer_kind": "concentrated_spare_B",
+  "source_count": 5,
+  "status": "complete",
+  "failure": null,
+  "request_ms": 2528.097708,
+  "pool_wait_ms": 0.6377499999999999,
+  "builtins_ms": 758.83375,
+  "metadata_ms": 2.6365,
+  "b_rows": 100,
+  "builtins_truncated": false,
+  "k": 100,
+  "list_candidates_before_cap": 202,
+  "source_metrics": [
+    {
+      "label": "stage,source",
+      "completed": true,
+      "failure": null,
+      "total_ms": 359.64070799999996,
+      "validation_ms": 1.0810419999999998,
+      "membership_ms": 2.0201659999999997,
+      "prefix_with_hydration_ms": 355.203375,
+      "matched_b": 100,
+      "hydrated_prefix_rows": 101
+    },
+    {
+      "label": "stage,source,has_phone",
+      "completed": true,
+      "failure": null,
+      "total_ms": 401.770291,
+      "validation_ms": 0.497833,
+      "membership_ms": 1.846333,
+      "prefix_with_hydration_ms": 398.717,
+      "matched_b": 90,
+      "hydrated_prefix_rows": 101
+    },
+    {
+      "label": "stage,last_contact",
+      "completed": true,
+      "failure": null,
+      "total_ms": 353.919042,
+      "validation_ms": 0.441875,
+      "membership_ms": 1.818292,
+      "prefix_with_hydration_ms": 350.611542,
+      "matched_b": 100,
+      "hydrated_prefix_rows": 101
+    },
+    {
+      "label": "stage,source,last_contact",
+      "completed": true,
+      "failure": null,
+      "total_ms": 350.3205,
+      "validation_ms": 0.7036250000000001,
+      "membership_ms": 2.087875,
+      "prefix_with_hydration_ms": 346.670375,
+      "matched_b": 100,
+      "hydrated_prefix_rows": 101
+    },
+    {
+      "label": "stage,has_phone",
+      "completed": true,
+      "failure": null,
+      "total_ms": 288.647041,
+      "validation_ms": 0.574875,
+      "membership_ms": 1.284042,
+      "prefix_with_hydration_ms": 285.870541,
+      "matched_b": 10,
+      "hydrated_prefix_rows": 101
+    }
+  ]
+}

@@ -99,8 +99,8 @@ fn rank_one(candidate: TodayCandidate) -> TodayItem {
         priority,
         recommended_action,
         reasons,
-        waiting_since: candidate.waiting_since,
-        latest_inquiry: candidate.latest_inquiry,
+        waiting_since: Some(candidate.waiting_since),
+        latest_inquiry: Some(candidate.latest_inquiry),
         last_contact_attempt: candidate.last_contact_attempt,
     }
 }
@@ -167,6 +167,7 @@ mod tests {
                 TodayReason::RepeatInquiry { .. } => "repeat_inquiry",
                 TodayReason::CallOutcomeNeeded { .. } => "call_outcome_needed",
                 TodayReason::ClientReplied { .. } => "client_replied",
+                TodayReason::ListMember { .. } => "list_member",
             })
             .collect()
     }
@@ -247,7 +248,7 @@ mod tests {
                 ended_at: ts(11)
             }]
         );
-        assert_eq!(item.waiting_since, ts(11));
+        assert_eq!(item.waiting_since, Some(ts(11)));
     }
 
     #[test]
@@ -271,7 +272,7 @@ mod tests {
                 "call_outcome_needed"
             ]
         );
-        assert_eq!(item.waiting_since, ts(9));
+        assert_eq!(item.waiting_since, Some(ts(9)));
     }
 
     #[test]
@@ -326,7 +327,7 @@ mod tests {
         });
         c.waiting_since = ts(11);
         let items = rank(vec![c], ts(12));
-        assert_eq!(items[0].waiting_since, ts(11));
+        assert_eq!(items[0].waiting_since, Some(ts(11)));
         assert!(items[0].last_contact_attempt.is_some());
     }
 
@@ -349,7 +350,7 @@ mod tests {
                 occurred_at: ts(11)
             }
         );
-        assert_eq!(items[0].waiting_since, ts(11));
+        assert_eq!(items[0].waiting_since, Some(ts(11)));
     }
 
     #[test]

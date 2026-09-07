@@ -1,0 +1,31 @@
+# Compile-time inputs hashed by TodayHttpPerfFixture::source_hash().
+# The release runner separately writes SHA-256 records for these paths and
+# passes the actual optimized test-binary SHA-256 as CRM_SLICE_011C_BUILD_HASH.
+crates/crm-app/src/domain/today/mod.rs
+crates/crm-app/src/domain/today/model.rs
+crates/crm-app/src/domain/today/queries.rs
+crates/crm-app/src/domain/today/rank.rs
+crates/crm-app/src/domain/today/sources.rs
+crates/crm-app/src/domain/today/source_candidates.sql
+crates/crm-app/src/domain/today/source_membership.sql
+crates/crm-app/src/domain/today/test_support.rs
+crates/crm-app/src/domain/person/filter.rs
+crates/crm-api/src/auth/session.rs
+crates/crm-api/src/config.rs
+crates/crm-api/src/error.rs
+crates/crm-api/src/routes/today.rs
+crates/crm-api/src/state.rs
+crates/crm-api/src/lib.rs
+crates/crm-api/tests/db_today_http_perf.rs
+crates/crm-api/tests/common/mod.rs
+crates/crm-api/tests/fixtures/today_http_perf_driver.rs
+crates/crm-api/tests/fixtures/today_http_perf_fixture.rs
+crates/crm-api/tests/fixtures/today_9d62e86/mod.rs
+crates/crm-api/tests/fixtures/today_9d62e86/model.rs
+crates/crm-api/tests/fixtures/today_9d62e86/queries.rs
+crates/crm-api/tests/fixtures/today_9d62e86/rank.rs
+crates/crm-api/migrations/20260906000001_saved_list.sql
+crates/crm-api/migrations/20260906000002_today_work_source.sql
+crates/crm-api/Cargo.toml
+Cargo.toml
+Cargo.lock

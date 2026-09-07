@@ -1,5 +1,11 @@
 # Slice 011a — Filter vocabulary + ad-hoc People filtering
 
+**Approved amendment — Slice 011c (2026-09-06):**
+[SLICE_011c §§4/8](SLICE_011c.md) supplement §§4c/4e with bounded static Today
+membership, ordered-ID and hydration projections using the same v1 filter
+semantics. These evaluate matching before Today admission; they do not reuse
+the capped People result. The vocabulary and People/count contracts are unchanged.
+
 **In plain language:** this slice adds filter chips to the People
 page — narrow the list by stage, assignee, lead source, how long
 since anyone was contacted, and so on, with a live match count.

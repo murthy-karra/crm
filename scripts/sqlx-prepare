@@ -72,6 +72,11 @@ echo "==> preparing offline query cache (backend/.sqlx/)"
 # Shares the main target dir (unlike scripts/check-db's isolated one) because
 # this only runs when queries actually changed, so the SQLX_OFFLINE=false
 # fingerprint clobber it causes forces a relink that was already justified.
-DATABASE_URL="$prepare_url" SQLX_OFFLINE=false cargo sqlx prepare --workspace
+# `crm-api` consolidates integration coverage into `tests/all.rs` and this
+# slice freezes one pre-source Today query there for executable parity. Keep
+# every production *and test* macro statement in the checked offline cache;
+# otherwise a clean `SQLX_OFFLINE=true cargo test --test all` can fail after
+# this script reports success.
+DATABASE_URL="$prepare_url" SQLX_OFFLINE=false cargo sqlx prepare --workspace -- --all-targets
 
 echo "==> sqlx-prepare complete"

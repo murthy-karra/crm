@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) AS \"count!\"\n           FROM today_work_source tws\n           JOIN saved_list l\n             ON l.organization_id = tws.organization_id AND l.id = tws.list_id\n           WHERE tws.organization_id = $1\n             AND tws.user_id = $2\n             AND l.deleted_at IS NULL\n             AND (l.scope = 'shared' OR l.created_by_user_id = $2)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "572cddb1d2f5572e9fef3baaa9f937d9d2702bcd49f85781122c97c250a4d997"
+}

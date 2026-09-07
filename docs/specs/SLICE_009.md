@@ -1,5 +1,13 @@
 # Slice 009 — Correspondence capture v1 (CC/BCC-first, metadata-only)
 
+**Approved amendment — Slice 011c (2026-09-06):**
+[SLICE_011c §§4/6/8](SLICE_011c.md) extend §6's Today response with explicit
+saved-list work and source availability. Built-in inquiry/client-reply ownership
+and effective-contact semantics are preserved; a Person may remain because an
+enabled saved list still matches. The approved query changes are limited to
+three same-Organization inquiry predicates and transaction-local JIT policy;
+capture, attribution and immutable history behavior are unchanged.
+
 Status: DRAFT, independently reviewed 2026-08-27 (READY-WITH-FIXES;
 all folded in: future-Date clamp, digest token lookup, terminal-
 status PII nulling, forward-dedup message_id rule, link semantics +

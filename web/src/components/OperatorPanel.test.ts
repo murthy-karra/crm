@@ -1,3 +1,4 @@
+/* eslint-disable vue/one-component-per-file -- local harnesses provide identity and call-host fixtures. */
 // SLICE_005 §13 item 5: pending/disabled states, each error code's copy,
 // cards from `references` only (a reply containing a UUID or `<a>` renders
 // as text), history capped at 6 and cleared by Clear, context per route.
@@ -7,10 +8,11 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, apiFetch } from '../api/client'
 import type { OperatorTurnRequest, OperatorTurnResponse } from '../api/types'
-import { defineComponent } from 'vue'
+import { defineComponent, ref } from 'vue'
 import OperatorPanel from './OperatorPanel.vue'
 import { CALL_HOST_KEY, provideCallHost, type CallHost } from '../telephony/callHost'
 import type { CallRoomFactory, CallRoom } from '../telephony/useCall'
+import { beginSessionTransition, settleSessionTransition } from '../sessionLifecycle'
 
 const ORG_ID = '11111111-1111-1111-1111-111111111111'
 
@@ -67,7 +69,11 @@ function response(overrides: Partial<OperatorTurnResponse> = {}): OperatorTurnRe
   }
 }
 
-async function mountPanel(path = '/today', roomBehavior: { denyMic?: boolean; events?: string[] } = {}) {
+async function mountPanel(
+  path = '/today',
+  roomBehavior: { denyMic?: boolean; events?: string[] } = {},
+  identityKey = ref(`${ORG_ID}:actor-a:0`),
+) {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -86,14 +92,15 @@ async function mountPanel(path = '/today', roomBehavior: { denyMic?: boolean; ev
     components: { OperatorPanel },
     setup() {
       host = provideCallHost({ orgId: () => ORG_ID, createRoom: fakeRoomFactory(roomBehavior) })
+      return { identityKey }
     },
-    template: '<OperatorPanel />',
+    template: '<OperatorPanel :identity-key="identityKey" />',
   })
   const wrapper = mount(Harness, {
     global: { plugins: [router, [VueQueryPlugin, { queryClient }]] },
     attachTo: document.body,
   })
-  return { wrapper, router, host: host! }
+  return { wrapper, router, host: host!, identityKey }
 }
 
 /** The structural surface both harnesses (provideCallHost wrapper and the
@@ -112,6 +119,30 @@ function lastRequest(): OperatorTurnRequest {
   return JSON.parse(String(call[1]?.body)) as OperatorTurnRequest
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason: unknown) => void
+  const promise = new Promise<T>((yes, no) => {
+    resolve = yes
+    reject = no
+  })
+  return { promise, resolve, reject }
+}
+
+const PRIVATE_SENTINEL = 'PRIVATE LIST NAME — ALICE ONLY'
+
+function privateTurn(): OperatorTurnResponse {
+  const person = {
+    ...response().references.people[0]!,
+    display_name: PRIVATE_SENTINEL,
+  }
+  return response({
+    reply: PRIVATE_SENTINEL,
+    references: { people: [person] },
+    proposal: { ...proposal(), person },
+  })
+}
+
 beforeEach(() => {
   apiFetchMock.mockReset()
 })
@@ -121,6 +152,19 @@ afterEach(() => {
 })
 
 describe('OperatorPanel', () => {
+  it('synchronously drops an old draft when a shared-cookie transition is discovered before send', async () => {
+    const { wrapper } = await mountPanel()
+    await type(wrapper, PRIVATE_SENTINEL)
+    const transition = beginSessionTransition()
+
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(apiFetchMock).not.toHaveBeenCalled()
+    expect(wrapper.findAll('[data-testid="operator-user"]')).toHaveLength(0)
+    settleSessionTransition(transition, {})
+  })
+
   it('disables Send when empty and while pending, then renders the reply and cards', async () => {
     let resolve!: (value: OperatorTurnResponse) => void
     apiFetchMock.mockImplementationOnce(
@@ -261,6 +305,87 @@ describe('OperatorPanel', () => {
   })
 })
 
+describe('OperatorPanel identity boundary (SLICE_011c §6)', () => {
+  it.each([
+    ['same-Organization actor switch', `${ORG_ID}:actor-b:0`],
+    ['same-ID authentication-session replacement', `${ORG_ID}:actor-a:1`],
+    // SLICE_011c §9 criterion 10: a different Organization id with the same
+    // actor (AppShell's `operatorIdentityKey` includes `orgId`, so an
+    // Organization switch changes this same prop) must discard state too.
+    ['Organization switch (same actor)', '22222222-2222-2222-2222-222222222222:actor-a:0'],
+  ])('discards transcript, history, draft, cards, and proposals on a %s', async (_label, nextIdentity) => {
+    apiFetchMock.mockResolvedValueOnce(privateTurn()).mockResolvedValueOnce(response({
+      reply: 'Fresh session reply',
+      references: { people: [] },
+    }))
+    const { wrapper, identityKey } = await mountPanel()
+    await type(wrapper, 'Remember my private source')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(wrapper.text()).toContain(PRIVATE_SENTINEL)
+    expect(wrapper.find('[data-testid="operator-person-card"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="operator-proposal"]').exists()).toBe(true)
+
+    await type(wrapper, `${PRIVATE_SENTINEL} draft`)
+    identityKey.value = nextIdentity
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain(PRIVATE_SENTINEL)
+    expect(wrapper.find('[data-testid="operator-person-card"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="operator-proposal"]').exists()).toBe(false)
+    expect((wrapper.get('[data-testid="operator-input"]').element as HTMLTextAreaElement).value).toBe('')
+
+    await type(wrapper, 'What belongs to this session?')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(lastRequest()).toEqual({
+      message: 'What belongs to this session?',
+      history: [],
+      context: { route: 'today' },
+    })
+    expect(wrapper.text()).not.toContain(PRIVATE_SENTINEL)
+  })
+
+  it('drops a late successful turn after the identity changes and starts the next history empty', async () => {
+    const first = deferred<OperatorTurnResponse>()
+    apiFetchMock.mockReturnValueOnce(first.promise as Promise<never>).mockResolvedValueOnce(response({
+      reply: 'Fresh response',
+      references: { people: [] },
+    }))
+    const { wrapper, identityKey } = await mountPanel()
+    await type(wrapper, 'Private question')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    identityKey.value = `${ORG_ID}:actor-b:0`
+    first.resolve(privateTurn())
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain(PRIVATE_SENTINEL)
+    expect(wrapper.find('[data-testid="operator-assistant"]').exists()).toBe(false)
+    await type(wrapper, 'New agent question')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(lastRequest().history).toEqual([])
+  })
+
+  it('drops a late failed turn after the identity changes', async () => {
+    const first = deferred<OperatorTurnResponse>()
+    apiFetchMock.mockReturnValueOnce(first.promise as Promise<never>)
+    const { wrapper, identityKey } = await mountPanel()
+    await type(wrapper, 'Private failure')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    identityKey.value = `${ORG_ID}:actor-b:0`
+    first.reject(new ApiError(503, 'operator_unavailable'))
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="operator-error"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('Private failure')
+  })
+})
+
 // ---- SLICE_006b §6: the proposal card ---------------------------------------
 
 const PROPOSAL_ID = '9b1c1a3e-2b6a-4c1e-9a1f-0d3e4f5a6b7c'
@@ -391,7 +516,10 @@ describe('OperatorPanel — start_call proposal card (SLICE_006b)', () => {
 })
 
 describe('OperatorPanel — local pre-checks never consume the proposal (SLICE_006b §6)', () => {
-  async function mountWithMockHost(code: string) {
+  async function mountWithMockHost(
+    result: () => Promise<string | null>,
+    identityKey = ref(`${ORG_ID}:actor-a:0`),
+  ) {
     const router = createRouter({
       history: createMemoryHistory(),
       routes: [{ path: '/today', component: { template: '<div />' } }],
@@ -399,16 +527,21 @@ describe('OperatorPanel — local pre-checks never consume the proposal (SLICE_0
     await router.push('/today')
     await router.isReady()
     const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
-    const startFromProposal = vi.fn(() => Promise.resolve(code))
+    const startFromProposal = vi.fn(result)
     const host = { startFromProposal, call: { error: { value: null } } } as unknown as CallHost
-    const wrapper = mount(OperatorPanel, {
+    const Harness = defineComponent({
+      components: { OperatorPanel },
+      setup: () => ({ identityKey }),
+      template: '<OperatorPanel :identity-key="identityKey" />',
+    })
+    const wrapper = mount(Harness, {
       global: {
         plugins: [router, [VueQueryPlugin, { queryClient }]],
         provide: { [CALL_HOST_KEY as symbol]: host },
       },
       attachTo: document.body,
     })
-    return { wrapper, startFromProposal }
+    return { wrapper, startFromProposal, identityKey }
   }
 
   it.each([
@@ -416,7 +549,7 @@ describe('OperatorPanel — local pre-checks never consume the proposal (SLICE_0
     ['outcome_pending', "Save the previous call's outcome first."],
   ])('%s: shows its copy and keeps Confirm retryable', async (code, copy) => {
     stubTurnThenConfirm(response({ proposal: proposal() }))
-    const { wrapper, startFromProposal } = await mountWithMockHost(code)
+    const { wrapper, startFromProposal } = await mountWithMockHost(() => Promise.resolve(code))
     await sendTurn(wrapper)
 
     await wrapper.get('[data-testid="operator-proposal-confirm"]').trigger('click')
@@ -427,5 +560,24 @@ describe('OperatorPanel — local pre-checks never consume the proposal (SLICE_0
     expect(
       wrapper.get('[data-testid="operator-proposal-confirm"]').attributes('disabled'),
     ).toBeUndefined()
+  })
+
+  it('does not apply a deferred proposal completion after the identity changes', async () => {
+    const completion = deferred<string | null>()
+    apiFetchMock.mockResolvedValueOnce(response({ proposal: proposal(), reply: PRIVATE_SENTINEL }))
+    const { wrapper, identityKey, startFromProposal } = await mountWithMockHost(() => completion.promise)
+    await sendTurn(wrapper)
+    await wrapper.get('[data-testid="operator-proposal-confirm"]').trigger('click')
+    await flushPromises()
+    expect(startFromProposal).toHaveBeenCalledTimes(1)
+
+    identityKey.value = `${ORG_ID}:actor-b:0`
+    await flushPromises()
+    completion.resolve(null)
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain(PRIVATE_SENTINEL)
+    expect(wrapper.find('[data-testid="operator-proposal"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="operator-proposal-started"]').exists()).toBe(false)
   })
 })

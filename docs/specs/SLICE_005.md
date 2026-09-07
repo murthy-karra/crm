@@ -1,5 +1,13 @@
 # Slice 005 — Operator retrieval
 
+**Approved amendment — Slice 011c (2026-09-06):**
+[SLICE_011c §6](SLICE_011c.md) amends §§3/7/14's Today-related tool outputs
+with source availability, truncation context, list priority/reasons/actions and
+truthful absence from the returned queue. List names remain untrusted text;
+tool inputs and the shared application read path are unchanged. Its session
+boundary rules also amend §10: clear browser conversation state on identity or
+session replacement and fence late turn/proposal/drawer callbacks.
+
 Status: APPROVED (user, 2026-08-22; planner pass, then independent
 review — 15 findings, all applied as safe defaults or implementation
 notes, none blocking; §14 safe defaults accepted as written).

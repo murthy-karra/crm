@@ -2,6 +2,19 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import { type MaybeRefOrGetter, computed, toValue, watch } from 'vue'
 import { queryClient } from '../query-client'
 import { apiFetch } from './client'
+import {
+  SessionVerificationPendingError,
+  beginSessionTransition,
+  beginLogoutSessionTransition,
+  completeSessionVerification,
+  configureSessionLifecycle,
+  currentSessionGeneration,
+  isCurrentSessionGeneration,
+  settleSessionTransition,
+  useAuthSessionLifetime as useSessionLifecycleAuthLifetime,
+  useSessionVerificationPending,
+  waitForSessionVerification,
+} from '../sessionLifecycle'
 import type {
   AcceptInvitationRequest,
   AcceptInvitationResponse,
@@ -62,6 +75,9 @@ import type {
   IntakeSettingsResponse,
   StartCallResponse,
   TodayResponse,
+  TodaySourcesResponse,
+  EnableTodaySourceRequest,
+  TodaySourceChange,
   UnresolvedResponse,
   UpdateSavedListRequest,
   UpdateSavedListResponse,
@@ -96,6 +112,8 @@ export const queryKeys = {
   // needs to name this key — every key an invalidation path touches goes
   // through this factory, never hand-written (SLICE_003 Lane B task brief).
   today: (orgId: string) => ['org', orgId, 'today'] as const,
+  todayForActor: (orgId: string, actorId: string) => ['org', orgId, 'today', actorId] as const,
+  todaySources: (orgId: string, actorId: string) => ['org', orgId, 'today-sources', actorId] as const,
   // SLICE_004 §10: extend the factory, never hand-write a key.
   invitations: (orgId: string) => ['org', orgId, 'invitations'] as const,
   // SLICE_006 §6: `call.changed` → ['org', orgId, 'call', callId] (and the
@@ -128,9 +146,49 @@ export const queryKeys = {
   platformOrganization: (id: string) => ['platform', 'organizations', id] as const,
 }
 
-export function fetchMe(): Promise<MeResponse> {
-  return apiFetch<MeResponse>('/me')
+// `/me` has no public session-id field. The coordinator adds an opaque
+// cross-tab generation for cookie replacement, so an A -> logout -> A login
+// (including one initiated in another tab) cannot retain private state.
+export function useAuthSessionLifetime() {
+  return useSessionLifecycleAuthLifetime()
 }
+
+async function fetchMeForGeneration(generation: number, signal?: AbortSignal): Promise<MeResponse> {
+  const data = await apiFetch<MeResponse>('/me', { signal })
+  if (!isCurrentSessionGeneration(generation)) throw new SessionVerificationPendingError()
+  return data
+}
+
+export async function fetchMe(signal?: AbortSignal): Promise<MeResponse> {
+  const verified = await waitForSessionVerification()
+  if (verified?.generation === currentSessionGeneration()) {
+    if (verified.error !== undefined) throw verified.error
+    if (verified.identity !== undefined) return verified.identity as MeResponse
+  }
+  return fetchMeForGeneration(currentSessionGeneration(), signal)
+}
+
+configureSessionLifecycle({
+  discardPrivateState: () => {
+    void queryClient.cancelQueries()
+    queryClient.clear()
+  },
+  verify: (generation) => {
+    // Do not use `fetchQuery(['me'])` here. A router guard may already own
+    // that cached query and be waiting for this verification, which would
+    // make TanStack dedupe the verifier onto its own waiter. This direct,
+    // generation-fenced transport is the one authoritative recovery read;
+    // `completeSessionVerification` installs its value for all observers.
+    void fetchMeForGeneration(generation).then(
+      (identity) => { completeSessionVerification(generation, identity) },
+      (error) => { completeSessionVerification(generation, undefined, error) },
+    )
+  },
+  installVerifiedIdentity: (identity, generation) => {
+    if (!isCurrentSessionGeneration(generation)) return
+    queryClient.setQueryData(queryKeys.me, identity as MeResponse)
+  },
+})
 
 /**
  * Also the router's auth gate: a 401 ApiError means "go to /login" (the
@@ -138,9 +196,11 @@ export function fetchMe(): Promise<MeResponse> {
  * query-client.ts).
  */
 export function useMe() {
+  const sessionVerificationPending = useSessionVerificationPending()
   return useQuery({
     queryKey: queryKeys.me,
-    queryFn: fetchMe,
+    queryFn: ({ signal }) => fetchMe(signal),
+    enabled: computed(() => !sessionVerificationPending.value),
   })
 }
 
@@ -319,6 +379,7 @@ function invalidateSavedListCaches(queryClient: QueryClient, orgId: string, acto
   void queryClient.invalidateQueries({ queryKey: queryKeys.savedLists(orgId, actorId) })
   void queryClient.invalidateQueries({ queryKey: queryKeys.savedListCountsForActor(orgId, actorId) })
   if (listId) void queryClient.invalidateQueries({ queryKey: queryKeys.savedList(orgId, actorId, listId) })
+  invalidateTodaySourceCaches(queryClient, orgId, actorId)
 }
 
 /** Create/Save as/Duplicate share the same explicit no-retry mutation path. */
@@ -534,13 +595,70 @@ export function useMembers(orgId: MaybeRefOrGetter<string>) {
  * even if a realtime event is missed entirely — D-011, §9 "Missed events".
  * TanStack pauses the interval while the tab is backgrounded.
  */
-export function useToday(orgId: MaybeRefOrGetter<string>) {
+export function useToday(orgId: MaybeRefOrGetter<string>, actorId: MaybeRefOrGetter<string>) {
   return useQuery({
-    queryKey: computed(() => queryKeys.today(toValue(orgId))),
-    queryFn: () => apiFetch<TodayResponse>('/today'),
-    enabled: computed(() => toValue(orgId) !== ''),
+    queryKey: computed(() => queryKeys.todayForActor(toValue(orgId), toValue(actorId))),
+    queryFn: ({ signal }) => apiFetch<TodayResponse>('/today', { signal }),
+    enabled: computed(() => toValue(orgId) !== '' && toValue(actorId) !== ''),
     refetchInterval: 60_000,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always',
   })
+}
+
+export function useTodaySources(orgId: MaybeRefOrGetter<string>, actorId: MaybeRefOrGetter<string>) {
+  return useQuery({
+    queryKey: computed(() => queryKeys.todaySources(toValue(orgId), toValue(actorId))),
+    queryFn: ({ signal }) => apiFetch<TodaySourcesResponse>('/today/sources', { signal }),
+    enabled: computed(() => toValue(orgId) !== '' && toValue(actorId) !== ''),
+    refetchInterval: 60_000,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always',
+  })
+}
+
+function invalidateTodaySourceCaches(qc: QueryClient, orgId: string, actorId: string) {
+  void qc.invalidateQueries({ queryKey: queryKeys.today(orgId) })
+  void qc.invalidateQueries({ queryKey: queryKeys.todaySources(orgId, actorId) })
+}
+
+export function useEnableTodaySourceMutation(
+  orgId: MaybeRefOrGetter<string>, actorId: MaybeRefOrGetter<string>, providedQueryClient?: QueryClient,
+) {
+  const qc = providedQueryClient ?? useQueryClient()
+  return useMutation({
+    mutationFn: ({ listId, body }: { listId: string; body: EnableTodaySourceRequest }) =>
+      apiFetch<TodaySourceChange>(`/today/sources/${encodeURIComponent(listId)}`, { method: 'PUT', body: JSON.stringify(body) }),
+    retry: false,
+    onMutate: (): SavedListMutationIdentity => currentSavedListIdentity(qc) ?? { orgId: toValue(orgId), actorId: toValue(actorId), session: undefined },
+    onSuccess: (_result, _variables, identity) => {
+      if (hasCurrentSavedListIdentity(qc, identity)) invalidateTodaySourceCaches(qc, identity.orgId, identity.actorId)
+    },
+    onSettled: async (_result, _error, _variables, identity) => {
+      if (!identity || !hasCurrentSavedListIdentity(qc, identity)) return
+      invalidateTodaySourceCaches(qc, identity.orgId, identity.actorId)
+      await qc.refetchQueries({ queryKey: queryKeys.todaySources(identity.orgId, identity.actorId), type: 'active' })
+    },
+  }, providedQueryClient)
+}
+
+export function useDisableTodaySourceMutation(
+  orgId: MaybeRefOrGetter<string>, actorId: MaybeRefOrGetter<string>, providedQueryClient?: QueryClient,
+) {
+  const qc = providedQueryClient ?? useQueryClient()
+  return useMutation({
+    mutationFn: (listId: string) => apiFetch<TodaySourceChange>(`/today/sources/${encodeURIComponent(listId)}`, { method: 'DELETE' }),
+    retry: false,
+    onMutate: (): SavedListMutationIdentity => currentSavedListIdentity(qc) ?? { orgId: toValue(orgId), actorId: toValue(actorId), session: undefined },
+    onSuccess: (_result, _listId, identity) => {
+      if (hasCurrentSavedListIdentity(qc, identity)) invalidateTodaySourceCaches(qc, identity.orgId, identity.actorId)
+    },
+    onSettled: async (_result, _error, _listId, identity) => {
+      if (!identity || !hasCurrentSavedListIdentity(qc, identity)) return
+      invalidateTodaySourceCaches(qc, identity.orgId, identity.actorId)
+      await qc.refetchQueries({ queryKey: queryKeys.todaySources(identity.orgId, identity.actorId), type: 'active' })
+    },
+  }, providedQueryClient)
 }
 
 /**
@@ -558,22 +676,33 @@ export function useLoginMutation() {
   return useMutation({
     mutationFn: (credentials: { email: string; password: string }) =>
       apiFetch<MeResponse>('/session', { method: 'POST', body: JSON.stringify(credentials) }),
-    onSuccess: (data) => {
-      qc.setQueryData(queryKeys.me, data)
+    onMutate: () => {
+      const epoch = beginSessionTransition()
+      qc.clear()
+      return epoch
     },
+    onSuccess: (_data, _credentials, epoch) => {
+      // A response callback can run after a different tab's later Set-Cookie
+      // has replaced its browser session. Never seed this body: completion
+      // always verifies the actual shared cookie through `/me`.
+      if (epoch) settleSessionTransition(epoch)
+      qc.clear()
+    },
+    onError: (_error, _credentials, epoch) => { if (epoch) settleSessionTransition(epoch) },
   })
 }
 
 export function useLogoutMutation() {
+  const qc = useQueryClient()
   return useMutation({
     mutationFn: () => apiFetch<void>('/session', { method: 'DELETE' }),
-    onSuccess: () => {
-      // Full reset, not just the me query: the next login may be a
-      // different user in a different Organization, and every org-scoped
-      // key is namespaced off the org id (see queryKeys above) so stale
-      // entries would otherwise sit in the cache unreachable but present.
-      queryClient.clear()
+    onMutate: () => {
+      const epoch = beginLogoutSessionTransition()
+      qc.clear()
+      return epoch
     },
+    onSuccess: (_data, _variables, epoch) => { if (epoch) settleSessionTransition(epoch) },
+    onError: (_error, _variables, epoch) => { if (epoch) settleSessionTransition(epoch) },
   })
 }
 
@@ -816,9 +945,16 @@ export function useAcceptInvitationMutation() {
         method: 'POST',
         body: JSON.stringify(request),
       }),
-    onSuccess: (data) => {
-      qc.setQueryData(queryKeys.me, data)
+    onMutate: () => {
+      const epoch = beginSessionTransition()
+      qc.clear()
+      return epoch
     },
+    onSuccess: (_data, _request, epoch) => {
+      if (epoch) settleSessionTransition(epoch)
+      qc.clear()
+    },
+    onError: (_error, _request, epoch) => { if (epoch) settleSessionTransition(epoch) },
   })
 }
 

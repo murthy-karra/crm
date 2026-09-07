@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO today_work_source (organization_id, user_id, list_id)\n           VALUES ($1, $2, $3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "eef4a7eb49fbf6b41f5ccf3e87607c94f1bf64e261fc63ee3a8a2b4b436d6be2"
+}

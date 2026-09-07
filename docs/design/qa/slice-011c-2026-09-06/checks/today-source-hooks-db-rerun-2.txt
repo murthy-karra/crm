@@ -1,0 +1,33 @@
+   Compiling crm-api v0.1.0 (/Users/karrad/projects/crm/backend/crates/crm-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 9.69s
+────────────
+ Nextest run ID 9569cb5b-7d6d-468b-a361-5ddd1ab546c7 with nextest profile: default
+    Starting 4 tests across 1 binary (514 tests skipped)
+        PASS [   1.382s] (1/4) crm-api::all db_today_source_hooks::today_source_after_builtins_gate_keeps_one_snapshot_across_list_and_contact_mutations
+        FAIL [   1.219s] (2/4) crm-api::all db_today_source_hooks::today_source_backend_termination_marks_current_and_remaining_sources_unavailable
+  stdout ───
+
+    running 1 test
+    test db_today_source_hooks::today_source_backend_termination_marks_current_and_remaining_sources_unavailable ... FAILED
+
+    failures:
+
+    failures:
+        db_today_source_hooks::today_source_backend_termination_marks_current_and_remaining_sources_unavailable
+
+    test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 517 filtered out; finished in 1.20s
+
+  stderr ───
+
+    thread 'db_today_source_hooks::today_source_backend_termination_marks_current_and_remaining_sources_unavailable' (4605224) panicked at crates/crm-api/tests/db_today_source_hooks.rs:659:5:
+    assertion `left == right` failed: B and the unattempted C source are explicitly unavailable
+      left: [d02acdd0-c44e-4d7e-860c-a5f685d936e9]
+     right: [d02acdd0-c44e-4d7e-860c-a5f685d936e9, d2a05e25-c51f-4516-b20a-580972b2c8e0]
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+        PASS [   1.668s] (3/4) crm-api::all db_today_source_hooks::today_source_membership_checkpoint_sql_failure_discards_only_that_source
+        PASS [   1.421s] (4/4) crm-api::all db_today_source_hooks::today_source_recovery_checkpoint_exhaustion_uses_cleanup_grace_and_discards_connection
+────────────
+     Summary [   5.692s] 4 tests run: 3 passed, 1 failed, 514 skipped
+        FAIL [   1.219s] (2/4) crm-api::all db_today_source_hooks::today_source_backend_termination_marks_current_and_remaining_sources_unavailable
+error: test run failed

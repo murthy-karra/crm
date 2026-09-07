@@ -8,7 +8,8 @@
 //! wrapped as `UntrustedText`.
 
 use async_trait::async_trait;
-use sqlx::{PgConnection, PgPool};
+use sqlx::pool::PoolConnection;
+use sqlx::{PgConnection, PgPool, Postgres};
 use uuid::Uuid;
 
 use crate::domain::inquiry::queries as inquiry_queries;
@@ -165,8 +166,8 @@ fn user_id(ctx: &OperatorContext) -> UserId {
     UserId::new(ctx.actor_user_id)
 }
 
-async fn today_for(conn: &mut PgConnection, ctx: &OperatorContext) -> ToolResult<TodayList> {
-    today::query(
+async fn today_for(conn: PoolConnection<Postgres>, ctx: &OperatorContext) -> ToolResult<TodayList> {
+    today::query_owned(
         conn,
         &PersonVisibilityScope::Organization(org_id(ctx)),
         user_id(ctx),
@@ -259,7 +260,7 @@ impl ToolBackend for SqlxToolBackend {
             })
             .collect();
 
-        let today = today_for(&mut conn, ctx).await?;
+        let today = today_for(conn, ctx).await?;
         let on_your_today = today.items.iter().any(|i| i.person.id == person_id);
 
         Ok(PersonDetail {
@@ -268,12 +269,14 @@ impl ToolBackend for SqlxToolBackend {
             inquiries,
             history,
             on_your_today,
+            today_truncated: today.truncated,
+            sources: explain::sources_view(&today),
         })
     }
 
     async fn get_today(&self, ctx: &OperatorContext, limit: usize) -> ToolResult<TodayView> {
-        let mut conn = self.conn().await?;
-        let list = today_for(&mut conn, ctx).await?;
+        let conn = self.conn().await?;
+        let list = today_for(conn, ctx).await?;
         let items = list
             .items
             .iter()
@@ -285,16 +288,19 @@ impl ToolBackend for SqlxToolBackend {
             generated_at: list.generated_at,
             total: list.items.len(),
             truncated: list.truncated || list.items.len() > limit,
+            sources: explain::sources_view(&list),
             items,
         })
     }
 
     async fn get_next_work_item(&self, ctx: &OperatorContext) -> ToolResult<NextWorkItem> {
-        let mut conn = self.conn().await?;
-        let list = today_for(&mut conn, ctx).await?;
+        let conn = self.conn().await?;
+        let list = today_for(conn, ctx).await?;
         Ok(NextWorkItem {
             item: list.items.first().map(|item| item_view(1, item)),
             total: list.items.len(),
+            truncated: list.truncated,
+            sources: explain::sources_view(&list),
         })
     }
 
@@ -307,7 +313,7 @@ impl ToolBackend for SqlxToolBackend {
         let person_id = PersonId::new(person_id);
         let mut conn = self.conn().await?;
         let summary = visible_summary(&mut conn, ctx, person_id).await?;
-        let list = today_for(&mut conn, ctx).await?;
+        let list = today_for(conn, ctx).await?;
         Ok(explain::build_explanation(
             &list,
             &summary,

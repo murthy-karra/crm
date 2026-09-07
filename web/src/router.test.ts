@@ -66,6 +66,114 @@ describe('router guards (SLICE_004 §10)', () => {
     expect(router.currentRoute.value.path).toBe('/today')
   })
 
+  it('replays a protected route through role authorization after a paused session recovers', async () => {
+    const lifecycle = await import('./sessionLifecycle')
+    const settleAs = async (
+      target: '/manage/members' | '/platform',
+      identity: MeResponse,
+      expected: string,
+    ) => {
+      const epoch = lifecycle.beginSessionTransition()
+      const router = freshRouter()
+      await router.push(target)
+      expect(router.currentRoute.value.path).toBe(target)
+
+      // The replay's real authorization guard waits for this deferred `/me`.
+      // Its flag must cover that wait, so AppShell's paired component test
+      // cannot mount a restricted slot between session recovery and redirect.
+      let resolveAuthorization!: (identity: MeResponse) => void
+      const authorization = new Promise<MeResponse>((resolve) => { resolveAuthorization = resolve })
+      const callsBeforeReplay = vi.mocked(fetchMe).mock.calls.length
+      vi.mocked(fetchMe).mockImplementation(() => authorization)
+      window.localStorage.removeItem(`crm.session-lifecycle.v1.pending.${epoch}`)
+      expect(lifecycle.completeSessionVerification(lifecycle.currentSessionGeneration())).toBe(true)
+      await vi.waitFor(() => expect(vi.mocked(fetchMe).mock.calls.length).toBeGreaterThan(callsBeforeReplay))
+      expect(lifecycle.useRouteAuthorizationReplayPending().value).toBe(true)
+      expect(router.currentRoute.value.path).toBe(target)
+
+      resolveAuthorization(identity)
+      await vi.waitFor(() => expect(router.currentRoute.value.path).toBe(expected))
+      await vi.waitFor(() => expect(lifecycle.useRouteAuthorizationReplayPending().value).toBe(false))
+    }
+
+    await settleAs('/manage/members', MEMBER, '/today')
+    await settleAs('/platform', MEMBER, '/today')
+    await settleAs('/manage/members', ADMIN, '/manage/members')
+  })
+
+  it('re-runs role authorization when a second session boundary completes during an in-flight replay (F4)', async () => {
+    const lifecycle = await import('./sessionLifecycle')
+    const epoch1 = lifecycle.beginSessionTransition()
+    const router = freshRouter()
+    const replaceSpy = vi.spyOn(router, 'replace')
+    await router.push('/manage/members')
+    expect(router.currentRoute.value.path).toBe('/manage/members')
+
+    // Each `fetchMe` call gets its own independently resolvable promise, so
+    // each replay's role-authorization request can be observed and
+    // controlled separately.
+    const deferredAuth: Array<{ resolve: (identity: MeResponse) => void }> = []
+    vi.mocked(fetchMe).mockImplementation(() => new Promise((resolve) => { deferredAuth.push({ resolve }) }))
+
+    window.localStorage.removeItem(`crm.session-lifecycle.v1.pending.${epoch1}`)
+    expect(lifecycle.completeSessionVerification(lifecycle.currentSessionGeneration())).toBe(true)
+    await vi.waitFor(() => expect(deferredAuth).toHaveLength(1))
+    expect(replaceSpy).toHaveBeenCalledTimes(1)
+    expect(lifecycle.useRouteAuthorizationReplayPending().value).toBe(true)
+
+    // A second, independent boundary (e.g. another tab's login) completes
+    // while the first replay's role check is still outstanding. The mutex
+    // must remember it rather than silently drop it.
+    const epoch2 = lifecycle.beginSessionTransition()
+    window.localStorage.removeItem(`crm.session-lifecycle.v1.pending.${epoch2}`)
+    expect(lifecycle.completeSessionVerification(lifecycle.currentSessionGeneration())).toBe(true)
+    expect(replaceSpy).toHaveBeenCalledTimes(1) // not yet — the first replay is still in flight
+    expect(lifecycle.useRouteAuthorizationReplayPending().value).toBe(true) // stays raised throughout
+
+    // Resolving the first (now stale) role check must trigger a SECOND
+    // replay whose own role guard actually runs, rather than admitting the
+    // route on the first replay's stale authorization alone.
+    deferredAuth[0]!.resolve(ADMIN)
+    await vi.waitFor(() => expect(deferredAuth).toHaveLength(2))
+    expect(replaceSpy).toHaveBeenCalledTimes(2)
+    expect(lifecycle.useRouteAuthorizationReplayPending().value).toBe(true)
+
+    deferredAuth[1]!.resolve(MEMBER)
+    await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/today'))
+    await vi.waitFor(() => expect(lifecycle.useRouteAuthorizationReplayPending().value).toBe(false))
+  })
+
+  it('synchronizes storage before the public-route check, so an unread changing marker does not fall through to fetchMe and park (F5)', async () => {
+    const PENDING_KEY = 'crm.session-lifecycle.v1.pending.f5-foreign-epoch'
+    const MARKER_KEY = 'crm.session-lifecycle.v1'
+    // Written directly, exactly as another tab would durably record it —
+    // deliberately NOT dispatched as a `storage` event to this window,
+    // matching the real-browser fact that `storage` events never fire in
+    // the tab that made the write.
+    window.localStorage.setItem(PENDING_KEY, 'f5-foreign-epoch')
+    window.localStorage.setItem(MARKER_KEY, JSON.stringify({
+      epoch: 'f5-foreign-epoch',
+      sequence: Date.now() + 1_000_000,
+      phase: 'changing',
+    }))
+
+    const router = freshRouter()
+    await router.push('/login')
+
+    expect(router.currentRoute.value.path).toBe('/login')
+    expect(fetchMe).not.toHaveBeenCalled()
+
+    // Clean up so later tests do not inherit a blocked lifecycle: remove the
+    // foreign pending key and directly complete verification for the
+    // current generation (mirroring the replay test's own cleanup style —
+    // `completeSessionVerification` only requires no pending transitions
+    // remain, so no settled marker needs publishing here).
+    window.localStorage.removeItem(PENDING_KEY)
+    const lifecycle = await import('./sessionLifecycle')
+    expect(lifecycle.completeSessionVerification(lifecycle.currentSessionGeneration())).toBe(true)
+  })
+
+
   describe('member session', () => {
     it('reaches tenant routes', async () => {
       vi.mocked(fetchMe).mockResolvedValue(MEMBER)

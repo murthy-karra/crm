@@ -1,5 +1,14 @@
 # Slice 003 — Today + Realtime
 
+**Approved amendment — Slice 011c (2026-09-06):**
+[SLICE_011c §§2–6](SLICE_011c.md) extend §§2–6/10 with per-agent source
+preferences/routes, list-derived work, nullable list-only fields, explicit source
+availability and actor-aware read caches. Section 4 preserves built-in admission
+and relative order while adding deterministic list merging; §8 narrowly amends
+§§3/4/14a with three same-Organization inquiry predicates and transaction-local
+JIT policy, backed by original-query parity tests. Existing built-in eligibility
+and realtime wire contracts remain in force.
+
 Status: APPROVED (user, 2026-08-21; planner draft independently
 reviewed — 17 findings, all applied as safe defaults or implementation
 notes; spec re-reviewed by the same reviewer — 13 further amendments

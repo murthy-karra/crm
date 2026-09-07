@@ -13,6 +13,10 @@ pub use crm_app::{domain, ids, realtime, telephony};
 
 use axum::extract::Request;
 use axum::http::{HeaderName, HeaderValue, Method};
+#[cfg(feature = "test-support")]
+use axum::middleware::{self, Next};
+#[cfg(feature = "test-support")]
+use axum::response::Response;
 use axum::Router;
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
@@ -27,6 +31,54 @@ use state::AppState;
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
 pub fn build_app(state: AppState) -> Router {
+    build_app_with_today_router_inner(state, routes::today::router())
+}
+
+/// Test-support-only application builder for the Phase B frozen-baseline
+/// comparison. It preserves the normal request-id, trace, session and auth
+/// stack while substituting only `GET /api/today`; no production caller can
+/// select a baseline or test clock.
+#[cfg(feature = "test-support")]
+pub fn build_app_with_today_router(state: AppState, today_router: Router<AppState>) -> Router {
+    build_app_with_today_router_inner(state, today_router)
+}
+
+/// Test-only Phase B wrapper. The numeric header is accepted only by this
+/// feature-gated builder and scopes safe timing collection around the entire
+/// request, including auth extraction and the Today handler. It has no
+/// production route, input, logging, or persistence effect.
+#[cfg(feature = "test-support")]
+pub fn build_app_with_today_router_and_perf_collector(
+    state: AppState,
+    today_router: Router<AppState>,
+    collector: crate::domain::today::test_support::HttpPerfCollector,
+) -> Router {
+    build_app_with_today_router_inner(state, today_router).layer(middleware::from_fn_with_state(
+        collector,
+        perf_capture_middleware,
+    ))
+}
+
+#[cfg(feature = "test-support")]
+async fn perf_capture_middleware(
+    axum::extract::State(collector): axum::extract::State<
+        crate::domain::today::test_support::HttpPerfCollector,
+    >,
+    request: Request,
+    next: Next,
+) -> Response {
+    let capture_id = request
+        .headers()
+        .get("x-crm-perf-capture")
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.parse::<u64>().ok());
+    match capture_id {
+        Some(capture_id) => collector.scope(capture_id, next.run(request)).await,
+        None => next.run(request).await,
+    }
+}
+
+fn build_app_with_today_router_inner(state: AppState, today_router: Router<AppState>) -> Router {
     // Read before `state` moves into `.with_state` below.
     let cors_allowed_origin = state.cors_allowed_origin.clone();
 
@@ -50,7 +102,7 @@ pub fn build_app(state: AppState) -> Router {
             .merge(routes::intake::router())
             .merge(routes::stages::router())
             .merge(routes::realtime::router())
-            .merge(routes::today::router())
+            .merge(today_router)
             .merge(routes::invitations::router())
             .merge(routes::platform::router())
             .merge(routes::operator::router())

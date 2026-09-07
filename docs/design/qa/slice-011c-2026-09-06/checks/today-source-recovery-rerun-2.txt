@@ -1,0 +1,26 @@
+warning: unused imports: `FRESH_INQUIRY_WINDOW_HOURS`, `InquiryRef`, `RecommendedAction`, `TodayCandidate`, `TodayItem`, `TodayPriority`, and `TodayReason`
+  --> crates/crm-api/tests/fixtures/today_9d62e86/mod.rs:11:5
+   |
+11 |     InquiryRef, RecommendedAction, TodayCandidate, TodayItem, TodayList, TodayPriority,
+   |     ^^^^^^^^^^  ^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^  ^^^^^^^^^             ^^^^^^^^^^^^^
+12 |     TodayReason, FRESH_INQUIRY_WINDOW_HOURS,
+   |     ^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `FRESH_INQUIRY_WINDOW_HOURS` is never used
+  --> crates/crm-api/tests/fixtures/today_9d62e86/model.rs:13:11
+   |
+13 | pub const FRESH_INQUIRY_WINDOW_HOURS: i64 = 24;
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `crm-api` (test "all") generated 2 warnings (run `cargo fix --test "all" -p crm-api` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.14s
+────────────
+ Nextest run ID 5dd82a18-cc3b-40a2-9970-e00486eb659e with nextest profile: default
+    Starting 1 test across 1 binary (513 tests skipped)
+        PASS [   2.004s] (1/1) crm-api::all db_today_source_failures::today_source_membership_lock_timeout_keeps_completed_source_and_reuses_owned_connection
+────────────
+     Summary [   2.005s] 1 test run: 1 passed, 513 skipped

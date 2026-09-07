@@ -1632,3 +1632,38 @@ shared original (D-043). No other 011b contract or implementation is approved
 by this decision; the concrete draft still receives its planned review.
 
 Blocks: nothing. Feeds the Slice 011b specification and implementation brief.
+
+### D-047 — Today source limit and partial availability (2026-09-06)
+
+Accepted by the user while specifying Slice 011c, in two explicit answers:
+
+1. Each agent may connect **up to five saved lists as Today sources** in their
+   active Organization. This is separate from D-046's saved-definition limits.
+2. If one source cannot load, Today **shows available work with a clear
+   notice**: preserve built-in reminders and results from working sources.
+   An unavailable source must not be presented as an empty list or a complete
+   Today result. This does not require pretending work is available when the
+   underlying database or built-in query cannot be read.
+
+The concrete status, query, command and client contracts belong to the 011c
+specification and its review. These answers approve the two product choices,
+not an as-yet-unreviewed implementation or a push/deployment.
+
+Blocks: nothing. Feeds the Slice 011c specification.
+
+Follow-up, 2026-09-06: after independent READY review and isolated performance
+evidence, the user explicitly approved the complete `SLICE_011c.md` plan for
+implementation, including its declared contracts and acceptance thresholds.
+This authorizes implementation/testing, not commit, merge, push or deployment.
+
+Follow-up, 2026-09-06 (late evening): after the Claude takeover finished
+verification, the user approved three things in one answer: (1) the fourth
+transaction-local planning change in `SLICE_011c.md` §8 (`SET LOCAL
+enable_mergejoin = off` in the Today read transaction), which pins the fast
+plan for the built-in query's per-Person contact probe against a
+visibility-map-dependent planner flip measured in Phase B; (2) acceptance of
+the Phase B evidence with its one recorded limitation (the concentrated book's
+zero-source HTTP pairing rests on run 1, run 2's frozen baseline series for it
+being disrupted by the same hazard); (3) the local commit and merge of the
+slice. Push and deployment were not authorized. The planner hazard itself is a
+pre-existing Slice 003/009 property; a durable fix is queued in PROJECT_STATE.

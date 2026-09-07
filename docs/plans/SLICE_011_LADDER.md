@@ -11,6 +11,18 @@ filter model IS the Today configuration language). Sizing rule
 specs are written when the previous rung merges and absorb what was
 learned. Format per SLICE_007_LADDER.
 
+Current work (2026-09-06): the user requested **011c next**, moving it ahead
+of the separately queued 011b-sort follow-up, and changed the Astra/Terra
+assignment from ultra to **extra high (`xhigh`)** for new work. D-047 accepts
+five Today sources per viewer/Organization and explicit partial availability.
+The complete [011c specification](../specs/SLICE_011c.md) and implementation
+brief were independently reviewed READY and approved by the user on
+2026-09-06. Terra / `xhigh` implemented and Astra / `xhigh` reviewed until Codex
+usage ran out; Claude finished verification the same evening (see
+PROJECT_STATE). 011c COMPLETE AND MERGED LOCALLY (implementation `6117b4a`,
+2026-09-06; the §8 planner amendment and the Phase B pairing limitation were
+accepted by the user before the merge).
+
 ## In plain language
 
 This ladder builds "smart lists": saved, shareable filters over
@@ -30,8 +42,8 @@ six small steps, each shippable on its own:
   list ("my stale Zillow leads") and come back to it. Personal
   lists belong to one agent; shared lists are curated by admins,
   and agents duplicate them rather than editing the original.
-- **011b-sort — Sorting saved lists.** A separate follow-up immediately after
-  saved lists, restricted initially to non-derived columns. Sorting applies
+- **011b-sort — Sorting saved lists.** A separate queued follow-up, restricted
+  initially to non-derived columns. Sorting applies
   before the 500-Person display limit. Detailed choices belong to its own spec.
 - **011c — Lists feed Today.** An agent can mark any list as a
   Today source: people matching that list start appearing on
@@ -68,13 +80,17 @@ the same plan.
    working-intent reading; D-006's original attribution remains
    untouched in the data and available to future reporting).
 
-## Later accepted amendment
+## Later accepted amendments
 
 On 2026-08-29 the user kept sorting outside 011b and requested a separate small
 rung immediately afterward. Recorded at 011b specification approval on
 2026-09-06: **011b-sort**, initially limited to non-derived columns. Its spec
 must define sorting before the 500-result cap while preserving static SQL
 verification. This records sequencing, not an approved sort/API contract.
+
+On 2026-09-06, after merging 011b, the user requested **011c next**. It has no
+functional dependency on saved-list sorting, so 011b-sort remains separate
+and queued while 011c proceeds. No sort behavior is folded into 011c.
 
 ## The rungs
 
@@ -83,17 +99,20 @@ verification. This records sequencing, not an approved sort/API contract.
 | **011a** Filter vocabulary + ad-hoc People filtering | Typed versioned `FilterDefinition` (AND of clauses: Stage, AssignedTo incl. Me/Unassigned, Source [latest-inquiry], Created/LastInquiry/LastContact/LastInbound ages incl. Never, HasReplied, HasPhone/HasEmail) + validation (caps ≤20 clauses/≤50 values, org-scoped id checks, deny_unknown_fields, unknown-clause-fails-closed on read) + `describe()` human-readable clauses + `filtered_summaries()` as FIXED-MATRIX STATIC SQL (NULL-guarded optional predicates; org boundary stays literal text; `.sqlx` discipline intact) + `GET /api/people?filter=` (declared additive SLICE_002 §5; absent = byte-identical) + `GET /api/inquiry-sources` + PeopleView FilterBar with chips, live count, URL-synced shareable filters. No persistence. Split seam if hot: a1 backend, a2 web. | none | M |
 | **011b** Saved lists | `saved_list` CRUD via typed commands: personal (creator-only, including from admins; D-046) + shared (admin-curated; agents DUPLICATE, never edit the shared original — FUB shape, re-verified at spec time); Lists nav + index with membership counts; list view = PeopleView preloaded + Save/Save-as/Duplicate/Delete. Limits (D-046): 200 shared/org plus 50 personal/creator/org; no combined cap. | `saved_list` | M |
 | **011b-sort** Per-list sorting | Separate follow-up after 011b; v1 uses non-derived columns only. Define persisted sort choices and deterministic ordering before result truncation in its own specification. | Determined by its spec | S |
-| **011c** Lists feed Today | Per-viewer "Use as a Today source" on any visible list (agent-for-self v1; admin org-push deferred); Today evaluates marked lists at QUERY TIME (no materialization — derived-truth posture; per-feed static evaluation, merge+dedup in Rust); additive `TodayReason::ListMember {list_id, name}` (declared SLICE_003 §5); list-only band below stale built-ins, above the low outcome tier, oldest-effective-contact-first with the key displayed (no secret priority); multi-qualification = one item, list reasons appended; 200 cap, list band sheds first. Known footgun stated: a no-activity-clause list has no organic exit but stage change — guidance, not enforcement. | `today_work_source` | M |
+| **011c** Lists feed Today | Per-viewer "Use as a Today source" on any visible list (agent-for-self v1; admin org-push deferred), up to five per viewer/Organization (D-047); Today evaluates marked lists at QUERY TIME (no materialization — derived-truth posture; per-feed static evaluation, merge+dedup in Rust); additive `TodayReason::ListMember {list_id, name}` (declared SLICE_003 §5); list-only band below stale built-ins, above the low outcome tier, oldest-effective-contact-first with the key displayed (no secret priority); multi-qualification = one item, list reasons appended; 200 cap, list band sheds first. A failed source preserves available work with an explicit notice (D-047). Known footgun stated: a no-activity-clause list has no organic exit but stage change — guidance, not enforcement. | `today_work_source` | M |
 | **011d** Tweakable built-ins | Vocabulary gains the named derived axes: `AwaitingResponse`, `ClientRepliedUnanswered`, and (decision 2) `AwaitingCallOutcome` with its payload plumbing. The three built-ins become seeded per-org `today_system_feed` rows (seed on create_organization + backfill migration), managed on an admin "Today feeds" surface: enable/disable, edit clause values + freshness-window param, PREVIEW before save, REVERT-to-default (canonical regenerated from code), `today_feed_changed` audit fact. Acceptance gate: equivalence db tests prove feed-evaluation ≡ the old hardcoded arms (items, reasons, priorities, order) BEFORE arm deletion. Priority-tier order stays fixed system policy v1 (orgs tweak membership, not tiers). Pre-declared split d1/d2 per decision 2. | `today_system_feed` + backfill + fact table | M (split-ready) |
 | **011e** Tags | `tag` + `person_tag` model, chips on PersonDetail (monochrome per UI_STYLE), `Tags`/`NotTags` clause variants proving additive vocabulary extension; re-opens part of parked 010f (tags import — noted in SLICE_010_LADDER). Creation: any member inline; rename/delete admin (confirm at spec). | `tag`, `person_tag` | S–M |
 
-Delivery order: a → b → b-sort → c → d → e. Functional dependencies remain
-a → b → c → d; e depends on b and may parallelize with c/d.
+Current delivery order: a → b → c → d → e, with b-sort separately queued.
+Functional dependencies remain a → b → c → d; e depends on b and may
+parallelize with c/d.
 
 ## Standing tensions (carried into rung specs)
 
-- Evaluation is O(people-in-org) per feed via LATERAL probes — fine
-  to ~50k people on existing indexes; recorded levers, not built:
+- Evaluation can be O(people-in-org) per feed via LATERAL probes. The earlier
+  "fine to ~50k" assumption is superseded by the measured history-heavy Today
+  limits in `docs/design/PERF_BASELINE.md`; 011c must include a measured
+  performance gate. Recorded levers, not built:
   denormalized last-activity columns, custom-plan mode, QueryBuilder
   fork (which becomes REQUIRED if custom fields ever join the
   vocabulary — the deliberate future fork point).

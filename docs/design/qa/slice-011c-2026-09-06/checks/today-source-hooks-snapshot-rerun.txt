@@ -1,0 +1,8 @@
+   Compiling crm-api v0.1.0 (/Users/karrad/projects/crm/backend/crates/crm-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 8.57s
+────────────
+ Nextest run ID 1d6c91a8-0f10-455a-9a40-3372f840281b with nextest profile: default
+    Starting 1 test across 1 binary (521 tests skipped)
+        PASS [   1.395s] (1/1) crm-api::all db_today_source_hooks::today_source_after_builtins_gate_keeps_one_snapshot_across_list_and_contact_mutations
+────────────
+     Summary [   1.396s] 1 test run: 1 passed, 521 skipped

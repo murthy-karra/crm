@@ -292,6 +292,28 @@ pub async fn filtered_summaries(
     scope: &PersonVisibilityScope,
     params: &PersonFilterParams,
 ) -> Result<(Vec<PersonSummary>, bool), sqlx::Error> {
+    filtered_summaries_with_reference_now(conn, scope, params, None).await
+}
+
+/// Test-only common-clock seam for Today source parity fixtures. The normal
+/// query keeps PostgreSQL `now()` as its authoritative evaluation clock;
+/// callers outside test support cannot provide a reference time.
+#[cfg(feature = "test-support")]
+pub async fn filtered_summaries_at(
+    conn: &mut PgConnection,
+    scope: &PersonVisibilityScope,
+    params: &PersonFilterParams,
+    reference_now: DateTime<Utc>,
+) -> Result<(Vec<PersonSummary>, bool), sqlx::Error> {
+    filtered_summaries_with_reference_now(conn, scope, params, Some(reference_now)).await
+}
+
+async fn filtered_summaries_with_reference_now(
+    conn: &mut PgConnection,
+    scope: &PersonVisibilityScope,
+    params: &PersonFilterParams,
+    reference_now: Option<DateTime<Utc>>,
+) -> Result<(Vec<PersonSummary>, bool), sqlx::Error> {
     let organization_id = scope.organization_id();
     let mut rows = sqlx::query_as!(
         PersonSummaryRow,
@@ -341,24 +363,24 @@ pub async fn filtered_summaries(
                   OR ($4::boolean AND p.assigned_user_id IS NULL))
              AND ($5::text[] IS NULL OR latest_src.source = ANY($5))
              AND ($6::int IS NULL
-                  OR COALESCE(p.created_at, '-infinity'::timestamptz) > now() - make_interval(days => $6))
+                  OR COALESCE(p.created_at, '-infinity'::timestamptz) > COALESCE($21, now()) - make_interval(days => $6))
              AND ($7::int IS NULL
-                  OR COALESCE(p.created_at, '-infinity'::timestamptz) <= now() - make_interval(days => $7))
+                  OR COALESCE(p.created_at, '-infinity'::timestamptz) <= COALESCE($21, now()) - make_interval(days => $7))
              AND ($8::boolean IS NULL OR (p.created_at IS NULL) = $8)
              AND ($9::int IS NULL
-                  OR COALESCE(last_inquiry_ts.ts, '-infinity'::timestamptz) > now() - make_interval(days => $9))
+                  OR COALESCE(last_inquiry_ts.ts, '-infinity'::timestamptz) > COALESCE($21, now()) - make_interval(days => $9))
              AND ($10::int IS NULL
-                  OR COALESCE(last_inquiry_ts.ts, '-infinity'::timestamptz) <= now() - make_interval(days => $10))
+                  OR COALESCE(last_inquiry_ts.ts, '-infinity'::timestamptz) <= COALESCE($21, now()) - make_interval(days => $10))
              AND ($11::boolean IS NULL OR (last_inquiry_ts.ts IS NULL) = $11)
              AND ($12::int IS NULL
-                  OR COALESCE(last_contact_ts.ts, '-infinity'::timestamptz) > now() - make_interval(days => $12))
+                  OR COALESCE(last_contact_ts.ts, '-infinity'::timestamptz) > COALESCE($21, now()) - make_interval(days => $12))
              AND ($13::int IS NULL
-                  OR COALESCE(last_contact_ts.ts, '-infinity'::timestamptz) <= now() - make_interval(days => $13))
+                  OR COALESCE(last_contact_ts.ts, '-infinity'::timestamptz) <= COALESCE($21, now()) - make_interval(days => $13))
              AND ($14::boolean IS NULL OR (last_contact_ts.ts IS NULL) = $14)
              AND ($15::int IS NULL
-                  OR COALESCE(last_inbound_ts.ts, '-infinity'::timestamptz) > now() - make_interval(days => $15))
+                  OR COALESCE(last_inbound_ts.ts, '-infinity'::timestamptz) > COALESCE($21, now()) - make_interval(days => $15))
              AND ($16::int IS NULL
-                  OR COALESCE(last_inbound_ts.ts, '-infinity'::timestamptz) <= now() - make_interval(days => $16))
+                  OR COALESCE(last_inbound_ts.ts, '-infinity'::timestamptz) <= COALESCE($21, now()) - make_interval(days => $16))
              AND ($17::boolean IS NULL OR (last_inbound_ts.ts IS NULL) = $17)
              AND ($18::boolean IS NULL OR (EXISTS (
                    SELECT 1 FROM correspondence_captured cc2
@@ -397,6 +419,7 @@ pub async fn filtered_summaries(
         params.has_replied,
         params.has_phone,
         params.has_email,
+        reference_now,
     )
     .fetch_all(conn)
     .await?;

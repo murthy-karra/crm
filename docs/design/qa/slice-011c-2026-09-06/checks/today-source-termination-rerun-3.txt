@@ -1,0 +1,18 @@
+   Compiling crm-app v0.1.0 (/Users/karrad/projects/crm/backend/crates/crm-app)
+error: `SQLX_OFFLINE=true` but there is no cached data for this query, run `cargo sqlx prepare` to update the query cache or unset `SQLX_OFFLINE`
+   --> crates/crm-app/src/domain/today/queries.rs:213:20
+    |
+213 |       let mut rows = sqlx::query_as!(
+    |  ____________________^
+214 | |         TodayCandidateRow,
+215 | |         r#"WITH outcome_call AS (
+216 | |                SELECT DISTINCT ON (c.person_id) c.person_id, c.id, c.ended_at
+...   |
+347 | |         now,
+348 | |     )
+    | |_____^
+    |
+    = note: this error originates in the macro `$crate::sqlx_macros::expand_query` which comes from the expansion of the macro `sqlx::query_as` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: could not compile `crm-app` (lib) due to 1 previous error
+error: command `/Users/karrad/.rustup/toolchains/1.98.0-aarch64-apple-darwin/bin/cargo test --no-run --message-format json-render-diagnostics --package crm-api --test all` exited with code 101

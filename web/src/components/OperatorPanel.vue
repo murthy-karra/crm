@@ -17,7 +17,9 @@ import { buttonClasses, TEXTAREA_CLASSES } from '../lib/controls'
 import { deriveScreenContext, describeOperatorError, historyWindow, MAX_MESSAGE_CHARS } from '../lib/operator'
 import OperatorPersonCardView from './OperatorPersonCard.vue'
 import { useCallHost } from '../telephony/callHost'
+import { isSessionVerified } from '../sessionLifecycle'
 
+const props = defineProps<{ identityKey?: string }>()
 const emit = defineEmits<{ close: [] }>()
 
 interface TranscriptEntry {
@@ -77,6 +79,8 @@ const LOCAL_CODE_MESSAGES: Record<string, string> = {
 }
 
 async function confirmProposal(proposal: OperatorProposal) {
+  if (!isSessionVerified()) return
+  const proposalLifetime = lifetime
   const state = proposalState(proposal.id)
   if (state.status === 'confirming' || state.final) return
   if (proposalExpired(proposal)) {
@@ -88,6 +92,7 @@ async function confirmProposal(proposal: OperatorProposal) {
   state.status = 'confirming'
   state.message = null
   const code = await host.startFromProposal(proposal)
+  if (!live || proposalLifetime !== lifetime) return
   if (code === null) {
     state.status = 'started'
     state.final = true
@@ -102,6 +107,8 @@ async function confirmProposal(proposal: OperatorProposal) {
 }
 
 function dismissProposal(proposal: OperatorProposal) {
+  const proposalLifetime = lifetime
+  if (!live || proposalLifetime !== lifetime) return
   // Purely local (SLICE_006b §6): the row expires inert server-side.
   const state = proposalState(proposal.id)
   if (state.status === 'confirming') return
@@ -116,6 +123,8 @@ const errorText = ref<string | null>(null)
 const scroller = ref<HTMLElement | null>(null)
 const textarea = ref<HTMLTextAreaElement | null>(null)
 let nextId = 1
+let live = true
+let lifetime = 0
 
 const pending = computed(() => turn.isPending.value)
 
@@ -143,10 +152,11 @@ const history = computed<OperatorHistoryMessage[]>(() =>
 )
 
 function send() {
-  if (!canSend.value) return
+  if (!canSend.value || !isSessionVerified()) return
   const message = trimmed.value
   // History is what came *before* this message.
   const priorHistory = history.value
+  const requestLifetime = lifetime
   transcript.value.push({ id: nextId++, role: 'user', text: message, cards: [] })
   draft.value = ''
   errorText.value = null
@@ -154,6 +164,7 @@ function send() {
     { message, history: priorHistory, context: deriveScreenContext(route.path) },
     {
       onSuccess: (response) => {
+        if (!live || requestLifetime !== lifetime) return
         transcript.value.push({
           id: nextId++,
           role: 'assistant',
@@ -163,6 +174,7 @@ function send() {
         })
       },
       onError: (err) => {
+        if (!live || requestLifetime !== lifetime) return
         errorText.value = describeOperatorError(err)
       },
     },
@@ -175,6 +187,24 @@ function clear() {
   draft.value = ''
   turn.reset()
 }
+
+watch(() => props.identityKey, () => {
+  lifetime += 1
+  transcript.value = []
+  draft.value = ''
+  errorText.value = null
+  proposalStates.clear()
+  turn.reset()
+})
+
+onBeforeUnmount(() => {
+  live = false
+  lifetime += 1
+  transcript.value = []
+  draft.value = ''
+  errorText.value = null
+  proposalStates.clear()
+})
 
 function onKeydown(event: KeyboardEvent) {
   // Enter sends; Shift+Enter inserts a newline.

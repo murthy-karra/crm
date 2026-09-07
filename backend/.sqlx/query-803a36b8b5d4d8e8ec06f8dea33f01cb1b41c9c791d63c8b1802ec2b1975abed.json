@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(\n             SELECT 1 FROM today_work_source\n             WHERE organization_id = $1 AND user_id = $2 AND list_id = $3\n           ) AS \"already_enabled!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "already_enabled!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "803a36b8b5d4d8e8ec06f8dea33f01cb1b41c9c791d63c8b1802ec2b1975abed"
+}

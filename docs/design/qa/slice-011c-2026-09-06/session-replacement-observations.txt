@@ -1,0 +1,6 @@
+Corrected I16 live checkpoint, 2026-09-06, synthetic dedicated QA origin.
+A→B: after Alice logout in tab 8, tab 9 showed Sign in and had no Alice identity, private email list name or unsent draft. After Carol login and direct navigation to Today, tab 9 displayed Carol and an empty Operator drawer, no prior draft/name.
+A→A: Carol unsent draft cleared when Carol logged out in tab 8; after same-account login and direct navigation in tab 9, Carol Today and empty Operator appeared.
+Receiving tab stays safely at Sign in until navigation/reload; no automatic redirect asserted. No Operator Send action or external outreach performed.
+
+Pending-attempt implementation recheck: Carol→Alice and Alice→logout→Alice both passed after full reload of both tabs. Receiving tab immediately showed Sign in without previous private draft/identity. After login and navigation to Today, current Alice identity, no Carol private list name and empty Operator drawer were observed. No Operator request sent. Normal final Today screenshot captured with Alice4People/oneemail source; controlled slow/overlapping transport cases remain automated/review evidence.

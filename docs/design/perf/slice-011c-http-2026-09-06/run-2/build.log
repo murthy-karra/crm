@@ -1,0 +1,5 @@
+   Compiling crm-app v0.1.0 (/Users/karrad/projects/crm/backend/crates/crm-app)
+   Compiling crm-api v0.1.0 (/Users/karrad/projects/crm/backend/crates/crm-api)
+    Finished `release` profile [optimized] target(s) in 37.75s
+  Executable tests/db_today_http_perf.rs (target/release/deps/db_today_http_perf-c716c187c104953f)
+BUILD_EXIT=0

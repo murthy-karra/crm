@@ -1,0 +1,7 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.12s
+────────────
+ Nextest run ID 1dac1201-5d2e-49c0-a950-ddcca93d94c0 with nextest profile: default
+    Starting 1 test across 1 binary (517 tests skipped)
+        PASS [   1.297s] (1/1) crm-api::all db_today_source_hooks::today_source_backend_termination_marks_current_and_remaining_sources_unavailable
+────────────
+     Summary [   1.298s] 1 test run: 1 passed, 517 skipped

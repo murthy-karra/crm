@@ -1,3 +1,4 @@
+import { watch } from 'vue'
 import {
   createRouter,
   createWebHistory,
@@ -7,6 +8,14 @@ import {
 } from 'vue-router'
 import { fetchMe, queryKeys } from './api/queries'
 import { ApiError } from './api/client'
+import {
+  isSessionVerified,
+  SessionCoordinationUnavailableError,
+  SessionVerificationPendingError,
+  setRouteAuthorizationReplayPending,
+  useSessionCoordinationUnavailable,
+  useSessionVerificationPending,
+} from './sessionLifecycle'
 import { queryClient, setUnauthorizedHandler } from './query-client'
 import type { MeResponse } from './api/types'
 
@@ -173,6 +182,54 @@ export function createAppRouter(history: RouterHistory): Router {
       })
   })
 
+  // A protected route may deliberately reach AppShell while a cross-tab
+  // session replacement is unresolved, so its fail-closed recovery copy can
+  // render instead of leaving initial navigation blank. Once verification
+  // settles, force this same route back through the normal authorization
+  // guard; otherwise a member paused on `/manage/*` could mount its route
+  // component after recovery without the role redirect below running again.
+  let replayingAfterSessionRecovery = false
+  // F4: a second session boundary (e.g. another tab's login) can complete
+  // while this replay's own role-authorization request is still in flight.
+  // Dropping it silently would let the first replay's guard admit the
+  // route on stale authorization. Remember it here and re-run once the
+  // in-flight replay finishes, keeping the flag raised continuously across
+  // both so AppShell's paused state never blips open in between.
+  let replayRequested = false
+  const lifecyclePending = useSessionVerificationPending()
+  const lifecycleUnavailable = useSessionCoordinationUnavailable()
+  function replayCurrentRoute() {
+    replayingAfterSessionRecovery = true
+    setRouteAuthorizationReplayPending(true)
+    const current = router.currentRoute.value
+    void router.replace({
+      path: current.path,
+      query: current.query,
+      hash: current.hash,
+      force: true,
+    }).catch(() => {}).finally(() => {
+      if (replayRequested) {
+        replayRequested = false
+        replayCurrentRoute()
+        return
+      }
+      replayingAfterSessionRecovery = false
+      setRouteAuthorizationReplayPending(false)
+    })
+  }
+  watch(
+    [lifecyclePending, lifecycleUnavailable],
+    ([pending, unavailable], [wasPending, wasUnavailable]) => {
+      if (pending || unavailable || (!wasPending && !wasUnavailable)) return
+      if (replayingAfterSessionRecovery) {
+        replayRequested = true
+        return
+      }
+      replayCurrentRoute()
+    },
+    { flush: 'sync' },
+  )
+
   // Gate every route on the `me` query. `ensureQueryData` returns the cached
   // value without a network round-trip once a session is known-good, and
   // de-dupes concurrent navigations. A 401 ApiError means "not authenticated"
@@ -190,12 +247,31 @@ export function createAppRouter(history: RouterHistory): Router {
   // to `/platform`; no branch needs to duplicate another branch's landing
   // logic.
   router.beforeEach(async (to) => {
+    // F5: synchronize storage before EITHER branch below reads pending/
+    // unavailable state. A `changing` marker durably written by another
+    // tab can be observable here before that tab's own `storage` event
+    // listener fires in this one; reading a stale ref first let a public
+    // route (e.g. /login) fall through to `fetchMe` and park forever.
+    isSessionVerified()
+    // A public sign-in/recovery route remains reachable while a different
+    // tab's opaque auth attempt is unfinished. Private routes below stay
+    // paused until that marker actually settles.
+    if (to.meta.public && useSessionVerificationPending().value) return true
+    // `main.ts` waits for the first navigation before mounting AppShell. If
+    // another tab left a durable auth attempt unfinished, waiting for `/me`
+    // here would keep a direct protected navigation permanently blank. Let
+    // AppShell mount its fail-closed recovery shell instead.
+    if (!to.meta.public && (useSessionVerificationPending().value || useSessionCoordinationUnavailable().value)) {
+      return true
+    }
     let me: MeResponse | undefined
     try {
-      me = await queryClient.ensureQueryData({ queryKey: queryKeys.me, queryFn: fetchMe })
+      me = await queryClient.ensureQueryData({ queryKey: queryKeys.me, queryFn: ({ signal }) => fetchMe(signal) })
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         me = undefined
+      } else if (error instanceof SessionVerificationPendingError || error instanceof SessionCoordinationUnavailableError) {
+        return true
       } else if (error instanceof ApiError) {
         return true
       } else {

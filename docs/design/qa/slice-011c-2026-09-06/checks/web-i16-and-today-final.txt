@@ -1,0 +1,22 @@
+
+ RUN  v4.1.11 /Users/karrad/projects/crm/web
+
+DOMException [AbortError]: The operation was aborted.
+    at Fetch.onAsyncTaskManagerAbort (file:///Users/karrad/projects/crm/web/node_modules/.pnpm/happy-dom@20.11.6/node_modules/happy-dom/lib/fetch/Fetch.js:546:23)
+    at Object.<anonymous> (file:///Users/karrad/projects/crm/web/node_modules/.pnpm/happy-dom@20.11.6/node_modules/happy-dom/lib/fetch/Fetch.js:416:101)
+    at AsyncTaskManager.abortAll (file:///Users/karrad/projects/crm/web/node_modules/.pnpm/happy-dom@20.11.6/node_modules/happy-dom/lib/async-task-manager/AsyncTaskManager.js:292:30)
+    at AsyncTaskManager.abort (file:///Users/karrad/projects/crm/web/node_modules/.pnpm/happy-dom@20.11.6/node_modules/happy-dom/lib/async-task-manager/AsyncTaskManager.js:52:21)
+    at DetachedBrowserFrame.abort (file:///Users/karrad/projects/crm/web/node_modules/.pnpm/happy-dom@20.11.6/node_modules/happy-dom/lib/browser/detached-browser/DetachedBrowserFrame.js:112:58)
+    at DetachedWindowAPI.abort (file:///Users/karrad/projects/crm/web/node_modules/.pnpm/happy-dom@20.11.6/node_modules/happy-dom/lib/window/DetachedWindowAPI.js:51:35)
+    at teardownWindow (file:///Users/karrad/projects/crm/web/node_modules/.pnpm/vitest@4.1.11_@types+node@26.2.0_happy-dom@20.11.6_vite@8.2.1_@types+node@26.2.0_jiti@2.7.0_yaml@2.9.0_/node_modules/vitest/dist/chunks/index.DC7d2Pf8.js:331:22)
+    at Object.teardown (file:///Users/karrad/projects/crm/web/node_modules/.pnpm/vitest@4.1.11_@types+node@26.2.0_happy-dom@20.11.6_vite@8.2.1_@types+node@26.2.0_jiti@2.7.0_yaml@2.9.0_/node_modules/vitest/dist/chunks/index.DC7d2Pf8.js:392:10)
+    at file:///Users/karrad/projects/crm/web/node_modules/.pnpm/vitest@4.1.11_@types+node@26.2.0_happy-dom@20.11.6_vite@8.2.1_@types+node@26.2.0_jiti@2.7.0_yaml@2.9.0_/node_modules/vitest/dist/chunks/base.B6Opl8PE.js:168:65
+    at Traces.$ (file:///Users/karrad/projects/crm/web/node_modules/.pnpm/vitest@4.1.11_@types+node@26.2.0_happy-dom@20.11.6_vite@8.2.1_@types+node@26.2.0_jiti@2.7.0_yaml@2.9.0_/node_modules/vitest/dist/chunks/traces.DT5aQ62U.js:142:27)
+GET http://localhost:3000/api/me 401 (Unauthorized)
+GET http://localhost:3000/api/me 401 (Unauthorized)
+
+ Test Files  12 passed (12)
+      Tests  106 passed (106)
+   Start at  16:53:58
+   Duration  2.19s (transform 2.28s, setup 177ms, import 3.95s, tests 2.57s, environment 2.85s)
+

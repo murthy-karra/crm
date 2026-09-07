@@ -1,3 +1,10 @@
+import {
+  SessionVerificationPendingError,
+  currentSessionGeneration,
+  isCurrentSessionGeneration,
+  requireVerifiedSession,
+} from '../sessionLifecycle'
+
 // Loopback dev (and a single-hostname tunnel) use the relative Vite-proxied
 // path. When viewed from an "app.<domain>" tunnel hostname, the API lives
 // on its own "api.<domain>" hostname and must be called directly — the API
@@ -57,6 +64,23 @@ function isErrorEnvelope(value: unknown): value is ErrorEnvelope {
  * `/api/people`.
  */
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+  // `/me` is the coordinator's authoritative verification request. Session
+  // establishment endpoints must also remain usable while the old shared
+  // cookie is being replaced. Every other Web API request is private and is
+  // synchronously fenced before it can submit stale route state or Operator
+  // history after another tab changed the cookie.
+  const privateRequest =
+    path !== '/me' && path !== '/session' &&
+    path !== '/invitations/preview' && path !== '/invitations/accept'
+  const sessionGeneration = privateRequest ? currentSessionGeneration() : undefined
+  if (privateRequest) {
+    requireVerifiedSession()
+  }
+  const assertCurrentSession = () => {
+    if (sessionGeneration !== undefined && !isCurrentSessionGeneration(sessionGeneration)) {
+      throw new SessionVerificationPendingError()
+    }
+  }
   const headers = new Headers(init.headers)
   if (init.body !== undefined && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json')
@@ -70,11 +94,13 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
       headers,
     })
   } catch {
+    assertCurrentSession()
     throw new ApiError(0, 'network_error')
   }
 
   if (!response.ok) {
     const body: unknown = await response.json().catch(() => null)
+    assertCurrentSession()
     if (isErrorEnvelope(body)) {
       const { error, ...details } = body
       throw new ApiError(response.status, error, details)
@@ -83,8 +109,17 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   }
 
   if (response.status === 204) {
+    assertCurrentSession()
     return undefined as T
   }
 
-  return (await response.json()) as T
+  let body: T
+  try {
+    body = (await response.json()) as T
+  } catch (error) {
+    assertCurrentSession()
+    throw error
+  }
+  assertCurrentSession()
+  return body
 }

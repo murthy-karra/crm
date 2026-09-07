@@ -1,0 +1,4378 @@
+{
+  "scope": "Raw request and known safe telemetry recount. Matrix completeness, body parity, trace sentinel checks and final acceptance require separate checks.",
+  "waves": 215,
+  "reconciled_failed_joins": 0,
+  "groups": [
+    {
+      "series": "final_matrix",
+      "case": "concentrated_five_overlapping_sources",
+      "arm": "final",
+      "phase": "measured",
+      "concurrency": 1,
+      "attempts": 8,
+      "complete_200": 8,
+      "outcome_counts": {
+        "response": 8
+      },
+      "status_counts": {
+        "200": 8
+      },
+      "result_counts": {
+        "complete": 8
+      },
+      "timing_counts": {
+        "exact": 8
+      },
+      "response_source_evaluations": 40,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 8
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 636.396375,
+      "request_p95_ms": 680.478041,
+      "request_max_ms": 680.478041,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 8,
+          "outcomes": {
+            "complete": 8
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 2.093375,
+          "max_ms": 2.093375
+        },
+        "source_evaluations": {
+          "events": 40,
+          "outcomes": {
+            "complete": 40
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 125.591958,
+          "max_ms": 129.117834,
+          "static_filter_kinds": {
+            "stage": 40,
+            "source": 24,
+            "last_contact": 16,
+            "has_phone": 16
+          }
+        },
+        "authentication_pool_acquisitions": {
+          "events": 8,
+          "outcomes": {
+            "acquired": 8
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.271958,
+          "max_ms": 0.271958,
+          "headroom_from_observed_max_to_2s_ms": 1999.728042
+        },
+        "feed_pool_acquisitions": {
+          "events": 8,
+          "outcomes": {
+            "acquired": 8
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.372,
+          "max_ms": 0.372,
+          "headroom_from_observed_max_to_2s_ms": 1999.628
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "concentrated_five_overlapping_sources",
+      "arm": "final",
+      "phase": "measured",
+      "concurrency": 10,
+      "attempts": 20,
+      "complete_200": 20,
+      "outcome_counts": {
+        "response": 20
+      },
+      "status_counts": {
+        "200": 20
+      },
+      "result_counts": {
+        "complete": 20
+      },
+      "timing_counts": {
+        "exact": 20
+      },
+      "response_source_evaluations": 100,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 20
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 1213.790542,
+      "request_p95_ms": 1331.618584,
+      "request_max_ms": 1365.915041,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 20,
+          "outcomes": {
+            "complete": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 10.197583,
+          "max_ms": 13.27975
+        },
+        "source_evaluations": {
+          "events": 100,
+          "outcomes": {
+            "complete": 100
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 265.973666,
+          "max_ms": 317.977792,
+          "static_filter_kinds": {
+            "stage": 100,
+            "source": 60,
+            "last_contact": 40,
+            "has_phone": 40
+          }
+        },
+        "authentication_pool_acquisitions": {
+          "events": 20,
+          "outcomes": {
+            "acquired": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 1.457583,
+          "max_ms": 2.353625,
+          "headroom_from_observed_max_to_2s_ms": 1997.646375
+        },
+        "feed_pool_acquisitions": {
+          "events": 20,
+          "outcomes": {
+            "acquired": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.791083,
+          "max_ms": 7.452,
+          "headroom_from_observed_max_to_2s_ms": 1992.548
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "concentrated_five_overlapping_sources",
+      "arm": "final",
+      "phase": "measured",
+      "concurrency": 20,
+      "attempts": 40,
+      "complete_200": 40,
+      "outcome_counts": {
+        "response": 40
+      },
+      "status_counts": {
+        "200": 40
+      },
+      "result_counts": {
+        "complete": 40
+      },
+      "timing_counts": {
+        "exact": 40
+      },
+      "response_source_evaluations": 200,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 40
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 1581.999458,
+      "request_p95_ms": 2710.255417,
+      "request_max_ms": 2779.404209,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 40,
+          "outcomes": {
+            "complete": 40
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 17.629292,
+          "max_ms": 25.101291
+        },
+        "source_evaluations": {
+          "events": 200,
+          "outcomes": {
+            "complete": 200
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 291.195666,
+          "max_ms": 358.031792,
+          "static_filter_kinds": {
+            "stage": 200,
+            "source": 120,
+            "last_contact": 80,
+            "has_phone": 80
+          }
+        },
+        "authentication_pool_acquisitions": {
+          "events": 40,
+          "outcomes": {
+            "acquired": 40
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 1.686125,
+          "max_ms": 1.717916,
+          "headroom_from_observed_max_to_2s_ms": 1998.282084
+        },
+        "feed_pool_acquisitions": {
+          "events": 40,
+          "outcomes": {
+            "acquired": 40
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 1452.46525,
+          "max_ms": 1586.167959,
+          "headroom_from_observed_max_to_2s_ms": 413.832041
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "concentrated_five_overlapping_sources",
+      "arm": "final",
+      "phase": "warmup",
+      "concurrency": 10,
+      "attempts": 60,
+      "complete_200": 60,
+      "outcome_counts": {
+        "response": 60
+      },
+      "status_counts": {
+        "200": 60
+      },
+      "result_counts": {
+        "complete": 60
+      },
+      "timing_counts": {
+        "exact": 60
+      },
+      "response_source_evaluations": 300,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 60
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 1251.713292,
+      "request_p95_ms": 1361.705625,
+      "request_max_ms": 1399.820167,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 60,
+          "outcomes": {
+            "complete": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 9.604416,
+          "max_ms": 18.510417
+        },
+        "source_evaluations": {
+          "events": 300,
+          "outcomes": {
+            "complete": 300
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 265.921916,
+          "max_ms": 336.933042,
+          "static_filter_kinds": {
+            "stage": 300,
+            "source": 180,
+            "last_contact": 120,
+            "has_phone": 120
+          }
+        },
+        "authentication_pool_acquisitions": {
+          "events": 60,
+          "outcomes": {
+            "acquired": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.532208,
+          "max_ms": 0.614375,
+          "headroom_from_observed_max_to_2s_ms": 1999.385625
+        },
+        "feed_pool_acquisitions": {
+          "events": 60,
+          "outcomes": {
+            "acquired": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.823083,
+          "max_ms": 0.939333,
+          "headroom_from_observed_max_to_2s_ms": 1999.060667
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "concentrated_one_absence_source",
+      "arm": "final",
+      "phase": "measured",
+      "concurrency": 1,
+      "attempts": 8,
+      "complete_200": 8,
+      "outcome_counts": {
+        "response": 8
+      },
+      "status_counts": {
+        "200": 8
+      },
+      "result_counts": {
+        "complete": 8
+      },
+      "timing_counts": {
+        "exact": 8
+      },
+      "response_source_evaluations": 8,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 8
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 267.384709,
+      "request_p95_ms": 302.418625,
+      "request_max_ms": 302.418625,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 8,
+          "outcomes": {
+            "complete": 8
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 2.984333,
+          "max_ms": 2.984333
+        },
+        "source_evaluations": {
+          "events": 8,
+          "outcomes": {
+            "complete": 8
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 67.156209,
+          "max_ms": 67.156209,
+          "static_filter_kinds": {
+            "stage": 8,
+            "last_contact": 8
+          }
+        },
+        "authentication_pool_acquisitions": {
+          "events": 8,
+          "outcomes": {
+            "acquired": 8
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.373167,
+          "max_ms": 0.373167,
+          "headroom_from_observed_max_to_2s_ms": 1999.626833
+        },
+        "feed_pool_acquisitions": {
+          "events": 8,
+          "outcomes": {
+            "acquired": 8
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.342666,
+          "max_ms": 0.342666,
+          "headroom_from_observed_max_to_2s_ms": 1999.657334
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "concentrated_one_absence_source",
+      "arm": "final",
+      "phase": "measured",
+      "concurrency": 10,
+      "attempts": 20,
+      "complete_200": 20,
+      "outcome_counts": {
+        "response": 20
+      },
+      "status_counts": {
+        "200": 20
+      },
+      "result_counts": {
+        "complete": 20
+      },
+      "timing_counts": {
+        "exact": 20
+      },
+      "response_source_evaluations": 20,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 20
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 511.70625,
+      "request_p95_ms": 594.893375,
+      "request_max_ms": 600.929,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 20,
+          "outcomes": {
+            "complete": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 8.524333,
+          "max_ms": 10.343833
+        },
+        "source_evaluations": {
+          "events": 20,
+          "outcomes": {
+            "complete": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 182.495667,
+          "max_ms": 188.09075,
+          "static_filter_kinds": {
+            "stage": 20,
+            "last_contact": 20
+          }
+        },
+        "authentication_pool_acquisitions": {
+          "events": 20,
+          "outcomes": {
+            "acquired": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.483292,
+          "max_ms": 0.490083,
+          "headroom_from_observed_max_to_2s_ms": 1999.509917
+        },
+        "feed_pool_acquisitions": {
+          "events": 20,
+          "outcomes": {
+            "acquired": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.7255,
+          "max_ms": 0.781666,
+          "headroom_from_observed_max_to_2s_ms": 1999.218334
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "concentrated_one_absence_source",
+      "arm": "final",
+      "phase": "measured",
+      "concurrency": 20,
+      "attempts": 40,
+      "complete_200": 40,
+      "outcome_counts": {
+        "response": 40
+      },
+      "status_counts": {
+        "200": 40
+      },
+      "result_counts": {
+        "complete": 40
+      },
+      "timing_counts": {
+        "exact": 40
+      },
+      "response_source_evaluations": 40,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 40
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 606.623958,
+      "request_p95_ms": 1072.415417,
+      "request_max_ms": 1079.47825,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 40,
+          "outcomes": {
+            "complete": 40
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 12.498375,
+          "max_ms": 14.886209
+        },
+        "source_evaluations": {
+          "events": 40,
+          "outcomes": {
+            "complete": 40
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 189.903125,
+          "max_ms": 200.984583,
+          "static_filter_kinds": {
+            "stage": 40,
+            "last_contact": 40
+          }
+        },
+        "authentication_pool_acquisitions": {
+          "events": 40,
+          "outcomes": {
+            "acquired": 40
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 2.327833,
+          "max_ms": 2.369875,
+          "headroom_from_observed_max_to_2s_ms": 1997.630125
+        },
+        "feed_pool_acquisitions": {
+          "events": 40,
+          "outcomes": {
+            "acquired": 40
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 603.954792,
+          "max_ms": 610.570708,
+          "headroom_from_observed_max_to_2s_ms": 1389.429292
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "concentrated_one_absence_source",
+      "arm": "final",
+      "phase": "warmup",
+      "concurrency": 10,
+      "attempts": 60,
+      "complete_200": 60,
+      "outcome_counts": {
+        "response": 60
+      },
+      "status_counts": {
+        "200": 60
+      },
+      "result_counts": {
+        "complete": 60
+      },
+      "timing_counts": {
+        "exact": 60
+      },
+      "response_source_evaluations": 60,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 60
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 493.109625,
+      "request_p95_ms": 576.09875,
+      "request_max_ms": 584.81325,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 60,
+          "outcomes": {
+            "complete": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 8.368917,
+          "max_ms": 14.014083
+        },
+        "source_evaluations": {
+          "events": 60,
+          "outcomes": {
+            "complete": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 187.09575,
+          "max_ms": 191.265,
+          "static_filter_kinds": {
+            "stage": 60,
+            "last_contact": 60
+          }
+        },
+        "authentication_pool_acquisitions": {
+          "events": 60,
+          "outcomes": {
+            "acquired": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.556209,
+          "max_ms": 0.639375,
+          "headroom_from_observed_max_to_2s_ms": 1999.360625
+        },
+        "feed_pool_acquisitions": {
+          "events": 60,
+          "outcomes": {
+            "acquired": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.936333,
+          "max_ms": 1.429958,
+          "headroom_from_observed_max_to_2s_ms": 1998.570042
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "concentrated_one_dense_source",
+      "arm": "final",
+      "phase": "measured",
+      "concurrency": 1,
+      "attempts": 8,
+      "complete_200": 8,
+      "outcome_counts": {
+        "response": 8
+      },
+      "status_counts": {
+        "200": 8
+      },
+      "result_counts": {
+        "complete": 8
+      },
+      "timing_counts": {
+        "exact": 8
+      },
+      "response_source_evaluations": 8,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 8
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 312.428875,
+      "request_p95_ms": 322.083667,
+      "request_max_ms": 322.083667,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 8,
+          "outcomes": {
+            "complete": 8
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 2.011667,
+          "max_ms": 2.011667
+        },
+        "source_evaluations": {
+          "events": 8,
+          "outcomes": {
+            "complete": 8
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 114.357666,
+          "max_ms": 114.357666,
+          "static_filter_kinds": {
+            "stage": 8,
+            "source": 8
+          }
+        },
+        "authentication_pool_acquisitions": {
+          "events": 8,
+          "outcomes": {
+            "acquired": 8
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.264958,
+          "max_ms": 0.264958,
+          "headroom_from_observed_max_to_2s_ms": 1999.735042
+        },
+        "feed_pool_acquisitions": {
+          "events": 8,
+          "outcomes": {
+            "acquired": 8
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.370334,
+          "max_ms": 0.370334,
+          "headroom_from_observed_max_to_2s_ms": 1999.629666
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "concentrated_one_dense_source",
+      "arm": "final",
+      "phase": "measured",
+      "concurrency": 10,
+      "attempts": 20,
+      "complete_200": 20,
+      "outcome_counts": {
+        "response": 20
+      },
+      "status_counts": {
+        "200": 20
+      },
+      "result_counts": {
+        "complete": 20
+      },
+      "timing_counts": {
+        "exact": 20
+      },
+      "response_source_evaluations": 20,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 20
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 554.203083,
+      "request_p95_ms": 661.726084,
+      "request_max_ms": 665.478417,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 20,
+          "outcomes": {
+            "complete": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 6.382333,
+          "max_ms": 11.211916
+        },
+        "source_evaluations": {
+          "events": 20,
+          "outcomes": {
+            "complete": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 266.542042,
+          "max_ms": 272.357917,
+          "static_filter_kinds": {
+            "stage": 20,
+            "source": 20
+          }
+        },
+        "authentication_pool_acquisitions": {
+          "events": 20,
+          "outcomes": {
+            "acquired": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.657,
+          "max_ms": 0.716834,
+          "headroom_from_observed_max_to_2s_ms": 1999.283166
+        },
+        "feed_pool_acquisitions": {
+          "events": 20,
+          "outcomes": {
+            "acquired": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.817208,
+          "max_ms": 0.988875,
+          "headroom_from_observed_max_to_2s_ms": 1999.011125
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "concentrated_one_dense_source",
+      "arm": "final",
+      "phase": "measured",
+      "concurrency": 20,
+      "attempts": 40,
+      "complete_200": 40,
+      "outcome_counts": {
+        "response": 40
+      },
+      "status_counts": {
+        "200": 40
+      },
+      "result_counts": {
+        "complete": 40
+      },
+      "timing_counts": {
+        "exact": 40
+      },
+      "response_source_evaluations": 40,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 40
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 892.706834,
+      "request_p95_ms": 1319.002583,
+      "request_max_ms": 1397.641083,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 40,
+          "outcomes": {
+            "complete": 40
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 13.334875,
+          "max_ms": 20.400542
+        },
+        "source_evaluations": {
+          "events": 40,
+          "outcomes": {
+            "complete": 40
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 326.452542,
+          "max_ms": 334.807083,
+          "static_filter_kinds": {
+            "stage": 40,
+            "source": 40
+          }
+        },
+        "authentication_pool_acquisitions": {
+          "events": 40,
+          "outcomes": {
+            "acquired": 40
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 1.720625,
+          "max_ms": 1.813042,
+          "headroom_from_observed_max_to_2s_ms": 1998.186958
+        },
+        "feed_pool_acquisitions": {
+          "events": 40,
+          "outcomes": {
+            "acquired": 40
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 741.245333,
+          "max_ms": 898.538583,
+          "headroom_from_observed_max_to_2s_ms": 1101.461417
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "concentrated_one_dense_source",
+      "arm": "final",
+      "phase": "warmup",
+      "concurrency": 10,
+      "attempts": 60,
+      "complete_200": 60,
+      "outcome_counts": {
+        "response": 60
+      },
+      "status_counts": {
+        "200": 60
+      },
+      "result_counts": {
+        "complete": 60
+      },
+      "timing_counts": {
+        "exact": 60
+      },
+      "response_source_evaluations": 60,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 60
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 561.812458,
+      "request_p95_ms": 670.574875,
+      "request_max_ms": 701.389458,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 60,
+          "outcomes": {
+            "complete": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 8.00825,
+          "max_ms": 13.7685
+        },
+        "source_evaluations": {
+          "events": 60,
+          "outcomes": {
+            "complete": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 269.868917,
+          "max_ms": 294.136458,
+          "static_filter_kinds": {
+            "stage": 60,
+            "source": 60
+          }
+        },
+        "authentication_pool_acquisitions": {
+          "events": 60,
+          "outcomes": {
+            "acquired": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.5205,
+          "max_ms": 0.641416,
+          "headroom_from_observed_max_to_2s_ms": 1999.358584
+        },
+        "feed_pool_acquisitions": {
+          "events": 60,
+          "outcomes": {
+            "acquired": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.756625,
+          "max_ms": 0.817958,
+          "headroom_from_observed_max_to_2s_ms": 1999.182042
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "concentrated_zero_sources",
+      "arm": "final",
+      "phase": "measured",
+      "concurrency": 1,
+      "attempts": 8,
+      "complete_200": 8,
+      "outcome_counts": {
+        "response": 8
+      },
+      "status_counts": {
+        "200": 8
+      },
+      "result_counts": {
+        "complete": 8
+      },
+      "timing_counts": {
+        "exact": 8
+      },
+      "response_source_evaluations": 0,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 8
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 208.088917,
+      "request_p95_ms": 223.4585,
+      "request_max_ms": 223.4585,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 8,
+          "outcomes": {
+            "complete": 8
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 1.698084,
+          "max_ms": 1.698084
+        },
+        "source_evaluations": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null,
+          "static_filter_kinds": {}
+        },
+        "authentication_pool_acquisitions": {
+          "events": 8,
+          "outcomes": {
+            "acquired": 8
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.497917,
+          "max_ms": 0.497917,
+          "headroom_from_observed_max_to_2s_ms": 1999.502083
+        },
+        "feed_pool_acquisitions": {
+          "events": 8,
+          "outcomes": {
+            "acquired": 8
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.345334,
+          "max_ms": 0.345334,
+          "headroom_from_observed_max_to_2s_ms": 1999.654666
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "concentrated_zero_sources",
+      "arm": "final",
+      "phase": "measured",
+      "concurrency": 10,
+      "attempts": 20,
+      "complete_200": 20,
+      "outcome_counts": {
+        "response": 20
+      },
+      "status_counts": {
+        "200": 20
+      },
+      "result_counts": {
+        "complete": 20
+      },
+      "timing_counts": {
+        "exact": 20
+      },
+      "response_source_evaluations": 0,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 20
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 330.373125,
+      "request_p95_ms": 440.792458,
+      "request_max_ms": 442.1355,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 20,
+          "outcomes": {
+            "complete": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 4.846,
+          "max_ms": 5.526291
+        },
+        "source_evaluations": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null,
+          "static_filter_kinds": {}
+        },
+        "authentication_pool_acquisitions": {
+          "events": 20,
+          "outcomes": {
+            "acquired": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.495375,
+          "max_ms": 0.521791,
+          "headroom_from_observed_max_to_2s_ms": 1999.478209
+        },
+        "feed_pool_acquisitions": {
+          "events": 20,
+          "outcomes": {
+            "acquired": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.715916,
+          "max_ms": 0.774625,
+          "headroom_from_observed_max_to_2s_ms": 1999.225375
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "concentrated_zero_sources",
+      "arm": "final",
+      "phase": "measured",
+      "concurrency": 20,
+      "attempts": 40,
+      "complete_200": 40,
+      "outcome_counts": {
+        "response": 40
+      },
+      "status_counts": {
+        "200": 40
+      },
+      "result_counts": {
+        "complete": 40
+      },
+      "timing_counts": {
+        "exact": 40
+      },
+      "response_source_evaluations": 0,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 40
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 493.4215,
+      "request_p95_ms": 781.668,
+      "request_max_ms": 819.188041,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 40,
+          "outcomes": {
+            "complete": 40
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 8.869458,
+          "max_ms": 18.026209
+        },
+        "source_evaluations": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null,
+          "static_filter_kinds": {}
+        },
+        "authentication_pool_acquisitions": {
+          "events": 40,
+          "outcomes": {
+            "acquired": 40
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 1.328208,
+          "max_ms": 1.37375,
+          "headroom_from_observed_max_to_2s_ms": 1998.62625
+        },
+        "feed_pool_acquisitions": {
+          "events": 40,
+          "outcomes": {
+            "acquired": 40
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 487.776459,
+          "max_ms": 499.8335,
+          "headroom_from_observed_max_to_2s_ms": 1500.1665
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "concentrated_zero_sources",
+      "arm": "final",
+      "phase": "warmup",
+      "concurrency": 10,
+      "attempts": 60,
+      "complete_200": 60,
+      "outcome_counts": {
+        "response": 60
+      },
+      "status_counts": {
+        "200": 60
+      },
+      "result_counts": {
+        "complete": 60
+      },
+      "timing_counts": {
+        "exact": 60
+      },
+      "response_source_evaluations": 0,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 60
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 348.285875,
+      "request_p95_ms": 462.540125,
+      "request_max_ms": 572.888,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 60,
+          "outcomes": {
+            "complete": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 8.084834,
+          "max_ms": 10.795333
+        },
+        "source_evaluations": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null,
+          "static_filter_kinds": {}
+        },
+        "authentication_pool_acquisitions": {
+          "events": 60,
+          "outcomes": {
+            "acquired": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 15.812666,
+          "max_ms": 18.330375,
+          "headroom_from_observed_max_to_2s_ms": 1981.669625
+        },
+        "feed_pool_acquisitions": {
+          "events": 60,
+          "outcomes": {
+            "acquired": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 1.075833,
+          "max_ms": 11.191,
+          "headroom_from_observed_max_to_2s_ms": 1988.809
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "empty_builtins_five_overlapping_sources",
+      "arm": "final",
+      "phase": "measured",
+      "concurrency": 1,
+      "attempts": 5,
+      "complete_200": 5,
+      "outcome_counts": {
+        "response": 5
+      },
+      "status_counts": {
+        "200": 5
+      },
+      "result_counts": {
+        "complete": 5
+      },
+      "timing_counts": {
+        "exact": 5
+      },
+      "response_source_evaluations": 25,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 5
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 470.916208,
+      "request_p95_ms": 504.844209,
+      "request_max_ms": 504.844209,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 5,
+          "outcomes": {
+            "complete": 5
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 1.725667,
+          "max_ms": 1.725667
+        },
+        "source_evaluations": {
+          "events": 25,
+          "outcomes": {
+            "complete": 25
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 141.398083,
+          "max_ms": 160.09275,
+          "static_filter_kinds": {
+            "stage": 25,
+            "source": 15,
+            "last_contact": 10,
+            "has_phone": 10
+          }
+        },
+        "authentication_pool_acquisitions": {
+          "events": 5,
+          "outcomes": {
+            "acquired": 5
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.333333,
+          "max_ms": 0.333333,
+          "headroom_from_observed_max_to_2s_ms": 1999.666667
+        },
+        "feed_pool_acquisitions": {
+          "events": 5,
+          "outcomes": {
+            "acquired": 5
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.255208,
+          "max_ms": 0.255208,
+          "headroom_from_observed_max_to_2s_ms": 1999.744792
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "empty_builtins_five_overlapping_sources",
+      "arm": "final",
+      "phase": "measured",
+      "concurrency": 10,
+      "attempts": 10,
+      "complete_200": 10,
+      "outcome_counts": {
+        "response": 10
+      },
+      "status_counts": {
+        "200": 10
+      },
+      "result_counts": {
+        "complete": 10
+      },
+      "timing_counts": {
+        "exact": 10
+      },
+      "response_source_evaluations": 50,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 10
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 941.639916,
+      "request_p95_ms": 1020.198875,
+      "request_max_ms": 1020.198875,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 10,
+          "outcomes": {
+            "complete": 10
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 12.544333,
+          "max_ms": 12.544333
+        },
+        "source_evaluations": {
+          "events": 50,
+          "outcomes": {
+            "complete": 50
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 274.607125,
+          "max_ms": 302.207958,
+          "static_filter_kinds": {
+            "stage": 50,
+            "source": 30,
+            "last_contact": 20,
+            "has_phone": 20
+          }
+        },
+        "authentication_pool_acquisitions": {
+          "events": 10,
+          "outcomes": {
+            "acquired": 10
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 1.115708,
+          "max_ms": 1.115708,
+          "headroom_from_observed_max_to_2s_ms": 1998.884292
+        },
+        "feed_pool_acquisitions": {
+          "events": 10,
+          "outcomes": {
+            "acquired": 10
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 1.050834,
+          "max_ms": 1.050834,
+          "headroom_from_observed_max_to_2s_ms": 1998.949166
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "empty_builtins_five_overlapping_sources",
+      "arm": "final",
+      "phase": "measured",
+      "concurrency": 20,
+      "attempts": 20,
+      "complete_200": 20,
+      "outcome_counts": {
+        "response": 20
+      },
+      "status_counts": {
+        "200": 20
+      },
+      "result_counts": {
+        "complete": 20
+      },
+      "timing_counts": {
+        "exact": 20
+      },
+      "response_source_evaluations": 100,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 20
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 1094.430166,
+      "request_p95_ms": 1910.196791,
+      "request_max_ms": 1939.767541,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 20,
+          "outcomes": {
+            "complete": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 4.390625,
+          "max_ms": 8.347791
+        },
+        "source_evaluations": {
+          "events": 100,
+          "outcomes": {
+            "complete": 100
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 278.522667,
+          "max_ms": 346.786875,
+          "static_filter_kinds": {
+            "stage": 100,
+            "source": 60,
+            "last_contact": 40,
+            "has_phone": 40
+          }
+        },
+        "authentication_pool_acquisitions": {
+          "events": 20,
+          "outcomes": {
+            "acquired": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 1.466958,
+          "max_ms": 1.533,
+          "headroom_from_observed_max_to_2s_ms": 1998.467
+        },
+        "feed_pool_acquisitions": {
+          "events": 20,
+          "outcomes": {
+            "acquired": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 1033.299292,
+          "max_ms": 1097.045125,
+          "headroom_from_observed_max_to_2s_ms": 902.954875
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "empty_builtins_five_overlapping_sources",
+      "arm": "final",
+      "phase": "warmup",
+      "concurrency": 10,
+      "attempts": 60,
+      "complete_200": 60,
+      "outcome_counts": {
+        "response": 60
+      },
+      "status_counts": {
+        "200": 60
+      },
+      "result_counts": {
+        "complete": 60
+      },
+      "timing_counts": {
+        "exact": 60
+      },
+      "response_source_evaluations": 300,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 60
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 932.423292,
+      "request_p95_ms": 1034.271916,
+      "request_max_ms": 1049.972416,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 60,
+          "outcomes": {
+            "complete": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 6.654875,
+          "max_ms": 12.991667
+        },
+        "source_evaluations": {
+          "events": 300,
+          "outcomes": {
+            "complete": 300
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 290.859208,
+          "max_ms": 362.841625,
+          "static_filter_kinds": {
+            "stage": 300,
+            "source": 180,
+            "last_contact": 120,
+            "has_phone": 120
+          }
+        },
+        "authentication_pool_acquisitions": {
+          "events": 60,
+          "outcomes": {
+            "acquired": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.58,
+          "max_ms": 0.722375,
+          "headroom_from_observed_max_to_2s_ms": 1999.277625
+        },
+        "feed_pool_acquisitions": {
+          "events": 60,
+          "outcomes": {
+            "acquired": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.867333,
+          "max_ms": 0.900792,
+          "headroom_from_observed_max_to_2s_ms": 1999.099208
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "empty_builtins_zero_sources",
+      "arm": "final",
+      "phase": "measured",
+      "concurrency": 1,
+      "attempts": 5,
+      "complete_200": 5,
+      "outcome_counts": {
+        "response": 5
+      },
+      "status_counts": {
+        "200": 5
+      },
+      "result_counts": {
+        "complete": 5
+      },
+      "timing_counts": {
+        "exact": 5
+      },
+      "response_source_evaluations": 0,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 5
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 5.455166,
+      "request_p95_ms": 5.5015,
+      "request_max_ms": 5.5015,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 5,
+          "outcomes": {
+            "complete": 5
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.944416,
+          "max_ms": 0.944416
+        },
+        "source_evaluations": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null,
+          "static_filter_kinds": {}
+        },
+        "authentication_pool_acquisitions": {
+          "events": 5,
+          "outcomes": {
+            "acquired": 5
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.186,
+          "max_ms": 0.186,
+          "headroom_from_observed_max_to_2s_ms": 1999.814
+        },
+        "feed_pool_acquisitions": {
+          "events": 5,
+          "outcomes": {
+            "acquired": 5
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.216209,
+          "max_ms": 0.216209,
+          "headroom_from_observed_max_to_2s_ms": 1999.783791
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "empty_builtins_zero_sources",
+      "arm": "final",
+      "phase": "measured",
+      "concurrency": 10,
+      "attempts": 10,
+      "complete_200": 10,
+      "outcome_counts": {
+        "response": 10
+      },
+      "status_counts": {
+        "200": 10
+      },
+      "result_counts": {
+        "complete": 10
+      },
+      "timing_counts": {
+        "exact": 10
+      },
+      "response_source_evaluations": 0,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 10
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 9.945083,
+      "request_p95_ms": 10.703,
+      "request_max_ms": 10.703,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 10,
+          "outcomes": {
+            "complete": 10
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 3.631458,
+          "max_ms": 3.631458
+        },
+        "source_evaluations": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null,
+          "static_filter_kinds": {}
+        },
+        "authentication_pool_acquisitions": {
+          "events": 10,
+          "outcomes": {
+            "acquired": 10
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.405208,
+          "max_ms": 0.405208,
+          "headroom_from_observed_max_to_2s_ms": 1999.594792
+        },
+        "feed_pool_acquisitions": {
+          "events": 10,
+          "outcomes": {
+            "acquired": 10
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.634875,
+          "max_ms": 0.634875,
+          "headroom_from_observed_max_to_2s_ms": 1999.365125
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "empty_builtins_zero_sources",
+      "arm": "final",
+      "phase": "measured",
+      "concurrency": 20,
+      "attempts": 20,
+      "complete_200": 20,
+      "outcome_counts": {
+        "response": 20
+      },
+      "status_counts": {
+        "200": 20
+      },
+      "result_counts": {
+        "complete": 20
+      },
+      "timing_counts": {
+        "exact": 20
+      },
+      "response_source_evaluations": 0,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 20
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 15.624042,
+      "request_p95_ms": 19.392916,
+      "request_max_ms": 20.933667,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 20,
+          "outcomes": {
+            "complete": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 2.968208,
+          "max_ms": 4.132208
+        },
+        "source_evaluations": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null,
+          "static_filter_kinds": {}
+        },
+        "authentication_pool_acquisitions": {
+          "events": 20,
+          "outcomes": {
+            "acquired": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 1.142791,
+          "max_ms": 1.158875,
+          "headroom_from_observed_max_to_2s_ms": 1998.841125
+        },
+        "feed_pool_acquisitions": {
+          "events": 20,
+          "outcomes": {
+            "acquired": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 9.770917,
+          "max_ms": 13.541458,
+          "headroom_from_observed_max_to_2s_ms": 1986.458542
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "empty_builtins_zero_sources",
+      "arm": "final",
+      "phase": "warmup",
+      "concurrency": 10,
+      "attempts": 60,
+      "complete_200": 60,
+      "outcome_counts": {
+        "response": 60
+      },
+      "status_counts": {
+        "200": 60
+      },
+      "result_counts": {
+        "complete": 60
+      },
+      "timing_counts": {
+        "exact": 60
+      },
+      "response_source_evaluations": 0,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 60
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 10.508959,
+      "request_p95_ms": 13.032375,
+      "request_max_ms": 16.59275,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 60,
+          "outcomes": {
+            "complete": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 4.721291,
+          "max_ms": 5.469041
+        },
+        "source_evaluations": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null,
+          "static_filter_kinds": {}
+        },
+        "authentication_pool_acquisitions": {
+          "events": 60,
+          "outcomes": {
+            "acquired": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.870375,
+          "max_ms": 1.106,
+          "headroom_from_observed_max_to_2s_ms": 1998.894
+        },
+        "feed_pool_acquisitions": {
+          "events": 60,
+          "outcomes": {
+            "acquired": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.834125,
+          "max_ms": 0.910375,
+          "headroom_from_observed_max_to_2s_ms": 1999.089625
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "partial_builtins_five_overlapping_sources",
+      "arm": "final",
+      "phase": "measured",
+      "concurrency": 1,
+      "attempts": 5,
+      "complete_200": 5,
+      "outcome_counts": {
+        "response": 5
+      },
+      "status_counts": {
+        "200": 5
+      },
+      "result_counts": {
+        "complete": 5
+      },
+      "timing_counts": {
+        "exact": 5
+      },
+      "response_source_evaluations": 25,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 5
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 509.339417,
+      "request_p95_ms": 546.157875,
+      "request_max_ms": 546.157875,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 5,
+          "outcomes": {
+            "complete": 5
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 3.962625,
+          "max_ms": 3.962625
+        },
+        "source_evaluations": {
+          "events": 25,
+          "outcomes": {
+            "complete": 25
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 147.618083,
+          "max_ms": 173.783709,
+          "static_filter_kinds": {
+            "stage": 25,
+            "source": 15,
+            "last_contact": 10,
+            "has_phone": 10
+          }
+        },
+        "authentication_pool_acquisitions": {
+          "events": 5,
+          "outcomes": {
+            "acquired": 5
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.479458,
+          "max_ms": 0.479458,
+          "headroom_from_observed_max_to_2s_ms": 1999.520542
+        },
+        "feed_pool_acquisitions": {
+          "events": 5,
+          "outcomes": {
+            "acquired": 5
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.402167,
+          "max_ms": 0.402167,
+          "headroom_from_observed_max_to_2s_ms": 1999.597833
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "partial_builtins_five_overlapping_sources",
+      "arm": "final",
+      "phase": "measured",
+      "concurrency": 10,
+      "attempts": 10,
+      "complete_200": 10,
+      "outcome_counts": {
+        "response": 10
+      },
+      "status_counts": {
+        "200": 10
+      },
+      "result_counts": {
+        "complete": 10
+      },
+      "timing_counts": {
+        "exact": 10
+      },
+      "response_source_evaluations": 50,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 10
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 909.813083,
+      "request_p95_ms": 1014.548834,
+      "request_max_ms": 1014.548834,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 10,
+          "outcomes": {
+            "complete": 10
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 4.816375,
+          "max_ms": 4.816375
+        },
+        "source_evaluations": {
+          "events": 50,
+          "outcomes": {
+            "complete": 50
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 281.032833,
+          "max_ms": 324.354916,
+          "static_filter_kinds": {
+            "stage": 50,
+            "source": 30,
+            "last_contact": 20,
+            "has_phone": 20
+          }
+        },
+        "authentication_pool_acquisitions": {
+          "events": 10,
+          "outcomes": {
+            "acquired": 10
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.608,
+          "max_ms": 0.608,
+          "headroom_from_observed_max_to_2s_ms": 1999.392
+        },
+        "feed_pool_acquisitions": {
+          "events": 10,
+          "outcomes": {
+            "acquired": 10
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.62175,
+          "max_ms": 0.62175,
+          "headroom_from_observed_max_to_2s_ms": 1999.37825
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "partial_builtins_five_overlapping_sources",
+      "arm": "final",
+      "phase": "measured",
+      "concurrency": 20,
+      "attempts": 20,
+      "complete_200": 20,
+      "outcome_counts": {
+        "response": 20
+      },
+      "status_counts": {
+        "200": 20
+      },
+      "result_counts": {
+        "complete": 20
+      },
+      "timing_counts": {
+        "exact": 20
+      },
+      "response_source_evaluations": 100,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 20
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 1200.40175,
+      "request_p95_ms": 2120.681917,
+      "request_max_ms": 2140.859542,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 20,
+          "outcomes": {
+            "complete": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 14.947875,
+          "max_ms": 22.975625
+        },
+        "source_evaluations": {
+          "events": 100,
+          "outcomes": {
+            "complete": 100
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 322.247459,
+          "max_ms": 390.5835,
+          "static_filter_kinds": {
+            "stage": 100,
+            "source": 60,
+            "last_contact": 40,
+            "has_phone": 40
+          }
+        },
+        "authentication_pool_acquisitions": {
+          "events": 20,
+          "outcomes": {
+            "acquired": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 1.382791,
+          "max_ms": 1.443125,
+          "headroom_from_observed_max_to_2s_ms": 1998.556875
+        },
+        "feed_pool_acquisitions": {
+          "events": 20,
+          "outcomes": {
+            "acquired": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 1178.345208,
+          "max_ms": 1202.865667,
+          "headroom_from_observed_max_to_2s_ms": 797.134333
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "partial_builtins_five_overlapping_sources",
+      "arm": "final",
+      "phase": "warmup",
+      "concurrency": 10,
+      "attempts": 60,
+      "complete_200": 60,
+      "outcome_counts": {
+        "response": 60
+      },
+      "status_counts": {
+        "200": 60
+      },
+      "result_counts": {
+        "complete": 60
+      },
+      "timing_counts": {
+        "exact": 60
+      },
+      "response_source_evaluations": 300,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 60
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 970.622,
+      "request_p95_ms": 1181.303167,
+      "request_max_ms": 1219.164708,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 60,
+          "outcomes": {
+            "complete": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 3.116416,
+          "max_ms": 10.304125
+        },
+        "source_evaluations": {
+          "events": 300,
+          "outcomes": {
+            "complete": 300
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 313.442,
+          "max_ms": 437.043792,
+          "static_filter_kinds": {
+            "stage": 300,
+            "source": 180,
+            "last_contact": 120,
+            "has_phone": 120
+          }
+        },
+        "authentication_pool_acquisitions": {
+          "events": 60,
+          "outcomes": {
+            "acquired": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.651084,
+          "max_ms": 0.718834,
+          "headroom_from_observed_max_to_2s_ms": 1999.281166
+        },
+        "feed_pool_acquisitions": {
+          "events": 60,
+          "outcomes": {
+            "acquired": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.907375,
+          "max_ms": 1.050708,
+          "headroom_from_observed_max_to_2s_ms": 1998.949292
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "partial_builtins_zero_sources",
+      "arm": "final",
+      "phase": "measured",
+      "concurrency": 1,
+      "attempts": 5,
+      "complete_200": 5,
+      "outcome_counts": {
+        "response": 5
+      },
+      "status_counts": {
+        "200": 5
+      },
+      "result_counts": {
+        "complete": 5
+      },
+      "timing_counts": {
+        "exact": 5
+      },
+      "response_source_evaluations": 0,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 5
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 8.657083,
+      "request_p95_ms": 9.813333,
+      "request_max_ms": 9.813333,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 5,
+          "outcomes": {
+            "complete": 5
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 1.828292,
+          "max_ms": 1.828292
+        },
+        "source_evaluations": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null,
+          "static_filter_kinds": {}
+        },
+        "authentication_pool_acquisitions": {
+          "events": 5,
+          "outcomes": {
+            "acquired": 5
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.358625,
+          "max_ms": 0.358625,
+          "headroom_from_observed_max_to_2s_ms": 1999.641375
+        },
+        "feed_pool_acquisitions": {
+          "events": 5,
+          "outcomes": {
+            "acquired": 5
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.350833,
+          "max_ms": 0.350833,
+          "headroom_from_observed_max_to_2s_ms": 1999.649167
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "partial_builtins_zero_sources",
+      "arm": "final",
+      "phase": "measured",
+      "concurrency": 10,
+      "attempts": 10,
+      "complete_200": 10,
+      "outcome_counts": {
+        "response": 10
+      },
+      "status_counts": {
+        "200": 10
+      },
+      "result_counts": {
+        "complete": 10
+      },
+      "timing_counts": {
+        "exact": 10
+      },
+      "response_source_evaluations": 0,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 10
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 16.24775,
+      "request_p95_ms": 21.283584,
+      "request_max_ms": 21.283584,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 10,
+          "outcomes": {
+            "complete": 10
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 8.066917,
+          "max_ms": 8.066917
+        },
+        "source_evaluations": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null,
+          "static_filter_kinds": {}
+        },
+        "authentication_pool_acquisitions": {
+          "events": 10,
+          "outcomes": {
+            "acquired": 10
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.517833,
+          "max_ms": 0.517833,
+          "headroom_from_observed_max_to_2s_ms": 1999.482167
+        },
+        "feed_pool_acquisitions": {
+          "events": 10,
+          "outcomes": {
+            "acquired": 10
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.77075,
+          "max_ms": 0.77075,
+          "headroom_from_observed_max_to_2s_ms": 1999.22925
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "partial_builtins_zero_sources",
+      "arm": "final",
+      "phase": "measured",
+      "concurrency": 20,
+      "attempts": 20,
+      "complete_200": 20,
+      "outcome_counts": {
+        "response": 20
+      },
+      "status_counts": {
+        "200": 20
+      },
+      "result_counts": {
+        "complete": 20
+      },
+      "timing_counts": {
+        "exact": 20
+      },
+      "response_source_evaluations": 0,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 20
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 25.484291,
+      "request_p95_ms": 42.6275,
+      "request_max_ms": 43.892709,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 20,
+          "outcomes": {
+            "complete": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 8.171958,
+          "max_ms": 8.874
+        },
+        "source_evaluations": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null,
+          "static_filter_kinds": {}
+        },
+        "authentication_pool_acquisitions": {
+          "events": 20,
+          "outcomes": {
+            "acquired": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 1.528958,
+          "max_ms": 1.606,
+          "headroom_from_observed_max_to_2s_ms": 1998.394
+        },
+        "feed_pool_acquisitions": {
+          "events": 20,
+          "outcomes": {
+            "acquired": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 21.417583,
+          "max_ms": 23.184334,
+          "headroom_from_observed_max_to_2s_ms": 1976.815666
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "partial_builtins_zero_sources",
+      "arm": "final",
+      "phase": "warmup",
+      "concurrency": 10,
+      "attempts": 60,
+      "complete_200": 60,
+      "outcome_counts": {
+        "response": 60
+      },
+      "status_counts": {
+        "200": 60
+      },
+      "result_counts": {
+        "complete": 60
+      },
+      "timing_counts": {
+        "exact": 60
+      },
+      "response_source_evaluations": 0,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 60
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 18.803416,
+      "request_p95_ms": 25.642083,
+      "request_max_ms": 28.031542,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 60,
+          "outcomes": {
+            "complete": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 7.655875,
+          "max_ms": 8.686625
+        },
+        "source_evaluations": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null,
+          "static_filter_kinds": {}
+        },
+        "authentication_pool_acquisitions": {
+          "events": 60,
+          "outcomes": {
+            "acquired": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.464375,
+          "max_ms": 0.573375,
+          "headroom_from_observed_max_to_2s_ms": 1999.426625
+        },
+        "feed_pool_acquisitions": {
+          "events": 60,
+          "outcomes": {
+            "acquired": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.735667,
+          "max_ms": 0.817958,
+          "headroom_from_observed_max_to_2s_ms": 1999.182042
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "typical_five_overlapping_sources",
+      "arm": "final",
+      "phase": "measured",
+      "concurrency": 1,
+      "attempts": 5,
+      "complete_200": 5,
+      "outcome_counts": {
+        "response": 5
+      },
+      "status_counts": {
+        "200": 5
+      },
+      "result_counts": {
+        "complete": 5
+      },
+      "timing_counts": {
+        "exact": 5
+      },
+      "response_source_evaluations": 25,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 5
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 39.6035,
+      "request_p95_ms": 41.016334,
+      "request_max_ms": 41.016334,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 5,
+          "outcomes": {
+            "complete": 5
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 1.428583,
+          "max_ms": 1.428583
+        },
+        "source_evaluations": {
+          "events": 25,
+          "outcomes": {
+            "complete": 25
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 3.441125,
+          "max_ms": 3.446375,
+          "static_filter_kinds": {
+            "stage": 25,
+            "last_contact": 10,
+            "source": 15,
+            "has_phone": 10
+          }
+        },
+        "authentication_pool_acquisitions": {
+          "events": 5,
+          "outcomes": {
+            "acquired": 5
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.360167,
+          "max_ms": 0.360167,
+          "headroom_from_observed_max_to_2s_ms": 1999.639833
+        },
+        "feed_pool_acquisitions": {
+          "events": 5,
+          "outcomes": {
+            "acquired": 5
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.259875,
+          "max_ms": 0.259875,
+          "headroom_from_observed_max_to_2s_ms": 1999.740125
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "typical_five_overlapping_sources",
+      "arm": "final",
+      "phase": "measured",
+      "concurrency": 10,
+      "attempts": 10,
+      "complete_200": 10,
+      "outcome_counts": {
+        "response": 10
+      },
+      "status_counts": {
+        "200": 10
+      },
+      "result_counts": {
+        "complete": 10
+      },
+      "timing_counts": {
+        "exact": 10
+      },
+      "response_source_evaluations": 50,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 10
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 79.208833,
+      "request_p95_ms": 95.929041,
+      "request_max_ms": 95.929041,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 10,
+          "outcomes": {
+            "complete": 10
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 9.225291,
+          "max_ms": 9.225291
+        },
+        "source_evaluations": {
+          "events": 50,
+          "outcomes": {
+            "complete": 50
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 13.718292,
+          "max_ms": 13.882833,
+          "static_filter_kinds": {
+            "stage": 50,
+            "last_contact": 20,
+            "source": 30,
+            "has_phone": 20
+          }
+        },
+        "authentication_pool_acquisitions": {
+          "events": 10,
+          "outcomes": {
+            "acquired": 10
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.567458,
+          "max_ms": 0.567458,
+          "headroom_from_observed_max_to_2s_ms": 1999.432542
+        },
+        "feed_pool_acquisitions": {
+          "events": 10,
+          "outcomes": {
+            "acquired": 10
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.836875,
+          "max_ms": 0.836875,
+          "headroom_from_observed_max_to_2s_ms": 1999.163125
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "typical_five_overlapping_sources",
+      "arm": "final",
+      "phase": "measured",
+      "concurrency": 20,
+      "attempts": 20,
+      "complete_200": 20,
+      "outcome_counts": {
+        "response": 20
+      },
+      "status_counts": {
+        "200": 20
+      },
+      "result_counts": {
+        "complete": 20
+      },
+      "timing_counts": {
+        "exact": 20
+      },
+      "response_source_evaluations": 100,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 20
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 99.653,
+      "request_p95_ms": 167.456042,
+      "request_max_ms": 170.657,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 20,
+          "outcomes": {
+            "complete": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 4.667167,
+          "max_ms": 4.835167
+        },
+        "source_evaluations": {
+          "events": 100,
+          "outcomes": {
+            "complete": 100
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 13.030917,
+          "max_ms": 19.653334,
+          "static_filter_kinds": {
+            "stage": 100,
+            "last_contact": 40,
+            "source": 60,
+            "has_phone": 40
+          }
+        },
+        "authentication_pool_acquisitions": {
+          "events": 20,
+          "outcomes": {
+            "acquired": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 1.244334,
+          "max_ms": 1.265167,
+          "headroom_from_observed_max_to_2s_ms": 1998.734833
+        },
+        "feed_pool_acquisitions": {
+          "events": 20,
+          "outcomes": {
+            "acquired": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 95.552792,
+          "max_ms": 99.845417,
+          "headroom_from_observed_max_to_2s_ms": 1900.154583
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "typical_five_overlapping_sources",
+      "arm": "final",
+      "phase": "warmup",
+      "concurrency": 10,
+      "attempts": 60,
+      "complete_200": 60,
+      "outcome_counts": {
+        "response": 60
+      },
+      "status_counts": {
+        "200": 60
+      },
+      "result_counts": {
+        "complete": 60
+      },
+      "timing_counts": {
+        "exact": 60
+      },
+      "response_source_evaluations": 300,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 60
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 73.934042,
+      "request_p95_ms": 93.519583,
+      "request_max_ms": 95.485791,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 60,
+          "outcomes": {
+            "complete": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 6.564125,
+          "max_ms": 8.290417
+        },
+        "source_evaluations": {
+          "events": 300,
+          "outcomes": {
+            "complete": 300
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 14.065875,
+          "max_ms": 20.138875,
+          "static_filter_kinds": {
+            "stage": 300,
+            "last_contact": 120,
+            "source": 180,
+            "has_phone": 120
+          }
+        },
+        "authentication_pool_acquisitions": {
+          "events": 60,
+          "outcomes": {
+            "acquired": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.482708,
+          "max_ms": 0.563,
+          "headroom_from_observed_max_to_2s_ms": 1999.437
+        },
+        "feed_pool_acquisitions": {
+          "events": 60,
+          "outcomes": {
+            "acquired": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.786084,
+          "max_ms": 0.8675,
+          "headroom_from_observed_max_to_2s_ms": 1999.1325
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "typical_zero_sources",
+      "arm": "final",
+      "phase": "measured",
+      "concurrency": 1,
+      "attempts": 5,
+      "complete_200": 5,
+      "outcome_counts": {
+        "response": 5
+      },
+      "status_counts": {
+        "200": 5
+      },
+      "result_counts": {
+        "complete": 5
+      },
+      "timing_counts": {
+        "exact": 5
+      },
+      "response_source_evaluations": 0,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 5
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 25.0555,
+      "request_p95_ms": 27.598459,
+      "request_max_ms": 27.598459,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 5,
+          "outcomes": {
+            "complete": 5
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 1.345042,
+          "max_ms": 1.345042
+        },
+        "source_evaluations": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null,
+          "static_filter_kinds": {}
+        },
+        "authentication_pool_acquisitions": {
+          "events": 5,
+          "outcomes": {
+            "acquired": 5
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.337708,
+          "max_ms": 0.337708,
+          "headroom_from_observed_max_to_2s_ms": 1999.662292
+        },
+        "feed_pool_acquisitions": {
+          "events": 5,
+          "outcomes": {
+            "acquired": 5
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.268334,
+          "max_ms": 0.268334,
+          "headroom_from_observed_max_to_2s_ms": 1999.731666
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "typical_zero_sources",
+      "arm": "final",
+      "phase": "measured",
+      "concurrency": 10,
+      "attempts": 10,
+      "complete_200": 10,
+      "outcome_counts": {
+        "response": 10
+      },
+      "status_counts": {
+        "200": 10
+      },
+      "result_counts": {
+        "complete": 10
+      },
+      "timing_counts": {
+        "exact": 10
+      },
+      "response_source_evaluations": 0,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 10
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 50.2535,
+      "request_p95_ms": 60.264958,
+      "request_max_ms": 60.264958,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 10,
+          "outcomes": {
+            "complete": 10
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 14.631125,
+          "max_ms": 14.631125
+        },
+        "source_evaluations": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null,
+          "static_filter_kinds": {}
+        },
+        "authentication_pool_acquisitions": {
+          "events": 10,
+          "outcomes": {
+            "acquired": 10
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.53075,
+          "max_ms": 0.53075,
+          "headroom_from_observed_max_to_2s_ms": 1999.46925
+        },
+        "feed_pool_acquisitions": {
+          "events": 10,
+          "outcomes": {
+            "acquired": 10
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.858709,
+          "max_ms": 0.858709,
+          "headroom_from_observed_max_to_2s_ms": 1999.141291
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "typical_zero_sources",
+      "arm": "final",
+      "phase": "measured",
+      "concurrency": 20,
+      "attempts": 20,
+      "complete_200": 20,
+      "outcome_counts": {
+        "response": 20
+      },
+      "status_counts": {
+        "200": 20
+      },
+      "result_counts": {
+        "complete": 20
+      },
+      "timing_counts": {
+        "exact": 20
+      },
+      "response_source_evaluations": 0,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 20
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 58.438709,
+      "request_p95_ms": 102.93175,
+      "request_max_ms": 104.537333,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 20,
+          "outcomes": {
+            "complete": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 11.674958,
+          "max_ms": 12.508708
+        },
+        "source_evaluations": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null,
+          "static_filter_kinds": {}
+        },
+        "authentication_pool_acquisitions": {
+          "events": 20,
+          "outcomes": {
+            "acquired": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 1.216542,
+          "max_ms": 1.223125,
+          "headroom_from_observed_max_to_2s_ms": 1998.776875
+        },
+        "feed_pool_acquisitions": {
+          "events": 20,
+          "outcomes": {
+            "acquired": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 57.317708,
+          "max_ms": 57.670166,
+          "headroom_from_observed_max_to_2s_ms": 1942.329834
+        }
+      }
+    },
+    {
+      "series": "final_matrix",
+      "case": "typical_zero_sources",
+      "arm": "final",
+      "phase": "warmup",
+      "concurrency": 10,
+      "attempts": 60,
+      "complete_200": 60,
+      "outcome_counts": {
+        "response": 60
+      },
+      "status_counts": {
+        "200": 60
+      },
+      "result_counts": {
+        "complete": 60
+      },
+      "timing_counts": {
+        "exact": 60
+      },
+      "response_source_evaluations": 0,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 60
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 49.792875,
+      "request_p95_ms": 92.705292,
+      "request_max_ms": 104.288959,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 60,
+          "outcomes": {
+            "complete": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 11.81125,
+          "max_ms": 37.616542
+        },
+        "source_evaluations": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null,
+          "static_filter_kinds": {}
+        },
+        "authentication_pool_acquisitions": {
+          "events": 60,
+          "outcomes": {
+            "acquired": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.600917,
+          "max_ms": 0.672125,
+          "headroom_from_observed_max_to_2s_ms": 1999.327875
+        },
+        "feed_pool_acquisitions": {
+          "events": 60,
+          "outcomes": {
+            "acquired": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.868584,
+          "max_ms": 1.1515,
+          "headroom_from_observed_max_to_2s_ms": 1998.8485
+        }
+      }
+    },
+    {
+      "series": "independent_concentrated_repeat",
+      "case": "concentrated_five_overlapping_sources",
+      "arm": "final",
+      "phase": "measured",
+      "concurrency": 20,
+      "attempts": 40,
+      "complete_200": 40,
+      "outcome_counts": {
+        "response": 40
+      },
+      "status_counts": {
+        "200": 40
+      },
+      "result_counts": {
+        "complete": 40
+      },
+      "timing_counts": {
+        "exact": 40
+      },
+      "response_source_evaluations": 200,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 40
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 1549.804375,
+      "request_p95_ms": 2725.147708,
+      "request_max_ms": 2777.634959,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 40,
+          "outcomes": {
+            "complete": 40
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 17.774416,
+          "max_ms": 18.899917
+        },
+        "source_evaluations": {
+          "events": 200,
+          "outcomes": {
+            "complete": 200
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 287.080542,
+          "max_ms": 341.354292,
+          "static_filter_kinds": {
+            "stage": 200,
+            "source": 120,
+            "last_contact": 80,
+            "has_phone": 80
+          }
+        },
+        "authentication_pool_acquisitions": {
+          "events": 40,
+          "outcomes": {
+            "acquired": 40
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 1.464708,
+          "max_ms": 1.499042,
+          "headroom_from_observed_max_to_2s_ms": 1998.500958
+        },
+        "feed_pool_acquisitions": {
+          "events": 40,
+          "outcomes": {
+            "acquired": 40
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 1487.710417,
+          "max_ms": 1557.156375,
+          "headroom_from_observed_max_to_2s_ms": 442.843625
+        }
+      }
+    },
+    {
+      "series": "independent_concentrated_repeat",
+      "case": "concentrated_five_overlapping_sources",
+      "arm": "final",
+      "phase": "warmup",
+      "concurrency": 10,
+      "attempts": 60,
+      "complete_200": 60,
+      "outcome_counts": {
+        "response": 60
+      },
+      "status_counts": {
+        "200": 60
+      },
+      "result_counts": {
+        "complete": 60
+      },
+      "timing_counts": {
+        "exact": 60
+      },
+      "response_source_evaluations": 300,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 60
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 1286.157833,
+      "request_p95_ms": 1391.91325,
+      "request_max_ms": 1417.099875,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 60,
+          "outcomes": {
+            "complete": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 14.650667,
+          "max_ms": 17.809417
+        },
+        "source_evaluations": {
+          "events": 300,
+          "outcomes": {
+            "complete": 300
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 281.191667,
+          "max_ms": 361.95525,
+          "static_filter_kinds": {
+            "stage": 300,
+            "source": 180,
+            "last_contact": 120,
+            "has_phone": 120
+          }
+        },
+        "authentication_pool_acquisitions": {
+          "events": 60,
+          "outcomes": {
+            "acquired": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.652125,
+          "max_ms": 0.7495,
+          "headroom_from_observed_max_to_2s_ms": 1999.2505
+        },
+        "feed_pool_acquisitions": {
+          "events": 60,
+          "outcomes": {
+            "acquired": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.704416,
+          "max_ms": 0.934167,
+          "headroom_from_observed_max_to_2s_ms": 1999.065833
+        }
+      }
+    },
+    {
+      "series": "paired_original_zero_source",
+      "case": "concentrated_zero_sources",
+      "arm": "frozen_original",
+      "phase": "measured",
+      "concurrency": 1,
+      "attempts": 8,
+      "complete_200": 8,
+      "outcome_counts": {
+        "response": 8
+      },
+      "status_counts": {
+        "200": 8
+      },
+      "result_counts": {
+        "complete": 8
+      },
+      "timing_counts": {
+        "exact": 8
+      },
+      "response_source_evaluations": 0,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 8
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 652.845334,
+      "request_p95_ms": 702.887208,
+      "request_max_ms": 702.887208,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null
+        },
+        "source_evaluations": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null,
+          "static_filter_kinds": {}
+        },
+        "authentication_pool_acquisitions": {
+          "events": 8,
+          "outcomes": {
+            "acquired": 8
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.282083,
+          "max_ms": 0.282083,
+          "headroom_from_observed_max_to_2s_ms": 1999.717917
+        },
+        "feed_pool_acquisitions": {
+          "events": 8,
+          "outcomes": {
+            "acquired": 8
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.328333,
+          "max_ms": 0.328333,
+          "headroom_from_observed_max_to_2s_ms": 1999.671667
+        }
+      }
+    },
+    {
+      "series": "paired_original_zero_source",
+      "case": "concentrated_zero_sources",
+      "arm": "frozen_original",
+      "phase": "measured",
+      "concurrency": 10,
+      "attempts": 20,
+      "complete_200": 20,
+      "outcome_counts": {
+        "response": 20
+      },
+      "status_counts": {
+        "200": 20
+      },
+      "result_counts": {
+        "complete": 20
+      },
+      "timing_counts": {
+        "exact": 20
+      },
+      "response_source_evaluations": 0,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 20
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 1248.699166,
+      "request_p95_ms": 3330.688875,
+      "request_max_ms": 3387.817583,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null
+        },
+        "source_evaluations": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null,
+          "static_filter_kinds": {}
+        },
+        "authentication_pool_acquisitions": {
+          "events": 20,
+          "outcomes": {
+            "acquired": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.766125,
+          "max_ms": 0.769167,
+          "headroom_from_observed_max_to_2s_ms": 1999.230833
+        },
+        "feed_pool_acquisitions": {
+          "events": 20,
+          "outcomes": {
+            "acquired": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 6.154958,
+          "max_ms": 7.921875,
+          "headroom_from_observed_max_to_2s_ms": 1992.078125
+        }
+      }
+    },
+    {
+      "series": "paired_original_zero_source",
+      "case": "concentrated_zero_sources",
+      "arm": "frozen_original",
+      "phase": "measured",
+      "concurrency": 20,
+      "attempts": 40,
+      "complete_200": 20,
+      "outcome_counts": {
+        "response": 40
+      },
+      "status_counts": {
+        "200": 20,
+        "503": 20
+      },
+      "result_counts": {
+        "complete": 20,
+        "invalid_envelope": 20
+      },
+      "timing_counts": {
+        "exact": 40
+      },
+      "response_source_evaluations": 0,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 40
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 2005.795542,
+      "request_p95_ms": 3328.379083,
+      "request_max_ms": 3442.481791,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null
+        },
+        "source_evaluations": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null,
+          "static_filter_kinds": {}
+        },
+        "authentication_pool_acquisitions": {
+          "events": 40,
+          "outcomes": {
+            "acquired": 40
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 1.645708,
+          "max_ms": 1.820041,
+          "headroom_from_observed_max_to_2s_ms": 1998.179959
+        },
+        "feed_pool_acquisitions": {
+          "events": 40,
+          "outcomes": {
+            "acquired": 20,
+            "timed_out": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 2001.68675,
+          "max_ms": 2001.801333,
+          "headroom_from_observed_max_to_2s_ms": -1.801333
+        }
+      }
+    },
+    {
+      "series": "paired_original_zero_source",
+      "case": "concentrated_zero_sources",
+      "arm": "frozen_original",
+      "phase": "warmup",
+      "concurrency": 10,
+      "attempts": 60,
+      "complete_200": 60,
+      "outcome_counts": {
+        "response": 60
+      },
+      "status_counts": {
+        "200": 60
+      },
+      "result_counts": {
+        "complete": 60
+      },
+      "timing_counts": {
+        "exact": 60
+      },
+      "response_source_evaluations": 0,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 60
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 1153.14075,
+      "request_p95_ms": 1301.124,
+      "request_max_ms": 1339.616583,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null
+        },
+        "source_evaluations": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null,
+          "static_filter_kinds": {}
+        },
+        "authentication_pool_acquisitions": {
+          "events": 60,
+          "outcomes": {
+            "acquired": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 15.392417,
+          "max_ms": 16.240458,
+          "headroom_from_observed_max_to_2s_ms": 1983.759542
+        },
+        "feed_pool_acquisitions": {
+          "events": 60,
+          "outcomes": {
+            "acquired": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 4.593,
+          "max_ms": 10.642417,
+          "headroom_from_observed_max_to_2s_ms": 1989.357583
+        }
+      }
+    },
+    {
+      "series": "paired_original_zero_source",
+      "case": "empty_builtins_zero_sources",
+      "arm": "frozen_original",
+      "phase": "measured",
+      "concurrency": 1,
+      "attempts": 5,
+      "complete_200": 5,
+      "outcome_counts": {
+        "response": 5
+      },
+      "status_counts": {
+        "200": 5
+      },
+      "result_counts": {
+        "complete": 5
+      },
+      "timing_counts": {
+        "exact": 5
+      },
+      "response_source_evaluations": 0,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 5
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 369.86525,
+      "request_p95_ms": 377.42425,
+      "request_max_ms": 377.42425,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null
+        },
+        "source_evaluations": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null,
+          "static_filter_kinds": {}
+        },
+        "authentication_pool_acquisitions": {
+          "events": 5,
+          "outcomes": {
+            "acquired": 5
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.343583,
+          "max_ms": 0.343583,
+          "headroom_from_observed_max_to_2s_ms": 1999.656417
+        },
+        "feed_pool_acquisitions": {
+          "events": 5,
+          "outcomes": {
+            "acquired": 5
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.269042,
+          "max_ms": 0.269042,
+          "headroom_from_observed_max_to_2s_ms": 1999.730958
+        }
+      }
+    },
+    {
+      "series": "paired_original_zero_source",
+      "case": "empty_builtins_zero_sources",
+      "arm": "frozen_original",
+      "phase": "measured",
+      "concurrency": 10,
+      "attempts": 10,
+      "complete_200": 10,
+      "outcome_counts": {
+        "response": 10
+      },
+      "status_counts": {
+        "200": 10
+      },
+      "result_counts": {
+        "complete": 10
+      },
+      "timing_counts": {
+        "exact": 10
+      },
+      "response_source_evaluations": 0,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 10
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 455.033667,
+      "request_p95_ms": 694.938667,
+      "request_max_ms": 694.938667,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null
+        },
+        "source_evaluations": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null,
+          "static_filter_kinds": {}
+        },
+        "authentication_pool_acquisitions": {
+          "events": 10,
+          "outcomes": {
+            "acquired": 10
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.577125,
+          "max_ms": 0.577125,
+          "headroom_from_observed_max_to_2s_ms": 1999.422875
+        },
+        "feed_pool_acquisitions": {
+          "events": 10,
+          "outcomes": {
+            "acquired": 10
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 13.855708,
+          "max_ms": 13.855708,
+          "headroom_from_observed_max_to_2s_ms": 1986.144292
+        }
+      }
+    },
+    {
+      "series": "paired_original_zero_source",
+      "case": "empty_builtins_zero_sources",
+      "arm": "frozen_original",
+      "phase": "measured",
+      "concurrency": 20,
+      "attempts": 20,
+      "complete_200": 20,
+      "outcome_counts": {
+        "response": 20
+      },
+      "status_counts": {
+        "200": 20
+      },
+      "result_counts": {
+        "complete": 20
+      },
+      "timing_counts": {
+        "exact": 20
+      },
+      "response_source_evaluations": 0,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 20
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 933.039333,
+      "request_p95_ms": 1523.594708,
+      "request_max_ms": 1550.681209,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null
+        },
+        "source_evaluations": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null,
+          "static_filter_kinds": {}
+        },
+        "authentication_pool_acquisitions": {
+          "events": 20,
+          "outcomes": {
+            "acquired": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 1.241125,
+          "max_ms": 1.274084,
+          "headroom_from_observed_max_to_2s_ms": 1998.725916
+        },
+        "feed_pool_acquisitions": {
+          "events": 20,
+          "outcomes": {
+            "acquired": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 919.582125,
+          "max_ms": 948.153542,
+          "headroom_from_observed_max_to_2s_ms": 1051.846458
+        }
+      }
+    },
+    {
+      "series": "paired_original_zero_source",
+      "case": "empty_builtins_zero_sources",
+      "arm": "frozen_original",
+      "phase": "warmup",
+      "concurrency": 10,
+      "attempts": 60,
+      "complete_200": 60,
+      "outcome_counts": {
+        "response": 60
+      },
+      "status_counts": {
+        "200": 60
+      },
+      "result_counts": {
+        "complete": 60
+      },
+      "timing_counts": {
+        "exact": 60
+      },
+      "response_source_evaluations": 0,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 60
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 491.904416,
+      "request_p95_ms": 701.878333,
+      "request_max_ms": 763.311917,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null
+        },
+        "source_evaluations": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null,
+          "static_filter_kinds": {}
+        },
+        "authentication_pool_acquisitions": {
+          "events": 60,
+          "outcomes": {
+            "acquired": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.845584,
+          "max_ms": 0.987833,
+          "headroom_from_observed_max_to_2s_ms": 1999.012167
+        },
+        "feed_pool_acquisitions": {
+          "events": 60,
+          "outcomes": {
+            "acquired": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 5.601041,
+          "max_ms": 10.901417,
+          "headroom_from_observed_max_to_2s_ms": 1989.098583
+        }
+      }
+    },
+    {
+      "series": "paired_original_zero_source",
+      "case": "partial_builtins_zero_sources",
+      "arm": "frozen_original",
+      "phase": "measured",
+      "concurrency": 1,
+      "attempts": 5,
+      "complete_200": 5,
+      "outcome_counts": {
+        "response": 5
+      },
+      "status_counts": {
+        "200": 5
+      },
+      "result_counts": {
+        "complete": 5
+      },
+      "timing_counts": {
+        "exact": 5
+      },
+      "response_source_evaluations": 0,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 5
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 375.595667,
+      "request_p95_ms": 409.295792,
+      "request_max_ms": 409.295792,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null
+        },
+        "source_evaluations": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null,
+          "static_filter_kinds": {}
+        },
+        "authentication_pool_acquisitions": {
+          "events": 5,
+          "outcomes": {
+            "acquired": 5
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.428833,
+          "max_ms": 0.428833,
+          "headroom_from_observed_max_to_2s_ms": 1999.571167
+        },
+        "feed_pool_acquisitions": {
+          "events": 5,
+          "outcomes": {
+            "acquired": 5
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.37275,
+          "max_ms": 0.37275,
+          "headroom_from_observed_max_to_2s_ms": 1999.62725
+        }
+      }
+    },
+    {
+      "series": "paired_original_zero_source",
+      "case": "partial_builtins_zero_sources",
+      "arm": "frozen_original",
+      "phase": "measured",
+      "concurrency": 10,
+      "attempts": 10,
+      "complete_200": 10,
+      "outcome_counts": {
+        "response": 10
+      },
+      "status_counts": {
+        "200": 10
+      },
+      "result_counts": {
+        "complete": 10
+      },
+      "timing_counts": {
+        "exact": 10
+      },
+      "response_source_evaluations": 0,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 10
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 476.37925,
+      "request_p95_ms": 671.003667,
+      "request_max_ms": 671.003667,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null
+        },
+        "source_evaluations": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null,
+          "static_filter_kinds": {}
+        },
+        "authentication_pool_acquisitions": {
+          "events": 10,
+          "outcomes": {
+            "acquired": 10
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.508958,
+          "max_ms": 0.508958,
+          "headroom_from_observed_max_to_2s_ms": 1999.491042
+        },
+        "feed_pool_acquisitions": {
+          "events": 10,
+          "outcomes": {
+            "acquired": 10
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 7.824458,
+          "max_ms": 7.824458,
+          "headroom_from_observed_max_to_2s_ms": 1992.175542
+        }
+      }
+    },
+    {
+      "series": "paired_original_zero_source",
+      "case": "partial_builtins_zero_sources",
+      "arm": "frozen_original",
+      "phase": "measured",
+      "concurrency": 20,
+      "attempts": 20,
+      "complete_200": 20,
+      "outcome_counts": {
+        "response": 20
+      },
+      "status_counts": {
+        "200": 20
+      },
+      "result_counts": {
+        "complete": 20
+      },
+      "timing_counts": {
+        "exact": 20
+      },
+      "response_source_evaluations": 0,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 20
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 699.069458,
+      "request_p95_ms": 1129.105875,
+      "request_max_ms": 1231.849333,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null
+        },
+        "source_evaluations": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null,
+          "static_filter_kinds": {}
+        },
+        "authentication_pool_acquisitions": {
+          "events": 20,
+          "outcomes": {
+            "acquired": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 1.886584,
+          "max_ms": 1.923417,
+          "headroom_from_observed_max_to_2s_ms": 1998.076583
+        },
+        "feed_pool_acquisitions": {
+          "events": 20,
+          "outcomes": {
+            "acquired": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 689.444917,
+          "max_ms": 706.538041,
+          "headroom_from_observed_max_to_2s_ms": 1293.461959
+        }
+      }
+    },
+    {
+      "series": "paired_original_zero_source",
+      "case": "partial_builtins_zero_sources",
+      "arm": "frozen_original",
+      "phase": "warmup",
+      "concurrency": 10,
+      "attempts": 60,
+      "complete_200": 60,
+      "outcome_counts": {
+        "response": 60
+      },
+      "status_counts": {
+        "200": 60
+      },
+      "result_counts": {
+        "complete": 60
+      },
+      "timing_counts": {
+        "exact": 60
+      },
+      "response_source_evaluations": 0,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 60
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 468.009334,
+      "request_p95_ms": 682.616333,
+      "request_max_ms": 697.489791,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null
+        },
+        "source_evaluations": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null,
+          "static_filter_kinds": {}
+        },
+        "authentication_pool_acquisitions": {
+          "events": 60,
+          "outcomes": {
+            "acquired": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.751792,
+          "max_ms": 0.79925,
+          "headroom_from_observed_max_to_2s_ms": 1999.20075
+        },
+        "feed_pool_acquisitions": {
+          "events": 60,
+          "outcomes": {
+            "acquired": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 4.316209,
+          "max_ms": 6.990458,
+          "headroom_from_observed_max_to_2s_ms": 1993.009542
+        }
+      }
+    },
+    {
+      "series": "paired_original_zero_source",
+      "case": "typical_zero_sources",
+      "arm": "frozen_original",
+      "phase": "measured",
+      "concurrency": 1,
+      "attempts": 5,
+      "complete_200": 5,
+      "outcome_counts": {
+        "response": 5
+      },
+      "status_counts": {
+        "200": 5
+      },
+      "result_counts": {
+        "complete": 5
+      },
+      "timing_counts": {
+        "exact": 5
+      },
+      "response_source_evaluations": 0,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 5
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 485.527334,
+      "request_p95_ms": 524.053042,
+      "request_max_ms": 524.053042,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null
+        },
+        "source_evaluations": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null,
+          "static_filter_kinds": {}
+        },
+        "authentication_pool_acquisitions": {
+          "events": 5,
+          "outcomes": {
+            "acquired": 5
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.331125,
+          "max_ms": 0.331125,
+          "headroom_from_observed_max_to_2s_ms": 1999.668875
+        },
+        "feed_pool_acquisitions": {
+          "events": 5,
+          "outcomes": {
+            "acquired": 5
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.552458,
+          "max_ms": 0.552458,
+          "headroom_from_observed_max_to_2s_ms": 1999.447542
+        }
+      }
+    },
+    {
+      "series": "paired_original_zero_source",
+      "case": "typical_zero_sources",
+      "arm": "frozen_original",
+      "phase": "measured",
+      "concurrency": 10,
+      "attempts": 10,
+      "complete_200": 10,
+      "outcome_counts": {
+        "response": 10
+      },
+      "status_counts": {
+        "200": 10
+      },
+      "result_counts": {
+        "complete": 10
+      },
+      "timing_counts": {
+        "exact": 10
+      },
+      "response_source_evaluations": 0,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 10
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 590.742458,
+      "request_p95_ms": 843.838542,
+      "request_max_ms": 843.838542,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null
+        },
+        "source_evaluations": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null,
+          "static_filter_kinds": {}
+        },
+        "authentication_pool_acquisitions": {
+          "events": 10,
+          "outcomes": {
+            "acquired": 10
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.896417,
+          "max_ms": 0.896417,
+          "headroom_from_observed_max_to_2s_ms": 1999.103583
+        },
+        "feed_pool_acquisitions": {
+          "events": 10,
+          "outcomes": {
+            "acquired": 10
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 4.158875,
+          "max_ms": 4.158875,
+          "headroom_from_observed_max_to_2s_ms": 1995.841125
+        }
+      }
+    },
+    {
+      "series": "paired_original_zero_source",
+      "case": "typical_zero_sources",
+      "arm": "frozen_original",
+      "phase": "measured",
+      "concurrency": 20,
+      "attempts": 20,
+      "complete_200": 20,
+      "outcome_counts": {
+        "response": 20
+      },
+      "status_counts": {
+        "200": 20
+      },
+      "result_counts": {
+        "complete": 20
+      },
+      "timing_counts": {
+        "exact": 20
+      },
+      "response_source_evaluations": 0,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 20
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 894.785583,
+      "request_p95_ms": 1464.077833,
+      "request_max_ms": 1531.584791,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null
+        },
+        "source_evaluations": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null,
+          "static_filter_kinds": {}
+        },
+        "authentication_pool_acquisitions": {
+          "events": 20,
+          "outcomes": {
+            "acquired": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 1.964375,
+          "max_ms": 1.970167,
+          "headroom_from_observed_max_to_2s_ms": 1998.029833
+        },
+        "feed_pool_acquisitions": {
+          "events": 20,
+          "outcomes": {
+            "acquired": 20
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 857.073417,
+          "max_ms": 896.468291,
+          "headroom_from_observed_max_to_2s_ms": 1103.531709
+        }
+      }
+    },
+    {
+      "series": "paired_original_zero_source",
+      "case": "typical_zero_sources",
+      "arm": "frozen_original",
+      "phase": "warmup",
+      "concurrency": 10,
+      "attempts": 60,
+      "complete_200": 60,
+      "outcome_counts": {
+        "response": 60
+      },
+      "status_counts": {
+        "200": 60
+      },
+      "result_counts": {
+        "complete": 60
+      },
+      "timing_counts": {
+        "exact": 60
+      },
+      "response_source_evaluations": 0,
+      "reconciled_failed_joins": 0,
+      "capture_terminal_counts": {
+        "complete_body": 60
+      },
+      "initial_capture_terminal_counts": {},
+      "request_p50_ms": 613.916291,
+      "request_p95_ms": 838.468792,
+      "request_max_ms": 858.129916,
+      "telemetry": {
+        "source_enumeration": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null
+        },
+        "source_evaluations": {
+          "events": 0,
+          "outcomes": {},
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": null,
+          "max_ms": null,
+          "static_filter_kinds": {}
+        },
+        "authentication_pool_acquisitions": {
+          "events": 60,
+          "outcomes": {
+            "acquired": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 0.596916,
+          "max_ms": 0.743792,
+          "headroom_from_observed_max_to_2s_ms": 1999.256208
+        },
+        "feed_pool_acquisitions": {
+          "events": 60,
+          "outcomes": {
+            "acquired": 60
+          },
+          "attempts_without_metadata": 0,
+          "attempts_missing_event_field": 0,
+          "p95_ms": 8.225208,
+          "max_ms": 12.1595,
+          "headroom_from_observed_max_to_2s_ms": 1987.8405
+        }
+      }
+    }
+  ]
+}

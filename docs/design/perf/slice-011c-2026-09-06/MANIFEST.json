@@ -1,0 +1,60 @@
+{
+  "date": "2026-09-06",
+  "base_revision": "9d62e8692fa52d97b206f45870c3fac0972738ad",
+  "branch": "codex/slice-011c-today-sources",
+  "kind": "isolated SQL prototype; not HTTP or final implementation acceptance",
+  "runner": {
+    "model": "gpt-5.6-terra",
+    "effort": "xhigh",
+    "reviewer_model": "gpt-6-astra",
+    "reviewer_effort": "xhigh"
+  },
+  "database_version_reported_by_runner": "PostgreSQL 18.6",
+  "fixture": {
+    "people": 50000,
+    "inquiries": 46064,
+    "contact_records": 52306,
+    "contact_corrections": 2906,
+    "inbound_records": 2843
+  },
+  "pool_connections": 10,
+  "pool_acquire_timeout_ms": 2000,
+  "source_budget_ms": 500,
+  "metadata_budget_ms": 250,
+  "candidate_normal_requests": 522,
+  "all_candidate_normal_requests_complete": true,
+  "cleanup_record": "cleanup.json",
+  "source_sha256": {
+    "backend/Cargo.lock": "a1ae338f6f5864d8bacb1b73cbf23f8566f4fa00afc6333f0ccdefbce6da1fd2",
+    "backend/crates/crm-app/src/domain/today/queries.rs": "c5daa311dfc770b49b229c346f392e6e3ff47c7e889de00fd4308d1d516cff62",
+    "backend/crates/crm-app/src/domain/person/filter.rs": "37551c0435e7c3ba361297896ac7fce556e42ef558de3809fd9a6bc6ee5a485a",
+    "backend/crates/crm-app/src/domain/person/queries.rs": "27cc0b0ba55cd73934f5cd351817f330357a1347122f59dbb74391232a87c2e2",
+    "backend/crates/crm-api/migrations/20260820000001_initial_identity_schema.sql": "78ab054b393c433928a062095cc19dab38560d2e8f38e5de2eb8d33f172b9252",
+    "backend/crates/crm-api/migrations/20260821000001_stage.sql": "44e652ea58d5e68a458042b452a195defe518d58946abb7183b09f9bc4d5e32d",
+    "backend/crates/crm-api/migrations/20260821000002_person_contact_method.sql": "2c9f000fd558d39195b63b3baf9463f5a31dd06facc23706e807f96629ee855e",
+    "backend/crates/crm-api/migrations/20260821000003_raw_payload.sql": "e932bf6755dbd9c032dd50019faee0648690682f7e4b06d12e2c221db66ff2d7",
+    "backend/crates/crm-api/migrations/20260821000004_inquiry_and_facts.sql": "ca76d9df082ebea9bb8e2ec9496a44edaeeb69c93c4425378e594ed5167eefb7",
+    "backend/crates/crm-api/migrations/20260822000001_contact_attempted.sql": "8de3a70be3232495e256a6190ece689d91192c1908c7b5631e319ddb3844fee4",
+    "backend/crates/crm-api/migrations/20260823000001_administration.sql": "8bb2930a30a5b8e469f0a5ac121125b9ac3277b92591f300e22bf796484ddcdd",
+    "backend/crates/crm-api/migrations/20260824000001_operator_ledger.sql": "00f1454ddad2515749687e1847e72a575a127f3d817358983806286a3f24306f",
+    "backend/crates/crm-api/migrations/20260825000001_calls.sql": "cce99609396af666558c7700eda447499d8ea09160236879af1b527f184c0194",
+    "backend/crates/crm-api/migrations/20260826000001_contact_outcome_correction.sql": "50907916ff068c2c0f2eb4063a6c7fe919b46c532193911369cc261cf6c16109",
+    "backend/crates/crm-api/migrations/20260826000002_call_outcome_indexes.sql": "14517d8eca4e49116982a088bb74593f268a70fc085e39a5bcbcea5f4ae44c68",
+    "backend/crates/crm-api/migrations/20260827000001_operator_proposal.sql": "32ee4161e35d9bfb0ddc56a0c8e5c5abf4eeded4fadf59806399758147b3cea0",
+    "backend/crates/crm-api/migrations/20260828000001_organization_intake_address.sql": "b3b8ef021b78e5dd430d4d27d06102e0a2facf9087c999b124462ce9d245149d",
+    "backend/crates/crm-api/migrations/20260829000001_intake_settings.sql": "131cf740c06d17e3fd2d4686f6a62d7644aea917a111f129353a95f0e1fef696",
+    "backend/crates/crm-api/migrations/20260830000001_raw_payload_discard.sql": "fcdf0b168fc1f2e4def732f06f16c51583586379d3d4b3a55d158c0e6b97a850",
+    "backend/crates/crm-api/migrations/20260901000001_intake_extraction.sql": "b34aab7672947c99ea4cf2ea951d33ba6cd0a16f2610ccf35a517639c3151ce4",
+    "backend/crates/crm-api/migrations/20260902000001_intake_token_rotation.sql": "40016fe670c534db1f8dfbe7d6be6524b03bec476314ccee8e741ca1cc134ae3",
+    "backend/crates/crm-api/migrations/20260903000001_intake_routing_mode.sql": "f8f8454d2993c15b497510a540a88f0200b8251e3010d99f782539b5153a687b",
+    "backend/crates/crm-api/migrations/20260904000001_correspondence_capture.sql": "52da6594ff24d4812ddc2e866ffb690c250c18f0ae65522f34e41a64403f9c9f",
+    "backend/crates/crm-api/migrations/20260906000001_saved_list.sql": "e6b2bfd82e6687ceb0fe17dea4017b8ad5bb8ca00cd02b64e5cf4b94e8ac13e4"
+  },
+  "provenance_notes": [
+    "Preserved baseline harness includes later measurement support; baseline behavior uses baseline SQL and no PERF_JIT_OFF override.",
+    "Baseline checksum list retains historical /tmp paths; ARTIFACT_SHA256.txt covers final relative paths.",
+    "Initial matrices retain summaries; the final 40-request burst retains raw samples.",
+    "Warm-up waves exercised prepared statements; per-connection coverage/counters were not captured.",
+    "Only benchmark/docs artifacts changed; no production source or migration changes."
+  ]
+}

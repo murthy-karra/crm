@@ -1,0 +1,36 @@
+   Compiling crm-app v0.1.0 (/Users/karrad/projects/crm/backend/crates/crm-app)
+   Compiling crm-api v0.1.0 (/Users/karrad/projects/crm/backend/crates/crm-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 30.32s
+────────────
+ Nextest run ID f5a224eb-8e54-4156-a326-4103734548bb with nextest profile: default
+    Starting 8 tests across 1 binary (514 tests skipped)
+        PASS [   1.459s] (1/8) crm-api::all db_today_source_deadlines::today_source_recovery_deadline_survives_a_malformed_tail_until_final_commit
+        PASS [   1.820s] (2/8) crm-api::all db_today_source_deadlines::today_source_uses_one_absolute_deadline_through_savepoint_membership_and_release
+        FAIL [   1.295s] (3/8) crm-api::all db_today_source_hooks::today_source_after_builtins_gate_keeps_one_snapshot_across_list_and_contact_mutations
+  stdout ───
+
+    running 1 test
+    test db_today_source_hooks::today_source_after_builtins_gate_keeps_one_snapshot_across_list_and_contact_mutations ... FAILED
+
+    failures:
+
+    failures:
+        db_today_source_hooks::today_source_after_builtins_gate_keeps_one_snapshot_across_list_and_contact_mutations
+
+    test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 521 filtered out; finished in 1.27s
+
+  stderr ───
+
+    thread 'db_today_source_hooks::today_source_after_builtins_gate_keeps_one_snapshot_across_list_and_contact_mutations' (4643790) panicked at crates/crm-api/tests/db_today_source_hooks.rs:571:5:
+    the next read observes the contact fact
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+        PASS [   1.675s] (4/8) crm-api::all db_today_source_hooks::today_source_backend_termination_marks_current_and_remaining_sources_unavailable
+        PASS [   1.154s] (5/8) crm-api::all db_today_source_hooks::today_source_membership_checkpoint_sql_failure_discards_only_that_source
+        PASS [   1.400s] (6/8) crm-api::all db_today_source_hooks::today_source_recovery_checkpoint_exhaustion_uses_cleanup_grace_and_discards_connection
+        PASS [   2.203s] (7/8) crm-api::all db_today_source_settings::operator_turn_timeout_cancels_owned_today_query_and_replaces_its_connection
+        PASS [   1.300s] (8/8) crm-api::all db_today_source_settings::today_owned_query_restores_pool_settings_after_normal_partial_and_recovered_source_error
+────────────
+     Summary [  12.309s] 8 tests run: 7 passed, 1 failed, 514 skipped
+        FAIL [   1.295s] (3/8) crm-api::all db_today_source_hooks::today_source_after_builtins_gate_keeps_one_snapshot_across_list_and_contact_mutations
+error: test run failed

@@ -632,8 +632,8 @@ export interface UnresolvedResponse {
 
 // SLICE_006c §5a (D-033): `low` is the "outcome needed" tier, served after
 // every other item; `set_outcome` is its recommended action.
-export type TodayPriority = 'high' | 'normal' | 'low'
-export type RecommendedAction = 'call' | 'email' | 'set_outcome'
+export type TodayPriority = 'high' | 'normal' | 'list' | 'low'
+export type RecommendedAction = 'call' | 'email' | 'review_person' | 'set_outcome'
 
 // Discriminated on `code`, in the fixed wire order (§3) — never re-sorted
 // client-side, same discipline as `history` above. `call_outcome_needed`
@@ -648,6 +648,7 @@ export type TodayReason =
   | { code: 'repeat_inquiry'; inquiry_count: number }
   | { code: 'call_outcome_needed'; call_id: string; ended_at: string }
   | { code: 'client_replied'; occurred_at: string }
+  | { code: 'list_member'; list_id: string; name: string }
 
 // `latest_inquiry` on a TodayItem — exactly `{id, source, received_at}` (§5),
 // narrower than `PersonInquiry` (which also carries `source_external_id` and
@@ -670,8 +671,8 @@ export interface TodayItem {
   priority: TodayPriority
   recommended_action: RecommendedAction
   reasons: TodayReason[]
-  waiting_since: string
-  latest_inquiry: TodayInquiryRef
+  waiting_since: string | null
+  latest_inquiry: TodayInquiryRef | null
   last_contact_attempt: ContactAttemptRef | null
 }
 
@@ -679,7 +680,34 @@ export interface TodayResponse {
   generated_at: string
   items: TodayItem[]
   truncated: boolean
+  sources: TodaySourcesStatus
 }
+
+export type TodaySourceStatus = 'complete' | 'partial' | 'unavailable'
+export type TodaySourceIssueError = 'unsupported_filter' | 'invalid_stage' | 'invalid_assignee' | 'unavailable'
+export interface TodaySourceIssue {
+  list_id: string
+  name: string
+  revision: number
+  error: TodaySourceIssueError
+}
+export interface TodaySourcesStatus {
+  status: TodaySourceStatus
+  issues: TodaySourceIssue[]
+}
+export interface TodaySource {
+  list_id: string
+  name: string
+  scope: SavedListScope
+  revision: number
+  filter_error: SavedListFilterError | null
+}
+export interface TodaySourcesResponse {
+  limit: number
+  sources: TodaySource[]
+}
+export interface EnableTodaySourceRequest { expected_list_revision: number }
+export interface TodaySourceChange { enabled: boolean; changed: boolean }
 
 // ---- Contact attempts (SLICE_003 §5 POST /api/people/{id}/contact-attempts)
 

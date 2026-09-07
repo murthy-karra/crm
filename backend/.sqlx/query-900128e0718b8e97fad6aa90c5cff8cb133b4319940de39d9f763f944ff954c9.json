@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM today_work_source\n           WHERE organization_id = $1 AND list_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "900128e0718b8e97fad6aa90c5cff8cb133b4319940de39d9f763f944ff954c9"
+}

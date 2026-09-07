@@ -1,9 +1,66 @@
 # Project State
 
-Last updated: 2026-09-06 (Slice 011b complete and merged to local main;
-Terra/ultra implementation, Astra/ultra coordination/review).
+Last updated: 2026-09-06, late evening (Slice 011c complete: verified under the
+Claude takeover, three user decisions taken, committed and merged locally).
 
 ## Current phase
+
+**Slice 011c (saved lists feed Today) — COMPLETE AND MERGED TO LOCAL MAIN.**
+The user approved the §8 planner amendment, accepted the Phase B pairing
+limitation and approved the local commit and merge on 2026-09-06 (late
+evening); push and deployment were not authorized.
+
+How it got here: the Codex lanes (Astra / Terra, `xhigh`) specified, built,
+reviewed and browser-walked the slice, then ran out of usage on the evening of
+2026-09-06 with the tree uncommitted and three items open (Phase B HTTP
+performance, final-tree gates, independent acceptance review). The user asked
+Claude to finish. Claude Fable 5.1 took the coordinator, sole-gate-runner and
+acceptance-reviewer roles; Claude Sonnet 5 lanes made the bounded corrections;
+the lane ledger is in the [implementation brief](../tasks/SLICE_011c_IMPL.md#takeover-on-2026-09-06-evening-codex-usage-exhausted)
+and every result in the [verification record](../tasks/SLICE_011c_VERIFICATION.md).
+
+What the takeover found and did:
+
+- The tree as left passed `check-db` (422 of 422) and the Web gate but failed
+  clippy on three test-file lints; a telemetry test was never registered; the
+  Phase B harness did not compile. All fixed; the harness lints clean.
+- Acceptance review found no blocking backend or Operator defect. The Web
+  session-privacy review found a P1 availability lockout (an auth attempt that
+  never settles left every tab paused for ever with no exit) plus three small
+  router/copy defects; all fixed with tests (C011C-I17–I20) and the lockout
+  recovery verified live. One pre-existing telephony gap is a residual (R1).
+- **Phase B exposed a pre-existing Today planner hazard:** once autovacuum
+  fills the visibility map, PostgreSQL 18 replans the built-in query's
+  per-Person effective-contact probe into a Merge Anti Join that scans the
+  whole corrections index per Person (~2.2 s instead of ~0.2 s for a 30k-Person
+  book; the frozen original query shows 2.6 s). Run 1 failed on it. A
+  transaction-local `SET LOCAL enable_mergejoin = off` beside the approved JIT
+  setting pins the fast plan with no result change (frozen-fixture parity
+  tests pass) and no effect on the source statements; run 2 with it passed
+  every final-arm criterion (522/522 complete, all p95 caps met, five-source
+  concurrency-20 p95 2,710 ms against 4,500, pool headroom ≥ 414 ms). It is
+  recorded in [spec §8](../specs/SLICE_011c.md) as the fourth planning change,
+  approved by the user after the evidence was in. Evidence, both runs retained:
+  [Phase B archive](../design/perf/slice-011c-http-2026-09-06/README.md).
+- Final-tree gates were run once by the coordinator after run 2 and passed
+  (`sqlx-prepare`; `check` with 675 Rust and 446 Web tests; `check-db` 423 of
+  423); see the verification record for the actual results.
+
+QA setup incident (Codex phase): a bootstrap command used the shared migration
+URL and rewrote the existing development owner's local credential hash and
+timestamp. The previous password's equivalence is unknown and its hash cannot
+be restored. Exact effects are recorded in
+[the verification record](../tasks/SLICE_011c_VERIFICATION.md#shared-development-credential-incident).
+Do not describe shared development data as untouched for this slice. The QA
+runtime and its generated databases were cleaned up at the takeover's end.
+
+The user approved **five Today sources per agent** and **available work with
+an explicit notice when one source fails** (D-047). 011b-sort remains separately
+queued; it is not a functional prerequisite for 011c. The approved specification
+preserves built-in Today work, private-list visibility and deterministic order,
+and addresses the measured cost of evaluating filters against a large history.
+
+## Previous completed slice
 
 **Slice 011b (saved lists) — COMPLETE AND MERGED TO LOCAL MAIN.**
 The user authorized starting the slice with **Astra / ultra** for
@@ -73,22 +130,30 @@ clear-all.
 
 ## Current slice
 
-Slice 011b — Saved lists — specification `docs/specs/SLICE_011b.md`
-and brief `docs/tasks/SLICE_011b_IMPL.md` are complete and merged locally. Ladder:
-docs/plans/SLICE_011_LADDER.md (011a done → 011b done → **011b-sort** →
-011c lists-feed-Today → 011d tweakable built-ins → 011e tags).
+Slice 011c — Lists feed Today — `docs/specs/SLICE_011c.md` (approved, with
+one proposed §8 planning amendment pending), companion
+`docs/specs/SLICE_011c_EXPLAINED.md`, brief `docs/tasks/SLICE_011c_IMPL.md`.
+Phase A SQL evidence: `docs/design/perf/slice-011c-2026-09-06/`; Phase B HTTP
+evidence: `docs/design/perf/slice-011c-http-2026-09-06/`; browser evidence:
+`docs/design/qa/slice-011c-2026-09-06/`. Implementation complete; verified.
+Ladder:
+docs/plans/SLICE_011_LADDER.md (011a done → 011b done → **011c** →
+011d tweakable built-ins → 011e tags; 011b-sort separately queued).
 
 ## Current branch
 
-`main`, after the approved local merge of `codex/slice-011b-saved-lists`.
-Implementation commit: `2af023c`, based on `1635fc4`. The slice branch is
-retained. Push and deployment remain outside the authorization; remote and
-old-branch cleanup were not performed.
+`main`, after the approved local merge of `codex/slice-011c-today-sources`.
+Implementation commit: `6117b4a`, based on `9d62e86` (the full file inventory
+is in the verification record). The slice branch is retained. Neither 011b
+nor 011c has been pushed; deployment was not authorized. The shared
+development runtime still runs the pre-011b binary and `crm_dev` lacks both
+new migrations; restarting it needs `./scripts/db-migrate` first.
 
 ## Last accepted decision
 
-D-046 (2026-09-06) — creator-only personal lists and separate shared/personal
-caps. D-045 governs the current white/glass Web design; D-044 establishes
+D-047 (2026-09-06) — up to five Today sources per agent and explicit partial
+availability. D-046 preserves creator-only personal lists and separate
+shared/personal caps. D-045 governs the current white/glass Web design; D-044 establishes
 the Elysium CRM identity. D-043 remains the slice-shaping product decision:
 smart lists are first-class and FUB-shaped; lists feed Today; built-in
 Today logic becomes org-tweakable system feeds; the filter model IS the
@@ -99,7 +164,7 @@ and the 2026-08-29 sort-rung decision above.
 ## Slice ledger
 
 All entries are complete and merged to main. Through 011a they were pushed;
-011b is merged locally only.
+011b and 011c are merged locally only.
 
 | Slice | What | Merge |
 |---|---|---|
@@ -127,6 +192,7 @@ All entries are complete and merged to main. Through 011a they were pushed;
 | 009 | Correspondence capture v1 (D-042; largest slice, 78 files) | `807d7c2` |
 | 011a | Filter vocabulary + ad-hoc People filtering (D-043) | `4aee12d` |
 | 011b | Personal and shared saved People lists (D-046) | Local merge; implementation `2af023c` (not pushed) |
+| 011c | Saved lists feed Today (D-047; §8 planner amendment approved) | Local merge; implementation `6117b4a` (not pushed) |
 | — | Gate-speedup chunk (check 35m→79s, check-db 37m→~2m) | 2026-08-28 |
 | — | Test-binary consolidation (40 files → 1 binary) | `6427ee8` |
 
@@ -340,7 +406,17 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. Specify the separate **011b-sort** rung when requested.
+1. Specify the next rung when requested: **011d** (tweakable built-ins) is
+   next on the ladder, with 011b-sort separately queued. When the shared
+   development runtime is next restarted, run `./scripts/db-migrate` first.
+2. Follow-ups this slice surfaced, unordered: R1 (call host not fenced on a
+   session boundary, pre-existing, telephony files); the Today built-in query
+   hazard deserves a durable fix in 011d or the queued denormalization chunk
+   rather than relying on a planner toggle for ever; the Web reviewer's three
+   uncovered criterion-10 test scenarios (fake-clock timer, real-wiring
+   same-actor relogin, cancellation race); `scripts/check-db` does not
+   schema-check test-target queries that `scripts/sqlx-prepare` now caches.
+   011b-sort remains separately queued.
 2. Updating the shared development runtime, pushing and deployment are
    separate actions; the shared API/database still predate 011b.
 3. Later, unordered: 009 walkthrough steps 3–5;
@@ -349,5 +425,9 @@ and now lives only in git history.
 
 ## Approval currently required
 
-- Local commit and merge were approved and completed on 2026-09-06.
-  Push and deployment are not authorized.
+- All three 011c decisions were taken on 2026-09-06 (late evening): the §8
+  planner amendment is approved, the Phase B pairing limitation accepted, and
+  the local commit and merge performed. **Push and deployment are not
+  authorized.** Updating the shared development runtime is a separate action.
+- R1 (auto-hangup of a live call on identity change) is a product choice for
+  a later slice, not blocking.

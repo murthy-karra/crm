@@ -1,4 +1,5 @@
 import { ApiError } from '../api/client'
+import { SessionCoordinationUnavailableError } from '../sessionLifecycle'
 
 /**
  * Human-readable message for a failed read query. Covers the failure modes
@@ -45,6 +46,9 @@ const ADMIN_CODE_MESSAGES: Record<string, string> = {
 
 /** Same shape as `describeApiError`, extended with SLICE_004's mutation error codes. */
 export function describeMutationError(err: unknown, fallback: string): string {
+  if (err instanceof SessionCoordinationUnavailableError) {
+    return 'Browser storage is unavailable. Enable site storage, then reload.'
+  }
   if (err instanceof ApiError) {
     if (err.status === 0) return 'Could not reach the server. Check your connection and try again.'
     if (err.status === 401) return 'Your session has expired. Redirecting to sign in…'

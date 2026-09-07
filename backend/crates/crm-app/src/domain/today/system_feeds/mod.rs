@@ -1,12 +1,15 @@
 //! The three per-Organization system feeds that replace the compiled-in
 //! Today built-ins (docs/specs/SLICE_011d.md §§1-3). This module owns the
 //! feed vocabulary (`FeedKey`), the canonical (code-defined) default
-//! definition per feed, seeding a new Organization's three rows, and the
-//! feed-row loader with its fallback-to-canonical semantics. Typed
-//! commands, preview and routes are a later round (spec §4, brief step 4);
-//! this module only supports reads (seed + load) through step 3.
+//! definition per feed, seeding a new Organization's three rows, the
+//! feed-row loader with its fallback-to-canonical semantics, typed admin
+//! commands and preview (spec §4), and the admin/member read shapes
+//! (spec §6).
 
+pub mod commands;
+pub mod error;
 pub(crate) mod evaluate;
+pub mod queries;
 
 use chrono::{DateTime, Utc};
 use sqlx::PgConnection;

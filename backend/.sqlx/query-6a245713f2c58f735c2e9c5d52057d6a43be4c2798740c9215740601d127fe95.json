@@ -1,0 +1,55 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE today_system_feed\n           SET filter = NULL, fresh_within_hours = NULL, revision = revision + 1,\n               updated_by_user_id = $3, updated_at = now()\n           WHERE organization_id = $1 AND feed_key = $2 AND revision = $4\n           RETURNING enabled, filter::text as filter, fresh_within_hours, revision,\n                     updated_at, updated_by_user_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "enabled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "filter",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "fresh_within_hours",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "updated_by_user_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      true,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "6a245713f2c58f735c2e9c5d52057d6a43be4c2798740c9215740601d127fe95"
+}

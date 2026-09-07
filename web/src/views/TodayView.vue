@@ -17,11 +17,12 @@ import PageHeader from '../components/PageHeader.vue'
 import DataTable from '../components/DataTable.vue'
 import Badge from '../components/Badge.vue'
 import LogContactDialog from '../components/LogContactDialog.vue'
-import { useAuthSessionLifetime, useDisableTodaySourceMutation, useMe, useToday, useTodaySources } from '../api/queries'
+import { useAuthSessionLifetime, useDisableTodaySourceMutation, useMe, useToday, useTodayFeeds, useTodaySources } from '../api/queries'
 import type { TodayItem, TodayReason } from '../api/types'
 import { formatAbsoluteTime, formatRelativeTime } from '../lib/format'
 import { buttonClasses } from '../lib/controls'
 import { describeApiError } from '../lib/errors'
+import { MEMBER_FEED_MARKER_LABEL, TODAY_FEED_LABEL, TODAY_FEED_ORDER, fallbackFeedMessage, memberFeedMarker } from '../lib/todayFeeds'
 
 const route = useRoute()
 const router = useRouter()
@@ -33,7 +34,12 @@ const authSessionLifetime = useAuthSessionLifetime()
 const todayQuery = useToday(orgId, actorId)
 const { data: todayData, dataUpdatedAt, isPending, isError, error } = todayQuery
 const sourcesQuery = useTodaySources(orgId, actorId)
+const feedsQuery = useTodayFeeds(orgId, actorId)
 const disableSource = useDisableTodaySourceMutation(orgId, actorId)
+const orderedFeeds = computed(() => {
+  const byKey = new Map((feedsQuery.data.value?.feeds ?? []).map((f) => [f.feed_key, f]))
+  return TODAY_FEED_ORDER.map((key) => byKey.get(key)).filter((f): f is NonNullable<typeof f> => f !== undefined)
+})
 const items = computed(() => todayData.value?.items ?? [])
 const showSources = ref(false)
 const removing = ref<string | null>(null)
@@ -137,7 +143,7 @@ function retrySources() {
 
 function refreshToday() {
   sourceNotice.value = null
-  void Promise.all([todayQuery.refetch(), sourcesQuery.refetch()])
+  void Promise.all([todayQuery.refetch(), sourcesQuery.refetch(), feedsQuery.refetch()])
 }
 
 const emptyTitle = computed(() =>
@@ -449,6 +455,58 @@ const columns: ColumnDef<TodayItem>[] = [
           No saved lists are feeding Today.
         </li>
       </ul>
+
+      <div class="mt-5 border-t border-border pt-4">
+        <div class="flex items-center justify-between gap-4">
+          <h2 class="text-body font-semibold text-text">
+            Rules
+          </h2>
+          <RouterLink
+            to="/manage/today-feeds"
+            class="shrink-0 text-small font-medium text-accent hover:underline"
+          >
+            Manage
+          </RouterLink>
+        </div>
+        <p class="mt-1 text-small text-text-muted">
+          The three built-in rules that put People on your Today. An admin can adjust, preview, disable or restore each one.
+        </p>
+        <div
+          v-if="feedsQuery.isError.value"
+          class="mt-3 text-small text-danger"
+          role="status"
+        >
+          Could not load Today rules.
+        </div>
+        <p
+          v-else-if="feedsQuery.isPending.value && !feedsQuery.data.value"
+          class="mt-3 text-small text-text-muted"
+        >
+          Loading rules…
+        </p>
+        <ul
+          v-else
+          class="mt-3 divide-y divide-border rounded-lg border border-border"
+        >
+          <li
+            v-for="feed in orderedFeeds"
+            :key="feed.feed_key"
+            class="px-3 py-2"
+            :data-testid="`today-rules-${feed.feed_key}`"
+          >
+            <div class="flex items-center justify-between gap-3">
+              <span class="text-body font-medium text-text">{{ TODAY_FEED_LABEL[feed.feed_key] }}</span>
+              <span class="shrink-0 text-small text-text-muted">{{ MEMBER_FEED_MARKER_LABEL[memberFeedMarker(feed)] }}</span>
+            </div>
+            <p
+              v-if="feed.description.length"
+              class="mt-1 text-small text-text-muted"
+            >
+              {{ feed.description.join(' · ') }}
+            </p>
+          </li>
+        </ul>
+      </div>
     </section>
 
     <div
@@ -456,11 +514,22 @@ const columns: ColumnDef<TodayItem>[] = [
       class="mb-5 rounded-xl border border-border bg-surface-0 p-4 text-body text-text-muted"
       role="status"
     >
-      Some Today sources could not load. Available work is shown.
+      Some Today rules or sources could not load. Available work is shown.
       <ul
-        v-if="todayData.sources.issues.length > 0"
+        v-if="todayData.sources.issues.length > 0 || todayData.sources.system_feed_issues.length > 0"
         class="mt-2 list-disc space-y-1 pl-5 text-small"
       >
+        <li
+          v-for="issue in todayData.sources.system_feed_issues"
+          :key="`feed-${issue.feed_key}`"
+        >
+          <template v-if="issue.fallback">
+            {{ fallbackFeedMessage(issue) }}
+          </template>
+          <template v-else>
+            {{ TODAY_FEED_LABEL[issue.feed_key] }} could not load.
+          </template>
+        </li>
         <li
           v-for="issue in todayData.sources.issues"
           :key="issue.list_id"

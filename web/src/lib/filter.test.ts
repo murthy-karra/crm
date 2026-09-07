@@ -44,6 +44,17 @@ describe('People filter descriptions', () => {
     expect(describeClause({ kind: 'stage', stage_ids: ['missing-private-id'] }, names)).toBe('Stage: Unknown stage')
     expect(describeClause({ kind: 'assigned_to', assignees: [{ user_id: 'missing-private-id' }] }, names)).toBe('Assignee: Unknown member')
   })
+
+  // SLICE_011d §2's describe() lines verbatim — full sentences per value,
+  // not the "Label: Yes/No" pattern the other boolean kinds use.
+  it('uses SLICE_011d §2\'s full-sentence describe() lines for the three derived clause kinds', () => {
+    expect(describeClause({ kind: 'awaiting_response', value: true }, names)).toBe('Awaiting a response')
+    expect(describeClause({ kind: 'awaiting_response', value: false }, names)).toBe('Not awaiting a response')
+    expect(describeClause({ kind: 'client_replied_unanswered', value: true }, names)).toBe('Client replied, unanswered')
+    expect(describeClause({ kind: 'client_replied_unanswered', value: false }, names)).toBe('No unanswered client reply')
+    expect(describeClause({ kind: 'awaiting_call_outcome', value: true }, names)).toBe('A call of mine needs an outcome')
+    expect(describeClause({ kind: 'awaiting_call_outcome', value: false }, names)).toBe('No call of mine needs an outcome')
+  })
 })
 
 describe('People filter canonical serialization', () => {

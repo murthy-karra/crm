@@ -121,6 +121,15 @@ function routes(): RouteRecordRaw[] {
       meta: { requiresOrgAdmin: true, title: 'Intake' },
     },
     {
+      // SLICE_011d §6: "Manage → Today rules ... admin-only route meta,
+      // nav beside Intake and Members" — same `requiresOrgAdmin` pattern as
+      // the two routes above.
+      path: '/manage/today-feeds',
+      name: 'manage-today-feeds',
+      component: () => import('./views/TodayFeedsView.vue'),
+      meta: { requiresOrgAdmin: true, title: 'Today rules' },
+    },
+    {
       path: '/platform',
       name: 'platform-organizations',
       component: () => import('./views/PlatformOrganizationsView.vue'),

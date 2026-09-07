@@ -3,7 +3,7 @@
 // fetching; opening an editor never changes its committed clauses.
 import { computed, nextTick, ref, useId, watch } from 'vue'
 import Popover, { type PopoverPassThroughOptions } from 'primevue/popover'
-import { ChevronDown, ChevronRight, SlidersHorizontal, X } from 'lucide-vue-next'
+import { ChevronDown, ChevronRight, Lock, SlidersHorizontal, X } from 'lucide-vue-next'
 import StageLabel from './StageLabel.vue'
 import type { AgeOp, Assignee, FilterClause, FilterClauseKind, Member, Stage, StageRef } from '../api/types'
 import { buttonClasses, INPUT_CLASSES } from '../lib/controls'
@@ -17,7 +17,7 @@ import {
 
 type AgeKind = 'created' | 'last_inquiry' | 'last_contact' | 'last_inbound'
 type AgeClause = Extract<FilterClause, { kind: AgeKind }>
-type BoolKind = 'has_replied' | 'has_phone' | 'has_email'
+type BoolKind = 'has_replied' | 'has_phone' | 'has_email' | 'awaiting_response' | 'client_replied_unanswered' | 'awaiting_call_outcome'
 type BoolClause = Extract<FilterClause, { kind: BoolKind }>
 type OptionKind = 'stage' | 'assigned_to' | 'source'
 type OptionValue = string | { user_id: string }
@@ -35,6 +35,13 @@ const props = defineProps<{
   sourcesPending?: boolean
   sourcesError?: boolean
   sourcesTruncated?: boolean
+  // SLICE_011d §6: the Today rules editor's locked-clause mode — the anchor
+  // clause is shown but cannot be removed or negated (spec §1 rule 4), and
+  // (for the two person-state feeds) `assigned_to` must keep `me` (rule 3).
+  // Every other consumer (People, list editing) leaves both unset and gets
+  // today's fully-editable behavior unchanged.
+  lockedAnchorKind?: FilterClauseKind
+  requireAssigneeMe?: boolean
 }>()
 const emit = defineEmits<{
   'update:clauses': [FilterClause[]]
@@ -64,9 +71,13 @@ const ageKind = computed(() => {
   const kind = editingKind.value
   return kind === 'created' || kind === 'last_inquiry' || kind === 'last_contact' || kind === 'last_inbound' ? kind : null
 })
+const BOOL_KINDS = new Set<FilterClauseKind>([
+  'has_replied', 'has_phone', 'has_email',
+  'awaiting_response', 'client_replied_unanswered', 'awaiting_call_outcome',
+])
 const boolKind = computed(() => {
   const kind = editingKind.value
-  return kind === 'has_replied' || kind === 'has_phone' || kind === 'has_email' ? kind : null
+  return kind !== null && BOOL_KINDS.has(kind) ? (kind as BoolKind) : null
 })
 const optionKind = computed<OptionKind | null>(() => {
   const kind = editingKind.value
@@ -128,6 +139,17 @@ const options = computed<Option[]>(() => {
 })
 const visibleOptions = computed(() => options.value.filter((option) => matchesSearch(`${option.label}${option.inactive ? ' inactive' : ''}`)))
 
+/** Whole-clause removal is blocked for the locked anchor (rule 4: "cannot be
+ * negated or removed") and for `assigned_to` under `requireAssigneeMe`
+ * (rule 3: an admin cannot strip viewer-relativity by removing the clause
+ * that carries `me`). Every other kind removes normally. */
+function isLockedClauseKind(kind: FilterClauseKind): boolean {
+  return kind === props.lockedAnchorKind || (kind === 'assigned_to' && !!props.requireAssigneeMe)
+}
+function isLockedOptionValue(kind: OptionKind, value: OptionValue): boolean {
+  return kind === 'assigned_to' && !!props.requireAssigneeMe && value === 'me'
+}
+
 function updateClauses(next: FilterClause[]) {
   if (JSON.stringify(next) !== JSON.stringify(props.clauses)) emit('update:clauses', next)
 }
@@ -140,16 +162,20 @@ function replaceClause(kind: FilterClauseKind, clause: FilterClause | null) {
   updateClauses(next)
 }
 function removeClause(kind: FilterClauseKind) {
+  if (isLockedClauseKind(kind)) return
   if (kind === editingKind.value) resetAgeDraft()
   replaceClause(kind, null)
 }
 function clearAll() {
   resetAgeDraft()
-  updateClauses([])
+  // A locked anchor/`me` clause survives Clear all — it is not removable by
+  // any control (rule 3/4), including this one.
+  updateClauses(applied.value.filter((clause) => isLockedClauseKind(clause.kind)))
 }
 function toggleOption(option: Option) {
   const kind = optionKind.value
   if (!kind) return
+  if (isLockedOptionValue(kind, option.value)) return
   const current = selectedValues(kind)
   const selected = isSelected(option)
   if (!selected && current.length >= 50) return
@@ -216,7 +242,13 @@ function setPreset(days: number) {
   commitAge(ageOp.value === 'not_within_days' ? 'not_within_days' : 'within_days')
 }
 function setBool(value: boolean) {
-  if (boolKind.value) replaceClause(boolKind.value, { kind: boolKind.value, value })
+  if (!boolKind.value) return
+  // Rule 4: the locked anchor's value is pinned `true` — negating it here
+  // would silently disable the feed's own axis. Guarded again in the
+  // template (the "No" button is disabled), this is the defense-in-depth
+  // backstop against any other path reaching this function.
+  if (boolKind.value === props.lockedAnchorKind && !value) return
+  replaceClause(boolKind.value, { kind: boolKind.value, value })
 }
 const ageHint = computed(() => {
   if (ageOp.value !== 'not_within_days' || !ageKind.value || ageKind.value === 'created') return ''
@@ -355,7 +387,21 @@ function onHide() {
             class="min-w-0 break-words"
           >{{ describeClause(clause, names, 2) }}</span>
         </button>
+        <span
+          v-if="isLockedClauseKind(clause.kind)"
+          :data-testid="`filter-chip-locked-${clause.kind}`"
+          class="inline-flex min-h-10 shrink-0 items-center pr-3 text-small text-text-muted"
+          title="Required by this rule"
+        >
+          <Lock
+            class="h-4 w-4"
+            stroke-width="1.5"
+            aria-hidden="true"
+          />
+          <span class="sr-only">Required, cannot be removed</span>
+        </span>
         <button
+          v-else
           type="button"
           :data-testid="`filter-chip-remove-${clause.kind}`"
           class="inline-flex min-h-10 w-10 shrink-0 items-center justify-center rounded-r-lg hover:bg-surface-1 focus-visible:ring-2 focus-visible:ring-focus"
@@ -513,7 +559,7 @@ function onHide() {
                   :data-testid="optionKind === 'assigned_to' ? `filter-assignee-${option.key}` : `filter-option-${option.key}`"
                   :class="checkboxClasses"
                   :checked="isSelected(option)"
-                  :disabled="selectionCount >= 50 && !isSelected(option)"
+                  :disabled="isLockedOptionValue(optionKind, option.value) || (selectionCount >= 50 && !isSelected(option))"
                   @change="toggleOption(option)"
                 >
                 <StageLabel
@@ -526,7 +572,10 @@ function onHide() {
                 >{{ option.label }}<span
                   v-if="option.inactive"
                   class="text-text-muted"
-                > (inactive)</span></span>
+                > (inactive)</span><span
+                  v-if="isLockedOptionValue(optionKind, option.value)"
+                  class="text-text-muted"
+                > (required)</span></span>
               </label>
               <p
                 v-if="!visibleOptions.length && !optionPending && !optionError"
@@ -640,6 +689,13 @@ function onHide() {
             >
               A received email was recorded, whether answered or not.
             </p>
+            <p
+              v-if="boolKind === editingKind && boolKind === lockedAnchorKind"
+              data-testid="filter-anchor-locked-hint"
+              class="mb-3 text-small text-text-muted"
+            >
+              This is the rule this feed is built on. It stays on and cannot be removed.
+            </p>
             <div
               class="flex gap-2"
               role="group"
@@ -652,6 +708,7 @@ function onHide() {
                 :data-testid="`filter-bool-${value ? 'yes' : 'no'}-${boolKind}`"
                 :data-editor-focus="value ? '' : undefined"
                 :aria-pressed="activeBool?.value === value"
+                :disabled="!value && boolKind === lockedAnchorKind"
                 :class="buttonClasses(activeBool?.value === value ? 'primary' : 'secondary')"
                 @click="setBool(value)"
               >
@@ -662,7 +719,7 @@ function onHide() {
 
           <div class="mt-4 flex items-center justify-between gap-2 border-t border-border pt-3">
             <button
-              v-if="activeClause"
+              v-if="activeClause && editingKind && !isLockedClauseKind(editingKind)"
               type="button"
               data-testid="filter-clear-selection"
               :class="buttonClasses('ghost')"

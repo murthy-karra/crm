@@ -298,3 +298,85 @@ describe('FilterBar option feedback and keyboard', () => {
     expect(get('filter-trigger-assigned_to').attributes('aria-expanded')).toBe('false')
   })
 })
+
+// SLICE_011d §2/§6: the three derived boolean clause kinds, available
+// wherever the vocabulary is accepted.
+describe('FilterBar derived boolean chips (SLICE_011d §2)', () => {
+  it('opens, sets and clears each derived kind with the spec describe() wording as the chip text', async () => {
+    const wrapper = setup()
+    for (const [kind, yesText, noText] of [
+      ['awaiting_response', 'Awaiting a response', 'Not awaiting a response'],
+      ['client_replied_unanswered', 'Client replied, unanswered', 'No unanswered client reply'],
+      ['awaiting_call_outcome', 'A call of mine needs an outcome', 'No call of mine needs an outcome'],
+    ] as const) {
+      await open(kind)
+      await click(`filter-bool-yes-${kind}`)
+      expect(wrapper.props('clauses')).toEqual([{ kind, value: true }])
+      expect(get(`filter-chip-${kind}`).text()).toBe(yesText)
+      await open(kind)
+      await click(`filter-bool-no-${kind}`)
+      expect(wrapper.props('clauses')).toEqual([{ kind, value: false }])
+      expect(get(`filter-chip-${kind}`).text()).toBe(noText)
+      await click(`filter-chip-remove-${kind}`)
+      expect(wrapper.props('clauses')).toEqual([])
+    }
+  })
+})
+
+// SLICE_011d §1 rules 3-4, §6: the Today rules editor's locked-clause mode.
+describe('FilterBar locked-clause mode (SLICE_011d §1 rules 3-4, §6)', () => {
+  it('shows the locked anchor chip without a remove control and blocks negation/removal in its editor', async () => {
+    const wrapper = setup(
+      [{ kind: 'awaiting_response', value: true }],
+      { lockedAnchorKind: 'awaiting_response' },
+    )
+    expect(body().find('[data-testid="filter-chip-remove-awaiting_response"]').exists()).toBe(false)
+    expect(get('filter-chip-locked-awaiting_response').element).toBeDefined()
+
+    await open('awaiting_response')
+    expect(get('filter-bool-no-awaiting_response').attributes('disabled')).toBeDefined()
+    await click('filter-bool-no-awaiting_response')
+    expect(wrapper.emitted('update:clauses')).toBeUndefined()
+    expect(body().find('[data-testid="filter-clear-selection"]').exists()).toBe(false)
+    expect(get('filter-anchor-locked-hint').element).toBeDefined()
+
+    await click('filter-editor-done')
+    await click('filter-clear-all')
+    expect(wrapper.props('clauses')).toEqual([{ kind: 'awaiting_response', value: true }])
+  })
+
+  it('keeps `me` checked, disabled and un-removable in the assignee editor when requireAssigneeMe is set', async () => {
+    const wrapper = setup(
+      [{ kind: 'assigned_to', assignees: ['me'] }],
+      { requireAssigneeMe: true },
+    )
+    expect(body().find('[data-testid="filter-chip-remove-assigned_to"]').exists()).toBe(false)
+    expect(get('filter-chip-locked-assigned_to').element).toBeDefined()
+
+    await open('assigned_to')
+    const meCheckbox = get('filter-assignee-me')
+    expect((meCheckbox.element as HTMLInputElement).checked).toBe(true)
+    expect(meCheckbox.attributes('disabled')).toBeDefined()
+    await meCheckbox.trigger('change')
+    expect(wrapper.emitted('update:clauses')).toBeUndefined()
+
+    await check('filter-assignee-unassigned', true)
+    expect(wrapper.props('clauses')).toEqual([{ kind: 'assigned_to', assignees: ['me', 'unassigned'] }])
+  })
+
+  it('preserves both locked clauses through Clear all', async () => {
+    const wrapper = setup(
+      [
+        { kind: 'assigned_to', assignees: ['me', { user_id: 'user-1' }] },
+        { kind: 'stage', stage_ids: ['stage-1'] },
+        { kind: 'awaiting_response', value: true },
+      ],
+      { lockedAnchorKind: 'awaiting_response', requireAssigneeMe: true },
+    )
+    await click('filter-clear-all')
+    expect(wrapper.props('clauses')).toEqual([
+      { kind: 'assigned_to', assignees: ['me', { user_id: 'user-1' }] },
+      { kind: 'awaiting_response', value: true },
+    ])
+  })
+})

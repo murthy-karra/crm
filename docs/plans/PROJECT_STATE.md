@@ -1,12 +1,19 @@
 # Project State
 
-Last updated: 2026-09-07, early (Slice 011d specification approved;
-implementation held).
+Last updated: 2026-09-07 (Slice 011d implementation started: two lanes
+running in worktrees).
 
 ## Current phase
 
-**Slice 011d (tweakable built-in Today rules) — SPECIFICATION APPROVED,
-IMPLEMENTATION HELD.** On 2026-09-06 the user asked to look at 011d. The read-only planner
+**Slice 011d (tweakable built-in Today rules) — IMPLEMENTATION IN PROGRESS.**
+The user said "start 011d" on 2026-09-07. Integration branch
+`slice-011d-today-system-feeds` from `main` at `66b44ff`; Lane B (Claude
+Sonnet 5) in `../crm-worktrees/011d-lane-b` on `slice-011d-lane-b` doing brief
+steps 1–3 (vocabulary, persistence, feed path behind the `Legacy | Feeds`
+seam plus the equivalence suite), then stopping for the coordinator; Lane W
+(Claude Sonnet 5) in `../crm-worktrees/011d-lane-w` on `slice-011d-lane-w`
+doing steps 1–4 (types, chips, Today rules page, Today markers) with Vitest.
+Claude Fable 5.1 coordinates. Planning history follows. On 2026-09-06 the user asked to look at 011d. The read-only planner
 analysed the rung against the code and found that the ladder's pre-declared
 d1/d2 seam does not exist (the three Today arms are one statement with one
 precedence rule and one cap). Offered three cuts, the user chose **one L rung
@@ -19,9 +26,8 @@ applied (migration version, rule 7 on the call feed, the call-only sentinel
 gating, the invalid-definition example, 403-before-400 precedence, `Feed.filter`
 semantics under `filter_error`, a `Legacy | Feeds` provider seam for the
 equivalence and paired-perf gates, `unavailable` precedence over `partial`).
-The user then approved the specification with its seven §1 safe defaults on
-2026-09-07 and chose to hold implementation for a later session. Nothing is
-implemented; no branch exists yet.
+The user approved the specification with its seven §1 safe defaults on
+2026-09-07, held implementation briefly, then started it the same day.
 
 Previous phase, for context:
 
@@ -174,7 +180,7 @@ clear-all.
 ## Current slice
 
 Slice 011d — Tweakable built-in Today rules — `docs/specs/SLICE_011d.md`
-(approved 2026-09-07; implementation held), companion `docs/specs/SLICE_011d_EXPLAINED.md`,
+(approved 2026-09-07; implementation in progress), companion `docs/specs/SLICE_011d_EXPLAINED.md`,
 brief `docs/tasks/SLICE_011d_IMPL.md` (Lane B backend owns the migration and
 SQLx; Lane W web). Planned integration branch `slice-011d-today-system-feeds`
 from `main` at `f51bff8`. Ladder: docs/plans/SLICE_011_LADDER.md (011a → 011b →
@@ -183,8 +189,8 @@ from `main` at `f51bff8`. Ladder: docs/plans/SLICE_011_LADDER.md (011a → 011b 
 ## Current branch
 
 `main` at `f51bff8` (one docs-only commit after the pushed `929b6ab`). The
-011d planning documents (spec, companion, brief, D-049, ladder amendment, this
-file) are committed on `main` with the user's approval; not pushed. Earlier: `main`
+011d planning documents are committed on `main` (`769172a`, `66b44ff`); not
+pushed. Live worktrees: `../crm-worktrees/011d-lane-b` and `011d-lane-w`. Earlier: `main`
 at `929b6ab`, pushed to `origin/main` on 2026-09-06 (the push carried
 011b's `2af023c`/`9d62e86` and 011c's `6117b4a`/`b4c4226`/`929b6ab`). The
 011b and 011c slice branches were deleted locally after the merge; they never
@@ -453,11 +459,11 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. **Start 011d implementation when requested** (spec approved, held): set
-   the model assignment in `docs/tasks/SLICE_011d_IMPL.md`, confirm the base
-   is current `main`, create `slice-011d-today-system-feeds` and two lane
-   worktrees, and start Lane B step 1 (vocabulary) and Lane W step 1 (types)
-   in parallel.
+1. **011d in progress:** wait for Lane B's step 3 equivalence report and
+   Lane W's step 4 report; audit each lane's file list against `git status`;
+   decide arm deletion; then assign Lane B steps 4–6 and Lane W step 5;
+   merge lanes into the integration branch; run the final-tree gates once;
+   reviewer and tester passes; commit and merge gates with the user.
    The equivalence gate (Lane B step 3) and the merge-join toggle question
    (step 5) return to the coordinator. The shared development runtime is
    already migrated and serving the merged 011c code.
@@ -484,10 +490,10 @@ and now lives only in git history.
 
 ## Approval currently required
 
-- None for 011d planning: the specification is approved and its documents
-  committed. The next approval is the implementation start (branch and
-  worktree creation) when the user asks to begin; push of the planning
-  commit is separate and not authorized.
+- None right now: implementation is authorized and running. Coming gates:
+  arm deletion (coordinator, on equivalence evidence), the merge-join toggle
+  (coordinator, on §8 evidence), then commit and merge approval from the
+  user. Push and deployment are not authorized.
 - All three 011c decisions were taken on 2026-09-06 (late evening): the §8
   planner amendment is approved, the Phase B pairing limitation accepted, and
   the local commit and merge performed, then the push. **Deployment is not

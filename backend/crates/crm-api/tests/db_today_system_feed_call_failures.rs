@@ -11,14 +11,22 @@
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use axum::response::IntoResponse;
 use chrono::{Duration as ChronoDuration, Utc};
+use crm_api::domain::admin::{MembershipStatus, Role};
 use crm_api::domain::envelope::{CommandContext, Origin};
-use crm_api::domain::person::filter::{Clause, FilterDefinition, StageClause};
+use crm_api::domain::person::filter::{
+    AssignedToClause, Assignee, BoolClause, Clause, FilterDefinition, StageClause,
+};
 use crm_api::domain::person::visibility::PersonVisibilityScope;
 use crm_api::domain::saved_list::{self, CreateSavedList, SavedListScope};
+use crm_api::domain::today::system_feeds::commands::{self, PreviewTodaySystemFeed};
+use crm_api::domain::today::system_feeds::error::TodayFeedError;
+use crm_api::domain::today::system_feeds::FeedKey;
 use crm_api::domain::today::{
     self, EnableTodayWorkSource, TodayItem, TodayReason, TodaySourcesStatus,
 };
+use crm_api::error::ApiError;
 use crm_api::ids::{CorrelationId, OrganizationId, SavedListId, StageId, UserId};
 use crm_app::domain::today::test_support::{
     scope as with_today_hooks, HookFuture, TodayQueryHook, TodayQueryHooks, TodayQueryPhase,
@@ -39,6 +47,24 @@ fn command_context(organization_id: Uuid, actor_user_id: Uuid) -> CommandContext
 
 fn visibility_scope(organization_id: Uuid) -> PersonVisibilityScope {
     PersonVisibilityScope::Organization(OrganizationId::new(organization_id))
+}
+
+/// An admin fixture (preview is admin-only) — mirrors
+/// `db_today_system_feed_commands.rs`'s helper of the same shape.
+async fn create_org_with_admin(pool: &PgPool, org_name: &str, email: &str) -> (Uuid, Uuid) {
+    let org_id = crate::common::create_org(pool, org_name).await;
+    crate::common::seed_stages(pool, org_id).await;
+    let user_id =
+        crate::common::create_user(pool, email, "Admin", "correct horse battery staple").await;
+    crate::common::add_membership_with(
+        pool,
+        org_id,
+        user_id,
+        Role::Admin,
+        MembershipStatus::Active,
+    )
+    .await;
+    (org_id, user_id)
 }
 
 async fn connect_as_one_app(migrator_pool: &PgPool) -> PgPool {
@@ -480,4 +506,106 @@ async fn call_feed_unrecoverable_failure_marks_the_response_unavailable_and_disc
         owned_pid,
         "an unrecoverable call-feed failure must dispose the old owned connection"
     );
+}
+
+// --- Coverage gap (2): preview's real statement timeout ---------------------
+
+/// Injects a genuinely slow query (`pg_sleep`) at the checkpoint preview
+/// reaches immediately AFTER its real `statement_timeout` is configured —
+/// so PostgreSQL itself cancels the sleep once the real 1,250 ms budget
+/// elapses (error 57014), never a simulated/synthetic failure.
+struct SleepPastPreviewTimeout;
+
+impl TodayQueryHook for SleepPastPreviewTimeout {
+    fn checkpoint<'a>(
+        &'a self,
+        phase: TodayQueryPhase,
+        _source_id: Option<Uuid>,
+        _deadline: Option<Instant>,
+        connection: &'a mut PgConnection,
+    ) -> HookFuture<'a> {
+        if phase == TodayQueryPhase::PreviewBeforeEvaluation {
+            return Box::pin(async move {
+                sqlx::query("SELECT pg_sleep(2)")
+                    .execute(connection)
+                    .await
+                    .map(|_| ())
+            });
+        }
+        Box::pin(async { Ok(()) })
+    }
+}
+
+/// docs/specs/SLICE_011d.md §4: preview's 1,250 ms statement timeout is an
+/// error, never a partial result — a real PostgreSQL cancellation
+/// propagates as `TodayFeedError::Database`, which `ApiError::from` maps
+/// to `Unavailable` (503), exactly like every other genuine database
+/// failure in this domain (never a bespoke "preview timed out" code).
+#[sqlx::test]
+#[ignore]
+async fn preview_statement_timeout_is_unavailable_and_never_partial(migrator_pool: PgPool) {
+    let (organization_id, admin_id) = create_org_with_admin(
+        &migrator_pool,
+        "011d preview timeout",
+        "admin@d011-preview-timeout.test",
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let stage = stage_id(&app_pool, organization_id).await;
+    let person = insert_person(&app_pool, organization_id, stage, Some(admin_id)).await;
+    insert_inquiry(&app_pool, organization_id, person).await;
+
+    let hooks = TodayQueryHooks::new(Arc::new(SleepPastPreviewTimeout));
+    let started = Instant::now();
+    let result = with_today_hooks(
+        hooks,
+        commands::preview_today_system_feed(
+            &app_pool,
+            &command_context(organization_id, admin_id),
+            PreviewTodaySystemFeed {
+                feed_key: FeedKey::UnansweredInquiry,
+                filter: FilterDefinition {
+                    version: 1,
+                    clauses: vec![
+                        Clause::AssignedTo(AssignedToClause {
+                            assignees: vec![Assignee::Me],
+                        }),
+                        Clause::AwaitingResponse(BoolClause { value: true }),
+                    ],
+                },
+                fresh_within_hours: Some(24),
+                subject: UserId::new(admin_id),
+            },
+        ),
+    )
+    .await;
+    let elapsed = started.elapsed();
+
+    let err = result.expect_err(
+        "a real statement-timeout cancellation must propagate as an error, never a partial result",
+    );
+    assert!(matches!(err, TodayFeedError::Database(_)));
+    assert!(
+        elapsed < Duration::from_millis(1900),
+        "the real 1,250 ms statement_timeout must cancel the 2 s sleep, not wait it out: {elapsed:?}"
+    );
+    let response = ApiError::from(err).into_response();
+    assert_eq!(
+        response.status(),
+        axum::http::StatusCode::SERVICE_UNAVAILABLE
+    );
+
+    // Nothing was persisted: the feed row is untouched by the cancelled
+    // preview transaction.
+    let (enabled, filter, revision): (bool, Option<String>, i64) = sqlx::query_as(
+        "SELECT enabled, filter::text, revision FROM today_system_feed \
+         WHERE organization_id = $1 AND feed_key = 'unanswered_inquiry'",
+    )
+    .bind(organization_id)
+    .fetch_one(&app_pool)
+    .await
+    .unwrap();
+    assert!(enabled);
+    assert!(filter.is_none());
+    assert_eq!(revision, 1);
 }

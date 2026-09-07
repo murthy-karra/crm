@@ -746,6 +746,15 @@ async fn preview_today_system_feed_attempt(
         .execute(&mut *tx)
         .await?;
 
+    #[cfg(feature = "test-support")]
+    crate::domain::today::test_support::checkpoint(
+        crate::domain::today::test_support::TodayQueryPhase::PreviewBeforeEvaluation,
+        None,
+        None,
+        &mut tx,
+    )
+    .await?;
+
     let now: DateTime<Utc> = sqlx::query_scalar("SELECT statement_timestamp()")
         .fetch_one(&mut *tx)
         .await?;

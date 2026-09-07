@@ -1393,6 +1393,164 @@ async fn call_feed_customized_with_assigned_to_me_narrows_evaluation_to_assigned
     ));
 }
 
+/// Coverage gap (1): a dedicated EVALUATION-path test (not just
+/// `load_feed_rows`'s unit-level read, covered by
+/// `db_today_system_feeds.rs`'s `invalid_stage_reference_falls_back_to_
+/// canonical`) proving that a stored feed definition referencing a stage
+/// which is later deleted falls back to the CANONICAL rule inside
+/// `today::query_at` itself — a Person who matches the canonical rule but
+/// NOT the (now-broken) stage restriction still appears — with
+/// `system_feed_issues` carrying `fallback: true`.
+#[sqlx::test]
+#[ignore]
+async fn a_stored_feed_referencing_a_deleted_stage_falls_back_to_canonical_in_evaluation(
+    migrator_pool: PgPool,
+) {
+    let (organization_id, admin_id) = create_org_with_admin(
+        &migrator_pool,
+        "011d fallback deleted stage",
+        "admin@d011-fallback-stage.test",
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let stages: Vec<Uuid> =
+        sqlx::query_scalar("SELECT id FROM stage WHERE organization_id = $1 ORDER BY position")
+            .bind(organization_id)
+            .fetch_all(&app_pool)
+            .await
+            .unwrap();
+    let referenced_stage = stages[8];
+    let other_stage = stages[0];
+
+    // Store a valid definition referencing `referenced_stage` (it exists
+    // at write time, so this passes reference validation).
+    let customized = FilterDefinition {
+        version: 1,
+        clauses: vec![
+            Clause::AssignedTo(AssignedToClause {
+                assignees: vec![Assignee::Me],
+            }),
+            Clause::AwaitingResponse(BoolClause { value: true }),
+            Clause::Stage(StageClause {
+                stage_ids: vec![StageId::new(referenced_stage)],
+            }),
+        ],
+    };
+    commands::update_today_system_feed(
+        &app_pool,
+        &command_context(organization_id, admin_id),
+        UpdateTodaySystemFeed {
+            feed_key: FeedKey::UnansweredInquiry,
+            expected_revision: 1,
+            filter: customized,
+            fresh_within_hours: Some(24),
+        },
+    )
+    .await
+    .unwrap();
+
+    // No Person is ever placed in `referenced_stage`, so deleting it hits
+    // no foreign key.
+    sqlx::query("DELETE FROM stage WHERE id = $1")
+        .bind(referenced_stage)
+        .execute(&migrator_pool)
+        .await
+        .unwrap();
+
+    // A Person matching the CANONICAL rule (assigned to admin, fresh
+    // unanswered inquiry) but in a DIFFERENT stage than the one the
+    // (now-broken) stored definition referenced.
+    let person = insert_person(&app_pool, organization_id, other_stage, Some(admin_id)).await;
+    insert_inquiry(&app_pool, organization_id, person).await;
+
+    let scope = crm_api::domain::person::PersonVisibilityScope::Organization(OrganizationId::new(
+        organization_id,
+    ));
+    let mut conn = app_pool.acquire().await.unwrap();
+    let list = crm_api::domain::today::query(&mut conn, &scope, UserId::new(admin_id), Utc::now())
+        .await
+        .unwrap();
+    let ids: Vec<Uuid> = list.items.iter().map(|i| i.person.id.as_uuid()).collect();
+    assert!(
+        ids.contains(&person),
+        "the canonical rule (no stage restriction) is evaluated under fallback"
+    );
+    assert_eq!(list.sources.system_feed_issues.len(), 1);
+    let issue = &list.sources.system_feed_issues[0];
+    assert_eq!(issue.feed_key, "unanswered_inquiry");
+    assert!(matches!(
+        issue.error,
+        crm_api::domain::today::SystemFeedIssueError::InvalidDefinition
+    ));
+    assert!(issue.fallback);
+}
+
+/// Coverage gap (1), sibling case: unsupported stored JSON (a version this
+/// binary does not decode) falls back the same way, through the same
+/// evaluation path.
+#[sqlx::test]
+#[ignore]
+async fn a_stored_feed_with_unsupported_json_falls_back_to_canonical_in_evaluation(
+    migrator_pool: PgPool,
+) {
+    let (organization_id, admin_id) = create_org_with_admin(
+        &migrator_pool,
+        "011d fallback unsupported json",
+        "admin@d011-fallback-json.test",
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let stage_id = first_stage_id(&app_pool, organization_id).await;
+
+    sqlx::query(
+        "UPDATE today_system_feed SET filter = '{\"version\":99,\"clauses\":[]}'::jsonb, \
+         revision = revision + 1 WHERE organization_id = $1 AND feed_key = 'client_replied'",
+    )
+    .bind(organization_id)
+    .execute(&app_pool)
+    .await
+    .unwrap();
+
+    let person = insert_person(&app_pool, organization_id, stage_id, Some(admin_id)).await;
+    insert_inquiry(&app_pool, organization_id, person).await;
+    insert_correspondence(
+        &app_pool,
+        organization_id,
+        person,
+        admin_id,
+        "inbound",
+        Utc::now() - ChronoDuration::hours(1),
+    )
+    .await;
+
+    let scope = crm_api::domain::person::PersonVisibilityScope::Organization(OrganizationId::new(
+        organization_id,
+    ));
+    let mut conn = app_pool.acquire().await.unwrap();
+    let list = crm_api::domain::today::query(&mut conn, &scope, UserId::new(admin_id), Utc::now())
+        .await
+        .unwrap();
+    let item = list
+        .items
+        .iter()
+        .find(|i| i.person.id.as_uuid() == person)
+        .unwrap();
+    assert!(
+        item.reasons
+            .iter()
+            .any(|r| matches!(r, crm_api::domain::today::TodayReason::ClientReplied { .. })),
+        "the canonical client_replied rule is evaluated under fallback"
+    );
+    assert_eq!(list.sources.system_feed_issues.len(), 1);
+    let issue = &list.sources.system_feed_issues[0];
+    assert_eq!(issue.feed_key, "client_replied");
+    assert!(matches!(
+        issue.error,
+        crm_api::domain::today::SystemFeedIssueError::InvalidDefinition
+    ));
+    assert!(issue.fallback);
+}
+
 /// spec §9.5: the call feed's own failure, together with a SEPARATE
 /// list-source enumeration failure, must still yield `unavailable` (011c
 /// precedence) with the call feed's `system_feed_issues` entry present.

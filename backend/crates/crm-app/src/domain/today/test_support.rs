@@ -35,6 +35,14 @@ pub enum TodayQueryPhase {
     CallFeedAfterSavepoint,
     CallFeedAfterMembership,
     BeforeCallFeedRelease,
+    /// docs/specs/SLICE_011d.md §4: immediately after preview's real
+    /// `statement_timeout` is set, immediately before its (person-state or
+    /// call-only) evaluation query. A hook running a genuinely slow query
+    /// here (e.g. `SELECT pg_sleep(...)`) is bounded by that SAME real
+    /// timeout, producing a real PostgreSQL query-cancellation error —
+    /// preview has no recovery path, so this must propagate as a plain
+    /// error (503 at the API layer), never a partial result.
+    PreviewBeforeEvaluation,
 }
 
 pub type HookFuture<'a> = Pin<Box<dyn Future<Output = Result<(), sqlx::Error>> + Send + 'a>>;

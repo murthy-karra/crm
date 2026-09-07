@@ -410,7 +410,14 @@ and now lives only in git history.
 1. Specify the next rung when requested: **011d** (tweakable built-ins) is
    next on the ladder, with 011b-sort separately queued. When the shared
    development runtime is next restarted, run `./scripts/db-migrate` first.
-2. Follow-ups this slice surfaced, unordered: R1 (call host not fenced on a
+2. Post-merge polish landed on main (2026-09-06): the People page explains
+   list creation when reached from Lists (three steps plus a recorded
+   walkthrough), and a direct load of any protected URL no longer bounces to
+   Today when session verification settles mid-navigation (replay now waits
+   for the initial navigation); a named list's header now wraps its toolbar
+   below a long title instead of squeezing the title. `playwright-core` was
+   added as a Web dev dependency only for the guide recording script.
+3. Follow-ups this slice surfaced, unordered: R1 (call host not fenced on a
    session boundary, pre-existing, telephony files); the Today built-in query
    hazard deserves a durable fix in 011d or the queued denormalization chunk
    rather than relying on a planner toggle for ever; the Web reviewer's three

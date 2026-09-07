@@ -15,10 +15,13 @@ defineProps<{
   <div
     :class="[
       'mb-6 flex justify-between gap-4',
-      stackActionOnNarrow ? 'flex-col items-start sm:flex-row sm:items-center' : 'items-center',
+      // With the prop, the row also wraps above the narrow breakpoint, so a
+      // long title keeps a readable width and a wide action group moves
+      // below it instead of squeezing the title into one word per line.
+      stackActionOnNarrow ? 'flex-col items-start sm:flex-row sm:flex-wrap sm:items-center' : 'items-center',
     ]"
   >
-    <div class="min-w-0">
+    <div :class="stackActionOnNarrow ? 'min-w-0 sm:min-w-64 sm:flex-1' : 'min-w-0'">
       <slot name="breadcrumb" />
       <h1 class="text-title font-medium tracking-title text-text">
         {{ title }}
@@ -32,7 +35,7 @@ defineProps<{
     </div>
     <div
       v-if="$slots.action"
-      :class="stackActionOnNarrow ? 'shrink-0 sm:self-auto' : 'shrink-0'"
+      :class="stackActionOnNarrow ? 'shrink-0 sm:ml-auto sm:self-auto' : 'shrink-0'"
     >
       <slot name="action" />
     </div>

@@ -83,7 +83,7 @@ onBeforeUnmount(() => window.removeEventListener('focus', refreshOnWindowFocus))
     >
       <template #action>
         <RouterLink
-          to="/people"
+          :to="{ path: '/people', query: { guide: 'create-list' } }"
           :class="buttonClasses('primary')"
         >
           <Plus
@@ -172,7 +172,7 @@ onBeforeUnmount(() => window.removeEventListener('focus', refreshOnWindowFocus))
         Build criteria in People, then save them here for reuse.
       </p>
       <RouterLink
-        to="/people"
+        :to="{ path: '/people', query: { guide: 'create-list' } }"
         :class="[buttonClasses('primary'), 'mt-4 inline-flex']"
       >
         Create a list

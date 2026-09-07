@@ -1,5 +1,6 @@
 import { watch } from 'vue'
 import {
+  START_LOCATION,
   createRouter,
   createWebHistory,
   type Router,
@@ -201,12 +202,21 @@ export function createAppRouter(history: RouterHistory): Router {
   function replayCurrentRoute() {
     replayingAfterSessionRecovery = true
     setRouteAuthorizationReplayPending(true)
-    const current = router.currentRoute.value
-    void router.replace({
-      path: current.path,
-      query: current.query,
-      hash: current.hash,
-      force: true,
+    // Verification can settle while the very first navigation is still in
+    // flight (a direct load of a protected URL). `currentRoute` is then still
+    // the start location, and replaying it would follow the `/` redirect to
+    // Today instead of re-authorizing the URL the user actually opened. Wait
+    // for the initial navigation, then replay whatever it resolved to; if it
+    // never resolved there is nothing rendered to re-authorize.
+    void router.isReady().catch(() => {}).then(() => {
+      const current = router.currentRoute.value
+      if (current === START_LOCATION) return undefined
+      return router.replace({
+        path: current.path,
+        query: current.query,
+        hash: current.hash,
+        force: true,
+      })
     }).catch(() => {}).finally(() => {
       if (replayRequested) {
         replayRequested = false

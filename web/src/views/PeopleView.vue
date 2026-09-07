@@ -11,6 +11,7 @@ import DataTable from '../components/DataTable.vue'
 import PersonPreview from '../components/PersonPreview.vue'
 import StageLabel from '../components/StageLabel.vue'
 import FilterBar from '../components/FilterBar.vue'
+import CreateListGuide from '../components/CreateListGuide.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import SavedListDialog from '../components/SavedListDialog.vue'
 import {
@@ -947,7 +948,10 @@ const columns: ColumnDef<PersonSummary>[] = [
 <template>
   <div class="people-layout">
     <div class="people-list">
-      <PageHeader :title="isNamedList ? (currentSavedMetadata?.name ?? 'Saved list') : 'People'">
+      <PageHeader
+        :title="isNamedList ? (currentSavedMetadata?.name ?? 'Saved list') : 'People'"
+        :stack-action-on-narrow="isNamedList"
+      >
         <template #action>
           <div class="flex flex-wrap justify-end gap-2">
             <template v-if="isNamedList">
@@ -1046,6 +1050,8 @@ const columns: ColumnDef<PersonSummary>[] = [
           </div>
         </template>
       </PageHeader>
+
+      <CreateListGuide v-if="!isNamedList" />
 
       <div
         v-if="createdCopy"

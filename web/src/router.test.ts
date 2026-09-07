@@ -101,6 +101,24 @@ describe('router guards (SLICE_004 §10)', () => {
     await settleAs('/manage/members', ADMIN, '/manage/members')
   })
 
+  it('replays the URL a direct load resolved to, not the start location, when recovery settles during the initial navigation', async () => {
+    // Regression: the replay read `router.currentRoute` while the very first
+    // navigation was still in flight, replayed the start location `/`, and
+    // its redirect sent every direct load of a protected URL to /today.
+    const lifecycle = await import('./sessionLifecycle')
+    const epoch = lifecycle.beginSessionTransition()
+    vi.mocked(fetchMe).mockResolvedValue(MEMBER)
+    const router = freshRouter()
+    const initialNavigation = router.push('/people')
+    // Verification completes synchronously, before the initial navigation
+    // has resolved its guards.
+    window.localStorage.removeItem(`crm.session-lifecycle.v1.pending.${epoch}`)
+    expect(lifecycle.completeSessionVerification(lifecycle.currentSessionGeneration())).toBe(true)
+    await initialNavigation
+    await vi.waitFor(() => expect(lifecycle.useRouteAuthorizationReplayPending().value).toBe(false))
+    expect(router.currentRoute.value.path).toBe('/people')
+  })
+
   it('re-runs role authorization when a second session boundary completes during an in-flight replay (F4)', async () => {
     const lifecycle = await import('./sessionLifecycle')
     const epoch1 = lifecycle.beginSessionTransition()

@@ -1,13 +1,17 @@
 # Project State
 
-Last updated: 2026-09-07 (Slice 011d verified on the integration branch;
-awaiting the user's merge approval).
+Last updated: 2026-09-07 (Slice 011d complete and merged to local main;
+not pushed).
 
 ## Current phase
 
-**Slice 011d (tweakable built-in Today rules) — VERIFIED, AWAITING MERGE
-APPROVAL.** Integration branch `slice-011d-today-system-feeds` at `77a8963`
-(144 files against `main`). Final-tree gates run once by the coordinator:
+**Slice 011d (tweakable built-in Today rules) — COMPLETE AND MERGED TO
+LOCAL MAIN** at `b8b53e2` (2026-09-07, with the user's approval; not pushed,
+not deployed). The two lane branches and all three worktrees were deleted
+with that approval; the merged integration branch
+`slice-011d-today-system-feeds` (`77a8963`) still exists locally and can be
+deleted on request. Verification summary: 144 files against the previous
+`main`. Final-tree gates run once by the coordinator:
 `sqlx-prepare` clean, `check` green (699 Rust, 572 Web tests), `check-db`
 541 of 541 on the second run after a pre-existing `db_calls` timing flake
 that also fails on `main`. Review round 2: READY. Full evidence in the
@@ -270,7 +274,8 @@ clear-all.
 ## Current slice
 
 Slice 011d — Tweakable built-in Today rules — `docs/specs/SLICE_011d.md`
-(approved 2026-09-07; implementation in progress), companion `docs/specs/SLICE_011d_EXPLAINED.md`,
+(approved and delivered 2026-09-07; verification record
+`docs/tasks/SLICE_011d_VERIFICATION.md`), companion `docs/specs/SLICE_011d_EXPLAINED.md`,
 brief `docs/tasks/SLICE_011d_IMPL.md` (Lane B backend owns the migration and
 SQLx; Lane W web). Planned integration branch `slice-011d-today-system-feeds`
 from `main` at `f51bff8`. Ladder: docs/plans/SLICE_011_LADDER.md (011a → 011b →
@@ -278,9 +283,10 @@ from `main` at `f51bff8`. Ladder: docs/plans/SLICE_011_LADDER.md (011a → 011b 
 
 ## Current branch
 
-`main` at `f51bff8` (one docs-only commit after the pushed `929b6ab`). The
-011d planning documents are committed on `main` (`769172a`, `66b44ff`); not
-pushed. Live worktrees: `../crm-worktrees/011d-lane-b` and `011d-lane-w`. Earlier: `main`
+`main` at `b8b53e2` (the 011d merge), local only; `origin/main` is still at
+`929b6ab` (the 011c push). No worktrees. The shared development runtime
+still runs the pre-011d binary and `crm_dev` lacks migration
+`20260908000001`; run `./scripts/db-migrate` before restarting it. Earlier: `main`
 at `929b6ab`, pushed to `origin/main` on 2026-09-06 (the push carried
 011b's `2af023c`/`9d62e86` and 011c's `6117b4a`/`b4c4226`/`929b6ab`). The
 011b and 011c slice branches were deleted locally after the merge; they never
@@ -339,6 +345,7 @@ together on 2026-09-06).
 | 011b | Personal and shared saved People lists (D-046) | `9d62e86` (implementation `2af023c`) |
 | 011c | Saved lists feed Today (D-047; §8 planner amendment approved) | `929b6ab` (implementation `6117b4a`) |
 | 011b-sort | Per-list sorting for saved People lists (D-048) | `d52a0ad` (implementation `bd23f42`) |
+| 011d | Tweakable built-in Today rules: system feeds, three derived clauses, admin surface, change fact (D-049, D-050) | `b8b53e2` (integration `77a8963`), local only |
 | — | Gate-speedup chunk (check 35m→79s, check-db 37m→~2m) | 2026-08-28 |
 | — | Test-binary consolidation (40 files → 1 binary) | `6427ee8` |
 
@@ -552,12 +559,15 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. **Merge 011d on the user's approval:** `slice-011d-today-system-feeds`
-   (`77a8963`) into `main` with `--no-ff`; then delete the three worktrees
-   and the two lane branches (needs approval), run `./scripts/db-migrate`
-   before restarting the shared development runtime (migration
-   `20260908000001`), and record the merge here. Push and deployment are
-   separate approvals.
+1. **Next rung when requested: 011e (tags)**, the last rung of the ladder;
+   write its spec just in time per the ladder rule. Before that, the small
+   LATER items from the 011d verification record can be batched: the
+   person-state 503 test, two equivalence pins, the feeds page first-load
+   error test, the `db_calls` timing flake (pre-existing, fails on `main`
+   1 in 3), and splitting the three largest test files.
+2. Updating the shared development runtime (`./scripts/db-migrate`, then
+   restart the API by exact PID), pushing `main` (011d not on the remote)
+   and deployment are separate actions needing approval.
    The equivalence gate (Lane B step 3) and the merge-join toggle question
    (step 5) return to the coordinator. The shared development runtime is
    already migrated and serving the merged 011c code.
@@ -584,9 +594,9 @@ and now lives only in git history.
 
 ## Approval currently required
 
-- **Merge approval for 011d** (source `slice-011d-today-system-feeds` at
-  `77a8963`, destination `main`). Also: approval to delete the lane branches
-  and worktrees after the merge. Push and deployment are not authorized.
+- None for 011d: merged and cleaned up with approval on 2026-09-07. Push
+  of `main` (carries 011d) and deployment are not authorized; deleting the
+  merged `slice-011d-today-system-feeds` branch needs a word.
 - All three 011c decisions were taken on 2026-09-06 (late evening): the §8
   planner amendment is approved, the Phase B pairing limitation accepted, and
   the local commit and merge performed, then the push. **Deployment is not

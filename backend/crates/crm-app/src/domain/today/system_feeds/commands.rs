@@ -803,22 +803,30 @@ async fn preview_today_system_feed_attempt(
             (items, truncated || extra_truncated)
         }
         FeedKey::CallOutcomeNeeded => {
-            // KNOWN LIMITATION (inherited from step 3, flagged rather than
-            // silently overclaimed): `call_only_candidates`/
-            // `call_membership` are fixed statements — the compiled-in
-            // outcome_call membership plus the §1 rule 7 inquiry
-            // constraint — and do not accept a `FilterDefinition`. Any
-            // clause an admin adds to the call feed BEYOND its anchor
-            // (permitted by §1 rule 4) is therefore not applied here,
-            // exactly as it is not applied by Today evaluation itself
-            // (`evaluate_feeds_builtins`) — preview stays consistent with
-            // production, not a separate inconsistency. Extending both to
-            // the full predicate matrix (mirroring `person_state.sql`) is
-            // a follow-up, reported rather than silently done in this
-            // round.
-            let call_only =
-                evaluate::call_only_candidates(&mut tx, ctx.organization_id, cmd.subject, &[], 201)
-                    .await?;
+            // The candidate definition is bound as the call feed's full
+            // predicate matrix (spec §1 rule 4, §5 step 4 "feed C matrix
+            // params") — an admin-added clause narrows the call-only
+            // candidates exactly as it would in Today evaluation.
+            let candidate = super::ResolvedFeed {
+                feed_key: cmd.feed_key,
+                enabled: true,
+                filter: cmd.filter.clone(),
+                fresh_within_hours: cmd.fresh_within_hours,
+                is_default: false,
+                fallback: false,
+                revision: 1,
+                updated_at: now,
+                updated_by_user_id: None,
+            };
+            let call_only = evaluate::call_only_candidates(
+                &mut tx,
+                ctx.organization_id,
+                cmd.subject,
+                &candidate,
+                &[],
+                201,
+            )
+            .await?;
             let truncated = call_only.len() > 200;
             let mut items = rank(call_only, now);
             items.truncate(200);

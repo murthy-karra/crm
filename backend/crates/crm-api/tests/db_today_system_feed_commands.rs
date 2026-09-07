@@ -166,6 +166,53 @@ async fn insert_correspondence(
     .unwrap();
 }
 
+/// A qualifying call (ended/failed with a non-null `ended_at`, and an
+/// uncorrected automatic `contact_attempted` root) — the exact
+/// `outcome_call` membership shape `call_membership.sql`/`call_only.sql`
+/// require, mirroring `db_today_feed_equivalence.rs`'s `insert_call`.
+async fn insert_call(
+    pool: &PgPool,
+    organization_id: Uuid,
+    person_id: Uuid,
+    caller_user_id: Uuid,
+    ended_at: chrono::DateTime<Utc>,
+) -> Uuid {
+    let call_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO call \
+            (id, organization_id, person_id, contact_method_id, caller_user_id, origin, \
+             correlation_id, status, end_reason, provider, provider_room, placed_at, ended_at) \
+         VALUES \
+            ($1, $2, $3, $4, $5, 'web_session', $6, 'ended', 'agent_hangup', \
+             'scripted', 'commands-fixture', $7, $7)",
+    )
+    .bind(call_id)
+    .bind(organization_id)
+    .bind(person_id)
+    .bind(Uuid::new_v4())
+    .bind(caller_user_id)
+    .bind(Uuid::new_v4())
+    .bind(ended_at)
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO contact_attempted \
+            (organization_id, actor_kind, actor_user_id, origin, occurred_at, correlation_id, \
+             causation_id, person_id, channel, outcome) \
+         VALUES ($1, 'system', NULL, 'migration', $2, $3, $4, $5, 'call', 'reached')",
+    )
+    .bind(organization_id)
+    .bind(ended_at)
+    .bind(Uuid::new_v4())
+    .bind(call_id)
+    .bind(person_id)
+    .execute(pool)
+    .await
+    .unwrap();
+    call_id
+}
+
 fn feed_row_key(feed_key: FeedKey) -> &'static str {
     feed_key.as_str()
 }
@@ -1105,6 +1152,247 @@ async fn a_person_in_both_feeds_shifts_to_inquiry_reasons_when_feed_b_is_disable
         .any(|r| matches!(r, crm_api::domain::today::TodayReason::ClientReplied { .. })));
 }
 
+/// Coordinator decision (round 3): the call feed's matrix statements now
+/// bind the full `PersonFilterParams` matrix (spec §1 rule 4, §5 step 4
+/// "feed C matrix params"), so an admin-added stage clause narrows the
+/// call feed exactly as it narrows the two person-state feeds. Both
+/// person-state feeds are disabled so ONLY the call feed contributes,
+/// isolating its own narrowing from person-state candidacy.
+#[sqlx::test]
+#[ignore]
+async fn call_feed_customized_with_a_stage_clause_narrows_evaluation_to_that_stage(
+    migrator_pool: PgPool,
+) {
+    let (organization_id, admin_id) = create_org_with_admin(
+        &migrator_pool,
+        "011d call feed stage",
+        "admin@d011-call-stage.test",
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let stages: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT id FROM stage WHERE organization_id = $1 ORDER BY position LIMIT 2",
+    )
+    .bind(organization_id)
+    .fetch_all(&app_pool)
+    .await
+    .unwrap();
+    let (stage_a, stage_b) = (stages[0], stages[1]);
+    let now = Utc::now();
+
+    let in_stage_a = insert_person(&app_pool, organization_id, stage_a, Some(admin_id)).await;
+    insert_inquiry(&app_pool, organization_id, in_stage_a).await;
+    let call_a = insert_call(
+        &app_pool,
+        organization_id,
+        in_stage_a,
+        admin_id,
+        now - ChronoDuration::hours(3),
+    )
+    .await;
+
+    let in_stage_b = insert_person(&app_pool, organization_id, stage_b, Some(admin_id)).await;
+    insert_inquiry(&app_pool, organization_id, in_stage_b).await;
+    insert_call(
+        &app_pool,
+        organization_id,
+        in_stage_b,
+        admin_id,
+        now - ChronoDuration::hours(3),
+    )
+    .await;
+
+    commands::set_today_system_feed_enabled(
+        &app_pool,
+        &command_context(organization_id, admin_id),
+        SetTodaySystemFeedEnabled {
+            feed_key: FeedKey::UnansweredInquiry,
+            expected_revision: 1,
+            enabled: false,
+        },
+    )
+    .await
+    .unwrap();
+    commands::set_today_system_feed_enabled(
+        &app_pool,
+        &command_context(organization_id, admin_id),
+        SetTodaySystemFeedEnabled {
+            feed_key: FeedKey::ClientReplied,
+            expected_revision: 1,
+            enabled: false,
+        },
+    )
+    .await
+    .unwrap();
+    let call_filter = FilterDefinition {
+        version: 1,
+        clauses: vec![
+            Clause::AwaitingCallOutcome(BoolClause { value: true }),
+            Clause::Stage(StageClause {
+                stage_ids: vec![StageId::new(stage_a)],
+            }),
+        ],
+    };
+    commands::update_today_system_feed(
+        &app_pool,
+        &command_context(organization_id, admin_id),
+        UpdateTodaySystemFeed {
+            feed_key: FeedKey::CallOutcomeNeeded,
+            expected_revision: 1,
+            filter: call_filter,
+            fresh_within_hours: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    let scope = crm_api::domain::person::PersonVisibilityScope::Organization(OrganizationId::new(
+        organization_id,
+    ));
+    let mut conn = app_pool.acquire().await.unwrap();
+    let list = crm_api::domain::today::query_at(&mut conn, &scope, UserId::new(admin_id), now)
+        .await
+        .unwrap();
+    let ids: Vec<Uuid> = list.items.iter().map(|i| i.person.id.as_uuid()).collect();
+    assert!(
+        ids.contains(&in_stage_a),
+        "stage_a's call-outcome person is retained"
+    );
+    assert!(
+        !ids.contains(&in_stage_b),
+        "stage_b's call-outcome person is excluded by the customized stage clause"
+    );
+    let item = list
+        .items
+        .iter()
+        .find(|i| i.person.id.as_uuid() == in_stage_a)
+        .unwrap();
+    assert!(item.reasons.iter().any(
+        |r| matches!(r, crm_api::domain::today::TodayReason::CallOutcomeNeeded { call_id, .. } if *call_id == call_a)
+    ));
+}
+
+/// Same coordinator decision: `assigned_to: [me]` added to the call feed
+/// narrows call-outcome candidates to Persons assigned to the viewer, even
+/// though the call itself was always placed BY the viewer (the caller_user_id
+/// axis and the assigned_to axis are independent).
+#[sqlx::test]
+#[ignore]
+async fn call_feed_customized_with_assigned_to_me_narrows_evaluation_to_assigned_persons(
+    migrator_pool: PgPool,
+) {
+    let (organization_id, admin_id) = create_org_with_admin(
+        &migrator_pool,
+        "011d call feed assignee",
+        "admin@d011-call-assignee.test",
+    )
+    .await;
+    let bob_id =
+        crate::common::create_user(&migrator_pool, "bob@d011-call-assignee.test", "Bob", PW).await;
+    crate::common::add_membership_with(
+        &migrator_pool,
+        organization_id,
+        bob_id,
+        Role::Member,
+        MembershipStatus::Active,
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let stage_id = first_stage_id(&app_pool, organization_id).await;
+    let now = Utc::now();
+
+    // Both calls are placed by the ADMIN (viewer); only the Person's
+    // ASSIGNEE differs.
+    let assigned_to_me = insert_person(&app_pool, organization_id, stage_id, Some(admin_id)).await;
+    insert_inquiry(&app_pool, organization_id, assigned_to_me).await;
+    let call_mine = insert_call(
+        &app_pool,
+        organization_id,
+        assigned_to_me,
+        admin_id,
+        now - ChronoDuration::hours(3),
+    )
+    .await;
+
+    let assigned_to_bob = insert_person(&app_pool, organization_id, stage_id, Some(bob_id)).await;
+    insert_inquiry(&app_pool, organization_id, assigned_to_bob).await;
+    insert_call(
+        &app_pool,
+        organization_id,
+        assigned_to_bob,
+        admin_id,
+        now - ChronoDuration::hours(3),
+    )
+    .await;
+
+    commands::set_today_system_feed_enabled(
+        &app_pool,
+        &command_context(organization_id, admin_id),
+        SetTodaySystemFeedEnabled {
+            feed_key: FeedKey::UnansweredInquiry,
+            expected_revision: 1,
+            enabled: false,
+        },
+    )
+    .await
+    .unwrap();
+    commands::set_today_system_feed_enabled(
+        &app_pool,
+        &command_context(organization_id, admin_id),
+        SetTodaySystemFeedEnabled {
+            feed_key: FeedKey::ClientReplied,
+            expected_revision: 1,
+            enabled: false,
+        },
+    )
+    .await
+    .unwrap();
+    let call_filter = FilterDefinition {
+        version: 1,
+        clauses: vec![
+            Clause::AwaitingCallOutcome(BoolClause { value: true }),
+            Clause::AssignedTo(AssignedToClause {
+                assignees: vec![Assignee::Me],
+            }),
+        ],
+    };
+    commands::update_today_system_feed(
+        &app_pool,
+        &command_context(organization_id, admin_id),
+        UpdateTodaySystemFeed {
+            feed_key: FeedKey::CallOutcomeNeeded,
+            expected_revision: 1,
+            filter: call_filter,
+            fresh_within_hours: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    let scope = crm_api::domain::person::PersonVisibilityScope::Organization(OrganizationId::new(
+        organization_id,
+    ));
+    let mut conn = app_pool.acquire().await.unwrap();
+    let list = crm_api::domain::today::query_at(&mut conn, &scope, UserId::new(admin_id), now)
+        .await
+        .unwrap();
+    let ids: Vec<Uuid> = list.items.iter().map(|i| i.person.id.as_uuid()).collect();
+    assert!(ids.contains(&assigned_to_me));
+    assert!(
+        !ids.contains(&assigned_to_bob),
+        "assigned_to: [me] excludes a Person assigned to someone else, even though the \
+         admin placed the call"
+    );
+    let item = list
+        .items
+        .iter()
+        .find(|i| i.person.id.as_uuid() == assigned_to_me)
+        .unwrap();
+    assert!(item.reasons.iter().any(
+        |r| matches!(r, crm_api::domain::today::TodayReason::CallOutcomeNeeded { call_id, .. } if *call_id == call_mine)
+    ));
+}
+
 /// spec §9.5: the call feed's own failure, together with a SEPARATE
 /// list-source enumeration failure, must still yield `unavailable` (011c
 /// precedence) with the call feed's `system_feed_issues` entry present.
@@ -1283,6 +1571,165 @@ async fn preview_caps_at_200_with_truncated(migrator_pool: PgPool) {
     .unwrap();
     assert_eq!(preview.items.len(), 200);
     assert!(preview.truncated);
+}
+
+/// Coordinator decision (round 3): preview for the call feed now binds the
+/// SAME full matrix as evaluation, so a candidate stage clause narrows the
+/// previewed call-only set exactly as it narrows Today.
+#[sqlx::test]
+#[ignore]
+async fn preview_of_a_call_feed_customized_with_a_stage_clause_narrows_the_candidates(
+    migrator_pool: PgPool,
+) {
+    let (organization_id, admin_id) = create_org_with_admin(
+        &migrator_pool,
+        "011d preview call stage",
+        "admin@d011-preview-call-stage.test",
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let stages: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT id FROM stage WHERE organization_id = $1 ORDER BY position LIMIT 2",
+    )
+    .bind(organization_id)
+    .fetch_all(&app_pool)
+    .await
+    .unwrap();
+    let (stage_a, stage_b) = (stages[0], stages[1]);
+    let now = Utc::now();
+
+    let in_stage_a = insert_person(&app_pool, organization_id, stage_a, Some(admin_id)).await;
+    insert_inquiry(&app_pool, organization_id, in_stage_a).await;
+    insert_call(
+        &app_pool,
+        organization_id,
+        in_stage_a,
+        admin_id,
+        now - ChronoDuration::hours(3),
+    )
+    .await;
+    let in_stage_b = insert_person(&app_pool, organization_id, stage_b, Some(admin_id)).await;
+    insert_inquiry(&app_pool, organization_id, in_stage_b).await;
+    insert_call(
+        &app_pool,
+        organization_id,
+        in_stage_b,
+        admin_id,
+        now - ChronoDuration::hours(3),
+    )
+    .await;
+
+    let call_filter = FilterDefinition {
+        version: 1,
+        clauses: vec![
+            Clause::AwaitingCallOutcome(BoolClause { value: true }),
+            Clause::Stage(StageClause {
+                stage_ids: vec![StageId::new(stage_a)],
+            }),
+        ],
+    };
+    let preview = commands::preview_today_system_feed(
+        &app_pool,
+        &command_context(organization_id, admin_id),
+        PreviewTodaySystemFeed {
+            feed_key: FeedKey::CallOutcomeNeeded,
+            filter: call_filter,
+            fresh_within_hours: None,
+            subject: UserId::new(admin_id),
+        },
+    )
+    .await
+    .unwrap();
+    let ids: Vec<Uuid> = preview
+        .items
+        .iter()
+        .map(|i| i.person.id.as_uuid())
+        .collect();
+    assert!(ids.contains(&in_stage_a));
+    assert!(!ids.contains(&in_stage_b));
+}
+
+/// Same coordinator decision: preview for the call feed honors an
+/// `assigned_to: [me]` narrowing exactly as evaluation does.
+#[sqlx::test]
+#[ignore]
+async fn preview_of_a_call_feed_customized_with_assigned_to_me_narrows_the_candidates(
+    migrator_pool: PgPool,
+) {
+    let (organization_id, admin_id) = create_org_with_admin(
+        &migrator_pool,
+        "011d preview call assignee",
+        "admin@d011-preview-call-assignee.test",
+    )
+    .await;
+    let bob_id = crate::common::create_user(
+        &migrator_pool,
+        "bob@d011-preview-call-assignee.test",
+        "Bob",
+        PW,
+    )
+    .await;
+    crate::common::add_membership_with(
+        &migrator_pool,
+        organization_id,
+        bob_id,
+        Role::Member,
+        MembershipStatus::Active,
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let stage_id = first_stage_id(&app_pool, organization_id).await;
+    let now = Utc::now();
+
+    let assigned_to_me = insert_person(&app_pool, organization_id, stage_id, Some(admin_id)).await;
+    insert_inquiry(&app_pool, organization_id, assigned_to_me).await;
+    insert_call(
+        &app_pool,
+        organization_id,
+        assigned_to_me,
+        admin_id,
+        now - ChronoDuration::hours(3),
+    )
+    .await;
+    let assigned_to_bob = insert_person(&app_pool, organization_id, stage_id, Some(bob_id)).await;
+    insert_inquiry(&app_pool, organization_id, assigned_to_bob).await;
+    insert_call(
+        &app_pool,
+        organization_id,
+        assigned_to_bob,
+        admin_id,
+        now - ChronoDuration::hours(3),
+    )
+    .await;
+
+    let call_filter = FilterDefinition {
+        version: 1,
+        clauses: vec![
+            Clause::AwaitingCallOutcome(BoolClause { value: true }),
+            Clause::AssignedTo(AssignedToClause {
+                assignees: vec![Assignee::Me],
+            }),
+        ],
+    };
+    let preview = commands::preview_today_system_feed(
+        &app_pool,
+        &command_context(organization_id, admin_id),
+        PreviewTodaySystemFeed {
+            feed_key: FeedKey::CallOutcomeNeeded,
+            filter: call_filter,
+            fresh_within_hours: None,
+            subject: UserId::new(admin_id),
+        },
+    )
+    .await
+    .unwrap();
+    let ids: Vec<Uuid> = preview
+        .items
+        .iter()
+        .map(|i| i.person.id.as_uuid())
+        .collect();
+    assert!(ids.contains(&assigned_to_me));
+    assert!(!ids.contains(&assigned_to_bob));
 }
 
 // --- §9.9: telemetry ----------------------------------------------------

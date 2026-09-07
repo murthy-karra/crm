@@ -1045,6 +1045,210 @@ async fn feeds_call_feed_disabled_omits_call_items_and_reasons_re_enabling_resto
     assert_providers_equal(&legacy, &feeds, "call feed re-enabled");
 }
 
+/// Coordinator decision (round 3): `call_membership.sql`/`call_only.sql`
+/// now bind the full `PersonFilterParams` matrix (spec §1 rule 4, §5 step
+/// 4 "feed C matrix params"), not just the fixed outcome_call membership.
+/// With the call feed left at its CANONICAL, unmodified definition (every
+/// added-axis param NULL), the matrix collapses to exactly the original
+/// fixed query, so `Feeds` must still equal `Legacy` byte-for-byte across
+/// a call-heavy fixture: call-only Persons, a Person qualifying by both
+/// inquiry and call (call reason appended last), a corrected call
+/// (excluded), two qualifying calls for one Person (most recent selected),
+/// and a call by a DIFFERENT caller (excluded for this viewer).
+#[sqlx::test]
+#[ignore]
+async fn feeds_equals_legacy_for_the_call_feed_matrix_statements_with_no_extra_clauses(
+    migrator_pool: PgPool,
+) {
+    let (organization_id, alice_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "011d call matrix parity",
+        "alice@d011-call-matrix-parity.test",
+        "Alice",
+        "correct horse battery staple",
+    )
+    .await;
+    let bob_id = crate::common::create_user(
+        &migrator_pool,
+        "bob@d011-call-matrix-parity.test",
+        "Bob",
+        "correct horse battery staple",
+    )
+    .await;
+    crate::common::add_membership_with(
+        &migrator_pool,
+        organization_id,
+        bob_id,
+        Role::Member,
+        MembershipStatus::Active,
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let stage_id = first_stage_id(&app_pool, organization_id).await;
+    let now = Utc::now();
+
+    // Call-only, no inquiry-based membership.
+    let call_only = insert_person(&app_pool, organization_id, stage_id, Some(alice_id)).await;
+    insert_inquiry(
+        &app_pool,
+        organization_id,
+        call_only,
+        "zillow",
+        now - ChronoDuration::days(10),
+    )
+    .await;
+    insert_contact_attempt(
+        &app_pool,
+        organization_id,
+        call_only,
+        now - ChronoDuration::days(9),
+    )
+    .await;
+    insert_call(
+        &app_pool,
+        organization_id,
+        call_only,
+        alice_id,
+        now - ChronoDuration::hours(1),
+        false,
+    )
+    .await;
+
+    // Both inquiry (fresh, unanswered) and a qualifying call — call reason
+    // appended last, after the inquiry-based reason.
+    let both = insert_person(&app_pool, organization_id, stage_id, Some(alice_id)).await;
+    insert_inquiry(
+        &app_pool,
+        organization_id,
+        both,
+        "zillow",
+        now - ChronoDuration::hours(2),
+    )
+    .await;
+    insert_call(
+        &app_pool,
+        organization_id,
+        both,
+        alice_id,
+        now - ChronoDuration::hours(5),
+        false,
+    )
+    .await;
+
+    // A corrected call: the automatic root attempt is superseded, so the
+    // call feed's `NOT EXISTS` correction guard excludes this Person.
+    let corrected = insert_person(&app_pool, organization_id, stage_id, Some(alice_id)).await;
+    insert_inquiry(
+        &app_pool,
+        organization_id,
+        corrected,
+        "zillow",
+        now - ChronoDuration::days(20),
+    )
+    .await;
+    insert_call(
+        &app_pool,
+        organization_id,
+        corrected,
+        alice_id,
+        now - ChronoDuration::hours(4),
+        true,
+    )
+    .await;
+
+    // Two qualifying calls for the SAME Person by the SAME viewer — the
+    // most recent (by ended_at) must be the one carried in the reason.
+    let two_calls = insert_person(&app_pool, organization_id, stage_id, Some(alice_id)).await;
+    insert_inquiry(
+        &app_pool,
+        organization_id,
+        two_calls,
+        "zillow",
+        now - ChronoDuration::days(15),
+    )
+    .await;
+    insert_call(
+        &app_pool,
+        organization_id,
+        two_calls,
+        alice_id,
+        now - ChronoDuration::hours(9),
+        false,
+    )
+    .await;
+    let most_recent_call = insert_call(
+        &app_pool,
+        organization_id,
+        two_calls,
+        alice_id,
+        now - ChronoDuration::hours(1),
+        false,
+    )
+    .await;
+
+    // A call by a DIFFERENT caller (Bob) — excluded for Alice's viewer.
+    let different_caller =
+        insert_person(&app_pool, organization_id, stage_id, Some(alice_id)).await;
+    insert_inquiry(
+        &app_pool,
+        organization_id,
+        different_caller,
+        "zillow",
+        now - ChronoDuration::days(12),
+    )
+    .await;
+    insert_call(
+        &app_pool,
+        organization_id,
+        different_caller,
+        bob_id,
+        now - ChronoDuration::hours(2),
+        false,
+    )
+    .await;
+
+    let (legacy, feeds) = compare_providers(&app_pool, organization_id, alice_id, now).await;
+    assert_providers_equal(
+        &legacy,
+        &feeds,
+        "call feed matrix statements, canonical definition",
+    );
+
+    let ids: Vec<Value> = feeds["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item["person"]["id"].clone())
+        .collect();
+    assert!(ids.contains(&Value::String(call_only.to_string())));
+    assert!(ids.contains(&Value::String(both.to_string())));
+    assert!(
+        !ids.contains(&Value::String(corrected.to_string())),
+        "a corrected call must not qualify"
+    );
+    assert!(ids.contains(&Value::String(two_calls.to_string())));
+    assert!(
+        !ids.contains(&Value::String(different_caller.to_string())),
+        "a call by a different caller must not qualify for this viewer"
+    );
+    let two_calls_item = feeds["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["person"]["id"] == Value::String(two_calls.to_string()))
+        .unwrap();
+    let reasons = two_calls_item["reasons"].as_array().unwrap();
+    let call_reason = reasons
+        .iter()
+        .find(|r| r["code"] == Value::String("call_outcome_needed".to_string()))
+        .unwrap();
+    assert_eq!(
+        call_reason["call_id"],
+        Value::String(most_recent_call.to_string()),
+        "the most recent qualifying call is the one carried in the reason"
+    );
+}
+
 /// Correction (a): spec §5 — "a disabled feed contributes nothing and no
 /// issue" covers fallback reporting too. A disabled feed with an invalid
 /// stored definition must produce no `system_feed_issues` entry; the

@@ -248,21 +248,47 @@ struct CallMembershipRow {
     ended_at: DateTime<Utc>,
 }
 
-/// docs/specs/SLICE_011d.md §5 step 4a: for every retained P id, the
-/// viewer's one qualifying call. Returns `(person_id, call_id, ended_at)`.
+/// docs/specs/SLICE_011d.md §5 step 4a / §1 rule 4: for every retained P
+/// id, the viewer's one qualifying call, narrowed by `call_feed`'s full
+/// predicate matrix (any admin-added clause beyond the anchor applies
+/// here). Returns `(person_id, call_id, ended_at)`.
 pub(crate) async fn call_membership(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
     viewer: UserId,
+    call_feed: &ResolvedFeed,
     retained_ids: &[Uuid],
 ) -> Result<Vec<(Uuid, Uuid, DateTime<Utc>)>, sqlx::Error> {
     if retained_ids.is_empty() {
         return Ok(Vec::new());
     }
+    let params = call_feed.filter.to_query_params(viewer);
     let rows = sqlx::query_file_as!(
         CallMembershipRow,
         "src/domain/today/system_feeds/sql/call_membership.sql",
         organization_id.0,
+        params.stage_ids.as_deref(),
+        params.assigned_user_ids.as_deref(),
+        params.assigned_include_unassigned,
+        params.sources.as_deref(),
+        params.created_within_days,
+        params.created_not_within_days,
+        params.created_never,
+        params.last_inquiry_within_days,
+        params.last_inquiry_not_within_days,
+        params.last_inquiry_never,
+        params.last_contact_within_days,
+        params.last_contact_not_within_days,
+        params.last_contact_never,
+        params.last_inbound_within_days,
+        params.last_inbound_not_within_days,
+        params.last_inbound_never,
+        params.has_replied,
+        params.has_phone,
+        params.has_email,
+        params.awaiting_response,
+        params.client_replied_unanswered,
+        params.awaiting_call_outcome,
         viewer.0,
         retained_ids,
     )
@@ -360,20 +386,45 @@ impl TryFrom<CallOnlyRow> for TodayCandidate {
     }
 }
 
-/// docs/specs/SLICE_011d.md §5 step 4b: the call-only prefix, ordered
-/// `ended_at ASC, id ASC`, limited to `(200 - |P|) + 1`. Only called when
-/// the person-state statement was NOT truncated.
+/// docs/specs/SLICE_011d.md §5 step 4b / §1 rule 4: the call-only prefix,
+/// ordered `ended_at ASC, id ASC`, limited to `(200 - |P|) + 1`, narrowed
+/// by `call_feed`'s full predicate matrix. Only called when the
+/// person-state statement was NOT truncated.
 pub(crate) async fn call_only_candidates(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
     viewer: UserId,
+    call_feed: &ResolvedFeed,
     retained_ids: &[Uuid],
     limit: i64,
 ) -> Result<Vec<TodayCandidate>, sqlx::Error> {
+    let params = call_feed.filter.to_query_params(viewer);
     let rows = sqlx::query_file_as!(
         CallOnlyRow,
         "src/domain/today/system_feeds/sql/call_only.sql",
         organization_id.0,
+        params.stage_ids.as_deref(),
+        params.assigned_user_ids.as_deref(),
+        params.assigned_include_unassigned,
+        params.sources.as_deref(),
+        params.created_within_days,
+        params.created_not_within_days,
+        params.created_never,
+        params.last_inquiry_within_days,
+        params.last_inquiry_not_within_days,
+        params.last_inquiry_never,
+        params.last_contact_within_days,
+        params.last_contact_not_within_days,
+        params.last_contact_never,
+        params.last_inbound_within_days,
+        params.last_inbound_not_within_days,
+        params.last_inbound_never,
+        params.has_replied,
+        params.has_phone,
+        params.has_email,
+        params.awaiting_response,
+        params.client_replied_unanswered,
+        params.awaiting_call_outcome,
         viewer.0,
         retained_ids,
         limit,

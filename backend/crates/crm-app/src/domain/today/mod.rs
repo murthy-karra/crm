@@ -1341,9 +1341,14 @@ async fn evaluate_feeds_builtins(
             )
             .await?;
             set_source_statement_timeout_until(tx, call_deadline).await?;
-            let membership =
-                system_feeds::evaluate::call_membership(tx, organization_id, viewer, &retained_ids)
-                    .await?;
+            let membership = system_feeds::evaluate::call_membership(
+                tx,
+                organization_id,
+                viewer,
+                feed_call,
+                &retained_ids,
+            )
+            .await?;
             #[cfg(feature = "test-support")]
             test_support::checkpoint(
                 test_support::TodayQueryPhase::CallFeedAfterMembership,
@@ -1364,6 +1369,7 @@ async fn evaluate_feeds_builtins(
                     tx,
                     organization_id,
                     viewer,
+                    feed_call,
                     &retained_ids,
                     limit,
                 )

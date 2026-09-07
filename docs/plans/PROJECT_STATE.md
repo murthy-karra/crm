@@ -1,7 +1,7 @@
 # Project State
 
-Last updated: 2026-09-07 (Slice 011d implementation started: two lanes
-running in worktrees).
+Last updated: 2026-09-07 (Slice 011d: Lane W steps 1–4 done; Lane B steps
+1–3 done with the equivalence suite green; Lane B step 4 in progress).
 
 ## Current phase
 
@@ -13,7 +13,38 @@ steps 1–3 (vocabulary, persistence, feed path behind the `Legacy | Feeds`
 seam plus the equivalence suite), then stopping for the coordinator; Lane W
 (Claude Sonnet 5) in `../crm-worktrees/011d-lane-w` on `slice-011d-lane-w`
 doing steps 1–4 (types, chips, Today rules page, Today markers) with Vitest.
-Claude Fable 5.1 coordinates. Planning history follows. On 2026-09-06 the user asked to look at 011d. The read-only planner
+Claude Fable 5.1 coordinates.
+
+Progress so far (2026-09-07):
+
+- **Lane W steps 1–4 complete** on `slice-011d-lane-w` (`ab5f7b3`, `ef31a9b`):
+  types and hooks mirroring spec §6, three boolean chips plus a locked-clause
+  mode, the `/manage/today-feeds` page with preview/revert/typed-off
+  confirmation and 409 reload, the Today Rules section and notices. Web gate
+  green on the final lane tree (lint, typecheck, 560 Vitest tests, build).
+  Coordinator audited the 20 changed files: all under `web/`, matching the
+  report. Step 5 (browser walkthrough) waits for Lane B's routes. Two
+  ten-minute agent stalls occurred; work was checkpointed and resumed.
+- **Lane B steps 1–3 complete** on `slice-011d-lane-b` (`99e8d99`,
+  `bd631c2`, `0280e1f`): the three clause kinds across all eleven statements
+  with regenerated SQLx metadata; migration `20260908000001` (feed table,
+  `today_feed_changed` fact, backfill) and org seeding; the `Legacy | Feeds`
+  provider seam with `person_state.sql`, `call_membership.sql`,
+  `call_only.sql`, and `system_feed_issues` on every `TodaySources` site;
+  `db_today_feed_equivalence.rs` (5 tests, byte-identical `TodayList` JSON
+  across a rich mixed fixture, two tenants, deactivated caller, a list
+  source enabled, call feed disabled/enabled) plus every existing Today
+  suite passing under `Feeds` by default. Gates on the lane tree: `check`
+  (699 tests), `check-db` (471 of 471). Coordinator audited the 56 changed
+  files: all under `backend/`. A machine-sleep interruption was resumed
+  without loss. The `Legacy` provider stays until step 6.
+- **Lane B step 4 assigned** (commands, preview, routes, Operator field,
+  telemetry, authorization tests) together with three corrections from its
+  own report: no issue entry for a disabled feed (spec §5), count and sorted-
+  statement parity for the three axes (spec §9.1), and the 011c connection-
+  recovery mechanism plus failure-injection tests for the call feed.
+
+Planning history follows. On 2026-09-06 the user asked to look at 011d. The read-only planner
 analysed the rung against the code and found that the ladder's pre-declared
 d1/d2 seam does not exist (the three Today arms are one statement with one
 precedence rule and one cap). Offered three cuts, the user chose **one L rung
@@ -459,11 +490,13 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. **011d in progress:** wait for Lane B's step 3 equivalence report and
-   Lane W's step 4 report; audit each lane's file list against `git status`;
-   decide arm deletion; then assign Lane B steps 4–6 and Lane W step 5;
-   merge lanes into the integration branch; run the final-tree gates once;
-   reviewer and tester passes; commit and merge gates with the user.
+1. **011d in progress:** wait for Lane B's step 4 report and audit it;
+   then step 5 (performance evidence, paired against `Legacy`); merge both
+   lanes into `slice-011d-today-system-feeds`; Lane W step 5 walkthrough
+   against real routes; independent reviewer confirmation of the equivalence
+   evidence, then Lane B step 6 (delete `Legacy`, freeze SQL under
+   `tests/fixtures/today_f51bff8/`); tester pass; final-tree gates once;
+   commit and merge gates with the user.
    The equivalence gate (Lane B step 3) and the merge-join toggle question
    (step 5) return to the coordinator. The shared development runtime is
    already migrated and serving the merged 011c code.

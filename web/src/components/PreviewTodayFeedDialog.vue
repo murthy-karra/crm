@@ -8,15 +8,15 @@
 // draft) — TodayFeedsView.vue passes whichever `filter`/`freshWithinHours`
 // applies. Never persists anything (§4: "a read, admin-only, never
 // persisted").
-import { computed, h, ref, watch } from 'vue'
+import { computed, h, onBeforeUnmount, ref, watch } from 'vue'
 import Dialog from 'primevue/dialog'
 import Select from 'primevue/select'
 import { Mail, Phone, PhoneOutgoing } from 'lucide-vue-next'
 import type { ColumnDef } from '@tanstack/vue-table'
 import DataTable from './DataTable.vue'
 import Badge from './Badge.vue'
-import { usePreviewTodayFeedMutation } from '../api/queries'
-import type { FilterDefinition, Member, TodayFeedKey, TodayItem, TodayReason } from '../api/types'
+import { useMe, usePreviewTodayFeedMutation } from '../api/queries'
+import type { FilterDefinition, MeResponse, Member, PreviewTodayFeedResponse, TodayFeedKey, TodayItem, TodayReason } from '../api/types'
 import { buttonClasses, dialogPt, selectPt } from '../lib/controls'
 import { describeMutationError } from '../lib/errors'
 import { formatAbsoluteTime, formatRelativeTime } from '../lib/format'
@@ -42,11 +42,58 @@ const memberOptions = computed(() =>
 
 const preview = usePreviewTodayFeedMutation(() => props.orgId)
 
+// Session-identity fence (the 011b/011c pattern reused by
+// `queries.ts`'s saved-list/Today-source mutations): a preview request that
+// outlives the actor or Organization it was started under must never paint
+// its result. Local state (not the mutation's own reactive `data`/`error`)
+// so a late, identity-mismatched settlement can be silently discarded
+// instead of overwriting what the current identity is looking at.
+const { data: me } = useMe()
+let mounted = true
+onBeforeUnmount(() => { mounted = false })
+
+interface RequestIdentity {
+  orgId: string
+  actorId: string
+  session: MeResponse | undefined
+}
+function captureIdentity(): RequestIdentity {
+  return { orgId: me.value?.organization?.id ?? '', actorId: me.value?.user.id ?? '', session: me.value }
+}
+function identityMatches(identity: RequestIdentity) {
+  return mounted && me.value === identity.session &&
+    me.value?.organization?.id === identity.orgId && me.value?.user.id === identity.actorId
+}
+
+const items = ref<PreviewTodayFeedResponse | null>(null)
+const previewPending = ref(false)
+const previewErrorValue = ref<unknown>(null)
+
 function run() {
-  preview.mutate({
-    feedKey: props.feedKey,
-    body: { filter: props.filter, fresh_within_hours: props.freshWithinHours, subject_user_id: subjectId.value },
-  })
+  const identity = captureIdentity()
+  items.value = null
+  previewErrorValue.value = null
+  previewPending.value = true
+  preview.mutate(
+    {
+      feedKey: props.feedKey,
+      body: { filter: props.filter, fresh_within_hours: props.freshWithinHours, subject_user_id: subjectId.value },
+    },
+    {
+      onSuccess: (data) => {
+        if (!identityMatches(identity)) return
+        items.value = data
+      },
+      onError: (error) => {
+        if (!identityMatches(identity)) return
+        previewErrorValue.value = error
+      },
+      onSettled: () => {
+        if (!identityMatches(identity)) return
+        previewPending.value = false
+      },
+    },
+  )
 }
 
 // `immediate: true`: the parent only mounts this component once it has a
@@ -57,12 +104,16 @@ function run() {
 watch(() => props.visible, (open) => {
   if (!open) return
   subjectId.value = props.defaultSubjectId
-  preview.reset()
   run()
 }, { immediate: true })
 
+// Guarded so a stale/removed id (e.g. a race with deactivation elsewhere)
+// can never reach the server — the picker's own options are already
+// filtered to active members, so this also fails closed against anything
+// driving the Select outside a normal user click.
 function onSubjectChange(value: unknown) {
   if (typeof value !== 'string' || value === subjectId.value) return
+  if (!memberOptions.value.some((member) => member.user_id === value)) return
   subjectId.value = value
   run()
 }
@@ -190,17 +241,17 @@ const columns: ColumnDef<TodayItem>[] = [
     </label>
 
     <div
-      v-if="preview.isPending.value"
+      v-if="previewPending"
       class="rounded-xl border border-border bg-surface-0 p-5 text-body text-text-muted"
       role="status"
     >
       Loading preview…
     </div>
     <div
-      v-else-if="preview.isError.value"
+      v-else-if="previewErrorValue"
       class="rounded-xl border border-border bg-surface-0 p-5 text-body text-danger"
     >
-      {{ describeMutationError(preview.error.value, 'Could not load this preview.') }}
+      {{ describeMutationError(previewErrorValue, 'Could not load this preview.') }}
       <button
         type="button"
         :class="buttonClasses('secondary')"
@@ -210,17 +261,17 @@ const columns: ColumnDef<TodayItem>[] = [
         Retry
       </button>
     </div>
-    <template v-else-if="preview.data.value">
+    <template v-else-if="items">
       <DataTable
-        :data="preview.data.value.items"
+        :data="items.items"
         :columns="columns"
         :row-key="(item) => item.person.id"
         :row-to="(item) => `/people/${item.person.id}`"
         count-noun="matches"
         count-noun-singular="match"
-        :truncated="preview.data.value.truncated"
+        :truncated="items.truncated"
         empty-title="No matches"
-        :empty-message="`No people currently match this rule for ${preview.data.value.subject.display_name}.`"
+        :empty-message="`No people currently match this rule for ${items.subject.display_name}.`"
       />
     </template>
 

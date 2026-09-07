@@ -247,7 +247,7 @@ describe('TodayFeedsView save and the 409 reload flow', () => {
     expect(wrapper.find('[data-testid="feed-save-unanswered_inquiry"]').exists()).toBe(false)
   })
 
-  it('reloads the feed for review on a 409 and requires a new explicit Save click', async () => {
+  it('reloads the feed for review on a 409 (discarding the draft) and requires a new explicit Save click', async () => {
     let updateAttempt = 0
     let feedsFetch = 0
     stub({
@@ -268,21 +268,68 @@ describe('TodayFeedsView save and the 409 reload flow', () => {
     const wrapper = await mountView()
     await wrapper.get('[data-testid="feed-edit-unanswered_inquiry"]').trigger('click')
     await flushPromises()
+
+    // The admin adds a stage clause before saving — this is the draft that
+    // must be visibly discarded, not silently resubmitted, on the conflict.
+    // FilterBar's popover teleports to document.body, so it (and its own
+    // options) must be queried there, not inside the card's own subtree.
+    const editorPanel = wrapper.get('[data-testid="feed-card-unanswered_inquiry"]')
+    const body = new DOMWrapper(document.body)
+    await editorPanel.get('[data-testid="filter-trigger-stage"]').trigger('click')
+    await flushPromises()
+    await body.get('[data-testid="filter-option-stage-1"]').setValue(true)
+    await flushPromises()
+    expect(document.body.querySelector('[data-testid="filter-chip-stage"]')).not.toBeNull()
+
     await wrapper.get('[data-testid="feed-save-unanswered_inquiry"]').trigger('click')
     await flushPromises()
 
-    // The editor stays open with a reload notice; only ONE PUT has been sent.
-    expect(wrapper.get('[data-testid="feed-edit-notice-unanswered_inquiry"]').text()).toContain('changed')
+    // The editor stays open with an explicit reload notice; only ONE PUT
+    // has been sent so far.
+    const notice = wrapper.get('[data-testid="feed-edit-notice-unanswered_inquiry"]').text()
+    expect(notice).toBe('This rule was changed by someone else. The saved version has been reloaded and your draft was discarded.')
     expect(apiFetchMock.mock.calls.filter(([p, i]) => p === '/organization/today-feeds/unanswered_inquiry' && (i as RequestInit | undefined)?.method === 'PUT')).toHaveLength(1)
     expect(wrapper.find('[data-testid="feed-save-unanswered_inquiry"]').exists()).toBe(true)
+    // The added stage clause is gone: the editor now shows the server's
+    // reloaded definition (revision 2), not the discarded draft.
+    expect(wrapper.get('[data-testid="feed-card-unanswered_inquiry"]').find('[data-testid="filter-chip-stage"]').exists()).toBe(false)
 
-    // A fresh, explicit click sends the reloaded revision.
+    // A fresh, explicit click sends the reloaded revision — never the stale
+    // one, and never auto-retried on the admin's behalf.
     await wrapper.get('[data-testid="feed-save-unanswered_inquiry"]').trigger('click')
     await flushPromises()
     const calls = apiFetchMock.mock.calls.filter(([p, i]) => p === '/organization/today-feeds/unanswered_inquiry' && (i as RequestInit | undefined)?.method === 'PUT')
     expect(calls).toHaveLength(2)
     const secondBody = JSON.parse((calls[1][1] as RequestInit).body as string)
     expect(secondBody.expected_revision).toBe(2)
+    expect(secondBody.filter.clauses.some((c: { kind: string }) => c.kind === 'stage')).toBe(false)
+  })
+
+  it('keeps the editor open with an error notice when the post-409 reload itself fails', async () => {
+    let feedsFetch = 0
+    stub({
+      update: () => new ApiError(409, 'today_feed_conflict'),
+      // The initial load must succeed (the page has to render at all); only
+      // the reload triggered by the 409 fails.
+      feeds: () => {
+        feedsFetch += 1
+        if (feedsFetch === 1) return baseFeeds()
+        throw new ApiError(503, 'unavailable')
+      },
+    })
+    const wrapper = await mountView()
+    await wrapper.get('[data-testid="feed-edit-unanswered_inquiry"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="feed-save-unanswered_inquiry"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="feed-edit-notice-unanswered_inquiry"]').text()).toBe(
+      'This rule was changed by someone else, and the latest version could not be loaded. Try Save again.',
+    )
+    // The editor stays open (never silently closes on a failed reload) and
+    // the admin's in-progress draft is left exactly as it was.
+    expect(wrapper.find('[data-testid="feed-save-unanswered_inquiry"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="feed-fresh-hours"]').exists()).toBe(true)
   })
 })
 

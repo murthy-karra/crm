@@ -6,6 +6,11 @@
 // renders its own chip labels client-side from data it already has").
 import type { AgeOp, Assignee, FilterClause, FilterClauseKind, FilterDefinition } from '../api/types'
 
+// SLICE_011d §2: three more derived boolean clause kinds join the vocabulary
+// (`awaiting_response`, `client_replied_unanswered`, `awaiting_call_outcome`)
+// — usable everywhere this vocabulary is accepted (People, list editing, and
+// the Today rules editor's locked-clause mode, FilterBar.vue's
+// `lockedAnchorKind`/`requireAssigneeMe` props).
 export const FILTER_CLAUSE_KINDS: FilterClauseKind[] = [
   'stage',
   'assigned_to',
@@ -17,6 +22,9 @@ export const FILTER_CLAUSE_KINDS: FilterClauseKind[] = [
   'has_replied',
   'has_phone',
   'has_email',
+  'awaiting_response',
+  'client_replied_unanswered',
+  'awaiting_call_outcome',
 ]
 
 export const CLAUSE_KIND_LABEL: Record<FilterClauseKind, string> = {
@@ -30,11 +38,17 @@ export const CLAUSE_KIND_LABEL: Record<FilterClauseKind, string> = {
   has_replied: 'Received email',
   has_phone: 'Has phone',
   has_email: 'Has email',
+  awaiting_response: 'Awaiting a response',
+  client_replied_unanswered: 'Client replied, unanswered',
+  awaiting_call_outcome: 'A call of mine needs an outcome',
 }
 
 export const AGE_CLAUSE_KINDS: FilterClauseKind[] = ['created', 'last_inquiry', 'last_contact', 'last_inbound']
 export const MULTI_VALUE_CLAUSE_KINDS: FilterClauseKind[] = ['stage', 'assigned_to', 'source']
-export const BOOL_CLAUSE_KINDS: FilterClauseKind[] = ['has_replied', 'has_phone', 'has_email']
+export const BOOL_CLAUSE_KINDS: FilterClauseKind[] = [
+  'has_replied', 'has_phone', 'has_email',
+  'awaiting_response', 'client_replied_unanswered', 'awaiting_call_outcome',
+]
 
 export function defaultClauseFor(kind: FilterClauseKind): FilterClause {
   switch (kind) {
@@ -52,6 +66,9 @@ export function defaultClauseFor(kind: FilterClauseKind): FilterClause {
     case 'has_replied':
     case 'has_phone':
     case 'has_email':
+    case 'awaiting_response':
+    case 'client_replied_unanswered':
+    case 'awaiting_call_outcome':
       return { kind, value: true }
   }
 }
@@ -142,6 +159,9 @@ function isFilterClause(value: unknown): value is FilterClause {
     case 'has_replied':
     case 'has_phone':
     case 'has_email':
+    case 'awaiting_response':
+    case 'client_replied_unanswered':
+    case 'awaiting_call_outcome':
       return typeof v.value === 'boolean'
     default:
       return false
@@ -224,5 +244,13 @@ export function describeClause(clause: FilterClause, names: FilterNames, maxValu
       return `Has phone: ${clause.value ? 'Yes' : 'No'}`
     case 'has_email':
       return `Has email: ${clause.value ? 'Yes' : 'No'}`
+    // SLICE_011d §2's describe() lines verbatim — full sentences, not the
+    // generic "Label: Yes/No" pattern the other boolean kinds use above.
+    case 'awaiting_response':
+      return clause.value ? 'Awaiting a response' : 'Not awaiting a response'
+    case 'client_replied_unanswered':
+      return clause.value ? 'Client replied, unanswered' : 'No unanswered client reply'
+    case 'awaiting_call_outcome':
+      return clause.value ? 'A call of mine needs an outcome' : 'No call of mine needs an outcome'
   }
 }

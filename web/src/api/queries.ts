@@ -78,6 +78,15 @@ import type {
   TodaySourcesResponse,
   EnableTodaySourceRequest,
   TodaySourceChange,
+  MemberTodayFeedsResponse,
+  TodayFeedsResponse,
+  TodayFeedKey,
+  UpdateTodayFeedRequest,
+  RevertTodayFeedRequest,
+  SetTodayFeedEnabledRequest,
+  TodayFeedMutationResponse,
+  PreviewTodayFeedRequest,
+  PreviewTodayFeedResponse,
   UnresolvedResponse,
   UpdateSavedListRequest,
   UpdateSavedListResponse,
@@ -123,6 +132,14 @@ export const queryKeys = {
   today: (orgId: string) => ['org', orgId, 'today'] as const,
   todayForActor: (orgId: string, actorId: string) => ['org', orgId, 'today', actorId] as const,
   todaySources: (orgId: string, actorId: string) => ['org', orgId, 'today-sources', actorId] as const,
+  // SLICE_011d §6: `todayFeeds(org, actor)` "under the existing Today
+  // prefix" — nested under `today(orgId)` so the whole-Today invalidation
+  // sweep (`queryKeys.today(org)`, used throughout this file) already
+  // covers it without a separate call. The admin surface's key is
+  // deliberately NOT actor-scoped (any current admin sees the same rows);
+  // spec-literal key text: `['org', org, 'today-feeds-admin']`.
+  todayFeeds: (orgId: string, actorId: string) => [...queryKeys.today(orgId), 'feeds', actorId] as const,
+  todayFeedsAdmin: (orgId: string) => ['org', orgId, 'today-feeds-admin'] as const,
   // SLICE_004 §10: extend the factory, never hand-write a key.
   invitations: (orgId: string) => ['org', orgId, 'invitations'] as const,
   // SLICE_006 §6: `call.changed` → ['org', orgId, 'call', callId] (and the
@@ -640,6 +657,146 @@ export function useTodaySources(orgId: MaybeRefOrGetter<string>, actorId: MaybeR
 function invalidateTodaySourceCaches(qc: QueryClient, orgId: string, actorId: string) {
   void qc.invalidateQueries({ queryKey: queryKeys.today(orgId) })
   void qc.invalidateQueries({ queryKey: queryKeys.todaySources(orgId, actorId) })
+}
+
+// --- Slice 011d: Today system feeds (docs/specs/SLICE_011d.md §4, §6) -----
+// `currentSavedListIdentity`/`hasCurrentSavedListIdentity`/
+// `SavedListMutationIdentity` above are already a generic actor/Organization/
+// auth-session fence (011b/011c pattern) — `useEnableTodaySourceMutation`
+// already reuses them for a non-list mutation, so these do too rather than
+// duplicating the fence.
+
+/** `GET /api/today/feeds` — any active member; the effective rule only. */
+export function useTodayFeeds(orgId: MaybeRefOrGetter<string>, actorId: MaybeRefOrGetter<string>) {
+  return useQuery({
+    queryKey: computed(() => queryKeys.todayFeeds(toValue(orgId), toValue(actorId))),
+    queryFn: ({ signal }) => apiFetch<MemberTodayFeedsResponse>('/today/feeds', { signal }),
+    enabled: computed(() => toValue(orgId) !== '' && toValue(actorId) !== ''),
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always',
+  })
+}
+
+/** `GET /api/organization/today-feeds` — org-admin only. */
+export function useTodayFeedsAdmin(orgId: MaybeRefOrGetter<string>) {
+  return useQuery({
+    queryKey: computed(() => queryKeys.todayFeedsAdmin(toValue(orgId))),
+    queryFn: ({ signal }) => apiFetch<TodayFeedsResponse>('/organization/today-feeds', { signal }),
+    enabled: computed(() => toValue(orgId) !== ''),
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always',
+  })
+}
+
+/** §6: "Mutations invalidate both and Today" — the admin list, the member
+ * summary and Today itself (built-in items/reasons can change). */
+function invalidateTodayFeedCaches(qc: QueryClient, orgId: string, actorId: string) {
+  void qc.invalidateQueries({ queryKey: queryKeys.todayFeedsAdmin(orgId) })
+  void qc.invalidateQueries({ queryKey: queryKeys.today(orgId) })
+  // todayFeeds(orgId, actorId) already sits under today(orgId)'s prefix
+  // (queryKeys.todayFeeds), so the invalidation above already covers it for
+  // this actor; other actors' cached member summaries are covered the same
+  // way the existing Today-prefix sweep covers every other actor-scoped key.
+  void qc.invalidateQueries({ queryKey: queryKeys.todayFeeds(orgId, actorId) })
+}
+
+/** `PUT /api/organization/today-feeds/{feed_key}` (§4, §6). No auto-retry;
+ * an uncertain outcome (network/5xx) still triggers the caller's own
+ * refetch-and-reconcile flow (TodayFeedsView.vue), matching 011b's Save. */
+export function useUpdateTodayFeedMutation(
+  orgId: MaybeRefOrGetter<string>, actorId: MaybeRefOrGetter<string>, providedQueryClient?: QueryClient,
+) {
+  const qc = providedQueryClient ?? useQueryClient()
+  return useMutation({
+    mutationFn: ({ feedKey, body }: { feedKey: TodayFeedKey; body: UpdateTodayFeedRequest }) =>
+      apiFetch<TodayFeedMutationResponse>(`/organization/today-feeds/${encodeURIComponent(feedKey)}`, {
+        method: 'PUT', body: JSON.stringify(body),
+      }),
+    retry: false,
+    onMutate: (): SavedListMutationIdentity => currentSavedListIdentity(qc) ?? {
+      orgId: toValue(orgId), actorId: toValue(actorId), session: undefined,
+    },
+    onSuccess: (_result, _variables, identity) => {
+      if (hasCurrentSavedListIdentity(qc, identity)) invalidateTodayFeedCaches(qc, identity.orgId, identity.actorId)
+    },
+    // §6 "uncertain mutations refetch": a network/5xx failure may still have
+    // committed (as 011b/011c's Today-source mutations already handle) — an
+    // uncertain outcome refetches the admin list so the card and the 409
+    // reload flow both read the true current row afterward.
+    onSettled: async (_result, _error, _variables, identity) => {
+      if (!identity || !hasCurrentSavedListIdentity(qc, identity)) return
+      invalidateTodayFeedCaches(qc, identity.orgId, identity.actorId)
+      await qc.refetchQueries({ queryKey: queryKeys.todayFeedsAdmin(identity.orgId), type: 'active' })
+    },
+  }, providedQueryClient)
+}
+
+/** `POST /api/organization/today-feeds/{feed_key}/revert` (§4, §6). */
+export function useRevertTodayFeedMutation(
+  orgId: MaybeRefOrGetter<string>, actorId: MaybeRefOrGetter<string>, providedQueryClient?: QueryClient,
+) {
+  const qc = providedQueryClient ?? useQueryClient()
+  return useMutation({
+    mutationFn: ({ feedKey, body }: { feedKey: TodayFeedKey; body: RevertTodayFeedRequest }) =>
+      apiFetch<TodayFeedMutationResponse>(`/organization/today-feeds/${encodeURIComponent(feedKey)}/revert`, {
+        method: 'POST', body: JSON.stringify(body),
+      }),
+    retry: false,
+    onMutate: (): SavedListMutationIdentity => currentSavedListIdentity(qc) ?? {
+      orgId: toValue(orgId), actorId: toValue(actorId), session: undefined,
+    },
+    onSuccess: (_result, _variables, identity) => {
+      if (hasCurrentSavedListIdentity(qc, identity)) invalidateTodayFeedCaches(qc, identity.orgId, identity.actorId)
+    },
+    onSettled: async (_result, _error, _variables, identity) => {
+      if (!identity || !hasCurrentSavedListIdentity(qc, identity)) return
+      invalidateTodayFeedCaches(qc, identity.orgId, identity.actorId)
+      await qc.refetchQueries({ queryKey: queryKeys.todayFeedsAdmin(identity.orgId), type: 'active' })
+    },
+  }, providedQueryClient)
+}
+
+/** `PUT /api/organization/today-feeds/{feed_key}/enabled` (§4, §6) — Turn
+ * off/Turn on. */
+export function useSetTodayFeedEnabledMutation(
+  orgId: MaybeRefOrGetter<string>, actorId: MaybeRefOrGetter<string>, providedQueryClient?: QueryClient,
+) {
+  const qc = providedQueryClient ?? useQueryClient()
+  return useMutation({
+    mutationFn: ({ feedKey, body }: { feedKey: TodayFeedKey; body: SetTodayFeedEnabledRequest }) =>
+      apiFetch<TodayFeedMutationResponse>(`/organization/today-feeds/${encodeURIComponent(feedKey)}/enabled`, {
+        method: 'PUT', body: JSON.stringify(body),
+      }),
+    retry: false,
+    onMutate: (): SavedListMutationIdentity => currentSavedListIdentity(qc) ?? {
+      orgId: toValue(orgId), actorId: toValue(actorId), session: undefined,
+    },
+    onSuccess: (_result, _variables, identity) => {
+      if (hasCurrentSavedListIdentity(qc, identity)) invalidateTodayFeedCaches(qc, identity.orgId, identity.actorId)
+    },
+    onSettled: async (_result, _error, _variables, identity) => {
+      if (!identity || !hasCurrentSavedListIdentity(qc, identity)) return
+      invalidateTodayFeedCaches(qc, identity.orgId, identity.actorId)
+      await qc.refetchQueries({ queryKey: queryKeys.todayFeedsAdmin(identity.orgId), type: 'active' })
+    },
+  }, providedQueryClient)
+}
+
+/** `POST /api/organization/today-feeds/{feed_key}/preview` (§4, §6) — a
+ * read, never persisted; no cache to invalidate or seed. `_orgId` is kept
+ * for signature symmetry with the other feed mutations (matches
+ * `useDialCall`'s `_orgId` convention above). */
+export function usePreviewTodayFeedMutation(_orgId: MaybeRefOrGetter<string>, providedQueryClient?: QueryClient) {
+  return useMutation(
+    {
+      mutationFn: ({ feedKey, body }: { feedKey: TodayFeedKey; body: PreviewTodayFeedRequest }) =>
+        apiFetch<PreviewTodayFeedResponse>(`/organization/today-feeds/${encodeURIComponent(feedKey)}/preview`, {
+          method: 'POST', body: JSON.stringify(body),
+        }),
+      retry: false,
+    },
+    providedQueryClient,
+  )
 }
 
 export function useEnableTodaySourceMutation(

@@ -11,10 +11,12 @@ parallel lanes.
 
 Base: local `main` at `f51bff8`. Integration branch:
 `slice-011d-today-system-feeds`. Lane worktrees branch from it and merge back
-through the coordinator. Model assignment is set at the implementation gate
-(the previous Codex Astra/Terra assignment ran out of usage during 011c; the
-011c takeover used Claude Sonnet 5 lanes with Claude Fable 5.1 coordinating,
-reviewing and running the final gates).
+through the coordinator. Model assignment (set 2026-09-07 at the start): **Claude Sonnet 5**
+writes each lane in its own worktree (`../crm-worktrees/011d-lane-b` on
+`slice-011d-lane-b`, `../crm-worktrees/011d-lane-w` on `slice-011d-lane-w`);
+**Claude Fable 5.1** coordinates, merges lanes into the integration branch,
+runs the once-only final-tree gates and the independent review and test
+analysis. This is the 011c-takeover pattern.
 
 ## Read first
 

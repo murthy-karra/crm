@@ -1,7 +1,7 @@
 # Project State
 
-Last updated: 2026-09-07 (Slice 011d complete and merged to local main;
-not pushed).
+Last updated: 2026-09-07 (Slice 011d merged, pushed, and serving on the
+shared development runtime).
 
 ## Current phase
 
@@ -283,10 +283,12 @@ from `main` at `f51bff8`. Ladder: docs/plans/SLICE_011_LADDER.md (011a → 011b 
 
 ## Current branch
 
-`main` at `b8b53e2` (the 011d merge), local only; `origin/main` is still at
-`929b6ab` (the 011c push). No worktrees. The shared development runtime
-still runs the pre-011d binary and `crm_dev` lacks migration
-`20260908000001`; run `./scripts/db-migrate` before restarting it. Earlier: `main`
+`main` pushed to `origin/main` on 2026-09-07 (the push carried 011d's
+`b8b53e2` and the state commits). No worktrees. The shared development
+runtime was updated the same day with the user's approval: `crm_dev`
+migrated (`20260908000001` applied), the old API (pid 54346, started
+2026-09-06) stopped by exact PID, and `./scripts/dev-api` relaunched; the
+new binary answers the 011d routes (401 unauthenticated, not 404). Earlier: `main`
 at `929b6ab`, pushed to `origin/main` on 2026-09-06 (the push carried
 011b's `2af023c`/`9d62e86` and 011c's `6117b4a`/`b4c4226`/`929b6ab`). The
 011b and 011c slice branches were deleted locally after the merge; they never
@@ -565,9 +567,8 @@ and now lives only in git history.
    person-state 503 test, two equivalence pins, the feeds page first-load
    error test, the `db_calls` timing flake (pre-existing, fails on `main`
    1 in 3), and splitting the three largest test files.
-2. Updating the shared development runtime (`./scripts/db-migrate`, then
-   restart the API by exact PID), pushing `main` (011d not on the remote)
-   and deployment are separate actions needing approval.
+2. Deployment remains a separate action needing approval; the shared
+   development runtime and the remote are current as of 2026-09-07.
    The equivalence gate (Lane B step 3) and the merge-join toggle question
    (step 5) return to the coordinator. The shared development runtime is
    already migrated and serving the merged 011c code.
@@ -594,9 +595,9 @@ and now lives only in git history.
 
 ## Approval currently required
 
-- None for 011d: merged and cleaned up with approval on 2026-09-07. Push
-  of `main` (carries 011d) and deployment are not authorized; deleting the
-  merged `slice-011d-today-system-feeds` branch needs a word.
+- None for 011d: merged, pushed, and the dev runtime updated with approval
+  on 2026-09-07. Deployment is not authorized; deleting the merged
+  `slice-011d-today-system-feeds` branch needs a word.
 - All three 011c decisions were taken on 2026-09-06 (late evening): the §8
   planner amendment is approved, the Phase B pairing limitation accepted, and
   the local commit and merge performed, then the push. **Deployment is not

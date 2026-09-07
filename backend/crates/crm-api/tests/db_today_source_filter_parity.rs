@@ -1634,3 +1634,454 @@ async fn today_source_fixed_clock_age_boundaries_are_strict_and_not_within_is_in
     )
     .await;
 }
+
+// --- 011d: the three derived clause kinds (docs/specs/SLICE_011d.md §2, §9.1) ---
+
+#[allow(clippy::too_many_arguments)]
+async fn insert_call(
+    pool: &PgPool,
+    organization_id: Uuid,
+    person_id: Uuid,
+    caller_user_id: Uuid,
+    ended_at: DateTime<Utc>,
+    corrected: bool,
+) -> Uuid {
+    let call_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO call \
+            (id, organization_id, person_id, contact_method_id, caller_user_id, origin, \
+             correlation_id, status, end_reason, provider, provider_room, placed_at, ended_at) \
+         VALUES \
+            ($1, $2, $3, $4, $5, 'web_session', $6, 'ended', 'agent_hangup', \
+             'scripted', 'derived-axis-parity', $7, $7)",
+    )
+    .bind(call_id)
+    .bind(organization_id)
+    .bind(person_id)
+    .bind(Uuid::new_v4())
+    .bind(caller_user_id)
+    .bind(Uuid::new_v4())
+    .bind(ended_at)
+    .execute(pool)
+    .await
+    .unwrap();
+
+    let root_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO contact_attempted \
+            (organization_id, actor_kind, actor_user_id, origin, occurred_at, correlation_id, \
+             causation_id, person_id, channel, outcome) \
+         VALUES ($1, 'system', NULL, 'migration', $2, $3, $4, $5, 'call', 'reached') \
+         RETURNING id",
+    )
+    .bind(organization_id)
+    .bind(ended_at)
+    .bind(Uuid::new_v4())
+    .bind(call_id)
+    .bind(person_id)
+    .fetch_one(pool)
+    .await
+    .unwrap();
+
+    if corrected {
+        insert_contact_correction(
+            pool,
+            organization_id,
+            person_id,
+            caller_user_id,
+            root_id,
+            ended_at,
+        )
+        .await;
+    }
+
+    call_id
+}
+
+/// Per-axis present-true/present-false/absent parity (spec §9.1) for the
+/// three 011d derived clause kinds, across the People-filter statement AND
+/// both Today source statements (`assert_reason_parity` exercises
+/// `filtered_summaries` and the full Today query, which internally uses
+/// `source_membership`/`source_candidates`) — on one common-clock fixture
+/// with corrections, a zero-inquiry Person, outbound-only correspondence,
+/// calls by two callers and a corrected call attempt.
+#[sqlx::test]
+#[ignore]
+async fn derived_axis_parity_awaiting_response_client_replied_and_call_outcome(
+    migrator_pool: PgPool,
+) {
+    let (organization_id, alice_id) = create_org_with_stages_and_member(
+        &migrator_pool,
+        "011d derived axis parity",
+        "alice@d011-derived-axis.test",
+        "Alice",
+        PW,
+    )
+    .await;
+    let bob_id = create_user(&migrator_pool, "bob@d011-derived-axis.test", "Bob", PW).await;
+    add_membership_with(
+        &migrator_pool,
+        organization_id,
+        bob_id,
+        Role::Member,
+        MembershipStatus::Active,
+    )
+    .await;
+    let app_pool = connect_as_app(&migrator_pool).await;
+    let (stage_a, _stage_b) = first_stage_ids(&app_pool, organization_id).await;
+    let now = Utc::now();
+
+    // --- awaiting_response ---------------------------------------------
+
+    // true: an inquiry after the (only) contact attempt.
+    let awaiting_true = insert_person(
+        &migrator_pool,
+        organization_id,
+        stage_a,
+        Some(alice_id),
+        now - ChronoDuration::days(5),
+    )
+    .await;
+    insert_contact_attempt(
+        &migrator_pool,
+        organization_id,
+        awaiting_true,
+        now - ChronoDuration::days(4),
+    )
+    .await;
+    insert_inquiry(
+        &migrator_pool,
+        organization_id,
+        awaiting_true,
+        Uuid::new_v4(),
+        "zillow",
+        now - ChronoDuration::days(3),
+    )
+    .await;
+
+    // false: the (only) inquiry is answered by a LATER contact attempt.
+    let awaiting_false = insert_person(
+        &migrator_pool,
+        organization_id,
+        stage_a,
+        Some(alice_id),
+        now - ChronoDuration::days(5),
+    )
+    .await;
+    insert_inquiry(
+        &migrator_pool,
+        organization_id,
+        awaiting_false,
+        Uuid::new_v4(),
+        "zillow",
+        now - ChronoDuration::days(4),
+    )
+    .await;
+    insert_contact_attempt(
+        &migrator_pool,
+        organization_id,
+        awaiting_false,
+        now - ChronoDuration::days(3),
+    )
+    .await;
+
+    // zero-inquiry Person: never matches awaiting_response:true (no
+    // inquiry exists to be "after" anything), and DOES match
+    // awaiting_response:false.
+    let zero_inquiry = insert_person(
+        &migrator_pool,
+        organization_id,
+        stage_a,
+        Some(alice_id),
+        now - ChronoDuration::days(5),
+    )
+    .await;
+
+    let awaiting_response_true = FilterDefinition {
+        version: 1,
+        clauses: vec![Clause::AwaitingResponse(BoolClause { value: true })],
+    };
+    let awaiting_response_true_list = create_and_enable_source(
+        &app_pool,
+        organization_id,
+        alice_id,
+        SavedListScope::Personal,
+        "Awaiting response true",
+        awaiting_response_true.clone(),
+    )
+    .await;
+    assert_reason_parity(
+        &app_pool,
+        organization_id,
+        alice_id,
+        awaiting_response_true_list,
+        &awaiting_response_true,
+        ids([awaiting_true]),
+    )
+    .await;
+
+    let awaiting_response_false = FilterDefinition {
+        version: 1,
+        clauses: vec![Clause::AwaitingResponse(BoolClause { value: false })],
+    };
+    let awaiting_response_false_list = create_and_enable_source(
+        &app_pool,
+        organization_id,
+        alice_id,
+        SavedListScope::Personal,
+        "Awaiting response false",
+        awaiting_response_false.clone(),
+    )
+    .await;
+    assert_reason_parity(
+        &app_pool,
+        organization_id,
+        alice_id,
+        awaiting_response_false_list,
+        &awaiting_response_false,
+        ids([awaiting_false, zero_inquiry]),
+    )
+    .await;
+
+    // absent: unaffected by the new clause — the ordinary empty filter
+    // matches everyone in this fixture (byte-identical to pre-011d).
+    let absent = FilterDefinition {
+        version: 1,
+        clauses: vec![],
+    };
+    let all = filtered_ids(&app_pool, organization_id, alice_id, &absent).await;
+    assert!(all.contains(&awaiting_true));
+    assert!(all.contains(&awaiting_false));
+    assert!(all.contains(&zero_inquiry));
+
+    // --- client_replied_unanswered --------------------------------------
+
+    // true: latest inbound is later than the latest outbound AND the last
+    // contact attempt.
+    let replied_true = insert_person(
+        &migrator_pool,
+        organization_id,
+        stage_a,
+        Some(alice_id),
+        now - ChronoDuration::days(5),
+    )
+    .await;
+    capture_fact(
+        &app_pool,
+        &migrator_pool,
+        organization_id,
+        alice_id,
+        replied_true,
+        Direction::Outbound,
+        now - ChronoDuration::days(4),
+        false,
+    )
+    .await;
+    capture_fact(
+        &app_pool,
+        &migrator_pool,
+        organization_id,
+        alice_id,
+        replied_true,
+        Direction::Inbound,
+        now - ChronoDuration::days(3),
+        false,
+    )
+    .await;
+
+    // false: outbound-only correspondence (no inbound at all).
+    let replied_false_outbound_only = insert_person(
+        &migrator_pool,
+        organization_id,
+        stage_a,
+        Some(alice_id),
+        now - ChronoDuration::days(5),
+    )
+    .await;
+    capture_fact(
+        &app_pool,
+        &migrator_pool,
+        organization_id,
+        alice_id,
+        replied_false_outbound_only,
+        Direction::Outbound,
+        now - ChronoDuration::days(3),
+        false,
+    )
+    .await;
+
+    // false: the inbound reply was already answered by a later contact
+    // attempt.
+    let replied_false_answered = insert_person(
+        &migrator_pool,
+        organization_id,
+        stage_a,
+        Some(alice_id),
+        now - ChronoDuration::days(5),
+    )
+    .await;
+    capture_fact(
+        &app_pool,
+        &migrator_pool,
+        organization_id,
+        alice_id,
+        replied_false_answered,
+        Direction::Inbound,
+        now - ChronoDuration::days(4),
+        false,
+    )
+    .await;
+    insert_contact_attempt(
+        &migrator_pool,
+        organization_id,
+        replied_false_answered,
+        now - ChronoDuration::days(3),
+    )
+    .await;
+
+    let client_replied_true = FilterDefinition {
+        version: 1,
+        clauses: vec![Clause::ClientRepliedUnanswered(BoolClause { value: true })],
+    };
+    let client_replied_true_list = create_and_enable_source(
+        &app_pool,
+        organization_id,
+        alice_id,
+        SavedListScope::Personal,
+        "Client replied unanswered true",
+        client_replied_true.clone(),
+    )
+    .await;
+    assert_reason_parity(
+        &app_pool,
+        organization_id,
+        alice_id,
+        client_replied_true_list,
+        &client_replied_true,
+        ids([replied_true]),
+    )
+    .await;
+
+    let client_replied_false = FilterDefinition {
+        version: 1,
+        clauses: vec![Clause::ClientRepliedUnanswered(BoolClause { value: false })],
+    };
+    let client_replied_false_list = create_and_enable_source(
+        &app_pool,
+        organization_id,
+        alice_id,
+        SavedListScope::Personal,
+        "Client replied unanswered false",
+        client_replied_false.clone(),
+    )
+    .await;
+    let false_ids = filtered_ids(&app_pool, organization_id, alice_id, &client_replied_false).await;
+    assert!(false_ids.contains(&replied_false_outbound_only));
+    assert!(false_ids.contains(&replied_false_answered));
+    assert!(!false_ids.contains(&replied_true));
+    let false_source = source_reason_ids(
+        &today_items(&app_pool, organization_id, alice_id).await,
+        client_replied_false_list,
+    );
+    assert_eq!(false_source, false_ids, "Today source must agree with People filter");
+
+    // --- awaiting_call_outcome (viewer-relative: the caller is the viewer) ---
+
+    // true for Alice: Alice called, ended, root attempt uncorrected.
+    let call_true_for_alice = insert_person(
+        &migrator_pool,
+        organization_id,
+        stage_a,
+        Some(alice_id),
+        now - ChronoDuration::days(5),
+    )
+    .await;
+    insert_call(
+        &app_pool,
+        organization_id,
+        call_true_for_alice,
+        alice_id,
+        now - ChronoDuration::hours(2),
+        false,
+    )
+    .await;
+
+    // false for Alice: Bob called (a different caller) — must not appear
+    // for Alice's viewer-relative axis, even though a qualifying call
+    // exists in the Organization.
+    let call_by_bob = insert_person(
+        &migrator_pool,
+        organization_id,
+        stage_a,
+        Some(alice_id),
+        now - ChronoDuration::days(5),
+    )
+    .await;
+    insert_call(
+        &app_pool,
+        organization_id,
+        call_by_bob,
+        bob_id,
+        now - ChronoDuration::hours(2),
+        false,
+    )
+    .await;
+
+    // false for Alice: Alice's call outcome was corrected (no longer
+    // "needs an outcome").
+    let call_corrected = insert_person(
+        &migrator_pool,
+        organization_id,
+        stage_a,
+        Some(alice_id),
+        now - ChronoDuration::days(5),
+    )
+    .await;
+    insert_call(
+        &app_pool,
+        organization_id,
+        call_corrected,
+        alice_id,
+        now - ChronoDuration::hours(2),
+        true,
+    )
+    .await;
+
+    let call_outcome_true = FilterDefinition {
+        version: 1,
+        clauses: vec![Clause::AwaitingCallOutcome(BoolClause { value: true })],
+    };
+    let call_outcome_true_list = create_and_enable_source(
+        &app_pool,
+        organization_id,
+        alice_id,
+        SavedListScope::Personal,
+        "Awaiting call outcome true (alice)",
+        call_outcome_true.clone(),
+    )
+    .await;
+    assert_reason_parity(
+        &app_pool,
+        organization_id,
+        alice_id,
+        call_outcome_true_list,
+        &call_outcome_true,
+        ids([call_true_for_alice]),
+    )
+    .await;
+
+    // The SAME filter evaluated as Bob's own viewer-relative axis instead
+    // matches Bob's call, proving the bound viewer id (never the wire) is
+    // what resolves the axis.
+    let bob_ids = filtered_ids(&app_pool, organization_id, bob_id, &call_outcome_true).await;
+    assert_eq!(bob_ids, ids([call_by_bob]));
+
+    let call_outcome_false = FilterDefinition {
+        version: 1,
+        clauses: vec![Clause::AwaitingCallOutcome(BoolClause { value: false })],
+    };
+    let alice_false_ids =
+        filtered_ids(&app_pool, organization_id, alice_id, &call_outcome_false).await;
+    assert!(!alice_false_ids.contains(&call_true_for_alice));
+    assert!(alice_false_ids.contains(&call_by_bob));
+    assert!(alice_false_ids.contains(&call_corrected));
+}

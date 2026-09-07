@@ -19,6 +19,10 @@ LEFT JOIN LATERAL (
   SELECT max(cc.occurred_at) AS ts FROM correspondence_captured cc
   WHERE cc.person_id = p.id AND cc.organization_id = p.organization_id AND cc.direction = 'inbound'
 ) last_inbound_ts ON true
+LEFT JOIN LATERAL (
+  SELECT max(cc5.occurred_at) AS ts FROM correspondence_captured cc5
+  WHERE cc5.person_id = p.id AND cc5.organization_id = p.organization_id AND cc5.direction = 'outbound'
+) last_outbound_ts ON true
 WHERE p.organization_id = $1
   AND ($2::uuid[] IS NULL OR p.stage_id = ANY($2))
   AND ($3::uuid[] IS NULL OR p.assigned_user_id = ANY($3) OR ($4::boolean AND p.assigned_user_id IS NULL))
@@ -41,6 +45,33 @@ WHERE p.organization_id = $1
        WHERE cm3.person_id = p.id AND cm3.organization_id = p.organization_id AND cm3.kind = 'phone')) = $19)
   AND ($20::boolean IS NULL OR (EXISTS (SELECT 1 FROM contact_method cm4
        WHERE cm4.person_id = p.id AND cm4.organization_id = p.organization_id AND cm4.kind = 'email')) = $20)
+  -- docs/specs/SLICE_011d.md §2: same three derived predicates as
+  -- filtered_summaries.sql, appended after the existing tail params.
+  AND ($25::boolean IS NULL OR (EXISTS (
+        SELECT 1 FROM inquiry ia
+        WHERE ia.person_id = p.id AND ia.organization_id = p.organization_id
+          AND ia.received_at > COALESCE(last_contact_ts.ts, '-infinity'::timestamptz)
+      )) = $25)
+  AND ($26::boolean IS NULL OR (
+        last_inbound_ts.ts IS NOT NULL
+        AND last_inbound_ts.ts > COALESCE(last_contact_ts.ts, '-infinity'::timestamptz)
+        AND last_inbound_ts.ts > COALESCE(last_outbound_ts.ts, '-infinity'::timestamptz)
+      ) = $26)
+  AND ($27::boolean IS NULL OR (EXISTS (
+        SELECT 1 FROM call c
+        WHERE c.organization_id = p.organization_id
+          AND c.person_id = p.id
+          AND c.caller_user_id = $28
+          AND c.status IN ('ended', 'failed')
+          AND c.ended_at IS NOT NULL
+          AND EXISTS (
+              SELECT 1 FROM contact_attempted root
+              WHERE root.organization_id = c.organization_id
+                AND root.causation_id = c.id
+                AND root.corrects_id IS NULL
+                AND NOT EXISTS (SELECT 1 FROM contact_attempted x WHERE x.corrects_id = root.id)
+          )
+      )) = $27)
   AND (CASE WHEN $23::boolean THEN p.id = ANY($22::uuid[]) ELSE NOT (p.id = ANY($22::uuid[])) END)
 ORDER BY (last_contact_ts.ts IS NOT NULL) ASC, last_contact_ts.ts ASC, p.id ASC
 LIMIT $24

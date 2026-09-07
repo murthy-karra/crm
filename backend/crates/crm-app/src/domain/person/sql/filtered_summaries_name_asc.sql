@@ -38,6 +38,12 @@ SELECT
        WHERE cc.person_id = p.id AND cc.organization_id = p.organization_id
          AND cc.direction = 'inbound'
    ) last_inbound_ts ON true
+   LEFT JOIN LATERAL (
+       SELECT max(cc5.occurred_at) as ts
+       FROM correspondence_captured cc5
+       WHERE cc5.person_id = p.id AND cc5.organization_id = p.organization_id
+         AND cc5.direction = 'outbound'
+   ) last_outbound_ts ON true
    WHERE p.organization_id = $1
      AND ($2::uuid[] IS NULL OR p.stage_id = ANY($2))
      AND ($3::uuid[] IS NULL OR p.assigned_user_id = ANY($3)
@@ -78,5 +84,41 @@ SELECT
            WHERE cm4.person_id = p.id AND cm4.organization_id = p.organization_id
              AND cm4.kind = 'email'
          )) = $20)
+     -- docs/specs/SLICE_011d.md §2: awaiting_response — an inquiry after the
+     -- effective last contact attempt (equivalently: exists an inquiry whose
+     -- received_at exceeds the same last_contact_ts.ts this matrix already
+     -- computes for the last_contact age axis).
+     AND ($22::boolean IS NULL OR (EXISTS (
+           SELECT 1 FROM inquiry ia
+           WHERE ia.person_id = p.id AND ia.organization_id = p.organization_id
+             AND ia.received_at > COALESCE(last_contact_ts.ts, '-infinity'::timestamptz)
+         )) = $22)
+     -- docs/specs/SLICE_011d.md §2: client_replied_unanswered — the latest
+     -- inbound correspondence exists and is later than both the effective
+     -- last contact attempt and the latest outbound correspondence.
+     AND ($23::boolean IS NULL OR (
+           last_inbound_ts.ts IS NOT NULL
+           AND last_inbound_ts.ts > COALESCE(last_contact_ts.ts, '-infinity'::timestamptz)
+           AND last_inbound_ts.ts > COALESCE(last_outbound_ts.ts, '-infinity'::timestamptz)
+         ) = $23)
+     -- docs/specs/SLICE_011d.md §2: awaiting_call_outcome — a call of the
+     -- viewer's ($25) to the Person is ended/failed with a non-null
+     -- ended_at and its root automatic contact attempt has no correction
+     -- (exactly the compiled-in outcome_call membership).
+     AND ($24::boolean IS NULL OR (EXISTS (
+           SELECT 1 FROM call c
+           WHERE c.organization_id = p.organization_id
+             AND c.person_id = p.id
+             AND c.caller_user_id = $25
+             AND c.status IN ('ended', 'failed')
+             AND c.ended_at IS NOT NULL
+             AND EXISTS (
+                 SELECT 1 FROM contact_attempted root
+                 WHERE root.organization_id = c.organization_id
+                   AND root.causation_id = c.id
+                   AND root.corrects_id IS NULL
+                   AND NOT EXISTS (SELECT 1 FROM contact_attempted x WHERE x.corrects_id = root.id)
+             )
+         )) = $24)
    ORDER BY p.last_name ASC  NULLS LAST, p.first_name ASC  NULLS LAST, p.created_at DESC, p.id ASC
    LIMIT 501

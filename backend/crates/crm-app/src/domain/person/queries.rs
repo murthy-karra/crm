@@ -340,6 +340,10 @@ async fn filtered_summaries_with_reference_now(
         params.has_phone,
         params.has_email,
         reference_now,
+        params.awaiting_response,
+        params.client_replied_unanswered,
+        params.awaiting_call_outcome,
+        params.viewer_id,
     )
     .fetch_all(conn)
     .await?;
@@ -397,6 +401,10 @@ pub async fn filtered_summaries_sorted(
                 params.has_phone,
                 params.has_email,
                 None::<DateTime<Utc>>,
+                params.awaiting_response,
+                params.client_replied_unanswered,
+                params.awaiting_call_outcome,
+                params.viewer_id,
             )
             .fetch_all(&mut *conn)
             .await?
@@ -478,6 +486,12 @@ pub async fn count_filtered_matches(
                  WHERE cc.person_id = p.id AND cc.organization_id = p.organization_id
                    AND cc.direction = 'inbound'
              ) last_inbound_ts ON true
+             LEFT JOIN LATERAL (
+                 SELECT max(cc5.occurred_at) as ts
+                 FROM correspondence_captured cc5
+                 WHERE cc5.person_id = p.id AND cc5.organization_id = p.organization_id
+                   AND cc5.direction = 'outbound'
+             ) last_outbound_ts ON true
              WHERE p.organization_id = $1
                AND ($2::uuid[] IS NULL OR p.stage_id = ANY($2))
                AND ($3::uuid[] IS NULL OR p.assigned_user_id = ANY($3)
@@ -518,6 +532,34 @@ pub async fn count_filtered_matches(
                      WHERE cm4.person_id = p.id AND cm4.organization_id = p.organization_id
                        AND cm4.kind = 'email'
                    )) = $20)
+               -- docs/specs/SLICE_011d.md §2: same three derived predicates
+               -- and identical positions as filtered_summaries.sql, offset
+               -- by the absence of that statement's reference_now param.
+               AND ($21::boolean IS NULL OR (EXISTS (
+                     SELECT 1 FROM inquiry ia
+                     WHERE ia.person_id = p.id AND ia.organization_id = p.organization_id
+                       AND ia.received_at > COALESCE(last_contact_ts.ts, '-infinity'::timestamptz)
+                   )) = $21)
+               AND ($22::boolean IS NULL OR (
+                     last_inbound_ts.ts IS NOT NULL
+                     AND last_inbound_ts.ts > COALESCE(last_contact_ts.ts, '-infinity'::timestamptz)
+                     AND last_inbound_ts.ts > COALESCE(last_outbound_ts.ts, '-infinity'::timestamptz)
+                   ) = $22)
+               AND ($23::boolean IS NULL OR (EXISTS (
+                     SELECT 1 FROM call c
+                     WHERE c.organization_id = p.organization_id
+                       AND c.person_id = p.id
+                       AND c.caller_user_id = $24
+                       AND c.status IN ('ended', 'failed')
+                       AND c.ended_at IS NOT NULL
+                       AND EXISTS (
+                           SELECT 1 FROM contact_attempted root
+                           WHERE root.organization_id = c.organization_id
+                             AND root.causation_id = c.id
+                             AND root.corrects_id IS NULL
+                             AND NOT EXISTS (SELECT 1 FROM contact_attempted x WHERE x.corrects_id = root.id)
+                       )
+                   )) = $23)
              LIMIT 501
            ) capped"#,
         organization_id.0,
@@ -540,6 +582,10 @@ pub async fn count_filtered_matches(
         params.has_replied,
         params.has_phone,
         params.has_email,
+        params.awaiting_response,
+        params.client_replied_unanswered,
+        params.awaiting_call_outcome,
+        params.viewer_id,
     )
     .fetch_one(conn)
     .await?;

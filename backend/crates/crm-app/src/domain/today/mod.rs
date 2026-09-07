@@ -9,6 +9,7 @@ pub mod model;
 pub mod queries;
 pub mod rank;
 pub mod sources;
+pub mod system_feeds;
 #[cfg(feature = "test-support")]
 pub mod test_support;
 

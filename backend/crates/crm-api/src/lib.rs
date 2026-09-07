@@ -147,6 +147,8 @@ fn build_app_with_today_router_inner(state: AppState, today_router: Router<AppSt
 /// `filter_clause_count` are declared here as `Empty` so `routes::people`
 /// can `Span::current().record(...)` them without every other route
 /// paying for unused fields being anything but absent from their output.
+/// `sort` (docs/specs/SLICE_011b_SORT.md §6) is declared alongside them for
+/// the same reason: the static sort token only, never a clause value.
 fn make_span_with(request: &Request) -> Span {
     tracing::span!(
         Level::INFO,
@@ -156,6 +158,7 @@ fn make_span_with(request: &Request) -> Span {
         version = ?request.version(),
         filter_kinds = tracing::field::Empty,
         filter_clause_count = tracing::field::Empty,
+        sort = tracing::field::Empty,
     )
 }
 

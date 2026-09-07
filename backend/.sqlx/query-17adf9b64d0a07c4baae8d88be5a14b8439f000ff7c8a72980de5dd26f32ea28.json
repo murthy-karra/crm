@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, created_by_user_id, scope,\n                  name as \"name!\", filter::text as \"filter!\",\n                  revision, created_at, updated_at\n           FROM saved_list\n           WHERE id = $1\n             AND organization_id = $2\n             AND deleted_at IS NULL\n             AND (scope = 'shared' OR created_by_user_id = $3)",
+  "query": "SELECT id, created_by_user_id, scope,\n                  name as \"name!\", filter::text as \"filter!\",\n                  sort_key, sort_direction,\n                  revision, created_at, updated_at\n           FROM saved_list\n           WHERE id = $1\n             AND organization_id = $2\n             AND deleted_at IS NULL\n             AND (scope = 'shared' OR created_by_user_id = $3)",
   "describe": {
     "columns": [
       {
@@ -30,16 +30,26 @@
       },
       {
         "ordinal": 5,
+        "name": "sort_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "sort_direction",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
         "name": "revision",
         "type_info": "Int8"
       },
       {
-        "ordinal": 6,
+        "ordinal": 8,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 9,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -57,10 +67,12 @@
       false,
       true,
       null,
+      true,
+      true,
       false,
       false,
       false
     ]
   },
-  "hash": "c7b1b449209d15c153fa15f58b9271b37f56988f7110671a3fd4edc9bb7296cc"
+  "hash": "17adf9b64d0a07c4baae8d88be5a14b8439f000ff7c8a72980de5dd26f32ea28"
 }

@@ -291,6 +291,18 @@ export interface FilterDefinition {
   clauses: FilterClause[]
 }
 
+// --- Slice 011b-sort: People sort vocabulary (docs/specs/SLICE_011b_SORT.md
+// §3, §6) --------------------------------------------------------------
+// The eight lowercase dotted tokens `backend/crates/crm-app/src/domain/person/sort.rs`
+// (de)serializes through `TryFrom<String>`. `null`/absent means the default
+// order (`created.desc`), which is itself also a legal, byte-identical token.
+
+export type PersonSortToken =
+  | 'created.asc' | 'created.desc'
+  | 'name.asc' | 'name.desc'
+  | 'stage.asc' | 'stage.desc'
+  | 'assignee.asc' | 'assignee.desc'
+
 // --- Slice 011b: saved People definitions ---------------------------------
 // Saved lists retain the existing v1 filter vocabulary verbatim. The server
 // derives visibility and capabilities; no owner or Organization identifier is
@@ -318,6 +330,11 @@ export interface SavedListsResponse {
 export interface SavedListDetailResponse {
   list: SavedListMetadata
   filter: FilterDefinition | null
+  // SLICE_011b_SORT.md §6: `null` means the default order (`created.desc`
+  // stored is indistinguishable from absent). A stored sort the binary
+  // cannot read fails closed the same way as `filter: null` (§5), so this
+  // is never observed diverging from `filter_error`.
+  sort: PersonSortToken | null
   description: string[]
   filter_error: SavedListFilterError | null
 }
@@ -334,6 +351,8 @@ export interface CreateSavedListRequest {
   scope: SavedListScope
   name: string
   filter: FilterDefinition
+  // SLICE_011b_SORT.md §6: optional; `null`/absent means the default order.
+  sort?: PersonSortToken | null
 }
 
 export interface CreateSavedListResponse {
@@ -345,6 +364,8 @@ export interface UpdateSavedListRequest {
   expected_revision: number
   name: string
   filter: FilterDefinition
+  // SLICE_011b_SORT.md §6: optional; `null`/absent means the default order.
+  sort?: PersonSortToken | null
 }
 
 export interface UpdateSavedListResponse {

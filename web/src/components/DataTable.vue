@@ -2,11 +2,26 @@
 // Shared TanStack table. People uses D-045's inspector on plain activation;
 // real hrefs preserve new-tab/context-menu behavior. Other tables keep their
 // existing navigation or action callbacks. Counts come from returned rows.
+//
+// SLICE_011b_SORT.md §9: an optional server-driven sort. A column becomes a
+// clickable header only when its `ColumnDef.meta.sortKey` is set (only
+// People's Added/Name/Stage/Assignee columns do); every other consumer's
+// columns are untouched and render exactly as before. No TanStack sorting
+// row model is introduced — the server orders the rows; this component only
+// renders the control and reports clicks via `update:sort`.
 import { computed, type Component } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
-import { FlexRender, getCoreRowModel, useVueTable, type ColumnDef } from '@tanstack/vue-table'
+import { FlexRender, getCoreRowModel, useVueTable, type Column, type ColumnDef } from '@tanstack/vue-table'
+import { ArrowDown, ArrowUp } from 'lucide-vue-next'
 import Card from './Card.vue'
 import { buttonClasses } from '../lib/controls'
+
+/** Generic so this component stays domain-agnostic; People's `PersonSort`
+ * (`lib/sort.ts`) is structurally assignable — same `{key, direction}` shape. */
+export interface TableSort {
+  key: string
+  direction: 'asc' | 'desc'
+}
 
 const props = defineProps<{
   data: TData[]
@@ -22,6 +37,11 @@ const props = defineProps<{
   /** Singular form used when the count is exactly 1, e.g. "person", "unresolved lead". Defaults to `countNoun`. */
   countNounSingular?: string
   truncated?: boolean
+  /** The active server-applied sort. Omit on tables with no sortable columns. */
+  sort?: TableSort
+  /** Appended to the truncated-count copy, e.g. "by Name (A–Z)" (SLICE_011b_SORT.md
+   *  §9). Consumers without a sort keep today's plain "Showing the first N — more exist." */
+  truncatedSortLabel?: string
   emptyMessage: string
   /** Short headline above `emptyMessage`, e.g. "No people yet". */
   emptyTitle?: string
@@ -30,7 +50,54 @@ const props = defineProps<{
   emptyActionTo?: string
 }>()
 
+const emit = defineEmits<{
+  'update:sort': [value: TableSort]
+}>()
+
 const router = useRouter()
+
+function sortKeyOf(column: Column<TData, unknown>): string | undefined {
+  return column.columnDef.meta?.sortKey
+}
+
+/** The column's plain text label, reused as the accessible-name subject.
+ * Every sortable People column declares a literal string `header` (Added,
+ * Name, Stage, Assignee), so this never needs to render the header cell. */
+function columnLabel(column: Column<TData, unknown>): string {
+  const header = column.columnDef.header
+  return typeof header === 'string' ? header : ''
+}
+
+function isActiveSort(column: Column<TData, unknown>): boolean {
+  return sortKeyOf(column) !== undefined && sortKeyOf(column) === props.sort?.key
+}
+
+/** The direction a click on this header applies next: the column's declared
+ * natural (first-click) direction, or the toggle of the current direction
+ * when this column is already active (§9). */
+function nextSortDirection(column: Column<TData, unknown>): 'asc' | 'desc' {
+  if (isActiveSort(column)) return props.sort?.direction === 'asc' ? 'desc' : 'asc'
+  return column.columnDef.meta?.sortNaturalDirection ?? 'asc'
+}
+
+function ariaSort(column: Column<TData, unknown>): 'ascending' | 'descending' | 'none' | undefined {
+  if (sortKeyOf(column) === undefined) return undefined
+  if (!isActiveSort(column)) return 'none'
+  return props.sort?.direction === 'asc' ? 'ascending' : 'descending'
+}
+
+/** "Sort by <Column>, ascending|descending" — describes the direction a
+ * click WILL apply next, not the column's current state (§9). */
+function sortAccessibleName(column: Column<TData, unknown>): string {
+  const direction = nextSortDirection(column) === 'asc' ? 'ascending' : 'descending'
+  return `Sort by ${columnLabel(column)}, ${direction}`
+}
+
+function toggleSort(column: Column<TData, unknown>) {
+  const key = sortKeyOf(column)
+  if (key === undefined) return
+  emit('update:sort', { key, direction: nextSortDirection(column) })
+}
 
 const table = useVueTable({
   get data() {
@@ -124,9 +191,29 @@ function clickLink(event: MouseEvent, row: TData) {
                 :key="header.id"
                 class="px-5 text-left align-middle text-small font-medium text-text-muted"
                 :class="header.column.columnDef.meta?.align === 'right' ? 'text-right' : ''"
+                :aria-sort="ariaSort(header.column)"
               >
+                <button
+                  v-if="!header.isPlaceholder && sortKeyOf(header.column) !== undefined"
+                  type="button"
+                  class="-mx-1 flex min-h-10 items-center gap-1 rounded-md px-1 text-small font-medium text-text-muted hover:text-text"
+                  :aria-label="sortAccessibleName(header.column)"
+                  @click="toggleSort(header.column)"
+                >
+                  <FlexRender
+                    :render="header.column.columnDef.header"
+                    :props="header.getContext()"
+                  />
+                  <component
+                    :is="props.sort?.direction === 'asc' ? ArrowUp : ArrowDown"
+                    v-if="isActiveSort(header.column)"
+                    class="h-4 w-4 shrink-0"
+                    stroke-width="1.5"
+                    aria-hidden="true"
+                  />
+                </button>
                 <FlexRender
-                  v-if="!header.isPlaceholder"
+                  v-else-if="!header.isPlaceholder"
                   :render="header.column.columnDef.header"
                   :props="header.getContext()"
                 />
@@ -190,7 +277,7 @@ function clickLink(event: MouseEvent, row: TData) {
           v-if="truncated"
           class="text-small text-text-muted"
         >
-          Showing the first {{ data.length }} — more exist.
+          Showing the first {{ data.length }}{{ truncatedSortLabel ? ` by ${truncatedSortLabel}` : '' }} — more exist.
         </p>
       </div>
     </template>

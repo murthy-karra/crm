@@ -53,6 +53,7 @@ function detail(
       can_delete: true,
     },
     filter: { version: 1, clauses: filter },
+    sort: null,
     description: ['All people'],
     filter_error: filterError,
   }
@@ -62,6 +63,7 @@ function unsupportedDetail(): SavedListDetailResponse {
   return {
     ...detail(),
     filter: null,
+    sort: null,
     description: [],
     filter_error: 'unsupported_filter',
   }

@@ -5,6 +5,7 @@ use uuid::Uuid;
 use crate::domain::admin::Role;
 use crate::domain::envelope::CommandContext;
 use crate::domain::person::filter::FilterDefinition;
+use crate::domain::person::sort::PersonSort;
 use crate::ids::{SavedListId, UserId};
 
 use super::error::SavedListError;
@@ -23,6 +24,9 @@ pub struct CreateSavedList {
     pub scope: SavedListScope,
     pub name: String,
     pub filter: FilterDefinition,
+    /// `None`/`Some(PersonSort::DEFAULT)` are both normalized to `None`
+    /// before fingerprinting and storage (docs/specs/SLICE_011b_SORT.md §5).
+    pub sort: Option<PersonSort>,
 }
 
 pub struct UpdateSavedList {
@@ -30,6 +34,7 @@ pub struct UpdateSavedList {
     pub expected_revision: i64,
     pub name: String,
     pub filter: FilterDefinition,
+    pub sort: Option<PersonSort>,
 }
 
 pub struct DeleteSavedList {
@@ -125,11 +130,16 @@ async fn create_saved_list_attempt(
     cmd: CreateSavedList,
 ) -> Result<CreateSavedListOutcome, SavedListError> {
     let normalized_name = normalize_and_validate_input(&cmd.name, &cmd.filter)?;
-    let fingerprint = creation_fingerprint(cmd.scope, &normalized_name, &cmd.filter)?;
+    // `Some(PersonSort::DEFAULT)` normalizes to `None` here too, so a
+    // caller-supplied literal `created.desc` produces byte-identical
+    // fingerprint/storage to an absent sort (spec §5).
+    let sort = cmd.sort.and_then(PersonSort::normalized);
+    let fingerprint = creation_fingerprint(cmd.scope, &normalized_name, &cmd.filter, sort)?;
     let filter_value =
         serde_json::to_value(&cmd.filter).map_err(|_| SavedListError::MalformedRequest)?;
     let filter_json =
         serde_json::to_string(&filter_value).map_err(|_| SavedListError::MalformedRequest)?;
+    let (sort_key, sort_direction) = PersonSort::storage_columns(sort);
 
     let mut tx = pool.begin().await?;
     // Membership is deliberately re-read and share-locked inside this
@@ -180,10 +190,11 @@ async fn create_saved_list_attempt(
         SavedListStoredRowDb,
         r#"INSERT INTO saved_list
               (organization_id, created_by_user_id, scope, name, filter,
-               create_request_id, create_fingerprint)
-           VALUES ($1, $2, $3, $4, CAST($5 AS text)::jsonb, $6, $7)
+               create_request_id, create_fingerprint, sort_key, sort_direction)
+           VALUES ($1, $2, $3, $4, CAST($5 AS text)::jsonb, $6, $7, $8, $9)
            RETURNING id, created_by_user_id, scope,
                      name as "name!", filter::text as "filter!",
+                     sort_key, sort_direction,
                      revision, created_at, updated_at"#,
         ctx.organization_id.0,
         ctx.actor_user_id.0,
@@ -192,6 +203,8 @@ async fn create_saved_list_attempt(
         filter_json,
         cmd.request_id,
         &fingerprint,
+        sort_key,
+        sort_direction,
     )
     .fetch_one(&mut *tx)
     .await?;
@@ -248,6 +261,8 @@ async fn update_saved_list_attempt(
 ) -> Result<UpdateSavedListOutcome, SavedListError> {
     validate_expected_revision(cmd.expected_revision)?;
     let normalized_name = normalize_and_validate_input(&cmd.name, &cmd.filter)?;
+    let sort = cmd.sort.and_then(PersonSort::normalized);
+    let (sort_key, sort_direction) = PersonSort::storage_columns(sort);
     let filter_value =
         serde_json::to_value(&cmd.filter).map_err(|_| SavedListError::MalformedRequest)?;
     let filter_json =
@@ -275,7 +290,17 @@ async fn update_saved_list_attempt(
         .await
         .map_err(SavedListError::from)?;
 
-    if row.name == normalized_name && row.filter.as_ref() == Some(&filter_value) {
+    // Equal-definition no-op compares name, filter AND sort (spec §5,
+    // §11.9): a sort-only change must still bump the revision, and an
+    // unchanged sort must not block an otherwise-equal no-op. Compare
+    // against the RAW stored columns, not a decoded `PersonSort` — an
+    // unreadable stored sort must never be treated as equal to a valid
+    // request (it would silently persist unrecoverable content).
+    if row.name == normalized_name
+        && row.filter.as_ref() == Some(&filter_value)
+        && row.sort_key.as_deref() == sort_key
+        && row.sort_direction.as_deref() == sort_direction
+    {
         tx.commit().await?;
         return Ok(UpdateSavedListOutcome {
             list: metadata_for(&row, ctx.actor_user_id, role),
@@ -289,7 +314,8 @@ async fn update_saved_list_attempt(
     let updated = sqlx::query_as!(
         SavedListStoredRowDb,
         r#"UPDATE saved_list
-           SET name = $4, filter = CAST($5 AS text)::jsonb, revision = revision + 1, updated_at = now()
+           SET name = $4, filter = CAST($5 AS text)::jsonb, revision = revision + 1, updated_at = now(),
+               sort_key = $7, sort_direction = $8
            WHERE id = $1
              AND organization_id = $2
              AND deleted_at IS NULL
@@ -297,6 +323,7 @@ async fn update_saved_list_attempt(
              AND (scope = 'shared' OR created_by_user_id = $6)
            RETURNING id, created_by_user_id, scope,
                      name as "name!", filter::text as "filter!",
+                     sort_key, sort_direction,
                      revision, created_at, updated_at"#,
         cmd.list_id.0,
         ctx.organization_id.0,
@@ -304,6 +331,8 @@ async fn update_saved_list_attempt(
         normalized_name,
         filter_json,
         ctx.actor_user_id.0,
+        sort_key,
+        sort_direction,
     )
     .fetch_optional(&mut *tx)
     .await?
@@ -391,7 +420,8 @@ async fn delete_saved_list_attempt(
     let changed = sqlx::query!(
         r#"UPDATE saved_list
            SET name = NULL, filter = NULL, revision = revision + 1,
-               deleted_at = now(), updated_at = now()
+               deleted_at = now(), updated_at = now(),
+               sort_key = NULL, sort_direction = NULL
            WHERE id = $1
              AND organization_id = $2
              AND deleted_at IS NULL
@@ -467,17 +497,28 @@ pub(crate) async fn acquire_saved_lists_lock(
     Ok(())
 }
 
+/// `sort` MUST already be normalized (`None` for the default order) — see
+/// [`PersonSort::normalized`]. The fingerprint stays `[scope,
+/// normalized_name, filter]` (byte-identical to every pre-011b-sort digest)
+/// when `sort` is `None`, and becomes `[scope, normalized_name, filter,
+/// sort_token]` otherwise (docs/specs/SLICE_011b_SORT.md §5) — so a list
+/// saved without a sort keeps its existing digest and in-flight retries
+/// unchanged.
 fn creation_fingerprint(
     scope: SavedListScope,
     normalized_name: &str,
     filter: &FilterDefinition,
+    sort: Option<PersonSort>,
 ) -> Result<Vec<u8>, SavedListError> {
-    // Tuple serializes as the required deterministic JSON array
-    // `[scope, normalized_name, filter]`; FilterDefinition's declared field
-    // and clause serializers preserve their stable order. This is request
-    // equality, deliberately not Boolean-equivalence normalization.
-    let bytes = serde_json::to_vec(&(scope.as_str(), normalized_name, filter))
-        .map_err(|_| SavedListError::MalformedRequest)?;
+    // Tuple serializes as the required deterministic JSON array; both arms
+    // preserve `FilterDefinition`'s declared field/clause order. This is
+    // request equality, deliberately not Boolean-equivalence normalization.
+    let bytes = match sort {
+        None => serde_json::to_vec(&(scope.as_str(), normalized_name, filter))
+            .map_err(|_| SavedListError::MalformedRequest)?,
+        Some(sort) => serde_json::to_vec(&(scope.as_str(), normalized_name, filter, sort.token()))
+            .map_err(|_| SavedListError::MalformedRequest)?,
+    };
     Ok(Sha256::digest(bytes).to_vec())
 }
 
@@ -487,6 +528,8 @@ struct RetryRow {
     scope: String,
     name: Option<String>,
     filter: Option<String>,
+    sort_key: Option<String>,
+    sort_direction: Option<String>,
     revision: i64,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: chrono::DateTime<chrono::Utc>,
@@ -510,6 +553,8 @@ impl RetryRow {
             scope: SavedListScope::from_db(&self.scope)?,
             name,
             filter,
+            sort_key: self.sort_key,
+            sort_direction: self.sort_direction,
             revision: self.revision,
             created_at: self.created_at,
             updated_at: self.updated_at,
@@ -527,6 +572,7 @@ async fn retry_row_for_update(
         RetryRow,
         r#"SELECT id, created_by_user_id, scope, name,
                   filter::text as "filter: String",
+                  sort_key, sort_direction,
                   revision, created_at, updated_at, deleted_at, create_fingerprint
            FROM saved_list
            WHERE organization_id = $1

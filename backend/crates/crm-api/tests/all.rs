@@ -104,6 +104,9 @@ mod db_people;
 #[path = "db_people_filter.rs"]
 mod db_people_filter;
 
+#[path = "db_people_sort.rs"]
+mod db_people_sort;
+
 #[path = "db_realtime.rs"]
 mod db_realtime;
 

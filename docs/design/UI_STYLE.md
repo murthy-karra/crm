@@ -20,6 +20,10 @@ visible action must work with current application capabilities.
 - People: All people / My people shortcuts use existing filters, compact
   FilterBar and nearby truthful count, flat table, optional person inspector.
   No fake search, sorting, saved-list tabs, pagination or totals.
+  *Amendment (Slice 011b-sort, 2026-09-06):* the People table's Added, Name,
+  Stage and Assignee headers are real server-side sort controls (button with
+  an accessible name, `aria-sort`, 16px monochrome arrow on the active
+  column); other headers stay plain.
 - The inspector sits beside the list at >=1200px and overlays it on smaller
   screens. Explicit close and Escape dismiss; focus returns to the selected
   person's link. No modal focus trap: the list remains operable.

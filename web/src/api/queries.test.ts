@@ -78,6 +78,7 @@ function savedDetail(revision = 1): SavedListDetailResponse {
   return {
     list: savedList(revision),
     filter: { version: 1, clauses: [{ kind: 'assigned_to', assignees: ['me'] }] },
+    sort: null,
     description: ['Assigned to me'],
     filter_error: null,
   }
@@ -233,5 +234,29 @@ describe('saved-list mutation session guards', () => {
     expect(invalidate).not.toHaveBeenCalled()
     expect(queryClient.getQueryData(queryKeys.savedList(ORG_ID, 'actor-a', SAVED_LIST_ID))).toBeUndefined()
     scope.stop()
+  })
+})
+
+// SLICE_011b_SORT.md §9: the factory is extended only — without a sort the
+// key stays byte-identical to today (3 or 4 elements); with a normalized
+// sort token the key is always 5 elements, with the filter slot forced to
+// `''` rather than omitted when there is no filter.
+describe('queryKeys.people', () => {
+  const filter = JSON.stringify({ version: 1, clauses: [{ kind: 'has_phone', value: true }] })
+
+  it('keeps the pre-existing 3-element shape with no filter and no sort', () => {
+    expect(queryKeys.people(ORG_ID)).toEqual(['org', ORG_ID, 'people'])
+  })
+
+  it('keeps the pre-existing 4-element shape with a filter and no sort', () => {
+    expect(queryKeys.people(ORG_ID, filter)).toEqual(['org', ORG_ID, 'people', filter])
+  })
+
+  it('forces an empty filter slot and appends the sort token with a sort but no filter', () => {
+    expect(queryKeys.people(ORG_ID, undefined, 'name.asc')).toEqual(['org', ORG_ID, 'people', '', 'name.asc'])
+  })
+
+  it('carries both the filter and the sort token when both are present', () => {
+    expect(queryKeys.people(ORG_ID, filter, 'name.asc')).toEqual(['org', ORG_ID, 'people', filter, 'name.asc'])
   })
 })

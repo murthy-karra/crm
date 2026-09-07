@@ -99,6 +99,12 @@ names are permitted: use IDs, not names, as identity. Render names as text.
 
 ## 3. Persistence and concurrency
 
+*Amendment pointer (Slice 011b-sort, 2026-09-06, D-048):* `saved_list` gains
+nullable `sort_key`/`sort_direction` columns with CHECK constraints; the sort
+is part of the definition, bumps the revision, joins the create fingerprint
+only when present, and is cleared by delete. See
+[SLICE_011b_SORT.md](SLICE_011b_SORT.md) §5.
+
 One additive migration introduces `saved_list`; no backfill or seeds. Use the
 repository's next migration timestamp, later than `20260904000001`. This is
 normal relational CRUD, not a history fact or event store.
@@ -264,6 +270,11 @@ recoverable invalid-list state, not an unfiltered table.
 
 ## 5. HTTP contract
 
+*Amendment pointer (Slice 011b-sort, 2026-09-06):* create and update bodies
+accept an optional `sort`; detail returns `sort` (token or null);
+`filter_error: unsupported_filter` also covers an unreadable stored sort. See
+[SLICE_011b_SORT.md](SLICE_011b_SORT.md) §5 and §6.
+
 All routes are under the existing authenticated `/api` surface. Request JSON
 denies unknown fields and duplicate keys, including nested filter fields;
 malformed bodies, UUIDs, revisions or names use the existing error envelope
@@ -335,6 +346,11 @@ No automatic mutation retries. CORS already allows GET/POST/PUT/DELETE and
 Content-Type; no CORS or header-contract change is needed.
 
 ## 6. Web flows and state
+
+*Amendment pointer (Slice 011b-sort, 2026-09-06):* the People table gains an
+"Added" column and sortable Name/Stage/Assignee/Added headers; `/people`
+syncs `?sort=`; the sort is part of the dirty draft and of Save, Save as and
+Duplicate. See [SLICE_011b_SORT.md](SLICE_011b_SORT.md) §9.
 
 ### Lists index
 

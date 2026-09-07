@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { ApiError } from '../api/client'
 import SavedListDialog from './SavedListDialog.vue'
 
-function dialog(error?: unknown) {
+function dialog(error?: unknown, sortSummary?: string) {
   return mount(SavedListDialog, {
     props: {
       visible: true,
@@ -13,6 +13,7 @@ function dialog(error?: unknown) {
       allowShared: true,
       isPending: false,
       error,
+      sortSummary,
     },
     global: {
       stubs: {
@@ -33,5 +34,17 @@ describe('SavedListDialog quota recovery', () => {
     await shared.setProps({ error: new ApiError(409, 'saved_list_limit_reached') })
     expect(shared.text()).toContain('200 shared lists')
     expect(shared.text()).toContain('Only me')
+  })
+})
+
+// docs/specs/SLICE_011b_SORT.md §9: "one summary line ... omitted for the
+// default order".
+describe('SavedListDialog sort summary', () => {
+  it('renders the summary line only when one is passed', () => {
+    const withoutSort = dialog()
+    expect(withoutSort.find('[data-testid="saved-list-sort-summary"]').exists()).toBe(false)
+
+    const withSort = dialog(undefined, 'Sorted by Name (A–Z)')
+    expect(withSort.get('[data-testid="saved-list-sort-summary"]').text()).toBe('Sorted by Name (A–Z)')
   })
 })

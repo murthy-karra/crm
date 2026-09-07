@@ -122,6 +122,7 @@ async fn create_list(
             scope: SavedListScope::Personal,
             name: name.to_owned(),
             filter,
+            sort: None,
         },
     )
     .await
@@ -145,6 +146,7 @@ async fn update_list(
             expected_revision,
             name: name.to_owned(),
             filter,
+            sort: None,
         },
     )
     .await

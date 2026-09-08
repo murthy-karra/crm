@@ -60,8 +60,19 @@ descended 5,293 times. One fixture fix in `db_operator.rs` (a direct
 same action the erasure runbook would take). Disclosed, not touched: an
 011e-era `perf-harness` test binds 25 parameters to a 27-parameter
 statement, broken at the branch point. Coordinator audit passed; review
-round 1 (reviewer and tester) launched on `df72926`. Lane B is running its
-full gates behind the lock.
+round 1 (reviewer and tester) launched on `df72926`. **Lane B steps 2–6
+complete** (`b0511e3` pure name resolver; `2a8279a` the adapter with the
+request's `AuthContext` threaded into the backend constructor, bridging trait
+defaults removed; `b815e04` dispatch, ledger names, `MAX_REFERENCES` 25,
+declared span fields, prompt; `163b876` thirteen database tests;
+`7da1b21` a real bug check-db caught: duplicate-named saved lists resolved
+to the first match instead of a clarification, plus two fixture fixes).
+Lane gates `sqlx-prepare` no new entries, `check` 751 Rust / 614 Vitest,
+`check-db` 600 of 600. Two test files outside the boundary
+(`db_today_source_operator.rs`, `db_today_source_settings.rs`) received
+mechanical placeholder `AuthContext` fixtures because the constructor
+signature changed; accepted. Coordinator audit passed; review round 1
+(reviewer and tester) launched on `7da1b21`. Both lanes now await review.
 
 Previous phase: **Slice 011e (tags) — COMPLETE. RUNG e2 MERGED TO LOCAL MAIN** at `b6dc49b`
 (2026-09-07, with the user's approval; not pushed, not deployed). Source

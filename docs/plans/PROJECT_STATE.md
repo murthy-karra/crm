@@ -24,7 +24,27 @@ B (013) in `../crm-worktrees/013` on `slice-013-operator-filter`; both from
 `main` after the planning commit; one Claude Sonnet 5 writer each; Claude
 Fable 5.1 coordinates. Ownership per the specs' §10; only `tests/all.rs` is
 shared (alphabetical insertion, "keep both"). Merge order A then B. Lane C
-(FilterBar UX polish) stays held for the perceived-latency chunk.
+(FilterBar UX polish) stays held for the perceived-latency chunk. Gate runs
+across the two lanes are serialized by a directory lock because
+`sqlx-prepare`/`check-db` use fixed throwaway database names.
+
+Progress (2026-09-08): **lane A steps 1–3 complete** (`a503640`: migration in
+the reviewed order, three triggers, marked backfill block, one NULLS FIRST
+index, 11 invariant tests incl. real two-transaction concurrency, 3 schema
+tests; `805699b`: the fourteen pre-switch statements frozen as a Rust module
+under `tests/fixtures/statements_b45b04f/` and `db_statement_equivalence.rs`
+green against the live text; lane gates `check` 717, `check-db` 602 of 602;
+coordinator audit passed; one accepted implementation detail: `pub`
+visibility on the Today source/feed statement functions so the equivalence
+test can call them). Steps 4–5 (the read-side switch behind the equivalence
+test, then performance evidence) released. **Lane B step 1 complete**
+(`ab1657f`: input types, two trait methods with bridging defaults to be
+removed in step 3, `FilterOutcome` views, both tool schemas and parsing with
+`limit` defaulting to 10, regenerated snapshot, `kind_label` mirror test in
+crm-api, fake backends; `check` 734 Rust / 614 Vitest; coordinator audit
+passed). Steps 2–6 released with decisions: `RefBucket::Search` for both
+tools; `validate()` failures after resolution are `invalid_arguments`, unknown
+names are clarifications; names clipped and control-stripped at parse time.
 
 Previous phase: **Slice 011e (tags) — COMPLETE. RUNG e2 MERGED TO LOCAL MAIN** at `b6dc49b`
 (2026-09-07, with the user's approval; not pushed, not deployed). Source

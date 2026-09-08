@@ -1,11 +1,33 @@
 # Project State
 
-Last updated: 2026-09-08 (Slices 012 and 013 merged and pushed; planning
-Slice 014, the perceived-latency chunk with the FilterBar UX polish).
+Last updated: 2026-09-08 (Slice 014 approved and its lane started).
 
 ## Current phase
 
-**PLANNING Slice 014 — perceived-latency chunk plus FilterBar UX polish
+**Slice 014 — APPROVED 2026-09-08, LANE IN IMPLEMENTATION (Web-only).**
+[SLICE_014.md](../specs/SLICE_014.md) and its
+[brief](../tasks/SLICE_014_IMPL.md) were drafted from the planner's analysis
+(which corrected the investigation on one point: through the tunnel the
+browser calls `api.tarams.org` directly, so production serving needs only
+Vite's preview server on 5173 and no tunnel change; and found three of the
+four 2026-08-29 FilterBar gaps already fixed by the 2026-09-06 pass),
+independently reviewed READY WITH CORRECTIONS (the request-count gate
+restated as before-DOMContentLoaded so the Today preload does not defeat it;
+the caching claim corrected to what `vite preview` actually emits; tag
+mutations write `data.tags` not `data.person`; a held-response Vitest for
+the single-request claim; a shared `preloadTodayView` export), all applied,
+and approved with both workflow confirmations: the tunnel is normally served
+from the production bundle (`scripts/dev-web-prod`; dev mode stays for
+loopback), and the running dev server (`pnpm run dev` pid 24542, Vite pid
+24563, up since 2026-09-06) is stopped by exact PID at verification so the
+production server can take port 5173. Four parts in order: A production
+serving, B optimistic stage/assignment/tag mutations, C Today chunk preload
+and data prefetch plus hover prefetch of Person detail, D FilterBar residue.
+One lane (Claude Sonnet 5) in `../crm-worktrees/014` on
+`slice-014-perceived-latency`; checkpoint after part A. Coordinator runs the
+tunnel probe and walkthrough at the end.
+
+Previously: **PLANNING Slice 014 — perceived-latency chunk plus FilterBar UX polish
 (Web-only).** The user chose the coordinator's suggestions 1 and 2 on
 2026-09-08: `main` was pushed to `origin/main` at `32b36de` (carrying Slices
 012 and 013, D-052 and the state records), and planning started for the held
@@ -460,7 +482,8 @@ clear-all.
 
 ## Current slice
 
-No slice is active. Last completed: Slices 012 (`docs/specs/SLICE_012.md`,
+Slice 014 (`docs/specs/SLICE_014.md`, brief `docs/tasks/SLICE_014_IMPL.md`),
+approved 2026-09-08, in implementation. Last completed: Slices 012 (`docs/specs/SLICE_012.md`,
 verification `docs/tasks/SLICE_012_VERIFICATION.md`) and 013
 (`docs/specs/SLICE_013.md`, verification `docs/tasks/SLICE_013_VERIFICATION.md`),
 both merged 2026-09-08. Previous: Slice 011e — Tags —

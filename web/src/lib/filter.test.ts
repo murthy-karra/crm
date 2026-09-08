@@ -5,6 +5,7 @@ import { canonicalFilterDefinition, describeClause, type FilterNames } from './f
 const names: FilterNames = {
   stageNames: { lead: 'Lead', hot: 'Hot Prospect', nurture: 'Nurture' },
   memberNames: { member: 'Morgan Vale' },
+  tagNames: { 'tag-1': 'Investor', 'tag-2': 'Past client' },
 }
 
 describe('People filter descriptions', () => {
@@ -54,6 +55,16 @@ describe('People filter descriptions', () => {
     expect(describeClause({ kind: 'client_replied_unanswered', value: false }, names)).toBe('No unanswered client reply')
     expect(describeClause({ kind: 'awaiting_call_outcome', value: true }, names)).toBe('A call of mine needs an outcome')
     expect(describeClause({ kind: 'awaiting_call_outcome', value: false }, names)).toBe('No call of mine needs an outcome')
+  })
+
+  // Slice 011e e2 (docs/specs/SLICE_011e.md §5, §9.17): one name, several
+  // names, and the "an unknown tag" placeholder -- never a raw uuid.
+  it('describes tags and not_tags with comma-joined names and the unknown-tag placeholder', () => {
+    expect(describeClause({ kind: 'tags', tag_ids: ['tag-1'] }, names)).toBe('Tagged: Investor')
+    expect(describeClause({ kind: 'tags', tag_ids: ['tag-1', 'tag-2'] }, names)).toBe('Tagged: Investor, Past client')
+    expect(describeClause({ kind: 'not_tags', tag_ids: ['tag-2'] }, names)).toBe('Not tagged: Past client')
+    expect(describeClause({ kind: 'tags', tag_ids: ['missing-tag-id'] }, names)).toBe('Tagged: an unknown tag')
+    expect(describeClause({ kind: 'not_tags', tag_ids: ['missing-tag-id'] }, names)).toBe('Not tagged: an unknown tag')
   })
 })
 

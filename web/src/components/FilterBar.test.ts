@@ -2,7 +2,7 @@ import { DOMWrapper, flushPromises, mount } from '@vue/test-utils'
 import PrimeVue from 'primevue/config'
 import { afterEach, describe, expect, it } from 'vitest'
 import FilterBar from './FilterBar.vue'
-import type { FilterClause, Member, Stage } from '../api/types'
+import type { FilterClause, Member, Stage, TagRef } from '../api/types'
 
 const STAGES: Stage[] = [
   { id: 'stage-1', name: 'Lead', position: 1 },
@@ -13,12 +13,16 @@ function member(id: string, name: string, status: Member['status'] = 'active'): 
   return { user_id: id, display_name: name, status, role: 'member', email: `${id}@example.invalid`, joined_at: '2026-01-01T00:00:00Z', assigned_people_count: 0 }
 }
 const MEMBERS = [member('user-1', 'Morgan Vale'), member('user-2', 'Riley North', 'inactive')]
+const TAGS: TagRef[] = [
+  { id: 'tag-1', name: 'Investor' },
+  { id: 'tag-2', name: 'Past client' },
+]
 type Props = Partial<InstanceType<typeof FilterBar>['$props']>
 const wrappers: ReturnType<typeof mountBar>[] = []
 function mountBar(clauses: FilterClause[] = [], extra: Props = {}) {
   const wrapper = mount(FilterBar, {
     props: {
-      clauses, stages: STAGES, members: MEMBERS, sources: ['website', 'zillow'], ...extra,
+      clauses, stages: STAGES, members: MEMBERS, sources: ['website', 'zillow'], tags: TAGS, ...extra,
       'onUpdate:clauses': (next: FilterClause[]) => { void wrapper.setProps({ clauses: next }) },
     },
     global: { plugins: [[PrimeVue, { unstyled: true }]], stubs: { transition: false } },
@@ -53,7 +57,7 @@ afterEach(() => {
 describe('FilterBar committed filters', () => {
   it('opens every field without emitting an arbitrary default', async () => {
     const wrapper = setup()
-    for (const kind of ['stage', 'assigned_to', 'source', 'created', 'last_inquiry', 'last_contact', 'last_inbound', 'has_replied', 'has_phone', 'has_email']) {
+    for (const kind of ['stage', 'assigned_to', 'source', 'created', 'last_inquiry', 'last_contact', 'last_inbound', 'has_replied', 'has_phone', 'has_email', 'tags', 'not_tags']) {
       await open(kind)
       expect(get(`filter-editor-${kind}`).element).toBeDefined()
       expect(wrapper.emitted('update:clauses')).toBeUndefined()
@@ -141,17 +145,19 @@ describe('FilterBar committed filters', () => {
     expect(chip.find('svg.lucide-flame').exists()).toBe(true)
   })
 
-  it.each(['stage', 'assigned_to', 'source'] as const)('enforces 50 values for %s while allowing deselection', async (kind) => {
+  it.each(['stage', 'assigned_to', 'source', 'tags', 'not_tags'] as const)('enforces 50 values for %s while allowing deselection', async (kind) => {
     const stages = Array.from({ length: 51 }, (_, i) => ({ id: `s${i}`, name: `Stage ${i}`, position: i }))
     const members = Array.from({ length: 51 }, (_, i) => member(`u${i}`, `Member ${i}`))
     const sources = Array.from({ length: 51 }, (_, i) => `source${i}`)
+    const tags = Array.from({ length: 51 }, (_, i) => ({ id: `t${i}`, name: `Tag ${i}` }))
     const clause: FilterClause = kind === 'stage' ? { kind, stage_ids: stages.slice(0, 50).map((stage) => stage.id) }
       : kind === 'assigned_to' ? { kind, assignees: members.slice(0, 50).map((item) => ({ user_id: item.user_id })) }
-        : { kind, sources: sources.slice(0, 50) }
-    const wrapper = setup([clause], { stages, members, sources })
+        : kind === 'source' ? { kind, sources: sources.slice(0, 50) }
+          : { kind, tag_ids: tags.slice(0, 50).map((tag) => tag.id) }
+    const wrapper = setup([clause], { stages, members, sources, tags })
     await open(kind)
-    const selectedId = kind === 'stage' ? 'filter-option-s0' : kind === 'assigned_to' ? 'filter-assignee-user-u0' : 'filter-option-source0'
-    const extraId = kind === 'stage' ? 'filter-option-s50' : kind === 'assigned_to' ? 'filter-assignee-user-u50' : 'filter-option-source50'
+    const selectedId = kind === 'stage' ? 'filter-option-s0' : kind === 'assigned_to' ? 'filter-assignee-user-u0' : kind === 'source' ? 'filter-option-source0' : 'filter-option-t0'
+    const extraId = kind === 'stage' ? 'filter-option-s50' : kind === 'assigned_to' ? 'filter-assignee-user-u50' : kind === 'source' ? 'filter-option-source50' : 'filter-option-t50'
     expect(get(extraId).attributes('disabled')).toBeDefined()
     expect(get(`filter-editor-${kind}`).text()).toContain('50 values selected')
     await check(selectedId, false)
@@ -159,6 +165,49 @@ describe('FilterBar committed filters', () => {
     await check(extraId, true)
     expect(wrapper.props('clauses')).toHaveLength(1)
     expect(get(extraId).element).toHaveProperty('checked', true)
+  })
+})
+
+// Slice 011e e2 (docs/specs/SLICE_011e.md §5, §9.17): the multi-select
+// editor reused verbatim for `tags`/`not_tags`, options from the shared
+// `tags` prop like `stages`.
+describe('FilterBar tags and not_tags (Slice 011e e2)', () => {
+  it('shows two chips at once, comma-joined names, and an unknown-tag placeholder for a missing id', async () => {
+    setup([
+      { kind: 'tags', tag_ids: ['tag-1', 'tag-2'] },
+      { kind: 'not_tags', tag_ids: ['missing-tag-id'] },
+    ])
+    expect(get('filter-chip-tags').text()).toContain('Tagged: Investor, Past client')
+    expect(get('filter-chip-not_tags').text()).toContain('Not tagged: an unknown tag')
+    expect(body().text()).not.toContain('missing-tag-id')
+  })
+
+  it('selects tag options via the shared multi-select editor and commits tag_ids', async () => {
+    const wrapper = setup()
+    await open('tags')
+    expect(get('filter-editor-tags').element).toBeDefined()
+    await check('filter-option-tag-1', true)
+    await check('filter-option-tag-2', true)
+    expect(wrapper.props('clauses')).toEqual([{ kind: 'tags', tag_ids: ['tag-1', 'tag-2'] }])
+    await click('filter-editor-done')
+    await open('not_tags')
+    await check('filter-option-tag-1', true)
+    expect(wrapper.props('clauses')).toEqual([
+      { kind: 'tags', tag_ids: ['tag-1', 'tag-2'] },
+      { kind: 'not_tags', tag_ids: ['tag-1'] },
+    ])
+  })
+
+  it('reports tags loading and error states, and supports retry', async () => {
+    const wrapper = setup([], { tags: [], tagsPending: true })
+    await open('tags')
+    expect(get('filter-editor-tags').text()).toContain('Loading tags')
+    await wrapper.setProps({ tagsPending: false, tagsError: true })
+    const retry = get('filter-editor-tags').findAll('button').find((button) => button.text() === 'Retry')!
+    await retry.trigger('click')
+    expect(wrapper.emitted('retry-options')).toEqual([['tags']])
+    await wrapper.setProps({ tagsError: false })
+    expect(get('filter-editor-tags').text()).toContain('No tags available')
   })
 })
 

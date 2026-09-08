@@ -15,6 +15,7 @@ import type {
   PersonDetailResponse,
   SavedListCountResponse,
   SavedListDetailResponse,
+  TagsResponse,
   UpdateSavedListRequest,
   UpdateSavedListResponse,
 } from '../api/types'
@@ -36,6 +37,10 @@ const SAVED_LIST_B = '77777777-7777-4777-8777-777777777777'
 const phoneFilter: FilterClause[] = [{ kind: 'has_phone', value: true }]
 const emailFilter: FilterClause[] = [{ kind: 'has_email', value: false }]
 const meFilter: FilterClause[] = [{ kind: 'assigned_to', assignees: ['me'] }]
+// Slice 011e e2 (docs/specs/SLICE_011e.md §9.17).
+const TAG_ID = '88888888-8888-4888-8888-888888888888'
+const tagsFilter: FilterClause[] = [{ kind: 'tags', tag_ids: [TAG_ID] }]
+const notTagsFilter: FilterClause[] = [{ kind: 'not_tags', tag_ids: [TAG_ID] }]
 
 function me(orgId = ORG_ID, role: 'member' | 'admin' = 'member'): MeResponse {
   return {
@@ -117,6 +122,7 @@ function deferred<T>() {
 interface StubOptions {
   people?: (filter: string | null, sort: string | null) => PeopleResponse | Promise<PeopleResponse> | ApiError
   sources?: () => InquirySourcesResponse | Promise<InquirySourcesResponse>
+  tags?: () => TagsResponse | Promise<TagsResponse>
   person?: (id: string) => PersonDetailResponse | Promise<PersonDetailResponse> | ApiError
   savedList?: (id: string) => SavedListDetailResponse | Promise<SavedListDetailResponse> | ApiError
   savedCount?: (id: string, revision: number) => SavedListCountResponse | Promise<SavedListCountResponse> | ApiError
@@ -131,6 +137,7 @@ function stub(options: StubOptions = {}) {
     if (path === '/stages') return { stages: [{ id: STAGE_ID, name: 'Lead', position: 1 }] }
     if (path === '/organization/members') return { members: [] }
     if (path === '/inquiry-sources') return options.sources?.() ?? { sources: ['website', 'zillow'], truncated: false }
+    if (path === '/tags') return options.tags?.() ?? { tags: [] }
     if (path === '/saved-lists' && init?.method === 'POST') {
       const body = JSON.parse(String(init.body)) as CreateSavedListRequest
       const response = options.createSavedList?.(body)
@@ -345,6 +352,31 @@ describe('People filters and URL navigation', () => {
     const reloaded = await mountView(router.currentRoute.value.fullPath)
     expect(filterState(reloaded.wrapper)).toEqual(meFilter)
   })
+
+  // Slice 011e e2 (docs/specs/SLICE_011e.md §9.17): a `tags` clause
+  // round-trips through the URL exactly like every other clause kind.
+  it('a tags clause round-trips through the URL and reload', async () => {
+    stub()
+    const { wrapper, router } = await mountView()
+    edit(wrapper, tagsFilter)
+    await flushPromises()
+    expect(router.currentRoute.value.query.filter).toBe(serialized(tagsFilter))
+    const reloaded = await mountView(router.currentRoute.value.fullPath)
+    expect(filterState(reloaded.wrapper)).toEqual(tagsFilter)
+  })
+
+  // Review round 1, tester F6: `not_tags` beside `tags` above -- the two
+  // clause kinds share a wire shape (`{kind, tag_ids}`) closely enough
+  // that a URL-encoding regression could confuse one for the other.
+  it('a not_tags clause round-trips through the URL and reload', async () => {
+    stub()
+    const { wrapper, router } = await mountView()
+    edit(wrapper, notTagsFilter)
+    await flushPromises()
+    expect(router.currentRoute.value.query.filter).toBe(serialized(notTagsFilter))
+    const reloaded = await mountView(router.currentRoute.value.fullPath)
+    expect(filterState(reloaded.wrapper)).toEqual(notTagsFilter)
+  })
 })
 
 describe('People result feedback and failures', () => {
@@ -370,6 +402,18 @@ describe('People result feedback and failures', () => {
     expect(router.currentRoute.value.query.filter).toBe(serialized(phoneFilter))
     expect(wrapper.text()).toContain('Could not load people')
     expect(wrapper.text()).toContain('Try again')
+  })
+
+  // Slice 011e e2 (docs/specs/SLICE_011e.md §9.17): a foreign/deleted tag
+  // id behaves exactly like the existing invalid_stage/invalid_assignee
+  // URL-origin degrade -- clear criteria and refetch the plain list.
+  it('a URL-origin invalid_tag 422 clears criteria and refetches the plain list', async () => {
+    stub({ people: (filter) => filter ? new ApiError(422, 'invalid_tag') : result() })
+    const { wrapper, router } = await mountView(filteredPath(tagsFilter))
+    expect(router.currentRoute.value.query.filter).toBeUndefined()
+    expect(filterState(wrapper)).toEqual([])
+    expect(wrapper.text()).toContain('Grace Hopper')
+    expect(peoplePaths()).toEqual([filteredPath(tagsFilter), '/people'])
   })
 
   it('503 preserves a shared filter and offers retry', async () => {
@@ -522,6 +566,66 @@ describe('Saved-list workspace safety', () => {
     expect(wrapper.text()).toContain('Match count paused')
     expect(wrapper.text()).not.toContain('Loading people…')
     expect(wrapper.text()).not.toContain('Updating match count…')
+  })
+
+  // Slice 011e e2 (docs/specs/SLICE_011e.md §9.14, §9.17): a deleted tag
+  // pauses a named list exactly like a deleted stage.
+  it('pauses saved criteria naming a deleted tag without presenting disabled work as loading', async () => {
+    stub({
+      savedList: (id) => ({
+        ...savedDetail(id, tagsFilter),
+        filter_error: 'invalid_tag',
+      }),
+    })
+    const { wrapper } = await mountView(`/lists/${SAVED_LIST_A}`)
+    expect(peoplePaths()).toEqual([])
+    expect(wrapper.text()).toContain('People are paused until the criteria are repaired.')
+    expect(wrapper.text()).toContain('Match count paused')
+  })
+
+  // §9.14's "the writer repairs by editing": once the WORKING draft no
+  // longer names the deleted tag, People loads from that local repair --
+  // never a round-trip through the stale stored (still-422ing) definition.
+  it('a local repair of an unresolvable tag reference loads People without a round-trip 422', async () => {
+    stub({
+      savedList: (id) => ({
+        ...editableSavedDetail(id, tagsFilter),
+        filter_error: 'invalid_tag',
+      }),
+    })
+    const { wrapper } = await mountView(`/lists/${SAVED_LIST_A}`)
+    expect(peoplePaths()).toEqual([])
+    expect(wrapper.text()).toContain('People are paused until the criteria are repaired.')
+    edit(wrapper, [])
+    await flushPromises()
+    expect(peoplePaths()).toContain(filteredPath([]))
+    expect(wrapper.text()).toContain('Grace Hopper')
+    expect(wrapper.text()).not.toContain('People are paused until the criteria are repaired.')
+  })
+
+  // Review round 1, tester F5: a "repair" that still names the same
+  // unresolvable tag id must NOT lift the pause, even though the draft
+  // has changed (an added `has_phone` clause) and so is no longer equal
+  // to the stored baseline. `stub()`'s default `/tags` response is
+  // `{ tags: [] }`, so `TAG_ID` never resolves -- this is decisive
+  // against a regression that deleted the `tags`/`not_tags` branch of
+  // `hasResolvableReferences` (PeopleView.vue), which would otherwise
+  // treat any changed-but-unrelated draft as resolved the moment
+  // `workingFilterChanged` alone went true.
+  it('a repair that still names the same unknown tag stays paused with no People request', async () => {
+    stub({
+      savedList: (id) => ({
+        ...editableSavedDetail(id, tagsFilter),
+        filter_error: 'invalid_tag',
+      }),
+    })
+    const { wrapper } = await mountView(`/lists/${SAVED_LIST_A}`)
+    expect(peoplePaths()).toEqual([])
+    expect(wrapper.text()).toContain('People are paused until the criteria are repaired.')
+    edit(wrapper, [...tagsFilter, ...phoneFilter])
+    await flushPromises()
+    expect(peoplePaths()).toEqual([])
+    expect(wrapper.text()).toContain('People are paused until the criteria are repaired.')
   })
 
   it('a stored sort this binary cannot parse fails closed exactly like an unreadable filter', async () => {

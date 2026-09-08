@@ -358,6 +358,73 @@ async fn today_source_commands_are_idempotent_and_disable_stored_invalid_source(
     );
 }
 
+/// docs/specs/SLICE_011e.md §9.14: `GET /api/today/sources` (via
+/// `list_today_work_sources`) reports `filter_error:"invalid_tag"` -- never
+/// `unsupported_filter` -- for a source naming a tag that has since been
+/// deleted.
+#[sqlx::test]
+#[ignore]
+async fn today_source_reports_invalid_tag_for_a_deleted_tag(migrator_pool: PgPool) {
+    let (organization_id, owner_id) = create_org_with_stages_and_member(
+        &migrator_pool,
+        "Today source invalid tag",
+        "owner@today-source-invalid-tag.test",
+        "Owner",
+        PW,
+    )
+    .await;
+    let app_pool = connect_as_app(&migrator_pool).await;
+    let list = create_list(
+        &app_pool,
+        organization_id,
+        owner_id,
+        SavedListScope::Personal,
+        "Tag source",
+    )
+    .await;
+    enable(
+        &app_pool,
+        organization_id,
+        owner_id,
+        list.list.id,
+        list.list.revision,
+    )
+    .await
+    .unwrap();
+
+    let tag_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO tag (organization_id, name, created_by_user_id) VALUES ($1, $2, $3) \
+         RETURNING id",
+    )
+    .bind(organization_id)
+    .bind("Will be deleted")
+    .bind(owner_id)
+    .fetch_one(&migrator_pool)
+    .await
+    .unwrap();
+    let filter_json =
+        format!(r#"{{"version":1,"clauses":[{{"kind":"tags","tag_ids":["{tag_id}"]}}]}}"#);
+    sqlx::query("UPDATE saved_list SET filter = $1::jsonb WHERE id = $2")
+        .bind(filter_json)
+        .bind(list.list.id.as_uuid())
+        .execute(&migrator_pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM tag WHERE id = $1")
+        .bind(tag_id)
+        .execute(&migrator_pool)
+        .await
+        .unwrap();
+
+    let configured = list_sources(&app_pool, organization_id, owner_id, Role::Member).await;
+    assert_eq!(configured.len(), 1);
+    assert_eq!(configured[0].list_id, list.list.id);
+    assert!(matches!(
+        configured[0].filter_error,
+        Some(saved_list::SavedListFilterError::InvalidTag)
+    ));
+}
+
 /// The quota is based on current live visible definitions. A retained source
 /// row for a rollback-era tombstone does not appear in configuration and does
 /// not consume one of the five slots.

@@ -577,6 +577,152 @@ async fn invalid_stage_reference_is_422_invalid_stage(migrator_pool: PgPool) {
     assert_eq!(body["error"], "invalid_stage");
 }
 
+/// docs/specs/SLICE_011e.md §9.14: write time -- a foreign tag id on
+/// `PUT /api/organization/today-feeds/{key}` is 422 `invalid_tag`, never
+/// `unsupported_filter`. Read time -- a tag deleted out from under a
+/// stored, previously valid definition falls back to `InvalidDefinition`
+/// (canonical fallback): the admin read shows `filter_error:"invalid_tag"`
+/// with the stored (unresolved) definition, and the member read shows the
+/// effective canonical description instead.
+#[sqlx::test]
+#[ignore]
+async fn invalid_tag_reference_is_422_on_write_and_falls_back_on_read(migrator_pool: PgPool) {
+    let (org_id, admin_id, _member_id) = create_org_with_admin_and_member(
+        &migrator_pool,
+        "011e f3 invalid tag",
+        "admin@e011-f3-invalid-tag.test",
+        "member@e011-f3-invalid-tag.test",
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let router = crate::common::build_router(&migrator_pool).await;
+    let admin_cookie =
+        crate::common::login_cookie(&router, "admin@e011-f3-invalid-tag.test", PW).await;
+
+    // Write time: a random uuid tag id is 422 invalid_tag.
+    let random_uuid = Uuid::new_v4();
+    let write_body = json!({
+        "expected_revision": 1,
+        "filter": {
+            "version": 1,
+            "clauses": [
+                {"kind": "assigned_to", "assignees": ["me"]},
+                {"kind": "awaiting_response", "value": true},
+                {"kind": "tags", "tag_ids": [random_uuid]}
+            ]
+        },
+        "fresh_within_hours": 24
+    });
+    let response = crate::common::put_json_with_cookie(
+        &router,
+        "/api/organization/today-feeds/unanswered_inquiry",
+        &admin_cookie,
+        write_body,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let body = crate::common::body_json(response).await;
+    assert_eq!(body["error"], "invalid_tag");
+    assert_ne!(body["error"], "unsupported_filter");
+
+    // A real tag applied successfully, then deleted underneath the row.
+    let tag_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO tag (organization_id, name, created_by_user_id) VALUES ($1, $2, $3) \
+         RETURNING id",
+    )
+    .bind(org_id)
+    .bind("Will be deleted")
+    .bind(admin_id)
+    .fetch_one(&app_pool)
+    .await
+    .unwrap();
+
+    let applied_body = json!({
+        "expected_revision": 1,
+        "filter": {
+            "version": 1,
+            "clauses": [
+                {"kind": "assigned_to", "assignees": ["me"]},
+                {"kind": "awaiting_response", "value": true},
+                {"kind": "tags", "tag_ids": [tag_id]}
+            ]
+        },
+        "fresh_within_hours": 24
+    });
+    let applied_resp = crate::common::put_json_with_cookie(
+        &router,
+        "/api/organization/today-feeds/unanswered_inquiry",
+        &admin_cookie,
+        applied_body,
+    )
+    .await;
+    assert_eq!(applied_resp.status(), StatusCode::OK);
+
+    // §9.16: while the tag is still live, the admin read resolves its
+    // real name (proving system_feeds::queries::filter_names loads tag
+    // names, not just stage/user names).
+    let live_admin_resp =
+        crate::common::get_with_cookie(&router, "/api/organization/today-feeds", &admin_cookie)
+            .await;
+    let live_admin_body = crate::common::body_json(live_admin_resp).await;
+    let live_unanswered = live_admin_body["feeds"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["feed_key"] == "unanswered_inquiry")
+        .unwrap();
+    assert_eq!(
+        live_unanswered["description"],
+        json!([
+            "Assigned to me",
+            "Awaiting a response",
+            "Tagged Will be deleted"
+        ])
+    );
+
+    sqlx::query("DELETE FROM tag WHERE id = $1")
+        .bind(tag_id)
+        .execute(&app_pool)
+        .await
+        .unwrap();
+
+    // Admin read: the stored (unresolved) definition, filter_error invalid_tag.
+    let admin_resp =
+        crate::common::get_with_cookie(&router, "/api/organization/today-feeds", &admin_cookie)
+            .await;
+    let admin_body = crate::common::body_json(admin_resp).await;
+    let unanswered = admin_body["feeds"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["feed_key"] == "unanswered_inquiry")
+        .unwrap();
+    assert_eq!(unanswered["filter_error"], "invalid_tag");
+    assert_ne!(unanswered["filter_error"], "unsupported_filter");
+
+    // Member read: the EFFECTIVE (canonical, under fallback) definition --
+    // never the customized tags clause, never unsupported_filter.
+    let member_cookie =
+        crate::common::login_cookie(&router, "member@e011-f3-invalid-tag.test", PW).await;
+    let member_resp =
+        crate::common::get_with_cookie(&router, "/api/today/feeds", &member_cookie).await;
+    let member_body = crate::common::body_json(member_resp).await;
+    let member_unanswered = member_body["feeds"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["feed_key"] == "unanswered_inquiry")
+        .unwrap();
+    assert_eq!(
+        member_unanswered["description"],
+        json!(["Assigned to me", "Awaiting a response"])
+    );
+    assert!(!member_unanswered
+        .as_object()
+        .unwrap()
+        .contains_key("filter_error"));
+}
+
 #[sqlx::test]
 #[ignore]
 async fn a_body_over_128_kib_matches_the_existing_payload_too_large_mapping(migrator_pool: PgPool) {

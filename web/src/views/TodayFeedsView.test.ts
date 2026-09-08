@@ -19,6 +19,7 @@ import type {
   PreviewTodayFeedResponse,
   Stage,
   StagesResponse,
+  TagsResponse,
   TodayFeedMutationResponse,
   TodayFeedsResponse,
 } from '../api/types'
@@ -53,6 +54,11 @@ function members(): MembersResponse {
 
 function stages(): StagesResponse {
   return { stages: [{ id: 'stage-1', name: 'Lead', position: 1 }] satisfies Stage[] }
+}
+
+// Slice 011e e2 (docs/specs/SLICE_011e.md §9.17).
+function tags(): TagsResponse {
+  return { tags: [{ id: 'tag-1', name: 'Investor', person_count: 0, can_manage: true }] }
 }
 
 const UNANSWERED_DEFAULT_FILTER = { version: 1 as const, clauses: [{ kind: 'assigned_to' as const, assignees: ['me' as const] }, { kind: 'awaiting_response' as const, value: true }] }
@@ -103,6 +109,7 @@ function stub(options: StubOptions = {}) {
     if (path === '/organization/members') return members()
     if (path === '/stages') return stages()
     if (path === '/inquiry-sources') return { sources: [], truncated: false }
+    if (path === '/tags') return tags()
     if (path === '/organization/today-feeds' && method === 'GET') return options.feeds?.() ?? baseFeeds()
     const updateMatch = /^\/organization\/today-feeds\/([a-z_]+)$/.exec(path)
     if (updateMatch && method === 'PUT') {
@@ -228,6 +235,37 @@ describe('TodayFeedsView editor locking (SLICE_011d §1 rules 3-4)', () => {
     expect(document.body.querySelector('[data-testid="filter-chip-locked-assigned_to"]')).toBeNull()
     expect(document.body.querySelector('[data-testid="filter-chip-remove-awaiting_call_outcome"]')).toBeNull()
     expect(wrapper.find('[data-testid="feed-fresh-hours"]').exists()).toBe(false)
+  })
+})
+
+// Slice 011e e2 (docs/specs/SLICE_011e.md §5, §9.17): the system-feed
+// editor accepts a `tags` chip alongside its locked anchor, exactly like
+// the People list editor.
+describe('TodayFeedsView tags chip (Slice 011e e2)', () => {
+  it('adds a tags clause alongside the locked anchor and PUTs it', async () => {
+    const wrapper = await mountView()
+    await wrapper.get('[data-testid="feed-edit-unanswered_inquiry"]').trigger('click')
+    await flushPromises()
+
+    const editorPanel = wrapper.get('[data-testid="feed-card-unanswered_inquiry"]')
+    const body = new DOMWrapper(document.body)
+    await editorPanel.get('[data-testid="filter-add"]').trigger('click')
+    await flushPromises()
+    await body.get('[data-testid="filter-add-tags"]').trigger('click')
+    await flushPromises()
+    await body.get('[data-testid="filter-option-tag-1"]').setValue(true)
+    await flushPromises()
+    expect(document.body.querySelector('[data-testid="filter-chip-tags"]')?.textContent).toContain('Tagged: Investor')
+
+    await wrapper.get('[data-testid="feed-save-unanswered_inquiry"]').trigger('click')
+    await flushPromises()
+
+    const call = apiFetchMock.mock.calls.find(([path]) => path === '/organization/today-feeds/unanswered_inquiry')!
+    const putBody = JSON.parse((call[1] as RequestInit).body as string)
+    expect(putBody.filter.clauses).toEqual([
+      ...UNANSWERED_DEFAULT_FILTER.clauses,
+      { kind: 'tags', tag_ids: ['tag-1'] },
+    ])
   })
 })
 

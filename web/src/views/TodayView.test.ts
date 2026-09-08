@@ -10,7 +10,7 @@ import PrimeVue from 'primevue/config'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { apiFetch } from '../api/client'
-import type { MeResponse, PersonSummary, TodayItem, TodayResponse } from '../api/types'
+import type { MeResponse, PersonSummary, TodayItem, TodayResponse, TodaySourcesResponse } from '../api/types'
 import TodayView from './TodayView.vue'
 
 vi.mock('../api/client', async (importOriginal) => {
@@ -73,7 +73,7 @@ function lowItem(): TodayItem {
   }
 }
 
-function stubApi(items: TodayItem[]) {
+function stubApi(items: TodayItem[], sources: TodaySourcesResponse['sources'] = []) {
   apiFetchMock.mockImplementation(async (path: string) => {
     if (path === '/me') return me()
     if (path === '/today') {
@@ -84,7 +84,7 @@ function stubApi(items: TodayItem[]) {
         sources: { status: 'complete', issues: [], system_feed_issues: [] },
       } satisfies TodayResponse
     }
-    if (path === '/today/sources') return { limit: 5, sources: [] }
+    if (path === '/today/sources') return { limit: 5, sources }
     if (path === '/today/feeds') {
       return {
         feeds: [
@@ -218,5 +218,19 @@ describe('TodayView — client_replied (SLICE_009 §6)', () => {
     stubApi([clientRepliedItem('normal')])
     const { wrapper } = await mountView()
     expect(wrapper.get('tbody tr').findAll('td')[2].text()).toBe('Normal')
+  })
+})
+
+// Slice 011e e2 (docs/specs/SLICE_011e.md §9.14, §9.17): the Today source
+// panel's per-source notice sentence for invalid_tag, alongside the
+// existing invalid_stage/invalid_assignee sentences.
+describe('TodayView — Today source notices (Slice 011e e2)', () => {
+  it('shows the invalid_tag sentence for a source naming a deleted tag', async () => {
+    stubApi([], [{ list_id: 'list-1', name: 'Investors', scope: 'personal', revision: 1, filter_error: 'invalid_tag' }])
+    const { wrapper } = await mountView()
+    const manageSources = wrapper.findAll('button').find((button) => button.text() === 'Manage sources')!
+    await manageSources.trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('This list refers to a tag that no longer exists.')
   })
 })

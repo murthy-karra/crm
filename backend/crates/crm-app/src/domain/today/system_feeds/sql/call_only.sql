@@ -134,6 +134,15 @@ matched AS (
                     AND NOT EXISTS (SELECT 1 FROM contact_attempted x2 WHERE x2.corrects_id = root2.id)
               )
           )) = $23)
+      -- docs/specs/SLICE_011e.md §4: tags (any-of) / not_tags (none-of).
+      AND ($28::uuid[] IS NULL OR EXISTS (
+            SELECT 1 FROM person_tag pt
+            WHERE pt.organization_id = $1
+              AND pt.person_id = p.id AND pt.tag_id = ANY($28)))
+      AND ($29::uuid[] IS NULL OR NOT EXISTS (
+            SELECT 1 FROM person_tag pt2
+            WHERE pt2.organization_id = $1
+              AND pt2.person_id = p.id AND pt2.tag_id = ANY($29)))
 ),
 capped AS (
     SELECT * FROM matched

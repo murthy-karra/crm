@@ -562,7 +562,11 @@ async fn query_inner_untraced(
                     Some(crate::domain::saved_list::SavedListFilterError::InvalidAssignee) => {
                         "invalid_assignee"
                     }
-                    _ => "unsupported_filter",
+                    Some(crate::domain::saved_list::SavedListFilterError::InvalidTag) => {
+                        "invalid_tag"
+                    }
+                    Some(crate::domain::saved_list::SavedListFilterError::UnsupportedFilter)
+                    | None => "unsupported_filter",
                 },
             );
             issues.push(TodaySourceIssue {
@@ -576,7 +580,11 @@ async fn query_inner_untraced(
                     Some(crate::domain::saved_list::SavedListFilterError::InvalidAssignee) => {
                         TodaySourceIssueError::InvalidAssignee
                     }
-                    _ => TodaySourceIssueError::UnsupportedFilter,
+                    Some(crate::domain::saved_list::SavedListFilterError::InvalidTag) => {
+                        TodaySourceIssueError::InvalidTag
+                    }
+                    Some(crate::domain::saved_list::SavedListFilterError::UnsupportedFilter)
+                    | None => TodaySourceIssueError::UnsupportedFilter,
                 },
             });
             continue;
@@ -683,6 +691,23 @@ async fn query_inner_untraced(
                     name: source.name,
                     revision: source.revision,
                     error: TodaySourceIssueError::InvalidAssignee,
+                });
+            }
+            Ok(Ok(SourceEvaluation::InvalidTag)) => {
+                source_span.record("outcome", "invalid_tag");
+                source_span.record("membership_count", 0usize);
+                source_span.record("prefix_candidate_count", 0usize);
+                #[cfg(feature = "test-support")]
+                test_support::record_source_evaluation(
+                    test_support::SourceEvaluationOutcome::InvalidFilter,
+                    source_started.elapsed(),
+                    source_filter_kinds,
+                );
+                issues.push(TodaySourceIssue {
+                    list_id: source.list_id,
+                    name: source.name,
+                    revision: source.revision,
+                    error: TodaySourceIssueError::InvalidTag,
                 });
             }
             Ok(Err(_)) => {
@@ -1006,6 +1031,7 @@ enum SourceEvaluation {
     },
     InvalidStage,
     InvalidAssignee,
+    InvalidTag,
 }
 
 async fn evaluate_source(
@@ -1055,6 +1081,13 @@ async fn evaluate_source(
                 .execute(&mut *conn)
                 .await?;
             return Ok(SourceEvaluation::InvalidAssignee);
+        }
+        Err(crate::domain::person::filter::FilterError::InvalidTag) => {
+            set_source_statement_timeout_until(conn, deadline).await?;
+            sqlx::query("RELEASE SAVEPOINT today_source")
+                .execute(&mut *conn)
+                .await?;
+            return Ok(SourceEvaluation::InvalidTag);
         }
         Err(crate::domain::person::filter::FilterError::Database(error)) => return Err(error),
         Err(crate::domain::person::filter::FilterError::Malformed) => {

@@ -25,6 +25,7 @@ import {
   useRevertTodayFeedMutation,
   useSetTodayFeedEnabledMutation,
   useStages,
+  useTagsQuery,
   useTodayFeedsAdmin,
   useUpdateTodayFeedMutation,
 } from '../api/queries'
@@ -49,6 +50,7 @@ const feedsQuery = useTodayFeedsAdmin(orgId)
 const stagesQuery = useStages(orgId)
 const membersQuery = useMembers(orgId)
 const sourcesQuery = useInquirySources(orgId)
+const tagsQuery = useTagsQuery(orgId)
 
 const updateMutation = useUpdateTodayFeedMutation(orgId, actorId)
 const revertMutation = useRevertTodayFeedMutation(orgId, actorId)
@@ -309,6 +311,7 @@ const feeds = computed(() => TODAY_FEED_ORDER.map((key) => {
               :stages="stagesQuery.data.value?.stages ?? []"
               :members="membersQuery.data.value?.members ?? []"
               :sources="sourcesQuery.data.value?.sources ?? []"
+              :tags="tagsQuery.data.value?.tags ?? []"
               :stages-pending="stagesQuery.isPending.value"
               :stages-error="stagesQuery.isError.value"
               :members-pending="membersQuery.isPending.value"
@@ -316,6 +319,8 @@ const feeds = computed(() => TODAY_FEED_ORDER.map((key) => {
               :sources-pending="sourcesQuery.isPending.value"
               :sources-error="sourcesQuery.isError.value"
               :sources-truncated="sourcesQuery.data.value?.truncated"
+              :tags-pending="tagsQuery.isPending.value"
+              :tags-error="tagsQuery.isError.value"
               :locked-anchor-kind="TODAY_FEED_ANCHOR_KIND[key]"
               :require-assignee-me="requiresAssigneeMe(key)"
               @update:clauses="onEditClausesChange"

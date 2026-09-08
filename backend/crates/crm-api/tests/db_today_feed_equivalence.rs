@@ -1976,3 +1976,693 @@ async fn preview_of_the_call_feed_caps_at_200_with_truncated(migrator_pool: PgPo
     assert_eq!(preview.items.len(), 200);
     assert!(preview.truncated);
 }
+
+// --- Slice 011e e2 §9.12: a system feed carrying a `tags`/`not_tags`
+// clause alongside its locked anchor (rule 4) ---------------------------
+
+use crm_api::domain::person::filter::TagIdsClause;
+use crm_api::ids::TagId;
+
+async fn f5_insert_tag(pool: &PgPool, organization_id: Uuid, created_by: Uuid, name: &str) -> Uuid {
+    sqlx::query_scalar(
+        "INSERT INTO tag (organization_id, name, created_by_user_id) VALUES ($1, $2, $3) \
+         RETURNING id",
+    )
+    .bind(organization_id)
+    .bind(name)
+    .bind(created_by)
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+async fn f5_apply_tag(
+    pool: &PgPool,
+    organization_id: Uuid,
+    person_id: Uuid,
+    tag_id: Uuid,
+    added_by: Uuid,
+) {
+    sqlx::query(
+        "INSERT INTO person_tag (organization_id, person_id, tag_id, added_by_user_id) \
+         VALUES ($1, $2, $3, $4)",
+    )
+    .bind(organization_id)
+    .bind(person_id)
+    .bind(tag_id)
+    .bind(added_by)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+/// docs/specs/SLICE_011e.md §9.12: an admin edits `unanswered_inquiry`
+/// (a person-state feed) to carry a `tags` clause alongside its locked
+/// `assigned_to: [me]` anchor — only the tagged, awaiting-response Person
+/// is admitted; an awaiting-response Person carrying a DIFFERENT tag is
+/// excluded. Switching the same feed to `not_tags` with the same id
+/// inverts admission (the untagged Person now qualifies too).
+#[sqlx::test]
+#[ignore]
+async fn person_state_feed_with_a_tags_clause_admits_and_excludes(migrator_pool: PgPool) {
+    let (organization_id, alice_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "011e f5 person-state tags",
+        "alice@e011-f5-person-state-tags.test",
+        "Alice",
+        "correct horse battery staple",
+    )
+    .await;
+    f5_promote_to_admin(&migrator_pool, organization_id, alice_id).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let stage_id = first_stage_id(&app_pool, organization_id).await;
+    let now = Utc::now();
+
+    let vip = f5_insert_tag(&app_pool, organization_id, alice_id, "VIP").await;
+    let spam = f5_insert_tag(&app_pool, organization_id, alice_id, "Spam").await;
+
+    // Awaiting-response (an inquiry, no contact attempt), assigned to
+    // alice: the anchor already admits both; only the tag axis decides.
+    let vip_tagged = insert_person(&app_pool, organization_id, stage_id, Some(alice_id)).await;
+    insert_inquiry(
+        &app_pool,
+        organization_id,
+        vip_tagged,
+        "zillow",
+        now - ChronoDuration::hours(1),
+    )
+    .await;
+    f5_apply_tag(&app_pool, organization_id, vip_tagged, vip, alice_id).await;
+
+    let spam_tagged = insert_person(&app_pool, organization_id, stage_id, Some(alice_id)).await;
+    insert_inquiry(
+        &app_pool,
+        organization_id,
+        spam_tagged,
+        "zillow",
+        now - ChronoDuration::hours(1),
+    )
+    .await;
+    f5_apply_tag(&app_pool, organization_id, spam_tagged, spam, alice_id).await;
+
+    let untagged = insert_person(&app_pool, organization_id, stage_id, Some(alice_id)).await;
+    insert_inquiry(
+        &app_pool,
+        organization_id,
+        untagged,
+        "zillow",
+        now - ChronoDuration::hours(1),
+    )
+    .await;
+
+    commands::update_today_system_feed(
+        &app_pool,
+        &f5_command_context(organization_id, alice_id),
+        UpdateTodaySystemFeed {
+            feed_key: FeedKey::UnansweredInquiry,
+            expected_revision: 1,
+            filter: FilterDefinition {
+                version: 1,
+                clauses: vec![
+                    Clause::AssignedTo(AssignedToClause {
+                        assignees: vec![Assignee::Me],
+                    }),
+                    Clause::AwaitingResponse(BoolClause { value: true }),
+                    Clause::Tags(TagIdsClause {
+                        tag_ids: vec![TagId::new(vip)],
+                    }),
+                ],
+            },
+            fresh_within_hours: Some(24),
+        },
+    )
+    .await
+    .unwrap();
+
+    let scope = PersonVisibilityScope::Organization(OrganizationId::new(organization_id));
+    let admits = |list: &crm_api::domain::today::TodayList, person_id: Uuid| -> bool {
+        list.items
+            .iter()
+            .any(|i| i.person.id.as_uuid() == person_id)
+    };
+
+    let mut conn = app_pool.acquire().await.unwrap();
+    let with_tags = today::query_at(&mut conn, &scope, UserId::new(alice_id), now)
+        .await
+        .unwrap();
+    drop(conn);
+    assert!(admits(&with_tags, vip_tagged), "tags: [VIP] admits VIP");
+    assert!(
+        !admits(&with_tags, spam_tagged),
+        "tags: [VIP] excludes a Person tagged only Spam"
+    );
+    assert!(
+        !admits(&with_tags, untagged),
+        "tags: [VIP] excludes an untagged Person"
+    );
+
+    // Flip to `not_tags: [Spam]`: VIP and the untagged Person now qualify;
+    // Spam is excluded — the exact complement, same anchor.
+    commands::update_today_system_feed(
+        &app_pool,
+        &f5_command_context(organization_id, alice_id),
+        UpdateTodaySystemFeed {
+            feed_key: FeedKey::UnansweredInquiry,
+            expected_revision: 2,
+            filter: FilterDefinition {
+                version: 1,
+                clauses: vec![
+                    Clause::AssignedTo(AssignedToClause {
+                        assignees: vec![Assignee::Me],
+                    }),
+                    Clause::AwaitingResponse(BoolClause { value: true }),
+                    Clause::NotTags(TagIdsClause {
+                        tag_ids: vec![TagId::new(spam)],
+                    }),
+                ],
+            },
+            fresh_within_hours: Some(24),
+        },
+    )
+    .await
+    .unwrap();
+
+    let mut conn = app_pool.acquire().await.unwrap();
+    let with_not_tags = today::query_at(&mut conn, &scope, UserId::new(alice_id), now)
+        .await
+        .unwrap();
+    drop(conn);
+    assert!(
+        admits(&with_not_tags, vip_tagged),
+        "not_tags: [Spam] admits VIP"
+    );
+    assert!(
+        admits(&with_not_tags, untagged),
+        "not_tags: [Spam] admits the untagged Person"
+    );
+    assert!(
+        !admits(&with_not_tags, spam_tagged),
+        "not_tags: [Spam] excludes Spam"
+    );
+}
+
+/// docs/specs/SLICE_011e.md §9.12/§9.13 (review round 1, F2/tester F3): the
+/// `client_replied` feed's twin of the test above -- `person_state.sql`
+/// binds the tag-clause parameter chain TWICE, once per person-state feed
+/// (matrix_a's $52/$53 for `unanswered_inquiry`, matrix_b's $54/$55 for
+/// `client_replied`). The prior test only ever exercised matrix_a; this
+/// one exercises matrix_b so a mistake isolated to the second binding
+/// (e.g. a copy-paste that left $54/$55 unbound or misrouted) would fail
+/// here even though the first test passes.
+#[sqlx::test]
+#[ignore]
+async fn person_state_feed_client_replied_with_a_tags_clause_admits_and_excludes(
+    migrator_pool: PgPool,
+) {
+    let (organization_id, alice_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "011e f5 client-replied tags",
+        "alice@e011-f5-client-replied-tags.test",
+        "Alice",
+        "correct horse battery staple",
+    )
+    .await;
+    f5_promote_to_admin(&migrator_pool, organization_id, alice_id).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let stage_id = first_stage_id(&app_pool, organization_id).await;
+    let now = Utc::now();
+
+    let vip = f5_insert_tag(&app_pool, organization_id, alice_id, "VIP").await;
+    let spam = f5_insert_tag(&app_pool, organization_id, alice_id, "Spam").await;
+
+    // An unanswered client reply: an inquiry (so `person_state.sql`'s
+    // `latest.id IS NOT NULL` gate is satisfied), then a contact attempt
+    // that answers it (so the untouched, still-canonical
+    // `unanswered_inquiry` feed's `awaiting_response` axis is FALSE for
+    // all three -- otherwise every Person here, having an inquiry and
+    // being assigned to alice, would also qualify for that unrelated
+    // feed regardless of this test's `client_replied` customization),
+    // then an inbound correspondence AFTER that attempt (so
+    // `client_replied_unanswered` is TRUE). Assigned to alice: the
+    // `client_replied` anchor already admits all three; only the tag
+    // axis decides.
+    let vip_tagged = insert_person(&app_pool, organization_id, stage_id, Some(alice_id)).await;
+    insert_inquiry(
+        &app_pool,
+        organization_id,
+        vip_tagged,
+        "zillow",
+        now - ChronoDuration::hours(3),
+    )
+    .await;
+    insert_contact_attempt(
+        &app_pool,
+        organization_id,
+        vip_tagged,
+        now - ChronoDuration::hours(2),
+    )
+    .await;
+    insert_correspondence(
+        &app_pool,
+        organization_id,
+        vip_tagged,
+        alice_id,
+        "inbound",
+        now - ChronoDuration::hours(1),
+    )
+    .await;
+    f5_apply_tag(&app_pool, organization_id, vip_tagged, vip, alice_id).await;
+
+    let spam_tagged = insert_person(&app_pool, organization_id, stage_id, Some(alice_id)).await;
+    insert_inquiry(
+        &app_pool,
+        organization_id,
+        spam_tagged,
+        "zillow",
+        now - ChronoDuration::hours(3),
+    )
+    .await;
+    insert_contact_attempt(
+        &app_pool,
+        organization_id,
+        spam_tagged,
+        now - ChronoDuration::hours(2),
+    )
+    .await;
+    insert_correspondence(
+        &app_pool,
+        organization_id,
+        spam_tagged,
+        alice_id,
+        "inbound",
+        now - ChronoDuration::hours(1),
+    )
+    .await;
+    f5_apply_tag(&app_pool, organization_id, spam_tagged, spam, alice_id).await;
+
+    let untagged = insert_person(&app_pool, organization_id, stage_id, Some(alice_id)).await;
+    insert_inquiry(
+        &app_pool,
+        organization_id,
+        untagged,
+        "zillow",
+        now - ChronoDuration::hours(3),
+    )
+    .await;
+    insert_contact_attempt(
+        &app_pool,
+        organization_id,
+        untagged,
+        now - ChronoDuration::hours(2),
+    )
+    .await;
+    insert_correspondence(
+        &app_pool,
+        organization_id,
+        untagged,
+        alice_id,
+        "inbound",
+        now - ChronoDuration::hours(1),
+    )
+    .await;
+
+    commands::update_today_system_feed(
+        &app_pool,
+        &f5_command_context(organization_id, alice_id),
+        UpdateTodaySystemFeed {
+            feed_key: FeedKey::ClientReplied,
+            expected_revision: 1,
+            filter: FilterDefinition {
+                version: 1,
+                clauses: vec![
+                    Clause::AssignedTo(AssignedToClause {
+                        assignees: vec![Assignee::Me],
+                    }),
+                    Clause::ClientRepliedUnanswered(BoolClause { value: true }),
+                    Clause::Tags(TagIdsClause {
+                        tag_ids: vec![TagId::new(vip)],
+                    }),
+                ],
+            },
+            fresh_within_hours: Some(24),
+        },
+    )
+    .await
+    .unwrap();
+
+    let scope = PersonVisibilityScope::Organization(OrganizationId::new(organization_id));
+    let admits = |list: &crm_api::domain::today::TodayList, person_id: Uuid| -> bool {
+        list.items
+            .iter()
+            .any(|i| i.person.id.as_uuid() == person_id)
+    };
+
+    let mut conn = app_pool.acquire().await.unwrap();
+    let with_tags = today::query_at(&mut conn, &scope, UserId::new(alice_id), now)
+        .await
+        .unwrap();
+    drop(conn);
+    assert!(admits(&with_tags, vip_tagged), "tags: [VIP] admits VIP");
+    assert!(
+        !admits(&with_tags, spam_tagged),
+        "tags: [VIP] excludes a Person tagged only Spam"
+    );
+    assert!(
+        !admits(&with_tags, untagged),
+        "tags: [VIP] excludes an untagged Person"
+    );
+
+    // Flip to `not_tags: [Spam]`: VIP and the untagged Person now qualify;
+    // Spam is excluded — the exact complement, same anchor.
+    commands::update_today_system_feed(
+        &app_pool,
+        &f5_command_context(organization_id, alice_id),
+        UpdateTodaySystemFeed {
+            feed_key: FeedKey::ClientReplied,
+            expected_revision: 2,
+            filter: FilterDefinition {
+                version: 1,
+                clauses: vec![
+                    Clause::AssignedTo(AssignedToClause {
+                        assignees: vec![Assignee::Me],
+                    }),
+                    Clause::ClientRepliedUnanswered(BoolClause { value: true }),
+                    Clause::NotTags(TagIdsClause {
+                        tag_ids: vec![TagId::new(spam)],
+                    }),
+                ],
+            },
+            fresh_within_hours: Some(24),
+        },
+    )
+    .await
+    .unwrap();
+
+    let mut conn = app_pool.acquire().await.unwrap();
+    let with_not_tags = today::query_at(&mut conn, &scope, UserId::new(alice_id), now)
+        .await
+        .unwrap();
+    drop(conn);
+    assert!(
+        admits(&with_not_tags, vip_tagged),
+        "not_tags: [Spam] admits VIP"
+    );
+    assert!(
+        admits(&with_not_tags, untagged),
+        "not_tags: [Spam] admits the untagged Person"
+    );
+    assert!(
+        !admits(&with_not_tags, spam_tagged),
+        "not_tags: [Spam] excludes Spam"
+    );
+}
+
+/// docs/specs/SLICE_011e.md §9.12: the call feed edited to carry a `tags`
+/// clause alongside its locked `awaiting_call_outcome: true` anchor admits
+/// only the tagged caller-of-alice's qualifying-call Person.
+#[sqlx::test]
+#[ignore]
+async fn call_feed_with_a_tags_clause_admits_and_excludes(migrator_pool: PgPool) {
+    let (organization_id, alice_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "011e f5 call feed tags",
+        "alice@e011-f5-call-feed-tags.test",
+        "Alice",
+        "correct horse battery staple",
+    )
+    .await;
+    f5_promote_to_admin(&migrator_pool, organization_id, alice_id).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let stage_id = first_stage_id(&app_pool, organization_id).await;
+    let now = Utc::now();
+
+    let vip = f5_insert_tag(&app_pool, organization_id, alice_id, "VIP").await;
+
+    let vip_tagged = insert_person(&app_pool, organization_id, stage_id, Some(alice_id)).await;
+    insert_inquiry(
+        &app_pool,
+        organization_id,
+        vip_tagged,
+        "zillow",
+        now - ChronoDuration::days(1),
+    )
+    .await;
+    insert_call(
+        &app_pool,
+        organization_id,
+        vip_tagged,
+        alice_id,
+        now - ChronoDuration::hours(1),
+        false,
+    )
+    .await;
+    f5_apply_tag(&app_pool, organization_id, vip_tagged, vip, alice_id).await;
+
+    let untagged = insert_person(&app_pool, organization_id, stage_id, Some(alice_id)).await;
+    insert_inquiry(
+        &app_pool,
+        organization_id,
+        untagged,
+        "zillow",
+        now - ChronoDuration::days(1),
+    )
+    .await;
+    insert_call(
+        &app_pool,
+        organization_id,
+        untagged,
+        alice_id,
+        now - ChronoDuration::hours(1),
+        false,
+    )
+    .await;
+
+    // Review round 1, tester F4: `vip_tagged`/`untagged` above are only
+    // ever call-only candidates (`call_only.sql`) -- their one Inquiry is
+    // answered by the call's own automatic root contact_attempt, so
+    // `person_state.sql`'s `waiting` probe (an Inquiry received after the
+    // Person's last contact) never admits them and `call_membership.sql`
+    // (which narrows Persons ALREADY retained by a person-state feed) is
+    // never exercised. Give a Person a second, later Inquiry that arrives
+    // AFTER the call's automatic contact_attempt: `waiting_received_at`
+    // then resolves to that new Inquiry, so `unanswered_inquiry` retains
+    // them (awaiting response) at the same time their earlier call's
+    // outcome is still unresolved -- both axes are independent in SQL, so
+    // nothing here prevents them holding at once, and `call_membership`'s
+    // own tag parameters ($27/$28) are what this fixture exercises.
+    let retained_and_call_vip =
+        insert_person(&app_pool, organization_id, stage_id, Some(alice_id)).await;
+    insert_inquiry(
+        &app_pool,
+        organization_id,
+        retained_and_call_vip,
+        "zillow",
+        now - ChronoDuration::days(3),
+    )
+    .await;
+    insert_call(
+        &app_pool,
+        organization_id,
+        retained_and_call_vip,
+        alice_id,
+        now - ChronoDuration::days(2),
+        false,
+    )
+    .await;
+    insert_inquiry(
+        &app_pool,
+        organization_id,
+        retained_and_call_vip,
+        "zillow",
+        now - ChronoDuration::days(1),
+    )
+    .await;
+    f5_apply_tag(
+        &app_pool,
+        organization_id,
+        retained_and_call_vip,
+        vip,
+        alice_id,
+    )
+    .await;
+
+    commands::update_today_system_feed(
+        &app_pool,
+        &f5_command_context(organization_id, alice_id),
+        UpdateTodaySystemFeed {
+            feed_key: FeedKey::CallOutcomeNeeded,
+            expected_revision: 1,
+            filter: FilterDefinition {
+                version: 1,
+                clauses: vec![
+                    Clause::AwaitingCallOutcome(BoolClause { value: true }),
+                    Clause::Tags(TagIdsClause {
+                        tag_ids: vec![TagId::new(vip)],
+                    }),
+                ],
+            },
+            fresh_within_hours: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    let scope = PersonVisibilityScope::Organization(OrganizationId::new(organization_id));
+    let mut conn = app_pool.acquire().await.unwrap();
+    let list = today::query_at(&mut conn, &scope, UserId::new(alice_id), now)
+        .await
+        .unwrap();
+    drop(conn);
+    let call_outcome_item = |person_id: Uuid| -> bool {
+        list.items.iter().any(|i| {
+            i.person.id.as_uuid() == person_id
+                && i.reasons.iter().any(|r| {
+                    matches!(
+                        r,
+                        crm_api::domain::today::TodayReason::CallOutcomeNeeded { .. }
+                    )
+                })
+        })
+    };
+    assert!(
+        call_outcome_item(vip_tagged),
+        "tags: [VIP] admits the tagged caller-of-alice Person with a CallOutcomeNeeded reason"
+    );
+    assert!(
+        !call_outcome_item(untagged),
+        "tags: [VIP] excludes the untagged Person from the call feed"
+    );
+    assert!(
+        call_outcome_item(retained_and_call_vip),
+        "tags: [VIP] admits the tagged, person-state-retained Person's CallOutcomeNeeded reason \
+         via call_membership.sql"
+    );
+
+    // Flip to `not_tags: [VIP]`: the exact complement on `call_membership`
+    // and `call_only` alike -- `untagged` now gains the reason, both
+    // VIP-tagged Persons lose it (the retained one keeps its
+    // `unanswered_inquiry` presence in Today via its own reasons, just not
+    // `CallOutcomeNeeded`).
+    commands::update_today_system_feed(
+        &app_pool,
+        &f5_command_context(organization_id, alice_id),
+        UpdateTodaySystemFeed {
+            feed_key: FeedKey::CallOutcomeNeeded,
+            expected_revision: 2,
+            filter: FilterDefinition {
+                version: 1,
+                clauses: vec![
+                    Clause::AwaitingCallOutcome(BoolClause { value: true }),
+                    Clause::NotTags(TagIdsClause {
+                        tag_ids: vec![TagId::new(vip)],
+                    }),
+                ],
+            },
+            fresh_within_hours: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    let mut conn = app_pool.acquire().await.unwrap();
+    let list_not_tags = today::query_at(&mut conn, &scope, UserId::new(alice_id), now)
+        .await
+        .unwrap();
+    drop(conn);
+    let call_outcome_item_not_tags = |person_id: Uuid| -> bool {
+        list_not_tags.items.iter().any(|i| {
+            i.person.id.as_uuid() == person_id
+                && i.reasons.iter().any(|r| {
+                    matches!(
+                        r,
+                        crm_api::domain::today::TodayReason::CallOutcomeNeeded { .. }
+                    )
+                })
+        })
+    };
+    assert!(
+        call_outcome_item_not_tags(untagged),
+        "not_tags: [VIP] admits the untagged, call-only Person's CallOutcomeNeeded reason"
+    );
+    assert!(
+        !call_outcome_item_not_tags(vip_tagged),
+        "not_tags: [VIP] excludes the tagged, call-only Person"
+    );
+    assert!(
+        !call_outcome_item_not_tags(retained_and_call_vip),
+        "not_tags: [VIP] excludes the tagged, person-state-retained Person's \
+         CallOutcomeNeeded reason via call_membership.sql"
+    );
+}
+
+/// docs/specs/SLICE_011e.md §9.14: a system feed's stored definition
+/// naming a tag id that has since been deleted falls back to canonical on
+/// Today, reported exactly like a deleted stage --
+/// `SystemFeedIssueError::InvalidDefinition` with `fallback: true`, never
+/// a 503 and never silently swallowed.
+#[sqlx::test]
+#[ignore]
+async fn a_stored_feed_referencing_a_deleted_tag_reports_invalid_definition_fallback(
+    migrator_pool: PgPool,
+) {
+    let (organization_id, alice_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "011e f3 feed tag fallback",
+        "alice@e011-f3-feed-tag-fallback.test",
+        "Alice",
+        "correct horse battery staple",
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let now = Utc::now();
+
+    let tag_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO tag (organization_id, name, created_by_user_id) VALUES ($1, $2, $3) \
+         RETURNING id",
+    )
+    .bind(organization_id)
+    .bind("Will be deleted")
+    .bind(alice_id)
+    .fetch_one(&app_pool)
+    .await
+    .unwrap();
+    sqlx::query("DELETE FROM tag WHERE id = $1")
+        .bind(tag_id)
+        .execute(&app_pool)
+        .await
+        .unwrap();
+
+    let broken_filter = serde_json::json!({
+        "version": 1,
+        "clauses": [
+            {"kind": "assigned_to", "assignees": ["me"]},
+            {"kind": "awaiting_response", "value": true},
+            {"kind": "tags", "tag_ids": [tag_id]},
+        ]
+    });
+    sqlx::query(
+        "UPDATE today_system_feed SET filter = $1, enabled = true, revision = revision + 1
+         WHERE organization_id = $2 AND feed_key = 'unanswered_inquiry'",
+    )
+    .bind(&broken_filter)
+    .bind(organization_id)
+    .execute(&app_pool)
+    .await
+    .unwrap();
+
+    let scope = PersonVisibilityScope::Organization(OrganizationId::new(organization_id));
+    let mut conn = app_pool.acquire().await.unwrap();
+    let list = today::query_at(&mut conn, &scope, UserId::new(alice_id), now)
+        .await
+        .unwrap();
+    assert_eq!(list.sources.system_feed_issues.len(), 1);
+    assert_eq!(
+        list.sources.system_feed_issues[0].feed_key,
+        "unanswered_inquiry"
+    );
+    assert!(list.sources.system_feed_issues[0].fallback);
+    assert!(matches!(
+        list.sources.system_feed_issues[0].error,
+        crm_api::domain::today::SystemFeedIssueError::InvalidDefinition
+    ));
+}

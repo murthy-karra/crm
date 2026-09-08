@@ -227,6 +227,10 @@ pub(crate) async fn person_state_candidates(
         feed_b.enabled,
         fresh_hours_a,
         fresh_hours_b,
+        params_a.tag_ids_any.as_deref(),
+        params_a.tag_ids_none.as_deref(),
+        params_b.tag_ids_any.as_deref(),
+        params_b.tag_ids_none.as_deref(),
     )
     .fetch_all(conn)
     .await?;
@@ -293,6 +297,8 @@ pub(crate) async fn call_membership(
         viewer.0,
         retained_ids,
         now,
+        params.tag_ids_any.as_deref(),
+        params.tag_ids_none.as_deref(),
     )
     .fetch_all(conn)
     .await?;
@@ -432,6 +438,8 @@ pub(crate) async fn call_only_candidates(
         retained_ids,
         limit,
         now,
+        params.tag_ids_any.as_deref(),
+        params.tag_ids_none.as_deref(),
     )
     .fetch_all(conn)
     .await?;

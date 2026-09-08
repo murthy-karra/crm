@@ -21,10 +21,11 @@ use crate::common::{
 use crm_api::auth::AuthContext;
 use crm_api::domain::admin::{MembershipStatus, Role};
 use crm_api::domain::envelope::{CommandContext, Origin};
-use crm_api::domain::person::filter::FilterDefinition;
+use crm_api::domain::person::filter::{Clause, FilterDefinition, TagIdsClause};
 use crm_api::domain::saved_list::{
     self, CreateSavedList, SavedListError, SavedListScope, MAX_WIRE_REVISION,
 };
+use crm_api::domain::tag::{self, CreateTag, DeleteTag};
 use crm_api::domain::today::{self, EnableTodayWorkSource, TodaySource};
 use crm_api::ids::{CorrelationId, OrganizationId, SavedListId, UserId};
 
@@ -766,4 +767,177 @@ async fn five_rollback_tombstones_are_invisible_and_leave_all_five_source_slots_
     .await
     .unwrap();
     assert_eq!(raw_preference_count, 10);
+}
+
+/// docs/specs/SLICE_011e.md §4b (review round 1, reviewer F3): the
+/// write-time path -- `PUT /api/today/sources/{list_id}`, i.e.
+/// `enable_today_work_source`'s own reference validation -- rejects a
+/// stored `tags` clause naming a tag that has since been hard-deleted
+/// with exactly `422 {"error":"invalid_tag"}`, the same body the read-time
+/// (`GET /api/today/sources`) path already reports as
+/// `filter_error:"invalid_tag"` (see
+/// `today_source_reports_invalid_tag_for_a_deleted_tag` in
+/// `db_today_sources.rs`) -- never `unsupported_filter` and never a
+/// generic 400.
+#[sqlx::test]
+#[ignore]
+async fn today_source_enable_http_rejects_a_deleted_tag_with_422_invalid_tag(
+    migrator_pool: PgPool,
+) {
+    let (organization_id, owner_id) = create_org_with_stages_and_member(
+        &migrator_pool,
+        "Today source enable deleted tag",
+        "owner@today-source-enable-deleted-tag.test",
+        "Owner",
+        PW,
+    )
+    .await;
+    let app_pool = connect_as_app(&migrator_pool).await;
+
+    let tag = tag::create_tag(
+        &app_pool,
+        &command_context(organization_id, owner_id),
+        CreateTag {
+            name: "Will be deleted".to_string(),
+        },
+    )
+    .await
+    .unwrap()
+    .tag;
+
+    let list = saved_list::create_saved_list(
+        &app_pool,
+        &command_context(organization_id, owner_id),
+        CreateSavedList {
+            request_id: Uuid::new_v4(),
+            scope: SavedListScope::Personal,
+            name: "Tag source".to_string(),
+            filter: FilterDefinition {
+                version: 1,
+                clauses: vec![Clause::Tags(TagIdsClause {
+                    tag_ids: vec![tag.id],
+                })],
+            },
+            sort: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    tag::delete_tag(
+        &app_pool,
+        &command_context(organization_id, owner_id),
+        DeleteTag { tag_id: tag.id },
+    )
+    .await
+    .unwrap();
+
+    let router = build_router(&migrator_pool).await;
+    let owner_cookie =
+        login_cookie(&router, "owner@today-source-enable-deleted-tag.test", PW).await;
+    let uri = format!("/api/today/sources/{}", list.list.id);
+    let response = put_json_with_cookie(
+        &router,
+        &uri,
+        &owner_cookie,
+        json!({ "expected_list_revision": list.list.revision }),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(body_json(response).await, json!({ "error": "invalid_tag" }));
+
+    assert_eq!(
+        list_sources(&app_pool, organization_id, owner_id, Role::Member)
+            .await
+            .len(),
+        0,
+        "the rejected enable must not create a live source preference"
+    );
+}
+
+/// docs/specs/SLICE_011e.md §4b (review round 1, reviewer F3): a stored
+/// `tags` clause naming a tag id from a DIFFERENT organization -- never
+/// visible to this one -- is indistinguishable from a hard-deleted tag id
+/// to `enable_today_work_source`'s own-organization-scoped existence
+/// check; the write-time path rejects it with the identical
+/// `422 {"error":"invalid_tag"}` body. The stored filter is written
+/// directly (never through `create_saved_list`, which would itself
+/// reject a foreign tag id at creation time) to reach the one state a
+/// live row can end up in that creation-time validation can no longer
+/// prevent -- exactly the shape `today_source_reports_invalid_tag_for_a_deleted_tag`
+/// (`db_today_sources.rs`) already establishes for the read-time path.
+#[sqlx::test]
+#[ignore]
+async fn today_source_enable_http_rejects_a_foreign_tag_id_with_422_invalid_tag(
+    migrator_pool: PgPool,
+) {
+    let (organization_id, owner_id) = create_org_with_stages_and_member(
+        &migrator_pool,
+        "Today source enable foreign tag",
+        "owner@today-source-enable-foreign-tag.test",
+        "Owner",
+        PW,
+    )
+    .await;
+    let (foreign_organization_id, foreign_owner_id) = create_org_with_stages_and_member(
+        &migrator_pool,
+        "Today source enable foreign tag (other org)",
+        "owner@today-source-enable-foreign-tag-other.test",
+        "Other owner",
+        PW,
+    )
+    .await;
+    let app_pool = connect_as_app(&migrator_pool).await;
+
+    let foreign_tag = tag::create_tag(
+        &app_pool,
+        &command_context(foreign_organization_id, foreign_owner_id),
+        CreateTag {
+            name: "Foreign".to_string(),
+        },
+    )
+    .await
+    .unwrap()
+    .tag;
+
+    let list = create_list(
+        &app_pool,
+        organization_id,
+        owner_id,
+        SavedListScope::Personal,
+        "Foreign tag source",
+    )
+    .await;
+    let filter_json = format!(
+        r#"{{"version":1,"clauses":[{{"kind":"tags","tag_ids":["{}"]}}]}}"#,
+        foreign_tag.id
+    );
+    sqlx::query("UPDATE saved_list SET filter = $1::jsonb WHERE id = $2")
+        .bind(filter_json)
+        .bind(list.list.id.as_uuid())
+        .execute(&migrator_pool)
+        .await
+        .unwrap();
+
+    let router = build_router(&migrator_pool).await;
+    let owner_cookie =
+        login_cookie(&router, "owner@today-source-enable-foreign-tag.test", PW).await;
+    let uri = format!("/api/today/sources/{}", list.list.id);
+    let response = put_json_with_cookie(
+        &router,
+        &uri,
+        &owner_cookie,
+        json!({ "expected_list_revision": list.list.revision }),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(body_json(response).await, json!({ "error": "invalid_tag" }));
+
+    assert_eq!(
+        list_sources(&app_pool, organization_id, owner_id, Role::Member)
+            .await
+            .len(),
+        0,
+        "the rejected enable must not create a live source preference"
+    );
 }

@@ -1817,3 +1817,35 @@ contract is approved by this decision; the specification receives its own
 approval.
 
 Blocks: nothing. Feeds the Slice 011e specification and implementation brief.
+
+### D-052 — Trigger-maintained derived columns are a read-model mechanism (2026-09-08)
+
+Accepted (user, at Slice 012 specification). Slice 012 stores four derived
+dates on `person` (`last_inquiry_at`, `last_contact_at`, `last_inbound_at`,
+`last_outbound_at`), each equal at every commit boundary to the maximum of
+the corresponding history rows, so filters and Today stop scanning history.
+
+1. **Database triggers keep them exact.** `AFTER INSERT` triggers on
+   `inquiry`, `contact_attempted` and `correspondence_captured` update the
+   Person row in the same transaction, guarded so a maximum never moves
+   backwards (backdated captures and corrections are no-ops). Chosen over
+   application updates in each typed command because every writer is
+   covered without remembering to (four commands and the future Slice 010
+   import share one insert site), 23 raw-SQL test fixtures stay correct
+   unchanged, and an old binary still running during a deploy keeps the
+   columns exact.
+2. **The history insert remains the only business mutation** (AGENTS §4.8,
+   D-021). A trigger maintaining a derived read-model column (AGENTS §4.7)
+   is in the same category as the schema's append-only `reject_mutation`
+   triggers and composite foreign keys: database-enforced consistency, not a
+   second mutation path. Future derived columns may use the same mechanism
+   under the same rule; business facts may not be written by triggers.
+3. **Byte-identical results are a gate, not a hope.** Every statement that
+   switches from computing a maximum to reading a column proves identical
+   results against its frozen pre-switch text before the switch lands
+   (Slice 012 §4).
+
+Blocks: nothing. Feeds the Slice 012 specification and brief. Recorded
+lever, not taken: column-level `UPDATE` grants plus a `SECURITY DEFINER`
+trigger function would make the invariant database-enforced against
+application bugs.

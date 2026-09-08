@@ -1,27 +1,30 @@
 # Project State
 
-Last updated: 2026-09-08 (Slice 011 ladder complete and pushed; planning two
-parallel follow-on lanes: denormalized last-activity columns and an Operator
-`filter_people` tool).
+Last updated: 2026-09-08 (Slices 012 and 013 approved; two parallel lanes
+started).
 
 ## Current phase
 
-**PLANNING two parallel post-ladder lanes (2026-09-08, user: "Go").** After
-the ladder closed, the user asked what remains in Slice 011 and chose to run
-the "worth a small chunk soon" items in parallel worktrees. Two lanes proceed
-now, each with its own spec, review and gate: **A — denormalized
-last-activity columns on `person`** (backend, one migration; the ladder's
-recorded performance lever with a measured trigger: Today 966 ms at 100k
-People, pool saturation) and **B — Operator `filter_people` read-only tool**
-(crm-operator + the crm-api adapter; the ladder's natural post-ladder
-extension). **C — FilterBar UX polish** is held until the user decides
-whether to touch the FilterBar once together with the held perceived-latency
-chunk or now. Planner analyses dispatched for A and B; specs, one review
-round and one implementation gate follow. Ownership: A owns `backend/**`
-except the Operator adapter and the migration directory exclusively; B owns
-`crm-operator/**`, `crm-api/src/operator/**` and, if needed, the Operator
-panel in `web/`; neither edits `web/src/api/types.ts` without the
-coordinator; merge order A then B (B rebases onto A's statements).
+**Slices 012 and 013 — APPROVED 2026-09-08, TWO PARALLEL LANES IN
+IMPLEMENTATION.** After the ladder closed, the user chose to run the
+"worth a small chunk soon" items in parallel worktrees ("Go"). Planner
+analyses, then [SLICE_012.md](../specs/SLICE_012.md) (denormalized
+last-activity columns on `person`; trigger-maintained per **D-052**; the
+fourteen statements switch to the columns behind a frozen-text equivalence
+gate; one migration; size M) and [SLICE_013.md](../specs/SLICE_013.md)
+(Operator `filter_people` and `run_saved_list`, name-based, read-only,
+D-046-faithful; size S), each with a brief, were drafted and independently
+reviewed the same day: both READY WITH CORRECTIONS, all applied (012: create
+the triggers before the backfill so no deploy-window row is lost; one index
+not three; probe-gate placement; a testable backfill block. 013: a missed
+closed code set in the count scheduler analogue, `get_today` drawer side
+effect of `MAX_REFERENCES` 25, `validate_references` cut as redundant).
+Lane A (012) in `../crm-worktrees/012` on `slice-012-activity-columns`; lane
+B (013) in `../crm-worktrees/013` on `slice-013-operator-filter`; both from
+`main` after the planning commit; one Claude Sonnet 5 writer each; Claude
+Fable 5.1 coordinates. Ownership per the specs' §10; only `tests/all.rs` is
+shared (alphabetical insertion, "keep both"). Merge order A then B. Lane C
+(FilterBar UX polish) stays held for the perceived-latency chunk.
 
 Previous phase: **Slice 011e (tags) — COMPLETE. RUNG e2 MERGED TO LOCAL MAIN** at `b6dc49b`
 (2026-09-07, with the user's approval; not pushed, not deployed). Source
@@ -345,7 +348,10 @@ clear-all.
 
 ## Current slice
 
-Slice 011e — Tags — `docs/specs/SLICE_011e.md` (approved 2026-09-07),
+Slices 012 (`docs/specs/SLICE_012.md`, brief `docs/tasks/SLICE_012_IMPL.md`)
+and 013 (`docs/specs/SLICE_013.md`, brief `docs/tasks/SLICE_013_IMPL.md`),
+approved 2026-09-08, in parallel implementation. Previous: Slice 011e — Tags —
+`docs/specs/SLICE_011e.md` (approved 2026-09-07),
 companion `docs/specs/SLICE_011e_EXPLAINED.md`, brief
 `docs/tasks/SLICE_011e_IMPL.md`, verification record
 `docs/tasks/SLICE_011e_VERIFICATION.md`. Both rungs merged: e1 `51331e9`,
@@ -375,6 +381,8 @@ new migrations; restarting it needs `./scripts/db-migrate` first.
 
 ## Last accepted decision
 
+D-052 (2026-09-08) — trigger-maintained derived columns are a read-model
+mechanism; the history insert remains the only business mutation.
 D-051 (2026-09-07, `97b889f`) — tag rename and delete by Organization admins,
 plus the creator while the tag is unused; hard delete with `invalid_tag`
 through the existing stale-reference paths. Any member creates and applies.

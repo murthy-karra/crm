@@ -107,11 +107,17 @@ mod db_people_filter;
 #[path = "db_people_sort.rs"]
 mod db_people_sort;
 
+#[path = "db_person_last_activity.rs"]
+mod db_person_last_activity;
+
 #[path = "db_realtime.rs"]
 mod db_realtime;
 
 #[path = "db_schema.rs"]
 mod db_schema;
+
+#[path = "db_statement_equivalence.rs"]
+mod db_statement_equivalence;
 
 #[path = "db_saved_lists.rs"]
 mod db_saved_lists;

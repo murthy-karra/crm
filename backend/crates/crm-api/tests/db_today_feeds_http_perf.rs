@@ -37,6 +37,9 @@
 #[path = "common/mod.rs"]
 mod common;
 
+#[path = "fixtures/statements_b45b04f/mod.rs"]
+mod frozen;
+
 #[path = "fixtures/today_http_perf_driver.rs"]
 mod today_http_perf_driver;
 
@@ -1292,4 +1295,708 @@ async fn d050_plan_shape_evidence_call_statements_and_filtered_summaries(migrato
     println!("D050_PLAN_FILTERED_SUMMARIES_START");
     println!("{filtered_summaries_plan}");
     println!("D050_PLAN_FILTERED_SUMMARIES_END");
+}
+
+// --- Slice 012 step 5 performance evidence (docs/specs/SLICE_012.md §7) ---
+//
+// A purpose-built, smaller harness (disclosed scope reduction, mirroring
+// the Slice 011e archive's own precedent): one Organization, 25,000
+// People (D-050's envelope ceiling), seeded directly via the batch-SQL
+// technique lifted from `today_http_perf_fixture.rs::seed_people_and_history`
+// (scaled down, same shape: history-rich, skewed assignment, corrections,
+// waiting queues, inbound correspondence) — not the full 011c/011d Phase B
+// HTTP-concurrency apparatus, which this slice's gate does not need
+// (D-050: "no slice spends more than one benchmark run on performance
+// unless the paired regression fails"). Scratch/ephemeral database only
+// (the `#[sqlx::test]` throwaway), never `crm_dev`; no servers on
+// 3000/5173 (the one Today HTTP trend sample below runs an in-process
+// `axum::serve` on an OS-assigned ephemeral port, torn down at the end of
+// the function, exactly like `today_http_perf_driver`'s own server spawn).
+
+mod slice_012_perf {
+    use std::time::{Duration, Instant};
+
+    use chrono::{DateTime, TimeZone, Utc};
+    use sqlx::PgPool;
+    use uuid::Uuid;
+
+    use crm_api::domain::person::filter::PersonFilterParams;
+    use crm_api::domain::person::queries as person_queries;
+    use crm_api::domain::person::visibility::PersonVisibilityScope;
+    use crm_api::domain::today::sources as today_sources;
+    use crm_api::domain::today::system_feeds::evaluate as system_feeds_evaluate;
+    use crm_api::domain::today::system_feeds::{
+        canonical_default, canonical_fresh_within_hours, FeedKey, ResolvedFeed,
+    };
+    use crm_api::ids::OrganizationId;
+
+    use super::frozen;
+    use super::today_http_perf_driver::nearest_rank_percentile;
+
+    pub const PEOPLE: i64 = 25_000;
+
+    pub fn fixed_clock() -> DateTime<Utc> {
+        Utc.with_ymd_and_hms(2026, 9, 8, 12, 0, 0).unwrap()
+    }
+
+    /// Batch-SQL history seed, lifted (and scaled to 25k) from
+    /// `today_http_perf_fixture.rs::seed_people_and_history`: the same
+    /// shape (skewed assignment, historical + waiting inquiries,
+    /// corrected contact attempts, inbound correspondence), one
+    /// transaction. Returns the elapsed wall time — the trigger write-cost
+    /// figure (report only, spec §7): every `inquiry`/`contact_attempted`/
+    /// `correspondence_captured` row inserted here now also fires its
+    /// `person_touch_*` trigger, whereas the 011c archive's equivalent
+    /// seed (docs/design/perf/slice-011c-...) predates Slice 012 and paid
+    /// no such per-row cost.
+    pub async fn seed(
+        pool: &PgPool,
+        organization_id: Uuid,
+        stage_id: Uuid,
+        assignee: Uuid,
+        caller: Uuid,
+    ) -> Duration {
+        let now = fixed_clock();
+        let start = Instant::now();
+        let mut tx = pool.begin().await.unwrap();
+        sqlx::query(
+            "CREATE TEMP TABLE s012_people (id uuid PRIMARY KEY, ordinal integer NOT NULL UNIQUE) ON COMMIT DROP",
+        )
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO s012_people (id, ordinal) \
+             SELECT md5('slice-012-perf-person-' || value::text)::uuid, value \
+             FROM generate_series(1, $1) AS value",
+        )
+        .bind(PEOPLE)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO person (id, organization_id, first_name, last_name, stage_id, assigned_user_id, created_at, updated_at) \
+             SELECT id, $1, 'Synthetic', lpad(ordinal::text, 5, '0'), $2, \
+               CASE WHEN ordinal % 3 = 0 THEN $3 ELSE NULL END, \
+               $4 - ((ordinal % 365) * interval '1 day'), \
+               $4 - ((ordinal % 365) * interval '1 day') \
+             FROM s012_people",
+        )
+        .bind(organization_id)
+        .bind(stage_id)
+        .bind(assignee)
+        .bind(now)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+        // ~80% of People get an old, answered inquiry.
+        sqlx::query(
+            "INSERT INTO inquiry (id, organization_id, person_id, raw_payload_id, source, source_external_id, received_at, created_at) \
+             SELECT md5('slice-012-perf-inquiry-old-' || ordinal::text)::uuid, $1, id, \
+               md5('slice-012-perf-raw-' || ordinal::text)::uuid, \
+               CASE WHEN ordinal % 10 < 8 THEN 'zillow' ELSE 'website' END, \
+               'fixture-' || ordinal::text, $2 - interval '30 days' - ((ordinal % 20) * interval '1 hour'), $2 \
+             FROM s012_people WHERE ordinal % 5 <> 0",
+        )
+        .bind(organization_id)
+        .bind(now)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+        // ~4% of People (the assignee's book) get a fresh, unanswered
+        // (waiting) inquiry.
+        sqlx::query(
+            "INSERT INTO inquiry (id, organization_id, person_id, raw_payload_id, source, source_external_id, received_at, created_at) \
+             SELECT md5('slice-012-perf-inquiry-waiting-' || ordinal::text)::uuid, $1, id, \
+               md5('slice-012-perf-raw-waiting-' || ordinal::text)::uuid, 'zillow', \
+               'waiting-' || ordinal::text, $2 - interval '2 hours', $2 \
+             FROM s012_people WHERE ordinal % 3 = 0 AND ordinal % 25 = 0",
+        )
+        .bind(organization_id)
+        .bind(now)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+        // ~80% of the answered-inquiry People get a contact attempt.
+        sqlx::query(
+            "INSERT INTO contact_attempted \
+               (id, organization_id, actor_kind, actor_user_id, on_behalf_of_user_id, origin, occurred_at, recorded_at, correlation_id, causation_id, corrects_id, person_id, channel, outcome) \
+             SELECT md5('slice-012-perf-contact-root-' || ordinal::text)::uuid, $1, 'system', NULL, NULL, 'fixture', \
+               $2 - ((ordinal % 20 + 1) * interval '1 day'), $2, \
+               md5('slice-012-perf-contact-correlation-' || ordinal::text)::uuid, NULL, NULL, id, 'call', 'no_answer' \
+             FROM s012_people WHERE ordinal % 5 <> 0 AND ordinal % 4 <> 0",
+        )
+        .bind(organization_id)
+        .bind(now)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+        // A correction chain on ~6% of those attempts.
+        sqlx::query(
+            "INSERT INTO contact_attempted \
+               (id, organization_id, actor_kind, actor_user_id, on_behalf_of_user_id, origin, occurred_at, recorded_at, correlation_id, causation_id, corrects_id, person_id, channel, outcome) \
+             SELECT md5('slice-012-perf-contact-correction-' || ordinal::text)::uuid, $1, 'system', NULL, NULL, 'fixture', \
+               $2 - ((ordinal % 20 + 1) * interval '1 day'), $2, \
+               md5('slice-012-perf-contact-correction-correlation-' || ordinal::text)::uuid, NULL, \
+               md5('slice-012-perf-contact-root-' || ordinal::text)::uuid, id, 'call', 'reached' \
+             FROM s012_people WHERE ordinal % 5 <> 0 AND ordinal % 4 <> 0 AND ordinal % 17 = 0",
+        )
+        .bind(organization_id)
+        .bind(now)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+        // Inbound correspondence for ~14% of People.
+        sqlx::query(
+            "INSERT INTO correspondence_raw (id, organization_id, received_at, nonce, ciphertext, content_hmac, byte_len, processed) \
+             SELECT md5('slice-012-perf-raw-cc-' || ordinal::text)::uuid, $1, $2 - interval '12 hours', \
+               decode('00', 'hex'), decode('00', 'hex'), \
+               decode(md5('slice-012-perf-hmac-a-' || ordinal::text) || md5('slice-012-perf-hmac-b-' || ordinal::text), 'hex'), \
+               1, true \
+             FROM s012_people WHERE ordinal % 7 = 0",
+        )
+        .bind(organization_id)
+        .bind(now)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO correspondence_captured \
+               (id, organization_id, actor_kind, actor_user_id, on_behalf_of_user_id, origin, occurred_at, recorded_at, correlation_id, causation_id, corrects_id, person_id, agent_user_id, direction, message_id, thread_key, via, correspondence_raw_id, backdated) \
+             SELECT md5('slice-012-perf-cc-' || ordinal::text)::uuid, $1, 'system', NULL, NULL, 'fixture', \
+               $2 - interval '12 hours', $2, \
+               md5('slice-012-perf-cc-correlation-' || ordinal::text)::uuid, NULL, NULL, id, $3, 'inbound', \
+               'fixture-' || ordinal::text || '@example.invalid', NULL, 'cc', \
+               md5('slice-012-perf-raw-cc-' || ordinal::text)::uuid, false \
+             FROM s012_people WHERE ordinal % 7 = 0",
+        )
+        .bind(organization_id)
+        .bind(now)
+        .bind(caller)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+        // A handful of ended calls for the caller, so awaiting_call_outcome
+        // and person_state's call chain have real volume too.
+        for i in 1..=200i64 {
+            let call_id = Uuid::new_v4();
+            sqlx::query(
+                "INSERT INTO call (id, organization_id, person_id, contact_method_id, caller_user_id, origin, correlation_id, status, end_reason, provider, provider_room, placed_at, ended_at) \
+                 SELECT $1, $2, id, $3, $4, 'web_session', $5, 'ended', 'agent_hangup', 'scripted', 'slice-012-perf', $6, $6 \
+                 FROM s012_people WHERE ordinal = $7",
+            )
+            .bind(call_id)
+            .bind(organization_id)
+            .bind(Uuid::new_v4())
+            .bind(caller)
+            .bind(Uuid::new_v4())
+            .bind(now - chrono::Duration::hours(3))
+            .bind(i)
+            .execute(&mut *tx)
+            .await
+            .unwrap();
+            sqlx::query(
+                "INSERT INTO contact_attempted (organization_id, actor_kind, origin, occurred_at, correlation_id, causation_id, person_id, channel, outcome) \
+                 SELECT $1, 'system', 'fixture', $2, $3, $4, id, 'call', 'reached' FROM s012_people WHERE ordinal = $5",
+            )
+            .bind(organization_id)
+            .bind(now - chrono::Duration::hours(3))
+            .bind(Uuid::new_v4())
+            .bind(call_id)
+            .bind(i)
+            .execute(&mut *tx)
+            .await
+            .unwrap();
+        }
+        tx.commit().await.unwrap();
+        start.elapsed()
+    }
+
+    pub async fn vacuum_analyze(pool: &PgPool) {
+        for relation in [
+            "person",
+            "inquiry",
+            "contact_attempted",
+            "call",
+            "correspondence_captured",
+            "contact_method",
+        ] {
+            sqlx::query(&format!("VACUUM (ANALYZE) {relation}"))
+                .execute(pool)
+                .await
+                .unwrap();
+        }
+    }
+
+    const SAMPLES: usize = 15;
+    const WARMUP: usize = 3;
+
+    fn p95(mut samples: Vec<Duration>) -> Duration {
+        samples.drain(0..WARMUP);
+        nearest_rank_percentile(&samples, 0.95).unwrap()
+    }
+
+    fn allowed(baseline: Duration) -> Duration {
+        std::cmp::max(Duration::from_millis(25), baseline / 10)
+    }
+
+    /// Runs `f` `SAMPLES` times against a fresh connection each time,
+    /// returning (durations, last result).
+    async fn timed<T, F, Fut>(pool: &PgPool, mut f: F) -> (Vec<Duration>, T)
+    where
+        F: FnMut(sqlx::pool::PoolConnection<sqlx::Postgres>) -> Fut,
+        Fut: std::future::Future<Output = (sqlx::pool::PoolConnection<sqlx::Postgres>, T)>,
+    {
+        let mut durations = Vec::with_capacity(SAMPLES);
+        let mut last = None;
+        for _ in 0..SAMPLES {
+            let conn = pool.acquire().await.unwrap();
+            let start = Instant::now();
+            let (_conn, result) = f(conn).await;
+            durations.push(start.elapsed());
+            last = Some(result);
+        }
+        (durations, last.unwrap())
+    }
+
+    pub struct RegressionRow {
+        pub statement: &'static str,
+        pub binding: &'static str,
+        pub frozen_p95: Duration,
+        pub live_p95: Duration,
+        pub allowed: Duration,
+        pub within_allowed: bool,
+        pub payload_equal: bool,
+    }
+
+    pub async fn gate1(
+        app_pool: &PgPool,
+        organization_id: Uuid,
+        viewer_id: Uuid,
+    ) -> Vec<RegressionRow> {
+        let scope = PersonVisibilityScope::Organization(OrganizationId::new(organization_id));
+        let mut rows = Vec::new();
+
+        let params_never = PersonFilterParams {
+            last_contact_never: Some(true),
+            viewer_id,
+            ..PersonFilterParams::default()
+        };
+        let params_not_within_7 = PersonFilterParams {
+            last_contact_not_within_days: Some(7),
+            viewer_id,
+            ..PersonFilterParams::default()
+        };
+
+        for (binding, params) in [
+            ("last_contact never", &params_never),
+            ("last_contact not_within_days 7", &params_not_within_7),
+        ] {
+            // filtered_summaries (default sort).
+            let (frozen_d, frozen_r) = timed(app_pool, |mut conn| async move {
+                let r = frozen::person_sql::filtered_summaries(&mut conn, &scope, params, None)
+                    .await
+                    .unwrap();
+                (conn, r)
+            })
+            .await;
+            let (live_d, live_r) = timed(app_pool, |mut conn| async move {
+                let r = person_queries::filtered_summaries(&mut conn, &scope, params)
+                    .await
+                    .unwrap();
+                (conn, r)
+            })
+            .await;
+            let frozen_ids: Vec<Uuid> = frozen_r.0.iter().map(|p| p.id.0).collect();
+            let live_ids: Vec<Uuid> = live_r.0.iter().map(|p| p.id.0).collect();
+            let frozen_p95 = p95(frozen_d);
+            let live_p95 = p95(live_d);
+            rows.push(RegressionRow {
+                statement: "filtered_summaries",
+                binding,
+                frozen_p95,
+                live_p95,
+                allowed: allowed(frozen_p95),
+                within_allowed: live_p95 <= allowed(frozen_p95),
+                payload_equal: frozen_ids == live_ids && frozen_r.1 == live_r.1,
+            });
+
+            // count_filtered_matches.
+            let (frozen_d, frozen_r) = timed(app_pool, |mut conn| async move {
+                let r = frozen::person_sql::count_filtered_matches(&mut conn, &scope, params)
+                    .await
+                    .unwrap();
+                (conn, r)
+            })
+            .await;
+            let (live_d, live_r) = timed(app_pool, |mut conn| async move {
+                let r = person_queries::count_filtered_matches(&mut conn, &scope, params)
+                    .await
+                    .unwrap();
+                (conn, r)
+            })
+            .await;
+            let frozen_p95 = p95(frozen_d);
+            let live_p95 = p95(live_d);
+            rows.push(RegressionRow {
+                statement: "count_filtered_matches",
+                binding,
+                frozen_p95,
+                live_p95,
+                allowed: allowed(frozen_p95),
+                within_allowed: live_p95 <= allowed(frozen_p95),
+                payload_equal: frozen_r == live_r,
+            });
+
+            // source_candidates.
+            let now = fixed_clock();
+            let builtin_ids: Vec<Uuid> = Vec::new();
+            let org = OrganizationId::new(organization_id);
+            let (frozen_d, frozen_r) = timed(app_pool, |mut conn| {
+                let builtin_ids = &builtin_ids;
+                async move {
+                    let r = frozen::today_sql::source_candidates(
+                        &mut conn,
+                        org,
+                        params,
+                        now,
+                        builtin_ids,
+                        false,
+                        50,
+                    )
+                    .await
+                    .unwrap();
+                    (conn, r)
+                }
+            })
+            .await;
+            let (live_d, live_r) = timed(app_pool, |mut conn| {
+                let builtin_ids = &builtin_ids;
+                async move {
+                    let r = today_sources::source_candidates(
+                        &mut conn,
+                        org,
+                        params,
+                        now,
+                        builtin_ids,
+                        false,
+                        50,
+                    )
+                    .await
+                    .unwrap();
+                    (conn, r)
+                }
+            })
+            .await;
+            let frozen_ids: Vec<Uuid> = frozen_r.iter().map(|c| c.person.id.0).collect();
+            let live_ids: Vec<Uuid> = live_r.iter().map(|c| c.person.id.0).collect();
+            let frozen_p95 = p95(frozen_d);
+            let live_p95 = p95(live_d);
+            rows.push(RegressionRow {
+                statement: "source_candidates",
+                binding,
+                frozen_p95,
+                live_p95,
+                allowed: allowed(frozen_p95),
+                within_allowed: live_p95 <= allowed(frozen_p95),
+                payload_equal: frozen_ids == live_ids,
+            });
+        }
+
+        // person_state with the canonical feed definitions bound.
+        let feed_a_filter = canonical_default(FeedKey::UnansweredInquiry);
+        let feed_b_filter = canonical_default(FeedKey::ClientReplied);
+        let feed_a = ResolvedFeed {
+            feed_key: FeedKey::UnansweredInquiry,
+            enabled: true,
+            filter: feed_a_filter.clone(),
+            fresh_within_hours: canonical_fresh_within_hours(FeedKey::UnansweredInquiry),
+            is_default: true,
+            fallback: false,
+            revision: 1,
+            updated_at: Utc::now(),
+            updated_by_user_id: None,
+        };
+        let feed_b = ResolvedFeed {
+            feed_key: FeedKey::ClientReplied,
+            enabled: true,
+            filter: feed_b_filter.clone(),
+            fresh_within_hours: canonical_fresh_within_hours(FeedKey::ClientReplied),
+            is_default: true,
+            fallback: false,
+            revision: 1,
+            updated_at: Utc::now(),
+            updated_by_user_id: None,
+        };
+        let viewer = crm_api::ids::UserId::new(viewer_id);
+        let org = OrganizationId::new(organization_id);
+        let now = fixed_clock();
+        let params_a = feed_a_filter.to_query_params(viewer);
+        let params_b = feed_b_filter.to_query_params(viewer);
+        let fresh_a = canonical_fresh_within_hours(FeedKey::UnansweredInquiry).unwrap_or(24);
+        let fresh_b = canonical_fresh_within_hours(FeedKey::ClientReplied).unwrap_or(24);
+
+        let (frozen_d, frozen_r) = timed(app_pool, |mut conn| {
+            let params_a = &params_a;
+            let params_b = &params_b;
+            async move {
+                let r = frozen::system_feeds_sql::person_state_candidates(
+                    &mut conn, org, viewer, now, params_a, true, fresh_a, params_b, true, fresh_b,
+                )
+                .await
+                .unwrap();
+                (conn, r)
+            }
+        })
+        .await;
+        let (live_d, live_r) = timed(app_pool, |mut conn| {
+            let feed_a = &feed_a;
+            let feed_b = &feed_b;
+            async move {
+                let r = system_feeds_evaluate::person_state_candidates(
+                    &mut conn, org, viewer, now, feed_a, feed_b,
+                )
+                .await
+                .unwrap();
+                (conn, r)
+            }
+        })
+        .await;
+        let frozen_ids: Vec<Uuid> = frozen_r.0.iter().map(|c| c.person.id.0).collect();
+        let live_ids: Vec<Uuid> = live_r.0.iter().map(|c| c.person.id.0).collect();
+        let frozen_p95 = p95(frozen_d);
+        let live_p95 = p95(live_d);
+        rows.push(RegressionRow {
+            statement: "person_state",
+            binding: "canonical feed definitions",
+            frozen_p95,
+            live_p95,
+            allowed: allowed(frozen_p95),
+            within_allowed: live_p95 <= allowed(frozen_p95),
+            payload_equal: frozen_ids == live_ids && frozen_r.1 == live_r.1,
+        });
+
+        rows
+    }
+}
+
+#[sqlx::test]
+#[ignore = "Phase B only: opt-in, isolated database, real HTTP load"]
+async fn slice_012_performance_evidence(migrator_pool: PgPool) {
+    use slice_012_perf as s012;
+
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let (organization_id, viewer_id) = org_and_admin_named(
+        &migrator_pool,
+        "viewer@slice-012-perf.test",
+        "Slice 012 Perf Realty",
+    )
+    .await;
+    let stage_id = {
+        let row: (Uuid,) = sqlx::query_as(
+            "SELECT id FROM stage WHERE organization_id = $1 ORDER BY position LIMIT 1",
+        )
+        .bind(organization_id)
+        .fetch_one(&migrator_pool)
+        .await
+        .unwrap();
+        row.0
+    };
+
+    let seed_duration = s012::seed(
+        &migrator_pool,
+        organization_id,
+        stage_id,
+        viewer_id,
+        viewer_id,
+    )
+    .await;
+    s012::vacuum_analyze(&migrator_pool).await;
+
+    println!("SLICE_012_SEED_DURATION_MS {}", seed_duration.as_millis());
+    println!("SLICE_012_PEOPLE {}", s012::PEOPLE);
+
+    // Gate 1: paired regression.
+    let rows = s012::gate1(&app_pool, organization_id, viewer_id).await;
+    println!("SLICE_012_GATE1_START");
+    for row in &rows {
+        println!(
+            "{}\t{}\tfrozen_p95_ms={}\tlive_p95_ms={}\tallowed_ms={}\twithin_allowed={}\tpayload_equal={}",
+            row.statement,
+            row.binding,
+            row.frozen_p95.as_millis(),
+            row.live_p95.as_millis(),
+            row.allowed.as_millis(),
+            row.within_allowed,
+            row.payload_equal,
+        );
+        assert!(
+            row.payload_equal,
+            "{} ({}): frozen and live payloads must be equal",
+            row.statement, row.binding
+        );
+        assert!(
+            row.within_allowed,
+            "{} ({}): live p95 {:?} exceeds allowed {:?} (frozen p95 {:?})",
+            row.statement, row.binding, row.live_p95, row.allowed, row.frozen_p95
+        );
+    }
+    println!("SLICE_012_GATE1_END");
+
+    // Gate 2: EXPLAIN (ANALYZE, BUFFERS) through PREPARE/EXECUTE of the
+    // exact .sqlx text, for filtered_summaries (never / not_within_days 7)
+    // and person_state (canonical). Absolute, `CARGO_MANIFEST_DIR`-rooted
+    // paths (not a `cwd`-relative guess): cargo's own test-runner
+    // convention sets a test binary's process `cwd` to the PACKAGE
+    // directory (`crates/crm-api/`), not the workspace root, which a bare
+    // `"crates/crm-app/..."` relative path silently assumes.
+    let filtered_summaries_sql = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../crm-app/src/domain/person/sql/filtered_summaries.sql"
+    ))
+    .unwrap();
+    let person_state_sql = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../crm-app/src/domain/today/system_feeds/sql/person_state.sql"
+    ))
+    .unwrap();
+
+    let mut tx = migrator_pool.begin().await.unwrap();
+    // Round 1 review fix 9: without this, a freshly PREPAREd statement's
+    // first few EXECUTEs use a CUSTOM plan (the bound constants folded in
+    // by the planner), not the GENERIC plan a statement prepared once and
+    // executed repeatedly (as sqlx does in production) converges to after
+    // five executions. Forcing the generic plan here makes the archived
+    // plan the one production actually runs.
+    sqlx::query("SET LOCAL plan_cache_mode = force_generic_plan")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    sqlx::query(&format!("PREPARE s012_fs AS {filtered_summaries_sql}"))
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    sqlx::query(&format!("PREPARE s012_ps AS {person_state_sql}"))
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+
+    // filtered_summaries: last_contact never.
+    let sql = format!(
+        "EXPLAIN (ANALYZE, BUFFERS) EXECUTE s012_fs(\
+         '{organization_id}', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, \
+         NULL, NULL, true, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '{viewer_id}', NULL, NULL)"
+    );
+    let rows: Vec<(String,)> = sqlx::query_as(&sql).fetch_all(&mut *tx).await.unwrap();
+    let plan_never = rows
+        .into_iter()
+        .map(|(l,)| l)
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    // filtered_summaries: last_contact not_within_days 7.
+    let sql = format!(
+        "EXPLAIN (ANALYZE, BUFFERS) EXECUTE s012_fs(\
+         '{organization_id}', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, \
+         NULL, 7, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '{viewer_id}', NULL, NULL)"
+    );
+    let rows: Vec<(String,)> = sqlx::query_as(&sql).fetch_all(&mut *tx).await.unwrap();
+    let plan_not_within_7 = rows
+        .into_iter()
+        .map(|(l,)| l)
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    // person_state: canonical feed definitions (assigned_to me +
+    // awaiting_response for feed A, assigned_to me + client_replied for
+    // feed B), enabled, 24h freshness both.
+    let sql = format!(
+        "EXPLAIN (ANALYZE, BUFFERS) EXECUTE s012_ps(\
+         '{organization_id}', \
+         NULL, ARRAY['{viewer_id}']::uuid[], false, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, true, NULL, NULL, \
+         NULL, ARRAY['{viewer_id}']::uuid[], false, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, true, NULL, \
+         '2026-09-08 12:00:00+00', '{viewer_id}', true, true, 24, 24, NULL, NULL, NULL, NULL)"
+    );
+    let rows: Vec<(String,)> = sqlx::query_as(&sql).fetch_all(&mut *tx).await.unwrap();
+    let plan_person_state = rows
+        .into_iter()
+        .map(|(l,)| l)
+        .collect::<Vec<_>>()
+        .join("\n");
+    tx.rollback().await.unwrap();
+
+    println!("SLICE_012_PLAN_FILTERED_SUMMARIES_NEVER_START");
+    println!("{plan_never}");
+    println!("SLICE_012_PLAN_FILTERED_SUMMARIES_NEVER_END");
+    println!("SLICE_012_PLAN_FILTERED_SUMMARIES_NOT_WITHIN_7_START");
+    println!("{plan_not_within_7}");
+    println!("SLICE_012_PLAN_FILTERED_SUMMARIES_NOT_WITHIN_7_END");
+    println!("SLICE_012_PLAN_PERSON_STATE_START");
+    println!("{plan_person_state}");
+    println!("SLICE_012_PLAN_PERSON_STATE_END");
+
+    // Backfill block duration on this populated (25k-Person) fixture.
+    const MIGRATION: &str = include_str!("../migrations/20260910000001_person_last_activity.sql");
+    let block = {
+        const BEGIN: &str = "-- BEGIN PERSON_LAST_ACTIVITY_BACKFILL";
+        const END: &str = "-- END PERSON_LAST_ACTIVITY_BACKFILL";
+        let start = MIGRATION.find(BEGIN).unwrap() + BEGIN.len();
+        let rest = &MIGRATION[start..];
+        let end = rest.find(END).unwrap();
+        rest[..end].trim().to_string()
+    };
+    sqlx::query(
+        "UPDATE person SET last_inquiry_at = NULL, last_contact_at = NULL, \
+         last_inbound_at = NULL, last_outbound_at = NULL WHERE organization_id = $1",
+    )
+    .bind(organization_id)
+    .execute(&migrator_pool)
+    .await
+    .unwrap();
+    let backfill_start = Instant::now();
+    sqlx::query(&block).execute(&migrator_pool).await.unwrap();
+    let backfill_duration = backfill_start.elapsed();
+    println!(
+        "SLICE_012_BACKFILL_DURATION_MS {} (over {} People)",
+        backfill_duration.as_millis(),
+        s012::PEOPLE
+    );
+
+    // Today HTTP serial p95 trend (report only, against the archived
+    // 011d Feeds/concentrated/zero-source/serial figure of 177 ms at
+    // 50,000 People — docs/design/perf/slice-011d-2026-09-07/README.md
+    // Part 1).
+    let router = crate::common::build_router(&migrator_pool).await;
+    let cookie = crate::common::login_cookie(
+        &router,
+        "viewer@slice-012-perf.test",
+        "correct horse battery staple",
+    )
+    .await;
+    let mut http_durations = Vec::with_capacity(SLICE_012_HTTP_SAMPLES);
+    for _ in 0..SLICE_012_HTTP_SAMPLES {
+        let start = Instant::now();
+        let response = crate::common::get_with_cookie(&router, "/api/today", &cookie).await;
+        assert_eq!(response.status(), axum::http::StatusCode::OK);
+        http_durations.push(start.elapsed());
+    }
+    let http_p95 = today_http_perf_driver::nearest_rank_percentile(&http_durations, 0.95).unwrap();
+    println!(
+        "SLICE_012_TODAY_HTTP_SERIAL_P95_MS {} (011d Feeds concentrated/zero-source/serial trend: 177 ms at 50k People)",
+        http_p95.as_millis()
+    );
+}
+
+const SLICE_012_HTTP_SAMPLES: usize = 12;
+
+async fn org_and_admin_named(pool: &PgPool, email: &str, org_name: &str) -> (Uuid, Uuid) {
+    let (organization_id, user_id) = crate::common::create_org_with_stages_and_member(
+        pool,
+        org_name,
+        email,
+        "Slice 012 Perf Viewer",
+        "correct horse battery staple",
+    )
+    .await;
+    (organization_id, user_id)
 }

@@ -39,8 +39,15 @@ pub(crate) struct EvaluatedTodaySource {
 /// A hydrated, source-only candidate. The query returns no more than the
 /// caller's requested bound and uses the same fixed v1 predicate matrix as
 /// People; it never reads an Organization's full membership into Rust.
+///
+/// `pub`, not `pub(crate)` (Slice 012, docs/specs/SLICE_012.md §4): the
+/// frozen-vs-live statement equivalence gate in the `crm-api` crate
+/// (`tests/db_statement_equivalence.rs`) needs to call
+/// [`source_candidates`] directly, from outside this crate — a visibility
+/// widening only, no behavior or signature change.
 #[derive(Debug, Clone)]
-pub(crate) struct SourceCandidate {
+#[doc(hidden)]
+pub struct SourceCandidate {
     pub person: PersonSummary,
     pub latest_inquiry: Option<InquiryRef>,
     pub last_contact_attempt: Option<ContactAttemptRef>,
@@ -101,7 +108,10 @@ struct SourceCandidateRow {
     last_contact_at: Option<DateTime<Utc>>,
 }
 
-pub(crate) async fn source_candidates(
+/// `pub` (Slice 012, docs/specs/SLICE_012.md §4): visibility widening only,
+/// for the same reason as [`SourceCandidate`] above.
+#[doc(hidden)]
+pub async fn source_candidates(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
     params: &PersonFilterParams,
@@ -219,7 +229,10 @@ pub(crate) async fn source_candidates(
 /// those People again. Built-in payloads are already captured in this
 /// snapshot, so this preserves the measured B-membership shape and keeps the
 /// whole-source budget for actual non-B candidates.
-pub(crate) async fn source_membership(
+/// `pub` (Slice 012, docs/specs/SLICE_012.md §4): visibility widening only,
+/// for the same reason as [`SourceCandidate`] above.
+#[doc(hidden)]
+pub async fn source_membership(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
     params: &PersonFilterParams,

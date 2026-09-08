@@ -8,7 +8,14 @@
 
 pub mod commands;
 pub mod error;
-pub(crate) mod evaluate;
+// `pub`, not `pub(crate)` (Slice 012, docs/specs/SLICE_012.md §4): the
+// frozen-vs-live statement equivalence gate in the `crm-api` crate
+// (`tests/db_statement_equivalence.rs`) needs to call `evaluate`'s
+// `person_state_candidates`/`call_membership`/`call_only_candidates`
+// directly, from outside this crate — a visibility widening only, no
+// behavior or signature change.
+#[doc(hidden)]
+pub mod evaluate;
 pub mod queries;
 
 use chrono::{DateTime, Utc};

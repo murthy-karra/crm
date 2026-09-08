@@ -1,0 +1,367 @@
+Nested Loop Left Join  (cost=2806150.23..2852941.12 rows=201 width=288) (actual time=1636.699..1645.332 rows=201.00 loops=1)
+  Buffers: shared hit=75474
+  ->  Nested Loop Left Join  (cost=2806137.15..2849433.93 rows=201 width=210) (actual time=1636.589..1637.547 rows=201.00 loops=1)
+        Buffers: shared hit=74004
+        ->  Nested Loop Left Join  (cost=2806128.83..2847755.58 rows=201 width=179) (actual time=1636.577..1637.156 rows=201.00 loops=1)
+              Buffers: shared hit=73399
+              ->  Nested Loop  (cost=2806128.67..2847750.22 rows=201 width=147) (actual time=1636.565..1637.089 rows=201.00 loops=1)
+                    Buffers: shared hit=73397
+                    ->  Nested Loop  (cost=2806128.51..2847744.87 rows=201 width=115) (actual time=1636.553..1637.013 rows=201.00 loops=1)
+                          Buffers: shared hit=73395
+                          ->  Limit  (cost=2806128.22..2846409.55 rows=201 width=51) (actual time=1636.539..1636.703 rows=201.00 loops=1)
+                                Buffers: shared hit=72792
+                                ->  Result  (cost=2806128.22..4588927.59 rows=8896 width=51) (actual time=53.355..53.508 rows=201.00 loops=1)
+                                      Buffers: shared hit=72792
+                                      ->  Sort  (cost=2806128.22..2806150.46 rows=8896 width=152) (actual time=53.342..53.360 rows=201.00 loops=1)
+                                            Sort Key: (CASE WHEN (COALESCE($49, false) AND COALESCE(((($24 IS NULL) OR (p_1.stage_id = ANY ($24))) AND (($25 IS NULL) OR (p_1.assigned_user_id = ANY ($25)) OR ($26 AND (p_1.assigned_user_id IS NULL))) AND (($27 IS NULL) OR (i.source = ANY ($27))) AND (($28 IS NULL) OR (COALESCE(p_1.created_at, '-infinity'::timestamp with time zone) > ($46 - make_interval(0, 0, 0, $28, 0, 0, '0'::double precision)))) AND (($29 IS NULL) OR (COALESCE(p_1.created_at, '-infinity'::timestamp with time zone) <= ($46 - make_interval(0, 0, 0, $29, 0, 0, '0'::double precision)))) AND (($30 IS NULL) OR ((p_1.created_at IS NULL) = $30)) AND (($31 IS NULL) OR (COALESCE(p_1.last_inquiry_at, '-infinity'::timestamp with time zone) > ($46 - make_interval(0, 0, 0, $31, 0, 0, '0'::double precision)))) AND (($32 IS NULL) OR (COALESCE(p_1.last_inquiry_at, '-infinity'::timestamp with time zone) <= ($46 - make_interval(0, 0, 0, $32, 0, 0, '0'::double precision)))) AND (($33 IS NULL) OR ((p_1.last_inquiry_at IS NULL) = $33)) AND (($34 IS NULL) OR (COALESCE(p_1.last_contact_at, '-infinity'::timestamp with time zone) > ($46 - make_interval(0, 0, 0, $34, 0, 0, '0'::double precision)))) AND (($35 IS NULL) OR (COALESCE(p_1.last_contact_at, '-infinity'::timestamp with time zone) <= ($46 - make_interval(0, 0, 0, $35, 0, 0, '0'::double precision)))) AND (($36 IS NULL) OR ((p_1.last_contact_at IS NULL) = $36)) AND (($37 IS NULL) OR (COALESCE(p_1.last_inbound_at, '-infinity'::timestamp with time zone) > ($46 - make_interval(0, 0, 0, $37, 0, 0, '0'::double precision)))) AND (($38 IS NULL) OR (COALESCE(p_1.last_inbound_at, '-infinity'::timestamp with time zone) <= ($46 - make_interval(0, 0, 0, $38, 0, 0, '0'::double precision)))) AND (($39 IS NULL) OR ((p_1.last_inbound_at IS NULL) = $39)) AND (($40 IS NULL) OR ((p_1.last_inbound_at IS NOT NULL) = $40)) AND (($41 IS NULL) OR (EXISTS(SubPlan 44) = $41)) AND (($42 IS NULL) OR (EXISTS(SubPlan 46) = $42)) AND (($43 IS NULL) OR ((i2.received_at IS NOT NULL) = $43)) AND (($44 IS NULL) OR (((p_1.last_inbound_at IS NOT NULL) AND (p_1.last_inbound_at > COALESCE(p_1.last_contact_at, '-infinity'::timestamp with time zone)) AND (p_1.last_inbound_at > COALESCE(p_1.last_outbound_at, '-infinity'::timestamp with time zone))) = $44)) AND (($45 IS NULL) OR ((ANY ((p_1.organization_id = (hashed SubPlan 49).col1) AND (p_1.id = (hashed SubPlan 49).col2))) = $45)) AND (($54 IS NULL) OR (ANY (p_1.id = (hashed SubPlan 51).col1))) AND (($55 IS NULL) OR (NOT (ANY (p_1.id = (hashed SubPlan 53).col1))))), false)) THEN (p_1.last_inbound_at > ($46 - make_interval(0, 0, 0, 0, $51, 0, '0'::double precision))) WHEN (COALESCE($48, false) AND COALESCE(((($2 IS NULL) OR (p_1.stage_id = ANY ($2))) AND (($3 IS NULL) OR (p_1.assigned_user_id = ANY ($3)) OR ($4 AND (p_1.assigned_user_id IS NULL))) AND (($5 IS NULL) OR (i.source = ANY ($5))) AND (($6 IS NULL) OR (COALESCE(p_1.created_at, '-infinity'::timestamp with time zone) > ($46 - make_interval(0, 0, 0, $6, 0, 0, '0'::double precision)))) AND (($7 IS NULL) OR (COALESCE(p_1.created_at, '-infinity'::timestamp with time zone) <= ($46 - make_interval(0, 0, 0, $7, 0, 0, '0'::double precision)))) AND (($8 IS NULL) OR ((p_1.created_at IS NULL) = $8)) AND (($9 IS NULL) OR (COALESCE(p_1.last_inquiry_at, '-infinity'::timestamp with time zone) > ($46 - make_interval(0, 0, 0, $9, 0, 0, '0'::double precision)))) AND (($10 IS NULL) OR (COALESCE(p_1.last_inquiry_at, '-infinity'::timestamp with time zone) <= ($46 - make_interval(0, 0, 0, $10, 0, 0, '0'::double precision)))) AND (($11 IS NULL) OR ((p_1.last_inquiry_at IS NULL) = $11)) AND (($12 IS NULL) OR (COALESCE(p_1.last_contact_at, '-infinity'::timestamp with time zone) > ($46 - make_interval(0, 0, 0, $12, 0, 0, '0'::double precision)))) AND (($13 IS NULL) OR (COALESCE(p_1.last_contact_at, '-infinity'::timestamp with time zone) <= ($46 - make_interval(0, 0, 0, $13, 0, 0, '0'::double precision)))) AND (($14 IS NULL) OR ((p_1.last_contact_at IS NULL) = $14)) AND (($15 IS NULL) OR (COALESCE(p_1.last_inbound_at, '-infinity'::timestamp with time zone) > ($46 - make_interval(0, 0, 0, $15, 0, 0, '0'::double precision)))) AND (($16 IS NULL) OR (COALESCE(p_1.last_inbound_at, '-infinity'::timestamp with time zone) <= ($46 - make_interval(0, 0, 0, $16, 0, 0, '0'::double precision)))) AND (($17 IS NULL) OR ((p_1.last_inbound_at IS NULL) = $17)) AND (($18 IS NULL) OR ((p_1.last_inbound_at IS NOT NULL) = $18)) AND (($19 IS NULL) OR (EXISTS(SubPlan 54) = $19)) AND (($20 IS NULL) OR (EXISTS(SubPlan 56) = $20)) AND (($21 IS NULL) OR ((i2.received_at IS NOT NULL) = $21)) AND (($22 IS NULL) OR (((p_1.last_inbound_at IS NOT NULL) AND (p_1.last_inbound_at > COALESCE(p_1.last_contact_at, '-infinity'::timestamp with time zone)) AND (p_1.last_inbound_at > COALESCE(p_1.last_outbound_at, '-infinity'::timestamp with time zone))) = $22)) AND (($23 IS NULL) OR ((ANY ((p_1.organization_id = (hashed SubPlan 59).col1) AND (p_1.id = (hashed SubPlan 59).col2))) = $23)) AND (($52 IS NULL) OR (ANY (p_1.id = (hashed SubPlan 61).col1))) AND (($53 IS NULL) OR (NOT (ANY (p_1.id = (hashed SubPlan 63).col1))))), false)) THEN (p_1.last_inquiry_at > ($46 - make_interval(0, 0, 0, 0, $50, 0, '0'::double precision))) ELSE false END) DESC, (CASE WHEN (COALESCE($49, false) AND COALESCE(((($24 IS NULL) OR (p_1.stage_id = ANY ($24))) AND (($25 IS NULL) OR (p_1.assigned_user_id = ANY ($25)) OR ($26 AND (p_1.assigned_user_id IS NULL))) AND (($27 IS NULL) OR (i.source = ANY ($27))) AND (($28 IS NULL) OR (COALESCE(p_1.created_at, '-infinity'::timestamp with time zone) > ($46 - make_interval(0, 0, 0, $28, 0, 0, '0'::double precision)))) AND (($29 IS NULL) OR (COALESCE(p_1.created_at, '-infinity'::timestamp with time zone) <= ($46 - make_interval(0, 0, 0, $29, 0, 0, '0'::double precision)))) AND (($30 IS NULL) OR ((p_1.created_at IS NULL) = $30)) AND (($31 IS NULL) OR (COALESCE(p_1.last_inquiry_at, '-infinity'::timestamp with time zone) > ($46 - make_interval(0, 0, 0, $31, 0, 0, '0'::double precision)))) AND (($32 IS NULL) OR (COALESCE(p_1.last_inquiry_at, '-infinity'::timestamp with time zone) <= ($46 - make_interval(0, 0, 0, $32, 0, 0, '0'::double precision)))) AND (($33 IS NULL) OR ((p_1.last_inquiry_at IS NULL) = $33)) AND (($34 IS NULL) OR (COALESCE(p_1.last_contact_at, '-infinity'::timestamp with time zone) > ($46 - make_interval(0, 0, 0, $34, 0, 0, '0'::double precision)))) AND (($35 IS NULL) OR (COALESCE(p_1.last_contact_at, '-infinity'::timestamp with time zone) <= ($46 - make_interval(0, 0, 0, $35, 0, 0, '0'::double precision)))) AND (($36 IS NULL) OR ((p_1.last_contact_at IS NULL) = $36)) AND (($37 IS NULL) OR (COALESCE(p_1.last_inbound_at, '-infinity'::timestamp with time zone) > ($46 - make_interval(0, 0, 0, $37, 0, 0, '0'::double precision)))) AND (($38 IS NULL) OR (COALESCE(p_1.last_inbound_at, '-infinity'::timestamp with time zone) <= ($46 - make_interval(0, 0, 0, $38, 0, 0, '0'::double precision)))) AND (($39 IS NULL) OR ((p_1.last_inbound_at IS NULL) = $39)) AND (($40 IS NULL) OR ((p_1.last_inbound_at IS NOT NULL) = $40)) AND (($41 IS NULL) OR (EXISTS(SubPlan 24) = $41)) AND (($42 IS NULL) OR (EXISTS(SubPlan 26) = $42)) AND (($43 IS NULL) OR ((i2.received_at IS NOT NULL) = $43)) AND (($44 IS NULL) OR (((p_1.last_inbound_at IS NOT NULL) AND (p_1.last_inbound_at > COALESCE(p_1.last_contact_at, '-infinity'::timestamp with time zone)) AND (p_1.last_inbound_at > COALESCE(p_1.last_outbound_at, '-infinity'::timestamp with time zone))) = $44)) AND (($45 IS NULL) OR ((ANY ((p_1.organization_id = (hashed SubPlan 29).col1) AND (p_1.id = (hashed SubPlan 29).col2))) = $45)) AND (($54 IS NULL) OR (ANY (p_1.id = (hashed SubPlan 31).col1))) AND (($55 IS NULL) OR (NOT (ANY (p_1.id = (hashed SubPlan 33).col1))))), false)) THEN p_1.last_inbound_at WHEN (COALESCE($48, false) AND COALESCE(((($2 IS NULL) OR (p_1.stage_id = ANY ($2))) AND (($3 IS NULL) OR (p_1.assigned_user_id = ANY ($3)) OR ($4 AND (p_1.assigned_user_id IS NULL))) AND (($5 IS NULL) OR (i.source = ANY ($5))) AND (($6 IS NULL) OR (COALESCE(p_1.created_at, '-infinity'::timestamp with time zone) > ($46 - make_interval(0, 0, 0, $6, 0, 0, '0'::double precision)))) AND (($7 IS NULL) OR (COALESCE(p_1.created_at, '-infinity'::timestamp with time zone) <= ($46 - make_interval(0, 0, 0, $7, 0, 0, '0'::double precision)))) AND (($8 IS NULL) OR ((p_1.created_at IS NULL) = $8)) AND (($9 IS NULL) OR (COALESCE(p_1.last_inquiry_at, '-infinity'::timestamp with time zone) > ($46 - make_interval(0, 0, 0, $9, 0, 0, '0'::double precision)))) AND (($10 IS NULL) OR (COALESCE(p_1.last_inquiry_at, '-infinity'::timestamp with time zone) <= ($46 - make_interval(0, 0, 0, $10, 0, 0, '0'::double precision)))) AND (($11 IS NULL) OR ((p_1.last_inquiry_at IS NULL) = $11)) AND (($12 IS NULL) OR (COALESCE(p_1.last_contact_at, '-infinity'::timestamp with time zone) > ($46 - make_interval(0, 0, 0, $12, 0, 0, '0'::double precision)))) AND (($13 IS NULL) OR (COALESCE(p_1.last_contact_at, '-infinity'::timestamp with time zone) <= ($46 - make_interval(0, 0, 0, $13, 0, 0, '0'::double precision)))) AND (($14 IS NULL) OR ((p_1.last_contact_at IS NULL) = $14)) AND (($15 IS NULL) OR (COALESCE(p_1.last_inbound_at, '-infinity'::timestamp with time zone) > ($46 - make_interval(0, 0, 0, $15, 0, 0, '0'::double precision)))) AND (($16 IS NULL) OR (COALESCE(p_1.last_inbound_at, '-infinity'::timestamp with time zone) <= ($46 - make_interval(0, 0, 0, $16, 0, 0, '0'::double precision)))) AND (($17 IS NULL) OR ((p_1.last_inbound_at IS NULL) = $17)) AND (($18 IS NULL) OR ((p_1.last_inbound_at IS NOT NULL) = $18)) AND (($19 IS NULL) OR (EXISTS(SubPlan 34) = $19)) AND (($20 IS NULL) OR (EXISTS(SubPlan 36) = $20)) AND (($21 IS NULL) OR ((i2.received_at IS NOT NULL) = $21)) AND (($22 IS NULL) OR (((p_1.last_inbound_at IS NOT NULL) AND (p_1.last_inbound_at > COALESCE(p_1.last_contact_at, '-infinity'::timestamp with time zone)) AND (p_1.last_inbound_at > COALESCE(p_1.last_outbound_at, '-infinity'::timestamp with time zone))) = $22)) AND (($23 IS NULL) OR ((ANY ((p_1.organization_id = (hashed SubPlan 39).col1) AND (p_1.id = (hashed SubPlan 39).col2))) = $23)) AND (($52 IS NULL) OR (ANY (p_1.id = (hashed SubPlan 41).col1))) AND (($53 IS NULL) OR (NOT (ANY (p_1.id = (hashed SubPlan 43).col1))))), false)) THEN i2.received_at ELSE NULL::timestamp with time zone END), p_1.id
+                                            Sort Method: top-N heapsort  Memory: 95kB
+                                            Buffers: shared hit=72792
+                                            ->  Nested Loop Left Join  (cost=8.60..2805743.43 rows=8896 width=152) (actual time=0.477..52.009 rows=2695.00 loops=1)
+                                                  Filter: ((COALESCE($48, false) AND COALESCE(((($2 IS NULL) OR (p_1.stage_id = ANY ($2))) AND (($3 IS NULL) OR (p_1.assigned_user_id = ANY ($3)) OR ($4 AND (p_1.assigned_user_id IS NULL))) AND (($5 IS NULL) OR (i.source = ANY ($5))) AND (($6 IS NULL) OR (COALESCE(p_1.created_at, '-infinity'::timestamp with time zone) > ($46 - make_interval(0, 0, 0, $6, 0, 0, '0'::double precision)))) AND (($7 IS NULL) OR (COALESCE(p_1.created_at, '-infinity'::timestamp with time zone) <= ($46 - make_interval(0, 0, 0, $7, 0, 0, '0'::double precision)))) AND (($8 IS NULL) OR ((p_1.created_at IS NULL) = $8)) AND (($9 IS NULL) OR (COALESCE(p_1.last_inquiry_at, '-infinity'::timestamp with time zone) > ($46 - make_interval(0, 0, 0, $9, 0, 0, '0'::double precision)))) AND (($10 IS NULL) OR (COALESCE(p_1.last_inquiry_at, '-infinity'::timestamp with time zone) <= ($46 - make_interval(0, 0, 0, $10, 0, 0, '0'::double precision)))) AND (($11 IS NULL) OR ((p_1.last_inquiry_at IS NULL) = $11)) AND (($12 IS NULL) OR (COALESCE(p_1.last_contact_at, '-infinity'::timestamp with time zone) > ($46 - make_interval(0, 0, 0, $12, 0, 0, '0'::double precision)))) AND (($13 IS NULL) OR (COALESCE(p_1.last_contact_at, '-infinity'::timestamp with time zone) <= ($46 - make_interval(0, 0, 0, $13, 0, 0, '0'::double precision)))) AND (($14 IS NULL) OR ((p_1.last_contact_at IS NULL) = $14)) AND (($15 IS NULL) OR (COALESCE(p_1.last_inbound_at, '-infinity'::timestamp with time zone) > ($46 - make_interval(0, 0, 0, $15, 0, 0, '0'::double precision)))) AND (($16 IS NULL) OR (COALESCE(p_1.last_inbound_at, '-infinity'::timestamp with time zone) <= ($46 - make_interval(0, 0, 0, $16, 0, 0, '0'::double precision)))) AND (($17 IS NULL) OR ((p_1.last_inbound_at IS NULL) = $17)) AND (($18 IS NULL) OR ((p_1.last_inbound_at IS NOT NULL) = $18)) AND (($19 IS NULL) OR (EXISTS(SubPlan 64) = $19)) AND (($20 IS NULL) OR (EXISTS(SubPlan 66) = $20)) AND (($21 IS NULL) OR ((i2.received_at IS NOT NULL) = $21)) AND (($22 IS NULL) OR (((p_1.last_inbound_at IS NOT NULL) AND (p_1.last_inbound_at > COALESCE(p_1.last_contact_at, '-infinity'::timestamp with time zone)) AND (p_1.last_inbound_at > COALESCE(p_1.last_outbound_at, '-infinity'::timestamp with time zone))) = $22)) AND (($23 IS NULL) OR ((ANY ((p_1.organization_id = (hashed SubPlan 69).col1) AND (p_1.id = (hashed SubPlan 69).col2))) = $23)) AND (($52 IS NULL) OR (ANY (p_1.id = (hashed SubPlan 71).col1))) AND (($53 IS NULL) OR (NOT (ANY (p_1.id = (hashed SubPlan 73).col1))))), false)) OR (COALESCE($49, false) AND COALESCE(((($24 IS NULL) OR (p_1.stage_id = ANY ($24))) AND (($25 IS NULL) OR (p_1.assigned_user_id = ANY ($25)) OR ($26 AND (p_1.assigned_user_id IS NULL))) AND (($27 IS NULL) OR (i.source = ANY ($27))) AND (($28 IS NULL) OR (COALESCE(p_1.created_at, '-infinity'::timestamp with time zone) > ($46 - make_interval(0, 0, 0, $28, 0, 0, '0'::double precision)))) AND (($29 IS NULL) OR (COALESCE(p_1.created_at, '-infinity'::timestamp with time zone) <= ($46 - make_interval(0, 0, 0, $29, 0, 0, '0'::double precision)))) AND (($30 IS NULL) OR ((p_1.created_at IS NULL) = $30)) AND (($31 IS NULL) OR (COALESCE(p_1.last_inquiry_at, '-infinity'::timestamp with time zone) > ($46 - make_interval(0, 0, 0, $31, 0, 0, '0'::double precision)))) AND (($32 IS NULL) OR (COALESCE(p_1.last_inquiry_at, '-infinity'::timestamp with time zone) <= ($46 - make_interval(0, 0, 0, $32, 0, 0, '0'::double precision)))) AND (($33 IS NULL) OR ((p_1.last_inquiry_at IS NULL) = $33)) AND (($34 IS NULL) OR (COALESCE(p_1.last_contact_at, '-infinity'::timestamp with time zone) > ($46 - make_interval(0, 0, 0, $34, 0, 0, '0'::double precision)))) AND (($35 IS NULL) OR (COALESCE(p_1.last_contact_at, '-infinity'::timestamp with time zone) <= ($46 - make_interval(0, 0, 0, $35, 0, 0, '0'::double precision)))) AND (($36 IS NULL) OR ((p_1.last_contact_at IS NULL) = $36)) AND (($37 IS NULL) OR (COALESCE(p_1.last_inbound_at, '-infinity'::timestamp with time zone) > ($46 - make_interval(0, 0, 0, $37, 0, 0, '0'::double precision)))) AND (($38 IS NULL) OR (COALESCE(p_1.last_inbound_at, '-infinity'::timestamp with time zone) <= ($46 - make_interval(0, 0, 0, $38, 0, 0, '0'::double precision)))) AND (($39 IS NULL) OR ((p_1.last_inbound_at IS NULL) = $39)) AND (($40 IS NULL) OR ((p_1.last_inbound_at IS NOT NULL) = $40)) AND (($41 IS NULL) OR (EXISTS(SubPlan 74) = $41)) AND (($42 IS NULL) OR (EXISTS(SubPlan 76) = $42)) AND (($43 IS NULL) OR ((i2.received_at IS NOT NULL) = $43)) AND (($44 IS NULL) OR (((p_1.last_inbound_at IS NOT NULL) AND (p_1.last_inbound_at > COALESCE(p_1.last_contact_at, '-infinity'::timestamp with time zone)) AND (p_1.last_inbound_at > COALESCE(p_1.last_outbound_at, '-infinity'::timestamp with time zone))) = $44)) AND (($45 IS NULL) OR ((ANY ((p_1.organization_id = (hashed SubPlan 79).col1) AND (p_1.id = (hashed SubPlan 79).col2))) = $45)) AND (($54 IS NULL) OR (ANY (p_1.id = (hashed SubPlan 81).col1))) AND (($55 IS NULL) OR (NOT (ANY (p_1.id = (hashed SubPlan 83).col1))))), false)))
+                                                  Rows Removed by Filter: 17638
+                                                  Buffers: shared hit=72787
+                                                  ->  Nested Loop Left Join  (cost=8.32..171312.38 rows=20333 width=111) (actual time=0.455..34.941 rows=20333.00 loops=1)
+                                                        Join Filter: (($5 IS NOT NULL) OR ($27 IS NOT NULL))
+                                                        Rows Removed by Join Filter: 20333
+                                                        Buffers: shared hit=62200
+                                                        ->  Seq Scan on person p_1  (cost=0.00..1328.50 rows=20333 width=104) (actual time=0.432..2.807 rows=20333.00 loops=1)
+                                                              Filter: ((last_inquiry_at IS NOT NULL) AND (organization_id = $1))
+                                                              Rows Removed by Filter: 4667
+                                                              Buffers: shared hit=1016
+                                                        ->  Limit  (cost=8.32..8.34 rows=1 width=31) (actual time=0.001..0.001 rows=1.00 loops=20333)
+                                                              Buffers: shared hit=61184
+                                                              ->  Incremental Sort  (cost=8.32..8.36 rows=2 width=31) (actual time=0.001..0.001 rows=1.00 loops=20333)
+                                                                    Sort Key: i.received_at DESC, i.id DESC
+                                                                    Presorted Key: i.received_at
+                                                                    Full-sort Groups: 20333  Sort Method: quicksort  Average Memory: 25kB  Peak Memory: 25kB
+                                                                    Buffers: shared hit=61184
+                                                                    ->  Index Scan Backward using inquiry_org_person_received_idx on inquiry i  (cost=0.29..8.31 rows=1 width=31) (actual time=0.001..0.001 rows=1.00 loops=20333)
+                                                                          Index Cond: ((organization_id = p_1.organization_id) AND (person_id = p_1.id))
+                                                                          Index Searches: 20333
+                                                                          Buffers: shared hit=61184
+                                                  ->  Limit  (cost=0.29..4.31 rows=1 width=8) (actual time=0.000..0.000 rows=0.26 loops=20333)
+                                                        Buffers: shared hit=10587
+                                                        ->  Result  (cost=0.29..4.31 rows=1 width=8) (actual time=0.000..0.000 rows=0.26 loops=20333)
+                                                              One-Time Filter: (p_1.last_inquiry_at > COALESCE(p_1.last_contact_at, '-infinity'::timestamp with time zone))
+                                                              Buffers: shared hit=10587
+                                                              ->  Index Only Scan using inquiry_org_person_received_idx on inquiry i2  (cost=0.29..4.31 rows=1 width=8) (actual time=0.001..0.001 rows=1.00 loops=5293)
+                                                                    Index Cond: ((organization_id = p_1.organization_id) AND (person_id = p_1.id) AND (received_at > COALESCE(p_1.last_contact_at, '-infinity'::timestamp with time zone)))
+                                                                    Heap Fetches: 0
+                                                                    Index Searches: 5293
+                                                                    Buffers: shared hit=10587
+                                                  SubPlan 24
+                                                    ->  Seq Scan on contact_method cm_phone_b_1  (cost=0.00..0.00 rows=1 width=0) (never executed)
+                                                          Filter: ((person_id = p_1.id) AND (organization_id = p_1.organization_id) AND (kind = 'phone'::text))
+                                                  SubPlan 26
+                                                    ->  Seq Scan on contact_method cm_email_b_1  (cost=0.00..0.00 rows=1 width=0) (never executed)
+                                                          Filter: ((person_id = p_1.id) AND (organization_id = p_1.organization_id) AND (kind = 'email'::text))
+                                                  SubPlan 29
+                                                    ->  Nested Loop Semi Join  (cost=0.56..802.74 rows=179 width=32) (never executed)
+                                                          ->  Seq Scan on call c_b_1  (cost=0.00..9.00 rows=200 width=48) (never executed)
+                                                                Filter: ((ended_at IS NOT NULL) AND (status = ANY ('{ended,failed}'::text[])) AND (caller_user_id = $47))
+                                                          ->  Nested Loop Anti Join  (cost=0.56..3.96 rows=1 width=32) (never executed)
+                                                                ->  Index Scan using contact_attempted_org_causation_idx on contact_attempted root_b_1  (cost=0.29..3.65 rows=1 width=48) (never executed)
+                                                                      Index Cond: ((organization_id = c_b_1.organization_id) AND (causation_id = c_b_1.id))
+                                                                      Filter: (corrects_id IS NULL)
+                                                                      Index Searches: 0
+                                                                ->  Index Only Scan using contact_attempted_corrects_once on contact_attempted x_b_1  (cost=0.28..0.29 rows=1 width=16) (never executed)
+                                                                      Index Cond: (corrects_id = root_b_1.id)
+                                                                      Heap Fetches: 0
+                                                                      Index Searches: 0
+                                                  SubPlan 31
+                                                    ->  Index Only Scan using person_tag_org_tag_person_idx on person_tag pt_b_1  (cost=0.15..8.17 rows=1 width=16) (never executed)
+                                                          Index Cond: ((organization_id = $1) AND (tag_id = ANY ($54)))
+                                                          Heap Fetches: 0
+                                                          Index Searches: 0
+                                                  SubPlan 33
+                                                    ->  Index Only Scan using person_tag_org_tag_person_idx on person_tag pt2_b_1  (cost=0.15..8.17 rows=1 width=16) (never executed)
+                                                          Index Cond: ((organization_id = $1) AND (tag_id = ANY ($55)))
+                                                          Heap Fetches: 0
+                                                          Index Searches: 0
+                                                  SubPlan 34
+                                                    ->  Seq Scan on contact_method cm_phone_a_1  (cost=0.00..0.00 rows=1 width=0) (never executed)
+                                                          Filter: ((person_id = p_1.id) AND (organization_id = p_1.organization_id) AND (kind = 'phone'::text))
+                                                  SubPlan 36
+                                                    ->  Seq Scan on contact_method cm_email_a_1  (cost=0.00..0.00 rows=1 width=0) (never executed)
+                                                          Filter: ((person_id = p_1.id) AND (organization_id = p_1.organization_id) AND (kind = 'email'::text))
+                                                  SubPlan 39
+                                                    ->  Nested Loop Semi Join  (cost=0.56..802.74 rows=179 width=32) (never executed)
+                                                          ->  Seq Scan on call c_a_1  (cost=0.00..9.00 rows=200 width=48) (never executed)
+                                                                Filter: ((ended_at IS NOT NULL) AND (status = ANY ('{ended,failed}'::text[])) AND (caller_user_id = $47))
+                                                          ->  Nested Loop Anti Join  (cost=0.56..3.96 rows=1 width=32) (never executed)
+                                                                ->  Index Scan using contact_attempted_org_causation_idx on contact_attempted root_a_1  (cost=0.29..3.65 rows=1 width=48) (never executed)
+                                                                      Index Cond: ((organization_id = c_a_1.organization_id) AND (causation_id = c_a_1.id))
+                                                                      Filter: (corrects_id IS NULL)
+                                                                      Index Searches: 0
+                                                                ->  Index Only Scan using contact_attempted_corrects_once on contact_attempted x_a_1  (cost=0.28..0.29 rows=1 width=16) (never executed)
+                                                                      Index Cond: (corrects_id = root_a_1.id)
+                                                                      Heap Fetches: 0
+                                                                      Index Searches: 0
+                                                  SubPlan 41
+                                                    ->  Index Only Scan using person_tag_org_tag_person_idx on person_tag pt_a_1  (cost=0.15..8.17 rows=1 width=16) (never executed)
+                                                          Index Cond: ((organization_id = $1) AND (tag_id = ANY ($52)))
+                                                          Heap Fetches: 0
+                                                          Index Searches: 0
+                                                  SubPlan 43
+                                                    ->  Index Only Scan using person_tag_org_tag_person_idx on person_tag pt2_a_1  (cost=0.15..8.17 rows=1 width=16) (never executed)
+                                                          Index Cond: ((organization_id = $1) AND (tag_id = ANY ($53)))
+                                                          Heap Fetches: 0
+                                                          Index Searches: 0
+                                                  SubPlan 44
+                                                    ->  Seq Scan on contact_method cm_phone_b_2  (cost=0.00..0.00 rows=1 width=0) (never executed)
+                                                          Filter: ((person_id = p_1.id) AND (organization_id = p_1.organization_id) AND (kind = 'phone'::text))
+                                                  SubPlan 46
+                                                    ->  Seq Scan on contact_method cm_email_b_2  (cost=0.00..0.00 rows=1 width=0) (never executed)
+                                                          Filter: ((person_id = p_1.id) AND (organization_id = p_1.organization_id) AND (kind = 'email'::text))
+                                                  SubPlan 49
+                                                    ->  Nested Loop Semi Join  (cost=0.56..802.74 rows=179 width=32) (never executed)
+                                                          ->  Seq Scan on call c_b_2  (cost=0.00..9.00 rows=200 width=48) (never executed)
+                                                                Filter: ((ended_at IS NOT NULL) AND (status = ANY ('{ended,failed}'::text[])) AND (caller_user_id = $47))
+                                                          ->  Nested Loop Anti Join  (cost=0.56..3.96 rows=1 width=32) (never executed)
+                                                                ->  Index Scan using contact_attempted_org_causation_idx on contact_attempted root_b_2  (cost=0.29..3.65 rows=1 width=48) (never executed)
+                                                                      Index Cond: ((organization_id = c_b_2.organization_id) AND (causation_id = c_b_2.id))
+                                                                      Filter: (corrects_id IS NULL)
+                                                                      Index Searches: 0
+                                                                ->  Index Only Scan using contact_attempted_corrects_once on contact_attempted x_b_2  (cost=0.28..0.29 rows=1 width=16) (never executed)
+                                                                      Index Cond: (corrects_id = root_b_2.id)
+                                                                      Heap Fetches: 0
+                                                                      Index Searches: 0
+                                                  SubPlan 51
+                                                    ->  Index Only Scan using person_tag_org_tag_person_idx on person_tag pt_b_2  (cost=0.15..8.17 rows=1 width=16) (never executed)
+                                                          Index Cond: ((organization_id = $1) AND (tag_id = ANY ($54)))
+                                                          Heap Fetches: 0
+                                                          Index Searches: 0
+                                                  SubPlan 53
+                                                    ->  Index Only Scan using person_tag_org_tag_person_idx on person_tag pt2_b_2  (cost=0.15..8.17 rows=1 width=16) (never executed)
+                                                          Index Cond: ((organization_id = $1) AND (tag_id = ANY ($55)))
+                                                          Heap Fetches: 0
+                                                          Index Searches: 0
+                                                  SubPlan 54
+                                                    ->  Seq Scan on contact_method cm_phone_a_2  (cost=0.00..0.00 rows=1 width=0) (never executed)
+                                                          Filter: ((person_id = p_1.id) AND (organization_id = p_1.organization_id) AND (kind = 'phone'::text))
+                                                  SubPlan 56
+                                                    ->  Seq Scan on contact_method cm_email_a_2  (cost=0.00..0.00 rows=1 width=0) (never executed)
+                                                          Filter: ((person_id = p_1.id) AND (organization_id = p_1.organization_id) AND (kind = 'email'::text))
+                                                  SubPlan 59
+                                                    ->  Nested Loop Semi Join  (cost=0.56..802.74 rows=179 width=32) (never executed)
+                                                          ->  Seq Scan on call c_a_2  (cost=0.00..9.00 rows=200 width=48) (never executed)
+                                                                Filter: ((ended_at IS NOT NULL) AND (status = ANY ('{ended,failed}'::text[])) AND (caller_user_id = $47))
+                                                          ->  Nested Loop Anti Join  (cost=0.56..3.96 rows=1 width=32) (never executed)
+                                                                ->  Index Scan using contact_attempted_org_causation_idx on contact_attempted root_a_2  (cost=0.29..3.65 rows=1 width=48) (never executed)
+                                                                      Index Cond: ((organization_id = c_a_2.organization_id) AND (causation_id = c_a_2.id))
+                                                                      Filter: (corrects_id IS NULL)
+                                                                      Index Searches: 0
+                                                                ->  Index Only Scan using contact_attempted_corrects_once on contact_attempted x_a_2  (cost=0.28..0.29 rows=1 width=16) (never executed)
+                                                                      Index Cond: (corrects_id = root_a_2.id)
+                                                                      Heap Fetches: 0
+                                                                      Index Searches: 0
+                                                  SubPlan 61
+                                                    ->  Index Only Scan using person_tag_org_tag_person_idx on person_tag pt_a_2  (cost=0.15..8.17 rows=1 width=16) (never executed)
+                                                          Index Cond: ((organization_id = $1) AND (tag_id = ANY ($52)))
+                                                          Heap Fetches: 0
+                                                          Index Searches: 0
+                                                  SubPlan 63
+                                                    ->  Index Only Scan using person_tag_org_tag_person_idx on person_tag pt2_a_2  (cost=0.15..8.17 rows=1 width=16) (never executed)
+                                                          Index Cond: ((organization_id = $1) AND (tag_id = ANY ($53)))
+                                                          Heap Fetches: 0
+                                                          Index Searches: 0
+                                                  SubPlan 64
+                                                    ->  Seq Scan on contact_method cm_phone_a_3  (cost=0.00..0.00 rows=1 width=0) (never executed)
+                                                          Filter: ((person_id = p_1.id) AND (organization_id = p_1.organization_id) AND (kind = 'phone'::text))
+                                                  SubPlan 66
+                                                    ->  Seq Scan on contact_method cm_email_a_3  (cost=0.00..0.00 rows=1 width=0) (never executed)
+                                                          Filter: ((person_id = p_1.id) AND (organization_id = p_1.organization_id) AND (kind = 'email'::text))
+                                                  SubPlan 69
+                                                    ->  Nested Loop Semi Join  (cost=0.56..802.74 rows=179 width=32) (never executed)
+                                                          ->  Seq Scan on call c_a_3  (cost=0.00..9.00 rows=200 width=48) (never executed)
+                                                                Filter: ((ended_at IS NOT NULL) AND (status = ANY ('{ended,failed}'::text[])) AND (caller_user_id = $47))
+                                                          ->  Nested Loop Anti Join  (cost=0.56..3.96 rows=1 width=32) (never executed)
+                                                                ->  Index Scan using contact_attempted_org_causation_idx on contact_attempted root_a_3  (cost=0.29..3.65 rows=1 width=48) (never executed)
+                                                                      Index Cond: ((organization_id = c_a_3.organization_id) AND (causation_id = c_a_3.id))
+                                                                      Filter: (corrects_id IS NULL)
+                                                                      Index Searches: 0
+                                                                ->  Index Only Scan using contact_attempted_corrects_once on contact_attempted x_a_3  (cost=0.28..0.29 rows=1 width=16) (never executed)
+                                                                      Index Cond: (corrects_id = root_a_3.id)
+                                                                      Heap Fetches: 0
+                                                                      Index Searches: 0
+                                                  SubPlan 71
+                                                    ->  Index Only Scan using person_tag_org_tag_person_idx on person_tag pt_a_3  (cost=0.15..8.17 rows=1 width=16) (never executed)
+                                                          Index Cond: ((organization_id = $1) AND (tag_id = ANY ($52)))
+                                                          Heap Fetches: 0
+                                                          Index Searches: 0
+                                                  SubPlan 73
+                                                    ->  Index Only Scan using person_tag_org_tag_person_idx on person_tag pt2_a_3  (cost=0.15..8.17 rows=1 width=16) (never executed)
+                                                          Index Cond: ((organization_id = $1) AND (tag_id = ANY ($53)))
+                                                          Heap Fetches: 0
+                                                          Index Searches: 0
+                                                  SubPlan 74
+                                                    ->  Seq Scan on contact_method cm_phone_b_3  (cost=0.00..0.00 rows=1 width=0) (never executed)
+                                                          Filter: ((person_id = p_1.id) AND (organization_id = p_1.organization_id) AND (kind = 'phone'::text))
+                                                  SubPlan 76
+                                                    ->  Seq Scan on contact_method cm_email_b_3  (cost=0.00..0.00 rows=1 width=0) (never executed)
+                                                          Filter: ((person_id = p_1.id) AND (organization_id = p_1.organization_id) AND (kind = 'email'::text))
+                                                  SubPlan 79
+                                                    ->  Nested Loop Semi Join  (cost=0.56..802.74 rows=179 width=32) (never executed)
+                                                          ->  Seq Scan on call c_b_3  (cost=0.00..9.00 rows=200 width=48) (never executed)
+                                                                Filter: ((ended_at IS NOT NULL) AND (status = ANY ('{ended,failed}'::text[])) AND (caller_user_id = $47))
+                                                          ->  Nested Loop Anti Join  (cost=0.56..3.96 rows=1 width=32) (never executed)
+                                                                ->  Index Scan using contact_attempted_org_causation_idx on contact_attempted root_b_3  (cost=0.29..3.65 rows=1 width=48) (never executed)
+                                                                      Index Cond: ((organization_id = c_b_3.organization_id) AND (causation_id = c_b_3.id))
+                                                                      Filter: (corrects_id IS NULL)
+                                                                      Index Searches: 0
+                                                                ->  Index Only Scan using contact_attempted_corrects_once on contact_attempted x_b_3  (cost=0.28..0.29 rows=1 width=16) (never executed)
+                                                                      Index Cond: (corrects_id = root_b_3.id)
+                                                                      Heap Fetches: 0
+                                                                      Index Searches: 0
+                                                  SubPlan 81
+                                                    ->  Index Only Scan using person_tag_org_tag_person_idx on person_tag pt_b_3  (cost=0.15..8.17 rows=1 width=16) (never executed)
+                                                          Index Cond: ((organization_id = $1) AND (tag_id = ANY ($54)))
+                                                          Heap Fetches: 0
+                                                          Index Searches: 0
+                                                  SubPlan 83
+                                                    ->  Index Only Scan using person_tag_org_tag_person_idx on person_tag pt2_b_3  (cost=0.15..8.17 rows=1 width=16) (never executed)
+                                                          Index Cond: ((organization_id = $1) AND (tag_id = ANY ($55)))
+                                                          Heap Fetches: 0
+                                                          Index Searches: 0
+                                      SubPlan 4
+                                        ->  Seq Scan on contact_method cm_phone_a  (cost=0.00..0.00 rows=1 width=0) (never executed)
+                                              Filter: ((person_id = p_1.id) AND (organization_id = p_1.organization_id) AND (kind = 'phone'::text))
+                                      SubPlan 6
+                                        ->  Seq Scan on contact_method cm_email_a  (cost=0.00..0.00 rows=1 width=0) (never executed)
+                                              Filter: ((person_id = p_1.id) AND (organization_id = p_1.organization_id) AND (kind = 'email'::text))
+                                      SubPlan 9
+                                        ->  Nested Loop Semi Join  (cost=0.56..802.74 rows=179 width=32) (never executed)
+                                              ->  Seq Scan on call c_a  (cost=0.00..9.00 rows=200 width=48) (never executed)
+                                                    Filter: ((ended_at IS NOT NULL) AND (status = ANY ('{ended,failed}'::text[])) AND (caller_user_id = $47))
+                                              ->  Nested Loop Anti Join  (cost=0.56..3.96 rows=1 width=32) (never executed)
+                                                    ->  Index Scan using contact_attempted_org_causation_idx on contact_attempted root_a  (cost=0.29..3.65 rows=1 width=48) (never executed)
+                                                          Index Cond: ((organization_id = c_a.organization_id) AND (causation_id = c_a.id))
+                                                          Filter: (corrects_id IS NULL)
+                                                          Index Searches: 0
+                                                    ->  Index Only Scan using contact_attempted_corrects_once on contact_attempted x_a  (cost=0.28..0.29 rows=1 width=16) (never executed)
+                                                          Index Cond: (corrects_id = root_a.id)
+                                                          Heap Fetches: 0
+                                                          Index Searches: 0
+                                      SubPlan 11
+                                        ->  Index Only Scan using person_tag_org_tag_person_idx on person_tag pt_a  (cost=0.15..8.17 rows=1 width=16) (never executed)
+                                              Index Cond: ((organization_id = $1) AND (tag_id = ANY ($52)))
+                                              Heap Fetches: 0
+                                              Index Searches: 0
+                                      SubPlan 13
+                                        ->  Index Only Scan using person_tag_org_tag_person_idx on person_tag pt2_a  (cost=0.15..8.17 rows=1 width=16) (never executed)
+                                              Index Cond: ((organization_id = $1) AND (tag_id = ANY ($53)))
+                                              Heap Fetches: 0
+                                              Index Searches: 0
+                                      SubPlan 14
+                                        ->  Seq Scan on contact_method cm_phone_b  (cost=0.00..0.00 rows=1 width=0) (never executed)
+                                              Filter: ((person_id = p_1.id) AND (organization_id = p_1.organization_id) AND (kind = 'phone'::text))
+                                      SubPlan 16
+                                        ->  Seq Scan on contact_method cm_email_b  (cost=0.00..0.00 rows=1 width=0) (never executed)
+                                              Filter: ((person_id = p_1.id) AND (organization_id = p_1.organization_id) AND (kind = 'email'::text))
+                                      SubPlan 19
+                                        ->  Nested Loop Semi Join  (cost=0.56..802.74 rows=179 width=32) (never executed)
+                                              ->  Seq Scan on call c_b  (cost=0.00..9.00 rows=200 width=48) (never executed)
+                                                    Filter: ((ended_at IS NOT NULL) AND (status = ANY ('{ended,failed}'::text[])) AND (caller_user_id = $47))
+                                              ->  Nested Loop Anti Join  (cost=0.56..3.96 rows=1 width=32) (never executed)
+                                                    ->  Index Scan using contact_attempted_org_causation_idx on contact_attempted root_b  (cost=0.29..3.65 rows=1 width=48) (never executed)
+                                                          Index Cond: ((organization_id = c_b.organization_id) AND (causation_id = c_b.id))
+                                                          Filter: (corrects_id IS NULL)
+                                                          Index Searches: 0
+                                                    ->  Index Only Scan using contact_attempted_corrects_once on contact_attempted x_b  (cost=0.28..0.29 rows=1 width=16) (never executed)
+                                                          Index Cond: (corrects_id = root_b.id)
+                                                          Heap Fetches: 0
+                                                          Index Searches: 0
+                                      SubPlan 21
+                                        ->  Index Only Scan using person_tag_org_tag_person_idx on person_tag pt_b  (cost=0.15..8.17 rows=1 width=16) (never executed)
+                                              Index Cond: ((organization_id = $1) AND (tag_id = ANY ($54)))
+                                              Heap Fetches: 0
+                                              Index Searches: 0
+                                      SubPlan 23
+                                        ->  Index Only Scan using person_tag_org_tag_person_idx on person_tag pt2_b  (cost=0.15..8.17 rows=1 width=16) (never executed)
+                                              Index Cond: ((organization_id = $1) AND (tag_id = ANY ($55)))
+                                              Heap Fetches: 0
+                                              Index Searches: 0
+                          ->  Index Scan using person_pkey on person p  (cost=0.29..6.63 rows=1 width=88) (actual time=0.001..0.001 rows=1.00 loops=201)
+                                Index Cond: (id = p_1.id)
+                                Index Searches: 201
+                                Buffers: shared hit=603
+                    ->  Memoize  (cost=0.16..0.18 rows=1 width=48) (actual time=0.000..0.000 rows=1.00 loops=201)
+                          Cache Key: p.stage_id
+                          Cache Mode: logical
+                          Hits: 200  Misses: 1  Evictions: 0  Overflows: 0  Memory Usage: 1kB
+                          Buffers: shared hit=2
+                          ->  Index Scan using stage_id_organization_id_key on stage s  (cost=0.15..0.17 rows=1 width=48) (actual time=0.007..0.007 rows=1.00 loops=1)
+                                Index Cond: (id = p.stage_id)
+                                Index Searches: 1
+                                Buffers: shared hit=2
+              ->  Memoize  (cost=0.16..0.18 rows=1 width=48) (actual time=0.000..0.000 rows=1.00 loops=201)
+                    Cache Key: p.assigned_user_id
+                    Cache Mode: logical
+                    Hits: 200  Misses: 1  Evictions: 0  Overflows: 0  Memory Usage: 1kB
+                    Buffers: shared hit=2
+                    ->  Index Scan using app_user_pkey on app_user u  (cost=0.15..0.17 rows=1 width=48) (actual time=0.007..0.007 rows=1.00 loops=1)
+                          Index Cond: (id = p.assigned_user_id)
+                          Index Searches: 1
+                          Buffers: shared hit=2
+        ->  Limit  (cost=8.32..8.34 rows=1 width=31) (actual time=0.002..0.002 rows=1.00 loops=201)
+              Buffers: shared hit=605
+              ->  Incremental Sort  (cost=8.32..8.36 rows=2 width=31) (actual time=0.002..0.002 rows=1.00 loops=201)
+                    Sort Key: i_1.received_at DESC, i_1.id DESC
+                    Presorted Key: i_1.received_at
+                    Full-sort Groups: 201  Sort Method: quicksort  Average Memory: 25kB  Peak Memory: 25kB
+                    Buffers: shared hit=605
+                    ->  Index Scan Backward using inquiry_org_person_received_idx on inquiry i_1  (cost=0.29..8.31 rows=1 width=31) (actual time=0.001..0.001 rows=1.00 loops=201)
+                          Index Cond: ((organization_id = p.organization_id) AND (person_id = p.id))
+                          Index Searches: 201
+                          Buffers: shared hit=605
+  ->  Limit  (cost=13.08..13.09 rows=1 width=38) (actual time=0.036..0.036 rows=0.68 loops=201)
+        Buffers: shared hit=1067
+        ->  Sort  (cost=13.08..13.09 rows=1 width=38) (actual time=0.035..0.035 rows=0.68 loops=201)
+              Sort Key: ca.occurred_at DESC, ca.id DESC
+              Sort Method: quicksort  Memory: 25kB
+              Buffers: shared hit=1067
+              ->  Merge Anti Join  (cost=8.59..13.07 rows=1 width=38) (actual time=0.034..0.035 rows=0.68 loops=201)
+                    Merge Cond: (ca.id = x2.corrects_id)
+                    Buffers: shared hit=1067
+                    ->  Sort  (cost=8.31..8.32 rows=1 width=38) (actual time=0.002..0.002 rows=0.74 loops=201)
+                          Sort Key: ca.id
+                          Sort Method: quicksort  Memory: 25kB
+                          Buffers: shared hit=552
+                          ->  Index Scan Backward using contact_attempted_org_person_occurred_idx on contact_attempted ca  (cost=0.29..8.30 rows=1 width=38) (actual time=0.002..0.002 rows=0.74 loops=201)
+                                Index Cond: ((organization_id = p.organization_id) AND (person_id = p.id))
+                                Index Searches: 201
+                                Buffers: shared hit=552
+                    ->  Index Only Scan using contact_attempted_corrects_once on contact_attempted x2  (cost=0.28..41.50 rows=16082 width=16) (actual time=0.002..0.023 rows=453.60 loops=137)
+                          Heap Fetches: 0
+                          Index Searches: 137
+                          Buffers: shared hit=515
+  SubPlan 1
+    ->  Limit  (cost=0.01..0.02 rows=1 width=40) (actual time=0.001..0.001 rows=0.00 loops=201)
+          ->  Sort  (cost=0.01..0.02 rows=1 width=40) (actual time=0.001..0.001 rows=0.00 loops=201)
+                Sort Key: cm.created_at
+                Sort Method: quicksort  Memory: 25kB
+                ->  Seq Scan on contact_method cm  (cost=0.00..0.00 rows=1 width=40) (actual time=0.000..0.000 rows=0.00 loops=201)
+                      Filter: ((person_id = p.id) AND (organization_id = p.organization_id) AND (kind = 'email'::text))
+  SubPlan 2
+    ->  Limit  (cost=0.01..0.02 rows=1 width=40) (actual time=0.001..0.001 rows=0.00 loops=201)
+          ->  Sort  (cost=0.01..0.02 rows=1 width=40) (actual time=0.000..0.000 rows=0.00 loops=201)
+                Sort Key: cm_1.created_at
+                Sort Method: quicksort  Memory: 25kB
+                ->  Seq Scan on contact_method cm_1  (cost=0.00..0.00 rows=1 width=40) (actual time=0.000..0.000 rows=0.00 loops=201)
+                      Filter: ((person_id = p.id) AND (organization_id = p.organization_id) AND (kind = 'phone'::text))
+  SubPlan 3
+    ->  Aggregate  (cost=4.31..4.32 rows=1 width=8) (actual time=0.001..0.001 rows=1.00 loops=201)
+          Buffers: shared hit=403
+          ->  Index Only Scan using inquiry_org_person_received_idx on inquiry i_2  (cost=0.29..4.31 rows=1 width=0) (actual time=0.001..0.001 rows=1.00 loops=201)
+                Index Cond: ((organization_id = p.organization_id) AND (person_id = p.id))
+                Heap Fetches: 0
+                Index Searches: 201
+                Buffers: shared hit=403
+Planning:
+  Buffers: shared hit=427
+Planning Time: 4.342 ms
+JIT:
+  Functions: 468
+  Options: Inlining true, Optimization true, Expressions true, Deforming true
+  Timing: Generation 14.030 ms (Deform 3.467 ms), Inlining 11.141 ms, Optimization 768.214 ms, Emission 803.873 ms, Total 1597.259 ms
+Execution Time: 1660.130 ms

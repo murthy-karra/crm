@@ -17,6 +17,22 @@
 -- the at-most-201 `capped` prefix — the structural fix for the §8 planner
 -- hazard: the expensive per-Person effective-attempt anti-join LATERAL
 -- never runs against the whole Organization, only the capped prefix.
+--
+-- docs/specs/SLICE_012.md §4 (read-side switch): the four LATERAL max()
+-- probes are gone — every matrix predicate and the shared aggregates now
+-- read the trigger-maintained p.last_*_at columns directly. Two pins:
+-- (1) the `waiting` probe's gate ("exists an inquiry after X" ⇔ "max > X")
+-- is placed INSIDE the probe subquery's own WHERE, where it references
+-- only outer (person-row) columns and is pseudo-constant, letting the
+-- planner fold it into a One-Time Filter that skips the scan entirely for
+-- a Person who cannot qualify, rather than in the LATERAL's ON clause (a
+-- join qual evaluated after the probe already ran). (2) The `latest`
+-- LATERAL inside `ranked` is needed only for the two feeds' own `source`
+-- clause now (its id/received_at hydration moved to the outer query, over
+-- the capped prefix, exactly as source_candidates.sql already does), so it
+-- is guarded on EITHER feed's source parameter being bound ($5 OR $27).
+-- Feed A's `fresh` reads p.last_inquiry_at (the denormalized maximum IS
+-- the latest inquiry's received_at, by the column's own invariant).
 
 WITH ranked AS (
     SELECT
@@ -32,21 +48,21 @@ WITH ranked AS (
              OR COALESCE(p.created_at, '-infinity'::timestamptz) <= $46::timestamptz - make_interval(days => $7))
         AND ($8::boolean IS NULL OR (p.created_at IS NULL) = $8)
         AND ($9::int IS NULL
-             OR COALESCE(last_inquiry_ts.ts, '-infinity'::timestamptz) > $46::timestamptz - make_interval(days => $9))
+             OR COALESCE(p.last_inquiry_at, '-infinity'::timestamptz) > $46::timestamptz - make_interval(days => $9))
         AND ($10::int IS NULL
-             OR COALESCE(last_inquiry_ts.ts, '-infinity'::timestamptz) <= $46::timestamptz - make_interval(days => $10))
-        AND ($11::boolean IS NULL OR (last_inquiry_ts.ts IS NULL) = $11)
+             OR COALESCE(p.last_inquiry_at, '-infinity'::timestamptz) <= $46::timestamptz - make_interval(days => $10))
+        AND ($11::boolean IS NULL OR (p.last_inquiry_at IS NULL) = $11)
         AND ($12::int IS NULL
-             OR COALESCE(last_contact_ts.ts, '-infinity'::timestamptz) > $46::timestamptz - make_interval(days => $12))
+             OR COALESCE(p.last_contact_at, '-infinity'::timestamptz) > $46::timestamptz - make_interval(days => $12))
         AND ($13::int IS NULL
-             OR COALESCE(last_contact_ts.ts, '-infinity'::timestamptz) <= $46::timestamptz - make_interval(days => $13))
-        AND ($14::boolean IS NULL OR (last_contact_ts.ts IS NULL) = $14)
+             OR COALESCE(p.last_contact_at, '-infinity'::timestamptz) <= $46::timestamptz - make_interval(days => $13))
+        AND ($14::boolean IS NULL OR (p.last_contact_at IS NULL) = $14)
         AND ($15::int IS NULL
-             OR COALESCE(last_inbound_ts.ts, '-infinity'::timestamptz) > $46::timestamptz - make_interval(days => $15))
+             OR COALESCE(p.last_inbound_at, '-infinity'::timestamptz) > $46::timestamptz - make_interval(days => $15))
         AND ($16::int IS NULL
-             OR COALESCE(last_inbound_ts.ts, '-infinity'::timestamptz) <= $46::timestamptz - make_interval(days => $16))
-        AND ($17::boolean IS NULL OR (last_inbound_ts.ts IS NULL) = $17)
-        AND ($18::boolean IS NULL OR (last_inbound_ts.ts IS NOT NULL) = $18)
+             OR COALESCE(p.last_inbound_at, '-infinity'::timestamptz) <= $46::timestamptz - make_interval(days => $16))
+        AND ($17::boolean IS NULL OR (p.last_inbound_at IS NULL) = $17)
+        AND ($18::boolean IS NULL OR (p.last_inbound_at IS NOT NULL) = $18)
         AND ($19::boolean IS NULL OR (EXISTS (
               SELECT 1 FROM contact_method cm_phone_a
               WHERE cm_phone_a.person_id = p.id AND cm_phone_a.organization_id = p.organization_id
@@ -59,9 +75,9 @@ WITH ranked AS (
             )) = $20)
         AND ($21::boolean IS NULL OR (waiting.received_at IS NOT NULL) = $21)
         AND ($22::boolean IS NULL OR (
-              last_inbound_ts.ts IS NOT NULL
-              AND last_inbound_ts.ts > COALESCE(last_contact_ts.ts, '-infinity'::timestamptz)
-              AND last_inbound_ts.ts > COALESCE(last_outbound_ts.ts, '-infinity'::timestamptz)
+              p.last_inbound_at IS NOT NULL
+              AND p.last_inbound_at > COALESCE(p.last_contact_at, '-infinity'::timestamptz)
+              AND p.last_inbound_at > COALESCE(p.last_outbound_at, '-infinity'::timestamptz)
             ) = $22)
         AND ($23::boolean IS NULL OR (EXISTS (
               SELECT 1 FROM call c_a
@@ -100,21 +116,21 @@ WITH ranked AS (
              OR COALESCE(p.created_at, '-infinity'::timestamptz) <= $46::timestamptz - make_interval(days => $29))
         AND ($30::boolean IS NULL OR (p.created_at IS NULL) = $30)
         AND ($31::int IS NULL
-             OR COALESCE(last_inquiry_ts.ts, '-infinity'::timestamptz) > $46::timestamptz - make_interval(days => $31))
+             OR COALESCE(p.last_inquiry_at, '-infinity'::timestamptz) > $46::timestamptz - make_interval(days => $31))
         AND ($32::int IS NULL
-             OR COALESCE(last_inquiry_ts.ts, '-infinity'::timestamptz) <= $46::timestamptz - make_interval(days => $32))
-        AND ($33::boolean IS NULL OR (last_inquiry_ts.ts IS NULL) = $33)
+             OR COALESCE(p.last_inquiry_at, '-infinity'::timestamptz) <= $46::timestamptz - make_interval(days => $32))
+        AND ($33::boolean IS NULL OR (p.last_inquiry_at IS NULL) = $33)
         AND ($34::int IS NULL
-             OR COALESCE(last_contact_ts.ts, '-infinity'::timestamptz) > $46::timestamptz - make_interval(days => $34))
+             OR COALESCE(p.last_contact_at, '-infinity'::timestamptz) > $46::timestamptz - make_interval(days => $34))
         AND ($35::int IS NULL
-             OR COALESCE(last_contact_ts.ts, '-infinity'::timestamptz) <= $46::timestamptz - make_interval(days => $35))
-        AND ($36::boolean IS NULL OR (last_contact_ts.ts IS NULL) = $36)
+             OR COALESCE(p.last_contact_at, '-infinity'::timestamptz) <= $46::timestamptz - make_interval(days => $35))
+        AND ($36::boolean IS NULL OR (p.last_contact_at IS NULL) = $36)
         AND ($37::int IS NULL
-             OR COALESCE(last_inbound_ts.ts, '-infinity'::timestamptz) > $46::timestamptz - make_interval(days => $37))
+             OR COALESCE(p.last_inbound_at, '-infinity'::timestamptz) > $46::timestamptz - make_interval(days => $37))
         AND ($38::int IS NULL
-             OR COALESCE(last_inbound_ts.ts, '-infinity'::timestamptz) <= $46::timestamptz - make_interval(days => $38))
-        AND ($39::boolean IS NULL OR (last_inbound_ts.ts IS NULL) = $39)
-        AND ($40::boolean IS NULL OR (last_inbound_ts.ts IS NOT NULL) = $40)
+             OR COALESCE(p.last_inbound_at, '-infinity'::timestamptz) <= $46::timestamptz - make_interval(days => $38))
+        AND ($39::boolean IS NULL OR (p.last_inbound_at IS NULL) = $39)
+        AND ($40::boolean IS NULL OR (p.last_inbound_at IS NOT NULL) = $40)
         AND ($41::boolean IS NULL OR (EXISTS (
               SELECT 1 FROM contact_method cm_phone_b
               WHERE cm_phone_b.person_id = p.id AND cm_phone_b.organization_id = p.organization_id
@@ -127,9 +143,9 @@ WITH ranked AS (
             )) = $42)
         AND ($43::boolean IS NULL OR (waiting.received_at IS NOT NULL) = $43)
         AND ($44::boolean IS NULL OR (
-              last_inbound_ts.ts IS NOT NULL
-              AND last_inbound_ts.ts > COALESCE(last_contact_ts.ts, '-infinity'::timestamptz)
-              AND last_inbound_ts.ts > COALESCE(last_outbound_ts.ts, '-infinity'::timestamptz)
+              p.last_inbound_at IS NOT NULL
+              AND p.last_inbound_at > COALESCE(p.last_contact_at, '-infinity'::timestamptz)
+              AND p.last_inbound_at > COALESCE(p.last_outbound_at, '-infinity'::timestamptz)
             ) = $44)
         AND ($45::boolean IS NULL OR (EXISTS (
               SELECT 1 FROM call c_b
@@ -157,51 +173,28 @@ WITH ranked AS (
               WHERE pt2_b.organization_id = $1
                 AND pt2_b.person_id = p.id AND pt2_b.tag_id = ANY($55)))
       )) AS matrix_b,
-        latest.id AS latest_inquiry_id,
-        latest.source AS latest_inquiry_source,
-        latest.received_at AS latest_inquiry_received_at,
-        last_inbound_ts.ts AS last_inbound_at,
+        p.last_inquiry_at AS latest_inquiry_received_at,
+        p.last_inbound_at AS last_inbound_at,
         waiting.received_at AS waiting_received_at
     FROM person p
     LEFT JOIN LATERAL (
-        SELECT i.id, i.source, i.received_at
+        SELECT i.source
         FROM inquiry i
         WHERE i.person_id = p.id AND i.organization_id = p.organization_id
         ORDER BY i.received_at DESC, i.id DESC
         LIMIT 1
-    ) latest ON true
-    LEFT JOIN LATERAL (
-        SELECT max(i3.received_at) AS ts
-        FROM inquiry i3
-        WHERE i3.person_id = p.id AND i3.organization_id = p.organization_id
-    ) last_inquiry_ts ON true
-    LEFT JOIN LATERAL (
-        SELECT max(ca.occurred_at) AS ts
-        FROM contact_attempted ca
-        WHERE ca.person_id = p.id AND ca.organization_id = p.organization_id
-    ) last_contact_ts ON true
-    LEFT JOIN LATERAL (
-        SELECT max(cc.occurred_at) AS ts
-        FROM correspondence_captured cc
-        WHERE cc.person_id = p.id AND cc.organization_id = p.organization_id
-          AND cc.direction = 'inbound'
-    ) last_inbound_ts ON true
-    LEFT JOIN LATERAL (
-        SELECT max(cc5.occurred_at) AS ts
-        FROM correspondence_captured cc5
-        WHERE cc5.person_id = p.id AND cc5.organization_id = p.organization_id
-          AND cc5.direction = 'outbound'
-    ) last_outbound_ts ON true
+    ) latest ON ($5::text[] IS NOT NULL OR $27::text[] IS NOT NULL)
     LEFT JOIN LATERAL (
         SELECT i2.received_at
         FROM inquiry i2
-        WHERE i2.person_id = p.id AND i2.organization_id = p.organization_id
-          AND i2.received_at > COALESCE(last_contact_ts.ts, '-infinity'::timestamptz)
+        WHERE p.last_inquiry_at > COALESCE(p.last_contact_at, '-infinity'::timestamptz)
+          AND i2.person_id = p.id AND i2.organization_id = p.organization_id
+          AND i2.received_at > COALESCE(p.last_contact_at, '-infinity'::timestamptz)
         ORDER BY i2.received_at ASC
         LIMIT 1
     ) waiting ON true
     WHERE p.organization_id = $1
-      AND latest.id IS NOT NULL
+      AND p.last_inquiry_at IS NOT NULL
 ),
 qualifying AS (
     SELECT
@@ -218,8 +211,6 @@ qualifying AS (
         -- since a NULL matrix never qualified a candidate before either.
         (COALESCE($48::boolean, false) AND COALESCE(r.matrix_a, false)) AS by_inquiry,
         (COALESCE($49::boolean, false) AND COALESCE(r.matrix_b, false)) AS by_reply,
-        r.latest_inquiry_id,
-        r.latest_inquiry_source,
         r.latest_inquiry_received_at,
         r.last_inbound_at,
         r.waiting_received_at
@@ -253,9 +244,9 @@ SELECT
        ORDER BY cm.created_at ASC LIMIT 1) AS "primary_phone?",
     (SELECT count(*) FROM inquiry i
        WHERE i.person_id = p.id AND i.organization_id = p.organization_id) AS "inquiry_count!",
-    capped.latest_inquiry_id AS "latest_inquiry_id?",
-    capped.latest_inquiry_source AS "latest_inquiry_source?",
-    capped.latest_inquiry_received_at AS "latest_inquiry_received_at?",
+    latest.id AS "latest_inquiry_id?",
+    latest.source AS "latest_inquiry_source?",
+    latest.received_at AS "latest_inquiry_received_at?",
     effective_attempt.id AS "last_attempt_id?",
     effective_attempt.channel AS "last_attempt_channel?",
     effective_attempt.outcome AS "last_attempt_outcome?",
@@ -268,6 +259,13 @@ FROM capped
 JOIN person p ON p.id = capped.id
 JOIN stage s ON s.id = p.stage_id
 LEFT JOIN app_user u ON u.id = p.assigned_user_id
+LEFT JOIN LATERAL (
+    SELECT i.id, i.source, i.received_at
+    FROM inquiry i
+    WHERE i.person_id = p.id AND i.organization_id = p.organization_id
+    ORDER BY i.received_at DESC, i.id DESC
+    LIMIT 1
+) latest ON true
 LEFT JOIN LATERAL (
     SELECT ca.id, ca.channel, ca.outcome, ca.occurred_at
     FROM contact_attempted ca

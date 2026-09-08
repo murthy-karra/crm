@@ -659,7 +659,14 @@ fn clean_and_clip(raw: &str, max: usize) -> String {
 /// `tag_names_none` — never `sources`, an opaque token matched exactly):
 /// each item is cleaned with [`clean_and_clip`] to
 /// [`FILTER_NAME_MAX_CHARS`] before the resolver ever sees it, so the
-/// resolver never has to clip or clean an echo itself.
+/// resolver never has to clip or clean an echo itself. An item that
+/// cleans down to nothing (`"  "`, all control characters, ...) is
+/// dropped rather than kept as an empty string — an empty stage/tag/
+/// assignee name can never resolve to anything, so keeping it would only
+/// manufacture a spurious "unknown ''" clarification entry. If dropping
+/// leaves nothing in this array and no other property carries a
+/// condition, `parse_people_filter_spec`'s empty-spec check catches it
+/// (docs/specs/SLICE_013.md §1 rule 5).
 fn parse_name_array(
     value: Option<&Value>,
     name: &'static str,
@@ -668,6 +675,7 @@ fn parse_name_array(
     Ok(raw
         .into_iter()
         .map(|s| clean_and_clip(&s, FILTER_NAME_MAX_CHARS))
+        .filter(|s| !s.is_empty())
         .collect())
 }
 
@@ -986,6 +994,27 @@ mod tests {
         // Booleans explicitly set to a value still count as a condition
         // even though the JSON is otherwise minimal.
         assert!(parse_invocation(FILTER_PEOPLE, r#"{"has_phone": true}"#).is_ok());
+    }
+
+    /// A name that cleans down to nothing is dropped, not kept as an
+    /// empty-string entry (which would otherwise surface as a spurious
+    /// "unknown ''" clarification downstream); if that leaves the whole
+    /// spec with no condition, it is `EmptyFilterSpec`, same as `{}`.
+    #[test]
+    fn a_name_array_of_only_whitespace_leaves_an_empty_spec() {
+        assert_eq!(
+            parse_invocation(FILTER_PEOPLE, r#"{"stage_names":["  "]}"#),
+            Err(ArgumentError::EmptyFilterSpec)
+        );
+        // Mixed with a real condition, the whitespace-only entry is
+        // simply dropped and the call succeeds with the real one intact.
+        let args = json!({ "stage_names": ["  ", "Lead"] }).to_string();
+        match parse_invocation(FILTER_PEOPLE, &args).unwrap() {
+            ToolInvocation::FilterPeople { spec } => {
+                assert_eq!(spec.stage_names, vec!["Lead".to_string()]);
+            }
+            other => panic!("{other:?}"),
+        }
     }
 
     #[test]

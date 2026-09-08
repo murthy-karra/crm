@@ -137,38 +137,20 @@ pub trait ToolBackend: Send + Sync {
     /// validate a `FilterDefinition`, and run `filtered_summaries`
     /// (docs/specs/SLICE_013.md §2). Read-only, executes immediately (§1
     /// rule 7).
-    ///
-    /// Default body (docs/tasks/SLICE_013_IMPL.md step 1/step 3 split): the
-    /// crm-api adapter (`SqlxToolBackend`) is granted to this slice's lane
-    /// but deliberately not touched until step 3, so the trait carries a
-    /// bridging default here rather than forcing that edit now — it is
-    /// never reached once `SqlxToolBackend` overrides it. Test backends
-    /// (`FakeBackend`, the sleeping backend) override it explicitly.
     async fn filter_people(
         &self,
-        _ctx: &OperatorContext,
-        _spec: &PeopleFilterSpec,
-    ) -> ToolResult<FilterOutcome> {
-        Err(ToolError::Backend(
-            "filter_people has no backend implementation yet".to_string(),
-        ))
-    }
+        ctx: &OperatorContext,
+        spec: &PeopleFilterSpec,
+    ) -> ToolResult<FilterOutcome>;
 
     /// Resolve `selector` (by name or, for the duplicate-name case, by
     /// `list_id`) through the same visibility predicate the Lists index
     /// uses, honour its stored sort, and run the matching statement
     /// (docs/specs/SLICE_013.md §2, D-046, D-048). Read-only, executes
     /// immediately (§1 rule 7).
-    ///
-    /// Default body: see `filter_people`'s doc comment above — same
-    /// step 1/step 3 bridging reason.
     async fn run_saved_list(
         &self,
-        _ctx: &OperatorContext,
-        _selector: &SavedListSelector,
-    ) -> ToolResult<FilterOutcome> {
-        Err(ToolError::Backend(
-            "run_saved_list has no backend implementation yet".to_string(),
-        ))
-    }
+        ctx: &OperatorContext,
+        selector: &SavedListSelector,
+    ) -> ToolResult<FilterOutcome>;
 }

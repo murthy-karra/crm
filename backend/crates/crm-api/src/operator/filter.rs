@@ -175,6 +175,18 @@ fn to_age_spec(cond: AgeCondition) -> AgeSpec {
     }
 }
 
+/// First-occurrence-wins, order-preserving deduplication (docs/tasks/
+/// SLICE_013_IMPL.md coordinator decision): two names resolving to the
+/// same value collapse to one, so `FilterDefinition::validate()`'s
+/// duplicate-value check never sees them.
+fn dedup_preserve_order<T: Eq + std::hash::Hash + Clone>(items: Vec<T>) -> Vec<T> {
+    let mut seen = std::collections::HashSet::new();
+    items
+        .into_iter()
+        .filter(|item| seen.insert(item.clone()))
+        .collect()
+}
+
 /// Resolves every name in `spec` against the caller's own Organization
 /// vocabulary (`stages`/`members`/`tags`, already Organization-scoped by
 /// the caller) and, if every dimension resolved cleanly, builds a
@@ -224,6 +236,22 @@ pub fn resolve(
         return Resolved::Clarification(clarification);
     }
 
+    // docs/tasks/SLICE_013_IMPL.md coordinator decision (round 2, revising
+    // the round-1 note this comment used to cite): two names that resolve
+    // to the same value are ONE value, order-preservingly deduplicated
+    // here — `["Lead","lead"]`, `["me","me"]`, `["Investor","investor"]` —
+    // not left for `FilterDefinition::validate()`'s duplicate-value check
+    // to reject as `invalid_arguments`. `sources` gets the same treatment
+    // even though it never goes through name resolution (a literal
+    // repeated token is the same case). A non-canonical `sources` value or
+    // anything else `validate()` still rejects remains `InvalidArguments`
+    // (`operator/backend.rs`).
+    let stage_ids = dedup_preserve_order(stage_ids);
+    let assignees = dedup_preserve_order(assignees);
+    let tag_ids_any = dedup_preserve_order(tag_ids_any);
+    let tag_ids_none = dedup_preserve_order(tag_ids_none);
+    let sources = dedup_preserve_order(spec.sources.clone());
+
     let mut clauses = Vec::new();
     if !stage_ids.is_empty() {
         clauses.push(Clause::Stage(StageClause { stage_ids }));
@@ -231,10 +259,8 @@ pub fn resolve(
     if !assignees.is_empty() {
         clauses.push(Clause::AssignedTo(AssignedToClause { assignees }));
     }
-    if !spec.sources.is_empty() {
-        clauses.push(Clause::Source(SourceClause {
-            sources: spec.sources.clone(),
-        }));
+    if !sources.is_empty() {
+        clauses.push(Clause::Source(SourceClause { sources }));
     }
     if let Some(age) = spec.created {
         clauses.push(Clause::Created(AgeClause {
@@ -353,6 +379,67 @@ mod tests {
         }
     }
 
+    /// docs/tasks/SLICE_013_IMPL.md coordinator decision: two names that
+    /// resolve to the same value collapse to one BEFORE `validate()` ever
+    /// runs, so `["Lead","lead"]`, `["me","me"]`, and
+    /// `["Investor","investor"]` are one value each, never a duplicate-
+    /// value `validate()` strike.
+    #[test]
+    fn duplicate_names_resolving_to_one_id_are_collapsed() {
+        let stages = vec![stage("Lead")];
+        let members = vec![]; // "me" needs no member row
+        let tags = vec![tag("Investor")];
+        let s = PeopleFilterSpec {
+            stage_names: vec!["Lead".to_string(), "lead".to_string()],
+            assignees: vec!["me".to_string(), "me".to_string()],
+            tag_names_any: vec!["Investor".to_string(), "investor".to_string()],
+            sources: vec!["zillow".to_string(), "zillow".to_string()],
+            ..spec()
+        };
+        match resolve(&s, &stages, &members, &tags) {
+            Resolved::Definition(def) => {
+                def.validate().expect("collapsed values must validate");
+                let stage_ids = def
+                    .clauses
+                    .iter()
+                    .find_map(|c| match c {
+                        Clause::Stage(sc) => Some(sc.stage_ids.clone()),
+                        _ => None,
+                    })
+                    .unwrap();
+                assert_eq!(stage_ids.len(), 1);
+                let assignees = def
+                    .clauses
+                    .iter()
+                    .find_map(|c| match c {
+                        Clause::AssignedTo(a) => Some(a.assignees.clone()),
+                        _ => None,
+                    })
+                    .unwrap();
+                assert_eq!(assignees, vec![Assignee::Me]);
+                let tag_ids = def
+                    .clauses
+                    .iter()
+                    .find_map(|c| match c {
+                        Clause::Tags(t) => Some(t.tag_ids.clone()),
+                        _ => None,
+                    })
+                    .unwrap();
+                assert_eq!(tag_ids.len(), 1);
+                let sources = def
+                    .clauses
+                    .iter()
+                    .find_map(|c| match c {
+                        Clause::Source(s) => Some(s.sources.clone()),
+                        _ => None,
+                    })
+                    .unwrap();
+                assert_eq!(sources, vec!["zillow".to_string()]);
+            }
+            Resolved::Clarification(c) => panic!("{c:?}"),
+        }
+    }
+
     #[test]
     fn resolves_a_case_insensitive_trimmed_stage_name() {
         let stages = vec![stage("Lead")];
@@ -459,6 +546,30 @@ mod tests {
                 assert_eq!(c.members.len(), 2);
             }
             Resolved::Definition(_) => panic!("ambiguous name must not resolve"),
+        }
+    }
+
+    /// The exact-duplicate collision path (`find_by_name`'s `exact.len() >
+    /// 1` branch) — unlike stages/tags, nothing stops two active members
+    /// from sharing the exact same display name, so this is reachable in
+    /// production, not just defensive.
+    #[test]
+    fn two_members_with_the_exact_same_display_name_are_ambiguous() {
+        let members = vec![
+            member("Sam", MembershipStatus::Active),
+            member("Sam", MembershipStatus::Active),
+        ];
+        let s = PeopleFilterSpec {
+            assignees: vec!["Sam".to_string()],
+            ..spec()
+        };
+        match resolve(&s, &[], &members, &[]) {
+            Resolved::Clarification(c) => {
+                assert_eq!(c.ambiguous_assignees, vec!["Sam".to_string()]);
+                assert!(c.unknown_assignees.is_empty());
+                assert_eq!(c.members.len(), 2);
+            }
+            Resolved::Definition(_) => panic!("an exact-duplicate name must not resolve"),
         }
     }
 

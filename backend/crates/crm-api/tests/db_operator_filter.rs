@@ -374,6 +374,76 @@ async fn composed_filter_matches_stage_tag_and_assignee_and_ledger_reflects_it(
     assert_eq!(tools[0].3, vec![grace], "ledger person_ids match the cards");
 }
 
+/// The SAME vocabulary word ("Investor", "Lead") names independent tags/
+/// stages in two different Organizations; each Organization has its own
+/// Person carrying it. Org A's resolver must resolve strictly against org
+/// A's own rows — org B's Person must never appear in the match, the
+/// count, or (as a name or an id) in anything the model saw.
+#[sqlx::test]
+#[ignore]
+async fn same_name_vocabulary_across_two_organizations_stays_isolated(migrator_pool: PgPool) {
+    let f = fixture(migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&f.migrator_pool).await;
+    let tag_a = create_tag(&app_pool, f.org, f.alice_id, "Investor").await;
+    let person_a = insert_named_person(
+        &f.migrator_pool,
+        f.org,
+        f.stage_lead,
+        "Alpha",
+        "Investor",
+        None,
+    )
+    .await;
+    apply_tag(&app_pool, f.org, f.alice_id, person_a, tag_a).await;
+
+    let (org_b, alice_b) = crate::common::create_org_with_stages_and_member(
+        &f.migrator_pool,
+        "Beta Realty",
+        "alice@beta.test",
+        "Alice Beta",
+        PW,
+    )
+    .await;
+    let stage_b_lead = first_stage_id(&f.migrator_pool, org_b, "Lead").await;
+    let tag_b = create_tag(&app_pool, org_b, alice_b, "Investor").await;
+    let person_b = insert_named_person(
+        &f.migrator_pool,
+        org_b,
+        stage_b_lead,
+        "Beta",
+        "Investor",
+        None,
+    )
+    .await;
+    apply_tag(&app_pool, org_b, alice_b, person_b, tag_b).await;
+
+    let (router, provider) = router_scripted(
+        &f.migrator_pool,
+        vec![
+            tool_step(
+                "filter_people",
+                json!({"tag_names_any": ["Investor"], "stage_names": ["Lead"]}),
+            ),
+            text_step("Found Alpha Investor."),
+        ],
+    )
+    .await;
+    let cookie = crate::common::login_cookie(&router, "alice@acme.test", PW).await;
+    let response = post_turn(&router, &cookie, "Show me Investors in Lead").await;
+    assert_eq!(response.status(), axum::http::StatusCode::OK);
+    let result = tool_result(&provider, 1);
+    assert_eq!(result["status"], "matched");
+    assert_eq!(result["count"], 1);
+    assert_eq!(result["matches"].as_array().unwrap().len(), 1);
+    assert_eq!(result["matches"][0]["id"], person_a.to_string());
+
+    let prompt = requests_json(&provider);
+    assert!(
+        !prompt.contains(&person_b.to_string()),
+        "org B's Person id never reached the model"
+    );
+}
+
 // --- §8.5: unknown tag name -> needs_clarification (an Ok outcome that
 // does not end the turn, even two in a row) -----------------------------
 
@@ -751,7 +821,7 @@ async fn own_personal_list_and_shared_list_are_visible_to_member_and_admin(migra
 async fn another_members_personal_list_is_not_found_including_for_admin(migrator_pool: PgPool) {
     let f = fixture(migrator_pool).await;
     let app_pool = crate::common::connect_as_app(&f.migrator_pool).await;
-    create_list(
+    let bobs_list_id = create_list(
         &app_pool,
         f.org,
         f.bob_id,
@@ -795,6 +865,44 @@ async fn another_members_personal_list_is_not_found_including_for_admin(migrator
     assert_eq!(body_a["outcome"], body_b["outcome"]);
     assert_eq!(body_a["tool_calls"][0]["outcome"], "not_found");
     assert_eq!(body_b["tool_calls"][0]["outcome"], "not_found");
+
+    // The id path, not only the name path: an admin passing another
+    // member's personal list_id DIRECTLY is byte-identical to a random
+    // uuid — `saved_list_detail`'s own visibility predicate refuses it
+    // regardless of how the model got the id.
+    let (router_c, _) = router_scripted(
+        &f.migrator_pool,
+        vec![
+            tool_step(
+                "run_saved_list",
+                json!({"list_id": bobs_list_id.as_uuid().to_string()}),
+            ),
+            text_step("ok"),
+        ],
+    )
+    .await;
+    let alice_cookie3 = crate::common::login_cookie(&router_c, "alice@acme.test", PW).await;
+    let resp_c = post_turn(&router_c, &alice_cookie3, "run that list id").await;
+    let body_c = crate::common::body_json(resp_c).await;
+
+    let (router_d, _) = router_scripted(
+        &f.migrator_pool,
+        vec![
+            tool_step(
+                "run_saved_list",
+                json!({"list_id": Uuid::new_v4().to_string()}),
+            ),
+            text_step("ok"),
+        ],
+    )
+    .await;
+    let alice_cookie4 = crate::common::login_cookie(&router_d, "alice@acme.test", PW).await;
+    let resp_d = post_turn(&router_d, &alice_cookie4, "run a random list id").await;
+    let body_d = crate::common::body_json(resp_d).await;
+
+    assert_eq!(body_c["outcome"], body_d["outcome"]);
+    assert_eq!(body_c["tool_calls"], body_d["tool_calls"], "byte-identical");
+    assert_eq!(body_c["tool_calls"][0]["outcome"], "not_found");
 }
 
 #[sqlx::test]
@@ -1138,7 +1246,7 @@ async fn span_capture_contains_filter_kinds_and_no_names_ids_or_day_counts(migra
     )
     .await;
     apply_tag(&app_pool, f.org, f.alice_id, person, tag_id).await;
-    create_list(
+    let list_id = create_list(
         &app_pool,
         f.org,
         f.alice_id,
@@ -1208,20 +1316,36 @@ async fn span_capture_contains_filter_kinds_and_no_names_ids_or_day_counts(migra
 
     let captured = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
     assert!(!captured.is_empty());
+    // filter_people's clauses are built last_contact, then tags (clause
+    // order in operator::filter::resolve — last_contact is bound before
+    // the trailing tags/not_tags block), so `kinds_field()` joins them in
+    // that order: the exact string this turn's filter_people call binds.
     assert!(
-        captured.contains("filter_kinds"),
-        "the declared span field was recorded"
+        captured.contains(r#"filter_kinds="last_contact,tags""#),
+        "{captured}"
     );
+    assert!(captured.contains("match_count=1"), "{captured}");
+    assert!(captured.contains(r#"resolution="matched""#), "{captured}");
     assert!(
-        captured.contains("tags"),
-        "filter_kinds carries the clause-kind token"
+        captured.contains(r#"saved_list_scope="shared""#),
+        "{captured}"
     );
-    assert!(captured.contains("resolution"));
-    assert!(captured.contains("saved_list_scope"));
     for leaked in ["Investor", "Grace", "Hopper", "Distinctive List Name"] {
         assert!(
             !captured.contains(leaked),
             "leaked into spans/logs: {leaked}"
+        );
+    }
+    // Ids are D-029-forbidden exactly like names: the Person, the tag, and
+    // the saved list's own uuid must never appear either.
+    for leaked_id in [
+        person.to_string(),
+        tag_id.to_string(),
+        list_id.as_uuid().to_string(),
+    ] {
+        assert!(
+            !captured.contains(&leaked_id),
+            "an id leaked into spans/logs: {leaked_id}"
         );
     }
     // Day counts: no span here declares or records a "days" field at all,

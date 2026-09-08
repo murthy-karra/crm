@@ -879,12 +879,14 @@ async fn dispatch(
                 }
             }
         }
-        // Placeholder dispatch (docs/tasks/SLICE_013_IMPL.md step 1: "no
-        // service dispatch beyond what compiling requires"). `RefBucket`
-        // choice and any state-machine interaction (e.g. `ledger_name`,
-        // clarification handling as a non-strike) are step 4's job; this
-        // arm only makes the now-exhaustive match on `ToolInvocation`
-        // compile correctly and wires the new backend methods through.
+        // docs/specs/SLICE_013.md §4 precedence: `filter_people`/
+        // `run_saved_list` cards share `RefBucket::Search`'s precedence
+        // (equal standing with `search_people`'s matches, behind an
+        // explicitly asked-about Person). `NeedsClarification`/
+        // `ListInvalid` are still `Ok(...)` results here, not
+        // `ToolError`s, so `execute()` treats either as a successful call
+        // (outcome "ok") and resets `consecutive_malformed` — never a
+        // strike (§1 rule 2).
         ToolInvocation::FilterPeople { spec } => {
             let outcome = backend.filter_people(ctx, spec).await?;
             let value = to_value(&outcome)?;
@@ -981,6 +983,10 @@ mod tests {
         filter_people_ids: Vec<Uuid>,
         /// `run_saved_list`'s `seen` fixture, same shape.
         run_saved_list_ids: Vec<Uuid>,
+        /// When set, `filter_people` returns `NeedsClarification` instead
+        /// of `Matched` — still `Ok(...)`, so the loop treats it as a
+        /// successful call (docs/specs/SLICE_013.md §1 rule 2).
+        filter_people_needs_clarification: bool,
     }
 
     impl FakeBackend {
@@ -1136,6 +1142,18 @@ mod tests {
             _spec: &PeopleFilterSpec,
         ) -> Result<FilterOutcome, ToolError> {
             self.note(ctx)?;
+            if self.filter_people_needs_clarification {
+                return Ok(FilterOutcome::NeedsClarification {
+                    unknown_stages: vec!["Bogus".to_string()],
+                    unknown_tags: vec![],
+                    unknown_assignees: vec![],
+                    ambiguous_assignees: vec![],
+                    available_stages: vec!["Lead".to_string()],
+                    available_tags: vec![],
+                    members: vec![],
+                    candidate_lists: vec![],
+                });
+            }
             let matches: Vec<PersonCard> = self
                 .filter_people_ids
                 .iter()
@@ -1357,6 +1375,51 @@ mod tests {
             .run_turn(&ctx(), &FakeBackend::default(), input("x"))
             .await;
         assert_eq!(out.outcome, TurnOutcome::Completed);
+    }
+
+    /// docs/specs/SLICE_013.md §1 rule 2: `needs_clarification` is an `Ok`
+    /// outcome that resets `consecutive_malformed`, exactly like any other
+    /// successful call — strike, clarification, strike (three separate
+    /// rounds, so the malformed counter would trip at 2-in-a-row if the
+    /// clarification in between did not reset it) still completes.
+    #[tokio::test]
+    async fn a_needs_clarification_result_resets_the_malformed_strike_count() {
+        let (svc, _) = service(
+            vec![
+                // Strike 1: filter_people's own empty-spec check.
+                ScriptedStep::Respond(ChatResponse::tool_calls(vec![call(
+                    "c1",
+                    "filter_people",
+                    json!({}),
+                )])),
+                // A valid call the fake backend turns into
+                // NeedsClarification — Ok, resets the counter.
+                ScriptedStep::Respond(ChatResponse::tool_calls(vec![call(
+                    "c2",
+                    "filter_people",
+                    json!({"stage_names": ["Bogus"]}),
+                )])),
+                // Strike 1 again — would be strike 2 (ending the turn) if
+                // the clarification above had not reset the counter.
+                ScriptedStep::Respond(ChatResponse::tool_calls(vec![call(
+                    "c3",
+                    "filter_people",
+                    json!({}),
+                )])),
+                ScriptedStep::Respond(ChatResponse::text("ok")),
+            ],
+            Limits::default(),
+        );
+        let backend = FakeBackend {
+            filter_people_needs_clarification: true,
+            ..Default::default()
+        };
+        let out = svc.run_turn(&ctx(), &backend, input("x")).await;
+        assert_eq!(out.outcome, TurnOutcome::Completed);
+        assert_eq!(out.tool_calls.len(), 3);
+        assert_eq!(out.tool_calls[0].outcome, ToolCallOutcome::InvalidArguments);
+        assert_eq!(out.tool_calls[1].outcome, ToolCallOutcome::Ok);
+        assert_eq!(out.tool_calls[2].outcome, ToolCallOutcome::InvalidArguments);
     }
 
     #[tokio::test]
@@ -2173,9 +2236,10 @@ mod tests {
 
     // --- filter_people / run_saved_list wiring (docs/specs/SLICE_013.md
     // §8.3): the fake backend's `seen` assertions cover both new
-    // `ToolBackend` methods, called directly (the full scripted-provider
-    // turn loop's dispatch/ledger/clarification behavior is step 4's job,
-    // docs/tasks/SLICE_013_IMPL.md).
+    // `ToolBackend` methods, called directly. Full scripted-provider turn
+    // loop coverage (dispatch, ledger, clarification-as-non-strike) is
+    // below, mirroring `not_found_is_returned_to_the_model_and_the_turn_
+    // continues`'s style.
 
     #[tokio::test]
     async fn fake_backend_filter_people_records_context_and_returns_matches() {

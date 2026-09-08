@@ -513,12 +513,14 @@ impl ToolBackend for SqlxToolBackend {
                 })
             }
             Resolved::Definition(def) => {
-                // Every id here came from the resolve above, but a
-                // resolved filter can still be structurally invalid (a
-                // duplicate resolved id across two different names, a
-                // clause-count edge) — that is `invalid_arguments`, a
-                // strike, not a clarification (docs/tasks/
-                // SLICE_013_IMPL.md coordinator decision).
+                // Every id here came from the resolve above, and
+                // `name_resolver::resolve` already collapses two names
+                // that resolve to the same value (docs/tasks/
+                // SLICE_013_IMPL.md coordinator decision) — so a
+                // duplicate-value rejection from `validate()` cannot come
+                // from that. What's left (a non-canonical `sources`
+                // value, a clause-count edge) is still `invalid_arguments`,
+                // a strike, never a clarification.
                 def.validate().map_err(|_| {
                     ToolError::InvalidArguments("the filter is invalid".to_string())
                 })?;
@@ -570,6 +572,20 @@ impl ToolBackend for SqlxToolBackend {
         ctx: &OperatorContext,
         selector: &SavedListSelector,
     ) -> ToolResult<FilterOutcome> {
+        // Fail closed if this backend's own `AuthContext` (set once at
+        // construction, `routes/operator.rs`) ever disagreed with the
+        // per-call `OperatorContext` (set once per turn) about who is
+        // asking — unreachable in production (both are built from the
+        // same request's `auth`), but this is the one method that reads
+        // `self.auth` at all, and it must never silently query on behalf
+        // of the wrong identity if that constructor invariant is ever
+        // broken.
+        if self.auth.active_organization_id != org_id(ctx)
+            || self.auth.actor_user_id != user_id(ctx)
+        {
+            return Err(ToolError::Backend("operator context mismatch".to_string()));
+        }
+
         let mut conn = self.conn().await?;
 
         let detail = if let Some(list_id) = selector.list_id {
@@ -674,5 +690,67 @@ impl ToolBackend for SqlxToolBackend {
             returned: matches.len(),
             matches,
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+    use crm_app::domain::admin::Role;
+    use sqlx::postgres::PgPoolOptions;
+
+    /// A lazy pool never opens a connection until first used — the
+    /// context-mismatch guard returns before that happens, so this test
+    /// needs no database.
+    fn fake_pool() -> PgPool {
+        PgPoolOptions::new()
+            .connect_lazy("postgres://user:pass@127.0.0.1:1/db")
+            .expect("lazy pool construction never touches the network")
+    }
+
+    fn auth(organization_id: Uuid, actor_user_id: Uuid) -> AuthContext {
+        AuthContext {
+            actor_user_id: UserId::new(actor_user_id),
+            actor_email: "fixture@example.test".to_string(),
+            actor_display_name: "Fixture".to_string(),
+            active_organization_id: OrganizationId::new(organization_id),
+            active_organization_name: "Fixture Organization".to_string(),
+            role: Role::Member,
+        }
+    }
+
+    fn ctx(organization_id: Uuid, actor_user_id: Uuid) -> OperatorContext {
+        OperatorContext {
+            actor_user_id,
+            organization_id,
+            actor_display_name: "Fixture".to_string(),
+            turn_id: Uuid::new_v4(),
+            now: Utc::now(),
+        }
+    }
+
+    /// docs/tasks/SLICE_013_IMPL.md coordinator decision: `run_saved_list`
+    /// fails closed rather than querying on behalf of the wrong identity
+    /// if the backend's own `AuthContext` and the per-call
+    /// `OperatorContext` ever disagree (unreachable in production; both
+    /// are built from the same request's `auth` in `routes/operator.rs`).
+    #[tokio::test]
+    async fn run_saved_list_fails_closed_on_a_context_mismatch() {
+        let backend = SqlxToolBackend::new(
+            fake_pool(),
+            std::time::Duration::from_secs(120),
+            auth(Uuid::new_v4(), Uuid::new_v4()),
+        );
+        // Every id here is independently random: both the organization
+        // and the actor disagree with `backend`'s own `auth`.
+        let mismatched_ctx = ctx(Uuid::new_v4(), Uuid::new_v4());
+        let selector = SavedListSelector {
+            name: Some("Any List".to_string()),
+            list_id: None,
+            limit: 10,
+        };
+        let result = backend.run_saved_list(&mismatched_ctx, &selector).await;
+        assert!(matches!(result, Err(ToolError::Backend(_))), "{result:?}");
     }
 }

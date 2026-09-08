@@ -1,0 +1,56 @@
+Slice 012 step 5 performance evidence — environment
+=====================================================
+
+Captured: 2026-09-08 (this checkout)
+Host: MacBook Pro (Apple M1 Max, 10 cores, 64 GB)
+OS: macOS 26.6.2 (build 25G83)
+PostgreSQL: 18.6 (Debian 18.6-1.pgdg13+2), OrbStack Docker container
+  (development-postgres-1), the same container used for prior slice
+  archives.
+Rust toolchain: workspace-pinned (see backend/rust-toolchain if present;
+  otherwise stable as resolved by cargo at capture time).
+sqlx: locked workspace version (see backend/Cargo.lock).
+Database: an ephemeral #[sqlx::test]-managed scratch database created and
+  torn down by the harness itself — never crm_dev, never a fixture shared
+  with any other test. No server was started on port 3000 or 5173 for
+  this evidence; the one HTTP measurement (Today serial trend) runs an
+  in-process axum::serve/tower ServiceExt request against the SAME
+  ephemeral database, never binding a real TCP port a browser could reach.
+
+Worktree: /Users/karrad/projects/crm-worktrees/012
+Branch: slice-012-activity-columns
+Git HEAD at capture time: 9f02ead3c9c8c3467989e45794c08f97be8df3b7
+  ("Slice 012 step 4: read-side switch to the last-activity columns")
+
+Harness: `slice_012_performance_evidence` (and its `slice_012_perf` support
+module), appended to backend/crates/crm-api/tests/db_today_feeds_http_perf.rs,
+`#[ignore]`d and gated behind the `perf-harness` feature — KEPT and
+COMMITTED with this archive (unlike the Slice 011e e2 harness, which was
+disclosed as temporary and removed; the coordinator's step 5 instruction
+for this slice was to keep and commit it). The batch-SQL history seed is
+lifted (and scaled from 50,000 to 25,000 People) from
+`tests/fixtures/today_http_perf_fixture.rs::seed_people_and_history` — same
+shape (skewed assignment, historical + waiting inquiries, corrected contact
+attempts, inbound correspondence, a caller's ended calls), not the full
+011c/011d Phase B HTTP-concurrency apparatus (D-050: "no slice spends more
+than one benchmark run on performance unless the paired regression fails").
+
+The command that produced harness-stdout.txt:
+
+  cd backend
+  DATABASE_URL="$MIGRATION_DATABASE_URL" SQLX_OFFLINE=true \
+  cargo nextest run --locked --features perf-harness -p crm-api \
+    --test db_today_feeds_http_perf --run-ignored only \
+    -E 'test(slice_012_performance_evidence)' --no-capture
+
+(DATABASE_URL here is only #[sqlx::test]'s required master-connection seam
+per docs/specs/SLICE_001.md §9 — the test itself creates and drops its own
+throwaway database and never touches crm_dev's data. MIGRATION_DATABASE_URL
+is the same migrator-role connection string ./scripts/check-db exports.)
+
+One benchmark run, as D-050 requires. The gate mutex
+(/private/tmp/claude-501/crm-gate.lock) was held during a prior compile
+check of the harness against the shared workspace .sqlx cache, then
+released before this capture (the harness itself creates its own isolated
+throwaway database via #[sqlx::test], so the capture run itself did not
+need the mutex).

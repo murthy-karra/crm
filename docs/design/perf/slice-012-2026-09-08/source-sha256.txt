@@ -1,0 +1,23 @@
+# SHA-256 of the statement texts measured/EXPLAINed in this archive.
+# `count_filtered_matches` has no standalone .sql file (an inline query!
+# string in person/queries.rs), so the whole file's hash is recorded
+# instead, matching the Slice 011e e2 archive's own convention.
+
+# NEW (live, post-switch text — this worktree, commit 9f02ead, the Slice
+# 012 step 4 read-side-switch commit):
+115d230fca041ac6ecd2fb5ed6aeb9c34b8e8c7c52cb937d94bfa5b1be63f86b  backend/crates/crm-app/src/domain/person/sql/filtered_summaries.sql (NEW)
+956dda8a54561e3ab6d9aa2395dedc6248678ee2ad9324f9c4be0f6e4170fbd8  backend/crates/crm-app/src/domain/person/queries.rs (NEW; count_filtered_matches body inline)
+13f7fae5eff4b435286e81997552a1790b657fdcc351259d6cbcd3af63359304  backend/crates/crm-app/src/domain/today/source_candidates.sql (NEW)
+78d073e471f641f7f8fc3ca633dfc3945f4938a076a62330cf5c2ee7fbeb6819  backend/crates/crm-app/src/domain/today/system_feeds/sql/person_state.sql (NEW)
+
+# OLD (frozen at commit b45b04f / this lane's own branch point 61b08ac —
+# byte-identical at both, per tests/fixtures/statements_b45b04f/README.md):
+f31bbc0bf94307ce1800ac6a771f75f4a3d222df68e4bd9603079cf2517afbcd  backend/crates/crm-app/src/domain/person/sql/filtered_summaries.sql (OLD, b45b04f/61b08ac)
+fe95c95da69a31b1dcb7c1acc7b34d4edb9454941752eff71b312ffa223bf846  backend/crates/crm-app/src/domain/person/queries.rs (OLD, b45b04f/61b08ac; count_filtered_matches body inline)
+b38d6b77ad462d38cf06c02c9fdefc7e47edfcef10d660fd9f14831dd30c30b6  backend/crates/crm-app/src/domain/today/source_candidates.sql (OLD, b45b04f/61b08ac)
+794267ed57897de4178c149948666103b8dae78bf077ed427a4c0b6ecf95e319  backend/crates/crm-app/src/domain/today/system_feeds/sql/person_state.sql (OLD, b45b04f/61b08ac)
+
+Reproduce with (from the worktree root):
+  git show 9f02ead:backend/crates/crm-app/src/domain/person/sql/filtered_summaries.sql | sha256sum
+  git show 61b08ac:backend/crates/crm-app/src/domain/person/sql/filtered_summaries.sql | sha256sum
+(substituting each path above).

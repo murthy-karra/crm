@@ -1,0 +1,568 @@
+   Compiling crm-api v0.1.0 (/Users/karrad/projects/crm-worktrees/012/backend/crates/crm-api)
+warning: multiple variants are never constructed
+  --> crates/crm-api/tests/fixtures/statements_b45b04f/person_sql.rs:77:5
+   |
+74 | pub enum SortedStatement {
+   |          --------------- variants in this enum
+...
+77 |     CreatedAsc,
+   |     ^^^^^^^^^^
+78 |     NameAsc,
+   |     ^^^^^^^
+79 |     NameDesc,
+   |     ^^^^^^^^
+80 |     StageAsc,
+   |     ^^^^^^^^
+81 |     StageDesc,
+   |     ^^^^^^^^^
+82 |     AssigneeAsc,
+   |     ^^^^^^^^^^^
+83 |     AssigneeDesc,
+   |     ^^^^^^^^^^^^
+   |
+   = note: `SortedStatement` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `filtered_summaries_sorted` is never used
+   --> crates/crm-api/tests/fixtures/statements_b45b04f/person_sql.rs:193:14
+    |
+193 | pub async fn filtered_summaries_sorted(
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `CallMembershipRow` is never constructed
+   --> crates/crm-api/tests/fixtures/statements_b45b04f/system_feeds_sql.rs:247:8
+    |
+247 | struct CallMembershipRow {
+    |        ^^^^^^^^^^^^^^^^^
+
+warning: function `call_membership` is never used
+   --> crates/crm-api/tests/fixtures/statements_b45b04f/system_feeds_sql.rs:253:14
+    |
+253 | pub async fn call_membership(
+    |              ^^^^^^^^^^^^^^^
+
+warning: function `call_only_candidates` is never used
+   --> crates/crm-api/tests/fixtures/statements_b45b04f/system_feeds_sql.rs:391:14
+    |
+391 | pub async fn call_only_candidates(
+    |              ^^^^^^^^^^^^^^^^^^^^
+
+warning: fields `latest_inquiry`, `last_contact_attempt`, and `last_contact_at` are never read
+  --> crates/crm-api/tests/fixtures/statements_b45b04f/today_sql.rs:25:9
+   |
+23 | pub struct FrozenSourceCandidate {
+   |            --------------------- fields in this struct
+24 |     pub person: PersonSummary,
+25 |     pub latest_inquiry: Option<InquiryRef>,
+   |         ^^^^^^^^^^^^^^
+26 |     pub last_contact_attempt: Option<ContactAttemptRef>,
+   |         ^^^^^^^^^^^^^^^^^^^^
+27 |     pub last_contact_at: Option<DateTime<Utc>>,
+   |         ^^^^^^^^^^^^^^^
+   |
+   = note: `FrozenSourceCandidate` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: function `source_membership` is never used
+   --> crates/crm-api/tests/fixtures/statements_b45b04f/today_sql.rs:195:14
+    |
+195 | pub async fn source_membership(
+    |              ^^^^^^^^^^^^^^^^^
+
+warning: constant `WARMUP_ATTEMPTS_PER_CASE` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:28:11
+   |
+28 | pub const WARMUP_ATTEMPTS_PER_CASE: usize = WARMUP_WAVES * WARMUP_CONCURRENCY;
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `CRITICAL_CASES` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:33:11
+   |
+33 | pub const CRITICAL_CASES: usize = 4;
+   |           ^^^^^^^^^^^^^^
+
+warning: constant `CRITICAL_MEASURED_ATTEMPTS` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:35:11
+   |
+35 | pub const CRITICAL_MEASURED_ATTEMPTS: usize = CRITICAL_CASES * CRITICAL_SAMPLE_SHAPE.attempts();
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `SUPPLEMENTAL_CASES` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:40:11
+   |
+40 | pub const SUPPLEMENTAL_CASES: usize = 6;
+   |           ^^^^^^^^^^^^^^^^^^
+
+warning: constant `SUPPLEMENTAL_MEASURED_ATTEMPTS` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:42:11
+   |
+42 | pub const SUPPLEMENTAL_MEASURED_ATTEMPTS: usize =
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `INDEPENDENT_REPEAT_ATTEMPTS` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:49:11
+   |
+49 | pub const INDEPENDENT_REPEAT_ATTEMPTS: usize =
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `FINAL_ARM_MEASURED_ATTEMPTS` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:55:11
+   |
+55 | pub const FINAL_ARM_MEASURED_ATTEMPTS: usize =
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `PAIRED_ORIGINAL_MEASURED_ATTEMPTS` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:62:11
+   |
+62 | pub const PAIRED_ORIGINAL_MEASURED_ATTEMPTS: usize =
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `HTTP_OK` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:66:11
+   |
+66 | pub const HTTP_OK: u16 = 200;
+   |           ^^^^^^^
+
+warning: constant `SOURCE_ENUMERATION_BUDGET` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:71:11
+   |
+71 | pub const SOURCE_ENUMERATION_BUDGET: Duration = Duration::from_millis(250);
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `WHOLE_SOURCE_BUDGET` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:72:11
+   |
+72 | pub const WHOLE_SOURCE_BUDGET: Duration = Duration::from_millis(500);
+   |           ^^^^^^^^^^^^^^^^^^^
+
+warning: constant `ACQUISITION_BUDGET` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:73:11
+   |
+73 | pub const ACQUISITION_BUDGET: Duration = Duration::from_secs(2);
+   |           ^^^^^^^^^^^^^^^^^^
+
+warning: method `attempts` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:94:18
+   |
+85 | impl SampleShape {
+   | ---------------- method in this implementation
+...
+94 |     pub const fn attempts(self) -> usize {
+   |                  ^^^^^^^^
+
+warning: enum `FinalMatrixCase` is never used
+   --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:104:10
+    |
+104 | pub enum FinalMatrixCase {
+    |          ^^^^^^^^^^^^^^^
+
+warning: associated items `CRITICAL`, `SUPPLEMENTAL`, `sample_shape`, and `expected_sources_per_attempt` are never used
+   --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:118:15
+    |
+117 | impl FinalMatrixCase {
+    | -------------------- associated items in this implementation
+118 |     pub const CRITICAL: [Self; CRITICAL_CASES] = [
+    |               ^^^^^^^^
+...
+125 |     pub const SUPPLEMENTAL: [Self; SUPPLEMENTAL_CASES] = [
+    |               ^^^^^^^^^^^^
+...
+134 |     pub const fn sample_shape(self) -> SampleShape {
+    |                  ^^^^^^^^^^^^
+...
+149 |     pub const fn expected_sources_per_attempt(self) -> usize {
+    |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: variant `FrozenOriginal` is never constructed
+   --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:169:5
+    |
+168 | pub enum QueryArm {
+    |          -------- variant in this enum
+169 |     FrozenOriginal,
+    |     ^^^^^^^^^^^^^^
+    |
+    = note: `QueryArm` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: struct `TimingSummary` is never constructed
+   --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:501:12
+    |
+501 | pub struct TimingSummary {
+    |            ^^^^^^^^^^^^^
+
+warning: function `summarize_timings` is never used
+   --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:511:8
+    |
+511 | pub fn summarize_timings<I>(timings: I) -> TimingSummary
+    |        ^^^^^^^^^^^^^^^^^
+
+warning: struct `AttemptAggregate` is never constructed
+   --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:553:12
+    |
+553 | pub struct AttemptAggregate {
+    |            ^^^^^^^^^^^^^^^^
+
+warning: function `aggregate_attempts` is never used
+   --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:567:8
+    |
+567 | pub fn aggregate_attempts<M, F, I>(
+    |        ^^^^^^^^^^^^^^^^^^
+
+warning: struct `NormalCompletionGate` is never constructed
+   --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:628:12
+    |
+628 | pub struct NormalCompletionGate {
+    |            ^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `NormalCompletionReport` is never constructed
+   --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:637:12
+    |
+637 | pub struct NormalCompletionReport {
+    |            ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: enum `NormalCompletionViolation` is never used
+   --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:648:10
+    |
+648 | pub enum NormalCompletionViolation {
+    |          ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `check_normal_completion` is never used
+   --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:659:8
+    |
+659 | pub fn check_normal_completion<M>(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `request_p95_limit` is never used
+   --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:715:14
+    |
+715 | pub const fn request_p95_limit(concurrency: usize) -> Option<Duration> {
+    |              ^^^^^^^^^^^^^^^^^
+
+warning: fields `source_hash` and `build_hash` are never read
+   --> crates/crm-api/tests/fixtures/today_http_perf_fixture.rs:101:5
+    |
+ 93 | pub struct TodayHttpPerfFixture {
+    |            -------------------- fields in this struct
+...
+101 |     source_hash: String,
+    |     ^^^^^^^^^^^
+102 |     build_hash: String,
+    |     ^^^^^^^^^^
+
+warning: methods `source_hash` and `build_hash` are never used
+   --> crates/crm-api/tests/fixtures/today_http_perf_fixture.rs:251:12
+    |
+105 | impl TodayHttpPerfFixture {
+    | ------------------------- methods in this implementation
+...
+251 |     pub fn source_hash(&self) -> &str {
+    |            ^^^^^^^^^^^
+...
+255 |     pub fn build_hash(&self) -> &str {
+    |            ^^^^^^^^^^
+
+warning: `crm-api` (test "db_today_feeds_http_perf") generated 34 warnings
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.10s
+────────────
+ Nextest run ID dc22fa89-2c81-49e6-ad4e-423ea7bcc9f4 with nextest profile: default
+    Starting 1 test across 1 binary (2 tests skipped)
+       START [         ] (1/1) crm-api::db_today_feeds_http_perf slice_012_performance_evidence
+
+running 1 test
+SLICE_012_SEED_DURATION_MS 2118
+SLICE_012_PEOPLE 25000
+SLICE_012_GATE1_START
+filtered_summaries	last_contact never	frozen_p95_ms=21	live_p95_ms=5	allowed_ms=25	within_allowed=true	payload_equal=true
+count_filtered_matches	last_contact never	frozen_p95_ms=7	live_p95_ms=1	allowed_ms=25	within_allowed=true	payload_equal=true
+source_candidates	last_contact never	frozen_p95_ms=46	live_p95_ms=2	allowed_ms=25	within_allowed=true	payload_equal=true
+filtered_summaries	last_contact not_within_days 7	frozen_p95_ms=6	live_p95_ms=5	allowed_ms=25	within_allowed=true	payload_equal=true
+count_filtered_matches	last_contact not_within_days 7	frozen_p95_ms=1	live_p95_ms=0	allowed_ms=25	within_allowed=true	payload_equal=true
+source_candidates	last_contact not_within_days 7	frozen_p95_ms=48	live_p95_ms=1	allowed_ms=25	within_allowed=true	payload_equal=true
+person_state	canonical feed definitions	frozen_p95_ms=348	live_p95_ms=21	allowed_ms=34	within_allowed=true	payload_equal=true
+SLICE_012_GATE1_END
+SLICE_012_PLAN_FILTERED_SUMMARIES_NEVER_START
+Limit  (cost=247.31..6820.59 rows=501 width=216) (actual time=0.582..3.478 rows=501.00 loops=1)
+  Buffers: shared hit=3544
+  ->  Result  (cost=247.31..130401.00 rows=9920 width=216) (actual time=0.582..3.450 rows=501.00 loops=1)
+        Buffers: shared hit=3544
+        ->  Incremental Sort  (cost=247.31..87149.80 rows=9920 width=224) (actual time=0.568..2.896 rows=501.00 loops=1)
+              Sort Key: p.created_at DESC, p.id
+              Presorted Key: p.created_at
+              Full-sort Groups: 11  Sort Method: quicksort  Average Memory: 36kB  Peak Memory: 36kB
+              Pre-sorted Groups: 4  Sort Method: quicksort  Average Memory: 36kB  Peak Memory: 36kB
+              Buffers: shared hit=2541
+              ->  Nested Loop Left Join  (cost=8.92..86782.19 rows=9920 width=224) (actual time=0.074..2.688 rows=511.00 loops=1)
+                    Buffers: shared hit=2532
+                    ->  Nested Loop Left Join  (cost=0.61..3553.39 rows=9920 width=160) (actual time=0.033..0.948 rows=511.00 loops=1)
+                          Buffers: shared hit=1252
+                          ->  Nested Loop  (cost=0.45..3305.12 rows=9920 width=128) (actual time=0.027..0.822 rows=511.00 loops=1)
+                                Buffers: shared hit=1250
+                                ->  Index Scan Backward using person_organization_created_idx on person p  (cost=0.29..3056.97 rows=9920 width=96) (actual time=0.012..0.681 rows=511.00 loops=1)
+                                      Index Cond: (organization_id = 'c84cb9c6-0ef6-47b9-b2ba-c8a18ce69980'::uuid)
+                                      Filter: (last_contact_at IS NULL)
+                                      Rows Removed by Filter: 732
+                                      Index Searches: 1
+                                      Buffers: shared hit=1248
+                                ->  Memoize  (cost=0.16..0.18 rows=1 width=48) (actual time=0.000..0.000 rows=1.00 loops=511)
+                                      Cache Key: p.stage_id
+                                      Cache Mode: logical
+                                      Hits: 510  Misses: 1  Evictions: 0  Overflows: 0  Memory Usage: 1kB
+                                      Buffers: shared hit=2
+                                      ->  Index Scan using stage_id_organization_id_key on stage s  (cost=0.15..0.17 rows=1 width=48) (actual time=0.012..0.012 rows=1.00 loops=1)
+                                            Index Cond: (id = p.stage_id)
+                                            Index Searches: 1
+                                            Buffers: shared hit=2
+                          ->  Memoize  (cost=0.16..0.18 rows=1 width=48) (actual time=0.000..0.000 rows=0.34 loops=511)
+                                Cache Key: p.assigned_user_id
+                                Cache Mode: logical
+                                Hits: 509  Misses: 2  Evictions: 0  Overflows: 0  Memory Usage: 1kB
+                                Buffers: shared hit=2
+                                ->  Index Scan using app_user_pkey on app_user u  (cost=0.15..0.17 rows=1 width=48) (actual time=0.003..0.003 rows=0.50 loops=2)
+                                      Index Cond: (id = p.assigned_user_id)
+                                      Index Searches: 1
+                                      Buffers: shared hit=2
+                    ->  Limit  (cost=8.32..8.34 rows=1 width=56) (actual time=0.002..0.002 rows=0.50 loops=511)
+                          Buffers: shared hit=1280
+                          ->  Incremental Sort  (cost=8.32..8.36 rows=2 width=56) (actual time=0.002..0.002 rows=0.50 loops=511)
+                                Sort Key: i2.received_at DESC, i2.id DESC
+                                Presorted Key: i2.received_at
+                                Full-sort Groups: 511  Sort Method: quicksort  Average Memory: 25kB  Peak Memory: 25kB
+                                Buffers: shared hit=1280
+                                ->  Index Scan Backward using inquiry_org_person_received_idx on inquiry i2  (cost=0.29..8.31 rows=1 width=56) (actual time=0.002..0.002 rows=0.50 loops=511)
+                                      Index Cond: ((organization_id = p.organization_id) AND (person_id = p.id))
+                                      Index Searches: 511
+                                      Buffers: shared hit=1280
+                    SubPlan 1
+                      ->  Limit  (cost=0.01..0.02 rows=1 width=40) (actual time=0.001..0.001 rows=0.00 loops=511)
+                            ->  Sort  (cost=0.01..0.02 rows=1 width=40) (actual time=0.000..0.000 rows=0.00 loops=511)
+                                  Sort Key: cm.created_at
+                                  Sort Method: quicksort  Memory: 25kB
+                                  ->  Seq Scan on contact_method cm  (cost=0.00..0.00 rows=1 width=40) (actual time=0.000..0.000 rows=0.00 loops=511)
+                                        Filter: ((person_id = p.id) AND (organization_id = p.organization_id) AND (kind = 'email'::text))
+                    SubPlan 2
+                      ->  Limit  (cost=0.01..0.02 rows=1 width=40) (actual time=0.001..0.001 rows=0.00 loops=511)
+                            ->  Sort  (cost=0.01..0.02 rows=1 width=40) (actual time=0.000..0.000 rows=0.00 loops=511)
+                                  Sort Key: cm_1.created_at
+                                  Sort Method: quicksort  Memory: 25kB
+                                  ->  Seq Scan on contact_method cm_1  (cost=0.00..0.00 rows=1 width=40) (actual time=0.000..0.000 rows=0.00 loops=511)
+                                        Filter: ((person_id = p.id) AND (organization_id = p.organization_id) AND (kind = 'phone'::text))
+        SubPlan 3
+          ->  Aggregate  (cost=4.31..4.32 rows=1 width=8) (actual time=0.001..0.001 rows=1.00 loops=501)
+                Buffers: shared hit=1003
+                ->  Index Only Scan using inquiry_org_person_received_idx on inquiry i  (cost=0.29..4.31 rows=1 width=0) (actual time=0.001..0.001 rows=0.49 loops=501)
+                      Index Cond: ((organization_id = p.organization_id) AND (person_id = p.id))
+                      Heap Fetches: 0
+                      Index Searches: 501
+                      Buffers: shared hit=1003
+Planning:
+  Buffers: shared hit=452
+Planning Time: 0.803 ms
+Execution Time: 3.587 ms
+SLICE_012_PLAN_FILTERED_SUMMARIES_NEVER_END
+SLICE_012_PLAN_FILTERED_SUMMARIES_NOT_WITHIN_7_START
+Limit  (cost=210.99..6824.21 rows=501 width=216) (actual time=0.327..2.870 rows=501.00 loops=1)
+  Buffers: shared hit=3043
+  ->  Result  (cost=210.99..110206.82 rows=8333 width=216) (actual time=0.326..2.838 rows=501.00 loops=1)
+        Buffers: shared hit=3043
+        ->  Incremental Sort  (cost=210.99..73874.94 rows=8333 width=224) (actual time=0.323..2.228 rows=501.00 loops=1)
+              Sort Key: p.created_at DESC, p.id
+              Presorted Key: p.created_at
+              Full-sort Groups: 9  Sort Method: quicksort  Average Memory: 36kB  Peak Memory: 36kB
+              Pre-sorted Groups: 3  Sort Method: quicksort  Average Memory: 36kB  Peak Memory: 36kB
+              Buffers: shared hit=2040
+              ->  Nested Loop Left Join  (cost=8.92..73575.45 rows=8333 width=224) (actual time=0.021..2.042 rows=511.00 loops=1)
+                    Buffers: shared hit=2040
+                    ->  Nested Loop Left Join  (cost=0.61..3661.58 rows=8333 width=160) (actual time=0.012..0.535 rows=511.00 loops=1)
+                          Buffers: shared hit=630
+                          ->  Nested Loop  (cost=0.45..3452.98 rows=8333 width=128) (actual time=0.010..0.419 rows=511.00 loops=1)
+                                Buffers: shared hit=628
+                                ->  Index Scan Backward using person_organization_created_idx on person p  (cost=0.29..3244.47 rows=8333 width=96) (actual time=0.006..0.294 rows=511.00 loops=1)
+                                      Index Cond: (organization_id = 'c84cb9c6-0ef6-47b9-b2ba-c8a18ce69980'::uuid)
+                                      Filter: (COALESCE(last_contact_at, '-infinity'::timestamp with time zone) <= (COALESCE(now()) - '7 days'::interval))
+                                      Rows Removed by Filter: 111
+                                      Index Searches: 1
+                                      Buffers: shared hit=626
+                                ->  Memoize  (cost=0.16..0.18 rows=1 width=48) (actual time=0.000..0.000 rows=1.00 loops=511)
+                                      Cache Key: p.stage_id
+                                      Cache Mode: logical
+                                      Hits: 510  Misses: 1  Evictions: 0  Overflows: 0  Memory Usage: 1kB
+                                      Buffers: shared hit=2
+                                      ->  Index Scan using stage_id_organization_id_key on stage s  (cost=0.15..0.17 rows=1 width=48) (actual time=0.002..0.002 rows=1.00 loops=1)
+                                            Index Cond: (id = p.stage_id)
+                                            Index Searches: 1
+                                            Buffers: shared hit=2
+                          ->  Memoize  (cost=0.16..0.18 rows=1 width=48) (actual time=0.000..0.000 rows=0.33 loops=511)
+                                Cache Key: p.assigned_user_id
+                                Cache Mode: logical
+                                Hits: 509  Misses: 2  Evictions: 0  Overflows: 0  Memory Usage: 1kB
+                                Buffers: shared hit=2
+                                ->  Index Scan using app_user_pkey on app_user u  (cost=0.15..0.17 rows=1 width=48) (actual time=0.001..0.001 rows=0.50 loops=2)
+                                      Index Cond: (id = p.assigned_user_id)
+                                      Index Searches: 1
+                                      Buffers: shared hit=2
+                    ->  Limit  (cost=8.32..8.34 rows=1 width=56) (actual time=0.001..0.001 rows=0.75 loops=511)
+                          Buffers: shared hit=1410
+                          ->  Incremental Sort  (cost=8.32..8.36 rows=2 width=56) (actual time=0.001..0.001 rows=0.75 loops=511)
+                                Sort Key: i2.received_at DESC, i2.id DESC
+                                Presorted Key: i2.received_at
+                                Full-sort Groups: 511  Sort Method: quicksort  Average Memory: 25kB  Peak Memory: 25kB
+                                Buffers: shared hit=1410
+                                ->  Index Scan Backward using inquiry_org_person_received_idx on inquiry i2  (cost=0.29..8.31 rows=1 width=56) (actual time=0.001..0.001 rows=0.75 loops=511)
+                                      Index Cond: ((organization_id = p.organization_id) AND (person_id = p.id))
+                                      Index Searches: 511
+                                      Buffers: shared hit=1410
+                    SubPlan 1
+                      ->  Limit  (cost=0.01..0.02 rows=1 width=40) (actual time=0.001..0.001 rows=0.00 loops=511)
+                            ->  Sort  (cost=0.01..0.02 rows=1 width=40) (actual time=0.000..0.000 rows=0.00 loops=511)
+                                  Sort Key: cm.created_at
+                                  Sort Method: quicksort  Memory: 25kB
+                                  ->  Seq Scan on contact_method cm  (cost=0.00..0.00 rows=1 width=40) (actual time=0.000..0.000 rows=0.00 loops=511)
+                                        Filter: ((person_id = p.id) AND (organization_id = p.organization_id) AND (kind = 'email'::text))
+                    SubPlan 2
+                      ->  Limit  (cost=0.01..0.02 rows=1 width=40) (actual time=0.001..0.001 rows=0.00 loops=511)
+                            ->  Sort  (cost=0.01..0.02 rows=1 width=40) (actual time=0.000..0.000 rows=0.00 loops=511)
+                                  Sort Key: cm_1.created_at
+                                  Sort Method: quicksort  Memory: 25kB
+                                  ->  Seq Scan on contact_method cm_1  (cost=0.00..0.00 rows=1 width=40) (actual time=0.000..0.000 rows=0.00 loops=511)
+                                        Filter: ((person_id = p.id) AND (organization_id = p.organization_id) AND (kind = 'phone'::text))
+        SubPlan 3
+          ->  Aggregate  (cost=4.31..4.32 rows=1 width=8) (actual time=0.001..0.001 rows=1.00 loops=501)
+                Buffers: shared hit=1003
+                ->  Index Only Scan using inquiry_org_person_received_idx on inquiry i  (cost=0.29..4.31 rows=1 width=0) (actual time=0.001..0.001 rows=0.75 loops=501)
+                      Index Cond: ((organization_id = p.organization_id) AND (person_id = p.id))
+                      Heap Fetches: 0
+                      Index Searches: 501
+                      Buffers: shared hit=1003
+Planning:
+  Buffers: shared hit=12
+Planning Time: 0.299 ms
+Execution Time: 2.918 ms
+SLICE_012_PLAN_FILTERED_SUMMARIES_NOT_WITHIN_7_END
+SLICE_012_PLAN_PERSON_STATE_START
+Nested Loop Left Join  (cost=90700.16..97210.23 rows=201 width=288) (actual time=17.261..25.039 rows=201.00 loops=1)
+  Buffers: shared hit=14290
+  ->  Nested Loop Left Join  (cost=90687.08..93703.04 rows=201 width=210) (actual time=17.131..18.093 rows=201.00 loops=1)
+        Buffers: shared hit=12820
+        ->  Nested Loop Left Join  (cost=90678.76..92024.69 rows=201 width=179) (actual time=17.111..17.540 rows=201.00 loops=1)
+              Buffers: shared hit=12215
+              ->  Nested Loop  (cost=90678.60..92019.33 rows=201 width=147) (actual time=17.106..17.473 rows=201.00 loops=1)
+                    Buffers: shared hit=12213
+                    ->  Nested Loop  (cost=90678.44..92013.97 rows=201 width=115) (actual time=17.094..17.398 rows=201.00 loops=1)
+                          Buffers: shared hit=12211
+                          ->  Limit  (cost=90678.16..90678.66 rows=201 width=51) (actual time=17.068..17.091 rows=201.00 loops=1)
+                                Buffers: shared hit=11608
+                                ->  Sort  (cost=90678.16..90716.28 rows=15250 width=51) (actual time=17.067..17.080 rows=201.00 loops=1)
+                                      Sort Key: (CASE WHEN COALESCE(((p_1.assigned_user_id = ANY ('{19c08830-4671-4078-bb80-1f065d1c1829}'::uuid[])) AND (p_1.last_inbound_at IS NOT NULL) AND (p_1.last_inbound_at > COALESCE(p_1.last_contact_at, '-infinity'::timestamp with time zone)) AND (p_1.last_inbound_at > COALESCE(p_1.last_outbound_at, '-infinity'::timestamp with time zone))), false) THEN (p_1.last_inbound_at > ('2026-09-08 12:00:00+00'::timestamp with time zone - '24:00:00'::interval)) WHEN COALESCE(((p_1.assigned_user_id = ANY ('{19c08830-4671-4078-bb80-1f065d1c1829}'::uuid[])) AND (i2.received_at IS NOT NULL)), false) THEN (p_1.last_inquiry_at > ('2026-09-08 12:00:00+00'::timestamp with time zone - '24:00:00'::interval)) ELSE false END) DESC, (CASE WHEN COALESCE(((p_1.assigned_user_id = ANY ('{19c08830-4671-4078-bb80-1f065d1c1829}'::uuid[])) AND (p_1.last_inbound_at IS NOT NULL) AND (p_1.last_inbound_at > COALESCE(p_1.last_contact_at, '-infinity'::timestamp with time zone)) AND (p_1.last_inbound_at > COALESCE(p_1.last_outbound_at, '-infinity'::timestamp with time zone))), false) THEN p_1.last_inbound_at WHEN COALESCE(((p_1.assigned_user_id = ANY ('{19c08830-4671-4078-bb80-1f065d1c1829}'::uuid[])) AND (i2.received_at IS NOT NULL)), false) THEN i2.received_at ELSE NULL::timestamp with time zone END), p_1.id
+                                      Sort Method: top-N heapsort  Memory: 49kB
+                                      Buffers: shared hit=11608
+                                      ->  Nested Loop Left Join  (cost=0.29..90018.51 rows=15250 width=51) (actual time=0.567..15.950 rows=2695.00 loops=1)
+                                            Filter: (COALESCE(((p_1.assigned_user_id = ANY ('{19c08830-4671-4078-bb80-1f065d1c1829}'::uuid[])) AND (i2.received_at IS NOT NULL)), false) OR COALESCE(((p_1.assigned_user_id = ANY ('{19c08830-4671-4078-bb80-1f065d1c1829}'::uuid[])) AND (p_1.last_inbound_at IS NOT NULL) AND (p_1.last_inbound_at > COALESCE(p_1.last_contact_at, '-infinity'::timestamp with time zone)) AND (p_1.last_inbound_at > COALESCE(p_1.last_outbound_at, '-infinity'::timestamp with time zone))), false))
+                                            Rows Removed by Filter: 17638
+                                            Buffers: shared hit=11603
+                                            ->  Nested Loop Left Join  (cost=0.00..1531.83 rows=20333 width=80) (actual time=0.551..5.201 rows=20333.00 loops=1)
+                                                  Join Filter: false
+                                                  Buffers: shared hit=1016
+                                                  ->  Seq Scan on person p_1  (cost=0.00..1328.50 rows=20333 width=80) (actual time=0.550..2.538 rows=20333.00 loops=1)
+                                                        Filter: ((last_inquiry_at IS NOT NULL) AND (organization_id = 'c84cb9c6-0ef6-47b9-b2ba-c8a18ce69980'::uuid))
+                                                        Rows Removed by Filter: 4667
+                                                        Buffers: shared hit=1016
+                                                  ->  Result  (cost=0.00..0.00 rows=0 width=0) (actual time=0.000..0.000 rows=0.00 loops=20333)
+                                                        One-Time Filter: false
+                                            ->  Limit  (cost=0.29..4.31 rows=1 width=8) (actual time=0.000..0.000 rows=0.26 loops=20333)
+                                                  Buffers: shared hit=10587
+                                                  ->  Result  (cost=0.29..4.31 rows=1 width=8) (actual time=0.000..0.000 rows=0.26 loops=20333)
+                                                        One-Time Filter: (p_1.last_inquiry_at > COALESCE(p_1.last_contact_at, '-infinity'::timestamp with time zone))
+                                                        Buffers: shared hit=10587
+                                                        ->  Index Only Scan using inquiry_org_person_received_idx on inquiry i2  (cost=0.29..4.31 rows=1 width=8) (actual time=0.001..0.001 rows=1.00 loops=5293)
+                                                              Index Cond: ((organization_id = p_1.organization_id) AND (person_id = p_1.id) AND (received_at > COALESCE(p_1.last_contact_at, '-infinity'::timestamp with time zone)))
+                                                              Heap Fetches: 0
+                                                              Index Searches: 5293
+                                                              Buffers: shared hit=10587
+                          ->  Index Scan using person_pkey on person p  (cost=0.29..6.63 rows=1 width=88) (actual time=0.001..0.001 rows=1.00 loops=201)
+                                Index Cond: (id = p_1.id)
+                                Index Searches: 201
+                                Buffers: shared hit=603
+                    ->  Memoize  (cost=0.16..0.18 rows=1 width=48) (actual time=0.000..0.000 rows=1.00 loops=201)
+                          Cache Key: p.stage_id
+                          Cache Mode: logical
+                          Hits: 200  Misses: 1  Evictions: 0  Overflows: 0  Memory Usage: 1kB
+                          Buffers: shared hit=2
+                          ->  Index Scan using stage_id_organization_id_key on stage s  (cost=0.15..0.17 rows=1 width=48) (actual time=0.009..0.009 rows=1.00 loops=1)
+                                Index Cond: (id = p.stage_id)
+                                Index Searches: 1
+                                Buffers: shared hit=2
+              ->  Memoize  (cost=0.16..0.18 rows=1 width=48) (actual time=0.000..0.000 rows=1.00 loops=201)
+                    Cache Key: p.assigned_user_id
+                    Cache Mode: logical
+                    Hits: 200  Misses: 1  Evictions: 0  Overflows: 0  Memory Usage: 1kB
+                    Buffers: shared hit=2
+                    ->  Index Scan using app_user_pkey on app_user u  (cost=0.15..0.17 rows=1 width=48) (actual time=0.004..0.004 rows=1.00 loops=1)
+                          Index Cond: (id = p.assigned_user_id)
+                          Index Searches: 1
+                          Buffers: shared hit=2
+        ->  Limit  (cost=8.32..8.34 rows=1 width=31) (actual time=0.002..0.003 rows=1.00 loops=201)
+              Buffers: shared hit=605
+              ->  Incremental Sort  (cost=8.32..8.36 rows=2 width=31) (actual time=0.002..0.002 rows=1.00 loops=201)
+                    Sort Key: i.received_at DESC, i.id DESC
+                    Presorted Key: i.received_at
+                    Full-sort Groups: 201  Sort Method: quicksort  Average Memory: 25kB  Peak Memory: 25kB
+                    Buffers: shared hit=605
+                    ->  Index Scan Backward using inquiry_org_person_received_idx on inquiry i  (cost=0.29..8.31 rows=1 width=31) (actual time=0.002..0.002 rows=1.00 loops=201)
+                          Index Cond: ((organization_id = p.organization_id) AND (person_id = p.id))
+                          Index Searches: 201
+                          Buffers: shared hit=605
+  ->  Limit  (cost=13.08..13.09 rows=1 width=38) (actual time=0.031..0.031 rows=0.68 loops=201)
+        Buffers: shared hit=1067
+        ->  Sort  (cost=13.08..13.09 rows=1 width=38) (actual time=0.031..0.031 rows=0.68 loops=201)
+              Sort Key: ca.occurred_at DESC, ca.id DESC
+              Sort Method: quicksort  Memory: 25kB
+              Buffers: shared hit=1067
+              ->  Merge Anti Join  (cost=8.59..13.07 rows=1 width=38) (actual time=0.030..0.031 rows=0.68 loops=201)
+                    Merge Cond: (ca.id = x2.corrects_id)
+                    Buffers: shared hit=1067
+                    ->  Sort  (cost=8.31..8.32 rows=1 width=38) (actual time=0.002..0.002 rows=0.74 loops=201)
+                          Sort Key: ca.id
+                          Sort Method: quicksort  Memory: 25kB
+                          Buffers: shared hit=552
+                          ->  Index Scan Backward using contact_attempted_org_person_occurred_idx on contact_attempted ca  (cost=0.29..8.30 rows=1 width=38) (actual time=0.002..0.002 rows=0.74 loops=201)
+                                Index Cond: ((organization_id = p.organization_id) AND (person_id = p.id))
+                                Index Searches: 201
+                                Buffers: shared hit=552
+                    ->  Index Only Scan using contact_attempted_corrects_once on contact_attempted x2  (cost=0.28..41.50 rows=16082 width=16) (actual time=0.002..0.024 rows=453.60 loops=137)
+                          Heap Fetches: 0
+                          Index Searches: 137
+                          Buffers: shared hit=515
+  SubPlan 1
+    ->  Limit  (cost=0.01..0.02 rows=1 width=40) (actual time=0.001..0.001 rows=0.00 loops=201)
+          ->  Sort  (cost=0.01..0.02 rows=1 width=40) (actual time=0.001..0.001 rows=0.00 loops=201)
+                Sort Key: cm.created_at
+                Sort Method: quicksort  Memory: 25kB
+                ->  Seq Scan on contact_method cm  (cost=0.00..0.00 rows=1 width=40) (actual time=0.000..0.000 rows=0.00 loops=201)
+                      Filter: ((person_id = p.id) AND (organization_id = p.organization_id) AND (kind = 'email'::text))
+  SubPlan 2
+    ->  Limit  (cost=0.01..0.02 rows=1 width=40) (actual time=0.001..0.001 rows=0.00 loops=201)
+          ->  Sort  (cost=0.01..0.02 rows=1 width=40) (actual time=0.000..0.000 rows=0.00 loops=201)
+                Sort Key: cm_1.created_at
+                Sort Method: quicksort  Memory: 25kB
+                ->  Seq Scan on contact_method cm_1  (cost=0.00..0.00 rows=1 width=40) (actual time=0.000..0.000 rows=0.00 loops=201)
+                      Filter: ((person_id = p.id) AND (organization_id = p.organization_id) AND (kind = 'phone'::text))
+  SubPlan 3
+    ->  Aggregate  (cost=4.31..4.32 rows=1 width=8) (actual time=0.001..0.001 rows=1.00 loops=201)
+          Buffers: shared hit=403
+          ->  Index Only Scan using inquiry_org_person_received_idx on inquiry i_1  (cost=0.29..4.31 rows=1 width=0) (actual time=0.001..0.001 rows=1.00 loops=201)
+                Index Cond: ((organization_id = p.organization_id) AND (person_id = p.id))
+                Heap Fetches: 0
+                Index Searches: 201
+                Buffers: shared hit=403
+Planning:
+  Buffers: shared hit=199
+Planning Time: 1.499 ms
+Execution Time: 25.139 ms
+SLICE_012_PLAN_PERSON_STATE_END
+SLICE_012_BACKFILL_DURATION_MS 323 (over 25000 People)
+SLICE_012_TODAY_HTTP_SERIAL_P95_MS 34 (011d Feeds concentrated/zero-source/serial trend: 177 ms at 50k People)
+test slice_012_performance_evidence ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 12.22s
+
+        PASS [  12.234s] (1/1) crm-api::db_today_feeds_http_perf slice_012_performance_evidence
+────────────
+     Summary [  12.234s] 1 test run: 1 passed, 2 skipped

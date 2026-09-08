@@ -22,6 +22,7 @@ const fixture: PersonDetailResponse = {
     { id: 'email-1', kind: 'email', value: 'grace@example.com' },
   ],
   inquiries: [], history: [],
+  tags: [{ id: 'tag-sphere', name: 'Sphere' }, { id: 'tag-investor', name: 'Investor' }],
 }
 const cleanups: Array<() => void> = []
 afterEach(() => { cleanups.splice(0).forEach((cleanup) => cleanup()); vi.clearAllMocks() })
@@ -66,6 +67,17 @@ describe('Person preview actions', () => {
     outcome.value = true
     await flushPromises()
     expect(button.attributes('disabled')).toBeDefined()
+  })
+
+  // SLICE_011e §5, §9.9: read-only chips under the name — no remove control,
+  // no separate fetch (the preview already reads the detail query).
+  it('shows read-only tag chips with no controls and no extra fetch', async () => {
+    const { wrapper } = await mountPreview()
+    const chips = wrapper.get('[data-testid="person-preview-tags"]')
+    expect(chips.text()).toContain('Sphere')
+    expect(chips.text()).toContain('Investor')
+    expect(chips.findAll('button')).toHaveLength(0)
+    expect(vi.mocked(apiFetch).mock.calls.filter(([path]) => String(path).includes('/tags'))).toHaveLength(0)
   })
 
   it('only launches Operator on activation and exposes email as a client link', async () => {

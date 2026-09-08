@@ -21,7 +21,10 @@ pub fn channel_for(organization_id: OrganizationId) -> String {
 /// (docs/specs/SLICE_009.md §6, SLICE_003 §6 pointer amendment): no new
 /// event type — the web handler already invalidates person/people/today
 /// for every `person.changed` regardless of `change`, so old clients
-/// degrade correctly.
+/// degrade correctly. `TagsChanged` is Slice 011e's declared additive
+/// variant (docs/specs/SLICE_011e.md §5, §7): published after an
+/// `AddPersonTag`/`RemovePersonTag` that changed a row; rename and delete
+/// publish nothing (no tag name ever travels on the channel, D-023).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PersonChange {
@@ -30,6 +33,7 @@ pub enum PersonChange {
     StageChanged,
     ContactAttempted,
     CorrespondenceCaptured,
+    TagsChanged,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -283,6 +287,7 @@ mod tests {
                 PersonChange::CorrespondenceCaptured,
                 "correspondence_captured",
             ),
+            (PersonChange::TagsChanged, "tags_changed"),
         ] {
             let event = RealtimeEvent::person_changed(
                 OrganizationId::new(Uuid::new_v4()),

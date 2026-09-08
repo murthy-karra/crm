@@ -747,3 +747,224 @@ async fn saved_list_sort_columns_check_constraints_reject_bad_values_and_half_pa
         Some("saved_list_sort_pair_check".to_string())
     );
 }
+
+/// docs/specs/SLICE_011e.md §2, §9.1: `crm_app` grants for `tag` (full
+/// CRUD — rename/delete are in-place writes, unlike `saved_list`'s
+/// tombstone convention) and `person_tag` (SELECT/INSERT/DELETE only, no
+/// UPDATE — an applied tag is added or removed, never edited in place).
+#[sqlx::test]
+#[ignore]
+async fn tag_and_person_tag_grants_are_exactly_slice_011e_section_2(migrator_pool: PgPool) {
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let (org_id, actor_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Grant Check Realty",
+        "grant-check@acme.test",
+        "Grant Check",
+        "correct horse battery staple",
+    )
+    .await;
+
+    let select = sqlx::query("SELECT * FROM tag").fetch_all(&app_pool).await;
+    assert!(select.is_ok(), "tag: SELECT must succeed for crm_app");
+
+    let tag_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO tag (organization_id, created_by_user_id, name) VALUES ($1, $2, 'Investor') RETURNING id",
+    )
+    .bind(org_id)
+    .bind(actor_id)
+    .fetch_one(&app_pool)
+    .await
+    .expect("tag: INSERT must succeed for crm_app");
+
+    let update = sqlx::query("UPDATE tag SET name = 'Renamed' WHERE id = $1")
+        .bind(tag_id)
+        .execute(&app_pool)
+        .await;
+    assert!(update.is_ok(), "tag: UPDATE must succeed for crm_app");
+
+    let delete = sqlx::query("DELETE FROM tag WHERE id = $1")
+        .bind(tag_id)
+        .execute(&app_pool)
+        .await;
+    assert!(delete.is_ok(), "tag: DELETE must succeed for crm_app");
+
+    let tag_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO tag (organization_id, created_by_user_id, name) VALUES ($1, $2, 'Sphere') RETURNING id",
+    )
+    .bind(org_id)
+    .bind(actor_id)
+    .fetch_one(&app_pool)
+    .await
+    .unwrap();
+    let stage_id = first_stage_id_for_schema_test(&app_pool, org_id).await;
+    let person_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO person (organization_id, first_name, stage_id) VALUES ($1, 'Fixture', $2) RETURNING id",
+    )
+    .bind(org_id)
+    .bind(stage_id)
+    .fetch_one(&app_pool)
+    .await
+    .unwrap();
+
+    let select = sqlx::query("SELECT * FROM person_tag")
+        .fetch_all(&app_pool)
+        .await;
+    assert!(
+        select.is_ok(),
+        "person_tag: SELECT must succeed for crm_app"
+    );
+    let insert = sqlx::query(
+        "INSERT INTO person_tag (organization_id, person_id, tag_id, added_by_user_id) VALUES ($1, $2, $3, $4)",
+    )
+    .bind(org_id)
+    .bind(person_id)
+    .bind(tag_id)
+    .bind(actor_id)
+    .execute(&app_pool)
+    .await;
+    assert!(
+        insert.is_ok(),
+        "person_tag: INSERT must succeed for crm_app"
+    );
+    let update =
+        sqlx::query("UPDATE person_tag SET added_by_user_id = added_by_user_id WHERE false")
+            .execute(&app_pool)
+            .await;
+    assert!(
+        update.is_err(),
+        "person_tag: UPDATE must be denied for crm_app"
+    );
+    let delete = sqlx::query(
+        "DELETE FROM person_tag WHERE organization_id = $1 AND person_id = $2 AND tag_id = $3",
+    )
+    .bind(org_id)
+    .bind(person_id)
+    .bind(tag_id)
+    .execute(&app_pool)
+    .await;
+    assert!(
+        delete.is_ok(),
+        "person_tag: DELETE must succeed for crm_app"
+    );
+}
+
+/// docs/specs/SLICE_011e.md §2: the index enumeration — the case-
+/// insensitive uniqueness index on `tag` and the tag-led probe/count index
+/// on `person_tag` both exist exactly as named.
+#[sqlx::test]
+#[ignore]
+async fn tag_and_person_tag_indexes_exist(migrator_pool: PgPool) {
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let index_names: Vec<String> = sqlx::query_scalar(
+        "SELECT indexname FROM pg_indexes WHERE tablename IN ('tag', 'person_tag')",
+    )
+    .fetch_all(&app_pool)
+    .await
+    .unwrap();
+    assert!(
+        index_names.contains(&"tag_org_lower_name_key".to_string()),
+        "missing tag_org_lower_name_key in {index_names:?}"
+    );
+    assert!(
+        index_names.contains(&"person_tag_org_tag_person_idx".to_string()),
+        "missing person_tag_org_tag_person_idx in {index_names:?}"
+    );
+}
+
+async fn first_stage_id_for_schema_test(pool: &PgPool, organization_id: Uuid) -> Uuid {
+    sqlx::query_scalar("SELECT id FROM stage WHERE organization_id = $1 ORDER BY position LIMIT 1")
+        .bind(organization_id)
+        .fetch_one(pool)
+        .await
+        .unwrap()
+}
+
+/// docs/specs/SLICE_011e.md §2, §9.1: case-insensitive uniqueness per
+/// Organization (the `tag_org_lower_name_key` expression index), and the
+/// composite FKs that make a cross-Organization `person_tag` row
+/// unpersistable even if an application check regresses.
+#[sqlx::test]
+#[ignore]
+async fn tag_name_is_unique_case_insensitively_per_organization_and_person_tag_is_tenant_isolated(
+    migrator_pool: PgPool,
+) {
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let (org_a, actor_a) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Acme Realty",
+        "alice-schema@acme.test",
+        "Alice",
+        "correct horse battery staple",
+    )
+    .await;
+    let (org_b, actor_b) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Best Realty",
+        "dave-schema@best.test",
+        "Dave",
+        "correct horse battery staple",
+    )
+    .await;
+
+    sqlx::query(
+        "INSERT INTO tag (organization_id, created_by_user_id, name) VALUES ($1, $2, 'Investor')",
+    )
+    .bind(org_a)
+    .bind(actor_a)
+    .execute(&app_pool)
+    .await
+    .unwrap();
+
+    let collision = sqlx::query(
+        "INSERT INTO tag (organization_id, created_by_user_id, name) VALUES ($1, $2, 'INVESTOR')",
+    )
+    .bind(org_a)
+    .bind(actor_a)
+    .execute(&app_pool)
+    .await;
+    assert!(
+        collision.is_err(),
+        "a case-insensitive duplicate name in the SAME Organization must be rejected"
+    );
+
+    // The identical name is fine in a DIFFERENT Organization.
+    let cross_org_same_name = sqlx::query(
+        "INSERT INTO tag (organization_id, created_by_user_id, name) VALUES ($1, $2, 'Investor')",
+    )
+    .bind(org_b)
+    .bind(actor_b)
+    .execute(&app_pool)
+    .await;
+    assert!(cross_org_same_name.is_ok());
+
+    // A cross-Organization person_tag row (a Person of org_a with a tag of
+    // org_b) is rejected by the composite FKs even though both ids exist.
+    let stage_a = first_stage_id_for_schema_test(&app_pool, org_a).await;
+    let person_a: Uuid = sqlx::query_scalar(
+        "INSERT INTO person (organization_id, first_name, stage_id) VALUES ($1, 'Fixture', $2) RETURNING id",
+    )
+    .bind(org_a)
+    .bind(stage_a)
+    .fetch_one(&app_pool)
+    .await
+    .unwrap();
+    let tag_b: Uuid = sqlx::query_scalar("SELECT id FROM tag WHERE organization_id = $1")
+        .bind(org_b)
+        .fetch_one(&app_pool)
+        .await
+        .unwrap();
+    let cross_org_person_tag = sqlx::query(
+        "INSERT INTO person_tag (organization_id, person_id, tag_id, added_by_user_id) VALUES ($1, $2, $3, $4)",
+    )
+    .bind(org_a)
+    .bind(person_a)
+    .bind(tag_b)
+    .bind(actor_a)
+    .execute(&app_pool)
+    .await;
+    assert!(
+        cross_org_person_tag.is_err(),
+        "a Person or tag from another Organization can never be persisted into person_tag"
+    );
+}

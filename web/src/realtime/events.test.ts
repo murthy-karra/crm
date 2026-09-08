@@ -57,6 +57,18 @@ describe('invalidationsFor', () => {
     ])
   })
 
+  // SLICE_011e §5, §7: `tags_changed` is additive on the existing
+  // `person.changed` event — no new case needed, since this handler already
+  // invalidates person/people/today/saved-list counts for every change value.
+  it('maps tags_changed to person, people, today, and saved-list counts', () => {
+    expect(invalidationsFor(personChanged('tags_changed'), ORG_ID)).toEqual([
+      queryKeys.person(ORG_ID, PERSON_ID),
+      queryKeys.people(ORG_ID),
+      queryKeys.today(ORG_ID),
+      queryKeys.savedListCounts(ORG_ID),
+    ])
+  })
+
   it('maps inquiry_received to person, people, today, saved-list counts, unresolved, and inquiry sources', () => {
     expect(invalidationsFor(personChanged('inquiry_received'), ORG_ID)).toEqual([
       queryKeys.person(ORG_ID, PERSON_ID),

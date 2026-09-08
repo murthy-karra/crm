@@ -4,21 +4,28 @@
 import { QueryClient } from '@tanstack/vue-query'
 import { effectScope, ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { apiFetch } from './client'
+import { ApiError, apiFetch } from './client'
 import {
   queryKeys,
   fetchMe,
+  useAddPersonTagMutation,
   useCorrectCallOutcome,
   useCreateSavedListMutation,
+  useCreateTagMutation,
   useDeleteSavedListMutation,
+  useDeleteTagMutation,
+  useRemovePersonTagMutation,
+  useRenameTagMutation,
   useUpdateSavedListMutation,
 } from './queries'
 import { beginSessionTransition, settleSessionTransition } from '../sessionLifecycle'
 import type {
   CorrectOutcomeResponse,
   CreateSavedListResponse,
+  CreateTagResponse,
   DeleteSavedListResponse,
   MeResponse,
+  PersonTagMutationResponse,
   SavedListDetailResponse,
   SavedListMetadata,
   UpdateSavedListResponse,
@@ -119,6 +126,132 @@ describe('useCorrectCallOutcome', () => {
     await expect(mutation.mutateAsync({ callId: CALL_ID, personId: PERSON_ID, outcome: 'busy' })).rejects.toThrow('nope')
     expect(invalidate).not.toHaveBeenCalled()
     scope.stop()
+  })
+})
+
+// SLICE_011e §5, §10: create-or-get, apply/remove, and rename/delete each
+// invalidate the tags key (apply/remove also the Person key); rename/
+// delete/apply/remove additionally refetch the tags key on a 403 or 404
+// (a stale rule-1 permission or a vanished tag), never on any other error.
+describe('tag mutations', () => {
+  const TAG_ID = 'tag-1'
+
+  function tagResult(): CreateTagResponse {
+    return { tag: { id: TAG_ID, name: 'Investor', person_count: 0, can_manage: true }, created: true }
+  }
+
+  it('useCreateTagMutation invalidates the tags key on success only', async () => {
+    apiFetchMock.mockResolvedValueOnce(tagResult())
+    const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+    const scope = effectScope()
+    const mutation = scope.run(() => useCreateTagMutation(ORG_ID, queryClient))!
+    await mutation.mutateAsync({ name: 'Investor' })
+    const [path, init] = apiFetchMock.mock.calls[0]
+    expect(path).toBe('/tags')
+    expect(init?.method).toBe('POST')
+    const keys = invalidate.mock.calls.map(([filters]) => (typeof filters === 'function' ? filters() : filters)?.queryKey)
+    expect(keys).toEqual([queryKeys.tags(ORG_ID)])
+    scope.stop()
+  })
+
+  it('useAddPersonTagMutation sends no body and invalidates tags + the Person key', async () => {
+    const response: PersonTagMutationResponse = { tags: [{ id: TAG_ID, name: 'Investor' }], changed: true }
+    apiFetchMock.mockResolvedValueOnce(response)
+    const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+    const scope = effectScope()
+    const mutation = scope.run(() => useAddPersonTagMutation(ORG_ID, queryClient))!
+    await mutation.mutateAsync({ personId: PERSON_ID, tagId: TAG_ID })
+    const [path, init] = apiFetchMock.mock.calls[0]
+    expect(path).toBe(`/people/${PERSON_ID}/tags/${TAG_ID}`)
+    expect(init?.method).toBe('PUT')
+    expect(init?.body).toBeUndefined()
+    const keys = invalidate.mock.calls.map(([filters]) => (typeof filters === 'function' ? filters() : filters)?.queryKey)
+    expect(keys).toEqual([queryKeys.tags(ORG_ID), queryKeys.person(ORG_ID, PERSON_ID)])
+    scope.stop()
+  })
+
+  async function expectRefetchOnlyOnStaleReference(
+    build: (queryClient: QueryClient) => { mutateAsync: (variables: never) => Promise<unknown> },
+    variables: unknown,
+  ) {
+    for (const status of [403, 404] as const) {
+      apiFetchMock.mockReset()
+      apiFetchMock.mockRejectedValueOnce(new ApiError(status, status === 403 ? 'forbidden' : 'not_found'))
+      const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+      const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+      const scope = effectScope()
+      const mutation = scope.run(() => build(queryClient))!
+      await expect(mutation.mutateAsync(variables as never)).rejects.toThrow()
+      const keys = invalidate.mock.calls.map(([filters]) => (typeof filters === 'function' ? filters() : filters)?.queryKey)
+      expect(keys).toEqual([queryKeys.tags(ORG_ID)])
+      scope.stop()
+    }
+
+    apiFetchMock.mockReset()
+    apiFetchMock.mockRejectedValueOnce(new ApiError(409, 'conflict'))
+    const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+    const scope = effectScope()
+    const mutation = scope.run(() => build(queryClient))!
+    await expect(mutation.mutateAsync(variables as never)).rejects.toThrow()
+    expect(invalidate).not.toHaveBeenCalled()
+    scope.stop()
+  }
+
+  it('useRenameTagMutation refetches the tags key on 403/404, not on 409', async () => {
+    await expectRefetchOnlyOnStaleReference(
+      (qc) => useRenameTagMutation(ORG_ID, qc),
+      { tagId: TAG_ID, body: { name: 'Investor' } },
+    )
+  })
+
+  it('useDeleteTagMutation refetches the tags key on 403/404, not on 409', async () => {
+    await expectRefetchOnlyOnStaleReference((qc) => useDeleteTagMutation(ORG_ID, qc), TAG_ID)
+  })
+
+  // Person-tag routes carry no 403 case (any member may apply/remove), so
+  // unlike the tag-level mutations above, only 404 triggers a refetch here
+  // — and it refetches BOTH the tags index and the Person detail: the
+  // vanished tag can still be sitting in this tab's cached Person `tags`
+  // array, and only invalidating the Person key clears that stale chip
+  // (reviewer F1 / tester F1).
+  async function expectPersonTagRefetchOnly404(
+    build: (queryClient: QueryClient) => { mutateAsync: (variables: never) => Promise<unknown> },
+  ) {
+    const variables = { personId: PERSON_ID, tagId: TAG_ID }
+
+    apiFetchMock.mockReset()
+    apiFetchMock.mockRejectedValueOnce(new ApiError(404, 'not_found'))
+    let queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+    let invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+    let scope = effectScope()
+    let mutation = scope.run(() => build(queryClient))!
+    await expect(mutation.mutateAsync(variables as never)).rejects.toThrow()
+    const keys = invalidate.mock.calls.map(([filters]) => (typeof filters === 'function' ? filters() : filters)?.queryKey)
+    expect(keys).toEqual([queryKeys.tags(ORG_ID), queryKeys.person(ORG_ID, PERSON_ID)])
+    scope.stop()
+
+    for (const [status, code] of [[403, 'forbidden'], [409, 'conflict']] as const) {
+      apiFetchMock.mockReset()
+      apiFetchMock.mockRejectedValueOnce(new ApiError(status, code))
+      queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+      invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+      scope = effectScope()
+      mutation = scope.run(() => build(queryClient))!
+      await expect(mutation.mutateAsync(variables as never)).rejects.toThrow()
+      expect(invalidate).not.toHaveBeenCalled()
+      scope.stop()
+    }
+  }
+
+  it('useAddPersonTagMutation refetches tags + the Person key on 404 only', async () => {
+    await expectPersonTagRefetchOnly404((qc) => useAddPersonTagMutation(ORG_ID, qc))
+  })
+
+  it('useRemovePersonTagMutation refetches tags + the Person key on 404 only', async () => {
+    await expectPersonTagRefetchOnly404((qc) => useRemovePersonTagMutation(ORG_ID, qc))
   })
 })
 

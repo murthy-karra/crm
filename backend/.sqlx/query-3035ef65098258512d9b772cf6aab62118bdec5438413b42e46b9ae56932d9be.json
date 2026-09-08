@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT t.id, t.name\n           FROM tag t\n           JOIN person_tag pt\n             ON pt.tag_id = t.id AND pt.organization_id = t.organization_id\n           WHERE pt.organization_id = $1 AND pt.person_id = $2\n           ORDER BY lower(t.name), t.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "3035ef65098258512d9b772cf6aab62118bdec5438413b42e46b9ae56932d9be"
+}

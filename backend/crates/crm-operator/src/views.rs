@@ -195,6 +195,10 @@ pub struct PersonDetail {
     /// It does not make an uncapped membership claim.
     pub today_truncated: bool,
     pub sources: TodaySourcesView,
+    /// Tag names are user-authored text (Slice 011e, docs/specs/
+    /// SLICE_011e.md §5), so — like list names (011c) — they are never
+    /// serialized as trusted strings in a model-facing tool result.
+    pub tags: Vec<UntrustedText>,
 }
 
 /// Source evaluation state shared by every Today-derived Operator output.

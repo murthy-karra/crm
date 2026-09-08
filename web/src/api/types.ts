@@ -527,6 +527,62 @@ export interface PersonDetailResponse {
   // Ordered by the server (occurred_at, recorded_at, kind_rank, id) — never
   // re-sort this client-side (§5).
   history: HistoryEntry[]
+  // Slice 011e §5: ordered `lower(name), id`, additive.
+  tags: TagRef[]
+}
+
+// --- Slice 011e: Tags (docs/specs/SLICE_011e.md §5) -------------------------
+// Free-form tags on People: created inline by any member, applied/removed on
+// the Person page, renamed/deleted by an admin or (while unused) the
+// creator (D-051). `Tag` is the `GET /api/tags` row / mutation response
+// shape; `TagRef` is the narrower `{id,name}` shape carried on the Person
+// detail and the apply/remove responses — never widen one into the other.
+
+export interface Tag {
+  id: string
+  name: string
+  person_count: number
+  // The server's rule-1 verdict for THIS viewer at read time — a display
+  // hint; the command re-decides under the tag row's lock (§5).
+  can_manage: boolean
+}
+
+export interface TagRef {
+  id: string
+  name: string
+}
+
+export interface TagsResponse {
+  tags: Tag[]
+}
+
+export interface CreateTagRequest {
+  name: string
+}
+
+export interface CreateTagResponse {
+  tag: Tag
+  created: boolean
+}
+
+export interface RenameTagRequest {
+  name: string
+}
+
+export interface RenameTagResponse {
+  tag: Tag
+  changed: boolean
+}
+
+export interface DeleteTagResponse {
+  deleted: boolean
+  removed_from_people: number
+}
+
+/** `PUT`/`DELETE /api/people/{id}/tags/{tag_id}` — same shape for apply and remove. */
+export interface PersonTagMutationResponse {
+  tags: TagRef[]
+  changed: boolean
 }
 
 // ---- Mutations: assignment / stage (§5 POST .../assignment, .../stage) ---

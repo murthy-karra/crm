@@ -2,7 +2,7 @@ use axum::extract::rejection::{JsonRejection, QueryRejection};
 use axum::extract::{FromRequestParts, Path, Query, State};
 use axum::http::request::Parts;
 use axum::response::Json;
-use axum::routing::{get, post};
+use axum::routing::{delete, get, post, put};
 use axum::Router;
 use serde::Deserialize;
 use serde_json::json;
@@ -18,8 +18,9 @@ use crate::domain::person::filter::{FilterDefinition, PersonFilterParams};
 use crate::domain::person::queries as person_queries;
 use crate::domain::person::sort::PersonSort;
 use crate::domain::person::PersonVisibilityScope;
+use crate::domain::tag::{self, AddPersonTag, RemovePersonTag};
 use crate::error::ApiError;
-use crate::ids::{PersonId, StageId, UserId};
+use crate::ids::{PersonId, StageId, TagId, UserId};
 use crate::state::AppState;
 
 pub fn router() -> Router<AppState> {
@@ -29,6 +30,8 @@ pub fn router() -> Router<AppState> {
         .route("/api/people/{id}/assignment", post(set_assignment))
         .route("/api/people/{id}/stage", post(set_stage))
         .route("/api/people/{id}/contact-attempts", post(log_contact))
+        .route("/api/people/{id}/tags/{tag_id}", put(add_person_tag))
+        .route("/api/people/{id}/tags/{tag_id}", delete(remove_person_tag))
 }
 
 /// A `{id}` path segment parsed as a UUID and typed as `PersonId`
@@ -59,6 +62,28 @@ impl FromRequestParts<AppState> for PersonIdPath {
             .await
             .map_err(|_| ApiError::MalformedRequest)?;
         Ok(PersonIdPath(PersonId::new(id)))
+    }
+}
+
+/// The `{id}/tags/{tag_id}` pair (docs/specs/SLICE_011e.md §5), same
+/// pre-authentication 400 precedent as `PersonIdPath` above: either id
+/// being a non-UUID is a 400 independent of auth state.
+struct PersonTagIdsPath(PersonId, TagId);
+
+impl FromRequestParts<AppState> for PersonTagIdsPath {
+    type Rejection = ApiError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let Path((person_id, tag_id)) = Path::<(Uuid, Uuid)>::from_request_parts(parts, state)
+            .await
+            .map_err(|_| ApiError::MalformedRequest)?;
+        Ok(PersonTagIdsPath(
+            PersonId::new(person_id),
+            TagId::new(tag_id),
+        ))
     }
 }
 
@@ -202,11 +227,14 @@ async fn get_person(
         .await
         .map_err(|_| ApiError::Unavailable)?;
 
+    let tags = tag::list_for_person(&mut conn, organization_id, person_id).await?;
+
     Ok(Json(json!({
         "person": person,
         "contact_methods": contact_methods,
         "inquiries": inquiries,
         "history": history,
+        "tags": tags,
     })))
 }
 
@@ -308,5 +336,52 @@ async fn log_contact(
     Ok((
         axum::http::StatusCode::CREATED,
         Json(json!({ "person": summary, "contact_attempt": contact_attempt })),
+    ))
+}
+
+/// `PUT /api/people/{person_id}/tags/{tag_id}` (docs/specs/SLICE_011e.md
+/// §5): target-state idempotent apply — 200 whether or not the tag was
+/// already applied, `changed` distinguishes the two.
+async fn add_person_tag(
+    State(state): State<AppState>,
+    PersonTagIdsPath(person_id, tag_id): PersonTagIdsPath,
+    auth: AuthContext,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
+    let ctx = CommandContext::from_auth(&auth);
+
+    let outcome = tag::add_person_tag(
+        pool,
+        &state.publisher,
+        &ctx,
+        AddPersonTag { person_id, tag_id },
+    )
+    .await?;
+
+    Ok(Json(
+        json!({ "tags": outcome.tags, "changed": outcome.changed }),
+    ))
+}
+
+/// `DELETE /api/people/{person_id}/tags/{tag_id}` (docs/specs/SLICE_011e.md
+/// §5): target-state idempotent remove.
+async fn remove_person_tag(
+    State(state): State<AppState>,
+    PersonTagIdsPath(person_id, tag_id): PersonTagIdsPath,
+    auth: AuthContext,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
+    let ctx = CommandContext::from_auth(&auth);
+
+    let outcome = tag::remove_person_tag(
+        pool,
+        &state.publisher,
+        &ctx,
+        RemovePersonTag { person_id, tag_id },
+    )
+    .await?;
+
+    Ok(Json(
+        json!({ "tags": outcome.tags, "changed": outcome.changed }),
     ))
 }

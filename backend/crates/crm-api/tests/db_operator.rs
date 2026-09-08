@@ -1664,3 +1664,97 @@ async fn get_person_history_marks_superseded_and_corrected_attempts(migrator_poo
     );
     let _ = (f.carol_id, f.org_best, f.bob_id);
 }
+
+/// docs/specs/SLICE_011e.md §9.8: `get_person` returns `tags` as untrusted
+/// text, and a foreign Person is still refused (no leakage of tags across
+/// Organizations either). Crate-fence coverage (no new crm-app dependency
+/// on crm-operator, no bare SQL in the Operator layer) is the existing
+/// `operator_deps.rs`/`./scripts/check` job — unaffected by this addition.
+#[sqlx::test]
+#[ignore]
+async fn get_person_returns_tags_as_untrusted_text_and_a_foreign_person_is_still_refused(
+    migrator_pool: PgPool,
+) {
+    let f = fixture(migrator_pool).await;
+    let plain = router_with(&f.migrator_pool, None).await;
+    let alice = crate::common::login_cookie(&plain, "alice@acme.test", "pw").await;
+    let person_id = create_person(
+        &plain,
+        &alice,
+        "Grace",
+        "Hopper",
+        "grace-tags@example.test",
+        None,
+        None,
+        Some(f.alice_id),
+    )
+    .await;
+
+    let app_pool = crate::common::connect_as_app(&f.migrator_pool).await;
+    let ctx = crm_api::domain::envelope::CommandContext {
+        organization_id: OrganizationId::new(f.org_acme),
+        actor_user_id: UserId::new(f.alice_id),
+        origin: crm_api::domain::envelope::Origin::WebSession,
+        correlation_id: crm_api::ids::CorrelationId::new(Uuid::new_v4()),
+    };
+    let created = crm_api::domain::tag::create_tag(
+        &app_pool,
+        &ctx,
+        crm_api::domain::tag::CreateTag {
+            name: "Sphere".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+    crm_api::domain::tag::add_person_tag(
+        &app_pool,
+        &Publisher::recording(),
+        &ctx,
+        crm_api::domain::tag::AddPersonTag {
+            person_id: crm_api::ids::PersonId::new(person_id),
+            tag_id: created.tag.id,
+        },
+    )
+    .await
+    .unwrap();
+
+    let (router, provider) = router_scripted(
+        &f.migrator_pool,
+        vec![
+            tool_step("get_person", json!({ "person_id": person_id })),
+            text_step("They're tagged Sphere."),
+        ],
+    )
+    .await;
+    let alice = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
+    let response = post_turn(&router, &alice, message("What tags does Grace have?")).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = crate::common::body_json(response).await;
+    assert_eq!(body["tool_calls"][0]["outcome"], "ok");
+
+    let prompt = requests_json(&provider);
+    // The tool-result message's `content` is itself a JSON string
+    // (docs/specs/SLICE_005.md §4), so its embedded quotes are
+    // backslash-escaped once more when the whole request array is
+    // serialized here — hence the literal `\"` below, not `"`.
+    assert!(
+        prompt.contains(r#"\"untrusted_text\":\"Sphere\""#),
+        "tags must be wrapped as untrusted text: {prompt}"
+    );
+
+    // A foreign Organization's Person is still `not_found` — tags carry no
+    // separate visibility path.
+    let (foreign_router, _foreign_provider) = router_scripted(
+        &f.migrator_pool,
+        vec![
+            tool_step("get_person", json!({ "person_id": person_id })),
+            text_step("I couldn't find that person."),
+        ],
+    )
+    .await;
+    let bob = crate::common::login_cookie(&foreign_router, "bob@best.test", "pw").await;
+    let foreign_response = post_turn(&foreign_router, &bob, message("Look up this person")).await;
+    assert_eq!(foreign_response.status(), StatusCode::OK);
+    let foreign_body = crate::common::body_json(foreign_response).await;
+    assert_eq!(foreign_body["tool_calls"][0]["outcome"], "not_found");
+}

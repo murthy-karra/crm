@@ -142,6 +142,19 @@ const recent = computed(() => {
         badge
       />
 
+      <div
+        v-if="data?.tags.length"
+        class="mt-2 flex flex-wrap gap-1.5"
+        aria-label="Tags"
+        data-testid="person-preview-tags"
+      >
+        <span
+          v-for="tag in data.tags"
+          :key="tag.id"
+          class="inline-flex items-center rounded-lg border border-border px-2 py-0.5 text-small text-text-muted"
+        >{{ tag.name }}</span>
+      </div>
+
       <p
         v-if="isPending"
         role="status"

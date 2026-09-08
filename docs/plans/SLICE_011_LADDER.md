@@ -116,6 +116,10 @@ Delivery so far: a → b → c → b-sort → d, all merged and pushed (011d
 APPROVED on 2026-09-07** ([spec](../specs/SLICE_011e.md),
 [brief](../tasks/SLICE_011e_IMPL.md)); the "confirm at spec" item is decided
 as D-051 (admins, plus the creator while the tag is unused; hard delete).
+**Rung e1 merged 2026-09-07** (`51331e9`; [verification](../tasks/SLICE_011e_VERIFICATION.md)):
+tag model, commands, routes, Person page chips, member Tags page, Operator
+field. **Rung e2 next**: the `tags`/`not_tags` clauses across the fourteen
+statements.
 The spec pre-declares two S–M rungs, e1 (model, commands, routes, Person
 page, admin Tags page) then e2 (the `tags`/`not_tags` clauses), honouring the
 sizing rule without a D-049-style exception. Review found that **fourteen**

@@ -1,69 +1,32 @@
 # Project State
 
-Last updated: 2026-09-07 (Slice 011e rung e1 implementation started in a
-worktree after the Phase 6 gate).
+Last updated: 2026-09-07 (Slice 011e rung e1 merged to local main; shared
+development runtime migrated and restarted).
 
 ## Current phase
 
-**Slice 011e (tags) — RUNG e1 IN IMPLEMENTATION.** The user passed the Phase 6
-gate on 2026-09-07 ("proceed in a worktree"). Branch `slice-011e-tags` from
-`main` at `ad1c33b`, worktree `../crm-worktrees/011e-e1` (gitignored `.env`
-copied in; Web dependencies installed). One lane, one writer: Claude Sonnet 5
-(`implement` profile) follows `docs/tasks/SLICE_011e_IMPL.md` e1 steps 1–6,
-backend first, then Web against its own routes; Claude Fable 5.1 coordinates,
-audits the changed-file list against `git status` each round, runs the
-once-only final-tree gates and the reviewer/tester rounds (two maximum,
-D-050), and holds the commit and merge gates. The shared development runtime
-in the main checkout is untouched until merge. Specification approved and
-committed as `97b889f`.
+**Slice 011e (tags) — RUNG e1 COMPLETE AND MERGED TO LOCAL MAIN** at
+`51331e9` (2026-09-07, with the user's approval; not pushed, not deployed).
+Source `slice-011e-tags` at `4af2e13` (five commits: backend `502f418`, Web
+`e7530d2`, walkthrough `a563cce`, round-1 fixes `8d7c748`, verification
+record `4af2e13`), worktree `../crm-worktrees/011e-e1` (still present; deletion
+of the branch and worktree needs the user's approval). Final-tree gates run
+once by the coordinator: `sqlx-prepare` clean, `check` green (704 Rust, 598
+Web tests), `check-db` 566 of 566 first run. Review round 1 of two: reviewer
+READY WITH FIXES, tester no blocking finding, all fixes applied; round 2 not
+needed. Walkthrough 11 of 11. Full evidence in the
+[verification record](../tasks/SLICE_011e_VERIFICATION.md). The shared
+development runtime was updated the same evening with the user's approval:
+`crm_dev` migrated (`20260909000001` applied), the old API (pid 89707,
+binary of 15:51) stopped by exact PID, the merged binary built and
+`./scripts/dev-api` relaunched. **Next rung: e2** (the `tags`/`not_tags`
+clauses across the fourteen statements) per the brief; its Phase 6 gate is
+the next approval. Specification approved and committed as `97b889f`.
 
-Progress (2026-09-07): **e1 steps 1–5 complete** on `slice-011e-tags`:
-backend `502f418` (migration `20260909000001_tag.sql`, `TagId`, the `tag`
-module with five commands, `routes/tags.rs` plus the two person-tag routes,
-`PersonChange::TagsChanged`, Operator `PersonDetail.tags`, 19 new `.sqlx`
-entries, 21 tests in `db_tags.rs` plus schema/admin/operator extensions; lane
-gates `check` 704 tests and `check-db` 565 of 565 green) and Web `e7530d2`
-(types, tags query and mutations, Person page chips and Add-tag popover,
-preview chips, member-visible `/manage/tags` `TagsView`, `tags_changed`
-token; Web gate green, 596 Vitest tests; the lane also fixed a pre-existing
-unmounted-overlay hygiene bug in `PersonDetailView.test.ts`). Coordinator
-audited both commits against `git status`: 41 files all under `backend/`,
-14 files all under `web/`, matching the reports. **Step 6 walkthrough
-complete** (`a563cce`): 11 of 11 scenarios pass on a real scratch runtime
-(`:31011`/`:51011`, scratch database seeded through the HTTP API, torn down
-and verified by the coordinator: ports free, only `crm_dev` remains, the dev
-API healthy); archive `docs/design/qa/slice-011e-e1-2026-09-07/`. **Review
-round 1 (of two) complete** on `a563cce`: reviewer READY WITH FIXES, tester no
-blocking findings; tenant isolation, the D-051 enforcement, lock ordering and
-the wire contract verified. Consolidated fix round dispatched to the lane:
-the Web 404 stale-chip path (also invalidate the Person query and show a
-message), a display-hint role read that could 503, a UTF-16 length nit, and
-seven test hardenings (cross-Organization read and real-foreign-id cases that
-were vacuous, HTTP 403/409 wire bodies, create-or-get at the cap, ids-only
-realtime assertion, index enumeration, member reachability of
-`/manage/tags`). Recorded LATER: `outcome` span value naming, popover
-`aria-activedescendant`, disabled-button tooltip in Firefox, no membership
-re-read on add/remove (BEYOND_ENVELOPE, matches assign/stage), a
-DB-unavailable 503 route test. Next: lane gates, coordinator once-only
-final-tree gates, verification record, commit and merge gate. Amendment pointers
-written in 002 §§2/5, 003 §6, 005 §3 view types, 011a §4, 011b §§4/5, 011c
-§§3/5 and 011d §§2/6. The user said "start the plan for 011e" on 2026-09-07 (an earlier
-session that began the same planning was closed after 45 seconds of reads and
-left nothing behind). Planner analysis, then
-[SLICE_011e.md](../specs/SLICE_011e.md), its
-[plain-language companion](../specs/SLICE_011e_EXPLAINED.md) and the
-[implementation brief](../tasks/SLICE_011e_IMPL.md) were drafted and
-independently reviewed the same day: READY WITH CORRECTIONS, all applied. The
-load-bearing correction: **fourteen** static statements bind the filter
-parameters on `main`, not the eleven 011d §2 states, because 011d §5 added
-three system-feed statements; a tag clause left out of them would be silently
-ignored in feed evaluation. The spec pre-declares two S–M rungs (e1 model,
-commands, routes, Person page, admin Tags page; e2 the `tags`/`not_tags`
-clauses across the fourteen statements) per the ladder's standing sizing rule.
-The one genuine decision (who renames or deletes a tag) was taken the same
-day as D-051: admins, plus the creator while the tag is unused. The planning
-documents, D-051 and the amendment pointers were committed with the user's
-approval as `97b889f`.
+Implementation history: the user passed the e1 Phase 6 gate on 2026-09-07
+("proceed in a worktree"); one lane, one writer (Claude Sonnet 5, `implement`
+profile) followed brief steps 1–6 with a coordinator audit after the backend
+half and after each later commit; Claude Fable 5.1 coordinated.
 
 Previous phase: **Slice 011d (tweakable built-in Today rules) — COMPLETE AND MERGED TO
 LOCAL MAIN** at `b8b53e2` (2026-09-07, with the user's approval; not pushed,
@@ -333,11 +296,12 @@ clear-all.
 
 ## Current slice
 
-Slice 011e — Tags — `docs/specs/SLICE_011e.md` (reviewed 2026-09-07, not yet
-approved), companion `docs/specs/SLICE_011e_EXPLAINED.md`, brief
-`docs/tasks/SLICE_011e_IMPL.md` (two sequential single-lane rungs: e1 on
-`slice-011e-tags`, e2 on `slice-011e-tag-clauses`, each from `main`; the e1
-lane owns the only migration, `20260909000001_tag.sql`). Ladder:
+Slice 011e — Tags — `docs/specs/SLICE_011e.md` (approved 2026-09-07),
+companion `docs/specs/SLICE_011e_EXPLAINED.md`, brief
+`docs/tasks/SLICE_011e_IMPL.md`, verification record
+`docs/tasks/SLICE_011e_VERIFICATION.md`. Two sequential single-lane rungs:
+**e1 merged** (`51331e9`); **e2 next** on `slice-011e-tag-clauses` from
+`main` (no migration; the fourteen statements and `.sqlx`). Ladder:
 docs/plans/SLICE_011_LADDER.md (011a → 011b → 011b-sort → 011c → 011d all
 done → **011e**, the last rung).
 
@@ -415,7 +379,8 @@ together on 2026-09-06).
 | 011b | Personal and shared saved People lists (D-046) | `9d62e86` (implementation `2af023c`) |
 | 011c | Saved lists feed Today (D-047; §8 planner amendment approved) | `929b6ab` (implementation `6117b4a`) |
 | 011b-sort | Per-list sorting for saved People lists (D-048) | `d52a0ad` (implementation `bd23f42`) |
-| 011d | Tweakable built-in Today rules: system feeds, three derived clauses, admin surface, change fact (D-049, D-050) | `b8b53e2` (integration `77a8963`), local only |
+| 011d | Tweakable built-in Today rules: system feeds, three derived clauses, admin surface, change fact (D-049, D-050) | `b8b53e2` (integration `77a8963`), pushed 2026-09-07 |
+| 011e-e1 | Tags model, commands, six routes, Person page and Tags page, Operator field (D-051) | `51331e9` (branch head `4af2e13`), local only |
 | — | Gate-speedup chunk (check 35m→79s, check-db 37m→~2m) | 2026-08-28 |
 | — | Test-binary consolidation (40 files → 1 binary) | `6427ee8` |
 
@@ -629,8 +594,8 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. **011e (tags): e1 in progress** on `slice-011e-tags` in
-   `../crm-worktrees/011e-e1` (one lane,
+1. **011e (tags): e1 merged; e2 next** on `slice-011e-tag-clauses` from
+   `main` (one lane,
    `implement` profile, backend then Web). The small LATER items from the 011d
    verification record can still be batched before or between the rungs:
    the person-state 503 test, two equivalence pins, the feeds page
@@ -664,10 +629,11 @@ and now lives only in git history.
 
 ## Approval currently required
 
-- None while e1 is in implementation. Next gates: the lane's step 3
-  checkpoint (routes live before Web work), then review, commit and merge
-  approval for `slice-011e-tags` into `main`. Push, shared-runtime migration
-  and deployment are not authorized.
+- **e2 Phase 6 implementation gate** ("Proceed with implementation?") when
+  the user wants the next rung. Separately: approval to delete the merged
+  `slice-011e-tags` branch and the `../crm-worktrees/011e-e1` worktree; push
+  of `main` (now seven commits ahead of `origin/main`); deployment. None of
+  these is authorized.
 - None for 011d: merged, pushed, and the dev runtime updated with approval
   on 2026-09-07. Deployment is not authorized.
 - All three 011c decisions were taken on 2026-09-06 (late evening): the §8

@@ -1,9 +1,24 @@
 # Project State
 
-Last updated: 2026-09-08 (Slice 012 merged to local main and serving; Slice
-013 rebased, in final gates).
+Last updated: 2026-09-08 (Slices 012 and 013 both merged to local main; the
+shared development runtime restarted; no slice active).
 
 ## Current phase
+
+**Slices 012 and 013 — BOTH COMPLETE AND MERGED TO LOCAL MAIN; NO SLICE
+ACTIVE.** Slice 013 merged at `9af47c1` (2026-09-08, with the user's
+approval; not pushed, not deployed) from `slice-013-operator-filter` at
+`151d38a` (ten commits after the rebase, incl. the
+[verification record](../tasks/SLICE_013_VERIFICATION.md)). Final-tree gates
+run once by the coordinator on the rebased tree: `sqlx-prepare` clean (no
+new statements), `check` green (757 Rust, 614 Web), `check-db` 617 of 617
+first run. Review round 1 of two: reviewer READY WITH FIXES, tester no
+blocking finding, all fixes applied; round 2 not needed. No migration; the
+dev API rebuilt and relaunched by exact PID (see below). Branch and worktree
+`../crm-worktrees/013` deleted with approval. The Operator now has eight
+tools. Lane C (FilterBar UX polish) remains held for the perceived-latency
+chunk. `main` is ahead of `origin/main`; push and deployment are not
+authorized.
 
 **Slice 012 — COMPLETE AND MERGED TO LOCAL MAIN** at `26ddab7` (2026-09-08,
 with the user's approval; not pushed, not deployed). Source
@@ -436,9 +451,10 @@ clear-all.
 
 ## Current slice
 
-Slices 012 (`docs/specs/SLICE_012.md`, brief `docs/tasks/SLICE_012_IMPL.md`)
-and 013 (`docs/specs/SLICE_013.md`, brief `docs/tasks/SLICE_013_IMPL.md`),
-approved 2026-09-08, in parallel implementation. Previous: Slice 011e — Tags —
+No slice is active. Last completed: Slices 012 (`docs/specs/SLICE_012.md`,
+verification `docs/tasks/SLICE_012_VERIFICATION.md`) and 013
+(`docs/specs/SLICE_013.md`, verification `docs/tasks/SLICE_013_VERIFICATION.md`),
+both merged 2026-09-08. Previous: Slice 011e — Tags —
 `docs/specs/SLICE_011e.md` (approved 2026-09-07),
 companion `docs/specs/SLICE_011e_EXPLAINED.md`, brief
 `docs/tasks/SLICE_011e_IMPL.md`, verification record
@@ -527,6 +543,7 @@ together on 2026-09-06).
 | 011e-e1 | Tags model, commands, six routes, Person page and Tags page, Operator field (D-051) | `51331e9` (branch head `4af2e13`), local only |
 | 011e-e2 | `tags`/`not_tags` clauses across the fourteen statements, `invalid_tag` paths, FilterBar chips, performance evidence | `b6dc49b` (branch head `1796e85`), pushed 2026-09-07 |
 | 012 | Denormalized last-activity columns on Person, trigger-maintained (D-052); fourteen statements read the columns; equivalence gate; perf archive | `26ddab7` (branch head `e32ffd7`), local only |
+| 013 | Operator `filter_people` and `run_saved_list` read-only tools, name-based, D-046-faithful, `MAX_REFERENCES` 25 | `9af47c1` (branch head `151d38a`), local only |
 | — | Gate-speedup chunk (check 35m→79s, check-db 37m→~2m) | 2026-08-28 |
 | — | Test-binary consolidation (40 files → 1 binary) | `6427ee8` |
 
@@ -750,14 +767,16 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. **Slice 011 ladder complete.** Candidates for the next request, unordered:
-   push `main`; the 011d/011e LATER batches (person-state 503 test, two
+1. **Slices 012 and 013 done.** Candidates for the next request, unordered:
+   push `main`; the perceived-latency chunk together with lane C (FilterBar
+   UX polish); the 011d/011e/012/013 LATER batches (person-state 503 test,
    equivalence pins, feeds page first-load error test, the `db_calls` timing
    flake, splitting the three largest test files, popover
-   `aria-activedescendant`, batching tag reference probes); an Operator
-   `filter_people` tool (the ladder's natural post-ladder extension);
-   resuming parked Slice 010 (FUB migration), whose 010f tags-import portion
-   now has its destination model; the queued PERCEIVED-LATENCY chunk.
+   `aria-activedescendant`, `inquiry` append-only triggers, the exact-500
+   boundary test, the invalid-source error detail); notes and tasks models
+   (thesis core scope; the path back into the parked FUB migration, whose
+   010f tags-import portion now has its destination model and whose
+   importer must insert history in stable Person order per D-052).
    (Former text: e2 in progress, one lane,
    `implement` profile, backend then Web). The small LATER items from the 011d
    verification record can still be batched before or between the rungs:

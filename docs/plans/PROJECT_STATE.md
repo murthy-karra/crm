@@ -45,6 +45,23 @@ crm-api, fake backends; `check` 734 Rust / 614 Vitest; coordinator audit
 passed). Steps 2–6 released with decisions: `RefBucket::Search` for both
 tools; `validate()` failures after resolution are `invalid_arguments`, unknown
 names are clarifications; names clipped and control-stripped at parse time.
+**Lane A steps 4–5 complete** (`9f02ead` the read-side switch of all fourteen
+statements with the equivalence test green throughout and the §8.6 pins
+added; `df72926` the performance archive
+`docs/design/perf/slice-012-2026-09-08/` with the harness committed behind
+the `perf-harness` feature). Lane gates `check` 717, `check-db` 603 of 603
+(three `db_calls` timing flakes under load, clean on re-run). Measured: seed
+of 25k People with triggers 2.1 s; backfill 323 ms; paired regression all
+seven rows within gate with payloads equal, `person_state` 353 → 22 ms,
+`source_candidates` 46 → 2 ms, the `never` filter 22 → 5 ms; the gated
+`waiting` probe runs once per gated candidate (20,333) with the index
+descended 5,293 times. One fixture fix in `db_operator.rs` (a direct
+`UPDATE inquiry SET received_at` backdate now keeps the column in step, the
+same action the erasure runbook would take). Disclosed, not touched: an
+011e-era `perf-harness` test binds 25 parameters to a 27-parameter
+statement, broken at the branch point. Coordinator audit passed; review
+round 1 (reviewer and tester) launched on `df72926`. Lane B is running its
+full gates behind the lock.
 
 Previous phase: **Slice 011e (tags) — COMPLETE. RUNG e2 MERGED TO LOCAL MAIN** at `b6dc49b`
 (2026-09-07, with the user's approval; not pushed, not deployed). Source

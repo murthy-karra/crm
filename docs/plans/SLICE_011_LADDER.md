@@ -1,6 +1,7 @@
 # Slice 011 — Smart Lists ladder
 
-Status: ACCEPTED (user, 2026-08-28) with the three ladder-level
+Status: COMPLETE (all rungs merged to local `main` by 2026-09-07; 011e
+pending push). Originally ACCEPTED (user, 2026-08-28) with the three ladder-level
 decisions taken. 011a COMPLETE AND MERGED (`4aee12d`, 2026-08-28);
 011b COMPLETE, MERGED AND PUSHED (implementation `2af023c`, 2026-09-06; privacy and separate limits
 accepted in D-046). Charter: D-043 (smart lists first-class FUB-shaped;
@@ -118,8 +119,11 @@ APPROVED on 2026-09-07** ([spec](../specs/SLICE_011e.md),
 as D-051 (admins, plus the creator while the tag is unused; hard delete).
 **Rung e1 merged 2026-09-07** (`51331e9`; [verification](../tasks/SLICE_011e_VERIFICATION.md)):
 tag model, commands, routes, Person page chips, member Tags page, Operator
-field. **Rung e2 next**: the `tags`/`not_tags` clauses across the fourteen
-statements.
+field. **Rung e2 merged 2026-09-07** (`b6dc49b`): the `tags`/`not_tags`
+clauses across the fourteen statements, `invalid_tag` through saved lists,
+sources and system feeds, FilterBar chips, performance evidence. **The
+ladder is complete**: a → b → c → b-sort → d → e1 → e2, all merged to local
+`main`.
 The spec pre-declares two S–M rungs, e1 (model, commands, routes, Person
 page, admin Tags page) then e2 (the `tags`/`not_tags` clauses), honouring the
 sizing rule without a D-049-style exception. Review found that **fourteen**

@@ -1,65 +1,37 @@
 # Project State
 
-Last updated: 2026-09-07 (Slice 011e rung e2 implementation started in a
-worktree after the Phase 6 gate; e1 merged and serving).
+Last updated: 2026-09-07 (Slice 011e complete: e2 merged to local main, the
+shared development runtime restarted, the Slice 011 ladder finished).
 
 ## Current phase
 
-**Slice 011e (tags) — RUNG e2 IN IMPLEMENTATION.** The user passed the e2
-Phase 6 gate on 2026-09-07 ("proceed in a worktree"). Branch
-`slice-011e-tag-clauses` from `main` at `c629ac0`, worktree
-`../crm-worktrees/011e-e2` (`.env` copied in; Web dependencies installed).
-One lane, one writer: Claude Sonnet 5 (`implement` profile) follows
-`docs/tasks/SLICE_011e_IMPL.md` e2 steps 1–5, stopping after step 2 (the
-fourteen statements and parity) for the coordinator's audit before the
-`invalid_tag` wiring; Claude Fable 5.1 coordinates as for e1. No migration in
-e2. The shared development runtime serves e1 and is untouched until the e2
-merge.
+**Slice 011e (tags) — COMPLETE. RUNG e2 MERGED TO LOCAL MAIN** at `b6dc49b`
+(2026-09-07, with the user's approval; not pushed, not deployed). Source
+`slice-011e-tag-clauses` at `1796e85` (seven commits: vocabulary `db2be0a`,
+fourteen statements `2cecee3`, `invalid_tag` `23340d1`, Web `147ef64`,
+performance `ad6f10a`, round-1 fixes `3d33ff7`, verification record
+`1796e85`). Final-tree gates run once by the coordinator: `sqlx-prepare`
+clean, `check` green (717 Rust, 614 Web tests), `check-db` 587 of 587 first
+run. Review round 1 of two: reviewer READY WITH FIXES, tester no blocking
+finding, all fixes applied; round 2 not needed. Performance (D-050): paired
+regression unchanged with the clause absent; plan shape an index-only scan
+on `person_tag_org_tag_person_idx` after the §4 binding amendment. Evidence
+in the [verification record](../tasks/SLICE_011e_VERIFICATION.md) and
+`docs/design/perf/slice-011e-2026-09-08/`. The branch and the worktree
+`../crm-worktrees/011e-e2` were deleted with the user's approval; no 011e
+branch remains and none existed on the remote. The shared development runtime
+was updated the same evening (no migration in e2): the old API (pid 37778)
+stopped by exact PID, the merged binary built and `./scripts/dev-api`
+relaunched (pid 16112, binary of 22:06; health 200, the new filter kind
+reaches authentication). **This completes the Slice 011 ladder** (011a, 011b,
+011b-sort, 011c, 011d, 011e). `main` is 21 commits ahead of `origin/main`;
+push and deployment are not authorized.
 
-Progress (2026-09-07): **e2 steps 1–2 complete** (`db2be0a` vocabulary,
-`2cecee3` the fourteen statements): `tags`/`not_tags` clause kinds with the
-canonical-uuid pre-check, validation, `InvalidTag` reference error,
-`FilterNames.tag_names`, `describe()`, params; both predicates in all
-fourteen statements (coordinator verified each file; `person_state.sql`
-carries both chains), 14 `.sqlx` entries regenerated, `list_summaries`
-untouched; semantics and present-clause parity tests across People, count,
-seven sorts, both source statements and the three feed statements; the
-compile-forced `InvalidTag` arms added explicitly everywhere except the two
-`_ =>` sites in the Today source-issue mapping, which step 3 replaces. Lane
-gates: `check` 717 tests, `check-db` 573 of 573. **Steps 3–5 complete**
-(`23340d1` `invalid_tag` at every site incl. the two former `_ =>` arms in
-the Today source-issue mapping, with write-time and read-time tests;
-`147ef64` Web chips on both FilterBar mounts, the repair check and the Today
-notice sentence, 610 Vitest; `ad6f10a` performance archive
-`docs/design/perf/slice-011e-2026-09-08/`). Coordinator audited the five
-commits: 69 files against `main`, all under `backend/`, `web/` and the perf
-archive. Lane disclosures: the "tag vanishes during evaluation" case is
-unreachable because Today runs one REPEATABLE READ READ ONLY transaction
-(replaced by a snapshot-isolation test; spec §9.14 to be annotated); the
-planner uses a hashed semi-join over `person_tag` rather than a per-Person
-probe (judged against §8's actual gate in review); two `db_calls` timing
-failures in the lane's check-db run, claimed pre-existing. **Review round 1
-(of two) complete** on `ad6f10a`: reviewer READY WITH FIXES, tester no
-blocking finding; the fourteen-statement extension, bindings, `.sqlx`,
-closed code sets in Rust, isolation and the Web contracts verified. One
-behavioural defect: the Web saved-list count scheduler
-(`savedListCounts.ts`) still absorbed `invalid_tag` as "Unavailable" with
-Retry. Coordinator decision taken: bind the statement's literal Organization
-parameter inside the tag subqueries so `person_tag_org_tag_person_idx` can
-serve the probe (the correlated form forced a full `person_tag` scan per
-query; inside the envelope at 25k People × 20 tags that is 500k rows per
-People page). Spec §4/§8/§9.14 amended by pointer on `main` (predicate
-binding; plan-shape gate wording; "vanishes during evaluation" unreachable
-under Today's `REPEATABLE READ READ ONLY` snapshot). Consolidated fix round
-dispatched to the lane: the count-scheduler arm, the predicate binding with
-`.sqlx` regeneration and re-captured plans, stale comments, and test
-hardenings (person_state chain B, `source_membership` and `call_membership`
-present-clause paths, write-time `PUT /api/today/sources`, byte-stable
-round trip, a decisive Web repair-check test, `not_tags` URL round trip).
-LATER: batching the reference probes near the 50-value cap
-(BEYOND_ENVELOPE); the `FilterNames` loaders use the 200-row list rather
-than `names_for` (bounded, matches stages). Next: lane gates, coordinator
-once-only final-tree gates, verification record, merge gate.
+Implementation history: the user passed the e2 Phase 6 gate on 2026-09-07;
+one lane (Claude Sonnet 5) followed brief steps 1–5 with a coordinator audit
+after step 2 and after step 5; Claude Fable 5.1 coordinated, took the
+predicate-binding decision in review round 1, and amended spec §4/§8/§9.14
+by pointer.
 
 Previous rung: **RUNG e1 COMPLETE AND MERGED TO LOCAL MAIN** at
 `51331e9` (2026-09-07, with the user's approval; not pushed, not deployed).
@@ -356,9 +328,8 @@ clear-all.
 Slice 011e — Tags — `docs/specs/SLICE_011e.md` (approved 2026-09-07),
 companion `docs/specs/SLICE_011e_EXPLAINED.md`, brief
 `docs/tasks/SLICE_011e_IMPL.md`, verification record
-`docs/tasks/SLICE_011e_VERIFICATION.md`. Two sequential single-lane rungs:
-**e1 merged** (`51331e9`); **e2 next** on `slice-011e-tag-clauses` from
-`main` (no migration; the fourteen statements and `.sqlx`). Ladder:
+`docs/tasks/SLICE_011e_VERIFICATION.md`. Both rungs merged: e1 `51331e9`,
+e2 `b6dc49b`. No slice is active; the next slice needs the user's request. Ladder:
 docs/plans/SLICE_011_LADDER.md (011a → 011b → 011b-sort → 011c → 011d all
 done → **011e**, the last rung).
 
@@ -438,6 +409,7 @@ together on 2026-09-06).
 | 011b-sort | Per-list sorting for saved People lists (D-048) | `d52a0ad` (implementation `bd23f42`) |
 | 011d | Tweakable built-in Today rules: system feeds, three derived clauses, admin surface, change fact (D-049, D-050) | `b8b53e2` (integration `77a8963`), pushed 2026-09-07 |
 | 011e-e1 | Tags model, commands, six routes, Person page and Tags page, Operator field (D-051) | `51331e9` (branch head `4af2e13`), local only |
+| 011e-e2 | `tags`/`not_tags` clauses across the fourteen statements, `invalid_tag` paths, FilterBar chips, performance evidence | `b6dc49b` (branch head `1796e85`), local only |
 | — | Gate-speedup chunk (check 35m→79s, check-db 37m→~2m) | 2026-08-28 |
 | — | Test-binary consolidation (40 files → 1 binary) | `6427ee8` |
 
@@ -651,8 +623,15 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. **011e (tags): e2 in progress** on `slice-011e-tag-clauses` in
-   `../crm-worktrees/011e-e2` (one lane,
+1. **Slice 011 ladder complete.** Candidates for the next request, unordered:
+   push `main`; the 011d/011e LATER batches (person-state 503 test, two
+   equivalence pins, feeds page first-load error test, the `db_calls` timing
+   flake, splitting the three largest test files, popover
+   `aria-activedescendant`, batching tag reference probes); an Operator
+   `filter_people` tool (the ladder's natural post-ladder extension);
+   resuming parked Slice 010 (FUB migration), whose 010f tags-import portion
+   now has its destination model; the queued PERCEIVED-LATENCY chunk.
+   (Former text: e2 in progress, one lane,
    `implement` profile, backend then Web). The small LATER items from the 011d
    verification record can still be batched before or between the rungs:
    the person-state 503 test, two equivalence pins, the feeds page
@@ -686,10 +665,10 @@ and now lives only in git history.
 
 ## Approval currently required
 
-- None while e2 is in implementation. Next gates: the lane's step 2
-  checkpoint (fourteen statements and parity), then review, commit and merge
-  approval for `slice-011e-tag-clauses` into `main`. Push of `main` (fifteen
-  commits ahead of `origin/main`) and deployment are not authorized.
+- None for 011e: both rungs merged, the dev runtime updated and the branches
+  cleaned up with approval on 2026-09-07. Push of `main` (21 commits ahead of
+  `origin/main`) and deployment are not authorized. The next slice or chunk
+  (candidates below) needs the user's request.
 - None for 011d: merged, pushed, and the dev runtime updated with approval
   on 2026-09-07. Deployment is not authorized.
 - All three 011c decisions were taken on 2026-09-06 (late evening): the §8

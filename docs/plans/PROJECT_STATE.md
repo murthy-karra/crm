@@ -15,7 +15,22 @@ audits the changed-file list against `git status` each round, runs the
 once-only final-tree gates and the reviewer/tester rounds (two maximum,
 D-050), and holds the commit and merge gates. The shared development runtime
 in the main checkout is untouched until merge. Specification approved and
-committed as `97b889f`. Amendment pointers
+committed as `97b889f`.
+
+Progress (2026-09-07): **e1 steps 1–5 complete** on `slice-011e-tags`:
+backend `502f418` (migration `20260909000001_tag.sql`, `TagId`, the `tag`
+module with five commands, `routes/tags.rs` plus the two person-tag routes,
+`PersonChange::TagsChanged`, Operator `PersonDetail.tags`, 19 new `.sqlx`
+entries, 21 tests in `db_tags.rs` plus schema/admin/operator extensions; lane
+gates `check` 704 tests and `check-db` 565 of 565 green) and Web `e7530d2`
+(types, tags query and mutations, Person page chips and Add-tag popover,
+preview chips, member-visible `/manage/tags` `TagsView`, `tags_changed`
+token; Web gate green, 596 Vitest tests; the lane also fixed a pre-existing
+unmounted-overlay hygiene bug in `PersonDetailView.test.ts`). Coordinator
+audited both commits against `git status`: 41 files all under `backend/`,
+14 files all under `web/`, matching the reports. Review round 1 (reviewer and
+tester, read-only) launched on the e1 tree; step 6 walkthrough and the
+once-only final-tree gates follow the round. Amendment pointers
 written in 002 §§2/5, 003 §6, 005 §3 view types, 011a §4, 011b §§4/5, 011c
 §§3/5 and 011d §§2/6. The user said "start the plan for 011e" on 2026-09-07 (an earlier
 session that began the same planning was closed after 45 seconds of reads and

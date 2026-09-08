@@ -9,6 +9,7 @@ use crate::domain::commands::{CallError, CommandError};
 use crate::domain::intake::workbench::WorkbenchError;
 use crate::domain::person::filter::FilterError;
 use crate::domain::saved_list::SavedListError;
+use crate::domain::tag::TagError;
 
 /// `{"error": "<code>"}` envelope shared across authenticated endpoints
 /// (docs/specs/SLICE_001.md §4). Slice 002 (docs/specs/SLICE_002.md §5)
@@ -103,6 +104,10 @@ pub enum ApiError {
     // --- Slice 011d (docs/specs/SLICE_011d.md §6) ----------------------
     TodayFeedConflict,
     InvalidFeedRule,
+    // --- Slice 011e (docs/specs/SLICE_011e.md §5) -----------------------
+    TagLimitReached,
+    PersonTagLimitReached,
+    TagNameTaken,
 }
 
 impl IntoResponse for ApiError {
@@ -197,6 +202,11 @@ impl IntoResponse for ApiError {
             ApiError::InvalidFeedRule => {
                 (StatusCode::UNPROCESSABLE_ENTITY, "invalid_feed_rule", None)
             }
+            ApiError::TagLimitReached => (StatusCode::CONFLICT, "tag_limit_reached", None),
+            ApiError::PersonTagLimitReached => {
+                (StatusCode::CONFLICT, "person_tag_limit_reached", None)
+            }
+            ApiError::TagNameTaken => (StatusCode::CONFLICT, "tag_name_taken", None),
         };
 
         let body = Json(json!({ "error": code }));
@@ -343,6 +353,25 @@ impl From<SavedListError> for ApiError {
             SavedListError::RevisionExhausted
             | SavedListError::Corrupt
             | SavedListError::Database(_) => ApiError::Unavailable,
+        }
+    }
+}
+
+/// `tag::TagError` -> `ApiError` (docs/specs/SLICE_011e.md §5): rule-1
+/// permission is `Forbidden` -> the existing `403 forbidden` code (no new
+/// variant needed — every other tenant-scoped command reuses it too); a
+/// corrupt stored role is an operational failure, never a user-facing
+/// code.
+impl From<TagError> for ApiError {
+    fn from(err: TagError) -> Self {
+        match err {
+            TagError::NotFound => ApiError::NotFound,
+            TagError::Forbidden => ApiError::Forbidden,
+            TagError::MalformedRequest => ApiError::MalformedRequest,
+            TagError::TagLimitReached => ApiError::TagLimitReached,
+            TagError::PersonTagLimitReached => ApiError::PersonTagLimitReached,
+            TagError::TagNameTaken => ApiError::TagNameTaken,
+            TagError::Corrupt | TagError::Database(_) => ApiError::Unavailable,
         }
     }
 }

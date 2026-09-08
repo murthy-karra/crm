@@ -16,6 +16,7 @@ use crate::domain::inquiry::queries as inquiry_queries;
 use crate::domain::person::model::PersonSummary;
 use crate::domain::person::queries::{self as person_queries, HistoryEntry};
 use crate::domain::person::PersonVisibilityScope;
+use crate::domain::tag;
 use crate::domain::today::{self, TodayItem, TodayList};
 use crate::ids::{ContactMethodId, OrganizationId, PersonId, UserId};
 use crate::operator::explain;
@@ -260,6 +261,17 @@ impl ToolBackend for SqlxToolBackend {
             })
             .collect();
 
+        let tags = tag::list_for_person(&mut conn, org_id(ctx), person_id)
+            .await
+            // `TagError`, not `sqlx::Error` (`tag::list_for_person` is a
+            // domain-error-wrapped read, unlike the bare-`sqlx::Error`
+            // queries above) — same generic backend-failure reason as
+            // `db_error`, kept free of any SQL-error text.
+            .map_err(|_| ToolError::Backend("database query failed".into()))?
+            .into_iter()
+            .map(|t| UntrustedText::new(&t.name))
+            .collect();
+
         let today = today_for(conn, ctx).await?;
         let on_your_today = today.items.iter().any(|i| i.person.id == person_id);
 
@@ -271,6 +283,7 @@ impl ToolBackend for SqlxToolBackend {
             on_your_today,
             today_truncated: today.truncated,
             sources: explain::sources_view(&today),
+            tags,
         })
     }
 

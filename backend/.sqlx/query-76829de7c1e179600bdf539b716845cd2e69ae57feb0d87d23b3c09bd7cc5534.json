@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT t.id, t.name,\n                  count(pt.person_id) as \"person_count!\",\n                  t.created_by_user_id\n           FROM tag t\n           LEFT JOIN person_tag pt\n             ON pt.tag_id = t.id AND pt.organization_id = t.organization_id\n           WHERE t.organization_id = $1\n           GROUP BY t.id, t.name, t.created_by_user_id\n           ORDER BY lower(t.name), t.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "person_count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_by_user_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      false
+    ]
+  },
+  "hash": "76829de7c1e179600bdf539b716845cd2e69ae57feb0d87d23b3c09bd7cc5534"
+}

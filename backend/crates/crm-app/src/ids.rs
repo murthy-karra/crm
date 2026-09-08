@@ -1255,3 +1255,52 @@ mod saved_list_id_tests {
         );
     }
 }
+
+/// A tag identity (Slice 011e). Kept distinct from every other UUID —
+/// above all `PersonId` and `SavedListId`, its two closest neighbors in
+/// every tag-related call site — so a Person or saved-list id cannot
+/// accidentally cross a tag query boundary at compile time.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
+#[repr(transparent)]
+pub struct TagId(pub Uuid);
+
+impl TagId {
+    pub fn new(id: Uuid) -> Self {
+        Self(id)
+    }
+
+    pub fn as_uuid(self) -> Uuid {
+        self.0
+    }
+}
+
+impl fmt::Display for TagId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
+impl fmt::Debug for TagId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self, f)
+    }
+}
+
+#[cfg(test)]
+mod tag_id_tests {
+    use super::*;
+
+    #[test]
+    fn tag_id_is_transparent_and_readable() {
+        let raw = Uuid::new_v4();
+        let id = TagId::new(raw);
+        assert_eq!(id.as_uuid(), raw);
+        assert_eq!(id.to_string(), raw.to_string());
+        assert_eq!(format!("{id:?}"), raw.to_string());
+        assert_eq!(
+            serde_json::to_string(&id).unwrap(),
+            serde_json::to_string(&raw).unwrap()
+        );
+    }
+}

@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT 1 as \"present!\" FROM tag\n           WHERE organization_id = $1 AND lower(name) = lower($2) AND id <> $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "present!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "466472ccc86ebe6bba2ef2a062ebcb190c5bdcde802fe2bf55e916551b35b9d4"
+}

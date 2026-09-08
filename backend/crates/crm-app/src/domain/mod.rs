@@ -14,5 +14,6 @@ pub mod person;
 pub mod raw_payload;
 pub mod saved_list;
 pub mod stage;
+pub mod tag;
 pub mod telephony;
 pub mod today;

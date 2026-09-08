@@ -366,6 +366,11 @@ async fn platform_admin_with_zero_memberships_has_null_organization_and_is_401_o
         // member feed-state read too.
         "/api/organization/today-feeds",
         "/api/today/feeds",
+        // Slice 011e (docs/specs/SLICE_011e.md §9.6): `/api/tags` is a
+        // member route, not an admin one, but it still requires an active
+        // Organization membership — a platform-only session is 401 here
+        // exactly as on every other tenant route in this enumeration.
+        "/api/tags",
     ] {
         let resp = get_with_cookie(&router, uri, &cookie).await;
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED, "GET {uri}");

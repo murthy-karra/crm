@@ -116,6 +116,9 @@ mod db_schema;
 #[path = "db_saved_lists.rs"]
 mod db_saved_lists;
 
+#[path = "db_tags.rs"]
+mod db_tags;
+
 #[path = "db_today.rs"]
 mod db_today;
 

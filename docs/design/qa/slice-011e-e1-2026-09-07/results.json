@@ -1,0 +1,68 @@
+[
+  {
+    "n": 1,
+    "description": "Carol creates \"Investr\" inline (POST then PUT, in order); chip appears with an accessible remove control",
+    "pass": true,
+    "detail": "requests=[\"GET /api/tags\",\"POST /api/tags\",\"GET /api/tags\",\"PUT /api/people/e60d6300-1020-4ebd-a22d-57abb53e03db/tags/f99899e9-9810-49ca-8147-4a06d00e3497\",\"GET /api/tags\"] tagId=f99899e9-9810-49ca-8147-4a06d00e3497"
+  },
+  {
+    "n": 2,
+    "description": "Carol removes the chip (DELETE, changed:true); it disappears",
+    "pass": true,
+    "detail": "changed=true"
+  },
+  {
+    "n": 3,
+    "description": "Carol reaches /manage/tags via the Manage nav; \"Investr\" shows people 0, Rename/Delete enabled; renames to \"Investor\"",
+    "pass": true,
+    "detail": "people=0 renamed=Investor"
+  },
+  {
+    "n": 4,
+    "description": "Carol re-applies \"Investor\" from the popover (existing tag → PUT only, no POST)",
+    "pass": true,
+    "detail": "requests=[\"GET /api/tags\",\"PUT /api/people/e60d6300-1020-4ebd-a22d-57abb53e03db/tags/f99899e9-9810-49ca-8147-4a06d00e3497\",\"GET /api/tags\"]"
+  },
+  {
+    "n": 5,
+    "description": "/manage/tags shows people 1 with controls disabled + tooltip; a direct PUT as Carol is 403",
+    "pass": true,
+    "detail": "people=1 disabled=true tooltip=Only an admin can change a tag that is in use directStatus=403 directBody={\"error\":\"forbidden\"}"
+  },
+  {
+    "n": 6,
+    "description": "Alice sees the chip on the Person page and a read-only chip (no remove control) in the People preview",
+    "pass": true,
+    "detail": "chipVisible=true previewChipVisible=true previewChipText=Investor removeButtons=0"
+  },
+  {
+    "n": 7,
+    "description": "Alice renames to \"Investor client\"; Delete confirm shows count 1 and the invalid-filter sentence; confirm removes the row",
+    "pass": true,
+    "detail": "dialogText=Delete tagDelete \"Investor client\"? 1 person will lose this tag. Saved lists and Today rules that use this tag will show an invalid-filter notice until they are edited. Cancel Delete"
+  },
+  {
+    "n": 8,
+    "description": "Carol reloads the Person: the chip (deleted by Alice) is gone",
+    "pass": true,
+    "detail": "chipCount=0"
+  },
+  {
+    "n": 9,
+    "description": "Best Realty is isolated: bob's /manage/tags is empty, GET /api/tags is {tags:[]}, dave's People show no chips",
+    "pass": true,
+    "detail": "bobTags={\"tags\":[]}"
+  },
+  {
+    "n": 10,
+    "description": "Unauthenticated GET /api/tags is 401; a platform-only session (owner@platform.test) GET /api/tags is 401",
+    "pass": true,
+    "detail": "anon=401 platform=401"
+  },
+  {
+    "n": 11,
+    "description": "Escape closes the Add tag popover and returns focus to the Add tag button",
+    "pass": true,
+    "detail": "focusedTestId=add-tag-button"
+  }
+]

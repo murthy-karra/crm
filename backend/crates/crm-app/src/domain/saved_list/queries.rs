@@ -61,9 +61,7 @@ pub enum SavedListFilterError {
     UnsupportedFilter,
     InvalidStage,
     InvalidAssignee,
-    /// docs/specs/SLICE_011e.md §4b (compile-forced by `FilterError` gaining
-    /// `InvalidTag`; the deleted-before-enumeration/during-evaluation Today
-    /// source wiring in `today/mod.rs` is e2 step 3).
+    /// docs/specs/SLICE_011e.md §4b.
     InvalidTag,
 }
 

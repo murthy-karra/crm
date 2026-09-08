@@ -15,8 +15,7 @@ pub enum SavedListError {
     TodaySourceLimitReached,
     InvalidStage,
     InvalidAssignee,
-    /// docs/specs/SLICE_011e.md §4b (compile-forced by `FilterError`
-    /// gaining `InvalidTag`; full write/read-time wiring is e2 step 3).
+    /// docs/specs/SLICE_011e.md §4b.
     InvalidTag,
     UnsupportedFilter,
     RevisionExhausted,

@@ -116,6 +116,66 @@ caveat the Slice 011d archive gave for its own `enable_mergejoin`
 finding: a cost-based choice, re-evaluated by the planner on real
 statistics, not a hard guarantee against every future fixture shape.
 
+## Addendum (2026-09-08, review round 1) — re-capture after the org-param fix
+
+Reviewer F4 changed all sixteen tag predicate sites (both the `tags` and
+`not_tags` `EXISTS`/`NOT EXISTS` subqueries in each of the fourteen
+statements, `person_state.sql`'s `matrix_a`/`matrix_b` each counted
+twice) from the correlated `pt.organization_id = p.organization_id` /
+`pt2.organization_id = p.organization_id` to the statement's own literal
+Organization bind parameter (`$1` in every one of the fourteen
+statements, confirmed by inspection). This is a correctness/robustness
+change, not a performance-motivated one — but D-050 gate 2 (plan shape)
+is re-checked here since a literal-vs-correlated join key can change what
+the planner is willing to do with an index.
+
+**This does not rerun gate 1** (the paired relative-regression timing
+comparison in Part 1) per instruction — only the plan-shape evidence
+below is new.
+
+Same fixture shape as Part 2 above (25,000 People, one Organization, 200
+tags each on a disjoint 120-Person slice, 24,000 `person_tag` rows,
+`VACUUM (ANALYZE)` immediately before capture), rebuilt fresh via a
+temporary, uncommitted harness appended to
+`backend/crates/crm-api/tests/db_today_feeds_http_perf.rs` (run with
+`--features perf-harness --ignored`, removed via `git checkout`
+immediately after capture — never left in the tree).
+
+| Clause | Matching People | Plan shape for the tag predicate (v2) | Execution time (v2) | Execution time (v1) |
+|---|---:|---|---:|---:|
+| `tags: [tag]` | 120 | `Bitmap Heap Scan on person p` filtered by a **hashed subplan** that is now an **`Index Only Scan` using `person_tag_org_tag_person_idx`** (`Index Cond: organization_id = '<literal-uuid>' AND tag_id = ANY(...)`, cost 8.43, executed once) | 3.3 ms | 4.6 ms |
+| `not_tags: [tag]` | 501 (capped; 24,880 true matches) | Same shape: `Index Only Scan using person_tag_org_tag_person_idx on person_tag pt2` (cost 8.43, executed once), `NOT (ANY(...))` filter on the outer scan | 27.8 ms | 29.1 ms |
+
+Full v2 plans:
+[plans/filtered_summaries_tags_v2.txt](plans/filtered_summaries_tags_v2.txt),
+[plans/filtered_summaries_not_tags_v2.txt](plans/filtered_summaries_not_tags_v2.txt).
+
+**Yes, the index is now used.** Binding the Organization id as the
+statement's own literal parameter instead of a same-row correlation
+(`p.organization_id`, which Postgres could not fold to a constant when
+choosing the `person_tag` access path, even though it is provably the
+same value on every row the outer scan touches, since `p.organization_id
+= $1` is itself just another filtered predicate) let the planner see
+`person_tag`'s `(organization_id, tag_id, person_id)` prefix as a
+constant-prefixed index probe (`organization_id = '<uuid>' AND tag_id =
+ANY('{...}')`) rather than the free-floating table-wide predicate the v1
+plan hashed a full sequential scan for. The subplan's own cost dropped
+from 567.64 (`Seq Scan on person_tag`, all 24,000 rows) to 8.43 (`Index
+Only Scan`, exactly the 120 matching rows) — a real, if here immaterial,
+cost-model improvement, not just a cosmetic plan-shape change: it holds
+because the same fix was applied uniformly to `tags` and `not_tags`
+alike, so both directions now reach the index instead of only one.
+
+Execution times moved in the expected direction (both slightly faster:
+tags 4.6 ms -> 3.3 ms, not_tags 29.1 ms -> 27.8 ms) but the difference is
+within ordinary laptop noise at this row count — the finding here is the
+plan shape, not a claimed latency win. Gate 2's actual requirement (no
+super-linear growth with People) continues to hold either way: an index
+probe scales even better than the v1 hashed scan-once-per-query shape did
+(`O(|person| + matching rows)` instead of `O(|person| + |person_tag|)`),
+so this is a strict improvement on the same non-regression conclusion the
+v1 capture already reached, not a new risk.
+
 ## Absolute numbers (reported per D-050, never gated)
 
 All timings above are absolute, uncapped, laptop measurements, reported

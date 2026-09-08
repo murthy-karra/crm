@@ -75,11 +75,11 @@ WHERE p.organization_id = $1
   -- docs/specs/SLICE_011e.md §4: tags (any-of) / not_tags (none-of).
   AND ($29::uuid[] IS NULL OR EXISTS (
         SELECT 1 FROM person_tag pt
-        WHERE pt.organization_id = p.organization_id
+        WHERE pt.organization_id = $1
           AND pt.person_id = p.id AND pt.tag_id = ANY($29)))
   AND ($30::uuid[] IS NULL OR NOT EXISTS (
         SELECT 1 FROM person_tag pt2
-        WHERE pt2.organization_id = p.organization_id
+        WHERE pt2.organization_id = $1
           AND pt2.person_id = p.id AND pt2.tag_id = ANY($30)))
   AND (CASE WHEN $23::boolean THEN p.id = ANY($22::uuid[]) ELSE NOT (p.id = ANY($22::uuid[])) END)
 ORDER BY (last_contact_ts.ts IS NOT NULL) ASC, last_contact_ts.ts ASC, p.id ASC

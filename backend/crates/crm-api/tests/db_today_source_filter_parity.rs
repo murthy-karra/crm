@@ -2180,6 +2180,50 @@ async fn tags_and_not_tags_source_parity(migrator_pool: PgPool) {
     )
     .await;
 
+    // Review round 1, tester F2: every Person above is a brand-new candidate
+    // to Today (no Inquiry), so the source is evaluated only through
+    // `source_candidates.sql` -- `source_membership.sql` (which decides list
+    // membership for a Person Today already retains as a built-in) never
+    // runs. Add a Person who independently qualifies as a Today built-in
+    // (an unanswered Inquiry, assigned to alice) so both statements are
+    // exercised: `built_in_vip` tagged VIP, `built_in_untagged` untagged.
+    let built_in_vip = insert_person(
+        &migrator_pool,
+        organization_id,
+        stage_a,
+        Some(alice_id),
+        now - ChronoDuration::days(5),
+    )
+    .await;
+    insert_inquiry(
+        &migrator_pool,
+        organization_id,
+        built_in_vip,
+        Uuid::new_v4(),
+        "built-in",
+        now - ChronoDuration::hours(2),
+    )
+    .await;
+    apply_tag(&migrator_pool, organization_id, built_in_vip, vip, alice_id).await;
+
+    let built_in_untagged = insert_person(
+        &migrator_pool,
+        organization_id,
+        stage_a,
+        Some(alice_id),
+        now - ChronoDuration::days(5),
+    )
+    .await;
+    insert_inquiry(
+        &migrator_pool,
+        organization_id,
+        built_in_untagged,
+        Uuid::new_v4(),
+        "built-in",
+        now - ChronoDuration::hours(2),
+    )
+    .await;
+
     let tags_vip = FilterDefinition {
         version: 1,
         clauses: vec![Clause::Tags(TagIdsClause {
@@ -2201,7 +2245,7 @@ async fn tags_and_not_tags_source_parity(migrator_pool: PgPool) {
         alice_id,
         tags_list,
         &tags_vip,
-        ids([has_vip]),
+        ids([has_vip, built_in_vip]),
     )
     .await;
 
@@ -2226,7 +2270,7 @@ async fn tags_and_not_tags_source_parity(migrator_pool: PgPool) {
         alice_id,
         not_tags_list,
         &not_tags_spam,
-        ids([has_vip, untagged]),
+        ids([has_vip, untagged, built_in_vip, built_in_untagged]),
     )
     .await;
 }

@@ -148,10 +148,7 @@ pub enum TodaySourceIssueError {
     InvalidStage,
     InvalidAssignee,
     /// docs/specs/SLICE_011e.md §4b: a `tags`/`not_tags` value vanished
-    /// during Today's per-source evaluation (compile-forced by
-    /// `FilterError`/`SourceEvaluation` gaining `InvalidTag`; the
-    /// deleted-before-enumeration wildcard sites in `today/mod.rs` are e2
-    /// step 3).
+    /// during Today's per-source evaluation.
     InvalidTag,
     Unavailable,
 }

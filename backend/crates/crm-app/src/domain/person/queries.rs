@@ -568,11 +568,11 @@ pub async fn count_filtered_matches(
                -- (none-of), same positions as filtered_summaries.sql.
                AND ($25::uuid[] IS NULL OR EXISTS (
                      SELECT 1 FROM person_tag pt
-                     WHERE pt.organization_id = p.organization_id
+                     WHERE pt.organization_id = $1
                        AND pt.person_id = p.id AND pt.tag_id = ANY($25)))
                AND ($26::uuid[] IS NULL OR NOT EXISTS (
                      SELECT 1 FROM person_tag pt2
-                     WHERE pt2.organization_id = p.organization_id
+                     WHERE pt2.organization_id = $1
                        AND pt2.person_id = p.id AND pt2.tag_id = ANY($26)))
              LIMIT 501
            ) capped"#,

@@ -960,17 +960,19 @@ impl TodayQueryHook for DeleteTagAfterSavepoint {
 }
 
 /// docs/specs/SLICE_011e.md §9.14's "vanishes during evaluation" case,
-/// tested against what this codebase can actually observe: Today's query
-/// transaction takes its `REPEATABLE READ` snapshot at `BEGIN`, before any
-/// per-source evaluation runs, so a tag deleted on an independent
-/// connection AFTER that snapshot began is invisible for the remainder of
-/// this Today call, no matter how precisely it is timed against the
-/// per-source savepoint -- there is no way to make it observably different
-/// from "the tag was never deleted" for THIS call. The genuinely-invalid
-/// case (`TodaySourceIssueError::InvalidTag`) is exhaustively covered by
+/// tested against what this codebase can actually observe: PostgreSQL
+/// takes a `REPEATABLE READ` transaction's snapshot at its FIRST statement
+/// (not at `BEGIN` itself), which here is `SET TRANSACTION ISOLATION
+/// LEVEL REPEATABLE READ READ ONLY`, before any per-source evaluation
+/// runs -- so a tag deleted on an independent connection AFTER that first
+/// statement is invisible for the remainder of this Today call, no matter
+/// how precisely it is timed against the per-source savepoint -- there is
+/// no way to make it observably different from "the tag was never
+/// deleted" for THIS call. The genuinely-invalid case
+/// (`TodaySourceIssueError::InvalidTag`) is exhaustively covered by
 /// `today_source_tag_deleted_before_enumeration_is_invalid_tag_issue`
-/// (deletion committed before the Today transaction's own `BEGIN`); this
-/// test instead pins the isolation guarantee itself: the source completes
+/// (deletion committed before the Today transaction's own first
+/// statement); this test instead pins the isolation guarantee itself: the source completes
 /// normally and the tagged Person is still admitted with its list reason,
 /// proving the concurrent deletion could not have leaked into this
 /// evaluation. See the coordinator report for the full analysis.

@@ -40,6 +40,7 @@ const meFilter: FilterClause[] = [{ kind: 'assigned_to', assignees: ['me'] }]
 // Slice 011e e2 (docs/specs/SLICE_011e.md §9.17).
 const TAG_ID = '88888888-8888-4888-8888-888888888888'
 const tagsFilter: FilterClause[] = [{ kind: 'tags', tag_ids: [TAG_ID] }]
+const notTagsFilter: FilterClause[] = [{ kind: 'not_tags', tag_ids: [TAG_ID] }]
 
 function me(orgId = ORG_ID, role: 'member' | 'admin' = 'member'): MeResponse {
   return {
@@ -363,6 +364,19 @@ describe('People filters and URL navigation', () => {
     const reloaded = await mountView(router.currentRoute.value.fullPath)
     expect(filterState(reloaded.wrapper)).toEqual(tagsFilter)
   })
+
+  // Review round 1, tester F6: `not_tags` beside `tags` above -- the two
+  // clause kinds share a wire shape (`{kind, tag_ids}`) closely enough
+  // that a URL-encoding regression could confuse one for the other.
+  it('a not_tags clause round-trips through the URL and reload', async () => {
+    stub()
+    const { wrapper, router } = await mountView()
+    edit(wrapper, notTagsFilter)
+    await flushPromises()
+    expect(router.currentRoute.value.query.filter).toBe(serialized(notTagsFilter))
+    const reloaded = await mountView(router.currentRoute.value.fullPath)
+    expect(filterState(reloaded.wrapper)).toEqual(notTagsFilter)
+  })
 })
 
 describe('People result feedback and failures', () => {
@@ -587,6 +601,31 @@ describe('Saved-list workspace safety', () => {
     expect(peoplePaths()).toContain(filteredPath([]))
     expect(wrapper.text()).toContain('Grace Hopper')
     expect(wrapper.text()).not.toContain('People are paused until the criteria are repaired.')
+  })
+
+  // Review round 1, tester F5: a "repair" that still names the same
+  // unresolvable tag id must NOT lift the pause, even though the draft
+  // has changed (an added `has_phone` clause) and so is no longer equal
+  // to the stored baseline. `stub()`'s default `/tags` response is
+  // `{ tags: [] }`, so `TAG_ID` never resolves -- this is decisive
+  // against a regression that deleted the `tags`/`not_tags` branch of
+  // `hasResolvableReferences` (PeopleView.vue), which would otherwise
+  // treat any changed-but-unrelated draft as resolved the moment
+  // `workingFilterChanged` alone went true.
+  it('a repair that still names the same unknown tag stays paused with no People request', async () => {
+    stub({
+      savedList: (id) => ({
+        ...editableSavedDetail(id, tagsFilter),
+        filter_error: 'invalid_tag',
+      }),
+    })
+    const { wrapper } = await mountView(`/lists/${SAVED_LIST_A}`)
+    expect(peoplePaths()).toEqual([])
+    expect(wrapper.text()).toContain('People are paused until the criteria are repaired.')
+    edit(wrapper, [...tagsFilter, ...phoneFilter])
+    await flushPromises()
+    expect(peoplePaths()).toEqual([])
+    expect(wrapper.text()).toContain('People are paused until the criteria are repaired.')
   })
 
   it('a stored sort this binary cannot parse fails closed exactly like an unreadable filter', async () => {

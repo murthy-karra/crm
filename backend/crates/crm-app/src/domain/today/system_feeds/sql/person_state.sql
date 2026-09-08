@@ -82,11 +82,11 @@ WITH ranked AS (
         -- feed A's own tag_ids parameters.
         AND ($52::uuid[] IS NULL OR EXISTS (
               SELECT 1 FROM person_tag pt_a
-              WHERE pt_a.organization_id = p.organization_id
+              WHERE pt_a.organization_id = $1
                 AND pt_a.person_id = p.id AND pt_a.tag_id = ANY($52)))
         AND ($53::uuid[] IS NULL OR NOT EXISTS (
               SELECT 1 FROM person_tag pt2_a
-              WHERE pt2_a.organization_id = p.organization_id
+              WHERE pt2_a.organization_id = $1
                 AND pt2_a.person_id = p.id AND pt2_a.tag_id = ANY($53)))
       )) AS matrix_a,
         ((
@@ -150,11 +150,11 @@ WITH ranked AS (
         -- feed B's own tag_ids parameters.
         AND ($54::uuid[] IS NULL OR EXISTS (
               SELECT 1 FROM person_tag pt_b
-              WHERE pt_b.organization_id = p.organization_id
+              WHERE pt_b.organization_id = $1
                 AND pt_b.person_id = p.id AND pt_b.tag_id = ANY($54)))
         AND ($55::uuid[] IS NULL OR NOT EXISTS (
               SELECT 1 FROM person_tag pt2_b
-              WHERE pt2_b.organization_id = p.organization_id
+              WHERE pt2_b.organization_id = $1
                 AND pt2_b.person_id = p.id AND pt2_b.tag_id = ANY($55)))
       )) AS matrix_b,
         latest.id AS latest_inquiry_id,

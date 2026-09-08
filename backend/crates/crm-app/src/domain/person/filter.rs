@@ -2122,6 +2122,18 @@ mod tests {
         let serialized = serde_json::to_string(&parsed).unwrap();
         let reparsed: FilterDefinition = parse(&serialized).unwrap();
         assert_eq!(parsed, reparsed);
+        // Review round 1, tester L5: `PartialEq` alone would not catch a
+        // serializer regression that reordered fields or changed a tag
+        // clause's wire shape without changing its parsed meaning (e.g. a
+        // `Vec` vs `BTreeSet` swap that still parses to the same
+        // `Clause::Tags`/`NotTags` value) -- re-serializing the reparsed
+        // value must produce byte-for-byte the same JSON as the first
+        // round-trip.
+        assert_eq!(
+            serialized,
+            serde_json::to_string(&reparsed).unwrap(),
+            "re-serializing the round-tripped value must be byte-stable"
+        );
     }
 
     #[test]

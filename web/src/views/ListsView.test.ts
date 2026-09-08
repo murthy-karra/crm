@@ -99,4 +99,41 @@ describe('ListsView count recovery', () => {
     expect(listsQuery.refetch).toHaveBeenCalledTimes(1)
     expect(scheduler.refresh).toHaveBeenCalledTimes(1)
   })
+
+  // Slice 011e e2 review round 1, F1: a count 422 invalid_tag must reach
+  // "Invalid definition" with no Retry control, exactly like
+  // invalid_stage/invalid_assignee -- never "Unavailable" with Retry (the
+  // unrecognized-code fallback).
+  it('renders Invalid definition with no Retry for a count state of invalid_tag', async () => {
+    mocks.useSavedListCountScheduler.mockReturnValue({
+      isRefreshing: computed(() => false),
+      refresh: vi.fn(),
+      retry: vi.fn(),
+      stateFor: (item: SavedListMetadata) =>
+        item.id === list(1).id
+          ? { kind: 'invalid', error: 'invalid_tag' }
+          : { kind: 'ready', count: 1, truncated: false },
+    })
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/lists', component: ListsView },
+        { path: '/lists/:savedListId', component: { template: '<p>List detail</p>' } },
+        { path: '/people', component: { template: '<p>People</p>' } },
+      ],
+    })
+    await router.push('/lists')
+    await router.isReady()
+    const wrapper = mount(ListsView, {
+      global: { plugins: [router, [PrimeVue, { unstyled: true }]] },
+      attachTo: document.body,
+    })
+    cleanups.push(() => wrapper.unmount())
+    await flushPromises()
+
+    const row = wrapper.findAll('div').find((div) => div.text().includes('List 1'))!
+    expect(row.text()).toContain('Invalid definition')
+    expect(row.text()).not.toContain('Unavailable')
+    expect(row.findAll('button').some((button) => button.text() === 'Retry')).toBe(false)
+  })
 })

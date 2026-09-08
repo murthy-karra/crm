@@ -6,14 +6,14 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, onBeforeUnmount, ref, toValue, watch, type MaybeRefOrGetter } from 'vue'
 import { ApiError } from './client'
 import { fetchSavedListCount, queryKeys } from './queries'
-import type { MeResponse, SavedListMetadata } from './types'
+import type { MeResponse, SavedListFilterError, SavedListMetadata } from './types'
 
 const MAX_IN_FLIGHT = 4
 
 export type SavedListCountState =
   | { kind: 'idle' | 'loading' }
   | { kind: 'ready'; count: number; truncated: boolean }
-  | { kind: 'invalid'; error: 'unsupported_filter' | 'invalid_stage' | 'invalid_assignee' }
+  | { kind: 'invalid'; error: SavedListFilterError }
   | { kind: 'stale' }
   | { kind: 'unavailable' }
 
@@ -25,6 +25,21 @@ function itemKey(item: CountItem) {
 
 function isAbort(error: unknown) {
   return error instanceof DOMException && error.name === 'AbortError'
+}
+
+// A `Record<SavedListFilterError, true>` rather than a bare literal array:
+// TypeScript requires every union member as a key, so adding a new
+// `SavedListFilterError` code without updating this set is a compile
+// error, not a silent `kind: 'unavailable'` fallback (Slice 011e e2
+// review round 1, F1).
+const SAVED_LIST_FILTER_ERROR_CODES: Record<SavedListFilterError, true> = {
+  unsupported_filter: true,
+  invalid_stage: true,
+  invalid_assignee: true,
+  invalid_tag: true,
+}
+function isSavedListFilterErrorCode(code: string): code is SavedListFilterError {
+  return Object.prototype.hasOwnProperty.call(SAVED_LIST_FILTER_ERROR_CODES, code)
 }
 
 /**
@@ -119,9 +134,7 @@ export function useSavedListCountScheduler(
         toValue(orgId) !== identity.orgId || toValue(actorId) !== identity.actorId ||
         currentSession() !== identity.session
       ) return
-      if (error instanceof ApiError && (
-        error.code === 'unsupported_filter' || error.code === 'invalid_stage' || error.code === 'invalid_assignee'
-      )) {
+      if (error instanceof ApiError && isSavedListFilterErrorCode(error.code)) {
         setState(item, { kind: 'invalid', error: error.code })
       } else if (error instanceof ApiError && (error.status === 404 || error.code === 'saved_list_conflict')) {
         // Metadata changed under us. The index's next revalidation replaces

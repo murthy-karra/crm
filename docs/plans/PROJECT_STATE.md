@@ -14,7 +14,9 @@ run once by the coordinator on the rebased tree: `sqlx-prepare` clean (no
 new statements), `check` green (757 Rust, 614 Web), `check-db` 617 of 617
 first run. Review round 1 of two: reviewer READY WITH FIXES, tester no
 blocking finding, all fixes applied; round 2 not needed. No migration; the
-dev API rebuilt and relaunched by exact PID (see below). Branch and worktree
+old dev API (pid 12421) stopped by exact PID, the merged binary built and
+`./scripts/dev-api` relaunched (pid 17478, binary of 13:25; health 200, the
+Operator route answers 401 unauthenticated). Branch and worktree
 `../crm-worktrees/013` deleted with approval. The Operator now has eight
 tools. Lane C (FilterBar UX polish) remains held for the perceived-latency
 chunk. `main` is ahead of `origin/main`; push and deployment are not

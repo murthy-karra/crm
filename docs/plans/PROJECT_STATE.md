@@ -438,7 +438,17 @@ notes).
   weighed). Re-verify vendor pricing at spec time.
 
 **QUEUED: PERCEIVED-LATENCY chunk (web, not yet approved for
-implementation).** Scale baselines measured 2026-08-29 against a
+implementation).** *Re-measured over the public tunnel on 2026-09-07 at the
+user's request, in a real browser: see
+[perceived-latency-2026-09-07.md](../design/perceived-latency-2026-09-07.md).
+Headline: the per-request edge floor is now 90–250 ms (two edge hops, jitter;
+not app code) and POST bodies pay 300–700 ms more; dev-mode Vite ships 50–60
+module requests per load and a 9-module route chunk before People's first
+data request (rows at 0.4–0.8 s); login → Today data 1.4–1.8 s over four
+sequential stages; the filter path is already flash-free
+(`keepPreviousData` landed). Ranked levers: production build through the
+tunnel first, optimistic mutations second, chunk preload and detail
+hover-prefetch third. The earlier notes below stand.* Scale baselines measured 2026-08-29 against a
 "Perf Test Realty" org seeded via the live API (dev DB only; wiped by
 the next dev-bootstrap), first at 5k people, then at **100k people +
 66,589 contact attempts + ~5k repeat inquiries** (the mature-FUB-team

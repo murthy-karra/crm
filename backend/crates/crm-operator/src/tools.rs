@@ -32,7 +32,11 @@ pub const FILTER_ARRAY_MAX: usize = 50;
 /// `MIN_DAYS`/`MAX_DAYS` mirrored from the same module, same reason.
 pub const FILTER_MIN_DAYS: i64 = 1;
 pub const FILTER_MAX_DAYS: i64 = 3650;
-pub const STAGE_NAME_MAX_CHARS: usize = 80;
+/// Per-item cap for `stage_names`/`assignees`/`tag_names_any`/
+/// `tag_names_none` (docs/specs/SLICE_013.md §2's `stage_names` table row;
+/// applied uniformly to the other three name arrays too, docs/tasks/
+/// SLICE_013_IMPL.md coordinator decision).
+pub const FILTER_NAME_MAX_CHARS: usize = 80;
 pub const SAVED_LIST_NAME_MAX_CHARS: usize = 80;
 
 pub const SEARCH_PEOPLE: &str = "search_people";
@@ -161,7 +165,7 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
                     "stage_names": {
                         "type": "array",
                         "description": "Stage names to match (any of).",
-                        "items": { "type": "string", "maxLength": STAGE_NAME_MAX_CHARS },
+                        "items": { "type": "string", "maxLength": FILTER_NAME_MAX_CHARS },
                         "minItems": FILTER_ARRAY_MIN,
                         "maxItems": FILTER_ARRAY_MAX
                     },
@@ -475,14 +479,7 @@ pub fn parse_invocation(name: &str, arguments: &str) -> Result<ToolInvocation, A
             // as an encoding error, which would read as a backend outage)
             // and invisible formatting characters are stripped, never
             // passed through.
-            let query: String = query
-                .chars()
-                .filter(|c| !c.is_control() && !crate::views::is_invisible_format(*c))
-                .collect::<String>()
-                .trim()
-                .chars()
-                .take(SEARCH_QUERY_MAX_CHARS)
-                .collect();
+            let query = clean_and_clip(query, SEARCH_QUERY_MAX_CHARS);
             if query.is_empty() {
                 return Err(ArgumentError::EmptyQuery);
             }
@@ -526,11 +523,17 @@ pub fn parse_invocation(name: &str, arguments: &str) -> Result<ToolInvocation, A
 fn parse_people_filter_spec(
     object: &Map<String, Value>,
 ) -> Result<PeopleFilterSpec, ArgumentError> {
-    let stage_names = parse_string_array(object.get("stage_names"), "stage_names")?;
-    let assignees = parse_string_array(object.get("assignees"), "assignees")?;
+    // docs/specs/SLICE_013.md §1 rule 2: these four are name arrays the
+    // resolver (crm-api's `operator::filter`) will echo back verbatim on an
+    // unknown/ambiguous match, so — unlike `sources`, whose values are
+    // opaque tokens matched exactly, never echoed — every item is cleaned
+    // exactly like `search_people.query` at parse time, before the
+    // resolver ever sees it.
+    let stage_names = parse_name_array(object.get("stage_names"), "stage_names")?;
+    let assignees = parse_name_array(object.get("assignees"), "assignees")?;
     let sources = parse_string_array(object.get("sources"), "sources")?;
-    let tag_names_any = parse_string_array(object.get("tag_names_any"), "tag_names_any")?;
-    let tag_names_none = parse_string_array(object.get("tag_names_none"), "tag_names_none")?;
+    let tag_names_any = parse_name_array(object.get("tag_names_any"), "tag_names_any")?;
+    let tag_names_none = parse_name_array(object.get("tag_names_none"), "tag_names_none")?;
     let created = parse_age_condition(object.get("created"), "created", false)?;
     let last_inquiry = parse_age_condition(object.get("last_inquiry"), "last_inquiry", true)?;
     let last_contact = parse_age_condition(object.get("last_contact"), "last_contact", true)?;
@@ -603,14 +606,7 @@ fn parse_saved_list_selector(
     let name = match object.get("name") {
         None | Some(Value::Null) => None,
         Some(Value::String(raw)) => {
-            let cleaned: String = raw
-                .chars()
-                .filter(|c| !c.is_control() && !crate::views::is_invisible_format(*c))
-                .collect::<String>()
-                .trim()
-                .chars()
-                .take(SAVED_LIST_NAME_MAX_CHARS)
-                .collect();
+            let cleaned = clean_and_clip(raw, SAVED_LIST_NAME_MAX_CHARS);
             if cleaned.is_empty() {
                 None
             } else {
@@ -639,6 +635,40 @@ fn parse_saved_list_selector(
         list_id,
         limit,
     })
+}
+
+/// Strips control characters (NUL in particular is rejected by Postgres as
+/// an encoding error, which would read as a backend outage) and invisible
+/// formatting characters, trims, and clips to `max` chars —
+/// `search_people.query`'s cleaning pipeline, reused wherever a
+/// model-supplied string might later be echoed back to the model
+/// unbounded (docs/specs/SLICE_013.md §1 rule 2: unknown/ambiguous names
+/// in a `filter_people`/`run_saved_list` clarification).
+fn clean_and_clip(raw: &str, max: usize) -> String {
+    raw.chars()
+        .filter(|c| !c.is_control() && !crate::views::is_invisible_format(*c))
+        .collect::<String>()
+        .trim()
+        .chars()
+        .take(max)
+        .collect()
+}
+
+/// A `string[1..50]` array property whose items may be echoed back to the
+/// model in a clarification (`stage_names`, `assignees`, `tag_names_any`,
+/// `tag_names_none` — never `sources`, an opaque token matched exactly):
+/// each item is cleaned with [`clean_and_clip`] to
+/// [`FILTER_NAME_MAX_CHARS`] before the resolver ever sees it, so the
+/// resolver never has to clip or clean an echo itself.
+fn parse_name_array(
+    value: Option<&Value>,
+    name: &'static str,
+) -> Result<Vec<String>, ArgumentError> {
+    let raw = parse_string_array(value, name)?;
+    Ok(raw
+        .into_iter()
+        .map(|s| clean_and_clip(&s, FILTER_NAME_MAX_CHARS))
+        .collect())
 }
 
 /// A `string[1..50]` array property (docs/specs/SLICE_013.md §2): absent
@@ -1071,6 +1101,50 @@ mod tests {
             parse_invocation(FILTER_PEOPLE, r#"{"stage_id":["x"]}"#),
             Err(ArgumentError::UnknownProperty("stage_id".into()))
         );
+    }
+
+    /// docs/specs/SLICE_013.md §1 rule 2: unknown/ambiguous names are
+    /// echoed back to the model in a clarification, clipped and
+    /// control-stripped exactly like `search_people.query` — done once,
+    /// here, at parse time, so the resolver never sees a longer or dirtier
+    /// string. `sources` is the deliberate exception: its values are
+    /// opaque tokens matched exactly, never echoed.
+    #[test]
+    fn filter_people_name_arrays_strip_control_and_invisible_chars() {
+        let args = json!({ "stage_names": ["a\u{0}b\u{200b}"] }).to_string();
+        match parse_invocation(FILTER_PEOPLE, &args).unwrap() {
+            ToolInvocation::FilterPeople { spec } => {
+                assert_eq!(spec.stage_names, vec!["ab".to_string()]);
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn filter_people_name_arrays_are_clipped_but_sources_are_not() {
+        let long = "z".repeat(200);
+        let args = json!({
+            "assignees": [long.clone()],
+            "tag_names_any": [long.clone()],
+            "tag_names_none": [long.clone()],
+            "sources": [long.clone()],
+        })
+        .to_string();
+        match parse_invocation(FILTER_PEOPLE, &args).unwrap() {
+            ToolInvocation::FilterPeople { spec } => {
+                assert_eq!(spec.assignees[0].chars().count(), FILTER_NAME_MAX_CHARS);
+                assert_eq!(spec.tag_names_any[0].chars().count(), FILTER_NAME_MAX_CHARS);
+                assert_eq!(
+                    spec.tag_names_none[0].chars().count(),
+                    FILTER_NAME_MAX_CHARS
+                );
+                // sources is the deliberate exception: opaque tokens
+                // matched exactly, never echoed, so left untouched here —
+                // the full 200-char string.
+                assert_eq!(spec.sources[0].chars().count(), 200);
+            }
+            other => panic!("{other:?}"),
+        }
     }
 
     #[test]

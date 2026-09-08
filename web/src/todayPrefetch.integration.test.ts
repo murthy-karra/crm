@@ -54,9 +54,17 @@ beforeEach(() => {
 
 describe('Today preload/prefetch join (SLICE_014 §4, §8.6)', () => {
   it('issues exactly one request each to Today, sources and feeds when TodayView mounts while the guard-triggered prefetch is still in flight', async () => {
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    // staleTime matches query-client.ts's real default (30s): the guard's
+    // own `ensureQueryData` would have left `me` fresh, so TodayView's
+    // `useMe()` must read the cache rather than firing its own GET /me.
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 30_000 } } })
     queryClient.setQueryData(queryKeys.me, MEMBER)
 
+    // Round-1 review fix, item 9: collect any request this test did not
+    // expect (rather than letting it surface only as a swallowed rejected
+    // promise inside the mock, e.g. a query error state nothing here
+    // asserts on) and check the list is empty at the end.
+    const unexpectedPaths: string[] = []
     const todayDeferred = deferred<unknown>()
     const sourcesDeferred = deferred<unknown>()
     const feedsDeferred = deferred<unknown>()
@@ -64,6 +72,7 @@ describe('Today preload/prefetch join (SLICE_014 §4, §8.6)', () => {
       if (path === '/today') return todayDeferred.promise
       if (path === '/today/sources') return sourcesDeferred.promise
       if (path === '/today/feeds') return feedsDeferred.promise
+      unexpectedPaths.push(path)
       return Promise.reject(new Error(`unexpected path ${path}`))
     })
 
@@ -96,6 +105,7 @@ describe('Today preload/prefetch join (SLICE_014 §4, §8.6)', () => {
     expect(apiFetchMock.mock.calls.filter(([p]) => p === '/today')).toHaveLength(1)
     expect(apiFetchMock.mock.calls.filter(([p]) => p === '/today/sources')).toHaveLength(1)
     expect(apiFetchMock.mock.calls.filter(([p]) => p === '/today/feeds')).toHaveLength(1)
+    expect(unexpectedPaths).toEqual([])
     wrapper.unmount()
   })
 

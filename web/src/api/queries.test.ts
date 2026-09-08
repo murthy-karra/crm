@@ -56,6 +56,7 @@ const SAVED_LIST_ID = 'saved-list-1'
 // ---- SLICE_014 §3 optimistic-mutation fixtures -----------------------------
 const STAGE_LEAD = { id: 'stage-lead', name: 'Lead' }
 const STAGE_HOT = { id: 'stage-hot', name: 'Hot Prospect' }
+const STAGE_NURTURE = { id: 'stage-nurture', name: 'Nurture' }
 const MEMBER_ALICE = { id: 'user-alice', display_name: 'Alice' }
 const MEMBER_BOB = { id: 'user-bob', display_name: 'Bob' }
 
@@ -156,6 +157,18 @@ function deferred<T>() {
   let reject!: (reason: unknown) => void
   const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no })
   return { promise, resolve, reject }
+}
+
+// A single shared `usePerson` observer harness (only one `defineComponent`
+// call in this file — vue/one-component-per-file), reused by both the
+// cancellation test and the real-race test below.
+function personHarness() {
+  return defineComponent({
+    setup() {
+      usePerson(ORG_ID, PERSON_ID)
+      return () => null
+    },
+  })
 }
 
 describe('useCorrectCallOutcome', () => {
@@ -271,13 +284,17 @@ describe('tag mutations', () => {
     await expectRefetchOnlyOnStaleReference((qc) => useDeleteTagMutation(ORG_ID, qc), TAG_ID)
   })
 
-  // Person-tag routes carry no 403 case (any member may apply/remove), so
-  // unlike the tag-level mutations above, only 404 triggers a refetch here
-  // — and it refetches BOTH the tags index and the Person detail: the
-  // vanished tag can still be sitting in this tab's cached Person `tags`
-  // array, and only invalidating the Person key clears that stale chip
-  // (reviewer F1 / tester F1).
-  async function expectPersonTagRefetchOnly404(
+  // Person-tag routes carry no 403 case (any member may apply/remove).
+  // Round-1 review fix: EVERY error invalidates the Person key after
+  // rollback (a timeout or 5xx whose write actually committed must heal
+  // rather than leave a rolled-back chip the server contradicts); 404
+  // additionally invalidates the tags index (unchanged path) — the vanished
+  // tag can still be sitting in this tab's cached Person `tags` array, and
+  // only invalidating the Person key clears that stale chip (reviewer F1 /
+  // tester F1). 404 therefore invalidates the Person key twice (the
+  // existing 404-specific path, then the new unconditional one) — harmless,
+  // both just mark the same query stale.
+  async function expectPersonTagInvalidatesPersonAlways(
     build: (queryClient: QueryClient) => { mutateAsync: (variables: never) => Promise<unknown> },
   ) {
     const variables = { personId: PERSON_ID, tagId: TAG_ID }
@@ -290,7 +307,7 @@ describe('tag mutations', () => {
     let mutation = scope.run(() => build(queryClient))!
     await expect(mutation.mutateAsync(variables as never)).rejects.toThrow()
     const keys = invalidate.mock.calls.map(([filters]) => (typeof filters === 'function' ? filters() : filters)?.queryKey)
-    expect(keys).toEqual([queryKeys.tags(ORG_ID), queryKeys.person(ORG_ID, PERSON_ID)])
+    expect(keys).toEqual([queryKeys.tags(ORG_ID), queryKeys.person(ORG_ID, PERSON_ID), queryKeys.person(ORG_ID, PERSON_ID)])
     scope.stop()
 
     for (const [status, code] of [[403, 'forbidden'], [409, 'conflict']] as const) {
@@ -301,17 +318,51 @@ describe('tag mutations', () => {
       scope = effectScope()
       mutation = scope.run(() => build(queryClient))!
       await expect(mutation.mutateAsync(variables as never)).rejects.toThrow()
-      expect(invalidate).not.toHaveBeenCalled()
+      const errorKeys = invalidate.mock.calls.map(([filters]) => (typeof filters === 'function' ? filters() : filters)?.queryKey)
+      expect(errorKeys).toEqual([queryKeys.person(ORG_ID, PERSON_ID)])
       scope.stop()
     }
   }
 
-  it('useAddPersonTagMutation refetches tags + the Person key on 404 only', async () => {
-    await expectPersonTagRefetchOnly404((qc) => useAddPersonTagMutation(ORG_ID, qc))
+  it('useAddPersonTagMutation invalidates the Person key on every error, plus tags on 404', async () => {
+    await expectPersonTagInvalidatesPersonAlways((qc) => useAddPersonTagMutation(ORG_ID, qc))
   })
 
-  it('useRemovePersonTagMutation refetches tags + the Person key on 404 only', async () => {
-    await expectPersonTagRefetchOnly404((qc) => useRemovePersonTagMutation(ORG_ID, qc))
+  it('useRemovePersonTagMutation invalidates the Person key on every error, plus tags on 404', async () => {
+    await expectPersonTagInvalidatesPersonAlways((qc) => useRemovePersonTagMutation(ORG_ID, qc))
+  })
+
+  // Round-1 review fix, item 1: a non-ApiError rejection (a network error,
+  // a timeout) also rolls back and invalidates the Person key — the write
+  // may have actually committed server-side, so this heals rather than
+  // leaving a stale rolled-back chip.
+  it('useAddPersonTagMutation rolls back and invalidates the Person key on a non-ApiError rejection (e.g. a timeout)', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+    queryClient.setQueryData(queryKeys.person(ORG_ID, PERSON_ID), { ...personDetail(), tags: [] })
+    apiFetchMock.mockRejectedValueOnce(new Error('network timeout'))
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+    const scope = effectScope()
+    const mutation = scope.run(() => useAddPersonTagMutation(ORG_ID, queryClient))!
+    await expect(mutation.mutateAsync({ personId: PERSON_ID, tagId: TAG_ID })).rejects.toThrow('network timeout')
+    expect(queryClient.getQueryData<PersonDetailResponse>(queryKeys.person(ORG_ID, PERSON_ID))?.tags).toEqual([])
+    const keys = invalidate.mock.calls.map(([filters]) => (typeof filters === 'function' ? filters() : filters)?.queryKey)
+    expect(keys).toEqual([queryKeys.person(ORG_ID, PERSON_ID)])
+    scope.stop()
+  })
+
+  it('useRemovePersonTagMutation rolls back and invalidates the Person key on a non-ApiError rejection (e.g. a timeout)', async () => {
+    const tag = { id: TAG_ID, name: 'Investor' }
+    const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+    queryClient.setQueryData(queryKeys.person(ORG_ID, PERSON_ID), { ...personDetail(), tags: [tag] })
+    apiFetchMock.mockRejectedValueOnce(new Error('network timeout'))
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+    const scope = effectScope()
+    const mutation = scope.run(() => useRemovePersonTagMutation(ORG_ID, queryClient))!
+    await expect(mutation.mutateAsync({ personId: PERSON_ID, tagId: TAG_ID })).rejects.toThrow('network timeout')
+    expect(queryClient.getQueryData<PersonDetailResponse>(queryKeys.person(ORG_ID, PERSON_ID))?.tags).toEqual([tag])
+    const keys = invalidate.mock.calls.map(([filters]) => (typeof filters === 'function' ? filters() : filters)?.queryKey)
+    expect(keys).toEqual([queryKeys.person(ORG_ID, PERSON_ID)])
+    scope.stop()
   })
 
   // SLICE_014 §3, §8.4: apply/remove predict their result from the tags
@@ -342,6 +393,27 @@ describe('tag mutations', () => {
     scope.stop()
   })
 
+  // Round-1 review fix, item 7: onSuccess writes the server's `result.tags`
+  // verbatim — even when the server's order differs from this client's own
+  // optimistic lower-cased-name sort (§3: "the server's lower(name), id
+  // order is authoritative on success").
+  it('useAddPersonTagMutation writes the server tag order on success, even when it differs from the optimistic sort', async () => {
+    const existing = { id: 'tag-existing', name: 'zzz-existing' }
+    const newTag = { id: 'tag-1', name: 'Investor' }
+    const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+    queryClient.setQueryData(queryKeys.tags(ORG_ID), { tags: [{ ...newTag, person_count: 0, can_manage: true }] })
+    queryClient.setQueryData(queryKeys.person(ORG_ID, PERSON_ID), { ...personDetail(), tags: [existing] })
+    // Deliberately the REVERSE of the optimistic lower-cased-name order.
+    const serverOrder = [existing, newTag]
+    apiFetchMock.mockResolvedValueOnce({ tags: serverOrder, changed: true } satisfies PersonTagMutationResponse)
+    const scope = effectScope()
+    const mutation = scope.run(() => useAddPersonTagMutation(ORG_ID, queryClient))!
+    await mutation.mutateAsync({ personId: PERSON_ID, tagId: newTag.id })
+
+    expect(queryClient.getQueryData<PersonDetailResponse>(queryKeys.person(ORG_ID, PERSON_ID))?.tags).toEqual(serverOrder)
+    scope.stop()
+  })
+
   it('useRemovePersonTagMutation removes the tag from the detail before the response resolves, and rolls back on 404', async () => {
     const tag = { id: 'tag-1', name: 'Investor' }
     const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
@@ -358,6 +430,26 @@ describe('tag mutations', () => {
     pending.reject(new ApiError(404, 'not_found'))
     await expect(call).rejects.toThrow()
     expect(queryClient.getQueryData<PersonDetailResponse>(queryKeys.person(ORG_ID, PERSON_ID))?.tags).toEqual([tag])
+    scope.stop()
+  })
+
+  // Round-1 review fix, item 7 (remove side).
+  it('useRemovePersonTagMutation writes the server tag order on success, even when it differs from the optimistic filter order', async () => {
+    const tagA = { id: 'tag-a', name: 'Alpha' }
+    const tagB = { id: 'tag-b', name: 'Beta' }
+    const tagC = { id: 'tag-c', name: 'Gamma' }
+    const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+    queryClient.setQueryData(queryKeys.person(ORG_ID, PERSON_ID), { ...personDetail(), tags: [tagA, tagB, tagC] })
+    // Removing B optimistically leaves [A, C] (original array order, just
+    // filtered) — the server responds with a DIFFERENT order for the same
+    // remaining set.
+    const serverOrder = [tagC, tagA]
+    apiFetchMock.mockResolvedValueOnce({ tags: serverOrder, changed: true } satisfies PersonTagMutationResponse)
+    const scope = effectScope()
+    const mutation = scope.run(() => useRemovePersonTagMutation(ORG_ID, queryClient))!
+    await mutation.mutateAsync({ personId: PERSON_ID, tagId: tagB.id })
+
+    expect(queryClient.getQueryData<PersonDetailResponse>(queryKeys.person(ORG_ID, PERSON_ID))?.tags).toEqual(serverOrder)
     scope.stop()
   })
 })
@@ -377,7 +469,11 @@ describe('optimistic stage and assignment mutations (SLICE_014 §3)', () => {
     qc.setQueryData(queryKeys.members(ORG_ID), membersResponse())
     qc.setQueryData(queryKeys.person(ORG_ID, PERSON_ID), personDetail({ stage: STAGE_LEAD, assigned_user: null }))
     const row = personSummary({ stage: STAGE_LEAD, assigned_user: null })
-    const otherRow = personSummary({ id: OTHER_PERSON_ID, stage: STAGE_HOT, assigned_user: null })
+    // Round-1 review fix: a THIRD stage, distinct from both the row's own
+    // starting stage and the mutation's target (STAGE_HOT) — otherwise a
+    // bug that touched every row would go undetected, since this row would
+    // already equal the target value by coincidence.
+    const otherRow = personSummary({ id: OTHER_PERSON_ID, stage: STAGE_NURTURE, assigned_user: null })
     qc.setQueryData(queryKeys.people(ORG_ID), peopleResponse([row, otherRow]))
     // A filtered variant containing only the row this test mutates — its
     // filter (stage = Lead) will stop matching once the row's stage
@@ -401,8 +497,9 @@ describe('optimistic stage and assignment mutations (SLICE_014 §3)', () => {
 
     const unfiltered = queryClient.getQueryData<PeopleResponse>(queryKeys.people(ORG_ID))
     expect(unfiltered?.people.find((p) => p.id === PERSON_ID)?.stage).toEqual(STAGE_HOT)
-    // The other row (never targeted) is untouched.
-    expect(unfiltered?.people.find((p) => p.id === OTHER_PERSON_ID)?.stage).toEqual(STAGE_HOT)
+    // The other row (never targeted) is untouched — still its original
+    // stage, not the mutation's target.
+    expect(unfiltered?.people.find((p) => p.id === OTHER_PERSON_ID)?.stage).toEqual(STAGE_NURTURE)
 
     // Rule 2: the filtered variant still contains the row (membership never
     // moves optimistically), even though its new stage no longer matches
@@ -486,6 +583,38 @@ describe('optimistic stage and assignment mutations (SLICE_014 §3)', () => {
     scope.stop()
   })
 
+  // Round-1 review fix, item 5: a dedicated assignment-write test mirroring
+  // the stage test above — the detail, the unfiltered row and the filtered
+  // row all show the predicted assignee during flight, the untouched row's
+  // assigned_user is unaffected, and a rejection restores all three.
+  it('writes the predicted assignee into the detail and into a filtered and unfiltered People row, leaving the other row untouched, and restores all three on rejection', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+    seedPersonAndPeopleCaches(queryClient)
+    const pending = deferred<MutatePersonResponse>()
+    apiFetchMock.mockReturnValueOnce(pending.promise)
+    const scope = effectScope()
+    const mutation = scope.run(() => useAssignPersonMutation(ORG_ID, queryClient))!
+    const call = mutation.mutateAsync({ personId: PERSON_ID, assignedUserId: MEMBER_BOB.id })
+    await flushPromises()
+
+    const detail = queryClient.getQueryData<PersonDetailResponse>(queryKeys.person(ORG_ID, PERSON_ID))
+    expect(detail?.person.assigned_user).toEqual(MEMBER_BOB)
+    const unfiltered = queryClient.getQueryData<PeopleResponse>(queryKeys.people(ORG_ID))
+    expect(unfiltered?.people.find((p) => p.id === PERSON_ID)?.assigned_user).toEqual(MEMBER_BOB)
+    // The other row (never targeted) keeps its own assigned_user (null).
+    expect(unfiltered?.people.find((p) => p.id === OTHER_PERSON_ID)?.assigned_user).toBeNull()
+    const filtered = queryClient.getQueryData<PeopleResponse>(FILTERED_KEY)
+    expect(filtered?.people[0]?.assigned_user).toEqual(MEMBER_BOB)
+
+    pending.reject(new ApiError(409, 'conflict'))
+    await expect(call).rejects.toThrow()
+
+    expect(queryClient.getQueryData<PersonDetailResponse>(queryKeys.person(ORG_ID, PERSON_ID))?.person.assigned_user).toBeNull()
+    expect(queryClient.getQueryData<PeopleResponse>(queryKeys.people(ORG_ID))?.people.find((p) => p.id === PERSON_ID)?.assigned_user).toBeNull()
+    expect(queryClient.getQueryData<PeopleResponse>(FILTERED_KEY)?.people[0]?.assigned_user).toBeNull()
+    scope.stop()
+  })
+
   it('skips the optimistic assignment write with an empty members cache, but Unassigned (null) is always predictable', async () => {
     const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
     // No members cache seeded.
@@ -514,31 +643,83 @@ describe('optimistic stage and assignment mutations (SLICE_014 §3)', () => {
     scope.stop()
   })
 
-  // §8.5: a person.changed invalidation (a realtime refetch landing with
-  // stale pre-commit data) racing a pending mutation must never leave the
-  // old value showing once the mutation itself has resolved — the
-  // mutation's own onSuccess write is the final word for its own request.
-  it('never shows the old stage after the mutation resolves, even if a racing invalidation lands stale data mid-flight', async () => {
-    const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
-    seedPersonAndPeopleCaches(queryClient)
-    const pending = deferred<MutatePersonResponse>()
-    apiFetchMock.mockReturnValueOnce(pending.promise)
+  // Round-1 review fix, item 6: the REAL race, not a simulated cache
+  // overwrite — a mounted `usePerson` observer, a genuine
+  // `invalidateQueries` mid-flight (which, since the query is active,
+  // issues a real second GET), the mutation settling, and only then the
+  // stale GET resolving. `invalidateQueries` defaults `cancelRefetch` to
+  // `true` (@tanstack/query-core's `queryClient.cjs`): calling it again from
+  // `onSettled` while the racing GET is still in flight cancels that GET's
+  // retryer and starts a genuinely fresh one, so the racing GET's late,
+  // stale resolution is discarded rather than clobbering the mutation's
+  // already-committed value. This is exactly what SLICE_014.md §3's
+  // "Realtime" note describes: "the only hazard is a refetch already in
+  // flight at mutate time, which cancelQueries removes, and onSettled's
+  // invalidate corrects anything that slips between."
+  it('never shows the old stage after the mutation resolves, even when a real invalidate-triggered refetch races it and resolves late', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
+    const personKey = queryKeys.person(ORG_ID, PERSON_ID)
+    queryClient.setQueryData(queryKeys.stages(ORG_ID), stagesResponse())
+    queryClient.setQueryData(personKey, personDetail({ stage: STAGE_LEAD }))
+
+    const postDeferred = deferred<MutatePersonResponse>()
+    const getDeferreds: Array<ReturnType<typeof deferred<PersonDetailResponse>>> = []
+    apiFetchMock.mockImplementation((path: string, init?: RequestInit) => {
+      if (path === `/people/${PERSON_ID}/stage` && init?.method === 'POST') return postDeferred.promise
+      if (path === `/people/${PERSON_ID}`) {
+        const d = deferred<PersonDetailResponse>()
+        getDeferreds.push(d)
+        return d.promise
+      }
+      return Promise.reject(new Error(`unexpected path ${path}`))
+    })
+
+    const Harness = personHarness()
+    const wrapper = mount(Harness, {
+      global: { plugins: [[VueQueryPlugin, { queryClient }]] },
+    })
+    await flushPromises()
+    // Mounting an observer over a staleTime-0 QueryClient fetches once.
+    expect(getDeferreds).toHaveLength(1)
+    getDeferreds[0]!.resolve(personDetail({ stage: STAGE_LEAD }))
+    await flushPromises()
+    expect(queryClient.getQueryData<PersonDetailResponse>(personKey)?.person.stage).toEqual(STAGE_LEAD)
+
     const scope = effectScope()
     const mutation = scope.run(() => useChangeStageMutation(ORG_ID, queryClient))!
     const call = mutation.mutateAsync({ personId: PERSON_ID, stageId: STAGE_HOT.id })
     await flushPromises()
-    expect(queryClient.getQueryData<PersonDetailResponse>(queryKeys.person(ORG_ID, PERSON_ID))?.person.stage).toEqual(STAGE_HOT)
+    expect(queryClient.getQueryData<PersonDetailResponse>(personKey)?.person.stage).toEqual(STAGE_HOT)
 
-    // A racing person.changed-triggered refetch lands with the PRE-commit
-    // stage (it was in flight before the server committed this mutation).
-    queryClient.setQueryData(queryKeys.person(ORG_ID, PERSON_ID), personDetail({ stage: STAGE_LEAD }))
-    expect(queryClient.getQueryData<PersonDetailResponse>(queryKeys.person(ORG_ID, PERSON_ID))?.person.stage).toEqual(STAGE_LEAD)
+    // The real race: an invalidation (standing in for a person.changed
+    // event) arrives while the POST is still in flight. Since `usePerson`
+    // is an active observer, this issues a genuine second GET.
+    void queryClient.invalidateQueries({ queryKey: personKey })
+    await flushPromises()
+    expect(getDeferreds).toHaveLength(2)
 
-    pending.resolve(mutatePersonResponse(personSummary({ stage: STAGE_HOT })))
+    // The mutation settles: onSuccess writes the server-confirmed stage
+    // directly, then onSettled's own invalidate cancels the still-pending
+    // racing GET and issues a fresh one.
+    postDeferred.resolve(mutatePersonResponse(personSummary({ stage: STAGE_HOT })))
     await call
+    await flushPromises()
+    expect(getDeferreds).toHaveLength(3)
 
-    expect(queryClient.getQueryData<PersonDetailResponse>(queryKeys.person(ORG_ID, PERSON_ID))?.person.stage).toEqual(STAGE_HOT)
+    // The stale GET resolves LAST, with the pre-mutation stage. Because it
+    // was cancelled by onSettled's invalidate, its result must never reach
+    // the cache.
+    getDeferreds[1]!.resolve(personDetail({ stage: STAGE_LEAD }))
+    await flushPromises()
+    expect(queryClient.getQueryData<PersonDetailResponse>(personKey)?.person.stage).toEqual(STAGE_HOT)
+
+    // The fresh GET (issued by the settle) resolving confirms the truth.
+    getDeferreds[2]!.resolve(personDetail({ stage: STAGE_HOT }))
+    await flushPromises()
+    expect(queryClient.getQueryData<PersonDetailResponse>(personKey)?.person.stage).toEqual(STAGE_HOT)
+
     scope.stop()
+    wrapper.unmount()
   })
 })
 
@@ -550,12 +731,7 @@ describe('usePerson cancellation (SLICE_014 §3)', () => {
       return new Promise(() => {}) // never resolves
     })
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    const Harness = defineComponent({
-      setup() {
-        usePerson(ORG_ID, PERSON_ID)
-        return () => null
-      },
-    })
+    const Harness = personHarness()
     const wrapper = mount(Harness, {
       global: { plugins: [[VueQueryPlugin, { queryClient }]] },
     })

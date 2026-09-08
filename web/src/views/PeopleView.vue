@@ -20,6 +20,7 @@ import {
   useDisableTodaySourceMutation,
   useEnableTodaySourceMutation,
   useDeleteSavedListMutation,
+  fetchPerson,
   useInquirySources,
   useMe,
   useMembers,
@@ -32,8 +33,8 @@ import {
   useUpdateSavedListMutation,
   queryKeys,
 } from '../api/queries'
-import { ApiError, apiFetch } from '../api/client'
-import type { CreateSavedListRequest, FilterClause, FilterDefinition, MeResponse, PersonDetailResponse, PersonSummary, SavedListDetailResponse } from '../api/types'
+import { ApiError } from '../api/client'
+import type { CreateSavedListRequest, FilterClause, FilterDefinition, MeResponse, PersonSummary, SavedListDetailResponse } from '../api/types'
 import { formatAbsoluteTime, formatRelativeTime, initials } from '../lib/format'
 import { buttonClasses } from '../lib/controls'
 import { describeApiError } from '../lib/errors'
@@ -1049,7 +1050,7 @@ function onRowIntent(person: PersonSummary) {
     rowIntentTimer = null
     void queryClient.prefetchQuery({
       queryKey: queryKeys.person(id, person.id),
-      queryFn: () => apiFetch<PersonDetailResponse>(`/people/${person.id}`),
+      queryFn: ({ signal }) => fetchPerson(person.id, signal),
     })
   }, ROW_INTENT_DWELL_MS)
 }

@@ -519,13 +519,21 @@ export function useInquirySources(orgId: MaybeRefOrGetter<string>) {
   })
 }
 
+/** `GET /api/people/{id}` — shared by `usePerson`'s queryFn and
+ * PeopleView's hover/focus prefetch (SLICE_014 §4), so both forward the
+ * same abort signal and hit the exact same request shape rather than one
+ * of the two silently drifting. */
+export function fetchPerson(personId: string, signal?: AbortSignal): Promise<PersonDetailResponse> {
+  return apiFetch<PersonDetailResponse>(`/people/${personId}`, { signal })
+}
+
 export function usePerson(orgId: MaybeRefOrGetter<string>, personId: MaybeRefOrGetter<string>) {
   return useQuery({
     queryKey: computed(() => queryKeys.person(toValue(orgId), toValue(personId))),
     // SLICE_014 §3: the signal is forwarded so a cancelQueries (an
     // optimistic mutation's onMutate, or a route/identity change) actually
     // aborts the in-flight request instead of leaving it to resolve unused.
-    queryFn: ({ signal }) => apiFetch<PersonDetailResponse>(`/people/${toValue(personId)}`, { signal }),
+    queryFn: ({ signal }) => fetchPerson(toValue(personId), signal),
     enabled: computed(() => toValue(orgId) !== '' && toValue(personId) !== ''),
   })
 }
@@ -1673,9 +1681,15 @@ export function useAddPersonTagMutation(orgId: MaybeRefOrGetter<string>, provide
       }
       return snapshot
     },
+    // Round-1 review fix: ANY error (not only the 404 stale-reference case
+    // above) invalidates the Person key after rollback — a timeout or
+    // 5xx whose write actually committed server-side otherwise leaves a
+    // rolled-back chip that contradicts the server until some unrelated
+    // invalidation happens to refetch it.
     onError: (error, variables, snapshot) => {
       restorePersonDetailSnapshot(qc, snapshot)
       refetchOnStalePersonTagReference(qc, orgId, variables.personId, error)
+      void qc.invalidateQueries({ queryKey: queryKeys.person(toValue(orgId), variables.personId) })
     },
     onSuccess: (result, variables) => {
       const id = toValue(orgId)
@@ -1711,9 +1725,12 @@ export function useRemovePersonTagMutation(orgId: MaybeRefOrGetter<string>, prov
       }
       return snapshot
     },
+    // Round-1 review fix: see useAddPersonTagMutation's onError above —
+    // same "any error invalidates the Person key after rollback" rule.
     onError: (error, variables, snapshot) => {
       restorePersonDetailSnapshot(qc, snapshot)
       refetchOnStalePersonTagReference(qc, orgId, variables.personId, error)
+      void qc.invalidateQueries({ queryKey: queryKeys.person(toValue(orgId), variables.personId) })
     },
     onSuccess: (result, variables) => {
       const id = toValue(orgId)

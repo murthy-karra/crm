@@ -1545,6 +1545,35 @@ describe('People row hover/focus prefetch (SLICE_014 §4)', () => {
     expect(apiFetchMock.mock.calls.filter(([p]) => p === '/people/row-1')).toHaveLength(1)
   })
 
+  // Round-1 review fix, item 8: the exact 150ms boundary — nothing at
+  // 149ms, exactly one request the instant the timer reaches 150ms.
+  it('issues no request at 149ms, then exactly one at 150ms', async () => {
+    stub({ people: () => threeRowResult() })
+    const { wrapper } = await mountView()
+    const row = wrapper.findAll('tbody tr')[0]!
+    await row.trigger('pointerenter')
+    await vi.advanceTimersByTimeAsync(149)
+    await flushPromises()
+    expect(apiFetchMock.mock.calls.filter(([p]) => p === '/people/row-1')).toHaveLength(0)
+
+    await vi.advanceTimersByTimeAsync(1)
+    await flushPromises()
+    expect(apiFetchMock.mock.calls.filter(([p]) => p === '/people/row-1')).toHaveLength(1)
+  })
+
+  // Round-1 review fix, item 8: unmounting before the dwell timer fires
+  // (onBeforeUnmount clears it) must issue no request at all.
+  it('issues no request if the view unmounts before the 150ms dwell elapses', async () => {
+    stub({ people: () => threeRowResult() })
+    const { wrapper } = await mountView()
+    const row = wrapper.findAll('tbody tr')[0]!
+    await row.trigger('pointerenter')
+    wrapper.unmount()
+    await vi.advanceTimersByTimeAsync(150)
+    await flushPromises()
+    expect(apiFetchMock.mock.calls.filter(([p]) => p === '/people/row-1')).toHaveLength(0)
+  })
+
   it('crossing three rows within 150ms issues at most one request, for the latest row', async () => {
     stub({ people: () => threeRowResult() })
     const { wrapper } = await mountView()

@@ -192,7 +192,11 @@ function isLockedOptionValue(kind: OptionKind, value: OptionValue): boolean {
 // when their own clause is already applied, so the toolbar itself hints at
 // what's active without needing to read the chip row.
 type ToggleTriggerKind = 'assigned_to' | 'stage'
-const SELECTED_TRIGGER_CLASSES = `${BUTTON_BASE} bg-surface-2 text-text hover:bg-surface-1`
+// Round-1 review fix: the glass control (buttonClasses()'s secondary
+// variant, via glass-control) carries a 1px border; without a matching
+// transparent border here, toggling the selected state shifts layout by
+// that 1px.
+const SELECTED_TRIGGER_CLASSES = `${BUTTON_BASE} border border-transparent bg-surface-2 text-text hover:bg-surface-1`
 function triggerValueCount(kind: ToggleTriggerKind): number {
   const clause = applied.value.find((item) => item.kind === kind)
   if (!clause) return 0

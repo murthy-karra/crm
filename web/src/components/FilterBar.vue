@@ -6,7 +6,7 @@ import Popover, { type PopoverPassThroughOptions } from 'primevue/popover'
 import { ChevronDown, ChevronRight, Lock, SlidersHorizontal, X } from 'lucide-vue-next'
 import StageLabel from './StageLabel.vue'
 import type { AgeOp, Assignee, FilterClause, FilterClauseKind, Member, Stage, StageRef, TagRef } from '../api/types'
-import { buttonClasses, INPUT_CLASSES } from '../lib/controls'
+import { BUTTON_BASE, buttonClasses, INPUT_CLASSES } from '../lib/controls'
 import {
   CLAUSE_KIND_LABEL,
   FILTER_CLAUSE_KINDS,
@@ -186,6 +186,31 @@ function isLockedOptionValue(kind: OptionKind, value: OptionValue): boolean {
   return kind === 'assigned_to' && !!props.requireAssigneeMe && value === 'me'
 }
 
+// ---- Toolbar trigger selected state (SLICE_014 §5) -------------------------
+// The chip row stays the source of truth for what's applied; this only
+// changes how the two persistent toolbar triggers (Assignee, Stage) look
+// when their own clause is already applied, so the toolbar itself hints at
+// what's active without needing to read the chip row.
+type ToggleTriggerKind = 'assigned_to' | 'stage'
+const SELECTED_TRIGGER_CLASSES = `${BUTTON_BASE} bg-surface-2 text-text hover:bg-surface-1`
+function triggerValueCount(kind: ToggleTriggerKind): number {
+  const clause = applied.value.find((item) => item.kind === kind)
+  if (!clause) return 0
+  if (clause.kind === 'stage') return clause.stage_ids.length
+  if (clause.kind === 'assigned_to') return clause.assignees.length
+  return 0
+}
+function triggerLabel(kind: ToggleTriggerKind): string {
+  const count = triggerValueCount(kind)
+  return count > 0 ? `${CLAUSE_KIND_LABEL[kind]} · ${count}` : CLAUSE_KIND_LABEL[kind]
+}
+function triggerClasses(kind: ToggleTriggerKind): string {
+  return triggerValueCount(kind) > 0 ? SELECTED_TRIGGER_CLASSES : buttonClasses()
+}
+// Clear all does nothing in locked-only mode (every applied clause is
+// locked) — hide it there rather than show a control with no effect.
+const hasClearableClause = computed(() => applied.value.some((clause) => !isLockedClauseKind(clause.kind)))
+
 function updateClauses(next: FilterClause[]) {
   if (JSON.stringify(next) !== JSON.stringify(props.clauses)) emit('update:clauses', next)
 }
@@ -357,13 +382,13 @@ function onHide() {
         :key="kind"
         type="button"
         :data-testid="`filter-trigger-${kind}`"
-        :class="buttonClasses()"
+        :class="triggerClasses(kind)"
         :aria-expanded="open && editingKind === kind"
         :aria-controls="`${id}-popover`"
         aria-haspopup="dialog"
         @click="openEditor(kind, $event)"
       >
-        {{ CLAUSE_KIND_LABEL[kind] }}
+        {{ triggerLabel(kind) }}
         <ChevronDown
           class="h-4 w-4"
           stroke-width="1.5"
@@ -423,6 +448,11 @@ function onHide() {
             v-else
             class="min-w-0 break-words"
           >{{ describeClause(clause, names, 2) }}</span>
+          <ChevronDown
+            class="h-4 w-4 shrink-0"
+            stroke-width="1.5"
+            aria-hidden="true"
+          />
         </button>
         <span
           v-if="isLockedClauseKind(clause.kind)"
@@ -453,6 +483,7 @@ function onHide() {
         </button>
       </span>
       <button
+        v-if="hasClearableClause"
         type="button"
         data-testid="filter-clear-all"
         :class="buttonClasses('ghost')"

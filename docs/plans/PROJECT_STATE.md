@@ -61,9 +61,15 @@ test now holds a stale GET open past the mutation and passes
 deterministically). Coordinator audit passed (19 files against `main`, all
 under `web/` plus the four part-A files); **final gate run once on
 `fa9bcab`: `check` green, 757 Rust / 650 Vitest.** The pre-approved tunnel
-switch follows: the dev server (pids 24542/24563) stopped by exact PID,
-`scripts/dev-web-prod` served from the slice tree on 5173, the probe re-run
-over `app.tarams.org`, then the §8.10 walkthrough.
+switch was performed on 2026-09-08 (pre-approved): the dev server (pids
+24542/24563, up since 2026-09-06) stopped by exact PID; `scripts/dev-web-prod`
+from the slice tree serves the production build on 5173 (preview pid 55779);
+through the tunnel `/` answers `cache-control: no-cache` (`cf-cache-status:
+DYNAMIC`) and hashed assets `max-age=14400`. The probe re-run and the §8.10
+walkthrough follow. **Standing note:** the tunnel is now served from the
+production bundle; after a merge or pull, re-run `./scripts/dev-web-prod`
+(from the main checkout once Slice 014 merges) and reload; use
+`./scripts/dev-web` for HMR on loopback only when 5173 is free.
 
 Previously: **PLANNING Slice 014 — perceived-latency chunk plus FilterBar UX polish
 (Web-only).** The user chose the coordinator's suggestions 1 and 2 on

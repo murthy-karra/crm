@@ -91,6 +91,7 @@ function stub(options: StubOptions = {}) {
     if (path === '/stages') return { stages: [{ id: STAGE_ID, name: 'Lead', position: 1 }] }
     if (path === '/organization/members') return { members: [] }
     if (path === '/inquiry-sources') return { sources: [], truncated: false }
+    if (path === '/tags') return { tags: [] }
     if (path.startsWith(`/saved-lists/${LIST_ID}/count?`)) {
       return { list_id: LIST_ID, revision: 1, count: 0, truncated: false }
     }

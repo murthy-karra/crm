@@ -281,6 +281,8 @@ export type FilterClauseKind =
   | 'awaiting_response'
   | 'client_replied_unanswered'
   | 'awaiting_call_outcome'
+  | 'tags'
+  | 'not_tags'
 
 export type FilterClause =
   | { kind: 'stage'; stage_ids: string[] }
@@ -296,6 +298,10 @@ export type FilterClause =
   | { kind: 'awaiting_response'; value: boolean }
   | { kind: 'client_replied_unanswered'; value: boolean }
   | { kind: 'awaiting_call_outcome'; value: boolean }
+  // --- Slice 011e e2 (docs/specs/SLICE_011e.md §4a): tags (any-of) /
+  // not_tags (none-of), one clause per kind, same 20-clause cap. -----------
+  | { kind: 'tags'; tag_ids: string[] }
+  | { kind: 'not_tags'; tag_ids: string[] }
 
 export interface FilterDefinition {
   version: 1
@@ -332,7 +338,11 @@ export interface SavedListMetadata {
   can_delete: boolean
 }
 
-export type SavedListFilterError = 'unsupported_filter' | 'invalid_stage' | 'invalid_assignee'
+export type SavedListFilterError =
+  | 'unsupported_filter'
+  | 'invalid_stage'
+  | 'invalid_assignee'
+  | 'invalid_tag'
 
 export interface SavedListsResponse {
   lists: SavedListMetadata[]
@@ -786,7 +796,12 @@ export interface SystemFeedIssue {
 }
 
 export type TodaySourceStatus = 'complete' | 'partial' | 'unavailable'
-export type TodaySourceIssueError = 'unsupported_filter' | 'invalid_stage' | 'invalid_assignee' | 'unavailable'
+export type TodaySourceIssueError =
+  | 'unsupported_filter'
+  | 'invalid_stage'
+  | 'invalid_assignee'
+  | 'invalid_tag'
+  | 'unavailable'
 export interface TodaySourceIssue {
   list_id: string
   name: string

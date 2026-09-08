@@ -27,6 +27,7 @@ import {
   useSavedList,
   useSavedListCount,
   useStages,
+  useTagsQuery,
   useTodaySources,
   useUpdateSavedListMutation,
   queryKeys,
@@ -68,9 +69,14 @@ const membersQuery = useMembers(orgId)
 const members = computed(() => membersQuery.data.value?.members ?? [])
 const sourcesQuery = useInquirySources(orgId)
 const sources = computed(() => sourcesQuery.data.value?.sources ?? [])
+const tagsQuery = useTagsQuery(orgId)
+const tags = computed(() => tagsQuery.data.value?.tags ?? [])
 
-function retryOptions(kind: 'stage' | 'assigned_to' | 'source') {
-  const query = kind === 'stage' ? stagesQuery : kind === 'assigned_to' ? membersQuery : sourcesQuery
+function retryOptions(kind: 'stage' | 'assigned_to' | 'source' | 'tags' | 'not_tags') {
+  const query = kind === 'stage' ? stagesQuery
+    : kind === 'assigned_to' ? membersQuery
+    : kind === 'tags' || kind === 'not_tags' ? tagsQuery
+    : sourcesQuery
   void query.refetch()
 }
 
@@ -194,11 +200,14 @@ const workingFilterChanged = computed(() => savedBaseline.value !== null &&
 function hasResolvableReferences(filter: FilterDefinition) {
   const knownStages = new Set(stages.value.map((stage) => stage.id))
   const knownMembers = new Set(members.value.map((member) => member.user_id))
+  const knownTags = new Set(tags.value.map((tag) => tag.id))
   for (const clause of filter.clauses) {
     if (clause.kind === 'stage' && clause.stage_ids.some((id) => !knownStages.has(id))) return false
     if (clause.kind === 'assigned_to' && clause.assignees.some((assignee) =>
       typeof assignee === 'object' && !knownMembers.has(assignee.user_id),
     )) return false
+    if ((clause.kind === 'tags' || clause.kind === 'not_tags') &&
+      clause.tag_ids.some((id) => !knownTags.has(id))) return false
   }
   return true
 }
@@ -1451,6 +1460,7 @@ const columns: ColumnDef<PersonSummary>[] = [
             :stages="stages"
             :members="members"
             :sources="sources"
+            :tags="tags"
             :stages-pending="stagesQuery.isPending.value"
             :stages-error="stagesQuery.isError.value"
             :members-pending="membersQuery.isPending.value"
@@ -1458,6 +1468,8 @@ const columns: ColumnDef<PersonSummary>[] = [
             :sources-pending="sourcesQuery.isPending.value"
             :sources-error="sourcesQuery.isError.value"
             :sources-truncated="sourcesQuery.data.value?.truncated ?? false"
+            :tags-pending="tagsQuery.isPending.value"
+            :tags-error="tagsQuery.isError.value"
             @update:clauses="onClausesUpdate"
             @retry-options="retryOptions"
           />

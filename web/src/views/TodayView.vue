@@ -82,6 +82,7 @@ function sourceError(error: string | null) {
   if (error === 'unsupported_filter') return 'This list definition is no longer supported.'
   if (error === 'invalid_stage') return 'This list refers to a stage that no longer exists.'
   if (error === 'invalid_assignee') return 'This list refers to a member who no longer exists.'
+  if (error === 'invalid_tag') return 'This list refers to a tag that no longer exists.'
   return null
 }
 

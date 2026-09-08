@@ -5,7 +5,7 @@ import { computed, nextTick, ref, useId, watch } from 'vue'
 import Popover, { type PopoverPassThroughOptions } from 'primevue/popover'
 import { ChevronDown, ChevronRight, Lock, SlidersHorizontal, X } from 'lucide-vue-next'
 import StageLabel from './StageLabel.vue'
-import type { AgeOp, Assignee, FilterClause, FilterClauseKind, Member, Stage, StageRef } from '../api/types'
+import type { AgeOp, Assignee, FilterClause, FilterClauseKind, Member, Stage, StageRef, TagRef } from '../api/types'
 import { buttonClasses, INPUT_CLASSES } from '../lib/controls'
 import {
   CLAUSE_KIND_LABEL,
@@ -19,7 +19,7 @@ type AgeKind = 'created' | 'last_inquiry' | 'last_contact' | 'last_inbound'
 type AgeClause = Extract<FilterClause, { kind: AgeKind }>
 type BoolKind = 'has_replied' | 'has_phone' | 'has_email' | 'awaiting_response' | 'client_replied_unanswered' | 'awaiting_call_outcome'
 type BoolClause = Extract<FilterClause, { kind: BoolKind }>
-type OptionKind = 'stage' | 'assigned_to' | 'source'
+type OptionKind = 'stage' | 'assigned_to' | 'source' | 'tags' | 'not_tags'
 type OptionValue = string | { user_id: string }
 type Option = { key: string; label: string; value: OptionValue; stage?: StageRef; inactive?: boolean }
 
@@ -28,6 +28,9 @@ const props = defineProps<{
   stages: Stage[]
   members: Member[]
   sources: string[]
+  // Slice 011e e2 (docs/specs/SLICE_011e.md §5): shared by both `tags` and
+  // `not_tags` editors, like `stages` is shared by nothing else needing it.
+  tags: TagRef[]
   stagesPending?: boolean
   stagesError?: boolean
   membersPending?: boolean
@@ -35,6 +38,8 @@ const props = defineProps<{
   sourcesPending?: boolean
   sourcesError?: boolean
   sourcesTruncated?: boolean
+  tagsPending?: boolean
+  tagsError?: boolean
   // SLICE_011d §6: the Today rules editor's locked-clause mode — the anchor
   // clause is shown but cannot be removed or negated (spec §1 rule 4), and
   // (for the two person-state feeds) `assigned_to` must keep `me` (rule 3).
@@ -61,6 +66,7 @@ const applied = computed(() => committedClauses(props.clauses))
 const names = computed<FilterNames>(() => ({
   stageNames: Object.fromEntries(props.stages.map((stage) => [stage.id, stage.name])),
   memberNames: Object.fromEntries(props.members.map((member) => [member.user_id, member.display_name])),
+  tagNames: Object.fromEntries(props.tags.map((tag) => [tag.id, tag.name])),
 }))
 const menuKinds = computed(() => FILTER_CLAUSE_KINDS.filter((kind) =>
   kind !== 'stage' && kind !== 'assigned_to' && matchesSearch(CLAUSE_KIND_LABEL[kind]),
@@ -81,13 +87,31 @@ const boolKind = computed(() => {
 })
 const optionKind = computed<OptionKind | null>(() => {
   const kind = editingKind.value
-  return kind === 'stage' || kind === 'assigned_to' || kind === 'source' ? kind : null
+  return kind === 'stage' || kind === 'assigned_to' || kind === 'source' || kind === 'tags' || kind === 'not_tags' ? kind : null
 })
 const activeAge = computed(() => ageKind.value ? activeClause.value as AgeClause | undefined : undefined)
 const activeBool = computed(() => boolKind.value ? activeClause.value as BoolClause | undefined : undefined)
-const optionPending = computed(() => optionKind.value === 'stage' ? props.stagesPending : optionKind.value === 'assigned_to' ? props.membersPending : props.sourcesPending)
-const optionError = computed(() => optionKind.value === 'stage' ? props.stagesError : optionKind.value === 'assigned_to' ? props.membersError : props.sourcesError)
-const optionNoun = computed(() => optionKind.value === 'stage' ? 'stages' : optionKind.value === 'assigned_to' ? 'assignees' : 'sources')
+const optionPending = computed(() => {
+  const kind = optionKind.value
+  if (kind === 'stage') return props.stagesPending
+  if (kind === 'assigned_to') return props.membersPending
+  if (kind === 'tags' || kind === 'not_tags') return props.tagsPending
+  return props.sourcesPending
+})
+const optionError = computed(() => {
+  const kind = optionKind.value
+  if (kind === 'stage') return props.stagesError
+  if (kind === 'assigned_to') return props.membersError
+  if (kind === 'tags' || kind === 'not_tags') return props.tagsError
+  return props.sourcesError
+})
+const optionNoun = computed(() => {
+  const kind = optionKind.value
+  if (kind === 'stage') return 'stages'
+  if (kind === 'assigned_to') return 'assignees'
+  if (kind === 'tags' || kind === 'not_tags') return 'tags'
+  return 'sources'
+})
 
 const popoverPt: PopoverPassThroughOptions = {
   root: 'glass-panel z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] text-text',
@@ -106,7 +130,9 @@ function selectedValues(kind: OptionKind): OptionValue[] {
   const clause = applied.value.find((item) => item.kind === kind)
   if (clause?.kind === 'stage') return clause.stage_ids
   if (clause?.kind === 'source') return clause.sources
-  return clause?.kind === 'assigned_to' ? clause.assignees : []
+  if (clause?.kind === 'assigned_to') return clause.assignees
+  if (clause?.kind === 'tags' || clause?.kind === 'not_tags') return clause.tag_ids
+  return []
 }
 function optionEquals(a: OptionValue, b: OptionValue) {
   return typeof a === 'string' || typeof b === 'string' ? a === b : a.user_id === b.user_id
@@ -134,6 +160,16 @@ const options = computed<Option[]>(() => {
   }
   if (optionKind.value === 'source') {
     return [...new Set([...props.sources, ...selectedValues('source') as string[]])].map((source) => ({ key: source, label: source, value: source }))
+  }
+  if (optionKind.value === 'tags' || optionKind.value === 'not_tags') {
+    const tagIds = new Set(props.tags.map((tag) => tag.id))
+    const missingTagIds = (selectedValues(optionKind.value) as string[]).filter((id) => !tagIds.has(id))
+    return [
+      ...props.tags.map((tag) => ({ key: tag.id, label: tag.name, value: tag.id })),
+      // Slice 011e e2 (docs/specs/SLICE_011e.md §5): an unresolvable id
+      // never renders the raw uuid.
+      ...missingTagIds.map((id) => ({ key: id, label: 'an unknown tag', value: id })),
+    ]
   }
   return []
 })
@@ -183,6 +219,7 @@ function toggleOption(option: Option) {
   if (!next.length) replaceClause(kind, null)
   else if (kind === 'stage') replaceClause(kind, { kind, stage_ids: next as string[] })
   else if (kind === 'source') replaceClause(kind, { kind, sources: next as string[] })
+  else if (kind === 'tags' || kind === 'not_tags') replaceClause(kind, { kind, tag_ids: next as string[] })
   else replaceClause(kind, { kind, assignees: next as Assignee[] })
 }
 

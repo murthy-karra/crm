@@ -25,6 +25,10 @@ export const FILTER_CLAUSE_KINDS: FilterClauseKind[] = [
   'awaiting_response',
   'client_replied_unanswered',
   'awaiting_call_outcome',
+  // Slice 011e e2 (docs/specs/SLICE_011e.md §4a): tags (any-of) / not_tags
+  // (none-of), one clause per kind, same 20-clause cap.
+  'tags',
+  'not_tags',
 ]
 
 export const CLAUSE_KIND_LABEL: Record<FilterClauseKind, string> = {
@@ -41,10 +45,12 @@ export const CLAUSE_KIND_LABEL: Record<FilterClauseKind, string> = {
   awaiting_response: 'Awaiting a response',
   client_replied_unanswered: 'Client replied, unanswered',
   awaiting_call_outcome: 'A call of mine needs an outcome',
+  tags: 'Tagged',
+  not_tags: 'Not tagged',
 }
 
 export const AGE_CLAUSE_KINDS: FilterClauseKind[] = ['created', 'last_inquiry', 'last_contact', 'last_inbound']
-export const MULTI_VALUE_CLAUSE_KINDS: FilterClauseKind[] = ['stage', 'assigned_to', 'source']
+export const MULTI_VALUE_CLAUSE_KINDS: FilterClauseKind[] = ['stage', 'assigned_to', 'source', 'tags', 'not_tags']
 export const BOOL_CLAUSE_KINDS: FilterClauseKind[] = [
   'has_replied', 'has_phone', 'has_email',
   'awaiting_response', 'client_replied_unanswered', 'awaiting_call_outcome',
@@ -70,6 +76,9 @@ export function defaultClauseFor(kind: FilterClauseKind): FilterClause {
     case 'client_replied_unanswered':
     case 'awaiting_call_outcome':
       return { kind, value: true }
+    case 'tags':
+    case 'not_tags':
+      return { kind, tag_ids: [] }
   }
 }
 
@@ -86,6 +95,7 @@ export function isDraftClause(clause: FilterClause): boolean {
   if (clause.kind === 'stage') return clause.stage_ids.length === 0
   if (clause.kind === 'assigned_to') return clause.assignees.length === 0
   if (clause.kind === 'source') return clause.sources.length === 0
+  if (clause.kind === 'tags' || clause.kind === 'not_tags') return clause.tag_ids.length === 0
   return false
 }
 
@@ -163,6 +173,9 @@ function isFilterClause(value: unknown): value is FilterClause {
     case 'client_replied_unanswered':
     case 'awaiting_call_outcome':
       return typeof v.value === 'boolean'
+    case 'tags':
+    case 'not_tags':
+      return Array.isArray(v.tag_ids) && v.tag_ids.every((x) => typeof x === 'string')
     default:
       return false
   }
@@ -195,10 +208,17 @@ export function parseFilter(raw: string): FilterClause[] | null {
 export interface FilterNames {
   stageNames: Record<string, string>
   memberNames: Record<string, string>
+  // Slice 011e e2 (docs/specs/SLICE_011e.md §4d).
+  tagNames: Record<string, string>
 }
 
 function joinOr(items: string[], maxValues: number): string {
   const visible = items.slice(0, maxValues).join(' or ')
+  return items.length > maxValues ? `${visible} +${items.length - maxValues}` : visible
+}
+
+function joinComma(items: string[], maxValues: number): string {
+  const visible = items.slice(0, maxValues).join(', ')
   return items.length > maxValues ? `${visible} +${items.length - maxValues}` : visible
 }
 
@@ -252,5 +272,17 @@ export function describeClause(clause: FilterClause, names: FilterNames, maxValu
       return clause.value ? 'Client replied, unanswered' : 'No unanswered client reply'
     case 'awaiting_call_outcome':
       return clause.value ? 'A call of mine needs an outcome' : 'No call of mine needs an outcome'
+    // Slice 011e e2 (docs/specs/SLICE_011e.md §5): 50-value cap matches the
+    // server's MAX_VALUES; an unresolvable id never renders the raw uuid.
+    case 'tags': {
+      if (clause.tag_ids.length === 0) return 'Tagged: Choose a value'
+      const labels = clause.tag_ids.map((id) => names.tagNames[id] ?? 'an unknown tag')
+      return `Tagged: ${joinComma(labels, Math.min(maxValues, 50))}`
+    }
+    case 'not_tags': {
+      if (clause.tag_ids.length === 0) return 'Not tagged: Choose a value'
+      const labels = clause.tag_ids.map((id) => names.tagNames[id] ?? 'an unknown tag')
+      return `Not tagged: ${joinComma(labels, Math.min(maxValues, 50))}`
+    }
   }
 }

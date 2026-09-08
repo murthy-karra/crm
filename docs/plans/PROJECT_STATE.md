@@ -27,6 +27,15 @@ One lane (Claude Sonnet 5) in `../crm-worktrees/014` on
 `slice-014-perceived-latency`; checkpoint after part A. Coordinator runs the
 tunnel probe and walkthrough at the end.
 
+Progress (2026-09-08): **part A complete** (`5301b5b`): `preview: { port }`
+in `vite.config.ts` (Vite 8.2.1's preview resolver verified in source to
+inherit host, strictPort, allowedHosts and proxy from `server`),
+`scripts/dev-web-prod`, README and `.env.example` notes. Scratch-port
+measurement of the production bundle: **3 script requests before
+DOMContentLoaded** (was 50–60), DCL 50 ms on loopback, the login page renders
+and `/api/me` reaches the API through the preview proxy. Web gate green (614
+Vitest). Coordinator audit passed; parts B–D released.
+
 Previously: **PLANNING Slice 014 — perceived-latency chunk plus FilterBar UX polish
 (Web-only).** The user chose the coordinator's suggestions 1 and 2 on
 2026-09-08: `main` was pushed to `origin/main` at `32b36de` (carrying Slices

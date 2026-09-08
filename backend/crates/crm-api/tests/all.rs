@@ -107,6 +107,9 @@ mod db_people_filter;
 #[path = "db_people_sort.rs"]
 mod db_people_sort;
 
+#[path = "db_person_last_activity.rs"]
+mod db_person_last_activity;
+
 #[path = "db_realtime.rs"]
 mod db_realtime;
 

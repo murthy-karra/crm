@@ -872,6 +872,142 @@ async fn tag_and_person_tag_indexes_exist(migrator_pool: PgPool) {
     );
 }
 
+/// docs/specs/SLICE_012.md §2, §8.1: the three `AFTER INSERT` triggers
+/// exist, each firing on exactly the one table/event named. `pg_trigger`
+/// is used (not `information_schema.triggers`, which does not expose
+/// `AFTER`/`BEFORE` directly for a single-event row-level trigger without
+/// joining more) via `pg_trigger.tgtype`'s bits (Postgres `trigger.h`):
+/// `TRIGGER_TYPE_ROW = 1 << 0`, `TRIGGER_TYPE_BEFORE = 1 << 1`. There is no
+/// dedicated "AFTER" bit — AFTER is the absence of BEFORE (and of INSTEAD
+/// OF, `1 << 6`, irrelevant here since nothing declares one), so `is_after`
+/// checks that the BEFORE bit is clear.
+#[sqlx::test]
+#[ignore]
+async fn person_last_activity_triggers_exist_as_after_insert_row_triggers(migrator_pool: PgPool) {
+    let rows: Vec<(String, String, bool, bool)> = sqlx::query_as(
+        r#"SELECT t.tgname,
+                  c.relname,
+                  (t.tgtype & 2) = 0 AS is_after,
+                  (t.tgtype & 1) <> 0 AS is_row
+           FROM pg_trigger t
+           JOIN pg_class c ON c.oid = t.tgrelid
+           WHERE t.tgname IN (
+               'inquiry_touch_person',
+               'contact_attempted_touch_person',
+               'correspondence_captured_touch_person'
+           )
+           AND NOT t.tgisinternal
+           ORDER BY t.tgname"#,
+    )
+    .fetch_all(&migrator_pool)
+    .await
+    .unwrap();
+
+    let expected: [(&str, &str); 3] = [
+        ("contact_attempted_touch_person", "contact_attempted"),
+        (
+            "correspondence_captured_touch_person",
+            "correspondence_captured",
+        ),
+        ("inquiry_touch_person", "inquiry"),
+    ];
+    assert_eq!(
+        rows.len(),
+        3,
+        "expected exactly the three person_last_activity triggers, got {rows:?}"
+    );
+    for ((name, table, _, _), (expected_name, expected_table)) in rows.iter().zip(expected.iter()) {
+        assert_eq!(name, expected_name);
+        assert_eq!(table, expected_table);
+    }
+    for (name, _table, is_after, is_row) in &rows {
+        assert!(is_after, "{name}: must be an AFTER trigger");
+        assert!(is_row, "{name}: must be a FOR EACH ROW trigger");
+    }
+
+    // Each trigger fires on INSERT only (docs/specs/SLICE_012.md §2: history
+    // tables have no application UPDATE/DELETE path).
+    let events: Vec<(String, String)> = sqlx::query_as(
+        r#"SELECT trigger_name, event_manipulation
+           FROM information_schema.triggers
+           WHERE trigger_name IN (
+               'inquiry_touch_person',
+               'contact_attempted_touch_person',
+               'correspondence_captured_touch_person'
+           )
+           ORDER BY trigger_name"#,
+    )
+    .fetch_all(&migrator_pool)
+    .await
+    .unwrap();
+    assert_eq!(events.len(), 3, "{events:?}");
+    for (_name, event) in &events {
+        assert_eq!(event, "INSERT");
+    }
+}
+
+/// docs/specs/SLICE_012.md §1 rule 6, §2: the one index, declared in
+/// exactly the column order the spec names (`organization_id,
+/// last_contact_at ASC NULLS FIRST, id ASC`), and no index on the other
+/// three activity columns.
+#[sqlx::test]
+#[ignore]
+async fn person_org_last_contact_idx_exists_with_the_declared_column_order(migrator_pool: PgPool) {
+    let (indexdef,): (String,) = sqlx::query_as(
+        "SELECT indexdef FROM pg_indexes WHERE indexname = 'person_org_last_contact_idx'",
+    )
+    .fetch_one(&migrator_pool)
+    .await
+    .unwrap();
+    assert!(indexdef.contains("organization_id"), "{indexdef}");
+    assert!(indexdef.contains("last_contact_at"), "{indexdef}");
+    assert!(indexdef.contains("NULLS FIRST"), "{indexdef}");
+    // Column order: organization_id before last_contact_at before id.
+    let org_pos = indexdef.find("organization_id").unwrap();
+    let contact_pos = indexdef.find("last_contact_at").unwrap();
+    assert!(org_pos < contact_pos, "{indexdef}");
+
+    let index_names: Vec<String> =
+        sqlx::query_scalar("SELECT indexname FROM pg_indexes WHERE tablename = 'person'")
+            .fetch_all(&migrator_pool)
+            .await
+            .unwrap();
+    for unwanted in ["last_inquiry_at", "last_inbound_at", "last_outbound_at"] {
+        assert!(
+            !index_names
+                .iter()
+                .any(|name| name.to_lowercase().contains(unwanted)),
+            "no index on {unwanted} must exist (spec §1 rule 6); indexes: {index_names:?}"
+        );
+    }
+}
+
+/// docs/specs/SLICE_012.md §2: no new grants — `person`'s grant is
+/// unchanged from Slice 002 (SELECT, INSERT, UPDATE, no DELETE), which is
+/// what lets `crm_app` (which cannot UPDATE any history table) still
+/// update the four new columns through the triggers when it inserts a
+/// history row.
+#[sqlx::test]
+#[ignore]
+async fn person_grant_is_unchanged_by_slice_012(migrator_pool: PgPool) {
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let update = sqlx::query(
+        "UPDATE person SET last_contact_at = last_contact_at, last_inquiry_at = last_inquiry_at, \
+         last_inbound_at = last_inbound_at, last_outbound_at = last_outbound_at WHERE false",
+    )
+    .execute(&app_pool)
+    .await;
+    assert!(
+        update.is_ok(),
+        "crm_app must still be able to UPDATE the (now four-column-wider) person row"
+    );
+    let delete = sqlx::query("DELETE FROM person").execute(&app_pool).await;
+    assert!(
+        delete.is_err(),
+        "person: DELETE must still be denied for crm_app"
+    );
+}
+
 async fn first_stage_id_for_schema_test(pool: &PgPool, organization_id: Uuid) -> Uuid {
     sqlx::query_scalar("SELECT id FROM stage WHERE organization_id = $1 ORDER BY position LIMIT 1")
         .bind(organization_id)

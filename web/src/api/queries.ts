@@ -18,6 +18,7 @@ import {
 import type {
   AcceptInvitationRequest,
   AcceptInvitationResponse,
+  ActorRef,
   AssignmentRequest,
   CallOutcomeCorrection,
   CallResponse,
@@ -61,12 +62,14 @@ import type {
   PersonDetailResponse,
   PlatformChangeMemberRoleRequest,
   PlatformIssueInvitationRequest,
+  PersonSummary,
   PlatformOrganizationDetailResponse,
   PlatformOrganizationsResponse,
   RealtimeTokenResponse,
   ReceiveInquiryRequest,
   ReceiveInquiryResponse,
   SetMemberStatusRequest,
+  StageRef,
   StageRequest,
   StagesResponse,
   StartCallRequest,
@@ -80,6 +83,7 @@ import type {
   PersonTagMutationResponse,
   RenameTagRequest,
   RenameTagResponse,
+  TagRef,
   TagsResponse,
   TodayResponse,
   TodaySourcesResponse,
@@ -518,7 +522,10 @@ export function useInquirySources(orgId: MaybeRefOrGetter<string>) {
 export function usePerson(orgId: MaybeRefOrGetter<string>, personId: MaybeRefOrGetter<string>) {
   return useQuery({
     queryKey: computed(() => queryKeys.person(toValue(orgId), toValue(personId))),
-    queryFn: () => apiFetch<PersonDetailResponse>(`/people/${toValue(personId)}`),
+    // SLICE_014 §3: the signal is forwarded so a cancelQueries (an
+    // optimistic mutation's onMutate, or a route/identity change) actually
+    // aborts the in-flight request instead of leaving it to resolve unused.
+    queryFn: ({ signal }) => apiFetch<PersonDetailResponse>(`/people/${toValue(personId)}`, { signal }),
     enabled: computed(() => toValue(orgId) !== '' && toValue(personId) !== ''),
   })
 }
@@ -895,40 +902,186 @@ export function useLogoutMutation() {
   })
 }
 
-export function useAssignPersonMutation(orgId: MaybeRefOrGetter<string>) {
-  const qc = useQueryClient()
+// ---- Optimistic Person mutations (SLICE_014 §3) ---------------------------
+// Stage, assignment, and tag apply/remove pay the tunnel's ≥0.5-1s POST
+// penalty (docs/design/perceived-latency-2026-09-07.md §1) even though the
+// server settles in tens of milliseconds, so each predicts its result from
+// an already-cached reference (the stages/members/tags query) and rolls
+// back losslessly on failure.
+//
+// Rule 2 (§1): list membership never moves optimistically. A matching row is
+// rewritten in place in every cached People variant (filtered, sorted and
+// unfiltered alike, all sharing the ['org', orgId, 'people'] prefix — a
+// prefix no other factory key shares: person/stages/members/tags all use a
+// different third element), never added or removed; a row that stops
+// matching its filter leaves only when the settled invalidate's refetch
+// says so.
+//
+// Rule 3 (§1): with no cached reference to predict from (an empty stages/
+// members/tags cache, or the specific id missing from it), the optimistic
+// write is skipped entirely — never invent a name — and the mutation still
+// completes pessimistically (the UI just waits for the response like today).
+
+interface PersonDetailSnapshot {
+  personKey: ReturnType<typeof queryKeys.person>
+  person: PersonDetailResponse | undefined
+}
+
+interface PersonMutationSnapshot extends PersonDetailSnapshot {
+  peopleEntries: Array<[readonly unknown[], PeopleResponse | undefined]>
+}
+
+async function snapshotPersonDetail(qc: QueryClient, orgId: string, personId: string): Promise<PersonDetailSnapshot> {
+  const personKey = queryKeys.person(orgId, personId)
+  await qc.cancelQueries({ queryKey: personKey })
+  return { personKey, person: qc.getQueryData<PersonDetailResponse>(personKey) }
+}
+
+/** Also snapshots and cancels every cached People variant (the prefix match
+ * documented above) — used by stage/assignment, whose optimistic write
+ * touches list rows as well as the detail; tag apply/remove use
+ * `snapshotPersonDetail` alone since `PersonSummary` (the People row shape)
+ * carries no `tags` field. */
+async function snapshotPersonForOptimism(qc: QueryClient, orgId: string, personId: string): Promise<PersonMutationSnapshot> {
+  const peoplePrefix = queryKeys.people(orgId)
+  const [detail] = await Promise.all([
+    snapshotPersonDetail(qc, orgId, personId),
+    qc.cancelQueries({ queryKey: peoplePrefix }),
+  ])
+  return { ...detail, peopleEntries: qc.getQueriesData<PeopleResponse>({ queryKey: peoplePrefix }) }
+}
+
+function restorePersonDetailSnapshot(qc: QueryClient, snapshot: PersonDetailSnapshot | undefined) {
+  if (!snapshot) return
+  qc.setQueryData(snapshot.personKey, snapshot.person)
+}
+
+function restorePersonMutationSnapshot(qc: QueryClient, snapshot: PersonMutationSnapshot | undefined) {
+  if (!snapshot) return
+  restorePersonDetailSnapshot(qc, snapshot)
+  for (const [key, data] of snapshot.peopleEntries) qc.setQueryData(key, data)
+}
+
+/** Writes `update` into the Person detail (if cached) and into the matching
+ * row (by id) of every cached People variant — never touching row count. */
+function writeOptimisticPersonSummary(
+  qc: QueryClient,
+  orgId: string,
+  personId: string,
+  update: (summary: PersonSummary) => PersonSummary,
+) {
+  qc.setQueryData<PersonDetailResponse>(queryKeys.person(orgId, personId), (old) =>
+    old ? { ...old, person: update(old.person) } : old,
+  )
+  qc.setQueriesData<PeopleResponse>({ queryKey: queryKeys.people(orgId) }, (old) => {
+    if (!old) return old
+    let changed = false
+    const people = old.people.map((row) => {
+      if (row.id !== personId) return row
+      changed = true
+      return update(row)
+    })
+    return changed ? { ...old, people } : old
+  })
+}
+
+function stageRefFromCache(qc: QueryClient, orgId: string, stageId: string): StageRef | undefined {
+  // `Stage` (the cache's row shape) also carries `position`, which
+  // `PersonSummary.stage` (a `StageRef`) never does — narrow explicitly
+  // rather than passing the wider object through.
+  const stage = qc.getQueryData<StagesResponse>(queryKeys.stages(orgId))?.stages.find((s) => s.id === stageId)
+  return stage ? { id: stage.id, name: stage.name } : undefined
+}
+
+function actorRefFromCache(qc: QueryClient, orgId: string, userId: string): ActorRef | undefined {
+  const member = qc.getQueryData<MembersResponse>(queryKeys.members(orgId))?.members.find((m) => m.user_id === userId)
+  return member ? { id: member.user_id, display_name: member.display_name } : undefined
+}
+
+function tagRefFromCache(qc: QueryClient, orgId: string, tagId: string): TagRef | undefined {
+  const tag = qc.getQueryData<TagsResponse>(queryKeys.tags(orgId))?.tags.find((t) => t.id === tagId)
+  return tag ? { id: tag.id, name: tag.name } : undefined
+}
+
+/** §3 table: "sorted by lower-cased name then id" — the server's
+ * `lower(name), id` order is authoritative on success; this is only the
+ * optimistic prediction of it. */
+function sortTagRefs(tags: TagRef[]): TagRef[] {
+  return [...tags].sort((a, b) => {
+    const an = a.name.toLowerCase()
+    const bn = b.name.toLowerCase()
+    if (an !== bn) return an < bn ? -1 : 1
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+  })
+}
+
+export function useAssignPersonMutation(orgId: MaybeRefOrGetter<string>, providedQueryClient?: QueryClient) {
+  const qc = providedQueryClient ?? useQueryClient()
   return useMutation({
     mutationFn: ({ personId, assignedUserId }: { personId: string; assignedUserId: string | null }) =>
       apiFetch<MutatePersonResponse>(`/people/${personId}/assignment`, {
         method: 'POST',
         body: JSON.stringify({ assigned_user_id: assignedUserId } satisfies AssignmentRequest),
       }),
-    onSuccess: (data, variables) => {
+    onMutate: async ({ personId, assignedUserId }) => {
       const id = toValue(orgId)
+      const snapshot = await snapshotPersonForOptimism(qc, id, personId)
+      // Unassigned (`null`) needs no cache lookup and is always predictable;
+      // a specific user needs the members cache (rule 3's fallback).
+      const assignee = assignedUserId === null ? null : actorRefFromCache(qc, id, assignedUserId)
+      if (assignedUserId === null || assignee !== undefined) {
+        writeOptimisticPersonSummary(qc, id, personId, (person) => ({ ...person, assigned_user: assignee ?? null }))
+      }
+      return { id, snapshot }
+    },
+    onError: (_error, _variables, context) => {
+      restorePersonMutationSnapshot(qc, context?.snapshot)
+    },
+    onSuccess: (data, variables, context) => {
+      const id = context?.id ?? toValue(orgId)
       qc.setQueryData(queryKeys.person(id, variables.personId), (old: PersonDetailResponse | undefined) =>
         old ? { ...old, person: data.person } : old,
       )
-      void qc.invalidateQueries({ queryKey: queryKeys.org(id) })
     },
-  })
+    // Fires whether the mutation resolved or rejected — an uncertain
+    // network failure may still have committed server-side, and a real
+    // `person.changed` invalidation racing a pending mutation only ever
+    // arrives after that mutation's own commit (§3 "Realtime"), so this
+    // final invalidate's refetch is guaranteed to see the true state.
+    onSettled: (_data, _error, _variables, context) => {
+      void qc.invalidateQueries({ queryKey: queryKeys.org(context?.id ?? toValue(orgId)) })
+    },
+  }, providedQueryClient)
 }
 
-export function useChangeStageMutation(orgId: MaybeRefOrGetter<string>) {
-  const qc = useQueryClient()
+export function useChangeStageMutation(orgId: MaybeRefOrGetter<string>, providedQueryClient?: QueryClient) {
+  const qc = providedQueryClient ?? useQueryClient()
   return useMutation({
     mutationFn: ({ personId, stageId }: { personId: string; stageId: string }) =>
       apiFetch<MutatePersonResponse>(`/people/${personId}/stage`, {
         method: 'POST',
         body: JSON.stringify({ stage_id: stageId } satisfies StageRequest),
       }),
-    onSuccess: (data, variables) => {
+    onMutate: async ({ personId, stageId }) => {
       const id = toValue(orgId)
+      const snapshot = await snapshotPersonForOptimism(qc, id, personId)
+      const stage = stageRefFromCache(qc, id, stageId)
+      if (stage) writeOptimisticPersonSummary(qc, id, personId, (person) => ({ ...person, stage }))
+      return { id, snapshot }
+    },
+    onError: (_error, _variables, context) => {
+      restorePersonMutationSnapshot(qc, context?.snapshot)
+    },
+    onSuccess: (data, variables, context) => {
+      const id = context?.id ?? toValue(orgId)
       qc.setQueryData(queryKeys.person(id, variables.personId), (old: PersonDetailResponse | undefined) =>
         old ? { ...old, person: data.person } : old,
       )
-      void qc.invalidateQueries({ queryKey: queryKeys.org(id) })
     },
-  })
+    onSettled: (_data, _error, _variables, context) => {
+      void qc.invalidateQueries({ queryKey: queryKeys.org(context?.id ?? toValue(orgId)) })
+    },
+  }, providedQueryClient)
 }
 
 /** `POST /api/people/{id}/contact-attempts` (§5, D-022). Same
@@ -1473,12 +1626,32 @@ export function useAddPersonTagMutation(orgId: MaybeRefOrGetter<string>, provide
         { method: 'PUT' },
       ),
     retry: false,
-    onSuccess: (_result, variables) => {
+    // §3 table: append the TagRef from the tags cache, sorted; skipped (rule
+    // 3) if the tag or an already-applied duplicate is not resolvable from
+    // cache — never invent a name, never double-apply optimistically.
+    onMutate: async ({ personId, tagId }) => {
       const id = toValue(orgId)
+      const snapshot = await snapshotPersonDetail(qc, id, personId)
+      const tag = tagRefFromCache(qc, id, tagId)
+      if (tag && snapshot.person && !snapshot.person.tags.some((t) => t.id === tag.id)) {
+        qc.setQueryData<PersonDetailResponse>(snapshot.personKey, (old) =>
+          old ? { ...old, tags: sortTagRefs([...old.tags, tag]) } : old,
+        )
+      }
+      return snapshot
+    },
+    onError: (error, variables, snapshot) => {
+      restorePersonDetailSnapshot(qc, snapshot)
+      refetchOnStalePersonTagReference(qc, orgId, variables.personId, error)
+    },
+    onSuccess: (result, variables) => {
+      const id = toValue(orgId)
+      qc.setQueryData<PersonDetailResponse>(queryKeys.person(id, variables.personId), (old) =>
+        old ? { ...old, tags: result.tags } : old,
+      )
       void qc.invalidateQueries({ queryKey: queryKeys.tags(id) })
       void qc.invalidateQueries({ queryKey: queryKeys.person(id, variables.personId) })
     },
-    onError: (error, variables) => refetchOnStalePersonTagReference(qc, orgId, variables.personId, error),
   }, providedQueryClient)
 }
 
@@ -1492,11 +1665,30 @@ export function useRemovePersonTagMutation(orgId: MaybeRefOrGetter<string>, prov
         { method: 'DELETE' },
       ),
     retry: false,
-    onSuccess: (_result, variables) => {
+    // §3 table: filter the TagRef out of the detail — no cache lookup is
+    // needed to remove an id, so this is always optimistic when the detail
+    // is cached (unlike apply, there is no "unresolvable reference" case).
+    onMutate: async ({ personId, tagId }) => {
       const id = toValue(orgId)
+      const snapshot = await snapshotPersonDetail(qc, id, personId)
+      if (snapshot.person) {
+        qc.setQueryData<PersonDetailResponse>(snapshot.personKey, (old) =>
+          old ? { ...old, tags: old.tags.filter((t) => t.id !== tagId) } : old,
+        )
+      }
+      return snapshot
+    },
+    onError: (error, variables, snapshot) => {
+      restorePersonDetailSnapshot(qc, snapshot)
+      refetchOnStalePersonTagReference(qc, orgId, variables.personId, error)
+    },
+    onSuccess: (result, variables) => {
+      const id = toValue(orgId)
+      qc.setQueryData<PersonDetailResponse>(queryKeys.person(id, variables.personId), (old) =>
+        old ? { ...old, tags: result.tags } : old,
+      )
       void qc.invalidateQueries({ queryKey: queryKeys.tags(id) })
       void qc.invalidateQueries({ queryKey: queryKeys.person(id, variables.personId) })
     },
-    onError: (error, variables) => refetchOnStalePersonTagReference(qc, orgId, variables.personId, error),
   }, providedQueryClient)
 }

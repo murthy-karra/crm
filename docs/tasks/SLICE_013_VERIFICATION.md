@@ -122,7 +122,7 @@ by exact PID only.
 
 Source `slice-013-operator-filter` at `3d68a7c` plus this record; destination
 `main` at `686dc26` (the branch is rebased onto the Slice 012 merge, so the
-merge is a fast-forward-able no-conflict merge). Migration impact: none.
+merge cannot conflict: `main` has since moved only in `docs/plans/PROJECT_STATE.md`). Migration impact: none.
 Contract changes as declared in spec §7: two new tools and the regenerated
 snapshot, the `ToolBackend` trait methods, `MAX_REFERENCES` 25 (with the
 accepted `get_today` drawer side effect), the prompt asset. Unresolved

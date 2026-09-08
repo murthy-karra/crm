@@ -34,7 +34,18 @@ inherit host, strictPort, allowedHosts and proxy from `server`),
 measurement of the production bundle: **3 script requests before
 DOMContentLoaded** (was 50–60), DCL 50 ms on loopback, the login page renders
 and `/api/me` reaches the API through the preview proxy. Web gate green (614
-Vitest). Coordinator audit passed; parts B–D released.
+Vitest). Coordinator audit passed; parts B–D released. **Parts B–D complete**
+(`1401008` optimistic stage/assignment/tag mutations with snapshot rollback
+and settle-invalidate; `3e4fd5d` `preload.ts` shared by the router and
+LoginView, `prefetchTodayData` from the guard, `onRowIntent` hover/focus
+prefetch with a 150 ms dwell; `9f1ce13` FilterBar selected triggers, chip
+chevron, Clear all only with a non-locked clause). Two real problems found
+and fixed by the lane: a cached stage object leaking `position` into the
+optimistic row, and the new prefetch reaching the live dev API from
+`router.test.ts` until mocked. Web gate green, 643 Vitest. Coordinator audit
+passed (15 files, all under `web/`). Review round 1 (reviewer and tester)
+launched on `9f1ce13`; the tunnel switch, probe and walkthrough follow the
+round.
 
 Previously: **PLANNING Slice 014 — perceived-latency chunk plus FilterBar UX polish
 (Web-only).** The user chose the coordinator's suggestions 1 and 2 on

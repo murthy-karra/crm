@@ -26,8 +26,21 @@ untouched; semantics and present-clause parity tests across People, count,
 seven sorts, both source statements and the three feed statements; the
 compile-forced `InvalidTag` arms added explicitly everywhere except the two
 `_ =>` sites in the Today source-issue mapping, which step 3 replaces. Lane
-gates: `check` 717 tests, `check-db` 573 of 573. Steps 3–5 (the `invalid_tag`
-paths and tests, Web chips, performance evidence) released to the lane.
+gates: `check` 717 tests, `check-db` 573 of 573. **Steps 3–5 complete**
+(`23340d1` `invalid_tag` at every site incl. the two former `_ =>` arms in
+the Today source-issue mapping, with write-time and read-time tests;
+`147ef64` Web chips on both FilterBar mounts, the repair check and the Today
+notice sentence, 610 Vitest; `ad6f10a` performance archive
+`docs/design/perf/slice-011e-2026-09-08/`). Coordinator audited the five
+commits: 69 files against `main`, all under `backend/`, `web/` and the perf
+archive. Lane disclosures: the "tag vanishes during evaluation" case is
+unreachable because Today runs one REPEATABLE READ READ ONLY transaction
+(replaced by a snapshot-isolation test; spec §9.14 to be annotated); the
+planner uses a hashed semi-join over `person_tag` rather than a per-Person
+probe (judged against §8's actual gate in review); two `db_calls` timing
+failures in the lane's check-db run, claimed pre-existing. Review round 1
+(reviewer and tester, read-only) launched on `ad6f10a`; the coordinator's
+once-only final-tree gates follow the round.
 
 Previous rung: **RUNG e1 COMPLETE AND MERGED TO LOCAL MAIN** at
 `51331e9` (2026-09-07, with the user's approval; not pushed, not deployed).

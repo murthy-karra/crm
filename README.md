@@ -183,6 +183,25 @@ The API starts without PostgreSQL or a telemetry collector; it logs to the conso
 
 Log in at `http://127.0.0.1:5173` with a seeded account, e.g. `alice@acme.test` / the value of `CRM_DEV_SEED_PASSWORD`. A successful login shows the Organization name and its member list; logout revokes the session server-side. Alice and Bob are seeded as Organization admins — their sidebar gains a **Manage** group (`/manage/members`) for inviting, promoting/demoting, and deactivating/reactivating members of their own Organization. Log in as the platform admin, `owner@platform.test` / `CRM_DEV_SEED_PASSWORD`, to reach **Platform** (`/platform`): a membership-free operator account (D-021) that creates Organizations and issues/promotes admin invitations, but has no Organization of its own and cannot see any tenant's People, Inquiries, or Today.
 
+#### Production mode (`dev-web-prod`)
+
+```sh
+./scripts/dev-web-prod
+```
+
+This builds `web/dist` and serves it with Vite's preview server instead of
+the dev server with HMR. It exists because dev-mode Vite ships 50–60
+unbundled module requests per page load, and every one of those pays the
+public tunnel's per-request floor (docs/design/perceived-latency-2026-09-07.md);
+the production build cuts that to a handful, so the tunnel (`app.tarams.org`,
+below) is normally served this way rather than from `dev-web`. Loopback
+development keeps using `./scripts/dev-web` for HMR. Only one of the two
+scripts can hold port 5173 (`CRM_WEB_PORT`) at a time — `strictPort` means
+the second one to start just fails rather than picking a different port.
+`dev-web-prod` always rebuilds before serving, but a code change made
+*after* it has started is invisible until you stop it, re-run it, and
+reload the page — there is no watch mode here.
+
 Verify liveness:
 
 ```sh

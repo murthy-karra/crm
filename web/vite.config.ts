@@ -42,6 +42,16 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
+    // vite preview (scripts/dev-web-prod) serves the production build on
+    // the same port. `port` is the only CommonServerOptions field the
+    // preview resolver does not fall back to `server` for (verified against
+    // installed Vite 8.2.1's `resolvePreviewOptions`, node_modules/vite/dist/node/chunks/node.js):
+    // host, strictPort, allowedHosts, https, open, proxy, cors and headers
+    // are all inherited from `server` when `preview` omits them, so
+    // duplicating them here would just be dead config that could drift.
+    preview: {
+      port,
+    },
     test: {
       // A DOM stand-in, not a real browser: api/client.ts reads
       // `window.location` at module load, which every realtime test

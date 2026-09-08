@@ -280,6 +280,21 @@ async fn tool_rows(pool: &PgPool, turn_id: Uuid) -> Vec<(i16, String, String, Ve
     .unwrap()
 }
 
+/// The wire `tool_calls[]` shape stripped of `duration_ms` — real wall-clock
+/// timing, never byte-identical across two separate turns even when the
+/// outcome is. "Byte-identical" comparisons (D-046, §8.10) mean the shape
+/// the model/caller can observe, not the timing.
+fn tool_call_shape(tool_calls: &Value) -> Value {
+    Value::Array(
+        tool_calls
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|c| json!({ "name": c["name"], "outcome": c["outcome"] }))
+            .collect(),
+    )
+}
+
 async fn proposal_row_count(pool: &PgPool) -> i64 {
     sqlx::query_scalar("SELECT count(*) FROM operator_proposal")
         .fetch_one(pool)
@@ -901,7 +916,11 @@ async fn another_members_personal_list_is_not_found_including_for_admin(migrator
     let body_d = crate::common::body_json(resp_d).await;
 
     assert_eq!(body_c["outcome"], body_d["outcome"]);
-    assert_eq!(body_c["tool_calls"], body_d["tool_calls"], "byte-identical");
+    assert_eq!(
+        tool_call_shape(&body_c["tool_calls"]),
+        tool_call_shape(&body_d["tool_calls"]),
+        "byte-identical"
+    );
     assert_eq!(body_c["tool_calls"][0]["outcome"], "not_found");
 }
 
@@ -1135,7 +1154,10 @@ async fn foreign_list_id_and_foreign_tag_name_are_byte_identical_to_nonexistent(
     let body2 = crate::common::body_json(resp2).await;
 
     assert_eq!(body1["tool_calls"][0]["outcome"], "not_found");
-    assert_eq!(body1["tool_calls"], body2["tool_calls"]);
+    assert_eq!(
+        tool_call_shape(&body1["tool_calls"]),
+        tool_call_shape(&body2["tool_calls"])
+    );
     assert!(
         !requests_json(&provider(vec![])).contains("Best Realty's Only List"),
         "sanity: helper compiles"

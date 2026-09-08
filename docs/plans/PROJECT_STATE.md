@@ -1,11 +1,22 @@
 # Project State
 
-Last updated: 2026-09-07 (Slice 011e rung e1 merged to local main; shared
-development runtime migrated and restarted).
+Last updated: 2026-09-07 (Slice 011e rung e2 implementation started in a
+worktree after the Phase 6 gate; e1 merged and serving).
 
 ## Current phase
 
-**Slice 011e (tags) — RUNG e1 COMPLETE AND MERGED TO LOCAL MAIN** at
+**Slice 011e (tags) — RUNG e2 IN IMPLEMENTATION.** The user passed the e2
+Phase 6 gate on 2026-09-07 ("proceed in a worktree"). Branch
+`slice-011e-tag-clauses` from `main` at `c629ac0`, worktree
+`../crm-worktrees/011e-e2` (`.env` copied in; Web dependencies installed).
+One lane, one writer: Claude Sonnet 5 (`implement` profile) follows
+`docs/tasks/SLICE_011e_IMPL.md` e2 steps 1–5, stopping after step 2 (the
+fourteen statements and parity) for the coordinator's audit before the
+`invalid_tag` wiring; Claude Fable 5.1 coordinates as for e1. No migration in
+e2. The shared development runtime serves e1 and is untouched until the e2
+merge.
+
+Previous rung: **RUNG e1 COMPLETE AND MERGED TO LOCAL MAIN** at
 `51331e9` (2026-09-07, with the user's approval; not pushed, not deployed).
 Source `slice-011e-tags` at `4af2e13` (five commits: backend `502f418`, Web
 `e7530d2`, walkthrough `a563cce`, round-1 fixes `8d7c748`, verification
@@ -595,8 +606,8 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. **011e (tags): e1 merged; e2 next** on `slice-011e-tag-clauses` from
-   `main` (one lane,
+1. **011e (tags): e2 in progress** on `slice-011e-tag-clauses` in
+   `../crm-worktrees/011e-e2` (one lane,
    `implement` profile, backend then Web). The small LATER items from the 011d
    verification record can still be batched before or between the rungs:
    the person-state 503 test, two equivalence pins, the feeds page
@@ -630,10 +641,10 @@ and now lives only in git history.
 
 ## Approval currently required
 
-- **e2 Phase 6 implementation gate** ("Proceed with implementation?"),
-  presented 2026-09-07 after the e1 cleanup. Separately: push of `main`
-  (fourteen commits ahead of `origin/main`); deployment. Neither is
-  authorized.
+- None while e2 is in implementation. Next gates: the lane's step 2
+  checkpoint (fourteen statements and parity), then review, commit and merge
+  approval for `slice-011e-tag-clauses` into `main`. Push of `main` (fifteen
+  commits ahead of `origin/main`) and deployment are not authorized.
 - None for 011d: merged, pushed, and the dev runtime updated with approval
   on 2026-09-07. Deployment is not authorized.
 - All three 011c decisions were taken on 2026-09-06 (late evening): the §8

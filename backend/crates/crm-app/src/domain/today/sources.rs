@@ -283,6 +283,7 @@ fn filter_error(
     match error {
         FilterError::InvalidStage => Ok(SavedListFilterError::InvalidStage),
         FilterError::InvalidAssignee => Ok(SavedListFilterError::InvalidAssignee),
+        FilterError::InvalidTag => Ok(SavedListFilterError::InvalidTag),
         FilterError::Malformed => Ok(SavedListFilterError::UnsupportedFilter),
         FilterError::Database(error) => Err(SavedListError::Database(error)),
     }

@@ -15,6 +15,9 @@ pub enum SavedListError {
     TodaySourceLimitReached,
     InvalidStage,
     InvalidAssignee,
+    /// docs/specs/SLICE_011e.md §4b (compile-forced by `FilterError`
+    /// gaining `InvalidTag`; full write/read-time wiring is e2 step 3).
+    InvalidTag,
     UnsupportedFilter,
     RevisionExhausted,
     Corrupt,
@@ -33,6 +36,7 @@ impl From<FilterError> for SavedListError {
             FilterError::Malformed => Self::MalformedRequest,
             FilterError::InvalidStage => Self::InvalidStage,
             FilterError::InvalidAssignee => Self::InvalidAssignee,
+            FilterError::InvalidTag => Self::InvalidTag,
             FilterError::Database(error) => Self::Database(error),
         }
     }
@@ -54,6 +58,7 @@ impl SavedListError {
             Self::TodaySourceLimitReached => "today_source_limit_reached",
             Self::InvalidStage => "invalid_stage",
             Self::InvalidAssignee => "invalid_assignee",
+            Self::InvalidTag => "invalid_tag",
             Self::UnsupportedFilter => "unsupported_filter",
             Self::RevisionExhausted => "revision_exhausted",
             Self::Corrupt => "corrupt",

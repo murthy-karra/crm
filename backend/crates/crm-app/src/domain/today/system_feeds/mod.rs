@@ -280,7 +280,9 @@ async fn resolve_stored_filter(
     };
     match filter.validate_references(conn, organization_id).await {
         Ok(()) => Ok(Some(filter)),
-        Err(FilterError::InvalidStage) | Err(FilterError::InvalidAssignee) => Ok(None),
+        Err(FilterError::InvalidStage)
+        | Err(FilterError::InvalidAssignee)
+        | Err(FilterError::InvalidTag) => Ok(None),
         Err(FilterError::Malformed) => Ok(None),
         Err(FilterError::Database(error)) => Err(error),
     }

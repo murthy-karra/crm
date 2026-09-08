@@ -45,7 +45,8 @@ use sqlx::PgConnection;
 
 use crate::domain::person::queries as person_queries;
 use crate::domain::stage;
-use crate::ids::{OrganizationId, StageId, UserId};
+use crate::domain::tag;
+use crate::ids::{OrganizationId, StageId, TagId, UserId};
 
 /// A JSON value parsed with duplicate-object-key rejection applied AT
 /// EVERY NESTING LEVEL (§4b) — the key difference from
@@ -199,6 +200,11 @@ pub enum FilterError {
     Malformed,
     InvalidStage,
     InvalidAssignee,
+    /// docs/specs/SLICE_011e.md §4b: a `tags`/`not_tags` value does not
+    /// exist in the active Organization (`tag::exists`) — non-leaking,
+    /// byte-identical for a nonexistent or cross-Organization id, exactly
+    /// like `InvalidStage`/`InvalidAssignee`.
+    InvalidTag,
     Database(sqlx::Error),
 }
 
@@ -392,6 +398,17 @@ pub struct BoolClause {
     pub value: bool,
 }
 
+/// `{"tag_ids": [uuid, ...]}` — shared payload for `tags` (any-of) and
+/// `not_tags` (none-of) (docs/specs/SLICE_011e.md §4a). One clause struct
+/// shared by both kinds, like `StageClause` is shared by nothing but is
+/// structurally validated identically (§4b: non-empty, ≤ 50, no
+/// duplicates).
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct TagIdsClause {
+    pub tag_ids: Vec<TagId>,
+}
+
 // --- Clause -----------------------------------------------------------------
 
 /// One filter clause (§4a). Manually (de)serialized on the `"kind"`
@@ -421,6 +438,13 @@ pub enum Clause {
     /// `ended`/`failed` with a non-null `ended_at` and its root automatic
     /// contact attempt has no correction.
     AwaitingCallOutcome(BoolClause),
+    /// docs/specs/SLICE_011e.md §4: the Person carries at least one of the
+    /// listed tags (`EXISTS`, OR semantics like every value array).
+    Tags(TagIdsClause),
+    /// docs/specs/SLICE_011e.md §4: the Person carries none of the listed
+    /// tags (`NOT EXISTS`); an untagged Person matches. Exact complement of
+    /// `Tags` with the same ids.
+    NotTags(TagIdsClause),
 }
 
 impl Clause {
@@ -442,6 +466,8 @@ impl Clause {
             Clause::AwaitingResponse(_) => "awaiting_response",
             Clause::ClientRepliedUnanswered(_) => "client_replied_unanswered",
             Clause::AwaitingCallOutcome(_) => "awaiting_call_outcome",
+            Clause::Tags(_) => "tags",
+            Clause::NotTags(_) => "not_tags",
         }
     }
 }
@@ -477,6 +503,8 @@ impl Serialize for Clause {
             Clause::AwaitingResponse(c) => merged("awaiting_response", c),
             Clause::ClientRepliedUnanswered(c) => merged("client_replied_unanswered", c),
             Clause::AwaitingCallOutcome(c) => merged("awaiting_call_outcome", c),
+            Clause::Tags(c) => merged("tags", c),
+            Clause::NotTags(c) => merged("not_tags", c),
         };
         value.serialize(serializer)
     }
@@ -520,6 +548,8 @@ impl<'de> Deserialize<'de> for Clause {
             .to_string();
         if kind == "stage" {
             require_canonical_uuid_strings(&obj, "stage_ids")?;
+        } else if kind == "tags" || kind == "not_tags" {
+            require_canonical_uuid_strings(&obj, "tag_ids")?;
         }
         let remaining = serde_json::Value::Object(obj);
         fn decode<T: serde::de::DeserializeOwned, E: DeError>(
@@ -541,6 +571,8 @@ impl<'de> Deserialize<'de> for Clause {
             "awaiting_response" => Ok(Clause::AwaitingResponse(decode(remaining)?)),
             "client_replied_unanswered" => Ok(Clause::ClientRepliedUnanswered(decode(remaining)?)),
             "awaiting_call_outcome" => Ok(Clause::AwaitingCallOutcome(decode(remaining)?)),
+            "tags" => Ok(Clause::Tags(decode(remaining)?)),
+            "not_tags" => Ok(Clause::NotTags(decode(remaining)?)),
             other => Err(DeError::custom(format!("unknown clause kind: {other:?}"))),
         }
     }
@@ -664,6 +696,17 @@ impl FilterDefinition {
                 Clause::AwaitingResponse(_)
                 | Clause::ClientRepliedUnanswered(_)
                 | Clause::AwaitingCallOutcome(_) => {}
+                Clause::Tags(c) | Clause::NotTags(c) => {
+                    if c.tag_ids.is_empty() || c.tag_ids.len() > MAX_VALUES {
+                        return Err(FilterError::Malformed);
+                    }
+                    let mut seen = HashSet::new();
+                    for id in &c.tag_ids {
+                        if !seen.insert(id.0) {
+                            return Err(FilterError::Malformed);
+                        }
+                    }
+                }
             }
         }
         Ok(())
@@ -721,6 +764,16 @@ impl FilterDefinition {
                         }
                     }
                 }
+                Clause::Tags(c) | Clause::NotTags(c) => {
+                    for id in &c.tag_ids {
+                        let exists = tag::exists(conn, organization_id, *id)
+                            .await
+                            .map_err(tag_error_to_database)?;
+                        if !exists {
+                            return Err(FilterError::InvalidTag);
+                        }
+                    }
+                }
                 _ => {}
             }
         }
@@ -767,10 +820,35 @@ impl FilterDefinition {
                         }
                     }
                 }
+                Clause::Tags(c) | Clause::NotTags(c) => {
+                    for id in &c.tag_ids {
+                        set_statement_timeout_until(conn, deadline).await?;
+                        let exists = tag::exists(conn, organization_id, *id)
+                            .await
+                            .map_err(tag_error_to_database)?;
+                        if !exists {
+                            return Err(FilterError::InvalidTag);
+                        }
+                    }
+                }
                 _ => {}
             }
         }
         Ok(())
+    }
+}
+
+/// `tag::exists` returns `Result<bool, tag::TagError>` (the module's shared
+/// command/read error shape) rather than a bare `sqlx::Error` like
+/// `stage::exists`; `TagError::Database` is the only variant a simple
+/// existence probe can actually produce, but the type still requires this
+/// mapping to be total.
+fn tag_error_to_database(err: tag::TagError) -> FilterError {
+    match err {
+        tag::TagError::Database(error) => FilterError::Database(error),
+        _ => FilterError::Database(sqlx::Error::Decode(
+            "tag::exists returned an unexpected non-database TagError".into(),
+        )),
     }
 }
 
@@ -830,6 +908,10 @@ pub struct PersonFilterParams {
     pub client_replied_unanswered: Option<bool>,
     /// docs/specs/SLICE_011d.md §2.
     pub awaiting_call_outcome: Option<bool>,
+    /// docs/specs/SLICE_011e.md §4: `tags` (any-of).
+    pub tag_ids_any: Option<Vec<uuid::Uuid>>,
+    /// docs/specs/SLICE_011e.md §4: `not_tags` (none-of).
+    pub tag_ids_none: Option<Vec<uuid::Uuid>>,
     /// The bound viewer id, used ONLY by the `awaiting_call_outcome` probe
     /// (§2: "for the first time, a bound viewer id"). Always set by
     /// [`to_query_params`](FilterDefinition::to_query_params) regardless of
@@ -930,6 +1012,12 @@ impl FilterDefinition {
                     params.client_replied_unanswered = Some(c.value)
                 }
                 Clause::AwaitingCallOutcome(c) => params.awaiting_call_outcome = Some(c.value),
+                Clause::Tags(c) => {
+                    params.tag_ids_any = Some(c.tag_ids.iter().map(|id| id.0).collect());
+                }
+                Clause::NotTags(c) => {
+                    params.tag_ids_none = Some(c.tag_ids.iter().map(|id| id.0).collect());
+                }
             }
         }
         params
@@ -944,6 +1032,8 @@ impl FilterDefinition {
 pub struct FilterNames {
     pub stage_names: std::collections::HashMap<StageId, String>,
     pub user_names: std::collections::HashMap<UserId, String>,
+    /// docs/specs/SLICE_011e.md §4d.
+    pub tag_names: std::collections::HashMap<TagId, String>,
 }
 
 fn join_or(items: Vec<String>) -> String {
@@ -1047,6 +1137,34 @@ impl FilterDefinition {
                     } else {
                         "No call of mine needs an outcome".to_string()
                     }
+                }
+                Clause::Tags(c) => {
+                    let labels = c
+                        .tag_ids
+                        .iter()
+                        .map(|id| {
+                            names
+                                .tag_names
+                                .get(id)
+                                .cloned()
+                                .unwrap_or_else(|| "an unknown tag".to_string())
+                        })
+                        .collect();
+                    format!("Tagged {}", join_or(labels))
+                }
+                Clause::NotTags(c) => {
+                    let labels = c
+                        .tag_ids
+                        .iter()
+                        .map(|id| {
+                            names
+                                .tag_names
+                                .get(id)
+                                .cloned()
+                                .unwrap_or_else(|| "an unknown tag".to_string())
+                        })
+                        .collect();
+                    format!("Not tagged {}", join_or(labels))
                 }
             })
             .collect()
@@ -1971,5 +2089,206 @@ mod tests {
             Some(vec![viewer.0, viewer.0]),
             "harmless: `= ANY(...)` ignores duplicate array entries"
         );
+    }
+
+    // --- 011e: `tags` / `not_tags` (docs/specs/SLICE_011e.md §4) ---------
+
+    #[test]
+    fn round_trips_tags_and_not_tags() {
+        let a = Uuid::new_v4();
+        let b = Uuid::new_v4();
+        let json = serde_json::json!({
+            "version": 1,
+            "clauses": [
+                {"kind": "tags", "tag_ids": [a, b]},
+                {"kind": "not_tags", "tag_ids": [a]},
+            ]
+        })
+        .to_string();
+        let parsed: FilterDefinition = parse(&json).unwrap();
+        assert_eq!(parsed.clauses.len(), 2);
+        assert_eq!(
+            parsed.clauses[0],
+            Clause::Tags(TagIdsClause {
+                tag_ids: vec![TagId::new(a), TagId::new(b)]
+            })
+        );
+        assert_eq!(
+            parsed.clauses[1],
+            Clause::NotTags(TagIdsClause {
+                tag_ids: vec![TagId::new(a)]
+            })
+        );
+        let serialized = serde_json::to_string(&parsed).unwrap();
+        let reparsed: FilterDefinition = parse(&serialized).unwrap();
+        assert_eq!(parsed, reparsed);
+    }
+
+    #[test]
+    fn tags_and_not_tags_kind_labels() {
+        assert_eq!(
+            Clause::Tags(TagIdsClause {
+                tag_ids: vec![TagId::new(Uuid::new_v4())]
+            })
+            .kind_label(),
+            "tags"
+        );
+        assert_eq!(
+            Clause::NotTags(TagIdsClause {
+                tag_ids: vec![TagId::new(Uuid::new_v4())]
+            })
+            .kind_label(),
+            "not_tags"
+        );
+    }
+
+    #[test]
+    fn non_canonical_tag_id_fails_closed_at_decode() {
+        let json = r#"{"version":1,"clauses":[{"kind":"tags","tag_ids":["00000000-0000-0000-0000-00000000000A"]}]}"#;
+        assert!(parse(json).is_err(), "uppercase hex must be rejected");
+        let json = r#"{"version":1,"clauses":[{"kind":"not_tags","tag_ids":["{00000000-0000-0000-0000-000000000001}"]}]}"#;
+        assert!(parse(json).is_err(), "braced form must be rejected");
+    }
+
+    #[test]
+    fn unknown_field_inside_a_tags_clause_fails_closed() {
+        let json = format!(
+            r#"{{"version":1,"clauses":[{{"kind":"tags","tag_ids":["{}"],"extra":1}}]}}"#,
+            Uuid::new_v4()
+        );
+        assert!(parse(&json).is_err());
+    }
+
+    fn tags_clause(n: usize) -> Clause {
+        Clause::Tags(TagIdsClause {
+            tag_ids: (0..n).map(|_| TagId::new(Uuid::new_v4())).collect(),
+        })
+    }
+
+    #[test]
+    fn empty_tag_ids_is_malformed() {
+        let filter = FilterDefinition {
+            version: 1,
+            clauses: vec![tags_clause(0)],
+        };
+        assert!(matches!(filter.validate(), Err(FilterError::Malformed)));
+    }
+
+    #[test]
+    fn more_than_fifty_tag_ids_is_malformed() {
+        let filter = FilterDefinition {
+            version: 1,
+            clauses: vec![tags_clause(51)],
+        };
+        assert!(matches!(filter.validate(), Err(FilterError::Malformed)));
+    }
+
+    #[test]
+    fn duplicate_tag_id_within_tags_is_malformed() {
+        let id = TagId::new(Uuid::new_v4());
+        let filter = FilterDefinition {
+            version: 1,
+            clauses: vec![Clause::Tags(TagIdsClause {
+                tag_ids: vec![id, id],
+            })],
+        };
+        assert!(matches!(filter.validate(), Err(FilterError::Malformed)));
+    }
+
+    #[test]
+    fn duplicate_tags_clause_kind_is_malformed() {
+        let filter = FilterDefinition {
+            version: 1,
+            clauses: vec![tags_clause(1), tags_clause(1)],
+        };
+        assert!(matches!(filter.validate(), Err(FilterError::Malformed)));
+    }
+
+    #[test]
+    fn tags_and_not_tags_together_is_valid_not_a_duplicate_kind() {
+        let id = TagId::new(Uuid::new_v4());
+        let filter = FilterDefinition {
+            version: 1,
+            clauses: vec![
+                Clause::Tags(TagIdsClause { tag_ids: vec![id] }),
+                Clause::NotTags(TagIdsClause { tag_ids: vec![id] }),
+            ],
+        };
+        assert!(filter.validate().is_ok());
+    }
+
+    #[test]
+    fn describe_tags_joins_multiple_names_and_placeholders_unknown_ids() {
+        let known = TagId::new(Uuid::new_v4());
+        let unknown = TagId::new(Uuid::new_v4());
+        let mut names = FilterNames::default();
+        names.tag_names.insert(known, "Investor".to_string());
+        let filter = FilterDefinition {
+            version: 1,
+            clauses: vec![Clause::Tags(TagIdsClause {
+                tag_ids: vec![known, unknown],
+            })],
+        };
+        assert_eq!(
+            filter.describe(&names),
+            vec!["Tagged Investor or an unknown tag".to_string()]
+        );
+    }
+
+    #[test]
+    fn describe_not_tags_single_name() {
+        let known = TagId::new(Uuid::new_v4());
+        let mut names = FilterNames::default();
+        names.tag_names.insert(known, "Investor".to_string());
+        let filter = FilterDefinition {
+            version: 1,
+            clauses: vec![Clause::NotTags(TagIdsClause {
+                tag_ids: vec![known],
+            })],
+        };
+        assert_eq!(
+            filter.describe(&names),
+            vec!["Not tagged Investor".to_string()]
+        );
+    }
+
+    #[test]
+    fn to_query_params_binds_tag_axes_and_leaves_them_null_when_absent() {
+        let a = TagId::new(Uuid::new_v4());
+        let b = TagId::new(Uuid::new_v4());
+        let filter = FilterDefinition {
+            version: 1,
+            clauses: vec![
+                Clause::Tags(TagIdsClause {
+                    tag_ids: vec![a, b],
+                }),
+                Clause::NotTags(TagIdsClause { tag_ids: vec![a] }),
+            ],
+        };
+        let params = filter.to_query_params(UserId::new(Uuid::new_v4()));
+        assert_eq!(params.tag_ids_any, Some(vec![a.0, b.0]));
+        assert_eq!(params.tag_ids_none, Some(vec![a.0]));
+
+        let empty = FilterDefinition {
+            version: 1,
+            clauses: vec![],
+        };
+        let params = empty.to_query_params(UserId::new(Uuid::new_v4()));
+        assert_eq!(params.tag_ids_any, None);
+        assert_eq!(params.tag_ids_none, None);
+    }
+
+    #[test]
+    fn kinds_field_includes_tags_and_not_tags() {
+        let filter = FilterDefinition {
+            version: 1,
+            clauses: vec![
+                tags_clause(1),
+                Clause::NotTags(TagIdsClause {
+                    tag_ids: vec![TagId::new(Uuid::new_v4())],
+                }),
+            ],
+        };
+        assert_eq!(filter.kinds_field(), "tags,not_tags");
     }
 }

@@ -12,6 +12,7 @@ use crate::domain::person::queries as person_queries;
 use crate::domain::person::sort::{PersonSort, SortDecodeResult};
 use crate::domain::person::PersonVisibilityScope;
 use crate::domain::stage;
+use crate::domain::tag;
 use crate::ids::{OrganizationId, SavedListId, UserId};
 
 use super::error::SavedListError;
@@ -60,6 +61,10 @@ pub enum SavedListFilterError {
     UnsupportedFilter,
     InvalidStage,
     InvalidAssignee,
+    /// docs/specs/SLICE_011e.md §4b (compile-forced by `FilterError` gaining
+    /// `InvalidTag`; the deleted-before-enumeration/during-evaluation Today
+    /// source wiring in `today/mod.rs` is e2 step 3).
+    InvalidTag,
 }
 
 impl SavedListFilterError {
@@ -68,6 +73,7 @@ impl SavedListFilterError {
             Self::UnsupportedFilter => "unsupported_filter",
             Self::InvalidStage => "invalid_stage",
             Self::InvalidAssignee => "invalid_assignee",
+            Self::InvalidTag => "invalid_tag",
         }
     }
 }
@@ -353,6 +359,7 @@ pub async fn saved_list_detail(
         Ok(()) => None,
         Err(FilterError::InvalidStage) => Some(SavedListFilterError::InvalidStage),
         Err(FilterError::InvalidAssignee) => Some(SavedListFilterError::InvalidAssignee),
+        Err(FilterError::InvalidTag) => Some(SavedListFilterError::InvalidTag),
         Err(FilterError::Database(error)) => return Err(SavedListError::Database(error)),
         Err(FilterError::Malformed) => Some(SavedListFilterError::UnsupportedFilter),
     };
@@ -374,6 +381,14 @@ async fn filter_names(
 ) -> Result<FilterNames, SavedListError> {
     let stages = stage::list(conn, organization_id).await?;
     let members = admin_queries::members(conn, organization_id).await?;
+    let tags = tag::list_for_organization(conn, organization_id)
+        .await
+        .map_err(|err| match err {
+            tag::TagError::Database(error) => SavedListError::Database(error),
+            _ => SavedListError::Database(sqlx::Error::Decode(
+                "tag::list_for_organization returned an unexpected TagError".into(),
+            )),
+        })?;
     let stage_names = stages
         .into_iter()
         .map(|stage| (stage.id, stage.name))
@@ -382,9 +397,14 @@ async fn filter_names(
         .into_iter()
         .map(|member| (member.user_id, member.display_name))
         .collect::<HashMap<_, _>>();
+    let tag_names = tags
+        .into_iter()
+        .map(|tag| (tag.id, tag.name))
+        .collect::<HashMap<_, _>>();
     Ok(FilterNames {
         stage_names,
         user_names,
+        tag_names,
     })
 }
 
@@ -437,6 +457,7 @@ pub async fn count_saved_list_matches(
         Ok(()) => {}
         Err(FilterError::InvalidStage) => return Err(SavedListError::InvalidStage),
         Err(FilterError::InvalidAssignee) => return Err(SavedListError::InvalidAssignee),
+        Err(FilterError::InvalidTag) => return Err(SavedListError::InvalidTag),
         Err(FilterError::Database(error)) => return Err(SavedListError::Database(error)),
         Err(FilterError::Malformed) => return Err(SavedListError::UnsupportedFilter),
     }

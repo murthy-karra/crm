@@ -15,6 +15,7 @@ use crate::domain::admin::queries as admin_queries;
 use crate::domain::person::filter::{FilterDefinition, FilterError, FilterNames};
 use crate::domain::saved_list::decode_structural_filter;
 use crate::domain::stage;
+use crate::domain::tag;
 use crate::ids::{OrganizationId, UserId};
 
 use super::error::TodayFeedError;
@@ -121,12 +122,21 @@ pub(crate) async fn filter_names(
 ) -> Result<FilterNames, sqlx::Error> {
     let stages = stage::list(conn, organization_id).await?;
     let members = admin_queries::members(conn, organization_id).await?;
+    let tags = tag::list_for_organization(conn, organization_id)
+        .await
+        .map_err(|err| match err {
+            tag::TagError::Database(error) => error,
+            _ => sqlx::Error::Decode(
+                "tag::list_for_organization returned an unexpected TagError".into(),
+            ),
+        })?;
     Ok(FilterNames {
         stage_names: stages.into_iter().map(|s| (s.id, s.name)).collect(),
         user_names: members
             .into_iter()
             .map(|m| (m.user_id, m.display_name))
             .collect(),
+        tag_names: tags.into_iter().map(|t| (t.id, t.name)).collect(),
     })
 }
 
@@ -172,6 +182,7 @@ pub(crate) async fn build_feed_view(
                 Ok(()) => (Some(typed), None),
                 Err(FilterError::InvalidStage) => (Some(typed), Some("invalid_stage")),
                 Err(FilterError::InvalidAssignee) => (Some(typed), Some("invalid_assignee")),
+                Err(FilterError::InvalidTag) => (Some(typed), Some("invalid_tag")),
                 Err(FilterError::Malformed) => (None, Some("unsupported_filter")),
                 Err(FilterError::Database(error)) => return Err(TodayFeedError::Database(error)),
             },

@@ -23,6 +23,8 @@ pub enum ApiError {
     NotFound,
     InvalidAssignee,
     InvalidStage,
+    // --- Slice 011e (docs/specs/SLICE_011e.md §4b) ----------------------
+    InvalidTag,
     InternalError,
     /// `receive_inquiry`'s bounded retry around the per-Organization
     /// advisory lock exhausted its wall-clock budget without acquiring it
@@ -123,6 +125,7 @@ impl IntoResponse for ApiError {
                 (StatusCode::UNPROCESSABLE_ENTITY, "invalid_assignee", None)
             }
             ApiError::InvalidStage => (StatusCode::UNPROCESSABLE_ENTITY, "invalid_stage", None),
+            ApiError::InvalidTag => (StatusCode::UNPROCESSABLE_ENTITY, "invalid_tag", None),
             ApiError::InternalError => (StatusCode::INTERNAL_SERVER_ERROR, "internal_error", None),
             ApiError::IntakeBusy => (StatusCode::SERVICE_UNAVAILABLE, "intake_busy", Some(2u64)),
             ApiError::Discarded => (StatusCode::CONFLICT, "discarded", None),
@@ -326,6 +329,7 @@ impl From<FilterError> for ApiError {
             FilterError::Malformed => ApiError::MalformedRequest,
             FilterError::InvalidStage => ApiError::InvalidStage,
             FilterError::InvalidAssignee => ApiError::InvalidAssignee,
+            FilterError::InvalidTag => ApiError::InvalidTag,
             FilterError::Database(_) => ApiError::Unavailable,
         }
     }
@@ -349,6 +353,7 @@ impl From<SavedListError> for ApiError {
             SavedListError::TodaySourceLimitReached => ApiError::TodaySourceLimitReached,
             SavedListError::InvalidStage => ApiError::InvalidStage,
             SavedListError::InvalidAssignee => ApiError::InvalidAssignee,
+            SavedListError::InvalidTag => ApiError::InvalidTag,
             SavedListError::UnsupportedFilter => ApiError::UnsupportedFilter,
             SavedListError::RevisionExhausted
             | SavedListError::Corrupt
@@ -389,6 +394,7 @@ impl From<crate::domain::today::system_feeds::error::TodayFeedError> for ApiErro
             TodayFeedError::Conflict => ApiError::TodayFeedConflict,
             TodayFeedError::InvalidStage => ApiError::InvalidStage,
             TodayFeedError::InvalidAssignee => ApiError::InvalidAssignee,
+            TodayFeedError::InvalidTag => ApiError::InvalidTag,
             TodayFeedError::InvalidFeedRule => ApiError::InvalidFeedRule,
             TodayFeedError::RevisionExhausted
             | TodayFeedError::Corrupt

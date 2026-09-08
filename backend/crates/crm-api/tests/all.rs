@@ -98,6 +98,9 @@ mod db_operator;
 #[path = "db_operator_call.rs"]
 mod db_operator_call;
 
+#[path = "db_operator_filter.rs"]
+mod db_operator_filter;
+
 #[path = "db_people.rs"]
 mod db_people;
 

@@ -38,9 +38,28 @@ unreachable because Today runs one REPEATABLE READ READ ONLY transaction
 (replaced by a snapshot-isolation test; spec §9.14 to be annotated); the
 planner uses a hashed semi-join over `person_tag` rather than a per-Person
 probe (judged against §8's actual gate in review); two `db_calls` timing
-failures in the lane's check-db run, claimed pre-existing. Review round 1
-(reviewer and tester, read-only) launched on `ad6f10a`; the coordinator's
-once-only final-tree gates follow the round.
+failures in the lane's check-db run, claimed pre-existing. **Review round 1
+(of two) complete** on `ad6f10a`: reviewer READY WITH FIXES, tester no
+blocking finding; the fourteen-statement extension, bindings, `.sqlx`,
+closed code sets in Rust, isolation and the Web contracts verified. One
+behavioural defect: the Web saved-list count scheduler
+(`savedListCounts.ts`) still absorbed `invalid_tag` as "Unavailable" with
+Retry. Coordinator decision taken: bind the statement's literal Organization
+parameter inside the tag subqueries so `person_tag_org_tag_person_idx` can
+serve the probe (the correlated form forced a full `person_tag` scan per
+query; inside the envelope at 25k People × 20 tags that is 500k rows per
+People page). Spec §4/§8/§9.14 amended by pointer on `main` (predicate
+binding; plan-shape gate wording; "vanishes during evaluation" unreachable
+under Today's `REPEATABLE READ READ ONLY` snapshot). Consolidated fix round
+dispatched to the lane: the count-scheduler arm, the predicate binding with
+`.sqlx` regeneration and re-captured plans, stale comments, and test
+hardenings (person_state chain B, `source_membership` and `call_membership`
+present-clause paths, write-time `PUT /api/today/sources`, byte-stable
+round trip, a decisive Web repair-check test, `not_tags` URL round trip).
+LATER: batching the reference probes near the 50-value cap
+(BEYOND_ENVELOPE); the `FilterNames` loaders use the 200-row list rather
+than `names_for` (bounded, matches stages). Next: lane gates, coordinator
+once-only final-tree gates, verification record, merge gate.
 
 Previous rung: **RUNG e1 COMPLETE AND MERGED TO LOCAL MAIN** at
 `51331e9` (2026-09-07, with the user's approval; not pushed, not deployed).

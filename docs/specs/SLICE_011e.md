@@ -253,6 +253,15 @@ per kind, counted against the 20-clause cap:
           AND pt2.person_id = p.id AND pt2.tag_id = ANY($B)))
   ```
 
+  *Amendment (e2 review round 1, 2026-09-07):* inside both subqueries the
+  Organization is bound to the statement's own literal Organization
+  parameter (`pt.organization_id = $1` in the People statements, the
+  corresponding parameter elsewhere) rather than correlated through
+  `p.organization_id`. Semantics are identical because the outer row already
+  satisfies `p.organization_id = $1`; the literal binding lets
+  `person_tag_org_tag_person_idx` serve the probe, where the correlated form
+  forced a full `person_tag` scan per query (measured in the e2 archive).
+
   Absent clauses bind NULL and keep every statement byte-identical in
   results, pinned by parity tests per axis across People, count, every sort,
   both Today source statements and the three feed statements. No dynamic
@@ -439,6 +448,13 @@ shape as `has_phone`. Gates, exactly two:
    `filtered_summaries` with a `tags` clause and with a `not_tags` clause on
    the perf book, showing the `person_tag` primary-key probe (or the
    tag-led index) and no super-linear growth with People.
+   *Amendment (e2 review round 1, 2026-09-07):* the gate is the D-050
+   wording, "index use and no super-linear growth with People". A hashed
+   semi-join that scans `person_tag` once per query is linear and was
+   measured first; the §4 literal-Organization amendment exists so the
+   tag-led index can serve that scan. Either shape passes provided growth
+   is linear in People plus tag links; the archive records what the planner
+   actually chose.
 
 Absolute latency is reported, never gated. Evidence under
 `docs/design/perf/slice-011e-<date>/`. e1 adds no hot statement and needs
@@ -524,9 +540,12 @@ e2:
     naming a deleted tag → detail `filter_error:"invalid_tag"` with metadata
     preserved, count 422, the writer repairs by editing; `GET
     /api/today/sources` reports `filter_error:"invalid_tag"`; as a Today
-    source → source issue `invalid_tag` with partial availability, both when
-    the tag was deleted **before** Today enumerated the source and when it
-    vanishes **during** evaluation; in a system feed → `InvalidDefinition`
+    source → source issue `invalid_tag` with partial availability when the
+    tag was deleted **before** Today's snapshot (*amendment, e2 review round
+    1, 2026-09-07:* "vanishes during evaluation" is unreachable as a distinct
+    outcome because Today runs one `REPEATABLE READ READ ONLY` transaction
+    whose snapshot precedes both source enumeration and evaluation; a test
+    pins that isolation instead); in a system feed → `InvalidDefinition`
     with canonical fallback, `fallback:true`, the admin feed read showing
     `filter_error:"invalid_tag"` and the member read showing the effective
     default. Never `unsupported_filter`. (db)

@@ -978,11 +978,15 @@ async fn foreign_list_id_and_foreign_tag_name_are_byte_identical_to_nonexistent(
     .await;
     let foreign_tag_id = create_tag(&app_pool, org_b, alice_b, "OnlyInOrgB").await;
     let _ = foreign_tag_id;
+    // Personal, not Shared: `create_org_with_stages_and_member` leaves
+    // `alice_b` a plain member, and only an admin may create a shared
+    // list — irrelevant to this test, which only needs A list foreign to
+    // org A.
     let foreign_list_id = create_list(
         &app_pool,
         org_b,
         alice_b,
-        SavedListScope::Shared,
+        SavedListScope::Personal,
         "Best Realty's Only List",
         vec![crm_api::domain::person::filter::Clause::HasPhone(
             crm_api::domain::person::filter::BoolClause { value: true },
@@ -1214,10 +1218,19 @@ async fn span_capture_contains_filter_kinds_and_no_names_ids_or_day_counts(migra
     );
     assert!(captured.contains("resolution"));
     assert!(captured.contains("saved_list_scope"));
-    for leaked in ["Investor", "Grace", "Hopper", "Distinctive List Name", "47"] {
+    for leaked in ["Investor", "Grace", "Hopper", "Distinctive List Name"] {
         assert!(
             !captured.contains(leaked),
             "leaked into spans/logs: {leaked}"
         );
     }
+    // Day counts: no span here declares or records a "days" field at all,
+    // so the direct test is that no such field-assignment ever appears —
+    // asserting the bare digits of the day count itself is unreliable
+    // (they can coincidentally appear inside an unrelated hex UUID
+    // elsewhere in a capture this size).
+    assert!(
+        !captured.contains("days="),
+        "a day-count field leaked into spans/logs"
+    );
 }

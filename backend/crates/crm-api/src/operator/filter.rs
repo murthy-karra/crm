@@ -42,8 +42,18 @@ pub fn find_by_name<'a, T>(
     items: &'a [T],
     name_of: impl Fn(&T) -> &str,
 ) -> NameMatch<'a, T> {
-    if let Some(exact) = items.iter().find(|item| name_of(item) == query) {
-        return NameMatch::One(exact);
+    // An exact match must still check for a COLLISION among exact matches,
+    // not just take the first one: stage/tag names are unique per
+    // Organization by construction (a DB constraint, D-051), but saved
+    // list names are not — two different visible lists (the whole point
+    // of the duplicate-name clarification, D-046) can share the exact
+    // same name, and nothing stops two members from sharing an exact
+    // display name either.
+    let exact: Vec<&T> = items.iter().filter(|item| name_of(item) == query).collect();
+    match exact.len() {
+        1 => return NameMatch::One(exact[0]),
+        n if n > 1 => return NameMatch::Many(exact),
+        _ => {}
     }
     let trimmed = query.trim();
     let matches: Vec<&T> = items
@@ -555,5 +565,25 @@ mod tests {
             find_by_name("ALEX", &dup, |s| s.as_str()),
             NameMatch::Many(_)
         ));
+    }
+
+    /// Regression: two items with the exact SAME name (a real case for
+    /// saved lists — a personal and a shared list can share a name, D-046
+    /// — and not impossible for member display names either) must report
+    /// `Many`, not silently pick the first exact match.
+    #[test]
+    fn find_by_name_reports_a_collision_even_among_exact_matches() {
+        let items = vec!["Weekly".to_string(), "Weekly".to_string()];
+        match find_by_name("Weekly", &items, |s| s.as_str()) {
+            NameMatch::Many(matches) => assert_eq!(matches.len(), 2),
+            other => panic!(
+                "expected Many, got a {} match",
+                if matches!(other, NameMatch::One(_)) {
+                    "One"
+                } else {
+                    "None"
+                }
+            ),
+        }
     }
 }

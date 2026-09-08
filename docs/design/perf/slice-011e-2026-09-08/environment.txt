@@ -1,0 +1,39 @@
+Slice 011e e2 step 5 performance evidence — environment
+=========================================================
+
+Captured: 2026-09-08T04:12:54Z
+Host: MacBook Pro (Apple M1 Max, 10 cores, 64 GB)
+OS: macOS 26.6.2 (build 25G83)
+PostgreSQL: 18.6 (Debian 18.6-1.pgdg13+2), OrbStack Docker container
+  (development-postgres-1), the same container used for prior slice
+  archives.
+Rust toolchain: workspace-pinned (see backend/rust-toolchain if present;
+  otherwise stable as resolved by cargo at capture time).
+sqlx: locked workspace version (see backend/Cargo.lock).
+Database: an ephemeral #[sqlx::test]-managed scratch database created and
+  torn down by the harness itself — never crm_dev, never a fixture shared
+  with any other test. No server was started on port 3000 or 5173 for
+  this evidence; no HTTP requests were made.
+
+Worktree: /Users/karrad/projects/crm-worktrees/011e-e2
+Branch: slice-011e-tag-clauses
+Git HEAD at capture time: 147ef64047a8b6bb8984eb6a74b6a0a4db959315
+  ("Slice 011e e2 step 4: Web FilterBar tags/not_tags support (spec §5)")
+
+Harness: a temporary, uncommitted addition to
+backend/crates/crm-api/tests/db_today_feeds_http_perf.rs
+(`slice_011e_perf_evidence`, `#[ignore]`d, `perf-harness`-gated), removed
+from that file after this archive was captured — per the coordinator's
+step 5 instruction, only this docs/design/perf archive is committed with
+the slice, not the harness code itself. The command that produced
+harness-stdout.txt:
+
+  cd backend
+  DATABASE_URL=postgres://crm_migrator:crm_migrator_local_pw@127.0.0.1:5432/crm_dev \
+  SQLX_OFFLINE=true \
+  cargo test --test db_today_feeds_http_perf -p crm-api --features perf-harness \
+    slice_011e_perf_evidence -- --ignored --nocapture
+
+(DATABASE_URL here is only #[sqlx::test]'s required master-connection
+seam per docs/specs/SLICE_001.md §9 — the test itself creates and drops
+its own throwaway database and never touches crm_dev's data.)

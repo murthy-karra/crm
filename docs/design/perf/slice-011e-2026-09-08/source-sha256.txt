@@ -1,0 +1,15 @@
+# SHA-256 of the statement texts compared/EXPLAINed in this archive.
+# (count_filtered_matches has no standalone .sql file -- its text is
+# inline in person/queries.rs -- so its SQL body was extracted to a
+# temporary file for hashing; the OLD hash below matches one of the
+# query-cache files deleted by the Slice 011e e2 step 2 commit's
+# `./scripts/sqlx-prepare` run, cross-confirming the extraction.)
+
+# NEW (current worktree, commit 147ef64047a8b6bb8984eb6a74b6a0a4db959315):
+a9b54ce6136c36cc7a5ba181f42bd94dfb193ea7d530d65db70058c507241d7c  backend/crates/crm-app/src/domain/person/sql/filtered_summaries.sql (NEW)
+4d5e68a7bf5e817b8d8b71d8f00d9034b10615216b0279bc07241c578a43c7bf  backend/crates/crm-app/src/domain/today/system_feeds/sql/person_state.sql (NEW)
+
+# OLD (git commit c629ac0, the branch point before any Slice 011e e2 change):
+b4fa76774bf0becdd82d1b7c507bc70b120874d3096918423b2f7fc2d1e7201e  backend/crates/crm-app/src/domain/person/sql/filtered_summaries.sql (OLD, c629ac0)
+429b1dce0c121703e635484ec7e599d7c409873689bac94143e0dd7ef24b9ea7  backend/crates/crm-app/src/domain/today/system_feeds/sql/person_state.sql (OLD, c629ac0)
+7d6442149e66d4374e441105f1a9f8475ee9e4d57cf5c5caf00b341fb7ab87db  backend/crates/crm-app/src/domain/person/queries.rs count_filtered_matches SQL body (OLD, c629ac0)

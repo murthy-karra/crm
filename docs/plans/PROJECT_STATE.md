@@ -9,8 +9,9 @@ development runtime migrated and restarted).
 `51331e9` (2026-09-07, with the user's approval; not pushed, not deployed).
 Source `slice-011e-tags` at `4af2e13` (five commits: backend `502f418`, Web
 `e7530d2`, walkthrough `a563cce`, round-1 fixes `8d7c748`, verification
-record `4af2e13`), worktree `../crm-worktrees/011e-e1` (still present; deletion
-of the branch and worktree needs the user's approval). Final-tree gates run
+record `4af2e13`). The branch and the worktree `../crm-worktrees/011e-e1`
+were deleted on 2026-09-07 with the user's approval; no 011e branch remains
+locally and none ever existed on the remote. Final-tree gates run
 once by the coordinator: `sqlx-prepare` clean, `check` green (704 Rust, 598
 Web tests), `check-db` 566 of 566 first run. Review round 1 of two: reviewer
 READY WITH FIXES, tester no blocking finding, all fixes applied; round 2 not
@@ -629,11 +630,10 @@ and now lives only in git history.
 
 ## Approval currently required
 
-- **e2 Phase 6 implementation gate** ("Proceed with implementation?") when
-  the user wants the next rung. Separately: approval to delete the merged
-  `slice-011e-tags` branch and the `../crm-worktrees/011e-e1` worktree; push
-  of `main` (now seven commits ahead of `origin/main`); deployment. None of
-  these is authorized.
+- **e2 Phase 6 implementation gate** ("Proceed with implementation?"),
+  presented 2026-09-07 after the e1 cleanup. Separately: push of `main`
+  (fourteen commits ahead of `origin/main`); deployment. Neither is
+  authorized.
 - None for 011d: merged, pushed, and the dev runtime updated with approval
   on 2026-09-07. Deployment is not authorized.
 - All three 011c decisions were taken on 2026-09-06 (late evening): the §8

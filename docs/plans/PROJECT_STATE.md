@@ -43,9 +43,19 @@ chevron, Clear all only with a non-locked clause). Two real problems found
 and fixed by the lane: a cached stage object leaking `position` into the
 optimistic row, and the new prefetch reaching the live dev API from
 `router.test.ts` until mocked. Web gate green, 643 Vitest. Coordinator audit
-passed (15 files, all under `web/`). Review round 1 (reviewer and tester)
-launched on `9f1ce13`; the tunnel switch, probe and walkthrough follow the
-round.
+passed (15 files, all under `web/`). **Review round 1 (of two) complete** on
+`9f1ce13`: reviewer READY WITH FIXES, tester no blocking finding; prefix
+isolation, clean reference shapes, guard placement, the shared Today chunk
+and the network-leak fix all verified. Consolidated fix round dispatched:
+tag mutations invalidate the person key on any error; a transparent border
+on the selected FilterBar trigger; one shared `fetchPerson`; test hardenings
+(a vacuous other-row assertion, the assignment row write and rollback, a
+real racing-invalidation test with a held stale GET, server tag order on
+success, the 149/150 ms boundary and unmount, client mocks in the new test
+files). LATER: field-only `onSuccess` writes for rapid mutation pairs,
+insertion-order tag sorting vs collation, pointerleave timer clearing, the
+unrelated-person invalidation transient. The tunnel switch, probe and
+walkthrough follow the fixes and the coordinator's final gate.
 
 Previously: **PLANNING Slice 014 — perceived-latency chunk plus FilterBar UX polish
 (Web-only).** The user chose the coordinator's suggestions 1 and 2 on

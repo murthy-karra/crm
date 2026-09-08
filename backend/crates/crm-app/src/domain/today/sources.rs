@@ -141,6 +141,8 @@ pub(crate) async fn source_candidates(
         params.client_replied_unanswered,
         params.awaiting_call_outcome,
         params.viewer_id,
+        params.tag_ids_any.as_deref(),
+        params.tag_ids_none.as_deref(),
     )
     .fetch_all(&mut *conn)
     .await?;
@@ -252,6 +254,8 @@ pub(crate) async fn source_membership(
         params.client_replied_unanswered,
         params.awaiting_call_outcome,
         params.viewer_id,
+        params.tag_ids_any.as_deref(),
+        params.tag_ids_none.as_deref(),
     )
     .fetch_all(&mut *conn)
     .await?;

@@ -2162,3 +2162,364 @@ mod derived_axis_full_matrix_parity {
         .await;
     }
 }
+
+// --- Slice 011e e2 §9.12/§9.13: `tags` / `not_tags` semantics and parity
+// across People, count and every sort ---------------------------------
+
+mod tags_and_not_tags {
+    use std::collections::HashSet;
+
+    use crm_api::domain::person::filter::{
+        Clause, FilterDefinition, PersonFilterParams, TagIdsClause,
+    };
+    use crm_api::domain::person::sort::{PersonSort, SortDirection, SortKey};
+    use crm_api::domain::person::{queries as person_queries, PersonVisibilityScope};
+    use crm_api::ids::{OrganizationId, TagId, UserId};
+    use sqlx::PgPool;
+    use uuid::Uuid;
+
+    use super::insert_person;
+
+    async fn insert_tag(
+        pool: &PgPool,
+        organization_id: Uuid,
+        created_by: Uuid,
+        name: &str,
+    ) -> Uuid {
+        sqlx::query_scalar(
+            "INSERT INTO tag (organization_id, name, created_by_user_id) VALUES ($1, $2, $3) \
+             RETURNING id",
+        )
+        .bind(organization_id)
+        .bind(name)
+        .bind(created_by)
+        .fetch_one(pool)
+        .await
+        .unwrap()
+    }
+
+    async fn apply_tag(
+        pool: &PgPool,
+        organization_id: Uuid,
+        person_id: Uuid,
+        tag_id: Uuid,
+        added_by: Uuid,
+    ) {
+        sqlx::query(
+            "INSERT INTO person_tag (organization_id, person_id, tag_id, added_by_user_id) \
+             VALUES ($1, $2, $3, $4)",
+        )
+        .bind(organization_id)
+        .bind(person_id)
+        .bind(tag_id)
+        .bind(added_by)
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+
+    fn tags_clause(ids: &[Uuid]) -> FilterDefinition {
+        FilterDefinition {
+            version: 1,
+            clauses: vec![Clause::Tags(TagIdsClause {
+                tag_ids: ids.iter().copied().map(TagId::new).collect(),
+            })],
+        }
+    }
+
+    fn not_tags_clause(ids: &[Uuid]) -> FilterDefinition {
+        FilterDefinition {
+            version: 1,
+            clauses: vec![Clause::NotTags(TagIdsClause {
+                tag_ids: ids.iter().copied().map(TagId::new).collect(),
+            })],
+        }
+    }
+
+    fn tags_and_not_tags(any_ids: &[Uuid], none_ids: &[Uuid]) -> FilterDefinition {
+        FilterDefinition {
+            version: 1,
+            clauses: vec![
+                Clause::Tags(TagIdsClause {
+                    tag_ids: any_ids.iter().copied().map(TagId::new).collect(),
+                }),
+                Clause::NotTags(TagIdsClause {
+                    tag_ids: none_ids.iter().copied().map(TagId::new).collect(),
+                }),
+            ],
+        }
+    }
+
+    /// §9.13: every People-shaped statement that binds the parameter set
+    /// except Today's two source statements and the three system-feed
+    /// statements, which have their own dedicated parity coverage
+    /// (`db_today_source_filter_parity.rs`, `db_today_feed_equivalence.rs`):
+    /// `filtered_summaries`, `count_filtered_matches`, and all seven sorted
+    /// statements.
+    async fn assert_people_parity(
+        pool: &PgPool,
+        organization_id: Uuid,
+        viewer_id: Uuid,
+        filter: &FilterDefinition,
+        expected: &HashSet<Uuid>,
+        context: &str,
+    ) {
+        let scope = PersonVisibilityScope::Organization(OrganizationId::new(organization_id));
+        let params = filter.to_query_params(UserId::new(viewer_id));
+        let mut conn = pool.acquire().await.unwrap();
+
+        let (summaries, truncated) = person_queries::filtered_summaries(&mut conn, &scope, &params)
+            .await
+            .unwrap();
+        assert!(
+            !truncated,
+            "{context}: People fixture is well below the cap"
+        );
+        let people_ids: HashSet<Uuid> = summaries.into_iter().map(|p| p.id.as_uuid()).collect();
+        assert_eq!(
+            &people_ids, expected,
+            "{context}: People (filtered_summaries)"
+        );
+
+        let (count, count_truncated) =
+            person_queries::count_filtered_matches(&mut conn, &scope, &params)
+                .await
+                .unwrap();
+        assert!(
+            !count_truncated,
+            "{context}: count fixture is well below the cap"
+        );
+        assert_eq!(
+            count as usize,
+            expected.len(),
+            "{context}: count_filtered_matches"
+        );
+
+        for (key, direction) in [
+            (SortKey::Created, SortDirection::Asc),
+            (SortKey::Name, SortDirection::Asc),
+            (SortKey::Name, SortDirection::Desc),
+            (SortKey::Stage, SortDirection::Asc),
+            (SortKey::Stage, SortDirection::Desc),
+            (SortKey::Assignee, SortDirection::Asc),
+            (SortKey::Assignee, SortDirection::Desc),
+        ] {
+            let sort = PersonSort { key, direction };
+            let (sorted, sorted_truncated) =
+                person_queries::filtered_summaries_sorted(&mut conn, &scope, &params, sort)
+                    .await
+                    .unwrap();
+            assert!(
+                !sorted_truncated,
+                "{context}: sort {key:?}.{direction:?} fixture below cap"
+            );
+            let sorted_ids: HashSet<Uuid> = sorted.into_iter().map(|p| p.id.as_uuid()).collect();
+            assert_eq!(
+                &sorted_ids, expected,
+                "{context}: sort {key:?}.{direction:?}"
+            );
+        }
+    }
+
+    #[sqlx::test]
+    #[ignore]
+    async fn tags_any_of_one_and_several_ids_positive_and_negative(migrator_pool: PgPool) {
+        let (organization_id, alice_id) = crate::common::create_org_with_stages_and_member(
+            &migrator_pool,
+            "Tags any-of",
+            "alice@tags-any-of.test",
+            "Alice",
+            "pw",
+        )
+        .await;
+        let stage_id = super::first_stage_id(&migrator_pool, organization_id).await;
+
+        let vip = insert_tag(&migrator_pool, organization_id, alice_id, "VIP").await;
+        let past_client =
+            insert_tag(&migrator_pool, organization_id, alice_id, "Past client").await;
+        let spam = insert_tag(&migrator_pool, organization_id, alice_id, "Spam").await;
+
+        let has_vip =
+            insert_person(&migrator_pool, organization_id, stage_id, Some(alice_id)).await;
+        apply_tag(&migrator_pool, organization_id, has_vip, vip, alice_id).await;
+
+        let has_past_client =
+            insert_person(&migrator_pool, organization_id, stage_id, Some(alice_id)).await;
+        apply_tag(
+            &migrator_pool,
+            organization_id,
+            has_past_client,
+            past_client,
+            alice_id,
+        )
+        .await;
+
+        let has_spam_only =
+            insert_person(&migrator_pool, organization_id, stage_id, Some(alice_id)).await;
+        apply_tag(
+            &migrator_pool,
+            organization_id,
+            has_spam_only,
+            spam,
+            alice_id,
+        )
+        .await;
+
+        let _untagged =
+            insert_person(&migrator_pool, organization_id, stage_id, Some(alice_id)).await;
+
+        // One id: only the Person carrying it.
+        assert_people_parity(
+            &migrator_pool,
+            organization_id,
+            alice_id,
+            &tags_clause(&[vip]),
+            &HashSet::from([has_vip]),
+            "tags:[VIP]",
+        )
+        .await;
+
+        // Several ids: OR — VIP or Past client, never Spam or untagged.
+        assert_people_parity(
+            &migrator_pool,
+            organization_id,
+            alice_id,
+            &tags_clause(&[vip, past_client]),
+            &HashSet::from([has_vip, has_past_client]),
+            "tags:[VIP, Past client]",
+        )
+        .await;
+    }
+
+    #[sqlx::test]
+    #[ignore]
+    async fn not_tags_none_of_matches_an_untagged_person(migrator_pool: PgPool) {
+        let (organization_id, alice_id) = crate::common::create_org_with_stages_and_member(
+            &migrator_pool,
+            "Not tags none-of",
+            "alice@not-tags-none-of.test",
+            "Alice",
+            "pw",
+        )
+        .await;
+        let stage_id = super::first_stage_id(&migrator_pool, organization_id).await;
+
+        let spam = insert_tag(&migrator_pool, organization_id, alice_id, "Spam").await;
+
+        let has_spam =
+            insert_person(&migrator_pool, organization_id, stage_id, Some(alice_id)).await;
+        apply_tag(&migrator_pool, organization_id, has_spam, spam, alice_id).await;
+
+        let untagged =
+            insert_person(&migrator_pool, organization_id, stage_id, Some(alice_id)).await;
+
+        assert_people_parity(
+            &migrator_pool,
+            organization_id,
+            alice_id,
+            &not_tags_clause(&[spam]),
+            &HashSet::from([untagged]),
+            "not_tags:[Spam]",
+        )
+        .await;
+    }
+
+    #[sqlx::test]
+    #[ignore]
+    async fn tags_and_not_tags_together_intersect(migrator_pool: PgPool) {
+        let (organization_id, alice_id) = crate::common::create_org_with_stages_and_member(
+            &migrator_pool,
+            "Tags and not_tags intersect",
+            "alice@tags-intersect.test",
+            "Alice",
+            "pw",
+        )
+        .await;
+        let stage_id = super::first_stage_id(&migrator_pool, organization_id).await;
+
+        let vip = insert_tag(&migrator_pool, organization_id, alice_id, "VIP").await;
+        let spam = insert_tag(&migrator_pool, organization_id, alice_id, "Spam").await;
+
+        // Both VIP and Spam: excluded by not_tags despite matching tags.
+        let both = insert_person(&migrator_pool, organization_id, stage_id, Some(alice_id)).await;
+        apply_tag(&migrator_pool, organization_id, both, vip, alice_id).await;
+        apply_tag(&migrator_pool, organization_id, both, spam, alice_id).await;
+
+        // VIP only: admitted.
+        let vip_only =
+            insert_person(&migrator_pool, organization_id, stage_id, Some(alice_id)).await;
+        apply_tag(&migrator_pool, organization_id, vip_only, vip, alice_id).await;
+
+        // Spam only: excluded (fails tags:[VIP]).
+        let spam_only =
+            insert_person(&migrator_pool, organization_id, stage_id, Some(alice_id)).await;
+        apply_tag(&migrator_pool, organization_id, spam_only, spam, alice_id).await;
+
+        // Untagged: excluded (fails tags:[VIP]).
+        let _untagged =
+            insert_person(&migrator_pool, organization_id, stage_id, Some(alice_id)).await;
+
+        assert_people_parity(
+            &migrator_pool,
+            organization_id,
+            alice_id,
+            &tags_and_not_tags(&[vip], &[spam]),
+            &HashSet::from([vip_only]),
+            "tags:[VIP], not_tags:[Spam]",
+        )
+        .await;
+    }
+
+    /// AGENTS.md §4.3: persistence tests must attempt cross-Organization
+    /// access. `to_query_params`/`filtered_summaries` never re-validate
+    /// reference existence (that is `validate_references`'s job, already
+    /// run before `to_query_params` on every real caller path) — this
+    /// binds another Organization's tag id directly to prove the SQL
+    /// join itself (`pt.organization_id = p.organization_id` plus the
+    /// literal `p.organization_id = $1`) is what keeps org A's result
+    /// empty, not merely that no caller happens to construct this filter.
+    #[sqlx::test]
+    #[ignore]
+    async fn identically_named_tag_in_another_organization_never_matches(migrator_pool: PgPool) {
+        let (org_a, alice_id) = crate::common::create_org_with_stages_and_member(
+            &migrator_pool,
+            "Tag cross-org A",
+            "alice@tag-cross-org-a.test",
+            "Alice",
+            "pw",
+        )
+        .await;
+        let (org_b, bob_id) = crate::common::create_org_with_stages_and_member(
+            &migrator_pool,
+            "Tag cross-org B",
+            "bob@tag-cross-org-b.test",
+            "Bob",
+            "pw",
+        )
+        .await;
+        let stage_a = super::first_stage_id(&migrator_pool, org_a).await;
+        let stage_b = super::first_stage_id(&migrator_pool, org_b).await;
+
+        let vip_b = insert_tag(&migrator_pool, org_b, bob_id, "VIP").await;
+        let _person_a = insert_person(&migrator_pool, org_a, stage_a, Some(alice_id)).await;
+        let person_b = insert_person(&migrator_pool, org_b, stage_b, Some(bob_id)).await;
+        apply_tag(&migrator_pool, org_b, person_b, vip_b, bob_id).await;
+
+        let scope = PersonVisibilityScope::Organization(OrganizationId::new(org_a));
+        let params = PersonFilterParams {
+            tag_ids_any: Some(vec![vip_b]),
+            viewer_id: alice_id,
+            ..Default::default()
+        };
+        let mut conn = migrator_pool.acquire().await.unwrap();
+        let (summaries, truncated) = person_queries::filtered_summaries(&mut conn, &scope, &params)
+            .await
+            .unwrap();
+        assert!(!truncated);
+        assert!(
+            summaries.is_empty(),
+            "org A must never match org B's tag id, even though it is a \
+             valid, identically-named tag for a different Organization"
+        );
+    }
+}

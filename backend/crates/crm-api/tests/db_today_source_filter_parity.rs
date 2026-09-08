@@ -20,7 +20,7 @@ use crm_api::domain::capture::Direction;
 use crm_api::domain::envelope::{CommandContext, Origin};
 use crm_api::domain::person::filter::{
     AgeClause, AgeSpec, AssignedToClause, Assignee, BoolClause, Clause, FilterDefinition,
-    SourceClause, StageClause,
+    SourceClause, StageClause, TagIdsClause,
 };
 use crm_api::domain::person::{queries as person_queries, PersonVisibilityScope};
 use crm_api::domain::saved_list::{self, CreateSavedList, SavedListScope};
@@ -28,7 +28,8 @@ use crm_api::domain::today::{
     self, EnableTodayWorkSource, TodayItem, TodayPriority, TodayReason, TodaySourcesStatus,
 };
 use crm_api::ids::{
-    CorrelationId, CorrespondenceRawId, OrganizationId, PersonId, SavedListId, StageId, UserId,
+    CorrelationId, CorrespondenceRawId, OrganizationId, PersonId, SavedListId, StageId, TagId,
+    UserId,
 };
 
 const PW: &str = "correct horse battery staple";
@@ -2087,4 +2088,145 @@ async fn derived_axis_parity_awaiting_response_client_replied_and_call_outcome(
     assert!(!alice_false_ids.contains(&call_true_for_alice));
     assert!(alice_false_ids.contains(&call_by_bob));
     assert!(alice_false_ids.contains(&call_corrected));
+}
+
+// --- Slice 011e e2 §9.13: `tags`/`not_tags` parity between the People
+// filter and Today's two source statements (source_membership,
+// source_candidates via ListMember) ---------------------------------------
+
+async fn insert_tag(pool: &PgPool, organization_id: Uuid, created_by: Uuid, name: &str) -> Uuid {
+    sqlx::query_scalar(
+        "INSERT INTO tag (organization_id, name, created_by_user_id) VALUES ($1, $2, $3) \
+         RETURNING id",
+    )
+    .bind(organization_id)
+    .bind(name)
+    .bind(created_by)
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+async fn apply_tag(
+    pool: &PgPool,
+    organization_id: Uuid,
+    person_id: Uuid,
+    tag_id: Uuid,
+    added_by: Uuid,
+) {
+    sqlx::query(
+        "INSERT INTO person_tag (organization_id, person_id, tag_id, added_by_user_id) \
+         VALUES ($1, $2, $3, $4)",
+    )
+    .bind(organization_id)
+    .bind(person_id)
+    .bind(tag_id)
+    .bind(added_by)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+/// docs/specs/SLICE_011e.md §9.13: a present `tags`/`not_tags` clause must
+/// agree between the People filter (`filtered_summaries`, proven directly)
+/// and Today's source statements (`source_membership`/`source_candidates`,
+/// exercised via a saved list enabled as a Today source and its
+/// `ListMember` reason — the same `assert_reason_parity` helper 011d's
+/// derived-axis parity test above uses).
+#[sqlx::test]
+#[ignore]
+async fn tags_and_not_tags_source_parity(migrator_pool: PgPool) {
+    let (organization_id, alice_id) = create_org_with_stages_and_member(
+        &migrator_pool,
+        "011e tags source parity",
+        "alice@e011-tags-source-parity.test",
+        "Alice",
+        PW,
+    )
+    .await;
+    let app_pool = connect_as_app(&migrator_pool).await;
+    let (stage_a, _stage_b) = first_stage_ids(&app_pool, organization_id).await;
+    let now = Utc::now();
+
+    let vip = insert_tag(&migrator_pool, organization_id, alice_id, "VIP").await;
+    let spam = insert_tag(&migrator_pool, organization_id, alice_id, "Spam").await;
+
+    let has_vip = insert_person(
+        &migrator_pool,
+        organization_id,
+        stage_a,
+        Some(alice_id),
+        now - ChronoDuration::days(5),
+    )
+    .await;
+    apply_tag(&migrator_pool, organization_id, has_vip, vip, alice_id).await;
+
+    let has_spam = insert_person(
+        &migrator_pool,
+        organization_id,
+        stage_a,
+        Some(alice_id),
+        now - ChronoDuration::days(5),
+    )
+    .await;
+    apply_tag(&migrator_pool, organization_id, has_spam, spam, alice_id).await;
+
+    let untagged = insert_person(
+        &migrator_pool,
+        organization_id,
+        stage_a,
+        Some(alice_id),
+        now - ChronoDuration::days(5),
+    )
+    .await;
+
+    let tags_vip = FilterDefinition {
+        version: 1,
+        clauses: vec![Clause::Tags(TagIdsClause {
+            tag_ids: vec![TagId::new(vip)],
+        })],
+    };
+    let tags_list = create_and_enable_source(
+        &app_pool,
+        organization_id,
+        alice_id,
+        SavedListScope::Personal,
+        "Tags VIP",
+        tags_vip.clone(),
+    )
+    .await;
+    assert_reason_parity(
+        &app_pool,
+        organization_id,
+        alice_id,
+        tags_list,
+        &tags_vip,
+        ids([has_vip]),
+    )
+    .await;
+
+    let not_tags_spam = FilterDefinition {
+        version: 1,
+        clauses: vec![Clause::NotTags(TagIdsClause {
+            tag_ids: vec![TagId::new(spam)],
+        })],
+    };
+    let not_tags_list = create_and_enable_source(
+        &app_pool,
+        organization_id,
+        alice_id,
+        SavedListScope::Personal,
+        "Not tags Spam",
+        not_tags_spam.clone(),
+    )
+    .await;
+    assert_reason_parity(
+        &app_pool,
+        organization_id,
+        alice_id,
+        not_tags_list,
+        &not_tags_spam,
+        ids([has_vip, untagged]),
+    )
+    .await;
 }

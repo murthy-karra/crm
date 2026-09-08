@@ -344,6 +344,8 @@ async fn filtered_summaries_with_reference_now(
         params.client_replied_unanswered,
         params.awaiting_call_outcome,
         params.viewer_id,
+        params.tag_ids_any.as_deref(),
+        params.tag_ids_none.as_deref(),
     )
     .fetch_all(conn)
     .await?;
@@ -405,6 +407,8 @@ pub async fn filtered_summaries_sorted(
                 params.client_replied_unanswered,
                 params.awaiting_call_outcome,
                 params.viewer_id,
+                params.tag_ids_any.as_deref(),
+                params.tag_ids_none.as_deref(),
             )
             .fetch_all(&mut *conn)
             .await?
@@ -560,6 +564,16 @@ pub async fn count_filtered_matches(
                              AND NOT EXISTS (SELECT 1 FROM contact_attempted x WHERE x.corrects_id = root.id)
                        )
                    )) = $23)
+               -- docs/specs/SLICE_011e.md §4: tags (any-of) / not_tags
+               -- (none-of), same positions as filtered_summaries.sql.
+               AND ($25::uuid[] IS NULL OR EXISTS (
+                     SELECT 1 FROM person_tag pt
+                     WHERE pt.organization_id = p.organization_id
+                       AND pt.person_id = p.id AND pt.tag_id = ANY($25)))
+               AND ($26::uuid[] IS NULL OR NOT EXISTS (
+                     SELECT 1 FROM person_tag pt2
+                     WHERE pt2.organization_id = p.organization_id
+                       AND pt2.person_id = p.id AND pt2.tag_id = ANY($26)))
              LIMIT 501
            ) capped"#,
         organization_id.0,
@@ -586,6 +600,8 @@ pub async fn count_filtered_matches(
         params.client_replied_unanswered,
         params.awaiting_call_outcome,
         params.viewer_id,
+        params.tag_ids_any.as_deref(),
+        params.tag_ids_none.as_deref(),
     )
     .fetch_one(conn)
     .await?;

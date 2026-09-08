@@ -1,12 +1,20 @@
 # Project State
 
-Last updated: 2026-09-08 (Slices 012 and 013 both merged to local main; the
-shared development runtime restarted; no slice active).
+Last updated: 2026-09-08 (Slices 012 and 013 merged and pushed; planning
+Slice 014, the perceived-latency chunk with the FilterBar UX polish).
 
 ## Current phase
 
-**Slices 012 and 013 — BOTH COMPLETE AND MERGED TO LOCAL MAIN; NO SLICE
-ACTIVE.** Slice 013 merged at `9af47c1` (2026-09-08, with the user's
+**PLANNING Slice 014 — perceived-latency chunk plus FilterBar UX polish
+(Web-only).** The user chose the coordinator's suggestions 1 and 2 on
+2026-09-08: `main` was pushed to `origin/main` at `32b36de` (carrying Slices
+012 and 013, D-052 and the state records), and planning started for the held
+perceived-latency chunk together with lane C (the four FilterBar UX gaps
+recorded since 011a), so the FilterBar is touched once. Planner analysis
+dispatched; a spec, one review round and one implementation gate follow.
+Push and deployment beyond this are not authorized.
+
+Previously: **Slices 012 and 013 — BOTH COMPLETE AND MERGED TO LOCAL MAIN.** Slice 013 merged at `9af47c1` (2026-09-08, with the user's
 approval; not pushed, not deployed) from `slice-013-operator-filter` at
 `151d38a` (ten commits after the rebase, incl. the
 [verification record](../tasks/SLICE_013_VERIFICATION.md)). Final-tree gates
@@ -19,8 +27,7 @@ old dev API (pid 12421) stopped by exact PID, the merged binary built and
 Operator route answers 401 unauthenticated). Branch and worktree
 `../crm-worktrees/013` deleted with approval. The Operator now has eight
 tools. Lane C (FilterBar UX polish) remains held for the perceived-latency
-chunk. `main` is ahead of `origin/main`; push and deployment are not
-authorized.
+chunk. `main` pushed 2026-09-08 (`32b36de`); deployment is not authorized.
 
 **Slice 012 — COMPLETE AND MERGED TO LOCAL MAIN** at `26ddab7` (2026-09-08,
 with the user's approval; not pushed, not deployed). Source

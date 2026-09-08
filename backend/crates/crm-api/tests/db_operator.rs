@@ -942,6 +942,20 @@ async fn explain_priority_position_matches_today_query_and_get_api_today(migrato
         .execute(&f.migrator_pool)
         .await
         .unwrap();
+    // docs/specs/SLICE_012.md §2: person.last_inquiry_at is trigger-
+    // maintained on `inquiry` INSERT only (never UPDATE — history tables
+    // have no application update path). This fixture's direct UPDATE of
+    // an already-inserted inquiry row's received_at (above) is exactly
+    // the kind of write the trigger does not observe, so the derived
+    // column would otherwise go stale relative to the row it now reads
+    // instead of recomputing live; keep it in step by hand here, the same
+    // fix-up a redaction/erasure runbook would apply via the backfill
+    // block.
+    sqlx::query("UPDATE person SET last_inquiry_at = now() - interval '2 days' WHERE id = $1")
+        .bind(p1)
+        .execute(&f.migrator_pool)
+        .await
+        .unwrap();
 
     // Authoritative order from the query and from the HTTP read model.
     let app_pool = crate::common::connect_as_app(&f.migrator_pool).await;

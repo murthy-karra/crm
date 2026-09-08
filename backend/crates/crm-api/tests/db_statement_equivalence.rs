@@ -991,3 +991,222 @@ async fn all_fourteen_statements_agree_between_frozen_and_live_text(migrator_poo
     // included, per spec §4's fixture requirement).
     assert_eq!(fx.all_person_ids.len(), 8);
 }
+
+// --- Spec §8.6 explicit pins: the gated waiting probe, the zero-inquiry
+// exclusion, and waiting_since/fresh for repeat inquirers and reply
+// members --------------------------------------------------------------
+
+/// docs/specs/SLICE_012.md §8.6: four pins on `person_state`'s frozen vs
+/// live text, on a small purpose-built fixture (the broader Today
+/// equivalence/parity suites — db_today_feed_equivalence.rs,
+/// db_today_builtin_parity.rs, db_today_source_filter_parity.rs, left
+/// untouched by this slice — already prove the general case and
+/// ordering/truncation near the 201 cap):
+///
+/// 1. The equality tie: an inquiry whose `received_at` exactly EQUALS the
+///    Person's effective last contact attempt is not "waiting" on either
+///    text (`>` is strict on both sides of the switch).
+/// 2. A zero-inquiry Person who nonetheless has a contact attempt and an
+///    inbound reply stays excluded from BOTH person-state feeds (the §1
+///    rule 7 "at least one inquiry" gate, now `p.last_inquiry_at IS NOT
+///    NULL`, still applies uniformly).
+/// 3. A repeat inquirer's `waiting_since` (the EARLIEST unanswered
+///    inquiry, not the latest) and `fresh` (from the latest inquiry)
+///    agree between frozen and live.
+/// 4. A reply member's `waiting_since` (the reply's own `occurred_at`)
+///    and `fresh` agree between frozen and live.
+#[sqlx::test]
+#[ignore]
+async fn person_state_pins_the_waiting_gate_tie_zero_inquiry_exclusion_and_repeat_reply_members(
+    migrator_pool: PgPool,
+) {
+    let (organization_id, viewer_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Person State Pins Realty",
+        "viewer@person-state-pins.test",
+        "Viewer",
+        "correct horse battery staple",
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let stage_id = first_stage_id(&migrator_pool, organization_id).await;
+    let now = ts(30, 12);
+
+    // Pin 1: the equality tie. An inquiry and a contact attempt at the
+    // EXACT SAME instant — "an inquiry after the last contact" must be
+    // false (strict >, not >=), so this Person is not waiting.
+    let tie = insert_person(&migrator_pool, organization_id, stage_id, Some(viewer_id)).await;
+    let tie_at = ts(1, 9);
+    insert_inquiry(&migrator_pool, organization_id, tie, "zillow", tie_at).await;
+    insert_contact_attempt(&migrator_pool, organization_id, tie, tie_at).await;
+
+    // Pin 2: zero-inquiry Person with a contact attempt AND an inbound
+    // reply — must be excluded from person_state entirely, on both feeds.
+    let zero_inquiry_reply =
+        insert_person(&migrator_pool, organization_id, stage_id, Some(viewer_id)).await;
+    insert_contact_attempt(
+        &migrator_pool,
+        organization_id,
+        zero_inquiry_reply,
+        ts(2, 9),
+    )
+    .await;
+    capture_fact(
+        &app_pool,
+        organization_id,
+        viewer_id,
+        zero_inquiry_reply,
+        Direction::Inbound,
+        ts(3, 9),
+        false,
+    )
+    .await;
+
+    // Pin 3: a repeat inquirer. First inquiry at day 5 answered by a
+    // contact attempt at day 6; a second, unanswered inquiry at day 10 —
+    // waiting_since must be day 10 (the earliest inquiry AFTER the last
+    // contact, which is also the only one here), fresh depends on the
+    // LATEST inquiry (day 10) against the 24h window.
+    let repeat = insert_person(&migrator_pool, organization_id, stage_id, Some(viewer_id)).await;
+    insert_inquiry(&migrator_pool, organization_id, repeat, "zillow", ts(5, 9)).await;
+    insert_contact_attempt(&migrator_pool, organization_id, repeat, ts(6, 9)).await;
+    let repeat_waiting_since = ts(10, 9);
+    insert_inquiry(
+        &migrator_pool,
+        organization_id,
+        repeat,
+        "website",
+        repeat_waiting_since,
+    )
+    .await;
+
+    // Pin 4: a reply member — assigned, an inbound reply later than any
+    // contact attempt/outbound. waiting_since must be the reply's own
+    // occurred_at.
+    let reply = insert_person(&migrator_pool, organization_id, stage_id, Some(viewer_id)).await;
+    insert_inquiry(&migrator_pool, organization_id, reply, "zillow", ts(11, 9)).await;
+    insert_contact_attempt(&migrator_pool, organization_id, reply, ts(12, 9)).await;
+    let reply_waiting_since = ts(13, 9);
+    capture_fact(
+        &app_pool,
+        organization_id,
+        viewer_id,
+        reply,
+        Direction::Inbound,
+        reply_waiting_since,
+        false,
+    )
+    .await;
+
+    let feed_a_filter = FilterDefinition {
+        version: 1,
+        clauses: vec![
+            Clause::AssignedTo(AssignedToClause {
+                assignees: vec![Assignee::Me],
+            }),
+            Clause::AwaitingResponse(BoolClause { value: true }),
+        ],
+    };
+    let feed_b_filter = FilterDefinition {
+        version: 1,
+        clauses: vec![
+            Clause::AssignedTo(AssignedToClause {
+                assignees: vec![Assignee::Me],
+            }),
+            Clause::ClientRepliedUnanswered(BoolClause { value: true }),
+        ],
+    };
+    let feed_a = resolved_feed(FeedKey::UnansweredInquiry, feed_a_filter.clone(), Some(24));
+    let feed_b = resolved_feed(FeedKey::ClientReplied, feed_b_filter.clone(), Some(24));
+    let viewer = UserId::new(viewer_id);
+    let org = OrganizationId::new(organization_id);
+
+    let mut live_conn = app_pool.acquire().await.unwrap();
+    let (live_candidates, live_truncated) = system_feeds_evaluate::person_state_candidates(
+        &mut live_conn,
+        org,
+        viewer,
+        now,
+        &feed_a,
+        &feed_b,
+    )
+    .await
+    .unwrap();
+    drop(live_conn);
+
+    let params_a = feed_a_filter.to_query_params(viewer);
+    let params_b = feed_b_filter.to_query_params(viewer);
+    let mut frozen_conn = app_pool.acquire().await.unwrap();
+    let (frozen_candidates, frozen_truncated) = frozen::system_feeds_sql::person_state_candidates(
+        &mut frozen_conn,
+        org,
+        viewer,
+        now,
+        &params_a,
+        true,
+        24,
+        &params_b,
+        true,
+        24,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        candidate_signatures(&frozen_candidates),
+        candidate_signatures(&live_candidates),
+        "frozen and live person_state must agree on this fixture"
+    );
+    assert_eq!(frozen_truncated, live_truncated);
+    assert!(!live_truncated, "this small fixture must not truncate");
+
+    let live_ids: Vec<Uuid> = live_candidates.iter().map(|c| c.person.id.0).collect();
+
+    // Pin 1: the tie is excluded from both texts.
+    assert!(
+        !live_ids.contains(&tie),
+        "an inquiry exactly at the last contact instant must not be waiting (live)"
+    );
+    assert!(
+        !candidate_signatures(&frozen_candidates)
+            .iter()
+            .any(|s| s.person_id == tie),
+        "an inquiry exactly at the last contact instant must not be waiting (frozen)"
+    );
+
+    // Pin 2: the zero-inquiry Person with a reply is excluded entirely.
+    assert!(
+        !live_ids.contains(&zero_inquiry_reply),
+        "a zero-inquiry Person must never qualify for person_state, reply or not"
+    );
+
+    // Pin 3: the repeat inquirer's waiting_since is the (only, unanswered)
+    // later inquiry, agreeing on both texts.
+    let repeat_live = live_candidates
+        .iter()
+        .find(|c| c.person.id.0 == repeat)
+        .expect("repeat inquirer must qualify by inquiry");
+    assert_eq!(repeat_live.waiting_since, repeat_waiting_since);
+    assert!(repeat_live.by_inquiry);
+    let repeat_frozen = frozen_candidates
+        .iter()
+        .find(|c| c.person.id.0 == repeat)
+        .expect("repeat inquirer must qualify by inquiry (frozen)");
+    assert_eq!(repeat_frozen.waiting_since, repeat_waiting_since);
+    assert_eq!(repeat_frozen.fresh, repeat_live.fresh);
+
+    // Pin 4: the reply member's waiting_since is the reply's own
+    // occurred_at, agreeing on both texts.
+    let reply_live = live_candidates
+        .iter()
+        .find(|c| c.person.id.0 == reply)
+        .expect("reply member must qualify by reply");
+    assert_eq!(reply_live.waiting_since, reply_waiting_since);
+    assert!(reply_live.client_replied.is_some());
+    let reply_frozen = frozen_candidates
+        .iter()
+        .find(|c| c.person.id.0 == reply)
+        .expect("reply member must qualify by reply (frozen)");
+    assert_eq!(reply_frozen.waiting_since, reply_waiting_since);
+    assert_eq!(reply_frozen.fresh, reply_live.fresh);
+}

@@ -2230,3 +2230,89 @@ async fn tags_and_not_tags_source_parity(migrator_pool: PgPool) {
     )
     .await;
 }
+
+/// docs/specs/SLICE_011e.md §9.15: a saved list with a `tags` clause
+/// enabled as a Today source admits a matching Person with the list
+/// reason, and drops that Person the moment the tag is removed from them
+/// -- Today reads live, never a materialized membership snapshot.
+#[sqlx::test]
+#[ignore]
+async fn tags_source_admits_and_drops_on_tag_removal(migrator_pool: PgPool) {
+    let (organization_id, alice_id) = create_org_with_stages_and_member(
+        &migrator_pool,
+        "011e tags source drops",
+        "alice@e011-tags-source-drops.test",
+        "Alice",
+        PW,
+    )
+    .await;
+    let app_pool = connect_as_app(&migrator_pool).await;
+    let (stage_a, _stage_b) = first_stage_ids(&app_pool, organization_id).await;
+    let now = Utc::now();
+
+    let vip = insert_tag(&migrator_pool, organization_id, alice_id, "VIP").await;
+    let person = insert_person(
+        &migrator_pool,
+        organization_id,
+        stage_a,
+        None,
+        now - ChronoDuration::days(5),
+    )
+    .await;
+    apply_tag(&migrator_pool, organization_id, person, vip, alice_id).await;
+
+    let tags_vip = FilterDefinition {
+        version: 1,
+        clauses: vec![Clause::Tags(TagIdsClause {
+            tag_ids: vec![TagId::new(vip)],
+        })],
+    };
+    let list_id = create_and_enable_source(
+        &app_pool,
+        organization_id,
+        alice_id,
+        SavedListScope::Personal,
+        "Tags VIP source",
+        tags_vip,
+    )
+    .await;
+
+    let scope = PersonVisibilityScope::Organization(OrganizationId::new(organization_id));
+    let mut conn = app_pool.acquire().await.unwrap();
+    let admitted = today::query_at(&mut conn, &scope, UserId::new(alice_id), Utc::now())
+        .await
+        .unwrap();
+    drop(conn);
+    let item = admitted
+        .items
+        .iter()
+        .find(|i| i.person.id.as_uuid() == person)
+        .expect("the tagged Person is admitted via the list source");
+    assert!(item.reasons.iter().any(
+        |reason| matches!(reason, TodayReason::ListMember { list_id: actual, .. } if *actual == list_id)
+    ));
+
+    // Remove the tag from the Person -- Today must drop them on the very
+    // next read, live, with no separate repair step.
+    sqlx::query(
+        "DELETE FROM person_tag WHERE organization_id = $1 AND person_id = $2 AND tag_id = $3",
+    )
+    .bind(organization_id)
+    .bind(person)
+    .bind(vip)
+    .execute(&migrator_pool)
+    .await
+    .unwrap();
+
+    let mut conn = app_pool.acquire().await.unwrap();
+    let after_removal = today::query_at(&mut conn, &scope, UserId::new(alice_id), Utc::now())
+        .await
+        .unwrap();
+    assert!(
+        !after_removal
+            .items
+            .iter()
+            .any(|i| i.person.id.as_uuid() == person),
+        "the Person must be dropped once the tag is removed"
+    );
+}

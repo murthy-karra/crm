@@ -2273,3 +2273,75 @@ async fn call_feed_with_a_tags_clause_admits_and_excludes(migrator_pool: PgPool)
         "tags: [VIP] excludes the untagged Person from the call feed"
     );
 }
+
+/// docs/specs/SLICE_011e.md §9.14: a system feed's stored definition
+/// naming a tag id that has since been deleted falls back to canonical on
+/// Today, reported exactly like a deleted stage --
+/// `SystemFeedIssueError::InvalidDefinition` with `fallback: true`, never
+/// a 503 and never silently swallowed.
+#[sqlx::test]
+#[ignore]
+async fn a_stored_feed_referencing_a_deleted_tag_reports_invalid_definition_fallback(
+    migrator_pool: PgPool,
+) {
+    let (organization_id, alice_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "011e f3 feed tag fallback",
+        "alice@e011-f3-feed-tag-fallback.test",
+        "Alice",
+        "correct horse battery staple",
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let now = Utc::now();
+
+    let tag_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO tag (organization_id, name, created_by_user_id) VALUES ($1, $2, $3) \
+         RETURNING id",
+    )
+    .bind(organization_id)
+    .bind("Will be deleted")
+    .bind(alice_id)
+    .fetch_one(&app_pool)
+    .await
+    .unwrap();
+    sqlx::query("DELETE FROM tag WHERE id = $1")
+        .bind(tag_id)
+        .execute(&app_pool)
+        .await
+        .unwrap();
+
+    let broken_filter = serde_json::json!({
+        "version": 1,
+        "clauses": [
+            {"kind": "assigned_to", "assignees": ["me"]},
+            {"kind": "awaiting_response", "value": true},
+            {"kind": "tags", "tag_ids": [tag_id]},
+        ]
+    });
+    sqlx::query(
+        "UPDATE today_system_feed SET filter = $1, enabled = true, revision = revision + 1
+         WHERE organization_id = $2 AND feed_key = 'unanswered_inquiry'",
+    )
+    .bind(&broken_filter)
+    .bind(organization_id)
+    .execute(&app_pool)
+    .await
+    .unwrap();
+
+    let scope = PersonVisibilityScope::Organization(OrganizationId::new(organization_id));
+    let mut conn = app_pool.acquire().await.unwrap();
+    let list = today::query_at(&mut conn, &scope, UserId::new(alice_id), now)
+        .await
+        .unwrap();
+    assert_eq!(list.sources.system_feed_issues.len(), 1);
+    assert_eq!(
+        list.sources.system_feed_issues[0].feed_key,
+        "unanswered_inquiry"
+    );
+    assert!(list.sources.system_feed_issues[0].fallback);
+    assert!(matches!(
+        list.sources.system_feed_issues[0].error,
+        crm_api::domain::today::SystemFeedIssueError::InvalidDefinition
+    ));
+}

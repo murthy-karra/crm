@@ -562,7 +562,11 @@ async fn query_inner_untraced(
                     Some(crate::domain::saved_list::SavedListFilterError::InvalidAssignee) => {
                         "invalid_assignee"
                     }
-                    _ => "unsupported_filter",
+                    Some(crate::domain::saved_list::SavedListFilterError::InvalidTag) => {
+                        "invalid_tag"
+                    }
+                    Some(crate::domain::saved_list::SavedListFilterError::UnsupportedFilter)
+                    | None => "unsupported_filter",
                 },
             );
             issues.push(TodaySourceIssue {
@@ -576,7 +580,11 @@ async fn query_inner_untraced(
                     Some(crate::domain::saved_list::SavedListFilterError::InvalidAssignee) => {
                         TodaySourceIssueError::InvalidAssignee
                     }
-                    _ => TodaySourceIssueError::UnsupportedFilter,
+                    Some(crate::domain::saved_list::SavedListFilterError::InvalidTag) => {
+                        TodaySourceIssueError::InvalidTag
+                    }
+                    Some(crate::domain::saved_list::SavedListFilterError::UnsupportedFilter)
+                    | None => TodaySourceIssueError::UnsupportedFilter,
                 },
             });
             continue;

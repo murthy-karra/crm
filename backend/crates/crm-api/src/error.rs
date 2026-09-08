@@ -492,6 +492,10 @@ mod tests {
             (StatusCode::UNPROCESSABLE_ENTITY, "invalid_assignee".into())
         );
         assert_eq!(
+            status_and_code(FilterError::InvalidTag.into()).await,
+            (StatusCode::UNPROCESSABLE_ENTITY, "invalid_tag".into())
+        );
+        assert_eq!(
             status_and_code(FilterError::Database(sqlx::Error::RowNotFound).into()).await,
             (StatusCode::SERVICE_UNAVAILABLE, "unavailable".into())
         );

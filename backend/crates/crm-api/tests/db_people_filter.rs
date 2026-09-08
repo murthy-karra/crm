@@ -2169,6 +2169,9 @@ mod derived_axis_full_matrix_parity {
 mod tags_and_not_tags {
     use std::collections::HashSet;
 
+    use axum::http::StatusCode;
+    use serde_json::json;
+
     use crm_api::domain::person::filter::{
         Clause, FilterDefinition, PersonFilterParams, TagIdsClause,
     };
@@ -2178,7 +2181,7 @@ mod tags_and_not_tags {
     use sqlx::PgPool;
     use uuid::Uuid;
 
-    use super::insert_person;
+    use super::{filter_uri, insert_person};
 
     async fn insert_tag(
         pool: &PgPool,
@@ -2520,6 +2523,100 @@ mod tags_and_not_tags {
             summaries.is_empty(),
             "org A must never match org B's tag id, even though it is a \
              valid, identically-named tag for a different Organization"
+        );
+    }
+
+    /// docs/specs/SLICE_011e.md §9.11: `GET /api/people?filter=` with a
+    /// foreign (another Organization's) tag id is 422 `invalid_tag`,
+    /// byte-identical to a random uuid that never existed at all --
+    /// non-leaking, exactly like `invalid_stage`/`invalid_assignee`.
+    #[sqlx::test]
+    #[ignore]
+    async fn cross_org_and_nonexistent_tag_ids_produce_byte_identical_422s(migrator_pool: PgPool) {
+        let (_org_a, _alice_id) = crate::common::create_org_with_stages_and_member(
+            &migrator_pool,
+            "Tag cross-org http A",
+            "alice@tag-cross-http-a.test",
+            "Alice",
+            "pw",
+        )
+        .await;
+        let (org_b, bob_id) = crate::common::create_org_with_stages_and_member(
+            &migrator_pool,
+            "Tag cross-org http B",
+            "bob@tag-cross-http-b.test",
+            "Bob",
+            "pw",
+        )
+        .await;
+        let org_b_tag = insert_tag(&migrator_pool, org_b, bob_id, "VIP").await;
+
+        let router = crate::common::build_router(&migrator_pool).await;
+        let cookie =
+            crate::common::login_cookie(&router, "alice@tag-cross-http-a.test", "pw").await;
+
+        let cross_org =
+            json!({"version": 1, "clauses": [{"kind": "tags", "tag_ids": [org_b_tag]}]});
+        let cross_resp = crate::common::get_with_cookie(
+            &router,
+            &filter_uri("/api/people", &cross_org),
+            &cookie,
+        )
+        .await;
+        assert_eq!(cross_resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        let cross_body = crate::common::body_json(cross_resp).await;
+        assert_eq!(cross_body["error"], "invalid_tag");
+
+        let nonexistent =
+            json!({"version": 1, "clauses": [{"kind": "tags", "tag_ids": [Uuid::new_v4()]}]});
+        let non_resp = crate::common::get_with_cookie(
+            &router,
+            &filter_uri("/api/people", &nonexistent),
+            &cookie,
+        )
+        .await;
+        assert_eq!(non_resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        let non_body = crate::common::body_json(non_resp).await;
+        assert_eq!(
+            non_body, cross_body,
+            "a foreign tag id and a nonexistent tag id must be byte-identical 422s"
+        );
+    }
+
+    /// docs/specs/SLICE_011e.md §9.11: a genuine database failure DURING
+    /// the `tag::exists` reference probe is 503 `unavailable`, never a 422
+    /// that would misreport "this filter is invalid" (review R2's rule,
+    /// already pinned for stage/assignee; this is the tag arm).
+    #[sqlx::test]
+    #[ignore]
+    async fn tag_reference_probe_database_failure_is_503(migrator_pool: PgPool) {
+        let (organization_id, alice_id) = crate::common::create_org_with_stages_and_member(
+            &migrator_pool,
+            "Tag probe db failure",
+            "alice@tag-probe-db-failure.test",
+            "Alice",
+            "pw",
+        )
+        .await;
+        let tag_id = insert_tag(&migrator_pool, organization_id, alice_id, "VIP").await;
+
+        let router = crate::common::build_router(&migrator_pool).await;
+        let cookie =
+            crate::common::login_cookie(&router, "alice@tag-probe-db-failure.test", "pw").await;
+
+        sqlx::query("REVOKE SELECT ON TABLE tag FROM crm_app")
+            .execute(&migrator_pool)
+            .await
+            .unwrap();
+
+        let filter = json!({"version": 1, "clauses": [{"kind": "tags", "tag_ids": [tag_id]}]});
+        let response =
+            crate::common::get_with_cookie(&router, &filter_uri("/api/people", &filter), &cookie)
+                .await;
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(
+            crate::common::body_json(response).await,
+            json!({"error": "unavailable"})
         );
     }
 }

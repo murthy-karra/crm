@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 use chrono::{Duration as ChronoDuration, Utc};
 use crm_api::domain::commands::{self, ContactChannel, ContactOutcome, LogContactAttempt};
 use crm_api::domain::envelope::{CommandContext, Origin};
-use crm_api::domain::person::filter::{Clause, FilterDefinition, StageClause};
+use crm_api::domain::person::filter::{Clause, FilterDefinition, StageClause, TagIdsClause};
 use crm_api::domain::person::visibility::PersonVisibilityScope;
 use crm_api::domain::saved_list::{
     self, CreateSavedList, DeleteSavedList, SavedListScope, UpdateSavedList,
@@ -18,7 +18,7 @@ use crm_api::domain::saved_list::{
 use crm_api::domain::today::{
     self, EnableTodayWorkSource, TodayItem, TodayReason, TodaySourceIssueError, TodaySourcesStatus,
 };
-use crm_api::ids::{CorrelationId, OrganizationId, PersonId, SavedListId, StageId, UserId};
+use crm_api::ids::{CorrelationId, OrganizationId, PersonId, SavedListId, StageId, TagId, UserId};
 use crm_api::realtime::Publisher;
 use crm_app::domain::today::test_support::{
     scope as with_today_hooks, HookFuture, TodayQueryHook, TodayQueryHooks, TodayQueryPhase,
@@ -841,5 +841,241 @@ async fn today_source_recovery_checkpoint_exhaustion_uses_cleanup_grace_and_disc
         backend_pid(&mut replacement_connection).await,
         owned_pid,
         "expired rollback cleanup cannot return a poisoned connection to the pool"
+    );
+}
+
+// --- Slice 011e e2 step 3 (docs/specs/SLICE_011e.md §9.14): a tag
+// deleted before vs. during Today's per-source evaluation -----------------
+
+/// docs/specs/SLICE_011e.md §9.14: a Today source (saved list) naming a
+/// tag already deleted before Today ever enumerates it reports a partial
+/// `TodaySources` with `TodaySourceIssueError::InvalidTag` for that source
+/// -- never `unsupported_filter`, never a 503.
+#[sqlx::test]
+#[ignore]
+async fn today_source_tag_deleted_before_enumeration_is_invalid_tag_issue(migrator_pool: PgPool) {
+    let (organization_id, viewer_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Today hook tag before",
+        "today-hook-tag-before@example.test",
+        "Alice",
+        "pw",
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+
+    let tag_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO tag (organization_id, name, created_by_user_id) VALUES ($1, $2, $3) \
+         RETURNING id",
+    )
+    .bind(organization_id)
+    .bind("Will be deleted")
+    .bind(viewer_id)
+    .fetch_one(&app_pool)
+    .await
+    .unwrap();
+
+    let source = create_list(
+        &app_pool,
+        organization_id,
+        viewer_id,
+        "Tag source",
+        FilterDefinition {
+            version: 1,
+            clauses: vec![Clause::Tags(TagIdsClause {
+                tag_ids: vec![TagId::new(tag_id)],
+            })],
+        },
+    )
+    .await;
+    enable(
+        &app_pool,
+        organization_id,
+        viewer_id,
+        source.list.id,
+        source.list.revision,
+    )
+    .await;
+
+    sqlx::query("DELETE FROM tag WHERE id = $1")
+        .bind(tag_id)
+        .execute(&app_pool)
+        .await
+        .unwrap();
+
+    let scope = visibility_scope(organization_id);
+    let mut conn = app_pool.acquire().await.unwrap();
+    let list = today::query_at(&mut conn, &scope, UserId::new(viewer_id), Utc::now())
+        .await
+        .unwrap();
+
+    assert!(matches!(list.sources.status, TodaySourcesStatus::Partial));
+    assert_eq!(list.sources.issues.len(), 1);
+    assert_eq!(list.sources.issues[0].list_id, source.list.id);
+    assert!(matches!(
+        list.sources.issues[0].error,
+        TodaySourceIssueError::InvalidTag
+    ));
+}
+
+/// Pauses this exact source's evaluation immediately after its savepoint
+/// (before its reference check runs) and signals the test to delete the
+/// tag from an INDEPENDENT read-write connection -- Today's own query
+/// transaction is `REPEATABLE READ READ ONLY` (today/mod.rs, "SET
+/// TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY"), so the
+/// deletion cannot run on the paused connection itself (a real attempt on
+/// that connection is rejected with PostgreSQL error 25006, confirmed
+/// while building this test).
+struct DeleteTagAfterSavepoint {
+    source_id: Uuid,
+    arrived: Mutex<Option<oneshot::Sender<()>>>,
+    release: Mutex<Option<oneshot::Receiver<()>>>,
+}
+
+impl TodayQueryHook for DeleteTagAfterSavepoint {
+    fn checkpoint<'a>(
+        &'a self,
+        phase: TodayQueryPhase,
+        source_id: Option<Uuid>,
+        _deadline: Option<Instant>,
+        _connection: &'a mut PgConnection,
+    ) -> HookFuture<'a> {
+        if phase != TodayQueryPhase::SourceAfterSavepoint || source_id != Some(self.source_id) {
+            return Box::pin(async { Ok(()) });
+        }
+        let arrived = self.arrived.lock().unwrap().take();
+        let release = self.release.lock().unwrap().take();
+        Box::pin(async move {
+            if let Some(arrived) = arrived {
+                arrived
+                    .send(())
+                    .expect("delete-tag arrival receiver is live");
+            }
+            if let Some(release) = release {
+                release.await.expect("test releases the delete-tag gate");
+            }
+            Ok(())
+        })
+    }
+}
+
+/// docs/specs/SLICE_011e.md §9.14's "vanishes during evaluation" case,
+/// tested against what this codebase can actually observe: Today's query
+/// transaction takes its `REPEATABLE READ` snapshot at `BEGIN`, before any
+/// per-source evaluation runs, so a tag deleted on an independent
+/// connection AFTER that snapshot began is invisible for the remainder of
+/// this Today call, no matter how precisely it is timed against the
+/// per-source savepoint -- there is no way to make it observably different
+/// from "the tag was never deleted" for THIS call. The genuinely-invalid
+/// case (`TodaySourceIssueError::InvalidTag`) is exhaustively covered by
+/// `today_source_tag_deleted_before_enumeration_is_invalid_tag_issue`
+/// (deletion committed before the Today transaction's own `BEGIN`); this
+/// test instead pins the isolation guarantee itself: the source completes
+/// normally and the tagged Person is still admitted with its list reason,
+/// proving the concurrent deletion could not have leaked into this
+/// evaluation. See the coordinator report for the full analysis.
+#[sqlx::test]
+#[ignore]
+async fn today_source_tag_deleted_concurrently_is_invisible_under_repeatable_read(
+    migrator_pool: PgPool,
+) {
+    let (organization_id, viewer_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Today hook tag during",
+        "today-hook-tag-during@example.test",
+        "Alice",
+        "pw",
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let stage = stage_id(&app_pool, organization_id, 0).await;
+
+    let tag_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO tag (organization_id, name, created_by_user_id) VALUES ($1, $2, $3) \
+         RETURNING id",
+    )
+    .bind(organization_id)
+    .bind("Deleted mid-flight")
+    .bind(viewer_id)
+    .fetch_one(&app_pool)
+    .await
+    .unwrap();
+    let tagged_person = insert_person(&app_pool, organization_id, stage, None).await;
+    sqlx::query(
+        "INSERT INTO person_tag (organization_id, person_id, tag_id, added_by_user_id) \
+         VALUES ($1, $2, $3, $4)",
+    )
+    .bind(organization_id)
+    .bind(tagged_person)
+    .bind(tag_id)
+    .bind(viewer_id)
+    .execute(&app_pool)
+    .await
+    .unwrap();
+
+    let source = create_list(
+        &app_pool,
+        organization_id,
+        viewer_id,
+        "Tag source (race)",
+        FilterDefinition {
+            version: 1,
+            clauses: vec![Clause::Tags(TagIdsClause {
+                tag_ids: vec![TagId::new(tag_id)],
+            })],
+        },
+    )
+    .await;
+    enable(
+        &app_pool,
+        organization_id,
+        viewer_id,
+        source.list.id,
+        source.list.revision,
+    )
+    .await;
+
+    let (arrived_tx, arrived_rx) = oneshot::channel();
+    let (release_tx, release_rx) = oneshot::channel();
+    let hooks = TodayQueryHooks::new(Arc::new(DeleteTagAfterSavepoint {
+        source_id: source.list.id.as_uuid(),
+        arrived: Mutex::new(Some(arrived_tx)),
+        release: Mutex::new(Some(release_rx)),
+    }));
+    let one_app_pool = connect_as_one_app(&migrator_pool).await;
+    let scope = visibility_scope(organization_id);
+    let owned_connection = one_app_pool.acquire().await.unwrap();
+    let query = tokio::spawn(async move {
+        with_today_hooks(
+            hooks,
+            today::query_owned_at(owned_connection, &scope, UserId::new(viewer_id), Utc::now()),
+        )
+        .await
+    });
+    arrived_rx
+        .await
+        .expect("the source's savepoint checkpoint is reached");
+
+    sqlx::query("DELETE FROM tag WHERE id = $1")
+        .bind(tag_id)
+        .execute(&app_pool)
+        .await
+        .unwrap();
+    release_tx
+        .send(())
+        .expect("release the paused source evaluation");
+
+    let list = query.await.expect("query task joins").unwrap();
+
+    assert!(
+        matches!(list.sources.status, TodaySourcesStatus::Complete),
+        "a deletion committed after this Today call's snapshot began must \
+         never be observed by it"
+    );
+    assert!(list.sources.issues.is_empty());
+    assert!(
+        has_list_reason(item_for(&list.items, tagged_person), source.list.id),
+        "the tagged Person is still admitted -- the concurrent deletion did \
+         not leak into this evaluation's repeatable-read snapshot"
     );
 }

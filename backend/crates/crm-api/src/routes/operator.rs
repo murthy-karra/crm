@@ -217,10 +217,15 @@ async fn post_turn(
 
     let task = tokio::spawn(
         async move {
-            // Both guards live exactly as long as this task (§7).
+            // Both guards live exactly as long as this task (§7). `auth`
+            // moves in here too (docs/specs/SLICE_013.md §2): the
+            // backend's `run_saved_list` needs it for `list_saved_lists`/
+            // `saved_list_detail`, and nothing above this point needs
+            // `auth` again — every earlier use (the busy-log, `ctx`,
+            // `slot`) already read what it needed by copy or clone.
             let _slot = slot;
             let started = Instant::now();
-            let backend = SqlxToolBackend::new(pool.clone(), runtime.proposal_ttl());
+            let backend = SqlxToolBackend::new(pool.clone(), runtime.proposal_ttl(), auth);
             let output = runtime.service.run_turn(&ctx, &backend, input).await;
             let completed_at = Utc::now();
 

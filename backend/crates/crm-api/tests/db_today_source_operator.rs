@@ -9,6 +9,8 @@ use std::time::Duration;
 use axum::http::StatusCode;
 use axum::Router;
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
+use crm_api::auth::AuthContext;
+use crm_api::domain::admin::Role;
 use crm_api::domain::envelope::{CommandContext, Origin};
 use crm_api::domain::person::filter::{Clause, FilterDefinition, StageClause};
 use crm_api::domain::saved_list::{self, CreateSavedList, SavedListScope};
@@ -44,6 +46,20 @@ fn operator_context(organization_id: Uuid, actor_user_id: Uuid) -> OperatorConte
         actor_display_name: "Alice".to_string(),
         turn_id: Uuid::new_v4(),
         now: Utc::now(),
+    }
+}
+
+/// `SqlxToolBackend::new`'s `AuthContext` (docs/specs/SLICE_013.md §2): only
+/// `run_saved_list` reads it, which none of this file's `SqlxToolBackend`
+/// calls exercise — a well-formed fixture is enough.
+fn auth_context(organization_id: Uuid, actor_user_id: Uuid) -> AuthContext {
+    AuthContext {
+        actor_user_id: UserId::new(actor_user_id),
+        actor_email: "fixture@example.test".to_string(),
+        actor_display_name: "Fixture".to_string(),
+        active_organization_id: OrganizationId::new(organization_id),
+        active_organization_name: "Fixture Organization".to_string(),
+        role: Role::Member,
     }
 }
 
@@ -375,7 +391,11 @@ async fn today_source_operator_and_http_share_order_positions_and_list_only_card
     assert_eq!(http_items[3]["reasons"][0]["code"], "call_outcome_needed");
     assert_eq!(http_items[3]["reasons"][0]["call_id"], low_call.to_string());
 
-    let backend = SqlxToolBackend::new(app_pool.clone(), Duration::from_secs(120));
+    let backend = SqlxToolBackend::new(
+        app_pool.clone(),
+        Duration::from_secs(120),
+        auth_context(organization_id, alice_id),
+    );
     let ctx = operator_context(organization_id, alice_id);
     let operator_today = backend.get_today(&ctx, 20).await.unwrap();
     assert_eq!(operator_today.total, 4);
@@ -524,7 +544,11 @@ async fn today_source_operator_reports_bounded_absence_after_source_cap(migrator
         "the 201st source-only member is deliberately absent from the returned queue"
     );
 
-    let backend = SqlxToolBackend::new(app_pool.clone(), Duration::from_secs(120));
+    let backend = SqlxToolBackend::new(
+        app_pool.clone(),
+        Duration::from_secs(120),
+        auth_context(organization_id, alice_id),
+    );
     let ctx = operator_context(organization_id, alice_id);
     let today = backend.get_today(&ctx, 200).await.unwrap();
     assert_eq!(today.items.len(), 200);
@@ -619,7 +643,11 @@ async fn today_source_operator_exposes_partial_empty_metadata_and_wraps_issue_na
         }])
     );
 
-    let backend = SqlxToolBackend::new(app_pool.clone(), Duration::from_secs(120));
+    let backend = SqlxToolBackend::new(
+        app_pool.clone(),
+        Duration::from_secs(120),
+        auth_context(organization_id, alice_id),
+    );
     let ctx = operator_context(organization_id, alice_id);
     let today = backend.get_today(&ctx, 20).await.unwrap();
     assert!(today.items.is_empty());
@@ -839,7 +867,11 @@ async fn operator_parity_under_a_customized_feed_a(migrator_pool: PgPool) {
     );
     assert!(issue_shape(http["sources"]["system_feed_issues"].as_array().unwrap()).is_empty());
 
-    let backend = SqlxToolBackend::new(app_pool.clone(), Duration::from_secs(120));
+    let backend = SqlxToolBackend::new(
+        app_pool.clone(),
+        Duration::from_secs(120),
+        auth_context(organization_id, admin_id),
+    );
     let ctx = operator_context(organization_id, admin_id);
 
     let today = backend.get_today(&ctx, 20).await.unwrap();
@@ -920,7 +952,11 @@ async fn operator_parity_under_a_disabled_feed(migrator_pool: PgPool) {
     assert_eq!(http["items"].as_array().unwrap().len(), 0);
     assert!(issue_shape(http["sources"]["system_feed_issues"].as_array().unwrap()).is_empty());
 
-    let backend = SqlxToolBackend::new(app_pool.clone(), Duration::from_secs(120));
+    let backend = SqlxToolBackend::new(
+        app_pool.clone(),
+        Duration::from_secs(120),
+        auth_context(organization_id, admin_id),
+    );
     let ctx = operator_context(organization_id, admin_id);
 
     let today = backend.get_today(&ctx, 20).await.unwrap();
@@ -1028,7 +1064,11 @@ async fn operator_parity_under_a_fallback_feed(migrator_pool: PgPool) {
         )]
     );
 
-    let backend = SqlxToolBackend::new(app_pool.clone(), Duration::from_secs(120));
+    let backend = SqlxToolBackend::new(
+        app_pool.clone(),
+        Duration::from_secs(120),
+        auth_context(organization_id, admin_id),
+    );
     let ctx = operator_context(organization_id, admin_id);
 
     let today = backend.get_today(&ctx, 20).await.unwrap();

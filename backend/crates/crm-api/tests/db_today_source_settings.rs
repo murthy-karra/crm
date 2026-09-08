@@ -9,6 +9,8 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use chrono::Utc;
+use crm_api::auth::AuthContext;
+use crm_api::domain::admin::Role;
 use crm_api::domain::envelope::{CommandContext, Origin};
 use crm_api::domain::person::filter::{Clause, FilterDefinition, StageClause};
 use crm_api::domain::person::visibility::PersonVisibilityScope;
@@ -37,6 +39,21 @@ fn command_context(organization_id: Uuid, actor_user_id: Uuid) -> CommandContext
         actor_user_id: UserId::new(actor_user_id),
         origin: Origin::WebSession,
         correlation_id: CorrelationId::new(Uuid::new_v4()),
+    }
+}
+
+/// `SqlxToolBackend::new`'s `AuthContext` (docs/specs/SLICE_013.md §2): only
+/// `run_saved_list` reads it, which this file's one `SqlxToolBackend` call
+/// does not exercise (it runs `get_today`) — a well-formed fixture is
+/// enough.
+fn auth_context(organization_id: Uuid, actor_user_id: Uuid) -> AuthContext {
+    AuthContext {
+        actor_user_id: UserId::new(actor_user_id),
+        actor_email: "fixture@example.test".to_string(),
+        actor_display_name: "Fixture".to_string(),
+        active_organization_id: OrganizationId::new(organization_id),
+        active_organization_name: "Fixture Organization".to_string(),
+        role: Role::Member,
     }
 }
 
@@ -628,7 +645,11 @@ async fn operator_turn_timeout_cancels_owned_today_query_and_replaces_its_connec
             ..Limits::default()
         },
     );
-    let backend = SqlxToolBackend::new(one_app_pool.clone(), Duration::from_secs(120));
+    let backend = SqlxToolBackend::new(
+        one_app_pool.clone(),
+        Duration::from_secs(120),
+        auth_context(organization_id, viewer_id),
+    );
     let context = OperatorContext {
         actor_user_id: viewer_id,
         organization_id,

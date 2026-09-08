@@ -849,6 +849,29 @@ async fn tag_and_person_tag_grants_are_exactly_slice_011e_section_2(migrator_poo
     );
 }
 
+/// docs/specs/SLICE_011e.md §2: the index enumeration — the case-
+/// insensitive uniqueness index on `tag` and the tag-led probe/count index
+/// on `person_tag` both exist exactly as named.
+#[sqlx::test]
+#[ignore]
+async fn tag_and_person_tag_indexes_exist(migrator_pool: PgPool) {
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let index_names: Vec<String> = sqlx::query_scalar(
+        "SELECT indexname FROM pg_indexes WHERE tablename IN ('tag', 'person_tag')",
+    )
+    .fetch_all(&app_pool)
+    .await
+    .unwrap();
+    assert!(
+        index_names.contains(&"tag_org_lower_name_key".to_string()),
+        "missing tag_org_lower_name_key in {index_names:?}"
+    );
+    assert!(
+        index_names.contains(&"person_tag_org_tag_person_idx".to_string()),
+        "missing person_tag_org_tag_person_idx in {index_names:?}"
+    );
+}
+
 async fn first_stage_id_for_schema_test(pool: &PgPool, organization_id: Uuid) -> Uuid {
     sqlx::query_scalar("SELECT id FROM stage WHERE organization_id = $1 ORDER BY position LIMIT 1")
         .bind(organization_id)

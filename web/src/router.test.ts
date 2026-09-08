@@ -235,6 +235,16 @@ describe('router guards (SLICE_004 §10)', () => {
       expect(router.currentRoute.value.path).toBe('/today')
     })
 
+    // SLICE_011e §5: /manage/tags carries NO requiresOrgAdmin meta — rule
+    // 1 (D-051) lets any member create/apply/remove tags and manage their
+    // own unused ones, unlike its three admin-only siblings above.
+    it('reaches /manage/tags (a member route, not bounced)', async () => {
+      vi.mocked(fetchMe).mockResolvedValue(MEMBER)
+      const router = freshRouter()
+      await router.push('/manage/tags')
+      expect(router.currentRoute.value.path).toBe('/manage/tags')
+    })
+
     it('is redirected away from /login (already signed in)', async () => {
       vi.mocked(fetchMe).mockResolvedValue(MEMBER)
       const router = freshRouter()

@@ -1399,6 +1399,25 @@ function refetchTagsOnStaleReference(qc: QueryClient, orgId: MaybeRefOrGetter<st
   }
 }
 
+/** Apply/remove's own 404 (the tag vanished between the popover's read and
+ * the write): also invalidate the Person detail, not just the tags index —
+ * the vanished tag can still be sitting in this tab's cached `tags` array
+ * on the Person, and only a Person-key invalidation clears that stale
+ * chip. Person-tag routes carry no 403 case (any member may apply/remove),
+ * so only 404 is checked here. */
+function refetchOnStalePersonTagReference(
+  qc: QueryClient,
+  orgId: MaybeRefOrGetter<string>,
+  personId: string,
+  error: unknown,
+) {
+  if (error instanceof ApiError && error.status === 404) {
+    const id = toValue(orgId)
+    void qc.invalidateQueries({ queryKey: queryKeys.tags(id) })
+    void qc.invalidateQueries({ queryKey: queryKeys.person(id, personId) })
+  }
+}
+
 /** `POST /api/tags` — create-or-get by case-insensitive name; never 409s on
  *  a name collision (`created: false` with the first spelling instead). */
 export function useCreateTagMutation(orgId: MaybeRefOrGetter<string>, providedQueryClient?: QueryClient) {
@@ -1459,7 +1478,7 @@ export function useAddPersonTagMutation(orgId: MaybeRefOrGetter<string>, provide
       void qc.invalidateQueries({ queryKey: queryKeys.tags(id) })
       void qc.invalidateQueries({ queryKey: queryKeys.person(id, variables.personId) })
     },
-    onError: (error) => refetchTagsOnStaleReference(qc, orgId, error),
+    onError: (error, variables) => refetchOnStalePersonTagReference(qc, orgId, variables.personId, error),
   }, providedQueryClient)
 }
 
@@ -1478,6 +1497,6 @@ export function useRemovePersonTagMutation(orgId: MaybeRefOrGetter<string>, prov
       void qc.invalidateQueries({ queryKey: queryKeys.tags(id) })
       void qc.invalidateQueries({ queryKey: queryKeys.person(id, variables.personId) })
     },
-    onError: (error) => refetchTagsOnStaleReference(qc, orgId, error),
+    onError: (error, variables) => refetchOnStalePersonTagReference(qc, orgId, variables.personId, error),
   }, providedQueryClient)
 }

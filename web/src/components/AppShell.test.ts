@@ -355,3 +355,19 @@ it('allows Escape to close Operator over the non-modal person inspector', async 
   expect(wrapper.find('[data-testid="person-preview"]').exists()).toBe(true)
   wrapper.unmount()
 })
+
+// SLICE_011e §5: Tags is a member route (rule 1/D-051 lets a creator
+// manage their own unused tag) — visible in Manage for every Organization
+// member, unlike the three admin-only entries beside it.
+describe('AppShell Manage nav (SLICE_011e §5)', () => {
+  it('shows the Tags entry for a member, with the admin-only entries hidden', async () => {
+    const { wrapper } = await mountShell('/today', orgSession())
+    const tagsLink = wrapper.find('a[href="/manage/tags"]')
+    expect(tagsLink.exists()).toBe(true)
+    expect(tagsLink.text()).toContain('Tags')
+    expect(wrapper.find('a[href="/manage/members"]').exists()).toBe(false)
+    expect(wrapper.find('a[href="/manage/intake"]').exists()).toBe(false)
+    expect(wrapper.find('a[href="/manage/today-feeds"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+})

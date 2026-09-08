@@ -95,9 +95,14 @@ async fn actor_role_hint(
     )
     .fetch_optional(&mut *conn)
     .await?;
+    // A display hint must never 503 a create over a value it does not
+    // even need to enforce anything (unlike `lock_current_membership`,
+    // whose unparseable role legitimately fails the whole command) — an
+    // unparseable role here falls back to `Member` exactly like a missing
+    // or inactive membership does, per this function's own doc comment.
     match row {
         Some(row) if row.status == "active" => {
-            Role::from_db_str(&row.role).ok_or(TagError::Corrupt)
+            Ok(Role::from_db_str(&row.role).unwrap_or(Role::Member))
         }
         _ => Ok(Role::Member),
     }

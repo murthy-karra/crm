@@ -171,7 +171,13 @@ function stubApi(personDetail: PersonDetailResponse, options: StubOptions = {}) 
       const tagId = decodeURIComponent(personTagMatch[2])
       const applying = method === 'PUT'
       const result = options.personTag?.(tagId, applying)
-      if (result instanceof Error) throw result
+      if (result instanceof Error) {
+        // A 404 here means the tag genuinely no longer exists (not merely
+        // that this one write lost a race) — a subsequent GET must not
+        // keep showing it, matching real backend behavior.
+        if (result instanceof ApiError && result.status === 404) appliedTags.delete(tagId)
+        throw result
+      }
       if (result) return result
       const already = appliedTags.has(tagId)
       const changed = applying ? !already : already
@@ -1280,18 +1286,23 @@ describe('PersonDetailView — Tags', () => {
     expect(wrapper.get('[data-testid="add-tag-error"]').text()).toBe('This Organization already has 200 tags.')
   })
 
-  it('removes a tag and re-fetches the tags query on a 404', async () => {
+  it('removes a tag and re-fetches the tags query AND the Person on a 404; the chip is gone and an inline message explains it', async () => {
     stubApi(detail([PHONE_A], [], [{ id: SPHERE.id, name: SPHERE.name }]), {
       orgTags: [SPHERE],
       personTag: () => new ApiError(404, 'not_found'),
     })
     const { wrapper } = await mountView()
     activeWrapper = wrapper
-    const before = apiFetchMock.mock.calls.filter(([path]) => path === '/tags').length
+    const tagsBefore = apiFetchMock.mock.calls.filter(([path]) => path === '/tags').length
+    const personBefore = apiFetchMock.mock.calls.filter(([path]) => path === `/people/${PERSON_ID}`).length
     await wrapper.get('[aria-label="Remove tag Sphere"]').trigger('click')
     await flushPromises()
-    const after = apiFetchMock.mock.calls.filter(([path]) => path === '/tags').length
-    expect(after).toBeGreaterThan(before)
+    const tagsAfter = apiFetchMock.mock.calls.filter(([path]) => path === '/tags').length
+    const personAfter = apiFetchMock.mock.calls.filter(([path]) => path === `/people/${PERSON_ID}`).length
+    expect(tagsAfter).toBeGreaterThan(tagsBefore)
+    expect(personAfter).toBeGreaterThan(personBefore)
+    expect(wrapper.find('[data-testid="person-tag-chip"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="remove-tag-error"]').text()).toBe('That tag no longer exists; refreshed.')
   })
 
   it('Escape closes the popover and returns focus to the Add tag button', async () => {

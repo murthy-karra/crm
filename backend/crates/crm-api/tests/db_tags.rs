@@ -226,6 +226,21 @@ async fn create_tag_the_201st_tag_is_409_tag_limit_reached(migrator_pool: PgPool
     .await;
     assert!(matches!(result, Err(TagError::TagLimitReached)));
     assert_eq!(tag_row_count(&migrator_pool, f.org_id).await, 200);
+
+    // Tester F5: at the cap, create-or-get on an EXISTING name is still a
+    // hit, not a 409 — the quota check only ever guards the miss path.
+    let existing = tag::create_tag(
+        &app_pool,
+        &command_context(f.org_id, f.member_id),
+        CreateTag {
+            name: "tag 5".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(!existing.created);
+    assert_eq!(existing.tag.name, "Tag 5", "the first spelling is kept");
+    assert_eq!(tag_row_count(&migrator_pool, f.org_id).await, 200);
 }
 
 #[sqlx::test]
@@ -485,6 +500,68 @@ async fn add_and_remove_on_a_foreign_or_nonexistent_person_or_tag_are_identical_
     assert_eq!(
         person_tag_row_count(&migrator_pool, f.org_id, person_id).await,
         0
+    );
+
+    // Tester F3: a REAL person or tag belonging to a DIFFERENT Organization
+    // is exactly as invisible as a nonexistent id — all four cross
+    // combinations, both add and remove, identical `NotFound` bodies, and
+    // no row lands in either Organization's `person_tag`.
+    let (other_org_id, other_member_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Best Realty",
+        "frank@best.test",
+        "Frank",
+        PW,
+    )
+    .await;
+    let other_stage_id = first_stage_id(&app_pool, other_org_id).await;
+    let other_person_id = insert_bare_person(&app_pool, other_org_id, other_stage_id).await;
+    let other_tag = tag::create_tag(
+        &app_pool,
+        &command_context(other_org_id, other_member_id),
+        CreateTag {
+            name: "Other Org Real Tag".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+
+    for (person, tag_id) in [
+        (PersonId::new(person_id), other_tag.tag.id), // org A's person + org B's real tag
+        (PersonId::new(other_person_id), created.tag.id), // org B's person + org A's real tag
+    ] {
+        let add_result = tag::add_person_tag(
+            &app_pool,
+            &publisher,
+            &command_context(f.org_id, f.member_id),
+            AddPersonTag {
+                person_id: person,
+                tag_id,
+            },
+        )
+        .await;
+        assert!(matches!(add_result, Err(TagError::NotFound)));
+        let remove_result = tag::remove_person_tag(
+            &app_pool,
+            &publisher,
+            &command_context(f.org_id, f.member_id),
+            RemovePersonTag {
+                person_id: person,
+                tag_id,
+            },
+        )
+        .await;
+        assert!(matches!(remove_result, Err(TagError::NotFound)));
+    }
+    assert_eq!(
+        person_tag_row_count(&migrator_pool, f.org_id, person_id).await,
+        0,
+        "org A's person_tag rows must stay at zero"
+    );
+    assert_eq!(
+        person_tag_row_count(&migrator_pool, other_org_id, other_person_id).await,
+        0,
+        "org B's person_tag rows must stay at zero"
     );
 }
 
@@ -1104,6 +1181,61 @@ async fn get_tags_lists_only_the_organizations_tags_with_correct_can_manage(migr
     let mut sorted = names.clone();
     sorted.sort_by_key(|n| n.to_lowercase());
     assert_eq!(names, sorted);
+
+    // Reviewer F2 / tester F2: a second Organization's tag never leaks
+    // into either Acme user's index, and that Organization's own member
+    // sees only its own tag.
+    let (other_org_id, other_admin_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Best Realty",
+        "eve@best.test",
+        "Eve",
+        PW,
+    )
+    .await;
+    promote_to_admin(&migrator_pool, other_org_id, other_admin_id).await;
+    tag::create_tag(
+        &app_pool,
+        &command_context(other_org_id, other_admin_id),
+        CreateTag {
+            name: "Leaky".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let admin_view_again = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/tags", &alice).await,
+    )
+    .await;
+    assert!(
+        admin_view_again["tags"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|t| t["name"] != "Leaky"),
+        "Acme's admin must never see the other Organization's tag: {admin_view_again}"
+    );
+    let member_view_again =
+        crate::common::body_json(crate::common::get_with_cookie(&router, "/api/tags", &bob).await)
+            .await;
+    assert!(
+        member_view_again["tags"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|t| t["name"] != "Leaky"),
+        "Acme's member must never see the other Organization's tag: {member_view_again}"
+    );
+
+    let other_admin_cookie = crate::common::login_cookie(&router, "eve@best.test", PW).await;
+    let other_view = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/tags", &other_admin_cookie).await,
+    )
+    .await;
+    let other_tags = other_view["tags"].as_array().unwrap();
+    assert_eq!(other_tags.len(), 1);
+    assert_eq!(other_tags[0]["name"], "Leaky");
 }
 
 #[sqlx::test]
@@ -1185,6 +1317,7 @@ async fn tag_route_error_precedence_and_wire_shapes(migrator_pool: PgPool) {
     let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let stage_id = first_stage_id(&app_pool, f.org_id).await;
     let person_id = insert_bare_person(&app_pool, f.org_id, stage_id).await;
+    let publisher = Publisher::recording();
 
     let router = crate::common::build_router(&migrator_pool).await;
     let alice = crate::common::login_cookie(&router, "alice@acme.test", PW).await;
@@ -1267,6 +1400,211 @@ async fn tag_route_error_precedence_and_wire_shapes(migrator_pool: PgPool) {
     let second_delete =
         crate::common::delete_with_cookie(&router, &format!("/api/tags/{tag_id}"), &alice).await;
     assert_eq!(second_delete.status(), StatusCode::NOT_FOUND);
+
+    // Tester F4: everything above ran as alice, the org admin, who always
+    // has rule-1 permission — so the 403 branch was never actually
+    // exercised. Redo the wire-code precedence as bob, a plain member,
+    // whose own permission genuinely varies by tag, and assert the exact
+    // `error` code strings the Web keys on (`lib/errors.ts`).
+    let bob = crate::common::login_cookie(&router, "bob@acme.test", PW).await;
+    let random_tag_id = Uuid::new_v4();
+
+    // Bad body -> 400 malformed_request (before 404/403 are even reached).
+    let bad_body = crate::common::put_json_with_cookie(
+        &router,
+        &format!("/api/tags/{random_tag_id}"),
+        &bob,
+        json!({ "name": "" }),
+    )
+    .await;
+    assert_eq!(bad_body.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        crate::common::body_json(bad_body).await["error"],
+        "malformed_request"
+    );
+
+    // Nonexistent tag id, valid body -> 404 not_found.
+    let nonexistent = crate::common::put_json_with_cookie(
+        &router,
+        &format!("/api/tags/{random_tag_id}"),
+        &bob,
+        json!({ "name": "New Name" }),
+    )
+    .await;
+    assert_eq!(nonexistent.status(), StatusCode::NOT_FOUND);
+    assert_eq!(
+        crate::common::body_json(nonexistent).await["error"],
+        "not_found"
+    );
+
+    // A real, in-use tag alice created — bob is neither admin nor creator:
+    // 404-before-403 precedence lands here at 403 forbidden (the tag
+    // exists, so precedence has already passed 404; only permission is
+    // denied).
+    let in_use = tag::create_tag(
+        &app_pool,
+        &command_context(f.org_id, f.admin_id),
+        CreateTag {
+            name: "In Use".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+    tag::add_person_tag(
+        &app_pool,
+        &publisher,
+        &command_context(f.org_id, f.admin_id),
+        AddPersonTag {
+            person_id: PersonId::new(person_id),
+            tag_id: in_use.tag.id,
+        },
+    )
+    .await
+    .unwrap();
+    let forbidden = crate::common::put_json_with_cookie(
+        &router,
+        &format!("/api/tags/{}", in_use.tag.id),
+        &bob,
+        json!({ "name": "Hijacked" }),
+    )
+    .await;
+    assert_eq!(forbidden.status(), StatusCode::FORBIDDEN);
+    assert_eq!(
+        crate::common::body_json(forbidden).await,
+        json!({ "error": "forbidden" })
+    );
+
+    // Bob renames his OWN unused tag to a name that collides with the
+    // existing "In Use" tag, case-insensitively -> 409 tag_name_taken.
+    // Rule 1 permits the rename itself (creator, unused); only the name
+    // collision fails.
+    let mine_unused = crate::common::body_json(
+        crate::common::post_json_with_cookie(
+            &router,
+            "/api/tags",
+            &bob,
+            json!({ "name": "Mine Unused" }),
+        )
+        .await,
+    )
+    .await;
+    let mine_unused_id = mine_unused["tag"]["id"].as_str().unwrap();
+    let collision = crate::common::put_json_with_cookie(
+        &router,
+        &format!("/api/tags/{mine_unused_id}"),
+        &bob,
+        json!({ "name": "in use" }),
+    )
+    .await;
+    assert_eq!(collision.status(), StatusCode::CONFLICT);
+    assert_eq!(
+        crate::common::body_json(collision).await["error"],
+        "tag_name_taken"
+    );
+
+    // 19 more tags applied to `person_id` (on top of "In Use" already
+    // applied above) reach the 20-tag cap; a 21st distinct tag is 409
+    // person_tag_limit_reached over HTTP.
+    for i in 0..19 {
+        let filler = tag::create_tag(
+            &app_pool,
+            &command_context(f.org_id, f.member_id),
+            CreateTag {
+                name: format!("Filler {i}"),
+            },
+        )
+        .await
+        .unwrap();
+        tag::add_person_tag(
+            &app_pool,
+            &publisher,
+            &command_context(f.org_id, f.member_id),
+            AddPersonTag {
+                person_id: PersonId::new(person_id),
+                tag_id: filler.tag.id,
+            },
+        )
+        .await
+        .unwrap();
+    }
+    assert_eq!(
+        person_tag_row_count(&migrator_pool, f.org_id, person_id).await,
+        20
+    );
+    let one_more = tag::create_tag(
+        &app_pool,
+        &command_context(f.org_id, f.member_id),
+        CreateTag {
+            name: "One More For Person".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+    let person_limit = crate::common::put_json_with_cookie(
+        &router,
+        &format!("/api/people/{person_id}/tags/{}", one_more.tag.id),
+        &bob,
+        json!({}),
+    )
+    .await;
+    assert_eq!(person_limit.status(), StatusCode::CONFLICT);
+    assert_eq!(
+        crate::common::body_json(person_limit).await["error"],
+        "person_tag_limit_reached"
+    );
+
+    // Fill the Organization to the 200-tag cap (currently: In Use, Mine
+    // Unused, 19 fillers, One More For Person = 22), then a fresh
+    // `POST /api/tags` over HTTP is 409 tag_limit_reached.
+    let existing_count = tag_row_count(&migrator_pool, f.org_id).await;
+    sqlx::query(
+        "INSERT INTO tag (organization_id, created_by_user_id, name)
+         SELECT $1, $2, 'Bulk ' || s.i FROM generate_series(1, $3) AS s(i)",
+    )
+    .bind(f.org_id)
+    .bind(f.member_id)
+    .bind(200 - existing_count)
+    .execute(&app_pool)
+    .await
+    .unwrap();
+    assert_eq!(tag_row_count(&migrator_pool, f.org_id).await, 200);
+    let at_cap = crate::common::post_json_with_cookie(
+        &router,
+        "/api/tags",
+        &bob,
+        json!({ "name": "One Too Many Over HTTP" }),
+    )
+    .await;
+    assert_eq!(at_cap.status(), StatusCode::CONFLICT);
+    assert_eq!(
+        crate::common::body_json(at_cap).await["error"],
+        "tag_limit_reached"
+    );
+
+    // No cookie on the person-tag routes -> 401 unauthenticated.
+    let unauth_put = crate::common::put_json_with_cookie(
+        &router,
+        &format!("/api/people/{person_id}/tags/{mine_unused_id}"),
+        "",
+        json!({}),
+    )
+    .await;
+    assert_eq!(unauth_put.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        crate::common::body_json(unauth_put).await["error"],
+        "unauthenticated"
+    );
+    let unauth_delete = crate::common::delete_with_cookie(
+        &router,
+        &format!("/api/people/{person_id}/tags/{mine_unused_id}"),
+        "",
+    )
+    .await;
+    assert_eq!(unauth_delete.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        crate::common::body_json(unauth_delete).await["error"],
+        "unauthenticated"
+    );
 }
 
 // --- §9.7: realtime ----------------------------------------------------
@@ -1309,6 +1647,12 @@ async fn tags_changed_publishes_exactly_once_per_changing_add_or_remove(migrator
     let events = recorded(&publisher).await;
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].1["data"]["change"], "tags_changed");
+    // D-023: ids only, never the tag name, on the realtime channel.
+    assert!(
+        !events[0].1.to_string().contains("Loud"),
+        "the tag name must never appear on the realtime event: {}",
+        events[0].1
+    );
 
     // Re-applying: changed:false, no additional event.
     let reapplied = crate::common::body_json(

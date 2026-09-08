@@ -94,7 +94,10 @@ const filteredTags = computed(() => {
 const trimmedQuery = computed(() => addTagQuery.value.trim())
 const showCreateRow = computed(() => {
   const q = trimmedQuery.value
-  if (q === '' || q.length > 40) return false
+  // Code points, not UTF-16 units — matches the server's `chars().count()`
+  // (backend/crates/crm-app/src/domain/tag/commands.rs), so a 40-character
+  // name with astral characters (e.g. some emoji) is not wrongly hidden.
+  if (q === '' || [...q].length > 40) return false
   return !orgTags.value.some((tag) => tag.name.toLowerCase() === q.toLowerCase())
 })
 const addTagOptions = computed<AddTagOption[]>(() => {
@@ -104,11 +107,19 @@ const addTagOptions = computed<AddTagOption[]>(() => {
 })
 watch(addTagOptions, () => { addTagActiveIndex.value = 0 })
 
+const TAG_GONE_MESSAGE = 'That tag no longer exists; refreshed.'
+
+// A 404 here means the tag (or, for remove, the applied row) vanished
+// between this tab's last read and the write — the tags query and, for
+// apply/remove, the Person detail have already been invalidated by the
+// mutation hook's own onError (queries.ts), so this is display copy only,
+// never silent (reviewer F1 / tester F1: a 404 must explain itself, not
+// leave the user guessing why a chip disappeared).
 function describeTagError(err: unknown, fallback: string): string {
   if (err instanceof ApiError) {
     if (err.code === 'person_tag_limit_reached') return 'This person already has 20 tags.'
     if (err.code === 'tag_limit_reached') return 'This Organization already has 200 tags.'
-    if (err.status === 404) return ''
+    if (err.status === 404) return TAG_GONE_MESSAGE
   }
   return describeApiError(err, fallback)
 }
@@ -203,8 +214,15 @@ onBeforeUnmount(() => {
   document.removeEventListener('keydown', onAddTagDocumentKeydown)
 })
 
+const removeTagError = ref<string | null>(null)
 function removeTag(tagId: string) {
-  removePersonTag.mutate({ personId: props.id, tagId })
+  removeTagError.value = null
+  removePersonTag.mutate(
+    { personId: props.id, tagId },
+    {
+      onError: (err) => { removeTagError.value = describeTagError(err, 'Could not remove this tag.') },
+    },
+  )
 }
 function isRemovingTag(tagId: string): boolean {
   return removePersonTag.isPending.value && removePersonTag.variables.value?.tagId === tagId
@@ -826,6 +844,14 @@ watch(
                 </div>
               </div>
             </div>
+            <p
+              v-if="removeTagError"
+              role="alert"
+              class="mt-1.5 text-small text-danger"
+              data-testid="remove-tag-error"
+            >
+              {{ removeTagError }}
+            </p>
           </FormField>
         </div>
       </Card>

@@ -83,7 +83,13 @@ gate-2 plans re-captured under `plan_cache_mode = force_generic_plan`);
 Slice 013 reviewer READY WITH FIXES (one required fix: the bridging trait
 default bodies the lane reported removed are still present; coordinator
 confirmed on the tree) with D-046, §5.2, telemetry and injection containment
-verified; Slice 013 tester pending. Slice 012 fix round dispatched to lane A.
+verified; Slice 013 tester no blocking finding (fixes: deduplicate aliases
+that resolve to one id instead of a strike — a revised coordinator decision;
+drop empty name items; a fail-closed context-mismatch guard in
+`run_saved_list`; cross-Organization same-name test with People on both
+sides; admin-by-`list_id` test; a service unit for the counter reset; exact
+span-field assertions incl. absent uuids; same-display-name members test).
+Both fix rounds dispatched (lane A for 012, lane B for 013).
 LATER recorded: `inquiry` lacks a `reject_mutation` trigger (migrator can
 update it; `crm_app` cannot); every history insert now takes the Person row
 lock (BEYOND_ENVELOPE; a future importer must insert in stable Person order);

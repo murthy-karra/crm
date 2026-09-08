@@ -9,6 +9,7 @@ import { ApiError, apiFetch } from './client'
 import {
   queryKeys,
   fetchMe,
+  prefetchTodayData,
   useAddPersonTagMutation,
   useAssignPersonMutation,
   useChangeStageMutation,
@@ -565,6 +566,36 @@ describe('usePerson cancellation (SLICE_014 §3)', () => {
     await queryClient.cancelQueries({ queryKey: queryKeys.person(ORG_ID, PERSON_ID) })
     expect(capturedSignal?.aborted).toBe(true)
     wrapper.unmount()
+  })
+})
+
+describe('prefetchTodayData (SLICE_014 §4)', () => {
+  it('prefetches Today, Today sources and Today feeds for the session\'s Organization and actor, using factory keys', async () => {
+    apiFetchMock.mockImplementation((path: string) => {
+      if (path === '/today') return Promise.resolve({ items: [] })
+      if (path === '/today/sources') return Promise.resolve({ sources: [] })
+      if (path === '/today/feeds') return Promise.resolve({ feeds: {} })
+      return Promise.reject(new Error(`unexpected path ${path}`))
+    })
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const session = savedMe(ORG_ID, 'actor-a')
+    prefetchTodayData(queryClient, session)
+    await flushPromises()
+
+    expect(apiFetchMock).toHaveBeenCalledWith('/today', expect.anything())
+    expect(apiFetchMock).toHaveBeenCalledWith('/today/sources', expect.anything())
+    expect(apiFetchMock).toHaveBeenCalledWith('/today/feeds', expect.anything())
+    expect(queryClient.getQueryData(queryKeys.todayForActor(ORG_ID, 'actor-a'))).toEqual({ items: [] })
+    expect(queryClient.getQueryData(queryKeys.todaySources(ORG_ID, 'actor-a'))).toEqual({ sources: [] })
+    expect(queryClient.getQueryData(queryKeys.todayFeeds(ORG_ID, 'actor-a'))).toEqual({ feeds: {} })
+  })
+
+  it('prefetches nothing for a platform-only session (no Organization)', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const platformOnly: MeResponse = { user: { id: 'platform-1', email: 'p@example.test', display_name: 'Platform' }, organization: null, platform_admin: true }
+    prefetchTodayData(queryClient, platformOnly)
+    await Promise.resolve()
+    expect(apiFetchMock).not.toHaveBeenCalled()
   })
 })
 

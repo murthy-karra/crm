@@ -7,7 +7,7 @@ import {
   type RouteRecordRaw,
   type RouterHistory,
 } from 'vue-router'
-import { fetchMe, queryKeys } from './api/queries'
+import { fetchMe, prefetchTodayData, queryKeys } from './api/queries'
 import { ApiError } from './api/client'
 import {
   isSessionVerified,
@@ -18,6 +18,7 @@ import {
   useSessionVerificationPending,
 } from './sessionLifecycle'
 import { queryClient, setUnauthorizedHandler } from './query-client'
+import { preloadTodayView } from './preload'
 import type { MeResponse } from './api/types'
 
 declare module 'vue-router' {
@@ -59,7 +60,10 @@ function routes(): RouteRecordRaw[] {
       // SLICE_003 §14: Today is the landing route after login.
       path: '/today',
       name: 'today',
-      component: () => import('./views/TodayView.vue'),
+      // SLICE_014 §4: shared with LoginView's onMounted preload — the same
+      // dynamic import, so whichever call comes second just resolves from
+      // Vite's module cache instead of importing twice.
+      component: preloadTodayView,
       meta: { title: 'Today' },
     },
     {
@@ -347,6 +351,16 @@ export function createAppRouter(history: RouterHistory): Router {
 
     if (to.meta.requiresPlatformAdmin && !session.platform_admin) {
       return { path: '/today' }
+    }
+
+    // SLICE_014 §4: as soon as identity is known for a Today target — well
+    // before the Today route chunk (preloaded from login, above) has
+    // necessarily finished importing — start Today's three data requests.
+    // Every earlier return above (public routes, the pending/unavailable
+    // early returns, unauthenticated, platform-only) has already exited
+    // before this point, so nothing is prefetched for any of those cases.
+    if (to.name === 'today') {
+      prefetchTodayData(queryClient, session)
     }
 
     return true

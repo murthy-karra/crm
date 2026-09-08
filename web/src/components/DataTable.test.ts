@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ColumnDef } from '@tanstack/vue-table'
 import DataTable, { type TableSort } from './DataTable.vue'
 
@@ -33,6 +33,7 @@ interface MountOverrides {
   sort?: TableSort
   truncated?: boolean
   truncatedSortLabel?: string
+  onRowIntent?: (row: Row) => void
 }
 
 async function mountTable(overrides: MountOverrides = {}) {
@@ -51,6 +52,7 @@ async function mountTable(overrides: MountOverrides = {}) {
       sort: overrides.sort,
       truncated: overrides.truncated,
       truncatedSortLabel: overrides.truncatedSortLabel,
+      onRowIntent: overrides.onRowIntent,
     },
     global: { plugins: [router] },
   })
@@ -146,5 +148,32 @@ describe('DataTable sortable headers (SLICE_011b_SORT.md §9, §11.12 item 12)',
     const withoutLabel = await mountTable({ truncated: true })
     expect(withoutLabel.text()).toContain('Showing the first 2 — more exist.')
     expect(withoutLabel.text()).not.toContain(' by ')
+  })
+})
+
+// SLICE_014 §4: additive hover/focus-intent signal for a caller-owned
+// prefetch dwell timer (PeopleView.vue). Every other consumer omits the
+// prop and renders exactly as before — no assertion needed beyond the
+// existing suite above already passing unchanged.
+describe('DataTable row intent (SLICE_014 §4)', () => {
+  it('fires onRowIntent with the row on pointerenter', async () => {
+    const onRowIntent = vi.fn()
+    const wrapper = await mountTable({ onRowIntent })
+    await wrapper.findAll('tbody tr')[0]!.trigger('pointerenter')
+    expect(onRowIntent).toHaveBeenCalledTimes(1)
+    expect(onRowIntent).toHaveBeenCalledWith(rows[0])
+  })
+
+  it('fires onRowIntent with the row on focusin', async () => {
+    const onRowIntent = vi.fn()
+    const wrapper = await mountTable({ onRowIntent })
+    await wrapper.findAll('tbody tr')[1]!.trigger('focusin')
+    expect(onRowIntent).toHaveBeenCalledTimes(1)
+    expect(onRowIntent).toHaveBeenCalledWith(rows[1])
+  })
+
+  it('does nothing when onRowIntent is omitted (every other DataTable consumer)', async () => {
+    const wrapper = await mountTable()
+    await expect(wrapper.findAll('tbody tr')[0]!.trigger('pointerenter')).resolves.not.toThrow()
   })
 })

@@ -645,6 +645,19 @@ export function useMembers(orgId: MaybeRefOrGetter<string>) {
   })
 }
 
+// SLICE_014 §4: named fetchers, factored out of the three Today queries'
+// inline queryFns, so the router guard's `prefetchTodayData` (below) shares
+// the exact same request shape rather than re-deriving it.
+function fetchToday(signal?: AbortSignal): Promise<TodayResponse> {
+  return apiFetch<TodayResponse>('/today', { signal })
+}
+function fetchTodaySources(signal?: AbortSignal): Promise<TodaySourcesResponse> {
+  return apiFetch<TodaySourcesResponse>('/today/sources', { signal })
+}
+function fetchTodayFeeds(signal?: AbortSignal): Promise<MemberTodayFeedsResponse> {
+  return apiFetch<MemberTodayFeedsResponse>('/today/feeds', { signal })
+}
+
 /**
  * SLICE_003 §10: `refetchInterval: 60_000` is one of the two backstops
  * (with window-focus refetch, a TanStack default) that keep Today correct
@@ -654,7 +667,7 @@ export function useMembers(orgId: MaybeRefOrGetter<string>) {
 export function useToday(orgId: MaybeRefOrGetter<string>, actorId: MaybeRefOrGetter<string>) {
   return useQuery({
     queryKey: computed(() => queryKeys.todayForActor(toValue(orgId), toValue(actorId))),
-    queryFn: ({ signal }) => apiFetch<TodayResponse>('/today', { signal }),
+    queryFn: ({ signal }) => fetchToday(signal),
     enabled: computed(() => toValue(orgId) !== '' && toValue(actorId) !== ''),
     refetchInterval: 60_000,
     refetchOnMount: 'always',
@@ -665,12 +678,32 @@ export function useToday(orgId: MaybeRefOrGetter<string>, actorId: MaybeRefOrGet
 export function useTodaySources(orgId: MaybeRefOrGetter<string>, actorId: MaybeRefOrGetter<string>) {
   return useQuery({
     queryKey: computed(() => queryKeys.todaySources(toValue(orgId), toValue(actorId))),
-    queryFn: ({ signal }) => apiFetch<TodaySourcesResponse>('/today/sources', { signal }),
+    queryFn: ({ signal }) => fetchTodaySources(signal),
     enabled: computed(() => toValue(orgId) !== '' && toValue(actorId) !== ''),
     refetchInterval: 60_000,
     refetchOnMount: 'always',
     refetchOnWindowFocus: 'always',
   })
+}
+
+/**
+ * SLICE_014 §4: called from the router guard once identity resolves for a
+ * Today target with an Organization — before the Today route chunk even
+ * finishes importing (`preloadTodayView` in `../preload.ts` races it from
+ * the other direction, starting at login). `prefetchQuery` never throws and
+ * never overwrites a fresher cache entry; a failed prefetch is silent (§7)
+ * — the click/mount path just fetches normally, exactly like any other
+ * failed mount fetch already does. Keys only from the factory (SLICE_002
+ * §10). Nothing for a session with no Organization (platform-only) — the
+ * caller (router.ts) only reaches this after confirming one.
+ */
+export function prefetchTodayData(qc: QueryClient, session: MeResponse): void {
+  const orgId = session.organization?.id
+  if (!orgId) return
+  const actorId = session.user.id
+  void qc.prefetchQuery({ queryKey: queryKeys.todayForActor(orgId, actorId), queryFn: ({ signal }) => fetchToday(signal) })
+  void qc.prefetchQuery({ queryKey: queryKeys.todaySources(orgId, actorId), queryFn: ({ signal }) => fetchTodaySources(signal) })
+  void qc.prefetchQuery({ queryKey: queryKeys.todayFeeds(orgId, actorId), queryFn: ({ signal }) => fetchTodayFeeds(signal) })
 }
 
 function invalidateTodaySourceCaches(qc: QueryClient, orgId: string, actorId: string) {
@@ -689,7 +722,7 @@ function invalidateTodaySourceCaches(qc: QueryClient, orgId: string, actorId: st
 export function useTodayFeeds(orgId: MaybeRefOrGetter<string>, actorId: MaybeRefOrGetter<string>) {
   return useQuery({
     queryKey: computed(() => queryKeys.todayFeeds(toValue(orgId), toValue(actorId))),
-    queryFn: ({ signal }) => apiFetch<MemberTodayFeedsResponse>('/today/feeds', { signal }),
+    queryFn: ({ signal }) => fetchTodayFeeds(signal),
     enabled: computed(() => toValue(orgId) !== '' && toValue(actorId) !== ''),
     refetchOnMount: 'always',
     refetchOnWindowFocus: 'always',

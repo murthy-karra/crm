@@ -1,15 +1,25 @@
 <script setup lang="ts">
 // UI_STYLE.md §7: a quiet, centered glass sign-in panel.
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import FormField from '../components/FormField.vue'
 import { useLoginMutation } from '../api/queries'
 import { ApiError } from '../api/client'
 import { SessionCoordinationUnavailableError } from '../sessionLifecycle'
 import { buttonClasses, INPUT_CLASSES } from '../lib/controls'
+import { preloadTodayView } from '../preload'
 
 const route = useRoute()
 const router = useRouter()
+
+// SLICE_014 §4: most sign-ins land on Today (SLICE_003 §14) — start
+// importing its route chunk while the login POST (which pays the tunnel's
+// ≥0.5-1s body penalty, docs/design/perceived-latency-2026-09-07.md §1) is
+// still in flight, so the chunk is already in the module cache by the time
+// the post-login navigation asks for it.
+onMounted(() => {
+  void preloadTodayView()
+})
 
 const email = ref('')
 const password = ref('')

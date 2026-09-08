@@ -316,6 +316,60 @@ impl PriorityExplanation {
     }
 }
 
+/// A saved list's identity as returned to the model (docs/specs/
+/// SLICE_013.md §2): `name` is user-authored (011c §6), so it is wrapped;
+/// `scope` is a fixed `"personal"`/`"shared"` token, not user text.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SavedListRef {
+    pub list_id: Uuid,
+    pub name: UntrustedText,
+    pub scope: String,
+}
+
+/// `filter_people`'s and `run_saved_list`'s shared result view
+/// (docs/specs/SLICE_013.md §2). `Matched` is a successful filter or list
+/// evaluation; `NeedsClarification` is also a **successful** call (§1 rule
+/// 2 — it resets the malformed-call counter, never a strike) reporting only
+/// the vocabulary for the dimension(s) that failed; `ListInvalid` reports a
+/// saved list whose stored definition cannot be evaluated (`error` is one
+/// of `unsupported_filter`/`invalid_stage`/`invalid_assignee`/
+/// `invalid_tag`, a fixed code, never echoed text).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum FilterOutcome {
+    Matched(FilterResult),
+    NeedsClarification {
+        unknown_stages: Vec<String>,
+        unknown_tags: Vec<String>,
+        unknown_assignees: Vec<String>,
+        ambiguous_assignees: Vec<String>,
+        available_stages: Vec<String>,
+        available_tags: Vec<UntrustedText>,
+        members: Vec<String>,
+        candidate_lists: Vec<SavedListRef>,
+    },
+    ListInvalid {
+        error: String,
+    },
+}
+
+/// A successful `filter_people`/`run_saved_list` evaluation (docs/specs/
+/// SLICE_013.md §2). `list` is `None` for `filter_people` and `Some` for
+/// `run_saved_list`; `description` lines are `describe()` output, wrapped
+/// because stage/tag/member names inside them are user-authored (§1 rule
+/// 6); `count` is `min(matches, 500)` and `more_than_500` mirrors the
+/// People page's truncation (§1 rule 4); `returned` is `matches.len()`
+/// after the `limit` cut.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FilterResult {
+    pub list: Option<SavedListRef>,
+    pub description: Vec<UntrustedText>,
+    pub count: usize,
+    pub more_than_500: bool,
+    pub returned: usize,
+    pub matches: Vec<PersonCard>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -401,5 +455,52 @@ mod tests {
         .unwrap();
         assert_eq!(v["status"], "not_on_today");
         assert_eq!(v["reason"], "not_in_returned_today");
+    }
+
+    #[test]
+    fn filter_outcome_variants_tag_by_status_and_wrap_untrusted_text() {
+        let matched = serde_json::to_value(FilterOutcome::Matched(FilterResult {
+            list: Some(SavedListRef {
+                list_id: Uuid::nil(),
+                name: UntrustedText::new("Stale Zillow"),
+                scope: "personal".to_string(),
+            }),
+            description: vec![UntrustedText::new("Stage is Lead")],
+            count: 3,
+            more_than_500: false,
+            returned: 3,
+            matches: vec![],
+        }))
+        .unwrap();
+        assert_eq!(matched["status"], "matched");
+        assert_eq!(
+            matched["list"]["name"],
+            serde_json::json!({"untrusted_text": "Stale Zillow"})
+        );
+        assert_eq!(
+            matched["description"][0],
+            serde_json::json!({"untrusted_text": "Stage is Lead"})
+        );
+
+        let clarification = serde_json::to_value(FilterOutcome::NeedsClarification {
+            unknown_stages: vec!["Bogus".to_string()],
+            unknown_tags: vec![],
+            unknown_assignees: vec![],
+            ambiguous_assignees: vec![],
+            available_stages: vec!["Lead".to_string()],
+            available_tags: vec![],
+            members: vec![],
+            candidate_lists: vec![],
+        })
+        .unwrap();
+        assert_eq!(clarification["status"], "needs_clarification");
+        assert_eq!(clarification["unknown_stages"][0], "Bogus");
+
+        let invalid = serde_json::to_value(FilterOutcome::ListInvalid {
+            error: "invalid_tag".to_string(),
+        })
+        .unwrap();
+        assert_eq!(invalid["status"], "list_invalid");
+        assert_eq!(invalid["error"], "invalid_tag");
     }
 }

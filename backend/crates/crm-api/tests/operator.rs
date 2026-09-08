@@ -87,3 +87,114 @@ async fn runtime_is_absent_without_a_key() {
     let state = AppState::new(&test_config(&[])).unwrap();
     assert!(state.operator.is_none());
 }
+
+// --- filter_people schema mirrors every Clause kind (docs/specs/
+// SLICE_013.md §2, §8.3) ----------------------------------------------------
+//
+// `crm-operator` cannot depend on `crm-app` (D-034,
+// crm-api/tests/operator_deps.rs), so the test that walks the REAL
+// `crm_app::domain::person::filter::Clause::kind_label()` values against
+// crm-operator's `filter_people` JSON schema has to live here, on the
+// crm-api side of the fence, where both crates are already dependencies.
+// `crm-operator/src/tools.rs` also carries its own
+// `filter_people_schema_declares_a_field_for_every_mirrored_clause` test
+// against a hardcoded copy of this same 15-entry list, so a missing schema
+// field fails fast in that crate too; this test is what actually proves the
+// hardcoded list matches the live `Clause` enum, not just crm-operator's
+// own idea of it.
+mod filter_people_mirrors_every_clause_kind {
+    use crm_app::domain::person::filter::{
+        AgeClause, AgeSpec, AssignedToClause, BoolClause, Clause, SourceClause, StageClause,
+        TagIdsClause,
+    };
+    use crm_app::ids::{StageId, TagId};
+
+    /// One instance of every `Clause` variant, with placeholder field
+    /// values — only `kind_label()` is exercised, never the payload.
+    fn one_of_every_clause() -> Vec<Clause> {
+        let stage_id = StageId::new(uuid::Uuid::nil());
+        let tag_id = TagId::new(uuid::Uuid::nil());
+        let age = AgeClause {
+            age: AgeSpec::WithinDays(1),
+        };
+        vec![
+            Clause::Stage(StageClause {
+                stage_ids: vec![stage_id],
+            }),
+            Clause::AssignedTo(AssignedToClause {
+                assignees: vec![crm_app::domain::person::filter::Assignee::Me],
+            }),
+            Clause::Source(SourceClause {
+                sources: vec!["zillow".to_string()],
+            }),
+            Clause::Created(age),
+            Clause::LastInquiry(age),
+            Clause::LastContact(age),
+            Clause::LastInbound(age),
+            Clause::HasReplied(BoolClause { value: true }),
+            Clause::HasPhone(BoolClause { value: true }),
+            Clause::HasEmail(BoolClause { value: true }),
+            Clause::AwaitingResponse(BoolClause { value: true }),
+            Clause::ClientRepliedUnanswered(BoolClause { value: true }),
+            Clause::AwaitingCallOutcome(BoolClause { value: true }),
+            Clause::Tags(TagIdsClause {
+                tag_ids: vec![tag_id],
+            }),
+            Clause::NotTags(TagIdsClause {
+                tag_ids: vec![tag_id],
+            }),
+        ]
+    }
+
+    /// docs/specs/SLICE_013.md §2's table: every `Clause::kind_label()` to
+    /// the `filter_people` schema property name it mirrors. Ids become
+    /// names (`stage`→`stage_names`, `assigned_to`→`assignees`,
+    /// `source`→`sources`, `tags`/`not_tags`→`tag_names_any`/
+    /// `tag_names_none`); every other kind keeps its own name.
+    fn expected_field_for_kind(kind: &str) -> &'static str {
+        match kind {
+            "stage" => "stage_names",
+            "assigned_to" => "assignees",
+            "source" => "sources",
+            "created" => "created",
+            "last_inquiry" => "last_inquiry",
+            "last_contact" => "last_contact",
+            "last_inbound" => "last_inbound",
+            "has_replied" => "has_replied",
+            "has_phone" => "has_phone",
+            "has_email" => "has_email",
+            "awaiting_response" => "awaiting_response",
+            "client_replied_unanswered" => "client_replied_unanswered",
+            "awaiting_call_outcome" => "awaiting_call_outcome",
+            "tags" => "tag_names_any",
+            "not_tags" => "tag_names_none",
+            other => panic!("unmapped Clause::kind_label(): {other}"),
+        }
+    }
+
+    #[test]
+    fn every_clause_kind_has_a_filter_people_schema_field() {
+        let def = crm_operator::tool_definitions()
+            .into_iter()
+            .find(|d| d.name == "filter_people")
+            .expect("filter_people is declared");
+        let props = def.parameters["properties"]
+            .as_object()
+            .expect("filter_people has an object schema");
+
+        let mut seen_kinds = std::collections::HashSet::new();
+        for clause in one_of_every_clause() {
+            let kind = clause.kind_label();
+            assert!(seen_kinds.insert(kind), "duplicate fixture for {kind}");
+            let field = expected_field_for_kind(kind);
+            assert!(
+                props.contains_key(field),
+                "Clause::kind_label() {kind:?} has no filter_people schema field {field:?}"
+            );
+        }
+        // And nothing on the other side: every kind_label this test knows
+        // about was actually produced by the fixture above (protects
+        // against a stale mapping entry no live Clause variant reaches).
+        assert_eq!(seen_kinds.len(), 15, "expected all fifteen Clause kinds");
+    }
+}

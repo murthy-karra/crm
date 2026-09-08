@@ -19,7 +19,7 @@ use crate::provider::{
     Usage,
 };
 use crate::tools::{self, parse_invocation, tool_definitions, ArgumentError, ToolInvocation};
-use crate::views::{PersonCard, ProposalView, StartCallProposalOutcome};
+use crate::views::{FilterOutcome, PersonCard, ProposalView, StartCallProposalOutcome};
 use crate::SYSTEM_PROMPT;
 
 /// Total characters of replayed history (§4).
@@ -839,12 +839,41 @@ async fn dispatch(
                 }
             }
         }
+        // Placeholder dispatch (docs/tasks/SLICE_013_IMPL.md step 1: "no
+        // service dispatch beyond what compiling requires"). `RefBucket`
+        // choice and any state-machine interaction (e.g. `ledger_name`,
+        // clarification handling as a non-strike) are step 4's job; this
+        // arm only makes the now-exhaustive match on `ToolInvocation`
+        // compile correctly and wires the new backend methods through.
+        ToolInvocation::FilterPeople { spec } => {
+            let outcome = backend.filter_people(ctx, spec).await?;
+            let value = to_value(&outcome)?;
+            let cards = match &outcome {
+                FilterOutcome::Matched(result) => result.matches.clone(),
+                FilterOutcome::NeedsClarification { .. } | FilterOutcome::ListInvalid { .. } => {
+                    Vec::new()
+                }
+            };
+            Ok((value, RefBucket::Search, cards, None))
+        }
+        ToolInvocation::RunSavedList { selector } => {
+            let outcome = backend.run_saved_list(ctx, selector).await?;
+            let value = to_value(&outcome)?;
+            let cards = match &outcome {
+                FilterOutcome::Matched(result) => result.matches.clone(),
+                FilterOutcome::NeedsClarification { .. } | FilterOutcome::ListInvalid { .. } => {
+                    Vec::new()
+                }
+            };
+            Ok((value, RefBucket::Search, cards, None))
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::backend::{PeopleFilterSpec, SavedListSelector};
     use crate::providers::scripted::{ScriptedProvider, ScriptedStep};
     use crate::views::*;
     use async_trait::async_trait;
@@ -907,6 +936,11 @@ mod tests {
         /// 0 => NoPhone; 1 => Proposed; >1 => NeedsNumberChoice unless a
         /// contact_method_id picks one.
         phones: Vec<Uuid>,
+        /// `filter_people`'s `seen` fixture (docs/specs/SLICE_013.md §2):
+        /// the ids `Matched` returns, in order.
+        filter_people_ids: Vec<Uuid>,
+        /// `run_saved_list`'s `seen` fixture, same shape.
+        run_saved_list_ids: Vec<Uuid>,
     }
 
     impl FakeBackend {
@@ -1054,6 +1088,52 @@ mod tests {
                         .collect(),
                 }),
             }
+        }
+
+        async fn filter_people(
+            &self,
+            ctx: &OperatorContext,
+            _spec: &PeopleFilterSpec,
+        ) -> Result<FilterOutcome, ToolError> {
+            self.note(ctx)?;
+            let matches: Vec<PersonCard> = self
+                .filter_people_ids
+                .iter()
+                .map(|id| card(*id, "F"))
+                .collect();
+            Ok(FilterOutcome::Matched(FilterResult {
+                list: None,
+                description: vec![UntrustedText::new("Stage is Lead")],
+                count: matches.len(),
+                more_than_500: false,
+                returned: matches.len(),
+                matches,
+            }))
+        }
+
+        async fn run_saved_list(
+            &self,
+            ctx: &OperatorContext,
+            _selector: &SavedListSelector,
+        ) -> Result<FilterOutcome, ToolError> {
+            self.note(ctx)?;
+            let matches: Vec<PersonCard> = self
+                .run_saved_list_ids
+                .iter()
+                .map(|id| card(*id, "L"))
+                .collect();
+            Ok(FilterOutcome::Matched(FilterResult {
+                list: Some(SavedListRef {
+                    list_id: Uuid::new_v4(),
+                    name: UntrustedText::new("My List"),
+                    scope: "personal".to_string(),
+                }),
+                description: vec![],
+                count: matches.len(),
+                more_than_500: false,
+                returned: matches.len(),
+                matches,
+            }))
         }
     }
 
@@ -1515,6 +1595,20 @@ mod tests {
                 _: Uuid,
                 _: Option<Uuid>,
             ) -> Result<StartCallProposalOutcome, ToolError> {
+                unreachable!()
+            }
+            async fn filter_people(
+                &self,
+                _: &OperatorContext,
+                _: &PeopleFilterSpec,
+            ) -> Result<FilterOutcome, ToolError> {
+                unreachable!()
+            }
+            async fn run_saved_list(
+                &self,
+                _: &OperatorContext,
+                _: &SavedListSelector,
+            ) -> Result<FilterOutcome, ToolError> {
                 unreachable!()
             }
         }
@@ -1992,6 +2086,90 @@ mod tests {
         let out = svc.run_turn(&ctx(), &backend, input("call P")).await;
         assert_eq!(out.tool_calls[0].outcome, ToolCallOutcome::NotFound);
         assert!(out.proposal.is_none());
+    }
+
+    // --- filter_people / run_saved_list wiring (docs/specs/SLICE_013.md
+    // §8.3): the fake backend's `seen` assertions cover both new
+    // `ToolBackend` methods, called directly (the full scripted-provider
+    // turn loop's dispatch/ledger/clarification behavior is step 4's job,
+    // docs/tasks/SLICE_013_IMPL.md).
+
+    #[tokio::test]
+    async fn fake_backend_filter_people_records_context_and_returns_matches() {
+        let id = Uuid::new_v4();
+        let backend = FakeBackend {
+            filter_people_ids: vec![id],
+            ..Default::default()
+        };
+        let spec = PeopleFilterSpec {
+            has_phone: Some(true),
+            limit: 10,
+            ..Default::default()
+        };
+        let outcome = backend.filter_people(&ctx(), &spec).await.unwrap();
+        assert_eq!(backend.seen.lock().unwrap().len(), 1);
+        match outcome {
+            FilterOutcome::Matched(result) => {
+                assert_eq!(result.matches.len(), 1);
+                assert_eq!(result.matches[0].id, id);
+                assert_eq!(result.count, 1);
+                assert_eq!(result.returned, 1);
+                assert!(!result.more_than_500);
+                assert!(result.list.is_none());
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn fake_backend_run_saved_list_records_context_and_returns_matches() {
+        let id = Uuid::new_v4();
+        let backend = FakeBackend {
+            run_saved_list_ids: vec![id],
+            ..Default::default()
+        };
+        let selector = SavedListSelector {
+            name: Some("Stale Zillow".to_string()),
+            list_id: None,
+            limit: 10,
+        };
+        let outcome = backend.run_saved_list(&ctx(), &selector).await.unwrap();
+        assert_eq!(backend.seen.lock().unwrap().len(), 1);
+        match outcome {
+            FilterOutcome::Matched(result) => {
+                assert_eq!(result.matches.len(), 1);
+                assert_eq!(result.matches[0].id, id);
+                assert!(result.list.is_some());
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn fake_backend_filter_and_saved_list_share_the_backend_error_and_not_found_fixtures() {
+        let backend = FakeBackend {
+            backend_error: true,
+            ..Default::default()
+        };
+        let spec = PeopleFilterSpec {
+            has_phone: Some(true),
+            limit: 10,
+            ..Default::default()
+        };
+        assert!(matches!(
+            backend.filter_people(&ctx(), &spec).await,
+            Err(ToolError::Backend(_))
+        ));
+        let selector = SavedListSelector {
+            name: Some("x".to_string()),
+            list_id: None,
+            limit: 10,
+        };
+        assert!(matches!(
+            backend.run_saved_list(&ctx(), &selector).await,
+            Err(ToolError::Backend(_))
+        ));
+        assert_eq!(backend.seen.lock().unwrap().len(), 2);
     }
 
     #[test]

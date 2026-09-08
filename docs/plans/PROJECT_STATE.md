@@ -28,9 +28,24 @@ preview chips, member-visible `/manage/tags` `TagsView`, `tags_changed`
 token; Web gate green, 596 Vitest tests; the lane also fixed a pre-existing
 unmounted-overlay hygiene bug in `PersonDetailView.test.ts`). Coordinator
 audited both commits against `git status`: 41 files all under `backend/`,
-14 files all under `web/`, matching the reports. Review round 1 (reviewer and
-tester, read-only) launched on the e1 tree; step 6 walkthrough and the
-once-only final-tree gates follow the round. Amendment pointers
+14 files all under `web/`, matching the reports. **Step 6 walkthrough
+complete** (`a563cce`): 11 of 11 scenarios pass on a real scratch runtime
+(`:31011`/`:51011`, scratch database seeded through the HTTP API, torn down
+and verified by the coordinator: ports free, only `crm_dev` remains, the dev
+API healthy); archive `docs/design/qa/slice-011e-e1-2026-09-07/`. **Review
+round 1 (of two) complete** on `a563cce`: reviewer READY WITH FIXES, tester no
+blocking findings; tenant isolation, the D-051 enforcement, lock ordering and
+the wire contract verified. Consolidated fix round dispatched to the lane:
+the Web 404 stale-chip path (also invalidate the Person query and show a
+message), a display-hint role read that could 503, a UTF-16 length nit, and
+seven test hardenings (cross-Organization read and real-foreign-id cases that
+were vacuous, HTTP 403/409 wire bodies, create-or-get at the cap, ids-only
+realtime assertion, index enumeration, member reachability of
+`/manage/tags`). Recorded LATER: `outcome` span value naming, popover
+`aria-activedescendant`, disabled-button tooltip in Firefox, no membership
+re-read on add/remove (BEYOND_ENVELOPE, matches assign/stage), a
+DB-unavailable 503 route test. Next: lane gates, coordinator once-only
+final-tree gates, verification record, commit and merge gate. Amendment pointers
 written in 002 §§2/5, 003 §6, 005 §3 view types, 011a §4, 011b §§4/5, 011c
 §§3/5 and 011d §§2/6. The user said "start the plan for 011e" on 2026-09-07 (an earlier
 session that began the same planning was closed after 45 seconds of reads and

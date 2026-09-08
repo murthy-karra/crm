@@ -54,8 +54,16 @@ real racing-invalidation test with a held stale GET, server tag order on
 success, the 149/150 ms boundary and unmount, client mocks in the new test
 files). LATER: field-only `onSuccess` writes for rapid mutation pairs,
 insertion-order tag sorting vs collation, pointerleave timer clearing, the
-unrelated-person invalidation transient. The tunnel switch, probe and
-walkthrough follow the fixes and the coordinator's final gate.
+unrelated-person invalidation transient. **Fix round complete** (`fa9bcab`:
+all nine items; the stricter integration test caught a spurious extra
+`GET /me` from a missing test-client `staleTime`; the racing-invalidation
+test now holds a stale GET open past the mutation and passes
+deterministically). Coordinator audit passed (19 files against `main`, all
+under `web/` plus the four part-A files); **final gate run once on
+`fa9bcab`: `check` green, 757 Rust / 650 Vitest.** The pre-approved tunnel
+switch follows: the dev server (pids 24542/24563) stopped by exact PID,
+`scripts/dev-web-prod` served from the slice tree on 5173, the probe re-run
+over `app.tarams.org`, then the §8.10 walkthrough.
 
 Previously: **PLANNING Slice 014 — perceived-latency chunk plus FilterBar UX polish
 (Web-only).** The user chose the coordinator's suggestions 1 and 2 on

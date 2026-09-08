@@ -1,28 +1,27 @@
-//! The `Feeds` provider's evaluation statements and merge (docs/specs/
-//! SLICE_011d.md §5): the person-state statement covering both
-//! person-state feeds, the call feed under its own savepoint, and a merge
-//! that produces the same `(Vec<TodayItem>, truncated, candidate_count)`
-//! trio the `Legacy` compiled-in path produces — so everything downstream
-//! (ranking already happened via the shared [`rank`](crate::domain::today::rank::rank)
-//! function; the list-source merge in `today::mod`) runs unchanged either
-//! way.
+//! Frozen pre-switch text (see `README.md`) for the last three of the
+//! fourteen Slice 012 statements: `person_state`, `call_membership` and
+//! `call_only` (`crm-app/src/domain/today/system_feeds/evaluate.rs`).
+//! Copied byte-for-byte at this lane's branch point `61b08ac` (identical
+//! to `b45b04f`); only Rust import paths and the `.sql` file paths were
+//! adjusted. `PersonStateRow`/`CallMembershipRow`/`CallOnlyRow` and their
+//! `TryFrom<_> for TodayCandidate` conversions are otherwise verbatim —
+//! `TodayCandidate` itself, and every model type it is built from, are
+//! the SAME live types `evaluate.rs` uses today.
 
 use chrono::{DateTime, Utc};
 use sqlx::PgConnection;
 use uuid::Uuid;
 
-use crate::domain::commands::{ContactAttemptRef, ContactChannel, ContactOutcome};
-use crate::domain::person::model::{compute_display_name, PersonSummary, StageRef, UserRef};
-use crate::domain::today::model::{
-    InquiryRef, OutcomeNeededCall, TodayCandidate, TodayItem, TodayReason,
-};
-use crate::domain::today::system_feeds::ResolvedFeed;
-use crate::ids::{InquiryId, OrganizationId, PersonId, StageId, UserId};
+use crm_api::domain::commands::{ContactAttemptRef, ContactChannel, ContactOutcome};
+use crm_api::domain::person::filter::PersonFilterParams;
+use crm_api::domain::person::model::{compute_display_name, PersonSummary, StageRef, UserRef};
+use crm_api::domain::today::model::{InquiryRef, OutcomeNeededCall, TodayCandidate};
+use crm_api::ids::{InquiryId, OrganizationId, PersonId, StageId, UserId};
 
 fn required<T>(value: Option<T>, column: &'static str) -> Result<T, sqlx::Error> {
     value.ok_or_else(|| {
         sqlx::Error::Decode(
-            format!("system feed person-state query: expected {column} to be non-null").into(),
+            format!("frozen system feed query: expected {column} to be non-null").into(),
         )
     })
 }
@@ -36,10 +35,10 @@ fn decode_contact(
     match (id, channel, outcome, occurred_at) {
         (Some(id), Some(channel), Some(outcome), Some(occurred_at)) => {
             let channel = ContactChannel::decode(&channel).ok_or_else(|| {
-                sqlx::Error::Decode("system feed query: invalid contact channel".into())
+                sqlx::Error::Decode("frozen system feed query: invalid contact channel".into())
             })?;
             let outcome = ContactOutcome::decode(&outcome).ok_or_else(|| {
-                sqlx::Error::Decode("system feed query: invalid contact outcome".into())
+                sqlx::Error::Decode("frozen system feed query: invalid contact outcome".into())
             })?;
             Ok(Some(ContactAttemptRef {
                 id,
@@ -50,12 +49,12 @@ fn decode_contact(
         }
         (None, None, None, None) => Ok(None),
         _ => Err(sqlx::Error::Decode(
-            "system feed query: contact columns must be all null or all set".into(),
+            "frozen system feed query: contact columns must be all null or all set".into(),
         )),
     }
 }
 
-// --- Person-state statement --------------------------------------------
+// --- Person-state statement ------------------------------------------------
 
 struct PersonStateRow {
     id: Uuid,
@@ -129,8 +128,6 @@ impl TryFrom<PersonStateRow> for TodayCandidate {
             row.last_attempt_occurred_at,
         )?;
         let waiting_since = required(row.order_key, "order_key")?;
-        // The call axis is layered on afterward (spec §5 step 4); this
-        // statement never populates it.
         let client_replied = if row.by_reply {
             Some(waiting_since)
         } else {
@@ -138,7 +135,7 @@ impl TryFrom<PersonStateRow> for TodayCandidate {
         };
         if !row.by_inquiry && !row.by_reply {
             return Err(sqlx::Error::Decode(
-                "system feed person-state query: a candidate must qualify by inquiry or reply"
+                "frozen system feed person-state query: a candidate must qualify by inquiry or reply"
                     .into(),
             ));
         }
@@ -156,26 +153,27 @@ impl TryFrom<PersonStateRow> for TodayCandidate {
     }
 }
 
-/// docs/specs/SLICE_011d.md §5 step 2. `feed_a` is `unanswered_inquiry`,
-/// `feed_b` is `client_replied` — the fixed precedence order (reply wins).
-/// Returns candidates ordered exactly as the Legacy compiled-in query,
-/// capped at 200 (`truncated_p` = the fetch found more than 200).
+/// Frozen `person_state_candidates`. `feed_a` is `unanswered_inquiry`,
+/// `feed_b` is `client_replied`. Takes the already-resolved
+/// `PersonFilterParams` for each feed directly (rather than a
+/// `ResolvedFeed`), so a test can bind two independently constructed
+/// filters without needing the live feed-storage/evaluation machinery.
+#[allow(clippy::too_many_arguments)]
 pub async fn person_state_candidates(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
     viewer: UserId,
     now: DateTime<Utc>,
-    feed_a: &ResolvedFeed,
-    feed_b: &ResolvedFeed,
+    params_a: &PersonFilterParams,
+    enabled_a: bool,
+    fresh_hours_a: i32,
+    params_b: &PersonFilterParams,
+    enabled_b: bool,
+    fresh_hours_b: i32,
 ) -> Result<(Vec<TodayCandidate>, bool), sqlx::Error> {
-    let params_a = feed_a.filter.to_query_params(viewer);
-    let params_b = feed_b.filter.to_query_params(viewer);
-    let fresh_hours_a = feed_a.fresh_within_hours.unwrap_or(24);
-    let fresh_hours_b = feed_b.fresh_within_hours.unwrap_or(24);
-
     let mut rows = sqlx::query_file_as!(
         PersonStateRow,
-        "src/domain/today/system_feeds/sql/person_state.sql",
+        "tests/fixtures/statements_b45b04f/sql/person_state.sql",
         organization_id.0,
         params_a.stage_ids.as_deref(),
         params_a.assigned_user_ids.as_deref(),
@@ -223,8 +221,8 @@ pub async fn person_state_candidates(
         params_b.awaiting_call_outcome,
         now,
         viewer.0,
-        feed_a.enabled,
-        feed_b.enabled,
+        enabled_a,
+        enabled_b,
         fresh_hours_a,
         fresh_hours_b,
         params_a.tag_ids_any.as_deref(),
@@ -244,7 +242,7 @@ pub async fn person_state_candidates(
     Ok((candidates, truncated))
 }
 
-// --- Call feed -----------------------------------------------------------
+// --- Call feed --------------------------------------------------------------
 
 struct CallMembershipRow {
     person_id: Uuid,
@@ -252,25 +250,20 @@ struct CallMembershipRow {
     ended_at: DateTime<Utc>,
 }
 
-/// docs/specs/SLICE_011d.md §5 step 4a / §1 rule 4: for every retained P
-/// id, the viewer's one qualifying call, narrowed by `call_feed`'s full
-/// predicate matrix (any admin-added clause beyond the anchor applies
-/// here). Returns `(person_id, call_id, ended_at)`.
 pub async fn call_membership(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
     viewer: UserId,
-    call_feed: &ResolvedFeed,
+    params: &PersonFilterParams,
     retained_ids: &[Uuid],
     now: DateTime<Utc>,
 ) -> Result<Vec<(Uuid, Uuid, DateTime<Utc>)>, sqlx::Error> {
     if retained_ids.is_empty() {
         return Ok(Vec::new());
     }
-    let params = call_feed.filter.to_query_params(viewer);
     let rows = sqlx::query_file_as!(
         CallMembershipRow,
-        "src/domain/today/system_feeds/sql/call_membership.sql",
+        "tests/fixtures/statements_b45b04f/sql/call_membership.sql",
         organization_id.0,
         params.stage_ids.as_deref(),
         params.assigned_user_ids.as_deref(),
@@ -394,23 +387,19 @@ impl TryFrom<CallOnlyRow> for TodayCandidate {
     }
 }
 
-/// docs/specs/SLICE_011d.md §5 step 4b / §1 rule 4: the call-only prefix,
-/// ordered `ended_at ASC, id ASC`, limited to `(200 - |P|) + 1`, narrowed
-/// by `call_feed`'s full predicate matrix. Only called when the
-/// person-state statement was NOT truncated.
+#[allow(clippy::too_many_arguments)]
 pub async fn call_only_candidates(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
     viewer: UserId,
-    call_feed: &ResolvedFeed,
+    params: &PersonFilterParams,
     retained_ids: &[Uuid],
     limit: i64,
     now: DateTime<Utc>,
 ) -> Result<Vec<TodayCandidate>, sqlx::Error> {
-    let params = call_feed.filter.to_query_params(viewer);
     let rows = sqlx::query_file_as!(
         CallOnlyRow,
-        "src/domain/today/system_feeds/sql/call_only.sql",
+        "tests/fixtures/statements_b45b04f/sql/call_only.sql",
         organization_id.0,
         params.stage_ids.as_deref(),
         params.assigned_user_ids.as_deref(),
@@ -444,32 +433,4 @@ pub async fn call_only_candidates(
     .fetch_all(conn)
     .await?;
     rows.into_iter().map(TodayCandidate::try_from).collect()
-}
-
-/// Appends the `call_outcome_needed` reason to an already-ranked item,
-/// last, exactly as the Legacy `rank_one` does — used for retained P
-/// members that separately qualify for the call feed (spec §5 step 4a).
-/// A no-op if the person is absent from `items` or already carries the
-/// reason (defensive; the caller only ever calls this once per person).
-pub(crate) fn append_call_outcome_reason(
-    items: &mut [TodayItem],
-    person_id: Uuid,
-    call_id: Uuid,
-    ended_at: DateTime<Utc>,
-) {
-    let Some(item) = items
-        .iter_mut()
-        .find(|item| item.person.id.as_uuid() == person_id)
-    else {
-        return;
-    };
-    if item
-        .reasons
-        .iter()
-        .any(|reason| matches!(reason, TodayReason::CallOutcomeNeeded { .. }))
-    {
-        return;
-    }
-    item.reasons
-        .push(TodayReason::CallOutcomeNeeded { call_id, ended_at });
 }

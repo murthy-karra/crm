@@ -116,6 +116,9 @@ mod db_realtime;
 #[path = "db_schema.rs"]
 mod db_schema;
 
+#[path = "db_statement_equivalence.rs"]
+mod db_statement_equivalence;
+
 #[path = "db_saved_lists.rs"]
 mod db_saved_lists;
 

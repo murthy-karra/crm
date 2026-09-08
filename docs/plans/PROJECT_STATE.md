@@ -16,6 +16,19 @@ fourteen statements and parity) for the coordinator's audit before the
 e2. The shared development runtime serves e1 and is untouched until the e2
 merge.
 
+Progress (2026-09-07): **e2 steps 1–2 complete** (`db2be0a` vocabulary,
+`2cecee3` the fourteen statements): `tags`/`not_tags` clause kinds with the
+canonical-uuid pre-check, validation, `InvalidTag` reference error,
+`FilterNames.tag_names`, `describe()`, params; both predicates in all
+fourteen statements (coordinator verified each file; `person_state.sql`
+carries both chains), 14 `.sqlx` entries regenerated, `list_summaries`
+untouched; semantics and present-clause parity tests across People, count,
+seven sorts, both source statements and the three feed statements; the
+compile-forced `InvalidTag` arms added explicitly everywhere except the two
+`_ =>` sites in the Today source-issue mapping, which step 3 replaces. Lane
+gates: `check` 717 tests, `check-db` 573 of 573. Steps 3–5 (the `invalid_tag`
+paths and tests, Web chips, performance evidence) released to the lane.
+
 Previous rung: **RUNG e1 COMPLETE AND MERGED TO LOCAL MAIN** at
 `51331e9` (2026-09-07, with the user's approval; not pushed, not deployed).
 Source `slice-011e-tags` at `4af2e13` (five commits: backend `502f418`, Web

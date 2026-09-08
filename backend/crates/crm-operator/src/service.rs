@@ -24,8 +24,12 @@ use crate::SYSTEM_PROMPT;
 
 /// Total characters of replayed history (§4).
 pub const MAX_HISTORY_CHARS: usize = 6000;
-/// Reference cards returned per turn (§4, §14 item 4).
-pub const MAX_REFERENCES: usize = 10;
+/// Reference cards returned per turn (§4, §14 item 4). 10 -> 25 (docs/specs/
+/// SLICE_013.md §1 rule 4: the drawer shows every card the model was given
+/// for `filter_people`/`run_saved_list`'s 25-card `limit`); side effect,
+/// accepted: `get_today` can now place up to 20 cards in the drawer instead
+/// of 10.
+pub const MAX_REFERENCES: usize = 25;
 /// `Unavailable` is retried once only if more than this remains (§4).
 pub const RETRY_MIN_REMAINING: Duration = Duration::from_secs(5);
 
@@ -311,6 +315,8 @@ fn ledger_name(model_supplied: &str) -> &'static str {
         tools::GET_NEXT_WORK_ITEM => tools::GET_NEXT_WORK_ITEM,
         tools::EXPLAIN_PRIORITY => tools::EXPLAIN_PRIORITY,
         tools::START_CALL => tools::START_CALL,
+        tools::FILTER_PEOPLE => tools::FILTER_PEOPLE,
+        tools::RUN_SAVED_LIST => tools::RUN_SAVED_LIST,
         _ => "unknown",
     }
 }
@@ -615,11 +621,28 @@ impl OperatorService {
     ) -> Result<(), ExecError> {
         let name = ledger_name(&call.name);
         let started = Instant::now();
+        // docs/specs/SLICE_013.md §6: `filter_kinds`/`filter_clause_count`/
+        // `resolution`/`match_count`/`more_than_500`/`returned`/
+        // `saved_list_scope` are declared here (an undeclared field is
+        // silently dropped by `Span::record`, per `tracing`) but recorded
+        // by the adapter (`crm-api`'s `SqlxToolBackend::filter_people`/
+        // `run_saved_list`) while it runs inside this span — the same
+        // ambient-span pattern `saved_list::queries::
+        // count_saved_list_matches` already uses. crm-operator itself
+        // never sees a name, id, or day count to record here even if it
+        // wanted to (D-034 fence; D-029).
         let span = tracing::info_span!(
             "operator.tool_call",
             tool = name,
             outcome = tracing::field::Empty,
-            duration_ms = tracing::field::Empty
+            duration_ms = tracing::field::Empty,
+            filter_kinds = tracing::field::Empty,
+            filter_clause_count = tracing::field::Empty,
+            resolution = tracing::field::Empty,
+            match_count = tracing::field::Empty,
+            more_than_500 = tracing::field::Empty,
+            returned = tracing::field::Empty,
+            saved_list_scope = tracing::field::Empty
         );
 
         let invocation = match parse_invocation(&call.name, &call.arguments) {
@@ -715,7 +738,7 @@ impl OperatorService {
                 };
                 state.messages.push(ChatMessage::Tool {
                     tool_call_id: call.id.clone(),
-                    content: tool_error_json("not_found", "no such person in your Organization"),
+                    content: tool_error_json("not_found", not_found_detail(&invocation)),
                 });
                 state.consecutive_malformed = 0;
                 Ok(())
@@ -752,6 +775,23 @@ impl OperatorService {
 
 fn argument_message(err: &ArgumentError) -> String {
     err.message()
+}
+
+/// `ToolError::NotFound`'s fixed detail string, tool-aware (docs/specs/
+/// SLICE_013.md §3): `run_saved_list` names a list, not a Person, so its
+/// message says so; every other tool keeps the original Person wording.
+/// Never echoes the model's argument text (D-029).
+fn not_found_detail(invocation: &ToolInvocation) -> &'static str {
+    match invocation {
+        ToolInvocation::RunSavedList { .. } => "you cannot see a list by that name",
+        ToolInvocation::SearchPeople { .. }
+        | ToolInvocation::GetPerson { .. }
+        | ToolInvocation::GetToday { .. }
+        | ToolInvocation::GetNextWorkItem
+        | ToolInvocation::ExplainPriority { .. }
+        | ToolInvocation::StartCall { .. }
+        | ToolInvocation::FilterPeople { .. } => "no such person in your Organization",
+    }
 }
 
 fn non_empty(content: Option<String>) -> Option<String> {
@@ -1752,6 +1792,41 @@ mod tests {
         );
     }
 
+    /// docs/specs/SLICE_013.md §3: `run_saved_list`'s `not_found` detail is
+    /// tool-aware — a list, not a Person — and, like every `not_found`, is
+    /// a successful call: the turn continues and the strike counter
+    /// resets.
+    #[tokio::test]
+    async fn run_saved_list_not_found_uses_a_list_aware_detail_and_the_turn_continues() {
+        let (svc, provider) = service(
+            vec![
+                ScriptedStep::Respond(ChatResponse::tool_calls(vec![call(
+                    "c1",
+                    "run_saved_list",
+                    json!({"name": "Stale Zillow"}),
+                )])),
+                ScriptedStep::Respond(ChatResponse::text("I can't see a list by that name.")),
+            ],
+            Limits::default(),
+        );
+        let backend = FakeBackend {
+            not_found: true,
+            ..Default::default()
+        };
+        let out = svc.run_turn(&ctx(), &backend, input("x")).await;
+        assert_eq!(out.outcome, TurnOutcome::Completed);
+        assert_eq!(out.tool_calls[0].name, "run_saved_list");
+        assert_eq!(out.tool_calls[0].outcome, ToolCallOutcome::NotFound);
+        let msgs = &provider.requests()[1].messages;
+        let content = match msgs.last() {
+            Some(ChatMessage::Tool { content, .. }) => content,
+            other => panic!("{other:?}"),
+        };
+        assert!(content.contains("not_found"));
+        assert!(content.contains("you cannot see a list by that name"));
+        assert!(!content.contains("no such person"));
+    }
+
     #[tokio::test]
     async fn history_is_truncated_by_count_and_chars_oldest_first() {
         let (svc, provider) = service(
@@ -1864,9 +1939,16 @@ mod tests {
 
     #[tokio::test]
     async fn references_follow_precedence_dedup_and_cap() {
+        // docs/specs/SLICE_013.md §1 rule 4: MAX_REFERENCES rose 10 -> 25,
+        // so the fixture supply must exceed 25 unique ids for the cap to
+        // still bind (search's own limit is 10, get_today's is 20; the
+        // fixture sizes below are the minimum that push total supply past
+        // 25 with both buckets near their own per-call caps).
         let asked = Uuid::new_v4();
         let today_ids: Vec<Uuid> = (0..15).map(|_| Uuid::new_v4()).collect();
-        let search_ids = vec![Uuid::new_v4(), today_ids[3]];
+        let mut search_ids: Vec<Uuid> = (0..9).map(|_| Uuid::new_v4()).collect();
+        search_ids.push(today_ids[3]);
+        assert_eq!(search_ids.len(), 10, "at search_people's own limit");
         let (svc, _) = service(
             vec![
                 // get_today first in time, but must not crowd out the
@@ -1889,17 +1971,18 @@ mod tests {
         let ids: Vec<Uuid> = out.references.people.iter().map(|c| c.id).collect();
         assert_eq!(ids.len(), MAX_REFERENCES);
         assert_eq!(ids[0], asked);
-        assert_eq!(ids[1], search_ids[0]);
-        assert_eq!(ids[2], search_ids[1]);
+        assert_eq!(&ids[1..11], &search_ids[..]);
         // today_ids[3] already appeared via search_people, so it is
-        // deduplicated out of the Today tail.
+        // deduplicated out of the Today tail; the remaining 14 fill the
+        // cap exactly (1 asked + 10 search + 14 today == 25).
         let expected_tail: Vec<Uuid> = today_ids
             .iter()
             .copied()
             .filter(|id| *id != today_ids[3])
-            .take(7)
+            .take(14)
             .collect();
-        assert_eq!(&ids[3..], &expected_tail[..]);
+        assert_eq!(expected_tail.len(), 14);
+        assert_eq!(&ids[11..], &expected_tail[..]);
         assert_eq!(ids.iter().filter(|id| **id == today_ids[3]).count(), 1);
         // The tool record for get_today carries every id it returned.
         assert_eq!(out.tool_calls[0].person_ids.len(), 15);
@@ -2183,7 +2266,7 @@ mod tests {
             "Never claim a call was placed",
             "Never propose a call the user did not ask for",
             "you can never dial a number from the conversation",
-            "six tools",
+            "eight tools",
         ] {
             assert!(prompt.contains(rule), "prompt lost the rule: {rule}");
         }
@@ -2191,5 +2274,27 @@ mod tests {
             !prompt.contains("read-only assistant"),
             "the read-only framing is gone (006b)"
         );
+        assert!(!prompt.contains("six tools"), "the tool count is stale");
+    }
+
+    /// docs/specs/SLICE_013.md §3: string-pinned like
+    /// `the_prompt_carries_the_start_call_rules` above — a reworded prompt
+    /// that drops one of these rules must fail a test.
+    #[test]
+    fn the_prompt_carries_the_filter_people_and_run_saved_list_rules() {
+        let prompt = include_str!("../prompts/system.md");
+        for rule in [
+            "filter_people",
+            "run_saved_list",
+            "assignees: [\"me\"]",
+            "People never contacted at all",
+            "more than 500 matched",
+            "description lines as the reason",
+            "needs_clarification",
+            "never retry the same call with a guessed name",
+            "you cannot see a list by that name",
+        ] {
+            assert!(prompt.contains(rule), "prompt lost the rule: {rule}");
+        }
     }
 }

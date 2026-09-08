@@ -130,6 +130,16 @@ function routes(): RouteRecordRaw[] {
       meta: { requiresOrgAdmin: true, title: 'Today rules' },
     },
     {
+      // SLICE_011e §5: a MEMBER route — deliberately NO `requiresOrgAdmin`.
+      // Rule 1 (D-051) lets any member create/apply/remove tags and manage
+      // their own unused ones; the page itself decides per-row controls
+      // from each tag's `can_manage`.
+      path: '/manage/tags',
+      name: 'manage-tags',
+      component: () => import('./views/TagsView.vue'),
+      meta: { title: 'Tags' },
+    },
+    {
       path: '/platform',
       name: 'platform-organizations',
       component: () => import('./views/PlatformOrganizationsView.vue'),

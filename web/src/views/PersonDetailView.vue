@@ -5,11 +5,11 @@
 // Inquiries / History cards. History renders the server's per-kind
 // `detail` shapes exactly as spec §5 documents them, in server order
 // (occurred_at, recorded_at, kind_rank, id) — never re-sorted here.
-import { computed, onBeforeUnmount, ref, watch, type Component } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch, type Component } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import Select from 'primevue/select'
 import { useQueryClient } from '@tanstack/vue-query'
-import { Flag, Inbox, Mail, Phone, PhoneCall, PhoneOutgoing, Route, UserCheck } from 'lucide-vue-next'
+import { Flag, Inbox, Mail, Phone, PhoneCall, PhoneOutgoing, Plus, Route, UserCheck, X } from 'lucide-vue-next'
 import Card from '../components/Card.vue'
 import FormField from '../components/FormField.vue'
 import Badge from '../components/Badge.vue'
@@ -19,18 +19,22 @@ import LogContactDialog from '../components/LogContactDialog.vue'
 import ChangeOutcomeDialog from '../components/ChangeOutcomeDialog.vue'
 import {
   queryKeys,
+  useAddPersonTagMutation,
   useAssignPersonMutation,
   useChangeStageMutation,
   useCorrectCallOutcome,
+  useCreateTagMutation,
   useMe,
   useMembers,
   usePerson,
+  useRemovePersonTagMutation,
   useStages,
+  useTagsQuery,
 } from '../api/queries'
 import { ApiError } from '../api/client'
-import type { ActorRef, CallOutcomeCorrection, ContactAttemptedDetail, HistoryEntry, RoutingStrategy } from '../api/types'
+import type { ActorRef, CallOutcomeCorrection, ContactAttemptedDetail, HistoryEntry, RoutingStrategy, TagRef } from '../api/types'
 import { formatAbsoluteTime, formatRelativeTime } from '../lib/format'
-import { buttonClasses, selectPt } from '../lib/controls'
+import { buttonClasses, INPUT_CLASSES, selectPt } from '../lib/controls'
 import { describeApiError } from '../lib/errors'
 import { CONTACT_CHANNEL_LABEL, CONTACT_OUTCOME_LABEL, correctedOutcomeLabel } from '../lib/labels'
 import { describeOutcomeError } from '../telephony/errors'
@@ -50,8 +54,161 @@ const person = computed(() => detail.value?.person)
 const contactMethods = computed(() => detail.value?.contact_methods ?? [])
 const inquiries = computed(() => detail.value?.inquiries ?? [])
 const history = computed(() => detail.value?.history ?? [])
+const personTags = computed(() => detail.value?.tags ?? [])
 
 const notFound = computed(() => error.value instanceof ApiError && error.value.status === 404)
+
+// ---- Tags (SLICE_011e §5, §9.9) --------------------------------------------
+// Chips in the identity header beside Stage/Assignee. "Add tag" opens a
+// keyboard-navigable popover over the Organization's tags minus those
+// already applied, with a "Create '<typed>'" row when no case-insensitive
+// match exists — choosing it runs POST /api/tags then PUT, in that order.
+// No modal focus trap (UI_STYLE §5's ordinary popover posture, matching the
+// call number picker above): Escape closes and returns focus to the button;
+// an outside click closes without stealing focus.
+const { data: orgTagsData } = useTagsQuery(orgId)
+const orgTags = computed(() => orgTagsData.value?.tags ?? [])
+const appliedTagIds = computed(() => new Set(personTags.value.map((tag) => tag.id)))
+const availableTags = computed(() => orgTags.value.filter((tag) => !appliedTagIds.value.has(tag.id)))
+
+const addPersonTag = useAddPersonTagMutation(orgId)
+const removePersonTag = useRemovePersonTagMutation(orgId)
+const createTag = useCreateTagMutation(orgId)
+const addTagPending = computed(() => addPersonTag.isPending.value || createTag.isPending.value)
+
+const addTagOpen = ref(false)
+const addTagQuery = ref('')
+const addTagActiveIndex = ref(0)
+const addTagError = ref<string | null>(null)
+const addTagRoot = ref<HTMLElement | null>(null)
+const addTagButton = ref<HTMLButtonElement | null>(null)
+const addTagInput = ref<HTMLInputElement | null>(null)
+
+type AddTagOption = { kind: 'existing'; tag: TagRef } | { kind: 'create'; name: string }
+
+const filteredTags = computed(() => {
+  const q = addTagQuery.value.trim().toLowerCase()
+  if (!q) return availableTags.value
+  return availableTags.value.filter((tag) => tag.name.toLowerCase().includes(q))
+})
+const trimmedQuery = computed(() => addTagQuery.value.trim())
+const showCreateRow = computed(() => {
+  const q = trimmedQuery.value
+  if (q === '' || q.length > 40) return false
+  return !orgTags.value.some((tag) => tag.name.toLowerCase() === q.toLowerCase())
+})
+const addTagOptions = computed<AddTagOption[]>(() => {
+  const options: AddTagOption[] = filteredTags.value.map((tag) => ({ kind: 'existing', tag }))
+  if (showCreateRow.value) options.push({ kind: 'create', name: trimmedQuery.value })
+  return options
+})
+watch(addTagOptions, () => { addTagActiveIndex.value = 0 })
+
+function describeTagError(err: unknown, fallback: string): string {
+  if (err instanceof ApiError) {
+    if (err.code === 'person_tag_limit_reached') return 'This person already has 20 tags.'
+    if (err.code === 'tag_limit_reached') return 'This Organization already has 200 tags.'
+    if (err.status === 404) return ''
+  }
+  return describeApiError(err, fallback)
+}
+
+function openAddTag() {
+  if (addTagOpen.value) return
+  addTagQuery.value = ''
+  addTagActiveIndex.value = 0
+  addTagError.value = null
+  addPersonTag.reset()
+  createTag.reset()
+  addTagOpen.value = true
+  void nextTick(() => addTagInput.value?.focus())
+}
+
+function closeAddTag(returnFocus: boolean) {
+  addTagOpen.value = false
+  if (returnFocus) addTagButton.value?.focus()
+}
+
+function toggleAddTag() {
+  if (addTagOpen.value) closeAddTag(false)
+  else openAddTag()
+}
+
+function applyTag(tagId: string) {
+  addPersonTag.mutate(
+    { personId: props.id, tagId },
+    {
+      onSuccess: () => { closeAddTag(true) },
+      onError: (err) => { addTagError.value = describeTagError(err, 'Could not add this tag.') },
+    },
+  )
+}
+
+function createAndApplyTag(name: string) {
+  createTag.mutate(
+    { name },
+    {
+      onSuccess: (result) => { applyTag(result.tag.id) },
+      onError: (err) => { addTagError.value = describeTagError(err, 'Could not create this tag.') },
+    },
+  )
+}
+
+function chooseAddTagOption(option: AddTagOption) {
+  if (addTagPending.value) return
+  addTagError.value = null
+  if (option.kind === 'existing') applyTag(option.tag.id)
+  else createAndApplyTag(option.name)
+}
+
+function onAddTagInputKeydown(event: KeyboardEvent) {
+  const options = addTagOptions.value
+  if (event.key === 'ArrowDown') {
+    event.preventDefault()
+    if (options.length) addTagActiveIndex.value = (addTagActiveIndex.value + 1) % options.length
+  } else if (event.key === 'ArrowUp') {
+    event.preventDefault()
+    if (options.length) addTagActiveIndex.value = (addTagActiveIndex.value - 1 + options.length) % options.length
+  } else if (event.key === 'Enter') {
+    event.preventDefault()
+    const option = options[addTagActiveIndex.value]
+    if (option) chooseAddTagOption(option)
+  }
+  // Escape is left to bubble to the document handler below, which also
+  // returns focus to the Add tag button.
+}
+
+function onAddTagDocumentClick(event: MouseEvent) {
+  if (!addTagOpen.value || addTagPending.value) return
+  const target = event.target
+  if (target instanceof Node && addTagRoot.value?.contains(target)) return
+  closeAddTag(false)
+}
+
+function onAddTagDocumentKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape' && addTagOpen.value && !addTagPending.value) closeAddTag(true)
+}
+
+watch(addTagOpen, (open) => {
+  if (open) {
+    document.addEventListener('click', onAddTagDocumentClick, true)
+    document.addEventListener('keydown', onAddTagDocumentKeydown)
+  } else {
+    document.removeEventListener('click', onAddTagDocumentClick, true)
+    document.removeEventListener('keydown', onAddTagDocumentKeydown)
+  }
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('click', onAddTagDocumentClick, true)
+  document.removeEventListener('keydown', onAddTagDocumentKeydown)
+})
+
+function removeTag(tagId: string) {
+  removePersonTag.mutate({ personId: props.id, tagId })
+}
+function isRemovingTag(tagId: string): boolean {
+  return removePersonTag.isPending.value && removePersonTag.variables.value?.tagId === tagId
+}
 
 const { data: stagesData, isPending: stagesPending } = useStages(orgId)
 const stages = computed(() => stagesData.value?.stages ?? [])
@@ -240,6 +397,7 @@ watch(
   () => {
     pickerOpen.value = false
     changeOutcomeOpen.value = false
+    addTagOpen.value = false
   },
 )
 
@@ -562,6 +720,112 @@ watch(
             >
               {{ describeApiError(assigneeError, 'Could not update the assignee.') }}
             </p>
+          </FormField>
+
+          <FormField
+            label="Tags"
+            bare
+          >
+            <div class="flex flex-wrap items-center gap-2">
+              <span
+                v-for="tag in personTags"
+                :key="tag.id"
+                data-testid="person-tag-chip"
+                class="inline-flex items-stretch rounded-lg border border-border bg-surface-0 text-small text-text"
+              >
+                <span class="inline-flex min-h-10 items-center px-3">{{ tag.name }}</span>
+                <button
+                  type="button"
+                  class="inline-flex min-h-10 w-10 shrink-0 items-center justify-center rounded-r-lg hover:bg-surface-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50"
+                  :aria-label="`Remove tag ${tag.name}`"
+                  :disabled="isRemovingTag(tag.id)"
+                  data-testid="remove-person-tag"
+                  @click="removeTag(tag.id)"
+                >
+                  <X
+                    class="h-3.5 w-3.5"
+                    stroke-width="1.5"
+                    aria-hidden="true"
+                  />
+                </button>
+              </span>
+
+              <div
+                ref="addTagRoot"
+                class="relative"
+              >
+                <button
+                  ref="addTagButton"
+                  type="button"
+                  :class="buttonClasses('ghost')"
+                  :aria-expanded="addTagOpen"
+                  aria-haspopup="dialog"
+                  aria-controls="add-tag-popover"
+                  data-testid="add-tag-button"
+                  @click="toggleAddTag"
+                >
+                  <Plus
+                    class="h-4 w-4"
+                    stroke-width="1.5"
+                    aria-hidden="true"
+                  />
+                  Add tag
+                </button>
+                <div
+                  v-if="addTagOpen"
+                  id="add-tag-popover"
+                  role="dialog"
+                  aria-label="Add tag"
+                  class="glass-panel absolute left-0 top-full z-50 mt-2 w-64 p-2"
+                  data-testid="add-tag-popover"
+                >
+                  <input
+                    ref="addTagInput"
+                    v-model="addTagQuery"
+                    type="text"
+                    aria-label="Search tags"
+                    placeholder="Search or create a tag"
+                    :disabled="addTagPending"
+                    :class="INPUT_CLASSES"
+                    data-testid="add-tag-search"
+                    @keydown="onAddTagInputKeydown"
+                  >
+                  <ul
+                    role="listbox"
+                    aria-label="Tag options"
+                    class="mt-2 max-h-48 space-y-0.5 overflow-auto"
+                  >
+                    <li
+                      v-for="(option, index) in addTagOptions"
+                      :key="option.kind === 'existing' ? option.tag.id : `create:${option.name}`"
+                      role="option"
+                      :aria-selected="index === addTagActiveIndex"
+                      :data-testid="option.kind === 'create' ? 'add-tag-create-row' : 'add-tag-option'"
+                      class="flex min-h-10 cursor-pointer items-center rounded-md px-2 text-body"
+                      :class="index === addTagActiveIndex ? 'bg-surface-2 text-text' : 'text-text-muted'"
+                      @mouseenter="addTagActiveIndex = index"
+                      @click="chooseAddTagOption(option)"
+                    >
+                      {{ option.kind === 'existing' ? option.tag.name : `Create '${option.name}'` }}
+                    </li>
+                    <li
+                      v-if="addTagOptions.length === 0"
+                      class="px-2 py-2 text-small text-text-muted"
+                    >
+                      No matching tags.
+                    </li>
+                  </ul>
+                  <p
+                    v-if="addTagError"
+                    role="alert"
+                    class="mt-2 text-small text-danger"
+                    data-testid="add-tag-error"
+                  >
+                    {{ addTagError }}
+                  </p>
+                </div>
+              </div>
+            </div>
           </FormField>
         </div>
       </Card>

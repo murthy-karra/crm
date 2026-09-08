@@ -27,6 +27,8 @@ import type {
   MeResponse,
   PersonDetailResponse,
   RoutingStrategy,
+  Tag,
+  TagRef,
 } from '../api/types'
 import { queryKeys } from '../api/queries'
 import type { CallRoom, CallRoomEvents, CallRoomFactory } from '../telephony/useCall'
@@ -58,7 +60,7 @@ function me(): MeResponse {
   }
 }
 
-function detail(contactMethods: ContactMethod[], history: HistoryEntry[] = []): PersonDetailResponse {
+function detail(contactMethods: ContactMethod[], history: HistoryEntry[] = [], tags: TagRef[] = []): PersonDetailResponse {
   return {
     person: {
       id: PERSON_ID,
@@ -76,6 +78,7 @@ function detail(contactMethods: ContactMethod[], history: HistoryEntry[] = []): 
     contact_methods: contactMethods,
     inquiries: [],
     history,
+    tags,
   }
 }
 
@@ -145,21 +148,63 @@ interface StubOptions {
   gets?: CallView[]
   /** `POST /api/calls/{id}/outcome` response, or an Error to throw. */
   outcome?: CorrectOutcomeResponse | Error
+  /** `GET /api/tags` — the Organization's tag index (SLICE_011e §9.9). */
+  orgTags?: Tag[]
+  /** `POST /api/tags` response, or an Error to throw. Defaults to a fresh, unused tag. */
+  createTag?: (name: string) => { tag: Tag; created: boolean } | Error
+  /** `PUT`/`DELETE /api/people/{id}/tags/{tag_id}` response, or an Error. Defaults to a
+   *  target-state-idempotent toggle against a locally tracked applied set. */
+  personTag?: (tagId: string, applying: boolean) => { tags: TagRef[]; changed: boolean } | Error
 }
 
 function stubApi(personDetail: PersonDetailResponse, options: StubOptions = {}) {
   const settledHangup = options.settledHangup ?? callView({ status: 'failed', failure_reason: 'cancelled', ringing_at: 'x' })
   const starts = [...(options.starts ?? [])]
   const gets = [...(options.gets ?? [])]
+  const appliedTags = new Map(personDetail.tags.map((tag) => [tag.id, tag]))
+  const orgTags = new Map((options.orgTags ?? []).map((tag) => [tag.id, tag]))
   apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET'
     if (path === '/me') return me()
+    const personTagMatch = /^\/people\/([^/]+)\/tags\/([^/]+)$/.exec(path)
+    if (personTagMatch && (method === 'PUT' || method === 'DELETE')) {
+      const tagId = decodeURIComponent(personTagMatch[2])
+      const applying = method === 'PUT'
+      const result = options.personTag?.(tagId, applying)
+      if (result instanceof Error) throw result
+      if (result) return result
+      const already = appliedTags.has(tagId)
+      const changed = applying ? !already : already
+      if (applying) {
+        const tag = orgTags.get(tagId)
+        if (tag) appliedTags.set(tagId, { id: tag.id, name: tag.name })
+      } else {
+        appliedTags.delete(tagId)
+      }
+      return {
+        tags: [...appliedTags.values()].sort((a, b) => a.name.localeCompare(b.name)),
+        changed,
+      }
+    }
     if (path.startsWith('/people/') && !path.endsWith('/calls') && method === 'GET') {
       const id = path.slice('/people/'.length)
-      return id === PERSON_ID ? personDetail : { ...personDetail, person: { ...personDetail.person, id, display_name: 'Someone Else' } }
+      const currentTags = [...appliedTags.values()].sort((a, b) => a.name.localeCompare(b.name))
+      return id === PERSON_ID
+        ? { ...personDetail, tags: currentTags }
+        : { ...personDetail, person: { ...personDetail.person, id, display_name: 'Someone Else' }, tags: currentTags }
     }
     if (path === '/stages') return { stages: [{ id: 'stage-lead', name: 'Lead', position: 1 }] }
     if (path === '/organization/members') return { members: [] }
+    if (path === '/tags' && method === 'GET') return { tags: [...orgTags.values()] }
+    if (path === '/tags' && method === 'POST') {
+      const body = JSON.parse(String(init?.body ?? '{}')) as { name: string }
+      const result = options.createTag?.(body.name)
+      if (result instanceof Error) throw result
+      if (result) return result
+      const tag: Tag = { id: `tag-${body.name.toLowerCase()}`, name: body.name, person_count: 0, can_manage: true }
+      orgTags.set(tag.id, tag)
+      return { tag, created: true }
+    }
     if (path === `/people/${PERSON_ID}/calls`) {
       const next = starts.length > 1 ? starts.shift() : starts[0]
       if (next instanceof Error) throw next
@@ -1134,5 +1179,141 @@ describe('PersonDetailView — Log contact dialog vocabulary (SLICE_006c §1)', 
     await flushPromises()
     const labels = Array.from(document.querySelectorAll('[role="option"]')).map((o) => o.textContent?.trim())
     expect(labels).toEqual(['Reached', 'No answer', 'Voicemail / left message', 'Sent', 'Busy', 'Wrong number'])
+    // Explicit unmount: this test leaves a PrimeVue Select overlay open
+    // (never closed or dismissed), and the surrounding suite's `afterEach`
+    // only clears `document.body` rather than tearing down the component
+    // tree. Left alone, that overlay's own pending update can resolve
+    // during a LATER, unrelated test and throw trying to patch DOM this
+    // test's own body-clear already removed.
+    wrapper.unmount()
+    await flushPromises()
+  })
+})
+
+// SLICE_011e §5, §9.9: chips beside Stage/Assignee, the Add tag popover
+// (existing-tag apply and inline create, in order), remove target/name,
+// inline 409s, and Escape/focus-return.
+describe('PersonDetailView — Tags', () => {
+  const SPHERE: Tag = { id: 'tag-sphere', name: 'Sphere', person_count: 3, can_manage: false }
+  const INVESTOR: Tag = { id: 'tag-investor', name: 'Investor', person_count: 0, can_manage: true }
+
+  // A tag mutation's success path invalidates and refetches BOTH the tags
+  // and person queries; without an explicit unmount, that refetch can
+  // resolve after a later test's own `afterEach` has already cleared
+  // `document.body`, throwing on the detached DOM. Unmounting first (this
+  // block's own `afterEach` runs before the outer one, which only clears
+  // `document.body.innerHTML`) lets every pending query settle against a
+  // torn-down component instead of a wiped body.
+  let activeWrapper: Awaited<ReturnType<typeof mountView>>['wrapper'] | null = null
+  afterEach(async () => {
+    activeWrapper?.unmount()
+    activeWrapper = null
+    await flushPromises()
+  })
+
+  it('renders chips from the detail response with a 40px remove target and accessible name', async () => {
+    stubApi(detail([PHONE_A], [], [{ id: SPHERE.id, name: SPHERE.name }]))
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    const chips = wrapper.findAll('[data-testid="person-tag-chip"]')
+    expect(chips).toHaveLength(1)
+    expect(chips[0].text()).toContain('Sphere')
+    const remove = wrapper.get('[aria-label="Remove tag Sphere"]')
+    expect(remove.classes()).toContain('min-h-10')
+    expect(remove.classes()).toContain('w-10')
+  })
+
+  it('adds an existing tag via the popover (PUT only, no create call)', async () => {
+    stubApi(detail([PHONE_A]), { orgTags: [INVESTOR] })
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    await wrapper.get('[data-testid="add-tag-button"]').trigger('click')
+    await flushPromises()
+    const option = wrapper.get('[data-testid="add-tag-option"]')
+    expect(option.text()).toBe('Investor')
+    await option.trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="add-tag-popover"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="person-tag-chip"]').text()).toContain('Investor')
+    const tagRequests = apiFetchMock.mock.calls.filter(([path]) => path.startsWith('/tags') || path.includes('/tags/'))
+    expect(tagRequests.some(([, init]) => (init?.method ?? 'GET') === 'POST')).toBe(false)
+  })
+
+  it('creates a new tag inline as two requests, in order (POST then PUT)', async () => {
+    stubApi(detail([PHONE_A]), { orgTags: [] })
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    await wrapper.get('[data-testid="add-tag-button"]').trigger('click')
+    await wrapper.get('[data-testid="add-tag-search"]').setValue('Past Client')
+    await flushPromises()
+    const createRow = wrapper.get('[data-testid="add-tag-create-row"]')
+    expect(createRow.text()).toBe("Create 'Past Client'")
+    await createRow.trigger('click')
+    await flushPromises()
+    const order = apiFetchMock.mock.calls
+      .map(([path, init]) => `${init?.method ?? 'GET'} ${path}`)
+      .filter((r) => r === 'POST /tags' || r.startsWith(`PUT /people/${PERSON_ID}/tags/`))
+    expect(order).toEqual(['POST /tags', `PUT /people/${PERSON_ID}/tags/${encodeURIComponent('tag-past client')}`])
+    expect(wrapper.get('[data-testid="person-tag-chip"]').text()).toContain('Past Client')
+  })
+
+  it('shows the 20-tags and 200-tags inline 409 messages', async () => {
+    stubApi(detail([PHONE_A]), {
+      orgTags: [INVESTOR],
+      personTag: () => new ApiError(409, 'person_tag_limit_reached'),
+    })
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    await wrapper.get('[data-testid="add-tag-button"]').trigger('click')
+    await wrapper.get('[data-testid="add-tag-option"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="add-tag-error"]').text()).toBe('This person already has 20 tags.')
+
+    stubApi(detail([PHONE_A]), {
+      orgTags: [],
+      createTag: () => new ApiError(409, 'tag_limit_reached'),
+    })
+    await wrapper.get('[data-testid="add-tag-search"]').setValue('Overflow')
+    await flushPromises()
+    await wrapper.get('[data-testid="add-tag-create-row"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="add-tag-error"]').text()).toBe('This Organization already has 200 tags.')
+  })
+
+  it('removes a tag and re-fetches the tags query on a 404', async () => {
+    stubApi(detail([PHONE_A], [], [{ id: SPHERE.id, name: SPHERE.name }]), {
+      orgTags: [SPHERE],
+      personTag: () => new ApiError(404, 'not_found'),
+    })
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    const before = apiFetchMock.mock.calls.filter(([path]) => path === '/tags').length
+    await wrapper.get('[aria-label="Remove tag Sphere"]').trigger('click')
+    await flushPromises()
+    const after = apiFetchMock.mock.calls.filter(([path]) => path === '/tags').length
+    expect(after).toBeGreaterThan(before)
+  })
+
+  it('Escape closes the popover and returns focus to the Add tag button', async () => {
+    stubApi(detail([PHONE_A]), { orgTags: [INVESTOR] })
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    const button = wrapper.get('[data-testid="add-tag-button"]')
+    await button.trigger('click')
+    expect(wrapper.find('[data-testid="add-tag-popover"]').exists()).toBe(true)
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await flushPromises()
+    expect(wrapper.find('[data-testid="add-tag-popover"]').exists()).toBe(false)
+    expect(document.activeElement).toBe(button.element)
+  })
+
+  it('closes on an outside click without stealing focus', async () => {
+    stubApi(detail([PHONE_A]), { orgTags: [INVESTOR] })
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    await wrapper.get('[data-testid="add-tag-button"]').trigger('click')
+    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flushPromises()
+    expect(wrapper.find('[data-testid="add-tag-popover"]').exists()).toBe(false)
   })
 })

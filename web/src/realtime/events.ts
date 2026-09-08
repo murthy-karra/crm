@@ -8,13 +8,16 @@ import { queryKeys } from '../api/queries'
 
 // SLICE_009 §6's declared additive variant: no new event type — the
 // `person.changed` handler below already invalidates person/people/today
-// for every change value, so this widening needs no new case.
+// for every change value, so this widening needs no new case. SLICE_011e §5
+// adds `tags_changed` the same way (published only on a changing
+// add/remove; rename/delete publish nothing).
 export type PersonChange =
   | 'inquiry_received'
   | 'assignment_changed'
   | 'stage_changed'
   | 'contact_attempted'
   | 'correspondence_captured'
+  | 'tags_changed'
 
 interface RealtimeEnvelopeBase {
   v: 1

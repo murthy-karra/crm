@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/vue-query'
 import { type MaybeRefOrGetter, computed, toValue, watch } from 'vue'
 import { queryClient } from '../query-client'
-import { apiFetch } from './client'
+import { ApiError, apiFetch } from './client'
 import {
   SessionVerificationPendingError,
   beginSessionTransition,
@@ -74,6 +74,13 @@ import type {
   IntakeSettingsRequest,
   IntakeSettingsResponse,
   StartCallResponse,
+  CreateTagRequest,
+  CreateTagResponse,
+  DeleteTagResponse,
+  PersonTagMutationResponse,
+  RenameTagRequest,
+  RenameTagResponse,
+  TagsResponse,
   TodayResponse,
   TodaySourcesResponse,
   EnableTodaySourceRequest,
@@ -170,6 +177,11 @@ export const queryKeys = {
     ['org', orgId, 'saved-list-counts', actorId, listId, revision] as const,
   platformOrganizations: () => ['platform', 'organizations'] as const,
   platformOrganization: (id: string) => ['platform', 'organizations', id] as const,
+  // Slice 011e §10: extend the factory, never hand-write a key. Not
+  // actor-scoped: `can_manage` is a per-viewer field on each row, not a
+  // separate cache — every member reads the same underlying index and gets
+  // their own `can_manage` values back from the same response.
+  tags: (orgId: string) => ['org', orgId, 'tags'] as const,
 }
 
 // `/me` has no public session-id field. The coordinator adds an opaque
@@ -1358,4 +1370,114 @@ export function useDismissUnmatchedMutation(orgId: MaybeRefOrGetter<string>) {
       void qc.invalidateQueries({ queryKey: queryKeys.captureUnmatched(toValue(orgId)) })
     },
   })
+}
+
+// --- Slice 011e: Tags (docs/specs/SLICE_011e.md §5, §10) --------------------
+// Any active member creates/applies/removes; an admin, or the creator while
+// unused, renames/deletes (D-051, rule 1 — decided server-side; the client
+// never re-derives it beyond the display-only `can_manage` hint). A 403
+// (rule-1 permission lost between read and write) or 404 (the tag vanished)
+// on rename/delete/apply/remove refetches the index so the surprise is
+// explained by the next render, matching the saved-list/today-source
+// uncertain-mutation convention already used above in this file.
+
+/** `GET /api/tags` — every active member; unpaginated (≤ 200 rows). */
+export function useTagsQuery(orgId: MaybeRefOrGetter<string>, providedQueryClient?: QueryClient) {
+  return useQuery(
+    {
+      queryKey: computed(() => queryKeys.tags(toValue(orgId))),
+      queryFn: ({ signal }) => apiFetch<TagsResponse>('/tags', { signal }),
+      enabled: computed(() => toValue(orgId) !== ''),
+    },
+    providedQueryClient,
+  )
+}
+
+function refetchTagsOnStaleReference(qc: QueryClient, orgId: MaybeRefOrGetter<string>, error: unknown) {
+  if (error instanceof ApiError && (error.status === 403 || error.status === 404)) {
+    void qc.invalidateQueries({ queryKey: queryKeys.tags(toValue(orgId)) })
+  }
+}
+
+/** `POST /api/tags` — create-or-get by case-insensitive name; never 409s on
+ *  a name collision (`created: false` with the first spelling instead). */
+export function useCreateTagMutation(orgId: MaybeRefOrGetter<string>, providedQueryClient?: QueryClient) {
+  const qc = providedQueryClient ?? useQueryClient()
+  return useMutation({
+    mutationFn: (body: CreateTagRequest) =>
+      apiFetch<CreateTagResponse>('/tags', { method: 'POST', body: JSON.stringify(body) }),
+    retry: false,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.tags(toValue(orgId)) })
+    },
+  }, providedQueryClient)
+}
+
+/** `PUT /api/tags/{tag_id}` — rule-1 permission decided server-side. */
+export function useRenameTagMutation(orgId: MaybeRefOrGetter<string>, providedQueryClient?: QueryClient) {
+  const qc = providedQueryClient ?? useQueryClient()
+  return useMutation({
+    mutationFn: ({ tagId, body }: { tagId: string; body: RenameTagRequest }) =>
+      apiFetch<RenameTagResponse>(`/tags/${encodeURIComponent(tagId)}`, {
+        method: 'PUT',
+        body: JSON.stringify(body),
+      }),
+    retry: false,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.tags(toValue(orgId)) })
+    },
+    onError: (error) => refetchTagsOnStaleReference(qc, orgId, error),
+  }, providedQueryClient)
+}
+
+/** `DELETE /api/tags/{tag_id}` — hard delete; a repeat is 404. */
+export function useDeleteTagMutation(orgId: MaybeRefOrGetter<string>, providedQueryClient?: QueryClient) {
+  const qc = providedQueryClient ?? useQueryClient()
+  return useMutation({
+    mutationFn: (tagId: string) =>
+      apiFetch<DeleteTagResponse>(`/tags/${encodeURIComponent(tagId)}`, { method: 'DELETE' }),
+    retry: false,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.tags(toValue(orgId)) })
+    },
+    onError: (error) => refetchTagsOnStaleReference(qc, orgId, error),
+  }, providedQueryClient)
+}
+
+/** `PUT /api/people/{id}/tags/{tag_id}` — target-state idempotent; no body. */
+export function useAddPersonTagMutation(orgId: MaybeRefOrGetter<string>, providedQueryClient?: QueryClient) {
+  const qc = providedQueryClient ?? useQueryClient()
+  return useMutation({
+    mutationFn: ({ personId, tagId }: { personId: string; tagId: string }) =>
+      apiFetch<PersonTagMutationResponse>(
+        `/people/${encodeURIComponent(personId)}/tags/${encodeURIComponent(tagId)}`,
+        { method: 'PUT' },
+      ),
+    retry: false,
+    onSuccess: (_result, variables) => {
+      const id = toValue(orgId)
+      void qc.invalidateQueries({ queryKey: queryKeys.tags(id) })
+      void qc.invalidateQueries({ queryKey: queryKeys.person(id, variables.personId) })
+    },
+    onError: (error) => refetchTagsOnStaleReference(qc, orgId, error),
+  }, providedQueryClient)
+}
+
+/** `DELETE /api/people/{id}/tags/{tag_id}` — target-state idempotent. */
+export function useRemovePersonTagMutation(orgId: MaybeRefOrGetter<string>, providedQueryClient?: QueryClient) {
+  const qc = providedQueryClient ?? useQueryClient()
+  return useMutation({
+    mutationFn: ({ personId, tagId }: { personId: string; tagId: string }) =>
+      apiFetch<PersonTagMutationResponse>(
+        `/people/${encodeURIComponent(personId)}/tags/${encodeURIComponent(tagId)}`,
+        { method: 'DELETE' },
+      ),
+    retry: false,
+    onSuccess: (_result, variables) => {
+      const id = toValue(orgId)
+      void qc.invalidateQueries({ queryKey: queryKeys.tags(id) })
+      void qc.invalidateQueries({ queryKey: queryKeys.person(id, variables.personId) })
+    },
+    onError: (error) => refetchTagsOnStaleReference(qc, orgId, error),
+  }, providedQueryClient)
 }

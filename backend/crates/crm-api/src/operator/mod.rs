@@ -5,6 +5,7 @@
 
 pub mod backend;
 pub mod explain;
+pub mod filter;
 
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};

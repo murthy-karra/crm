@@ -111,5 +111,214 @@
       ],
       "type": "object"
     }
+  },
+  {
+    "name": "filter_people",
+    "description": "Find People in the user's Organization matching named criteria: stage, assignee, source, tags, recency windows (created/last inquiry/last contact/last inbound), and reply/contact-method/outcome flags. Every name is resolved against the Organization's own vocabulary, case-insensitively; an unknown or ambiguous name comes back as a clarification to put to the user, never a guess. At least one property is required.",
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "assignees": {
+          "description": "\"me\", \"unassigned\", or a member's display name (any of).",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 50,
+          "minItems": 1,
+          "type": "array"
+        },
+        "awaiting_call_outcome": {
+          "description": "Whether the user has an ended call to this Person with no recorded outcome yet.",
+          "type": "boolean"
+        },
+        "awaiting_response": {
+          "description": "Whether the Person is awaiting a response from the team.",
+          "type": "boolean"
+        },
+        "client_replied_unanswered": {
+          "description": "Whether the Person's latest correspondence is an unanswered reply from them.",
+          "type": "boolean"
+        },
+        "created": {
+          "additionalProperties": false,
+          "description": "When the Person was created.",
+          "properties": {
+            "days": {
+              "maximum": 3650,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "op": {
+              "enum": [
+                "within_days",
+                "not_within_days"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "days"
+          ],
+          "type": "object"
+        },
+        "has_email": {
+          "description": "Whether the Person has an email contact method on file.",
+          "type": "boolean"
+        },
+        "has_phone": {
+          "description": "Whether the Person has a phone contact method on file.",
+          "type": "boolean"
+        },
+        "has_replied": {
+          "description": "Whether the Person has ever replied.",
+          "type": "boolean"
+        },
+        "last_contact": {
+          "additionalProperties": false,
+          "description": "Time since the last contact attempt; \"never\" matches People never contacted.",
+          "properties": {
+            "days": {
+              "maximum": 3650,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "op": {
+              "enum": [
+                "within_days",
+                "not_within_days",
+                "never"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "op"
+          ],
+          "type": "object"
+        },
+        "last_inbound": {
+          "additionalProperties": false,
+          "description": "Time since the last inbound correspondence; \"never\" matches People with none.",
+          "properties": {
+            "days": {
+              "maximum": 3650,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "op": {
+              "enum": [
+                "within_days",
+                "not_within_days",
+                "never"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "op"
+          ],
+          "type": "object"
+        },
+        "last_inquiry": {
+          "additionalProperties": false,
+          "description": "Time since the Person's last inquiry; \"never\" matches People with no inquiry.",
+          "properties": {
+            "days": {
+              "maximum": 3650,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "op": {
+              "enum": [
+                "within_days",
+                "not_within_days",
+                "never"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "op"
+          ],
+          "type": "object"
+        },
+        "limit": {
+          "default": 10,
+          "description": "Maximum number of matching Person cards to return.",
+          "maximum": 25,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "sources": {
+          "description": "Lead source tokens to match (any of).",
+          "items": {
+            "pattern": "^[a-z0-9_]{1,64}$",
+            "type": "string"
+          },
+          "maxItems": 50,
+          "minItems": 1,
+          "type": "array"
+        },
+        "stage_names": {
+          "description": "Stage names to match (any of).",
+          "items": {
+            "maxLength": 80,
+            "type": "string"
+          },
+          "maxItems": 50,
+          "minItems": 1,
+          "type": "array"
+        },
+        "tag_names_any": {
+          "description": "Match People carrying at least one of these tags.",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 50,
+          "minItems": 1,
+          "type": "array"
+        },
+        "tag_names_none": {
+          "description": "Match People carrying none of these tags.",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 50,
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  {
+    "name": "run_saved_list",
+    "description": "Run a saved People list the user can see (their own personal lists plus the Organization's shared lists) by name, in the list's own stored sort order. If more than one visible list shares the name, this returns candidates with ids instead of results; call again with list_id set to the chosen one.",
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "limit": {
+          "default": 10,
+          "description": "Maximum number of matching Person cards to return.",
+          "maximum": 25,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "list_id": {
+          "description": "A candidate list's id, from a previous run_saved_list clarification. Use only after a duplicate-name clarification named it.",
+          "format": "uuid",
+          "type": "string"
+        },
+        "name": {
+          "description": "The saved list's name.",
+          "maxLength": 80,
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
   }
 ]

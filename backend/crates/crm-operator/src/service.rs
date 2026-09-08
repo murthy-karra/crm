@@ -19,13 +19,17 @@ use crate::provider::{
     Usage,
 };
 use crate::tools::{self, parse_invocation, tool_definitions, ArgumentError, ToolInvocation};
-use crate::views::{PersonCard, ProposalView, StartCallProposalOutcome};
+use crate::views::{FilterOutcome, PersonCard, ProposalView, StartCallProposalOutcome};
 use crate::SYSTEM_PROMPT;
 
 /// Total characters of replayed history (§4).
 pub const MAX_HISTORY_CHARS: usize = 6000;
-/// Reference cards returned per turn (§4, §14 item 4).
-pub const MAX_REFERENCES: usize = 10;
+/// Reference cards returned per turn (§4, §14 item 4). 10 -> 25 (docs/specs/
+/// SLICE_013.md §1 rule 4: the drawer shows every card the model was given
+/// for `filter_people`/`run_saved_list`'s 25-card `limit`); side effect,
+/// accepted: `get_today` can now place up to 20 cards in the drawer instead
+/// of 10.
+pub const MAX_REFERENCES: usize = 25;
 /// `Unavailable` is retried once only if more than this remains (§4).
 pub const RETRY_MIN_REMAINING: Duration = Duration::from_secs(5);
 
@@ -311,6 +315,8 @@ fn ledger_name(model_supplied: &str) -> &'static str {
         tools::GET_NEXT_WORK_ITEM => tools::GET_NEXT_WORK_ITEM,
         tools::EXPLAIN_PRIORITY => tools::EXPLAIN_PRIORITY,
         tools::START_CALL => tools::START_CALL,
+        tools::FILTER_PEOPLE => tools::FILTER_PEOPLE,
+        tools::RUN_SAVED_LIST => tools::RUN_SAVED_LIST,
         _ => "unknown",
     }
 }
@@ -615,11 +621,28 @@ impl OperatorService {
     ) -> Result<(), ExecError> {
         let name = ledger_name(&call.name);
         let started = Instant::now();
+        // docs/specs/SLICE_013.md §6: `filter_kinds`/`filter_clause_count`/
+        // `resolution`/`match_count`/`more_than_500`/`returned`/
+        // `saved_list_scope` are declared here (an undeclared field is
+        // silently dropped by `Span::record`, per `tracing`) but recorded
+        // by the adapter (`crm-api`'s `SqlxToolBackend::filter_people`/
+        // `run_saved_list`) while it runs inside this span — the same
+        // ambient-span pattern `saved_list::queries::
+        // count_saved_list_matches` already uses. crm-operator itself
+        // never sees a name, id, or day count to record here even if it
+        // wanted to (D-034 fence; D-029).
         let span = tracing::info_span!(
             "operator.tool_call",
             tool = name,
             outcome = tracing::field::Empty,
-            duration_ms = tracing::field::Empty
+            duration_ms = tracing::field::Empty,
+            filter_kinds = tracing::field::Empty,
+            filter_clause_count = tracing::field::Empty,
+            resolution = tracing::field::Empty,
+            match_count = tracing::field::Empty,
+            more_than_500 = tracing::field::Empty,
+            returned = tracing::field::Empty,
+            saved_list_scope = tracing::field::Empty
         );
 
         let invocation = match parse_invocation(&call.name, &call.arguments) {
@@ -715,7 +738,7 @@ impl OperatorService {
                 };
                 state.messages.push(ChatMessage::Tool {
                     tool_call_id: call.id.clone(),
-                    content: tool_error_json("not_found", "no such person in your Organization"),
+                    content: tool_error_json("not_found", not_found_detail(&invocation)),
                 });
                 state.consecutive_malformed = 0;
                 Ok(())
@@ -752,6 +775,23 @@ impl OperatorService {
 
 fn argument_message(err: &ArgumentError) -> String {
     err.message()
+}
+
+/// `ToolError::NotFound`'s fixed detail string, tool-aware (docs/specs/
+/// SLICE_013.md §3): `run_saved_list` names a list, not a Person, so its
+/// message says so; every other tool keeps the original Person wording.
+/// Never echoes the model's argument text (D-029).
+fn not_found_detail(invocation: &ToolInvocation) -> &'static str {
+    match invocation {
+        ToolInvocation::RunSavedList { .. } => "you cannot see a list by that name",
+        ToolInvocation::SearchPeople { .. }
+        | ToolInvocation::GetPerson { .. }
+        | ToolInvocation::GetToday { .. }
+        | ToolInvocation::GetNextWorkItem
+        | ToolInvocation::ExplainPriority { .. }
+        | ToolInvocation::StartCall { .. }
+        | ToolInvocation::FilterPeople { .. } => "no such person in your Organization",
+    }
 }
 
 fn non_empty(content: Option<String>) -> Option<String> {
@@ -839,12 +879,43 @@ async fn dispatch(
                 }
             }
         }
+        // docs/specs/SLICE_013.md §4 precedence: `filter_people`/
+        // `run_saved_list` cards share `RefBucket::Search`'s precedence
+        // (equal standing with `search_people`'s matches, behind an
+        // explicitly asked-about Person). `NeedsClarification`/
+        // `ListInvalid` are still `Ok(...)` results here, not
+        // `ToolError`s, so `execute()` treats either as a successful call
+        // (outcome "ok") and resets `consecutive_malformed` — never a
+        // strike (§1 rule 2).
+        ToolInvocation::FilterPeople { spec } => {
+            let outcome = backend.filter_people(ctx, spec).await?;
+            let value = to_value(&outcome)?;
+            let cards = match &outcome {
+                FilterOutcome::Matched(result) => result.matches.clone(),
+                FilterOutcome::NeedsClarification { .. } | FilterOutcome::ListInvalid { .. } => {
+                    Vec::new()
+                }
+            };
+            Ok((value, RefBucket::Search, cards, None))
+        }
+        ToolInvocation::RunSavedList { selector } => {
+            let outcome = backend.run_saved_list(ctx, selector).await?;
+            let value = to_value(&outcome)?;
+            let cards = match &outcome {
+                FilterOutcome::Matched(result) => result.matches.clone(),
+                FilterOutcome::NeedsClarification { .. } | FilterOutcome::ListInvalid { .. } => {
+                    Vec::new()
+                }
+            };
+            Ok((value, RefBucket::Search, cards, None))
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::backend::{PeopleFilterSpec, SavedListSelector};
     use crate::providers::scripted::{ScriptedProvider, ScriptedStep};
     use crate::views::*;
     use async_trait::async_trait;
@@ -907,6 +978,15 @@ mod tests {
         /// 0 => NoPhone; 1 => Proposed; >1 => NeedsNumberChoice unless a
         /// contact_method_id picks one.
         phones: Vec<Uuid>,
+        /// `filter_people`'s `seen` fixture (docs/specs/SLICE_013.md §2):
+        /// the ids `Matched` returns, in order.
+        filter_people_ids: Vec<Uuid>,
+        /// `run_saved_list`'s `seen` fixture, same shape.
+        run_saved_list_ids: Vec<Uuid>,
+        /// When set, `filter_people` returns `NeedsClarification` instead
+        /// of `Matched` — still `Ok(...)`, so the loop treats it as a
+        /// successful call (docs/specs/SLICE_013.md §1 rule 2).
+        filter_people_needs_clarification: bool,
     }
 
     impl FakeBackend {
@@ -1054,6 +1134,64 @@ mod tests {
                         .collect(),
                 }),
             }
+        }
+
+        async fn filter_people(
+            &self,
+            ctx: &OperatorContext,
+            _spec: &PeopleFilterSpec,
+        ) -> Result<FilterOutcome, ToolError> {
+            self.note(ctx)?;
+            if self.filter_people_needs_clarification {
+                return Ok(FilterOutcome::NeedsClarification {
+                    unknown_stages: vec!["Bogus".to_string()],
+                    unknown_tags: vec![],
+                    unknown_assignees: vec![],
+                    ambiguous_assignees: vec![],
+                    available_stages: vec!["Lead".to_string()],
+                    available_tags: vec![],
+                    members: vec![],
+                    candidate_lists: vec![],
+                });
+            }
+            let matches: Vec<PersonCard> = self
+                .filter_people_ids
+                .iter()
+                .map(|id| card(*id, "F"))
+                .collect();
+            Ok(FilterOutcome::Matched(FilterResult {
+                list: None,
+                description: vec![UntrustedText::new("Stage is Lead")],
+                count: matches.len(),
+                more_than_500: false,
+                returned: matches.len(),
+                matches,
+            }))
+        }
+
+        async fn run_saved_list(
+            &self,
+            ctx: &OperatorContext,
+            _selector: &SavedListSelector,
+        ) -> Result<FilterOutcome, ToolError> {
+            self.note(ctx)?;
+            let matches: Vec<PersonCard> = self
+                .run_saved_list_ids
+                .iter()
+                .map(|id| card(*id, "L"))
+                .collect();
+            Ok(FilterOutcome::Matched(FilterResult {
+                list: Some(SavedListRef {
+                    list_id: Uuid::new_v4(),
+                    name: UntrustedText::new("My List"),
+                    scope: "personal".to_string(),
+                }),
+                description: vec![],
+                count: matches.len(),
+                more_than_500: false,
+                returned: matches.len(),
+                matches,
+            }))
         }
     }
 
@@ -1237,6 +1375,51 @@ mod tests {
             .run_turn(&ctx(), &FakeBackend::default(), input("x"))
             .await;
         assert_eq!(out.outcome, TurnOutcome::Completed);
+    }
+
+    /// docs/specs/SLICE_013.md §1 rule 2: `needs_clarification` is an `Ok`
+    /// outcome that resets `consecutive_malformed`, exactly like any other
+    /// successful call — strike, clarification, strike (three separate
+    /// rounds, so the malformed counter would trip at 2-in-a-row if the
+    /// clarification in between did not reset it) still completes.
+    #[tokio::test]
+    async fn a_needs_clarification_result_resets_the_malformed_strike_count() {
+        let (svc, _) = service(
+            vec![
+                // Strike 1: filter_people's own empty-spec check.
+                ScriptedStep::Respond(ChatResponse::tool_calls(vec![call(
+                    "c1",
+                    "filter_people",
+                    json!({}),
+                )])),
+                // A valid call the fake backend turns into
+                // NeedsClarification — Ok, resets the counter.
+                ScriptedStep::Respond(ChatResponse::tool_calls(vec![call(
+                    "c2",
+                    "filter_people",
+                    json!({"stage_names": ["Bogus"]}),
+                )])),
+                // Strike 1 again — would be strike 2 (ending the turn) if
+                // the clarification above had not reset the counter.
+                ScriptedStep::Respond(ChatResponse::tool_calls(vec![call(
+                    "c3",
+                    "filter_people",
+                    json!({}),
+                )])),
+                ScriptedStep::Respond(ChatResponse::text("ok")),
+            ],
+            Limits::default(),
+        );
+        let backend = FakeBackend {
+            filter_people_needs_clarification: true,
+            ..Default::default()
+        };
+        let out = svc.run_turn(&ctx(), &backend, input("x")).await;
+        assert_eq!(out.outcome, TurnOutcome::Completed);
+        assert_eq!(out.tool_calls.len(), 3);
+        assert_eq!(out.tool_calls[0].outcome, ToolCallOutcome::InvalidArguments);
+        assert_eq!(out.tool_calls[1].outcome, ToolCallOutcome::Ok);
+        assert_eq!(out.tool_calls[2].outcome, ToolCallOutcome::InvalidArguments);
     }
 
     #[tokio::test]
@@ -1517,6 +1700,20 @@ mod tests {
             ) -> Result<StartCallProposalOutcome, ToolError> {
                 unreachable!()
             }
+            async fn filter_people(
+                &self,
+                _: &OperatorContext,
+                _: &PeopleFilterSpec,
+            ) -> Result<FilterOutcome, ToolError> {
+                unreachable!()
+            }
+            async fn run_saved_list(
+                &self,
+                _: &OperatorContext,
+                _: &SavedListSelector,
+            ) -> Result<FilterOutcome, ToolError> {
+                unreachable!()
+            }
         }
         let (svc, _) = service(
             vec![ScriptedStep::Respond(ChatResponse::tool_calls(vec![call(
@@ -1658,6 +1855,41 @@ mod tests {
         );
     }
 
+    /// docs/specs/SLICE_013.md §3: `run_saved_list`'s `not_found` detail is
+    /// tool-aware — a list, not a Person — and, like every `not_found`, is
+    /// a successful call: the turn continues and the strike counter
+    /// resets.
+    #[tokio::test]
+    async fn run_saved_list_not_found_uses_a_list_aware_detail_and_the_turn_continues() {
+        let (svc, provider) = service(
+            vec![
+                ScriptedStep::Respond(ChatResponse::tool_calls(vec![call(
+                    "c1",
+                    "run_saved_list",
+                    json!({"name": "Stale Zillow"}),
+                )])),
+                ScriptedStep::Respond(ChatResponse::text("I can't see a list by that name.")),
+            ],
+            Limits::default(),
+        );
+        let backend = FakeBackend {
+            not_found: true,
+            ..Default::default()
+        };
+        let out = svc.run_turn(&ctx(), &backend, input("x")).await;
+        assert_eq!(out.outcome, TurnOutcome::Completed);
+        assert_eq!(out.tool_calls[0].name, "run_saved_list");
+        assert_eq!(out.tool_calls[0].outcome, ToolCallOutcome::NotFound);
+        let msgs = &provider.requests()[1].messages;
+        let content = match msgs.last() {
+            Some(ChatMessage::Tool { content, .. }) => content,
+            other => panic!("{other:?}"),
+        };
+        assert!(content.contains("not_found"));
+        assert!(content.contains("you cannot see a list by that name"));
+        assert!(!content.contains("no such person"));
+    }
+
     #[tokio::test]
     async fn history_is_truncated_by_count_and_chars_oldest_first() {
         let (svc, provider) = service(
@@ -1770,9 +2002,16 @@ mod tests {
 
     #[tokio::test]
     async fn references_follow_precedence_dedup_and_cap() {
+        // docs/specs/SLICE_013.md §1 rule 4: MAX_REFERENCES rose 10 -> 25,
+        // so the fixture supply must exceed 25 unique ids for the cap to
+        // still bind (search's own limit is 10, get_today's is 20; the
+        // fixture sizes below are the minimum that push total supply past
+        // 25 with both buckets near their own per-call caps).
         let asked = Uuid::new_v4();
         let today_ids: Vec<Uuid> = (0..15).map(|_| Uuid::new_v4()).collect();
-        let search_ids = vec![Uuid::new_v4(), today_ids[3]];
+        let mut search_ids: Vec<Uuid> = (0..9).map(|_| Uuid::new_v4()).collect();
+        search_ids.push(today_ids[3]);
+        assert_eq!(search_ids.len(), 10, "at search_people's own limit");
         let (svc, _) = service(
             vec![
                 // get_today first in time, but must not crowd out the
@@ -1795,17 +2034,18 @@ mod tests {
         let ids: Vec<Uuid> = out.references.people.iter().map(|c| c.id).collect();
         assert_eq!(ids.len(), MAX_REFERENCES);
         assert_eq!(ids[0], asked);
-        assert_eq!(ids[1], search_ids[0]);
-        assert_eq!(ids[2], search_ids[1]);
+        assert_eq!(&ids[1..11], &search_ids[..]);
         // today_ids[3] already appeared via search_people, so it is
-        // deduplicated out of the Today tail.
+        // deduplicated out of the Today tail; the remaining 14 fill the
+        // cap exactly (1 asked + 10 search + 14 today == 25).
         let expected_tail: Vec<Uuid> = today_ids
             .iter()
             .copied()
             .filter(|id| *id != today_ids[3])
-            .take(7)
+            .take(14)
             .collect();
-        assert_eq!(&ids[3..], &expected_tail[..]);
+        assert_eq!(expected_tail.len(), 14);
+        assert_eq!(&ids[11..], &expected_tail[..]);
         assert_eq!(ids.iter().filter(|id| **id == today_ids[3]).count(), 1);
         // The tool record for get_today carries every id it returned.
         assert_eq!(out.tool_calls[0].person_ids.len(), 15);
@@ -1994,6 +2234,91 @@ mod tests {
         assert!(out.proposal.is_none());
     }
 
+    // --- filter_people / run_saved_list wiring (docs/specs/SLICE_013.md
+    // §8.3): the fake backend's `seen` assertions cover both new
+    // `ToolBackend` methods, called directly. Full scripted-provider turn
+    // loop coverage (dispatch, ledger, clarification-as-non-strike) is
+    // below, mirroring `not_found_is_returned_to_the_model_and_the_turn_
+    // continues`'s style.
+
+    #[tokio::test]
+    async fn fake_backend_filter_people_records_context_and_returns_matches() {
+        let id = Uuid::new_v4();
+        let backend = FakeBackend {
+            filter_people_ids: vec![id],
+            ..Default::default()
+        };
+        let spec = PeopleFilterSpec {
+            has_phone: Some(true),
+            limit: 10,
+            ..Default::default()
+        };
+        let outcome = backend.filter_people(&ctx(), &spec).await.unwrap();
+        assert_eq!(backend.seen.lock().unwrap().len(), 1);
+        match outcome {
+            FilterOutcome::Matched(result) => {
+                assert_eq!(result.matches.len(), 1);
+                assert_eq!(result.matches[0].id, id);
+                assert_eq!(result.count, 1);
+                assert_eq!(result.returned, 1);
+                assert!(!result.more_than_500);
+                assert!(result.list.is_none());
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn fake_backend_run_saved_list_records_context_and_returns_matches() {
+        let id = Uuid::new_v4();
+        let backend = FakeBackend {
+            run_saved_list_ids: vec![id],
+            ..Default::default()
+        };
+        let selector = SavedListSelector {
+            name: Some("Stale Zillow".to_string()),
+            list_id: None,
+            limit: 10,
+        };
+        let outcome = backend.run_saved_list(&ctx(), &selector).await.unwrap();
+        assert_eq!(backend.seen.lock().unwrap().len(), 1);
+        match outcome {
+            FilterOutcome::Matched(result) => {
+                assert_eq!(result.matches.len(), 1);
+                assert_eq!(result.matches[0].id, id);
+                assert!(result.list.is_some());
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn fake_backend_filter_and_saved_list_share_the_backend_error_and_not_found_fixtures() {
+        let backend = FakeBackend {
+            backend_error: true,
+            ..Default::default()
+        };
+        let spec = PeopleFilterSpec {
+            has_phone: Some(true),
+            limit: 10,
+            ..Default::default()
+        };
+        assert!(matches!(
+            backend.filter_people(&ctx(), &spec).await,
+            Err(ToolError::Backend(_))
+        ));
+        let selector = SavedListSelector {
+            name: Some("x".to_string()),
+            list_id: None,
+            limit: 10,
+        };
+        assert!(matches!(
+            backend.run_saved_list(&ctx(), &selector).await,
+            Err(ToolError::Backend(_))
+        ));
+        assert_eq!(backend.seen.lock().unwrap().len(), 2);
+    }
+
     #[test]
     fn the_prompt_carries_the_start_call_rules() {
         // SLICE_006b §5: prepare-not-place. String-pinned like the actor
@@ -2005,7 +2330,7 @@ mod tests {
             "Never claim a call was placed",
             "Never propose a call the user did not ask for",
             "you can never dial a number from the conversation",
-            "six tools",
+            "eight tools",
         ] {
             assert!(prompt.contains(rule), "prompt lost the rule: {rule}");
         }
@@ -2013,5 +2338,27 @@ mod tests {
             !prompt.contains("read-only assistant"),
             "the read-only framing is gone (006b)"
         );
+        assert!(!prompt.contains("six tools"), "the tool count is stale");
+    }
+
+    /// docs/specs/SLICE_013.md §3: string-pinned like
+    /// `the_prompt_carries_the_start_call_rules` above — a reworded prompt
+    /// that drops one of these rules must fail a test.
+    #[test]
+    fn the_prompt_carries_the_filter_people_and_run_saved_list_rules() {
+        let prompt = include_str!("../prompts/system.md");
+        for rule in [
+            "filter_people",
+            "run_saved_list",
+            "assignees: [\"me\"]",
+            "People never contacted at all",
+            "more than 500 matched",
+            "description lines as the reason",
+            "needs_clarification",
+            "never retry the same call with a guessed name",
+            "you cannot see a list by that name",
+        ] {
+            assert!(prompt.contains(rule), "prompt lost the rule: {rule}");
+        }
     }
 }

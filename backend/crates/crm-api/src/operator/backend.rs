@@ -12,19 +12,25 @@ use sqlx::pool::PoolConnection;
 use sqlx::{PgConnection, PgPool, Postgres};
 use uuid::Uuid;
 
+use crate::auth::AuthContext;
+use crate::domain::admin::queries as admin_queries;
 use crate::domain::inquiry::queries as inquiry_queries;
+use crate::domain::person::filter::FilterNames;
 use crate::domain::person::model::PersonSummary;
 use crate::domain::person::queries::{self as person_queries, HistoryEntry};
 use crate::domain::person::PersonVisibilityScope;
+use crate::domain::saved_list::{self, SavedListError};
+use crate::domain::stage;
 use crate::domain::tag;
 use crate::domain::today::{self, TodayItem, TodayList};
-use crate::ids::{ContactMethodId, OrganizationId, PersonId, UserId};
+use crate::ids::{ContactMethodId, OrganizationId, PersonId, SavedListId, UserId};
 use crate::operator::explain;
+use crate::operator::filter::{self as name_resolver, NameMatch, Resolved};
 use crm_operator::{
-    ContactMethodView, HistoryEntryView, InquiryView, NextWorkItem, OperatorContext, PersonCard,
-    PersonDetail, PhoneOption, PriorityExplanation, ProposalView, SearchResult,
-    StartCallProposalOutcome, TodayItemView, TodayView, ToolBackend, ToolError, ToolResult,
-    UntrustedText,
+    ContactMethodView, FilterOutcome, FilterResult, HistoryEntryView, InquiryView, NextWorkItem,
+    OperatorContext, PeopleFilterSpec, PersonCard, PersonDetail, PhoneOption, PriorityExplanation,
+    ProposalView, SavedListRef, SavedListSelector, SearchResult, StartCallProposalOutcome,
+    TodayItemView, TodayView, ToolBackend, ToolError, ToolResult, UntrustedText,
 };
 
 /// `get_person` returns the latest 5 inquiries and latest 20 history
@@ -36,11 +42,20 @@ pub struct SqlxToolBackend {
     pool: PgPool,
     /// `start_call` proposal lifetime (docs/specs/SLICE_006b.md §2).
     proposal_ttl: std::time::Duration,
+    /// `run_saved_list`'s two reads (`list_saved_lists`/`saved_list_detail`,
+    /// docs/specs/SLICE_013.md §2) need the request's `AuthContext` — no
+    /// other method on this backend touches it, and never its
+    /// `actor_email` or `active_organization_name`.
+    auth: AuthContext,
 }
 
 impl SqlxToolBackend {
-    pub fn new(pool: PgPool, proposal_ttl: std::time::Duration) -> Self {
-        Self { pool, proposal_ttl }
+    pub fn new(pool: PgPool, proposal_ttl: std::time::Duration, auth: AuthContext) -> Self {
+        Self {
+            pool,
+            proposal_ttl,
+            auth,
+        }
     }
 
     async fn conn(&self) -> ToolResult<sqlx::pool::PoolConnection<sqlx::Postgres>> {
@@ -54,6 +69,32 @@ impl SqlxToolBackend {
 fn db_error(_: sqlx::Error) -> ToolError {
     // The sqlx error text can carry SQL fragments; keep the reason generic.
     ToolError::Backend("database query failed".into())
+}
+
+/// `list_saved_lists`/`saved_list_detail` fail (in practice) only with
+/// `SavedListError::Database`; every other variant belongs to command
+/// paths these two reads never take. Map generically, same reason as
+/// `db_error`.
+fn saved_list_error(_: SavedListError) -> ToolError {
+    ToolError::Backend("database query failed".into())
+}
+
+/// docs/specs/SLICE_013.md §2: pre-resolved name maps for `describe()`,
+/// built from the same three org-scoped list reads the resolver used —
+/// one round trip, not a second query per name.
+fn build_filter_names(
+    stages: &[stage::Stage],
+    members: &[admin_queries::MemberView],
+    tags: &[tag::TagRow],
+) -> FilterNames {
+    FilterNames {
+        stage_names: stages.iter().map(|s| (s.id, s.name.clone())).collect(),
+        user_names: members
+            .iter()
+            .map(|m| (m.user_id, m.display_name.clone()))
+            .collect(),
+        tag_names: tags.iter().map(|t| (t.id, t.name.clone())).collect(),
+    }
 }
 
 pub fn card_from_summary(summary: &PersonSummary) -> PersonCard {
@@ -426,5 +467,290 @@ impl ToolBackend for SqlxToolBackend {
             contact_method_id: method.id,
             expires_at,
         })))
+    }
+
+    /// docs/specs/SLICE_013.md §2: resolve `spec`'s names against the
+    /// caller's own Organization (the three org-scoped list reads
+    /// `saved_list::queries::filter_names` also uses), then `validate` →
+    /// `describe` → `to_query_params` → `filtered_summaries`. Never
+    /// `validate_references` — every id here came from these same
+    /// Organization-scoped reads in this request (§2).
+    async fn filter_people(
+        &self,
+        ctx: &OperatorContext,
+        spec: &PeopleFilterSpec,
+    ) -> ToolResult<FilterOutcome> {
+        let mut conn = self.conn().await?;
+        let stages = stage::list(&mut conn, org_id(ctx))
+            .await
+            .map_err(db_error)?;
+        let members = admin_queries::members(&mut conn, org_id(ctx))
+            .await
+            .map_err(db_error)?;
+        let tags = tag::list_for_organization(&mut conn, org_id(ctx))
+            .await
+            .map_err(|_| ToolError::Backend("database query failed".into()))?;
+
+        match name_resolver::resolve(spec, &stages, &members, &tags) {
+            Resolved::Clarification(c) => {
+                // docs/specs/SLICE_013.md §6: `resolution` only — no
+                // `FilterDefinition` was ever built, so `filter_kinds`/
+                // `filter_clause_count`/`match_count` stay `Empty`.
+                tracing::Span::current().record("resolution", "needs_clarification");
+                Ok(FilterOutcome::NeedsClarification {
+                    unknown_stages: c.unknown_stages,
+                    unknown_tags: c.unknown_tags,
+                    unknown_assignees: c.unknown_assignees,
+                    ambiguous_assignees: c.ambiguous_assignees,
+                    available_stages: c.available_stages,
+                    available_tags: c
+                        .available_tags
+                        .iter()
+                        .map(|t| UntrustedText::new(t))
+                        .collect(),
+                    members: c.members,
+                    candidate_lists: Vec::new(),
+                })
+            }
+            Resolved::Definition(def) => {
+                // Every id here came from the resolve above, and
+                // `name_resolver::resolve` already collapses two names
+                // that resolve to the same value (docs/tasks/
+                // SLICE_013_IMPL.md coordinator decision) — so a
+                // duplicate-value rejection from `validate()` cannot come
+                // from that. What's left (a non-canonical `sources`
+                // value, a clause-count edge) is still `invalid_arguments`,
+                // a strike, never a clarification.
+                def.validate().map_err(|_| {
+                    ToolError::InvalidArguments("the filter is invalid".to_string())
+                })?;
+                let names = build_filter_names(&stages, &members, &tags);
+                let description = def.describe(&names);
+                // docs/specs/SLICE_013.md §6: the static clause-kind
+                // vocabulary and a clause count — never a name, id, or day
+                // count.
+                let span = tracing::Span::current();
+                span.record("filter_kinds", def.kinds_field());
+                span.record("filter_clause_count", def.clauses.len());
+                span.record("resolution", "matched");
+                let params = def.to_query_params(user_id(ctx));
+                let scope = PersonVisibilityScope::Organization(org_id(ctx));
+                let (rows, truncated) =
+                    person_queries::filtered_summaries(&mut conn, &scope, &params)
+                        .await
+                        .map_err(db_error)?;
+                let matches: Vec<PersonCard> = rows
+                    .iter()
+                    .take(spec.limit)
+                    .map(card_from_summary)
+                    .collect();
+                span.record("match_count", rows.len());
+                span.record("more_than_500", truncated);
+                span.record("returned", matches.len());
+                Ok(FilterOutcome::Matched(FilterResult {
+                    list: None,
+                    description: description.iter().map(|d| UntrustedText::new(d)).collect(),
+                    count: rows.len(),
+                    more_than_500: truncated,
+                    returned: matches.len(),
+                    matches,
+                }))
+            }
+        }
+    }
+
+    /// docs/specs/SLICE_013.md §2, D-046, D-048: resolves `selector` by
+    /// `list_id` (the duplicate-name clarification's candidate, re-checked
+    /// through the same visibility predicate) or by `name` over
+    /// `list_saved_lists`' already visibility-filtered rows — the actor's
+    /// own personal lists plus every shared list, byte-identical
+    /// `not_found` for another member's personal list, a foreign
+    /// Organization's list, or a nonexistent one. The stored sort selects
+    /// the sorted statement; `None` the default one.
+    async fn run_saved_list(
+        &self,
+        ctx: &OperatorContext,
+        selector: &SavedListSelector,
+    ) -> ToolResult<FilterOutcome> {
+        // Fail closed if this backend's own `AuthContext` (set once at
+        // construction, `routes/operator.rs`) ever disagreed with the
+        // per-call `OperatorContext` (set once per turn) about who is
+        // asking — unreachable in production (both are built from the
+        // same request's `auth`), but this is the one method that reads
+        // `self.auth` at all, and it must never silently query on behalf
+        // of the wrong identity if that constructor invariant is ever
+        // broken.
+        if self.auth.active_organization_id != org_id(ctx)
+            || self.auth.actor_user_id != user_id(ctx)
+        {
+            return Err(ToolError::Backend("operator context mismatch".to_string()));
+        }
+
+        let mut conn = self.conn().await?;
+
+        let detail = if let Some(list_id) = selector.list_id {
+            saved_list::saved_list_detail(&mut conn, &self.auth, SavedListId::new(list_id))
+                .await
+                .map_err(saved_list_error)?
+                .ok_or(ToolError::NotFound)?
+        } else {
+            let name = selector.name.as_deref().unwrap_or_default();
+            let lists = saved_list::list_saved_lists(&mut conn, &self.auth)
+                .await
+                .map_err(saved_list_error)?;
+            match name_resolver::find_by_name(name, &lists, |l| l.name.as_str()) {
+                NameMatch::None => return Err(ToolError::NotFound),
+                NameMatch::Many(candidates) => {
+                    tracing::Span::current().record("resolution", "needs_clarification");
+                    return Ok(FilterOutcome::NeedsClarification {
+                        unknown_stages: Vec::new(),
+                        unknown_tags: Vec::new(),
+                        unknown_assignees: Vec::new(),
+                        ambiguous_assignees: Vec::new(),
+                        available_stages: Vec::new(),
+                        available_tags: Vec::new(),
+                        members: Vec::new(),
+                        candidate_lists: candidates
+                            .iter()
+                            .map(|l| SavedListRef {
+                                list_id: l.id.as_uuid(),
+                                name: UntrustedText::new(&l.name),
+                                scope: l.scope.as_str().to_string(),
+                            })
+                            .collect(),
+                    });
+                }
+                // Visibility-filtered by construction: `list_saved_lists`
+                // already scoped this row to the caller's own personal
+                // lists plus every shared list (§2).
+                NameMatch::One(list) => {
+                    saved_list::saved_list_detail(&mut conn, &self.auth, list.id)
+                        .await
+                        .map_err(saved_list_error)?
+                        .ok_or(ToolError::NotFound)?
+                }
+            }
+        };
+
+        let span = tracing::Span::current();
+        // docs/specs/SLICE_013.md §6: the list's scope token
+        // ("personal"/"shared") is not user text, unlike its name.
+        span.record("saved_list_scope", detail.list.scope.as_str());
+
+        // A stored definition this binary cannot evaluate — an
+        // unsupported/stale filter, or a since-deleted stage/assignee/tag
+        // reference — reports `ListInvalid` without re-validation; the
+        // fail-closed disposition and its `filter_error` code both already
+        // came from `saved_list_detail` (docs/specs/SLICE_013.md §2).
+        if detail.filter_error.is_some() || detail.filter.is_none() {
+            span.record("resolution", "list_invalid");
+            let error = detail
+                .filter_error
+                .map(|e| e.as_str())
+                .unwrap_or("unsupported_filter")
+                .to_string();
+            return Ok(FilterOutcome::ListInvalid { error });
+        }
+        let def = detail.filter.expect("checked filter_error/filter above");
+        span.record("filter_kinds", def.kinds_field());
+        span.record("filter_clause_count", def.clauses.len());
+        span.record("resolution", "matched");
+
+        let params = def.to_query_params(user_id(ctx));
+        let scope = PersonVisibilityScope::Organization(org_id(ctx));
+        let (rows, truncated) = match detail.sort {
+            Some(sort) => {
+                person_queries::filtered_summaries_sorted(&mut conn, &scope, &params, sort).await
+            }
+            None => person_queries::filtered_summaries(&mut conn, &scope, &params).await,
+        }
+        .map_err(db_error)?;
+        let matches: Vec<PersonCard> = rows
+            .iter()
+            .take(selector.limit)
+            .map(card_from_summary)
+            .collect();
+        span.record("match_count", rows.len());
+        span.record("more_than_500", truncated);
+        span.record("returned", matches.len());
+
+        Ok(FilterOutcome::Matched(FilterResult {
+            list: Some(SavedListRef {
+                list_id: detail.list.id.as_uuid(),
+                name: UntrustedText::new(&detail.list.name),
+                scope: detail.list.scope.as_str().to_string(),
+            }),
+            description: detail
+                .description
+                .iter()
+                .map(|d| UntrustedText::new(d))
+                .collect(),
+            count: rows.len(),
+            more_than_500: truncated,
+            returned: matches.len(),
+            matches,
+        }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+    use crm_app::domain::admin::Role;
+    use sqlx::postgres::PgPoolOptions;
+
+    /// A lazy pool never opens a connection until first used — the
+    /// context-mismatch guard returns before that happens, so this test
+    /// needs no database.
+    fn fake_pool() -> PgPool {
+        PgPoolOptions::new()
+            .connect_lazy("postgres://user:pass@127.0.0.1:1/db")
+            .expect("lazy pool construction never touches the network")
+    }
+
+    fn auth(organization_id: Uuid, actor_user_id: Uuid) -> AuthContext {
+        AuthContext {
+            actor_user_id: UserId::new(actor_user_id),
+            actor_email: "fixture@example.test".to_string(),
+            actor_display_name: "Fixture".to_string(),
+            active_organization_id: OrganizationId::new(organization_id),
+            active_organization_name: "Fixture Organization".to_string(),
+            role: Role::Member,
+        }
+    }
+
+    fn ctx(organization_id: Uuid, actor_user_id: Uuid) -> OperatorContext {
+        OperatorContext {
+            actor_user_id,
+            organization_id,
+            actor_display_name: "Fixture".to_string(),
+            turn_id: Uuid::new_v4(),
+            now: Utc::now(),
+        }
+    }
+
+    /// docs/tasks/SLICE_013_IMPL.md coordinator decision: `run_saved_list`
+    /// fails closed rather than querying on behalf of the wrong identity
+    /// if the backend's own `AuthContext` and the per-call
+    /// `OperatorContext` ever disagree (unreachable in production; both
+    /// are built from the same request's `auth` in `routes/operator.rs`).
+    #[tokio::test]
+    async fn run_saved_list_fails_closed_on_a_context_mismatch() {
+        let backend = SqlxToolBackend::new(
+            fake_pool(),
+            std::time::Duration::from_secs(120),
+            auth(Uuid::new_v4(), Uuid::new_v4()),
+        );
+        // Every id here is independently random: both the organization
+        // and the actor disagree with `backend`'s own `auth`.
+        let mismatched_ctx = ctx(Uuid::new_v4(), Uuid::new_v4());
+        let selector = SavedListSelector {
+            name: Some("Any List".to_string()),
+            list_id: None,
+            limit: 10,
+        };
+        let result = backend.run_saved_list(&mismatched_ctx, &selector).await;
+        assert!(matches!(result, Err(ToolError::Backend(_))), "{result:?}");
     }
 }

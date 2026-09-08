@@ -18,7 +18,9 @@ pub mod service;
 pub mod tools;
 pub mod views;
 
-pub use backend::{ToolBackend, ToolError, ToolResult};
+pub use backend::{
+    AgeCondition, PeopleFilterSpec, SavedListSelector, ToolBackend, ToolError, ToolResult,
+};
 pub use context::OperatorContext;
 pub use provider::{
     ChatMessage, ChatRequest, ChatResponse, InferenceProvider, ProviderError, ResponseFormat,
@@ -33,10 +35,11 @@ pub use service::{
 };
 pub use tools::tool_definitions;
 pub use views::{
-    Ahead, ContactMethodView, HistoryEntryView, InquiryView, NextWorkItem, NotOnTodayReason,
-    PersonCard, PersonDetail, PhoneOption, PriorityExplanation, ProposalView, SearchResult,
-    StartCallProposalOutcome, SystemFeedIssueView, TodayItemView, TodaySourceIssueView,
-    TodaySourcesView, TodayView, UntrustedText, WirePersonCard, ORDERING_RULE,
+    Ahead, ContactMethodView, FilterOutcome, FilterResult, HistoryEntryView, InquiryView,
+    NextWorkItem, NotOnTodayReason, PersonCard, PersonDetail, PhoneOption, PriorityExplanation,
+    ProposalView, SavedListRef, SearchResult, StartCallProposalOutcome, SystemFeedIssueView,
+    TodayItemView, TodaySourceIssueView, TodaySourcesView, TodayView, UntrustedText,
+    WirePersonCard, ORDERING_RULE,
 };
 
 /// The system prompt (docs/specs/SLICE_005.md §3). Not a contract; the

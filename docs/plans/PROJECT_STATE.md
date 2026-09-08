@@ -24,8 +24,10 @@ was updated the same evening (no migration in e2): the old API (pid 37778)
 stopped by exact PID, the merged binary built and `./scripts/dev-api`
 relaunched (pid 16112, binary of 22:06; health 200, the new filter kind
 reaches authentication). **This completes the Slice 011 ladder** (011a, 011b,
-011b-sort, 011c, 011d, 011e). `main` is 27 commits ahead of `origin/main`;
-push and deployment are not authorized.
+011b-sort, 011c, 011d, 011e). `main` was pushed to `origin/main` on 2026-09-07 at
+`aef151b` with the user's approval (the push carried 011e e1/e2, D-051, the
+perceived-latency investigation and the state records); deployment is not
+authorized.
 
 Implementation history: the user passed the e2 Phase 6 gate on 2026-09-07;
 one lane (Claude Sonnet 5) followed brief steps 1–5 with a coordinator audit
@@ -676,8 +678,7 @@ and now lives only in git history.
 ## Approval currently required
 
 - None for 011e: both rungs merged, the dev runtime updated and the branches
-  cleaned up with approval on 2026-09-07. Push of `main` (27 commits ahead of
-  `origin/main`) and deployment are not authorized. The next slice or chunk
+  cleaned up with approval on 2026-09-07. `main` pushed on 2026-09-07; deployment is not authorized. The next slice or chunk
   (candidates below) needs the user's request.
 - None for 011d: merged, pushed, and the dev runtime updated with approval
   on 2026-09-07. Deployment is not authorized.

@@ -1,11 +1,29 @@
 # Project State
 
-Last updated: 2026-09-08 (Slices 012 and 013 approved; two parallel lanes
-started).
+Last updated: 2026-09-08 (Slice 012 merged to local main and serving; Slice
+013 rebased, in final gates).
 
 ## Current phase
 
-**Slices 012 and 013 — APPROVED 2026-09-08, TWO PARALLEL LANES IN
+**Slice 012 — COMPLETE AND MERGED TO LOCAL MAIN** at `26ddab7` (2026-09-08,
+with the user's approval; not pushed, not deployed). Source
+`slice-012-activity-columns` at `e32ffd7` (six commits incl. the round-1
+fixes `77a51c8` and the [verification record](../tasks/SLICE_012_VERIFICATION.md)).
+Final-tree gates run once by the coordinator under the shared lock:
+`sqlx-prepare` clean, `check` green (718 Rust, 614 Web), `check-db` 603 of 603
+first run. Review round 1 of two: reviewer READY WITH FIXES, tester no
+blocking finding, all fixes applied; round 2 not needed. The shared
+development runtime was updated with approval: `crm_dev` migrated
+(`20260910000001` applied), the old API (pid 16112) stopped by exact PID, the
+merged binary built and `./scripts/dev-api` relaunched. The branch and the
+worktree `../crm-worktrees/012` were deleted. **Slice 013** rebased cleanly
+onto `26ddab7` (`3d68a7c`; the three `tests/all.rs` registrations merged
+without conflict); its round-1 fixes (`fe3321b`, `3d68a7c`: trait defaults
+removed, alias dedup, empty-item drop, context-mismatch guard, six test
+hardenings; lane gates 756 / 601 of 601) passed the coordinator audit; the
+coordinator's once-only final-tree gates are running on the rebased tree.
+
+Previously: **Slices 012 and 013 — APPROVED 2026-09-08, TWO PARALLEL LANES IN
 IMPLEMENTATION.** After the ladder closed, the user chose to run the
 "worth a small chunk soon" items in parallel worktrees ("Go"). Planner
 analyses, then [SLICE_012.md](../specs/SLICE_012.md) (denormalized
@@ -507,7 +525,8 @@ together on 2026-09-06).
 | 011b-sort | Per-list sorting for saved People lists (D-048) | `d52a0ad` (implementation `bd23f42`) |
 | 011d | Tweakable built-in Today rules: system feeds, three derived clauses, admin surface, change fact (D-049, D-050) | `b8b53e2` (integration `77a8963`), pushed 2026-09-07 |
 | 011e-e1 | Tags model, commands, six routes, Person page and Tags page, Operator field (D-051) | `51331e9` (branch head `4af2e13`), local only |
-| 011e-e2 | `tags`/`not_tags` clauses across the fourteen statements, `invalid_tag` paths, FilterBar chips, performance evidence | `b6dc49b` (branch head `1796e85`), local only |
+| 011e-e2 | `tags`/`not_tags` clauses across the fourteen statements, `invalid_tag` paths, FilterBar chips, performance evidence | `b6dc49b` (branch head `1796e85`), pushed 2026-09-07 |
+| 012 | Denormalized last-activity columns on Person, trigger-maintained (D-052); fourteen statements read the columns; equivalence gate; perf archive | `26ddab7` (branch head `e32ffd7`), local only |
 | — | Gate-speedup chunk (check 35m→79s, check-db 37m→~2m) | 2026-08-28 |
 | — | Test-binary consolidation (40 files → 1 binary) | `6427ee8` |
 

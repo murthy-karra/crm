@@ -46,6 +46,7 @@ pub(crate) struct EvaluatedTodaySource {
 /// [`source_candidates`] directly, from outside this crate — a visibility
 /// widening only, no behavior or signature change.
 #[derive(Debug, Clone)]
+#[doc(hidden)]
 pub struct SourceCandidate {
     pub person: PersonSummary,
     pub latest_inquiry: Option<InquiryRef>,
@@ -109,6 +110,7 @@ struct SourceCandidateRow {
 
 /// `pub` (Slice 012, docs/specs/SLICE_012.md §4): visibility widening only,
 /// for the same reason as [`SourceCandidate`] above.
+#[doc(hidden)]
 pub async fn source_candidates(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
@@ -229,6 +231,7 @@ pub async fn source_candidates(
 /// whole-source budget for actual non-B candidates.
 /// `pub` (Slice 012, docs/specs/SLICE_012.md §4): visibility widening only,
 /// for the same reason as [`SourceCandidate`] above.
+#[doc(hidden)]
 pub async fn source_membership(
     conn: &mut PgConnection,
     organization_id: OrganizationId,

@@ -951,11 +951,21 @@ async fn explain_priority_position_matches_today_query_and_get_api_today(migrato
     // instead of recomputing live; keep it in step by hand here, the same
     // fix-up a redaction/erasure runbook would apply via the backfill
     // block.
-    sqlx::query("UPDATE person SET last_inquiry_at = now() - interval '2 days' WHERE id = $1")
-        .bind(p1)
-        .execute(&f.migrator_pool)
-        .await
-        .unwrap();
+    // Round 1 review fix 8: recompute from the actual (now-backdated)
+    // inquiry row via a subquery, exactly as the migration's own backfill
+    // block would, rather than a separately evaluated `now() - interval`
+    // — the two `now()` calls (this one and the UPDATE above) are not
+    // guaranteed to observe the identical instant.
+    sqlx::query(
+        "UPDATE person SET last_inquiry_at = \
+           (SELECT max(received_at) FROM inquiry i \
+             WHERE i.person_id = person.id AND i.organization_id = person.organization_id) \
+         WHERE id = $1",
+    )
+    .bind(p1)
+    .execute(&f.migrator_pool)
+    .await
+    .unwrap();
 
     // Authoritative order from the query and from the HTTP read model.
     let app_pool = crate::common::connect_as_app(&f.migrator_pool).await;

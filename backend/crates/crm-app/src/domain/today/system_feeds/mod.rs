@@ -14,6 +14,7 @@ pub mod error;
 // `person_state_candidates`/`call_membership`/`call_only_candidates`
 // directly, from outside this crate — a visibility widening only, no
 // behavior or signature change.
+#[doc(hidden)]
 pub mod evaluate;
 pub mod queries;
 

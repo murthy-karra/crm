@@ -249,6 +249,33 @@ fn extract_backfill_block() -> String {
     rest[..end].trim().to_string()
 }
 
+/// Round 1 review fix 6: pins the migration's declared order (spec §2 —
+/// "in this order: columns -> trigger functions and triggers -> backfill
+/// -> index"). Triggers must exist before the backfill runs (`CREATE
+/// TRIGGER` takes a SHARE ROW EXCLUSIVE lock that drains in-flight
+/// inserts first); the index comes last. A pure text check — no database
+/// needed.
+#[test]
+fn migration_declares_triggers_before_backfill_before_index() {
+    let last_trigger = MIGRATION
+        .find("CREATE TRIGGER correspondence_captured_touch_person")
+        .expect("the correspondence trigger must exist");
+    let backfill_begin = MIGRATION
+        .find("-- BEGIN PERSON_LAST_ACTIVITY_BACKFILL")
+        .expect("the backfill begin marker must exist");
+    let index = MIGRATION
+        .find("CREATE INDEX person_org_last_contact_idx")
+        .expect("the index must exist");
+    assert!(
+        last_trigger < backfill_begin,
+        "the last trigger must be declared before the backfill block"
+    );
+    assert!(
+        backfill_begin < index,
+        "the backfill block must be declared before the index"
+    );
+}
+
 async fn insert_inquiry_row(
     pool: &PgPool,
     organization_id: Uuid,
@@ -424,6 +451,17 @@ async fn migration_backfill_block_recomputes_every_column_as_max_of_history(migr
     )
     .await;
 
+    // Round 1 review fix 4: a contact_attempted row naming org_b's
+    // organization_id but rich_a's (org_a) person_id, with a timestamp
+    // LATER than rich_a's real maximum — contact_attempted.person_id has
+    // no FK (docs/specs/SLICE_002.md §2), so this row is perfectly
+    // insertable and, if the backfill block's subquery correlated on
+    // person_id alone, would incorrectly become rich_a's new
+    // last_contact_at. It must not: the block's own subquery is scoped
+    // `WHERE ca.person_id = p.id AND ca.organization_id = p.organization_id`,
+    // so this cross-Organization row is invisible to rich_a's recompute.
+    insert_contact_attempted_row(&migrator_pool, org_b, rich_a, ts(2026, 6, 1, 9, 0, 0)).await;
+
     // The four columns are already correct (the AFTER INSERT triggers
     // maintained them live as the rows above were inserted) — null them
     // out as the migrator role to simulate the pre-migration state a
@@ -469,6 +507,10 @@ async fn migration_backfill_block_recomputes_every_column_as_max_of_history(migr
         rich_a_activity.last_inquiry_at,
         Some(ts(2026, 3, 1, 9, 0, 0))
     );
+    // Still rich_a's OWN maximum (2026-02-15), not the later
+    // (2026-06-01) cross-Organization row planted above: the block
+    // correlates on both person_id and organization_id, so that row is
+    // invisible here.
     assert_eq!(
         rich_a_activity.last_contact_at,
         Some(ts(2026, 2, 15, 9, 0, 0))
@@ -1035,6 +1077,15 @@ async fn concurrent_attempts_in_either_commit_order_leave_the_greater(migrator_p
         tx_late.commit().await.unwrap();
     });
     tokio::time::sleep(Duration::from_millis(200)).await;
+    // Round 1 review fix 5: distinguishes READ COMMITTED re-evaluation
+    // (the second insert waits on the Person row lock, then re-reads the
+    // committed value) from mere serialized execution (the second insert
+    // just happened not to overlap the first) — the task must still be
+    // blocked here, not finished-but-unobserved.
+    assert!(
+        !task.is_finished(),
+        "case A: the second insert must block on the Person row lock"
+    );
     tx_early.commit().await.unwrap();
     task.await.unwrap();
 
@@ -1064,6 +1115,10 @@ async fn concurrent_attempts_in_either_commit_order_leave_the_greater(migrator_p
         tx_early.commit().await.unwrap();
     });
     tokio::time::sleep(Duration::from_millis(200)).await;
+    assert!(
+        !task.is_finished(),
+        "case B: the second insert must block on the Person row lock"
+    );
     tx_late.commit().await.unwrap();
     task.await.unwrap();
 

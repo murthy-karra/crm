@@ -160,6 +160,7 @@ impl TryFrom<PersonStateRow> for TodayCandidate {
 /// `feed_b` is `client_replied` — the fixed precedence order (reply wins).
 /// Returns candidates ordered exactly as the Legacy compiled-in query,
 /// capped at 200 (`truncated_p` = the fetch found more than 200).
+#[doc(hidden)]
 pub async fn person_state_candidates(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
@@ -256,6 +257,7 @@ struct CallMembershipRow {
 /// id, the viewer's one qualifying call, narrowed by `call_feed`'s full
 /// predicate matrix (any admin-added clause beyond the anchor applies
 /// here). Returns `(person_id, call_id, ended_at)`.
+#[doc(hidden)]
 pub async fn call_membership(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
@@ -398,6 +400,7 @@ impl TryFrom<CallOnlyRow> for TodayCandidate {
 /// ordered `ended_at ASC, id ASC`, limited to `(200 - |P|) + 1`, narrowed
 /// by `call_feed`'s full predicate matrix. Only called when the
 /// person-state statement was NOT truncated.
+#[doc(hidden)]
 pub async fn call_only_candidates(
     conn: &mut PgConnection,
     organization_id: OrganizationId,

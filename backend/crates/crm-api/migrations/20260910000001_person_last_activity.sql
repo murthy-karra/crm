@@ -49,14 +49,19 @@ BEGIN
 END $$ LANGUAGE plpgsql;
 
 -- `correspondence_captured.direction` ('inbound' | 'outbound') selects
--- which of the two columns this fact advances.
+-- which of the two columns this fact advances. `ELSIF ... = 'outbound'`
+-- (round 1 review fix 7), not a bare `ELSE`: unreachable today (the
+-- column's own CHECK constraint already limits it to these two values),
+-- but fails closed at zero cost if that CHECK is ever widened — an
+-- unknown third direction then advances neither column instead of being
+-- silently routed to last_outbound_at.
 CREATE FUNCTION person_touch_correspondence() RETURNS TRIGGER AS $$
 BEGIN
   IF NEW.direction = 'inbound' THEN
     UPDATE person SET last_inbound_at = NEW.occurred_at
      WHERE id = NEW.person_id AND organization_id = NEW.organization_id
        AND (last_inbound_at IS NULL OR last_inbound_at < NEW.occurred_at);
-  ELSE
+  ELSIF NEW.direction = 'outbound' THEN
     UPDATE person SET last_outbound_at = NEW.occurred_at
      WHERE id = NEW.person_id AND organization_id = NEW.organization_id
        AND (last_outbound_at IS NULL OR last_outbound_at < NEW.occurred_at);

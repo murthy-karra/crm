@@ -244,6 +244,9 @@ struct RichFixture {
     /// `retained_ids` slices for `call_membership`/`call_only`.
     all_person_ids: Vec<Uuid>,
     call_person_id: Uuid,
+    /// p7 — assigned to the viewer, client_replied-qualifying, latest
+    /// inquiry source "zillow" (round 1 review fix 2's B-only pin).
+    reply_person_id: Uuid,
 }
 
 /// Builds the rich, fixed-clock fixture in `organization_id`: a plain
@@ -375,12 +378,33 @@ async fn build_rich_fixture(migrator_pool: &PgPool, app_pool: &PgPool) -> RichFi
     insert_call(migrator_pool, organization_id, p8, viewer_id, ts(17, 9)).await;
     all_person_ids.push(p8);
 
+    // p9: the client-replied TIE — an inbound reply at the EXACT SAME
+    // instant as the effective last contact attempt (round 1 review fix
+    // 3). client_replied_unanswered's `last_inbound_at > last_contact_at`
+    // is strict, so this Person must never match it on either text.
+    let p9 = insert_person(migrator_pool, organization_id, stage_id, Some(viewer_id)).await;
+    insert_inquiry(migrator_pool, organization_id, p9, "zillow", ts(18, 9)).await;
+    let tie_at = ts(19, 9);
+    insert_contact_attempt(migrator_pool, organization_id, p9, tie_at).await;
+    capture_fact(
+        app_pool,
+        organization_id,
+        viewer_id,
+        p9,
+        Direction::Inbound,
+        tie_at,
+        false,
+    )
+    .await;
+    all_person_ids.push(p9);
+
     RichFixture {
         organization_id,
         viewer_id,
         now,
         all_person_ids,
         call_person_id: p8,
+        reply_person_id: p7,
     }
 }
 
@@ -786,6 +810,108 @@ async fn assert_system_feed_statements_equal(app_pool: &PgPool, fx: &RichFixture
         "person_state: truncated"
     );
 
+    // Round 1 review fix 2: the `latest` LATERAL's guard
+    // (`ON ($5::text[] IS NOT NULL OR $27::text[] IS NOT NULL)`) is
+    // otherwise never exercised on either text — a source clause bound on
+    // ONLY feed A, ONLY feed B, or both must all agree between frozen and
+    // live. `fx.reply_person_id` (p7) is assigned to the viewer,
+    // client_replied-qualifying, and its latest inquiry's source is
+    // "zillow" — the B-only case must retain it (proving the guard opens
+    // the LATERAL for feed B's source check even though feed A's own
+    // source parameter is NULL).
+    {
+        let source_zillow = Clause::Source(SourceClause {
+            sources: vec!["zillow".to_string()],
+        });
+        let feed_a_source_filter = FilterDefinition {
+            version: 1,
+            clauses: vec![
+                Clause::AssignedTo(AssignedToClause {
+                    assignees: vec![Assignee::Me],
+                }),
+                Clause::AwaitingResponse(BoolClause { value: true }),
+                source_zillow.clone(),
+            ],
+        };
+        let feed_b_source_filter = FilterDefinition {
+            version: 1,
+            clauses: vec![
+                Clause::AssignedTo(AssignedToClause {
+                    assignees: vec![Assignee::Me],
+                }),
+                Clause::ClientRepliedUnanswered(BoolClause { value: true }),
+                source_zillow,
+            ],
+        };
+
+        for (label, filter_a, filter_b) in [
+            ("feed A source-only", &feed_a_source_filter, &feed_b_filter),
+            ("feed B source-only", &feed_a_filter, &feed_b_source_filter),
+            ("both source", &feed_a_source_filter, &feed_b_source_filter),
+        ] {
+            let resolved_a = resolved_feed(FeedKey::UnansweredInquiry, filter_a.clone(), Some(24));
+            let resolved_b = resolved_feed(FeedKey::ClientReplied, filter_b.clone(), Some(24));
+
+            let mut live_conn = app_pool.acquire().await.unwrap();
+            let (live_candidates, live_truncated) = system_feeds_evaluate::person_state_candidates(
+                &mut live_conn,
+                org,
+                viewer,
+                fx.now,
+                &resolved_a,
+                &resolved_b,
+            )
+            .await
+            .unwrap();
+            drop(live_conn);
+
+            let params_a = filter_a.to_query_params(viewer);
+            let params_b = filter_b.to_query_params(viewer);
+            let mut frozen_conn = app_pool.acquire().await.unwrap();
+            let (frozen_candidates, frozen_truncated) =
+                frozen::system_feeds_sql::person_state_candidates(
+                    &mut frozen_conn,
+                    org,
+                    viewer,
+                    fx.now,
+                    &params_a,
+                    true,
+                    24,
+                    &params_b,
+                    true,
+                    24,
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(
+                candidate_signatures(&frozen_candidates),
+                candidate_signatures(&live_candidates),
+                "person_state ({label}): candidate signatures"
+            );
+            assert_eq!(
+                frozen_truncated, live_truncated,
+                "person_state ({label}): truncated"
+            );
+
+            if label == "feed B source-only" {
+                let live_ids: Vec<Uuid> = live_candidates.iter().map(|c| c.person.id.0).collect();
+                assert!(
+                    live_ids.contains(&fx.reply_person_id),
+                    "the zillow reply member must remain in the B-only source-guarded feed (live)"
+                );
+                let frozen_ids: Vec<Uuid> = candidate_signatures(&frozen_candidates)
+                    .iter()
+                    .map(|s| s.person_id)
+                    .collect();
+                assert!(
+                    frozen_ids.contains(&fx.reply_person_id),
+                    "the zillow reply member must remain in the B-only source-guarded feed (frozen)"
+                );
+            }
+        }
+    }
+
     let retained_ids: Vec<Uuid> = live_person_state
         .0
         .iter()
@@ -921,8 +1047,49 @@ async fn all_fourteen_statements_agree_between_frozen_and_live_text(migrator_poo
         version: 1,
         clauses: vec![Clause::AwaitingCallOutcome(BoolClause { value: true })],
     };
+    // Round 1 review fix 1: LastInquiry and LastInbound × within_days(7),
+    // not_within_days(7), never — parameters $9-$11 and $15-$17 were
+    // otherwise never bound on any of the fourteen statements, so a
+    // swapped last_inbound_at/last_inquiry_at column reference would pass
+    // this test undetected.
+    let last_inquiry_within_7 = FilterDefinition {
+        version: 1,
+        clauses: vec![Clause::LastInquiry(AgeClause {
+            age: AgeSpec::WithinDays(7),
+        })],
+    };
+    let last_inquiry_not_within_7 = FilterDefinition {
+        version: 1,
+        clauses: vec![Clause::LastInquiry(AgeClause {
+            age: AgeSpec::NotWithinDays(7),
+        })],
+    };
+    let last_inquiry_never = FilterDefinition {
+        version: 1,
+        clauses: vec![Clause::LastInquiry(AgeClause {
+            age: AgeSpec::Never,
+        })],
+    };
+    let last_inbound_within_7 = FilterDefinition {
+        version: 1,
+        clauses: vec![Clause::LastInbound(AgeClause {
+            age: AgeSpec::WithinDays(7),
+        })],
+    };
+    let last_inbound_not_within_7 = FilterDefinition {
+        version: 1,
+        clauses: vec![Clause::LastInbound(AgeClause {
+            age: AgeSpec::NotWithinDays(7),
+        })],
+    };
+    let last_inbound_never = FilterDefinition {
+        version: 1,
+        clauses: vec![Clause::LastInbound(AgeClause {
+            age: AgeSpec::Never,
+        })],
+    };
 
-    let axes: [(&str, &FilterDefinition); 10] = [
+    let axes: [(&str, &FilterDefinition); 16] = [
         ("empty (the full org)", &empty),
         ("last_contact not_within_days 7", &last_contact_not_within_7),
         ("last_contact never", &last_contact_never),
@@ -936,6 +1103,12 @@ async fn all_fourteen_statements_agree_between_frozen_and_live_text(migrator_poo
         ("assigned_to me", &assigned_to_me),
         ("source zillow", &source_zillow),
         ("awaiting_call_outcome true", &awaiting_call_outcome_true),
+        ("last_inquiry within_days 7", &last_inquiry_within_7),
+        ("last_inquiry not_within_days 7", &last_inquiry_not_within_7),
+        ("last_inquiry never", &last_inquiry_never),
+        ("last_inbound within_days 7", &last_inbound_within_7),
+        ("last_inbound not_within_days 7", &last_inbound_not_within_7),
+        ("last_inbound never", &last_inbound_never),
     ];
 
     for (label, filter) in axes {
@@ -989,7 +1162,7 @@ async fn all_fourteen_statements_agree_between_frozen_and_live_text(migrator_poo
     // Sanity: every declared person id is actually present, so the
     // fixture itself is proven non-degenerate (zero-history Person
     // included, per spec §4's fixture requirement).
-    assert_eq!(fx.all_person_ids.len(), 8);
+    assert_eq!(fx.all_person_ids.len(), 9);
 }
 
 // --- Spec §8.6 explicit pins: the gated waiting probe, the zero-inquiry

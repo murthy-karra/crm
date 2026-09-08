@@ -1862,6 +1862,16 @@ async fn slice_012_performance_evidence(migrator_pool: PgPool) {
     .unwrap();
 
     let mut tx = migrator_pool.begin().await.unwrap();
+    // Round 1 review fix 9: without this, a freshly PREPAREd statement's
+    // first few EXECUTEs use a CUSTOM plan (the bound constants folded in
+    // by the planner), not the GENERIC plan a statement prepared once and
+    // executed repeatedly (as sqlx does in production) converges to after
+    // five executions. Forcing the generic plan here makes the archived
+    // plan the one production actually runs.
+    sqlx::query("SET LOCAL plan_cache_mode = force_generic_plan")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
     sqlx::query(&format!("PREPARE s012_fs AS {filtered_summaries_sql}"))
         .execute(&mut *tx)
         .await

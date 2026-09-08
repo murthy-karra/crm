@@ -959,13 +959,15 @@ async fn person_org_last_contact_idx_exists_with_the_declared_column_order(migra
     .fetch_one(&migrator_pool)
     .await
     .unwrap();
-    assert!(indexdef.contains("organization_id"), "{indexdef}");
-    assert!(indexdef.contains("last_contact_at"), "{indexdef}");
-    assert!(indexdef.contains("NULLS FIRST"), "{indexdef}");
-    // Column order: organization_id before last_contact_at before id.
-    let org_pos = indexdef.find("organization_id").unwrap();
-    let contact_pos = indexdef.find("last_contact_at").unwrap();
-    assert!(org_pos < contact_pos, "{indexdef}");
+    // Round 1 review fix 6: the FULL indexdef, not just substring checks
+    // — `id` (bare, ascending — Postgres omits `ASC` for the default
+    // direction) is the exact third key, immediately after
+    // `last_contact_at NULLS FIRST`.
+    assert_eq!(
+        indexdef,
+        "CREATE INDEX person_org_last_contact_idx ON public.person USING btree \
+         (organization_id, last_contact_at NULLS FIRST, id)"
+    );
 
     let index_names: Vec<String> =
         sqlx::query_scalar("SELECT indexname FROM pg_indexes WHERE tablename = 'person'")

@@ -1,67 +1,89 @@
-Limit  (cost=247.31..6820.59 rows=501 width=216) (actual time=0.582..3.478 rows=501.00 loops=1)
-  Buffers: shared hit=3544
-  ->  Result  (cost=247.31..130401.00 rows=9920 width=216) (actual time=0.582..3.450 rows=501.00 loops=1)
-        Buffers: shared hit=3544
-        ->  Incremental Sort  (cost=247.31..87149.80 rows=9920 width=224) (actual time=0.568..2.896 rows=501.00 loops=1)
+Limit  (cost=944230.29..944234.66 rows=1 width=216) (actual time=370.919..371.549 rows=501.00 loops=1)
+  Buffers: shared hit=47031
+  ->  Result  (cost=944230.29..944234.66 rows=1 width=216) (actual time=47.160..47.760 rows=501.00 loops=1)
+        Buffers: shared hit=47031
+        ->  Sort  (cost=944230.29..944230.30 rows=1 width=224) (actual time=47.122..47.144 rows=501.00 loops=1)
               Sort Key: p.created_at DESC, p.id
-              Presorted Key: p.created_at
-              Full-sort Groups: 11  Sort Method: quicksort  Average Memory: 36kB  Peak Memory: 36kB
-              Pre-sorted Groups: 4  Sort Method: quicksort  Average Memory: 36kB  Peak Memory: 36kB
-              Buffers: shared hit=2541
-              ->  Nested Loop Left Join  (cost=8.92..86782.19 rows=9920 width=224) (actual time=0.074..2.688 rows=511.00 loops=1)
-                    Buffers: shared hit=2532
-                    ->  Nested Loop Left Join  (cost=0.61..3553.39 rows=9920 width=160) (actual time=0.033..0.948 rows=511.00 loops=1)
-                          Buffers: shared hit=1252
-                          ->  Nested Loop  (cost=0.45..3305.12 rows=9920 width=128) (actual time=0.027..0.822 rows=511.00 loops=1)
-                                Buffers: shared hit=1250
-                                ->  Index Scan Backward using person_organization_created_idx on person p  (cost=0.29..3056.97 rows=9920 width=96) (actual time=0.012..0.681 rows=511.00 loops=1)
-                                      Index Cond: (organization_id = 'c84cb9c6-0ef6-47b9-b2ba-c8a18ce69980'::uuid)
-                                      Filter: (last_contact_at IS NULL)
-                                      Rows Removed by Filter: 732
-                                      Index Searches: 1
-                                      Buffers: shared hit=1248
-                                ->  Memoize  (cost=0.16..0.18 rows=1 width=48) (actual time=0.000..0.000 rows=1.00 loops=511)
-                                      Cache Key: p.stage_id
-                                      Cache Mode: logical
-                                      Hits: 510  Misses: 1  Evictions: 0  Overflows: 0  Memory Usage: 1kB
-                                      Buffers: shared hit=2
-                                      ->  Index Scan using stage_id_organization_id_key on stage s  (cost=0.15..0.17 rows=1 width=48) (actual time=0.012..0.012 rows=1.00 loops=1)
-                                            Index Cond: (id = p.stage_id)
-                                            Index Searches: 1
-                                            Buffers: shared hit=2
-                          ->  Memoize  (cost=0.16..0.18 rows=1 width=48) (actual time=0.000..0.000 rows=0.34 loops=511)
-                                Cache Key: p.assigned_user_id
-                                Cache Mode: logical
-                                Hits: 509  Misses: 2  Evictions: 0  Overflows: 0  Memory Usage: 1kB
-                                Buffers: shared hit=2
-                                ->  Index Scan using app_user_pkey on app_user u  (cost=0.15..0.17 rows=1 width=48) (actual time=0.003..0.003 rows=0.50 loops=2)
-                                      Index Cond: (id = p.assigned_user_id)
-                                      Index Searches: 1
-                                      Buffers: shared hit=2
-                    ->  Limit  (cost=8.32..8.34 rows=1 width=56) (actual time=0.002..0.002 rows=0.50 loops=511)
-                          Buffers: shared hit=1280
-                          ->  Incremental Sort  (cost=8.32..8.36 rows=2 width=56) (actual time=0.002..0.002 rows=0.50 loops=511)
+              Sort Method: top-N heapsort  Memory: 170kB
+              Buffers: shared hit=46028
+              ->  Nested Loop Left Join  (cost=8.32..944230.28 rows=1 width=224) (actual time=0.098..44.901 rows=9920.00 loops=1)
+                    Filter: (($5 IS NULL) OR (i2.source = ANY ($5)))
+                    Buffers: shared hit=46022
+                    ->  Nested Loop Left Join  (cost=0.00..944221.88 rows=1 width=160) (actual time=0.055..15.799 rows=9920.00 loops=1)
+                          Join Filter: (u.id = p.assigned_user_id)
+                          Rows Removed by Join Filter: 16533
+                          Buffers: shared hit=20856
+                          ->  Nested Loop  (cost=0.00..944197.26 rows=1 width=128) (actual time=0.046..9.833 rows=9920.00 loops=1)
+                                Join Filter: (s.id = p.stage_id)
+                                Buffers: shared hit=10936
+                                ->  Seq Scan on person p  (cost=0.00..944170.61 rows=1 width=96) (actual time=0.036..4.540 rows=9920.00 loops=1)
+                                      Filter: ((($8 IS NULL) OR ((created_at IS NULL) = $8)) AND (($11 IS NULL) OR ((last_inquiry_at IS NULL) = $11)) AND (($14 IS NULL) OR ((last_contact_at IS NULL) = $14)) AND (($17 IS NULL) OR ((last_inbound_at IS NULL) = $17)) AND (($18 IS NULL) OR ((last_inbound_at IS NOT NULL) = $18)) AND (($19 IS NULL) OR (EXISTS(SubPlan 4) = $19)) AND (($20 IS NULL) OR (EXISTS(SubPlan 6) = $20)) AND (organization_id = $1) AND (($23 IS NULL) OR (((last_inbound_at IS NOT NULL) AND (last_inbound_at > COALESCE(last_contact_at, '-infinity'::timestamp with time zone)) AND (last_inbound_at > COALESCE(last_outbound_at, '-infinity'::timestamp with time zone))) = $23)) AND (($6 IS NULL) OR (COALESCE(created_at, '-infinity'::timestamp with time zone) > (COALESCE($21, now()) - make_interval(0, 0, 0, $6, 0, 0, '0'::double precision)))) AND (($7 IS NULL) OR (COALESCE(created_at, '-infinity'::timestamp with time zone) <= (COALESCE($21, now()) - make_interval(0, 0, 0, $7, 0, 0, '0'::double precision)))) AND (($9 IS NULL) OR (COALESCE(last_inquiry_at, '-infinity'::timestamp with time zone) > (COALESCE($21, now()) - make_interval(0, 0, 0, $9, 0, 0, '0'::double precision)))) AND (($10 IS NULL) OR (COALESCE(last_inquiry_at, '-infinity'::timestamp with time zone) <= (COALESCE($21, now()) - make_interval(0, 0, 0, $10, 0, 0, '0'::double precision)))) AND (($12 IS NULL) OR (COALESCE(last_contact_at, '-infinity'::timestamp with time zone) > (COALESCE($21, now()) - make_interval(0, 0, 0, $12, 0, 0, '0'::double precision)))) AND (($13 IS NULL) OR (COALESCE(last_contact_at, '-infinity'::timestamp with time zone) <= (COALESCE($21, now()) - make_interval(0, 0, 0, $13, 0, 0, '0'::double precision)))) AND (($15 IS NULL) OR (COALESCE(last_inbound_at, '-infinity'::timestamp with time zone) > (COALESCE($21, now()) - make_interval(0, 0, 0, $15, 0, 0, '0'::double precision)))) AND (($16 IS NULL) OR (COALESCE(last_inbound_at, '-infinity'::timestamp with time zone) <= (COALESCE($21, now()) - make_interval(0, 0, 0, $16, 0, 0, '0'::double precision)))) AND (($2 IS NULL) OR (stage_id = ANY ($2))) AND (($3 IS NULL) OR (assigned_user_id = ANY ($3)) OR ($4 AND (assigned_user_id IS NULL))) AND (($22 IS NULL) OR (EXISTS(SubPlan 8) = $22)) AND (($26 IS NULL) OR (ANY (id = (hashed SubPlan 12).col1))) AND (($27 IS NULL) OR (NOT (ANY (id = (hashed SubPlan 14).col1)))) AND (($24 IS NULL) OR (EXISTS(SubPlan 9) = $24)))
+                                      Rows Removed by Filter: 15080
+                                      Buffers: shared hit=1016
+                                      SubPlan 4
+                                        ->  Seq Scan on contact_method cm3  (cost=0.00..0.00 rows=1 width=0) (never executed)
+                                              Filter: ((person_id = p.id) AND (organization_id = p.organization_id) AND (kind = 'phone'::text))
+                                      SubPlan 6
+                                        ->  Seq Scan on contact_method cm4  (cost=0.00..0.00 rows=1 width=0) (never executed)
+                                              Filter: ((person_id = p.id) AND (organization_id = p.organization_id) AND (kind = 'email'::text))
+                                      SubPlan 8
+                                        ->  Index Only Scan using inquiry_org_person_received_idx on inquiry ia  (cost=0.29..4.31 rows=1 width=0) (never executed)
+                                              Index Cond: ((organization_id = p.organization_id) AND (person_id = p.id) AND (received_at > COALESCE(p.last_contact_at, '-infinity'::timestamp with time zone)))
+                                              Heap Fetches: 0
+                                              Index Searches: 0
+                                      SubPlan 12
+                                        ->  Index Only Scan using person_tag_org_tag_person_idx on person_tag pt  (cost=0.15..8.17 rows=1 width=16) (never executed)
+                                              Index Cond: ((organization_id = $1) AND (tag_id = ANY ($26)))
+                                              Heap Fetches: 0
+                                              Index Searches: 0
+                                      SubPlan 14
+                                        ->  Index Only Scan using person_tag_org_tag_person_idx on person_tag pt2  (cost=0.15..8.17 rows=1 width=16) (never executed)
+                                              Index Cond: ((organization_id = $1) AND (tag_id = ANY ($27)))
+                                              Heap Fetches: 0
+                                              Index Searches: 0
+                                      SubPlan 9
+                                        ->  Nested Loop Semi Join  (cost=0.83..16.92 rows=1 width=0) (never executed)
+                                              ->  Index Scan using call_org_person_placed_idx on call c  (cost=0.27..8.29 rows=1 width=32) (never executed)
+                                                    Index Cond: ((organization_id = p.organization_id) AND (person_id = p.id))
+                                                    Filter: ((ended_at IS NOT NULL) AND (status = ANY ('{ended,failed}'::text[])) AND (caller_user_id = $25))
+                                                    Index Searches: 0
+                                              ->  Nested Loop Anti Join  (cost=0.56..8.62 rows=1 width=32) (never executed)
+                                                    ->  Index Scan using contact_attempted_org_causation_idx on contact_attempted root  (cost=0.29..8.30 rows=1 width=48) (never executed)
+                                                          Index Cond: ((organization_id = p.organization_id) AND (causation_id = c.id))
+                                                          Filter: (corrects_id IS NULL)
+                                                          Index Searches: 0
+                                                    ->  Index Only Scan using contact_attempted_corrects_once on contact_attempted x  (cost=0.28..0.29 rows=1 width=16) (never executed)
+                                                          Index Cond: (corrects_id = root.id)
+                                                          Heap Fetches: 0
+                                                          Index Searches: 0
+                                ->  Seq Scan on stage s  (cost=0.00..17.40 rows=740 width=48) (actual time=0.000..0.000 rows=1.00 loops=9920)
+                                      Buffers: shared hit=9920
+                          ->  Seq Scan on app_user u  (cost=0.00..16.50 rows=650 width=48) (actual time=0.000..0.000 rows=2.00 loops=9920)
+                                Buffers: shared hit=9920
+                    ->  Limit  (cost=8.32..8.34 rows=1 width=31) (actual time=0.001..0.001 rows=0.53 loops=9920)
+                          Buffers: shared hit=25166
+                          ->  Incremental Sort  (cost=8.32..8.36 rows=2 width=31) (actual time=0.001..0.001 rows=0.53 loops=9920)
                                 Sort Key: i2.received_at DESC, i2.id DESC
                                 Presorted Key: i2.received_at
-                                Full-sort Groups: 511  Sort Method: quicksort  Average Memory: 25kB  Peak Memory: 25kB
-                                Buffers: shared hit=1280
-                                ->  Index Scan Backward using inquiry_org_person_received_idx on inquiry i2  (cost=0.29..8.31 rows=1 width=56) (actual time=0.002..0.002 rows=0.50 loops=511)
+                                Full-sort Groups: 9920  Sort Method: quicksort  Average Memory: 25kB  Peak Memory: 25kB
+                                Buffers: shared hit=25166
+                                ->  Index Scan Backward using inquiry_org_person_received_idx on inquiry i2  (cost=0.29..8.31 rows=1 width=31) (actual time=0.001..0.001 rows=0.53 loops=9920)
                                       Index Cond: ((organization_id = p.organization_id) AND (person_id = p.id))
-                                      Index Searches: 511
-                                      Buffers: shared hit=1280
+                                      Index Searches: 9920
+                                      Buffers: shared hit=25163
                     SubPlan 1
-                      ->  Limit  (cost=0.01..0.02 rows=1 width=40) (actual time=0.001..0.001 rows=0.00 loops=511)
-                            ->  Sort  (cost=0.01..0.02 rows=1 width=40) (actual time=0.000..0.000 rows=0.00 loops=511)
+                      ->  Limit  (cost=0.01..0.02 rows=1 width=40) (actual time=0.001..0.001 rows=0.00 loops=9920)
+                            ->  Sort  (cost=0.01..0.02 rows=1 width=40) (actual time=0.000..0.000 rows=0.00 loops=9920)
                                   Sort Key: cm.created_at
                                   Sort Method: quicksort  Memory: 25kB
-                                  ->  Seq Scan on contact_method cm  (cost=0.00..0.00 rows=1 width=40) (actual time=0.000..0.000 rows=0.00 loops=511)
+                                  ->  Seq Scan on contact_method cm  (cost=0.00..0.00 rows=1 width=40) (actual time=0.000..0.000 rows=0.00 loops=9920)
                                         Filter: ((person_id = p.id) AND (organization_id = p.organization_id) AND (kind = 'email'::text))
                     SubPlan 2
-                      ->  Limit  (cost=0.01..0.02 rows=1 width=40) (actual time=0.001..0.001 rows=0.00 loops=511)
-                            ->  Sort  (cost=0.01..0.02 rows=1 width=40) (actual time=0.000..0.000 rows=0.00 loops=511)
+                      ->  Limit  (cost=0.01..0.02 rows=1 width=40) (actual time=0.001..0.001 rows=0.00 loops=9920)
+                            ->  Sort  (cost=0.01..0.02 rows=1 width=40) (actual time=0.000..0.000 rows=0.00 loops=9920)
                                   Sort Key: cm_1.created_at
                                   Sort Method: quicksort  Memory: 25kB
-                                  ->  Seq Scan on contact_method cm_1  (cost=0.00..0.00 rows=1 width=40) (actual time=0.000..0.000 rows=0.00 loops=511)
+                                  ->  Seq Scan on contact_method cm_1  (cost=0.00..0.00 rows=1 width=40) (actual time=0.000..0.000 rows=0.00 loops=9920)
                                         Filter: ((person_id = p.id) AND (organization_id = p.organization_id) AND (kind = 'phone'::text))
         SubPlan 3
           ->  Aggregate  (cost=4.31..4.32 rows=1 width=8) (actual time=0.001..0.001 rows=1.00 loops=501)
@@ -72,6 +94,10 @@ Limit  (cost=247.31..6820.59 rows=501 width=216) (actual time=0.582..3.478 rows=
                       Index Searches: 501
                       Buffers: shared hit=1003
 Planning:
-  Buffers: shared hit=452
-Planning Time: 0.803 ms
-Execution Time: 3.587 ms
+  Buffers: shared hit=814
+Planning Time: 1.805 ms
+JIT:
+  Functions: 92
+  Options: Inlining true, Optimization true, Expressions true, Deforming true
+  Timing: Generation 2.287 ms (Deform 0.718 ms), Inlining 44.026 ms, Optimization 139.140 ms, Emission 140.638 ms, Total 326.091 ms
+Execution Time: 382.165 ms

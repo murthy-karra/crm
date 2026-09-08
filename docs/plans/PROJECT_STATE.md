@@ -1,11 +1,29 @@
 # Project State
 
-Last updated: 2026-09-07 (Slice 011e complete: e2 merged to local main, the
-shared development runtime restarted, the Slice 011 ladder finished).
+Last updated: 2026-09-08 (Slice 011 ladder complete and pushed; planning two
+parallel follow-on lanes: denormalized last-activity columns and an Operator
+`filter_people` tool).
 
 ## Current phase
 
-**Slice 011e (tags) — COMPLETE. RUNG e2 MERGED TO LOCAL MAIN** at `b6dc49b`
+**PLANNING two parallel post-ladder lanes (2026-09-08, user: "Go").** After
+the ladder closed, the user asked what remains in Slice 011 and chose to run
+the "worth a small chunk soon" items in parallel worktrees. Two lanes proceed
+now, each with its own spec, review and gate: **A — denormalized
+last-activity columns on `person`** (backend, one migration; the ladder's
+recorded performance lever with a measured trigger: Today 966 ms at 100k
+People, pool saturation) and **B — Operator `filter_people` read-only tool**
+(crm-operator + the crm-api adapter; the ladder's natural post-ladder
+extension). **C — FilterBar UX polish** is held until the user decides
+whether to touch the FilterBar once together with the held perceived-latency
+chunk or now. Planner analyses dispatched for A and B; specs, one review
+round and one implementation gate follow. Ownership: A owns `backend/**`
+except the Operator adapter and the migration directory exclusively; B owns
+`crm-operator/**`, `crm-api/src/operator/**` and, if needed, the Operator
+panel in `web/`; neither edits `web/src/api/types.ts` without the
+coordinator; merge order A then B (B rebases onto A's statements).
+
+Previous phase: **Slice 011e (tags) — COMPLETE. RUNG e2 MERGED TO LOCAL MAIN** at `b6dc49b`
 (2026-09-07, with the user's approval; not pushed, not deployed). Source
 `slice-011e-tag-clauses` at `1796e85` (seven commits: vocabulary `db2be0a`,
 fourteen statements `2cecee3`, `invalid_tag` `23340d1`, Web `147ef64`,

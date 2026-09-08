@@ -72,7 +72,23 @@ Lane gates `sqlx-prepare` no new entries, `check` 751 Rust / 614 Vitest,
 (`db_today_source_operator.rs`, `db_today_source_settings.rs`) received
 mechanical placeholder `AuthContext` fixtures because the constructor
 signature changed; accepted. Coordinator audit passed; review round 1
-(reviewer and tester) launched on `7da1b21`. Both lanes now await review.
+(reviewer and tester) launched on `7da1b21`. **Review round 1 results:**
+Slice 012 reviewer READY WITH FIXES and tester no blocking finding (byte-identity
+of all fourteen switched statements verified against the base commit; fixes:
+exercise the `last_inquiry`/`last_inbound` axes and the new `$5/$27` source
+guard in the equivalence test, a cross-Organization backfill correlation
+case, a blocking assertion in the concurrency test, a migration-order pin,
+`ELSIF` in the correspondence trigger, an exact `db_operator.rs` fix-up, and
+gate-2 plans re-captured under `plan_cache_mode = force_generic_plan`);
+Slice 013 reviewer READY WITH FIXES (one required fix: the bridging trait
+default bodies the lane reported removed are still present; coordinator
+confirmed on the tree) with D-046, §5.2, telemetry and injection containment
+verified; Slice 013 tester pending. Slice 012 fix round dispatched to lane A.
+LATER recorded: `inquiry` lacks a `reject_mutation` trigger (migrator can
+update it; `crm_app` cannot); every history insert now takes the Person row
+lock (BEYOND_ENVELOPE; a future importer must insert in stable Person order);
+the 011e-era perf-harness "25 vs 27 parameters" claim could not be reproduced
+by the tester and awaits the lane's exact error or retraction.
 
 Previous phase: **Slice 011e (tags) — COMPLETE. RUNG e2 MERGED TO LOCAL MAIN** at `b6dc49b`
 (2026-09-07, with the user's approval; not pushed, not deployed). Source

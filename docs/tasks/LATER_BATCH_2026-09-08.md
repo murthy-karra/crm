@@ -46,12 +46,16 @@ review, the once-only final gates, and the commit and merge gates.
    and says nothing against a tie-break) plus the test asserting strictly
    increasing `(recorded_at, id)`; if the test itself manufactures the tie,
    fix the test. Report which it was. `.sqlx` regenerated if the statement
-   changes. *Outcome (2026-09-08, `2482b4c`):* not an ordering flake. The
-   history query already tie-breaks on `id` per SLICE_002 §5 and the test's
-   own query ordered by `(recorded_at, id)`; the assertion compared
-   `recorded_at` alone, which two sequential writes can tie on under load.
-   Test-only fix: compare the `(recorded_at, id)` tuple. No statement or
-   `.sqlx` change.
+   changes. *Outcome (2026-09-08):* **not reproduced and undiagnosed.** The
+   lane ran the test 18 times in isolation and 3 times in the full suite
+   without a failure, then weakened the assertion to a `(recorded_at, id)`
+   tuple; review showed that change was tautological against the helper's
+   own `ORDER BY` and that the original strict `recorded_at` assertion is
+   spec-backed (SLICE_006c §2 stamps a correction's `recorded_at` with
+   `clock_timestamp()` after the call lock, strictly later than its head).
+   The strict assertion is restored with both values in the failure message
+   so the next occurrence is diagnosable; the item stays open as a known,
+   unreproduced flake. No statement or `.sqlx` change.
 3. **Split the three largest test files** with no test changes:
    `db_saved_lists.rs` (4,298 lines), `db_calls.rs` (3,371),
    `db_today_system_feed_commands.rs` (2,961) into two or three files each

@@ -33,7 +33,23 @@ itself). Lane final gates: `check` green (757 Rust, 653 Vitest); `check-db`
 `db_today_system_feed_evaluation` test that passes 6 of 6 in isolation
 (pre-existing shape, not in this batch's scope; classified in review).
 Coordinator audit passed (22 files, all under tests, migrations and
-`web/src`). Review round 1 (reviewer and tester) launched on `cbdcbc7`.
+`web/src`). **Review round 1 (of two) complete** on `cbdcbc7`: reviewer READY
+WITH FIXES, tester one BLOCKING regression — two sibling mutations for the
+same Person settling in the same tick both skip the invalidation (each sees
+the other pending), so nothing refetches; fix: decide after the mutation's
+own state flips (deferred check, invalidate when the count is zero, and
+release the realtime hold by refetching active stale queries under the
+Organization prefix from all four mutations). Also: the item 2 "fix" was
+reverted to the spec-backed strict assertion (the flake was never reproduced
+and remains open); `TRUNCATE inquiry` gains a test; the cascade guard also
+requires the parent Person to be gone; a duplicated fixture removed.
+Consolidated fix round dispatched. LATER: an in-trigger `DELETE FROM
+inquiry` would pass the depth check (none exists; the header forbids one);
+same-field rapid pairs show the earlier response until the later settles;
+the hold is Organization-blind (one org active at a time);
+`useLogContactMutation` still writes the whole `person` and has no
+mutation key; the `db_today_system_feed_evaluation` load flake (moved test,
+unchanged body, not reproduced in 5 isolated runs plus the trio).
 
 Previously: **Slice 014 — COMPLETE AND MERGED TO LOCAL MAIN** at `ac270fb` (2026-09-08,
 with the user's approval; not pushed, not deployed). Source

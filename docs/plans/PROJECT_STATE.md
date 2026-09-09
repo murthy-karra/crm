@@ -1,26 +1,26 @@
 # Project State
 
-Last updated: 2026-09-09 (Slice 015 Notes implemented and verified on the
-branch; awaiting merge approval; LiveKit down, see Environment).
+Last updated: 2026-09-09 (Slice 015 Notes merged to local main at fd5a184;
+runtime update, push and cleanup pending; LiveKit down, see Environment).
 
 ## Current phase
 
-**SLICE 015 (NOTES) — IMPLEMENTED AND VERIFIED; AWAITING COMMIT AND MERGE
-APPROVAL (2026-09-09).** Branch `slice-015-notes` in
-`../crm-worktrees/notes-1`, twelve commits from `main` at `238c3a7`, head
-= the verification record on top of `082310a`; worktree clean. Lane
-(Claude Sonnet 5) delivered backend steps 1–4, Web step 5, the walkthrough
-record (eight screenshots) and two review rounds; the coordinator applied a
-test-only round-2 completion (a deflaked Vitest, a shared recording
-publisher). Final-tree gates run once by the coordinator on `082310a`:
-`sqlx-prepare` clean, `check` green (764 Rust, 677 Vitest), `check-db`
-647 of 647 first run. Reviews: round 1 backend and Web (no production
-defect; test gaps and two minor Web defects, all applied), round 2
-confirmation (two defective tests found and corrected). Evidence:
-[SLICE_015_VERIFICATION.md](../tasks/SLICE_015_VERIFICATION.md). Not
-authorized yet: merge to `main`, `crm_dev` migration, dev API restart,
-`dev-web-prod` rebuild, push, deployment. The QA database
-`crm_slice015_qa` remains on the dev Postgres for inspection.
+**SLICE 015 (NOTES) — MERGED TO LOCAL MAIN at `fd5a184` (2026-09-09, with
+the user's approval; not pushed, runtime not yet updated).** Source
+`slice-015-notes` at `00e2e67` (twelve commits: backend steps 1–4, Web
+step 5, the walkthrough record, two review rounds, the coordinator's
+test-only round-2 completion `082310a`, and the verification record).
+Final-tree gates on `082310a`: `sqlx-prepare` clean, `check` green (764
+Rust, 677 Vitest), `check-db` 647 of 647 first run. Evidence:
+[SLICE_015_VERIFICATION.md](../tasks/SLICE_015_VERIFICATION.md). Still
+pending, each needing the user's approval: migrate `crm_dev`
+(`./scripts/db-migrate`; one additive table), restart the dev API (new
+routes and Operator view; the running binary predates 015), rebuild and
+relaunch `dev-web-prod`; push `main`; delete the branch and the worktree
+`../crm-worktrees/notes-1`; drop the QA database `crm_slice015_qa`.
+Deployment is not authorized. After the runtime update: observe the live
+cross-tab `note_changed` path on the dev runtime (the one walkthrough
+item the QA environment could not exercise).
 
 Previously: **LATER BATCH (2026-09-08) — COMPLETE AND MERGED TO LOCAL MAIN** at `3ff6c5f`
 (with the user's approval; not pushed, not deployed). Source
@@ -738,6 +738,7 @@ together on 2026-09-06).
 | 013 | Operator `filter_people` and `run_saved_list` read-only tools, name-based, D-046-faithful, `MAX_REFERENCES` 25 | `9af47c1` (branch head `151d38a`), pushed 2026-09-08 |
 | 014 | Production bundle through the tunnel (`dev-web-prod`), optimistic stage/assignment/tag mutations, Today chunk preload and data prefetch, hover prefetch of Person detail, FilterBar residue | `ac270fb` (branch head `3495f71`), pushed 2026-09-08 |
 | — | LATER batch: `inquiry` append-only triggers (cascade-aware), three largest test files split into nine, field-only success writes and `isMutating` guards on the Person mutations | `3ff6c5f` (branch head `5fe4231`), pushed 2026-09-08 |
+| 015 | Notes: `note` table (tombstone delete, import-ready), three commands and routes, `note` timeline kind, `note_changed`, Operator `PersonDetail.notes` (untrusted, history filtered), Person page composer with inline edit/delete (D-053) | `fd5a184` (branch head `00e2e67`), local only |
 | — | Gate-speedup chunk (check 35m→79s, check-db 37m→~2m) | 2026-08-28 |
 | — | Test-binary consolidation (40 files → 1 binary) | `6427ee8` |
 
@@ -966,8 +967,7 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. **Slice 015 (Notes) awaits the merge gate**; after the merge and the
-   runtime update, observe the live cross-tab `note_changed` path on the
+1. **Slice 015 (Notes) is merged**; after the runtime update, observe the live cross-tab `note_changed` path on the
    shared dev runtime (the one walkthrough item the QA environment could
    not exercise). After 015: Tasks (the last CRM-core model),
    then the O-015 attachment-cap raise, then the small LATER batch.
@@ -1017,11 +1017,10 @@ and now lives only in git history.
 
 ## Approval currently required
 
-- **Slice 015 (Notes): merge approval.** The branch is committed and
-  verified (all commits on `slice-015-notes`, none on `main`). Requested:
-  (1) merge `slice-015-notes` into local `main`; (2) then, separately,
-  migrate `crm_dev`, restart the dev API and rebuild `dev-web-prod`; (3)
-  push. Deployment is not requested.
+- **Slice 015 (Notes): merged.** Requested next, separately: (1) update
+  the shared development runtime (migrate `crm_dev`, restart the dev API,
+  rebuild `dev-web-prod`); (2) push `main`; (3) cleanup (delete branch and
+  worktree, drop `crm_slice015_qa`). Deployment is not requested.
 - None for 011e: both rungs merged, the dev runtime updated and the branches
   cleaned up with approval on 2026-09-07. `main` pushed on 2026-09-07; deployment is not authorized. The next slice or chunk
   (candidates below) needs the user's request.

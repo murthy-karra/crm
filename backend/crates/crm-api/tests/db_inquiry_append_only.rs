@@ -127,7 +127,10 @@ async fn deleting_a_person_still_cascades_its_inquiries(migrator_pool: PgPool) {
         .fetch_one(&migrator_pool)
         .await
         .unwrap();
-    assert_eq!(remaining, 0, "the cascaded inquiry row must actually be gone");
+    assert_eq!(
+        remaining, 0,
+        "the cascaded inquiry row must actually be gone"
+    );
     let person_gone: i64 = sqlx::query_scalar("SELECT count(*) FROM person WHERE id = $1")
         .bind(person_id)
         .fetch_one(&migrator_pool)
@@ -145,8 +148,7 @@ async fn deleting_a_person_still_cascades_its_inquiries(migrator_pool: PgPool) {
 async fn person_delete_cascades_inquiry_and_person_tag_together(migrator_pool: PgPool) {
     let org_id = crate::common::create_org(&migrator_pool, "Acme Realty").await;
     crate::common::seed_stages(&migrator_pool, org_id).await;
-    let user_id =
-        crate::common::create_user(&migrator_pool, "alice@acme.test", "Alice", PW).await;
+    let user_id = crate::common::create_user(&migrator_pool, "alice@acme.test", "Alice", PW).await;
     crate::common::add_membership(&migrator_pool, org_id, user_id).await;
     let stage_id = first_stage_id(&migrator_pool, org_id).await;
     let person_id = create_person_row(&migrator_pool, org_id, stage_id).await;
@@ -179,12 +181,16 @@ async fn person_delete_cascades_inquiry_and_person_tag_together(migrator_pool: P
         .await
         .expect("both cascades (inquiry and person_tag) must succeed together");
 
-    let remaining_tags: i64 = sqlx::query_scalar("SELECT count(*) FROM person_tag WHERE tag_id = $1")
-        .bind(tag_id)
-        .fetch_one(&migrator_pool)
-        .await
-        .unwrap();
-    assert_eq!(remaining_tags, 0, "person_tag's own cascade must be unaffected");
+    let remaining_tags: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM person_tag WHERE tag_id = $1")
+            .bind(tag_id)
+            .fetch_one(&migrator_pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        remaining_tags, 0,
+        "person_tag's own cascade must be unaffected"
+    );
 }
 
 /// A direct `INSERT` (the application path, and — after this migration —

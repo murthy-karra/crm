@@ -4,7 +4,7 @@
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { defineComponent, effectScope, ref } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, apiFetch } from './client'
 import {
   queryKeys,
@@ -121,6 +121,23 @@ beforeEach(() => {
   apiFetchMock.mockReset()
 })
 
+// Item 5's settlePersonMutation (round 1 review fix) schedules a real
+// `setTimeout(fn, 0)` from inside a mutation's onSuccess/onError/onSettled.
+// A test that settles one of the four Person mutations without itself
+// awaiting a macrotask before finishing leaves that timer pending; without
+// this, it fires during whichever LATER test happens to be running when
+// the event loop next turns, calling the shared `apiFetchMock` (consuming
+// a `mockReturnValueOnce`/`mockResolvedValueOnce` queue slot meant for
+// that later test, or returning `undefined` after `beforeEach`'s
+// `mockReset`) — observed as a later test's own mutation resolving with
+// `data` unexpectedly `undefined`, or an `invalidate` spy missing calls it
+// should have seen. Draining any such timer here, before the next test's
+// `beforeEach` resets the mock, keeps every test's Person-mutation settles
+// confined to their own run.
+afterEach(async () => {
+  await flushSettleTimers()
+})
+
 function savedMe(orgId = ORG_ID, actorId = 'actor-a'): MeResponse {
   return {
     user: { id: actorId, email: `${actorId}@example.test`, display_name: actorId },
@@ -157,6 +174,20 @@ function deferred<T>() {
   let reject!: (reason: unknown) => void
   const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no })
   return { promise, resolve, reject }
+}
+
+/** Waits for a pending `settlePersonMutation` deferred check (item 5,
+ * round 1 review fix: `setTimeout(fn, 0)` inside a Person mutation's
+ * onSuccess/onError/onSettled) to fire, then flushes the promise chain it
+ * starts. `flushPromises()` alone is not reliable here: under Node it
+ * prefers `setImmediate`, whose ordering relative to a `setTimeout(fn, 0)`
+ * scheduled outside an I/O callback is unspecified (observed empirically:
+ * the `setImmediate` can fire first) — a plain `setTimeout` wait lands in
+ * the exact same macrotask queue `settlePersonMutation` itself uses, so it
+ * is guaranteed to fire after (it is scheduled later). */
+async function flushSettleTimers(): Promise<void> {
+  await new Promise<void>((resolve) => setTimeout(resolve, 0))
+  await flushPromises()
 }
 
 // A single shared `usePerson` observer harness (only one `defineComponent`
@@ -234,8 +265,12 @@ describe('tag mutations', () => {
     const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
     const scope = effectScope()
-    const mutation = scope.run(() => useAddPersonTagMutation(ORG_ID, queryClient))!
+    const mutation = scope.run(() => useAddPersonTagMutation(ORG_ID, PERSON_ID, queryClient))!
     await mutation.mutateAsync({ personId: PERSON_ID, tagId: TAG_ID })
+    // Item 5's settlePersonMutation defers its invalidate past a macrotask
+    // (round 1 fix) so a sibling mutation settling in the same tick isn't
+    // mistaken for itself.
+    await flushSettleTimers()
     const [path, init] = apiFetchMock.mock.calls[0]
     expect(path).toBe(`/people/${PERSON_ID}/tags/${TAG_ID}`)
     expect(init?.method).toBe('PUT')
@@ -306,6 +341,8 @@ describe('tag mutations', () => {
     let scope = effectScope()
     let mutation = scope.run(() => build(queryClient))!
     await expect(mutation.mutateAsync(variables as never)).rejects.toThrow()
+    // settlePersonMutation defers its invalidate past a macrotask.
+    await flushSettleTimers()
     const keys = invalidate.mock.calls.map(([filters]) => (typeof filters === 'function' ? filters() : filters)?.queryKey)
     expect(keys).toEqual([queryKeys.tags(ORG_ID), queryKeys.person(ORG_ID, PERSON_ID), queryKeys.person(ORG_ID, PERSON_ID)])
     scope.stop()
@@ -318,6 +355,7 @@ describe('tag mutations', () => {
       scope = effectScope()
       mutation = scope.run(() => build(queryClient))!
       await expect(mutation.mutateAsync(variables as never)).rejects.toThrow()
+      await flushSettleTimers()
       const errorKeys = invalidate.mock.calls.map(([filters]) => (typeof filters === 'function' ? filters() : filters)?.queryKey)
       expect(errorKeys).toEqual([queryKeys.person(ORG_ID, PERSON_ID)])
       scope.stop()
@@ -325,11 +363,11 @@ describe('tag mutations', () => {
   }
 
   it('useAddPersonTagMutation invalidates the Person key on every error, plus tags on 404', async () => {
-    await expectPersonTagInvalidatesPersonAlways((qc) => useAddPersonTagMutation(ORG_ID, qc))
+    await expectPersonTagInvalidatesPersonAlways((qc) => useAddPersonTagMutation(ORG_ID, PERSON_ID, qc))
   })
 
   it('useRemovePersonTagMutation invalidates the Person key on every error, plus tags on 404', async () => {
-    await expectPersonTagInvalidatesPersonAlways((qc) => useRemovePersonTagMutation(ORG_ID, qc))
+    await expectPersonTagInvalidatesPersonAlways((qc) => useRemovePersonTagMutation(ORG_ID, PERSON_ID, qc))
   })
 
   // Round-1 review fix, item 1: a non-ApiError rejection (a network error,
@@ -342,8 +380,9 @@ describe('tag mutations', () => {
     apiFetchMock.mockRejectedValueOnce(new Error('network timeout'))
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
     const scope = effectScope()
-    const mutation = scope.run(() => useAddPersonTagMutation(ORG_ID, queryClient))!
+    const mutation = scope.run(() => useAddPersonTagMutation(ORG_ID, PERSON_ID, queryClient))!
     await expect(mutation.mutateAsync({ personId: PERSON_ID, tagId: TAG_ID })).rejects.toThrow('network timeout')
+    await flushSettleTimers()
     expect(queryClient.getQueryData<PersonDetailResponse>(queryKeys.person(ORG_ID, PERSON_ID))?.tags).toEqual([])
     const keys = invalidate.mock.calls.map(([filters]) => (typeof filters === 'function' ? filters() : filters)?.queryKey)
     expect(keys).toEqual([queryKeys.person(ORG_ID, PERSON_ID)])
@@ -357,8 +396,9 @@ describe('tag mutations', () => {
     apiFetchMock.mockRejectedValueOnce(new Error('network timeout'))
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
     const scope = effectScope()
-    const mutation = scope.run(() => useRemovePersonTagMutation(ORG_ID, queryClient))!
+    const mutation = scope.run(() => useRemovePersonTagMutation(ORG_ID, PERSON_ID, queryClient))!
     await expect(mutation.mutateAsync({ personId: PERSON_ID, tagId: TAG_ID })).rejects.toThrow('network timeout')
+    await flushSettleTimers()
     expect(queryClient.getQueryData<PersonDetailResponse>(queryKeys.person(ORG_ID, PERSON_ID))?.tags).toEqual([tag])
     const keys = invalidate.mock.calls.map(([filters]) => (typeof filters === 'function' ? filters() : filters)?.queryKey)
     expect(keys).toEqual([queryKeys.person(ORG_ID, PERSON_ID)])
@@ -378,7 +418,7 @@ describe('tag mutations', () => {
     const pending = deferred<PersonTagMutationResponse>()
     apiFetchMock.mockReturnValueOnce(pending.promise)
     const scope = effectScope()
-    const mutation = scope.run(() => useAddPersonTagMutation(ORG_ID, queryClient))!
+    const mutation = scope.run(() => useAddPersonTagMutation(ORG_ID, PERSON_ID, queryClient))!
     const call = mutation.mutateAsync({ personId: PERSON_ID, tagId: newTag.id })
     await flushPromises()
 
@@ -407,7 +447,7 @@ describe('tag mutations', () => {
     const serverOrder = [existing, newTag]
     apiFetchMock.mockResolvedValueOnce({ tags: serverOrder, changed: true } satisfies PersonTagMutationResponse)
     const scope = effectScope()
-    const mutation = scope.run(() => useAddPersonTagMutation(ORG_ID, queryClient))!
+    const mutation = scope.run(() => useAddPersonTagMutation(ORG_ID, PERSON_ID, queryClient))!
     await mutation.mutateAsync({ personId: PERSON_ID, tagId: newTag.id })
 
     expect(queryClient.getQueryData<PersonDetailResponse>(queryKeys.person(ORG_ID, PERSON_ID))?.tags).toEqual(serverOrder)
@@ -421,7 +461,7 @@ describe('tag mutations', () => {
     const pending = deferred<PersonTagMutationResponse>()
     apiFetchMock.mockReturnValueOnce(pending.promise)
     const scope = effectScope()
-    const mutation = scope.run(() => useRemovePersonTagMutation(ORG_ID, queryClient))!
+    const mutation = scope.run(() => useRemovePersonTagMutation(ORG_ID, PERSON_ID, queryClient))!
     const call = mutation.mutateAsync({ personId: PERSON_ID, tagId: tag.id })
     await flushPromises()
 
@@ -446,7 +486,7 @@ describe('tag mutations', () => {
     const serverOrder = [tagC, tagA]
     apiFetchMock.mockResolvedValueOnce({ tags: serverOrder, changed: true } satisfies PersonTagMutationResponse)
     const scope = effectScope()
-    const mutation = scope.run(() => useRemovePersonTagMutation(ORG_ID, queryClient))!
+    const mutation = scope.run(() => useRemovePersonTagMutation(ORG_ID, PERSON_ID, queryClient))!
     await mutation.mutateAsync({ personId: PERSON_ID, tagId: tagB.id })
 
     expect(queryClient.getQueryData<PersonDetailResponse>(queryKeys.person(ORG_ID, PERSON_ID))?.tags).toEqual(serverOrder)
@@ -488,7 +528,7 @@ describe('optimistic stage and assignment mutations (SLICE_014 §3)', () => {
     const pending = deferred<MutatePersonResponse>()
     apiFetchMock.mockReturnValueOnce(pending.promise)
     const scope = effectScope()
-    const mutation = scope.run(() => useChangeStageMutation(ORG_ID, queryClient))!
+    const mutation = scope.run(() => useChangeStageMutation(ORG_ID, PERSON_ID, queryClient))!
     const call = mutation.mutateAsync({ personId: PERSON_ID, stageId: STAGE_HOT.id })
     await flushPromises()
 
@@ -519,7 +559,7 @@ describe('optimistic stage and assignment mutations (SLICE_014 §3)', () => {
     const pending = deferred<MutatePersonResponse>()
     apiFetchMock.mockReturnValueOnce(pending.promise)
     const scope = effectScope()
-    const mutation = scope.run(() => useChangeStageMutation(ORG_ID, queryClient))!
+    const mutation = scope.run(() => useChangeStageMutation(ORG_ID, PERSON_ID, queryClient))!
     const call = mutation.mutateAsync({ personId: PERSON_ID, stageId: STAGE_HOT.id })
     await flushPromises()
     expect(queryClient.getQueryData<PersonDetailResponse>(queryKeys.person(ORG_ID, PERSON_ID))?.person.stage).toEqual(STAGE_HOT)
@@ -539,8 +579,9 @@ describe('optimistic stage and assignment mutations (SLICE_014 §3)', () => {
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
     apiFetchMock.mockResolvedValueOnce(mutatePersonResponse(personSummary({ stage: STAGE_HOT })))
     const scope = effectScope()
-    const mutation = scope.run(() => useChangeStageMutation(ORG_ID, queryClient))!
+    const mutation = scope.run(() => useChangeStageMutation(ORG_ID, PERSON_ID, queryClient))!
     await mutation.mutateAsync({ personId: PERSON_ID, stageId: STAGE_HOT.id })
+    await flushSettleTimers()
 
     expect(queryClient.getQueryData<PersonDetailResponse>(queryKeys.person(ORG_ID, PERSON_ID))?.person.stage).toEqual(STAGE_HOT)
     expect(invalidate).toHaveBeenCalledTimes(1)
@@ -554,8 +595,9 @@ describe('optimistic stage and assignment mutations (SLICE_014 §3)', () => {
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
     apiFetchMock.mockRejectedValueOnce(new ApiError(409, 'conflict'))
     const scope = effectScope()
-    const mutation = scope.run(() => useChangeStageMutation(ORG_ID, queryClient))!
+    const mutation = scope.run(() => useChangeStageMutation(ORG_ID, PERSON_ID, queryClient))!
     await expect(mutation.mutateAsync({ personId: PERSON_ID, stageId: STAGE_HOT.id })).rejects.toThrow()
+    await flushSettleTimers()
 
     expect(invalidate).toHaveBeenCalledTimes(1)
     expect(invalidate.mock.calls[0]?.[0]).toMatchObject({ queryKey: queryKeys.org(ORG_ID) })
@@ -570,7 +612,7 @@ describe('optimistic stage and assignment mutations (SLICE_014 §3)', () => {
     const pending = deferred<MutatePersonResponse>()
     apiFetchMock.mockReturnValueOnce(pending.promise)
     const scope = effectScope()
-    const mutation = scope.run(() => useChangeStageMutation(ORG_ID, queryClient))!
+    const mutation = scope.run(() => useChangeStageMutation(ORG_ID, PERSON_ID, queryClient))!
     const pendingWrite = mutation.mutateAsync({ personId: PERSON_ID, stageId: STAGE_HOT.id })
     await flushPromises()
     // Still the pre-mutation stage: nothing was invented from an empty cache.
@@ -578,6 +620,7 @@ describe('optimistic stage and assignment mutations (SLICE_014 §3)', () => {
 
     pending.resolve(mutatePersonResponse(personSummary({ stage: STAGE_HOT })))
     await pendingWrite
+    await flushSettleTimers()
     expect(queryClient.getQueryData<PersonDetailResponse>(queryKeys.person(ORG_ID, PERSON_ID))?.person.stage).toEqual(STAGE_HOT)
     expect(invalidate).toHaveBeenCalledTimes(1)
     scope.stop()
@@ -593,7 +636,7 @@ describe('optimistic stage and assignment mutations (SLICE_014 §3)', () => {
     const pending = deferred<MutatePersonResponse>()
     apiFetchMock.mockReturnValueOnce(pending.promise)
     const scope = effectScope()
-    const mutation = scope.run(() => useAssignPersonMutation(ORG_ID, queryClient))!
+    const mutation = scope.run(() => useAssignPersonMutation(ORG_ID, PERSON_ID, queryClient))!
     const call = mutation.mutateAsync({ personId: PERSON_ID, assignedUserId: MEMBER_BOB.id })
     await flushPromises()
 
@@ -620,7 +663,7 @@ describe('optimistic stage and assignment mutations (SLICE_014 §3)', () => {
     // No members cache seeded.
     queryClient.setQueryData(queryKeys.person(ORG_ID, PERSON_ID), personDetail({ assigned_user: MEMBER_ALICE }))
     const scope = effectScope()
-    const mutation = scope.run(() => useAssignPersonMutation(ORG_ID, queryClient))!
+    const mutation = scope.run(() => useAssignPersonMutation(ORG_ID, PERSON_ID, queryClient))!
 
     // A specific user: no members cache to resolve the name from, so no
     // optimistic write.
@@ -686,7 +729,7 @@ describe('optimistic stage and assignment mutations (SLICE_014 §3)', () => {
     expect(queryClient.getQueryData<PersonDetailResponse>(personKey)?.person.stage).toEqual(STAGE_LEAD)
 
     const scope = effectScope()
-    const mutation = scope.run(() => useChangeStageMutation(ORG_ID, queryClient))!
+    const mutation = scope.run(() => useChangeStageMutation(ORG_ID, PERSON_ID, queryClient))!
     const call = mutation.mutateAsync({ personId: PERSON_ID, stageId: STAGE_HOT.id })
     await flushPromises()
     expect(queryClient.getQueryData<PersonDetailResponse>(personKey)?.person.stage).toEqual(STAGE_HOT)
@@ -699,27 +742,170 @@ describe('optimistic stage and assignment mutations (SLICE_014 §3)', () => {
     expect(getDeferreds).toHaveLength(2)
 
     // The mutation settles: onSuccess writes the server-confirmed stage
-    // directly, then onSettled's own invalidate cancels the still-pending
-    // racing GET and issues a fresh one.
+    // directly; settlePersonMutation's deferred check (item 5, round 1
+    // fix) then runs TWO calls once the timer fires — the mutation's own
+    // `invalidateQueries` (cancels the still-pending racing GET, issues a
+    // fresh one: GET #3) and the hold-release `refetchQueries` right
+    // behind it, which itself cancels that brand-new fetch and issues
+    // ANOTHER one (GET #4) — `cancelRefetch` defaults to `true`, so two
+    // settle-time calls against the same active query mean two
+    // supersede-and-restart cycles, not one. Wasteful but harmless: only
+    // the last one's result ever reaches the cache.
     postDeferred.resolve(mutatePersonResponse(personSummary({ stage: STAGE_HOT })))
     await call
-    await flushPromises()
-    expect(getDeferreds).toHaveLength(3)
+    await flushSettleTimers()
+    expect(getDeferreds).toHaveLength(4)
 
-    // The stale GET resolves LAST, with the pre-mutation stage. Because it
-    // was cancelled by onSettled's invalidate, its result must never reach
-    // the cache.
+    // The racing GET (#2, index 1) resolves LAST, with the pre-mutation
+    // stage. Cancelled by the settle's first call, its result must never
+    // reach the cache.
     getDeferreds[1]!.resolve(personDetail({ stage: STAGE_LEAD }))
     await flushPromises()
     expect(queryClient.getQueryData<PersonDetailResponse>(personKey)?.person.stage).toEqual(STAGE_HOT)
 
-    // The fresh GET (issued by the settle) resolving confirms the truth.
-    getDeferreds[2]!.resolve(personDetail({ stage: STAGE_HOT }))
+    // GET #3 (index 2, the settle's own `invalidateQueries` fetch) is ALSO
+    // cancelled — by the settle's second call (`refetchQueries`) — so its
+    // result must not reach the cache either.
+    getDeferreds[2]!.resolve(personDetail({ stage: STAGE_LEAD }))
+    await flushPromises()
+    expect(queryClient.getQueryData<PersonDetailResponse>(personKey)?.person.stage).toEqual(STAGE_HOT)
+
+    // GET #4 (index 3, the settle's `refetchQueries` call) is the one that
+    // actually wins; resolving it confirms the truth.
+    getDeferreds[3]!.resolve(personDetail({ stage: STAGE_HOT }))
     await flushPromises()
     expect(queryClient.getQueryData<PersonDetailResponse>(personKey)?.person.stage).toEqual(STAGE_HOT)
 
     scope.stop()
     wrapper.unmount()
+  })
+
+  // LATER item 4 (docs/tasks/LATER_BATCH_2026-09-08.md): before this fix,
+  // onSuccess wrote the whole server `person` into the cache, so the
+  // FIRST request's response (whose snapshot predates the second
+  // mutation) could overwrite the second mutation's still-in-flight or
+  // already-settled field. Field-only onSuccess writes must leave the
+  // other mutation's value untouched at every step.
+  it('keeps both optimistic values intact through a rapid stage-then-assignee pair, even when the first (stage) response resolves after the second (assignment) mutation has already started', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+    seedPersonAndPeopleCaches(queryClient)
+    const stageDeferred = deferred<MutatePersonResponse>()
+    const assignDeferred = deferred<MutatePersonResponse>()
+    apiFetchMock.mockReturnValueOnce(stageDeferred.promise).mockReturnValueOnce(assignDeferred.promise)
+    const scope = effectScope()
+    const stageMutation = scope.run(() => useChangeStageMutation(ORG_ID, PERSON_ID, queryClient))!
+    const assignMutation = scope.run(() => useAssignPersonMutation(ORG_ID, PERSON_ID, queryClient))!
+
+    const stageCall = stageMutation.mutateAsync({ personId: PERSON_ID, stageId: STAGE_HOT.id })
+    await flushPromises()
+    const assignCall = assignMutation.mutateAsync({ personId: PERSON_ID, assignedUserId: MEMBER_BOB.id })
+    await flushPromises()
+
+    // Both optimistic values are visible before either request resolves.
+    let detail = queryClient.getQueryData<PersonDetailResponse>(queryKeys.person(ORG_ID, PERSON_ID))
+    expect(detail?.person.stage).toEqual(STAGE_HOT)
+    expect(detail?.person.assigned_user).toEqual(MEMBER_BOB)
+
+    // The FIRST request (stage) resolves LAST, after the second mutation's
+    // onMutate already ran — its server snapshot reflects the state as of
+    // the stage command, i.e. still unassigned. A field-only onSuccess
+    // must not let that stale `assigned_user` field overwrite the
+    // still-in-flight assignment's optimistic value.
+    stageDeferred.resolve(mutatePersonResponse(personSummary({ stage: STAGE_HOT, assigned_user: null })))
+    await stageCall
+    detail = queryClient.getQueryData<PersonDetailResponse>(queryKeys.person(ORG_ID, PERSON_ID))
+    expect(detail?.person.stage).toEqual(STAGE_HOT)
+    expect(detail?.person.assigned_user).toEqual(MEMBER_BOB)
+
+    assignDeferred.resolve(mutatePersonResponse(personSummary({ stage: STAGE_HOT, assigned_user: MEMBER_BOB })))
+    await assignCall
+    detail = queryClient.getQueryData<PersonDetailResponse>(queryKeys.person(ORG_ID, PERSON_ID))
+    expect(detail?.person.stage).toEqual(STAGE_HOT)
+    expect(detail?.person.assigned_user).toEqual(MEMBER_BOB)
+
+    scope.stop()
+  })
+
+  // LATER item 5 (docs/tasks/LATER_BATCH_2026-09-08.md): the four Person
+  // mutations share a mutationKey scoped to (orgId, personId); the
+  // deferred settle check (settlePersonMutation) skips the org-branch
+  // invalidate while a sibling mutation for the same Person is still
+  // genuinely pending, so only the LAST one to settle actually
+  // invalidates.
+  it('skips the settle-invalidate while a sibling mutation for the same Person is still pending, and only the last one to settle invalidates', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+    seedPersonAndPeopleCaches(queryClient)
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+    const stageDeferred = deferred<MutatePersonResponse>()
+    const assignDeferred = deferred<MutatePersonResponse>()
+    apiFetchMock.mockReturnValueOnce(stageDeferred.promise).mockReturnValueOnce(assignDeferred.promise)
+    const scope = effectScope()
+    const stageMutation = scope.run(() => useChangeStageMutation(ORG_ID, PERSON_ID, queryClient))!
+    const assignMutation = scope.run(() => useAssignPersonMutation(ORG_ID, PERSON_ID, queryClient))!
+
+    const stageCall = stageMutation.mutateAsync({ personId: PERSON_ID, stageId: STAGE_HOT.id })
+    await flushPromises()
+    const assignCall = assignMutation.mutateAsync({ personId: PERSON_ID, assignedUserId: MEMBER_BOB.id })
+    await flushPromises()
+
+    // The stage mutation settles FIRST while the assignment is still
+    // genuinely pending (its own deferred is not yet resolved): by the
+    // time settlePersonMutation's deferred check runs, isMutating still
+    // finds the assignment truly in flight, so this settle-invalidate is
+    // skipped.
+    stageDeferred.resolve(mutatePersonResponse(personSummary({ stage: STAGE_HOT })))
+    await stageCall
+    await flushSettleTimers()
+    expect(invalidate).not.toHaveBeenCalled()
+
+    // The assignment settles last (nothing else pending for this Person):
+    // it invalidates, exactly once.
+    assignDeferred.resolve(mutatePersonResponse(personSummary({ assigned_user: MEMBER_BOB })))
+    await assignCall
+    await flushSettleTimers()
+    expect(invalidate).toHaveBeenCalledTimes(1)
+    expect(invalidate.mock.calls[0]?.[0]).toMatchObject({ queryKey: queryKeys.org(ORG_ID) })
+
+    scope.stop()
+  })
+
+  // LATER item 5, round 1 review BLOCKING fix: the exact regression a
+  // synchronous isMutating check introduced. TanStack Query's
+  // Mutation#execute runs onSuccess/onSettled BEFORE dispatching its own
+  // 'success' state, so when both responses resolve within the same
+  // microtask flush, at the moment EACH mutation's onSettled runs,
+  // NEITHER has dispatched yet — a synchronous check would have each one
+  // see the other as still pending and both would skip, leaving nothing
+  // invalidated (a regression versus the pre-batch always-invalidate).
+  // settlePersonMutation's setTimeout(0) defers the decision past both
+  // dispatches.
+  it('invalidates the org branch even when two sibling mutations for the same Person settle within the same tick', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+    seedPersonAndPeopleCaches(queryClient)
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+    const stageDeferred = deferred<MutatePersonResponse>()
+    const assignDeferred = deferred<MutatePersonResponse>()
+    apiFetchMock.mockReturnValueOnce(stageDeferred.promise).mockReturnValueOnce(assignDeferred.promise)
+    const scope = effectScope()
+    const stageMutation = scope.run(() => useChangeStageMutation(ORG_ID, PERSON_ID, queryClient))!
+    const assignMutation = scope.run(() => useAssignPersonMutation(ORG_ID, PERSON_ID, queryClient))!
+
+    const stageCall = stageMutation.mutateAsync({ personId: PERSON_ID, stageId: STAGE_HOT.id })
+    await flushPromises()
+    const assignCall = assignMutation.mutateAsync({ personId: PERSON_ID, assignedUserId: MEMBER_BOB.id })
+    await flushPromises()
+
+    // Both deferreds resolve synchronously, back to back, then both
+    // mutations are awaited together — their onSuccess/onSettled
+    // callbacks interleave within the same microtask flush.
+    stageDeferred.resolve(mutatePersonResponse(personSummary({ stage: STAGE_HOT })))
+    assignDeferred.resolve(mutatePersonResponse(personSummary({ assigned_user: MEMBER_BOB })))
+    await Promise.all([stageCall, assignCall])
+    await flushSettleTimers()
+
+    expect(invalidate.mock.calls).toContainEqual([{ queryKey: queryKeys.org(ORG_ID) }])
+
+    scope.stop()
   })
 })
 

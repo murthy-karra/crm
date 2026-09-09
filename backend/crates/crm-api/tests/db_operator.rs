@@ -902,17 +902,56 @@ async fn explain_priority_position_matches_today_query_and_get_api_today(migrato
     )
     .await;
     let alice = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
-    let p1 = create_person(
-        &router,
-        &alice,
-        "Ada",
-        "Lovelace",
-        "ada@lead.test",
-        Some("555-555-0101"),
-        None,
-        Some(f.alice_id),
+    // p1 is built directly (person + contact methods + an already-backdated
+    // inquiry) instead of through `create_person` followed by an `UPDATE
+    // inquiry SET received_at = ...`: 20260911000001_inquiry_append_only.sql
+    // (LATER item 1) now rejects a direct UPDATE/DELETE of `inquiry`
+    // outright, so backdating has to happen at INSERT time. That also
+    // removes the hand fix-up of `person.last_inquiry_at` the old UPDATE
+    // needed next to it — the Slice 012 `inquiry_touch_person` trigger
+    // (AFTER INSERT) maintains it from this INSERT on its own.
+    let p1_stage_id: Uuid = sqlx::query_scalar(
+        "SELECT id FROM stage WHERE organization_id = $1 ORDER BY position LIMIT 1",
     )
-    .await;
+    .bind(f.org_acme)
+    .fetch_one(&f.migrator_pool)
+    .await
+    .unwrap();
+    let p1: Uuid = sqlx::query_scalar(
+        "INSERT INTO person (organization_id, stage_id, assigned_user_id, first_name, last_name) \
+         VALUES ($1, $2, $3, 'Ada', 'Lovelace') RETURNING id",
+    )
+    .bind(f.org_acme)
+    .bind(p1_stage_id)
+    .bind(f.alice_id)
+    .fetch_one(&f.migrator_pool)
+    .await
+    .unwrap();
+    for (kind, value) in [("email", "ada@lead.test"), ("phone", "555-555-0101")] {
+        sqlx::query(
+            "INSERT INTO contact_method (organization_id, person_id, kind, value, normalized_value) \
+             VALUES ($1, $2, $3, $4, $4)",
+        )
+        .bind(f.org_acme)
+        .bind(p1)
+        .bind(kind)
+        .bind(value)
+        .execute(&f.migrator_pool)
+        .await
+        .unwrap();
+    }
+    // Backdate p1's inquiry by 2 days so it is Normal tier while the other
+    // two stay High: the tier boundary sits between them.
+    sqlx::query(
+        "INSERT INTO inquiry (organization_id, person_id, raw_payload_id, source, received_at) \
+         VALUES ($1, $2, $3, 'zillow', now() - interval '2 days')",
+    )
+    .bind(f.org_acme)
+    .bind(p1)
+    .bind(Uuid::new_v4())
+    .execute(&f.migrator_pool)
+    .await
+    .unwrap();
     let p2 = create_person(
         &router,
         &alice,
@@ -935,37 +974,6 @@ async fn explain_priority_position_matches_today_query_and_get_api_today(migrato
         Some(f.alice_id),
     )
     .await;
-    // Backdate p1's inquiry by 2 days so it is Normal tier while the other
-    // two stay High: the tier boundary sits between them.
-    sqlx::query("UPDATE inquiry SET received_at = now() - interval '2 days' WHERE person_id = $1")
-        .bind(p1)
-        .execute(&f.migrator_pool)
-        .await
-        .unwrap();
-    // docs/specs/SLICE_012.md §2: person.last_inquiry_at is trigger-
-    // maintained on `inquiry` INSERT only (never UPDATE — history tables
-    // have no application update path). This fixture's direct UPDATE of
-    // an already-inserted inquiry row's received_at (above) is exactly
-    // the kind of write the trigger does not observe, so the derived
-    // column would otherwise go stale relative to the row it now reads
-    // instead of recomputing live; keep it in step by hand here, the same
-    // fix-up a redaction/erasure runbook would apply via the backfill
-    // block.
-    // Round 1 review fix 8: recompute from the actual (now-backdated)
-    // inquiry row via a subquery, exactly as the migration's own backfill
-    // block would, rather than a separately evaluated `now() - interval`
-    // — the two `now()` calls (this one and the UPDATE above) are not
-    // guaranteed to observe the identical instant.
-    sqlx::query(
-        "UPDATE person SET last_inquiry_at = \
-           (SELECT max(received_at) FROM inquiry i \
-             WHERE i.person_id = person.id AND i.organization_id = person.organization_id) \
-         WHERE id = $1",
-    )
-    .bind(p1)
-    .execute(&f.migrator_pool)
-    .await
-    .unwrap();
 
     // Authoritative order from the query and from the HTTP read model.
     let app_pool = crate::common::connect_as_app(&f.migrator_pool).await;

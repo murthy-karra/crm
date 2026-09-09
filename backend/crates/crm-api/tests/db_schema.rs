@@ -516,9 +516,32 @@ async fn fact_tables_reject_truncate_via_grant_and_trigger(migrator_pool: PgPool
     // detectable, non-vacuous data loss, not just a permission probe
     // against an empty table.
     insert_one_row_per_fact_table(&migrator_pool, org_id, user_id, stage_id).await;
+    // `inquiry` (item 1 of the LATER batch,
+    // 20260911000001_inquiry_append_only.sql) has a real FK to `person`,
+    // unlike the bare-UUID fact tables above, so it needs an actual Person
+    // row to reference.
+    let (person_id,): (Uuid,) = sqlx::query_as(
+        "INSERT INTO person (organization_id, stage_id) VALUES ($1, $2) RETURNING id",
+    )
+    .bind(org_id)
+    .bind(stage_id)
+    .fetch_one(&migrator_pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO inquiry (organization_id, person_id, raw_payload_id, source, received_at) \
+         VALUES ($1, $2, $3, 'zillow', now())",
+    )
+    .bind(org_id)
+    .bind(person_id)
+    .bind(Uuid::new_v4())
+    .execute(&migrator_pool)
+    .await
+    .unwrap();
     let app_pool = crate::common::connect_as_app(&migrator_pool).await;
 
     let tables = [
+        "inquiry",
         "inquiry_received",
         "routing_decision",
         "assignment_changed",

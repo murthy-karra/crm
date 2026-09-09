@@ -237,12 +237,29 @@ pub struct NoteView {
 /// reason every other outside-text view carries it). `assignee_display_name`
 /// is `None` for an imported task whose FUB assignee matched no member
 /// (§1 rule 1).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// `Debug` is a hand-written, redacting impl (never `#[derive(Debug)]`,
+/// the `crm_app::domain::task::Task` pattern): `PersonDetail` is itself
+/// `Debug`-derived and `UntrustedText`'s own derived `Debug` prints its
+/// raw inner text, so a stray `?person_detail`/`{:?}` in a log, panic, or
+/// test-failure message must never be able to print a task title through
+/// this type — only its length.
+#[derive(Clone, Serialize, Deserialize)]
 pub struct TaskView {
     pub title: UntrustedText,
     pub kind: String,
     pub due_at: Option<DateTime<Utc>>,
     pub assignee_display_name: Option<String>,
+}
+
+impl std::fmt::Debug for TaskView {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TaskView")
+            .field("title_chars", &self.title.as_str().chars().count())
+            .field("kind", &self.kind)
+            .field("due_at", &self.due_at)
+            .field("assignee_display_name", &self.assignee_display_name)
+            .finish()
+    }
 }
 
 /// Source evaluation state shared by every Today-derived Operator output.

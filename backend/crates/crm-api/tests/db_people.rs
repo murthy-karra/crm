@@ -910,19 +910,24 @@ async fn tasks_never_change_person_row_or_people_list_rows_or_today(migrator_poo
     )
     .await;
 
-    let added = crate::common::body_json(
-        crate::common::post_json_with_cookie(
-            &router,
-            &format!("/api/people/{person_id}/tasks"),
-            &alice,
-            json!({ "title": "Call the client", "due_at": chrono::Utc::now() }),
-        )
-        .await,
+    // Round-1 review, item 7: every mutation below is a POSITIVE CONTROL
+    // — its status is 2xx and, where the response carries `changed`, it
+    // reads `true` — so the "byte-identical Person row" assertions after
+    // this block actually prove something (a silently-failed mutation
+    // could never have moved the row anyway).
+    let add_resp = crate::common::post_json_with_cookie(
+        &router,
+        &format!("/api/people/{person_id}/tasks"),
+        &alice,
+        json!({ "title": "Call the client", "due_at": chrono::Utc::now() }),
     )
     .await;
+    assert_eq!(add_resp.status(), StatusCode::CREATED);
+    let added = crate::common::body_json(add_resp).await;
     let task_id = added["task"]["id"].as_str().unwrap().to_string();
     let due_at = added["task"]["due_at"].clone();
-    crate::common::put_json_with_cookie(
+
+    let update_resp = crate::common::put_json_with_cookie(
         &router,
         &format!("/api/people/{person_id}/tasks/{task_id}"),
         &alice,
@@ -932,29 +937,42 @@ async fn tasks_never_change_person_row_or_people_list_rows_or_today(migrator_poo
         }),
     )
     .await;
-    crate::common::post_json_with_cookie(
+    assert_eq!(update_resp.status(), StatusCode::OK);
+    assert_eq!(crate::common::body_json(update_resp).await["changed"], true);
+
+    let complete_resp = crate::common::post_json_with_cookie(
         &router,
         &format!("/api/people/{person_id}/tasks/{task_id}/complete"),
         &alice,
         json!({}),
     )
     .await;
-    crate::common::post_json_with_cookie(
+    assert_eq!(complete_resp.status(), StatusCode::OK);
+    assert_eq!(
+        crate::common::body_json(complete_resp).await["changed"],
+        true
+    );
+
+    let reopen_resp = crate::common::post_json_with_cookie(
         &router,
         &format!("/api/people/{person_id}/tasks/{task_id}/reopen"),
         &alice,
         json!({}),
     )
     .await;
+    assert_eq!(reopen_resp.status(), StatusCode::OK);
+    assert_eq!(crate::common::body_json(reopen_resp).await["changed"], true);
     // Now open, dated in the past (overdue) — the case most likely to leak
     // onto Today if 016a accidentally wired the axis early.
-    crate::common::post_json_with_cookie(
+    let snooze_resp = crate::common::post_json_with_cookie(
         &router,
         &format!("/api/people/{person_id}/tasks/{task_id}/snooze"),
         &alice,
         json!({ "due_at": chrono::Utc::now() - chrono::Duration::hours(2) }),
     )
     .await;
+    assert_eq!(snooze_resp.status(), StatusCode::OK);
+    assert_eq!(crate::common::body_json(snooze_resp).await["changed"], true);
 
     // 016a has no Today axis yet (D-054 §1 is a 016b rung): an open,
     // overdue task must not appear as a Today reason this slice.
@@ -971,12 +989,14 @@ async fn tasks_never_change_person_row_or_people_list_rows_or_today(migrator_poo
         "an open, overdue task must never place a Person on Today in 016a: {today}"
     );
 
-    crate::common::delete_with_cookie(
+    let delete_resp = crate::common::delete_with_cookie(
         &router,
         &format!("/api/people/{person_id}/tasks/{task_id}"),
         &alice,
     )
     .await;
+    assert_eq!(delete_resp.status(), StatusCode::OK);
+    assert_eq!(crate::common::body_json(delete_resp).await["deleted"], true);
 
     let after: PersonRow = sqlx::query_as(
         "SELECT updated_at, last_inquiry_at, last_contact_at, last_inbound_at, last_outbound_at

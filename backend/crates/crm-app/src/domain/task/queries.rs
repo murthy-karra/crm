@@ -148,18 +148,32 @@ pub(crate) async fn insert_task(
         id: Uuid,
         created_at: DateTime<Utc>,
         updated_at: DateTime<Utc>,
+        due_at: Option<DateTime<Utc>>,
+        title: String,
+        kind: String,
         assignee_display_name: String,
         created_by_display_name: String,
     }
+    // RETURNING (and re-selecting) `due_at`/`title`/`kind` from the row
+    // rather than echoing the caller's own arguments: sqlx stores
+    // `DateTime<Utc>` at Postgres's microsecond precision, so a
+    // sub-microsecond (nanosecond) `due_at` the caller passed would
+    // otherwise be echoed untruncated in the receipt — a client that
+    // re-sends that exact receipt value on the next PUT would then see
+    // `changed: true` instead of `changed: false` (spec §1 rule 2: an
+    // unmodified round trip must be a no-op). Reading the STORED value
+    // back guarantees the receipt is always the byte-identical value a
+    // subsequent read would see.
     let row = sqlx::query_as!(
         InsertedTaskRow,
         r#"WITH inserted AS (
                INSERT INTO task (organization_id, person_id, title, kind, due_at,
                                   assignee_user_id, created_by_user_id, origin, correlation_id)
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-               RETURNING id, created_at, updated_at
+               RETURNING id, created_at, updated_at, due_at, title, kind
            )
            SELECT inserted.id, inserted.created_at, inserted.updated_at,
+                  inserted.due_at, inserted.title, inserted.kind,
                   au.display_name as "assignee_display_name!",
                   cu.display_name as "created_by_display_name!"
            FROM inserted
@@ -179,9 +193,9 @@ pub(crate) async fn insert_task(
     .await?;
     Ok(TaskRowFull {
         id: TaskId::new(row.id),
-        title: title.to_string(),
-        kind: kind.as_str().to_string(),
-        due_at,
+        title: row.title,
+        kind: row.kind,
+        due_at: row.due_at,
         assignee_user_id: Some(assignee_user_id),
         assignee_display_name: Some(row.assignee_display_name),
         created_by_user_id: Some(created_by_user_id),

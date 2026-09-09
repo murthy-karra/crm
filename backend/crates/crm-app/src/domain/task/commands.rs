@@ -170,11 +170,24 @@ async fn create_task_attempt(
         .await?
         .ok_or(TaskError::NotFound)?;
 
+    // The actor's own membership, re-read `FOR SHARE` (docs/specs/
+    // SLICE_016.md §3 "all commands", §9): an admin demoted or an actor
+    // deactivated inside this transaction — including in flight on a
+    // second, still-uncommitted connection — gets 403 and writes nothing.
+    // `CreateTask` has no rule-1 permission decision (any active member
+    // may create), but it still needs this re-read: the `AuthContext`
+    // session only proves the actor WAS active when the request arrived,
+    // not that they still are now that the row lock is held.
+    let role = lock_current_membership(&mut tx, ctx.organization_id, ctx.actor_user_id).await?;
+    if role.is_none() {
+        return Err(TaskError::Forbidden);
+    }
+
     let assignee_user_id = cmd.assignee_user_id.unwrap_or(ctx.actor_user_id);
     // Validated only for an EXPLICITLY supplied assignee (docs/specs/
     // SLICE_016.md §3): the default-to-actor path relies on the actor's
-    // own already-established session membership, exactly like every
-    // other command that acts as "the current active member".
+    // own membership just re-read above, exactly like every other command
+    // that acts as "the current active member".
     if cmd.assignee_user_id.is_some() {
         let active =
             queries::assignee_is_active_member(&mut tx, ctx.organization_id, assignee_user_id)

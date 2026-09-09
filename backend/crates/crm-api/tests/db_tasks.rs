@@ -38,6 +38,21 @@ async fn recorded(publisher: &Publisher) -> Vec<(String, serde_json::Value)> {
     recorded.lock().await.clone()
 }
 
+/// Round-1 review, item 3: every "+1 publication" assertion also confirms
+/// the LAST event is genuinely `task_changed` for the expected Person —
+/// not merely that *some* event landed (a `TaskChanged` publish going to
+/// the wrong Person, or being mislabeled, would otherwise pass silently).
+async fn assert_last_event_is_task_changed_for(publisher: &Publisher, person_id: Uuid) {
+    let events = recorded(publisher).await;
+    let (_, payload) = events.last().expect("at least one event must be recorded");
+    assert_eq!(payload["data"]["change"], "task_changed", "{payload}");
+    assert_eq!(
+        payload["data"]["person_id"],
+        person_id.to_string(),
+        "{payload}"
+    );
+}
+
 async fn first_stage_id(pool: &PgPool, organization_id: Uuid) -> Uuid {
     sqlx::query_scalar("SELECT id FROM stage WHERE organization_id = $1 ORDER BY position LIMIT 1")
         .bind(organization_id)
@@ -316,6 +331,7 @@ async fn create_task_assignee_deactivated_in_flight_is_422_after_commit_with_no_
     .await
     .unwrap();
 
+    let events_before = recorded(&publisher).await.len();
     let ctx = command_context(f.org_id, f.member_id);
     let create_fut = task::create_task(
         &app_pool,
@@ -339,6 +355,11 @@ async fn create_task_assignee_deactivated_in_flight_is_422_after_commit_with_no_
         "must observe the deactivation once it commits: {create_result:?}"
     );
     assert_eq!(task_row_count(&migrator_pool, f.org_id).await, 0);
+    assert_eq!(
+        recorded(&publisher).await.len(),
+        events_before,
+        "an in-flight-deactivated 422 must publish nothing"
+    );
 }
 
 /// docs/specs/SLICE_016.md §12.3: a `tokio::join!` race between creating a
@@ -388,6 +409,111 @@ async fn create_task_vs_deactivate_join_race_never_503(migrator_pool: PgPool) {
         Ok(_) | Err(TaskError::InvalidAssignee) => {}
         other => panic!("expected {{201, 422}}, never 503: {other:?}"),
     }
+}
+
+/// Round-1 review, fix B: `CreateTask` re-reads the ACTOR's own membership
+/// `FOR SHARE` before the insert, exactly like the other five commands
+/// (spec §3 "all commands", §9) — an actor deactivated out-of-band before
+/// the command runs, and one deactivated in flight on a second,
+/// still-uncommitted connection, both get 403, no row, no publication.
+#[sqlx::test]
+#[ignore]
+async fn create_task_actor_deactivated_is_forbidden_out_of_band_and_in_flight(
+    migrator_pool: PgPool,
+) {
+    let f = fixture(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let publisher = Publisher::recording();
+
+    // Out-of-band: the actor's membership is already inactive before the
+    // command ever starts.
+    sqlx::query(
+        "UPDATE organization_membership SET status = 'inactive' WHERE organization_id = $1 AND user_id = $2",
+    )
+    .bind(f.org_id)
+    .bind(f.member_id)
+    .execute(&migrator_pool)
+    .await
+    .unwrap();
+    let events_before = recorded(&publisher).await.len();
+    let out_of_band = task::create_task(
+        &app_pool,
+        &publisher,
+        &command_context(f.org_id, f.member_id),
+        CreateTask {
+            person_id: PersonId::new(f.person_id),
+            title: "Should never land (out of band)".to_string(),
+            kind: TaskKind::default(),
+            due_at: None,
+            assignee_user_id: None,
+        },
+    )
+    .await;
+    assert!(matches!(out_of_band, Err(TaskError::Forbidden)));
+    assert_eq!(task_row_count(&migrator_pool, f.org_id).await, 0);
+    assert_eq!(
+        recorded(&publisher).await.len(),
+        events_before,
+        "an out-of-band-deactivated actor's create must publish nothing"
+    );
+
+    // In flight: a second connection holds an uncommitted deactivation of
+    // a DIFFERENT (still-active) actor; the create's own FOR SHARE
+    // membership read must block on it and then observe it once it
+    // commits.
+    let carol_id = crate::common::create_user(
+        &migrator_pool,
+        "carol-create-inflight@acme.test",
+        "Carol",
+        PW,
+    )
+    .await;
+    crate::common::add_membership_with(
+        &migrator_pool,
+        f.org_id,
+        carol_id,
+        Role::Member,
+        MembershipStatus::Active,
+    )
+    .await;
+    let mut lock_tx = app_pool.begin().await.unwrap();
+    sqlx::query(
+        "UPDATE organization_membership SET status = 'inactive' WHERE organization_id = $1 AND user_id = $2",
+    )
+    .bind(f.org_id)
+    .bind(carol_id)
+    .execute(&mut *lock_tx)
+    .await
+    .unwrap();
+    let events_before_inflight = recorded(&publisher).await.len();
+    let create_ctx = command_context(f.org_id, carol_id);
+    let create_fut = task::create_task(
+        &app_pool,
+        &publisher,
+        &create_ctx,
+        CreateTask {
+            person_id: PersonId::new(f.person_id),
+            title: "Should never land (in flight)".to_string(),
+            kind: TaskKind::default(),
+            due_at: None,
+            assignee_user_id: None,
+        },
+    );
+    let commit_fut = async {
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        lock_tx.commit().await.unwrap();
+    };
+    let (create_result, ()) = tokio::join!(create_fut, commit_fut);
+    assert!(
+        matches!(create_result, Err(TaskError::Forbidden)),
+        "must observe the in-flight deactivation once it commits: {create_result:?}"
+    );
+    assert_eq!(task_row_count(&migrator_pool, f.org_id).await, 0);
+    assert_eq!(
+        recorded(&publisher).await.len(),
+        events_before_inflight,
+        "an in-flight-deactivated actor's create must publish nothing"
+    );
 }
 
 /// docs/specs/SLICE_016.md §9, §12.3: a real cross-Organization Person and
@@ -491,7 +617,8 @@ async fn update_task_assignee_creator_admin_succeed_third_member_forbidden(migra
     .await
     .unwrap();
 
-    // Third member: forbidden, no write.
+    // Third member: forbidden, no write, no publication.
+    let events_before_forbidden = recorded(&publisher).await.len();
     let forbidden = task::update_task(
         &app_pool,
         &publisher,
@@ -507,6 +634,11 @@ async fn update_task_assignee_creator_admin_succeed_third_member_forbidden(migra
     )
     .await;
     assert!(matches!(forbidden, Err(TaskError::Forbidden)));
+    assert_eq!(
+        recorded(&publisher).await.len(),
+        events_before_forbidden,
+        "a forbidden update must publish nothing"
+    );
     let title: String = sqlx::query_scalar("SELECT title FROM task WHERE id = $1")
         .bind(task.id.as_uuid())
         .fetch_one(&migrator_pool)
@@ -667,6 +799,7 @@ async fn update_task_changed_false_and_true_with_positive_control(migrator_pool:
         events_before + 1,
         "a genuinely different PUT must publish exactly one event"
     );
+    assert_last_event_is_task_changed_for(&publisher, f.person_id).await;
 }
 
 /// docs/specs/SLICE_016.md §3, §12.4: the assignee is re-validated as an
@@ -1000,12 +1133,24 @@ async fn complete_task_changed_false_and_true_with_positive_control(migrator_poo
     .unwrap();
     assert!(first.changed);
     assert_eq!(recorded(&publisher).await.len(), events_before + 1);
+    assert_last_event_is_task_changed_for(&publisher, f.person_id).await;
 
+    let (completed_at_before, completed_by_before): (chrono::DateTime<Utc>, Uuid) =
+        sqlx::query_as("SELECT completed_at, completed_by_user_id FROM task WHERE id = $1")
+            .bind(task.id.as_uuid())
+            .fetch_one(&migrator_pool)
+            .await
+            .unwrap();
+
+    // Round-1 review, item 9: the SECOND complete comes from a DIFFERENT
+    // actor (the admin, not the original completer) — a missing
+    // already-completed guard would otherwise silently flip
+    // `completed_by` to the admin without the test ever noticing.
     let events_before_second = recorded(&publisher).await.len();
     let second = task::complete_task(
         &app_pool,
         &publisher,
-        &command_context(f.org_id, f.member_id),
+        &command_context(f.org_id, f.admin_id),
         CompleteTask {
             person_id: PersonId::new(f.person_id),
             task_id: task.id,
@@ -1022,6 +1167,21 @@ async fn complete_task_changed_false_and_true_with_positive_control(migrator_poo
         events_before_second,
         "no publish on the second complete"
     );
+    let (completed_at_after, completed_by_after): (chrono::DateTime<Utc>, Uuid) =
+        sqlx::query_as("SELECT completed_at, completed_by_user_id FROM task WHERE id = $1")
+            .bind(task.id.as_uuid())
+            .fetch_one(&migrator_pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        completed_at_before, completed_at_after,
+        "completed_at must not move on a changed:false complete"
+    );
+    assert_eq!(
+        completed_by_before, completed_by_after,
+        "completed_by must stay the ORIGINAL completer, not the second caller"
+    );
+    assert_eq!(completed_by_before, f.member_id);
 }
 
 /// docs/specs/SLICE_016.md §3, §12.4: `ReopenTask` on an open task is
@@ -1092,6 +1252,7 @@ async fn reopen_task_changed_false_and_true_with_positive_control(migrator_pool:
     assert!(reopened.changed);
     assert!(reopened.task.completed_at.is_none());
     assert_eq!(recorded(&publisher).await.len(), events_before_reopen + 1);
+    assert_last_event_is_task_changed_for(&publisher, f.person_id).await;
 
     let mut conn = app_pool.acquire().await.unwrap();
     let history = crm_api::domain::person::queries::history_for_person(
@@ -1171,6 +1332,7 @@ async fn snooze_task_rule_3_completed_and_same_instant_are_changed_false(migrato
     assert!(changed.changed);
     assert_eq!(changed.task.due_at, Some(new_due));
     assert_eq!(recorded(&publisher).await.len(), events_before + 1);
+    assert_last_event_is_task_changed_for(&publisher, f.person_id).await;
 
     // Complete it, then snooze to a DIFFERENT due_at: changed:false, no
     // write, the receipt's completed_at explains why, due_at unchanged.
@@ -1240,6 +1402,7 @@ async fn delete_task_tombstone_byte_identical_except_three_columns(migrator_pool
     )
     .await
     .unwrap();
+    let events_before_delete = recorded(&publisher).await.len();
 
     #[derive(sqlx::FromRow, Debug, PartialEq)]
     struct RowSnapshot {
@@ -1279,6 +1442,12 @@ async fn delete_task_tombstone_byte_identical_except_three_columns(migrator_pool
     .await
     .unwrap();
     assert!(deleted.deleted);
+    assert_eq!(
+        recorded(&publisher).await.len(),
+        events_before_delete + 1,
+        "delete must publish exactly once"
+    );
+    assert_last_event_is_task_changed_for(&publisher, f.person_id).await;
 
     let (title, deleted_at, deleted_by): (String, Option<chrono::DateTime<Utc>>, Option<Uuid>) =
         sqlx::query_as("SELECT title, deleted_at, deleted_by_user_id FROM task WHERE id = $1")
@@ -1627,6 +1796,7 @@ async fn mutations_forbidden_for_actor_deactivated_or_admin_demoted_in_transacti
     .execute(&mut *lock_tx)
     .await
     .unwrap();
+    let events_before_inflight = recorded(&publisher).await.len();
     let complete_ctx = command_context(f.org_id, carol_id);
     let complete_fut = task::complete_task(
         &app_pool,
@@ -1645,6 +1815,11 @@ async fn mutations_forbidden_for_actor_deactivated_or_admin_demoted_in_transacti
     assert!(
         matches!(complete_result, Err(TaskError::Forbidden)),
         "must observe the in-flight deactivation once it commits: {complete_result:?}"
+    );
+    assert_eq!(
+        recorded(&publisher).await.len(),
+        events_before_inflight,
+        "the in-flight-deactivated complete must publish nothing"
     );
 }
 
@@ -1874,6 +2049,463 @@ async fn update_task_403_precedes_422_over_http(migrator_pool: PgPool) {
     );
 }
 
+/// Round-1 review, item 1: the detail `tasks[]` `can_manage` overwrite,
+/// asserted per row by id (never by count): an admin-created task
+/// assigned to bob gives bob (assignee only) `true` and carol `false`;
+/// bob's own self-created task gives bob `true` (creator) and carol
+/// `false`.
+#[sqlx::test]
+#[ignore]
+async fn detail_tasks_can_manage_per_viewer(migrator_pool: PgPool) {
+    let f = fixture(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let publisher = Publisher::recording();
+    let carol_id =
+        crate::common::create_user(&migrator_pool, "carol-can-manage@acme.test", "Carol", PW).await;
+    crate::common::add_membership_with(
+        &migrator_pool,
+        f.org_id,
+        carol_id,
+        Role::Member,
+        MembershipStatus::Active,
+    )
+    .await;
+
+    let admin_created = task::create_task(
+        &app_pool,
+        &publisher,
+        &command_context(f.org_id, f.admin_id),
+        CreateTask {
+            person_id: PersonId::new(f.person_id),
+            title: "Admin-created, bob-assigned".to_string(),
+            kind: TaskKind::default(),
+            due_at: None,
+            assignee_user_id: Some(UserId::new(f.member_id)),
+        },
+    )
+    .await
+    .unwrap();
+    let bob_self_created = task::create_task(
+        &app_pool,
+        &publisher,
+        &command_context(f.org_id, f.member_id),
+        CreateTask {
+            person_id: PersonId::new(f.person_id),
+            title: "Bob self-created".to_string(),
+            kind: TaskKind::default(),
+            due_at: None,
+            assignee_user_id: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    let router =
+        crate::common::build_router_with_publisher(&migrator_pool, publisher.clone()).await;
+    for (email, expect_bob_admin_created, expect_bob_self_created) in [
+        ("bob-tasks@acme.test", true, true),
+        ("carol-can-manage@acme.test", false, false),
+    ] {
+        let cookie = crate::common::login_cookie(&router, email, PW).await;
+        let detail = crate::common::body_json(
+            crate::common::get_with_cookie(
+                &router,
+                &format!("/api/people/{}", f.person_id),
+                &cookie,
+            )
+            .await,
+        )
+        .await;
+        let tasks = detail["tasks"].as_array().unwrap();
+        let admin_created_row = tasks
+            .iter()
+            .find(|t| t["id"] == admin_created.id.to_string())
+            .unwrap();
+        let self_created_row = tasks
+            .iter()
+            .find(|t| t["id"] == bob_self_created.id.to_string())
+            .unwrap();
+        assert_eq!(
+            admin_created_row["can_manage"], expect_bob_admin_created,
+            "admin-created/bob-assigned task, viewer {email}"
+        );
+        assert_eq!(
+            self_created_row["can_manage"], expect_bob_self_created,
+            "bob's self-created task, viewer {email}"
+        );
+    }
+}
+
+/// Round-1 review, item 4: a third member (neither assignee nor creator,
+/// not admin) is `Forbidden` on complete, reopen, snooze AND delete —
+/// each with the row snapshot unchanged and the publisher count
+/// unchanged.
+#[sqlx::test]
+#[ignore]
+async fn third_member_forbidden_on_complete_reopen_snooze_delete(migrator_pool: PgPool) {
+    let f = fixture(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let publisher = Publisher::recording();
+    let carol_id =
+        crate::common::create_user(&migrator_pool, "carol-loop@acme.test", "Carol", PW).await;
+    crate::common::add_membership_with(
+        &migrator_pool,
+        f.org_id,
+        carol_id,
+        Role::Member,
+        MembershipStatus::Active,
+    )
+    .await;
+
+    #[derive(sqlx::FromRow, Debug, PartialEq)]
+    struct RowSnapshot {
+        title: String,
+        due_at: Option<chrono::DateTime<Utc>>,
+        completed_at: Option<chrono::DateTime<Utc>>,
+        completed_by_user_id: Option<Uuid>,
+        deleted_at: Option<chrono::DateTime<Utc>>,
+        updated_at: chrono::DateTime<Utc>,
+    }
+    async fn snapshot(pool: &PgPool, task_id: Uuid) -> RowSnapshot {
+        sqlx::query_as(
+            "SELECT title, due_at, completed_at, completed_by_user_id, deleted_at, updated_at
+             FROM task WHERE id = $1",
+        )
+        .bind(task_id)
+        .fetch_one(pool)
+        .await
+        .unwrap()
+    }
+
+    for op_name in ["complete", "reopen", "snooze", "delete"] {
+        let task = task::create_task(
+            &app_pool,
+            &publisher,
+            &command_context(f.org_id, f.member_id),
+            CreateTask {
+                person_id: PersonId::new(f.person_id),
+                title: format!("Loop target for {op_name}"),
+                kind: TaskKind::default(),
+                due_at: Some(due_in(5)),
+                assignee_user_id: None,
+            },
+        )
+        .await
+        .unwrap();
+        let before = snapshot(&migrator_pool, task.id.as_uuid()).await;
+        let events_before = recorded(&publisher).await.len();
+        let ctx = command_context(f.org_id, carol_id);
+        let result_is_forbidden = match op_name {
+            "complete" => matches!(
+                task::complete_task(
+                    &app_pool,
+                    &publisher,
+                    &ctx,
+                    CompleteTask {
+                        person_id: PersonId::new(f.person_id),
+                        task_id: task.id
+                    },
+                )
+                .await,
+                Err(TaskError::Forbidden)
+            ),
+            "reopen" => matches!(
+                task::reopen_task(
+                    &app_pool,
+                    &publisher,
+                    &ctx,
+                    ReopenTask {
+                        person_id: PersonId::new(f.person_id),
+                        task_id: task.id
+                    },
+                )
+                .await,
+                Err(TaskError::Forbidden)
+            ),
+            "snooze" => matches!(
+                task::snooze_task(
+                    &app_pool,
+                    &publisher,
+                    &ctx,
+                    SnoozeTask {
+                        person_id: PersonId::new(f.person_id),
+                        task_id: task.id,
+                        due_at: due_in(50),
+                    },
+                )
+                .await,
+                Err(TaskError::Forbidden)
+            ),
+            "delete" => matches!(
+                task::delete_task(
+                    &app_pool,
+                    &publisher,
+                    &ctx,
+                    DeleteTask {
+                        person_id: PersonId::new(f.person_id),
+                        task_id: task.id
+                    },
+                )
+                .await,
+                Err(TaskError::Forbidden)
+            ),
+            _ => unreachable!(),
+        };
+        assert!(
+            result_is_forbidden,
+            "{op_name} must be Forbidden for a third member"
+        );
+        let after = snapshot(&migrator_pool, task.id.as_uuid()).await;
+        assert_eq!(before, after, "{op_name}: row must be byte-identical");
+        assert_eq!(
+            recorded(&publisher).await.len(),
+            events_before,
+            "{op_name}: no publication on a forbidden attempt"
+        );
+    }
+}
+
+/// Round-1 review, item 5: wire-level cases over HTTP — `due_at` with a
+/// non-UTC offset normalizes to `Z`; a date-only string (no time, no
+/// offset) is 400 (the wire contract is an RFC 3339 instant, not a bare
+/// date); `kind` is case-sensitive and closed (`"Call"` and an unknown
+/// token are both 400); `kind: null` on create is 400 (the field is
+/// optional, not nullable); an omitted `kind` defaults to `follow_up`.
+#[sqlx::test]
+#[ignore]
+async fn wire_cases_due_at_offset_and_kind_validation(migrator_pool: PgPool) {
+    let f = fixture(&migrator_pool).await;
+    let router = crate::common::build_router(&migrator_pool).await;
+    let alice = crate::common::login_cookie(&router, "alice-tasks@acme.test", PW).await;
+
+    let offset_resp = crate::common::post_json_with_cookie(
+        &router,
+        &format!("/api/people/{}/tasks", f.person_id),
+        &alice,
+        json!({ "title": "Offset due_at", "due_at": "2026-09-10T12:00:00+05:30" }),
+    )
+    .await;
+    assert_eq!(offset_resp.status(), StatusCode::CREATED);
+    let offset_body = crate::common::body_json(offset_resp).await;
+    assert_eq!(offset_body["task"]["due_at"], "2026-09-10T06:30:00Z");
+
+    let date_only_resp = crate::common::post_json_with_cookie(
+        &router,
+        &format!("/api/people/{}/tasks", f.person_id),
+        &alice,
+        json!({ "title": "Date-only due_at", "due_at": "2026-09-10" }),
+    )
+    .await;
+    assert_eq!(date_only_resp.status(), StatusCode::BAD_REQUEST);
+
+    let wrong_case_resp = crate::common::post_json_with_cookie(
+        &router,
+        &format!("/api/people/{}/tasks", f.person_id),
+        &alice,
+        json!({ "title": "Wrong case kind", "kind": "Call" }),
+    )
+    .await;
+    assert_eq!(wrong_case_resp.status(), StatusCode::BAD_REQUEST);
+
+    let null_kind_resp = crate::common::post_json_with_cookie(
+        &router,
+        &format!("/api/people/{}/tasks", f.person_id),
+        &alice,
+        json!({ "title": "Null kind", "kind": null }),
+    )
+    .await;
+    assert_eq!(null_kind_resp.status(), StatusCode::BAD_REQUEST);
+
+    let unknown_kind_resp = crate::common::post_json_with_cookie(
+        &router,
+        &format!("/api/people/{}/tasks", f.person_id),
+        &alice,
+        json!({ "title": "Unknown kind", "kind": "unknown_kind" }),
+    )
+    .await;
+    assert_eq!(unknown_kind_resp.status(), StatusCode::BAD_REQUEST);
+
+    let omitted_kind_resp = crate::common::post_json_with_cookie(
+        &router,
+        &format!("/api/people/{}/tasks", f.person_id),
+        &alice,
+        json!({ "title": "Omitted kind" }),
+    )
+    .await;
+    assert_eq!(omitted_kind_resp.status(), StatusCode::CREATED);
+    let omitted_kind_body = crate::common::body_json(omitted_kind_resp).await;
+    assert_eq!(omitted_kind_body["task"]["kind"], "follow_up");
+}
+
+/// Round-1 review, item 6: HTTP precedence at the extractor/decode layer —
+/// a malformed path uuid is 400 even with no session cookie at all (400
+/// before 401); malformed JSON against a foreign Person's path is 400
+/// before the Person lookup ever runs (400 before 404);
+/// `deny_unknown_fields` on PUT and snooze is 400 `malformed_request`
+/// with no title echoed in the body.
+#[sqlx::test]
+#[ignore]
+async fn http_precedence_malformed_uuid_json_and_unknown_fields(migrator_pool: PgPool) {
+    let f = fixture(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let publisher = Publisher::recording();
+    let router = crate::common::build_router(&migrator_pool).await;
+    let alice = crate::common::login_cookie(&router, "alice-tasks@acme.test", PW).await;
+
+    // Malformed path uuid, empty cookie: 400 before 401.
+    let malformed_uuid_resp = crate::common::post_json_with_cookie(
+        &router,
+        "/api/people/not-a-uuid/tasks",
+        "",
+        json!({ "title": "Should be 400" }),
+    )
+    .await;
+    assert_eq!(malformed_uuid_resp.status(), StatusCode::BAD_REQUEST);
+
+    // Malformed JSON against a REAL, foreign (Organization B) Person: 400
+    // before 404 — the JSON never even reaches the point where the
+    // Person lookup would run.
+    let (other_org_id, _other_admin_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Best Realty",
+        "erin-precedence@best.test",
+        "Erin",
+        PW,
+    )
+    .await;
+    let other_app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let other_stage_id = first_stage_id(&other_app_pool, other_org_id).await;
+    let other_person_id = insert_bare_person(&other_app_pool, other_org_id, other_stage_id).await;
+    let malformed_json_resp = crate::common::post_json_with_cookie(
+        &router,
+        &format!("/api/people/{other_person_id}/tasks"),
+        &alice,
+        serde_json::Value::String("not an object".to_string()),
+    )
+    .await;
+    assert_eq!(malformed_json_resp.status(), StatusCode::BAD_REQUEST);
+
+    // deny_unknown_fields on PUT and snooze: 400 malformed_request, no
+    // title echoed in the body.
+    let task = task::create_task(
+        &app_pool,
+        &publisher,
+        &command_context(f.org_id, f.member_id),
+        CreateTask {
+            person_id: PersonId::new(f.person_id),
+            title: "SENTINEL_UNKNOWN_FIELD_TITLE".to_string(),
+            kind: TaskKind::default(),
+            due_at: None,
+            assignee_user_id: None,
+        },
+    )
+    .await
+    .unwrap();
+    let put_unknown_field_resp = crate::common::put_json_with_cookie(
+        &router,
+        &format!("/api/people/{}/tasks/{}", f.person_id, task.id),
+        &alice,
+        json!({
+            "title": "SENTINEL_PUT_BODY_TITLE", "kind": "follow_up", "due_at": null,
+            "assignee_user_id": f.member_id, "unexpected_field": "x",
+        }),
+    )
+    .await;
+    assert_eq!(put_unknown_field_resp.status(), StatusCode::BAD_REQUEST);
+    let put_unknown_field_body = crate::common::body_json(put_unknown_field_resp).await;
+    assert_eq!(
+        put_unknown_field_body,
+        json!({ "error": "malformed_request" })
+    );
+    assert!(!put_unknown_field_body
+        .to_string()
+        .contains("SENTINEL_PUT_BODY_TITLE"));
+
+    let snooze_unknown_field_resp = crate::common::post_json_with_cookie(
+        &router,
+        &format!("/api/people/{}/tasks/{}/snooze", f.person_id, task.id),
+        &alice,
+        json!({ "due_at": Utc::now(), "unexpected_field": "x" }),
+    )
+    .await;
+    assert_eq!(snooze_unknown_field_resp.status(), StatusCode::BAD_REQUEST);
+    let snooze_unknown_field_body = crate::common::body_json(snooze_unknown_field_resp).await;
+    assert_eq!(
+        snooze_unknown_field_body,
+        json!({ "error": "malformed_request" })
+    );
+}
+
+/// Round-1 review, item 11: `UpdateTask` reassigning to an inactive
+/// member and to an Organization-B member are each 422, byte-identical
+/// to a random uuid.
+#[sqlx::test]
+#[ignore]
+async fn update_task_reassign_to_inactive_or_other_organization_member_is_422(
+    migrator_pool: PgPool,
+) {
+    let f = fixture(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let publisher = Publisher::recording();
+    let inactive_id =
+        crate::common::create_user(&migrator_pool, "dan-inactive-update@acme.test", "Dan", PW)
+            .await;
+    crate::common::add_membership_with(
+        &migrator_pool,
+        f.org_id,
+        inactive_id,
+        Role::Member,
+        MembershipStatus::Inactive,
+    )
+    .await;
+    let (other_org_id, other_admin_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Best Realty",
+        "erin-update-reassign@best.test",
+        "Erin",
+        PW,
+    )
+    .await;
+    let _ = other_org_id;
+
+    let task = task::create_task(
+        &app_pool,
+        &publisher,
+        &command_context(f.org_id, f.member_id),
+        CreateTask {
+            person_id: PersonId::new(f.person_id),
+            title: "Reassign target".to_string(),
+            kind: TaskKind::default(),
+            due_at: None,
+            assignee_user_id: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    let router =
+        crate::common::build_router_with_publisher(&migrator_pool, publisher.clone()).await;
+    let alice = crate::common::login_cookie(&router, "alice-tasks@acme.test", PW).await;
+    let mut bodies = Vec::new();
+    for assignee in [inactive_id, other_admin_id, Uuid::new_v4()] {
+        let resp = crate::common::put_json_with_cookie(
+            &router,
+            &format!("/api/people/{}/tasks/{}", f.person_id, task.id),
+            &alice,
+            json!({
+                "title": "Reassign target", "kind": "follow_up", "due_at": null,
+                "assignee_user_id": assignee,
+            }),
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        bodies.push(crate::common::body_json(resp).await);
+    }
+    assert_eq!(bodies[0], bodies[1]);
+    assert_eq!(bodies[1], bodies[2]);
+    assert_eq!(bodies[0], json!({ "error": "invalid_assignee" }));
+}
+
 // --- §12.5: history ------------------------------------------------------
 
 /// docs/specs/SLICE_016.md §1 rule 5, §12.5: `task_completed` is
@@ -2002,6 +2634,88 @@ async fn task_completed_history_rank8_tie_break_and_reopen_readd(migrator_pool: 
         recompleted_entry.occurred_at > shared_ts,
         "the re-added entry must be at the new completion time, not the original"
     );
+}
+
+/// Round-1 review, item 2: `task_completed` `can_manage` with a PLAIN
+/// MEMBER assignee (not admin, not creator) — admin creates, bob (a
+/// member) is the assignee, admin completes: bob (assignee) sees `true`,
+/// carol (third member) sees `false`, admin sees `true`.
+#[sqlx::test]
+#[ignore]
+async fn task_completed_history_can_manage_with_plain_member_assignee(migrator_pool: PgPool) {
+    let f = fixture(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let publisher = Publisher::recording();
+    let carol_id = crate::common::create_user(
+        &migrator_pool,
+        "carol-plain-member-history@acme.test",
+        "Carol",
+        PW,
+    )
+    .await;
+    crate::common::add_membership_with(
+        &migrator_pool,
+        f.org_id,
+        carol_id,
+        Role::Member,
+        MembershipStatus::Active,
+    )
+    .await;
+
+    let task = task::create_task(
+        &app_pool,
+        &publisher,
+        &command_context(f.org_id, f.admin_id),
+        CreateTask {
+            person_id: PersonId::new(f.person_id),
+            title: "Admin-created, bob-assigned, admin-completed".to_string(),
+            kind: TaskKind::default(),
+            due_at: None,
+            assignee_user_id: Some(UserId::new(f.member_id)),
+        },
+    )
+    .await
+    .unwrap();
+    task::complete_task(
+        &app_pool,
+        &publisher,
+        &command_context(f.org_id, f.admin_id),
+        CompleteTask {
+            person_id: PersonId::new(f.person_id),
+            task_id: task.id,
+        },
+    )
+    .await
+    .unwrap();
+
+    let router =
+        crate::common::build_router_with_publisher(&migrator_pool, publisher.clone()).await;
+    for (email, expect_can_manage) in [
+        ("bob-tasks@acme.test", true), // assignee (plain member)
+        ("carol-plain-member-history@acme.test", false), // third member
+        ("alice-tasks@acme.test", true), // admin
+    ] {
+        let cookie = crate::common::login_cookie(&router, email, PW).await;
+        let detail = crate::common::body_json(
+            crate::common::get_with_cookie(
+                &router,
+                &format!("/api/people/{}", f.person_id),
+                &cookie,
+            )
+            .await,
+        )
+        .await;
+        let entry = detail["history"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|e| e["kind"] == "task_completed" && e["id"] == task.id.to_string())
+            .unwrap();
+        assert_eq!(
+            entry["detail"]["can_manage"], expect_can_manage,
+            "can_manage for {email}"
+        );
+    }
 }
 
 /// docs/specs/SLICE_016.md §4, §12.5: the `task_completed` detail carries
@@ -2166,4 +2880,49 @@ async fn task_completed_history_can_manage_overwrite_and_imported_shape(migrator
     )
     .await;
     assert!(matches!(member_edit, Err(TaskError::Forbidden)));
+
+    // Round-1 review, item 10: an admin CAN manage the imported NULL-actor
+    // task (already shown above) — prove it by actually writing: the
+    // admin reassigns it to bob (200), and bob, now the assignee, can
+    // then also update it (200) — completion columns untouched throughout
+    // (rule 3: UpdateTask never touches them).
+    let admin_reassign = task::update_task(
+        &app_pool,
+        &publisher,
+        &command_context(f.org_id, f.admin_id),
+        UpdateTask {
+            person_id: PersonId::new(f.person_id),
+            task_id: TaskId::new(imported_task_id),
+            title: "Imported task, reassigned".to_string(),
+            kind: TaskKind::default(),
+            due_at: None,
+            assignee_user_id: UserId::new(f.member_id),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(admin_reassign.changed);
+    assert_eq!(
+        admin_reassign.task.assignee.as_ref().unwrap().id,
+        UserId::new(f.member_id)
+    );
+    assert!(admin_reassign.task.completed_at.is_some());
+
+    let bob_now_assignee_edit = task::update_task(
+        &app_pool,
+        &publisher,
+        &command_context(f.org_id, f.member_id),
+        UpdateTask {
+            person_id: PersonId::new(f.person_id),
+            task_id: TaskId::new(imported_task_id),
+            title: "Imported task, reassigned again".to_string(),
+            kind: TaskKind::default(),
+            due_at: None,
+            assignee_user_id: UserId::new(f.member_id),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(bob_now_assignee_edit.changed);
+    assert!(bob_now_assignee_edit.task.completed_at.is_some());
 }

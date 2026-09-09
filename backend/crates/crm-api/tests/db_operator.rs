@@ -2299,8 +2299,27 @@ async fn get_person_tasks_are_open_capped_at_ten_by_due_at_order(migrator_pool: 
 
     let app_pool = crate::common::connect_as_app(&f.migrator_pool).await;
     let base = Utc::now();
-    // Ten dated tasks, ascending due_at, each with a unique sentinel.
+    // Ten dated tasks, ascending due_at, each with a unique sentinel. The
+    // earliest (S01) is an IMPORTED-SHAPE row (NULL assignee/creator,
+    // origin = 'migration') — round-1 review item 8 — still counted
+    // toward the ten-item cap, so the view's `assignee_display_name` and
+    // `kind` fields are exercised for that shape too.
     for i in 1..=10 {
+        if i == 1 {
+            sqlx::query(
+                "INSERT INTO task (organization_id, person_id, assignee_user_id, created_by_user_id,
+                                    title, kind, origin, correlation_id, due_at)
+                 VALUES ($1, $2, NULL, NULL, $3, 'email', 'migration', gen_random_uuid(), $4)",
+            )
+            .bind(f.org_acme)
+            .bind(person_id)
+            .bind(format!("SENTINEL_TASK_S{i:02}"))
+            .bind(base + chrono::Duration::hours(i))
+            .execute(&app_pool)
+            .await
+            .unwrap();
+            continue;
+        }
         sqlx::query(
             "INSERT INTO task (organization_id, person_id, assignee_user_id, created_by_user_id,
                                 title, origin, correlation_id, due_at)
@@ -2373,6 +2392,7 @@ async fn get_person_tasks_are_open_capped_at_ten_by_due_at_order(migrator_pool: 
     assert_eq!(response.status(), StatusCode::OK);
 
     let prompt = requests_json(&provider);
+    let mut positions = Vec::new();
     for i in 1..=10 {
         let sentinel = format!("SENTINEL_TASK_S{i:02}");
         assert_eq!(
@@ -2384,7 +2404,25 @@ async fn get_person_tasks_are_open_capped_at_ten_by_due_at_order(migrator_pool: 
             prompt.contains(&format!(r#"{{\"untrusted_text\":\"{sentinel}\"}}"#)),
             "S{i} must be wrapped as untrusted text: {prompt}"
         );
+        positions.push(prompt.find(&sentinel).unwrap());
     }
+    // Round-1 review, item 8: the ten survive in `open_for_person` order
+    // (due_at ASC), not merely all-present — S01's position precedes
+    // S02's, which precedes S03's, and so on.
+    assert!(
+        positions.windows(2).all(|w| w[0] < w[1]),
+        "S01..S10 must appear in ascending due_at order: {positions:?} in {prompt}"
+    );
+    // The imported-shape row (S01): assignee_display_name null, kind
+    // present as the untrusted-free field it is.
+    assert!(
+        prompt.contains(r#"\"assignee_display_name\":null"#),
+        "the imported-shape row's assignee_display_name must be null: {prompt}"
+    );
+    assert!(
+        prompt.contains(r#"\"kind\":\"email\""#),
+        "the imported-shape row's kind must still be reported: {prompt}"
+    );
     assert!(
         !prompt.contains("SENTINEL_TASK_NULL_DUE"),
         "the eleventh (NULL-due) task must be excluded by the ten-item cap: {prompt}"

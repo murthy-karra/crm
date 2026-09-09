@@ -1889,3 +1889,51 @@ customer content in the erasable CRUD set (SLICE_002 §2, D-015 §6).
 
 Blocks: nothing. Feeds the Slice 015 specification. O-012 §"Blocks"
 amended above; O-013's erasure runbook gains `note`.
+
+### D-054 — Due tasks reach Today through a fixed built-in axis plus a task panel (2026-09-09)
+
+Accepted (user, at Slice 016 planning, after asking what the industry
+does). Tasks are the last unbuilt CRM-core model (thesis §11) and "overdue
+task" is a thesis Today reason. Every real-estate CRM surveyed (Follow Up
+Boss, Lofty, kvCORE, Sierra, BoomTown, Wise Agent; from training data, not
+re-verified live) shows tasks as their own Overdue / Today / Upcoming list
+with one-click complete and snooze, and none has a Person-ranked queue;
+that queue is this product's differentiator, so both views ship.
+
+1. **A fixed built-in task axis inside Today's query** (Slice 016b): the
+   viewer's open tasks due within 24 hours or overdue, one row per
+   Person, reasons `task_due` and `task_overdue`, overdue in the `high`
+   tier, evaluated on its own savepoint under the call feed's budget and
+   failure discipline. **This is a recorded, temporary exception to D-043
+   and 011d** ("every built-in reason is an admin-tweakable feed"): admins
+   cannot tweak or disable the axis yet. The exception closes when the
+   task filter-clause family lands (`has_open_task`, `task_due_within`,
+   `task_overdue`, plus a `next_task_due_at` column under D-052 if
+   measured necessary) and the axis becomes feed four. Recorded LATER
+   with that trigger.
+2. **A task panel on the Today page**, the industry surface: the viewer's
+   open tasks grouped Overdue and Due today, one-click complete and
+   snooze-to-tomorrow, backed by one member-level read route. Reminders,
+   action plans and a full `/tasks` page stay LATER; reminders are the
+   first to pull forward when mobile arrives.
+3. **Safe defaults adopted with this decision** (veto-able, recorded in
+   the Slice 016 specification): a task always belongs to a Person; the
+   assignee, the creator or an Organization admin edits, completes,
+   reopens, snoozes or deletes (the D-053 shape); `due_at` is an instant
+   and a date-only pick is sent by the client as local end of day (no
+   Organization timezone exists); tombstone delete; no task body yet; a
+   small closed `kind` enum (`call`, `email`, `text`, `follow_up`,
+   `other`); the Operator reads tasks now, and its `create_task` /
+   `complete_task` tools are the next S rung with their own decision
+   (risk class and mechanism; D-034).
+
+Blocks: nothing. Feeds the Slice 016 specification. Amends by pointer
+011c §5 ("built-in items continue to have a real InquiryRef": a task item
+on a zero-inquiry Person carries `latest_inquiry: null`, the list-only
+precedent), 003 §3 ("People with no Inquiry are never on Today"; "high
+iff new_inquiry"), and 011d §1 rule 7 and §5 (the feed-only inquiry
+constraint is not lifted, the axis is not a feed; "`TodayReason` gains no
+variant" is superseded). D-022's deferral of done/snooze/dismiss on Today
+items stands: complete and snooze act on the task row, never on the Today
+item.
+

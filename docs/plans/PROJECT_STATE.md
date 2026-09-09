@@ -1,21 +1,27 @@
 # Project State
 
-Last updated: 2026-09-09 (Slice 015 Notes complete: merged, runtime updated,
-pushed, cleaned up; no slice active; LiveKit down, see Environment).
+Last updated: 2026-09-09 (Slice 016a Tasks approved; lane started in
+../crm-worktrees/tasks-1; LiveKit down, see Environment).
 
 ## Current phase
 
-**SLICE 015 (NOTES) — COMPLETE: MERGED, RUNTIME UPDATED, PUSHED, CLEANED
-UP (2026-09-09, each with the user's approval).** `main` at the merge
-`fd5a184` plus records; pushed to `origin/main`. `crm_dev` migrated
-(`20260912000001`); the dev API and `dev-web-prod` were not running and
-were relaunched from `main` (API pid 77267 on `127.0.0.1:3000`, preview
-on `5173`; logs under `/private/tmp/claude-501/dev-api.log` and
-`dev-web-prod.log`); tunnel verified. Branch `slice-015-notes` and the
-worktree deleted; `crm_slice015_qa` dropped. The live cross-tab
-`note_changed` path was observed on the dev runtime (QA record addendum).
-Evidence: [SLICE_015_VERIFICATION.md](../tasks/SLICE_015_VERIFICATION.md).
-Deployment is not authorized. No slice active.
+**SLICE 016a (TASKS: MODEL, COMMANDS, ROUTES, PERSON PAGE) — LANE IN
+IMPLEMENTATION (started 2026-09-09).** The user approved the specification
+and the 016a gate ("commit and then Go for 016a"). One lane (`implement`
+profile, Claude Sonnet 5) in `../crm-worktrees/tasks-1` on
+`slice-016a-tasks` from `main` at the brief commit, backend then Web, per
+the [implementation brief](../tasks/SLICE_016_IMPL.md); the coordinator
+(Fable) owns review, test analysis, the once-only final-tree gates
+(including every `check-db` run) and the commit and merge gates.
+Specification: [SLICE_016.md](../specs/SLICE_016.md). D-054 recorded.
+016a amendment pointers recorded in SLICE_002 §§2/5, SLICE_003 §6,
+SLICE_005 §5; the 016b pointers (003 §3, 011c §5, 011d §§1/5/6) are
+recorded at the 016b gate. Safe defaults accepted at the gate: any member
+creates and assigns to any active member; assignee, creator or admin
+manages; `due_at` an instant with client end-of-day; tombstone; no body;
+five kinds; Operator reads only. Lane checkpoint that returns to the
+coordinator: routes live before Web work (brief step 3). Not authorized:
+commit on `main`, merge, push, deployment, runtime update, rung 016b.
 
 Previously: **LATER BATCH (2026-09-08) — COMPLETE AND MERGED TO LOCAL MAIN** at `3ff6c5f`
 (with the user's approval; not pushed, not deployed). Source
@@ -1014,9 +1020,9 @@ and now lives only in git history.
 
 ## Approval currently required
 
-- None for Slice 015: merged, runtime updated, pushed and cleaned up on
-  2026-09-09. Deployment is not authorized. The next slice or chunk needs
-  the user's request.
+- **Slice 016a (Tasks): none until the lane reports.** Implementation
+  approved on 2026-09-09; next gates are commit approval on the lane branch
+  after verification, then merge; rung 016b has its own gate afterwards.
 - None for 011e: both rungs merged, the dev runtime updated and the branches
   cleaned up with approval on 2026-09-07. `main` pushed on 2026-09-07; deployment is not authorized. The next slice or chunk
   (candidates below) needs the user's request.

@@ -74,6 +74,10 @@ gains `note` (plaintext body, tombstone delete, cascaded with the Person;
 the D-015 §7 erasure runbook must cover it). See
 [SLICE_015.md](SLICE_015.md) §2.
 
+*Amendment pointer (Slice 016, 2026-09-09, D-054):* the erasable CRUD set
+gains `task` (plaintext single-line title, tombstone delete, cascaded with
+the Person; the runbook must cover it). See [SLICE_016.md](SLICE_016.md) §2.
+
 ### Classification (D-007, D-015)
 
 - **Erasable CRUD set** (plaintext, D-015 §3/§6): `person`,
@@ -399,6 +403,14 @@ routes `POST /api/people/{person_id}/notes` and
 `PUT|DELETE /api/people/{person_id}/notes/{note_id}`; `GET /api/people` rows
 are unchanged. Permission for edit/delete is D-053 §4. See
 [SLICE_015.md](SLICE_015.md) §5.
+
+*Amendment pointer (Slice 016, 2026-09-09, declared additive, AGENTS.md
+§11):* `GET /api/people/{id}` gains a top-level `tasks: [Task]` (open
+tasks); `history[]` admits a ninth kind, `task_completed` (rank 8, at
+`completed_at`); six new routes `POST /api/people/{person_id}/tasks`,
+`PUT|DELETE …/tasks/{task_id}` and `POST …/tasks/{task_id}/{complete|reopen|snooze}`;
+rung 016b adds `GET /api/tasks?scope=mine`; `GET /api/people` rows are
+unchanged. Permission is D-054 §3. See [SLICE_016.md](SLICE_016.md) §4.
 
 
 **Additive amendment (approved 2026-09-06):** [SLICE_011b §5](SLICE_011b.md#5-http-contract)

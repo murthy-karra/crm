@@ -388,6 +388,13 @@ rename and delete of a tag publish nothing). See
 deleted; ids only, never a body. The Web handler invalidates only the Person
 detail for it. See [SLICE_015.md](SLICE_015.md) §5.
 
+*Amendment pointer (Slice 016, 2026-09-09, declared additive, AGENTS.md
+§11):* `data.change` also admits `task_changed`, published on
+`person.changed` after a task is created, changed, completed, reopened,
+snoozed or deleted (never on `changed: false`); ids only, never a title.
+The Web handler invalidates the Person detail and Today (and, after 016b,
+the viewer's tasks panel) for it. See [SLICE_016.md](SLICE_016.md) §6.
+
 **Channel.** `org:<organization_id>` (lowercase hyphenated UUID),
 namespace `org`. One channel per Organization. No per-user channel this
 slice (nothing targets a user yet; additive later).

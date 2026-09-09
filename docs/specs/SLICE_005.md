@@ -277,6 +277,13 @@ bodies as `UntrustedText`, clipped to 500 characters) and its `history`
 excludes the `note` kind; `PersonCard` is unchanged and no note tools are
 added. See [SLICE_015.md](SLICE_015.md) §5.
 
+*Amendment pointer (Slice 016, 2026-09-09, declared additive, AGENTS.md
+§11, D-054 §3):* `PersonDetail` gains `tasks: Vec<TaskView>` (open tasks,
+at most ten; titles as `UntrustedText`) and its `history` excludes the
+`task_completed` kind; no task tools are added (the next S rung). Rung 016b
+adds the `task_due`/`task_overdue` reason arms to the Today explanations.
+See [SLICE_016.md](SLICE_016.md) §7.
+
 ```rust
 pub struct PersonCard { id, display_name: UntrustedText, stage_name, assigned_user_display_name: Option<String>,
                         primary_email: Option<UntrustedText>, primary_phone: Option<UntrustedText>,

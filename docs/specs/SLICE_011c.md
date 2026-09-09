@@ -300,6 +300,9 @@ Extend `TodayItem` explicitly:
 - `latest_inquiry` becomes `InquiryRef|null`. A zero-inquiry Person can match
   existing v1 lists, so it must not be silently excluded or assigned a fake
   inquiry. Built-in items continue to have a real InquiryRef.
+  *Amendment pointer (Slice 016b, 2026-09-09, D-054):* the built-in task
+  axis produces items with `latest_inquiry: null` for zero-inquiry People,
+  the list-only precedent. See [SLICE_016.md](SLICE_016.md) §5.
 - `recommended_action` gains `review_person`. List-only items recommend Call
   if a phone exists, otherwise Email if an email exists, otherwise Review
   person, linking to the existing profile. Existing built-in actions do not

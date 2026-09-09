@@ -1,24 +1,24 @@
 # Project State
 
-Last updated: 2026-09-09 (Slice 016a complete: merged, runtime updated,
-pushed, cleaned up; 016b gate next; LiveKit down, see Environment).
+Last updated: 2026-09-09 (Slice 016b Today axis approved; lane started in
+../crm-worktrees/tasks-2; LiveKit down, see Environment).
 
 ## Current phase
 
-**SLICE 016a (TASKS: MODEL, COMMANDS, ROUTES, PERSON PAGE) — COMPLETE:
-MERGED, RUNTIME UPDATED, PUSHED, CLEANED UP (2026-09-09, each with the
-user's approval).** `main` at the merge `f106afc` plus records; pushed to
-`origin/main`. `crm_dev` migrated (`20260913000001`); the dev API and
-`dev-web-prod` were restarted by exact PID and relaunched from `main`
-(API on `127.0.0.1:3000`, health 200, task routes answering; preview on
-`5173`; logs under `/private/tmp/claude-501/`). Branch `slice-016a-tasks`,
-the worktree, `crm_slice016_qa` and the lane's leftover throwaway
-`crm_tasks1_round1` deleted. Evidence:
-[SLICE_016a_VERIFICATION.md](../tasks/SLICE_016a_VERIFICATION.md).
-**Next: the 016b gate** (the Today task axis and the Tasks panel; spec
-§§5, 8 "Today", 12.9–12.17; the 016b amendment pointers in 003 §3, 011c
-§5 and 011d §§1/5/6 are recorded at that gate). Deployment is not
-authorized. No lane active.
+**SLICE 016b (TASKS: TODAY AXIS AND PANEL) — LANE IN IMPLEMENTATION
+(started 2026-09-09).** The user approved the 016b gate ("ok start with
+016b"). One lane (`implement` profile, Claude Sonnet 5) in
+`../crm-worktrees/tasks-2` on `slice-016b-today` from `main` at the gate
+commit, backend then Web, per the
+[implementation brief](../tasks/SLICE_016_IMPL.md) §016b; the coordinator
+(Fable) owns review, test analysis, the once-only final-tree gates
+(including every `check-db` run), the §11 performance evidence check and
+the commit and merge gates. Specification:
+[SLICE_016.md](../specs/SLICE_016.md) §§5, 6, 7, 8 "Today", 11, 12.9–12.17.
+016b amendment pointers recorded in SLICE_003 §3, SLICE_011c §5 and
+SLICE_011d §§1/5/6. 016a is complete and serving on the shared dev
+runtime. Not authorized: commit on `main`, merge, push, deployment, runtime
+update.
 
 Previously: **LATER BATCH (2026-09-08) — COMPLETE AND MERGED TO LOCAL MAIN** at `3ff6c5f`
 (with the user's approval; not pushed, not deployed). Source
@@ -1018,10 +1018,9 @@ and now lives only in git history.
 
 ## Approval currently required
 
-- **Rung 016b (Today task axis and panel): "Proceed with implementation?"**
-  at its Phase 6 gate; the specification is already approved for the
-  slice, so the gate restates the 016b outcome, files, exclusions and
-  risks. Deployment is not authorized.
+- **Rung 016b: none until the lane reports.** Implementation approved on
+  2026-09-09; next gates are commit approval after verification, then
+  merge, runtime update, push. Deployment is not authorized.
 - None for 011e: both rungs merged, the dev runtime updated and the branches
   cleaned up with approval on 2026-09-07. `main` pushed on 2026-09-07; deployment is not authorized. The next slice or chunk
   (candidates below) needs the user's request.

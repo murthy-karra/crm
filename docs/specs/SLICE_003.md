@@ -192,6 +192,11 @@ in D-022):
   which is itself recorded history.
 - People with no Inquiry are never on Today (none exist via the
   application path). Unassigned People are on nobody's Today.
+  *Amendment pointer (Slice 016b, 2026-09-09, D-054):* a Person with no
+  Inquiry reaches the viewer's Today when the viewer holds an open task on
+  them due within 24 hours or overdue; such items carry
+  `latest_inquiry: null` and `waiting_since: null`. See
+  [SLICE_016.md](SLICE_016.md) §5.
 
 ### Ranking (exact; D-010)
 
@@ -223,6 +228,10 @@ For each candidate, with `now` = the request's `generated_at`:
   3. `repeat_inquiry { inquiry_count }` if the Person's total Inquiry
      count ≥ 2.
 - `priority = high` iff `new_inquiry` is present, else `normal`.
+  *Amendment pointer (Slice 016b, 2026-09-09, D-054):* a `normal` item
+  whose viewer-held task is overdue is raised to `high`; a task-only item
+  is `high` when overdue, else `normal`; `low` is never raised. See
+  [SLICE_016.md](SLICE_016.md) §5.
 - `recommended_action = call` if `primary_phone` is present, else
   `email`.
 - Order: `high` before `normal`; within a tier `waiting_since ASC`;

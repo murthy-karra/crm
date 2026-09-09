@@ -96,6 +96,10 @@ Product rules (safe defaults adopted at specification, veto-able by the user):
    (`latest.id IS NOT NULL` applies to every arm). This is a
    declared, pinned feed-evaluation constraint, not part of any clause's
    meaning; lifting it is a later, separately reviewed change.
+   *Amendment pointer (Slice 016b, 2026-09-09, D-054):* this constraint is
+   not lifted; the built-in task axis is not a feed and runs without it
+   (a recorded temporary exception to "every built-in reason is a
+   tweakable feed"). See [SLICE_016.md](SLICE_016.md) §5.
 
 ## 2. Vocabulary extension (amends 011a §4)
 
@@ -313,7 +317,9 @@ the transaction-local `jit = off` and `enable_mergejoin = off` settings from
 A disabled person-state feed contributes no members and no issue. Tiers,
 reason codes and payloads, `waiting_since`, `latest_inquiry`,
 `last_contact_attempt`, `recommended_action` and the four-band display order
-are unchanged. `TodayReason` gains no variant. `rank.rs` remains the built-in
+are unchanged. `TodayReason` gains no variant (*superseded by Slice 016b,
+2026-09-09, D-054: `task_due` and `task_overdue`; see
+[SLICE_016.md](SLICE_016.md) §5*). `rank.rs` remains the built-in
 mapper; a new pure merge function owns P/call-only/list assembly.
 
 `GET /api/today` keeps its shape; `sources` gains one additive field:
@@ -327,7 +333,9 @@ sources: { status, issues: [SourceIssue,...],
 `status` is `partial` when either list is non-empty, except that 011c's
 `unavailable` (list-source enumeration failed) keeps precedence; the early
 return paths that build `sources` on enumeration failure carry
-`system_feed_issues` too. `fallback:true` means
+`system_feed_issues` too (*Slice 016b, 2026-09-09: the token `task_due`,
+which has no feed row, joins the issue keys with `error: unavailable,
+fallback: false`; see [SLICE_016.md](SLICE_016.md) §5*). `fallback:true` means
 the canonical default was evaluated in place of an invalid stored definition
 (`invalid_definition`), `false` that the feed contributed nothing
 (`unavailable`). No definition JSON or names appear.

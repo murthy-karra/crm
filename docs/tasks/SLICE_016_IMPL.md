@@ -2,8 +2,10 @@
 
 **Status: SPECIFICATION APPROVED by the user on 2026-09-09 ("commit and
 then Go for 016a"); rung 016a starts the same day in
-`../crm-worktrees/tasks-1` on `slice-016a-tasks`. Rung 016b awaits its own
-gate after 016a merges.** The [specification](../specs/SLICE_016.md) is
+`../crm-worktrees/tasks-1` on `slice-016a-tasks`; 016a merged at `f106afc`.
+Rung 016b APPROVED by the user on 2026-09-09 ("ok start with 016b"); its
+lane starts the same day in `../crm-worktrees/tasks-2` on
+`slice-016b-today`.** The [specification](../specs/SLICE_016.md) is
 authoritative for every contract; this brief sequences the work. Two
 rungs, **016a** then **016b**, each one lane, one writer, one short-lived
 branch from `main`, merged through the coordinator before the next starts.

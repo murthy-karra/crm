@@ -1,26 +1,23 @@
 # Project State
 
-Last updated: 2026-09-09 (Slice 016a Tasks implemented and verified on the
-branch; awaiting merge approval; LiveKit down, see Environment).
+Last updated: 2026-09-09 (Slice 016a Tasks merged to local main at f106afc;
+runtime update, push and cleanup pending; LiveKit down, see Environment).
 
 ## Current phase
 
-**SLICE 016a (TASKS: MODEL, COMMANDS, ROUTES, PERSON PAGE) — IMPLEMENTED
-AND VERIFIED; AWAITING MERGE APPROVAL (2026-09-09).** Branch
-`slice-016a-tasks` in `../crm-worktrees/tasks-1`, nine commits from `main`
-at `a5c8758`, head `1d6c3bf` (the coordinator's completion: walkthrough
-record, verification record, a microsecond-truncated test helper);
-worktree clean. Lane (Claude Sonnet 5) delivered backend steps 1–4, Web
-step 5, the walkthrough screenshots and two fix rounds; final-tree gates
-run once by the coordinator on `1d6c3bf`: `sqlx-prepare` clean, `check`
-green (773 Rust, 703 Vitest), `check-db` 684 of 684 first run. Reviews:
-round 1 backend and round 2 Web (READY WITH FIXES each, all applied),
-confirmation READY (three claimed-but-missing Web tests and four small
-items recorded LATER). Evidence:
-[SLICE_016a_VERIFICATION.md](../tasks/SLICE_016a_VERIFICATION.md). Not
-authorized yet: merge, `crm_dev` migration, dev API restart,
-`dev-web-prod` rebuild, push, deployment, rung 016b. The QA database
-`crm_slice016_qa` remains on the dev Postgres.
+**SLICE 016a (TASKS: MODEL, COMMANDS, ROUTES, PERSON PAGE) — MERGED TO
+LOCAL MAIN at `f106afc` (2026-09-09, with the user's approval; not pushed,
+runtime not yet updated).** Source `slice-016a-tasks` at `1d6c3bf` (nine
+commits). Final-tree gates on `1d6c3bf`: `sqlx-prepare` clean, `check`
+green (773 Rust, 703 Vitest), `check-db` 684 of 684 first run. Evidence:
+[SLICE_016a_VERIFICATION.md](../tasks/SLICE_016a_VERIFICATION.md). Still
+pending, each needing the user's approval: migrate `crm_dev`
+(`20260913000001_task.sql`, one additive table), restart the dev API (new
+routes and Operator view; the running binary predates 016a), rebuild and
+relaunch `dev-web-prod`; push `main`; delete the branch and the worktree
+`../crm-worktrees/tasks-1`; drop `crm_slice016_qa`. Then the 016b gate
+(the Today axis and panel; the 016b amendment pointers are recorded at
+that gate). Deployment is not authorized.
 
 Previously: **LATER BATCH (2026-09-08) — COMPLETE AND MERGED TO LOCAL MAIN** at `3ff6c5f`
 (with the user's approval; not pushed, not deployed). Source
@@ -739,6 +736,7 @@ together on 2026-09-06).
 | 014 | Production bundle through the tunnel (`dev-web-prod`), optimistic stage/assignment/tag mutations, Today chunk preload and data prefetch, hover prefetch of Person detail, FilterBar residue | `ac270fb` (branch head `3495f71`), pushed 2026-09-08 |
 | — | LATER batch: `inquiry` append-only triggers (cascade-aware), three largest test files split into nine, field-only success writes and `isMutating` guards on the Person mutations | `3ff6c5f` (branch head `5fe4231`), pushed 2026-09-08 |
 | 015 | Notes: `note` table (tombstone delete, import-ready), three commands and routes, `note` timeline kind, `note_changed`, Operator `PersonDetail.notes` (untrusted, history filtered), Person page composer with inline edit/delete (D-053) | `fd5a184` (branch head `00e2e67`), pushed 2026-09-09 |
+| 016a | Tasks model: `task` table (tombstone, import-ready, Today index), six commands and routes, `tasks[]` on the detail, `task_completed` timeline kind, `task_changed`, Operator `PersonDetail.tasks` (untrusted, history filtered), Person page Tasks card (D-054) | `f106afc` (branch head `1d6c3bf`), local only |
 | — | Gate-speedup chunk (check 35m→79s, check-db 37m→~2m) | 2026-08-28 |
 | — | Test-binary consolidation (40 files → 1 binary) | `6427ee8` |
 
@@ -1019,10 +1017,10 @@ and now lives only in git history.
 
 ## Approval currently required
 
-- **Slice 016a (Tasks): merge approval.** All commits are on
-  `slice-016a-tasks`, none on `main`. Requested: (1) merge into local
-  `main`; (2) then, separately, migrate `crm_dev`, restart the dev API and
-  rebuild `dev-web-prod`; (3) push; (4) cleanup. Then the 016b gate.
+- **Slice 016a (Tasks): merged.** Requested next, separately: (1) update
+  the shared development runtime (migrate `crm_dev`, restart the dev API,
+  rebuild `dev-web-prod`); (2) push `main`; (3) cleanup (delete branch and
+  worktree, drop `crm_slice016_qa`). Then the 016b gate.
 - None for 011e: both rungs merged, the dev runtime updated and the branches
   cleaned up with approval on 2026-09-07. `main` pushed on 2026-09-07; deployment is not authorized. The next slice or chunk
   (candidates below) needs the user's request.

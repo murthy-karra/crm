@@ -65,8 +65,18 @@ switch was performed on 2026-09-08 (pre-approved): the dev server (pids
 24542/24563, up since 2026-09-06) stopped by exact PID; `scripts/dev-web-prod`
 from the slice tree serves the production build on 5173 (preview pid 55779);
 through the tunnel `/` answers `cache-control: no-cache` (`cf-cache-status:
-DYNAMIC`) and hashed assets `max-age=14400`. The probe re-run and the §8.10
-walkthrough follow. **Standing note:** the tunnel is now served from the
+DYNAMIC`) and hashed assets `max-age=14400`. **Probe re-run in production
+mode (3 runs):** cold `/login` DCL 0.22–0.58 s (one jittery run 2.0 s) from
+1.3–3.1 s; warm Today data 0.17–1.36 s from 2.2–2.5 s; login → Today
+0.97–1.6 s of which the login POST is 0.76–1.1 s; filter change still
+flash-free; 3 scripts before DOMContentLoaded (gate ≤ 10). **Walkthrough
+9 of 9** in production mode over the tunnel (hover prefetch removes the
+preview's Loading; optimistic stage/assignee hold through a 1.5 s delayed
+response; tag apply/remove; locked chips; selected trigger "Stage · 2",
+chevron, Clear all; popover 7 px under its chip when wrapped); archive
+`docs/design/qa/slice-014-2026-09-08/`; the lane stalled on the walkthrough
+script twice and the coordinator wrote and ran it. Verification record on
+the branch: `docs/tasks/SLICE_014_VERIFICATION.md`. Next: the merge gate. **Standing note:** the tunnel is now served from the
 production bundle; after a merge or pull, re-run `./scripts/dev-web-prod`
 (from the main checkout once Slice 014 merges) and reload; use
 `./scripts/dev-web` for HMR on loopback only when 5173 is free.

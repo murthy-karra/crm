@@ -68,6 +68,9 @@ mod db_inbound_email;
 #[path = "db_inbound_email_intake.rs"]
 mod db_inbound_email_intake;
 
+#[path = "db_inquiry_append_only.rs"]
+mod db_inquiry_append_only;
+
 #[path = "db_intake.rs"]
 mod db_intake;
 

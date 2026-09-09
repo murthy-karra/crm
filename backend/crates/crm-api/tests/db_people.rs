@@ -732,3 +732,122 @@ async fn set_stage_with_malformed_json_returns_400(migrator_pool: PgPool) {
         .unwrap();
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
+
+/// docs/specs/SLICE_015.md §1 rule 5, §9.3: a note is not a contact.
+/// Writing, editing and deleting a note never bumps `person.updated_at`,
+/// never touches any of the four D-052 derived columns, and leaves
+/// `GET /api/people` rows byte-identical.
+#[sqlx::test]
+#[ignore]
+async fn notes_never_change_person_row_or_people_list_rows(migrator_pool: PgPool) {
+    let (org_id, alice_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Acme Realty",
+        "alice-notes-people@acme.test",
+        "Alice",
+        "pw",
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let stage_id: Uuid =
+        sqlx::query_scalar("SELECT id FROM stage WHERE organization_id = $1 ORDER BY position LIMIT 1")
+            .bind(org_id)
+            .fetch_one(&app_pool)
+            .await
+            .unwrap();
+    let person_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO person (organization_id, first_name, stage_id) VALUES ($1, 'Fixture', $2) RETURNING id",
+    )
+    .bind(org_id)
+    .bind(stage_id)
+    .fetch_one(&app_pool)
+    .await
+    .unwrap();
+
+    type PersonRow = (
+        chrono::DateTime<chrono::Utc>,
+        Option<chrono::DateTime<chrono::Utc>>,
+        Option<chrono::DateTime<chrono::Utc>>,
+        Option<chrono::DateTime<chrono::Utc>>,
+        Option<chrono::DateTime<chrono::Utc>>,
+    );
+    let before: PersonRow = sqlx::query_as(
+        "SELECT updated_at, last_inquiry_at, last_contact_at, last_inbound_at, last_outbound_at
+         FROM person WHERE id = $1",
+    )
+    .bind(person_id)
+    .fetch_one(&app_pool)
+    .await
+    .unwrap();
+
+    let router = crate::common::build_router(&migrator_pool).await;
+    let alice = crate::common::login_cookie(&router, "alice-notes-people@acme.test", "pw").await;
+
+    let before_people = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/people", &alice).await,
+    )
+    .await;
+
+    let added = crate::common::body_json(
+        crate::common::post_json_with_cookie(
+            &router,
+            &format!("/api/people/{person_id}/notes"),
+            &alice,
+            json!({ "body": "First note" }),
+        )
+        .await,
+    )
+    .await;
+    let note_id = added["note"]["id"].as_str().unwrap().to_string();
+    crate::common::put_json_with_cookie(
+        &router,
+        &format!("/api/people/{person_id}/notes/{note_id}"),
+        &alice,
+        json!({ "body": "Edited note" }),
+    )
+    .await;
+    crate::common::delete_with_cookie(
+        &router,
+        &format!("/api/people/{person_id}/notes/{note_id}"),
+        &alice,
+    )
+    .await;
+
+    let after: PersonRow = sqlx::query_as(
+        "SELECT updated_at, last_inquiry_at, last_contact_at, last_inbound_at, last_outbound_at
+         FROM person WHERE id = $1",
+    )
+    .bind(person_id)
+    .fetch_one(&app_pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        before, after,
+        "note add/edit/delete must never touch person.updated_at or any D-052 column"
+    );
+
+    let after_people = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/people", &alice).await,
+    )
+    .await;
+    assert_eq!(
+        before_people, after_people,
+        "GET /api/people rows must be byte-identical before and after note activity"
+    );
+
+    // Never assigned, so unaffected either way — but pin it explicitly:
+    // no note-derived fact ever lands `person_id` on anyone's Today.
+    let today = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/today", &alice).await,
+    )
+    .await;
+    assert!(
+        today["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|item| item["person"]["id"] != person_id.to_string()),
+        "a note must never place a Person on Today: {today}"
+    );
+    let _ = alice_id;
+}

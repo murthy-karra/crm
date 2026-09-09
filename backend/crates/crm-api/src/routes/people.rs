@@ -9,6 +9,7 @@ use serde_json::json;
 use uuid::Uuid;
 
 use crate::auth::AuthContext;
+use crate::domain::admin::Role;
 use crate::domain::commands::{
     self, AssignPerson, ChangePersonStage, ContactChannel, ContactOutcome, LogContactAttempt,
 };
@@ -223,9 +224,24 @@ async fn get_person(
         .await
         .map_err(|_| ApiError::Unavailable)?;
 
-    let history = person_queries::history_for_person(&mut conn, organization_id, person_id)
+    let mut history = person_queries::history_for_person(&mut conn, organization_id, person_id)
         .await
         .map_err(|_| ApiError::Unavailable)?;
+    // The `note` history kind's `can_manage` (docs/specs/SLICE_015.md §5,
+    // the tags-route pattern): the domain query always emits `false` (it
+    // has no viewer context); this route knows the viewer's role and id,
+    // so it overwrites the field for every `note` entry — admin, or the
+    // viewer is the note's own author. An unmatched imported author
+    // (`actor: null`) is manageable by an admin only.
+    for entry in history.iter_mut() {
+        if entry.kind == "note" {
+            let can_manage = match &entry.actor {
+                Some(actor) => auth.role == Role::Admin || actor.id == auth.actor_user_id,
+                None => auth.role == Role::Admin,
+            };
+            entry.detail["can_manage"] = serde_json::json!(can_manage);
+        }
+    }
 
     let tags = tag::list_for_person(&mut conn, organization_id, person_id).await?;
 

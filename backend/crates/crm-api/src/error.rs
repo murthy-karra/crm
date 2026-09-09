@@ -7,6 +7,7 @@ use crate::domain::capture::address::RotateError as CaptureRotateError;
 use crate::domain::capture::commands::CaptureCommandError;
 use crate::domain::commands::{CallError, CommandError};
 use crate::domain::intake::workbench::WorkbenchError;
+use crate::domain::note::NoteError;
 use crate::domain::person::filter::FilterError;
 use crate::domain::saved_list::SavedListError;
 use crate::domain::tag::TagError;
@@ -377,6 +378,21 @@ impl From<TagError> for ApiError {
             TagError::PersonTagLimitReached => ApiError::PersonTagLimitReached,
             TagError::TagNameTaken => ApiError::TagNameTaken,
             TagError::Corrupt | TagError::Database(_) => ApiError::Unavailable,
+        }
+    }
+}
+
+/// `note::NoteError` -> `ApiError` (docs/specs/SLICE_015.md §5): rule-1
+/// permission is `Forbidden` -> the existing `403 forbidden` code (the
+/// `tag::TagError` precedent); a corrupt stored role is an operational
+/// failure, never a user-facing code. No new `ApiError` variant.
+impl From<NoteError> for ApiError {
+    fn from(err: NoteError) -> Self {
+        match err {
+            NoteError::NotFound => ApiError::NotFound,
+            NoteError::Forbidden => ApiError::Forbidden,
+            NoteError::MalformedRequest => ApiError::MalformedRequest,
+            NoteError::Corrupt | NoteError::Database(_) => ApiError::Unavailable,
         }
     }
 }

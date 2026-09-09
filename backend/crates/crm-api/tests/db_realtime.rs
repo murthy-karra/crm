@@ -801,3 +801,71 @@ async fn log_contact_attempt_racing_assign_person_on_same_person_both_write_and_
         assert_eq!(data["data"]["person_id"], person_id.to_string());
     }
 }
+
+/// docs/specs/SLICE_015.md §9.8, D-023 rule 7: the `note_changed` event's
+/// parsed payload carries no `body` key anywhere in the envelope — ids
+/// only, exactly like every other `person.changed` variant. Command-level
+/// (not HTTP) so the sentinel body cannot leak through any layer this
+/// slice touches on its way to the wire.
+#[sqlx::test]
+#[ignore]
+async fn note_changed_payload_carries_no_body_key(migrator_pool: PgPool) {
+    let (org_id, member_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Acme Realty",
+        "alice-note-realtime@acme.test",
+        "Alice",
+        "pw",
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let stage_id: Uuid =
+        sqlx::query_scalar("SELECT id FROM stage WHERE organization_id = $1 ORDER BY position LIMIT 1")
+            .bind(org_id)
+            .fetch_one(&app_pool)
+            .await
+            .unwrap();
+    let person_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO person (organization_id, first_name, stage_id) VALUES ($1, 'Fixture', $2) RETURNING id",
+    )
+    .bind(org_id)
+    .bind(stage_id)
+    .fetch_one(&app_pool)
+    .await
+    .unwrap();
+
+    let publisher = Publisher::recording();
+    let ctx = crm_api::domain::envelope::CommandContext {
+        organization_id: crm_api::ids::OrganizationId::new(org_id),
+        actor_user_id: crm_api::ids::UserId::new(member_id),
+        origin: crm_api::domain::envelope::Origin::WebSession,
+        correlation_id: crm_api::ids::CorrelationId::new(Uuid::new_v4()),
+    };
+    const SENTINEL: &str = "SENTINEL_NOTE_BODY_DO_NOT_LEAK";
+    let note = crm_api::domain::note::add_note(
+        &app_pool,
+        &publisher,
+        &ctx,
+        crm_api::domain::note::AddNote {
+            person_id: crm_api::ids::PersonId::new(person_id),
+            body: SENTINEL.to_string(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let events = recorded(&publisher).await;
+    assert_eq!(events.len(), 1);
+    let payload = &events[0].1;
+    assert_eq!(payload["data"]["change"], "note_changed");
+    assert!(
+        payload.get("body").is_none() && payload["data"].get("body").is_none(),
+        "the event must carry no top-level or data-level body key: {payload}"
+    );
+    let serialized = payload.to_string();
+    assert!(
+        !serialized.contains(SENTINEL),
+        "the note body must never reach the realtime payload: {serialized}"
+    );
+    let _ = note;
+}

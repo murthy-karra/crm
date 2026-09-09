@@ -1,10 +1,30 @@
 # Project State
 
-Last updated: 2026-09-08 (Slice 014 approved and its lane started).
+Last updated: 2026-09-08 (Slice 014 merged to local main; the tunnel serves
+the merged production build; no slice active).
 
 ## Current phase
 
-**Slice 014 — APPROVED 2026-09-08, LANE IN IMPLEMENTATION (Web-only).**
+**Slice 014 — COMPLETE AND MERGED TO LOCAL MAIN** at `ac270fb` (2026-09-08,
+with the user's approval; not pushed, not deployed). Source
+`slice-014-perceived-latency` at `3495f71` (six commits incl. the round-1
+fixes `fa9bcab`, the walkthrough archive and the
+[verification record](../tasks/SLICE_014_VERIFICATION.md)). Final gate run
+once by the coordinator: `check` green (757 Rust, 650 Web); no `check-db`
+needed (Web-only). Review round 1 of two: reviewer READY WITH FIXES, tester
+no blocking finding, all fixes applied; round 2 not needed. Measured over
+the tunnel in production mode: cold login DOMContentLoaded 0.22–0.58 s (was
+1.3–3.1 s), warm Today data 0.17–1.36 s (was 2.2–2.5 s), 3 scripts before
+DOMContentLoaded (was 50–60); walkthrough 9 of 9. **The tunnel now serves the
+merged production build from the main checkout** (`./scripts/dev-web-prod`,
+preview pid 62908, started 17:36); the slice-tree preview was stopped by
+exact PID; the branch and worktree `../crm-worktrees/014` were deleted with
+approval. Standing note: after a merge or pull, re-run
+`./scripts/dev-web-prod` and reload; `./scripts/dev-web` is for HMR on
+loopback when 5173 is free. `main` is ahead of `origin/main`; push and
+deployment are not authorized.
+
+Previously: **Slice 014 — APPROVED 2026-09-08, LANE IN IMPLEMENTATION (Web-only).**
 [SLICE_014.md](../specs/SLICE_014.md) and its
 [brief](../tasks/SLICE_014_IMPL.md) were drafted from the planner's analysis
 (which corrected the investigation on one point: through the tunnel the
@@ -536,8 +556,9 @@ clear-all.
 
 ## Current slice
 
-Slice 014 (`docs/specs/SLICE_014.md`, brief `docs/tasks/SLICE_014_IMPL.md`),
-approved 2026-09-08, in implementation. Last completed: Slices 012 (`docs/specs/SLICE_012.md`,
+No slice is active. Last completed: Slice 014 (`docs/specs/SLICE_014.md`,
+verification `docs/tasks/SLICE_014_VERIFICATION.md`, merged 2026-09-08),
+Slices 012 (`docs/specs/SLICE_012.md`,
 verification `docs/tasks/SLICE_012_VERIFICATION.md`) and 013
 (`docs/specs/SLICE_013.md`, verification `docs/tasks/SLICE_013_VERIFICATION.md`),
 both merged 2026-09-08. Previous: Slice 011e — Tags —
@@ -629,7 +650,8 @@ together on 2026-09-06).
 | 011e-e1 | Tags model, commands, six routes, Person page and Tags page, Operator field (D-051) | `51331e9` (branch head `4af2e13`), local only |
 | 011e-e2 | `tags`/`not_tags` clauses across the fourteen statements, `invalid_tag` paths, FilterBar chips, performance evidence | `b6dc49b` (branch head `1796e85`), pushed 2026-09-07 |
 | 012 | Denormalized last-activity columns on Person, trigger-maintained (D-052); fourteen statements read the columns; equivalence gate; perf archive | `26ddab7` (branch head `e32ffd7`), local only |
-| 013 | Operator `filter_people` and `run_saved_list` read-only tools, name-based, D-046-faithful, `MAX_REFERENCES` 25 | `9af47c1` (branch head `151d38a`), local only |
+| 013 | Operator `filter_people` and `run_saved_list` read-only tools, name-based, D-046-faithful, `MAX_REFERENCES` 25 | `9af47c1` (branch head `151d38a`), pushed 2026-09-08 |
+| 014 | Production bundle through the tunnel (`dev-web-prod`), optimistic stage/assignment/tag mutations, Today chunk preload and data prefetch, hover prefetch of Person detail, FilterBar residue | `ac270fb` (branch head `3495f71`), local only |
 | — | Gate-speedup chunk (check 35m→79s, check-db 37m→~2m) | 2026-08-28 |
 | — | Test-binary consolidation (40 files → 1 binary) | `6427ee8` |
 
@@ -853,9 +875,8 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. **Slices 012 and 013 done.** Candidates for the next request, unordered:
-   push `main`; the perceived-latency chunk together with lane C (FilterBar
-   UX polish); the 011d/011e/012/013 LATER batches (person-state 503 test,
+1. **Slices 012, 013 and 014 done.** Candidates for the next request,
+   unordered: push `main`; the 011d–014 LATER batches (person-state 503 test,
    equivalence pins, feeds page first-load error test, the `db_calls` timing
    flake, splitting the three largest test files, popover
    `aria-activedescendant`, `inquiry` append-only triggers, the exact-500

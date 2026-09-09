@@ -1661,11 +1661,12 @@ describe('PersonDetailView — Notes (SLICE_015 §9.10)', () => {
     activeWrapper = wrapper
     const textarea = wrapper.get('[data-testid="note-composer-textarea"]')
     await textarea.setValue('Should trigger a vanished-person 404')
-    await wrapper.get('[data-testid="note-composer-submit"]').trigger('click')
-    await flushPromises()
 
     // The Person has, in fact, vanished: the detail GET the settle's
-    // refetch issues now 404s too.
+    // refetch issues now 404s too. Swap the mock BEFORE the click: the
+    // settle refetch is scheduled on a macrotask from `onError`, and
+    // `flushPromises` is itself a macrotask, so a swap after the click
+    // races the refetch (round-2 confirmation: 1 failure in 3 runs).
     const defaultImpl = apiFetchMock.getMockImplementation()!
     apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
       if (path === `/people/${PERSON_ID}` && (init?.method ?? 'GET') === 'GET') {
@@ -1673,6 +1674,8 @@ describe('PersonDetailView — Notes (SLICE_015 §9.10)', () => {
       }
       return defaultImpl(path, init)
     })
+    await wrapper.get('[data-testid="note-composer-submit"]').trigger('click')
+    await flushPromises()
     await settleTick()
     expect(wrapper.text()).toContain('Person not found.')
   })

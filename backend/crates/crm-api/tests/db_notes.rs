@@ -541,7 +541,11 @@ async fn add_note_shape_history_entry_and_foreign_person_404(migrator_pool: PgPo
     assert!(!note.edited);
     assert_eq!(note.author.as_ref().unwrap().id, UserId::new(f.member_id));
 
-    let router = crate::common::build_router(&migrator_pool).await;
+    // The router shares the test's recording publisher so the "no publish on
+    // either 404" assertion below observes the HTTP path (round-2
+    // confirmation: `build_router` mints its own publisher).
+    let router =
+        crate::common::build_router_with_publisher(&migrator_pool, publisher.clone()).await;
     let alice = crate::common::login_cookie(&router, "alice-notes@acme.test", PW).await;
     let detail = crate::common::body_json(
         crate::common::get_with_cookie(&router, &format!("/api/people/{}", f.person_id), &alice)

@@ -9,7 +9,7 @@
 // Person page with `?outcome=<call_id>` (the Set-outcome dialog). Server
 // order is the only order (§3: `rank()` preserves SQL order; `low` arrives
 // last) — this view never sorts `items` itself.
-import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch, type VNode } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { Mail, Phone, PhoneOutgoing, Sun } from 'lucide-vue-next'
 import type { ColumnDef } from '@tanstack/vue-table'
@@ -17,12 +17,30 @@ import PageHeader from '../components/PageHeader.vue'
 import DataTable from '../components/DataTable.vue'
 import Badge from '../components/Badge.vue'
 import LogContactDialog from '../components/LogContactDialog.vue'
-import { useAuthSessionLifetime, useDisableTodaySourceMutation, useMe, useToday, useTodayFeeds, useTodaySources } from '../api/queries'
+import {
+  useAuthSessionLifetime,
+  useCompleteTaskMutation,
+  useDisableTodaySourceMutation,
+  useMe,
+  useSnoozeTaskMutation,
+  useTasks,
+  useToday,
+  useTodayFeeds,
+  useTodaySources,
+} from '../api/queries'
 import type { TodayItem, TodayReason } from '../api/types'
 import { formatAbsoluteTime, formatRelativeTime } from '../lib/format'
 import { buttonClasses } from '../lib/controls'
-import { describeApiError } from '../lib/errors'
-import { MEMBER_FEED_MARKER_LABEL, TODAY_FEED_LABEL, TODAY_FEED_ORDER, fallbackFeedMessage, memberFeedMarker } from '../lib/todayFeeds'
+import { describeApiError, describeTaskError } from '../lib/errors'
+import {
+  MEMBER_FEED_MARKER_LABEL,
+  TODAY_FEED_LABEL,
+  TODAY_FEED_ORDER,
+  fallbackFeedMessage,
+  memberFeedMarker,
+  todayFeedIssueMessage,
+} from '../lib/todayFeeds'
+import { TASK_KIND_LABEL, clipTitle, groupTasks, panelDueCellText, tomorrowLocalEndOfDay } from '../lib/tasks'
 
 const route = useRoute()
 const router = useRouter()
@@ -36,6 +54,115 @@ const { data: todayData, dataUpdatedAt, isPending, isError, error } = todayQuery
 const sourcesQuery = useTodaySources(orgId, actorId)
 const feedsQuery = useTodayFeeds(orgId, actorId)
 const disableSource = useDisableTodaySourceMutation(orgId, actorId)
+
+// Slice 016b (docs/specs/SLICE_016.md §8): the Tasks panel's own read,
+// independent of the ranked queue above (completing/snoozing a task can
+// move it between tiers or off Today entirely, refetched separately).
+const tasksQuery = useTasks(orgId, actorId)
+
+// One shared Complete mutation instance for BOTH the ranked queue's
+// per-row Complete button and the Tasks panel's rows (identical action,
+// `POST .../tasks/{task_id}/complete`) — `completeTaskPersonId` is
+// updated right before each `.mutate()` call so the hook's
+// `personMutationKey` (used only for the settle/realtime-hold
+// bookkeeping, never the request URL itself) always reflects whichever
+// row is currently in flight, the same pattern `useSnoozeTaskMutation`
+// below repeats for the panel's Snooze control.
+//
+// Pending state for THIS row is tracked with an explicit local ref
+// (`completingTask`/`snoozingTask`), not `completeTask.isPending`/
+// `.variables` directly — the `removeSource`/`removing` precedent
+// earlier in this file: a plain ref set immediately before `.mutate()`
+// and cleared in `onSettled` is deterministic and testable, unlike
+// reading the mutation object's own reactive fields from inside a
+// per-row helper.
+const completeTaskPersonId = ref('')
+const completeTask = useCompleteTaskMutation(orgId, completeTaskPersonId)
+const snoozeTaskPersonId = ref('')
+const snoozeTask = useSnoozeTaskMutation(orgId, snoozeTaskPersonId)
+const taskActionError = ref<{ id: string; message: string } | null>(null)
+const completingTask = ref<{ personId: string; taskId: string } | null>(null)
+const snoozingTask = ref<{ personId: string; taskId: string } | null>(null)
+
+/** Pessimistic (§8: "held while pending"); the row/item leaves only once
+ * the natural refetch (settled via `settleTaskMutation`) stops returning
+ * it — no optimistic cache write here.
+ *
+ * Round-2 review fix 1: `completeTask`'s `mutationKey` is
+ * `computed(() => personMutationKey(orgId, completeTaskPersonId))` — a
+ * REACTIVE key. Vue Query's `MutationObserver` applies a `mutationKey`
+ * change through a pre-flush watcher, which runs asynchronously relative
+ * to a synchronous `completeTaskPersonId.value = personId` immediately
+ * followed by `.mutate()`: the key change had not yet propagated when
+ * `.mutate()` fired, so the observer picked it up moments later and
+ * reset, detaching the very call this function just made from its own
+ * `onError`/`onSettled` — leaving `completingTask` stuck forever and
+ * every later click inert. Awaiting `nextTick()` between setting the ref
+ * and calling `.mutate()` lets that watcher flush first, so the mutation
+ * always starts already keyed to the right Person. */
+async function onCompleteTaskItem(personId: string, taskId: string) {
+  if (completingTask.value) return
+  taskActionError.value = null
+  completingTask.value = { personId, taskId }
+  completeTaskPersonId.value = personId
+  await nextTick()
+  completeTask.mutate(
+    { personId, taskId },
+    {
+      onError: (err) => { taskActionError.value = { id: taskId, message: describeTaskError(err, 'Could not complete this task.') } },
+      onSettled: () => { completingTask.value = null },
+    },
+  )
+}
+function isCompletingTaskItem(personId: string, taskId: string): boolean {
+  return completingTask.value?.personId === personId && completingTask.value?.taskId === taskId
+}
+
+/** Snooze to tomorrow at local end of day (rule 2). A `changed: false`
+ * response (the task is already due then) is not an error — the row
+ * simply stays, no error copy (§8). Same `nextTick()` fix as
+ * `onCompleteTaskItem` above, for the identical reactive-`mutationKey`
+ * reason. */
+async function onSnoozeTaskItem(personId: string, taskId: string) {
+  if (snoozingTask.value) return
+  taskActionError.value = null
+  snoozingTask.value = { personId, taskId }
+  snoozeTaskPersonId.value = personId
+  await nextTick()
+  snoozeTask.mutate(
+    { personId, taskId, dueAt: tomorrowLocalEndOfDay() },
+    {
+      onError: (err) => { taskActionError.value = { id: taskId, message: describeTaskError(err, 'Could not snooze this task.') } },
+      onSettled: () => { snoozingTask.value = null },
+    },
+  )
+}
+function isSnoozingTaskItem(personId: string, taskId: string): boolean {
+  return snoozingTask.value?.personId === personId && snoozingTask.value?.taskId === taskId
+}
+
+type TaskReasonVariant = Extract<TodayReason, { code: 'task_overdue' | 'task_due' }>
+
+/** The item's `task_overdue`/`task_due` reason, if any (§8: "whenever the
+ * item carries a task reason, regardless of `recommended_action`"). */
+function taskReason(item: TodayItem): TaskReasonVariant | null {
+  const reason = item.reasons.find(
+    (r): r is TaskReasonVariant => r.code === 'task_overdue' || r.code === 'task_due',
+  )
+  return reason ?? null
+}
+
+const generatedAt = computed(() => tasksQuery.data.value?.generated_at ?? new Date().toISOString())
+// Round-2 review fix 3: `groupTasks` (lib/tasks.ts) compares with
+// `Date.parse`, not raw ISO-string `<` (a whole-second `due_at` sorted
+// AFTER a fractional-second `generated_at` lexically, misclassifying it).
+const taskGroups = computed(() => {
+  const data = tasksQuery.data.value
+  if (!data) return { overdue: [], dueSoon: [] }
+  return groupTasks(data.tasks, data.generated_at)
+})
+const overdueTasks = computed(() => taskGroups.value.overdue)
+const dueSoonTasks = computed(() => taskGroups.value.dueSoon)
 const orderedFeeds = computed(() => {
   const byKey = new Map((feedsQuery.data.value?.feeds ?? []).map((f) => [f.feed_key, f]))
   return TODAY_FEED_ORDER.map((key) => byKey.get(key)).filter((f): f is NonNullable<typeof f> => f !== undefined)
@@ -73,6 +200,17 @@ function reasonLabel(reason: TodayReason): string {
       return 'Client replied'
     case 'list_member':
       return reason.name
+    // Slice 016b (docs/specs/SLICE_016.md §8): the badge shows the
+    // CLIPPED title (the `list_member` chip precedent — full text there
+    // because list names are short; a task title can run to 500 chars).
+    case 'task_overdue':
+    case 'task_due':
+      return clipTitle(reason.title)
+    // Forward-compatibility default (an older bundle encountering a
+    // future additive reason code): never an empty badge or `undefined`,
+    // the `HistoryEntry` generic-fallback precedent.
+    default:
+      return 'Work item'
   }
 }
 
@@ -144,7 +282,10 @@ function retrySources() {
 
 function refreshToday() {
   sourceNotice.value = null
-  void Promise.all([todayQuery.refetch(), sourcesQuery.refetch(), feedsQuery.refetch()])
+  // Round-2 review fix 5: the Tasks panel's own read was missing from the
+  // Refresh button's join — a stale panel could persist indefinitely
+  // after a Refresh that otherwise looked complete.
+  void Promise.all([todayQuery.refetch(), sourcesQuery.refetch(), feedsQuery.refetch(), tasksQuery.refetch()])
 }
 
 const emptyTitle = computed(() =>
@@ -161,6 +302,12 @@ watch([orgId, actorId, authSessionLifetime], () => {
   removing.value = null
   removalFocus.value = null
   showSources.value = false
+  // Round-2 review fix 5: an actor/org/session change (account switch,
+  // re-auth) must not leave a stale task action's guard/error stuck for
+  // the new identity.
+  completingTask.value = null
+  snoozingTask.value = null
+  taskActionError.value = null
 })
 
 // The cap notice may link directly to this panel. This is view-local route
@@ -273,9 +420,18 @@ const columns: ColumnDef<TodayItem>[] = [
       const value = item.priority === 'list'
         ? item.last_contact_attempt?.occurred_at ?? null
         : item.waiting_since
-      return value
-        ? h('span', { title: formatAbsoluteTime(value) }, formatRelativeTime(value))
-        : h('span', { class: 'text-text-muted' }, 'Never contacted')
+      if (value) {
+        return h('span', { title: formatAbsoluteTime(value) }, formatRelativeTime(value))
+      }
+      // Slice 016b (docs/specs/SLICE_016.md §8): "the Waiting cell shows
+      // 'Due <relative>' from the task reason when `waiting_since` is
+      // null" — a task-only item's `waiting_since` is always null (§5);
+      // a retained item with a real `waiting_since` never reaches here.
+      const task = item.priority !== 'list' ? taskReason(item) : null
+      if (task) {
+        return h('span', { title: formatAbsoluteTime(task.due_at) }, `Due ${formatRelativeTime(task.due_at)}`)
+      }
+      return h('span', { class: 'text-text-muted' }, 'Never contacted')
     },
   },
   {
@@ -311,27 +467,55 @@ const columns: ColumnDef<TodayItem>[] = [
     cell: (info) => {
       const item = info.row.original
       const needed = outcomeNeeded(item)
-      if (needed) return setOutcomeButton(item, needed.call_id, 'today-set-outcome-action')
-      const aside = outcomeNeededAside(item)
-      const logContact = h(
-        'button',
-        {
-          type: 'button',
-          class: buttonClasses('secondary'),
-          onClick: (event: MouseEvent) => {
-            // Rows are links (DataTable.vue) — stop the click from also
-            // bubbling into the row's own navigate() (SLICE_003 §10).
-            event.stopPropagation()
-            openLogContact(item)
-          },
-        },
-        'Log contact',
-      )
-      if (!aside) return logContact
-      return h('div', { class: 'flex items-center justify-end gap-2' }, [
-        logContact,
-        setOutcomeButton(item, aside.call_id, 'today-set-outcome-aside'),
-      ])
+      const buttons: VNode[] = []
+      if (needed) {
+        buttons.push(setOutcomeButton(item, needed.call_id, 'today-set-outcome-action'))
+      } else {
+        buttons.push(
+          h(
+            'button',
+            {
+              type: 'button',
+              class: buttonClasses('secondary'),
+              onClick: (event: MouseEvent) => {
+                // Rows are links (DataTable.vue) — stop the click from also
+                // bubbling into the row's own navigate() (SLICE_003 §10).
+                event.stopPropagation()
+                openLogContact(item)
+              },
+            },
+            'Log contact',
+          ),
+        )
+        const aside = outcomeNeededAside(item)
+        if (aside) buttons.push(setOutcomeButton(item, aside.call_id, 'today-set-outcome-aside'))
+      }
+      // Slice 016b (docs/specs/SLICE_016.md §8): "whenever the item
+      // carries a task reason, regardless of `recommended_action`" — the
+      // `set_outcome` control precedent: an additional row action, never
+      // replacing the ones above.
+      const task = taskReason(item)
+      if (task) {
+        const pending = isCompletingTaskItem(item.person.id, task.task_id)
+        buttons.push(
+          h(
+            'button',
+            {
+              type: 'button',
+              class: buttonClasses('secondary'),
+              disabled: pending,
+              'data-testid': 'today-task-complete',
+              onClick: (event: MouseEvent) => {
+                event.stopPropagation()
+                onCompleteTaskItem(item.person.id, task.task_id)
+              },
+            },
+            pending ? 'Completing…' : 'Complete',
+          ),
+        )
+      }
+      if (buttons.length === 1) return buttons[0]
+      return h('div', { class: 'flex items-center justify-end gap-2' }, buttons)
     },
   },
 ]
@@ -363,6 +547,103 @@ const columns: ColumnDef<TodayItem>[] = [
         </div>
       </template>
     </PageHeader>
+
+    <!-- Slice 016b (docs/specs/SLICE_016.md §8): the Tasks panel, below
+         the queue header — Overdue / Due soon grouped client-side against
+         the response's own `generated_at`, never the browser clock. -->
+    <section
+      class="mb-5 rounded-xl border border-border bg-surface-0 p-4"
+      aria-label="Tasks"
+      data-testid="tasks-panel"
+    >
+      <h2 class="text-body font-semibold text-text">
+        Tasks
+      </h2>
+      <div
+        v-if="tasksQuery.isError.value"
+        class="mt-3 text-small text-danger"
+        role="status"
+      >
+        Could not load your tasks.
+      </div>
+      <p
+        v-else-if="tasksQuery.isPending.value && !tasksQuery.data.value"
+        class="mt-3 text-small text-text-muted"
+      >
+        Loading tasks…
+      </p>
+      <template v-else-if="tasksQuery.data.value">
+        <div
+          v-for="group in [
+            { key: 'overdue', label: 'Overdue', rows: overdueTasks },
+            { key: 'due_soon', label: 'Due soon', rows: dueSoonTasks },
+          ]"
+          :key="group.key"
+          class="mt-3"
+          :data-testid="`task-panel-group-${group.key}`"
+        >
+          <h3 class="text-small font-semibold text-text-muted">
+            {{ group.label }}
+          </h3>
+          <p
+            v-if="group.rows.length === 0"
+            class="mt-1 text-small text-text-muted"
+          >
+            Nothing due
+          </p>
+          <ul
+            v-else
+            class="mt-1 divide-y divide-border rounded-lg border border-border"
+          >
+            <li
+              v-for="task in group.rows"
+              :key="task.id"
+              class="flex flex-wrap items-center gap-3 px-3 py-2"
+              :data-testid="`task-panel-row-${task.id}`"
+            >
+              <RouterLink
+                :to="`/people/${task.person.id}`"
+                class="min-w-0 flex-1 truncate text-body font-medium text-text hover:underline"
+              >
+                {{ task.person.display_name }}
+              </RouterLink>
+              <Badge tint="neutral">
+                {{ TASK_KIND_LABEL[task.kind] }}
+              </Badge>
+              <span class="min-w-0 flex-[2] truncate text-body text-text">{{ task.title }}</span>
+              <span
+                class="shrink-0 text-small text-text-muted"
+                :title="task.due_at ? formatAbsoluteTime(task.due_at) : undefined"
+              >{{ task.due_at ? panelDueCellText(task.due_at, generatedAt) : '' }}</span>
+              <button
+                type="button"
+                :class="buttonClasses('secondary')"
+                :disabled="isCompletingTaskItem(task.person.id, task.id)"
+                :data-testid="`task-panel-complete-${task.id}`"
+                @click="onCompleteTaskItem(task.person.id, task.id)"
+              >
+                {{ isCompletingTaskItem(task.person.id, task.id) ? 'Completing…' : 'Complete' }}
+              </button>
+              <button
+                type="button"
+                :class="buttonClasses('ghost')"
+                :disabled="isSnoozingTaskItem(task.person.id, task.id)"
+                :data-testid="`task-panel-snooze-${task.id}`"
+                @click="onSnoozeTaskItem(task.person.id, task.id)"
+              >
+                Tomorrow
+              </button>
+            </li>
+          </ul>
+        </div>
+        <p
+          v-if="tasksQuery.data.value.truncated"
+          class="mt-3 text-small text-text-muted"
+        >
+          Showing the first 200
+        </p>
+      </template>
+    </section>
 
     <section
       v-if="showSources"
@@ -528,7 +809,7 @@ const columns: ColumnDef<TodayItem>[] = [
             {{ fallbackFeedMessage(issue) }}
           </template>
           <template v-else>
-            {{ TODAY_FEED_LABEL[issue.feed_key] }} could not load.
+            {{ todayFeedIssueMessage(issue.feed_key) }}
           </template>
         </li>
         <li
@@ -560,6 +841,28 @@ const columns: ColumnDef<TodayItem>[] = [
           Manage sources
         </button>
       </div>
+    </div>
+
+    <!-- Round-2 review fix 2: a page-level, dismissible alert for a task
+         action's error, keyed by task id and independent of any row — the
+         016a "deleted elsewhere" banner pattern (PersonDetailView.vue).
+         Neither the ranked queue's Complete button nor a panel row whose
+         own refetch just removed it had anywhere to show this before. -->
+    <div
+      v-if="taskActionError"
+      role="alert"
+      class="mb-4 flex items-center justify-between gap-3 rounded-xl border border-border bg-surface-0 p-3 text-body text-danger"
+      data-testid="task-action-error-banner"
+    >
+      <span>{{ taskActionError.message }}</span>
+      <button
+        type="button"
+        :class="buttonClasses('ghost')"
+        data-testid="task-action-error-dismiss"
+        @click="taskActionError = null"
+      >
+        Dismiss
+      </button>
     </div>
 
     <div

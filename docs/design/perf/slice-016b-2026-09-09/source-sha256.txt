@@ -1,0 +1,27 @@
+Slice 016b §11 gate 1 (part 2): the person-state, call and source
+statements are byte-identical to `main` at a5b301e (the 016b lane's
+branch point, already containing 016a). Verified with:
+
+  git show a5b301e:<path> | shasum -a 256
+  shasum -a 256 <path>
+
+backend/crates/crm-app/src/domain/today/system_feeds/sql/person_state.sql                  IDENTICAL
+  a5b301e: 78d073e471f641f7f8fc3ca633dfc3945f4938a076a62330cf5c2ee7fbeb6819
+  HEAD:    78d073e471f641f7f8fc3ca633dfc3945f4938a076a62330cf5c2ee7fbeb6819
+
+backend/crates/crm-app/src/domain/today/system_feeds/sql/call_membership.sql               IDENTICAL
+  a5b301e: fd7560e03b3c1e81ea2f2f2912d16959bedae55cb914d1fb44c392a67420d2b1
+  HEAD:    fd7560e03b3c1e81ea2f2f2912d16959bedae55cb914d1fb44c392a67420d2b1
+
+backend/crates/crm-app/src/domain/today/system_feeds/sql/call_only.sql                     IDENTICAL
+  a5b301e: dbf1f641b196a1f5fb07570852364b14bb9bee63d4d70c69ed29a020dfe5d20c
+  HEAD:    dbf1f641b196a1f5fb07570852364b14bb9bee63d4d70c69ed29a020dfe5d20c
+
+backend/crates/crm-app/src/domain/today/source_candidates.sql                              IDENTICAL
+  a5b301e: 13f7fae5eff4b435286e81997552a1790b657fdcc351259d6cbcd3af63359304
+  HEAD:    13f7fae5eff4b435286e81997552a1790b657fdcc351259d6cbcd3af63359304
+
+backend/crates/crm-app/src/domain/today/source_membership.sql                              IDENTICAL
+  a5b301e: 739ffd43c9e03704973769e4e186ad9d2d71c1585b0ca6be08e8dc4f8525e967
+  HEAD:    739ffd43c9e03704973769e4e186ad9d2d71c1585b0ca6be08e8dc4f8525e967
+

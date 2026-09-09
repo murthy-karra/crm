@@ -17,6 +17,7 @@ use crm_api::domain::task::{
     self, CompleteTask, CreateTask, DeleteTask, ReopenTask, SnoozeTask, TaskError, TaskKind,
     UpdateTask,
 };
+use crm_api::domain::today;
 use crm_api::ids::{CorrelationId, OrganizationId, PersonId, TaskId, UserId};
 use crm_api::realtime::Publisher;
 
@@ -2929,4 +2930,474 @@ async fn task_completed_history_can_manage_overwrite_and_imported_shape(migrator
     .unwrap();
     assert!(bob_now_assignee_edit.changed);
     assert!(bob_now_assignee_edit.task.completed_at.is_some());
+}
+
+// --- 016b §12.13: `GET /api/tasks?scope=mine` -----------------------------
+
+async fn create_dated_task(
+    app_pool: &PgPool,
+    org_id: Uuid,
+    creator: Uuid,
+    assignee: Uuid,
+    person_id: Uuid,
+    due_at: chrono::DateTime<Utc>,
+) -> Uuid {
+    let task = task::create_task(
+        app_pool,
+        &Publisher::Disabled,
+        &command_context(org_id, creator),
+        CreateTask {
+            person_id: PersonId::new(person_id),
+            title: "Panel fixture task".to_string(),
+            kind: TaskKind::FollowUp,
+            due_at: Some(due_at),
+            assignee_user_id: Some(UserId::new(assignee)),
+        },
+    )
+    .await
+    .unwrap();
+    task.id.as_uuid()
+}
+
+#[sqlx::test]
+#[ignore]
+async fn list_my_tasks_membership_boundary_and_order(migrator_pool: PgPool) {
+    let f = fixture(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let router = crate::common::build_router(&migrator_pool).await;
+    let alice = crate::common::login_cookie(&router, "alice-tasks@acme.test", PW).await;
+    let now = Utc::now();
+
+    let p_overdue = insert_bare_person(
+        &app_pool,
+        f.org_id,
+        first_stage_id(&app_pool, f.org_id).await,
+    )
+    .await;
+    let p_due_now = insert_bare_person(
+        &app_pool,
+        f.org_id,
+        first_stage_id(&app_pool, f.org_id).await,
+    )
+    .await;
+    let p_boundary = insert_bare_person(
+        &app_pool,
+        f.org_id,
+        first_stage_id(&app_pool, f.org_id).await,
+    )
+    .await;
+    let p_beyond = insert_bare_person(
+        &app_pool,
+        f.org_id,
+        first_stage_id(&app_pool, f.org_id).await,
+    )
+    .await;
+
+    create_dated_task(
+        &app_pool,
+        f.org_id,
+        f.admin_id,
+        f.admin_id,
+        p_overdue,
+        now - Duration::hours(1),
+    )
+    .await;
+    create_dated_task(&app_pool, f.org_id, f.admin_id, f.admin_id, p_due_now, now).await;
+    create_dated_task(
+        &app_pool,
+        f.org_id,
+        f.admin_id,
+        f.admin_id,
+        p_boundary,
+        now + Duration::hours(24),
+    )
+    .await;
+    create_dated_task(
+        &app_pool,
+        f.org_id,
+        f.admin_id,
+        f.admin_id,
+        p_beyond,
+        now + Duration::hours(24) + Duration::seconds(1),
+    )
+    .await;
+
+    let resp = crate::common::get_with_cookie(&router, "/api/tasks?scope=mine", &alice).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = crate::common::body_json(resp).await;
+    let tasks = body["tasks"].as_array().unwrap();
+    // Beyond-24h task is excluded; the other three, ordered due_at ASC.
+    assert_eq!(tasks.len(), 3);
+    assert_eq!(tasks[0]["person"]["id"], p_overdue.to_string());
+    assert_eq!(tasks[1]["person"]["id"], p_due_now.to_string());
+    assert_eq!(tasks[2]["person"]["id"], p_boundary.to_string());
+    assert_eq!(body["truncated"], false);
+    assert!(body["generated_at"].is_string());
+    for task in tasks {
+        assert_eq!(task["can_manage"], true);
+        assert!(task["person"]["display_name"].is_string());
+    }
+}
+
+#[sqlx::test]
+#[ignore]
+async fn list_my_tasks_query_shape_fails_closed(migrator_pool: PgPool) {
+    let f = fixture(&migrator_pool).await;
+    let router = crate::common::build_router(&migrator_pool).await;
+    let alice = crate::common::login_cookie(&router, "alice-tasks@acme.test", PW).await;
+    let _ = f;
+
+    for uri in [
+        "/api/tasks",
+        "/api/tasks?scope=",
+        "/api/tasks?scope=all",
+        "/api/tasks?scope=mine&extra=1",
+        "/api/tasks?other=1",
+    ] {
+        let resp = crate::common::get_with_cookie(&router, uri, &alice).await;
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST, "GET {uri}");
+    }
+
+    let ok = crate::common::get_with_cookie(&router, "/api/tasks?scope=mine", &alice).await;
+    assert_eq!(
+        ok.status(),
+        StatusCode::OK,
+        "the exact accepted shape still succeeds"
+    );
+}
+
+#[sqlx::test]
+#[ignore]
+async fn list_my_tasks_excludes_another_members_and_another_organizations_tasks(
+    migrator_pool: PgPool,
+) {
+    let f = fixture(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let router = crate::common::build_router(&migrator_pool).await;
+    let alice = crate::common::login_cookie(&router, "alice-tasks@acme.test", PW).await;
+    let now = Utc::now();
+
+    // Another member's task in the SAME Organization: absent from alice's panel.
+    let p_other_member = insert_bare_person(
+        &app_pool,
+        f.org_id,
+        first_stage_id(&app_pool, f.org_id).await,
+    )
+    .await;
+    create_dated_task(
+        &app_pool,
+        f.org_id,
+        f.member_id,
+        f.member_id,
+        p_other_member,
+        now,
+    )
+    .await;
+
+    // A second Organization where the SAME email domain's admin also holds
+    // a task due now: absent from alice's panel (a fresh id, not alice).
+    let (other_org_id, other_admin_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Second Realty",
+        "second-org-admin-tasks@example.test",
+        "Dana",
+        PW,
+    )
+    .await;
+    let other_app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let other_stage = first_stage_id(&other_app_pool, other_org_id).await;
+    let p_other_org = insert_bare_person(&other_app_pool, other_org_id, other_stage).await;
+    create_dated_task(
+        &other_app_pool,
+        other_org_id,
+        other_admin_id,
+        other_admin_id,
+        p_other_org,
+        now,
+    )
+    .await;
+
+    // Alice's own task, the positive control.
+    let p_alice = insert_bare_person(
+        &app_pool,
+        f.org_id,
+        first_stage_id(&app_pool, f.org_id).await,
+    )
+    .await;
+    create_dated_task(&app_pool, f.org_id, f.admin_id, f.admin_id, p_alice, now).await;
+
+    let resp = crate::common::get_with_cookie(&router, "/api/tasks?scope=mine", &alice).await;
+    let body = crate::common::body_json(resp).await;
+    let tasks = body["tasks"].as_array().unwrap();
+    assert_eq!(tasks.len(), 1);
+    assert_eq!(tasks[0]["person"]["id"], p_alice.to_string());
+}
+
+#[sqlx::test]
+#[ignore]
+async fn list_my_tasks_set_based_parity_with_the_today_axis(migrator_pool: PgPool) {
+    let f = fixture(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let router = crate::common::build_router(&migrator_pool).await;
+    let alice = crate::common::login_cookie(&router, "alice-tasks@acme.test", PW).await;
+    let now = Utc::now();
+
+    let p_one_task = insert_bare_person(
+        &app_pool,
+        f.org_id,
+        first_stage_id(&app_pool, f.org_id).await,
+    )
+    .await;
+    create_dated_task(
+        &app_pool,
+        f.org_id,
+        f.admin_id,
+        f.admin_id,
+        p_one_task,
+        now + Duration::hours(3),
+    )
+    .await;
+
+    // Two in-window tasks on the SAME Person: two panel rows, but the
+    // Today axis carries only the earliest as its one item's reason.
+    let p_two_tasks = insert_bare_person(
+        &app_pool,
+        f.org_id,
+        first_stage_id(&app_pool, f.org_id).await,
+    )
+    .await;
+    let earlier_id = create_dated_task(
+        &app_pool,
+        f.org_id,
+        f.admin_id,
+        f.admin_id,
+        p_two_tasks,
+        now + Duration::hours(1),
+    )
+    .await;
+    create_dated_task(
+        &app_pool,
+        f.org_id,
+        f.admin_id,
+        f.admin_id,
+        p_two_tasks,
+        now + Duration::hours(5),
+    )
+    .await;
+
+    let resp = crate::common::get_with_cookie(&router, "/api/tasks?scope=mine", &alice).await;
+    let body = crate::common::body_json(resp).await;
+    let tasks = body["tasks"].as_array().unwrap();
+    assert_eq!(
+        tasks.len(),
+        3,
+        "two rows for the two-task Person, one for the other"
+    );
+
+    let today_list = today::query_at(
+        &mut app_pool.acquire().await.unwrap(),
+        &crm_api::domain::person::visibility::PersonVisibilityScope::Organization(
+            OrganizationId::new(f.org_id),
+        ),
+        UserId::new(f.admin_id),
+        now,
+    )
+    .await
+    .unwrap();
+
+    let panel_person_ids: std::collections::BTreeSet<Uuid> = tasks
+        .iter()
+        .map(|t| Uuid::parse_str(t["person"]["id"].as_str().unwrap()).unwrap())
+        .collect();
+    let axis_person_ids: std::collections::BTreeSet<Uuid> = today_list
+        .items
+        .iter()
+        .filter(|item| {
+            item.reasons.iter().any(|r| {
+                matches!(
+                    r,
+                    crm_api::domain::today::TodayReason::TaskDue { .. }
+                        | crm_api::domain::today::TodayReason::TaskOverdue { .. }
+                )
+            })
+        })
+        .map(|item| item.person.id.as_uuid())
+        .collect();
+    assert_eq!(
+        panel_person_ids, axis_person_ids,
+        "panel Persons equal the task-reason Persons"
+    );
+
+    let item_two_tasks = today_list
+        .items
+        .iter()
+        .find(|item| item.person.id.as_uuid() == p_two_tasks)
+        .unwrap();
+    match item_two_tasks
+        .reasons
+        .iter()
+        .find(|r| {
+            matches!(
+                r,
+                crm_api::domain::today::TodayReason::TaskDue { .. }
+                    | crm_api::domain::today::TodayReason::TaskOverdue { .. }
+            )
+        })
+        .unwrap()
+    {
+        crm_api::domain::today::TodayReason::TaskDue { task_id, .. } => {
+            assert_eq!(
+                task_id.as_uuid(),
+                earlier_id,
+                "the earliest per Person equals the reason's task_id"
+            );
+        }
+        other => panic!("expected task_due, got {other:?}"),
+    }
+}
+
+// --- Round-1 review must-close item 6: truncation at 200/201 -------------
+//
+// docs/specs/SLICE_016.md §12 item 13: "`truncated` at 201" for
+// `GET /api/tasks?scope=mine` — `open_for_assignee` fetches 201 and the
+// route (`routes/tasks.rs`) truncates to 200 and sets `truncated` on the
+// 201st row. Exactly 200 must NOT be truncated (proves the boundary is
+// "> 200", not "> 199" or "off by one" in either direction).
+
+/// Bulk, direct-SQL task insertion (mirrors `db_today_task_axis.rs`'s own
+/// `insert_n_fresh_inquiry_people` precedent) — the full `task::create_task`
+/// command is unnecessary ceremony 200+ times over in a boundary test.
+async fn insert_n_dated_tasks(
+    pool: &PgPool,
+    org_id: Uuid,
+    person_id: Uuid,
+    assignee: Uuid,
+    n: usize,
+    base: chrono::DateTime<Utc>,
+) {
+    for i in 0..n {
+        sqlx::query(
+            "INSERT INTO task (organization_id, person_id, title, kind, due_at, \
+                assignee_user_id, created_by_user_id, origin, correlation_id) \
+             VALUES ($1, $2, 'Boundary fixture task', 'follow_up', $3, $4, $4, 'migration', $5)",
+        )
+        .bind(org_id)
+        .bind(person_id)
+        .bind(base + Duration::milliseconds(i as i64))
+        .bind(assignee)
+        .bind(Uuid::new_v4())
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+}
+
+#[sqlx::test]
+#[ignore]
+async fn list_my_tasks_exactly_200_is_not_truncated(migrator_pool: PgPool) {
+    let f = fixture(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let router = crate::common::build_router(&migrator_pool).await;
+    let alice = crate::common::login_cookie(&router, "alice-tasks@acme.test", PW).await;
+    let now = Utc::now();
+
+    insert_n_dated_tasks(&app_pool, f.org_id, f.person_id, f.admin_id, 200, now).await;
+
+    let resp = crate::common::get_with_cookie(&router, "/api/tasks?scope=mine", &alice).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = crate::common::body_json(resp).await;
+    let tasks = body["tasks"].as_array().unwrap();
+    assert_eq!(tasks.len(), 200, "exactly 200 open tasks, all returned");
+    assert_eq!(
+        body["truncated"], false,
+        "exactly 200 must not report truncated (the boundary is strictly > 200)"
+    );
+}
+
+#[sqlx::test]
+#[ignore]
+async fn list_my_tasks_201_is_truncated_to_200(migrator_pool: PgPool) {
+    let f = fixture(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let router = crate::common::build_router(&migrator_pool).await;
+    let alice = crate::common::login_cookie(&router, "alice-tasks@acme.test", PW).await;
+    let now = Utc::now();
+
+    insert_n_dated_tasks(&app_pool, f.org_id, f.person_id, f.admin_id, 201, now).await;
+
+    let resp = crate::common::get_with_cookie(&router, "/api/tasks?scope=mine", &alice).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = crate::common::body_json(resp).await;
+    let tasks = body["tasks"].as_array().unwrap();
+    assert_eq!(
+        tasks.len(),
+        200,
+        "the 201st row is truncated away, never returned"
+    );
+    assert_eq!(body["truncated"], true, "the 201st row sets truncated");
+}
+
+// --- Round-1 review must-close item 1: same-user, two Organizations -----
+
+/// The SAME physical user is a member of two Organizations, each holding a
+/// task assigned to them. `list_my_tasks_excludes_another_members_and_
+/// another_organizations_tasks` above already proves cross-Organization
+/// exclusion, but with a DIFFERENT user id in the other Organization — a
+/// regression that dropped the `organization_id` predicate and kept only
+/// `assignee_user_id = $2` would still pass that test (the ids differ
+/// regardless). This is the strictly narrower, more dangerous shape: the
+/// SAME assignee id exists validly in both Organizations' task rows, so
+/// only the `organization_id` predicate itself — never id inequality —
+/// can keep them apart.
+#[sqlx::test]
+#[ignore]
+async fn list_my_tasks_same_assignee_id_in_two_organizations_never_leaks(migrator_pool: PgPool) {
+    let f_a = fixture(&migrator_pool).await;
+    let (org_b, admin_b) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Second Realty B",
+        "second-realty-b-admin@example.test",
+        "Dana",
+        PW,
+    )
+    .await;
+    crate::common::add_membership_with(
+        &migrator_pool,
+        org_b,
+        f_a.admin_id,
+        Role::Member,
+        MembershipStatus::Active,
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let router = crate::common::build_router(&migrator_pool).await;
+    let alice = crate::common::login_cookie(&router, "alice-tasks@acme.test", PW).await;
+    let now = Utc::now();
+
+    let p_a = insert_bare_person(
+        &app_pool,
+        f_a.org_id,
+        first_stage_id(&app_pool, f_a.org_id).await,
+    )
+    .await;
+    create_dated_task(&app_pool, f_a.org_id, f_a.admin_id, f_a.admin_id, p_a, now).await;
+
+    let other_app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let stage_b = first_stage_id(&other_app_pool, org_b).await;
+    let p_b = insert_bare_person(&other_app_pool, org_b, stage_b).await;
+    // f_a.admin_id (alice) is the assignee here too — a valid member of
+    // org_b, holding a task there under the exact SAME user id she uses
+    // in org A.
+    create_dated_task(&other_app_pool, org_b, admin_b, f_a.admin_id, p_b, now).await;
+
+    let resp = crate::common::get_with_cookie(&router, "/api/tasks?scope=mine", &alice).await;
+    let body = crate::common::body_json(resp).await;
+    let tasks = body["tasks"].as_array().unwrap();
+    assert_eq!(
+        tasks.len(),
+        1,
+        "alice's org-A session must see only her org-A task, never org B's, \
+         even though she is the assignee of both"
+    );
+    assert_eq!(tasks[0]["person"]["id"], p_a.to_string());
 }

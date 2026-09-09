@@ -9,6 +9,12 @@ pub mod model;
 pub mod rank;
 pub mod sources;
 pub mod system_feeds;
+/// The fixed built-in task axis (docs/specs/SLICE_016.md §5, D-054 §1).
+/// Private: only `today::mod` wires it into the query; no cross-crate or
+/// cross-module caller needs its statements directly (unlike
+/// `system_feeds::evaluate`, which the frozen-vs-live equivalence gate
+/// calls from outside this crate).
+mod task_axis;
 #[cfg(feature = "test-support")]
 pub mod test_support;
 
@@ -27,7 +33,7 @@ pub use sources::{
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, SubsecRound, Utc};
 use sqlx::pool::PoolConnection;
 use sqlx::{Acquire, PgConnection, Postgres};
 use tracing::Instrument;
@@ -70,6 +76,17 @@ struct QueryTelemetry {
     feed_statuses: Option<[(&'static str, &'static str); 3]>,
     person_state_candidate_count: Option<usize>,
     call_candidate_count: Option<usize>,
+    /// docs/specs/SLICE_016.md §5, §9: the task axis's evaluated row count
+    /// (statement (a) membership rows plus statement (b) task-only rows,
+    /// before either the (a)-side per-Person cap or the (b)-side K-cap).
+    /// `None` when the axis never completed (its own unrecoverable
+    /// failure) — zero would falsely claim zero candidates were read.
+    task_candidate_count: Option<usize>,
+    /// The task axis's own wall-clock duration, present whenever the axis
+    /// actually ran (success or a recovered failure) — absent only when
+    /// its own unrecoverable failure aborted the whole response before
+    /// timing was worth reporting.
+    task_axis_ms: Option<u64>,
 }
 
 struct QuerySpanGuard {
@@ -173,6 +190,9 @@ async fn query_inner(
         feed_status_call_outcome_needed = tracing::field::Empty,
         person_state_candidate_count = tracing::field::Empty,
         call_candidate_count = tracing::field::Empty,
+        // docs/specs/SLICE_016.md §5, §9: the built-in task axis (D-054 §1).
+        task_candidate_count = tracing::field::Empty,
+        task_axis_ms = tracing::field::Empty,
     );
     let mut trace = QuerySpanGuard::new(span.clone());
     let result = async { query_inner_untraced(conn, scope, viewer, evaluation_clock).await }
@@ -246,6 +266,14 @@ async fn query_inner(
                 "call_candidate_count",
                 outcome.telemetry.call_candidate_count,
             );
+            record_optional_usize(
+                &span,
+                "task_candidate_count",
+                outcome.telemetry.task_candidate_count,
+            );
+            if let Some(task_axis_ms) = outcome.telemetry.task_axis_ms {
+                span.record("task_axis_ms", task_axis_ms);
+            }
             trace.finish(match outcome.list.sources.status {
                 TodaySourcesStatus::Complete => "complete",
                 TodaySourcesStatus::Partial => "sources_partial",
@@ -286,11 +314,20 @@ async fn query_inner_untraced(
     let database_now: DateTime<Utc> = sqlx::query_scalar("SELECT statement_timestamp()")
         .fetch_one(&mut *tx)
         .await?;
+    // Round-1 review fix B: `database_now` (PostgreSQL's own
+    // `statement_timestamp()`) is already microsecond-precision, but a
+    // test-fixture `Fixed(now)` value (e.g. a bare `Utc::now()`) can carry
+    // nanosecond precision that PostgreSQL truncates on bind — leaving the
+    // in-memory `now` used for Rust-side comparisons (overdue/due-soon,
+    // reason selection) off by a sub-microsecond remainder from the value
+    // actually bound into every SQL parameter. Truncating unconditionally
+    // here keeps both sides byte-identical regardless of clock source.
     let now = match evaluation_clock {
         EvaluationClock::Database => database_now,
         #[cfg(feature = "test-support")]
         EvaluationClock::Fixed(now) => now,
-    };
+    }
+    .trunc_subsecs(6);
     let feeds_result = evaluate_feeds_builtins(&mut tx, scope, viewer, now).await?;
     if feeds_result.call_feed_unrecoverable {
         // Mirrors the source-metadata-unavailable early return exactly: the
@@ -325,20 +362,215 @@ async fn query_inner_untraced(
                 feed_statuses: feeds_result.feed_statuses,
                 person_state_candidate_count: feeds_result.person_state_candidate_count,
                 call_candidate_count: feeds_result.call_candidate_count,
+                // The call feed's own unrecoverable failure returns before
+                // the task axis ever runs (docs/specs/SLICE_016.md §5: "An
+                // unrecoverable call feed returns before the axis").
+                task_candidate_count: None,
+                task_axis_ms: None,
             },
         });
     }
     let FeedsBuiltins {
         items: mut builtins,
-        truncated: builtin_truncated,
+        truncated: mut builtin_truncated,
         candidate_count: builtin_candidate_count,
         feed_statuses,
         person_state_candidate_count,
         call_candidate_count,
-        system_feed_issues,
+        mut system_feed_issues,
         call_feed_recovery_deadline,
         ..
     } = feeds_result;
+
+    // Seeded from a recovered call-feed failure; the task axis below may
+    // overwrite it with its OWN recovery's remaining grace (recoveries
+    // share one total budget, never stack a fresh one per stage — the
+    // list-source loop further down reuses this same variable).
+    let mut final_recovery_deadline = call_feed_recovery_deadline;
+
+    // docs/specs/SLICE_016.md §5, D-054 §1: the fixed built-in task axis,
+    // after `evaluate_feeds_builtins` returns and the call-feed
+    // unrecoverable check above, and before `builtin_ids`/the list-source
+    // `k` are computed — task-only items must be part of the built-in set
+    // the list stage excludes and counts against. Retained = P ∪
+    // call-only, i.e. `builtins` exactly as they stand right now.
+    let task_candidate_count: Option<usize>;
+    let task_axis_ms: Option<u64>;
+    {
+        let retained_ids: Vec<Uuid> = builtins
+            .iter()
+            .map(|item| item.person.id.as_uuid())
+            .collect();
+        let axis_started = Instant::now();
+        let axis_deadline = axis_started + SOURCE_BUDGET;
+        let axis_span = tracing::info_span!(
+            "today.task_axis",
+            organization_id = %scope.organization_id(),
+            actor_id = %viewer,
+            outcome = tracing::field::Empty,
+            duration_ms = tracing::field::Empty,
+            task_candidate_count = tracing::field::Empty,
+        );
+        let organization_id = scope.organization_id();
+        let already_truncated = builtin_truncated;
+        let outcome = async {
+            tokio::time::timeout(SOURCE_BUDGET, async {
+                sqlx::query("SAVEPOINT today_task_axis")
+                    .execute(&mut *tx)
+                    .await?;
+                #[cfg(feature = "test-support")]
+                test_support::checkpoint(
+                    test_support::TodayQueryPhase::TaskAxisAfterSavepoint,
+                    None,
+                    Some(axis_deadline),
+                    &mut tx,
+                )
+                .await?;
+                set_source_statement_timeout_until(&mut tx, axis_deadline).await?;
+                let membership = task_axis::task_membership(
+                    &mut tx,
+                    organization_id,
+                    viewer,
+                    now,
+                    &retained_ids,
+                )
+                .await?;
+                #[cfg(feature = "test-support")]
+                test_support::checkpoint(
+                    test_support::TodayQueryPhase::TaskAxisAfterMembership,
+                    None,
+                    Some(axis_deadline),
+                    &mut tx,
+                )
+                .await?;
+                // docs/specs/SLICE_016.md §5: (b) runs only when neither
+                // the person-state statement nor the call prefix was
+                // truncated — never admit a discarded row.
+                let only = if already_truncated {
+                    Vec::new()
+                } else {
+                    let k = 200usize.saturating_sub(builtins.len());
+                    let limit = i64::try_from(k.saturating_add(1)).unwrap_or(201);
+                    set_source_statement_timeout_until(&mut tx, axis_deadline).await?;
+                    task_axis::task_only_prefix(
+                        &mut tx,
+                        organization_id,
+                        viewer,
+                        now,
+                        &retained_ids,
+                        limit,
+                    )
+                    .await?
+                };
+                #[cfg(feature = "test-support")]
+                test_support::checkpoint(
+                    test_support::TodayQueryPhase::BeforeTaskAxisRelease,
+                    None,
+                    Some(axis_deadline),
+                    &mut tx,
+                )
+                .await?;
+                set_source_statement_timeout_until(&mut tx, axis_deadline).await?;
+                sqlx::query("RELEASE SAVEPOINT today_task_axis")
+                    .execute(&mut *tx)
+                    .await?;
+                Ok::<_, sqlx::Error>((membership, only))
+            })
+            .await
+        }
+        .instrument(axis_span.clone())
+        .await;
+        task_axis_ms = Some(axis_started.elapsed().as_millis() as u64);
+
+        match outcome {
+            Ok(Ok((membership, only))) => {
+                task_candidate_count = Some(membership.len() + only.len());
+                axis_span.record("outcome", "complete");
+                axis_span.record(
+                    "task_candidate_count",
+                    task_candidate_count.unwrap_or_default(),
+                );
+                for row in &membership {
+                    let (reason, overdue) = task_axis::membership_reason(row, now)?;
+                    apply_task_membership(&mut builtins, row.person_id, reason, overdue);
+                }
+                if !already_truncated {
+                    let k = 200usize.saturating_sub(builtins.len());
+                    let truncated_task = only.len() > k;
+                    let mut only = only;
+                    only.truncate(k);
+                    builtins.extend(only);
+                    builtin_truncated = builtin_truncated || truncated_task;
+                }
+            }
+            Ok(Err(_)) | Err(_) => {
+                // All-or-nothing (docs/specs/SLICE_016.md §5): nothing
+                // above mutated `builtins`, so a failure at any point in
+                // either statement leaves the person-state/call-feed items
+                // exactly as they stood — no `task_*` reason, no
+                // task-only item.
+                axis_span.record("outcome", "unavailable");
+                task_candidate_count = None;
+                system_feed_issues.push(SystemFeedIssue {
+                    feed_key: "task_due",
+                    error: SystemFeedIssueError::Unavailable,
+                    fallback: false,
+                });
+                let recovery_started = Instant::now();
+                let recovered = match recovery_remaining(recovery_started) {
+                    Ok(remaining) => {
+                        rollback_task_axis_within(
+                            &mut tx,
+                            remaining,
+                            recovery_started + RECOVERY_BUDGET,
+                        )
+                        .await
+                    }
+                    Err(_) => false,
+                };
+                if recovered {
+                    final_recovery_deadline = Some(recovery_started + RECOVERY_BUDGET);
+                } else {
+                    // Mirrors the call feed's own unrecoverable early
+                    // return exactly: the task axis's savepoint rollback
+                    // could not complete inside its shared grace, so the
+                    // connection's state past that point is unknown.
+                    // Never attempt list-source work on it.
+                    return Ok(QueryOutcome {
+                        list: TodayList {
+                            generated_at: now,
+                            items: builtins,
+                            truncated: builtin_truncated,
+                            sources: TodaySources {
+                                status: TodaySourcesStatus::Unavailable,
+                                issues: Vec::new(),
+                                system_feed_issues,
+                            },
+                        },
+                        connection_healthy: false,
+                        telemetry: QueryTelemetry {
+                            builtin_candidate_count,
+                            builtin_truncated,
+                            metadata_outcome: SourceMetadataOutcome::Unavailable,
+                            enabled_source_count: None,
+                            successful_source_count: None,
+                            failed_source_count: None,
+                            list_candidate_count: None,
+                            list_item_count: None,
+                            list_truncated: None,
+                            feed_statuses,
+                            person_state_candidate_count,
+                            call_candidate_count,
+                            task_candidate_count: None,
+                            task_axis_ms,
+                        },
+                    });
+                }
+            }
+        }
+        axis_span.record("duration_ms", axis_started.elapsed().as_millis() as u64);
+    }
+
     let builtin_ids: Vec<Uuid> = builtins
         .iter()
         .map(|item| item.person.id.as_uuid())
@@ -454,6 +686,8 @@ async fn query_inner_untraced(
                     feed_statuses,
                     person_state_candidate_count,
                     call_candidate_count,
+                    task_candidate_count,
+                    task_axis_ms,
                 },
             });
         }
@@ -505,6 +739,8 @@ async fn query_inner_untraced(
                     feed_statuses,
                     person_state_candidate_count,
                     call_candidate_count,
+                    task_candidate_count,
+                    task_axis_ms,
                 },
             });
         }
@@ -525,11 +761,10 @@ async fn query_inner_untraced(
     // Once a recovery operation cannot complete inside its shared 100 ms
     // grace, no later query or transaction completion may reuse this socket.
     let mut connection_healthy = true;
-    // Seeded from a recovered call-feed failure (spec §5 step 4), so the
-    // final commit uses whatever remains of THAT recovery's shared grace
-    // when no list source runs afterward to reset it — recoveries share one
-    // total budget, never stack a fresh one per stage.
-    let mut final_recovery_deadline = call_feed_recovery_deadline;
+    // `final_recovery_deadline` was already seeded above (from a recovered
+    // call-feed OR task-axis failure — recoveries share one total budget,
+    // never stack a fresh one per stage) and is reused, not redeclared,
+    // here.
     let mut configured = configured.into_iter();
     while let Some(configured_source) = configured.next() {
         let source = configured_source.source;
@@ -931,6 +1166,8 @@ async fn query_inner_untraced(
             feed_statuses,
             person_state_candidate_count,
             call_candidate_count,
+            task_candidate_count,
+            task_axis_ms,
         },
     })
 }
@@ -1591,10 +1828,88 @@ fn append_list_reason(items: &mut [TodayItem], person_id: Uuid, source: &sources
         list_id: source.list_id,
         name: source.name.clone(),
     };
+    // docs/specs/SLICE_016.md §5: the list stage runs AFTER the task axis,
+    // and a list reason must land BEFORE any task reason (as well as
+    // before `call_outcome_needed`, which always stays last) — "a
+    // task-only item that later gains a list reason reads [list_member,
+    // task_*]". The axis's own insertion (`apply_task_membership`) only
+    // ever has `CallOutcomeNeeded` to avoid, since it always runs first;
+    // this boundary is the one place that must also avoid a reason the
+    // task axis may have already placed.
     let position = item
         .reasons
         .iter()
-        .position(|reason| matches!(reason, TodayReason::CallOutcomeNeeded { .. }))
+        .position(|reason| {
+            matches!(
+                reason,
+                TodayReason::CallOutcomeNeeded { .. }
+                    | TodayReason::TaskOverdue { .. }
+                    | TodayReason::TaskDue { .. }
+            )
+        })
         .unwrap_or(item.reasons.len());
     item.reasons.insert(position, reason);
+}
+
+/// Applies one task-membership row's reason to its retained item
+/// (docs/specs/SLICE_016.md §5): appended after any existing reasons and
+/// before `call_outcome_needed` (the list stage has not run yet at this
+/// point in the pipeline, so `CallOutcomeNeeded` — always appended by the
+/// call feed before the task axis runs — is the only reason to avoid). A
+/// retained `normal` item is raised to `high` when its task is overdue;
+/// `low` is never raised (this function is never called for a `low` item
+/// to raise it — the caller only ever raises `Normal`); nothing is ever
+/// lowered. A no-op if the Person is absent from `items` (defensive; the
+/// caller only ever calls this once per membership row).
+fn apply_task_membership(
+    items: &mut [TodayItem],
+    person_id: Uuid,
+    reason: TodayReason,
+    overdue: bool,
+) {
+    let Some(item) = items
+        .iter_mut()
+        .find(|item| item.person.id.as_uuid() == person_id)
+    else {
+        return;
+    };
+    if overdue && item.priority == TodayPriority::Normal {
+        item.priority = TodayPriority::High;
+    }
+    let position = item
+        .reasons
+        .iter()
+        .position(|r| matches!(r, TodayReason::CallOutcomeNeeded { .. }))
+        .unwrap_or(item.reasons.len());
+    item.reasons.insert(position, reason);
+}
+
+async fn rollback_task_axis_within(
+    conn: &mut PgConnection,
+    budget: Duration,
+    deadline: Instant,
+) -> bool {
+    #[cfg(not(feature = "test-support"))]
+    let _ = deadline;
+    matches!(
+        tokio::time::timeout(budget, async {
+            sqlx::query("ROLLBACK TO SAVEPOINT today_task_axis")
+                .execute(&mut *conn)
+                .await?;
+            #[cfg(feature = "test-support")]
+            test_support::checkpoint(
+                test_support::TodayQueryPhase::RecoveryAfterRollback,
+                None,
+                Some(deadline),
+                conn,
+            )
+            .await?;
+            sqlx::query("RELEASE SAVEPOINT today_task_axis")
+                .execute(&mut *conn)
+                .await?;
+            Ok::<(), sqlx::Error>(())
+        })
+        .await,
+        Ok(Ok(()))
+    )
 }

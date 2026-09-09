@@ -755,6 +755,27 @@ export interface DeleteTaskResponse {
   deleted: boolean
 }
 
+// --- Slice 016b: GET /api/tasks?scope=mine (docs/specs/SLICE_016.md §4) ----
+// The Today page's Tasks panel: the viewer's own open, dated tasks with
+// `due_at <= generated_at + 24h`, ordered `due_at, id`. `TaskWithPerson` is
+// `Task` plus the owning Person's minimal reference (id + display name for
+// the panel row's "Person's name as a link").
+
+export interface TaskPersonRef {
+  id: string
+  display_name: string
+}
+
+export interface TaskWithPerson extends Task {
+  person: TaskPersonRef
+}
+
+export interface ListTasksResponse {
+  tasks: TaskWithPerson[]
+  generated_at: string
+  truncated: boolean
+}
+
 // ---- Mutations: assignment / stage (§5 POST .../assignment, .../stage) ---
 
 export interface AssignmentRequest {
@@ -900,6 +921,12 @@ export type RecommendedAction = 'call' | 'email' | 'review_person' | 'set_outcom
 // SLICE_009 §6's declared additive change: `client_replied`, which WINS
 // the reason slot in place of the Inquiry-based trio when a Person
 // qualifies for both (the server never emits it alongside them).
+// Slice 016b (docs/specs/SLICE_016.md §5, D-054 §1): the built-in task
+// axis's two reasons. `title` rides the reason for the Web (the
+// `list_member.name` precedent) — clip it before display (§8: the
+// `list_member` chip precedent again). `task_overdue` is `due_at < now`
+// (strict) at evaluation time; `task_due` is `due_at >= now`, within the
+// 24h admission window.
 export type TodayReason =
   | { code: 'new_inquiry'; source: string; received_at: string }
   | { code: 'no_contact_attempt'; since: string }
@@ -907,6 +934,8 @@ export type TodayReason =
   | { code: 'call_outcome_needed'; call_id: string; ended_at: string }
   | { code: 'client_replied'; occurred_at: string }
   | { code: 'list_member'; list_id: string; name: string }
+  | { code: 'task_overdue'; task_id: string; title: string; kind: TaskKind; due_at: string }
+  | { code: 'task_due'; task_id: string; title: string; kind: TaskKind; due_at: string }
 
 // `latest_inquiry` on a TodayItem — exactly `{id, source, received_at}` (§5),
 // narrower than `PersonInquiry` (which also carries `source_external_id` and
@@ -946,8 +975,12 @@ export interface TodayResponse {
 // otherwise unchanged. -------------------------------------------------
 
 export type SystemFeedIssueError = 'unavailable' | 'invalid_definition'
+/** Slice 016b (docs/specs/SLICE_016.md §5): `'task_due'` joins the issue
+ * keys with `error: 'unavailable', fallback: false` — a token with no feed
+ * row, so it never appears in `TodayFeedKey` (the admin PUT paths' own
+ * closed vocabulary, which this union does NOT widen). */
 export interface SystemFeedIssue {
-  feed_key: TodayFeedKey
+  feed_key: TodayFeedKey | 'task_due'
   error: SystemFeedIssueError
   /** `true` when the canonical default was evaluated in place of an invalid
    * stored definition (`invalid_definition`); `false` when the feed

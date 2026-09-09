@@ -371,6 +371,11 @@ async fn platform_admin_with_zero_memberships_has_null_organization_and_is_401_o
         // Organization membership — a platform-only session is 401 here
         // exactly as on every other tenant route in this enumeration.
         "/api/tags",
+        // Slice 016b (docs/specs/SLICE_016.md §4, §9): the member Tasks
+        // panel read joins this enumeration too — `auth` runs before the
+        // query-shape check, so a platform-only session is 401 here
+        // regardless of the `scope=mine` query string.
+        "/api/tasks?scope=mine",
     ] {
         let resp = get_with_cookie(&router, uri, &cookie).await;
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED, "GET {uri}");

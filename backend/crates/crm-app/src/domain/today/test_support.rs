@@ -35,6 +35,17 @@ pub enum TodayQueryPhase {
     CallFeedAfterSavepoint,
     CallFeedAfterMembership,
     BeforeCallFeedRelease,
+    /// docs/specs/SLICE_016.md §5: the built-in task axis's own
+    /// checkpoints (D-054 §1), mirroring the call feed's
+    /// `CallFeedAfter*`/`BeforeCallFeedRelease` triad exactly — including
+    /// reuse of `RecoveryAfterRollback`/`BeforeFinalCommit` with
+    /// `source_id: None`, so a hook cannot distinguish the task axis's
+    /// recovery/commit checkpoints from the call feed's or the metadata
+    /// statement's by phase alone; tests target the axis's OWN three
+    /// phases below to inject its failure.
+    TaskAxisAfterSavepoint,
+    TaskAxisAfterMembership,
+    BeforeTaskAxisRelease,
     /// docs/specs/SLICE_011d.md §4: immediately after preview's real
     /// `statement_timeout` is set, immediately before its (person-state or
     /// call-only) evaluation query. A hook running a genuinely slow query

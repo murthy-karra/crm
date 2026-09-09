@@ -110,6 +110,7 @@ import type {
   CreateTaskRequest,
   CreateTaskResponse,
   DeleteTaskResponse,
+  ListTasksResponse,
   ReopenTaskResponse,
   SnoozeTaskRequest,
   SnoozeTaskResponse,
@@ -201,6 +202,15 @@ export const queryKeys = {
   // separate cache — every member reads the same underlying index and gets
   // their own `can_manage` values back from the same response.
   tags: (orgId: string) => ['org', orgId, 'tags'] as const,
+  // Slice 016b (docs/specs/SLICE_016.md §8): `GET /api/tasks?scope=mine`'s
+  // Tasks-panel cache, viewer-relative like `todayForActor` — the panel's
+  // content depends on which member is looking. `actorId` optional so a
+  // mutation settle/realtime invalidation can target the whole
+  // `['org', orgId, 'tasks']` prefix (every actor's panel cache under this
+  // Organization) without knowing which specific actor(s) a task's
+  // assignee changed between — the `people(orgId, filter?)` precedent.
+  tasks: (orgId: string, actorId?: string) =>
+    actorId ? (['org', orgId, 'tasks', actorId] as const) : (['org', orgId, 'tasks'] as const),
 }
 
 // `/me` has no public session-id field. The coordinator adds an opaque
@@ -691,6 +701,27 @@ export function useToday(orgId: MaybeRefOrGetter<string>, actorId: MaybeRefOrGet
   return useQuery({
     queryKey: computed(() => queryKeys.todayForActor(toValue(orgId), toValue(actorId))),
     queryFn: ({ signal }) => fetchToday(signal),
+    enabled: computed(() => toValue(orgId) !== '' && toValue(actorId) !== ''),
+    refetchInterval: 60_000,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always',
+  })
+}
+
+// Slice 016b (docs/specs/SLICE_016.md §8): the Today page's Tasks panel.
+// Same refetch discipline as `useToday` (interval, mount, focus) — a
+// second read model driven by the same task_changed/realtime and interval
+// backstops, since the panel and the ranked queue can each move
+// independently (completing from the queue removes the panel row; snoozing
+// from the panel can move an item between the queue's tiers).
+function fetchTasks(signal?: AbortSignal): Promise<ListTasksResponse> {
+  return apiFetch<ListTasksResponse>('/tasks?scope=mine', { signal })
+}
+
+export function useTasks(orgId: MaybeRefOrGetter<string>, actorId: MaybeRefOrGetter<string>) {
+  return useQuery({
+    queryKey: computed(() => queryKeys.tasks(toValue(orgId), toValue(actorId))),
+    queryFn: ({ signal }) => fetchTasks(signal),
     enabled: computed(() => toValue(orgId) !== '' && toValue(actorId) !== ''),
     refetchInterval: 60_000,
     refetchOnMount: 'always',
@@ -1972,18 +2003,27 @@ export function useDeleteNoteMutation(
   }, providedQueryClient)
 }
 
-// --- Slice 016a: Tasks (docs/specs/SLICE_016.md §8) -------------------------
+// --- Slice 016a/016b: Tasks (docs/specs/SLICE_016.md §8) --------------------
 // Typed to-dos on a Person. Deliberately PESSIMISTIC, the note precedent
 // above (§8: mutations are pessimistic) — `onMutate` writes nothing to the
 // cache. All six key with `personMutationKey` and settle through
 // `settlePersonMutation` on `[queryKeys.person(orgId, personId),
-// queryKeys.today(orgId)]` (a due task changes the viewer's Today; it
-// changes no People row or list count — rules 5/6), so the LATER-batch
-// `isMutating` guards and the realtime hold apply exactly as they do for
-// assign/stage/tags/notes.
+// queryKeys.today(orgId), queryKeys.tasks(orgId)]` (a due task changes the
+// viewer's Today and the Tasks panel; it changes no People row or list
+// count — rules 5/6). `queryKeys.tasks(orgId)` (no actorId) invalidates the
+// whole tasks prefix — every actor's panel cache under this Organization —
+// since a task mutation's assignee at the time of the write is not
+// necessarily the acting viewer (an admin managing another member's task;
+// a reassignment moves the task between two members' caches at once) — so
+// the LATER-batch `isMutating` guards and the realtime hold apply exactly
+// as they do for assign/stage/tags/notes.
 
 function settleTaskMutation(qc: QueryClient, orgId: string, personId: string) {
-  settlePersonMutation(qc, orgId, personId, [queryKeys.person(orgId, personId), queryKeys.today(orgId)])
+  settlePersonMutation(qc, orgId, personId, [
+    queryKeys.person(orgId, personId),
+    queryKeys.today(orgId),
+    queryKeys.tasks(orgId),
+  ])
 }
 
 /** `POST /api/people/{id}/tasks` (§4): any active member. */

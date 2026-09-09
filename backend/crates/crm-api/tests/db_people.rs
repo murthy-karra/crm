@@ -855,12 +855,15 @@ async fn notes_never_change_person_row_or_people_list_rows(migrator_pool: PgPool
 
 /// docs/specs/SLICE_016.md §1 rule 6, §9: creating, updating, completing,
 /// reopening, snoozing and deleting a task never bumps `person.updated_at`,
-/// never touches any of the four D-052 derived columns, leaves
-/// `GET /api/people` rows byte-identical, and (016a) never places the
-/// Person on Today (D-054 §1's axis is 016b-only).
+/// never touches any of the four D-052 derived columns, and leaves
+/// `GET /api/people` rows byte-identical throughout — even once 016b's
+/// built-in task axis (D-054 §1) legitimately places the Person on Today
+/// while the task is open, dated and overdue (asserted below), that
+/// placement is computed at read time from the `task` row and never
+/// writes anything back onto `person` or the People list.
 #[sqlx::test]
 #[ignore]
-async fn tasks_never_change_person_row_or_people_list_rows_or_today(migrator_pool: PgPool) {
+async fn tasks_never_change_person_row_or_people_list_rows(migrator_pool: PgPool) {
     let (org_id, alice_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Acme Realty",
@@ -974,20 +977,26 @@ async fn tasks_never_change_person_row_or_people_list_rows_or_today(migrator_poo
     assert_eq!(snooze_resp.status(), StatusCode::OK);
     assert_eq!(crate::common::body_json(snooze_resp).await["changed"], true);
 
-    // 016a has no Today axis yet (D-054 §1 is a 016b rung): an open,
-    // overdue task must not appear as a Today reason this slice.
+    // 016b (D-054 §1): the built-in task axis now legitimately places the
+    // Person on Today with a `task_overdue` reason while the task is
+    // open, dated and overdue — computed at read time, never written back
+    // onto the Person row (confirmed by the byte-identical `person`/
+    // `GET /api/people` assertions below, taken from BEFORE this whole
+    // sequence started).
     let today = crate::common::body_json(
         crate::common::get_with_cookie(&router, "/api/today", &alice).await,
     )
     .await;
+    let today_item = today["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["person"]["id"] == person_id.to_string());
     assert!(
-        today["items"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .all(|item| item["person"]["id"] != person_id.to_string()),
-        "an open, overdue task must never place a Person on Today in 016a: {today}"
+        today_item.is_some(),
+        "an open, overdue, assigned task must place the Person on Today via the 016b axis: {today}"
     );
+    assert_eq!(today_item.unwrap()["reasons"][0]["code"], "task_overdue");
 
     let delete_resp = crate::common::delete_with_cookie(
         &router,
@@ -997,6 +1006,19 @@ async fn tasks_never_change_person_row_or_people_list_rows_or_today(migrator_poo
     .await;
     assert_eq!(delete_resp.status(), StatusCode::OK);
     assert_eq!(crate::common::body_json(delete_resp).await["deleted"], true);
+
+    let today_after_delete = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/today", &alice).await,
+    )
+    .await;
+    assert!(
+        today_after_delete["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|item| item["person"]["id"] != person_id.to_string()),
+        "a tombstoned task must remove the Person from Today again: {today_after_delete}"
+    );
 
     let after: PersonRow = sqlx::query_as(
         "SELECT updated_at, last_inquiry_at, last_contact_at, last_inbound_at, last_outbound_at

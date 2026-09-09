@@ -168,6 +168,8 @@ mod tests {
                 TodayReason::CallOutcomeNeeded { .. } => "call_outcome_needed",
                 TodayReason::ClientReplied { .. } => "client_replied",
                 TodayReason::ListMember { .. } => "list_member",
+                TodayReason::TaskOverdue { .. } => "task_overdue",
+                TodayReason::TaskDue { .. } => "task_due",
             })
             .collect()
     }

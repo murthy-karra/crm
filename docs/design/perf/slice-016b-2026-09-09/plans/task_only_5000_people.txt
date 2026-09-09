@@ -1,0 +1,97 @@
+--- 5,000 People (viewer has 30 open dated tasks) ---
+Nested Loop Left Join  (cost=25.29..59.24 rows=1 width=432) (actual time=0.182..0.356 rows=30.00 loops=1)
+  Buffers: shared hit=403
+  CTE mine
+    ->  Index Scan using task_org_assignee_due_open_idx on task t  (cost=0.28..8.31 rows=1 width=104) (actual time=0.011..0.015 rows=30.00 loops=1)
+          Index Cond: ((organization_id = 'e87d61fc-3d48-48b9-9fac-3b7aab8d0c70'::uuid) AND (assignee_user_id = '610d9263-306a-4255-8f85-3958b831f297'::uuid) AND (due_at <= ('2026-09-09 14:41:47.163938+00'::timestamp with time zone + '24:00:00'::interval)))
+          Index Searches: 1
+          Buffers: shared hit=4
+  ->  Nested Loop Left Join  (cost=0.66..10.02 rows=1 width=304) (actual time=0.153..0.246 rows=30.00 loops=1)
+        Buffers: shared hit=160
+        ->  Nested Loop  (cost=0.51..9.29 rows=1 width=272) (actual time=0.150..0.236 rows=30.00 loops=1)
+              Buffers: shared hit=160
+              ->  Nested Loop  (cost=0.35..8.56 rows=1 width=240) (actual time=0.147..0.217 rows=30.00 loops=1)
+                    Buffers: shared hit=100
+                    ->  Limit  (cost=0.07..0.07 rows=1 width=104) (actual time=0.141..0.145 rows=30.00 loops=1)
+                          Buffers: shared hit=10
+                          ->  Sort  (cost=0.07..0.07 rows=1 width=104) (actual time=0.141..0.142 rows=30.00 loops=1)
+                                Sort Key: m.due_at, m.person_id
+                                Sort Method: quicksort  Memory: 28kB
+                                Buffers: shared hit=10
+                                ->  Nested Loop Anti Join  (cost=0.00..0.06 rows=1 width=104) (actual time=0.025..0.123 rows=30.00 loops=1)
+                                      Join Filter: ((m2.person_id = m.person_id) AND (ROW(m2.due_at, m2.task_id) < ROW(m.due_at, m.task_id)))
+                                      Rows Removed by Join Filter: 900
+                                      Buffers: shared hit=4
+                                      ->  CTE Scan on mine m  (cost=0.00..0.02 rows=1 width=104) (actual time=0.012..0.015 rows=30.00 loops=1)
+                                            Filter: (person_id <> ALL ('{}'::uuid[]))
+                                            Storage: Memory  Maximum Storage: 19kB
+                                            Buffers: shared hit=3
+                                      ->  CTE Scan on mine m2  (cost=0.00..0.02 rows=1 width=40) (actual time=0.000..0.002 rows=30.00 loops=30)
+                                            Storage: Memory  Maximum Storage: 19kB
+                                            Buffers: shared hit=1
+                    ->  Index Scan using person_id_organization_id_key on person p  (cost=0.29..8.31 rows=1 width=136) (actual time=0.002..0.002 rows=1.00 loops=30)
+                          Index Cond: ((id = m.person_id) AND (organization_id = 'e87d61fc-3d48-48b9-9fac-3b7aab8d0c70'::uuid))
+                          Index Searches: 30
+                          Buffers: shared hit=90
+              ->  Index Scan using stage_id_organization_id_key on stage s  (cost=0.15..0.73 rows=1 width=48) (actual time=0.000..0.000 rows=1.00 loops=30)
+                    Index Cond: (id = p.stage_id)
+                    Index Searches: 30
+                    Buffers: shared hit=60
+        ->  Index Scan using app_user_pkey on app_user u  (cost=0.15..0.73 rows=1 width=48) (actual time=0.000..0.000 rows=0.00 loops=30)
+              Index Cond: (id = p.assigned_user_id)
+              Index Searches: 0
+  ->  Limit  (cost=16.33..16.35 rows=1 width=88) (actual time=0.001..0.001 rows=0.00 loops=30)
+        Buffers: shared hit=63
+        ->  Incremental Sort  (cost=16.33..16.38 rows=2 width=88) (actual time=0.001..0.001 rows=0.00 loops=30)
+              Sort Key: ca.occurred_at DESC, ca.id DESC
+              Presorted Key: ca.occurred_at
+              Full-sort Groups: 30  Sort Method: quicksort  Average Memory: 25kB  Peak Memory: 25kB
+              Buffers: shared hit=63
+              ->  Nested Loop Anti Join  (cost=0.27..16.32 rows=1 width=88) (actual time=0.000..0.000 rows=0.00 loops=30)
+                    Buffers: shared hit=60
+                    ->  Index Scan Backward using contact_attempted_org_person_occurred_idx on contact_attempted ca  (cost=0.15..8.17 rows=1 width=88) (actual time=0.000..0.000 rows=0.00 loops=30)
+                          Index Cond: ((organization_id = p.organization_id) AND (person_id = p.id))
+                          Index Searches: 30
+                          Buffers: shared hit=60
+                    ->  Index Only Scan using contact_attempted_corrects_once on contact_attempted x2  (cost=0.12..8.14 rows=1 width=16) (never executed)
+                          Index Cond: (corrects_id = ca.id)
+                          Heap Fetches: 0
+                          Index Searches: 0
+  SubPlan 2
+    ->  Limit  (cost=8.18..8.19 rows=1 width=40) (actual time=0.001..0.001 rows=0.00 loops=30)
+          Buffers: shared hit=60
+          ->  Sort  (cost=8.18..8.19 rows=1 width=40) (actual time=0.001..0.001 rows=0.00 loops=30)
+                Sort Key: cm.created_at
+                Sort Method: quicksort  Memory: 25kB
+                Buffers: shared hit=60
+                ->  Index Scan using contact_method_lookup_idx on contact_method cm  (cost=0.15..8.17 rows=1 width=40) (actual time=0.000..0.000 rows=0.00 loops=30)
+                      Index Cond: ((organization_id = p.organization_id) AND (kind = 'email'::text))
+                      Filter: (person_id = p.id)
+                      Index Searches: 30
+                      Buffers: shared hit=60
+  SubPlan 3
+    ->  Limit  (cost=8.18..8.19 rows=1 width=40) (actual time=0.001..0.001 rows=0.00 loops=30)
+          Buffers: shared hit=60
+          ->  Sort  (cost=8.18..8.19 rows=1 width=40) (actual time=0.001..0.001 rows=0.00 loops=30)
+                Sort Key: cm_1.created_at
+                Sort Method: quicksort  Memory: 25kB
+                Buffers: shared hit=60
+                ->  Index Scan using contact_method_lookup_idx on contact_method cm_1  (cost=0.15..8.17 rows=1 width=40) (actual time=0.000..0.000 rows=0.00 loops=30)
+                      Index Cond: ((organization_id = p.organization_id) AND (kind = 'phone'::text))
+                      Filter: (person_id = p.id)
+                      Index Searches: 30
+                      Buffers: shared hit=60
+  SubPlan 4
+    ->  Aggregate  (cost=8.17..8.18 rows=1 width=8) (actual time=0.001..0.001 rows=1.00 loops=30)
+          Buffers: shared hit=60
+          ->  Index Only Scan using inquiry_org_person_received_idx on inquiry i  (cost=0.15..8.17 rows=1 width=0) (actual time=0.000..0.000 rows=0.00 loops=30)
+                Index Cond: ((organization_id = p.organization_id) AND (person_id = p.id))
+                Heap Fetches: 0
+                Index Searches: 30
+                Buffers: shared hit=60
+Planning:
+  Buffers: shared hit=496
+Planning Time: 0.700 ms
+Execution Time: 0.427 ms
+wall-clock (uninstrumented, single sample): 2.3995ms
+

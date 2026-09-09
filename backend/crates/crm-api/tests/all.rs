@@ -211,6 +211,12 @@ mod db_today_system_feed_call_failures;
 #[path = "db_today_feeds_http.rs"]
 mod db_today_feeds_http;
 
+#[path = "db_today_task_axis.rs"]
+mod db_today_task_axis;
+
+#[path = "db_today_task_axis_failures.rs"]
+mod db_today_task_axis_failures;
+
 #[path = "health.rs"]
 mod health;
 

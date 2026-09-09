@@ -101,6 +101,30 @@ impl std::fmt::Debug for Task {
     }
 }
 
+/// `TaskWithPerson.person` (docs/specs/SLICE_016.md §4, 016b): the
+/// minimal Person reference the Tasks panel needs. `display_name` is
+/// computed the same way `PersonSummary.display_name` is (never logged —
+/// a Person's own name carries no rule-7 title-secrecy requirement).
+#[derive(Debug, Clone, Serialize)]
+pub struct PersonRef {
+    pub id: PersonId,
+    pub display_name: String,
+}
+
+/// `GET /api/tasks?scope=mine`'s row shape (docs/specs/SLICE_016.md §4,
+/// 016b): `Task` plus the owning Person's reference. `#[serde(flatten)]`
+/// inlines every `Task` field at the top level, with `person` added
+/// beside them — exactly the wire shape `Task + "person": {"id",
+/// "display_name"}`. `Debug` derives cleanly: `Task`'s own hand-written,
+/// redacting impl is what actually runs for the `task` field, so this
+/// composes safely without a second hand-written impl.
+#[derive(Debug, Clone, Serialize)]
+pub struct TaskWithPerson {
+    #[serde(flatten)]
+    pub task: Task,
+    pub person: PersonRef,
+}
+
 /// Title validation (docs/specs/SLICE_016.md §1 rule 2, §3): a pure
 /// function, unit-tested without a database. Trimmed (Rust's `trim()` is
 /// Unicode-aware and strictly narrower than the §2 CHECK's ASCII-only

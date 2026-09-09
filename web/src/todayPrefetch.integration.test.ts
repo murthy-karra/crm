@@ -72,6 +72,12 @@ describe('Today preload/prefetch join (SLICE_014 §4, §8.6)', () => {
       if (path === '/today') return todayDeferred.promise
       if (path === '/today/sources') return sourcesDeferred.promise
       if (path === '/today/feeds') return feedsDeferred.promise
+      // Slice 016b: TodayView's own Tasks-panel read (`useTasks`) — not
+      // part of the router guard's prefetch join this test exercises, so
+      // it resolves immediately rather than joining the `unexpectedPaths`
+      // tracking below (which is specifically about the three prefetched
+      // endpoints never double-firing).
+      if (path === '/tasks?scope=mine') return Promise.resolve({ tasks: [], generated_at: '2026-09-08T00:00:00.000Z', truncated: false })
       unexpectedPaths.push(path)
       return Promise.reject(new Error(`unexpected path ${path}`))
     })

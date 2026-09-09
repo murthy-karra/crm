@@ -1,0 +1,49 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- docs/specs/SLICE_016.md §5 statement (a): \"Membership for retained ids\".\n-- For every retained Person id (P ∪ call-only, i.e. `builtins` as they\n-- stand right before this statement runs), the viewer's earliest open,\n-- dated task with due_at <= now + 24 hours — filtered by ASSIGNEE before\n-- choosing the earliest (the WHERE clause binds t.assignee_user_id = $2\n-- before the DISTINCT ON ever considers a row), one row per Person. No\n-- dynamic SQL, no rule-7 inquiry constraint, literal Organization\n-- predicate, `now` bound as a parameter ($3). Reads\n-- `task_org_assignee_due_open_idx` (organization_id, assignee_user_id,\n-- due_at, id WHERE completed_at IS NULL AND deleted_at IS NULL AND\n-- due_at IS NOT NULL).\nSELECT DISTINCT ON (t.person_id)\n    t.person_id AS \"person_id!\",\n    t.id AS \"task_id!\",\n    t.title AS \"title!\",\n    t.kind AS \"kind!\",\n    t.due_at AS \"due_at!\"\nFROM task t\nWHERE t.organization_id = $1\n  AND t.assignee_user_id = $2\n  AND t.completed_at IS NULL\n  AND t.deleted_at IS NULL\n  AND t.due_at IS NOT NULL\n  AND t.due_at <= $3::timestamptz + interval '24 hours'\n  AND t.person_id = ANY($4::uuid[])\nORDER BY t.person_id, t.due_at ASC, t.id ASC\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "person_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "task_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "title!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "kind!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "due_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Timestamptz",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "67367da056213bb4d48f1669e32324b03bf254db40ba0333ac1bcc32decea8d6"
+}

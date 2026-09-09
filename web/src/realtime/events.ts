@@ -107,9 +107,12 @@ export function invalidationsFor(event: unknown, orgId: string): QueryKey[] {
       // SLICE_016.md §6: a due task changes the viewer's Today, so this
       // gets `queryKeys.today` in addition to the Person detail — but
       // still never People or list counts (rule 6: tasks don't appear on
-      // People rows).
+      // People rows). 016b: also the tasks prefix (the Today page's Tasks
+      // panel), whole-prefix since the changed task's assignee is not
+      // necessarily this viewer (a reassignment moves it between two
+      // members' panel caches at once).
       if (data.change === 'task_changed') {
-        return [queryKeys.person(orgId, personId), queryKeys.today(orgId)]
+        return [queryKeys.person(orgId, personId), queryKeys.today(orgId), queryKeys.tasks(orgId)]
       }
       const keys: QueryKey[] = [
         queryKeys.person(orgId, personId),

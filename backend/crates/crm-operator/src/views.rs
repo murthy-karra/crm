@@ -15,7 +15,7 @@ pub const UNTRUSTED_CLIP_CHARS: usize = 500;
 /// (D-033): the `low` "outcome needed" tier sorts under both Inquiry
 /// tiers, by the call's `ended_at`.
 pub const ORDERING_RULE: &str =
-    "built_in_work_is_admitted_before_list_matches_at_the_200_item_cap; display_high_then_normal_then_list_then_low; list_matches_sort_by_last_contact_attempt_ascending_with_never_contacted_first_then_person_id; built_in_high_and_normal_sort_by_waiting_since_then_id; low_sorts_by_ended_at_then_id";
+    "built_in_work_is_admitted_before_list_matches_at_the_200_item_cap; display_high_then_normal_then_list_then_low; list_matches_sort_by_last_contact_attempt_ascending_with_never_contacted_first_then_person_id; built_in_high_and_normal_sort_by_waiting_since_then_id; low_sorts_by_ended_at_then_id; overdue_task_raises_normal_to_high_after_fresh; task_only_items_follow_their_tier_by_due_at_then_id";
 
 /// Zero-width and bidirectional formatting characters: invisible in a
 /// rendered reply but able to reorder or hide text in a prompt.
@@ -434,6 +434,30 @@ pub struct FilterResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Round-1 review must-close item 7: `db_operator.rs`'s own
+    /// `ordering_rule` assertion compares the HTTP response against
+    /// `crm_operator::ORDERING_RULE` — the same constant the production
+    /// code under test also reads from, so it can never catch an
+    /// accidental wording change to the constant itself (a typo, a
+    /// dropped clause) since both sides would silently drift together.
+    /// This pins the constant's exact text against a literal, independent
+    /// copy — the actual contract docs/specs/SLICE_003.md §3 / SLICE_005
+    /// §3 / SLICE_006c §5a (D-033) / SLICE_016.md §5 (D-054 §1) describe
+    /// in prose.
+    #[test]
+    fn ordering_rule_text_is_pinned_literally() {
+        assert_eq!(
+            ORDERING_RULE,
+            "built_in_work_is_admitted_before_list_matches_at_the_200_item_cap; \
+display_high_then_normal_then_list_then_low; \
+list_matches_sort_by_last_contact_attempt_ascending_with_never_contacted_first_then_person_id; \
+built_in_high_and_normal_sort_by_waiting_since_then_id; \
+low_sorts_by_ended_at_then_id; \
+overdue_task_raises_normal_to_high_after_fresh; \
+task_only_items_follow_their_tier_by_due_at_then_id"
+        );
+    }
 
     #[test]
     fn untrusted_text_clips_to_500_chars() {

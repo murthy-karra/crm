@@ -309,6 +309,86 @@ async fn note_check_constraints_matrix(migrator_pool: PgPool) {
     );
 }
 
+/// docs/specs/SLICE_015.md §2, §9.1 (review round 1, item 1): the composite
+/// FKs reject a cross-Organization Person, a non-member author, and a
+/// non-member `deleted_by_user_id`, even though every individual id is
+/// real — the `person_tag` precedent (`db_schema.rs`, "the composite FKs
+/// that make a cross-Organization row unpersistable even if an application
+/// check regresses").
+#[sqlx::test]
+#[ignore]
+async fn note_composite_fk_rejections(migrator_pool: PgPool) {
+    let f = fixture(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let (other_org_id, other_admin_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Best Realty",
+        "erin-composite-fk@best.test",
+        "Erin",
+        PW,
+    )
+    .await;
+    let other_stage_id = first_stage_id(&app_pool, other_org_id).await;
+    let other_person_id = insert_bare_person(&app_pool, other_org_id, other_stage_id).await;
+    // A real app_user with no membership in org A at all.
+    let non_member_id = other_admin_id;
+
+    let before = note_row_count(&migrator_pool, f.org_id).await;
+
+    // (a) organization_id = A, person_id belongs to Organization B.
+    let cross_org_person = sqlx::query(
+        "INSERT INTO note (organization_id, person_id, author_user_id, body, origin, correlation_id)
+         VALUES ($1, $2, $3, 'Body', 'web_session', gen_random_uuid())",
+    )
+    .bind(f.org_id)
+    .bind(other_person_id)
+    .bind(f.member_id)
+    .execute(&app_pool)
+    .await;
+    assert!(
+        cross_org_person.is_err(),
+        "a Person from another Organization must be rejected"
+    );
+
+    // (b) author_user_id is a real app_user with no membership in org A.
+    let non_member_author = sqlx::query(
+        "INSERT INTO note (organization_id, person_id, author_user_id, body, origin, correlation_id)
+         VALUES ($1, $2, $3, 'Body', 'web_session', gen_random_uuid())",
+    )
+    .bind(f.org_id)
+    .bind(f.person_id)
+    .bind(non_member_id)
+    .execute(&app_pool)
+    .await;
+    assert!(
+        non_member_author.is_err(),
+        "a non-member author_user_id must be rejected"
+    );
+
+    // (c) a tombstone whose deleted_by_user_id is a non-member.
+    let non_member_deleter = sqlx::query(
+        "INSERT INTO note (organization_id, person_id, author_user_id, body, origin, correlation_id,
+                            deleted_at, deleted_by_user_id)
+         VALUES ($1, $2, $3, '', 'web_session', gen_random_uuid(), now(), $4)",
+    )
+    .bind(f.org_id)
+    .bind(f.person_id)
+    .bind(f.member_id)
+    .bind(non_member_id)
+    .execute(&app_pool)
+    .await;
+    assert!(
+        non_member_deleter.is_err(),
+        "a non-member deleted_by_user_id must be rejected"
+    );
+
+    assert_eq!(
+        note_row_count(&migrator_pool, f.org_id).await,
+        before,
+        "no row must land from any rejected insert"
+    );
+}
+
 /// docs/specs/SLICE_015.md §9.1: a body of exactly 10,000 four-byte code
 /// points is accepted (pins `char_length` against bytes, not UTF-8 byte
 /// count — ~40 KB raw); a Person row deletion cascades its notes.
@@ -514,6 +594,138 @@ async fn add_note_over_128kib_is_400_not_413(migrator_pool: PgPool) {
     assert_eq!(
         crate::common::body_json(response).await["error"],
         "malformed_request"
+    );
+}
+
+async fn insert_correspondence_raw(pool: &PgPool, organization_id: Uuid) -> Uuid {
+    sqlx::query_scalar(
+        "INSERT INTO correspondence_raw (id, organization_id, received_at, nonce, ciphertext, content_hmac, byte_len, processed)
+         VALUES (gen_random_uuid(), $1, now(), $2, $3, $4, 0, true) RETURNING id",
+    )
+    .bind(organization_id)
+    .bind(vec![0_u8; 24])
+    .bind(vec![1_u8; 16])
+    .bind(Uuid::new_v4().as_bytes().to_vec())
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+/// docs/specs/SLICE_015.md §5, §9.3 (review round 1, item 5): a note
+/// (`kind_rank` 7) created in the exact same instant as a
+/// `correspondence_captured` row (`kind_rank` 6) sorts immediately after
+/// it — both inserted with one shared explicit timestamp for
+/// `occurred_at`/`recorded_at`/`created_at` on the owner connection, the
+/// only way to actually reach the `kind_rank` tie-break (two independent
+/// `now()` calls would essentially never collide). An edit does not move
+/// the note's rendered position, since `occurred_at` stays `created_at`
+/// regardless of `updated_at`.
+#[sqlx::test]
+#[ignore]
+async fn note_history_position_ties_with_correspondence_by_kind_rank_and_survives_an_edit(
+    migrator_pool: PgPool,
+) {
+    let f = fixture(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let publisher = Publisher::recording();
+
+    let shared_ts = chrono::Utc::now();
+    let raw_id = insert_correspondence_raw(&app_pool, f.org_id).await;
+    sqlx::query(
+        "INSERT INTO correspondence_captured
+            (organization_id, actor_kind, actor_user_id, on_behalf_of_user_id, origin, occurred_at,
+             recorded_at, correlation_id, person_id, agent_user_id, direction, via,
+             correspondence_raw_id, backdated)
+         VALUES ($1, 'system', NULL, $2, 'webhook', $3, $3, gen_random_uuid(), $4, $2, 'inbound',
+                 'cc', $5, false)",
+    )
+    .bind(f.org_id)
+    .bind(f.member_id)
+    .bind(shared_ts)
+    .bind(f.person_id)
+    .bind(raw_id)
+    .execute(&app_pool)
+    .await
+    .unwrap();
+
+    // The note's `created_at`/`updated_at` are forced to the SAME instant
+    // via a raw insert on the owner connection (`AddNote` itself always
+    // uses `now()`, which could never reliably collide with the row above).
+    let note_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO note (organization_id, person_id, author_user_id, body, origin,
+                            correlation_id, created_at, updated_at)
+         VALUES ($1, $2, $3, 'Same instant', 'web_session', gen_random_uuid(), $4, $4)
+         RETURNING id",
+    )
+    .bind(f.org_id)
+    .bind(f.person_id)
+    .bind(f.member_id)
+    .bind(shared_ts)
+    .fetch_one(&app_pool)
+    .await
+    .unwrap();
+
+    let router = crate::common::build_router(&migrator_pool).await;
+    let alice = crate::common::login_cookie(&router, "alice-notes@acme.test", PW).await;
+    let detail = crate::common::body_json(
+        crate::common::get_with_cookie(&router, &format!("/api/people/{}", f.person_id), &alice)
+            .await,
+    )
+    .await;
+    let history = detail["history"].as_array().unwrap();
+    let correspondence_index = history
+        .iter()
+        .position(|e| e["kind"] == "correspondence")
+        .expect("the correspondence entry must be present");
+    let note_index = history
+        .iter()
+        .position(|e| e["id"] == note_id.to_string())
+        .expect("the note entry must be present");
+    assert_eq!(
+        note_index,
+        correspondence_index + 1,
+        "note (kind_rank 7) must sort immediately after correspondence (kind_rank 6) at the same instant: {history:?}"
+    );
+
+    // An edit does not move the rendered position, and the detail read
+    // reflects the changed body plus edited/updated_at.
+    note::edit_note(
+        &app_pool,
+        &publisher,
+        &command_context(f.org_id, f.member_id),
+        EditNote {
+            person_id: PersonId::new(f.person_id),
+            note_id: NoteId::new(note_id),
+            body: "Same instant, fixed".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+    let detail_after = crate::common::body_json(
+        crate::common::get_with_cookie(&router, &format!("/api/people/{}", f.person_id), &alice)
+            .await,
+    )
+    .await;
+    let history_after = detail_after["history"].as_array().unwrap();
+    let correspondence_index_after = history_after
+        .iter()
+        .position(|e| e["kind"] == "correspondence")
+        .unwrap();
+    let note_index_after = history_after
+        .iter()
+        .position(|e| e["id"] == note_id.to_string())
+        .unwrap();
+    assert_eq!(
+        note_index_after,
+        correspondence_index_after + 1,
+        "editing the note must not move its rendered position: {history_after:?}"
+    );
+    let entry_after = &history_after[note_index_after];
+    assert_eq!(entry_after["detail"]["body"], "Same instant, fixed");
+    assert_eq!(entry_after["detail"]["edited"], true);
+    assert_ne!(
+        entry_after["detail"]["updated_at"], entry_after["occurred_at"],
+        "updated_at must have moved past the unchanged occurred_at (created_at)"
     );
 }
 
@@ -729,6 +941,249 @@ async fn edit_note_deactivated_author_and_demoted_deactivated_admin_are_forbidde
         .await
         .unwrap();
     assert_eq!(body, "Admin note");
+}
+
+/// docs/specs/SLICE_015.md §6 (review round 1, item 3): a PURE demotion —
+/// `role = 'member'` only, membership left `active` — is forbidden on its
+/// own, distinct from the deactivation case above (kept as its own step,
+/// not merged): an admin who is demoted but still an active member loses
+/// rule-1 access to another member's note exactly the same way, with no
+/// write and no publication.
+#[sqlx::test]
+#[ignore]
+async fn edit_note_pure_demotion_is_forbidden_with_no_write_or_publish(migrator_pool: PgPool) {
+    let f = fixture(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let publisher = Publisher::recording();
+
+    let note = note::add_note(
+        &app_pool,
+        &publisher,
+        &command_context(f.org_id, f.member_id),
+        AddNote {
+            person_id: PersonId::new(f.person_id),
+            body: "Member's note".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+
+    sqlx::query(
+        "UPDATE organization_membership SET role = 'member' WHERE organization_id = $1 AND user_id = $2",
+    )
+    .bind(f.org_id)
+    .bind(f.admin_id)
+    .execute(&migrator_pool)
+    .await
+    .unwrap();
+
+    let events_before = recorded(&publisher).await.len();
+    let result = note::edit_note(
+        &app_pool,
+        &publisher,
+        &command_context(f.org_id, f.admin_id),
+        EditNote {
+            person_id: PersonId::new(f.person_id),
+            note_id: note.id,
+            body: "Should not apply".to_string(),
+        },
+    )
+    .await;
+    assert!(matches!(result, Err(NoteError::Forbidden)));
+    assert_eq!(
+        recorded(&publisher).await.len(),
+        events_before,
+        "a forbidden edit must publish nothing"
+    );
+    let body: String = sqlx::query_scalar("SELECT body FROM note WHERE id = $1")
+        .bind(note.id.as_uuid())
+        .fetch_one(&migrator_pool)
+        .await
+        .unwrap();
+    assert_eq!(body, "Member's note");
+}
+
+/// docs/specs/SLICE_015.md §6 (review round 1, item 3): the delete path had
+/// no demotion or deactivation coverage at all — this mirrors the edit
+/// tests above, one case each, for `delete_note`.
+#[sqlx::test]
+#[ignore]
+async fn delete_note_deactivated_author_and_pure_demoted_admin_are_forbidden(
+    migrator_pool: PgPool,
+) {
+    let f = fixture(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let publisher = Publisher::recording();
+
+    // Deactivated author: cannot delete their own note.
+    let authored = note::add_note(
+        &app_pool,
+        &publisher,
+        &command_context(f.org_id, f.member_id),
+        AddNote {
+            person_id: PersonId::new(f.person_id),
+            body: "Author's note".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+    sqlx::query(
+        "UPDATE organization_membership SET status = 'inactive' WHERE organization_id = $1 AND user_id = $2",
+    )
+    .bind(f.org_id)
+    .bind(f.member_id)
+    .execute(&migrator_pool)
+    .await
+    .unwrap();
+    let deactivated_author_delete = note::delete_note(
+        &app_pool,
+        &publisher,
+        &command_context(f.org_id, f.member_id),
+        DeleteNote {
+            person_id: PersonId::new(f.person_id),
+            note_id: authored.id,
+        },
+    )
+    .await;
+    assert!(matches!(
+        deactivated_author_delete,
+        Err(NoteError::Forbidden)
+    ));
+    let body_after_deactivated: String = sqlx::query_scalar("SELECT body FROM note WHERE id = $1")
+        .bind(authored.id.as_uuid())
+        .fetch_one(&migrator_pool)
+        .await
+        .unwrap();
+    assert_eq!(body_after_deactivated, "Author's note");
+
+    // Pure demotion (role only, still active): an admin demoted to member
+    // cannot delete another member's note either.
+    let carol_id =
+        crate::common::create_user(&migrator_pool, "carol-pure-demote@acme.test", "Carol", PW)
+            .await;
+    crate::common::add_membership_with(
+        &migrator_pool,
+        f.org_id,
+        carol_id,
+        Role::Member,
+        MembershipStatus::Active,
+    )
+    .await;
+    let carols_note = note::add_note(
+        &app_pool,
+        &publisher,
+        &command_context(f.org_id, carol_id),
+        AddNote {
+            person_id: PersonId::new(f.person_id),
+            body: "Carol's note".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+    sqlx::query(
+        "UPDATE organization_membership SET role = 'member' WHERE organization_id = $1 AND user_id = $2",
+    )
+    .bind(f.org_id)
+    .bind(f.admin_id)
+    .execute(&migrator_pool)
+    .await
+    .unwrap();
+    let events_before = recorded(&publisher).await.len();
+    let demoted_admin_delete = note::delete_note(
+        &app_pool,
+        &publisher,
+        &command_context(f.org_id, f.admin_id),
+        DeleteNote {
+            person_id: PersonId::new(f.person_id),
+            note_id: carols_note.id,
+        },
+    )
+    .await;
+    assert!(matches!(demoted_admin_delete, Err(NoteError::Forbidden)));
+    assert_eq!(
+        recorded(&publisher).await.len(),
+        events_before,
+        "a forbidden delete must publish nothing"
+    );
+    let carols_body: String = sqlx::query_scalar("SELECT body FROM note WHERE id = $1")
+        .bind(carols_note.id.as_uuid())
+        .fetch_one(&migrator_pool)
+        .await
+        .unwrap();
+    assert_eq!(carols_body, "Carol's note");
+}
+
+/// docs/specs/SLICE_015.md §3, §6 (review round 1, item 4): the FOR SHARE
+/// membership re-read genuinely waits on, and then observes, an in-flight
+/// deactivation "inside the transaction" as the spec words it — not merely
+/// a deactivation already committed before the command starts (the
+/// existing deactivation tests). A second connection opens a transaction,
+/// takes the row lock via an UPDATE, and holds it uncommitted while the
+/// edit's own FOR SHARE read blocks behind it; only once that transaction
+/// commits does the edit's re-read proceed — and it must see the
+/// now-inactive membership.
+#[sqlx::test]
+#[ignore]
+async fn edit_note_for_share_reread_observes_a_committing_deactivation(migrator_pool: PgPool) {
+    let f = fixture(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let publisher = Publisher::recording();
+
+    let note = note::add_note(
+        &app_pool,
+        &publisher,
+        &command_context(f.org_id, f.member_id),
+        AddNote {
+            person_id: PersonId::new(f.person_id),
+            body: "Racing deactivation".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+    let events_before = recorded(&publisher).await.len();
+
+    let mut lock_tx = app_pool.begin().await.unwrap();
+    sqlx::query(
+        "UPDATE organization_membership SET status = 'inactive' WHERE organization_id = $1 AND user_id = $2",
+    )
+    .bind(f.org_id)
+    .bind(f.member_id)
+    .execute(&mut *lock_tx)
+    .await
+    .unwrap();
+
+    let edit_ctx = command_context(f.org_id, f.member_id);
+    let edit_fut = note::edit_note(
+        &app_pool,
+        &publisher,
+        &edit_ctx,
+        EditNote {
+            person_id: PersonId::new(f.person_id),
+            note_id: note.id,
+            body: "Should never apply".to_string(),
+        },
+    );
+    let commit_fut = async {
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        lock_tx.commit().await.unwrap();
+    };
+    let (edit_result, ()) = tokio::join!(edit_fut, commit_fut);
+
+    assert!(
+        matches!(edit_result, Err(NoteError::Forbidden)),
+        "the edit must observe the deactivation once it commits: {edit_result:?}"
+    );
+    let body: String = sqlx::query_scalar("SELECT body FROM note WHERE id = $1")
+        .bind(note.id.as_uuid())
+        .fetch_one(&migrator_pool)
+        .await
+        .unwrap();
+    assert_eq!(body, "Racing deactivation", "no write must land");
+    assert_eq!(
+        recorded(&publisher).await.len(),
+        events_before,
+        "no additional publication on a forbidden edit"
+    );
 }
 
 #[sqlx::test]
@@ -1008,6 +1463,107 @@ async fn delete_note_author_and_admin_succeed_third_member_forbidden_and_tombsto
     )
     .await;
     assert!(matches!(wrong_path_delete, Err(NoteError::NotFound)));
+
+    // Item 9: a fresh detail read and the Operator's own read
+    // (`latest_for_person`) both show the deleted note absent.
+    let router = crate::common::build_router(&migrator_pool).await;
+    let alice_cookie = crate::common::login_cookie(&router, "alice-notes@acme.test", PW).await;
+    let detail_after_delete = crate::common::body_json(
+        crate::common::get_with_cookie(
+            &router,
+            &format!("/api/people/{}", f.person_id),
+            &alice_cookie,
+        )
+        .await,
+    )
+    .await;
+    assert!(
+        detail_after_delete["history"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|e| e["id"] != note.id.to_string()),
+        "the deleted note must not appear in the detail read"
+    );
+    let mut conn = app_pool.acquire().await.unwrap();
+    let operator_notes = note::latest_for_person(
+        &mut conn,
+        OrganizationId::new(f.org_id),
+        PersonId::new(f.person_id),
+        5,
+    )
+    .await
+    .unwrap();
+    assert!(
+        operator_notes.iter().all(|n| n.body != "Delete me"),
+        "the deleted note must not appear in the Operator's own read"
+    );
+    drop(conn);
+
+    // Item 2: a REAL cross-Organization note id (not merely a random
+    // uuid) is exactly as invisible over HTTP as a random uuid — same
+    // status, byte-identical body, no publication, and the other
+    // Organization's row is untouched.
+    let (other_org_id, other_admin_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Best Realty",
+        "erin-del-fk@best.test",
+        "Erin",
+        PW,
+    )
+    .await;
+    promote_to_admin(&migrator_pool, other_org_id, other_admin_id).await;
+    let other_stage_id = first_stage_id(&app_pool, other_org_id).await;
+    let other_org_person_id = insert_bare_person(&app_pool, other_org_id, other_stage_id).await;
+    let other_org_note = note::add_note(
+        &app_pool,
+        &publisher,
+        &command_context(other_org_id, other_admin_id),
+        AddNote {
+            person_id: PersonId::new(other_org_person_id),
+            body: "Org B's note".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let events_before = recorded(&publisher).await.len();
+    let random_uuid_delete = crate::common::delete_with_cookie(
+        &router,
+        &format!("/api/people/{}/notes/{}", f.person_id, Uuid::new_v4()),
+        &alice_cookie,
+    )
+    .await;
+    assert_eq!(random_uuid_delete.status(), StatusCode::NOT_FOUND);
+    let random_uuid_body = crate::common::body_json(random_uuid_delete).await;
+
+    let cross_org_delete = crate::common::delete_with_cookie(
+        &router,
+        &format!("/api/people/{}/notes/{}", f.person_id, other_org_note.id),
+        &alice_cookie,
+    )
+    .await;
+    assert_eq!(cross_org_delete.status(), StatusCode::NOT_FOUND);
+    let cross_org_body = crate::common::body_json(cross_org_delete).await;
+    assert_eq!(
+        random_uuid_body, cross_org_body,
+        "a real cross-Organization note id must be byte-identical to a random uuid 404"
+    );
+    assert_eq!(
+        recorded(&publisher).await.len(),
+        events_before,
+        "no publish on a 404"
+    );
+    let other_org_body_untouched: String =
+        sqlx::query_scalar("SELECT body FROM note WHERE id = $1")
+            .bind(other_org_note.id.as_uuid())
+            .fetch_one(&migrator_pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        other_org_body_untouched, "Org B's note",
+        "the other Organization's note must be untouched"
+    );
 }
 
 /// docs/specs/SLICE_015.md §9.5: an author edit racing an admin delete
@@ -1174,11 +1730,14 @@ async fn note_route_error_precedence_wire_shapes_and_can_manage(migrator_pool: P
     let alice = crate::common::login_cookie(&router, "alice-notes@acme.test", PW).await;
     let bob = crate::common::login_cookie(&router, "bob-notes@acme.test", PW).await;
 
-    // Malformed path uuid: 400, before authentication is even relevant.
+    // Malformed path uuid: 400, before authentication is even relevant —
+    // proven with NO cookie at all (review round 1, item 8): sending a
+    // valid session here would only prove "400 happens", not that it
+    // outranks the 401 an absent/invalid session would otherwise produce.
     let bad_path = crate::common::put_json_with_cookie(
         &router,
         "/api/people/not-a-uuid/notes/not-a-uuid",
-        &alice,
+        "",
         json!({ "body": "X" }),
     )
     .await;
@@ -1369,6 +1928,28 @@ async fn note_changed_publishes_exactly_once_per_changing_write(migrator_pool: P
         recorded(&publisher).await.len(),
         1,
         "no publish on changed:false"
+    );
+
+    // Review round 1, item 10: a raw body that DIFFERS byte-for-byte from
+    // the stored one but NORMALIZES to it (`\r\n` -> `\n`, then trimmed)
+    // is still `changed: false` and publishes nothing — the byte-equality
+    // check in `edit_note` compares the NORMALIZED body, not the raw wire
+    // input.
+    let normalizes_to_same = crate::common::body_json(
+        crate::common::put_json_with_cookie(
+            &router,
+            &edit_uri,
+            &alice,
+            json!({ "body": "Loud note\r\n  " }),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(normalizes_to_same["changed"], false);
+    assert_eq!(
+        recorded(&publisher).await.len(),
+        1,
+        "no publish when the normalized body is unchanged"
     );
 
     // A changing edit: a second event.

@@ -1901,23 +1901,15 @@ async fn get_person_notes_are_latest_five_untrusted_and_excluded_from_history(
         "history must carry no note entries: {prompt}"
     );
 
-    // 25 more notes plus one stage change: the stage change still survives
-    // in `history` because notes never compete for the `MAX_HISTORY` cut
-    // (they are filtered out of `history` before the truncation runs).
-    for i in 0..25 {
-        sqlx::query(
-            "INSERT INTO note (organization_id, person_id, author_user_id, body, origin,
-                                correlation_id, created_at, updated_at)
-             VALUES ($1, $2, $3, $4, 'web_session', gen_random_uuid(), now(), now())",
-        )
-        .bind(f.org_acme)
-        .bind(person_id)
-        .bind(f.alice_id)
-        .bind(format!("Filler note {i}"))
-        .execute(&app_pool)
-        .await
-        .unwrap();
-    }
+    // One stage change, THEN 25 more notes strictly newer than it: without
+    // the `note`-kind filter running before the `MAX_HISTORY` cut, the
+    // stage change (now the OLDEST of the 26 rows) would be pushed out of
+    // the last-20 window by the 25 newer notes — this ordering is what
+    // actually exercises the filter rather than passing vacuously because
+    // the stage change happened to be the newest row (review round 1,
+    // item 6: the previous ordering inserted the filler notes with `now()`
+    // BEFORE the stage change, so the stage change survived regardless of
+    // whether notes were filtered at all).
     let stage_id: Uuid = sqlx::query_scalar(
         "SELECT id FROM stage WHERE organization_id = $1 ORDER BY position LIMIT 1 OFFSET 1",
     )
@@ -1933,6 +1925,20 @@ async fn get_person_notes_are_latest_five_untrusted_and_excluded_from_history(
     )
     .await;
     assert_eq!(stage_resp.status(), StatusCode::OK);
+    for i in 0..25 {
+        sqlx::query(
+            "INSERT INTO note (organization_id, person_id, author_user_id, body, origin,
+                                correlation_id, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, 'web_session', gen_random_uuid(), now(), now())",
+        )
+        .bind(f.org_acme)
+        .bind(person_id)
+        .bind(f.alice_id)
+        .bind(format!("Filler note {i}"))
+        .execute(&app_pool)
+        .await
+        .unwrap();
+    }
 
     let (router2, provider2) = router_scripted(
         &f.migrator_pool,
@@ -2056,6 +2062,7 @@ async fn note_activity_and_operator_call_never_leak_a_body_into_traces_or_wrong_
     const ADD_SENTINEL: &str = "SENTINEL_CAPTURE_ADD_DO_NOT_LEAK";
     const EDIT_SENTINEL: &str = "SENTINEL_CAPTURE_EDIT_DO_NOT_LEAK";
     const OPERATOR_SENTINEL: &str = "SENTINEL_CAPTURE_OPERATOR_DO_NOT_LEAK";
+    const REJECT_SENTINEL: &str = "SENTINEL_CAPTURE_REJECT_DO_NOT_LEAK";
 
     let buffer = Arc::new(Mutex::new(Vec::new()));
     let subscriber = tracing_subscriber::registry().with(
@@ -2105,13 +2112,15 @@ async fn note_activity_and_operator_call_never_leak_a_body_into_traces_or_wrong_
     let delete_body = crate::common::body_json(delete_resp).await;
     assert!(!delete_body.to_string().contains(EDIT_SENTINEL));
 
-    // A rejected control-character body: 400, no sentinel to leak, but
-    // still exercised for span coverage.
+    // A rejected control-character body carries its OWN sentinel (review
+    // round 1, item 7): a body of only `"bad\u{0}body"` (no sentinel) could
+    // never prove anything about capture safety one way or the other,
+    // since there was nothing sensitive in it to begin with.
     let rejected_resp = crate::common::post_json_with_cookie(
         &router,
         &format!("/api/people/{person_id}/notes"),
         &alice,
-        json!({ "body": "bad\u{0}body" }),
+        json!({ "body": format!("{REJECT_SENTINEL}\u{0}") }),
     )
     .await;
     assert_eq!(rejected_resp.status(), StatusCode::BAD_REQUEST);
@@ -2186,12 +2195,50 @@ async fn note_activity_and_operator_call_never_leak_a_body_into_traces_or_wrong_
     drop(guard);
 
     let captured = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
-    for sentinel in [ADD_SENTINEL, EDIT_SENTINEL, OPERATOR_SENTINEL] {
+    for sentinel in [
+        ADD_SENTINEL,
+        EDIT_SENTINEL,
+        OPERATOR_SENTINEL,
+        REJECT_SENTINEL,
+    ] {
         assert!(
             !captured.contains(sentinel),
             "sentinel {sentinel:?} leaked into the captured trace output: {captured}"
         );
     }
+
+    // Positive controls (review round 1, item 7): the negative assertions
+    // above are vacuous unless capture is actually wired for these spans
+    // and outcomes — prove the harness would have caught a leak by
+    // confirming it captured something at all for every code path
+    // exercised.
+    for span_name in ["note.add", "note.edit", "note.delete"] {
+        assert!(
+            captured.contains(span_name),
+            "the {span_name} span must appear in the captured output: {captured}"
+        );
+    }
+    assert!(
+        captured.contains("note command failed"),
+        "the warn! log line on a failed note command must be captured: {captured}"
+    );
+    fn has_field(captured: &str, field: &str, value: &str) -> bool {
+        captured.contains(&format!("{field}={value}"))
+            || captured.contains(&format!("{field}=\"{value}\""))
+    }
+    assert!(
+        has_field(&captured, "error_kind", "malformed_request"),
+        "the rejected add's malformed_request outcome must be captured: {captured}"
+    );
+    assert!(
+        has_field(&captured, "error_kind", "not_found"),
+        "the missing-note edit's not_found outcome must be captured: {captured}"
+    );
+    assert!(
+        has_field(&captured, "error_kind", "forbidden")
+            || has_field(&captured, "outcome", "forbidden"),
+        "carol's forbidden edit outcome must be captured: {captured}"
+    );
 
     // The prompt sent to the model provider IS allowed to carry the
     // sentinel (that is the whole point of the Operator's untrusted-text
@@ -2205,7 +2252,12 @@ async fn note_activity_and_operator_call_never_leak_a_body_into_traces_or_wrong_
     for (turn_id, ..) in &turns {
         let tools = tool_rows(&app_pool, *turn_id).await;
         let serialized = format!("{tools:?}");
-        for sentinel in [ADD_SENTINEL, EDIT_SENTINEL, OPERATOR_SENTINEL] {
+        for sentinel in [
+            ADD_SENTINEL,
+            EDIT_SENTINEL,
+            OPERATOR_SENTINEL,
+            REJECT_SENTINEL,
+        ] {
             assert!(!serialized.contains(sentinel));
         }
     }

@@ -165,7 +165,7 @@ async fn create_task_for(
     task.id.as_uuid()
 }
 
-fn task_reason_kind<'a>(item: &'a today::TodayItem, person_id: Uuid) -> Option<&'a TodayReason> {
+fn task_reason_kind(item: &today::TodayItem, person_id: Uuid) -> Option<&TodayReason> {
     item.reasons
         .iter()
         .find(|r| {

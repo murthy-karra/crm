@@ -130,8 +130,12 @@ async fn fixture(migrator_pool: &PgPool) -> Fixture {
     }
 }
 
+/// Microsecond-truncated so comparisons against a stored value never depend
+/// on the host clock's resolution (Postgres keeps microseconds; a Linux
+/// `Utc::now()` carries nanoseconds; round-2 confirmation).
 fn due_in(hours: i64) -> chrono::DateTime<Utc> {
-    Utc::now() + Duration::hours(hours)
+    use chrono::SubsecRound;
+    (Utc::now() + Duration::hours(hours)).trunc_subsecs(6)
 }
 
 // --- §12.3: create -----------------------------------------------------

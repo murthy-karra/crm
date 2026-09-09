@@ -20,8 +20,20 @@ while the query already tie-breaks on `id`; test-only fix, gates green
 trigger blocks the `person` → `inquiry` cascade that D-015 §5 erasure relies
 on; coordinator decision: a cascade-aware `reject_direct_mutation()`
 (updates and direct deletes rejected, cascaded deletes allowed via
-`pg_trigger_depth()`), recorded in the brief. Items 1 (revised), 3, 4 and 5
-released to the lane.
+`pg_trigger_depth()`), recorded in the brief. **All five items complete**
+(`c18d7e6`/`1b488a9` item 1 with five tests; `b4a4a04` item 3: the three
+files split into nine, fixtures moved to `tests/common/`, test-name sets
+identical per group and 729 = 729 overall; `cbdcbc7` items 4 and 5). The
+lane caught two of its own bugs before landing: the trigger must check
+`pg_trigger_depth() > 1` (a direct statement's own trigger already runs at
+depth 1) and the settle guard must check `isMutating > 1` (TanStack v5 runs
+`onSettled` before the success state change, so the calling mutation counts
+itself). Lane final gates: `check` green (757 Rust, 653 Vitest); `check-db`
+622 of 622 on the second run after one load-dependent failure in a moved
+`db_today_system_feed_evaluation` test that passes 6 of 6 in isolation
+(pre-existing shape, not in this batch's scope; classified in review).
+Coordinator audit passed (22 files, all under tests, migrations and
+`web/src`). Review round 1 (reviewer and tester) launched on `cbdcbc7`.
 
 Previously: **Slice 014 — COMPLETE AND MERGED TO LOCAL MAIN** at `ac270fb` (2026-09-08,
 with the user's approval; not pushed, not deployed). Source

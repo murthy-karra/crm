@@ -13,8 +13,15 @@ mutations, and `isMutating` guards on the settle-invalidate and the realtime
 invalidation. Brief: [LATER_BATCH_2026-09-08.md](../tasks/LATER_BATCH_2026-09-08.md);
 no spec (recorded LATER items; no contract or behaviour decision). One lane
 (Claude Sonnet 5) in `../crm-worktrees/later-1` on
-`chore/later-batch-2026-09-08`; checkpoints on the cascade finding (item 1)
-and the flake diagnosis (item 2).
+`chore/later-batch-2026-09-08`. Progress: item 2 done (`2482b4c`, the
+`db_calls` flake was a test asserting strict order on `recorded_at` alone
+while the query already tie-breaks on `id`; test-only fix, gates green
+757 / 650 / 617 of 617). Item 1 hit its checkpoint: a plain append-only
+trigger blocks the `person` → `inquiry` cascade that D-015 §5 erasure relies
+on; coordinator decision: a cascade-aware `reject_direct_mutation()`
+(updates and direct deletes rejected, cascaded deletes allowed via
+`pg_trigger_depth()`), recorded in the brief. Items 1 (revised), 3, 4 and 5
+released to the lane.
 
 Previously: **Slice 014 — COMPLETE AND MERGED TO LOCAL MAIN** at `ac270fb` (2026-09-08,
 with the user's approval; not pushed, not deployed). Source

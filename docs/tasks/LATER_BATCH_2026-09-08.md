@@ -24,10 +24,17 @@ review, the once-only final gates, and the commit and merge gates.
    append-only enumeration and a test that an `UPDATE`/`DELETE` as the
    migrator is rejected. Person erasure (`inquiry` cascades from `person`) is
    a cascade, not a `DELETE FROM inquiry`; confirm the cascade still works
-   under the trigger (a `BEFORE DELETE` row trigger fires on cascaded deletes
-   too — if it blocks the cascade, the trigger function must allow deletes
-   that originate from the `person` cascade, or the item is reported back
-   with the finding rather than forced; the fact tables' precedent decides).
+   under the trigger. *Checkpoint outcome (2026-09-08):* the lane proved
+   empirically that a plain `reject_mutation()` `BEFORE DELETE` binding
+   blocks the cascade, and the fact tables give no precedent because they
+   reference `person` by bare uuid without a foreign key. Coordinator
+   decision (safe default, schema integrity only): a new
+   `reject_direct_mutation()` rejects every `UPDATE`, rejects a `DELETE` at
+   `pg_trigger_depth() = 0` (a hand-run statement) and allows it when
+   cascaded from `person` (depth ≥ 1, inside the referential-integrity
+   trigger), so D-015 §5 erasure keeps working; `TRUNCATE` uses the existing
+   `reject_mutation()`. Tests pin all four cases (direct update rejected,
+   direct delete rejected, Person delete cascades, backdated insert allowed).
 2. **The `db_calls` timing flake** (011d LATER):
    `a_second_correction_chains_onto_the_first_with_strictly_increasing_recorded_at`
    fails about one run in three under full-suite load because two history
@@ -39,7 +46,12 @@ review, the once-only final gates, and the commit and merge gates.
    and says nothing against a tie-break) plus the test asserting strictly
    increasing `(recorded_at, id)`; if the test itself manufactures the tie,
    fix the test. Report which it was. `.sqlx` regenerated if the statement
-   changes.
+   changes. *Outcome (2026-09-08, `2482b4c`):* not an ordering flake. The
+   history query already tie-breaks on `id` per SLICE_002 §5 and the test's
+   own query ordered by `(recorded_at, id)`; the assertion compared
+   `recorded_at` alone, which two sequential writes can tie on under load.
+   Test-only fix: compare the `(recorded_at, id)` tuple. No statement or
+   `.sqlx` change.
 3. **Split the three largest test files** with no test changes:
    `db_saved_lists.rs` (4,298 lines), `db_calls.rs` (3,371),
    `db_today_system_feed_commands.rs` (2,961) into two or three files each

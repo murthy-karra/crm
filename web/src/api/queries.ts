@@ -106,6 +106,16 @@ import type {
   UnresolvedResponse,
   UpdateSavedListRequest,
   UpdateSavedListResponse,
+  CompleteTaskResponse,
+  CreateTaskRequest,
+  CreateTaskResponse,
+  DeleteTaskResponse,
+  ReopenTaskResponse,
+  SnoozeTaskRequest,
+  SnoozeTaskResponse,
+  TaskKind,
+  UpdateTaskRequest,
+  UpdateTaskResponse,
 } from './types'
 
 // Key factory (docs/specs/SLICE_002.md §10): every Organization-scoped
@@ -1116,10 +1126,26 @@ export function personMutationKey(orgId: string, personId: string) {
  * 0 this also refetches every stale, actively-observed query under the
  * org branch, regardless of which specific key this mutation's own
  * invalidate targeted. */
-function settlePersonMutation(qc: QueryClient, orgId: string, personId: string, queryKey: readonly unknown[]) {
+// SLICE_016.md §8: gains an array form so a task mutation can settle
+// BOTH the Person detail and Today (a due task changes the viewer's Today;
+// every other caller here still passes one bare key, unchanged). Detected
+// at runtime by checking whether the first element is itself an array —
+// every `queryKeys` entry's own key is `['org', ...]` (a string first
+// element), so a bare key can never be mistaken for a list of keys.
+function settlePersonMutation(
+  qc: QueryClient,
+  orgId: string,
+  personId: string,
+  queryKeyOrKeys: readonly unknown[] | readonly (readonly unknown[])[],
+) {
   setTimeout(() => {
     if (qc.isMutating({ mutationKey: personMutationKey(orgId, personId) }) === 0) {
-      void qc.invalidateQueries({ queryKey })
+      const keys = Array.isArray(queryKeyOrKeys[0])
+        ? (queryKeyOrKeys as readonly (readonly unknown[])[])
+        : [queryKeyOrKeys as readonly unknown[]]
+      for (const key of keys) {
+        void qc.invalidateQueries({ queryKey: key })
+      }
       void qc.refetchQueries({ queryKey: queryKeys.org(orgId), type: 'active', stale: true })
     }
   }, 0)
@@ -1942,6 +1968,219 @@ export function useDeleteNoteMutation(
     onSuccess: (_result, variables) => {
       const id = toValue(orgId)
       settlePersonMutation(qc, id, variables.personId, queryKeys.person(id, variables.personId))
+    },
+  }, providedQueryClient)
+}
+
+// --- Slice 016a: Tasks (docs/specs/SLICE_016.md §8) -------------------------
+// Typed to-dos on a Person. Deliberately PESSIMISTIC, the note precedent
+// above (§8: mutations are pessimistic) — `onMutate` writes nothing to the
+// cache. All six key with `personMutationKey` and settle through
+// `settlePersonMutation` on `[queryKeys.person(orgId, personId),
+// queryKeys.today(orgId)]` (a due task changes the viewer's Today; it
+// changes no People row or list count — rules 5/6), so the LATER-batch
+// `isMutating` guards and the realtime hold apply exactly as they do for
+// assign/stage/tags/notes.
+
+function settleTaskMutation(qc: QueryClient, orgId: string, personId: string) {
+  settlePersonMutation(qc, orgId, personId, [queryKeys.person(orgId, personId), queryKeys.today(orgId)])
+}
+
+/** `POST /api/people/{id}/tasks` (§4): any active member. */
+export function useCreateTaskMutation(
+  orgId: MaybeRefOrGetter<string>,
+  personId: MaybeRefOrGetter<string>,
+  providedQueryClient?: QueryClient,
+) {
+  const qc = providedQueryClient ?? useQueryClient()
+  return useMutation({
+    mutationKey: computed(() => personMutationKey(toValue(orgId), toValue(personId))),
+    mutationFn: ({
+      personId,
+      title,
+      kind,
+      dueAt,
+      assigneeUserId,
+    }: {
+      personId: string
+      title: string
+      kind: TaskKind
+      dueAt: string | null
+      assigneeUserId: string | null
+    }) =>
+      apiFetch<CreateTaskResponse>(`/people/${encodeURIComponent(personId)}/tasks`, {
+        method: 'POST',
+        body: JSON.stringify({
+          title,
+          kind,
+          due_at: dueAt,
+          assignee_user_id: assigneeUserId,
+        } satisfies CreateTaskRequest),
+      }),
+    retry: false,
+    onError: (_error, variables) => {
+      const id = toValue(orgId)
+      settleTaskMutation(qc, id, variables.personId)
+    },
+    onSuccess: (_result, variables) => {
+      const id = toValue(orgId)
+      settleTaskMutation(qc, id, variables.personId)
+    },
+  }, providedQueryClient)
+}
+
+/** `PUT /api/people/{id}/tasks/{task_id}` (§4): full replace; rule 1 is
+ * decided server-side under the task row's lock, not here. */
+export function useUpdateTaskMutation(
+  orgId: MaybeRefOrGetter<string>,
+  personId: MaybeRefOrGetter<string>,
+  providedQueryClient?: QueryClient,
+) {
+  const qc = providedQueryClient ?? useQueryClient()
+  return useMutation({
+    mutationKey: computed(() => personMutationKey(toValue(orgId), toValue(personId))),
+    mutationFn: ({
+      personId,
+      taskId,
+      title,
+      kind,
+      dueAt,
+      assigneeUserId,
+    }: {
+      personId: string
+      taskId: string
+      title: string
+      kind: TaskKind
+      dueAt: string | null
+      assigneeUserId: string
+    }) =>
+      apiFetch<UpdateTaskResponse>(
+        `/people/${encodeURIComponent(personId)}/tasks/${encodeURIComponent(taskId)}`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            title,
+            kind,
+            due_at: dueAt,
+            assignee_user_id: assigneeUserId,
+          } satisfies UpdateTaskRequest),
+        },
+      ),
+    retry: false,
+    onError: (_error, variables) => {
+      const id = toValue(orgId)
+      settleTaskMutation(qc, id, variables.personId)
+    },
+    onSuccess: (_result, variables) => {
+      const id = toValue(orgId)
+      settleTaskMutation(qc, id, variables.personId)
+    },
+  }, providedQueryClient)
+}
+
+/** `POST .../tasks/{task_id}/complete` (§4): target-state idempotent. */
+export function useCompleteTaskMutation(
+  orgId: MaybeRefOrGetter<string>,
+  personId: MaybeRefOrGetter<string>,
+  providedQueryClient?: QueryClient,
+) {
+  const qc = providedQueryClient ?? useQueryClient()
+  return useMutation({
+    mutationKey: computed(() => personMutationKey(toValue(orgId), toValue(personId))),
+    mutationFn: ({ personId, taskId }: { personId: string; taskId: string }) =>
+      apiFetch<CompleteTaskResponse>(
+        `/people/${encodeURIComponent(personId)}/tasks/${encodeURIComponent(taskId)}/complete`,
+        { method: 'POST' },
+      ),
+    retry: false,
+    onError: (_error, variables) => {
+      const id = toValue(orgId)
+      settleTaskMutation(qc, id, variables.personId)
+    },
+    onSuccess: (_result, variables) => {
+      const id = toValue(orgId)
+      settleTaskMutation(qc, id, variables.personId)
+    },
+  }, providedQueryClient)
+}
+
+/** `POST .../tasks/{task_id}/reopen` (§4): target-state idempotent. */
+export function useReopenTaskMutation(
+  orgId: MaybeRefOrGetter<string>,
+  personId: MaybeRefOrGetter<string>,
+  providedQueryClient?: QueryClient,
+) {
+  const qc = providedQueryClient ?? useQueryClient()
+  return useMutation({
+    mutationKey: computed(() => personMutationKey(toValue(orgId), toValue(personId))),
+    mutationFn: ({ personId, taskId }: { personId: string; taskId: string }) =>
+      apiFetch<ReopenTaskResponse>(
+        `/people/${encodeURIComponent(personId)}/tasks/${encodeURIComponent(taskId)}/reopen`,
+        { method: 'POST' },
+      ),
+    retry: false,
+    onError: (_error, variables) => {
+      const id = toValue(orgId)
+      settleTaskMutation(qc, id, variables.personId)
+    },
+    onSuccess: (_result, variables) => {
+      const id = toValue(orgId)
+      settleTaskMutation(qc, id, variables.personId)
+    },
+  }, providedQueryClient)
+}
+
+/** `POST .../tasks/{task_id}/snooze` (§4): its own route, never a full
+ * `UpdateTaskRequest` (016b's Today panel snoozes from a possibly stale
+ * row). Not wired to any control in 016a's Person page (Snooze is a 016b
+ * Today-panel action) — defined here so the mutation surface is complete. */
+export function useSnoozeTaskMutation(
+  orgId: MaybeRefOrGetter<string>,
+  personId: MaybeRefOrGetter<string>,
+  providedQueryClient?: QueryClient,
+) {
+  const qc = providedQueryClient ?? useQueryClient()
+  return useMutation({
+    mutationKey: computed(() => personMutationKey(toValue(orgId), toValue(personId))),
+    mutationFn: ({ personId, taskId, dueAt }: { personId: string; taskId: string; dueAt: string }) =>
+      apiFetch<SnoozeTaskResponse>(
+        `/people/${encodeURIComponent(personId)}/tasks/${encodeURIComponent(taskId)}/snooze`,
+        { method: 'POST', body: JSON.stringify({ due_at: dueAt } satisfies SnoozeTaskRequest) },
+      ),
+    retry: false,
+    onError: (_error, variables) => {
+      const id = toValue(orgId)
+      settleTaskMutation(qc, id, variables.personId)
+    },
+    onSuccess: (_result, variables) => {
+      const id = toValue(orgId)
+      settleTaskMutation(qc, id, variables.personId)
+    },
+  }, providedQueryClient)
+}
+
+/** `DELETE .../tasks/{task_id}` (§4): tombstone; a repeat is 404. */
+export function useDeleteTaskMutation(
+  orgId: MaybeRefOrGetter<string>,
+  personId: MaybeRefOrGetter<string>,
+  providedQueryClient?: QueryClient,
+) {
+  const qc = providedQueryClient ?? useQueryClient()
+  return useMutation({
+    mutationKey: computed(() => personMutationKey(toValue(orgId), toValue(personId))),
+    mutationFn: ({ personId, taskId }: { personId: string; taskId: string }) =>
+      apiFetch<DeleteTaskResponse>(
+        `/people/${encodeURIComponent(personId)}/tasks/${encodeURIComponent(taskId)}`,
+        { method: 'DELETE' },
+      ),
+    retry: false,
+    onError: (_error, variables) => {
+      const id = toValue(orgId)
+      settleTaskMutation(qc, id, variables.personId)
+    },
+    onSuccess: (_result, variables) => {
+      const id = toValue(orgId)
+      settleTaskMutation(qc, id, variables.personId)
     },
   }, providedQueryClient)
 }

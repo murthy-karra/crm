@@ -11,8 +11,10 @@ import Select from 'primevue/select'
 import { useQueryClient } from '@tanstack/vue-query'
 import {
   Activity,
+  Check,
   Flag,
   Inbox,
+  ListChecks,
   Mail,
   Pencil,
   Phone,
@@ -22,6 +24,7 @@ import {
   Route,
   StickyNote,
   Trash2,
+  Undo2,
   UserCheck,
   X,
 } from 'lucide-vue-next'
@@ -38,23 +41,37 @@ import {
   useAddPersonTagMutation,
   useAssignPersonMutation,
   useChangeStageMutation,
+  useCompleteTaskMutation,
   useCorrectCallOutcome,
   useCreateTagMutation,
+  useCreateTaskMutation,
   useDeleteNoteMutation,
+  useDeleteTaskMutation,
   useEditNoteMutation,
   useMe,
   useMembers,
   usePerson,
+  useReopenTaskMutation,
   useRemovePersonTagMutation,
   useStages,
   useTagsQuery,
+  useUpdateTaskMutation,
 } from '../api/queries'
 import { ApiError } from '../api/client'
-import type { ActorRef, CallOutcomeCorrection, ContactAttemptedDetail, HistoryEntry, RoutingStrategy, TagRef } from '../api/types'
-import { formatAbsoluteTime, formatRelativeTime } from '../lib/format'
+import type {
+  ActorRef,
+  CallOutcomeCorrection,
+  ContactAttemptedDetail,
+  HistoryEntry,
+  RoutingStrategy,
+  Task,
+  TaskKind,
+  TagRef,
+} from '../api/types'
+import { formatAbsoluteTime, formatDateOnly, formatRelativeTime } from '../lib/format'
 import { buttonClasses, INPUT_CLASSES, LABEL_CLASSES, TEXTAREA_CLASSES, selectPt } from '../lib/controls'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
-import { describeApiError, describeNoteError } from '../lib/errors'
+import { describeApiError, describeNoteError, describeTaskError } from '../lib/errors'
 import { CONTACT_CHANNEL_LABEL, CONTACT_OUTCOME_LABEL, correctedOutcomeLabel } from '../lib/labels'
 import { describeOutcomeError } from '../telephony/errors'
 import { callCompletedSummary, formatTalkSeconds } from '../telephony/format'
@@ -74,6 +91,7 @@ const contactMethods = computed(() => detail.value?.contact_methods ?? [])
 const inquiries = computed(() => detail.value?.inquiries ?? [])
 const history = computed(() => detail.value?.history ?? [])
 const personTags = computed(() => detail.value?.tags ?? [])
+const tasks = computed(() => detail.value?.tasks ?? [])
 
 const notFound = computed(() => error.value instanceof ApiError && error.value.status === 404)
 
@@ -281,6 +299,7 @@ const HISTORY_ICON: Record<HistoryEntry['kind'], Component> = {
   call_completed: PhoneOutgoing,
   correspondence: Mail,
   note: StickyNote,
+  task_completed: ListChecks,
 }
 
 // docs/specs/SLICE_015.md §5: a tab loaded before a deploy refetches on the
@@ -457,6 +476,325 @@ function confirmDeleteNote() {
   )
 }
 
+// ---- Tasks (SLICE_016.md §8, §12.8) ----------------------------------------
+// A Tasks card above History: an Add form, then one row per open task in
+// server order (`open_for_person`: due_at ASC NULLS LAST, created_at, id —
+// never re-sorted here). Complete/Edit/Delete render only where
+// `task.can_manage`. Mutations are pessimistic (the note precedent above).
+const TASK_KIND_OPTIONS: { value: TaskKind; label: string }[] = [
+  { value: 'follow_up', label: 'Follow up' },
+  { value: 'call', label: 'Call' },
+  { value: 'email', label: 'Email' },
+  { value: 'text', label: 'Text' },
+  { value: 'other', label: 'Other' },
+]
+const TASK_KIND_LABEL: Record<TaskKind, string> = {
+  follow_up: 'Follow up',
+  call: 'Call',
+  email: 'Email',
+  text: 'Text',
+  other: 'Other',
+}
+
+// Members for the assignee picker: filtered client-side to `status ===
+// 'active'` (the `PreviewTodayFeedDialog.vue` precedent) — a deactivated
+// member is never a choosable assignee (rule 3: tasks require an ACTIVE
+// assignee, unlike `AssignPerson`). The full (unfiltered) list backs the
+// "(inactive)" suffix on an existing row's already-deactivated assignee.
+const activeMemberOptions = computed(() =>
+  (membersData.value?.members ?? [])
+    .filter((member) => member.status === 'active')
+    .map((member) => ({ id: member.user_id, display_name: member.display_name })),
+)
+const memberStatusById = computed(() => {
+  const map = new Map<string, 'active' | 'inactive'>()
+  for (const member of membersData.value?.members ?? []) map.set(member.user_id, member.status)
+  return map
+})
+function assigneeSuffix(assignee: ActorRef | null): string {
+  if (!assignee) return ''
+  return memberStatusById.value.get(assignee.id) === 'inactive' ? ' (inactive)' : ''
+}
+
+// Rule 2: a date-only pick is converted to LOCAL end of day (23:59:59 in
+// the browser's own zone) — client-side, no Organization timezone exists.
+// An optional time input picks an exact local instant on that date instead.
+function dateOnlyToLocalEndOfDay(dateOnly: string): string {
+  const [year, month, day] = dateOnly.split('-').map(Number)
+  return new Date(year, month - 1, day, 23, 59, 59, 0).toISOString()
+}
+function dateAndOptionalTimeToLocalInstant(dateOnly: string, timeOnly: string): string {
+  if (timeOnly === '') return dateOnlyToLocalEndOfDay(dateOnly)
+  const [year, month, day] = dateOnly.split('-').map(Number)
+  const [hour, minute] = timeOnly.split(':').map(Number)
+  return new Date(year, month - 1, day, hour, minute, 0, 0).toISOString()
+}
+function isoToLocalDateInput(iso: string): string {
+  const d = new Date(iso)
+  const y = String(d.getFullYear()).padStart(4, '0')
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+function isoToLocalTimeInput(iso: string): string {
+  const d = new Date(iso)
+  const h = String(d.getHours()).padStart(2, '0')
+  const m = String(d.getMinutes()).padStart(2, '0')
+  return `${h}:${m}`
+}
+
+/** The due badge (§8: "Overdue", "Due today", or the date; monochrome per
+ * D-045 — never a colored tint). `null` when the task has no `due_at` (it
+ * lives on the Person page only, rule 2). Overdue takes precedence over
+ * "same calendar day" (a task due earlier today is overdue, not "due
+ * today"). */
+function dueBadge(dueAt: string | null): { label: string; overdue: boolean } | null {
+  if (dueAt === null) return null
+  const due = new Date(dueAt)
+  const now = new Date()
+  if (due.getTime() < now.getTime()) return { label: 'Overdue', overdue: true }
+  const sameDay =
+    due.getFullYear() === now.getFullYear() && due.getMonth() === now.getMonth() && due.getDate() === now.getDate()
+  if (sameDay) return { label: 'Due today', overdue: false }
+  return { label: formatDateOnly(dueAt), overdue: false }
+}
+
+// ---- Add task form ----------------------------------------------------
+const createTask = useCreateTaskMutation(orgId, () => props.id)
+const taskAddTitle = ref('')
+const taskAddKind = ref<TaskKind>('follow_up')
+const taskAddDate = ref('')
+const taskAddTime = ref('')
+const taskAddAssignee = ref('')
+const taskAddError = ref<string | null>(null)
+
+// Defaults the assignee picker to the viewer once `me` resolves — never
+// overwritten again, so a member who deliberately clears it stays cleared.
+watch(
+  () => me.value?.user.id,
+  (id) => {
+    if (id && taskAddAssignee.value === '') taskAddAssignee.value = id
+  },
+  { immediate: true },
+)
+
+const taskAddDisabled = computed(() => taskAddTitle.value.trim() === '' || createTask.isPending.value)
+
+function resetTaskAddForm() {
+  taskAddTitle.value = ''
+  taskAddKind.value = 'follow_up'
+  taskAddDate.value = ''
+  taskAddTime.value = ''
+  // Assignee intentionally kept (defaults to the viewer for the next add).
+}
+
+function submitTask() {
+  if (taskAddDisabled.value) return
+  taskAddError.value = null
+  const dueAt = taskAddDate.value === '' ? null : dateAndOptionalTimeToLocalInstant(taskAddDate.value, taskAddTime.value)
+  createTask.mutate(
+    {
+      personId: props.id,
+      title: taskAddTitle.value,
+      kind: taskAddKind.value,
+      dueAt,
+      assigneeUserId: taskAddAssignee.value === '' ? null : taskAddAssignee.value,
+    },
+    {
+      onSuccess: () => { resetTaskAddForm() },
+      onError: (err) => {
+        if (err instanceof ApiError && err.code === 'invalid_assignee') {
+          void queryClient.invalidateQueries({ queryKey: queryKeys.members(orgId.value) })
+        }
+        taskAddError.value = describeTaskError(err, 'Could not add this task.')
+      },
+    },
+  )
+}
+
+function onTaskAddTitleKeydown(event: KeyboardEvent) {
+  if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+    event.preventDefault()
+    submitTask()
+  }
+}
+
+// ---- Inline edit (local state keyed by task id, the note precedent) ------
+interface EditingTask {
+  id: string
+  title: string
+  kind: TaskKind
+  dateStr: string
+  timeStr: string
+  assigneeUserId: string
+  // True once the viewer has touched the date or time input — otherwise
+  // Save re-sends `originalDueAt` VERBATIM (§1 rule 2 "an untouched date
+  // re-sends the stored instant"; §12.8 "an untouched Save yields
+  // changed: false"), since the inputs' minute granularity would otherwise
+  // silently drop a stored second/sub-second offset and manufacture a
+  // spurious change.
+  dateTouched: boolean
+  originalDueAt: string | null
+  error: string | null
+}
+const editingTask = ref<EditingTask | null>(null)
+const updateTask = useUpdateTaskMutation(orgId, () => props.id)
+const editTaskButtonRefs: Record<string, HTMLButtonElement | null> = {}
+function setEditTaskButtonRef(id: string, el: unknown) {
+  editTaskButtonRefs[id] = el instanceof HTMLButtonElement ? el : null
+}
+
+function startEditTask(task: Task) {
+  if (editingTask.value?.id === task.id) return
+  editingTask.value = {
+    id: task.id,
+    title: task.title,
+    kind: task.kind,
+    dateStr: task.due_at ? isoToLocalDateInput(task.due_at) : '',
+    timeStr: task.due_at ? isoToLocalTimeInput(task.due_at) : '',
+    assigneeUserId: task.assignee?.id ?? '',
+    dateTouched: false,
+    originalDueAt: task.due_at,
+    error: null,
+  }
+}
+
+function cancelEditTask() {
+  if (!editingTask.value || updateTask.isPending.value) return
+  const id = editingTask.value.id
+  editingTask.value = null
+  void nextTick(() => editTaskButtonRefs[id]?.focus())
+}
+
+function onEditTaskKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    cancelEditTask()
+  }
+}
+
+const editingTaskTitleModel = computed<string>({
+  get: () => editingTask.value?.title ?? '',
+  set: (value) => { if (editingTask.value) editingTask.value.title = value },
+})
+const editingTaskKindModel = computed<TaskKind>({
+  get: () => editingTask.value?.kind ?? 'follow_up',
+  set: (value) => { if (editingTask.value) editingTask.value.kind = value },
+})
+const editingTaskDateModel = computed<string>({
+  get: () => editingTask.value?.dateStr ?? '',
+  set: (value) => {
+    if (!editingTask.value) return
+    editingTask.value.dateStr = value
+    editingTask.value.dateTouched = true
+  },
+})
+const editingTaskTimeModel = computed<string>({
+  get: () => editingTask.value?.timeStr ?? '',
+  set: (value) => {
+    if (!editingTask.value) return
+    editingTask.value.timeStr = value
+    editingTask.value.dateTouched = true
+  },
+})
+const editingTaskAssigneeModel = computed<string>({
+  get: () => editingTask.value?.assigneeUserId ?? '',
+  set: (value) => { if (editingTask.value) editingTask.value.assigneeUserId = value },
+})
+
+const editTaskSaveDisabled = computed(() => {
+  const editing = editingTask.value
+  if (!editing) return true
+  return editing.title.trim() === '' || updateTask.isPending.value
+})
+
+function saveEditTask() {
+  const editing = editingTask.value
+  if (!editing || editTaskSaveDisabled.value) return
+  editing.error = null
+  const dueAt = editing.dateTouched
+    ? (editing.dateStr === '' ? null : dateAndOptionalTimeToLocalInstant(editing.dateStr, editing.timeStr))
+    : editing.originalDueAt
+  updateTask.mutate(
+    {
+      personId: props.id,
+      taskId: editing.id,
+      title: editing.title,
+      kind: editing.kind,
+      dueAt,
+      assigneeUserId: editing.assigneeUserId,
+    },
+    {
+      onSuccess: () => {
+        if (editingTask.value?.id === editing.id) editingTask.value = null
+      },
+      onError: (err) => {
+        const current = editingTask.value
+        if (current?.id !== editing.id) return
+        if (err instanceof ApiError && err.code === 'invalid_assignee') {
+          void queryClient.invalidateQueries({ queryKey: queryKeys.members(orgId.value) })
+        }
+        current.error = describeTaskError(err, 'Could not save this task.')
+      },
+    },
+  )
+}
+
+// ---- Complete / Reopen --------------------------------------------------
+const completeTask = useCompleteTaskMutation(orgId, () => props.id)
+const reopenTask = useReopenTaskMutation(orgId, () => props.id)
+const taskActionError = ref<{ id: string; message: string } | null>(null)
+
+function onCompleteTask(task: Task) {
+  taskActionError.value = null
+  completeTask.mutate(
+    { personId: props.id, taskId: task.id },
+    { onError: (err) => { taskActionError.value = { id: task.id, message: describeTaskError(err, 'Could not complete this task.') } } },
+  )
+}
+function isCompletingTask(taskId: string): boolean {
+  return completeTask.isPending.value && completeTask.variables.value?.taskId === taskId
+}
+
+function onReopenTask(taskId: string) {
+  taskActionError.value = null
+  reopenTask.mutate(
+    { personId: props.id, taskId },
+    { onError: (err) => { taskActionError.value = { id: taskId, message: describeTaskError(err, 'Could not reopen this task.') } } },
+  )
+}
+function isReopeningTask(taskId: string): boolean {
+  return reopenTask.isPending.value && reopenTask.variables.value?.taskId === taskId
+}
+
+// ---- Delete (ConfirmDialog) -----------------------------------------------
+const deleteTask = useDeleteTaskMutation(orgId, () => props.id)
+const deleteTaskTarget = ref<{ id: string } | null>(null)
+const deleteTaskDialogOpen = ref(false)
+
+function openDeleteTask(taskId: string) {
+  deleteTaskTarget.value = { id: taskId }
+  deleteTask.reset()
+  deleteTaskDialogOpen.value = true
+}
+function closeDeleteTaskDialog() {
+  if (deleteTask.isPending.value) return
+  deleteTaskDialogOpen.value = false
+}
+function confirmDeleteTask() {
+  const target = deleteTaskTarget.value
+  if (!target || deleteTask.isPending.value) return
+  deleteTask.mutate(
+    { personId: props.id, taskId: target.id },
+    {
+      onSuccess: () => {
+        deleteTaskDialogOpen.value = false
+        if (editingTask.value?.id === target.id) editingTask.value = null
+      },
+    },
+  )
+}
+
 const logContactOpen = ref(false)
 
 // ---- Calling (SLICE_006 §10; SLICE_006b §6) --------------------------------
@@ -614,6 +952,11 @@ watch(
     noteAddError.value = null
     editingNote.value = null
     deleteNoteDialogOpen.value = false
+    taskAddTitle.value = ''
+    taskAddError.value = null
+    editingTask.value = null
+    taskActionError.value = null
+    deleteTaskDialogOpen.value = false
   },
 )
 
@@ -675,6 +1018,11 @@ function historySummary(entry: HistoryEntry): string {
       const base = entry.actor ? `Note by ${entry.actor.display_name}` : 'Note'
       return entry.detail.edited ? `${base} · edited` : base
     }
+    case 'task_completed':
+      // §8: "Completed task: <title>" — the secondary "<kind> · was due
+      // <date>" line lives in `taskCompletedDescription` below, the note
+      // body-line precedent.
+      return `Completed task: ${entry.detail.title}`
     default:
       // §5: any `kind` this bundle's `HistoryEntry` union does not know
       // about (a future additive kind an old tab hasn't reloaded for)
@@ -694,6 +1042,16 @@ function historySummary(entry: HistoryEntry): string {
 // never rendered as the outcome. Call-derived attempts whose call row is
 // missing (should not happen) fall through as ordinary rows so nothing is
 // silently lost; manual attempts (`call_id === null`) are untouched.
+/** Set only for `kind === 'task_completed'` (§8): the fields the row's
+ * secondary description line and ghost Reopen button need. */
+interface TaskCompletedPayload {
+  id: string
+  title: string
+  /** "<kind> · was due <date>", or the kind alone with no due date. */
+  description: string
+  canManage: boolean
+}
+
 interface HistoryRow {
   key: string
   icon: Component
@@ -706,6 +1064,7 @@ interface HistoryRow {
   /** Set only for `kind === 'note'` (§5): `id`, `body`, `edited`,
    * `canManage` — the fields the row's inline body/Edit/Delete UI needs. */
   note: NotePayload | null
+  task: TaskCompletedPayload | null
 }
 
 type AttemptEntry = HistoryEntry & { kind: 'contact_attempted'; detail: ContactAttemptedDetail }
@@ -721,6 +1080,20 @@ function plainRow(entry: HistoryEntry): HistoryRow {
     note:
       entry.kind === 'note'
         ? { id: entry.id, body: entry.detail.body, edited: entry.detail.edited, canManage: entry.detail.can_manage }
+        : null,
+    // §8: "<kind> · was due <date>" under the "Completed task: <title>"
+    // summary line; a task with no due date (rare — it never reaches
+    // Today, but can still be completed) shows the kind alone.
+    task:
+      entry.kind === 'task_completed'
+        ? {
+            id: entry.id,
+            title: entry.detail.title,
+            description: entry.detail.due_at
+              ? `${TASK_KIND_LABEL[entry.detail.kind]} · was due ${formatDateOnly(entry.detail.due_at)}`
+              : TASK_KIND_LABEL[entry.detail.kind],
+            canManage: entry.detail.can_manage,
+          }
         : null,
   }
 }
@@ -778,6 +1151,7 @@ const historyRows = computed<HistoryRow[]>(() => {
       occurredAt: entry.occurred_at,
       change,
       note: null,
+      task: null,
     })
   }
   return rows
@@ -1154,6 +1528,299 @@ watch(
 
       <Card>
         <h2 class="mb-4 text-section font-semibold text-text">
+          Tasks
+        </h2>
+
+        <div
+          class="mb-4 rounded-xl border border-border p-3"
+          data-testid="task-add-form"
+        >
+          <div class="grid gap-3 sm:grid-cols-2">
+            <div class="sm:col-span-2">
+              <label
+                for="task-add-title"
+                :class="LABEL_CLASSES"
+              >Title</label>
+              <input
+                id="task-add-title"
+                v-model="taskAddTitle"
+                type="text"
+                :class="INPUT_CLASSES"
+                placeholder="What needs to happen?"
+                :disabled="createTask.isPending.value"
+                data-testid="task-add-title"
+                @keydown="onTaskAddTitleKeydown"
+              >
+            </div>
+            <FormField
+              label="Kind"
+              bare
+            >
+              <Select
+                v-model="taskAddKind"
+                :options="TASK_KIND_OPTIONS"
+                option-label="label"
+                option-value="value"
+                aria-label="Kind"
+                :disabled="createTask.isPending.value"
+                :pt="selectPt()"
+                data-testid="task-add-kind"
+              />
+            </FormField>
+            <FormField
+              label="Assignee"
+              bare
+            >
+              <Select
+                v-model="taskAddAssignee"
+                :options="activeMemberOptions"
+                option-label="display_name"
+                option-value="id"
+                aria-label="Assignee"
+                :loading="membersPending"
+                :disabled="createTask.isPending.value"
+                :pt="selectPt()"
+                data-testid="task-add-assignee"
+              />
+            </FormField>
+            <div>
+              <label
+                for="task-add-date"
+                :class="LABEL_CLASSES"
+              >Due date</label>
+              <input
+                id="task-add-date"
+                v-model="taskAddDate"
+                type="date"
+                :class="INPUT_CLASSES"
+                :disabled="createTask.isPending.value"
+                data-testid="task-add-date"
+              >
+            </div>
+            <div>
+              <label
+                for="task-add-time"
+                :class="LABEL_CLASSES"
+              >Due time (optional)</label>
+              <input
+                id="task-add-time"
+                v-model="taskAddTime"
+                type="time"
+                :class="INPUT_CLASSES"
+                :disabled="createTask.isPending.value || taskAddDate === ''"
+                data-testid="task-add-time"
+              >
+            </div>
+          </div>
+          <div class="mt-3 flex justify-end">
+            <button
+              type="button"
+              :class="buttonClasses('primary')"
+              :disabled="taskAddDisabled"
+              data-testid="task-add-submit"
+              @click="submitTask"
+            >
+              {{ createTask.isPending.value ? 'Adding…' : 'Add task' }}
+            </button>
+          </div>
+          <p
+            v-if="taskAddError"
+            role="alert"
+            class="mt-2 text-small text-danger"
+            data-testid="task-add-error"
+          >
+            {{ taskAddError }}
+          </p>
+        </div>
+
+        <ul
+          v-if="tasks.length > 0"
+          class="divide-y divide-border"
+          data-testid="task-list"
+        >
+          <li
+            v-for="task in tasks"
+            :key="task.id"
+            class="flex min-h-14 items-start gap-3 py-2 first:pt-0 last:pb-0"
+            data-testid="task-row"
+          >
+            <div class="min-w-0 flex-1 self-center">
+              <template v-if="editingTask?.id === task.id">
+                <div class="grid gap-2 sm:grid-cols-2">
+                  <label
+                    :for="`task-edit-title-${task.id}`"
+                    class="sr-only"
+                  >Edit task title</label>
+                  <input
+                    :id="`task-edit-title-${task.id}`"
+                    v-model="editingTaskTitleModel"
+                    type="text"
+                    :class="[INPUT_CLASSES, 'sm:col-span-2']"
+                    :disabled="updateTask.isPending.value"
+                    data-testid="task-edit-title"
+                    @keydown="onEditTaskKeydown"
+                  >
+                  <Select
+                    v-model="editingTaskKindModel"
+                    :options="TASK_KIND_OPTIONS"
+                    option-label="label"
+                    option-value="value"
+                    aria-label="Kind"
+                    :disabled="updateTask.isPending.value"
+                    :pt="selectPt()"
+                    data-testid="task-edit-kind"
+                  />
+                  <Select
+                    v-model="editingTaskAssigneeModel"
+                    :options="activeMemberOptions"
+                    option-label="display_name"
+                    option-value="id"
+                    aria-label="Assignee"
+                    :disabled="updateTask.isPending.value"
+                    :pt="selectPt()"
+                    data-testid="task-edit-assignee"
+                  />
+                  <input
+                    v-model="editingTaskDateModel"
+                    type="date"
+                    aria-label="Due date"
+                    :class="INPUT_CLASSES"
+                    :disabled="updateTask.isPending.value"
+                    data-testid="task-edit-date"
+                  >
+                  <input
+                    v-model="editingTaskTimeModel"
+                    type="time"
+                    aria-label="Due time (optional)"
+                    :class="INPUT_CLASSES"
+                    :disabled="updateTask.isPending.value || editingTaskDateModel === ''"
+                    data-testid="task-edit-time"
+                  >
+                </div>
+                <p
+                  v-if="editingTask?.error"
+                  role="alert"
+                  class="mt-2 text-small text-danger"
+                  data-testid="task-edit-error"
+                >
+                  {{ editingTask?.error }}
+                </p>
+                <div class="mt-2 flex items-center gap-2">
+                  <button
+                    type="button"
+                    :class="buttonClasses('primary')"
+                    :disabled="editTaskSaveDisabled"
+                    data-testid="task-edit-save"
+                    @click="saveEditTask"
+                  >
+                    {{ updateTask.isPending.value ? 'Saving…' : 'Save' }}
+                  </button>
+                  <button
+                    type="button"
+                    :class="buttonClasses('secondary')"
+                    :disabled="updateTask.isPending.value"
+                    data-testid="task-edit-cancel"
+                    @click="cancelEditTask"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </template>
+              <template v-else>
+                <div class="flex flex-wrap items-center gap-2">
+                  <span data-testid="task-kind-badge">
+                    <Badge tint="neutral">
+                      {{ TASK_KIND_LABEL[task.kind] }}
+                    </Badge>
+                  </span>
+                  <span
+                    class="text-body text-text"
+                    data-testid="task-title"
+                  >{{ task.title }}</span>
+                  <span
+                    v-if="dueBadge(task.due_at)"
+                    data-testid="task-due-badge"
+                  >
+                    <Badge tint="neutral">
+                      {{ dueBadge(task.due_at)!.label }}
+                    </Badge>
+                  </span>
+                </div>
+                <p
+                  class="mt-1 text-small text-text-muted"
+                  data-testid="task-assignee"
+                >
+                  {{ task.assignee ? `${task.assignee.display_name}${assigneeSuffix(task.assignee)}` : 'Unassigned' }}
+                </p>
+                <p
+                  v-if="taskActionError?.id === task.id"
+                  role="alert"
+                  class="mt-1 text-small text-danger"
+                  data-testid="task-action-error"
+                >
+                  {{ taskActionError.message }}
+                </p>
+              </template>
+            </div>
+            <div
+              v-if="task.can_manage && editingTask?.id !== task.id"
+              class="flex shrink-0 items-center gap-1"
+            >
+              <button
+                type="button"
+                class="inline-flex h-10 w-10 items-center justify-center rounded-lg text-text-muted transition-colors duration-150 ease-out hover:bg-surface-2 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50"
+                aria-label="Complete task"
+                :disabled="isCompletingTask(task.id)"
+                data-testid="complete-task"
+                @click="onCompleteTask(task)"
+              >
+                <Check
+                  class="h-4 w-4"
+                  stroke-width="1.5"
+                  aria-hidden="true"
+                />
+              </button>
+              <button
+                :ref="(el) => setEditTaskButtonRef(task.id, el)"
+                type="button"
+                class="inline-flex h-10 w-10 items-center justify-center rounded-lg text-text-muted transition-colors duration-150 ease-out hover:bg-surface-2 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+                aria-label="Edit task"
+                data-testid="edit-task"
+                @click="startEditTask(task)"
+              >
+                <Pencil
+                  class="h-4 w-4"
+                  stroke-width="1.5"
+                  aria-hidden="true"
+                />
+              </button>
+              <button
+                type="button"
+                class="inline-flex h-10 w-10 items-center justify-center rounded-lg text-text-muted transition-colors duration-150 ease-out hover:bg-surface-2 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+                aria-label="Delete task"
+                data-testid="delete-task"
+                @click="openDeleteTask(task.id)"
+              >
+                <Trash2
+                  class="h-4 w-4"
+                  stroke-width="1.5"
+                  aria-hidden="true"
+                />
+              </button>
+            </div>
+          </li>
+        </ul>
+        <p
+          v-else
+          class="text-body text-text-muted"
+          data-testid="task-list-empty"
+        >
+          No open tasks.
+        </p>
+      </Card>
+
+      <Card>
+        <h2 class="mb-4 text-section font-semibold text-text">
           History
         </h2>
 
@@ -1321,6 +1988,13 @@ watch(
                 >
                   {{ row.note.body }}
                 </p>
+                <p
+                  v-if="row.task"
+                  class="mt-1 text-body text-text-muted"
+                  data-testid="task-completed-detail"
+                >
+                  {{ row.task.description }}
+                </p>
                 <p class="text-small text-text-muted">
                   {{ row.actor?.display_name ?? 'System' }} ·
                   <span :title="formatAbsoluteTime(row.occurredAt)">{{ formatRelativeTime(row.occurredAt) }}</span>
@@ -1369,6 +2043,21 @@ watch(
             >
               {{ row.change.outcome === null ? 'Set outcome' : 'Change outcome' }}
             </button>
+            <button
+              v-if="row.task && row.task.canManage"
+              type="button"
+              :class="buttonClasses('ghost')"
+              :disabled="isReopeningTask(row.task.id)"
+              data-testid="reopen-task"
+              @click="onReopenTask(row.task.id)"
+            >
+              <Undo2
+                class="h-4 w-4"
+                stroke-width="1.5"
+                aria-hidden="true"
+              />
+              Reopen
+            </button>
           </li>
         </ul>
         <p
@@ -1390,6 +2079,19 @@ watch(
         error-fallback="Could not delete this note."
         @update:visible="(value: boolean) => { if (!value) closeDeleteNoteDialog() }"
         @confirm="confirmDeleteNote"
+      />
+
+      <ConfirmDialog
+        :visible="deleteTaskDialogOpen"
+        title="Delete task"
+        message="Delete this task? This cannot be undone."
+        confirm-label="Delete"
+        confirm-variant="danger"
+        :is-pending="deleteTask.isPending.value"
+        :error="deleteTask.error.value"
+        error-fallback="Could not delete this task."
+        @update:visible="(value: boolean) => { if (!value) closeDeleteTaskDialog() }"
+        @confirm="confirmDeleteTask"
       />
 
       <LogContactDialog

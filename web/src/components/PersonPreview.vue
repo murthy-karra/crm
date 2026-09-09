@@ -53,12 +53,13 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
 defineExpose({ focus: () => root.value?.focus() })
 
 const icons = { inquiry_received: Inbox, routing_decision: Route, assignment_changed: UserCheck, stage_changed: Flag, contact_attempted: Phone, call_completed: Phone, correspondence: Mail }
-// SLICE_015 §1: notes are out of scope for the People preview card (unlike
-// PersonDetailView's History card). `recent`'s own type-narrowing filter
-// below excludes the `note` kind before it ever reaches this function, so
-// its parameter type is narrowed to match — the switch stays exhaustive
-// without a `note` case or a runtime-unreachable default.
-type PreviewableHistoryEntry = Exclude<HistoryEntry, { kind: 'note' }>
+// SLICE_015 §1 / SLICE_016.md §8: notes and completed tasks are out of
+// scope for the People preview card (unlike PersonDetailView's History
+// card). `recent`'s own type-narrowing filter below excludes both kinds
+// before they ever reach this function, so its parameter type is narrowed
+// to match — the switch stays exhaustive without a `note`/`task_completed`
+// case or a runtime-unreachable default.
+type PreviewableHistoryEntry = Exclude<HistoryEntry, { kind: 'note' | 'task_completed' }>
 function activity(entry: PreviewableHistoryEntry): { title: string; description: string } {
   switch (entry.kind) {
     case 'inquiry_received': return { title: 'Inquiry received', description: entry.detail.source }
@@ -76,7 +77,7 @@ const recent = computed(() => {
   const history = data.value?.history ?? []
   const calls = new Set(history.filter((entry) => entry.kind === 'call_completed').map((entry) => entry.detail.call_id))
   return history
-    .filter((entry): entry is PreviewableHistoryEntry => entry.kind !== 'note')
+    .filter((entry): entry is PreviewableHistoryEntry => entry.kind !== 'note' && entry.kind !== 'task_completed')
     .filter((entry) => entry.kind !== 'contact_attempted' ||
       (!entry.detail.superseded && (entry.detail.call_id === null || !calls.has(entry.detail.call_id))))
     .slice(-3).map((entry) => ({ ...entry, ...activity(entry) }))

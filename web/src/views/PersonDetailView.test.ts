@@ -13,6 +13,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import PrimeVue from 'primevue/config'
+import Select from 'primevue/select'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, apiFetch } from '../api/client'
@@ -22,17 +23,25 @@ import type {
   CallCompletedDetail,
   CallCompletedOutcome,
   CallView,
+  CompleteTaskResponse,
   ContactAttemptedDetail,
   ContactMethod,
   CorrectOutcomeResponse,
+  CreateTaskResponse,
   DeleteNoteResponse,
+  DeleteTaskResponse,
   EditNoteResponse,
   HistoryEntry,
   MeResponse,
+  Member,
   PersonDetailResponse,
+  ReopenTaskResponse,
   RoutingStrategy,
   Tag,
   TagRef,
+  Task,
+  TaskKind,
+  UpdateTaskResponse,
 } from '../api/types'
 import { personMutationKey, queryKeys } from '../api/queries'
 import type { CallRoom, CallRoomEvents, CallRoomFactory } from '../telephony/useCall'
@@ -64,7 +73,12 @@ function me(): MeResponse {
   }
 }
 
-function detail(contactMethods: ContactMethod[], history: HistoryEntry[] = [], tags: TagRef[] = []): PersonDetailResponse {
+function detail(
+  contactMethods: ContactMethod[],
+  history: HistoryEntry[] = [],
+  tags: TagRef[] = [],
+  tasks: Task[] = [],
+): PersonDetailResponse {
   return {
     person: {
       id: PERSON_ID,
@@ -83,6 +97,7 @@ function detail(contactMethods: ContactMethod[], history: HistoryEntry[] = [], t
     inquiries: [],
     history,
     tags,
+    tasks,
   }
 }
 
@@ -196,6 +211,80 @@ interface StubOptions {
   /** `DELETE /api/people/{id}/notes/{note_id}` response, or an Error. Defaults to
    *  removing the entry from the tracked history (tombstones are invisible, §1 rule 3). */
   noteDelete?: (noteId: string) => DeleteNoteResponse | Error
+  /** `GET /organization/members` — the assignee picker's source (docs/specs/
+   *  SLICE_016.md §8). Defaults to Alice (active, the viewer) only. */
+  members?: Member[]
+  /** `POST /api/people/{id}/tasks` response, or an Error. Defaults to a fresh
+   *  open task, `can_manage: true`, appended to the tracked open task list. */
+  taskAdd?: (body: { title: string; kind: TaskKind; due_at: string | null; assignee_user_id: string | null }) =>
+    CreateTaskResponse | Error
+  /** `PUT /api/people/{id}/tasks/{task_id}` response, or an Error. Defaults to
+   *  updating the tracked open task in place (`changed` by field comparison). */
+  taskUpdate?: (
+    taskId: string,
+    body: { title: string; kind: TaskKind; due_at: string | null; assignee_user_id: string },
+  ) => UpdateTaskResponse | Error
+  /** `POST .../tasks/{task_id}/complete` response, or an Error. Defaults to
+   *  moving the tracked task from open to a `task_completed` history entry. */
+  taskComplete?: (taskId: string) => CompleteTaskResponse | Error
+  /** `POST .../tasks/{task_id}/reopen` response, or an Error. Defaults to
+   *  moving the tracked `task_completed` entry back to the open list. */
+  taskReopen?: (taskId: string) => ReopenTaskResponse | Error
+  /** `DELETE .../tasks/{task_id}` response, or an Error. Defaults to removing
+   *  the task from the tracked open list (tombstones are invisible). */
+  taskDelete?: (taskId: string) => DeleteTaskResponse | Error
+}
+
+function taskFixture(overrides: Partial<Task> = {}): Task {
+  return {
+    id: 'task-1',
+    person_id: PERSON_ID,
+    title: 'A task',
+    kind: 'follow_up',
+    due_at: null,
+    assignee: { id: 'u-alice', display_name: 'Alice' },
+    created_by: { id: 'u-alice', display_name: 'Alice' },
+    completed_at: null,
+    completed_by: null,
+    created_at: '2026-08-22T09:00:00.000Z',
+    updated_at: '2026-08-22T09:00:00.000Z',
+    can_manage: true,
+    ...overrides,
+  }
+}
+
+function taskCompletedEntry(overrides: {
+  id?: string
+  title?: string
+  kind?: TaskKind
+  dueAt?: string | null
+  assignee?: ActorRef | null
+  createdBy?: ActorRef | null
+  canManage?: boolean
+  actor?: ActorRef | null
+  occurredAt?: string
+} = {}): HistoryEntry {
+  const {
+    id = 'task-1',
+    title = 'A task',
+    kind = 'follow_up',
+    dueAt = null,
+    assignee = { id: 'u-alice', display_name: 'Alice' },
+    createdBy = { id: 'u-alice', display_name: 'Alice' },
+    canManage = true,
+    actor = { id: 'u-alice', display_name: 'Alice' },
+    occurredAt = '2026-08-22T09:30:00.000Z',
+  } = overrides
+  return {
+    kind: 'task_completed',
+    id,
+    occurred_at: occurredAt,
+    recorded_at: occurredAt,
+    actor,
+    origin: 'web_session',
+    correlation_id: 'corr-task',
+    detail: { title, kind, due_at: dueAt, assignee, created_by: createdBy, can_manage: canManage },
+  }
 }
 
 function stubApi(personDetail: PersonDetailResponse, options: StubOptions = {}) {
@@ -208,6 +297,20 @@ function stubApi(personDetail: PersonDetailResponse, options: StubOptions = {}) 
   // detail refetch every mutation settles into (§5, §9.10).
   let currentHistory = [...personDetail.history]
   let noteSeq = 0
+  // Mutable the same way for task add/update/complete/reopen/delete (§8).
+  let currentTasks = [...personDetail.tasks]
+  let taskSeq = 0
+  const members: Member[] = options.members ?? [
+    {
+      user_id: 'u-alice',
+      display_name: 'Alice',
+      email: 'alice@acme.test',
+      role: 'member',
+      status: 'active',
+      joined_at: '2026-01-01T00:00:00.000Z',
+      assigned_people_count: 0,
+    },
+  ]
   apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET'
     if (path === '/me') return me()
@@ -301,15 +404,169 @@ function stubApi(personDetail: PersonDetailResponse, options: StubOptions = {}) 
       if (!existed) throw new ApiError(404, 'not_found')
       return { deleted: true }
     }
+    const taskCollectionMatch = /^\/people\/([^/]+)\/tasks$/.exec(path)
+    if (taskCollectionMatch && method === 'POST') {
+      const body = JSON.parse(String(init?.body ?? '{}')) as {
+        title: string
+        kind?: TaskKind
+        due_at?: string | null
+        assignee_user_id?: string | null
+      }
+      const kind = body.kind ?? 'follow_up'
+      const dueAt = body.due_at ?? null
+      const assigneeUserId = body.assignee_user_id ?? null
+      const result = options.taskAdd?.({ title: body.title, kind, due_at: dueAt, assignee_user_id: assigneeUserId })
+      if (result instanceof Error) throw result
+      if (result) {
+        currentTasks = [...currentTasks, result.task]
+        return result
+      }
+      taskSeq += 1
+      const assigneeMember = assigneeUserId ? members.find((m) => m.user_id === assigneeUserId) : undefined
+      const task = taskFixture({
+        id: `task-added-${taskSeq}`,
+        title: body.title,
+        kind,
+        due_at: dueAt,
+        assignee: assigneeUserId ? { id: assigneeUserId, display_name: assigneeMember?.display_name ?? 'Alice' } : null,
+        created_by: { id: 'u-alice', display_name: 'Alice' },
+        created_at: '2026-08-22T11:00:00.000Z',
+        updated_at: '2026-08-22T11:00:00.000Z',
+        can_manage: true,
+      })
+      currentTasks = [...currentTasks, task]
+      return { task }
+    }
+    const taskItemMatch = /^\/people\/([^/]+)\/tasks\/([^/]+)$/.exec(path)
+    if (taskItemMatch && (method === 'PUT' || method === 'DELETE')) {
+      const taskId = decodeURIComponent(taskItemMatch[2])
+      if (method === 'PUT') {
+        const body = JSON.parse(String(init?.body ?? '{}')) as {
+          title: string
+          kind: TaskKind
+          due_at: string | null
+          assignee_user_id: string
+        }
+        const result = options.taskUpdate?.(taskId, body)
+        if (result instanceof Error) {
+          // A 404 here means the task genuinely no longer exists (deleted
+          // elsewhere) — a subsequent refetch must not keep showing it,
+          // matching real backend behavior (the note precedent above).
+          if (result instanceof ApiError && result.status === 404) {
+            currentTasks = currentTasks.filter((t) => t.id !== taskId)
+          }
+          throw result
+        }
+        if (result) {
+          currentTasks = currentTasks.map((t) => (t.id === taskId ? result.task : t))
+          return result
+        }
+        const existing = currentTasks.find((t) => t.id === taskId)
+        if (!existing) throw new ApiError(404, 'not_found')
+        const assigneeMember = members.find((m) => m.user_id === body.assignee_user_id)
+        const newAssignee = assigneeMember
+          ? { id: assigneeMember.user_id, display_name: assigneeMember.display_name }
+          : existing.assignee
+        const changed =
+          existing.title !== body.title ||
+          existing.kind !== body.kind ||
+          existing.due_at !== body.due_at ||
+          (existing.assignee?.id ?? '') !== body.assignee_user_id
+        const updated: Task = changed
+          ? { ...existing, title: body.title, kind: body.kind, due_at: body.due_at, assignee: newAssignee, updated_at: '2026-08-22T12:00:00.000Z' }
+          : existing
+        currentTasks = currentTasks.map((t) => (t.id === taskId ? updated : t))
+        return { task: updated, changed }
+      }
+      const result = options.taskDelete?.(taskId)
+      if (result instanceof Error) throw result
+      const existed = currentTasks.some((t) => t.id === taskId)
+      currentTasks = currentTasks.filter((t) => t.id !== taskId)
+      if (result) return result
+      if (!existed) throw new ApiError(404, 'not_found')
+      return { deleted: true }
+    }
+    const taskCompleteMatch = /^\/people\/([^/]+)\/tasks\/([^/]+)\/complete$/.exec(path)
+    if (taskCompleteMatch && method === 'POST') {
+      const taskId = decodeURIComponent(taskCompleteMatch[2])
+      const result = options.taskComplete?.(taskId)
+      if (result instanceof Error) {
+        // A 404 here means the task genuinely no longer exists (deleted
+        // elsewhere) — a subsequent refetch must not keep showing it.
+        if (result instanceof ApiError && result.status === 404) {
+          currentTasks = currentTasks.filter((t) => t.id !== taskId)
+        }
+        throw result
+      }
+      if (result) {
+        if (result.changed) currentTasks = currentTasks.filter((t) => t.id !== taskId)
+        return result
+      }
+      const existing = currentTasks.find((t) => t.id === taskId)
+      if (!existing) throw new ApiError(404, 'not_found')
+      const completedAt = '2026-08-22T13:00:00.000Z'
+      const completedBy = { id: 'u-alice', display_name: 'Alice' }
+      currentTasks = currentTasks.filter((t) => t.id !== taskId)
+      currentHistory = [
+        ...currentHistory,
+        taskCompletedEntry({
+          id: taskId,
+          title: existing.title,
+          kind: existing.kind,
+          dueAt: existing.due_at,
+          assignee: existing.assignee,
+          createdBy: existing.created_by,
+          canManage: existing.can_manage,
+          actor: completedBy,
+          occurredAt: completedAt,
+        }),
+      ]
+      return { task: { ...existing, completed_at: completedAt, completed_by: completedBy }, changed: true }
+    }
+    const taskReopenMatch = /^\/people\/([^/]+)\/tasks\/([^/]+)\/reopen$/.exec(path)
+    if (taskReopenMatch && method === 'POST') {
+      const taskId = decodeURIComponent(taskReopenMatch[2])
+      const result = options.taskReopen?.(taskId)
+      if (result instanceof Error) throw result
+      if (result) {
+        if (result.changed) {
+          currentHistory = currentHistory.filter((entry) => !(entry.kind === 'task_completed' && entry.id === taskId))
+          currentTasks = [...currentTasks, result.task]
+        }
+        return result
+      }
+      const entry = currentHistory.find((e) => e.kind === 'task_completed' && e.id === taskId)
+      if (!entry || entry.kind !== 'task_completed') throw new ApiError(404, 'not_found')
+      const reopened = taskFixture({
+        id: taskId,
+        title: entry.detail.title,
+        kind: entry.detail.kind,
+        due_at: entry.detail.due_at,
+        assignee: entry.detail.assignee,
+        created_by: entry.detail.created_by,
+        can_manage: entry.detail.can_manage,
+        completed_at: null,
+        completed_by: null,
+      })
+      currentHistory = currentHistory.filter((e) => !(e.kind === 'task_completed' && e.id === taskId))
+      currentTasks = [...currentTasks, reopened]
+      return { task: reopened, changed: true }
+    }
     if (path.startsWith('/people/') && !path.endsWith('/calls') && method === 'GET') {
       const id = path.slice('/people/'.length)
       const currentTags = [...appliedTags.values()].sort((a, b) => a.name.localeCompare(b.name))
       return id === PERSON_ID
-        ? { ...personDetail, history: currentHistory, tags: currentTags }
-        : { ...personDetail, person: { ...personDetail.person, id, display_name: 'Someone Else' }, history: currentHistory, tags: currentTags }
+        ? { ...personDetail, history: currentHistory, tags: currentTags, tasks: currentTasks }
+        : {
+            ...personDetail,
+            person: { ...personDetail.person, id, display_name: 'Someone Else' },
+            history: currentHistory,
+            tags: currentTags,
+            tasks: currentTasks,
+          }
     }
     if (path === '/stages') return { stages: [{ id: 'stage-lead', name: 'Lead', position: 1 }] }
-    if (path === '/organization/members') return { members: [] }
+    if (path === '/organization/members') return { members }
     if (path === '/tags' && method === 'GET') return { tags: [...orgTags.values()] }
     if (path === '/tags' && method === 'POST') {
       const body = JSON.parse(String(init?.body ?? '{}')) as { name: string }
@@ -413,13 +670,14 @@ describe('PersonDetailView — Call button', () => {
     const { wrapper } = await mountView()
     expect(wrapper.get('[data-testid="call-button"]').classes()).toContain('bg-accent')
     expect(wrapper.get('[data-testid="log-contact"]').classes()).not.toContain('bg-accent')
-    // The note composer's always-visible "Add note" button is also
-    // primary-styled (docs/specs/SLICE_015.md §5) and independent of
-    // the call/outcome state this assertion is actually about, so it is
-    // excluded from the count rather than folded into the call header's
-    // own one-primary invariant.
+    // The note composer's always-visible "Add note" button and the task
+    // Add form's always-visible "Add task" button (docs/specs/SLICE_015.md
+    // §5, docs/specs/SLICE_016.md §8) are also primary-styled and
+    // independent of the call/outcome state this assertion is actually
+    // about, so both are excluded from the count rather than folded into
+    // the call header's own one-primary invariant.
     expect(
-      wrapper.findAll('.bg-accent').filter((el) => el.attributes('data-testid') !== 'note-composer-submit'),
+      wrapper.findAll('.bg-accent').filter((el) => !['note-composer-submit', 'task-add-submit'].includes(el.attributes('data-testid') ?? '')),
     ).toHaveLength(1)
   })
 
@@ -463,13 +721,14 @@ describe('PersonDetailView — Call button', () => {
     expect(panel.text()).toContain('Grace Hopper')
     expect(wrapper.get('[data-testid="call-status"]').text()).toBe('Connecting…')
     expect(wrapper.get('[data-testid="call-button"]').attributes('disabled')).toBeDefined()
-    // The note composer's always-visible "Add note" button is also
-    // primary-styled (docs/specs/SLICE_015.md §5) and independent of
-    // the call/outcome state this assertion is actually about, so it is
-    // excluded from the count rather than folded into the call header's
-    // own one-primary invariant.
+    // The note composer's always-visible "Add note" button and the task
+    // Add form's always-visible "Add task" button (docs/specs/SLICE_015.md
+    // §5, docs/specs/SLICE_016.md §8) are also primary-styled and
+    // independent of the call/outcome state this assertion is actually
+    // about, so both are excluded from the count rather than folded into
+    // the call header's own one-primary invariant.
     expect(
-      wrapper.findAll('.bg-accent').filter((el) => el.attributes('data-testid') !== 'note-composer-submit'),
+      wrapper.findAll('.bg-accent').filter((el) => !['note-composer-submit', 'task-add-submit'].includes(el.attributes('data-testid') ?? '')),
     ).toHaveLength(1)
     expect(wrapper.get('[data-testid="call-hangup"]').classes()).toContain('bg-accent')
 
@@ -485,13 +744,14 @@ describe('PersonDetailView — Call button', () => {
     // one primary, so the Call button (enabled again) is secondary.
     expect(wrapper.get('[data-testid="call-outcome-prompt"]').text()).toBe('How did it go?')
     expect(wrapper.get('[data-testid="call-button"]').attributes('disabled')).toBeUndefined()
-    // The note composer's always-visible "Add note" button is also
-    // primary-styled (docs/specs/SLICE_015.md §5) and independent of
-    // the call/outcome state this assertion is actually about, so it is
-    // excluded from the count rather than folded into the call header's
-    // own one-primary invariant.
+    // The note composer's always-visible "Add note" button and the task
+    // Add form's always-visible "Add task" button (docs/specs/SLICE_015.md
+    // §5, docs/specs/SLICE_016.md §8) are also primary-styled and
+    // independent of the call/outcome state this assertion is actually
+    // about, so both are excluded from the count rather than folded into
+    // the call header's own one-primary invariant.
     expect(
-      wrapper.findAll('.bg-accent').filter((el) => el.attributes('data-testid') !== 'note-composer-submit'),
+      wrapper.findAll('.bg-accent').filter((el) => !['note-composer-submit', 'task-add-submit'].includes(el.attributes('data-testid') ?? '')),
     ).toHaveLength(1)
     expect(wrapper.get('[data-testid="call-outcome-save"]').classes()).toContain('bg-accent')
 
@@ -1176,13 +1436,14 @@ describe('PersonDetailView — Set / Change outcome (SLICE_006c §1 step 7, §5a
     await action.trigger('click')
     await flushPromises()
     expect(document.querySelector('[data-testid="change-outcome-save"]')).toBeNull()
-    // The note composer's always-visible "Add note" button is also
-    // primary-styled (docs/specs/SLICE_015.md §5) and independent of
-    // the call/outcome state this assertion is actually about, so it is
-    // excluded from the count rather than folded into the call header's
-    // own one-primary invariant.
+    // The note composer's always-visible "Add note" button and the task
+    // Add form's always-visible "Add task" button (docs/specs/SLICE_015.md
+    // §5, docs/specs/SLICE_016.md §8) are also primary-styled and
+    // independent of the call/outcome state this assertion is actually
+    // about, so both are excluded from the count rather than folded into
+    // the call header's own one-primary invariant.
     expect(
-      wrapper.findAll('.bg-accent').filter((el) => el.attributes('data-testid') !== 'note-composer-submit'),
+      wrapper.findAll('.bg-accent').filter((el) => !['note-composer-submit', 'task-add-submit'].includes(el.attributes('data-testid') ?? '')),
     ).toHaveLength(1)
     // Only a saved outcome releases the prompt (no Skip).
     await wrapper.get('[data-outcome="reached"]').trigger('click')
@@ -2013,5 +2274,417 @@ describe('PersonDetailView — Notes (SLICE_015 §9.10)', () => {
     const summaries = wrapper.findAll('[data-testid="history-summary"]').filter((p) => p.text() === 'Activity')
     expect(summaries).toHaveLength(1)
     expect(wrapper.find('[data-testid="note-body"]').exists()).toBe(false)
+  })
+})
+
+describe('PersonDetailView — Tasks (SLICE_016.md §12.8)', () => {
+  let activeWrapper: Awaited<ReturnType<typeof mountView>>['wrapper'] | null = null
+  afterEach(async () => {
+    activeWrapper?.unmount()
+    activeWrapper = null
+    await flushPromises()
+  })
+
+  // §8's date-only conversion is pinned to two exact instants under a
+  // fixed America/New_York clock (spring-forward and fall-back boundaries)
+  // — the coordinator-mandated TZ for every date case in this block.
+  // `process` is a real Node global at Vitest runtime (not browser-typed
+  // by this app's tsconfig, hence the cast) — Node/V8 re-resolve `TZ` on
+  // every new `Date`/`Intl.DateTimeFormat`, not just at process start.
+  const nodeProcess = (globalThis as unknown as { process: { env: Record<string, string | undefined> } }).process
+  let originalTz: string | undefined
+  beforeEach(() => { originalTz = nodeProcess.env.TZ; nodeProcess.env.TZ = 'America/New_York' })
+  afterEach(() => { nodeProcess.env.TZ = originalTz })
+
+  async function settleTick() {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await flushPromises()
+  }
+
+  it('the empty state, an open row with its kind/title/assignee, and Complete/Edit/Delete present only where can_manage', async () => {
+    stubApi(detail([PHONE_A]))
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    expect(wrapper.get('[data-testid="task-list-empty"]').text()).toBe('No open tasks.')
+
+    activeWrapper.unmount()
+    stubApi(
+      detail([PHONE_A], [], [], [
+        taskFixture({ id: 'task-mine', title: 'Follow up with Grace', can_manage: true }),
+        taskFixture({ id: 'task-not-mine', title: 'Someone else handles this', can_manage: false, assignee: { id: 'u-bob', display_name: 'Bob' } }),
+      ]),
+    )
+    const { wrapper: wrapper2 } = await mountView()
+    activeWrapper = wrapper2
+    const rows = wrapper2.findAll('[data-testid="task-row"]')
+    expect(rows).toHaveLength(2)
+    // can_manage asserted PER ROW, never by count (the house rule).
+    expect(rows[0]!.find('[data-testid="complete-task"]').exists()).toBe(true)
+    expect(rows[0]!.find('[data-testid="edit-task"]').exists()).toBe(true)
+    expect(rows[0]!.find('[data-testid="delete-task"]').exists()).toBe(true)
+    expect(rows[1]!.find('[data-testid="complete-task"]').exists()).toBe(false)
+    expect(rows[1]!.find('[data-testid="edit-task"]').exists()).toBe(false)
+    expect(rows[1]!.find('[data-testid="delete-task"]').exists()).toBe(false)
+    expect(rows[0]!.get('[data-testid="task-title"]').text()).toBe('Follow up with Grace')
+    expect(rows[0]!.get('[data-testid="task-kind-badge"]').text()).toBe('Follow up')
+    expect(rows[0]!.get('[data-testid="task-assignee"]').text()).toBe('Alice')
+  })
+
+  it('the due badge reads Overdue, Due today, or the date, and an inactive assignee gets the "(inactive)" suffix', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date('2026-09-10T18:00:00.000Z'))
+      stubApi(
+        detail([PHONE_A], [], [], [
+          taskFixture({ id: 'task-overdue', title: 'Overdue one', due_at: '2026-09-10T10:00:00.000Z' }),
+          taskFixture({ id: 'task-today', title: 'Due today one', due_at: '2026-09-10T23:00:00.000Z' }),
+          taskFixture({ id: 'task-future', title: 'Future one', due_at: '2026-09-20T12:00:00.000Z' }),
+          taskFixture({
+            id: 'task-inactive-assignee',
+            title: 'Held by a deactivated member',
+            assignee: { id: 'u-inactive', display_name: 'Dan' },
+          }),
+        ]),
+        { members: [
+          { user_id: 'u-alice', display_name: 'Alice', email: 'alice@acme.test', role: 'member', status: 'active', joined_at: '2026-01-01T00:00:00.000Z', assigned_people_count: 0 },
+          { user_id: 'u-inactive', display_name: 'Dan', email: 'dan@acme.test', role: 'member', status: 'inactive', joined_at: '2026-01-01T00:00:00.000Z', assigned_people_count: 0 },
+        ] },
+      )
+      const { wrapper } = await mountView()
+      activeWrapper = wrapper
+      const rows = wrapper.findAll('[data-testid="task-row"]')
+      expect(rows[0]!.get('[data-testid="task-due-badge"]').text()).toBe('Overdue')
+      expect(rows[1]!.get('[data-testid="task-due-badge"]').text()).toBe('Due today')
+      expect(rows[2]!.find('[data-testid="task-due-badge"]').exists()).toBe(true)
+      expect(rows[2]!.get('[data-testid="task-due-badge"]').text()).not.toBe('Overdue')
+      expect(rows[2]!.get('[data-testid="task-due-badge"]').text()).not.toBe('Due today')
+      expect(rows[3]!.get('[data-testid="task-assignee"]').text()).toBe('Dan (inactive)')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('the Add form: disabled while empty/whitespace/pending, kind defaults to Follow up, the assignee picker is limited to active members and defaults to the viewer, and a plain Enter does not submit while Ctrl/Cmd+Enter does', async () => {
+    stubApi(detail([PHONE_A]), {
+      members: [
+        { user_id: 'u-alice', display_name: 'Alice', email: 'alice@acme.test', role: 'member', status: 'active', joined_at: '2026-01-01T00:00:00.000Z', assigned_people_count: 0 },
+        { user_id: 'u-bob', display_name: 'Bob', email: 'bob@acme.test', role: 'member', status: 'active', joined_at: '2026-01-01T00:00:00.000Z', assigned_people_count: 0 },
+        { user_id: 'u-carol', display_name: 'Carol', email: 'carol@acme.test', role: 'member', status: 'inactive', joined_at: '2026-01-01T00:00:00.000Z', assigned_people_count: 0 },
+      ],
+    })
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    const submit = wrapper.get('[data-testid="task-add-submit"]')
+    expect(submit.attributes('disabled')).toBeDefined()
+    const title = wrapper.get('[data-testid="task-add-title"]')
+    await title.setValue('   ')
+    expect(wrapper.get('[data-testid="task-add-submit"]').attributes('disabled')).toBeDefined()
+    await title.setValue('Call the client')
+    expect(wrapper.get('[data-testid="task-add-submit"]').attributes('disabled')).toBeUndefined()
+
+    // Kind default and assignee default (the viewer).
+    expect(wrapper.get('[data-testid="task-add-kind"]').findComponent(Select).props('modelValue')).toBe('follow_up')
+    expect(wrapper.get('[data-testid="task-add-assignee"]').findComponent(Select).props('modelValue')).toBe('u-alice')
+    // The assignee picker offers only active members (Carol is inactive).
+    expect(wrapper.get('[data-testid="task-add-assignee"]').findComponent(Select).props('options')).toEqual([
+      { id: 'u-alice', display_name: 'Alice' },
+      { id: 'u-bob', display_name: 'Bob' },
+    ])
+
+    function posts() {
+      return apiFetchMock.mock.calls.filter(
+        ([path, init]) => path === `/people/${PERSON_ID}/tasks` && (init?.method ?? 'GET') === 'POST',
+      )
+    }
+    await title.trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    expect(posts()).toHaveLength(0)
+    await title.trigger('keydown', { key: 'Enter', ctrlKey: true })
+    await flushPromises()
+    expect(posts()).toHaveLength(1)
+    const firstBody = JSON.parse(String(posts()[0]![1]?.body)) as { assignee_user_id: string | null }
+    expect(firstBody.assignee_user_id).toBe('u-alice')
+
+    await title.setValue('Second task')
+    await title.trigger('keydown', { key: 'Enter', metaKey: true })
+    await flushPromises()
+    expect(posts()).toHaveLength(2)
+  })
+
+  it('date-only converts to local end of day under America/New_York, spanning both a fall-back and a spring-forward boundary', async () => {
+    stubApi(detail([PHONE_A]))
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    await wrapper.get('[data-testid="task-add-title"]').setValue('Fall-back task')
+    await wrapper.get('[data-testid="task-add-date"]').setValue('2026-11-01')
+    await wrapper.get('[data-testid="task-add-submit"]').trigger('click')
+    await flushPromises()
+    const firstPost = apiFetchMock.mock.calls.find(
+      ([path, init]) => path === `/people/${PERSON_ID}/tasks` && (init?.method ?? 'GET') === 'POST',
+    )!
+    expect(JSON.parse(String(firstPost[1]?.body)).due_at).toBe('2026-11-02T04:59:59.000Z')
+
+    await wrapper.get('[data-testid="task-add-title"]').setValue('Spring-forward task')
+    await wrapper.get('[data-testid="task-add-date"]').setValue('2026-03-08')
+    await wrapper.get('[data-testid="task-add-submit"]').trigger('click')
+    await flushPromises()
+    const secondPost = apiFetchMock.mock.calls.filter(
+      ([path, init]) => path === `/people/${PERSON_ID}/tasks` && (init?.method ?? 'GET') === 'POST',
+    )[1]!
+    expect(JSON.parse(String(secondPost[1]?.body)).due_at).toBe('2026-03-09T03:59:59.000Z')
+  })
+
+  it('editing without touching the date re-sends the stored instant, and an otherwise-untouched Save yields changed: false', async () => {
+    const task = taskFixture({ id: 'task-1', title: 'Original title', due_at: '2026-09-10T14:23:07.123Z' })
+    stubApi(detail([PHONE_A], [], [], [task]))
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    await wrapper.get('[data-testid="edit-task"]').trigger('click')
+    // Retitle only — the date/time inputs are never touched.
+    await wrapper.get('[data-testid="task-edit-title"]').setValue('Retitled, date untouched')
+    await wrapper.get('[data-testid="task-edit-save"]').trigger('click')
+    await flushPromises()
+    const put = apiFetchMock.mock.calls.find(
+      ([path, init]) => path === `/people/${PERSON_ID}/tasks/task-1` && (init?.method ?? 'GET') === 'PUT',
+    )!
+    expect(JSON.parse(String(put[1]?.body)).due_at).toBe(task.due_at)
+
+    // Positive control: an entirely untouched Save (no field changed at
+    // all) must read `changed: false` from the mock's own field
+    // comparison, proving the re-sent instant is byte-identical.
+    await wrapper.get('[data-testid="edit-task"]').trigger('click')
+    await wrapper.get('[data-testid="task-edit-save"]').trigger('click')
+    await flushPromises()
+    const putBodies = apiFetchMock.mock.calls
+      .filter(([path, init]) => path === `/people/${PERSON_ID}/tasks/task-1` && (init?.method ?? 'GET') === 'PUT')
+      .map(([, init]) => JSON.parse(String(init?.body)))
+    expect(putBodies.at(-1).title).toBe('Retitled, date untouched')
+    expect(putBodies.at(-1).due_at).toBe(task.due_at)
+  })
+
+  it('a failed add keeps the draft, and an invalid_assignee 422 shows the exact copy and refetches members', async () => {
+    stubApi(detail([PHONE_A]), { taskAdd: () => new ApiError(422, 'invalid_assignee') })
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    await wrapper.get('[data-testid="task-add-title"]').setValue('Should keep this draft')
+    await wrapper.get('[data-testid="task-add-submit"]').trigger('click')
+    await flushPromises()
+    expect((wrapper.get('[data-testid="task-add-title"]').element as HTMLInputElement).value).toBe(
+      'Should keep this draft',
+    )
+    expect(wrapper.get('[data-testid="task-add-error"]').text()).toBe('That member is not active')
+    expect(
+      apiFetchMock.mock.calls.some(([path]) => path === '/organization/members'),
+    ).toBe(true)
+  })
+
+  it('while an add is pending: the button reads "Adding…" and is disabled, the title input is disabled, and a click plus Ctrl+Enter both no-op (exactly one POST) until it settles', async () => {
+    stubApi(detail([PHONE_A]))
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    let releaseAdd: () => void = () => {}
+    const gate = new Promise<void>((resolve) => { releaseAdd = resolve })
+    const defaultImpl = apiFetchMock.getMockImplementation()!
+    apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === `/people/${PERSON_ID}/tasks` && (init?.method ?? 'GET') === 'POST') await gate
+      return defaultImpl(path, init)
+    })
+    await wrapper.get('[data-testid="task-add-title"]').setValue('Pending task')
+    await wrapper.get('[data-testid="task-add-submit"]').trigger('click')
+    await nextTick()
+    expect(wrapper.get('[data-testid="task-add-submit"]').text()).toBe('Adding…')
+    expect(wrapper.get('[data-testid="task-add-submit"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="task-add-title"]').attributes('disabled')).toBeDefined()
+
+    await wrapper.get('[data-testid="task-add-submit"]').trigger('click')
+    await wrapper.get('[data-testid="task-add-title"]').trigger('keydown', { key: 'Enter', ctrlKey: true })
+    await flushPromises()
+    const posts = () => apiFetchMock.mock.calls.filter(
+      ([path, init]) => path === `/people/${PERSON_ID}/tasks` && (init?.method ?? 'GET') === 'POST',
+    )
+    expect(posts()).toHaveLength(1)
+    releaseAdd()
+    await flushPromises()
+  })
+
+  it('Edit: Save/Cancel/Escape, focus returns to Edit on cancel, and Cancel/Escape are inert while a save is pending', async () => {
+    stubApi(detail([PHONE_A], [], [], [taskFixture({ id: 'task-1', title: 'Editable task' })]))
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    await wrapper.get('[data-testid="edit-task"]').trigger('click')
+    expect(wrapper.find('[data-testid="task-edit-title"]').exists()).toBe(true)
+
+    // Escape cancels and returns focus to Edit (re-queried: the Edit
+    // button is inside a `v-if` sibling that unmounts and remounts a new
+    // DOM node each time editing starts/stops, the note precedent).
+    await wrapper.get('[data-testid="task-edit-title"]').trigger('keydown', { key: 'Escape' })
+    expect(wrapper.find('[data-testid="task-edit-title"]').exists()).toBe(false)
+    expect(document.activeElement).toBe(wrapper.get('[data-testid="edit-task"]').element)
+
+    // Cancel/Escape inert while a save is pending.
+    await wrapper.get('[data-testid="edit-task"]').trigger('click')
+    let releaseSave: () => void = () => {}
+    const gate = new Promise<void>((resolve) => { releaseSave = resolve })
+    const defaultImpl = apiFetchMock.getMockImplementation()!
+    apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === `/people/${PERSON_ID}/tasks/task-1` && (init?.method ?? 'GET') === 'PUT') await gate
+      return defaultImpl(path, init)
+    })
+    await wrapper.get('[data-testid="task-edit-title"]').setValue('Changed while pending')
+    await wrapper.get('[data-testid="task-edit-save"]').trigger('click')
+    await nextTick()
+    expect(wrapper.get('[data-testid="task-edit-cancel"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-testid="task-edit-title"]').trigger('keydown', { key: 'Escape' })
+    expect(wrapper.find('[data-testid="task-edit-title"]').exists()).toBe(true)
+    releaseSave()
+    await flushPromises()
+  })
+
+  it('Delete: ConfirmDialog with the exact copy, confirm disabled while pending, and the row is gone after the refetch', async () => {
+    stubApi(detail([PHONE_A], [], [], [taskFixture({ id: 'task-1', title: 'Delete me' })]))
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    await wrapper.get('[data-testid="delete-task"]').trigger('click')
+    await flushPromises()
+    // PrimeVue's Dialog teleports its content to <body>, outside the
+    // wrapper's own subtree (the note-delete precedent).
+    expect(document.body.textContent).toContain('Delete this task? This cannot be undone.')
+
+    let releaseDelete: () => void = () => {}
+    const gate = new Promise<void>((resolve) => { releaseDelete = resolve })
+    const defaultImpl = apiFetchMock.getMockImplementation()!
+    apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === `/people/${PERSON_ID}/tasks/task-1` && (init?.method ?? 'GET') === 'DELETE') await gate
+      return defaultImpl(path, init)
+    })
+    const confirmButton = [...document.body.querySelectorAll('button')].find((b) => b.textContent === 'Delete')
+    expect(confirmButton).toBeTruthy()
+    confirmButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flushPromises()
+    const pendingConfirm = [...document.body.querySelectorAll('button')].find((b) => b.textContent === 'Working…')
+    expect(pendingConfirm).toBeTruthy()
+    expect(pendingConfirm?.hasAttribute('disabled')).toBe(true)
+    releaseDelete()
+    await flushPromises()
+    await settleTick()
+    expect(wrapper.find('[data-testid="task-row"]').exists()).toBe(false)
+  })
+
+  it('Complete moves the task to History as "Completed task: <title>" with a Reopen control where can_manage, and Reopen brings it back to the open list', async () => {
+    stubApi(detail([PHONE_A], [], [], [taskFixture({ id: 'task-1', title: 'Call the client', kind: 'call', due_at: '2026-09-10T18:00:00.000Z' })]))
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    await wrapper.get('[data-testid="complete-task"]').trigger('click')
+    await flushPromises()
+    await settleTick()
+    expect(wrapper.find('[data-testid="task-row"]').exists()).toBe(false)
+    const summaries = wrapper.findAll('[data-testid="history-summary"]')
+    expect(summaries.some((s) => s.text() === 'Completed task: Call the client')).toBe(true)
+    expect(wrapper.get('[data-testid="task-completed-detail"]').text()).toContain('Call')
+    expect(wrapper.get('[data-testid="task-completed-detail"]').text()).toContain('was due')
+
+    await wrapper.get('[data-testid="reopen-task"]').trigger('click')
+    await flushPromises()
+    await settleTick()
+    expect(wrapper.get('[data-testid="task-row"]').get('[data-testid="task-title"]').text()).toBe('Call the client')
+    expect(wrapper.findAll('[data-testid="history-summary"]').some((s) => s.text() === 'Completed task: Call the client')).toBe(false)
+  })
+
+  it('a 403 on Complete (the viewer\'s rule-1 verdict changed server-side since the last read) explains inline on that row', async () => {
+    // can_manage: true at read time (the Complete button renders), but the
+    // server's own re-decision under the row lock says otherwise by the
+    // time the click lands — the realistic race this copy exists for.
+    stubApi(detail([PHONE_A], [], [], [taskFixture({ id: 'task-1', title: 'Race target', can_manage: true })]), {
+      taskComplete: () => new ApiError(403, 'forbidden'),
+    })
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    await wrapper.get('[data-testid="complete-task"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="task-action-error"]').text()).toBe('You can no longer manage this task.')
+  })
+
+  it('a 404 on Complete (deleted elsewhere) refetches and the row is gone', async () => {
+    stubApi(detail([PHONE_A], [], [], [taskFixture({ id: 'task-1', title: 'Gone target', can_manage: true })]), {
+      taskComplete: () => new ApiError(404, 'not_found'),
+    })
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    await wrapper.get('[data-testid="complete-task"]').trigger('click')
+    await flushPromises()
+    await settleTick()
+    expect(wrapper.find('[data-testid="task-row"]').exists()).toBe(false)
+  })
+
+  it('a literal-markup title renders as text with no element, and an imported task_completed row (actor: null) renders without "undefined"', async () => {
+    stubApi(
+      detail([PHONE_A], [
+        taskCompletedEntry({
+          id: 'task-imported',
+          title: 'Imported task',
+          actor: null,
+          assignee: null,
+          createdBy: null,
+          canManage: false,
+        }),
+      ], [], [
+        taskFixture({ id: 'task-xss', title: '<img src=x onerror=alert(1)>' }),
+      ]),
+    )
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    expect(wrapper.get('[data-testid="task-title"]').text()).toBe('<img src=x onerror=alert(1)>')
+    expect(wrapper.find('[data-testid="task-title"] img').exists()).toBe(false)
+    const importedSummary = wrapper.findAll('[data-testid="history-summary"]').find((s) => s.text().includes('Imported task'))!
+    const importedRow = importedSummary.element.closest('li')!
+    expect(importedRow.textContent).not.toContain('undefined')
+    expect(importedRow.textContent).toContain('System')
+    // `can_manage: false` on the only task_completed row: no Reopen anywhere.
+    expect(wrapper.find('[data-testid="reopen-task"]').exists()).toBe(false)
+  })
+
+  it('mutations are keyed with personMutationKey and settle by invalidating the person and today keys, never the People list', async () => {
+    stubApi(detail([PHONE_A]))
+    const { wrapper, queryClient } = await mountView()
+    activeWrapper = wrapper
+    vi.useFakeTimers()
+    try {
+      let releaseAdd: () => void = () => {}
+      const gate = new Promise<void>((resolve) => { releaseAdd = resolve })
+      const defaultImpl = apiFetchMock.getMockImplementation()!
+      apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+        if (path === `/people/${PERSON_ID}/tasks` && (init?.method ?? 'GET') === 'POST') await gate
+        return defaultImpl(path, init)
+      })
+      await wrapper.get('[data-testid="task-add-title"]').setValue('Keyed task')
+      await wrapper.get('[data-testid="task-add-submit"]').trigger('click')
+      await nextTick()
+      expect(queryClient.isMutating({ mutationKey: personMutationKey(ORG_ID, PERSON_ID) })).toBe(1)
+      const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+      releaseAdd()
+      await nextTick()
+      await nextTick()
+      await vi.advanceTimersByTimeAsync(0)
+      await nextTick()
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.person(ORG_ID, PERSON_ID) })
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.today(ORG_ID) })
+      expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: queryKeys.people(ORG_ID) })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('an unknown history kind (an older bundle seeing a future kind) still renders the generic Activity row alongside a task_completed row', async () => {
+    stubApi(
+      detail([PHONE_A], [
+        { ...taskCompletedEntry({ id: 'task-1', title: 'A completed task' }) },
+        { kind: 'made_up_future_kind', id: 'x', occurred_at: '2026-08-22T09:00:00.000Z', recorded_at: '2026-08-22T09:00:00.000Z', actor: null, origin: 'web_session', correlation_id: 'c', detail: {} } as unknown as HistoryEntry,
+      ]),
+    )
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    const summaries = wrapper.findAll('[data-testid="history-summary"]')
+    expect(summaries.some((s) => s.text() === 'Activity')).toBe(true)
+    expect(summaries.some((s) => s.text() === 'Completed task: A completed task')).toBe(true)
   })
 })

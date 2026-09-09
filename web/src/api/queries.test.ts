@@ -83,6 +83,7 @@ function personDetail(overrides: Partial<PersonSummary> = {}): PersonDetailRespo
     inquiries: [],
     history: [],
     tags: [],
+    tasks: [],
   }
 }
 function peopleResponse(people: PersonSummary[]): PeopleResponse {

@@ -21,8 +21,9 @@ preview pid 62908, started 17:36); the slice-tree preview was stopped by
 exact PID; the branch and worktree `../crm-worktrees/014` were deleted with
 approval. Standing note: after a merge or pull, re-run
 `./scripts/dev-web-prod` and reload; `./scripts/dev-web` is for HMR on
-loopback when 5173 is free. `main` is ahead of `origin/main`; push and
-deployment are not authorized.
+loopback when 5173 is free. `main` was pushed to `origin/main` on 2026-09-08
+at `57dbde1` with the user's approval (carrying Slice 014 and its records);
+deployment is not authorized.
 
 Previously: **Slice 014 — APPROVED 2026-09-08, LANE IN IMPLEMENTATION (Web-only).**
 [SLICE_014.md](../specs/SLICE_014.md) and its
@@ -651,7 +652,7 @@ together on 2026-09-06).
 | 011e-e2 | `tags`/`not_tags` clauses across the fourteen statements, `invalid_tag` paths, FilterBar chips, performance evidence | `b6dc49b` (branch head `1796e85`), pushed 2026-09-07 |
 | 012 | Denormalized last-activity columns on Person, trigger-maintained (D-052); fourteen statements read the columns; equivalence gate; perf archive | `26ddab7` (branch head `e32ffd7`), local only |
 | 013 | Operator `filter_people` and `run_saved_list` read-only tools, name-based, D-046-faithful, `MAX_REFERENCES` 25 | `9af47c1` (branch head `151d38a`), pushed 2026-09-08 |
-| 014 | Production bundle through the tunnel (`dev-web-prod`), optimistic stage/assignment/tag mutations, Today chunk preload and data prefetch, hover prefetch of Person detail, FilterBar residue | `ac270fb` (branch head `3495f71`), local only |
+| 014 | Production bundle through the tunnel (`dev-web-prod`), optimistic stage/assignment/tag mutations, Today chunk preload and data prefetch, hover prefetch of Person detail, FilterBar residue | `ac270fb` (branch head `3495f71`), pushed 2026-09-08 |
 | — | Gate-speedup chunk (check 35m→79s, check-db 37m→~2m) | 2026-08-28 |
 | — | Test-binary consolidation (40 files → 1 binary) | `6427ee8` |
 

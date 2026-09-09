@@ -3011,8 +3011,14 @@ async fn capture_across_today_tasks_and_operator_tools_finds_a_task_title_only_i
     // Positive controls: the title legitimately appears in both HTTP
     // bodies (rule 7 sites) and in the untrusted `reasons_json` the model
     // receives.
-    assert!(today_text.contains(SENTINEL), "GET /api/today legitimately carries the title in the reason payload");
-    assert!(tasks_text.contains(SENTINEL), "GET /api/tasks legitimately carries the title");
+    assert!(
+        today_text.contains(SENTINEL),
+        "GET /api/today legitimately carries the title in the reason payload"
+    );
+    assert!(
+        tasks_text.contains(SENTINEL),
+        "GET /api/tasks legitimately carries the title"
+    );
     let sent_to_model = requests_json(&provider);
     assert!(
         sent_to_model.contains(SENTINEL) && sent_to_model.contains("untrusted_text"),
@@ -3032,10 +3038,16 @@ async fn capture_across_today_tasks_and_operator_tools_finds_a_task_title_only_i
     let (turn_id, ..) = turns.last().unwrap();
     let tools = tool_rows(&turn_pool, *turn_id).await;
     let serialized_tools = format!("{tools:?}");
-    assert!(!serialized_tools.contains(SENTINEL), "the ledger row must hold no task title");
+    assert!(
+        !serialized_tools.contains(SENTINEL),
+        "the ledger row must hold no task title"
+    );
 
     // Positive control on capture itself: today.query and today.task_axis
     // spans must actually appear, proving the harness would have caught a
     // real leak.
-    assert!(captured.contains("today.query"), "the today.query span must appear: {captured}");
+    assert!(
+        captured.contains("today.query"),
+        "the today.query span must appear: {captured}"
+    );
 }

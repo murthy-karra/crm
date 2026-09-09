@@ -1875,7 +1875,11 @@ fn apply_task_membership(
     item.reasons.insert(position, reason);
 }
 
-async fn rollback_task_axis_within(conn: &mut PgConnection, budget: Duration, deadline: Instant) -> bool {
+async fn rollback_task_axis_within(
+    conn: &mut PgConnection,
+    budget: Duration,
+    deadline: Instant,
+) -> bool {
     #[cfg(not(feature = "test-support"))]
     let _ = deadline;
     matches!(

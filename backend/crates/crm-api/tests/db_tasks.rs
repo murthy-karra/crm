@@ -2968,15 +2968,59 @@ async fn list_my_tasks_membership_boundary_and_order(migrator_pool: PgPool) {
     let alice = crate::common::login_cookie(&router, "alice-tasks@acme.test", PW).await;
     let now = Utc::now();
 
-    let p_overdue = insert_bare_person(&app_pool, f.org_id, first_stage_id(&app_pool, f.org_id).await).await;
-    let p_due_now = insert_bare_person(&app_pool, f.org_id, first_stage_id(&app_pool, f.org_id).await).await;
-    let p_boundary = insert_bare_person(&app_pool, f.org_id, first_stage_id(&app_pool, f.org_id).await).await;
-    let p_beyond = insert_bare_person(&app_pool, f.org_id, first_stage_id(&app_pool, f.org_id).await).await;
+    let p_overdue = insert_bare_person(
+        &app_pool,
+        f.org_id,
+        first_stage_id(&app_pool, f.org_id).await,
+    )
+    .await;
+    let p_due_now = insert_bare_person(
+        &app_pool,
+        f.org_id,
+        first_stage_id(&app_pool, f.org_id).await,
+    )
+    .await;
+    let p_boundary = insert_bare_person(
+        &app_pool,
+        f.org_id,
+        first_stage_id(&app_pool, f.org_id).await,
+    )
+    .await;
+    let p_beyond = insert_bare_person(
+        &app_pool,
+        f.org_id,
+        first_stage_id(&app_pool, f.org_id).await,
+    )
+    .await;
 
-    create_dated_task(&app_pool, f.org_id, f.admin_id, f.admin_id, p_overdue, now - Duration::hours(1)).await;
+    create_dated_task(
+        &app_pool,
+        f.org_id,
+        f.admin_id,
+        f.admin_id,
+        p_overdue,
+        now - Duration::hours(1),
+    )
+    .await;
     create_dated_task(&app_pool, f.org_id, f.admin_id, f.admin_id, p_due_now, now).await;
-    create_dated_task(&app_pool, f.org_id, f.admin_id, f.admin_id, p_boundary, now + Duration::hours(24)).await;
-    create_dated_task(&app_pool, f.org_id, f.admin_id, f.admin_id, p_beyond, now + Duration::hours(24) + Duration::seconds(1)).await;
+    create_dated_task(
+        &app_pool,
+        f.org_id,
+        f.admin_id,
+        f.admin_id,
+        p_boundary,
+        now + Duration::hours(24),
+    )
+    .await;
+    create_dated_task(
+        &app_pool,
+        f.org_id,
+        f.admin_id,
+        f.admin_id,
+        p_beyond,
+        now + Duration::hours(24) + Duration::seconds(1),
+    )
+    .await;
 
     let resp = crate::common::get_with_cookie(&router, "/api/tasks?scope=mine", &alice).await;
     assert_eq!(resp.status(), StatusCode::OK);
@@ -3015,7 +3059,11 @@ async fn list_my_tasks_query_shape_fails_closed(migrator_pool: PgPool) {
     }
 
     let ok = crate::common::get_with_cookie(&router, "/api/tasks?scope=mine", &alice).await;
-    assert_eq!(ok.status(), StatusCode::OK, "the exact accepted shape still succeeds");
+    assert_eq!(
+        ok.status(),
+        StatusCode::OK,
+        "the exact accepted shape still succeeds"
+    );
 }
 
 #[sqlx::test]
@@ -3030,8 +3078,21 @@ async fn list_my_tasks_excludes_another_members_and_another_organizations_tasks(
     let now = Utc::now();
 
     // Another member's task in the SAME Organization: absent from alice's panel.
-    let p_other_member = insert_bare_person(&app_pool, f.org_id, first_stage_id(&app_pool, f.org_id).await).await;
-    create_dated_task(&app_pool, f.org_id, f.member_id, f.member_id, p_other_member, now).await;
+    let p_other_member = insert_bare_person(
+        &app_pool,
+        f.org_id,
+        first_stage_id(&app_pool, f.org_id).await,
+    )
+    .await;
+    create_dated_task(
+        &app_pool,
+        f.org_id,
+        f.member_id,
+        f.member_id,
+        p_other_member,
+        now,
+    )
+    .await;
 
     // A second Organization where the SAME email domain's admin also holds
     // a task due now: absent from alice's panel (a fresh id, not alice).
@@ -3046,10 +3107,23 @@ async fn list_my_tasks_excludes_another_members_and_another_organizations_tasks(
     let other_app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let other_stage = first_stage_id(&other_app_pool, other_org_id).await;
     let p_other_org = insert_bare_person(&other_app_pool, other_org_id, other_stage).await;
-    create_dated_task(&other_app_pool, other_org_id, other_admin_id, other_admin_id, p_other_org, now).await;
+    create_dated_task(
+        &other_app_pool,
+        other_org_id,
+        other_admin_id,
+        other_admin_id,
+        p_other_org,
+        now,
+    )
+    .await;
 
     // Alice's own task, the positive control.
-    let p_alice = insert_bare_person(&app_pool, f.org_id, first_stage_id(&app_pool, f.org_id).await).await;
+    let p_alice = insert_bare_person(
+        &app_pool,
+        f.org_id,
+        first_stage_id(&app_pool, f.org_id).await,
+    )
+    .await;
     create_dated_task(&app_pool, f.org_id, f.admin_id, f.admin_id, p_alice, now).await;
 
     let resp = crate::common::get_with_cookie(&router, "/api/tasks?scope=mine", &alice).await;
@@ -3068,23 +3142,63 @@ async fn list_my_tasks_set_based_parity_with_the_today_axis(migrator_pool: PgPoo
     let alice = crate::common::login_cookie(&router, "alice-tasks@acme.test", PW).await;
     let now = Utc::now();
 
-    let p_one_task = insert_bare_person(&app_pool, f.org_id, first_stage_id(&app_pool, f.org_id).await).await;
-    create_dated_task(&app_pool, f.org_id, f.admin_id, f.admin_id, p_one_task, now + Duration::hours(3)).await;
+    let p_one_task = insert_bare_person(
+        &app_pool,
+        f.org_id,
+        first_stage_id(&app_pool, f.org_id).await,
+    )
+    .await;
+    create_dated_task(
+        &app_pool,
+        f.org_id,
+        f.admin_id,
+        f.admin_id,
+        p_one_task,
+        now + Duration::hours(3),
+    )
+    .await;
 
     // Two in-window tasks on the SAME Person: two panel rows, but the
     // Today axis carries only the earliest as its one item's reason.
-    let p_two_tasks = insert_bare_person(&app_pool, f.org_id, first_stage_id(&app_pool, f.org_id).await).await;
-    let earlier_id = create_dated_task(&app_pool, f.org_id, f.admin_id, f.admin_id, p_two_tasks, now + Duration::hours(1)).await;
-    create_dated_task(&app_pool, f.org_id, f.admin_id, f.admin_id, p_two_tasks, now + Duration::hours(5)).await;
+    let p_two_tasks = insert_bare_person(
+        &app_pool,
+        f.org_id,
+        first_stage_id(&app_pool, f.org_id).await,
+    )
+    .await;
+    let earlier_id = create_dated_task(
+        &app_pool,
+        f.org_id,
+        f.admin_id,
+        f.admin_id,
+        p_two_tasks,
+        now + Duration::hours(1),
+    )
+    .await;
+    create_dated_task(
+        &app_pool,
+        f.org_id,
+        f.admin_id,
+        f.admin_id,
+        p_two_tasks,
+        now + Duration::hours(5),
+    )
+    .await;
 
     let resp = crate::common::get_with_cookie(&router, "/api/tasks?scope=mine", &alice).await;
     let body = crate::common::body_json(resp).await;
     let tasks = body["tasks"].as_array().unwrap();
-    assert_eq!(tasks.len(), 3, "two rows for the two-task Person, one for the other");
+    assert_eq!(
+        tasks.len(),
+        3,
+        "two rows for the two-task Person, one for the other"
+    );
 
     let today_list = today::query_at(
         &mut app_pool.acquire().await.unwrap(),
-        &crm_api::domain::person::visibility::PersonVisibilityScope::Organization(OrganizationId::new(f.org_id)),
+        &crm_api::domain::person::visibility::PersonVisibilityScope::Organization(
+            OrganizationId::new(f.org_id),
+        ),
         UserId::new(f.admin_id),
         now,
     )
@@ -3109,7 +3223,10 @@ async fn list_my_tasks_set_based_parity_with_the_today_axis(migrator_pool: PgPoo
         })
         .map(|item| item.person.id.as_uuid())
         .collect();
-    assert_eq!(panel_person_ids, axis_person_ids, "panel Persons equal the task-reason Persons");
+    assert_eq!(
+        panel_person_ids, axis_person_ids,
+        "panel Persons equal the task-reason Persons"
+    );
 
     let item_two_tasks = today_list
         .items
@@ -3129,7 +3246,11 @@ async fn list_my_tasks_set_based_parity_with_the_today_axis(migrator_pool: PgPoo
         .unwrap()
     {
         crm_api::domain::today::TodayReason::TaskDue { task_id, .. } => {
-            assert_eq!(task_id.as_uuid(), earlier_id, "the earliest per Person equals the reason's task_id");
+            assert_eq!(
+                task_id.as_uuid(),
+                earlier_id,
+                "the earliest per Person equals the reason's task_id"
+            );
         }
         other => panic!("expected task_due, got {other:?}"),
     }

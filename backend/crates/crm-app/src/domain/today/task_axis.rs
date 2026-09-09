@@ -159,7 +159,9 @@ pub(super) async fn task_only_prefix(
     )
     .fetch_all(&mut *conn)
     .await?;
-    rows.into_iter().map(|row| task_only_item(row, now)).collect()
+    rows.into_iter()
+        .map(|row| task_only_item(row, now))
+        .collect()
 }
 
 /// Shapes one task-only row into a `TodayItem` directly (docs/specs/

@@ -82,7 +82,11 @@ pub fn reason_text(reason: &TodayReason) -> String {
         // enters this fixed line (it reaches the model only through
         // `reasons_json`'s `UntrustedText` wrapper below).
         TodayReason::TaskOverdue { kind, due_at, .. } => {
-            format!("a {} task was due at {}", kind.as_str(), due_at.to_rfc3339())
+            format!(
+                "a {} task was due at {}",
+                kind.as_str(),
+                due_at.to_rfc3339()
+            )
         }
         TodayReason::TaskDue { kind, due_at, .. } => {
             format!("a {} task is due at {}", kind.as_str(), due_at.to_rfc3339())

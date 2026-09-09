@@ -119,7 +119,10 @@ impl TodayQueryHook for FailAtPhase {
     ) -> HookFuture<'a> {
         if phase == self.0 && source_id.is_none() {
             return Box::pin(async move {
-                sqlx::query("SELECT 1 / 0").execute(connection).await.map(|_| ())
+                sqlx::query("SELECT 1 / 0")
+                    .execute(connection)
+                    .await
+                    .map(|_| ())
             });
         }
         Box::pin(async { Ok(()) })
@@ -154,14 +157,18 @@ async fn assert_injected_failure_is_all_or_nothing(migrator_pool: PgPool, phase:
     assert_eq!(task_issue.error, SystemFeedIssueError::Unavailable);
     assert!(!task_issue.fallback);
     assert!(
-        list.items.iter().all(|item| !item.reasons.iter().any(|r| matches!(
-            r,
-            today::TodayReason::TaskOverdue { .. } | today::TodayReason::TaskDue { .. }
-        ))),
+        list.items
+            .iter()
+            .all(|item| !item.reasons.iter().any(|r| matches!(
+                r,
+                today::TodayReason::TaskOverdue { .. } | today::TodayReason::TaskDue { .. }
+            ))),
         "no task_* reason on any item after an injected axis failure"
     );
     assert!(
-        list.items.iter().all(|item| item.person.id.as_uuid() != f.person_id),
+        list.items
+            .iter()
+            .all(|item| item.person.id.as_uuid() != f.person_id),
         "no task-only item after an injected axis failure"
     );
 
@@ -175,26 +182,44 @@ async fn assert_injected_failure_is_all_or_nothing(migrator_pool: PgPool, phase:
     )
     .await
     .unwrap();
-    assert!(matches!(follow_up.sources.status, TodaySourcesStatus::Complete));
-    assert!(follow_up.items.iter().any(|item| item.person.id.as_uuid() == f.person_id));
+    assert!(matches!(
+        follow_up.sources.status,
+        TodaySourcesStatus::Complete
+    ));
+    assert!(follow_up
+        .items
+        .iter()
+        .any(|item| item.person.id.as_uuid() == f.person_id));
 }
 
 #[sqlx::test]
 #[ignore]
 async fn failure_after_savepoint_is_all_or_nothing_partial(migrator_pool: PgPool) {
-    assert_injected_failure_is_all_or_nothing(migrator_pool, TodayQueryPhase::TaskAxisAfterSavepoint).await;
+    assert_injected_failure_is_all_or_nothing(
+        migrator_pool,
+        TodayQueryPhase::TaskAxisAfterSavepoint,
+    )
+    .await;
 }
 
 #[sqlx::test]
 #[ignore]
 async fn failure_after_membership_is_all_or_nothing_partial(migrator_pool: PgPool) {
-    assert_injected_failure_is_all_or_nothing(migrator_pool, TodayQueryPhase::TaskAxisAfterMembership).await;
+    assert_injected_failure_is_all_or_nothing(
+        migrator_pool,
+        TodayQueryPhase::TaskAxisAfterMembership,
+    )
+    .await;
 }
 
 #[sqlx::test]
 #[ignore]
 async fn failure_before_release_is_all_or_nothing_partial(migrator_pool: PgPool) {
-    assert_injected_failure_is_all_or_nothing(migrator_pool, TodayQueryPhase::BeforeTaskAxisRelease).await;
+    assert_injected_failure_is_all_or_nothing(
+        migrator_pool,
+        TodayQueryPhase::BeforeTaskAxisRelease,
+    )
+    .await;
 }
 
 // --- Exhausted recovery budget: the whole response is unavailable --------
@@ -216,13 +241,18 @@ impl TodayQueryHook for ExhaustTaskAxisRecoveryBudget {
         }
         match phase {
             TodayQueryPhase::TaskAxisAfterSavepoint => Box::pin(async move {
-                sqlx::query("SELECT 1 / 0").execute(connection).await.map(|_| ())
+                sqlx::query("SELECT 1 / 0")
+                    .execute(connection)
+                    .await
+                    .map(|_| ())
             }),
             TodayQueryPhase::RecoveryAfterRollback => {
                 let sender = self.recovery_started.lock().unwrap().take();
                 Box::pin(async move {
                     if let Some(sender) = sender {
-                        sender.send(Instant::now()).expect("test observes recovery start");
+                        sender
+                            .send(Instant::now())
+                            .expect("test observes recovery start");
                     }
                     std::future::pending::<Result<(), sqlx::Error>>().await
                 })
@@ -254,7 +284,10 @@ async fn exhausted_recovery_budget_marks_the_whole_response_unavailable(migrator
     .unwrap();
 
     rx.await.expect("recovery attempt started");
-    assert!(matches!(list.sources.status, TodaySourcesStatus::Unavailable));
+    assert!(matches!(
+        list.sources.status,
+        TodaySourcesStatus::Unavailable
+    ));
     assert!(list.sources.issues.is_empty());
 }
 
@@ -275,7 +308,10 @@ impl TodayQueryHook for FailCallFeedForever {
         }
         match phase {
             TodayQueryPhase::CallFeedAfterSavepoint => Box::pin(async move {
-                sqlx::query("SELECT 1 / 0").execute(connection).await.map(|_| ())
+                sqlx::query("SELECT 1 / 0")
+                    .execute(connection)
+                    .await
+                    .map(|_| ())
             }),
             TodayQueryPhase::RecoveryAfterRollback => {
                 Box::pin(std::future::pending::<Result<(), sqlx::Error>>())
@@ -285,7 +321,11 @@ impl TodayQueryHook for FailCallFeedForever {
             | TodayQueryPhase::BeforeTaskAxisRelease => {
                 // The axis must never run at all once the call feed is
                 // unrecoverable: fail loudly if it does.
-                Box::pin(async { Err(sqlx::Error::Decode("task axis ran after an unrecoverable call feed".into())) })
+                Box::pin(async {
+                    Err(sqlx::Error::Decode(
+                        "task axis ran after an unrecoverable call feed".into(),
+                    ))
+                })
             }
             _ => Box::pin(async { Ok(()) }),
         }
@@ -310,7 +350,10 @@ async fn unrecoverable_call_feed_returns_before_the_axis_runs(migrator_pool: PgP
     .await
     .unwrap();
 
-    assert!(matches!(list.sources.status, TodaySourcesStatus::Unavailable));
+    assert!(matches!(
+        list.sources.status,
+        TodaySourcesStatus::Unavailable
+    ));
     assert!(
         !issue_present(&list, "task_due"),
         "the axis never ran, so it contributes no issue of its own"
@@ -335,7 +378,10 @@ impl TodayQueryHook for FailBothCallFeedAndAxis {
         match phase {
             TodayQueryPhase::CallFeedAfterSavepoint | TodayQueryPhase::TaskAxisAfterSavepoint => {
                 Box::pin(async move {
-                    sqlx::query("SELECT 1 / 0").execute(connection).await.map(|_| ())
+                    sqlx::query("SELECT 1 / 0")
+                        .execute(connection)
+                        .await
+                        .map(|_| ())
                 })
             }
             _ => Box::pin(async { Ok(()) }),
@@ -390,12 +436,10 @@ impl TodayQueryHook for SlowCallFeedThenAxis {
         match phase {
             // Within the call feed's own 500 ms budget, leaving little of
             // it — proving the axis does NOT inherit whatever remained.
-            TodayQueryPhase::CallFeedAfterMembership => {
-                Box::pin(async move {
-                    tokio::time::sleep(Duration::from_millis(400)).await;
-                    Ok(())
-                })
-            }
+            TodayQueryPhase::CallFeedAfterMembership => Box::pin(async move {
+                tokio::time::sleep(Duration::from_millis(400)).await;
+                Ok(())
+            }),
             // Comfortably within the axis's OWN fresh budget (500 ms) even
             // though 400 + 300 = 700 ms would overrun a SHARED one.
             TodayQueryPhase::TaskAxisAfterSavepoint => Box::pin(async move {

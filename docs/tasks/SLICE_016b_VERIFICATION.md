@@ -155,7 +155,11 @@ once. An identical sequence on `6689fe4` itself had passed `sqlx-prepare`
 (clean) and `check-db` (715 of 715) but failed `check` on the Vitest flake
 above (746 of 747), which is why the completion commit exists:
 
-FINAL_GATES_TABLE
+| Gate on `ca55dc1` | Result |
+|---|---|
+| `./scripts/sqlx-prepare` | clean; no metadata change |
+| `./scripts/check` | all checks passed, 35 s: fmt, clippy, cargo check, crate fences, **774** Rust tests, doc tests, Web lint/typecheck/**747** Vitest (49 files)/build, email-worker tests |
+| `./scripts/check-db` | all checks passed, 236 s: **716 of 716** DB-backed tests on the first run (thirty-two more than `main`'s 684); neither known flake occurred |
 
 ## Recorded LATER (D-050)
 
@@ -188,9 +192,9 @@ FINAL_GATES_TABLE
 
 ## Merge readiness
 
-Source `slice-016b-today` at its head (the completion commit on top of
-`6689fe4`: the positive latest-inquiry test, the deflaked Today test, this
-record); destination `main` (no commits since the branch base `a5b301e`, so
+Source `slice-016b-today` at `ca55dc1` plus this record's gate table
+(the completion on top of `6689fe4`: the positive latest-inquiry test, the
+deflaked Today test, this record); destination `main` (no commits since the branch base `a5b301e`, so
 no conflict is possible). Migration impact: none (016b adds no migration;
 `.sqlx` gains the axis and panel statements). After the merge, with the
 user's approval: restart the dev API (the Today query and the new route)

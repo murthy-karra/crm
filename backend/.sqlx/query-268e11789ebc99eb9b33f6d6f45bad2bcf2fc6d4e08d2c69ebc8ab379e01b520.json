@@ -1,0 +1,72 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH inserted AS (\n               INSERT INTO task (organization_id, person_id, title, kind, due_at,\n                                  assignee_user_id, created_by_user_id, origin, correlation_id)\n               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)\n               RETURNING id, created_at, updated_at, due_at, title, kind\n           )\n           SELECT inserted.id, inserted.created_at, inserted.updated_at,\n                  inserted.due_at, inserted.title, inserted.kind,\n                  au.display_name as \"assignee_display_name!\",\n                  cu.display_name as \"created_by_display_name!\"\n           FROM inserted\n           JOIN app_user au ON au.id = $6\n           JOIN app_user cu ON cu.id = $7",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "due_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "assignee_display_name!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_by_display_name!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "268e11789ebc99eb9b33f6d6f45bad2bcf2fc6d4e08d2c69ebc8ab379e01b520"
+}

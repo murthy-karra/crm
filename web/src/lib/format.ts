@@ -17,6 +17,14 @@ const absoluteFormatter = new Intl.DateTimeFormat(undefined, {
   dateStyle: 'medium',
   timeStyle: 'short',
 })
+// docs/specs/SLICE_016.md §8: the Person page's task due badge falls back
+// to a plain date (no time) once a due task is neither overdue nor due
+// today. Not cached at module scope like `absoluteFormatter` above,
+// because `Intl.DateTimeFormat` instances constructed before a test's
+// `process.env.TZ` change would keep resolving the OLD zone.
+export function formatDateOnly(iso: string): string {
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(iso))
+}
 
 /** "3 hours ago", "just now" — for §7's "actor + relative time in
  * text-muted". Accepts an epoch-millis number too (TanStack Query's

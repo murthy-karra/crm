@@ -22,6 +22,7 @@ use crate::domain::person::PersonVisibilityScope;
 use crate::domain::saved_list::{self, SavedListError};
 use crate::domain::stage;
 use crate::domain::tag;
+use crate::domain::task;
 use crate::domain::today::{self, TodayItem, TodayList};
 use crate::ids::{ContactMethodId, OrganizationId, PersonId, SavedListId, UserId};
 use crate::operator::explain;
@@ -30,16 +31,18 @@ use crm_operator::{
     ContactMethodView, FilterOutcome, FilterResult, HistoryEntryView, InquiryView, NextWorkItem,
     NoteView, OperatorContext, PeopleFilterSpec, PersonCard, PersonDetail, PhoneOption,
     PriorityExplanation, ProposalView, SavedListRef, SavedListSelector, SearchResult,
-    StartCallProposalOutcome, TodayItemView, TodayView, ToolBackend, ToolError, ToolResult,
-    UntrustedText,
+    StartCallProposalOutcome, TaskView, TodayItemView, TodayView, ToolBackend, ToolError,
+    ToolResult, UntrustedText,
 };
 
 /// `get_person` returns the latest 5 inquiries and latest 20 history
 /// entries (docs/specs/SLICE_005.md §3, §14 item 12); the latest 5 live
-/// notes (docs/specs/SLICE_015.md §5, the same `MAX_INQUIRIES` precedent).
+/// notes (docs/specs/SLICE_015.md §5, the same `MAX_INQUIRIES` precedent);
+/// at most ten open tasks (docs/specs/SLICE_016.md §7).
 const MAX_INQUIRIES: usize = 5;
 const MAX_HISTORY: usize = 20;
 const MAX_NOTES: usize = 5;
+const MAX_TASKS: usize = 10;
 
 pub struct SqlxToolBackend {
     pool: PgPool,
@@ -290,19 +293,21 @@ impl ToolBackend for SqlxToolBackend {
             })
             .collect();
 
-        // The `note` kind is excluded before the `MAX_HISTORY` truncation
-        // (docs/specs/SLICE_015.md §5): `notes` below already represents
-        // live notes, and twenty recent notes would otherwise push every
-        // stage, assignment, and call fact out of the model's bounded
-        // view. `history_detail` gains no `"note"` arm — a body never
-        // reaches the model through this projection, only through
-        // `notes` as `UntrustedText`.
+        // The `note` and `task_completed` kinds are excluded before the
+        // `MAX_HISTORY` truncation (docs/specs/SLICE_015.md §5,
+        // docs/specs/SLICE_016.md §7): `notes`/`tasks` below already
+        // represent live notes and open tasks, and a burst of either
+        // would otherwise push every stage, assignment, and call fact out
+        // of the model's bounded view. `history_detail` gains no
+        // `"task_completed"` arm — a title never reaches the model
+        // through this projection, only through `tasks` as
+        // `UntrustedText`.
         let all_history: Vec<_> =
             person_queries::history_for_person(&mut conn, org_id(ctx), person_id)
                 .await
                 .map_err(db_error)?
                 .into_iter()
-                .filter(|e| e.kind != "note")
+                .filter(|e| e.kind != "note" && e.kind != "task_completed")
                 .collect();
         let skip = all_history.len().saturating_sub(MAX_HISTORY);
         let history = all_history
@@ -346,6 +351,25 @@ impl ToolBackend for SqlxToolBackend {
         })
         .collect();
 
+        // Open tasks, in `open_for_person` order, at most ten
+        // (docs/specs/SLICE_016.md §7). `TaskError` (a domain-error-wrapped
+        // read, unlike the bare-`sqlx::Error` queries above) maps to the
+        // same generic backend-failure reason as `tag::list_for_person`
+        // and `note::latest_for_person` just below/above — never a task
+        // title or a SQL-error string.
+        let tasks = task::open_for_person(&mut conn, org_id(ctx), person_id)
+            .await
+            .map_err(|_| ToolError::Backend("database query failed".into()))?
+            .into_iter()
+            .take(MAX_TASKS)
+            .map(|t| TaskView {
+                title: UntrustedText::new(&t.title),
+                kind: t.kind.as_str().to_string(),
+                due_at: t.due_at,
+                assignee_display_name: t.assignee.map(|a| a.display_name),
+            })
+            .collect();
+
         let today = today_for(conn, ctx).await?;
         let on_your_today = today.items.iter().any(|i| i.person.id == person_id);
 
@@ -359,6 +383,7 @@ impl ToolBackend for SqlxToolBackend {
             sources: explain::sources_view(&today),
             tags,
             notes,
+            tasks,
         })
     }
 

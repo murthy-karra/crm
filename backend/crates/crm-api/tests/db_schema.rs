@@ -1203,3 +1203,728 @@ async fn note_indexes_exist(migrator_pool: PgPool) {
         "missing note_org_source_external_idx in {index_names:?}"
     );
 }
+
+// --- Slice 016a: task -----------------------------------------------------
+
+async fn insert_bare_person_for_schema_test(
+    pool: &PgPool,
+    organization_id: Uuid,
+    stage_id: Uuid,
+) -> Uuid {
+    sqlx::query_scalar(
+        "INSERT INTO person (organization_id, first_name, stage_id) VALUES ($1, 'Fixture', $2) RETURNING id",
+    )
+    .bind(organization_id)
+    .bind(stage_id)
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+/// docs/specs/SLICE_016.md §2, §12.1: every CHECK in the `task` migration,
+/// one at a time (the `note_check_constraints_matrix` pattern, widened for
+/// `kind`, `due_at`-free rows and the assignee/creator/completion columns)
+/// — empty live title, 501 characters, a title containing `\n`, an
+/// untrimmed title, an unknown `kind`, a tombstone carrying a title, a
+/// tombstone missing `deleted_by_user_id`, `source` without
+/// `source_external_id`, a non-`migration` origin with a NULL assignee, a
+/// non-`migration` origin with a NULL creator, `completed_by_user_id`
+/// without `completed_at`, and (outside `migration`) `completed_at`
+/// without `completed_by_user_id` all fail; the boundary (exactly 500
+/// trimmed characters) succeeds.
+#[sqlx::test]
+#[ignore]
+async fn task_check_constraints_matrix(migrator_pool: PgPool) {
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let (org_id, actor_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Task Check Realty",
+        "task-check@acme.test",
+        "Task Check",
+        "correct horse battery staple",
+    )
+    .await;
+    let stage_id = first_stage_id_for_schema_test(&app_pool, org_id).await;
+    let person_id = insert_bare_person_for_schema_test(&app_pool, org_id, stage_id).await;
+
+    #[allow(clippy::too_many_arguments)]
+    async fn insert(
+        pool: &PgPool,
+        org_id: Uuid,
+        person_id: Uuid,
+        assignee_id: Option<Uuid>,
+        created_by_id: Option<Uuid>,
+        title: &str,
+        kind: &str,
+        origin: &str,
+        deleted_at: bool,
+        deleted_by: Option<Uuid>,
+        source: Option<&str>,
+        source_external_id: Option<&str>,
+        completed: bool,
+        completed_by: Option<Uuid>,
+    ) -> Result<Uuid, sqlx::Error> {
+        sqlx::query_scalar(
+            "INSERT INTO task (organization_id, person_id, assignee_user_id, created_by_user_id,
+                                title, kind, origin, correlation_id, deleted_at, deleted_by_user_id,
+                                source, source_external_id, completed_at, completed_by_user_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, gen_random_uuid(),
+                     CASE WHEN $8 THEN now() ELSE NULL END, $9, $10, $11,
+                     CASE WHEN $12 THEN now() ELSE NULL END, $13)
+             RETURNING id",
+        )
+        .bind(org_id)
+        .bind(person_id)
+        .bind(assignee_id)
+        .bind(created_by_id)
+        .bind(title)
+        .bind(kind)
+        .bind(origin)
+        .bind(deleted_at)
+        .bind(deleted_by)
+        .bind(source)
+        .bind(source_external_id)
+        .bind(completed)
+        .bind(completed_by)
+        .fetch_one(pool)
+        .await
+    }
+
+    // Empty live title.
+    assert!(
+        insert(
+            &app_pool,
+            org_id,
+            person_id,
+            Some(actor_id),
+            Some(actor_id),
+            "",
+            "follow_up",
+            "web_session",
+            false,
+            None,
+            None,
+            None,
+            false,
+            None,
+        )
+        .await
+        .is_err(),
+        "empty live title must violate the CHECK"
+    );
+
+    // 501 characters.
+    assert!(
+        insert(
+            &app_pool,
+            org_id,
+            person_id,
+            Some(actor_id),
+            Some(actor_id),
+            &"a".repeat(501),
+            "follow_up",
+            "web_session",
+            false,
+            None,
+            None,
+            None,
+            false,
+            None,
+        )
+        .await
+        .is_err(),
+        "501-char title must violate the CHECK"
+    );
+
+    // A title with \n.
+    assert!(
+        insert(
+            &app_pool,
+            org_id,
+            person_id,
+            Some(actor_id),
+            Some(actor_id),
+            "line one\nline two",
+            "follow_up",
+            "web_session",
+            false,
+            None,
+            None,
+            None,
+            false,
+            None,
+        )
+        .await
+        .is_err(),
+        "a title with a newline must violate the CHECK"
+    );
+
+    // Untrimmed title.
+    assert!(
+        insert(
+            &app_pool,
+            org_id,
+            person_id,
+            Some(actor_id),
+            Some(actor_id),
+            "  padded  ",
+            "follow_up",
+            "web_session",
+            false,
+            None,
+            None,
+            None,
+            false,
+            None,
+        )
+        .await
+        .is_err(),
+        "untrimmed title must violate the CHECK"
+    );
+
+    // Unknown kind.
+    assert!(
+        insert(
+            &app_pool,
+            org_id,
+            person_id,
+            Some(actor_id),
+            Some(actor_id),
+            "A task",
+            "unknown_kind",
+            "web_session",
+            false,
+            None,
+            None,
+            None,
+            false,
+            None,
+        )
+        .await
+        .is_err(),
+        "an unknown kind must violate the CHECK"
+    );
+
+    // Tombstone carrying a title.
+    assert!(
+        insert(
+            &app_pool,
+            org_id,
+            person_id,
+            Some(actor_id),
+            Some(actor_id),
+            "still here",
+            "follow_up",
+            "web_session",
+            true,
+            Some(actor_id),
+            None,
+            None,
+            false,
+            None,
+        )
+        .await
+        .is_err(),
+        "a tombstone must have an empty title"
+    );
+
+    // Tombstone missing deleted_by_user_id.
+    assert!(
+        insert(
+            &app_pool,
+            org_id,
+            person_id,
+            Some(actor_id),
+            Some(actor_id),
+            "",
+            "follow_up",
+            "web_session",
+            true,
+            None,
+            None,
+            None,
+            false,
+            None,
+        )
+        .await
+        .is_err(),
+        "deleted_at without deleted_by_user_id must violate the CHECK"
+    );
+
+    // source without source_external_id.
+    assert!(
+        insert(
+            &app_pool,
+            org_id,
+            person_id,
+            Some(actor_id),
+            Some(actor_id),
+            "A task",
+            "follow_up",
+            "migration",
+            false,
+            None,
+            Some("fub"),
+            None,
+            false,
+            None,
+        )
+        .await
+        .is_err(),
+        "source without source_external_id must violate the CHECK"
+    );
+
+    // Non-migration origin with a NULL assignee.
+    assert!(
+        insert(
+            &app_pool,
+            org_id,
+            person_id,
+            None,
+            Some(actor_id),
+            "A task",
+            "follow_up",
+            "web_session",
+            false,
+            None,
+            None,
+            None,
+            false,
+            None,
+        )
+        .await
+        .is_err(),
+        "a non-migration origin requires a non-NULL assignee"
+    );
+
+    // Non-migration origin with a NULL creator.
+    assert!(
+        insert(
+            &app_pool,
+            org_id,
+            person_id,
+            Some(actor_id),
+            None,
+            "A task",
+            "follow_up",
+            "web_session",
+            false,
+            None,
+            None,
+            None,
+            false,
+            None,
+        )
+        .await
+        .is_err(),
+        "a non-migration origin requires a non-NULL creator"
+    );
+
+    // completed_by_user_id without completed_at.
+    assert!(
+        sqlx::query(
+            "INSERT INTO task (organization_id, person_id, assignee_user_id, created_by_user_id,
+                                title, origin, correlation_id, completed_by_user_id)
+             VALUES ($1, $2, $3, $3, 'A task', 'web_session', gen_random_uuid(), $3)",
+        )
+        .bind(org_id)
+        .bind(person_id)
+        .bind(actor_id)
+        .execute(&app_pool)
+        .await
+        .is_err(),
+        "completed_by_user_id without completed_at must violate the CHECK"
+    );
+
+    // completed_at without completed_by_user_id, outside migration.
+    assert!(
+        insert(
+            &app_pool,
+            org_id,
+            person_id,
+            Some(actor_id),
+            Some(actor_id),
+            "A task",
+            "follow_up",
+            "web_session",
+            false,
+            None,
+            None,
+            None,
+            true,
+            None,
+        )
+        .await
+        .is_err(),
+        "completed_at without completed_by_user_id must violate the CHECK outside migration"
+    );
+
+    // The boundary: exactly 500 trimmed characters succeeds.
+    let ok = insert(
+        &app_pool,
+        org_id,
+        person_id,
+        Some(actor_id),
+        Some(actor_id),
+        &"a".repeat(500),
+        "follow_up",
+        "web_session",
+        false,
+        None,
+        None,
+        None,
+        false,
+        None,
+    )
+    .await;
+    assert!(
+        ok.is_ok(),
+        "exactly 500 trimmed characters must be accepted: {ok:?}"
+    );
+}
+
+/// docs/specs/SLICE_016.md §2, §12.1: the composite FKs reject a
+/// cross-Organization Person and a non-member assignee, creator,
+/// completer and deleter, even though every individual id is real (the
+/// `note_composite_fk_rejections` / `person_tag` precedent).
+#[sqlx::test]
+#[ignore]
+async fn task_composite_fk_rejections(migrator_pool: PgPool) {
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let (org_id, actor_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Task FK Realty",
+        "task-fk@acme.test",
+        "Task FK",
+        "correct horse battery staple",
+    )
+    .await;
+    let stage_id = first_stage_id_for_schema_test(&app_pool, org_id).await;
+    let person_id = insert_bare_person_for_schema_test(&app_pool, org_id, stage_id).await;
+
+    let (other_org_id, other_admin_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Task FK Best Realty",
+        "task-fk-erin@best.test",
+        "Erin",
+        "correct horse battery staple",
+    )
+    .await;
+    let other_stage_id = first_stage_id_for_schema_test(&app_pool, other_org_id).await;
+    let other_person_id =
+        insert_bare_person_for_schema_test(&app_pool, other_org_id, other_stage_id).await;
+    // A real app_user with no membership in org A at all.
+    let non_member_id = other_admin_id;
+
+    let before: i64 = sqlx::query_scalar("SELECT count(*) FROM task WHERE organization_id = $1")
+        .bind(org_id)
+        .fetch_one(&migrator_pool)
+        .await
+        .unwrap();
+
+    // (a) organization_id = A, person_id belongs to Organization B.
+    let cross_org_person = sqlx::query(
+        "INSERT INTO task (organization_id, person_id, assignee_user_id, created_by_user_id,
+                            title, origin, correlation_id)
+         VALUES ($1, $2, $3, $3, 'A task', 'web_session', gen_random_uuid())",
+    )
+    .bind(org_id)
+    .bind(other_person_id)
+    .bind(actor_id)
+    .execute(&app_pool)
+    .await;
+    assert!(
+        cross_org_person.is_err(),
+        "a Person from another Organization must be rejected"
+    );
+
+    // (b) assignee_user_id is a real app_user with no membership in org A.
+    let non_member_assignee = sqlx::query(
+        "INSERT INTO task (organization_id, person_id, assignee_user_id, created_by_user_id,
+                            title, origin, correlation_id)
+         VALUES ($1, $2, $3, $4, 'A task', 'web_session', gen_random_uuid())",
+    )
+    .bind(org_id)
+    .bind(person_id)
+    .bind(non_member_id)
+    .bind(actor_id)
+    .execute(&app_pool)
+    .await;
+    assert!(
+        non_member_assignee.is_err(),
+        "a non-member assignee_user_id must be rejected"
+    );
+
+    // (c) created_by_user_id is a real app_user with no membership in org A.
+    let non_member_creator = sqlx::query(
+        "INSERT INTO task (organization_id, person_id, assignee_user_id, created_by_user_id,
+                            title, origin, correlation_id)
+         VALUES ($1, $2, $3, $4, 'A task', 'web_session', gen_random_uuid())",
+    )
+    .bind(org_id)
+    .bind(person_id)
+    .bind(actor_id)
+    .bind(non_member_id)
+    .execute(&app_pool)
+    .await;
+    assert!(
+        non_member_creator.is_err(),
+        "a non-member created_by_user_id must be rejected"
+    );
+
+    // (d) a completed task whose completed_by_user_id is a non-member.
+    let non_member_completer = sqlx::query(
+        "INSERT INTO task (organization_id, person_id, assignee_user_id, created_by_user_id,
+                            title, origin, correlation_id, completed_at, completed_by_user_id)
+         VALUES ($1, $2, $3, $3, 'A task', 'web_session', gen_random_uuid(), now(), $4)",
+    )
+    .bind(org_id)
+    .bind(person_id)
+    .bind(actor_id)
+    .bind(non_member_id)
+    .execute(&app_pool)
+    .await;
+    assert!(
+        non_member_completer.is_err(),
+        "a non-member completed_by_user_id must be rejected"
+    );
+
+    // (e) a tombstone whose deleted_by_user_id is a non-member.
+    let non_member_deleter = sqlx::query(
+        "INSERT INTO task (organization_id, person_id, assignee_user_id, created_by_user_id,
+                            title, origin, correlation_id, deleted_at, deleted_by_user_id)
+         VALUES ($1, $2, $3, $3, '', 'web_session', gen_random_uuid(), now(), $4)",
+    )
+    .bind(org_id)
+    .bind(person_id)
+    .bind(actor_id)
+    .bind(non_member_id)
+    .execute(&app_pool)
+    .await;
+    assert!(
+        non_member_deleter.is_err(),
+        "a non-member deleted_by_user_id must be rejected"
+    );
+
+    let after: i64 = sqlx::query_scalar("SELECT count(*) FROM task WHERE organization_id = $1")
+        .bind(org_id)
+        .fetch_one(&migrator_pool)
+        .await
+        .unwrap();
+    assert_eq!(before, after, "no row must land from any rejected insert");
+}
+
+/// docs/specs/SLICE_016.md §9.1: a title of exactly 500 four-byte code
+/// points is accepted (pins `char_length` against bytes, not UTF-8 byte
+/// count); a Person row deletion cascades its tasks.
+#[sqlx::test]
+#[ignore]
+async fn task_accepts_500_four_byte_code_points_and_cascades_with_person(migrator_pool: PgPool) {
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let (org_id, actor_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Task Cascade Realty",
+        "task-cascade@acme.test",
+        "Task Cascade",
+        "correct horse battery staple",
+    )
+    .await;
+    let stage_id = first_stage_id_for_schema_test(&app_pool, org_id).await;
+    let person_id = insert_bare_person_for_schema_test(&app_pool, org_id, stage_id).await;
+
+    let astral_title = "\u{1F600}".repeat(500);
+    assert_eq!(astral_title.len(), 2_000, "sanity: 4 bytes per code point");
+    let task_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO task (organization_id, person_id, assignee_user_id, created_by_user_id,
+                            title, origin, correlation_id)
+         VALUES ($1, $2, $3, $3, $4, 'web_session', gen_random_uuid()) RETURNING id",
+    )
+    .bind(org_id)
+    .bind(person_id)
+    .bind(actor_id)
+    .bind(&astral_title)
+    .fetch_one(&app_pool)
+    .await
+    .expect("500 four-byte code points must be accepted");
+
+    sqlx::query("DELETE FROM person WHERE id = $1")
+        .bind(person_id)
+        .execute(&migrator_pool)
+        .await
+        .unwrap();
+    let remaining: i64 = sqlx::query_scalar("SELECT count(*) FROM task WHERE id = $1")
+        .bind(task_id)
+        .fetch_one(&app_pool)
+        .await
+        .unwrap();
+    assert_eq!(remaining, 0, "deleting the Person must cascade the task");
+}
+
+/// docs/specs/SLICE_016.md §2, §9.1: the partial unique index rejects a
+/// duplicate `(organization_id, source, source_external_id)` and allows
+/// the same external id in a different Organization; a tombstoned
+/// imported task still blocks a re-insert of the same external id.
+#[sqlx::test]
+#[ignore]
+async fn task_source_external_id_partial_unique_index_and_resurrection_guard(
+    migrator_pool: PgPool,
+) {
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let (org_id, actor_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Task Import Realty",
+        "task-import@acme.test",
+        "Task Import",
+        "correct horse battery staple",
+    )
+    .await;
+    let stage_id = first_stage_id_for_schema_test(&app_pool, org_id).await;
+    let person_id = insert_bare_person_for_schema_test(&app_pool, org_id, stage_id).await;
+    let (other_org_id, _other_admin_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Task Import Best Realty",
+        "task-import-dave@best.test",
+        "Dave",
+        "correct horse battery staple",
+    )
+    .await;
+    let other_stage_id = first_stage_id_for_schema_test(&app_pool, other_org_id).await;
+    let other_person_id =
+        insert_bare_person_for_schema_test(&app_pool, other_org_id, other_stage_id).await;
+
+    sqlx::query(
+        "INSERT INTO task (organization_id, person_id, title, origin,
+                            correlation_id, source, source_external_id)
+         VALUES ($1, $2, 'Imported', 'migration', gen_random_uuid(), 'fub', 'ext-1')",
+    )
+    .bind(org_id)
+    .bind(person_id)
+    .execute(&app_pool)
+    .await
+    .unwrap();
+
+    // Same Organization, same external id: rejected.
+    let dup = sqlx::query(
+        "INSERT INTO task (organization_id, person_id, title, origin,
+                            correlation_id, source, source_external_id)
+         VALUES ($1, $2, 'Imported again', 'migration', gen_random_uuid(), 'fub', 'ext-1')",
+    )
+    .bind(org_id)
+    .bind(person_id)
+    .execute(&app_pool)
+    .await;
+    assert!(
+        dup.is_err(),
+        "a duplicate (org, source, external_id) must be rejected"
+    );
+
+    // A different Organization, same external id: allowed.
+    let cross_org = sqlx::query(
+        "INSERT INTO task (organization_id, person_id, title, origin,
+                            correlation_id, source, source_external_id)
+         VALUES ($1, $2, 'Imported elsewhere', 'migration', gen_random_uuid(), 'fub', 'ext-1')",
+    )
+    .bind(other_org_id)
+    .bind(other_person_id)
+    .execute(&app_pool)
+    .await;
+    assert!(
+        cross_org.is_ok(),
+        "the same external id in another Organization must be allowed"
+    );
+
+    // Tombstone the original, then a re-insert of the same external id is
+    // still rejected (the resurrection guard).
+    sqlx::query(
+        "UPDATE task SET title = '', deleted_at = now(), deleted_by_user_id = $2
+         WHERE organization_id = $1 AND source_external_id = 'ext-1'",
+    )
+    .bind(org_id)
+    .bind(actor_id)
+    .execute(&app_pool)
+    .await
+    .unwrap();
+    let resurrection = sqlx::query(
+        "INSERT INTO task (organization_id, person_id, title, origin,
+                            correlation_id, source, source_external_id)
+         VALUES ($1, $2, 'Re-imported', 'migration', gen_random_uuid(), 'fub', 'ext-1')",
+    )
+    .bind(org_id)
+    .bind(person_id)
+    .execute(&app_pool)
+    .await;
+    assert!(
+        resurrection.is_err(),
+        "a tombstoned imported task must block a re-insert of the same external id"
+    );
+}
+
+/// docs/specs/SLICE_016.md §2, §12.1: `crm_app` grants for `task` — full
+/// SELECT/INSERT/UPDATE, but explicitly **no DELETE** (tombstones are
+/// UPDATEs; erasure is the Person cascade, run as the table owner).
+#[sqlx::test]
+#[ignore]
+async fn task_grants_are_exactly_slice_016_section_2_with_no_delete(migrator_pool: PgPool) {
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let (org_id, actor_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Task Grant Realty",
+        "task-grant@acme.test",
+        "Task Grant",
+        "correct horse battery staple",
+    )
+    .await;
+    let stage_id = first_stage_id_for_schema_test(&app_pool, org_id).await;
+    let person_id = insert_bare_person_for_schema_test(&app_pool, org_id, stage_id).await;
+
+    let select = sqlx::query("SELECT * FROM task").fetch_all(&app_pool).await;
+    assert!(select.is_ok(), "task: SELECT must succeed for crm_app");
+
+    let task_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO task (organization_id, person_id, assignee_user_id, created_by_user_id,
+                            title, origin, correlation_id)
+         VALUES ($1, $2, $3, $3, 'A task title', 'web_session', gen_random_uuid()) RETURNING id",
+    )
+    .bind(org_id)
+    .bind(person_id)
+    .bind(actor_id)
+    .fetch_one(&app_pool)
+    .await
+    .expect("task: INSERT must succeed for crm_app");
+
+    let update = sqlx::query("UPDATE task SET title = 'Edited title' WHERE id = $1")
+        .bind(task_id)
+        .execute(&app_pool)
+        .await;
+    assert!(update.is_ok(), "task: UPDATE must succeed for crm_app");
+
+    let delete = sqlx::query("DELETE FROM task WHERE id = $1")
+        .bind(task_id)
+        .execute(&app_pool)
+        .await;
+    assert!(delete.is_err(), "task: DELETE must be denied for crm_app");
+}
+
+/// docs/specs/SLICE_016.md §2: both indexes exist exactly as named.
+#[sqlx::test]
+#[ignore]
+async fn task_indexes_exist(migrator_pool: PgPool) {
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let index_names: Vec<String> =
+        sqlx::query_scalar("SELECT indexname FROM pg_indexes WHERE tablename = 'task'")
+            .fetch_all(&app_pool)
+            .await
+            .unwrap();
+    assert!(
+        index_names.contains(&"task_org_person_due_idx".to_string()),
+        "missing task_org_person_due_idx in {index_names:?}"
+    );
+    assert!(
+        index_names.contains(&"task_org_assignee_due_open_idx".to_string()),
+        "missing task_org_assignee_due_open_idx in {index_names:?}"
+    );
+    assert!(
+        index_names.contains(&"task_org_source_external_idx".to_string()),
+        "missing task_org_source_external_idx in {index_names:?}"
+    );
+}

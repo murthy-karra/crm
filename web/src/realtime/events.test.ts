@@ -80,6 +80,28 @@ describe('invalidationsFor', () => {
     ])
   })
 
+  // SLICE_016.md §6, rule 5/6: `task_changed` invalidates the Person
+  // detail AND Today (a due task changes the viewer's Today) — but,
+  // unlike every full `person.changed` variant above, never People or
+  // list counts. Full-array `toEqual` pins BOTH halves of that claim at
+  // once: an accidental extra key (People, saved-list counts) or a
+  // missing one (Today) would both fail this exact assertion, where a
+  // `.some(...)`/subset check would only catch the second.
+  it('maps task_changed to person and today only, never people or list counts', () => {
+    expect(invalidationsFor(personChanged('task_changed'), ORG_ID)).toEqual([
+      queryKeys.person(ORG_ID, PERSON_ID),
+      queryKeys.today(ORG_ID),
+    ])
+  })
+
+  // The note precedent's own claim, made explicit here so the two
+  // additive kinds are pinned side by side: `note_changed` does NOT
+  // include `today` (a note changes no Today reason).
+  it('note_changed does not include today (unlike task_changed)', () => {
+    const keys = invalidationsFor(personChanged('note_changed'), ORG_ID)
+    expect(keys).not.toContainEqual(queryKeys.today(ORG_ID))
+  })
+
   it('maps inquiry_received to person, people, today, saved-list counts, unresolved, and inquiry sources', () => {
     expect(invalidationsFor(personChanged('inquiry_received'), ORG_ID)).toEqual([
       queryKeys.person(ORG_ID, PERSON_ID),

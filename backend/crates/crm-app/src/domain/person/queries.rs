@@ -1253,6 +1253,46 @@ async fn note_history_entries(
         .collect())
 }
 
+/// `task_completed` history entries (Slice 016a, docs/specs/SLICE_016.md
+/// §1 rule 5, §4): kind_rank 8, `detail: {"title","kind","due_at",
+/// "assignee","created_by","can_manage"}` — `can_manage` is emitted
+/// `false` here unconditionally; the people detail route, which knows the
+/// viewer's role and id, overwrites it for `task_completed` entries (the
+/// tags/note-route pattern). `occurred_at`/`recorded_at` are both the
+/// task's `completed_at`: reopening removes the entry, and completing
+/// again re-adds it at the new time. The raw row read itself lives in
+/// `domain::task::queries` (the task module owns its own table); this
+/// function only shapes it into a `HistoryEntry`.
+async fn task_completed_history_entries(
+    conn: &mut PgConnection,
+    organization_id: OrganizationId,
+    person_id: PersonId,
+) -> Result<Vec<HistoryEntry>, sqlx::Error> {
+    let rows =
+        crate::domain::task::task_completed_history(conn, organization_id, person_id).await?;
+    Ok(rows
+        .into_iter()
+        .map(|r| HistoryEntry {
+            kind: "task_completed",
+            kind_rank: 8,
+            id: r.id,
+            occurred_at: r.completed_at,
+            recorded_at: r.completed_at,
+            actor: r.completed_by,
+            origin: r.origin,
+            correlation_id: CorrelationId::new(r.correlation_id),
+            detail: serde_json::json!({
+                "title": r.title,
+                "kind": r.kind,
+                "due_at": r.due_at,
+                "assignee": r.assignee,
+                "created_by": r.created_by,
+                "can_manage": false,
+            }),
+        })
+        .collect())
+}
+
 /// The full history timeline for `GET /api/people/{id}`, ordered
 /// `occurred_at, recorded_at, kind_rank, id` (docs/specs/SLICE_002.md §5:
 /// required because intake's four facts otherwise share both timestamps).
@@ -1270,6 +1310,7 @@ pub async fn history_for_person(
     entries.extend(call_completed_history(conn, organization_id, person_id).await?);
     entries.extend(correspondence_history(conn, organization_id, person_id).await?);
     entries.extend(note_history_entries(conn, organization_id, person_id).await?);
+    entries.extend(task_completed_history_entries(conn, organization_id, person_id).await?);
 
     entries.sort_by_key(|e| (e.occurred_at, e.recorded_at, e.kind_rank, e.id));
     Ok(entries)

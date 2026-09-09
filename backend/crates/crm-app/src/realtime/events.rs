@@ -40,6 +40,12 @@ pub enum PersonChange {
     /// ids only: no note body ever travels on the realtime channel
     /// (D-023, rule 7).
     NoteChanged,
+    /// Slice 016a's declared additive variant (docs/specs/SLICE_016.md
+    /// §6, §9): published on create, a changing update, complete, reopen,
+    /// snooze, and delete — never on `changed: false` — and, like every
+    /// other variant here, ids only: no task title ever travels on the
+    /// realtime channel (D-023, rule 7).
+    TaskChanged,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -295,6 +301,7 @@ mod tests {
             ),
             (PersonChange::TagsChanged, "tags_changed"),
             (PersonChange::NoteChanged, "note_changed"),
+            (PersonChange::TaskChanged, "task_changed"),
         ] {
             let event = RealtimeEvent::person_changed(
                 OrganizationId::new(Uuid::new_v4()),

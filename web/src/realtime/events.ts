@@ -16,6 +16,11 @@ import { queryKeys } from '../api/queries'
 // other variants, it deliberately does NOT fall into the wide default
 // below (rule 5: a note changes no People row, Today queue, or list
 // count) — see the dedicated branch in the `person.changed` case.
+// SLICE_016.md §6 adds `task_changed` the same way: published on create, a
+// changing update, complete, reopen, snooze, and delete — never on
+// `changed: false`. A due task changes the viewer's Today, so (unlike
+// `note_changed`) it invalidates `queryKeys.today` too, but still never
+// People or list counts — see the dedicated branch below.
 export type PersonChange =
   | 'inquiry_received'
   | 'assignment_changed'
@@ -24,6 +29,7 @@ export type PersonChange =
   | 'correspondence_captured'
   | 'tags_changed'
   | 'note_changed'
+  | 'task_changed'
 
 interface RealtimeEnvelopeBase {
   v: 1
@@ -97,6 +103,13 @@ export function invalidationsFor(event: unknown, orgId: string): QueryKey[] {
       // (over-invalidation, never under-invalidation).
       if (data.change === 'note_changed') {
         return [queryKeys.person(orgId, personId)]
+      }
+      // SLICE_016.md §6: a due task changes the viewer's Today, so this
+      // gets `queryKeys.today` in addition to the Person detail — but
+      // still never People or list counts (rule 6: tasks don't appear on
+      // People rows).
+      if (data.change === 'task_changed') {
+        return [queryKeys.person(orgId, personId), queryKeys.today(orgId)]
       }
       const keys: QueryKey[] = [
         queryKeys.person(orgId, personId),

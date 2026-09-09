@@ -536,6 +536,23 @@ export interface NoteDetail {
   can_manage: boolean
 }
 
+// SLICE_016.md §4's declared additive change: `task_completed`, `kind_rank`
+// 8 (after `note`), `detail: {title, kind, due_at, assignee, created_by,
+// can_manage}`. `HistoryEntryBase.actor` is the completer's `ActorRef`, or
+// `null` for an imported task (§1 rule 1). Reopening removes the entry;
+// completing again re-adds it at the new time (occurred_at = completed_at).
+export interface TaskCompletedDetail {
+  title: string
+  kind: TaskKind
+  due_at: string | null
+  assignee: ActorRef | null
+  created_by: ActorRef | null
+  // The server's rule-1 verdict for THIS viewer (admin, or the task's own
+  // assignee/creator) — a display hint; the command re-decides under the
+  // task row's lock (§4).
+  can_manage: boolean
+}
+
 export type HistoryEntry =
   | (HistoryEntryBase & { kind: 'inquiry_received'; detail: InquiryReceivedDetail })
   | (HistoryEntryBase & { kind: 'routing_decision'; detail: RoutingDecisionDetail })
@@ -545,6 +562,7 @@ export type HistoryEntry =
   | (HistoryEntryBase & { kind: 'call_completed'; detail: CallCompletedDetail })
   | (HistoryEntryBase & { kind: 'correspondence'; detail: CorrespondenceDetail })
   | (HistoryEntryBase & { kind: 'note'; detail: NoteDetail })
+  | (HistoryEntryBase & { kind: 'task_completed'; detail: TaskCompletedDetail })
 
 export interface PersonDetailResponse {
   person: PersonSummary
@@ -555,6 +573,9 @@ export interface PersonDetailResponse {
   history: HistoryEntry[]
   // Slice 011e §5: ordered `lower(name), id`, additive.
   tags: TagRef[]
+  // Slice 016a §4: open tasks only, in `open_for_person` order
+  // (`due_at ASC NULLS LAST, created_at, id`) — never re-sort client-side.
+  tasks: Task[]
 }
 
 // --- Slice 011e: Tags (docs/specs/SLICE_011e.md §5) -------------------------
@@ -649,6 +670,88 @@ export interface EditNoteResponse {
 }
 
 export interface DeleteNoteResponse {
+  deleted: boolean
+}
+
+// --- Slice 016a: Tasks (docs/specs/SLICE_016.md §4) -------------------------
+// Typed to-dos on a Person: created by any active member from the Person
+// page, edited/completed/reopened/deleted by the assignee, the creator, or
+// an Organization admin. `tasks[]` on the Person detail (open only) is the
+// list read surface; `task_completed` history entries (above) cover
+// completed ones. `due_at` is an instant; a date-only pick is converted to
+// local end of day BY THE CLIENT (rule 2 — no Organization timezone
+// exists), never on the server.
+
+export type TaskKind = 'call' | 'email' | 'text' | 'follow_up' | 'other'
+
+/** `assignee`/`created_by` are `null` only for an imported task whose FUB
+ * assignee/creator matched no member (§1 rule 1). */
+export interface Task {
+  id: string
+  person_id: string
+  title: string
+  kind: TaskKind
+  due_at: string | null
+  assignee: ActorRef | null
+  created_by: ActorRef | null
+  completed_at: string | null
+  completed_by: ActorRef | null
+  created_at: string
+  updated_at: string
+  // The server's rule-1 verdict for THIS viewer at read time — a display
+  // hint; every mutating command re-decides under the task row's lock (§4).
+  can_manage: boolean
+}
+
+export interface CreateTaskRequest {
+  title: string
+  kind?: TaskKind
+  due_at?: string | null
+  assignee_user_id?: string | null
+}
+
+export interface CreateTaskResponse {
+  task: Task
+}
+
+/** `PUT .../tasks/{task_id}`: full replace of all four mutable fields — no
+ * partial update exists (§4). `assignee_user_id` is required, unlike
+ * `CreateTaskRequest` (an existing task always has one to keep or change). */
+export interface UpdateTaskRequest {
+  title: string
+  kind: TaskKind
+  due_at: string | null
+  assignee_user_id: string
+}
+
+export interface UpdateTaskResponse {
+  task: Task
+  changed: boolean
+}
+
+export interface CompleteTaskResponse {
+  task: Task
+  changed: boolean
+}
+
+export interface ReopenTaskResponse {
+  task: Task
+  changed: boolean
+}
+
+/** `POST .../tasks/{task_id}/snooze`: its own route (never a full
+ * `UpdateTaskRequest`) so the 016b Today panel can snooze from a possibly
+ * stale row — due_at only. */
+export interface SnoozeTaskRequest {
+  due_at: string
+}
+
+export interface SnoozeTaskResponse {
+  task: Task
+  changed: boolean
+}
+
+export interface DeleteTaskResponse {
   deleted: boolean
 }
 

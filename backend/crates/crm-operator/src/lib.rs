@@ -38,8 +38,8 @@ pub use views::{
     Ahead, ContactMethodView, FilterOutcome, FilterResult, HistoryEntryView, InquiryView,
     NextWorkItem, NotOnTodayReason, NoteView, PersonCard, PersonDetail, PhoneOption,
     PriorityExplanation, ProposalView, SavedListRef, SearchResult, StartCallProposalOutcome,
-    SystemFeedIssueView, TodayItemView, TodaySourceIssueView, TodaySourcesView, TodayView,
-    UntrustedText, WirePersonCard, ORDERING_RULE,
+    SystemFeedIssueView, TaskView, TodayItemView, TodaySourceIssueView, TodaySourcesView,
+    TodayView, UntrustedText, WirePersonCard, ORDERING_RULE,
 };
 
 /// The system prompt (docs/specs/SLICE_005.md §3). Not a contract; the

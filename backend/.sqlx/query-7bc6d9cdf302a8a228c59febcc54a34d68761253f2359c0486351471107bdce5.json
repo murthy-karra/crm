@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE task SET completed_at = now(), completed_by_user_id = $4\n           WHERE id = $1 AND organization_id = $2 AND person_id = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7bc6d9cdf302a8a228c59febcc54a34d68761253f2359c0486351471107bdce5"
+}

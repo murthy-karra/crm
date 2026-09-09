@@ -11,6 +11,7 @@ use crate::domain::note::NoteError;
 use crate::domain::person::filter::FilterError;
 use crate::domain::saved_list::SavedListError;
 use crate::domain::tag::TagError;
+use crate::domain::task::TaskError;
 
 /// `{"error": "<code>"}` envelope shared across authenticated endpoints
 /// (docs/specs/SLICE_001.md §4). Slice 002 (docs/specs/SLICE_002.md §5)
@@ -393,6 +394,24 @@ impl From<NoteError> for ApiError {
             NoteError::Forbidden => ApiError::Forbidden,
             NoteError::MalformedRequest => ApiError::MalformedRequest,
             NoteError::Corrupt | NoteError::Database(_) => ApiError::Unavailable,
+        }
+    }
+}
+
+/// `task::TaskError` -> `ApiError` (docs/specs/SLICE_016.md §4): rule-1
+/// permission is `Forbidden` -> the existing `403 forbidden` code (the
+/// `tag::TagError`/`note::NoteError` precedent); `InvalidAssignee` reuses
+/// the existing `422 invalid_assignee` code `AssignPerson` already has
+/// (no new code); a corrupt stored role/kind is an operational failure,
+/// never a user-facing code.
+impl From<TaskError> for ApiError {
+    fn from(err: TaskError) -> Self {
+        match err {
+            TaskError::NotFound => ApiError::NotFound,
+            TaskError::Forbidden => ApiError::Forbidden,
+            TaskError::MalformedRequest => ApiError::MalformedRequest,
+            TaskError::InvalidAssignee => ApiError::InvalidAssignee,
+            TaskError::Corrupt | TaskError::Database(_) => ApiError::Unavailable,
         }
     }
 }

@@ -1019,6 +1019,7 @@ function detail(name = 'Grace Hopper', id = PERSON_ID): PersonDetailResponse {
     inquiries: [{ id: 'inquiry-1', source: 'website', source_external_id: null, message: null, received_at: '2026-08-22T09:00:00.000Z' }],
     history: [],
     tags: [],
+    tasks: [],
   }
 }
 

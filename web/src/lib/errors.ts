@@ -86,3 +86,30 @@ export function describeNoteError(err: unknown, fallback: string): string {
   }
   return fallback
 }
+
+/** docs/specs/SLICE_016.md §8: the task add form's and inline editor's copy.
+ * `invalid_assignee`'s exact wording is pinned by spec §8 — do not reword
+ * it; a caller also refetches the members list on this code. `forbidden`
+ * covers any task action once the viewer's rule-1 verdict has changed
+ * (reassigned away, demoted, deactivated) between the last read and the
+ * write. `not_found` (task deleted elsewhere) falls through to the
+ * caller's fallback text, the note precedent. */
+const TASK_CODE_MESSAGES: Record<string, string> = {
+  malformed_request: 'Task titles are 1–500 characters, one line, with no control characters.',
+  invalid_assignee: 'That member is not active',
+  forbidden: 'You can no longer manage this task.',
+}
+
+export function describeTaskError(err: unknown, fallback: string): string {
+  if (err instanceof SessionCoordinationUnavailableError) {
+    return 'Browser storage is unavailable. Enable site storage, then reload.'
+  }
+  if (err instanceof ApiError) {
+    if (err.status === 0) return 'Could not reach the server. Check your connection and try again.'
+    if (err.status === 401) return 'Your session has expired. Redirecting to sign in…'
+    if (err.code === 'unavailable') return 'The server is temporarily unavailable. Try again shortly.'
+    const message = TASK_CODE_MESSAGES[err.code]
+    if (message) return message
+  }
+  return fallback
+}

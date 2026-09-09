@@ -852,3 +852,171 @@ async fn notes_never_change_person_row_or_people_list_rows(migrator_pool: PgPool
     );
     let _ = alice_id;
 }
+
+/// docs/specs/SLICE_016.md §1 rule 6, §9: creating, updating, completing,
+/// reopening, snoozing and deleting a task never bumps `person.updated_at`,
+/// never touches any of the four D-052 derived columns, leaves
+/// `GET /api/people` rows byte-identical, and (016a) never places the
+/// Person on Today (D-054 §1's axis is 016b-only).
+#[sqlx::test]
+#[ignore]
+async fn tasks_never_change_person_row_or_people_list_rows_or_today(migrator_pool: PgPool) {
+    let (org_id, alice_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Acme Realty",
+        "alice-tasks-people@acme.test",
+        "Alice",
+        "pw",
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let stage_id: Uuid = sqlx::query_scalar(
+        "SELECT id FROM stage WHERE organization_id = $1 ORDER BY position LIMIT 1",
+    )
+    .bind(org_id)
+    .fetch_one(&app_pool)
+    .await
+    .unwrap();
+    let person_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO person (organization_id, first_name, stage_id) VALUES ($1, 'Fixture', $2) RETURNING id",
+    )
+    .bind(org_id)
+    .bind(stage_id)
+    .fetch_one(&app_pool)
+    .await
+    .unwrap();
+
+    type PersonRow = (
+        chrono::DateTime<chrono::Utc>,
+        Option<chrono::DateTime<chrono::Utc>>,
+        Option<chrono::DateTime<chrono::Utc>>,
+        Option<chrono::DateTime<chrono::Utc>>,
+        Option<chrono::DateTime<chrono::Utc>>,
+    );
+    let before: PersonRow = sqlx::query_as(
+        "SELECT updated_at, last_inquiry_at, last_contact_at, last_inbound_at, last_outbound_at
+         FROM person WHERE id = $1",
+    )
+    .bind(person_id)
+    .fetch_one(&app_pool)
+    .await
+    .unwrap();
+
+    let router = crate::common::build_router(&migrator_pool).await;
+    let alice = crate::common::login_cookie(&router, "alice-tasks-people@acme.test", "pw").await;
+
+    let before_people = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/people", &alice).await,
+    )
+    .await;
+
+    // Round-1 review, item 7: every mutation below is a POSITIVE CONTROL
+    // — its status is 2xx and, where the response carries `changed`, it
+    // reads `true` — so the "byte-identical Person row" assertions after
+    // this block actually prove something (a silently-failed mutation
+    // could never have moved the row anyway).
+    let add_resp = crate::common::post_json_with_cookie(
+        &router,
+        &format!("/api/people/{person_id}/tasks"),
+        &alice,
+        json!({ "title": "Call the client", "due_at": chrono::Utc::now() }),
+    )
+    .await;
+    assert_eq!(add_resp.status(), StatusCode::CREATED);
+    let added = crate::common::body_json(add_resp).await;
+    let task_id = added["task"]["id"].as_str().unwrap().to_string();
+    let due_at = added["task"]["due_at"].clone();
+
+    let update_resp = crate::common::put_json_with_cookie(
+        &router,
+        &format!("/api/people/{person_id}/tasks/{task_id}"),
+        &alice,
+        json!({
+            "title": "Call the client back", "kind": "call", "due_at": due_at,
+            "assignee_user_id": alice_id,
+        }),
+    )
+    .await;
+    assert_eq!(update_resp.status(), StatusCode::OK);
+    assert_eq!(crate::common::body_json(update_resp).await["changed"], true);
+
+    let complete_resp = crate::common::post_json_with_cookie(
+        &router,
+        &format!("/api/people/{person_id}/tasks/{task_id}/complete"),
+        &alice,
+        json!({}),
+    )
+    .await;
+    assert_eq!(complete_resp.status(), StatusCode::OK);
+    assert_eq!(
+        crate::common::body_json(complete_resp).await["changed"],
+        true
+    );
+
+    let reopen_resp = crate::common::post_json_with_cookie(
+        &router,
+        &format!("/api/people/{person_id}/tasks/{task_id}/reopen"),
+        &alice,
+        json!({}),
+    )
+    .await;
+    assert_eq!(reopen_resp.status(), StatusCode::OK);
+    assert_eq!(crate::common::body_json(reopen_resp).await["changed"], true);
+    // Now open, dated in the past (overdue) — the case most likely to leak
+    // onto Today if 016a accidentally wired the axis early.
+    let snooze_resp = crate::common::post_json_with_cookie(
+        &router,
+        &format!("/api/people/{person_id}/tasks/{task_id}/snooze"),
+        &alice,
+        json!({ "due_at": chrono::Utc::now() - chrono::Duration::hours(2) }),
+    )
+    .await;
+    assert_eq!(snooze_resp.status(), StatusCode::OK);
+    assert_eq!(crate::common::body_json(snooze_resp).await["changed"], true);
+
+    // 016a has no Today axis yet (D-054 §1 is a 016b rung): an open,
+    // overdue task must not appear as a Today reason this slice.
+    let today = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/today", &alice).await,
+    )
+    .await;
+    assert!(
+        today["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|item| item["person"]["id"] != person_id.to_string()),
+        "an open, overdue task must never place a Person on Today in 016a: {today}"
+    );
+
+    let delete_resp = crate::common::delete_with_cookie(
+        &router,
+        &format!("/api/people/{person_id}/tasks/{task_id}"),
+        &alice,
+    )
+    .await;
+    assert_eq!(delete_resp.status(), StatusCode::OK);
+    assert_eq!(crate::common::body_json(delete_resp).await["deleted"], true);
+
+    let after: PersonRow = sqlx::query_as(
+        "SELECT updated_at, last_inquiry_at, last_contact_at, last_inbound_at, last_outbound_at
+         FROM person WHERE id = $1",
+    )
+    .bind(person_id)
+    .fetch_one(&app_pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        before, after,
+        "task activity must never touch person.updated_at or any D-052 column"
+    );
+
+    let after_people = crate::common::body_json(
+        crate::common::get_with_cookie(&router, "/api/people", &alice).await,
+    )
+    .await;
+    assert_eq!(
+        before_people, after_people,
+        "GET /api/people rows must be byte-identical before and after task activity"
+    );
+}

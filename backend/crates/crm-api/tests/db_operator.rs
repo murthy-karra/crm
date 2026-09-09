@@ -4,7 +4,7 @@
 //! the real intake endpoint (D-021); the migrator connection is used only
 //! to backdate or to revoke a grant for a negative case.
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use axum::body::Body;
@@ -14,6 +14,7 @@ use chrono::Utc;
 use serde_json::{json, Value};
 use sqlx::PgPool;
 use tower::ServiceExt;
+use tracing_subscriber::layer::SubscriberExt;
 use uuid::Uuid;
 
 use crm_api::domain::person::PersonVisibilityScope;
@@ -1789,4 +1790,420 @@ async fn get_person_returns_tags_as_untrusted_text_and_a_foreign_person_is_still
     assert_eq!(foreign_response.status(), StatusCode::OK);
     let foreign_body = crate::common::body_json(foreign_response).await;
     assert_eq!(foreign_body["tool_calls"][0]["outcome"], "not_found");
+}
+
+// --- Slice 015: notes (§9.9) ------------------------------------------
+
+/// docs/specs/SLICE_015.md §9.9: six live notes with unique sentinels
+/// S1–S6 (S1 oldest) plus a tombstoned one — the serialized `PersonDetail`
+/// contains S2–S6 exactly once each, as untrusted text, with the author's
+/// display name, and S1 zero times (the latest-five window, tombstones
+/// excluded); `history` carries no `note` entry and no sentinel, even
+/// with 25 more notes plus a stage change (the stage change still
+/// survives the `MAX_HISTORY` cut because notes never compete for it); a
+/// 600-character note arrives as its 500-character clip.
+#[sqlx::test]
+#[ignore]
+async fn get_person_notes_are_latest_five_untrusted_and_excluded_from_history(
+    migrator_pool: PgPool,
+) {
+    let f = fixture(migrator_pool).await;
+    let plain = router_with(&f.migrator_pool, None).await;
+    let alice = crate::common::login_cookie(&plain, "alice@acme.test", "pw").await;
+    let person_id = create_person(
+        &plain,
+        &alice,
+        "Grace",
+        "Hopper",
+        "grace-notes@example.test",
+        None,
+        None,
+        Some(f.alice_id),
+    )
+    .await;
+
+    let app_pool = crate::common::connect_as_app(&f.migrator_pool).await;
+    let base = Utc::now() - chrono::Duration::hours(1);
+    for i in 1..=6 {
+        sqlx::query(
+            "INSERT INTO note (organization_id, person_id, author_user_id, body, origin,
+                                correlation_id, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, 'web_session', gen_random_uuid(), $5, $5)",
+        )
+        .bind(f.org_acme)
+        .bind(person_id)
+        .bind(f.alice_id)
+        .bind(format!("SENTINEL_NOTE_S{i}"))
+        .bind(base + chrono::Duration::seconds(i))
+        .execute(&app_pool)
+        .await
+        .unwrap();
+    }
+    // A tombstone, timestamped AFTER S6 (so it would otherwise be the
+    // newest row): excluded entirely, never bumping S2 out of the window.
+    sqlx::query(
+        "INSERT INTO note (organization_id, person_id, author_user_id, body, origin, correlation_id,
+                            created_at, updated_at, deleted_at, deleted_by_user_id)
+         VALUES ($1, $2, $3, '', 'web_session', gen_random_uuid(), $4, $4, $4, $3)",
+    )
+    .bind(f.org_acme)
+    .bind(person_id)
+    .bind(f.alice_id)
+    .bind(base + chrono::Duration::seconds(7))
+    .execute(&app_pool)
+    .await
+    .unwrap();
+
+    let (router, provider) = router_scripted(
+        &f.migrator_pool,
+        vec![
+            tool_step("get_person", json!({ "person_id": person_id })),
+            text_step("Here is what I found."),
+        ],
+    )
+    .await;
+    let alice_scripted = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
+    let response = post_turn(
+        &router,
+        &alice_scripted,
+        message("What notes are on Grace?"),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        crate::common::body_json(response).await["tool_calls"][0]["outcome"],
+        "ok"
+    );
+
+    let prompt = requests_json(&provider);
+    for i in 2..=6 {
+        let sentinel = format!("SENTINEL_NOTE_S{i}");
+        assert_eq!(
+            prompt.matches(&sentinel).count(),
+            1,
+            "S{i} must appear exactly once: {prompt}"
+        );
+        assert!(
+            prompt.contains(&format!(r#"{{\"untrusted_text\":\"{sentinel}\"}}"#)),
+            "S{i} must be wrapped as untrusted text: {prompt}"
+        );
+    }
+    assert!(
+        !prompt.contains("SENTINEL_NOTE_S1"),
+        "S1 (outside the latest-five window) must not appear: {prompt}"
+    );
+    assert!(
+        prompt.contains(r#"\"author_display_name\":\"Alice\""#),
+        "the author's display name must appear: {prompt}"
+    );
+    assert!(
+        !prompt.contains(r#"\"kind\":\"note\""#),
+        "history must carry no note entries: {prompt}"
+    );
+
+    // 25 more notes plus one stage change: the stage change still survives
+    // in `history` because notes never compete for the `MAX_HISTORY` cut
+    // (they are filtered out of `history` before the truncation runs).
+    for i in 0..25 {
+        sqlx::query(
+            "INSERT INTO note (organization_id, person_id, author_user_id, body, origin,
+                                correlation_id, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, 'web_session', gen_random_uuid(), now(), now())",
+        )
+        .bind(f.org_acme)
+        .bind(person_id)
+        .bind(f.alice_id)
+        .bind(format!("Filler note {i}"))
+        .execute(&app_pool)
+        .await
+        .unwrap();
+    }
+    let stage_id: Uuid = sqlx::query_scalar(
+        "SELECT id FROM stage WHERE organization_id = $1 ORDER BY position LIMIT 1 OFFSET 1",
+    )
+    .bind(f.org_acme)
+    .fetch_one(&app_pool)
+    .await
+    .unwrap();
+    let stage_resp = crate::common::post_json_with_cookie(
+        &router,
+        &format!("/api/people/{person_id}/stage"),
+        &alice_scripted,
+        json!({ "stage_id": stage_id }),
+    )
+    .await;
+    assert_eq!(stage_resp.status(), StatusCode::OK);
+
+    let (router2, provider2) = router_scripted(
+        &f.migrator_pool,
+        vec![
+            tool_step("get_person", json!({ "person_id": person_id })),
+            text_step("Still here."),
+        ],
+    )
+    .await;
+    let alice2 = crate::common::login_cookie(&router2, "alice@acme.test", "pw").await;
+    let response2 = post_turn(&router2, &alice2, message("Any stage changes?")).await;
+    assert_eq!(response2.status(), StatusCode::OK);
+    let prompt2 = requests_json(&provider2);
+    assert!(
+        prompt2.contains(r#"\"kind\":\"stage_changed\""#),
+        "the stage change must survive the truncation even with 25+ notes: {prompt2}"
+    );
+    assert!(
+        !prompt2.contains(r#"\"kind\":\"note\""#),
+        "history must still carry no note entries: {prompt2}"
+    );
+
+    // A 600-character note arrives as its 500-character clip.
+    let long_body = "L".repeat(600);
+    sqlx::query(
+        "INSERT INTO note (organization_id, person_id, author_user_id, body, origin, correlation_id,
+                            created_at, updated_at)
+         VALUES ($1, $2, $3, $4, 'web_session', gen_random_uuid(), now(), now())",
+    )
+    .bind(f.org_acme)
+    .bind(person_id)
+    .bind(f.alice_id)
+    .bind(&long_body)
+    .execute(&app_pool)
+    .await
+    .unwrap();
+    let (router3, provider3) = router_scripted(
+        &f.migrator_pool,
+        vec![
+            tool_step("get_person", json!({ "person_id": person_id })),
+            text_step("Clipped."),
+        ],
+    )
+    .await;
+    let alice3 = crate::common::login_cookie(&router3, "alice@acme.test", "pw").await;
+    post_turn(&router3, &alice3, message("Show me the latest note")).await;
+    let prompt3 = requests_json(&provider3);
+    assert!(
+        prompt3.contains(&"L".repeat(500)),
+        "the 500-char clip must be present: {prompt3}"
+    );
+    assert!(
+        !prompt3.contains(&"L".repeat(501)),
+        "the body must not exceed 500 characters: {prompt3}"
+    );
+
+    // No sentinel anywhere in the ledger.
+    let turns = turn_rows(&app_pool).await;
+    for (turn_id, ..) in &turns {
+        let tools = tool_rows(&app_pool, *turn_id).await;
+        let serialized = format!("{tools:?}");
+        for i in 1..=6 {
+            assert!(!serialized.contains(&format!("SENTINEL_NOTE_S{i}")));
+        }
+    }
+    let _ = (f.carol_id, f.org_best, f.bob_id);
+}
+
+/// docs/specs/SLICE_015.md §9.9 capture test: an add with a sentinel body,
+/// an edit to a second sentinel, a delete, a rejected `\u{0}` body, a 403,
+/// and a 404, then an Operator tool call over a third sentinel — captured
+/// at TRACE with `FmtSpan::FULL` (the `db_today_source_telemetry.rs`
+/// harness). Neither sentinel appears in the captured trace output, nor
+/// in any HTTP response body other than the add/edit 201/200 receipts
+/// (which legitimately echo the body back, rule 7's mutation-receipt
+/// site) and the detail read. A foreign Person is still refused; crate
+/// fences (no bare SQL/no crm-operator dependency in crm-app) are the
+/// existing `operator_deps.rs`/`./scripts/check` job, unaffected here.
+#[derive(Clone)]
+struct CaptureWriter(Arc<Mutex<Vec<u8>>>);
+
+impl std::io::Write for CaptureWriter {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for CaptureWriter {
+    type Writer = CaptureWriter;
+    fn make_writer(&'a self) -> Self::Writer {
+        self.clone()
+    }
+}
+
+#[sqlx::test]
+#[ignore]
+async fn note_activity_and_operator_call_never_leak_a_body_into_traces_or_wrong_responses(
+    migrator_pool: PgPool,
+) {
+    let f = fixture(migrator_pool).await;
+    let router = router_with(&f.migrator_pool, None).await;
+    let alice = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
+    let person_id = create_person(
+        &router,
+        &alice,
+        "Ida",
+        "Capture",
+        "ida-capture@example.test",
+        None,
+        None,
+        Some(f.alice_id),
+    )
+    .await;
+    // A second member, neither author nor admin, for the 403 case.
+    let carol = crate::common::login_cookie(&router, "carol@acme.test", "pw").await;
+
+    const ADD_SENTINEL: &str = "SENTINEL_CAPTURE_ADD_DO_NOT_LEAK";
+    const EDIT_SENTINEL: &str = "SENTINEL_CAPTURE_EDIT_DO_NOT_LEAK";
+    const OPERATOR_SENTINEL: &str = "SENTINEL_CAPTURE_OPERATOR_DO_NOT_LEAK";
+
+    let buffer = Arc::new(Mutex::new(Vec::new()));
+    let subscriber = tracing_subscriber::registry().with(
+        tracing_subscriber::fmt::layer()
+            .with_writer(CaptureWriter(buffer.clone()))
+            .with_ansi(false)
+            .with_span_events(tracing_subscriber::fmt::format::FmtSpan::FULL),
+    );
+    let guard = tracing::subscriber::set_default(subscriber);
+
+    let add_resp = crate::common::post_json_with_cookie(
+        &router,
+        &format!("/api/people/{person_id}/notes"),
+        &alice,
+        json!({ "body": ADD_SENTINEL }),
+    )
+    .await;
+    assert_eq!(add_resp.status(), StatusCode::CREATED);
+    let add_body = crate::common::body_json(add_resp).await;
+    assert_eq!(add_body["note"]["body"], ADD_SENTINEL, "the 201 receipt legitimately echoes the body");
+    let note_id = add_body["note"]["id"].as_str().unwrap().to_string();
+
+    let edit_resp = crate::common::put_json_with_cookie(
+        &router,
+        &format!("/api/people/{person_id}/notes/{note_id}"),
+        &alice,
+        json!({ "body": EDIT_SENTINEL }),
+    )
+    .await;
+    assert_eq!(edit_resp.status(), StatusCode::OK);
+    let edit_body = crate::common::body_json(edit_resp).await;
+    assert_eq!(edit_body["note"]["body"], EDIT_SENTINEL, "the 200 receipt legitimately echoes the body");
+
+    let delete_resp = crate::common::delete_with_cookie(
+        &router,
+        &format!("/api/people/{person_id}/notes/{note_id}"),
+        &alice,
+    )
+    .await;
+    assert_eq!(delete_resp.status(), StatusCode::OK);
+    let delete_body = crate::common::body_json(delete_resp).await;
+    assert!(!delete_body.to_string().contains(EDIT_SENTINEL));
+
+    // A rejected control-character body: 400, no sentinel to leak, but
+    // still exercised for span coverage.
+    let rejected_resp = crate::common::post_json_with_cookie(
+        &router,
+        &format!("/api/people/{person_id}/notes"),
+        &alice,
+        json!({ "body": "bad\u{0}body" }),
+    )
+    .await;
+    assert_eq!(rejected_resp.status(), StatusCode::BAD_REQUEST);
+
+    // A live note for the 403 (carol is neither author nor admin) and 404
+    // (nonexistent id) cases, plus the Operator call below.
+    let live_resp = crate::common::post_json_with_cookie(
+        &router,
+        &format!("/api/people/{person_id}/notes"),
+        &alice,
+        json!({ "body": OPERATOR_SENTINEL }),
+    )
+    .await;
+    assert_eq!(live_resp.status(), StatusCode::CREATED);
+    let live_note_id = crate::common::body_json(live_resp).await["note"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let forbidden_resp = crate::common::put_json_with_cookie(
+        &router,
+        &format!("/api/people/{person_id}/notes/{live_note_id}"),
+        &carol,
+        json!({ "body": "Hijack attempt" }),
+    )
+    .await;
+    assert_eq!(forbidden_resp.status(), StatusCode::FORBIDDEN);
+    let forbidden_body = crate::common::body_json(forbidden_resp).await;
+    assert_eq!(forbidden_body, json!({ "error": "forbidden" }));
+
+    let missing_resp = crate::common::put_json_with_cookie(
+        &router,
+        &format!("/api/people/{person_id}/notes/{}", Uuid::new_v4()),
+        &alice,
+        json!({ "body": "Does not exist" }),
+    )
+    .await;
+    assert_eq!(missing_resp.status(), StatusCode::NOT_FOUND);
+
+    // The Operator's own tool call over the live sentinel note.
+    let (operator_router, provider) = router_scripted(
+        &f.migrator_pool,
+        vec![
+            tool_step("get_person", json!({ "person_id": person_id })),
+            text_step("Noted."),
+        ],
+    )
+    .await;
+    let alice_scripted =
+        crate::common::login_cookie(&operator_router, "alice@acme.test", "pw").await;
+    let turn_resp = post_turn(
+        &operator_router,
+        &alice_scripted,
+        message("What's the latest note say?"),
+    )
+    .await;
+    assert_eq!(turn_resp.status(), StatusCode::OK);
+    let turn_body = crate::common::body_json(turn_resp).await;
+    assert!(
+        !turn_body.to_string().contains(OPERATOR_SENTINEL),
+        "the turn's own HTTP response must never echo the note body: {turn_body}"
+    );
+
+    // A foreign Organization's Person is still refused.
+    let foreign_router = router_with(&f.migrator_pool, None).await;
+    let bob = crate::common::login_cookie(&foreign_router, "bob@best.test", "pw").await;
+    let foreign_get = crate::common::get_with_cookie(
+        &foreign_router,
+        &format!("/api/people/{person_id}"),
+        &bob,
+    )
+    .await;
+    assert_eq!(foreign_get.status(), StatusCode::NOT_FOUND);
+
+    drop(guard);
+
+    let captured = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
+    for sentinel in [ADD_SENTINEL, EDIT_SENTINEL, OPERATOR_SENTINEL] {
+        assert!(
+            !captured.contains(sentinel),
+            "sentinel {sentinel:?} leaked into the captured trace output: {captured}"
+        );
+    }
+
+    // The prompt sent to the model provider IS allowed to carry the
+    // sentinel (that is the whole point of the Operator's untrusted-text
+    // view) — confirmed separately by the sentinel test above; here the
+    // constraint is only the trace output and the HTTP response bodies.
+    let _ = requests_json(&provider);
+
+    // The operator_tool_call ledger holds no sentinel either.
+    let app_pool = crate::common::connect_as_app(&f.migrator_pool).await;
+    let turns = turn_rows(&app_pool).await;
+    for (turn_id, ..) in &turns {
+        let tools = tool_rows(&app_pool, *turn_id).await;
+        let serialized = format!("{tools:?}");
+        for sentinel in [ADD_SENTINEL, EDIT_SENTINEL, OPERATOR_SENTINEL] {
+            assert!(!serialized.contains(sentinel));
+        }
+    }
 }

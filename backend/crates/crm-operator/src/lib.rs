@@ -36,10 +36,10 @@ pub use service::{
 pub use tools::tool_definitions;
 pub use views::{
     Ahead, ContactMethodView, FilterOutcome, FilterResult, HistoryEntryView, InquiryView,
-    NextWorkItem, NotOnTodayReason, PersonCard, PersonDetail, PhoneOption, PriorityExplanation,
-    ProposalView, SavedListRef, SearchResult, StartCallProposalOutcome, SystemFeedIssueView,
-    TodayItemView, TodaySourceIssueView, TodaySourcesView, TodayView, UntrustedText,
-    WirePersonCard, ORDERING_RULE,
+    NextWorkItem, NoteView, NotOnTodayReason, PersonCard, PersonDetail, PhoneOption,
+    PriorityExplanation, ProposalView, SavedListRef, SearchResult, StartCallProposalOutcome,
+    SystemFeedIssueView, TodayItemView, TodaySourceIssueView, TodaySourcesView, TodayView,
+    UntrustedText, WirePersonCard, ORDERING_RULE,
 };
 
 /// The system prompt (docs/specs/SLICE_005.md §3). Not a contract; the

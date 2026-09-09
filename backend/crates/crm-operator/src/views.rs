@@ -188,7 +188,10 @@ pub struct PersonDetail {
     pub contact_methods: Vec<ContactMethodView>,
     /// Latest 5.
     pub inquiries: Vec<InquiryView>,
-    /// Latest 20.
+    /// Latest 20, excluding `note` entries (Slice 015, docs/specs/
+    /// SLICE_015.md §5): `notes` below already represents them, and the
+    /// merged-sort truncation would otherwise let a burst of notes push
+    /// stage, assignment, and call facts out of the model's view.
     pub history: Vec<HistoryEntryView>,
     pub on_your_today: bool,
     /// True only when the Person is in the bounded, returned Today queue.
@@ -199,6 +202,24 @@ pub struct PersonDetail {
     /// SLICE_011e.md §5), so — like list names (011c) — they are never
     /// serialized as trusted strings in a model-facing tool result.
     pub tags: Vec<UntrustedText>,
+    /// Latest 5 live notes, in creation order (Slice 015, docs/specs/
+    /// SLICE_015.md §5, the `MAX_INQUIRIES` precedent). Note bodies are
+    /// user-authored text about a client sent to the model provider —
+    /// the same exposure class `inquiries[].message` already has
+    /// (D-053 §4).
+    pub notes: Vec<NoteView>,
+}
+
+/// One note in the Operator's `PersonDetail.notes` (docs/specs/
+/// SLICE_015.md §5): `author_display_name` is `None` for an imported note
+/// whose FUB author matched no member (§1 rule 1); `body` is subject to
+/// `UntrustedText`'s 500-character clip and whitespace flattening, the
+/// `inquiries[].message` precedent.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NoteView {
+    pub author_display_name: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub body: UntrustedText,
 }
 
 /// Source evaluation state shared by every Today-derived Operator output.

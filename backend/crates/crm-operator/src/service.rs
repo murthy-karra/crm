@@ -1037,6 +1037,7 @@ mod tests {
                 today_truncated: false,
                 sources: sources(),
                 tags: vec![],
+                notes: vec![],
             })
         }
         async fn get_today(

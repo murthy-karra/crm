@@ -52,3 +52,15 @@ all = { level = "deny", priority = -1 }
 # `cargo build` and `cargo test`/`cargo nextest run`.
 [profile.dev]
 debug = "line-tables-only"
+
+# Release profile (2026-09-09): size-first defaults measured against a
+# plain release build of crm-api (17.7 MB unstripped, 13.7 MB stripped).
+# `panic = "abort"` is deliberately absent: the Today query's savepoint
+# recovery and the test harness rely on normal unwinding.
+[profile.release]
+strip = true
+lto = "fat"
+codegen-units = 1
+# Size-first: measured 8.7 MB -> 7.4 MB on crm-api; the hot path is
+# Postgres round trips, not CPU, so the trade is accepted.
+opt-level = "s"

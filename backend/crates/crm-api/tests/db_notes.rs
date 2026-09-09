@@ -123,6 +123,7 @@ async fn note_check_constraints_matrix(migrator_pool: PgPool) {
     let f = fixture(&migrator_pool).await;
     let app_pool = crate::common::connect_as_app(&migrator_pool).await;
 
+    #[allow(clippy::too_many_arguments)]
     async fn insert(
         pool: &PgPool,
         org_id: Uuid,

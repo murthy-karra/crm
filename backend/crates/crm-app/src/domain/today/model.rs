@@ -6,7 +6,8 @@ use uuid::Uuid;
 
 use crate::domain::commands::ContactAttemptRef;
 use crate::domain::person::model::PersonSummary;
-use crate::ids::{InquiryId, SavedListId};
+use crate::domain::task::TaskKind;
+use crate::ids::{InquiryId, SavedListId, TaskId};
 
 /// The strict freshness window (§3): `latest_inquiry.received_at > now -
 /// 24h`. Computed once, in SQL, and never re-evaluated by `rank()`.
@@ -23,7 +24,7 @@ pub const FRESH_INQUIRY_WINDOW_HOURS: i64 = 24;
 /// when the Person also qualifies for it — see `rank::rank_one` — but
 /// never replaces `call_outcome_needed`, which is always appended last
 /// regardless of which reason(s) precede it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "code", rename_all = "snake_case")]
 pub enum TodayReason {
     NewInquiry {
@@ -47,6 +48,90 @@ pub enum TodayReason {
         list_id: SavedListId,
         name: String,
     },
+    /// The built-in task axis (Slice 016b, docs/specs/SLICE_016.md §5,
+    /// D-054 §1): `due_at < now` at evaluation time. Appended after any
+    /// list reasons and before `call_outcome_needed`, in `today::mod` —
+    /// never emitted by `rank()`.
+    TaskOverdue {
+        task_id: TaskId,
+        title: String,
+        kind: TaskKind,
+        due_at: DateTime<Utc>,
+    },
+    /// The built-in task axis: `due_at >= now`, within the 24h window
+    /// (docs/specs/SLICE_016.md §5).
+    TaskDue {
+        task_id: TaskId,
+        title: String,
+        kind: TaskKind,
+        due_at: DateTime<Utc>,
+    },
+}
+
+/// A hand-written, redacting `Debug` impl (never `#[derive(Debug)]`, the
+/// `crm_app::domain::task::Task` pattern): `TaskOverdue`/`TaskDue` carry a
+/// task title (docs/specs/SLICE_016.md §1 rule 7, §9), and `TodayList` is
+/// `Debug`-printed in tests and error paths, so a stray `?list`/`{:?}`
+/// must never print the title itself, only its length.
+impl std::fmt::Debug for TodayReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TodayReason::NewInquiry {
+                source,
+                received_at,
+            } => f
+                .debug_struct("NewInquiry")
+                .field("source", source)
+                .field("received_at", received_at)
+                .finish(),
+            TodayReason::NoContactAttempt { since } => f
+                .debug_struct("NoContactAttempt")
+                .field("since", since)
+                .finish(),
+            TodayReason::RepeatInquiry { inquiry_count } => f
+                .debug_struct("RepeatInquiry")
+                .field("inquiry_count", inquiry_count)
+                .finish(),
+            TodayReason::CallOutcomeNeeded { call_id, ended_at } => f
+                .debug_struct("CallOutcomeNeeded")
+                .field("call_id", call_id)
+                .field("ended_at", ended_at)
+                .finish(),
+            TodayReason::ClientReplied { occurred_at } => f
+                .debug_struct("ClientReplied")
+                .field("occurred_at", occurred_at)
+                .finish(),
+            TodayReason::ListMember { list_id, name } => f
+                .debug_struct("ListMember")
+                .field("list_id", list_id)
+                .field("name_chars", &name.chars().count())
+                .finish(),
+            TodayReason::TaskOverdue {
+                task_id,
+                title,
+                kind,
+                due_at,
+            } => f
+                .debug_struct("TaskOverdue")
+                .field("task_id", task_id)
+                .field("title_chars", &title.chars().count())
+                .field("kind", kind)
+                .field("due_at", due_at)
+                .finish(),
+            TodayReason::TaskDue {
+                task_id,
+                title,
+                kind,
+                due_at,
+            } => f
+                .debug_struct("TaskDue")
+                .field("task_id", task_id)
+                .field("title_chars", &title.chars().count())
+                .field("kind", kind)
+                .field("due_at", due_at)
+                .finish(),
+        }
+    }
 }
 
 /// Tiers in list order: `high`, `normal`, then `low` (D-033's "outcome

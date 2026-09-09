@@ -1513,3 +1513,106 @@ describe('People sort', () => {
     expect(wrapper.text()).toContain('Grace Hopper')
   })
 })
+
+// SLICE_014 §4, §8.7: hover/focus prefetch of the Person detail — one 150ms
+// dwell timer, latest row wins, focusin behaves like hover, and a click
+// within the default 30s staleTime renders the preview without the
+// "Loading person…" block since the detail is already cached.
+describe('People row hover/focus prefetch (SLICE_014 §4)', () => {
+  function threeRowResult(): PeopleResponse {
+    return {
+      people: ['row-1', 'row-2', 'row-3'].map((id, index) => ({
+        id, first_name: `Row ${index + 1}`, last_name: '', display_name: `Row ${index + 1}`,
+        stage: { id: STAGE_ID, name: 'Lead' }, assigned_user: null,
+        primary_email: null, primary_phone: null, inquiry_count: 0,
+        last_inquiry_at: null, created_at: '2026-08-22T09:00:00.000Z',
+      })),
+      truncated: false,
+    }
+  }
+
+  beforeEach(() => { vi.useFakeTimers() })
+  afterEach(() => { vi.useRealTimers() })
+
+  it('hovering a row for 150ms issues exactly one detail request', async () => {
+    stub({ people: () => threeRowResult() })
+    const { wrapper } = await mountView()
+    const row = wrapper.findAll('tbody tr')[0]!
+    await row.trigger('pointerenter')
+    expect(apiFetchMock.mock.calls.filter(([p]) => p === '/people/row-1')).toHaveLength(0)
+    await vi.advanceTimersByTimeAsync(150)
+    await flushPromises()
+    expect(apiFetchMock.mock.calls.filter(([p]) => p === '/people/row-1')).toHaveLength(1)
+  })
+
+  // Round-1 review fix, item 8: the exact 150ms boundary — nothing at
+  // 149ms, exactly one request the instant the timer reaches 150ms.
+  it('issues no request at 149ms, then exactly one at 150ms', async () => {
+    stub({ people: () => threeRowResult() })
+    const { wrapper } = await mountView()
+    const row = wrapper.findAll('tbody tr')[0]!
+    await row.trigger('pointerenter')
+    await vi.advanceTimersByTimeAsync(149)
+    await flushPromises()
+    expect(apiFetchMock.mock.calls.filter(([p]) => p === '/people/row-1')).toHaveLength(0)
+
+    await vi.advanceTimersByTimeAsync(1)
+    await flushPromises()
+    expect(apiFetchMock.mock.calls.filter(([p]) => p === '/people/row-1')).toHaveLength(1)
+  })
+
+  // Round-1 review fix, item 8: unmounting before the dwell timer fires
+  // (onBeforeUnmount clears it) must issue no request at all.
+  it('issues no request if the view unmounts before the 150ms dwell elapses', async () => {
+    stub({ people: () => threeRowResult() })
+    const { wrapper } = await mountView()
+    const row = wrapper.findAll('tbody tr')[0]!
+    await row.trigger('pointerenter')
+    wrapper.unmount()
+    await vi.advanceTimersByTimeAsync(150)
+    await flushPromises()
+    expect(apiFetchMock.mock.calls.filter(([p]) => p === '/people/row-1')).toHaveLength(0)
+  })
+
+  it('crossing three rows within 150ms issues at most one request, for the latest row', async () => {
+    stub({ people: () => threeRowResult() })
+    const { wrapper } = await mountView()
+    const rows = wrapper.findAll('tbody tr')
+    await rows[0]!.trigger('pointerenter')
+    await vi.advanceTimersByTimeAsync(50)
+    await rows[1]!.trigger('pointerenter')
+    await vi.advanceTimersByTimeAsync(50)
+    await rows[2]!.trigger('pointerenter')
+    await vi.advanceTimersByTimeAsync(150)
+    await flushPromises()
+    const detailCalls = apiFetchMock.mock.calls.filter(([p]) => p.startsWith('/people/row-'))
+    expect(detailCalls).toHaveLength(1)
+    expect(detailCalls[0]![0]).toBe('/people/row-3')
+  })
+
+  it('focusin behaves like pointerenter', async () => {
+    stub({ people: () => threeRowResult() })
+    const { wrapper } = await mountView()
+    await wrapper.findAll('tbody tr')[0]!.trigger('focusin')
+    await vi.advanceTimersByTimeAsync(150)
+    await flushPromises()
+    expect(apiFetchMock.mock.calls.filter(([p]) => p === '/people/row-1')).toHaveLength(1)
+  })
+
+  it('opening the preview within 30s of the prefetch renders without the Loading block', async () => {
+    stub({ people: () => threeRowResult(), person: (id) => detail(`Loaded ${id}`, id) })
+    const { wrapper } = await mountView()
+    await wrapper.findAll('tbody tr')[0]!.trigger('pointerenter')
+    await vi.advanceTimersByTimeAsync(150)
+    await flushPromises()
+    expect(apiFetchMock.mock.calls.filter(([p]) => p === '/people/row-1')).toHaveLength(1)
+
+    await wrapper.get('a[href="/people/row-1"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="person-preview"]').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('Loading person')
+    // The click did not issue a second request — the prefetch already
+    // populated the cache within the default staleTime.
+    expect(apiFetchMock.mock.calls.filter(([p]) => p === '/people/row-1')).toHaveLength(1)
+  })
+})

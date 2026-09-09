@@ -31,6 +31,11 @@ const props = defineProps<{
   /** Row click as an action (e.g. open a dialog) instead of a route.
    *  SLICE_007e: the Unresolved table's admin-only detail dialog. */
   onRowClick?: (row: TData) => void
+  /** SLICE_014 §4: fired on `pointerenter`/`focusin` of a row — additive
+   *  hover/focus-intent signal for a caller-owned prefetch dwell timer
+   *  (PeopleView.vue). Optional and unused by every other DataTable
+   *  consumer, which render exactly as before. */
+  onRowIntent?: (row: TData) => void
   selectedRowKey?: string
   /** Noun for the footer count, e.g. "people", "unresolved leads". */
   countNoun: string
@@ -228,6 +233,8 @@ function clickLink(event: MouseEvent, row: TData) {
               :class="rowTo || onRowClick ? 'cursor-pointer hover:bg-surface-1' : ''"
               :data-selected="selectedRowKey === rowKey(row.original)"
               @click="clickRow($event, row.original)"
+              @pointerenter="onRowIntent?.(row.original)"
+              @focusin="onRowIntent?.(row.original)"
             >
               <td
                 v-for="(cell, index) in row.getVisibleCells()"

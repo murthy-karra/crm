@@ -20,6 +20,7 @@ import {
   useDisableTodaySourceMutation,
   useEnableTodaySourceMutation,
   useDeleteSavedListMutation,
+  fetchPerson,
   useInquirySources,
   useMe,
   useMembers,
@@ -1025,6 +1026,36 @@ function closePreview() {
 watch([orgId, serializedFilter, () => props.savedListId], () => { selectedId.value = '' }, { flush: 'sync' })
 watch(selectedPerson, (person) => { if (!person) selectedId.value = '' })
 
+// ---- Hover/focus prefetch of the Person detail (SLICE_014 §4) -------------
+// One dwell timer; a new row's intent clears any still-pending previous one
+// (latest row wins, cleared on leave — moving to a different row before the
+// timer fires cancels prefetching the row you've since left), so crossing
+// several rows within the window issues at most one request. In-flight
+// requests are not aborted on leave (§4): once started, we let it finish and
+// populate the cache for a possible click; `prefetchQuery` also dedupes
+// against an in-flight identical request rather than issuing a second one.
+const ROW_INTENT_DWELL_MS = 150
+let rowIntentTimer: ReturnType<typeof setTimeout> | null = null
+function clearRowIntentTimer() {
+  if (rowIntentTimer !== null) {
+    clearTimeout(rowIntentTimer)
+    rowIntentTimer = null
+  }
+}
+function onRowIntent(person: PersonSummary) {
+  clearRowIntentTimer()
+  const id = orgId.value
+  if (id === '') return
+  rowIntentTimer = setTimeout(() => {
+    rowIntentTimer = null
+    void queryClient.prefetchQuery({
+      queryKey: queryKeys.person(id, person.id),
+      queryFn: ({ signal }) => fetchPerson(person.id, signal),
+    })
+  }, ROW_INTENT_DWELL_MS)
+}
+onBeforeUnmount(clearRowIntentTimer)
+
 const myPeople = computed(() => clauses.value.length === 1 &&
   clauses.value[0]?.kind === 'assigned_to' && clauses.value[0].assignees.length === 1 &&
   clauses.value[0].assignees[0] === 'me')
@@ -1524,6 +1555,7 @@ const columns: ColumnDef<PersonSummary>[] = [
             <DataTable
               class="people-table"
               :on-row-click="selectPerson"
+              :on-row-intent="onRowIntent"
               :selected-row-key="selectedId"
               :data="people"
               :columns="columns"

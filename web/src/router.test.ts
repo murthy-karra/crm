@@ -7,13 +7,20 @@ import type { MeResponse } from './api/types'
 // Partial mock (SLICE_003 useRealtime.test.ts's pattern): keep the real
 // `queryKeys` factory (router.ts's guard depends on its exact key shape),
 // replace only `fetchMe` so each test controls what the "session" resolves
-// to without a network call.
+// to without a network call. `prefetchTodayData` is ALSO replaced here —
+// SLICE_014 §4's guard calls the real one on every Today navigation, and
+// the real one calls the real (unmocked in this file) `apiFetch`, which
+// would otherwise issue a genuine network request to whatever origin this
+// test environment resolves `/api` against every time one of the many
+// existing navigation tests below lands on /today. The dedicated
+// "Today prefetch" describe below restores the real implementation only
+// for its own assertions.
 vi.mock('./api/queries', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./api/queries')>()
-  return { ...actual, fetchMe: vi.fn() }
+  return { ...actual, fetchMe: vi.fn(), prefetchTodayData: vi.fn() }
 })
 
-const { fetchMe } = await import('./api/queries')
+const { fetchMe, prefetchTodayData } = await import('./api/queries')
 const { createAppRouter } = await import('./router')
 
 function meResponse(overrides: Partial<MeResponse>): MeResponse {
@@ -42,6 +49,7 @@ function freshRouter() {
 beforeEach(() => {
   queryClient.clear()
   vi.mocked(fetchMe).mockReset()
+  vi.mocked(prefetchTodayData).mockReset()
 })
 
 describe('router guards (SLICE_004 §10)', () => {
@@ -379,6 +387,54 @@ describe('router guards (SLICE_004 §10)', () => {
       const router = freshRouter()
       await router.push('/today')
       expect(router.currentRoute.value.path).toBe('/login')
+    })
+  })
+
+  // SLICE_014 §4, §8.6: the guard calls `prefetchTodayData` as soon as
+  // identity resolves for a Today target with an Organization, and only
+  // then. `prefetchTodayData` itself (its request shape, its keys) is
+  // covered directly in queries.test.ts; this only checks the guard calls
+  // it at the right time, with the right session, and never elsewhere.
+  describe('Today prefetch (SLICE_014 §4)', () => {
+    it('calls prefetchTodayData with the resolved session once a member reaches /today', async () => {
+      vi.mocked(fetchMe).mockResolvedValue(MEMBER)
+      const router = freshRouter()
+      await router.push('/today')
+      expect(router.currentRoute.value.path).toBe('/today')
+      expect(prefetchTodayData).toHaveBeenCalledTimes(1)
+      expect(prefetchTodayData).toHaveBeenCalledWith(queryClient, MEMBER)
+    })
+
+    it('calls it again reaching /today via the root redirect', async () => {
+      vi.mocked(fetchMe).mockResolvedValue(ADMIN)
+      const router = freshRouter()
+      await router.push('/')
+      expect(router.currentRoute.value.path).toBe('/today')
+      expect(prefetchTodayData).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not call it for a non-Today target', async () => {
+      vi.mocked(fetchMe).mockResolvedValue(MEMBER)
+      const router = freshRouter()
+      await router.push('/people')
+      expect(router.currentRoute.value.path).toBe('/people')
+      expect(prefetchTodayData).not.toHaveBeenCalled()
+    })
+
+    it('does not call it for a platform-only session redirected away from /today', async () => {
+      vi.mocked(fetchMe).mockResolvedValue(PLATFORM_ONLY)
+      const router = freshRouter()
+      await router.push('/today')
+      expect(router.currentRoute.value.path).toBe('/platform')
+      expect(prefetchTodayData).not.toHaveBeenCalled()
+    })
+
+    it('does not call it for an unauthenticated visitor bounced to /login', async () => {
+      vi.mocked(fetchMe).mockRejectedValue(new ApiError(401, 'unauthenticated'))
+      const router = freshRouter()
+      await router.push('/today')
+      expect(router.currentRoute.value.path).toBe('/login')
+      expect(prefetchTodayData).not.toHaveBeenCalled()
     })
   })
 })

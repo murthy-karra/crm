@@ -12,7 +12,11 @@ export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
 /** UI_STYLE.md §3 semantic badge tints — the closed set; do not invent new ones. */
 export type BadgeTint = 'warm' | 'neutral' | 'indigo' | 'green' | 'red'
 
-const BUTTON_BASE = `inline-flex items-center justify-center gap-2 h-10 px-4 rounded-lg text-body font-medium whitespace-nowrap transition-colors duration-150 ease-out disabled:opacity-50 disabled:pointer-events-none ${FOCUS_RING} focus-visible:ring-offset-surface-1`
+// Exported (SLICE_014 §5) so FilterBar.vue's toolbar triggers can build a
+// selected-state class string (surface-2 background, full text colour) that
+// stays byte-identical in layout to the ordinary variants below, without
+// re-typing this recipe by hand and risking it drifting from BUTTON_VARIANTS.
+export const BUTTON_BASE = `inline-flex items-center justify-center gap-2 h-10 px-4 rounded-lg text-body font-medium whitespace-nowrap transition-colors duration-150 ease-out disabled:opacity-50 disabled:pointer-events-none ${FOCUS_RING} focus-visible:ring-offset-surface-1`
 
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
   primary: `${BUTTON_BASE} glass-primary bg-accent text-white hover:bg-accent-hover`,

@@ -372,6 +372,58 @@ describe('FilterBar derived boolean chips (SLICE_011d §2)', () => {
   })
 })
 
+// SLICE_014 §5: FilterBar residue — selected-state toolbar triggers, a
+// click-to-edit chevron on the chip, and Clear all hidden when it would do
+// nothing.
+describe('FilterBar toolbar trigger and chip affordances (SLICE_014 §5)', () => {
+  it('shows a plain trigger unselected, and a selected state with a count once its clause is applied', async () => {
+    setup()
+    const stageTrigger = () => get('filter-trigger-stage')
+    expect(stageTrigger().text()).toBe('Stage')
+    expect(stageTrigger().classes()).not.toContain('bg-surface-2')
+
+    await open('stage')
+    await check('filter-option-stage-1', true)
+    await check('filter-option-stage-2', true)
+    await click('filter-editor-done')
+
+    expect(stageTrigger().text()).toBe('Stage · 2')
+    expect(stageTrigger().classes()).toContain('bg-surface-2')
+    expect(stageTrigger().classes()).toContain('text-text')
+
+    // The other trigger, still unapplied, is untouched.
+    expect(get('filter-trigger-assigned_to').text()).toBe('Assignee')
+    expect(get('filter-trigger-assigned_to').classes()).not.toContain('bg-surface-2')
+  })
+
+  it('gives the chip edit button a chevron after the text while keeping its Edit accessible name', () => {
+    setup([{ kind: 'stage', stage_ids: ['stage-1'] }])
+    const editButton = get('filter-chip-stage').get('button')
+    expect(editButton.attributes('aria-label')).toBe('Edit Stage: Lead')
+    expect(editButton.find('svg.lucide-chevron-down').exists()).toBe(true)
+    expect(editButton.classes()).toContain('min-h-10')
+  })
+
+  it('shows Clear all once a non-locked clause joins a locked-only state', async () => {
+    const wrapper = setup(
+      [{ kind: 'awaiting_response', value: true }],
+      { lockedAnchorKind: 'awaiting_response' },
+    )
+    expect(body().find('[data-testid="filter-clear-all"]').exists()).toBe(false)
+
+    await open('stage')
+    await check('filter-option-stage-1', true)
+    await click('filter-editor-done')
+
+    expect(get('filter-clear-all').element).toBeDefined()
+    await click('filter-clear-all')
+    expect(wrapper.props('clauses')).toEqual([{ kind: 'awaiting_response', value: true }])
+    // The locked anchor survives; the non-locked clause that made Clear all
+    // appear is gone, so it is hidden again.
+    expect(body().find('[data-testid="filter-clear-all"]').exists()).toBe(false)
+  })
+})
+
 // SLICE_011d §1 rules 3-4, §6: the Today rules editor's locked-clause mode.
 describe('FilterBar locked-clause mode (SLICE_011d §1 rules 3-4, §6)', () => {
   it('shows the locked anchor chip without a remove control and blocks negation/removal in its editor', async () => {
@@ -390,8 +442,9 @@ describe('FilterBar locked-clause mode (SLICE_011d §1 rules 3-4, §6)', () => {
     expect(get('filter-anchor-locked-hint').element).toBeDefined()
 
     await click('filter-editor-done')
-    await click('filter-clear-all')
-    expect(wrapper.props('clauses')).toEqual([{ kind: 'awaiting_response', value: true }])
+    // SLICE_014 §5: Clear all does nothing in locked-only mode, so it is
+    // hidden here rather than shown as a dead control.
+    expect(body().find('[data-testid="filter-clear-all"]').exists()).toBe(false)
   })
 
   it('keeps `me` checked, disabled and un-removable in the assignee editor when requireAssigneeMe is set', async () => {

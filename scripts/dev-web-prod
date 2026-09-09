@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# vite.config.ts sets envDir to the repo root, so it finds ../.env
+# regardless of this script's working directory (D-013). Always builds
+# first: web/dist is gitignored and goes stale (SLICE_014 §2 rule 1).
+# Serves the build with Vite's preview server on the same port dev-web
+# uses (CRM_WEB_PORT, default 5173, strictPort) — only one of dev-web or
+# dev-web-prod can hold that port at a time. A code change made after this
+# script starts is invisible until it is re-run and the page reloaded.
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "$script_dir/.." && pwd)"
+
+cd "$repo_root/web"
+pnpm run build
+exec pnpm exec vite preview

@@ -1,11 +1,29 @@
 # Project State
 
-Last updated: 2026-09-08 (Slice 014 merged and pushed; the LATER batch lane
-started).
+Last updated: 2026-09-08 (the LATER batch merged to local main; crm_dev
+migrated; the tunnel serves the merged build; no slice active).
 
 ## Current phase
 
-**LATER BATCH (2026-09-08) — LANE IN IMPLEMENTATION.** The user chose the
+**LATER BATCH (2026-09-08) — COMPLETE AND MERGED TO LOCAL MAIN** at `3ff6c5f`
+(with the user's approval; not pushed, not deployed). Source
+`chore/later-batch-2026-09-08` at `5fe4231` (seven commits incl. the
+round-1 fixes `28a3bf1` and the
+[verification record](../tasks/LATER_BATCH_2026-09-08_VERIFICATION.md)).
+Final-tree gates run once by the coordinator: `sqlx-prepare` clean, `check`
+green (757 Rust, 656 Web), `check-db` 622 of 622 first run. Review round 1
+of two: reviewer READY WITH FIXES, tester one blocking regression (fixed),
+all applied; round 2 not needed. Runtime updated with approval: `crm_dev`
+migrated (`20260911000001` applied; triggers only, the API needed no
+restart), the production web server rebuilt and relaunched from `main`
+(preview pid 28850, 20:09), branch and worktree `../crm-worktrees/later-1`
+deleted. Open flakes carried forward: the `db_calls` correction-ordering
+test (strict assertion kept, unreproduced in 21 runs) and the
+`db_today_system_feed_evaluation` stage-clause test (one load failure, passes
+isolated). `main` is ahead of `origin/main`; push and deployment are not
+authorized.
+
+Previously: **LATER BATCH (2026-09-08) — LANE IN IMPLEMENTATION.** The user chose the
 "worth a small batch soon" group from the LATER lists: `inquiry` append-only
 triggers (one migration), the `db_calls` timing flake, splitting the three
 largest test files, field-only `onSuccess` writes in the optimistic
@@ -603,7 +621,10 @@ clear-all.
 
 ## Current slice
 
-No slice is active. Last completed: Slice 014 (`docs/specs/SLICE_014.md`,
+No slice is active. Last completed: the LATER batch
+(`docs/tasks/LATER_BATCH_2026-09-08.md`, verification
+`docs/tasks/LATER_BATCH_2026-09-08_VERIFICATION.md`, merged 2026-09-08),
+Slice 014 (`docs/specs/SLICE_014.md`,
 verification `docs/tasks/SLICE_014_VERIFICATION.md`, merged 2026-09-08),
 Slices 012 (`docs/specs/SLICE_012.md`,
 verification `docs/tasks/SLICE_012_VERIFICATION.md`) and 013
@@ -699,6 +720,7 @@ together on 2026-09-06).
 | 012 | Denormalized last-activity columns on Person, trigger-maintained (D-052); fourteen statements read the columns; equivalence gate; perf archive | `26ddab7` (branch head `e32ffd7`), local only |
 | 013 | Operator `filter_people` and `run_saved_list` read-only tools, name-based, D-046-faithful, `MAX_REFERENCES` 25 | `9af47c1` (branch head `151d38a`), pushed 2026-09-08 |
 | 014 | Production bundle through the tunnel (`dev-web-prod`), optimistic stage/assignment/tag mutations, Today chunk preload and data prefetch, hover prefetch of Person detail, FilterBar residue | `ac270fb` (branch head `3495f71`), pushed 2026-09-08 |
+| — | LATER batch: `inquiry` append-only triggers (cascade-aware), three largest test files split into nine, field-only success writes and `isMutating` guards on the Person mutations | `3ff6c5f` (branch head `5fe4231`), local only |
 | — | Gate-speedup chunk (check 35m→79s, check-db 37m→~2m) | 2026-08-28 |
 | — | Test-binary consolidation (40 files → 1 binary) | `6427ee8` |
 
@@ -922,8 +944,10 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. **Slices 012, 013 and 014 done.** Candidates for the next request,
-   unordered: push `main`; the 011d–014 LATER batches (person-state 503 test,
+1. **Slices 012–014 and the LATER batch done.** Candidates for the next
+   request, unordered: push `main`; the remaining LATER items (accessibility,
+   test hardenings, performance levers, design residue; see the verification
+   records) (person-state 503 test,
    equivalence pins, feeds page first-load error test, the `db_calls` timing
    flake, splitting the three largest test files, popover
    `aria-activedescendant`, `inquiry` append-only triggers, the exact-500

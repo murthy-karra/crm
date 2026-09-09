@@ -870,3 +870,101 @@ async fn note_changed_payload_carries_no_body_key(migrator_pool: PgPool) {
     );
     let _ = note;
 }
+
+/// docs/specs/SLICE_016.md §6, D-023 rule 7: the `task_changed` event's
+/// parsed payload carries no `title` key anywhere in the envelope — ids
+/// only, exactly like every other `person.changed` variant. Command-level
+/// so the sentinel title cannot leak through any layer this slice
+/// touches on its way to the wire; also pins "exactly one event, and only
+/// on a changing write" across create and a no-op update.
+#[sqlx::test]
+#[ignore]
+async fn task_changed_payload_carries_no_title_key_and_none_on_changed_false(
+    migrator_pool: PgPool,
+) {
+    let (org_id, member_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Acme Realty",
+        "alice-task-realtime@acme.test",
+        "Alice",
+        "pw",
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let stage_id: Uuid = sqlx::query_scalar(
+        "SELECT id FROM stage WHERE organization_id = $1 ORDER BY position LIMIT 1",
+    )
+    .bind(org_id)
+    .fetch_one(&app_pool)
+    .await
+    .unwrap();
+    let person_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO person (organization_id, first_name, stage_id) VALUES ($1, 'Fixture', $2) RETURNING id",
+    )
+    .bind(org_id)
+    .bind(stage_id)
+    .fetch_one(&app_pool)
+    .await
+    .unwrap();
+
+    let publisher = Publisher::recording();
+    let ctx = crm_api::domain::envelope::CommandContext {
+        organization_id: crm_api::ids::OrganizationId::new(org_id),
+        actor_user_id: crm_api::ids::UserId::new(member_id),
+        origin: crm_api::domain::envelope::Origin::WebSession,
+        correlation_id: crm_api::ids::CorrelationId::new(Uuid::new_v4()),
+    };
+    const SENTINEL: &str = "SENTINEL_TASK_TITLE_DO_NOT_LEAK";
+    let task = crm_api::domain::task::create_task(
+        &app_pool,
+        &publisher,
+        &ctx,
+        crm_api::domain::task::CreateTask {
+            person_id: crm_api::ids::PersonId::new(person_id),
+            title: SENTINEL.to_string(),
+            kind: crm_api::domain::task::TaskKind::default(),
+            due_at: None,
+            assignee_user_id: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    let events = recorded(&publisher).await;
+    assert_eq!(events.len(), 1, "exactly one event on create");
+    let payload = &events[0].1;
+    assert_eq!(payload["data"]["change"], "task_changed");
+    assert!(
+        payload.get("title").is_none() && payload["data"].get("title").is_none(),
+        "the event must carry no top-level or data-level title key: {payload}"
+    );
+    let serialized = payload.to_string();
+    assert!(
+        !serialized.contains(SENTINEL),
+        "the task title must never reach the realtime payload: {serialized}"
+    );
+
+    // A no-op update (`changed: false`) publishes nothing further.
+    let events_before = recorded(&publisher).await.len();
+    let outcome = crm_api::domain::task::update_task(
+        &app_pool,
+        &publisher,
+        &ctx,
+        crm_api::domain::task::UpdateTask {
+            person_id: crm_api::ids::PersonId::new(person_id),
+            task_id: task.id,
+            title: task.title.clone(),
+            kind: task.kind,
+            due_at: task.due_at,
+            assignee_user_id: crm_api::ids::UserId::new(member_id),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(!outcome.changed);
+    assert_eq!(
+        recorded(&publisher).await.len(),
+        events_before,
+        "a changed:false update must publish nothing"
+    );
+}

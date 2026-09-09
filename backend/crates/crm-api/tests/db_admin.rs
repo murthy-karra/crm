@@ -418,6 +418,61 @@ async fn platform_admin_with_zero_memberships_has_null_organization_and_is_401_o
     .await;
     assert_eq!(note_delete_resp.status(), StatusCode::UNAUTHORIZED);
 
+    // Slice 016a (docs/specs/SLICE_016.md §9): the six task routes join
+    // this enumeration too, the note precedent above — explicit
+    // POST/PUT/DELETE since none of the six is a GET.
+    let fake_task_id = Uuid::new_v4();
+    let task_post_resp = post_json_with_cookie(
+        &router,
+        &format!("/api/people/{fake_person_id}/tasks"),
+        &cookie,
+        serde_json::json!({ "title": "Should be 401" }),
+    )
+    .await;
+    assert_eq!(task_post_resp.status(), StatusCode::UNAUTHORIZED);
+    let task_put_resp = put_json_with_cookie(
+        &router,
+        &format!("/api/people/{fake_person_id}/tasks/{fake_task_id}"),
+        &cookie,
+        serde_json::json!({
+            "title": "Should be 401", "kind": "follow_up", "due_at": null,
+            "assignee_user_id": Uuid::new_v4(),
+        }),
+    )
+    .await;
+    assert_eq!(task_put_resp.status(), StatusCode::UNAUTHORIZED);
+    let task_complete_resp = post_json_with_cookie(
+        &router,
+        &format!("/api/people/{fake_person_id}/tasks/{fake_task_id}/complete"),
+        &cookie,
+        serde_json::json!({}),
+    )
+    .await;
+    assert_eq!(task_complete_resp.status(), StatusCode::UNAUTHORIZED);
+    let task_reopen_resp = post_json_with_cookie(
+        &router,
+        &format!("/api/people/{fake_person_id}/tasks/{fake_task_id}/reopen"),
+        &cookie,
+        serde_json::json!({}),
+    )
+    .await;
+    assert_eq!(task_reopen_resp.status(), StatusCode::UNAUTHORIZED);
+    let task_snooze_resp = post_json_with_cookie(
+        &router,
+        &format!("/api/people/{fake_person_id}/tasks/{fake_task_id}/snooze"),
+        &cookie,
+        serde_json::json!({ "due_at": chrono::Utc::now() }),
+    )
+    .await;
+    assert_eq!(task_snooze_resp.status(), StatusCode::UNAUTHORIZED);
+    let task_delete_resp = delete_with_cookie(
+        &router,
+        &format!("/api/people/{fake_person_id}/tasks/{fake_task_id}"),
+        &cookie,
+    )
+    .await;
+    assert_eq!(task_delete_resp.status(), StatusCode::UNAUTHORIZED);
+
     // Lists and creates Organizations.
     let list_resp = get_with_cookie(&router, "/api/platform/organizations", &cookie).await;
     assert_eq!(list_resp.status(), StatusCode::OK);

@@ -10,10 +10,16 @@ import type { FilterClause, SystemFeedIssue, TodayFeedKey } from '../api/types'
  * views read it from). */
 export const TODAY_FEED_ORDER: TodayFeedKey[] = ['unanswered_inquiry', 'client_replied', 'call_outcome_needed']
 
-export const TODAY_FEED_LABEL: Record<TodayFeedKey, string> = {
+// Slice 016b (docs/specs/SLICE_016.md §5, §8): `'task_due'` joins this
+// label map — a distinct, WIDER record type than `TodayFeedKey` itself
+// (the admin PUT paths' closed vocabulary, not widened) so the same map
+// serves both `system_feed_issues` renderings without a cast at each
+// call site.
+export const TODAY_FEED_LABEL: Record<TodayFeedKey | 'task_due', string> = {
   unanswered_inquiry: 'Unanswered inquiry',
   client_replied: 'Client replied',
   call_outcome_needed: 'Call outcome needed',
+  task_due: 'Due tasks',
 }
 
 /** §2's canonical defaults table: each feed's derived axis, `value: true`
@@ -96,4 +102,18 @@ export function adminFeedStatus(feed: {
  * the sentence, matching the existing today-source issue copy style. */
 export function fallbackFeedMessage(issue: SystemFeedIssue): string {
   return `The ${TODAY_FEED_LABEL[issue.feed_key].toLowerCase()} rule is invalid; the default rule is being used.`
+}
+
+/** Slice 016b (docs/specs/SLICE_016.md §8): the non-fallback "<label> could
+ * not load." sentence for a `system_feed_issues` entry, generalized to
+ * render "A Today rule could not load." for a key this bundle's
+ * `TODAY_FEED_LABEL` does not recognize — a future additive token, the
+ * same forward-compatibility discipline as `HistoryEntry`'s generic
+ * "Activity" fallback — instead of interpolating `undefined`. `feedKey` is
+ * `string`, wider than `SystemFeedIssue['feed_key']`'s own declared union,
+ * specifically so this defensive path type-checks for a value outside
+ * that union (parsed JSON has no compile-time guarantee of matching it). */
+export function todayFeedIssueMessage(feedKey: string): string {
+  const label = (TODAY_FEED_LABEL as Record<string, string | undefined>)[feedKey]
+  return label ? `${label} could not load.` : 'A Today rule could not load.'
 }

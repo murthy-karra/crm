@@ -119,6 +119,10 @@ function stub(options: StubOptions = {}) {
       if (response instanceof ApiError) throw response
       return response
     }
+    // Slice 016b: TodayView's own Tasks panel read — every test in this
+    // file is about the SOURCES/system-feed-issue notice, not tasks, so a
+    // fixed empty response keeps them unaffected.
+    if (path === '/tasks?scope=mine') return { tasks: [], generated_at: new Date().toISOString(), truncated: false }
     throw new Error(`unexpected ${init?.method ?? 'GET'} ${path}`)
   })
 }

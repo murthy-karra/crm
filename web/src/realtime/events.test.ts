@@ -81,16 +81,19 @@ describe('invalidationsFor', () => {
   })
 
   // SLICE_016.md §6, rule 5/6: `task_changed` invalidates the Person
-  // detail AND Today (a due task changes the viewer's Today) — but,
-  // unlike every full `person.changed` variant above, never People or
-  // list counts. Full-array `toEqual` pins BOTH halves of that claim at
-  // once: an accidental extra key (People, saved-list counts) or a
-  // missing one (Today) would both fail this exact assertion, where a
-  // `.some(...)`/subset check would only catch the second.
-  it('maps task_changed to person and today only, never people or list counts', () => {
+  // detail, Today (a due task changes the viewer's Today) AND (016b) the
+  // Tasks-panel prefix — but, unlike every full `person.changed` variant
+  // above, never People or list counts. Full-array `toEqual` pins ALL
+  // three claims at once: an accidental extra key (People, saved-list
+  // counts) or a missing one (Today, the tasks prefix) would both fail
+  // this exact assertion, where a `.some(...)`/subset check would only
+  // catch the second. `queryKeys.tasks(ORG_ID)` (no actorId) is the whole
+  // prefix — every actor's panel cache under this Organization.
+  it('maps task_changed to person, today and the tasks prefix only, never people or list counts', () => {
     expect(invalidationsFor(personChanged('task_changed'), ORG_ID)).toEqual([
       queryKeys.person(ORG_ID, PERSON_ID),
       queryKeys.today(ORG_ID),
+      queryKeys.tasks(ORG_ID),
     ])
   })
 

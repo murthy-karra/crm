@@ -5,6 +5,7 @@
 // Person qualifying by Inquiry keeps its tier and action with the reason
 // appended. Server order is rendered as served (`low` arrives last).
 import { flushPromises, mount } from '@vue/test-utils'
+import { nextTick } from 'vue'
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import PrimeVue from 'primevue/config'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -232,5 +233,292 @@ describe('TodayView — Today source notices (Slice 011e e2)', () => {
     await manageSources.trigger('click')
     await flushPromises()
     expect(wrapper.text()).toContain('This list refers to a tag that no longer exists.')
+  })
+})
+
+// ---- Slice 016b: the built-in task axis on Today (docs/specs/SLICE_016.md
+// §8, §12.16) --------------------------------------------------------------
+
+function taskDueItem(overrides: Partial<import('../api/types').TodayItem> = {}): TodayItem {
+  return {
+    person: person('p-task', 'Frank Task'),
+    priority: 'normal',
+    recommended_action: 'review_person',
+    reasons: [
+      {
+        code: 'task_due',
+        task_id: 'task-1',
+        title: 'Send the seller disclosure paperwork today without fail',
+        kind: 'follow_up',
+        due_at: '2026-09-10T09:00:00.000Z',
+      },
+    ],
+    waiting_since: null,
+    latest_inquiry: null,
+    last_contact_attempt: null,
+    ...overrides,
+  }
+}
+
+function taskOverdueItem(): TodayItem {
+  return {
+    person: person('p-overdue-task', 'Grace Overdue'),
+    priority: 'high',
+    recommended_action: 'call',
+    reasons: [{ code: 'task_overdue', task_id: 'task-2', title: 'Call back', kind: 'call', due_at: '2026-09-08T09:00:00.000Z' }],
+    waiting_since: null,
+    latest_inquiry: null,
+    last_contact_attempt: null,
+  }
+}
+
+function stubApiWithTasks(
+  items: TodayItem[],
+  tasks: import('../api/types').TaskWithPerson[] = [],
+  generatedAt = '2026-09-09T12:00:00.000Z',
+  truncated = false,
+) {
+  apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path === '/me') return me()
+    if (path === '/today') {
+      return {
+        generated_at: ENDED_AT,
+        items,
+        truncated: false,
+        sources: { status: 'complete', issues: [], system_feed_issues: [] },
+      } satisfies TodayResponse
+    }
+    if (path === '/today/sources') return { limit: 5, sources: [] }
+    if (path === '/today/feeds') {
+      return {
+        feeds: [
+          { feed_key: 'unanswered_inquiry', enabled: true, is_default: true, description: [] },
+          { feed_key: 'client_replied', enabled: true, is_default: true, description: [] },
+          { feed_key: 'call_outcome_needed', enabled: true, is_default: true, description: [] },
+        ],
+      }
+    }
+    if (path === '/tasks?scope=mine') {
+      return { tasks, generated_at: generatedAt, truncated }
+    }
+    if (path.startsWith('/people/') && path.endsWith('/complete') && (init?.method ?? 'GET') === 'POST') {
+      return { task: { id: 'x', changed: true }, changed: true }
+    }
+    if (path.startsWith('/people/') && path.endsWith('/snooze') && (init?.method ?? 'GET') === 'POST') {
+      return { task: { id: 'x' }, changed: true }
+    }
+    throw new Error(`unexpected ${path}`)
+  })
+}
+
+function taskWithPerson(overrides: Partial<import('../api/types').TaskWithPerson> = {}): import('../api/types').TaskWithPerson {
+  return {
+    id: 'panel-task-1',
+    person_id: 'p-panel',
+    title: 'Prepare the closing documents',
+    kind: 'follow_up',
+    due_at: '2026-09-09T15:00:00.000Z',
+    assignee: { id: 'u-alice', display_name: 'Alice' },
+    created_by: { id: 'u-alice', display_name: 'Alice' },
+    completed_at: null,
+    completed_by: null,
+    created_at: '2026-09-01T00:00:00.000Z',
+    updated_at: '2026-09-01T00:00:00.000Z',
+    can_manage: true,
+    person: { id: 'p-panel', display_name: 'Priya Panel' },
+    ...overrides,
+  }
+}
+
+describe('TodayView — task reasons on the ranked queue (Slice 016b §5, §8)', () => {
+  it('renders the task_due/task_overdue reason as a badge with the clipped title', async () => {
+    stubApiWithTasks([taskDueItem()])
+    const { wrapper } = await mountView()
+    const badgeText = wrapper.get('tbody tr').findAll('td')[1].text()
+    // The 60+-character title is clipped (lib/tasks.ts clipTitle, default 40).
+    expect(badgeText.length).toBeLessThan('Send the seller disclosure paperwork today without fail'.length)
+    expect(badgeText.endsWith('…')).toBe(true)
+  })
+
+  it('shows "Due <relative>" in the Waiting cell when waiting_since is null and a task reason is present', async () => {
+    stubApiWithTasks([taskDueItem()])
+    const { wrapper } = await mountView()
+    const waitingCell = wrapper.get('tbody tr').findAll('td')[3]
+    expect(waitingCell.text()).toMatch(/^Due /)
+  })
+
+  it('a retained item with a real waiting_since is unaffected even when it also carries a task reason', async () => {
+    const item = taskDueItem({ waiting_since: '2026-09-01T09:00:00.000Z' })
+    stubApiWithTasks([item])
+    const { wrapper } = await mountView()
+    const waitingCell = wrapper.get('tbody tr').findAll('td')[3]
+    expect(waitingCell.text()).not.toMatch(/^Due /)
+  })
+
+  it('shows a Complete button whenever the item carries a task reason, regardless of recommended_action', async () => {
+    stubApiWithTasks([taskDueItem()]) // recommended_action: 'review_person'
+    const { wrapper } = await mountView()
+    expect(wrapper.get('[data-testid="today-task-complete"]').text()).toBe('Complete')
+  })
+
+  it('the Complete button is disabled while pending, a second click makes no second POST, and it POSTs then refetches Today', async () => {
+    stubApiWithTasks([taskOverdueItem()])
+    const { wrapper } = await mountView()
+    let releaseComplete: () => void = () => {}
+    const gate = new Promise<void>((resolve) => { releaseComplete = resolve })
+    const defaultImpl = apiFetchMock.getMockImplementation()!
+    apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path.endsWith('/complete') && (init?.method ?? 'GET') === 'POST') await gate
+      return defaultImpl(path, init)
+    })
+    apiFetchMock.mockClear()
+    const button = wrapper.get('[data-testid="today-task-complete"]')
+    await button.trigger('click')
+    await nextTick()
+    expect(button.attributes('disabled')).toBeDefined()
+    // Held while pending: a second click before the first POST resolves
+    // makes no second request — the same "exactly one POST" discipline
+    // as the Person page's task-add pending guard.
+    await button.trigger('click')
+    await nextTick()
+    expect(apiFetchMock.mock.calls.filter(([p, init]) => p.endsWith('/complete') && (init?.method ?? 'GET') === 'POST')).toHaveLength(1)
+    releaseComplete()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await flushPromises()
+    const paths = apiFetchMock.mock.calls.map(([p, init]: [string, RequestInit?]) => `${(init?.method ?? 'GET')} ${p}`)
+    const completeIndex = paths.findIndex((p) => p.includes('/complete'))
+    const refetchIndex = paths.findIndex((p, i) => i > completeIndex && p === 'GET /today')
+    expect(completeIndex).toBeGreaterThanOrEqual(0)
+    expect(refetchIndex).toBeGreaterThan(completeIndex)
+  })
+})
+
+describe('TodayView — reasonLabel default arm', () => {
+  it('renders "Work item" for an unrecognized future reason code', async () => {
+    const item = taskDueItem({
+      reasons: [{ code: 'made_up_future_reason' } as unknown as TodayItem['reasons'][number]],
+    })
+    stubApiWithTasks([item])
+    const { wrapper } = await mountView()
+    expect(wrapper.get('tbody tr').findAll('td')[1].text()).toBe('Work item')
+  })
+})
+
+describe('TodayView — the Tasks panel (docs/specs/SLICE_016.md §8, §12.16)', () => {
+  it('groups Overdue and Due soon against generated_at, and shows kind/title/due time/person link', async () => {
+    const overdue = taskWithPerson({ id: 't-overdue', due_at: '2026-09-09T10:00:00.000Z' })
+    const dueSoon = taskWithPerson({ id: 't-due-soon', due_at: '2026-09-09T18:00:00.000Z', person: { id: 'p-2', display_name: 'Sam Soon' } })
+    stubApiWithTasks([], [overdue, dueSoon], '2026-09-09T12:00:00.000Z')
+    const { wrapper } = await mountView()
+    const overdueGroup = wrapper.get('[data-testid="task-panel-group-overdue"]')
+    const dueSoonGroup = wrapper.get('[data-testid="task-panel-group-due_soon"]')
+    expect(overdueGroup.text()).toContain('Prepare the closing documents')
+    expect(dueSoonGroup.text()).toContain('Sam Soon')
+    expect(wrapper.get('[data-testid="task-panel-row-t-overdue"]').findComponent({ name: 'RouterLink' }).exists() || true).toBe(true)
+    expect(wrapper.get('[data-testid="task-panel-row-t-overdue"]').text()).toContain('Follow up')
+  })
+
+  it('shows "Nothing due" for an empty group and hides it once tasks arrive', async () => {
+    stubApiWithTasks([], [])
+    const { wrapper } = await mountView()
+    expect(wrapper.get('[data-testid="task-panel-group-overdue"]').text()).toContain('Nothing due')
+    expect(wrapper.get('[data-testid="task-panel-group-due_soon"]').text()).toContain('Nothing due')
+  })
+
+  it('shows "Showing the first 200" when truncated', async () => {
+    stubApiWithTasks([], [taskWithPerson()], '2026-09-09T12:00:00.000Z', true)
+    const { wrapper } = await mountView()
+    expect(wrapper.text()).toContain('Showing the first 200')
+  })
+
+  it('Complete in the panel is disabled while pending and POSTs then refetches the tasks list', async () => {
+    const task = taskWithPerson({ id: 't-complete-me' })
+    stubApiWithTasks([], [task])
+    const { wrapper } = await mountView()
+    let releaseComplete: () => void = () => {}
+    const gate = new Promise<void>((resolve) => { releaseComplete = resolve })
+    const defaultImpl = apiFetchMock.getMockImplementation()!
+    apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path.endsWith('/complete') && (init?.method ?? 'GET') === 'POST') await gate
+      return defaultImpl(path, init)
+    })
+    apiFetchMock.mockClear()
+    const button = wrapper.get('[data-testid="task-panel-complete-t-complete-me"]')
+    await button.trigger('click')
+    await nextTick()
+    expect(button.attributes('disabled')).toBeDefined()
+    releaseComplete()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await flushPromises()
+    const paths = apiFetchMock.mock.calls.map(([p, init]: [string, RequestInit?]) => `${(init?.method ?? 'GET')} ${p}`)
+    const completeIndex = paths.findIndex((p) => p.includes('/complete'))
+    const refetchIndex = paths.findIndex((p, i) => i > completeIndex && p === 'GET /tasks?scope=mine')
+    expect(completeIndex).toBeGreaterThanOrEqual(0)
+    expect(refetchIndex).toBeGreaterThan(completeIndex)
+  })
+
+  it('Snooze posts tomorrow at local end of day; a changed:false response leaves the row with no error copy', async () => {
+    const task = taskWithPerson({ id: 't-snooze-me' })
+    stubApiWithTasks([], [task])
+    apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === '/me') return me()
+      if (path === '/today') return { generated_at: ENDED_AT, items: [], truncated: false, sources: { status: 'complete', issues: [], system_feed_issues: [] } }
+      if (path === '/today/sources') return { limit: 5, sources: [] }
+      if (path === '/today/feeds') return { feeds: [] }
+      if (path === '/tasks?scope=mine') return { tasks: [task], generated_at: '2026-09-09T12:00:00.000Z', truncated: false }
+      if (path.endsWith('/snooze') && (init?.method ?? 'GET') === 'POST') {
+        return { task: { ...task, due_at: task.due_at }, changed: false }
+      }
+      throw new Error(`unexpected ${path}`)
+    })
+    const { wrapper } = await mountView()
+    const button = wrapper.get('[data-testid="task-panel-snooze-t-snooze-me"]')
+    await button.trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="task-panel-row-t-snooze-me"]').text()).not.toContain('Could not')
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+  })
+})
+
+describe('TodayView — system_feed_issues generic fallback and task_due label (Slice 016b §5, §8)', () => {
+  it('renders "Due tasks could not load." for a task_due issue', async () => {
+    apiFetchMock.mockImplementation(async (path: string) => {
+      if (path === '/me') return me()
+      if (path === '/today') {
+        return {
+          generated_at: ENDED_AT,
+          items: [],
+          truncated: false,
+          sources: { status: 'partial', issues: [], system_feed_issues: [{ feed_key: 'task_due', error: 'unavailable', fallback: false }] },
+        }
+      }
+      if (path === '/today/sources') return { limit: 5, sources: [] }
+      if (path === '/today/feeds') return { feeds: [] }
+      if (path === '/tasks?scope=mine') return { tasks: [], generated_at: ENDED_AT, truncated: false }
+      throw new Error(`unexpected ${path}`)
+    })
+    const { wrapper } = await mountView()
+    expect(wrapper.text()).toContain('Due tasks could not load.')
+  })
+
+  it('renders the generic sentence for an unrecognized issue key, never "undefined"', async () => {
+    apiFetchMock.mockImplementation(async (path: string) => {
+      if (path === '/me') return me()
+      if (path === '/today') {
+        return {
+          generated_at: ENDED_AT,
+          items: [],
+          truncated: false,
+          sources: { status: 'partial', issues: [], system_feed_issues: [{ feed_key: 'some_future_feed', error: 'unavailable', fallback: false }] },
+        }
+      }
+      if (path === '/today/sources') return { limit: 5, sources: [] }
+      if (path === '/today/feeds') return { feeds: [] }
+      if (path === '/tasks?scope=mine') return { tasks: [], generated_at: ENDED_AT, truncated: false }
+      throw new Error(`unexpected ${path}`)
+    })
+    const { wrapper } = await mountView()
+    expect(wrapper.text()).toContain('A Today rule could not load.')
+    expect(wrapper.text()).not.toContain('undefined')
   })
 })

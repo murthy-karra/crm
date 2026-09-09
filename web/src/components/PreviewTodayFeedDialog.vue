@@ -140,6 +140,14 @@ function reasonLabel(reason: TodayReason): string {
       return 'Client replied'
     case 'list_member':
       return reason.name
+    // Slice 016b: the built-in task axis's two reasons cannot occur here
+    // either (preview evaluates exactly one system feed alone, never the
+    // axis) — kept, with the default below, for type exhaustiveness only.
+    case 'task_overdue':
+    case 'task_due':
+      return reason.title
+    default:
+      return 'Work item'
   }
 }
 

@@ -47,6 +47,12 @@ mod db_admin;
 #[path = "db_calls.rs"]
 mod db_calls;
 
+#[path = "db_calls_corrections.rs"]
+mod db_calls_corrections;
+
+#[path = "db_calls_outcome_today.rs"]
+mod db_calls_outcome_today;
+
 #[path = "db_capture_address.rs"]
 mod db_capture_address;
 
@@ -128,6 +134,12 @@ mod db_statement_equivalence;
 #[path = "db_saved_lists.rs"]
 mod db_saved_lists;
 
+#[path = "db_saved_lists_sort.rs"]
+mod db_saved_lists_sort;
+
+#[path = "db_saved_lists_tags.rs"]
+mod db_saved_lists_tags;
+
 #[path = "db_tags.rs"]
 mod db_tags;
 
@@ -174,6 +186,13 @@ mod db_today_source_deadlines;
 mod db_today_source_telemetry;
 
 mod db_today_system_feed_commands;
+
+#[path = "db_today_system_feed_evaluation.rs"]
+mod db_today_system_feed_evaluation;
+
+#[path = "db_today_system_feed_preview.rs"]
+mod db_today_system_feed_preview;
+
 #[path = "db_today_system_feeds.rs"]
 mod db_today_system_feeds;
 

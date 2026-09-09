@@ -5,6 +5,25 @@
 //! reused across several test files.
 #![allow(dead_code)]
 
+/// The Slice 006 telephony fixture harness, split out because item 3 of
+/// the LATER batch (docs/tasks/LATER_BATCH_2026-09-08.md) needs it shared
+/// across `db_calls.rs`, `db_calls_corrections.rs` and
+/// `db_calls_outcome_today.rs` — narrow enough (telephony-only types) that
+/// folding it into this file directly would pull `crm_api::telephony`
+/// into every other test file's `common::` import instead.
+pub mod calls;
+
+/// The Slice 011b saved-list fixture helpers, split out for the same
+/// reason as `calls` above: item 3 of the LATER batch needs it shared
+/// across `db_saved_lists.rs` and `db_saved_lists_sort.rs`.
+pub mod saved_lists;
+
+/// The Slice 011d system-feed fixture helpers, split out for the same
+/// reason as `calls` and `saved_lists` above: item 3 of the LATER batch
+/// needs it shared across `db_today_system_feed_commands.rs`,
+/// `db_today_system_feed_evaluation.rs` and `db_today_system_feed_preview.rs`.
+pub mod today_system_feed;
+
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use axum::response::Response;

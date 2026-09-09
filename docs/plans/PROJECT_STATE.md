@@ -1,23 +1,24 @@
 # Project State
 
-Last updated: 2026-09-09 (Slice 016a Tasks merged to local main at f106afc;
-runtime update, push and cleanup pending; LiveKit down, see Environment).
+Last updated: 2026-09-09 (Slice 016a complete: merged, runtime updated,
+pushed, cleaned up; 016b gate next; LiveKit down, see Environment).
 
 ## Current phase
 
-**SLICE 016a (TASKS: MODEL, COMMANDS, ROUTES, PERSON PAGE) — MERGED TO
-LOCAL MAIN at `f106afc` (2026-09-09, with the user's approval; not pushed,
-runtime not yet updated).** Source `slice-016a-tasks` at `1d6c3bf` (nine
-commits). Final-tree gates on `1d6c3bf`: `sqlx-prepare` clean, `check`
-green (773 Rust, 703 Vitest), `check-db` 684 of 684 first run. Evidence:
-[SLICE_016a_VERIFICATION.md](../tasks/SLICE_016a_VERIFICATION.md). Still
-pending, each needing the user's approval: migrate `crm_dev`
-(`20260913000001_task.sql`, one additive table), restart the dev API (new
-routes and Operator view; the running binary predates 016a), rebuild and
-relaunch `dev-web-prod`; push `main`; delete the branch and the worktree
-`../crm-worktrees/tasks-1`; drop `crm_slice016_qa`. Then the 016b gate
-(the Today axis and panel; the 016b amendment pointers are recorded at
-that gate). Deployment is not authorized.
+**SLICE 016a (TASKS: MODEL, COMMANDS, ROUTES, PERSON PAGE) — COMPLETE:
+MERGED, RUNTIME UPDATED, PUSHED, CLEANED UP (2026-09-09, each with the
+user's approval).** `main` at the merge `f106afc` plus records; pushed to
+`origin/main`. `crm_dev` migrated (`20260913000001`); the dev API and
+`dev-web-prod` were restarted by exact PID and relaunched from `main`
+(API on `127.0.0.1:3000`, health 200, task routes answering; preview on
+`5173`; logs under `/private/tmp/claude-501/`). Branch `slice-016a-tasks`,
+the worktree, `crm_slice016_qa` and the lane's leftover throwaway
+`crm_tasks1_round1` deleted. Evidence:
+[SLICE_016a_VERIFICATION.md](../tasks/SLICE_016a_VERIFICATION.md).
+**Next: the 016b gate** (the Today task axis and the Tasks panel; spec
+§§5, 8 "Today", 12.9–12.17; the 016b amendment pointers in 003 §3, 011c
+§5 and 011d §§1/5/6 are recorded at that gate). Deployment is not
+authorized. No lane active.
 
 Previously: **LATER BATCH (2026-09-08) — COMPLETE AND MERGED TO LOCAL MAIN** at `3ff6c5f`
 (with the user's approval; not pushed, not deployed). Source
@@ -736,7 +737,7 @@ together on 2026-09-06).
 | 014 | Production bundle through the tunnel (`dev-web-prod`), optimistic stage/assignment/tag mutations, Today chunk preload and data prefetch, hover prefetch of Person detail, FilterBar residue | `ac270fb` (branch head `3495f71`), pushed 2026-09-08 |
 | — | LATER batch: `inquiry` append-only triggers (cascade-aware), three largest test files split into nine, field-only success writes and `isMutating` guards on the Person mutations | `3ff6c5f` (branch head `5fe4231`), pushed 2026-09-08 |
 | 015 | Notes: `note` table (tombstone delete, import-ready), three commands and routes, `note` timeline kind, `note_changed`, Operator `PersonDetail.notes` (untrusted, history filtered), Person page composer with inline edit/delete (D-053) | `fd5a184` (branch head `00e2e67`), pushed 2026-09-09 |
-| 016a | Tasks model: `task` table (tombstone, import-ready, Today index), six commands and routes, `tasks[]` on the detail, `task_completed` timeline kind, `task_changed`, Operator `PersonDetail.tasks` (untrusted, history filtered), Person page Tasks card (D-054) | `f106afc` (branch head `1d6c3bf`), local only |
+| 016a | Tasks model: `task` table (tombstone, import-ready, Today index), six commands and routes, `tasks[]` on the detail, `task_completed` timeline kind, `task_changed`, Operator `PersonDetail.tasks` (untrusted, history filtered), Person page Tasks card (D-054) | `f106afc` (branch head `1d6c3bf`), pushed 2026-09-09 |
 | — | Gate-speedup chunk (check 35m→79s, check-db 37m→~2m) | 2026-08-28 |
 | — | Test-binary consolidation (40 files → 1 binary) | `6427ee8` |
 
@@ -905,9 +906,9 @@ and now lives only in git history.
   process start time vs binary mtime; kill by exact PID only. Bit us
   again 2026-08-29 (011a filters). Run ./scripts/db-migrate after
   checking out a branch with a new migration.
-- dev-api and dev-web-prod currently run the post-015 build (relaunched
-  2026-09-09 by the coordinator, detached with nohup; logs under
-  `/private/tmp/claude-501/`).
+- dev-api and dev-web-prod currently run the post-016a build (restarted by
+  exact PID and relaunched 2026-09-09 by the coordinator, detached with
+  nohup; logs under `/private/tmp/claude-501/`).
 
 ## Backlog (deferred product tracks — full notes in the decision log)
 
@@ -1017,10 +1018,10 @@ and now lives only in git history.
 
 ## Approval currently required
 
-- **Slice 016a (Tasks): merged.** Requested next, separately: (1) update
-  the shared development runtime (migrate `crm_dev`, restart the dev API,
-  rebuild `dev-web-prod`); (2) push `main`; (3) cleanup (delete branch and
-  worktree, drop `crm_slice016_qa`). Then the 016b gate.
+- **Rung 016b (Today task axis and panel): "Proceed with implementation?"**
+  at its Phase 6 gate; the specification is already approved for the
+  slice, so the gate restates the 016b outcome, files, exclusions and
+  risks. Deployment is not authorized.
 - None for 011e: both rungs merged, the dev runtime updated and the branches
   cleaned up with approval on 2026-09-07. `main` pushed on 2026-09-07; deployment is not authorized. The next slice or chunk
   (candidates below) needs the user's request.

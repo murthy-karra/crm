@@ -20,8 +20,8 @@ restart), the production web server rebuilt and relaunched from `main`
 deleted. Open flakes carried forward: the `db_calls` correction-ordering
 test (strict assertion kept, unreproduced in 21 runs) and the
 `db_today_system_feed_evaluation` stage-clause test (one load failure, passes
-isolated). `main` is ahead of `origin/main`; push and deployment are not
-authorized.
+isolated). `main` was pushed to `origin/main` on 2026-09-08 at `88df7f5`
+with the user's approval; deployment is not authorized.
 
 Previously: **LATER BATCH (2026-09-08) — LANE IN IMPLEMENTATION.** The user chose the
 "worth a small batch soon" group from the LATER lists: `inquiry` append-only
@@ -720,7 +720,7 @@ together on 2026-09-06).
 | 012 | Denormalized last-activity columns on Person, trigger-maintained (D-052); fourteen statements read the columns; equivalence gate; perf archive | `26ddab7` (branch head `e32ffd7`), local only |
 | 013 | Operator `filter_people` and `run_saved_list` read-only tools, name-based, D-046-faithful, `MAX_REFERENCES` 25 | `9af47c1` (branch head `151d38a`), pushed 2026-09-08 |
 | 014 | Production bundle through the tunnel (`dev-web-prod`), optimistic stage/assignment/tag mutations, Today chunk preload and data prefetch, hover prefetch of Person detail, FilterBar residue | `ac270fb` (branch head `3495f71`), pushed 2026-09-08 |
-| — | LATER batch: `inquiry` append-only triggers (cascade-aware), three largest test files split into nine, field-only success writes and `isMutating` guards on the Person mutations | `3ff6c5f` (branch head `5fe4231`), local only |
+| — | LATER batch: `inquiry` append-only triggers (cascade-aware), three largest test files split into nine, field-only success writes and `isMutating` guards on the Person mutations | `3ff6c5f` (branch head `5fe4231`), pushed 2026-09-08 |
 | — | Gate-speedup chunk (check 35m→79s, check-db 37m→~2m) | 2026-08-28 |
 | — | Test-binary consolidation (40 files → 1 binary) | `6427ee8` |
 

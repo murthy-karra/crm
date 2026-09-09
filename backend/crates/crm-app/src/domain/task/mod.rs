@@ -19,8 +19,8 @@ pub use commands::{
     SnoozeTask, SnoozeTaskOutcome, UpdateTask, UpdateTaskOutcome,
 };
 pub use error::TaskError;
-pub use model::{Task, TaskKind, TaskTitle};
-pub use queries::open_for_person;
+pub use model::{PersonRef, Task, TaskKind, TaskTitle, TaskWithPerson};
+pub use queries::{open_for_assignee, open_for_person};
 
 /// Internal wiring surface for `domain::person::queries::history_for_person`
 /// (not part of this module's cross-crate public API — `pub(crate)`).

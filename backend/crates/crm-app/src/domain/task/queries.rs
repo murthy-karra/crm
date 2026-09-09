@@ -2,11 +2,11 @@ use chrono::{DateTime, Utc};
 use sqlx::PgConnection;
 use uuid::Uuid;
 
-use crate::domain::person::model::UserRef;
+use crate::domain::person::model::{compute_display_name, UserRef};
 use crate::ids::{OrganizationId, PersonId, TaskId, UserId};
 
 use super::error::TaskError;
-use super::model::{Task, TaskKind};
+use super::model::{PersonRef, Task, TaskKind, TaskWithPerson};
 
 /// A full task row for command-internal lookups (update/complete/reopen/
 /// snooze/delete's `FOR UPDATE` load) and for the open-tasks reads.
@@ -488,4 +488,110 @@ pub(crate) async fn task_completed_history(
             created_by: user_ref(r.created_by_user_id, r.created_by_display_name),
         })
         .collect())
+}
+
+struct TaskWithPersonRowDb {
+    id: Uuid,
+    title: String,
+    kind: String,
+    due_at: Option<DateTime<Utc>>,
+    assignee_user_id: Option<Uuid>,
+    assignee_display_name: Option<String>,
+    created_by_user_id: Option<Uuid>,
+    created_by_display_name: Option<String>,
+    completed_at: Option<DateTime<Utc>>,
+    completed_by_user_id: Option<Uuid>,
+    completed_by_display_name: Option<String>,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+    person_id: Uuid,
+    first_name: Option<String>,
+    last_name: Option<String>,
+    primary_email: Option<String>,
+    primary_phone: Option<String>,
+}
+
+/// `GET /api/tasks?scope=mine`'s source (docs/specs/SLICE_016.md §3, §4,
+/// 016b) and the built-in task axis's set-based-parity fixture: the
+/// viewer's open, dated tasks with `due_at <= now + 24h`, ordered
+/// `due_at ASC, id ASC`, fetch 201 (the route returns 200 and reports
+/// `truncated` on the 201st row — the `open_for_person`/D-052-adjacent
+/// `task_org_assignee_due_open_idx` precedent). Literal Organization
+/// predicate, `now` bound as a parameter, no dynamic SQL. `can_manage` is
+/// always `true` here: every returned task is one the viewer is the
+/// assignee of (rule 1), so no separate re-decision is needed the way the
+/// Person detail's open-tasks read needs one per viewer.
+pub async fn open_for_assignee(
+    conn: &mut PgConnection,
+    organization_id: OrganizationId,
+    user_id: UserId,
+    now: DateTime<Utc>,
+) -> Result<Vec<TaskWithPerson>, TaskError> {
+    let rows = sqlx::query_as!(
+        TaskWithPersonRowDb,
+        r#"SELECT t.id, t.title, t.kind, t.due_at,
+                  t.assignee_user_id, au.display_name as "assignee_display_name?",
+                  t.created_by_user_id, cu.display_name as "created_by_display_name?",
+                  t.completed_at,
+                  t.completed_by_user_id, ku.display_name as "completed_by_display_name?",
+                  t.created_at, t.updated_at,
+                  p.id as person_id, p.first_name, p.last_name,
+                  (SELECT cm.value FROM contact_method cm
+                     WHERE cm.person_id = p.id AND cm.organization_id = p.organization_id
+                       AND cm.kind = 'email'
+                     ORDER BY cm.created_at ASC LIMIT 1) AS "primary_email?",
+                  (SELECT cm.value FROM contact_method cm
+                     WHERE cm.person_id = p.id AND cm.organization_id = p.organization_id
+                       AND cm.kind = 'phone'
+                     ORDER BY cm.created_at ASC LIMIT 1) AS "primary_phone?"
+           FROM task t
+           JOIN person p ON p.id = t.person_id AND p.organization_id = t.organization_id
+           LEFT JOIN app_user au ON au.id = t.assignee_user_id
+           LEFT JOIN app_user cu ON cu.id = t.created_by_user_id
+           LEFT JOIN app_user ku ON ku.id = t.completed_by_user_id
+           WHERE t.organization_id = $1 AND t.assignee_user_id = $2
+             AND t.completed_at IS NULL AND t.deleted_at IS NULL
+             AND t.due_at IS NOT NULL AND t.due_at <= $3::timestamptz + interval '24 hours'
+           ORDER BY t.due_at ASC, t.id ASC
+           LIMIT 201"#,
+        organization_id.0,
+        user_id.0,
+        now,
+    )
+    .fetch_all(&mut *conn)
+    .await?;
+
+    rows.into_iter()
+        .map(|row| {
+            let person_id = PersonId::new(row.person_id);
+            let display_name = compute_display_name(
+                row.first_name.as_deref(),
+                row.last_name.as_deref(),
+                row.primary_email.as_deref(),
+                row.primary_phone.as_deref(),
+            );
+            let full = TaskRowFull {
+                id: TaskId::new(row.id),
+                title: row.title,
+                kind: row.kind,
+                due_at: row.due_at,
+                assignee_user_id: row.assignee_user_id.map(UserId::new),
+                assignee_display_name: row.assignee_display_name,
+                created_by_user_id: row.created_by_user_id.map(UserId::new),
+                created_by_display_name: row.created_by_display_name,
+                completed_at: row.completed_at,
+                completed_by_user_id: row.completed_by_user_id.map(UserId::new),
+                completed_by_display_name: row.completed_by_display_name,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+            };
+            Ok(TaskWithPerson {
+                task: task_from_row(full, person_id, true)?,
+                person: PersonRef {
+                    id: person_id,
+                    display_name,
+                },
+            })
+        })
+        .collect()
 }

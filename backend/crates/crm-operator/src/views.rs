@@ -15,7 +15,7 @@ pub const UNTRUSTED_CLIP_CHARS: usize = 500;
 /// (D-033): the `low` "outcome needed" tier sorts under both Inquiry
 /// tiers, by the call's `ended_at`.
 pub const ORDERING_RULE: &str =
-    "built_in_work_is_admitted_before_list_matches_at_the_200_item_cap; display_high_then_normal_then_list_then_low; list_matches_sort_by_last_contact_attempt_ascending_with_never_contacted_first_then_person_id; built_in_high_and_normal_sort_by_waiting_since_then_id; low_sorts_by_ended_at_then_id";
+    "built_in_work_is_admitted_before_list_matches_at_the_200_item_cap; display_high_then_normal_then_list_then_low; list_matches_sort_by_last_contact_attempt_ascending_with_never_contacted_first_then_person_id; built_in_high_and_normal_sort_by_waiting_since_then_id; low_sorts_by_ended_at_then_id; overdue_task_raises_normal_to_high_after_fresh; task_only_items_follow_their_tier_by_due_at_then_id";
 
 /// Zero-width and bidirectional formatting characters: invisible in a
 /// rendered reply but able to reorder or hide text in a prompt.

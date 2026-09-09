@@ -77,6 +77,16 @@ pub fn reason_text(reason: &TodayReason) -> String {
         TodayReason::ListMember { .. } => {
             "matches a saved list you enabled as a Today source".to_string()
         }
+        // docs/specs/SLICE_016.md §7 (016b): built from `due_at` and
+        // `kind` ONLY — the title is user-authored/untrusted and never
+        // enters this fixed line (it reaches the model only through
+        // `reasons_json`'s `UntrustedText` wrapper below).
+        TodayReason::TaskOverdue { kind, due_at, .. } => {
+            format!("a {} task was due at {}", kind.as_str(), due_at.to_rfc3339())
+        }
+        TodayReason::TaskDue { kind, due_at, .. } => {
+            format!("a {} task is due at {}", kind.as_str(), due_at.to_rfc3339())
+        }
     }
 }
 
@@ -97,6 +107,20 @@ pub fn reasons_json(item: &TodayItem) -> Vec<serde_json::Value> {
                     map.insert(
                         "name".to_string(),
                         serde_json::to_value(UntrustedText::new(name))
+                            .expect("UntrustedText serializes"),
+                    );
+                }
+                // docs/specs/SLICE_016.md §7 (016b): the task title is
+                // user-authored/untrusted (D-053 posture) — wrapped
+                // exactly like a saved list's `name` above, never a plain
+                // trusted string in model-facing JSON. `reason_text`
+                // above never reads it.
+                if let TodayReason::TaskOverdue { title, .. } | TodayReason::TaskDue { title, .. } =
+                    r
+                {
+                    map.insert(
+                        "title".to_string(),
+                        serde_json::to_value(UntrustedText::new(title))
                             .expect("UntrustedText serializes"),
                     );
                 }

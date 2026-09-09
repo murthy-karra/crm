@@ -8,12 +8,12 @@
 //! passes the title straight through to the command and never formats or
 //! records it itself.
 
-use axum::extract::rejection::JsonRejection;
-use axum::extract::{DefaultBodyLimit, FromRequestParts, Path, State};
+use axum::extract::rejection::{JsonRejection, QueryRejection};
+use axum::extract::{DefaultBodyLimit, FromRequestParts, Path, Query, State};
 use axum::http::request::Parts;
 use axum::http::StatusCode;
 use axum::response::Json;
-use axum::routing::{delete, post, put};
+use axum::routing::{delete, get, post, put};
 use axum::Router;
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
@@ -33,6 +33,7 @@ const MAX_TASK_BODY_BYTES: usize = 128 * 1024;
 
 pub fn router() -> Router<AppState> {
     Router::new()
+        .route("/api/tasks", get(list_my_tasks))
         .route(
             "/api/people/{person_id}/tasks",
             post(create_task).layer(DefaultBodyLimit::max(MAX_TASK_BODY_BYTES)),
@@ -125,6 +126,21 @@ struct UpdateTaskRequest {
 #[serde(deny_unknown_fields)]
 struct SnoozeTaskRequest {
     due_at: DateTime<Utc>,
+}
+
+/// `GET /api/tasks?scope=mine` (docs/specs/SLICE_016.md §4, 016b): the
+/// only accepted query shape is exactly `scope=mine` — no default, no
+/// other value, no extra key. `deny_unknown_fields` rejects an extra key;
+/// `scope: String` (not `Option`) makes a MISSING `scope` a deserialize
+/// failure (`QueryRejection` — no query string, or a query string that
+/// never sets this key, both fail to populate a required field); an
+/// EMPTY or UNKNOWN value still deserializes (any string is valid UTF-8
+/// query text) but is rejected explicitly below. Every one of "missing,
+/// empty, unknown, extra" therefore fails closed to 400.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ListTasksQuery {
+    scope: String,
 }
 
 /// `POST /api/people/{person_id}/tasks` (docs/specs/SLICE_016.md §4): any
@@ -274,4 +290,43 @@ async fn delete_task(
     .await?;
 
     Ok(Json(json!({ "deleted": outcome.deleted })))
+}
+
+/// `GET /api/tasks?scope=mine` (docs/specs/SLICE_016.md §4, 016b): the
+/// viewer's open, dated tasks with `due_at <= generated_at + 24h`,
+/// ordered `due_at, id`; fetch 201, return 200 with `truncated` set
+/// exactly by the 201st row. The viewer is always
+/// `auth.actor_user_id`/`auth.active_organization_id` — never client
+/// input (the `GET /api/today` precedent). `auth` runs before the query
+/// extractor, so a platform-only session is 401 before a query-shape 400
+/// (the `list_people` precedent).
+async fn list_my_tasks(
+    State(state): State<AppState>,
+    auth: AuthContext,
+    query: Result<Query<ListTasksQuery>, QueryRejection>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let Query(query) = query.map_err(|_| ApiError::MalformedRequest)?;
+    if query.scope != "mine" {
+        return Err(ApiError::MalformedRequest);
+    }
+
+    let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
+    let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
+    let generated_at = Utc::now();
+    let mut tasks = task::open_for_assignee(
+        &mut conn,
+        auth.active_organization_id,
+        auth.actor_user_id,
+        generated_at,
+    )
+    .await
+    .map_err(|_| ApiError::Unavailable)?;
+    let truncated = tasks.len() > 200;
+    tasks.truncate(200);
+
+    Ok(Json(json!({
+        "tasks": tasks,
+        "generated_at": generated_at,
+        "truncated": truncated,
+    })))
 }

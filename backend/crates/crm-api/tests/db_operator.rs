@@ -1039,10 +1039,7 @@ async fn explain_priority_position_matches_today_query_and_get_api_today(migrato
         assert_eq!(r["ahead"]["high"], want_high);
         assert_eq!(r["ahead"]["normal"], want_normal);
         assert_eq!(r["ahead"]["list"], 0);
-        assert_eq!(
-            r["ordering_rule"],
-            "built_in_work_is_admitted_before_list_matches_at_the_200_item_cap; display_high_then_normal_then_list_then_low; list_matches_sort_by_last_contact_attempt_ascending_with_never_contacted_first_then_person_id; built_in_high_and_normal_sort_by_waiting_since_then_id; low_sorts_by_ended_at_then_id"
-        );
+        assert_eq!(r["ordering_rule"], crm_operator::ORDERING_RULE);
         assert_eq!(r["sources"]["status"], "complete");
         assert_eq!(r["person"]["id"], person.to_string());
         assert!(r["reasons"]
@@ -2829,4 +2826,216 @@ async fn task_activity_and_operator_call_never_leak_a_title_into_traces_or_wrong
             assert!(!serialized.contains(sentinel));
         }
     }
+}
+
+// --- Slice 016b §12.14: task reasons in the Operator ----------------------
+
+/// A task-only Person (no inquiry, no assignment): reachable on Today
+/// ONLY through the built-in task axis. Returns the Person id.
+async fn insert_bare_person_for_tasks(pool: &PgPool, organization_id: Uuid) -> Uuid {
+    let stage_id: Uuid = sqlx::query_scalar(
+        "SELECT id FROM stage WHERE organization_id = $1 ORDER BY position LIMIT 1",
+    )
+    .bind(organization_id)
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    sqlx::query_scalar(
+        "INSERT INTO person (organization_id, stage_id) VALUES ($1, $2) RETURNING id",
+    )
+    .bind(organization_id)
+    .bind(stage_id)
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+async fn create_task_with_title(
+    pool: &PgPool,
+    organization_id: Uuid,
+    actor_user_id: Uuid,
+    person_id: Uuid,
+    title: &str,
+    due_at: chrono::DateTime<Utc>,
+) -> Uuid {
+    use crm_api::domain::envelope::{CommandContext, Origin};
+    use crm_api::domain::task::{self, CreateTask, TaskKind};
+    use crm_api::ids::{CorrelationId, PersonId};
+
+    let ctx = CommandContext {
+        organization_id: OrganizationId::new(organization_id),
+        actor_user_id: UserId::new(actor_user_id),
+        origin: Origin::WebSession,
+        correlation_id: CorrelationId::new(Uuid::new_v4()),
+    };
+    let task = task::create_task(
+        pool,
+        &Publisher::Disabled,
+        &ctx,
+        CreateTask {
+            person_id: PersonId::new(person_id),
+            title: title.to_string(),
+            kind: TaskKind::FollowUp,
+            due_at: Some(due_at),
+            assignee_user_id: Some(UserId::new(actor_user_id)),
+        },
+    )
+    .await
+    .unwrap();
+    task.id.as_uuid()
+}
+
+#[sqlx::test]
+#[ignore]
+async fn operator_today_tools_agree_with_http_on_a_task_item_and_the_fixed_line_has_no_title(
+    migrator_pool: PgPool,
+) {
+    let f = fixture(migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&f.migrator_pool).await;
+    let now = Utc::now();
+    let person_id = insert_bare_person_for_tasks(&app_pool, f.org_acme).await;
+    create_task_with_title(
+        &app_pool,
+        f.org_acme,
+        f.alice_id,
+        person_id,
+        "Follow up on the listing paperwork",
+        now - chrono::Duration::hours(1),
+    )
+    .await;
+
+    let (router, _provider) = router_scripted(
+        &f.migrator_pool,
+        vec![
+            tool_step("get_today", json!({ "limit": 20 })),
+            tool_step("get_next_work_item", json!({})),
+            tool_step("explain_priority", json!({ "person_id": person_id })),
+            text_step("done"),
+        ],
+    )
+    .await;
+    let alice = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
+
+    let http_today = crate::common::get_with_cookie(&router, "/api/today", &alice).await;
+    let http_body = crate::common::body_json(http_today).await;
+    let http_ids: Vec<String> = http_body["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|i| i["person"]["id"].as_str().unwrap().to_string())
+        .collect();
+    assert!(http_ids.contains(&person_id.to_string()));
+
+    let turn_resp = post_turn(&router, &alice, message("what's on today")).await;
+    assert_eq!(turn_resp.status(), StatusCode::OK);
+
+    let turn_pool = crate::common::connect_as_app(&f.migrator_pool).await;
+    let turns = turn_rows(&turn_pool).await;
+    let (turn_id, ..) = turns.last().unwrap();
+    let tools = tool_rows(&turn_pool, *turn_id).await;
+    assert_eq!(tools.len(), 3);
+    for (_, name, outcome, _) in &tools {
+        assert_eq!(outcome, "ok", "{name} must succeed");
+    }
+
+    let mut conn = app_pool.acquire().await.unwrap();
+    let list = today::query(
+        &mut conn,
+        &PersonVisibilityScope::Organization(OrganizationId::new(f.org_acme)),
+        UserId::new(f.alice_id),
+        Utc::now(),
+    )
+    .await
+    .unwrap();
+    let item = list
+        .items
+        .iter()
+        .find(|i| i.person.id.as_uuid() == person_id)
+        .expect("the task-only Person is on Today");
+    assert_eq!(item.priority, crm_api::domain::today::TodayPriority::High);
+
+    let reason_line = crm_api::operator::explain::reason_text(&item.reasons[0]);
+    assert!(
+        !reason_line.contains("Follow up on the listing paperwork"),
+        "the fixed explanation line must never contain the task title: {reason_line}"
+    );
+}
+
+#[sqlx::test]
+#[ignore]
+async fn capture_across_today_tasks_and_operator_tools_finds_a_task_title_only_in_untrusted_sites(
+    migrator_pool: PgPool,
+) {
+    let f = fixture(migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&f.migrator_pool).await;
+    let now = Utc::now();
+    const SENTINEL: &str = "SENTINEL_TASK_TITLE_DO_NOT_LEAK";
+    let person_id = insert_bare_person_for_tasks(&app_pool, f.org_acme).await;
+    create_task_with_title(&app_pool, f.org_acme, f.alice_id, person_id, SENTINEL, now).await;
+
+    let buffer = Arc::new(Mutex::new(Vec::new()));
+    let subscriber = tracing_subscriber::registry().with(
+        tracing_subscriber::fmt::layer()
+            .with_writer(CaptureWriter(buffer.clone()))
+            .with_ansi(false)
+            .with_span_events(tracing_subscriber::fmt::format::FmtSpan::FULL),
+    );
+    let guard = tracing::subscriber::set_default(subscriber);
+
+    let (router, provider) = router_scripted(
+        &f.migrator_pool,
+        vec![
+            tool_step("get_today", json!({ "limit": 20 })),
+            tool_step("get_next_work_item", json!({})),
+            tool_step("explain_priority", json!({ "person_id": person_id })),
+            text_step("done"),
+        ],
+    )
+    .await;
+    let alice = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
+
+    let today_http = crate::common::get_with_cookie(&router, "/api/today", &alice).await;
+    let today_body = crate::common::body_json(today_http).await;
+    let today_text = today_body.to_string();
+
+    let tasks_http = crate::common::get_with_cookie(&router, "/api/tasks?scope=mine", &alice).await;
+    let tasks_body = crate::common::body_json(tasks_http).await;
+    let tasks_text = tasks_body.to_string();
+
+    let turn_resp = post_turn(&router, &alice, message("what's on today")).await;
+    assert_eq!(turn_resp.status(), StatusCode::OK);
+
+    drop(guard);
+    let captured = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
+
+    // Positive controls: the title legitimately appears in both HTTP
+    // bodies (rule 7 sites) and in the untrusted `reasons_json` the model
+    // receives.
+    assert!(today_text.contains(SENTINEL), "GET /api/today legitimately carries the title in the reason payload");
+    assert!(tasks_text.contains(SENTINEL), "GET /api/tasks legitimately carries the title");
+    let sent_to_model = requests_json(&provider);
+    assert!(
+        sent_to_model.contains(SENTINEL) && sent_to_model.contains("untrusted_text"),
+        "the model-facing reasons_json legitimately carries the title, wrapped as untrusted_text"
+    );
+
+    // Negative: never in the captured trace/log output (spans, the
+    // MalformedRequest envelope path, etc.) — rule 7/§9.
+    assert!(
+        !captured.contains(SENTINEL),
+        "the task title leaked into the captured trace output: {captured}"
+    );
+
+    // Negative: never in the operator_tool_call ledger.
+    let turn_pool = crate::common::connect_as_app(&f.migrator_pool).await;
+    let turns = turn_rows(&turn_pool).await;
+    let (turn_id, ..) = turns.last().unwrap();
+    let tools = tool_rows(&turn_pool, *turn_id).await;
+    let serialized_tools = format!("{tools:?}");
+    assert!(!serialized_tools.contains(SENTINEL), "the ledger row must hold no task title");
+
+    // Positive control on capture itself: today.query and today.task_axis
+    // spans must actually appear, proving the harness would have caught a
+    // real leak.
+    assert!(captured.contains("today.query"), "the today.query span must appear: {captured}");
 }

@@ -146,6 +146,9 @@ mod db_saved_lists_tags;
 #[path = "db_tags.rs"]
 mod db_tags;
 
+#[path = "db_tasks.rs"]
+mod db_tasks;
+
 #[path = "db_today.rs"]
 mod db_today;
 

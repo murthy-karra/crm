@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE task SET title = '', deleted_at = now(), deleted_by_user_id = $4\n           WHERE id = $1 AND organization_id = $2 AND person_id = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cd92104a519e78aa588c8f3a4a74b8d00f596ea5b7ce1f0c02c2740a29310a19"
+}

@@ -1,0 +1,95 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT t.id, t.completed_at, t.origin, t.correlation_id,\n                  t.completed_by_user_id, ku.display_name as \"completed_by_display_name?\",\n                  t.title, t.kind, t.due_at,\n                  t.assignee_user_id, au.display_name as \"assignee_display_name?\",\n                  t.created_by_user_id, cu.display_name as \"created_by_display_name?\"\n           FROM task t\n           LEFT JOIN app_user ku ON ku.id = t.completed_by_user_id\n           LEFT JOIN app_user au ON au.id = t.assignee_user_id\n           LEFT JOIN app_user cu ON cu.id = t.created_by_user_id\n           WHERE t.organization_id = $1 AND t.person_id = $2\n             AND t.completed_at IS NOT NULL AND t.deleted_at IS NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "completed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "origin",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "correlation_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "completed_by_user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "completed_by_display_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "due_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "assignee_user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 10,
+        "name": "assignee_display_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "created_by_user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 12,
+        "name": "created_by_display_name?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "34f459d21a64330c4b68091af600c80a6a18f81bfa3f1fab4e9c6347ed51c21f"
+}

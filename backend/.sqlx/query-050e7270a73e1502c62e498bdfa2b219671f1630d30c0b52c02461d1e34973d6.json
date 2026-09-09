@@ -1,0 +1,96 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT t.id, t.title, t.kind, t.due_at,\n                  t.assignee_user_id, au.display_name as \"assignee_display_name?\",\n                  t.created_by_user_id, cu.display_name as \"created_by_display_name?\",\n                  t.completed_at,\n                  t.completed_by_user_id, ku.display_name as \"completed_by_display_name?\",\n                  t.created_at, t.updated_at\n           FROM task t\n           LEFT JOIN app_user au ON au.id = t.assignee_user_id\n           LEFT JOIN app_user cu ON cu.id = t.created_by_user_id\n           LEFT JOIN app_user ku ON ku.id = t.completed_by_user_id\n           WHERE t.id = $1 AND t.organization_id = $2 AND t.person_id = $3\n             AND t.deleted_at IS NULL\n           FOR UPDATE OF t",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "due_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "assignee_user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "assignee_display_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_by_user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_by_display_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "completed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "completed_by_user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 10,
+        "name": "completed_by_display_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "050e7270a73e1502c62e498bdfa2b219671f1630d30c0b52c02461d1e34973d6"
+}

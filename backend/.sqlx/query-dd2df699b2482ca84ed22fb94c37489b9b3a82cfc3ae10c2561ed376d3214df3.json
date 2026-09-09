@@ -1,0 +1,54 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH inserted AS (\n               INSERT INTO task (organization_id, person_id, title, kind, due_at,\n                                  assignee_user_id, created_by_user_id, origin, correlation_id)\n               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)\n               RETURNING id, created_at, updated_at\n           )\n           SELECT inserted.id, inserted.created_at, inserted.updated_at,\n                  au.display_name as \"assignee_display_name!\",\n                  cu.display_name as \"created_by_display_name!\"\n           FROM inserted\n           JOIN app_user au ON au.id = $6\n           JOIN app_user cu ON cu.id = $7",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "assignee_display_name!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_by_display_name!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "dd2df699b2482ca84ed22fb94c37489b9b3a82cfc3ae10c2561ed376d3214df3"
+}

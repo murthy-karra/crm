@@ -1,11 +1,22 @@
 # Project State
 
-Last updated: 2026-09-08 (Slice 014 merged to local main; the tunnel serves
-the merged production build; no slice active).
+Last updated: 2026-09-08 (Slice 014 merged and pushed; the LATER batch lane
+started).
 
 ## Current phase
 
-**Slice 014 — COMPLETE AND MERGED TO LOCAL MAIN** at `ac270fb` (2026-09-08,
+**LATER BATCH (2026-09-08) — LANE IN IMPLEMENTATION.** The user chose the
+"worth a small batch soon" group from the LATER lists: `inquiry` append-only
+triggers (one migration), the `db_calls` timing flake, splitting the three
+largest test files, field-only `onSuccess` writes in the optimistic
+mutations, and `isMutating` guards on the settle-invalidate and the realtime
+invalidation. Brief: [LATER_BATCH_2026-09-08.md](../tasks/LATER_BATCH_2026-09-08.md);
+no spec (recorded LATER items; no contract or behaviour decision). One lane
+(Claude Sonnet 5) in `../crm-worktrees/later-1` on
+`chore/later-batch-2026-09-08`; checkpoints on the cascade finding (item 1)
+and the flake diagnosis (item 2).
+
+Previously: **Slice 014 — COMPLETE AND MERGED TO LOCAL MAIN** at `ac270fb` (2026-09-08,
 with the user's approval; not pushed, not deployed). Source
 `slice-014-perceived-latency` at `3495f71` (six commits incl. the round-1
 fixes `fa9bcab`, the walkthrough archive and the

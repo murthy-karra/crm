@@ -1304,3 +1304,52 @@ mod tag_id_tests {
         );
     }
 }
+
+/// A note identity (Slice 015). Kept distinct from every other UUID —
+/// above all `PersonId` and `TagId`, its closest neighbors in every
+/// note-related call site — so a Person or tag id cannot accidentally
+/// cross a note query boundary at compile time.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
+#[repr(transparent)]
+pub struct NoteId(pub Uuid);
+
+impl NoteId {
+    pub fn new(id: Uuid) -> Self {
+        Self(id)
+    }
+
+    pub fn as_uuid(self) -> Uuid {
+        self.0
+    }
+}
+
+impl fmt::Display for NoteId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
+impl fmt::Debug for NoteId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self, f)
+    }
+}
+
+#[cfg(test)]
+mod note_id_tests {
+    use super::*;
+
+    #[test]
+    fn note_id_is_transparent_and_readable() {
+        let raw = Uuid::new_v4();
+        let id = NoteId::new(raw);
+        assert_eq!(id.as_uuid(), raw);
+        assert_eq!(id.to_string(), raw.to_string());
+        assert_eq!(format!("{id:?}"), raw.to_string());
+        assert_eq!(
+            serde_json::to_string(&id).unwrap(),
+            serde_json::to_string(&raw).unwrap()
+        );
+    }
+}

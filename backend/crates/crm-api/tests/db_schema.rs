@@ -1129,3 +1129,77 @@ async fn tag_name_is_unique_case_insensitively_per_organization_and_person_tag_i
         "a Person or tag from another Organization can never be persisted into person_tag"
     );
 }
+
+/// docs/specs/SLICE_015.md §2, §9.1: `crm_app` grants for `note` — full
+/// SELECT/INSERT/UPDATE, but explicitly **no DELETE** (tombstones are
+/// UPDATEs; erasure is the Person cascade, run as the table owner). The
+/// CHECK matrix itself is pinned in `db_notes.rs`.
+#[sqlx::test]
+#[ignore]
+async fn note_grants_are_exactly_slice_015_section_2_with_no_delete(migrator_pool: PgPool) {
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let (org_id, actor_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Note Grant Realty",
+        "note-grant@acme.test",
+        "Note Grant",
+        "correct horse battery staple",
+    )
+    .await;
+    let stage_id = first_stage_id_for_schema_test(&app_pool, org_id).await;
+    let person_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO person (organization_id, first_name, stage_id) VALUES ($1, 'Fixture', $2) RETURNING id",
+    )
+    .bind(org_id)
+    .bind(stage_id)
+    .fetch_one(&app_pool)
+    .await
+    .unwrap();
+
+    let select = sqlx::query("SELECT * FROM note").fetch_all(&app_pool).await;
+    assert!(select.is_ok(), "note: SELECT must succeed for crm_app");
+
+    let note_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO note (organization_id, person_id, author_user_id, body, origin, correlation_id)
+         VALUES ($1, $2, $3, 'A note body', 'web_session', gen_random_uuid()) RETURNING id",
+    )
+    .bind(org_id)
+    .bind(person_id)
+    .bind(actor_id)
+    .fetch_one(&app_pool)
+    .await
+    .expect("note: INSERT must succeed for crm_app");
+
+    let update = sqlx::query("UPDATE note SET body = 'Edited body' WHERE id = $1")
+        .bind(note_id)
+        .execute(&app_pool)
+        .await;
+    assert!(update.is_ok(), "note: UPDATE must succeed for crm_app");
+
+    let delete = sqlx::query("DELETE FROM note WHERE id = $1")
+        .bind(note_id)
+        .execute(&app_pool)
+        .await;
+    assert!(delete.is_err(), "note: DELETE must be denied for crm_app");
+}
+
+/// docs/specs/SLICE_015.md §2: the detail-read index and the import
+/// idempotency partial unique index both exist exactly as named.
+#[sqlx::test]
+#[ignore]
+async fn note_indexes_exist(migrator_pool: PgPool) {
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let index_names: Vec<String> =
+        sqlx::query_scalar("SELECT indexname FROM pg_indexes WHERE tablename = 'note'")
+            .fetch_all(&app_pool)
+            .await
+            .unwrap();
+    assert!(
+        index_names.contains(&"note_org_person_created_idx".to_string()),
+        "missing note_org_person_created_idx in {index_names:?}"
+    );
+    assert!(
+        index_names.contains(&"note_org_source_external_idx".to_string()),
+        "missing note_org_source_external_idx in {index_names:?}"
+    );
+}

@@ -364,8 +364,14 @@ constraint, `now` bound as a parameter:
   retained, one row per Person (earliest), joined to `person` for the
   summary, `LIMIT (200 − |retained|) + 1`; the extra row sets
   `truncated_task`. Items are built directly as `TodayItem` with
-  `latest_inquiry: null`, `waiting_since: null`, `last_contact_attempt`
-  from the D-052 column, `priority` `high` when overdue else `normal`, and
+  `latest_inquiry` and `last_inquiry_at` hydrated **exactly as the 011c
+  list-only band does** (a real `InquiryRef` when the Person has an
+  inquiry, `null` only when none exists; *amended at review round 1,
+  2026-09-09: an earlier draft said "null" unconditionally, contradicting
+  rule 8, D-054 and the 011c pointer*), `waiting_since: null`,
+  `last_contact_attempt` hydrated the way the call-only statement does
+  (the D-052 columns cannot supply the reference shape), `priority` `high`
+  when overdue else `normal`, and
   `recommended_action` from `kind` using the existing variants only:
   `email` → `Email` if an email exists, else `Call` if a phone, else
   `ReviewPerson`; every other kind → the list-only chain (`Call` if a
@@ -387,7 +393,9 @@ constraint, `now` bound as a parameter:
   Within `high`: fresh person-state items in their statement order, then
   raised items in their person-state order, then task-only items by
   `due_at ASC, id ASC`. Within `normal`: person-state items in order, then
-  task-only items by `due_at ASC, id ASC`. `low` unchanged. The compiled-in
+  task-only items by `due_at ASC, id ASC` (the tie-break `id` is the
+  Person id, the call-only precedent; the panel breaks ties on the task
+  id; §12.13 parity is set-based). `low` unchanged. The compiled-in
   `ORDERING_RULE` string gains the clause
   `overdue_task_raises_normal_to_high_after_fresh; task_only_items_follow_their_tier_by_due_at_then_id`.
 - **Failure, all-or-nothing:** if either statement fails or the budget

@@ -1,24 +1,32 @@
 # Project State
 
-Last updated: 2026-09-09 (Slice 016b Today axis approved; lane started in
-../crm-worktrees/tasks-2; LiveKit down, see Environment).
+Last updated: 2026-09-09 (Slice 016b implemented and verified on the
+branch; awaiting merge approval; LiveKit down, see Environment).
 
 ## Current phase
 
-**SLICE 016b (TASKS: TODAY AXIS AND PANEL) — LANE IN IMPLEMENTATION
-(started 2026-09-09).** The user approved the 016b gate ("ok start with
-016b"). One lane (`implement` profile, Claude Sonnet 5) in
-`../crm-worktrees/tasks-2` on `slice-016b-today` from `main` at the gate
-commit, backend then Web, per the
-[implementation brief](../tasks/SLICE_016_IMPL.md) §016b; the coordinator
-(Fable) owns review, test analysis, the once-only final-tree gates
-(including every `check-db` run), the §11 performance evidence check and
-the commit and merge gates. Specification:
-[SLICE_016.md](../specs/SLICE_016.md) §§5, 6, 7, 8 "Today", 11, 12.9–12.17.
-016b amendment pointers recorded in SLICE_003 §3, SLICE_011c §5 and
-SLICE_011d §§1/5/6. 016a is complete and serving on the shared dev
-runtime. Not authorized: commit on `main`, merge, push, deployment, runtime
-update.
+**SLICE 016b (TASKS: TODAY AXIS AND PANEL) — IMPLEMENTED AND VERIFIED;
+AWAITING MERGE APPROVAL (2026-09-09).** Branch `slice-016b-today` in
+`../crm-worktrees/tasks-2`, ten commits from `main` at `a5b301e`, head =
+the record's gate table on top of `ca55dc1` (the coordinator's completion:
+a positive latest-inquiry test, a deflaked Today Vitest, the record);
+worktree clean. Lane (Claude Sonnet 5) delivered the axis, the panel read,
+Operator explanations, the §11 evidence (whose `EXPLAIN` gate caught and
+fixed a planner degeneration), the Web half, the walkthrough (eleven
+screenshots) and two fix rounds. Final-tree gates on `ca55dc1`:
+`sqlx-prepare` clean, `check` green (774 Rust, 747 Vitest), `check-db`
+716 of 716 first run. Reviews: round 1 backend (no axis defect; a spec
+self-conflict on `latest_inquiry` resolved in D-054's favour; a
+clock-resolution test fix), round 2 Web (a real defect: the shared
+mutation hook detached its observer so only one Complete/Snooze worked per
+page load; fixed), confirmation READY with recorded test debt (the lane's
+context compacted mid-batch and about half the test sub-parts were
+dropped; the load-bearing one, the untested hydration, closed by the
+coordinator). Evidence:
+[SLICE_016b_VERIFICATION.md](../tasks/SLICE_016b_VERIFICATION.md). Not
+authorized yet: merge, dev API restart, `dev-web-prod` rebuild, push,
+deployment. No migration in this rung. `crm_slice016b_qa` remains on the
+dev Postgres.
 
 Previously: **LATER BATCH (2026-09-08) — COMPLETE AND MERGED TO LOCAL MAIN** at `3ff6c5f`
 (with the user's approval; not pushed, not deployed). Source
@@ -1018,9 +1026,10 @@ and now lives only in git history.
 
 ## Approval currently required
 
-- **Rung 016b: none until the lane reports.** Implementation approved on
-  2026-09-09; next gates are commit approval after verification, then
-  merge, runtime update, push. Deployment is not authorized.
+- **Rung 016b: merge approval.** All commits are on `slice-016b-today`,
+  none on `main`. Requested: (1) merge into local `main`; (2) then,
+  separately, restart the dev API and rebuild `dev-web-prod` (no
+  migration); (3) push; (4) cleanup. Deployment is not authorized.
 - None for 011e: both rungs merged, the dev runtime updated and the branches
   cleaned up with approval on 2026-09-07. `main` pushed on 2026-09-07; deployment is not authorized. The next slice or chunk
   (candidates below) needs the user's request.

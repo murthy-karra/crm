@@ -34,6 +34,12 @@ pub enum PersonChange {
     ContactAttempted,
     CorrespondenceCaptured,
     TagsChanged,
+    /// Slice 015's declared additive variant (docs/specs/SLICE_015.md §5,
+    /// §7): published on a committed add, a changing edit, and a delete —
+    /// never on `changed: false` — and, like every other variant here,
+    /// ids only: no note body ever travels on the realtime channel
+    /// (D-023, rule 7).
+    NoteChanged,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -288,6 +294,7 @@ mod tests {
                 "correspondence_captured",
             ),
             (PersonChange::TagsChanged, "tags_changed"),
+            (PersonChange::NoteChanged, "note_changed"),
         ] {
             let event = RealtimeEvent::person_changed(
                 OrganizationId::new(Uuid::new_v4()),

@@ -28,15 +28,18 @@ use crate::operator::explain;
 use crate::operator::filter::{self as name_resolver, NameMatch, Resolved};
 use crm_operator::{
     ContactMethodView, FilterOutcome, FilterResult, HistoryEntryView, InquiryView, NextWorkItem,
-    OperatorContext, PeopleFilterSpec, PersonCard, PersonDetail, PhoneOption, PriorityExplanation,
-    ProposalView, SavedListRef, SavedListSelector, SearchResult, StartCallProposalOutcome,
-    TodayItemView, TodayView, ToolBackend, ToolError, ToolResult, UntrustedText,
+    NoteView, OperatorContext, PeopleFilterSpec, PersonCard, PersonDetail, PhoneOption,
+    PriorityExplanation, ProposalView, SavedListRef, SavedListSelector, SearchResult,
+    StartCallProposalOutcome, TodayItemView, TodayView, ToolBackend, ToolError, ToolResult,
+    UntrustedText,
 };
 
 /// `get_person` returns the latest 5 inquiries and latest 20 history
-/// entries (docs/specs/SLICE_005.md §3, §14 item 12).
+/// entries (docs/specs/SLICE_005.md §3, §14 item 12); the latest 5 live
+/// notes (docs/specs/SLICE_015.md §5, the same `MAX_INQUIRIES` precedent).
 const MAX_INQUIRIES: usize = 5;
 const MAX_HISTORY: usize = 20;
+const MAX_NOTES: usize = 5;
 
 pub struct SqlxToolBackend {
     pool: PgPool,
@@ -287,9 +290,20 @@ impl ToolBackend for SqlxToolBackend {
             })
             .collect();
 
-        let all_history = person_queries::history_for_person(&mut conn, org_id(ctx), person_id)
-            .await
-            .map_err(db_error)?;
+        // The `note` kind is excluded before the `MAX_HISTORY` truncation
+        // (docs/specs/SLICE_015.md §5): `notes` below already represents
+        // live notes, and twenty recent notes would otherwise push every
+        // stage, assignment, and call fact out of the model's bounded
+        // view. `history_detail` gains no `"note"` arm — a body never
+        // reaches the model through this projection, only through
+        // `notes` as `UntrustedText`.
+        let all_history: Vec<_> =
+            person_queries::history_for_person(&mut conn, org_id(ctx), person_id)
+                .await
+                .map_err(db_error)?
+                .into_iter()
+                .filter(|e| e.kind != "note")
+                .collect();
         let skip = all_history.len().saturating_sub(MAX_HISTORY);
         let history = all_history
             .iter()
@@ -313,6 +327,25 @@ impl ToolBackend for SqlxToolBackend {
             .map(|t| UntrustedText::new(&t.name))
             .collect();
 
+        let notes = crate::domain::note::latest_for_person(
+            &mut conn,
+            org_id(ctx),
+            person_id,
+            MAX_NOTES as i64,
+        )
+        .await
+        // `NoteError`, the same reasoning as the `tag::list_for_person`
+        // mapping just above — a generic backend-failure reason, never a
+        // note body or a SQL-error string.
+        .map_err(|_| ToolError::Backend("database query failed".into()))?
+        .into_iter()
+        .map(|n| NoteView {
+            author_display_name: n.author_display_name,
+            created_at: n.created_at,
+            body: UntrustedText::new(&n.body),
+        })
+        .collect();
+
         let today = today_for(conn, ctx).await?;
         let on_your_today = today.items.iter().any(|i| i.person.id == person_id);
 
@@ -325,6 +358,7 @@ impl ToolBackend for SqlxToolBackend {
             today_truncated: today.truncated,
             sources: explain::sources_view(&today),
             tags,
+            notes,
         })
     }
 

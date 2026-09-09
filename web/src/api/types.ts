@@ -521,6 +521,21 @@ export interface CorrespondenceDetail {
   backdated: boolean
 }
 
+// SLICE_015 §5's declared additive change: `note`, `kind_rank` 7,
+// `detail: {body, updated_at, edited, can_manage}`. `HistoryEntryBase.actor`
+// is the note's author (`null` only for an imported note whose FUB author
+// matched no member, §1 rule 1) — an edit does not move `occurred_at`, so
+// the timeline position never changes on edit.
+export interface NoteDetail {
+  body: string
+  updated_at: string
+  edited: boolean
+  // The server's rule-1 verdict for THIS viewer (admin, or the note's own
+  // author) — a display hint; the command re-decides under the note row's
+  // lock (§5).
+  can_manage: boolean
+}
+
 export type HistoryEntry =
   | (HistoryEntryBase & { kind: 'inquiry_received'; detail: InquiryReceivedDetail })
   | (HistoryEntryBase & { kind: 'routing_decision'; detail: RoutingDecisionDetail })
@@ -529,6 +544,7 @@ export type HistoryEntry =
   | (HistoryEntryBase & { kind: 'contact_attempted'; detail: ContactAttemptedDetail })
   | (HistoryEntryBase & { kind: 'call_completed'; detail: CallCompletedDetail })
   | (HistoryEntryBase & { kind: 'correspondence'; detail: CorrespondenceDetail })
+  | (HistoryEntryBase & { kind: 'note'; detail: NoteDetail })
 
 export interface PersonDetailResponse {
   person: PersonSummary
@@ -593,6 +609,47 @@ export interface DeleteTagResponse {
 export interface PersonTagMutationResponse {
   tags: TagRef[]
   changed: boolean
+}
+
+// --- Slice 015: Notes (docs/specs/SLICE_015.md §5) --------------------------
+// Free-text notes on a Person: written by any active member from the Person
+// page, edited/deleted by the author or an Organization admin. No separate
+// GET route — the Person detail's `history[]` (the `note` kind above) is the
+// read surface; these are the three mutation shapes only.
+
+/** `author` is `null` only for an imported note whose FUB author matched no
+ * member (§1 rule 1) — the same `ActorRef | null` shape `HistoryEntryBase`
+ * uses. */
+export interface Note {
+  id: string
+  person_id: string
+  body: string
+  author: ActorRef | null
+  created_at: string
+  updated_at: string
+  edited: boolean
+  can_manage: boolean
+}
+
+export interface AddNoteRequest {
+  body: string
+}
+
+export interface AddNoteResponse {
+  note: Note
+}
+
+export interface EditNoteRequest {
+  body: string
+}
+
+export interface EditNoteResponse {
+  note: Note
+  changed: boolean
+}
+
+export interface DeleteNoteResponse {
+  deleted: boolean
 }
 
 // ---- Mutations: assignment / stage (§5 POST .../assignment, .../stage) ---

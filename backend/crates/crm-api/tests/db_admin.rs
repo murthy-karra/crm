@@ -387,6 +387,37 @@ async fn platform_admin_with_zero_memberships_has_null_organization_and_is_401_o
     .await;
     assert_eq!(realtime_resp.status(), StatusCode::UNAUTHORIZED);
 
+    // Slice 015 (docs/specs/SLICE_015.md §9.7): the three note routes join
+    // this enumeration too. The existing loop above is GET-only and notes
+    // has no GET route (the detail read's `history[]` is the read
+    // surface), so POST/PUT/DELETE are checked explicitly here, exactly
+    // like the inquiries/realtime POST checks just above.
+    let fake_person_id = Uuid::new_v4();
+    let fake_note_id = Uuid::new_v4();
+    let note_post_resp = post_json_with_cookie(
+        &router,
+        &format!("/api/people/{fake_person_id}/notes"),
+        &cookie,
+        serde_json::json!({ "body": "Should be 401" }),
+    )
+    .await;
+    assert_eq!(note_post_resp.status(), StatusCode::UNAUTHORIZED);
+    let note_put_resp = put_json_with_cookie(
+        &router,
+        &format!("/api/people/{fake_person_id}/notes/{fake_note_id}"),
+        &cookie,
+        serde_json::json!({ "body": "Should be 401" }),
+    )
+    .await;
+    assert_eq!(note_put_resp.status(), StatusCode::UNAUTHORIZED);
+    let note_delete_resp = delete_with_cookie(
+        &router,
+        &format!("/api/people/{fake_person_id}/notes/{fake_note_id}"),
+        &cookie,
+    )
+    .await;
+    assert_eq!(note_delete_resp.status(), StatusCode::UNAUTHORIZED);
+
     // Lists and creates Organizations.
     let list_resp = get_with_cookie(&router, "/api/platform/organizations", &cookie).await;
     assert_eq!(list_resp.status(), StatusCode::OK);

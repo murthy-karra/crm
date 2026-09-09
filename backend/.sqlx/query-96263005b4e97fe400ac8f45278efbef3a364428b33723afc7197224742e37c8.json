@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT au.display_name as \"author_display_name?\", n.created_at, n.body\n           FROM note n\n           LEFT JOIN app_user au ON au.id = n.author_user_id\n           WHERE n.organization_id = $1 AND n.person_id = $2 AND n.deleted_at IS NULL\n           ORDER BY n.created_at DESC, n.id DESC\n           LIMIT $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "author_display_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "body",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "96263005b4e97fe400ac8f45278efbef3a364428b33723afc7197224742e37c8"
+}

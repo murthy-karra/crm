@@ -1214,6 +1214,45 @@ async fn correspondence_history(
         .collect()
 }
 
+/// `note` history entries (Slice 015, docs/specs/SLICE_015.md §5): kind_rank
+/// 7, `detail: {"body","updated_at","edited","can_manage"}` —
+/// `can_manage` is emitted `false` here unconditionally; the people
+/// detail route, which knows the viewer's role and id, overwrites it for
+/// `note` entries (the tags-route pattern). `occurred_at`/`recorded_at`
+/// are both the note's `created_at`: an edit does not move the timeline
+/// position (spec §1 rule 4). The raw row read itself lives in
+/// `domain::note::queries` (the note module owns its own table); this
+/// function only shapes it into a `HistoryEntry`.
+async fn note_history_entries(
+    conn: &mut PgConnection,
+    organization_id: OrganizationId,
+    person_id: PersonId,
+) -> Result<Vec<HistoryEntry>, sqlx::Error> {
+    let rows = crate::domain::note::note_history(conn, organization_id, person_id).await?;
+    Ok(rows
+        .into_iter()
+        .map(|r| {
+            let edited = r.updated_at > r.created_at;
+            HistoryEntry {
+                kind: "note",
+                kind_rank: 7,
+                id: r.id,
+                occurred_at: r.created_at,
+                recorded_at: r.created_at,
+                actor: r.actor,
+                origin: r.origin,
+                correlation_id: CorrelationId::new(r.correlation_id),
+                detail: serde_json::json!({
+                    "body": r.body,
+                    "updated_at": r.updated_at,
+                    "edited": edited,
+                    "can_manage": false,
+                }),
+            }
+        })
+        .collect())
+}
+
 /// The full history timeline for `GET /api/people/{id}`, ordered
 /// `occurred_at, recorded_at, kind_rank, id` (docs/specs/SLICE_002.md §5:
 /// required because intake's four facts otherwise share both timestamps).
@@ -1230,6 +1269,7 @@ pub async fn history_for_person(
     entries.extend(contact_attempted_history(conn, organization_id, person_id).await?);
     entries.extend(call_completed_history(conn, organization_id, person_id).await?);
     entries.extend(correspondence_history(conn, organization_id, person_id).await?);
+    entries.extend(note_history_entries(conn, organization_id, person_id).await?);
 
     entries.sort_by_key(|e| (e.occurred_at, e.recorded_at, e.kind_rank, e.id));
     Ok(entries)

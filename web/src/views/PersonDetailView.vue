@@ -9,7 +9,22 @@ import { computed, nextTick, onBeforeUnmount, ref, watch, type Component } from 
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import Select from 'primevue/select'
 import { useQueryClient } from '@tanstack/vue-query'
-import { Flag, Inbox, Mail, Phone, PhoneCall, PhoneOutgoing, Plus, Route, UserCheck, X } from 'lucide-vue-next'
+import {
+  Activity,
+  Flag,
+  Inbox,
+  Mail,
+  Pencil,
+  Phone,
+  PhoneCall,
+  PhoneOutgoing,
+  Plus,
+  Route,
+  StickyNote,
+  Trash2,
+  UserCheck,
+  X,
+} from 'lucide-vue-next'
 import Card from '../components/Card.vue'
 import FormField from '../components/FormField.vue'
 import Badge from '../components/Badge.vue'
@@ -19,11 +34,14 @@ import LogContactDialog from '../components/LogContactDialog.vue'
 import ChangeOutcomeDialog from '../components/ChangeOutcomeDialog.vue'
 import {
   queryKeys,
+  useAddNoteMutation,
   useAddPersonTagMutation,
   useAssignPersonMutation,
   useChangeStageMutation,
   useCorrectCallOutcome,
   useCreateTagMutation,
+  useDeleteNoteMutation,
+  useEditNoteMutation,
   useMe,
   useMembers,
   usePerson,
@@ -34,8 +52,9 @@ import {
 import { ApiError } from '../api/client'
 import type { ActorRef, CallOutcomeCorrection, ContactAttemptedDetail, HistoryEntry, RoutingStrategy, TagRef } from '../api/types'
 import { formatAbsoluteTime, formatRelativeTime } from '../lib/format'
-import { buttonClasses, INPUT_CLASSES, selectPt } from '../lib/controls'
-import { describeApiError } from '../lib/errors'
+import { buttonClasses, INPUT_CLASSES, LABEL_CLASSES, TEXTAREA_CLASSES, selectPt } from '../lib/controls'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
+import { describeApiError, describeNoteError } from '../lib/errors'
 import { CONTACT_CHANNEL_LABEL, CONTACT_OUTCOME_LABEL, correctedOutcomeLabel } from '../lib/labels'
 import { describeOutcomeError } from '../telephony/errors'
 import { callCompletedSummary, formatTalkSeconds } from '../telephony/format'
@@ -261,6 +280,181 @@ const HISTORY_ICON: Record<HistoryEntry['kind'], Component> = {
   contact_attempted: PhoneCall,
   call_completed: PhoneOutgoing,
   correspondence: Mail,
+  note: StickyNote,
+}
+
+// docs/specs/SLICE_015.md §5: a tab loaded before a deploy refetches on the
+// first `person.changed` it receives, so an unrecognised future `kind`
+// (one this bundle's `HistoryEntry` union does not know about) must never
+// throw or render `undefined` — it renders as a generic "Activity" row
+// with this fallback icon instead. `HISTORY_ICON` is indexed by the raw
+// wire string (not the closed union) precisely so this lookup is defined
+// for a value TypeScript believes is exhaustive but the JSON payload does
+// not actually guarantee.
+function historyIcon(kind: string): Component {
+  return (HISTORY_ICON as Record<string, Component>)[kind] ?? Activity
+}
+
+// ---- Notes (SLICE_015 §5, §9.10) -------------------------------------------
+// Composer at the top of the History card; note rows render inline with
+// Edit/Delete where `detail.can_manage`. Mutations are pessimistic (§5: "a
+// note body is the kind of value 014 §3 declined to invent client-side") —
+// see api/queries.ts's useAdd/Edit/DeleteNoteMutation doc comments.
+const NOTE_MAX_CHARS = 10_000
+const NOTE_COUNTER_THRESHOLD = 9_000
+
+function codePointLength(value: string): number {
+  return Array.from(value).length
+}
+
+const addNote = useAddNoteMutation(orgId, () => props.id)
+const noteDraft = ref('')
+const noteAddError = ref<string | null>(null)
+const noteDraftCodePoints = computed(() => codePointLength(noteDraft.value))
+const noteDraftOverLimit = computed(() => noteDraftCodePoints.value > NOTE_MAX_CHARS)
+const noteAddDisabled = computed(
+  () => noteDraft.value.trim() === '' || noteDraftOverLimit.value || addNote.isPending.value,
+)
+
+function submitNote() {
+  if (noteAddDisabled.value) return
+  noteAddError.value = null
+  addNote.mutate(
+    { personId: props.id, body: noteDraft.value },
+    {
+      onSuccess: () => { noteDraft.value = '' },
+      onError: (err) => { noteAddError.value = describeNoteError(err, 'Could not add this note.') },
+    },
+  )
+}
+
+function onNoteComposerKeydown(event: KeyboardEvent) {
+  if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+    event.preventDefault()
+    submitNote()
+  }
+}
+
+interface NotePayload {
+  id: string
+  body: string
+  edited: boolean
+  canManage: boolean
+}
+
+// ---- Inline edit (local state keyed by note id) ---------------------------
+// Kept local rather than derived from `historyRows` so a refetch that drops
+// the note out of `history` (deleted elsewhere while the viewer is typing)
+// does not silently unmount the editor and lose the draft (§5).
+interface EditingNote {
+  id: string
+  draft: string
+  error: string | null
+}
+const editingNote = ref<EditingNote | null>(null)
+const editNote = useEditNoteMutation(orgId, () => props.id)
+const editButtonRefs: Record<string, HTMLButtonElement | null> = {}
+
+function setEditButtonRef(id: string, el: unknown) {
+  editButtonRefs[id] = el instanceof HTMLButtonElement ? el : null
+}
+
+// True once a refetch (any reason — realtime, focus, this mutation's own
+// settle) shows the note being edited is no longer live: tombstoned or
+// gone. Recomputed automatically whenever `history` changes; no manual
+// watcher needed.
+const editingNoteGone = computed(() => {
+  const editing = editingNote.value
+  if (!editing) return false
+  return !history.value.some((entry) => entry.kind === 'note' && entry.id === editing.id)
+})
+
+function startEditNote(note: NotePayload) {
+  if (editingNote.value?.id === note.id) return
+  editingNote.value = { id: note.id, draft: note.body, error: null }
+}
+
+function cancelEditNote() {
+  if (!editingNote.value || editNote.isPending.value) return
+  const id = editingNote.value.id
+  editingNote.value = null
+  void nextTick(() => editButtonRefs[id]?.focus())
+}
+
+function onEditNoteKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    cancelEditNote()
+  }
+}
+
+// A get/set computed rather than `v-model="editingNote.draft"` directly: the
+// template's `v-if="row.note && editingNote?.id === row.note.id"` implies
+// `editingNote` is non-null without a form vue-tsc's template narrowing
+// recognizes, so both editor blocks below bind through this null-safe model
+// instead of asserting it themselves.
+const editingNoteDraftModel = computed<string>({
+  get: () => editingNote.value?.draft ?? '',
+  set: (value) => {
+    if (editingNote.value) editingNote.value.draft = value
+  },
+})
+
+const editNoteCodePoints = computed(() => (editingNote.value ? codePointLength(editingNote.value.draft) : 0))
+const editNoteSaveDisabled = computed(() => {
+  const editing = editingNote.value
+  if (!editing) return true
+  return editing.draft.trim() === '' || editNoteCodePoints.value > NOTE_MAX_CHARS || editNote.isPending.value
+})
+
+function saveEditNote() {
+  const editing = editingNote.value
+  if (!editing || editNoteSaveDisabled.value) return
+  editing.error = null
+  editNote.mutate(
+    { personId: props.id, noteId: editing.id, body: editing.draft },
+    {
+      onSuccess: () => {
+        if (editingNote.value?.id === editing.id) editingNote.value = null
+      },
+      onError: (err) => {
+        const current = editingNote.value
+        if (current?.id === editing.id) {
+          current.error = describeNoteError(err, 'Could not save this note.')
+        }
+      },
+    },
+  )
+}
+
+// ---- Delete (ConfirmDialog) -------------------------------------------------
+const deleteNote = useDeleteNoteMutation(orgId, () => props.id)
+const deleteNoteTarget = ref<{ id: string } | null>(null)
+const deleteNoteDialogOpen = ref(false)
+
+function openDeleteNote(note: NotePayload) {
+  deleteNoteTarget.value = { id: note.id }
+  deleteNote.reset()
+  deleteNoteDialogOpen.value = true
+}
+
+function closeDeleteNoteDialog() {
+  if (deleteNote.isPending.value) return
+  deleteNoteDialogOpen.value = false
+}
+
+function confirmDeleteNote() {
+  const target = deleteNoteTarget.value
+  if (!target || deleteNote.isPending.value) return
+  deleteNote.mutate(
+    { personId: props.id, noteId: target.id },
+    {
+      onSuccess: () => {
+        deleteNoteDialogOpen.value = false
+        if (editingNote.value?.id === target.id) editingNote.value = null
+      },
+    },
+  )
 }
 
 const logContactOpen = ref(false)
@@ -416,6 +610,10 @@ watch(
     pickerOpen.value = false
     changeOutcomeOpen.value = false
     addTagOpen.value = false
+    noteDraft.value = ''
+    noteAddError.value = null
+    editingNote.value = null
+    deleteNoteDialogOpen.value = false
   },
 )
 
@@ -471,6 +669,17 @@ function historySummary(entry: HistoryEntry): string {
       const label = direction === 'outbound' ? 'Outbound email' : 'Inbound email'
       return backdated ? `${label} — ${agent.display_name} (forwarded)` : `${label} — ${agent.display_name}`
     }
+    case 'note': {
+      // §5: "Note by <author>", "· edited" when edited. `actor` is null
+      // only for an imported note whose FUB author matched no member.
+      const base = entry.actor ? `Note by ${entry.actor.display_name}` : 'Note'
+      return entry.detail.edited ? `${base} · edited` : base
+    }
+    default:
+      // §5: any `kind` this bundle's `HistoryEntry` union does not know
+      // about (a future additive kind an old tab hasn't reloaded for)
+      // renders as a generic row instead of throwing or showing nothing.
+      return 'Activity'
   }
 }
 
@@ -494,6 +703,9 @@ interface HistoryRow {
   /** The Set/Change-outcome target when the row's call is mine and has an
    * effective attempt; `outcome` null while the call is incomplete. */
   change: OutcomeTarget | null
+  /** Set only for `kind === 'note'` (§5): `id`, `body`, `edited`,
+   * `canManage` — the fields the row's inline body/Edit/Delete UI needs. */
+  note: NotePayload | null
 }
 
 type AttemptEntry = HistoryEntry & { kind: 'contact_attempted'; detail: ContactAttemptedDetail }
@@ -501,11 +713,15 @@ type AttemptEntry = HistoryEntry & { kind: 'contact_attempted'; detail: ContactA
 function plainRow(entry: HistoryEntry): HistoryRow {
   return {
     key: entry.id,
-    icon: HISTORY_ICON[entry.kind],
+    icon: historyIcon(entry.kind),
     summary: historySummary(entry),
     actor: entry.actor,
     occurredAt: entry.occurred_at,
     change: null,
+    note:
+      entry.kind === 'note'
+        ? { id: entry.id, body: entry.detail.body, edited: entry.detail.edited, canManage: entry.detail.can_manage }
+        : null,
   }
 }
 
@@ -554,7 +770,15 @@ const historyRows = computed<HistoryRow[]>(() => {
       else if (!chosen) change = { callId: call_id, outcome: null }
     }
 
-    rows.push({ key: entry.id, icon: HISTORY_ICON.call_completed, summary, actor, occurredAt: entry.occurred_at, change })
+    rows.push({
+      key: entry.id,
+      icon: HISTORY_ICON.call_completed,
+      summary,
+      actor,
+      occurredAt: entry.occurred_at,
+      change,
+      note: null,
+    })
   }
   return rows
 })
@@ -932,30 +1156,208 @@ watch(
         <h2 class="mb-4 text-section font-semibold text-text">
           History
         </h2>
+
+        <div
+          class="mb-4 rounded-xl border border-border p-3"
+          data-testid="note-composer"
+        >
+          <label
+            for="note-composer-textarea"
+            :class="LABEL_CLASSES"
+          >Add a note</label>
+          <textarea
+            id="note-composer-textarea"
+            v-model="noteDraft"
+            :class="TEXTAREA_CLASSES"
+            placeholder="Add a note…"
+            :disabled="addNote.isPending.value"
+            data-testid="note-composer-textarea"
+            @keydown="onNoteComposerKeydown"
+          />
+          <div class="mt-2 flex items-center justify-between gap-3">
+            <p
+              v-if="noteDraftCodePoints > NOTE_COUNTER_THRESHOLD"
+              class="text-small"
+              :class="noteDraftOverLimit ? 'text-danger' : 'text-text-muted'"
+              data-testid="note-composer-counter"
+            >
+              {{ noteDraftCodePoints }}/{{ NOTE_MAX_CHARS }}
+            </p>
+            <span v-else />
+            <button
+              type="button"
+              :class="buttonClasses('primary')"
+              :disabled="noteAddDisabled"
+              data-testid="note-composer-submit"
+              @click="submitNote"
+            >
+              {{ addNote.isPending.value ? 'Adding…' : 'Add note' }}
+            </button>
+          </div>
+          <p
+            v-if="noteAddError"
+            role="alert"
+            class="mt-2 text-small text-danger"
+            data-testid="note-composer-error"
+          >
+            {{ noteAddError }}
+          </p>
+        </div>
+
         <ul
-          v-if="history.length > 0"
+          v-if="history.length > 0 || (editingNote && editingNoteGone)"
           class="divide-y divide-border"
         >
           <li
-            v-for="row in historyRows"
-            :key="row.key"
-            class="flex min-h-14 items-center gap-3 py-2 first:pt-0 last:pb-0"
+            v-if="editingNote && editingNoteGone"
+            class="flex items-start gap-3 py-2 first:pt-0"
+            data-testid="note-edit-gone"
           >
             <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-2">
+              <StickyNote
+                class="h-4 w-4 text-text-muted"
+                stroke-width="1.5"
+              />
+            </div>
+            <div class="min-w-0 flex-1">
+              <p
+                class="text-body text-danger"
+                data-testid="note-edit-gone-message"
+              >
+                This note was deleted by someone else.
+              </p>
+              <textarea
+                v-model="editingNoteDraftModel"
+                :class="[TEXTAREA_CLASSES, 'mt-2']"
+                aria-label="Note draft"
+                data-testid="note-edit-gone-draft"
+              />
+              <div class="mt-2">
+                <button
+                  type="button"
+                  :class="buttonClasses('secondary')"
+                  data-testid="note-edit-gone-dismiss"
+                  @click="editingNote = null"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          </li>
+          <li
+            v-for="row in historyRows"
+            :key="row.key"
+            class="flex min-h-14 items-start gap-3 py-2 first:pt-0 last:pb-0"
+          >
+            <div class="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-2">
               <component
                 :is="row.icon"
                 class="h-4 w-4 text-text-muted"
                 stroke-width="1.5"
               />
             </div>
-            <div class="min-w-0 flex-1">
-              <p class="text-body text-text">
-                {{ row.summary }}
-              </p>
-              <p class="text-small text-text-muted">
-                {{ row.actor?.display_name ?? 'System' }} ·
-                <span :title="formatAbsoluteTime(row.occurredAt)">{{ formatRelativeTime(row.occurredAt) }}</span>
-              </p>
+            <div class="min-w-0 flex-1 self-center">
+              <template v-if="row.note && editingNote?.id === row.note.id">
+                <label
+                  :for="`note-edit-${row.note.id}`"
+                  class="sr-only"
+                >Edit note</label>
+                <textarea
+                  :id="`note-edit-${row.note.id}`"
+                  v-model="editingNoteDraftModel"
+                  :class="TEXTAREA_CLASSES"
+                  :disabled="editNote.isPending.value"
+                  data-testid="note-edit-textarea"
+                  @keydown="onEditNoteKeydown"
+                />
+                <p
+                  v-if="editNoteCodePoints > NOTE_COUNTER_THRESHOLD"
+                  class="mt-1 text-small"
+                  :class="editNoteCodePoints > NOTE_MAX_CHARS ? 'text-danger' : 'text-text-muted'"
+                  data-testid="note-edit-counter"
+                >
+                  {{ editNoteCodePoints }}/{{ NOTE_MAX_CHARS }}
+                </p>
+                <p
+                  v-if="editingNote?.error"
+                  role="alert"
+                  class="mt-1 text-small text-danger"
+                  data-testid="note-edit-error"
+                >
+                  {{ editingNote?.error }}
+                </p>
+                <div class="mt-2 flex items-center gap-2">
+                  <button
+                    type="button"
+                    :class="buttonClasses('primary')"
+                    :disabled="editNoteSaveDisabled"
+                    data-testid="note-edit-save"
+                    @click="saveEditNote"
+                  >
+                    {{ editNote.isPending.value ? 'Saving…' : 'Save' }}
+                  </button>
+                  <button
+                    type="button"
+                    :class="buttonClasses('secondary')"
+                    :disabled="editNote.isPending.value"
+                    data-testid="note-edit-cancel"
+                    @click="cancelEditNote"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </template>
+              <template v-else>
+                <p
+                  class="text-body text-text"
+                  data-testid="history-summary"
+                >
+                  {{ row.summary }}
+                </p>
+                <p
+                  v-if="row.note"
+                  class="mt-1 whitespace-pre-wrap text-body text-text"
+                  data-testid="note-body"
+                >
+                  {{ row.note.body }}
+                </p>
+                <p class="text-small text-text-muted">
+                  {{ row.actor?.display_name ?? 'System' }} ·
+                  <span :title="formatAbsoluteTime(row.occurredAt)">{{ formatRelativeTime(row.occurredAt) }}</span>
+                </p>
+              </template>
+            </div>
+            <div
+              v-if="row.note && row.note.canManage && editingNote?.id !== row.note.id"
+              class="flex shrink-0 items-center gap-1"
+            >
+              <button
+                :ref="(el) => setEditButtonRef(row.note!.id, el)"
+                type="button"
+                class="inline-flex h-10 w-10 items-center justify-center rounded-lg text-text-muted transition-colors duration-150 ease-out hover:bg-surface-2 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+                aria-label="Edit note"
+                data-testid="edit-note"
+                @click="startEditNote(row.note!)"
+              >
+                <Pencil
+                  class="h-4 w-4"
+                  stroke-width="1.5"
+                  aria-hidden="true"
+                />
+              </button>
+              <button
+                type="button"
+                class="inline-flex h-10 w-10 items-center justify-center rounded-lg text-text-muted transition-colors duration-150 ease-out hover:bg-surface-2 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+                aria-label="Delete note"
+                data-testid="delete-note"
+                @click="openDeleteNote(row.note!)"
+              >
+                <Trash2
+                  class="h-4 w-4"
+                  stroke-width="1.5"
+                  aria-hidden="true"
+                />
+              </button>
             </div>
             <button
               v-if="row.change"
@@ -976,6 +1378,19 @@ watch(
           No history yet.
         </p>
       </Card>
+
+      <ConfirmDialog
+        :visible="deleteNoteDialogOpen"
+        title="Delete note"
+        message="Delete this note? This cannot be undone."
+        confirm-label="Delete"
+        confirm-variant="danger"
+        :is-pending="deleteNote.isPending.value"
+        :error="deleteNote.error.value"
+        error-fallback="Could not delete this note."
+        @update:visible="(value: boolean) => { if (!value) closeDeleteNoteDialog() }"
+        @confirm="confirmDeleteNote"
+      />
 
       <LogContactDialog
         :visible="logContactOpen"

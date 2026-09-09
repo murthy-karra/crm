@@ -6,6 +6,7 @@ pub mod inquiry_sources;
 pub mod intake;
 pub mod invitations;
 pub mod livekit_webhook;
+pub mod notes;
 pub mod operator;
 pub mod organization;
 pub mod people;

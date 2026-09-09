@@ -1,26 +1,21 @@
 # Project State
 
-Last updated: 2026-09-09 (Slice 015 Notes merged to local main at fd5a184;
-runtime update, push and cleanup pending; LiveKit down, see Environment).
+Last updated: 2026-09-09 (Slice 015 Notes complete: merged, runtime updated,
+pushed, cleaned up; no slice active; LiveKit down, see Environment).
 
 ## Current phase
 
-**SLICE 015 (NOTES) — MERGED TO LOCAL MAIN at `fd5a184` (2026-09-09, with
-the user's approval; not pushed, runtime not yet updated).** Source
-`slice-015-notes` at `00e2e67` (twelve commits: backend steps 1–4, Web
-step 5, the walkthrough record, two review rounds, the coordinator's
-test-only round-2 completion `082310a`, and the verification record).
-Final-tree gates on `082310a`: `sqlx-prepare` clean, `check` green (764
-Rust, 677 Vitest), `check-db` 647 of 647 first run. Evidence:
-[SLICE_015_VERIFICATION.md](../tasks/SLICE_015_VERIFICATION.md). Still
-pending, each needing the user's approval: migrate `crm_dev`
-(`./scripts/db-migrate`; one additive table), restart the dev API (new
-routes and Operator view; the running binary predates 015), rebuild and
-relaunch `dev-web-prod`; push `main`; delete the branch and the worktree
-`../crm-worktrees/notes-1`; drop the QA database `crm_slice015_qa`.
-Deployment is not authorized. After the runtime update: observe the live
-cross-tab `note_changed` path on the dev runtime (the one walkthrough
-item the QA environment could not exercise).
+**SLICE 015 (NOTES) — COMPLETE: MERGED, RUNTIME UPDATED, PUSHED, CLEANED
+UP (2026-09-09, each with the user's approval).** `main` at the merge
+`fd5a184` plus records; pushed to `origin/main`. `crm_dev` migrated
+(`20260912000001`); the dev API and `dev-web-prod` were not running and
+were relaunched from `main` (API pid 77267 on `127.0.0.1:3000`, preview
+on `5173`; logs under `/private/tmp/claude-501/dev-api.log` and
+`dev-web-prod.log`); tunnel verified. Branch `slice-015-notes` and the
+worktree deleted; `crm_slice015_qa` dropped. The live cross-tab
+`note_changed` path was observed on the dev runtime (QA record addendum).
+Evidence: [SLICE_015_VERIFICATION.md](../tasks/SLICE_015_VERIFICATION.md).
+Deployment is not authorized. No slice active.
 
 Previously: **LATER BATCH (2026-09-08) — COMPLETE AND MERGED TO LOCAL MAIN** at `3ff6c5f`
 (with the user's approval; not pushed, not deployed). Source
@@ -738,7 +733,7 @@ together on 2026-09-06).
 | 013 | Operator `filter_people` and `run_saved_list` read-only tools, name-based, D-046-faithful, `MAX_REFERENCES` 25 | `9af47c1` (branch head `151d38a`), pushed 2026-09-08 |
 | 014 | Production bundle through the tunnel (`dev-web-prod`), optimistic stage/assignment/tag mutations, Today chunk preload and data prefetch, hover prefetch of Person detail, FilterBar residue | `ac270fb` (branch head `3495f71`), pushed 2026-09-08 |
 | — | LATER batch: `inquiry` append-only triggers (cascade-aware), three largest test files split into nine, field-only success writes and `isMutating` guards on the Person mutations | `3ff6c5f` (branch head `5fe4231`), pushed 2026-09-08 |
-| 015 | Notes: `note` table (tombstone delete, import-ready), three commands and routes, `note` timeline kind, `note_changed`, Operator `PersonDetail.notes` (untrusted, history filtered), Person page composer with inline edit/delete (D-053) | `fd5a184` (branch head `00e2e67`), local only |
+| 015 | Notes: `note` table (tombstone delete, import-ready), three commands and routes, `note` timeline kind, `note_changed`, Operator `PersonDetail.notes` (untrusted, history filtered), Person page composer with inline edit/delete (D-053) | `fd5a184` (branch head `00e2e67`), pushed 2026-09-09 |
 | — | Gate-speedup chunk (check 35m→79s, check-db 37m→~2m) | 2026-08-28 |
 | — | Test-binary consolidation (40 files → 1 binary) | `6427ee8` |
 
@@ -907,7 +902,9 @@ and now lives only in git history.
   process start time vs binary mtime; kill by exact PID only. Bit us
   again 2026-08-29 (011a filters). Run ./scripts/db-migrate after
   checking out a branch with a new migration.
-- dev-api currently runs the post-011a binary (restarted 2026-08-29).
+- dev-api and dev-web-prod currently run the post-015 build (relaunched
+  2026-09-09 by the coordinator, detached with nohup; logs under
+  `/private/tmp/claude-501/`).
 
 ## Backlog (deferred product tracks — full notes in the decision log)
 
@@ -1017,10 +1014,9 @@ and now lives only in git history.
 
 ## Approval currently required
 
-- **Slice 015 (Notes): merged.** Requested next, separately: (1) update
-  the shared development runtime (migrate `crm_dev`, restart the dev API,
-  rebuild `dev-web-prod`); (2) push `main`; (3) cleanup (delete branch and
-  worktree, drop `crm_slice015_qa`). Deployment is not requested.
+- None for Slice 015: merged, runtime updated, pushed and cleaned up on
+  2026-09-09. Deployment is not authorized. The next slice or chunk needs
+  the user's request.
 - None for 011e: both rungs merged, the dev runtime updated and the branches
   cleaned up with approval on 2026-09-07. `main` pushed on 2026-09-07; deployment is not authorized. The next slice or chunk
   (candidates below) needs the user's request.

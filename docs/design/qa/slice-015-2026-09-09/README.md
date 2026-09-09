@@ -51,3 +51,14 @@ top of the History card, before any note exists), `02-note-added.png`,
   the two processes started for this walkthrough (the QA API and the QA Web
   dev server) were stopped by their exact PIDs once the walkthrough
   finished.
+
+## Addendum: realtime observed on the shared development runtime (coordinator, 2026-09-09)
+
+After the merge (`fd5a184`), `crm_dev` migration, dev API relaunch and
+`dev-web-prod` rebuild, the coordinator opened the same Person (Skip
+Carolson, a seeded fixture) as Alice in two tabs at `127.0.0.1:5173`,
+added a note in tab two and watched it appear in tab one without a reload
+(`screenshots/09-realtime-tab-one-dev-runtime.png`), then deleted it from
+tab one and watched it vanish from tab two without a reload. This closes
+the one §9.11 item the QA environment could not exercise (Centrifugo was
+not wired there). The test note was deleted; `crm_dev` holds no notes.

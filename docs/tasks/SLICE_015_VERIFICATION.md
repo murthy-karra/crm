@@ -151,10 +151,9 @@ the final tree):
   delete falls to the body (UI_STYLE nicety).
 - Two viewers editing the same note: last writer wins silently (spec rule 4;
   a revision is additive).
-- Live cross-tab `note_changed` was not observed (Centrifugo not wired in
-  the QA environment); the contract is pinned by `db_realtime` and the
-  `invalidationsFor` Vitest. Observe it on the shared dev runtime after the
-  merge.
+- ~~Live cross-tab `note_changed`~~ observed on the shared dev runtime after
+  the merge (add and delete, two tabs, no reload; QA record addendum). No
+  longer open.
 - The ledger sentinel assertion is vacuous by schema (`operator_tool_call`
   has no free-text column); the per-route 128 KiB body limit is
   unobservable behind the 10,000-character validator.
@@ -181,3 +180,13 @@ server (`dev-web-prod`) rebuilt and restarted for the Web changes. The
 `crm_slice015_qa` database is left on the dev Postgres for the user's
 inspection and can be dropped afterwards. Unresolved risks: the LATER list
 above. Push and deployment are not authorized by this record.
+
+## Post-merge (coordinator, 2026-09-09, with the user's approval)
+
+Merged to local `main` at `fd5a184` (recorded `815c670`); `crm_dev`
+migrated (`20260912000001` applied); the dev API and `dev-web-prod` were
+found not running and were launched fresh from `main` (API listening on
+`127.0.0.1:3000`, health 200, note routes answering 401/400 as designed;
+web preview on `127.0.0.1:5173`); tunnel routing verified; `main` pushed
+(`ce15b7d..815c670`); branch and worktree deleted; `crm_slice015_qa`
+dropped (owned by the `crm_dev` role). Realtime observed live, above.

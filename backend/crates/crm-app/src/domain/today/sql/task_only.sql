@@ -9,14 +9,17 @@
 -- rule-7 inquiry constraint, `now` bound as a parameter ($3). Reads
 -- `task_org_assignee_due_open_idx`.
 --
--- `latest_inquiry` is deliberately NOT selected here: docs/specs/
--- SLICE_016.md §1 rule 8 / §5 fix the task axis's `TodayItem.latest_inquiry`
--- to `null` unconditionally for a task-only item, regardless of whether the
--- underlying Person actually has an inquiry — a distinct policy from the
--- 011c list-only band, whose `latest_inquiry` reflects the Person's real
--- inquiry state. `inquiry_count` on the returned `PersonSummary`, however,
--- still reflects reality (matching every other Today statement), so it is
--- computed here exactly as `call_only.sql` computes it.
+-- `latest_inquiry`/`PersonSummary.last_inquiry_at`: round-1 review fix A —
+-- D-054 amends 011c §5 ("built-in items continue to have a real
+-- InquiryRef") only for the zero-inquiry case ("a task item on a
+-- zero-inquiry Person carries `latest_inquiry: null`, the list-only
+-- precedent"); 011c §5's general rule otherwise stands, so a task-only
+-- item on a Person who DOES have an inquiry carries that real
+-- `InquiryRef`, exactly like every other Today statement. Hydrated via the
+-- same `LEFT JOIN LATERAL ... ORDER BY received_at DESC, id DESC LIMIT 1`
+-- pattern `source_candidates.sql` uses for `latest`. `inquiry_count` on
+-- the returned `PersonSummary` reflects reality regardless, matching every
+-- other Today statement.
 -- `mine` is forced `MATERIALIZED` (PostgreSQL 12+ inlines a `WITH` by
 -- default) so the ONLY access to the base `task` table this whole
 -- statement performs is this one scan, matching literal
@@ -80,6 +83,9 @@ SELECT
        ORDER BY cm.created_at ASC LIMIT 1) AS "primary_phone?",
     (SELECT count(*) FROM inquiry i
        WHERE i.person_id = p.id AND i.organization_id = p.organization_id) AS "inquiry_count!",
+    latest.id AS "latest_inquiry_id?",
+    latest.source AS "latest_inquiry_source?",
+    latest.received_at AS "latest_inquiry_received_at?",
     effective_attempt.id AS "last_attempt_id?",
     effective_attempt.channel AS "last_attempt_channel?",
     effective_attempt.outcome AS "last_attempt_outcome?",
@@ -92,6 +98,13 @@ FROM capped
 JOIN person p ON p.id = capped.id AND p.organization_id = $1
 JOIN stage s ON s.id = p.stage_id
 LEFT JOIN app_user u ON u.id = p.assigned_user_id
+LEFT JOIN LATERAL (
+    SELECT i.id, i.source, i.received_at
+    FROM inquiry i
+    WHERE i.person_id = p.id AND i.organization_id = p.organization_id
+    ORDER BY i.received_at DESC, i.id DESC
+    LIMIT 1
+) latest ON true
 LEFT JOIN LATERAL (
     SELECT ca.id, ca.channel, ca.outcome, ca.occurred_at
     FROM contact_attempted ca

@@ -3043,11 +3043,209 @@ async fn capture_across_today_tasks_and_operator_tools_finds_a_task_title_only_i
         "the ledger row must hold no task title"
     );
 
-    // Positive control on capture itself: today.query and today.task_axis
-    // spans must actually appear, proving the harness would have caught a
-    // real leak.
+    // Round-1 review must-close item 8: the positive control claimed by
+    // this comment must actually assert BOTH spans — a prior version only
+    // checked `today.query`, silently never proving the harness captures
+    // `today.task_axis` at all (the one span the task axis itself opens,
+    // docs/specs/SLICE_016.md §5/§9), which would have let a real leak
+    // specifically inside the axis's own span go undetected by this test.
     assert!(
         captured.contains("today.query"),
         "the today.query span must appear: {captured}"
     );
+    assert!(
+        captured.contains("today.task_axis"),
+        "the today.task_axis span must appear, proving this harness would catch a real leak \
+         inside the axis's own span, not just the outer today.query one: {captured}"
+    );
+
+    // Round-1 review must-close item 8, second half: `reason_text` (the
+    // fixed explanation line every Operator tool and the HTTP-agreement
+    // test above rely on) must never contain the sentinel either — the
+    // same assertion `operator_today_tools_agree_with_http_on_a_task_item_
+    // and_the_fixed_line_has_no_title` makes, repeated here so THIS
+    // capture test's own sentinel is the one proven never to leak into
+    // the fixed line, rather than relying on a different test's title.
+    let mut conn = app_pool.acquire().await.unwrap();
+    let list = today::query(
+        &mut conn,
+        &PersonVisibilityScope::Organization(OrganizationId::new(f.org_acme)),
+        UserId::new(f.alice_id),
+        Utc::now(),
+    )
+    .await
+    .unwrap();
+    let item = list
+        .items
+        .iter()
+        .find(|i| i.person.id.as_uuid() == person_id)
+        .expect("the task-only Person is on Today");
+    let reason_line = crm_api::operator::explain::reason_text(&item.reasons[0]);
+    assert!(
+        !reason_line.contains(SENTINEL),
+        "the fixed explanation line must never contain the task title: {reason_line}"
+    );
+}
+
+/// Round-1 review must-close item 9: a structural JSON comparison of the
+/// Operator's `get_today` tool result against the raw `/api/today` HTTP
+/// body, specifically for the two item shapes 016b introduces — a RAISED
+/// item (an existing normal person-state item lifted to high by an
+/// overdue task) and a TASK-ONLY item (reachable only through the axis) —
+/// rather than only checking presence/priority independently as the
+/// earlier §12.14 test does. Title is the one deliberate exception (the
+/// HTTP body carries it plain; the Operator's `reasons_json` re-wraps it
+/// as `{"untrusted_text": ...}`, docs/specs/SLICE_005.md §14) — everything
+/// else (`code`, `task_id`, `kind`, `due_at`, `priority`, `position`) must
+/// agree byte-for-byte.
+#[sqlx::test]
+#[ignore]
+async fn operator_get_today_json_agrees_with_http_on_raised_and_task_only_items(
+    migrator_pool: PgPool,
+) {
+    let f = fixture(migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&f.migrator_pool).await;
+    let now = Utc::now();
+
+    // Raised item: an inquiry person, backdated so the person-state
+    // statement alone would place them `normal`, then an overdue task
+    // that must raise them to `high`.
+    let raised_stage_id: Uuid = sqlx::query_scalar(
+        "SELECT id FROM stage WHERE organization_id = $1 ORDER BY position LIMIT 1",
+    )
+    .bind(f.org_acme)
+    .fetch_one(&app_pool)
+    .await
+    .unwrap();
+    let raised_person: Uuid = sqlx::query_scalar(
+        "INSERT INTO person (organization_id, stage_id, assigned_user_id) \
+         VALUES ($1, $2, $3) RETURNING id",
+    )
+    .bind(f.org_acme)
+    .bind(raised_stage_id)
+    .bind(f.alice_id)
+    .fetch_one(&app_pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO inquiry (organization_id, person_id, raw_payload_id, source, received_at) \
+         VALUES ($1, $2, $3, 'zillow', now() - interval '2 days')",
+    )
+    .bind(f.org_acme)
+    .bind(raised_person)
+    .bind(Uuid::new_v4())
+    .execute(&app_pool)
+    .await
+    .unwrap();
+    create_task_with_title(
+        &app_pool,
+        f.org_acme,
+        f.alice_id,
+        raised_person,
+        "SENTINEL_RAISED_ITEM_TASK",
+        now - chrono::Duration::hours(1),
+    )
+    .await;
+
+    // Task-only item: reachable ONLY through the axis, `task_due` (not
+    // overdue), so `normal`.
+    let task_only_person = insert_bare_person_for_tasks(&app_pool, f.org_acme).await;
+    create_task_with_title(
+        &app_pool,
+        f.org_acme,
+        f.alice_id,
+        task_only_person,
+        "SENTINEL_TASK_ONLY_ITEM_TASK",
+        now + chrono::Duration::hours(1),
+    )
+    .await;
+
+    let (router, provider) = router_scripted(
+        &f.migrator_pool,
+        vec![
+            tool_step("get_today", json!({ "limit": 20 })),
+            text_step("done"),
+        ],
+    )
+    .await;
+    let alice = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
+
+    let http_resp = crate::common::get_with_cookie(&router, "/api/today", &alice).await;
+    let http_body = crate::common::body_json(http_resp).await;
+    let http_items = http_body["items"].as_array().unwrap();
+
+    let turn_resp = post_turn(&router, &alice, message("what's on today")).await;
+    assert_eq!(turn_resp.status(), StatusCode::OK);
+    let reqs = provider.requests();
+    let tool_msg = reqs[1]
+        .messages
+        .iter()
+        .rev()
+        .find_map(|m| match m {
+            ChatMessage::Tool { content, .. } => Some(content.clone()),
+            _ => None,
+        })
+        .unwrap();
+    let result: Value = serde_json::from_str(&tool_msg).unwrap();
+    assert_eq!(result["ok"], true);
+    let op_items = result["result"]["items"].as_array().unwrap();
+
+    for (label, person_id, want_priority) in [
+        ("raised", raised_person, "high"),
+        ("task_only", task_only_person, "normal"),
+    ] {
+        let http_index = http_items
+            .iter()
+            .position(|i| i["person"]["id"] == person_id.to_string())
+            .unwrap_or_else(|| panic!("{label}: person missing from HTTP /api/today"));
+        let http_item = &http_items[http_index];
+        let op_item = op_items
+            .iter()
+            .find(|i| i["person"]["id"] == person_id.to_string())
+            .unwrap_or_else(|| panic!("{label}: person missing from Operator get_today"));
+
+        assert_eq!(
+            http_item["priority"], want_priority,
+            "{label}: HTTP priority"
+        );
+        assert_eq!(
+            op_item["priority"], want_priority,
+            "{label}: Operator priority"
+        );
+        assert_eq!(
+            op_item["position"],
+            http_index + 1,
+            "{label}: Operator position is 1-based HTTP index"
+        );
+
+        let http_reasons = http_item["reasons"].as_array().unwrap();
+        let op_reasons = op_item["reasons"].as_array().unwrap();
+        assert_eq!(
+            http_reasons.len(),
+            op_reasons.len(),
+            "{label}: same reason count"
+        );
+        let http_last = http_reasons.last().unwrap();
+        let op_last = op_reasons.last().unwrap();
+        assert_eq!(http_last["code"], op_last["code"], "{label}: reason code");
+        assert_eq!(
+            http_last["task_id"], op_last["task_id"],
+            "{label}: task_id agrees"
+        );
+        assert_eq!(http_last["kind"], op_last["kind"], "{label}: kind agrees");
+        assert_eq!(
+            http_last["due_at"], op_last["due_at"],
+            "{label}: due_at agrees"
+        );
+        // Title: present on both, but wrapped differently by design — the
+        // HTTP body carries it plain, the Operator's untrusted view wraps
+        // it. Confirm both forms actually carry the SAME underlying text
+        // rather than merely both being present.
+        let http_title = http_last["title"].as_str().unwrap();
+        let op_title = op_last["title"]["untrusted_text"].as_str().unwrap();
+        assert_eq!(
+            http_title, op_title,
+            "{label}: the same title text, differently wrapped"
+        );
+    }
 }

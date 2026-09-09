@@ -13,8 +13,10 @@ use uuid::Uuid;
 use crate::domain::commands::{ContactAttemptRef, ContactChannel, ContactOutcome};
 use crate::domain::person::model::{compute_display_name, PersonSummary, StageRef, UserRef};
 use crate::domain::task::TaskKind;
-use crate::domain::today::model::{RecommendedAction, TodayItem, TodayPriority, TodayReason};
-use crate::ids::{OrganizationId, PersonId, StageId, TaskId, UserId};
+use crate::domain::today::model::{
+    InquiryRef, RecommendedAction, TodayItem, TodayPriority, TodayReason,
+};
+use crate::ids::{InquiryId, OrganizationId, PersonId, StageId, TaskId, UserId};
 
 fn decode_contact(
     id: Option<Uuid>,
@@ -47,6 +49,27 @@ fn decode_contact(
 fn decode_kind(raw: &str) -> Result<TaskKind, sqlx::Error> {
     TaskKind::from_db_str(raw)
         .ok_or_else(|| sqlx::Error::Decode("task axis query: unrecognized task kind".into()))
+}
+
+/// Round-1 review fix A: decodes the task-only prefix's `latest_inquiry`
+/// LATERAL, mirroring `sources.rs`'s all-or-nothing pattern for the same
+/// three columns.
+fn decode_latest_inquiry(
+    id: Option<Uuid>,
+    source: Option<String>,
+    received_at: Option<DateTime<Utc>>,
+) -> Result<Option<InquiryRef>, sqlx::Error> {
+    match (id, source, received_at) {
+        (Some(id), Some(source), Some(received_at)) => Ok(Some(InquiryRef {
+            id: InquiryId::new(id),
+            source,
+            received_at,
+        })),
+        (None, None, None) => Ok(None),
+        _ => Err(sqlx::Error::Decode(
+            "task axis query: latest inquiry columns must be all null or all set".into(),
+        )),
+    }
 }
 
 /// One row of statement (a): the viewer's earliest open, dated task on a
@@ -126,6 +149,9 @@ struct TaskOnlyRow {
     primary_email: Option<String>,
     primary_phone: Option<String>,
     inquiry_count: i64,
+    latest_inquiry_id: Option<Uuid>,
+    latest_inquiry_source: Option<String>,
+    latest_inquiry_received_at: Option<DateTime<Utc>>,
     last_attempt_id: Option<Uuid>,
     last_attempt_channel: Option<String>,
     last_attempt_outcome: Option<String>,
@@ -165,13 +191,15 @@ pub(super) async fn task_only_prefix(
 }
 
 /// Shapes one task-only row into a `TodayItem` directly (docs/specs/
-/// SLICE_016.md §5): `latest_inquiry: null`, `waiting_since: null`,
-/// `last_contact_attempt` hydrated from the same effective-attempt
-/// pattern every other Today statement uses, `priority` `high` when
-/// overdue else `normal`, `recommended_action` from `kind` (§5: `email` ->
-/// `Email` if an email exists else `Call` if a phone else `ReviewPerson`;
-/// every other kind -> the list-only chain, `Call` if a phone else
-/// `Email` if an email else `ReviewPerson`).
+/// SLICE_016.md §5): `waiting_since: null`, a real `latest_inquiry` when
+/// the Person has one (round-1 review fix A; null only for a genuinely
+/// zero-inquiry Person, per D-054's amendment of 011c §5), `last_contact_
+/// attempt` hydrated from the same effective-attempt pattern every other
+/// Today statement uses, `priority` `high` when overdue else `normal`,
+/// `recommended_action` from `kind` (§5: `email` -> `Email` if an email
+/// exists else `Call` if a phone else `ReviewPerson`; every other kind ->
+/// the list-only chain, `Call` if a phone else `Email` if an email else
+/// `ReviewPerson`).
 fn task_only_item(row: TaskOnlyRow, now: DateTime<Utc>) -> Result<TodayItem, sqlx::Error> {
     let display_name = compute_display_name(
         row.first_name.as_deref(),
@@ -186,6 +214,11 @@ fn task_only_item(row: TaskOnlyRow, now: DateTime<Utc>) -> Result<TodayItem, sql
         }),
         _ => None,
     };
+    let latest_inquiry = decode_latest_inquiry(
+        row.latest_inquiry_id,
+        row.latest_inquiry_source,
+        row.latest_inquiry_received_at,
+    )?;
     let person = PersonSummary {
         id: PersonId::new(row.id),
         first_name: row.first_name.clone(),
@@ -199,12 +232,10 @@ fn task_only_item(row: TaskOnlyRow, now: DateTime<Utc>) -> Result<TodayItem, sql
         primary_email: row.primary_email.clone(),
         primary_phone: row.primary_phone.clone(),
         inquiry_count: row.inquiry_count,
-        // docs/specs/SLICE_016.md §1 rule 8, §5: the task axis's own
-        // `TodayItem.latest_inquiry` is unconditionally null for a
-        // task-only item; `PersonSummary.last_inquiry_at` follows the
-        // same rule here (the SQL never selects it), consistent with the
-        // Person carrying no inquiry-derived state on this item.
-        last_inquiry_at: None,
+        // Round-1 review fix A: real when the Person has an inquiry, null
+        // only when they genuinely have none (D-054 amends 011c §5's
+        // general "real InquiryRef" rule only for the zero-inquiry case).
+        last_inquiry_at: latest_inquiry.as_ref().map(|i| i.received_at),
         created_at: row.created_at,
     };
     let last_contact_attempt = decode_contact(
@@ -258,7 +289,7 @@ fn task_only_item(row: TaskOnlyRow, now: DateTime<Utc>) -> Result<TodayItem, sql
         recommended_action,
         reasons: vec![reason],
         waiting_since: None,
-        latest_inquiry: None,
+        latest_inquiry,
         last_contact_attempt,
     })
 }

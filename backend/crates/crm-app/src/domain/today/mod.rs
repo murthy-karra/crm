@@ -33,7 +33,7 @@ pub use sources::{
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, SubsecRound, Utc};
 use sqlx::pool::PoolConnection;
 use sqlx::{Acquire, PgConnection, Postgres};
 use tracing::Instrument;
@@ -314,11 +314,20 @@ async fn query_inner_untraced(
     let database_now: DateTime<Utc> = sqlx::query_scalar("SELECT statement_timestamp()")
         .fetch_one(&mut *tx)
         .await?;
+    // Round-1 review fix B: `database_now` (PostgreSQL's own
+    // `statement_timestamp()`) is already microsecond-precision, but a
+    // test-fixture `Fixed(now)` value (e.g. a bare `Utc::now()`) can carry
+    // nanosecond precision that PostgreSQL truncates on bind — leaving the
+    // in-memory `now` used for Rust-side comparisons (overdue/due-soon,
+    // reason selection) off by a sub-microsecond remainder from the value
+    // actually bound into every SQL parameter. Truncating unconditionally
+    // here keeps both sides byte-identical regardless of clock source.
     let now = match evaluation_clock {
         EvaluationClock::Database => database_now,
         #[cfg(feature = "test-support")]
         EvaluationClock::Fixed(now) => now,
-    };
+    }
+    .trunc_subsecs(6);
     let feeds_result = evaluate_feeds_builtins(&mut tx, scope, viewer, now).await?;
     if feeds_result.call_feed_unrecoverable {
         // Mirrors the source-metadata-unavailable early return exactly: the

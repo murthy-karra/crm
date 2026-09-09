@@ -181,6 +181,18 @@ fn find_item(items: &[today::TodayItem], person_id: Uuid) -> Option<&today::Toda
     items.iter().find(|i| i.person.id.as_uuid() == person_id)
 }
 
+/// Round-1 review fix B / `db_tasks.rs`'s own `due_in` precedent:
+/// microsecond-truncated so a boundary assertion against a stored
+/// `due_at` (Postgres keeps microseconds) never depends on the host
+/// clock's own resolution (a `Utc::now()` on this platform can carry
+/// nanoseconds) — `today::query`'s own evaluation clock is now truncated
+/// the same way, so the fixture clock must match it exactly for an
+/// equality assertion to be meaningful rather than accidentally passing.
+fn now_trunc() -> chrono::DateTime<Utc> {
+    use chrono::SubsecRound;
+    Utc::now().trunc_subsecs(6)
+}
+
 // --- §12.9: membership and boundaries ------------------------------------
 
 #[sqlx::test]
@@ -188,7 +200,7 @@ fn find_item(items: &[today::TodayItem], person_id: Uuid) -> Option<&today::Toda
 async fn boundary_instants_classify_due_overdue_and_admit_within_24h_window(migrator_pool: PgPool) {
     let f = fixture(&migrator_pool).await;
     let app_pool = crate::common::connect_as_app(&migrator_pool).await;
-    let now = Utc::now();
+    let now = now_trunc();
 
     let p_now = insert_bare_person(&app_pool, f.org_id, f.stage_id).await;
     let p_overdue = insert_bare_person(&app_pool, f.org_id, f.stage_id).await;
@@ -421,7 +433,7 @@ async fn completed_tombstoned_other_member_and_other_org_tasks_are_excluded_with
 async fn earliest_task_is_chosen_per_viewer_among_their_own_tasks_only(migrator_pool: PgPool) {
     let f = fixture(&migrator_pool).await;
     let app_pool = crate::common::connect_as_app(&migrator_pool).await;
-    let now = Utc::now();
+    let now = now_trunc();
 
     // One Person, both the admin and the member hold an open dated task.
     // The admin's task is later; the member's is earlier. Each viewer must
@@ -787,10 +799,29 @@ async fn low_outcome_needed_item_is_never_raised_by_an_overdue_task(migrator_poo
         TodayPriority::Low,
         "a low item is never raised by an overdue task"
     );
-    assert!(matches!(
-        task_reason_kind(item, person_id),
-        Some(TodayReason::TaskOverdue { .. })
-    ));
+    // Round-1 review must-close item 5: an exact-match assertion on the
+    // WHOLE `reasons` vector, not just independent presence checks — this
+    // also pins the count (exactly two, nothing extra re-admitted by the
+    // now-corrected contact attempt) and the order (`call_outcome_needed`
+    // stays last per every other Today statement's own contract, so the
+    // task axis's append-after-existing-reasons rule must place
+    // `task_overdue` BEFORE it here, never after).
+    assert_eq!(
+        item.reasons.len(),
+        2,
+        "a low item carries exactly the outcome-needed and the overdue-task reason: {:?}",
+        item.reasons
+    );
+    assert!(
+        matches!(item.reasons[0], TodayReason::TaskOverdue { .. }),
+        "reasons[0] must be the task reason (call_outcome_needed always stays last): {:?}",
+        item.reasons
+    );
+    assert!(
+        matches!(item.reasons[1], TodayReason::CallOutcomeNeeded { .. }),
+        "reasons[1] must be call_outcome_needed, always last: {:?}",
+        item.reasons
+    );
 }
 
 #[sqlx::test]
@@ -1119,4 +1150,96 @@ async fn zero_task_organization_today_is_unaffected_for_admin_and_member(migrato
             assert!(find_item(&list.items, p_normal).is_some());
         }
     }
+}
+
+// --- Round-1 review must-close item 1: same-user, two Organizations -----
+
+/// The same physical user is a member of two Organizations, each with a
+/// task assigned to them. `task_membership`/`task_only_prefix` both
+/// predicate on `t.organization_id = $1 AND t.assignee_user_id = $2`
+/// (never assignee alone) — a regression dropping the organization_id
+/// predicate would leak the other Organization's task-driven Today item
+/// for exactly this shape, so this proves the boundary directly rather
+/// than relying on the SQL text never regressing unnoticed.
+#[sqlx::test]
+#[ignore]
+async fn same_user_assignee_in_two_organizations_never_leaks_across_the_boundary(
+    migrator_pool: PgPool,
+) {
+    let f_a = fixture(&migrator_pool).await;
+    let (org_b, admin_b) = crate::common::today_system_feed::create_org_with_admin(
+        &migrator_pool,
+        "Task Axis Co B",
+        "task-axis-admin-b@example.test",
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let stage_b = crate::common::today_system_feed::first_stage_id(&app_pool, org_b).await;
+    // f_a.admin_id (already admin of org A) is ALSO a member of org B.
+    crate::common::add_membership_with(
+        &migrator_pool,
+        org_b,
+        f_a.admin_id,
+        Role::Member,
+        MembershipStatus::Active,
+    )
+    .await;
+    let now = Utc::now();
+
+    let person_a = insert_bare_person(&app_pool, f_a.org_id, f_a.stage_id).await;
+    let person_b = insert_bare_person(&app_pool, org_b, stage_b).await;
+    create_task_for(
+        &app_pool,
+        f_a.org_id,
+        f_a.admin_id,
+        f_a.admin_id,
+        person_a,
+        TaskKind::FollowUp,
+        Some(now),
+    )
+    .await;
+    create_task_for(
+        &app_pool,
+        org_b,
+        admin_b,
+        f_a.admin_id,
+        person_b,
+        TaskKind::FollowUp,
+        Some(now),
+    )
+    .await;
+
+    let list_a = today::query_at(
+        &mut app_pool.acquire().await.unwrap(),
+        &visibility_scope(f_a.org_id),
+        UserId::new(f_a.admin_id),
+        now,
+    )
+    .await
+    .unwrap();
+    let list_b = today::query_at(
+        &mut app_pool.acquire().await.unwrap(),
+        &visibility_scope(org_b),
+        UserId::new(f_a.admin_id),
+        now,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        find_item(&list_a.items, person_a).is_some(),
+        "org A's own task-driven item is present in org A's Today"
+    );
+    assert!(
+        find_item(&list_a.items, person_b).is_none(),
+        "org B's Person must never leak into org A's Today for the same assignee user"
+    );
+    assert!(
+        find_item(&list_b.items, person_b).is_some(),
+        "org B's own task-driven item is present in org B's Today"
+    );
+    assert!(
+        find_item(&list_b.items, person_a).is_none(),
+        "org A's Person must never leak into org B's Today for the same assignee user"
+    );
 }

@@ -17,13 +17,28 @@
 -- inquiry state. `inquiry_count` on the returned `PersonSummary`, however,
 -- still reflects reality (matching every other Today statement), so it is
 -- computed here exactly as `call_only.sql` computes it.
-WITH prefix AS (
-    SELECT DISTINCT ON (t.person_id)
-        t.person_id AS id,
-        t.id AS task_id,
-        t.title,
-        t.kind,
-        t.due_at
+-- `mine` is forced `MATERIALIZED` (PostgreSQL 12+ inlines a `WITH` by
+-- default) so the ONLY access to the base `task` table this whole
+-- statement performs is this one scan, matching literal
+-- `organization_id`/`assignee_user_id` and a `due_at` upper bound —
+-- exactly the shape `task_org_assignee_due_open_idx` exists for, and
+-- bounded by the viewer's own qualifying tasks (dozens, per spec), never
+-- by the Organization's total People or task volume. Without this fence,
+-- an equivalent `DISTINCT ON`/self-`NOT EXISTS` expressed directly against
+-- `task` gives the planner a second table access to plan (an inner or
+-- outer side needing to re-derive "one row per Person") that it may
+-- satisfy via `task_org_person_due_idx` (organization_id, person_id,
+-- due_at, id — no assignee/open-only guard) instead, DEGENERATING into a
+-- scan of every open, dated task in the Organization regardless of
+-- assignee — measured on PostgreSQL 18's skip-scan-capable planner at a
+-- 25,000-Person book ("Rows Removed by Filter: 25000", including inside a
+-- per-outer-row correlated subquery re-evaluated per candidate) — the
+-- exact super-linear-growth failure §11 forbids. Once `mine` is
+-- materialized, "the earliest open task per Person" (`prefix`) is a
+-- correlated `NOT EXISTS` self-anti-join over that already-small,
+-- in-memory row set, never touching `task` or any index again.
+WITH mine AS MATERIALIZED (
+    SELECT t.person_id, t.id AS task_id, t.title, t.kind, t.due_at
     FROM task t
     WHERE t.organization_id = $1
       AND t.assignee_user_id = $2
@@ -31,8 +46,21 @@ WITH prefix AS (
       AND t.deleted_at IS NULL
       AND t.due_at IS NOT NULL
       AND t.due_at <= $3::timestamptz + interval '24 hours'
-      AND NOT (t.person_id = ANY($4::uuid[]))
-    ORDER BY t.person_id, t.due_at ASC, t.id ASC
+),
+prefix AS (
+    SELECT
+        m.person_id AS id,
+        m.task_id,
+        m.title,
+        m.kind,
+        m.due_at
+    FROM mine m
+    WHERE NOT (m.person_id = ANY($4::uuid[]))
+      AND NOT EXISTS (
+          SELECT 1 FROM mine m2
+          WHERE m2.person_id = m.person_id
+            AND (m2.due_at, m2.task_id) < (m.due_at, m.task_id)
+      )
 ),
 capped AS (
     SELECT * FROM prefix

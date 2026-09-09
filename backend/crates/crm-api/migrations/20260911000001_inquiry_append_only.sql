@@ -54,9 +54,28 @@
 -- invokes the FK's own referential-integrity trigger (depth 1), which
 -- issues the internal `DELETE FROM inquiry ...` whose row trigger then
 -- runs at depth 2. `> 1` is therefore the correct cascade test.
+--
+-- Round 1 review hardening: depth alone only proves "nested two levels
+-- deep", not "because this row's Person was actually deleted" — some
+-- future trigger elsewhere in the schema could coincidentally nest a
+-- `DELETE FROM inquiry` at depth > 1 for an unrelated reason and slip
+-- through. The additional `NOT EXISTS` check ties the exception to a
+-- genuine cascade: `person`'s row-level `ON DELETE CASCADE` action runs
+-- as a later sub-command of the same statement, after the `person` row
+-- itself is gone (invisible to this command's snapshot), so by the time
+-- this trigger fires for the cascaded `inquiry` row, `OLD.person_id` no
+-- longer resolves. A direct `DELETE FROM inquiry` — even one artificially
+-- nested at depth > 1 — can never satisfy this, because the Person row
+-- is still there. No trigger may delete from `inquiry` unless the row's
+-- own Person is already gone.
 CREATE FUNCTION reject_direct_mutation() RETURNS TRIGGER AS $$
 BEGIN
-    IF TG_OP = 'DELETE' AND pg_trigger_depth() > 1 THEN
+    IF TG_OP = 'DELETE' AND pg_trigger_depth() > 1
+        AND NOT EXISTS (
+            SELECT 1 FROM person
+             WHERE id = OLD.person_id AND organization_id = OLD.organization_id
+        )
+    THEN
         RETURN OLD;
     END IF;
     RAISE EXCEPTION 'inquiry is append-only';

@@ -309,17 +309,26 @@ async fn a_second_correction_chains_onto_the_first_with_strictly_increasing_reco
     assert_eq!(rows[1].corrects_id, Some(rows[0].id));
     assert_eq!(rows[2].corrects_id, Some(rows[1].id));
     assert_eq!(rows[2].outcome, "wrong_number");
-    // LATER (011d): under full-suite load two sequential writes can land in
-    // the same microsecond `recorded_at` (`clock_timestamp()` resolution),
-    // which used to fail this assertion even though row order stayed
-    // correct — `attempt_rows`'s own `ORDER BY recorded_at, id` (and the
-    // production history sort, `person/queries.rs`'s `(occurred_at,
-    // recorded_at, kind_rank, id)`, docs/specs/SLICE_002.md §5) already
-    // tie-break on `id`; the assertion just wasn't checking the same key
-    // it was sorted by. Compare the compound key so a `recorded_at` tie
-    // does not fail a still-deterministic order.
-    assert!((rows[0].recorded_at, rows[0].id) < (rows[1].recorded_at, rows[1].id));
-    assert!((rows[1].recorded_at, rows[1].id) < (rows[2].recorded_at, rows[2].id));
+    // Strict, spec-backed (SLICE_006c §2): `correct_call_outcome` stamps a
+    // correction's `recorded_at` with `clock_timestamp()` taken *after* the
+    // call row lock, specifically so each correction's `recorded_at` is
+    // strictly later than its head's — not merely tie-broken by `id`. Keep
+    // both values in the panic message so a future occurrence (the 011d
+    // LATER item this assertion was briefly loosened for, then reverted —
+    // not reproduced in 21 isolated/full-suite runs; kept strict per
+    // review, "undiagnosed") is actually diagnosable.
+    assert!(
+        rows[0].recorded_at < rows[1].recorded_at,
+        "{:?} vs {:?}",
+        rows[0].recorded_at,
+        rows[1].recorded_at
+    );
+    assert!(
+        rows[1].recorded_at < rows[2].recorded_at,
+        "{:?} vs {:?}",
+        rows[1].recorded_at,
+        rows[2].recorded_at
+    );
     assert!(rows.iter().all(|r| r.occurred_at == rows[0].occurred_at));
     assert!(rows.iter().all(|r| r.causation_id == Some(call_id)));
 

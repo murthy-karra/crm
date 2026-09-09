@@ -1,9 +1,10 @@
 import { effectScope, nextTick, ref, type Ref } from 'vue'
-import { QueryClient, useMutation } from '@tanstack/vue-query'
+import { QueryClient, useMutation, useQuery } from '@tanstack/vue-query'
 import { UnauthorizedError } from 'centrifuge'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, apiFetch } from '../api/client'
-import { personMutationKey, queryKeys } from '../api/queries'
+import { personMutationKey, queryKeys, useAddPersonTagMutation } from '../api/queries'
+import type { PeopleResponse, PersonDetailResponse, PersonTagMutationResponse } from '../api/types'
 import { useRealtime, type RealtimeClient, type RealtimeClientFactory } from './useRealtime'
 
 /** Registers a mutation on `qc` with the given Person's mutationKey and
@@ -25,6 +26,23 @@ function startPendingPersonMutation(qc: QueryClient, orgId: string, personId: st
     ),
   )!
   mutation.mutate()
+  return scope
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason: unknown) => void
+  const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no })
+  return { promise, resolve, reject }
+}
+
+/** Mounts a real, active `useQuery` observer for `queryKey` on `qc`, so
+ * `refetchQueries({ type: 'active', ... })` (the item 5 hold release) has
+ * something to actually refetch and this test can count real
+ * `apiFetch` calls against it. Returns the owning `effectScope`. */
+function mountActiveQuery<T>(qc: QueryClient, queryKey: readonly unknown[], queryFn: () => Promise<T>) {
+  const scope = effectScope()
+  scope.run(() => useQuery({ queryKey: queryKey as unknown[], queryFn }, qc))
   return scope
 }
 
@@ -306,6 +324,206 @@ describe('useRealtime', () => {
     expect(h.invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.savedListCounts(ORG_ID) })
 
     mutationScope.stop()
+    scope.stop()
+  })
+
+  // Round 1 review FIX (item 5 hold release): the hold used to be released
+  // only by stage/assignment settles, because a tag mutation's own settle
+  // invalidate targets `person(id)` only, never the People list. This
+  // uses a REAL, deferred `useAddPersonTagMutation` (not the fake pending
+  // mutation above) so its actual settle path exercises
+  // settlePersonMutation's hold-release `refetchQueries`.
+  it('a pending tag mutation for one Person: an unrelated person.changed holds the People list stale, and the tag mutation settling releases the hold', async () => {
+    const h = harness()
+    h.orgId.value = ORG_ID
+    const { scope } = run(h)
+    await nextTick()
+    const client = h.clients[0]!
+
+    let peopleFetchCount = 0
+    vi.mocked(apiFetch).mockImplementation((path: string) => {
+      if (path === '/people') {
+        peopleFetchCount += 1
+        return Promise.resolve({ people: [], truncated: false } satisfies PeopleResponse)
+      }
+      return Promise.reject(new Error(`unexpected path ${path}`))
+    })
+    // An ACTIVE People observer -- refetchQueries({ type: 'active' }) only
+    // touches observed queries.
+    const peopleScope = mountActiveQuery<PeopleResponse>(h.queryClient, queryKeys.people(ORG_ID), () =>
+      apiFetch('/people'),
+    )
+    await nextTick()
+    await nextTick()
+    expect(peopleFetchCount).toBe(1)
+
+    // A tag mutation for a Person is now pending.
+    const tagDeferred = deferred<PersonTagMutationResponse>()
+    vi.mocked(apiFetch).mockImplementation((path: string) => {
+      if (path === '/people') {
+        peopleFetchCount += 1
+        return Promise.resolve({ people: [], truncated: false } satisfies PeopleResponse)
+      }
+      if (path.includes('/tags/')) return tagDeferred.promise
+      return Promise.reject(new Error(`unexpected path ${path}`))
+    })
+    const mutationScope = effectScope()
+    const tagMutation = mutationScope.run(() => useAddPersonTagMutation(ORG_ID, 'mutated-person', h.queryClient))!
+    tagMutation.mutate({ personId: 'mutated-person', tagId: 'tag-x' })
+    await nextTick()
+
+    // A person.changed for an UNRELATED Person arrives while the tag
+    // mutation is pending.
+    client.emit('publication', {
+      channel: `org:${ORG_ID}`,
+      data: {
+        v: 1,
+        type: 'person.changed',
+        organization_id: ORG_ID,
+        occurred_at: '2026-08-21T18:02:11.512Z',
+        correlation_id: 'c',
+        data: { person_id: 'other-person', change: 'stage_changed' },
+      },
+    })
+    await vi.advanceTimersByTimeAsync(250)
+
+    // Held: marked stale, but no extra fetch beyond the initial mount.
+    expect(peopleFetchCount).toBe(1)
+    expect(h.queryClient.getQueryState(queryKeys.people(ORG_ID))?.isInvalidated).toBe(true)
+
+    // The tag mutation resolves: settlePersonMutation's deferred
+    // hold-release refetches every stale active query under the org
+    // branch, including the People list the realtime path marked stale.
+    tagDeferred.resolve({ tags: [], changed: true })
+    await vi.advanceTimersByTimeAsync(0)
+    await nextTick()
+    await nextTick()
+    expect(peopleFetchCount).toBe(2)
+
+    mutationScope.stop()
+    peopleScope.stop()
+    scope.stop()
+  })
+
+  // Round 1 review FIX (item 5 hold release), the SAME-Person case: the
+  // optimistic tag write must stay visible (not reverted by the realtime
+  // stale mark) while the mutation is pending, and once it errors and
+  // rolls back, the hold's release must not leave the rolled-back
+  // snapshot as the last word — a real refetch confirms server truth.
+  it('a pending tag mutation for the SAME Person that then errors: the realtime stale mark is refetched on rollback, leaving no stale value behind', async () => {
+    const h = harness()
+    h.orgId.value = ORG_ID
+    const { scope } = run(h)
+    await nextTick()
+    const client = h.clients[0]!
+
+    const personId = 'mutated-person'
+    const existingTag = { id: 'tag-existing', name: 'Existing' }
+    const newTag = { id: 'tag-new', name: 'New' }
+    const serverPerson: PersonDetailResponse = {
+      person: {
+        id: personId,
+        first_name: null,
+        last_name: null,
+        display_name: 'P',
+        stage: { id: 'stage-1', name: 'Lead' },
+        assigned_user: null,
+        primary_email: 'p@example.test',
+        primary_phone: null,
+        inquiry_count: 1,
+        last_inquiry_at: null,
+        created_at: '2026-01-01T00:00:00Z',
+      },
+      contact_methods: [],
+      inquiries: [],
+      history: [],
+      tags: [existingTag],
+    }
+    h.queryClient.setQueryData(queryKeys.tags(ORG_ID), { tags: [{ ...newTag, person_count: 0, can_manage: true }] })
+    h.queryClient.setQueryData(queryKeys.person(ORG_ID, personId), serverPerson)
+
+    let personFetchCount = 0
+    vi.mocked(apiFetch).mockImplementation((path: string) => {
+      if (path === `/people/${personId}`) {
+        personFetchCount += 1
+        return Promise.resolve(serverPerson)
+      }
+      return Promise.reject(new Error(`unexpected path ${path}`))
+    })
+    const personScope = mountActiveQuery<PersonDetailResponse>(h.queryClient, queryKeys.person(ORG_ID, personId), () =>
+      apiFetch(`/people/${personId}`),
+    )
+    await nextTick()
+    await nextTick()
+    expect(personFetchCount).toBe(1)
+
+    const tagDeferred = deferred<PersonTagMutationResponse>()
+    vi.mocked(apiFetch).mockImplementation((path: string) => {
+      if (path === `/people/${personId}`) {
+        personFetchCount += 1
+        return Promise.resolve(serverPerson)
+      }
+      if (path.includes('/tags/')) return tagDeferred.promise
+      return Promise.reject(new Error(`unexpected path ${path}`))
+    })
+    const mutationScope = effectScope()
+    const tagMutation = mutationScope.run(() => useAddPersonTagMutation(ORG_ID, personId, h.queryClient))!
+    tagMutation.mutate({ personId, tagId: newTag.id })
+    // onMutate is async (it awaits cancelQueries before writing the
+    // optimistic value) — a timer/microtask flush, not just one nextTick,
+    // is needed for it to have fully applied.
+    await vi.advanceTimersByTimeAsync(0)
+    await nextTick()
+
+    // The optimistic write is visible (lower-cased-name order:
+    // "Existing" sorts before "New").
+    expect(h.queryClient.getQueryData<PersonDetailResponse>(queryKeys.person(ORG_ID, personId))?.tags).toEqual([
+      existingTag,
+      newTag,
+    ])
+
+    // A person.changed for the SAME Person arrives while pending.
+    client.emit('publication', {
+      channel: `org:${ORG_ID}`,
+      data: {
+        v: 1,
+        type: 'person.changed',
+        organization_id: ORG_ID,
+        occurred_at: '2026-08-21T18:02:11.512Z',
+        correlation_id: 'c',
+        data: { person_id: personId, change: 'tags_changed' },
+      },
+    })
+    await vi.advanceTimersByTimeAsync(250)
+
+    // Held: the optimistic value is untouched (no extra fetch yet).
+    expect(personFetchCount).toBe(1)
+    expect(h.queryClient.getQueryData<PersonDetailResponse>(queryKeys.person(ORG_ID, personId))?.tags).toEqual([
+      existingTag,
+      newTag,
+    ])
+
+    // The mutation errors: rollback restores the pre-mutation snapshot,
+    // then settlePersonMutation's deferred check (nothing else pending)
+    // fires both its calls — the mutation's own `invalidateQueries({
+    // queryKey: person(id) })` (GET #2) and the hold-release
+    // `refetchQueries` right behind it (GET #3, `cancelRefetch` defaults
+    // to `true` so it supersedes GET #2) — releasing the realtime hold
+    // too, so the rolled-back snapshot is not the last word (same
+    // double-supersede mechanism as queries.test.ts's "never shows the
+    // old stage" test).
+    tagDeferred.reject(new ApiError(409, 'person_tag_limit_reached'))
+    await vi.advanceTimersByTimeAsync(0)
+    await nextTick()
+    await nextTick()
+
+    expect(personFetchCount).toBe(3)
+    expect(h.queryClient.getQueryData<PersonDetailResponse>(queryKeys.person(ORG_ID, personId))?.tags).toEqual([
+      existingTag,
+    ])
+
+    mutationScope.stop()
+    personScope.stop()
     scope.stop()
   })
 

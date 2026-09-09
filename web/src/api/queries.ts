@@ -1074,22 +1074,50 @@ export function personMutationKey(orgId: string, personId: string) {
   return [PERSON_MUTATION_KEY_PREFIX, orgId, personId] as const
 }
 
-/** Invalidates `queryKey` unless another mutation for this same Person is
- * still pending. Called from `onSuccess`/`onError`/`onSettled`: TanStack
- * Query's `Mutation#execute` (query-core's mutation.ts) runs these
- * callbacks and only THEN dispatches the `'success'`/`'error'` state
- * change, so the calling mutation itself is still counted as `isMutating`
- * at this point — `isMutating` for this Person's key is therefore always
- * >= 1 (itself); `> 1` is what detects a genuinely different, still-
- * in-flight sibling mutation for the same Person. */
-function invalidateUnlessPersonMutationPending(
-  qc: QueryClient,
-  orgId: string,
-  personId: string,
-  queryKey: readonly unknown[],
-) {
-  if (qc.isMutating({ mutationKey: personMutationKey(orgId, personId) }) > 1) return
-  void qc.invalidateQueries({ queryKey })
+/** Called from `onSuccess`/`onError`/`onSettled` of all four Person
+ * mutations once each has done its own work, to invalidate `queryKey` and
+ * release the realtime hold (below) once no Person mutation is left
+ * pending.
+ *
+ * Round 1 review, BLOCKING fix: TanStack Query's `Mutation#execute`
+ * (query-core's mutation.ts) runs `onSuccess`/`onError`/`onSettled`
+ * BEFORE dispatching the mutation's own `'success'`/`'error'` state
+ * change. A synchronous `isMutating` check inside those callbacks
+ * therefore always counts the calling mutation itself as still pending —
+ * harmless for one mutation alone (an `> 1` threshold correctly looked
+ * past "itself"), but wrong for two sibling mutations for the same Person
+ * whose responses resolve within the same microtask flush: at the moment
+ * each one's callback runs, NEITHER has dispatched yet, so each counts
+ * the OTHER as still pending too and both skip — nothing invalidates, a
+ * regression versus the pre-batch always-invalidate behavior.
+ *
+ * Fix: defer the decision past a macrotask (`setTimeout(fn, 0)`). By the
+ * time it runs, every mutation that settled in this tick has already
+ * dispatched its state change, so `isMutating` reflects genuine reality:
+ * 0 means nobody is left actually in flight for this Person. Every
+ * settling mutation schedules one of these; if more than one happens to
+ * observe 0 (e.g. two sibling settles land in the same macrotask slot),
+ * more than one ends up invalidating/refetching — harmless, since
+ * TanStack's own request deduplication collapses concurrent fetches for
+ * the same key.
+ *
+ * Hold release (round 1 review fix): while any Person mutation was
+ * pending, realtime/useRealtime.ts's flush marked People/Person queries
+ * stale WITHOUT refetching (`refetchType: 'none'`) so an unrelated
+ * Person's `person.changed` could not revert this mutation's optimistic
+ * value. Nothing else turns that stale mark into a real refetch once the
+ * hold lifts — a tag mutation's own invalidate only targets its own
+ * Person's detail key, never the People list — so once the count reaches
+ * 0 this also refetches every stale, actively-observed query under the
+ * org branch, regardless of which specific key this mutation's own
+ * invalidate targeted. */
+function settlePersonMutation(qc: QueryClient, orgId: string, personId: string, queryKey: readonly unknown[]) {
+  setTimeout(() => {
+    if (qc.isMutating({ mutationKey: personMutationKey(orgId, personId) }) === 0) {
+      void qc.invalidateQueries({ queryKey })
+      void qc.refetchQueries({ queryKey: queryKeys.org(orgId), type: 'active', stale: true })
+    }
+  }, 0)
 }
 
 export function useAssignPersonMutation(
@@ -1137,11 +1165,13 @@ export function useAssignPersonMutation(
     // `person.changed` invalidation racing a pending mutation only ever
     // arrives after that mutation's own commit (§3 "Realtime"), so this
     // final invalidate's refetch is guaranteed to see the true state.
-    // Item 5 (014 LATER): skipped while another mutation for the same
-    // Person is still pending — that one invalidates when it settles.
+    // Item 5 (014 LATER): settlePersonMutation defers the decision past a
+    // macrotask so a sibling mutation for the same Person settling in the
+    // same tick is not mistaken for itself; only the settle(s) that find
+    // nobody else pending actually invalidate.
     onSettled: (_data, _error, variables, context) => {
       const id = context?.id ?? toValue(orgId)
-      invalidateUnlessPersonMutationPending(qc, id, variables.personId, queryKeys.org(id))
+      settlePersonMutation(qc, id, variables.personId, queryKeys.org(id))
     },
   }, providedQueryClient)
 }
@@ -1179,11 +1209,13 @@ export function useChangeStageMutation(
         stage: data.person.stage,
       }))
     },
-    // Item 5 (014 LATER): skipped while another mutation for the same
-    // Person is still pending — that one invalidates when it settles.
+    // Item 5 (014 LATER): settlePersonMutation defers the decision past a
+    // macrotask so a sibling mutation for the same Person settling in the
+    // same tick is not mistaken for itself; only the settle(s) that find
+    // nobody else pending actually invalidate.
     onSettled: (_data, _error, variables, context) => {
       const id = context?.id ?? toValue(orgId)
-      invalidateUnlessPersonMutationPending(qc, id, variables.personId, queryKeys.org(id))
+      settlePersonMutation(qc, id, variables.personId, queryKeys.org(id))
     },
   }, providedQueryClient)
 }
@@ -1760,7 +1792,7 @@ export function useAddPersonTagMutation(
       restorePersonDetailSnapshot(qc, snapshot)
       refetchOnStalePersonTagReference(qc, orgId, variables.personId, error)
       const id = toValue(orgId)
-      invalidateUnlessPersonMutationPending(qc, id, variables.personId, queryKeys.person(id, variables.personId))
+      settlePersonMutation(qc, id, variables.personId, queryKeys.person(id, variables.personId))
     },
     onSuccess: (result, variables) => {
       const id = toValue(orgId)
@@ -1768,7 +1800,7 @@ export function useAddPersonTagMutation(
         old ? { ...old, tags: result.tags } : old,
       )
       void qc.invalidateQueries({ queryKey: queryKeys.tags(id) })
-      invalidateUnlessPersonMutationPending(qc, id, variables.personId, queryKeys.person(id, variables.personId))
+      settlePersonMutation(qc, id, variables.personId, queryKeys.person(id, variables.personId))
     },
   }, providedQueryClient)
 }
@@ -1808,7 +1840,7 @@ export function useRemovePersonTagMutation(
       restorePersonDetailSnapshot(qc, snapshot)
       refetchOnStalePersonTagReference(qc, orgId, variables.personId, error)
       const id = toValue(orgId)
-      invalidateUnlessPersonMutationPending(qc, id, variables.personId, queryKeys.person(id, variables.personId))
+      settlePersonMutation(qc, id, variables.personId, queryKeys.person(id, variables.personId))
     },
     onSuccess: (result, variables) => {
       const id = toValue(orgId)
@@ -1816,7 +1848,7 @@ export function useRemovePersonTagMutation(
         old ? { ...old, tags: result.tags } : old,
       )
       void qc.invalidateQueries({ queryKey: queryKeys.tags(id) })
-      invalidateUnlessPersonMutationPending(qc, id, variables.personId, queryKeys.person(id, variables.personId))
+      settlePersonMutation(qc, id, variables.personId, queryKeys.person(id, variables.personId))
     },
   }, providedQueryClient)
 }

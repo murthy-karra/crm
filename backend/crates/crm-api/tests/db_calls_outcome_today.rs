@@ -20,20 +20,12 @@ use crm_api::telephony::{DialOutcome, ProviderError, SipFailure};
 use crate::common::calls::*;
 
 // --- Slice 006c §5a / D-033: the "outcome needed" Today tier ----------
-
-/// A failed call (busy → automatic `no_answer` attempt) by alice to
-/// `person_id`; returns the call id.
-async fn busy_call(f: &Fixture, person_id: Uuid, phone: Uuid) -> Uuid {
-    f.provider
-        .push_dial(Ok(DialOutcome::Failed(SipFailure::Busy)));
-    let (call_id, _) = start_with_agent_present(f, person_id, phone).await;
-    assert_eq!(
-        dial(&f.router, &f.alice, call_id).await.status(),
-        StatusCode::ACCEPTED
-    );
-    wait_for_status(&f.router, &f.alice, call_id, "failed").await;
-    call_id
-}
+//
+// `busy_call` (a failed call — busy → automatic `no_answer` attempt — by
+// alice to `person_id`) is the one in tests/common/calls.rs, shared with
+// db_calls_corrections.rs; this file used to carry its own duplicate
+// definition, which Rust's glob-import shadowing rules let compile
+// silently instead of erroring on the conflict.
 
 #[sqlx::test]
 #[ignore]

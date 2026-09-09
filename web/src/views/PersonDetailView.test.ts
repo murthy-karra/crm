@@ -17,12 +17,16 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, apiFetch } from '../api/client'
 import type {
+  ActorRef,
+  AddNoteResponse,
   CallCompletedDetail,
   CallCompletedOutcome,
   CallView,
   ContactAttemptedDetail,
   ContactMethod,
   CorrectOutcomeResponse,
+  DeleteNoteResponse,
+  EditNoteResponse,
   HistoryEntry,
   MeResponse,
   PersonDetailResponse,
@@ -79,6 +83,34 @@ function detail(contactMethods: ContactMethod[], history: HistoryEntry[] = [], t
     inquiries: [],
     history,
     tags,
+  }
+}
+
+function noteEntry(overrides: {
+  id?: string
+  body?: string
+  edited?: boolean
+  canManage?: boolean
+  actor?: ActorRef | null
+  occurredAt?: string
+} = {}): HistoryEntry {
+  const {
+    id = 'note-1',
+    body = 'A note',
+    edited = false,
+    canManage = true,
+    actor = { id: 'u-alice', display_name: 'Alice' },
+    occurredAt = '2026-08-22T09:30:00.000Z',
+  } = overrides
+  return {
+    kind: 'note',
+    id,
+    occurred_at: occurredAt,
+    recorded_at: occurredAt,
+    actor,
+    origin: 'web_session',
+    correlation_id: 'corr-note',
+    detail: { body, updated_at: occurredAt, edited, can_manage: canManage },
   }
 }
 
@@ -155,6 +187,15 @@ interface StubOptions {
   /** `PUT`/`DELETE /api/people/{id}/tags/{tag_id}` response, or an Error. Defaults to a
    *  target-state-idempotent toggle against a locally tracked applied set. */
   personTag?: (tagId: string, applying: boolean) => { tags: TagRef[]; changed: boolean } | Error
+  /** `POST /api/people/{id}/notes` response, or an Error to throw. Defaults to a fresh
+   *  note by Alice, `can_manage: true`, appended to the tracked history. */
+  noteAdd?: (body: string) => AddNoteResponse | Error
+  /** `PUT /api/people/{id}/notes/{note_id}` response, or an Error. Defaults to updating
+   *  the tracked history entry in place (`changed: true`, `edited: true`). */
+  noteEdit?: (noteId: string, body: string) => EditNoteResponse | Error
+  /** `DELETE /api/people/{id}/notes/{note_id}` response, or an Error. Defaults to
+   *  removing the entry from the tracked history (tombstones are invisible, §1 rule 3). */
+  noteDelete?: (noteId: string) => DeleteNoteResponse | Error
 }
 
 function stubApi(personDetail: PersonDetailResponse, options: StubOptions = {}) {
@@ -163,6 +204,10 @@ function stubApi(personDetail: PersonDetailResponse, options: StubOptions = {}) 
   const gets = [...(options.gets ?? [])]
   const appliedTags = new Map(personDetail.tags.map((tag) => [tag.id, tag]))
   const orgTags = new Map((options.orgTags ?? []).map((tag) => [tag.id, tag]))
+  // Mutable so a note add/edit/delete is reflected on the NEXT GET — the
+  // detail refetch every mutation settles into (§5, §9.10).
+  let currentHistory = [...personDetail.history]
+  let noteSeq = 0
   apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET'
     if (path === '/me') return me()
@@ -192,12 +237,76 @@ function stubApi(personDetail: PersonDetailResponse, options: StubOptions = {}) 
         changed,
       }
     }
+    const noteCollectionMatch = /^\/people\/([^/]+)\/notes$/.exec(path)
+    if (noteCollectionMatch && method === 'POST') {
+      const body = JSON.parse(String(init?.body ?? '{}')) as { body: string }
+      const result = options.noteAdd?.(body.body)
+      if (result instanceof Error) throw result
+      if (result) {
+        currentHistory = [...currentHistory, noteEntry({ id: result.note.id, body: result.note.body, edited: result.note.edited, canManage: result.note.can_manage, actor: result.note.author })]
+        return result
+      }
+      noteSeq += 1
+      const id = `note-added-${noteSeq}`
+      const note: AddNoteResponse['note'] = {
+        id,
+        person_id: decodeURIComponent(noteCollectionMatch[1]),
+        body: body.body,
+        author: { id: 'u-alice', display_name: 'Alice' },
+        created_at: '2026-08-22T11:00:00.000Z',
+        updated_at: '2026-08-22T11:00:00.000Z',
+        edited: false,
+        can_manage: true,
+      }
+      currentHistory = [...currentHistory, noteEntry({ id, body: note.body, occurredAt: note.created_at })]
+      return { note }
+    }
+    const noteItemMatch = /^\/people\/([^/]+)\/notes\/([^/]+)$/.exec(path)
+    if (noteItemMatch && (method === 'PUT' || method === 'DELETE')) {
+      const noteId = decodeURIComponent(noteItemMatch[2])
+      if (method === 'PUT') {
+        const body = JSON.parse(String(init?.body ?? '{}')) as { body: string }
+        const result = options.noteEdit?.(noteId, body.body)
+        if (result instanceof Error) {
+          // A 404 here means the note genuinely no longer exists (deleted
+          // elsewhere) — a subsequent refetch must not keep showing it,
+          // matching real backend behavior (the tags precedent above).
+          if (result instanceof ApiError && result.status === 404) {
+            currentHistory = currentHistory.filter((entry) => !(entry.kind === 'note' && entry.id === noteId))
+          }
+          throw result
+        }
+        if (result) {
+          currentHistory = currentHistory.map((entry) =>
+            entry.kind === 'note' && entry.id === noteId
+              ? noteEntry({ id: noteId, body: result.note.body, edited: result.note.edited, canManage: result.note.can_manage, actor: result.note.author, occurredAt: entry.occurred_at })
+              : entry,
+          )
+          return result
+        }
+        let updated: HistoryEntry | undefined
+        currentHistory = currentHistory.map((entry) => {
+          if (entry.kind !== 'note' || entry.id !== noteId) return entry
+          updated = noteEntry({ id: noteId, body: body.body, edited: true, canManage: entry.detail.can_manage, actor: entry.actor, occurredAt: entry.occurred_at })
+          return updated
+        })
+        if (!updated || updated.kind !== 'note') throw new ApiError(404, 'not_found')
+        return { note: { id: noteId, person_id: PERSON_ID, body: updated.detail.body, author: updated.actor, created_at: updated.occurred_at, updated_at: updated.detail.updated_at, edited: updated.detail.edited, can_manage: updated.detail.can_manage }, changed: true }
+      }
+      const result = options.noteDelete?.(noteId)
+      if (result instanceof Error) throw result
+      const existed = currentHistory.some((entry) => entry.kind === 'note' && entry.id === noteId)
+      currentHistory = currentHistory.filter((entry) => !(entry.kind === 'note' && entry.id === noteId))
+      if (result) return result
+      if (!existed) throw new ApiError(404, 'not_found')
+      return { deleted: true }
+    }
     if (path.startsWith('/people/') && !path.endsWith('/calls') && method === 'GET') {
       const id = path.slice('/people/'.length)
       const currentTags = [...appliedTags.values()].sort((a, b) => a.name.localeCompare(b.name))
       return id === PERSON_ID
-        ? { ...personDetail, tags: currentTags }
-        : { ...personDetail, person: { ...personDetail.person, id, display_name: 'Someone Else' }, tags: currentTags }
+        ? { ...personDetail, history: currentHistory, tags: currentTags }
+        : { ...personDetail, person: { ...personDetail.person, id, display_name: 'Someone Else' }, history: currentHistory, tags: currentTags }
     }
     if (path === '/stages') return { stages: [{ id: 'stage-lead', name: 'Lead', position: 1 }] }
     if (path === '/organization/members') return { members: [] }
@@ -304,7 +413,14 @@ describe('PersonDetailView — Call button', () => {
     const { wrapper } = await mountView()
     expect(wrapper.get('[data-testid="call-button"]').classes()).toContain('bg-accent')
     expect(wrapper.get('[data-testid="log-contact"]').classes()).not.toContain('bg-accent')
-    expect(wrapper.findAll('.bg-accent')).toHaveLength(1)
+    // The note composer's always-visible "Add note" button is also
+    // primary-styled (docs/specs/SLICE_015.md §5) and independent of
+    // the call/outcome state this assertion is actually about, so it is
+    // excluded from the count rather than folded into the call header's
+    // own one-primary invariant.
+    expect(
+      wrapper.findAll('.bg-accent').filter((el) => el.attributes('data-testid') !== 'note-composer-submit'),
+    ).toHaveLength(1)
   })
 
   it('with one phone, starts the call directly — no picker, only contact_method_id on the wire', async () => {
@@ -347,7 +463,14 @@ describe('PersonDetailView — Call button', () => {
     expect(panel.text()).toContain('Grace Hopper')
     expect(wrapper.get('[data-testid="call-status"]').text()).toBe('Connecting…')
     expect(wrapper.get('[data-testid="call-button"]').attributes('disabled')).toBeDefined()
-    expect(wrapper.findAll('.bg-accent')).toHaveLength(1)
+    // The note composer's always-visible "Add note" button is also
+    // primary-styled (docs/specs/SLICE_015.md §5) and independent of
+    // the call/outcome state this assertion is actually about, so it is
+    // excluded from the count rather than folded into the call header's
+    // own one-primary invariant.
+    expect(
+      wrapper.findAll('.bg-accent').filter((el) => el.attributes('data-testid') !== 'note-composer-submit'),
+    ).toHaveLength(1)
     expect(wrapper.get('[data-testid="call-hangup"]').classes()).toContain('bg-accent')
 
     rooms[0].emit('participantConnected', { identity: `sip:${CALL_ID}`, attributes: {} })
@@ -362,7 +485,14 @@ describe('PersonDetailView — Call button', () => {
     // one primary, so the Call button (enabled again) is secondary.
     expect(wrapper.get('[data-testid="call-outcome-prompt"]').text()).toBe('How did it go?')
     expect(wrapper.get('[data-testid="call-button"]').attributes('disabled')).toBeUndefined()
-    expect(wrapper.findAll('.bg-accent')).toHaveLength(1)
+    // The note composer's always-visible "Add note" button is also
+    // primary-styled (docs/specs/SLICE_015.md §5) and independent of
+    // the call/outcome state this assertion is actually about, so it is
+    // excluded from the count rather than folded into the call header's
+    // own one-primary invariant.
+    expect(
+      wrapper.findAll('.bg-accent').filter((el) => el.attributes('data-testid') !== 'note-composer-submit'),
+    ).toHaveLength(1)
     expect(wrapper.get('[data-testid="call-outcome-save"]').classes()).toContain('bg-accent')
 
     // D-033: forced choice — nothing selected, no Skip, Save disabled until a pick.
@@ -1046,7 +1176,14 @@ describe('PersonDetailView — Set / Change outcome (SLICE_006c §1 step 7, §5a
     await action.trigger('click')
     await flushPromises()
     expect(document.querySelector('[data-testid="change-outcome-save"]')).toBeNull()
-    expect(wrapper.findAll('.bg-accent')).toHaveLength(1)
+    // The note composer's always-visible "Add note" button is also
+    // primary-styled (docs/specs/SLICE_015.md §5) and independent of
+    // the call/outcome state this assertion is actually about, so it is
+    // excluded from the count rather than folded into the call header's
+    // own one-primary invariant.
+    expect(
+      wrapper.findAll('.bg-accent').filter((el) => el.attributes('data-testid') !== 'note-composer-submit'),
+    ).toHaveLength(1)
     // Only a saved outcome releases the prompt (no Skip).
     await wrapper.get('[data-outcome="reached"]').trigger('click')
     await wrapper.get('[data-testid="call-outcome-save"]').trigger('click')
@@ -1326,5 +1463,232 @@ describe('PersonDetailView — Tags', () => {
     document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     await flushPromises()
     expect(wrapper.find('[data-testid="add-tag-popover"]').exists()).toBe(false)
+  })
+})
+
+describe('PersonDetailView — Notes (SLICE_015 §9.10)', () => {
+  let activeWrapper: Awaited<ReturnType<typeof mountView>>['wrapper'] | null = null
+  afterEach(async () => {
+    activeWrapper?.unmount()
+    activeWrapper = null
+    await flushPromises()
+  })
+
+  // `settlePersonMutation` (api/queries.ts) defers its invalidate/refetch
+  // decision past a macrotask so a sibling mutation settling in the same
+  // tick is not mistaken for itself — real, not fake, timers here, so a
+  // genuine `setTimeout(fn, 0)` tick plus a further flush lets that
+  // deferred decision, and the refetch it may trigger, actually land.
+  async function settleTick() {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await flushPromises()
+  }
+
+  it('the composer is disabled while empty or whitespace-only, and Ctrl/Cmd+Enter submits', async () => {
+    stubApi(detail([PHONE_A]))
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    const submit = wrapper.get('[data-testid="note-composer-submit"]')
+    expect(submit.attributes('disabled')).toBeDefined()
+    const textarea = wrapper.get('[data-testid="note-composer-textarea"]')
+    await textarea.setValue('   ')
+    expect(wrapper.get('[data-testid="note-composer-submit"]').attributes('disabled')).toBeDefined()
+    await textarea.setValue('A real note')
+    expect(wrapper.get('[data-testid="note-composer-submit"]').attributes('disabled')).toBeUndefined()
+
+    await textarea.trigger('keydown', { key: 'Enter', ctrlKey: true })
+    await flushPromises()
+    const posts = apiFetchMock.mock.calls.filter(([path, init]) => path === `/people/${PERSON_ID}/notes` && (init?.method ?? 'GET') === 'POST')
+    expect(posts).toHaveLength(1)
+  })
+
+  it('a live counter appears past 9,000 code points and disables past 10,000 — counting code points, not UTF-16 units', async () => {
+    stubApi(detail([PHONE_A]))
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    const textarea = wrapper.get('[data-testid="note-composer-textarea"]')
+
+    await textarea.setValue('a'.repeat(9000))
+    expect(wrapper.find('[data-testid="note-composer-counter"]').exists()).toBe(false)
+
+    await textarea.setValue('a'.repeat(9001))
+    expect(wrapper.get('[data-testid="note-composer-counter"]').text()).toBe('9001/10000')
+    expect(wrapper.get('[data-testid="note-composer-submit"]').attributes('disabled')).toBeUndefined()
+
+    // 10,000 four-byte astral code points (each two UTF-16 units): the
+    // counter must read 10,000, not 20,000, and Add must stay enabled.
+    await textarea.setValue('\u{1F600}'.repeat(10000))
+    expect(wrapper.get('[data-testid="note-composer-counter"]').text()).toBe('10000/10000')
+    expect(wrapper.get('[data-testid="note-composer-submit"]').attributes('disabled')).toBeUndefined()
+
+    await textarea.setValue('\u{1F600}'.repeat(10001))
+    expect(wrapper.get('[data-testid="note-composer-submit"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('a successful add clears the composer and the new note appears after the refetch', async () => {
+    stubApi(detail([PHONE_A]))
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    const textarea = wrapper.get('[data-testid="note-composer-textarea"]')
+    await textarea.setValue('Called and left a voicemail')
+    await wrapper.get('[data-testid="note-composer-submit"]').trigger('click')
+    await flushPromises()
+    await settleTick()
+    expect((wrapper.get('[data-testid="note-composer-textarea"]').element as HTMLTextAreaElement).value).toBe('')
+    expect(wrapper.get('[data-testid="note-body"]').text()).toBe('Called and left a voicemail')
+  })
+
+  it('a failed add (400) keeps the draft and shows the note-specific malformed_request copy', async () => {
+    stubApi(detail([PHONE_A]), { noteAdd: () => new ApiError(400, 'malformed_request') })
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    const textarea = wrapper.get('[data-testid="note-composer-textarea"]')
+    await textarea.setValue('Too long or whatever')
+    await wrapper.get('[data-testid="note-composer-submit"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="note-composer-error"]').text()).toBe('Notes are 1–10,000 characters of plain text')
+    expect((wrapper.get('[data-testid="note-composer-textarea"]').element as HTMLTextAreaElement).value).toBe('Too long or whatever')
+    expect(wrapper.get('[data-testid="note-composer-submit"]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('renders a note row pre-wrap, "Note by <author>", and the edited marker', async () => {
+    stubApi(detail([PHONE_A], [
+      noteEntry({ id: 'note-1', body: 'Line one\nLine two', edited: false }),
+      noteEntry({ id: 'note-2', body: 'Fixed the typo', edited: true, occurredAt: '2026-08-22T09:31:00.000Z' }),
+    ]))
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    const bodies = wrapper.findAll('[data-testid="note-body"]')
+    expect(bodies[0].text()).toBe('Line one\nLine two')
+    expect(bodies[0].classes()).toContain('whitespace-pre-wrap')
+    const rows = wrapper.findAll('li')
+    const summaries = rows.map((row) => row.text())
+    expect(summaries.some((text) => text.includes('Note by Alice') && !text.includes('edited'))).toBe(true)
+    expect(summaries.some((text) => text.includes('Note by Alice') && text.includes('edited'))).toBe(true)
+  })
+
+  it('Edit/Delete render only where detail.can_manage is true, with 40px targets and accessible names', async () => {
+    stubApi(detail([PHONE_A], [
+      noteEntry({ id: 'note-mine', body: 'Mine', canManage: true }),
+      noteEntry({ id: 'note-theirs', body: 'Not mine', canManage: false, actor: { id: 'u-bob', display_name: 'Bob' } }),
+    ]))
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    expect(wrapper.findAll('[data-testid="edit-note"]')).toHaveLength(1)
+    expect(wrapper.findAll('[data-testid="delete-note"]')).toHaveLength(1)
+    const edit = wrapper.get('[data-testid="edit-note"]')
+    expect(edit.attributes('aria-label')).toBe('Edit note')
+    expect(edit.classes()).toContain('h-10')
+    expect(edit.classes()).toContain('w-10')
+    const del = wrapper.get('[data-testid="delete-note"]')
+    expect(del.attributes('aria-label')).toBe('Delete note')
+    expect(del.classes()).toContain('h-10')
+    expect(del.classes()).toContain('w-10')
+  })
+
+  it('inline edit: Save persists, Cancel discards, Escape cancels and returns focus to Edit', async () => {
+    stubApi(detail([PHONE_A], [noteEntry({ id: 'note-1', body: 'Original body' })]))
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    const editButton = wrapper.get('[data-testid="edit-note"]')
+    await editButton.trigger('click')
+    const textarea = wrapper.get('[data-testid="note-edit-textarea"]')
+    expect((textarea.element as HTMLTextAreaElement).value).toBe('Original body')
+
+    // Escape cancels and returns focus to the Edit button.
+    await textarea.trigger('keydown', { key: 'Escape' })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="note-edit-textarea"]').exists()).toBe(false)
+    expect(document.activeElement).toBe(wrapper.get('[data-testid="edit-note"]').element)
+
+    // Re-open, edit, Cancel discards.
+    await wrapper.get('[data-testid="edit-note"]').trigger('click')
+    await wrapper.get('[data-testid="note-edit-textarea"]').setValue('Discarded draft')
+    await wrapper.get('[data-testid="note-edit-cancel"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="note-body"]').text()).toBe('Original body')
+
+    // Re-open, edit, Save persists (after the settle refetch).
+    await wrapper.get('[data-testid="edit-note"]').trigger('click')
+    await wrapper.get('[data-testid="note-edit-textarea"]').setValue('Edited body')
+    await wrapper.get('[data-testid="note-edit-save"]').trigger('click')
+    await flushPromises()
+    await settleTick()
+    expect(wrapper.get('[data-testid="note-body"]').text()).toBe('Edited body')
+  })
+
+  it('an inline edit survives a refetch that removes the note, keeping the draft and explaining it was deleted elsewhere', async () => {
+    stubApi(detail([PHONE_A], [noteEntry({ id: 'note-1', body: 'Original body' })]), {
+      // Simulate another tab deleting the note the instant this tab's own
+      // PUT lands: the server sees it already gone (404), matching real
+      // backend behavior (tombstones are invisible, §1 rule 3).
+      noteEdit: () => new ApiError(404, 'not_found'),
+    })
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    await wrapper.get('[data-testid="edit-note"]').trigger('click')
+    await wrapper.get('[data-testid="note-edit-textarea"]').setValue('A draft that will be orphaned')
+    await wrapper.get('[data-testid="note-edit-save"]').trigger('click')
+    await flushPromises()
+    await settleTick()
+    expect(wrapper.get('[data-testid="note-edit-gone-message"]').text()).toBe('This note was deleted by someone else.')
+    expect((wrapper.get('[data-testid="note-edit-gone-draft"]').element as HTMLTextAreaElement).value).toBe(
+      'A draft that will be orphaned',
+    )
+    await wrapper.get('[data-testid="note-edit-gone-dismiss"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="note-edit-gone"]').exists()).toBe(false)
+  })
+
+  it('delete opens a ConfirmDialog with the exact copy, disables Confirm while pending, and removes the row on success', async () => {
+    stubApi(detail([PHONE_A], [noteEntry({ id: 'note-1', body: 'Delete me' })]))
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    await wrapper.get('[data-testid="delete-note"]').trigger('click')
+    await flushPromises()
+    expect(document.body.textContent).toContain('Delete this note? This cannot be undone.')
+
+    // Hold the DELETE request open so the pending state is observable,
+    // then release it and let the normal stub take over again.
+    let releaseDelete: () => void = () => {}
+    const deleteGate = new Promise<void>((resolve) => { releaseDelete = resolve })
+    const defaultImpl = apiFetchMock.getMockImplementation()!
+    apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === `/people/${PERSON_ID}/notes/note-1` && (init?.method ?? 'GET') === 'DELETE') {
+        await deleteGate
+      }
+      return defaultImpl(path, init)
+    })
+
+    const confirmButton = [...document.body.querySelectorAll('button')].find((b) => b.textContent === 'Delete')
+    expect(confirmButton).toBeTruthy()
+    confirmButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flushPromises()
+    const pendingConfirm = [...document.body.querySelectorAll('button')].find((b) => b.textContent === 'Working…')
+    expect(pendingConfirm).toBeTruthy()
+    expect(pendingConfirm?.hasAttribute('disabled')).toBe(true)
+
+    releaseDelete()
+    await flushPromises()
+    await settleTick()
+    expect(wrapper.find('[data-testid="note-body"]').exists()).toBe(false)
+  })
+
+  it('an unrecognised history kind renders as a generic Activity row instead of throwing', async () => {
+    const unknownEntry = {
+      kind: 'future_kind',
+      id: 'future-1',
+      occurred_at: '2026-08-22T09:40:00.000Z',
+      recorded_at: '2026-08-22T09:40:00.000Z',
+      actor: { id: 'u-alice', display_name: 'Alice' },
+      origin: 'web_session',
+      correlation_id: 'corr-future',
+      detail: {},
+    } as unknown as HistoryEntry
+    stubApi(detail([PHONE_A], [unknownEntry]))
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    await flushPromises()
+    expect(wrapper.text()).toContain('Activity')
   })
 })

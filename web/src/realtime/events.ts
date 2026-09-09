@@ -11,6 +11,11 @@ import { queryKeys } from '../api/queries'
 // for every change value, so this widening needs no new case. SLICE_011e §5
 // adds `tags_changed` the same way (published only on a changing
 // add/remove; rename/delete publish nothing).
+// SLICE_015 §5 adds `note_changed`: published on a committed add, a
+// changing edit, and a delete — never on `changed: false`. Unlike the
+// other variants, it deliberately does NOT fall into the wide default
+// below (rule 5: a note changes no People row, Today queue, or list
+// count) — see the dedicated branch in the `person.changed` case.
 export type PersonChange =
   | 'inquiry_received'
   | 'assignment_changed'
@@ -18,6 +23,7 @@ export type PersonChange =
   | 'contact_attempted'
   | 'correspondence_captured'
   | 'tags_changed'
+  | 'note_changed'
 
 interface RealtimeEnvelopeBase {
   v: 1
@@ -83,6 +89,15 @@ export function invalidationsFor(event: unknown, orgId: string): QueryKey[] {
     case 'person.changed': {
       const personId = typeof data.person_id === 'string' ? data.person_id : ''
       if (personId === '') return []
+      // SLICE_015 §5 rule 5/6: a note changes no People row, Today queue,
+      // or list count, so the wide default below would make every
+      // connected tab refetch three query families per note. Restrict to
+      // the Person detail only. Older bundles that don't recognize
+      // `note_changed` fall through to the wide default, which is safe
+      // (over-invalidation, never under-invalidation).
+      if (data.change === 'note_changed') {
+        return [queryKeys.person(orgId, personId)]
+      }
       const keys: QueryKey[] = [
         queryKeys.person(orgId, personId),
         queryKeys.people(orgId),

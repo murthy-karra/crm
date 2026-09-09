@@ -19,6 +19,8 @@ import type {
   AcceptInvitationRequest,
   AcceptInvitationResponse,
   ActorRef,
+  AddNoteRequest,
+  AddNoteResponse,
   AssignmentRequest,
   CallOutcomeCorrection,
   CallResponse,
@@ -79,7 +81,10 @@ import type {
   StartCallResponse,
   CreateTagRequest,
   CreateTagResponse,
+  DeleteNoteResponse,
   DeleteTagResponse,
+  EditNoteRequest,
+  EditNoteResponse,
   PersonTagMutationResponse,
   RenameTagRequest,
   RenameTagResponse,
@@ -1848,6 +1853,94 @@ export function useRemovePersonTagMutation(
         old ? { ...old, tags: result.tags } : old,
       )
       void qc.invalidateQueries({ queryKey: queryKeys.tags(id) })
+      settlePersonMutation(qc, id, variables.personId, queryKeys.person(id, variables.personId))
+    },
+  }, providedQueryClient)
+}
+
+// --- Slice 015: Notes (docs/specs/SLICE_015.md §5) --------------------------
+// Free-text notes on a Person. Deliberately PESSIMISTIC (§5: "a note body is
+// the kind of value 014 §3 declined to invent client-side") — unlike the
+// tag mutations above, `onMutate` writes nothing to the cache; the three
+// mutations below only key themselves with `personMutationKey` and settle
+// through `settlePersonMutation` on `queryKeys.person(orgId, personId)` (not
+// `queryKeys.org` — rules 5/6), so the LATER-batch `isMutating` guards and
+// the realtime hold apply exactly as they do for assign/stage/tags.
+
+/** `POST /api/people/{id}/notes` (§5): any active member. */
+export function useAddNoteMutation(
+  orgId: MaybeRefOrGetter<string>,
+  personId: MaybeRefOrGetter<string>,
+  providedQueryClient?: QueryClient,
+) {
+  const qc = providedQueryClient ?? useQueryClient()
+  return useMutation({
+    mutationKey: computed(() => personMutationKey(toValue(orgId), toValue(personId))),
+    mutationFn: ({ personId, body }: { personId: string; body: string }) =>
+      apiFetch<AddNoteResponse>(`/people/${encodeURIComponent(personId)}/notes`, {
+        method: 'POST',
+        body: JSON.stringify({ body } satisfies AddNoteRequest),
+      }),
+    retry: false,
+    onError: (_error, variables) => {
+      const id = toValue(orgId)
+      settlePersonMutation(qc, id, variables.personId, queryKeys.person(id, variables.personId))
+    },
+    onSuccess: (_result, variables) => {
+      const id = toValue(orgId)
+      settlePersonMutation(qc, id, variables.personId, queryKeys.person(id, variables.personId))
+    },
+  }, providedQueryClient)
+}
+
+/** `PUT /api/people/{id}/notes/{note_id}` (§5): member route; rule 1 is
+ * decided server-side under the note row's lock, not here. */
+export function useEditNoteMutation(
+  orgId: MaybeRefOrGetter<string>,
+  personId: MaybeRefOrGetter<string>,
+  providedQueryClient?: QueryClient,
+) {
+  const qc = providedQueryClient ?? useQueryClient()
+  return useMutation({
+    mutationKey: computed(() => personMutationKey(toValue(orgId), toValue(personId))),
+    mutationFn: ({ personId, noteId, body }: { personId: string; noteId: string; body: string }) =>
+      apiFetch<EditNoteResponse>(
+        `/people/${encodeURIComponent(personId)}/notes/${encodeURIComponent(noteId)}`,
+        { method: 'PUT', body: JSON.stringify({ body } satisfies EditNoteRequest) },
+      ),
+    retry: false,
+    onError: (_error, variables) => {
+      const id = toValue(orgId)
+      settlePersonMutation(qc, id, variables.personId, queryKeys.person(id, variables.personId))
+    },
+    onSuccess: (_result, variables) => {
+      const id = toValue(orgId)
+      settlePersonMutation(qc, id, variables.personId, queryKeys.person(id, variables.personId))
+    },
+  }, providedQueryClient)
+}
+
+/** `DELETE /api/people/{id}/notes/{note_id}` (§5): tombstone; a repeat is 404. */
+export function useDeleteNoteMutation(
+  orgId: MaybeRefOrGetter<string>,
+  personId: MaybeRefOrGetter<string>,
+  providedQueryClient?: QueryClient,
+) {
+  const qc = providedQueryClient ?? useQueryClient()
+  return useMutation({
+    mutationKey: computed(() => personMutationKey(toValue(orgId), toValue(personId))),
+    mutationFn: ({ personId, noteId }: { personId: string; noteId: string }) =>
+      apiFetch<DeleteNoteResponse>(
+        `/people/${encodeURIComponent(personId)}/notes/${encodeURIComponent(noteId)}`,
+        { method: 'DELETE' },
+      ),
+    retry: false,
+    onError: (_error, variables) => {
+      const id = toValue(orgId)
+      settlePersonMutation(qc, id, variables.personId, queryKeys.person(id, variables.personId))
+    },
+    onSuccess: (_result, variables) => {
+      const id = toValue(orgId)
       settlePersonMutation(qc, id, variables.personId, queryKeys.person(id, variables.personId))
     },
   }, providedQueryClient)

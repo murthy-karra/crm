@@ -69,6 +69,17 @@ describe('invalidationsFor', () => {
     ])
   })
 
+  // SLICE_015 §5, rule 5/6: unlike every other `person.changed` variant
+  // above, `note_changed` invalidates ONLY the Person detail — a note
+  // changes no People row, Today queue, or list count, so the wide
+  // default would make every connected tab refetch three query families
+  // per note.
+  it('maps note_changed to the Person detail only', () => {
+    expect(invalidationsFor(personChanged('note_changed'), ORG_ID)).toEqual([
+      queryKeys.person(ORG_ID, PERSON_ID),
+    ])
+  })
+
   it('maps inquiry_received to person, people, today, saved-list counts, unresolved, and inquiry sources', () => {
     expect(invalidationsFor(personChanged('inquiry_received'), ORG_ID)).toEqual([
       queryKeys.person(ORG_ID, PERSON_ID),

@@ -53,7 +53,13 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
 defineExpose({ focus: () => root.value?.focus() })
 
 const icons = { inquiry_received: Inbox, routing_decision: Route, assignment_changed: UserCheck, stage_changed: Flag, contact_attempted: Phone, call_completed: Phone, correspondence: Mail }
-function activity(entry: HistoryEntry): { title: string; description: string } {
+// SLICE_015 §1: notes are out of scope for the People preview card (unlike
+// PersonDetailView's History card). `recent`'s own type-narrowing filter
+// below excludes the `note` kind before it ever reaches this function, so
+// its parameter type is narrowed to match — the switch stays exhaustive
+// without a `note` case or a runtime-unreachable default.
+type PreviewableHistoryEntry = Exclude<HistoryEntry, { kind: 'note' }>
+function activity(entry: PreviewableHistoryEntry): { title: string; description: string } {
   switch (entry.kind) {
     case 'inquiry_received': return { title: 'Inquiry received', description: entry.detail.source }
     case 'assignment_changed': return { title: 'Assignment changed', description: entry.detail.to?.display_name ?? 'Unassigned' }
@@ -69,8 +75,10 @@ function activity(entry: HistoryEntry): { title: string; description: string } {
 const recent = computed(() => {
   const history = data.value?.history ?? []
   const calls = new Set(history.filter((entry) => entry.kind === 'call_completed').map((entry) => entry.detail.call_id))
-  return history.filter((entry) => entry.kind !== 'contact_attempted' ||
-    (!entry.detail.superseded && (entry.detail.call_id === null || !calls.has(entry.detail.call_id))))
+  return history
+    .filter((entry): entry is PreviewableHistoryEntry => entry.kind !== 'note')
+    .filter((entry) => entry.kind !== 'contact_attempted' ||
+      (!entry.detail.superseded && (entry.detail.call_id === null || !calls.has(entry.detail.call_id))))
     .slice(-3).map((entry) => ({ ...entry, ...activity(entry) }))
 })
 </script>

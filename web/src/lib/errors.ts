@@ -58,3 +58,29 @@ export function describeMutationError(err: unknown, fallback: string): string {
   }
   return fallback
 }
+
+/** docs/specs/SLICE_015.md §5: the composer's and inline editor's
+ * `malformed_request` copy names the actual 1–10,000-character/plain-text
+ * rule, rather than the generic `ADMIN_CODE_MESSAGES` wording — do not
+ * reword it. `forbidden` (a role changed under the viewer) and `not_found`
+ * (deleted elsewhere) render the same as the generic fallback text, since
+ * the note UI already explains those cases inline itself (PersonDetailView
+ * refetches and shows its own copy); this function exists specifically for
+ * the `malformed_request` override. */
+const NOTE_CODE_MESSAGES: Record<string, string> = {
+  malformed_request: 'Notes are 1–10,000 characters of plain text',
+}
+
+export function describeNoteError(err: unknown, fallback: string): string {
+  if (err instanceof SessionCoordinationUnavailableError) {
+    return 'Browser storage is unavailable. Enable site storage, then reload.'
+  }
+  if (err instanceof ApiError) {
+    if (err.status === 0) return 'Could not reach the server. Check your connection and try again.'
+    if (err.status === 401) return 'Your session has expired. Redirecting to sign in…'
+    if (err.code === 'unavailable') return 'The server is temporarily unavailable. Try again shortly.'
+    const message = NOTE_CODE_MESSAGES[err.code]
+    if (message) return message
+  }
+  return fallback
+}

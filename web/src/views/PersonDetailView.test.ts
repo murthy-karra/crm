@@ -2434,6 +2434,96 @@ describe('PersonDetailView — Tasks (SLICE_016.md §12.8)', () => {
     expect(JSON.parse(String(secondPost[1]?.body)).due_at).toBe('2026-03-09T03:59:59.000Z')
   })
 
+  it('a date with an explicit time converts using that local time, not end of day', async () => {
+    stubApi(detail([PHONE_A]))
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    await wrapper.get('[data-testid="task-add-title"]').setValue('Timed task')
+    await wrapper.get('[data-testid="task-add-date"]').setValue('2026-11-01')
+    await wrapper.get('[data-testid="task-add-time"]').setValue('09:30')
+    await wrapper.get('[data-testid="task-add-submit"]').trigger('click')
+    await flushPromises()
+    const post = apiFetchMock.mock.calls.find(
+      ([path, init]) => path === `/people/${PERSON_ID}/tasks` && (init?.method ?? 'GET') === 'POST',
+    )!
+    expect(JSON.parse(String(post[1]?.body)).due_at).toBe('2026-11-01T14:30:00.000Z')
+  })
+
+  it('opening Edit on a task pre-fills the local date and time from its stored instant', async () => {
+    const task = taskFixture({ id: 'task-1', title: 'Prefilled', due_at: '2026-09-10T14:23:07.123Z' })
+    stubApi(detail([PHONE_A], [], [], [task]))
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    await wrapper.get('[data-testid="edit-task"]').trigger('click')
+    expect((wrapper.get('[data-testid="task-edit-date"]').element as HTMLInputElement).value).toBe(
+      '2026-09-10',
+    )
+    expect((wrapper.get('[data-testid="task-edit-time"]').element as HTMLInputElement).value).toBe(
+      '10:23',
+    )
+  })
+
+  it('clearing the date on Edit sends due_at: null', async () => {
+    const task = taskFixture({ id: 'task-1', title: 'Clear my date', due_at: '2026-09-10T14:23:07.123Z' })
+    stubApi(detail([PHONE_A], [], [], [task]))
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    await wrapper.get('[data-testid="edit-task"]').trigger('click')
+    await wrapper.get('[data-testid="task-edit-date"]').setValue('')
+    await wrapper.get('[data-testid="task-edit-save"]').trigger('click')
+    await flushPromises()
+    const put = apiFetchMock.mock.calls.find(
+      ([path, init]) => path === `/people/${PERSON_ID}/tasks/task-1` && (init?.method ?? 'GET') === 'PUT',
+    )!
+    expect(JSON.parse(String(put[1]?.body)).due_at).toBeNull()
+  })
+
+  it('the due badge: boundary between "Due today" and the date, and between "Due today" and "Overdue", under a fixed clock', async () => {
+    // Two SEPARATE page loads at two different clock times (rather than
+    // one page live-ticking across a time advance, which `dueBadge()`'s
+    // plain, non-reactive `new Date()` read does not support and is not
+    // a stated requirement): each proves one boundary.
+    vi.useFakeTimers()
+    try {
+      // 2026-09-11T03:30:00Z = 2026-09-10T23:30 local (America/New_York,
+      // EDT, UTC-4) — "today" is Sept 10 for the badge's local-day compare.
+      vi.setSystemTime(new Date('2026-09-11T03:30:00.000Z'))
+      stubApi(
+        detail([PHONE_A], [], [], [
+          // Local midnight boundary: 03:59:59Z = 23:59:59 local Sept 10
+          // (still "today"); 04:00:00Z = 00:00:00 local Sept 11 (a new
+          // local day — no longer "today").
+          taskFixture({ id: 'task-today', title: 'Still today', due_at: '2026-09-11T03:59:59.000Z' }),
+          taskFixture({ id: 'task-tomorrow', title: 'A new local day', due_at: '2026-09-11T04:00:00.000Z' }),
+        ]),
+      )
+      const { wrapper } = await mountView()
+      activeWrapper = wrapper
+      const rows = wrapper.findAll('[data-testid="task-row"]')
+      expect(rows[0]!.get('[data-testid="task-due-badge"]').text()).toBe('Due today')
+      expect(rows[1]!.get('[data-testid="task-due-badge"]').text()).not.toBe('Due today')
+      expect(rows[1]!.get('[data-testid="task-due-badge"]').text()).not.toBe('Overdue')
+      wrapper.unmount()
+      activeWrapper = null
+
+      // A fresh load at exactly 04:00:00Z: the first task (due 03:59:59Z)
+      // is now in the past — Overdue, not "Due today".
+      vi.setSystemTime(new Date('2026-09-11T04:00:00.000Z'))
+      stubApi(
+        detail([PHONE_A], [], [], [
+          taskFixture({ id: 'task-today', title: 'Still today', due_at: '2026-09-11T03:59:59.000Z' }),
+          taskFixture({ id: 'task-tomorrow', title: 'A new local day', due_at: '2026-09-11T04:00:00.000Z' }),
+        ]),
+      )
+      const { wrapper: wrapperAfter } = await mountView()
+      activeWrapper = wrapperAfter
+      const rowsAfter = wrapperAfter.findAll('[data-testid="task-row"]')
+      expect(rowsAfter[0]!.get('[data-testid="task-due-badge"]').text()).toBe('Overdue')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('editing without touching the date re-sends the stored instant, and an otherwise-untouched Save yields changed: false', async () => {
     const task = taskFixture({ id: 'task-1', title: 'Original title', due_at: '2026-09-10T14:23:07.123Z' })
     stubApi(detail([PHONE_A], [], [], [task]))
@@ -2452,30 +2542,45 @@ describe('PersonDetailView — Tasks (SLICE_016.md §12.8)', () => {
     // Positive control: an entirely untouched Save (no field changed at
     // all) must read `changed: false` from the mock's own field
     // comparison, proving the re-sent instant is byte-identical.
+    const callsBeforeSecondSave = apiFetchMock.mock.calls.length
     await wrapper.get('[data-testid="edit-task"]').trigger('click')
     await wrapper.get('[data-testid="task-edit-save"]').trigger('click')
     await flushPromises()
-    const putBodies = apiFetchMock.mock.calls
-      .filter(([path, init]) => path === `/people/${PERSON_ID}/tasks/task-1` && (init?.method ?? 'GET') === 'PUT')
-      .map(([, init]) => JSON.parse(String(init?.body)))
-    expect(putBodies.at(-1).title).toBe('Retitled, date untouched')
-    expect(putBodies.at(-1).due_at).toBe(task.due_at)
+    let putCallIndex = -1
+    for (let i = callsBeforeSecondSave; i < apiFetchMock.mock.calls.length; i += 1) {
+      const [path, init] = apiFetchMock.mock.calls[i]!
+      if (path === `/people/${PERSON_ID}/tasks/task-1` && (init?.method ?? 'GET') === 'PUT') putCallIndex = i
+    }
+    expect(putCallIndex).toBeGreaterThanOrEqual(0)
+    const putBody = JSON.parse(String(apiFetchMock.mock.calls[putCallIndex]![1]?.body))
+    expect(putBody.title).toBe('Retitled, date untouched')
+    expect(putBody.due_at).toBe(task.due_at)
+    expect(putBody.assignee_user_id).toBe('u-alice')
+    expect(putBody.kind).toBe(task.kind)
+    const putResult = (await apiFetchMock.mock.results[putCallIndex]!.value) as { changed: boolean }
+    expect(putResult.changed).toBe(false)
   })
 
   it('a failed add keeps the draft, and an invalid_assignee 422 shows the exact copy and refetches members', async () => {
     stubApi(detail([PHONE_A]), { taskAdd: () => new ApiError(422, 'invalid_assignee') })
     const { wrapper } = await mountView()
     activeWrapper = wrapper
+    function membersGetCount() {
+      return apiFetchMock.mock.calls.filter(([path]) => path === '/organization/members').length
+    }
+    // Captured AFTER mount (which already did its own initial members GET)
+    // so a grown count actually proves a REFETCH happened, not merely the
+    // page's own load.
+    const membersGetCountBefore = membersGetCount()
     await wrapper.get('[data-testid="task-add-title"]').setValue('Should keep this draft')
     await wrapper.get('[data-testid="task-add-submit"]').trigger('click')
     await flushPromises()
+    await settleTick()
     expect((wrapper.get('[data-testid="task-add-title"]').element as HTMLInputElement).value).toBe(
       'Should keep this draft',
     )
     expect(wrapper.get('[data-testid="task-add-error"]').text()).toBe('That member is not active')
-    expect(
-      apiFetchMock.mock.calls.some(([path]) => path === '/organization/members'),
-    ).toBe(true)
+    expect(membersGetCount()).toBeGreaterThan(membersGetCountBefore)
   })
 
   it('while an add is pending: the button reads "Adding…" and is disabled, the title input is disabled, and a click plus Ctrl+Enter both no-op (exactly one POST) until it settles', async () => {
@@ -2540,6 +2645,101 @@ describe('PersonDetailView — Tasks (SLICE_016.md §12.8)', () => {
     await flushPromises()
   })
 
+  it('Edit-422 (the assignee was deactivated after the members list loaded): the exact copy, the editor stays open with the draft, and members are refetched', async () => {
+    stubApi(detail([PHONE_A], [], [], [taskFixture({ id: 'task-1', title: 'Editable task' })]), {
+      taskUpdate: () => new ApiError(422, 'invalid_assignee'),
+    })
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    function membersGetCount() {
+      return apiFetchMock.mock.calls.filter(([path]) => path === '/organization/members').length
+    }
+    const membersGetCountBefore = membersGetCount()
+
+    await wrapper.get('[data-testid="edit-task"]').trigger('click')
+    await wrapper.get('[data-testid="task-edit-title"]').setValue('Still editing')
+    await wrapper.get('[data-testid="task-edit-save"]').trigger('click')
+    await flushPromises()
+    await settleTick()
+
+    expect(wrapper.get('[data-testid="task-edit-error"]').text()).toBe('That member is not active')
+    // The editor stays open with the draft (not cleared, not closed).
+    expect((wrapper.get('[data-testid="task-edit-title"]').element as HTMLInputElement).value).toBe(
+      'Still editing',
+    )
+    expect(membersGetCount()).toBeGreaterThan(membersGetCountBefore)
+  })
+
+  it('Save-403 (the viewer\'s rule-1 verdict changed server-side): the exact copy, then the settle refetch (can_manage now false) closes the editor and removes every control', async () => {
+    stubApi(detail([PHONE_A], [], [], [taskFixture({ id: 'task-1', title: 'Editable task', can_manage: true })]), {
+      taskUpdate: () => new ApiError(403, 'forbidden'),
+    })
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+
+    // The settle's refetch is GATED (not merely swapped) so the inline
+    // error can be observed deterministically before that refetch (and
+    // the can_manage-false watch it triggers) has a chance to land —
+    // `flushPromises()` alone does not reliably order a same-macrotask
+    // `setTimeout(fn, 0)` after a prior one (the settlePersonMutation
+    // precedent this suite's own `settleTick` helper exists for).
+    let releaseGet: () => void = () => {}
+    const getGate = new Promise<void>((resolve) => { releaseGet = resolve })
+    const defaultImpl = apiFetchMock.getMockImplementation()!
+    apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === `/people/${PERSON_ID}` && (init?.method ?? 'GET') === 'GET') {
+        await getGate
+        return detail([PHONE_A], [], [], [
+          taskFixture({ id: 'task-1', title: 'Editable task', can_manage: false }),
+        ])
+      }
+      return defaultImpl(path, init)
+    })
+
+    await wrapper.get('[data-testid="edit-task"]').trigger('click')
+    await wrapper.get('[data-testid="task-edit-title"]').setValue('Should not save')
+    await wrapper.get('[data-testid="task-edit-save"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="task-edit-error"]').text()).toBe('You can no longer manage this task.')
+
+    releaseGet()
+    await settleTick()
+    expect(wrapper.find('[data-testid="task-edit-title"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="complete-task"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="edit-task"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="delete-task"]').exists()).toBe(false)
+  })
+
+  it('Save-404 (deleted elsewhere): the editor closes and a dismissible "deleted by someone else" banner appears once the settle refetch omits the task', async () => {
+    stubApi(detail([PHONE_A], [], [], [taskFixture({ id: 'task-1', title: 'Editable task' })]), {
+      taskUpdate: () => new ApiError(404, 'not_found'),
+    })
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+
+    const defaultImpl = apiFetchMock.getMockImplementation()!
+    apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === `/people/${PERSON_ID}` && (init?.method ?? 'GET') === 'GET') {
+        return detail([PHONE_A], [], [], [])
+      }
+      return defaultImpl(path, init)
+    })
+
+    await wrapper.get('[data-testid="edit-task"]').trigger('click')
+    await wrapper.get('[data-testid="task-edit-save"]').trigger('click')
+    await flushPromises()
+    await settleTick()
+
+    expect(wrapper.find('[data-testid="task-edit-title"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="task-edit-gone-banner"]').text()).toContain(
+      'This task was deleted by someone else.',
+    )
+    expect(wrapper.text()).not.toContain('undefined')
+
+    await wrapper.get('[data-testid="task-edit-gone-dismiss"]').trigger('click')
+    expect(wrapper.find('[data-testid="task-edit-gone-banner"]').exists()).toBe(false)
+  })
+
   it('Delete: ConfirmDialog with the exact copy, confirm disabled while pending, and the row is gone after the refetch', async () => {
     stubApi(detail([PHONE_A], [], [], [taskFixture({ id: 'task-1', title: 'Delete me' })]))
     const { wrapper } = await mountView()
@@ -2590,7 +2790,7 @@ describe('PersonDetailView — Tasks (SLICE_016.md §12.8)', () => {
     expect(wrapper.findAll('[data-testid="history-summary"]').some((s) => s.text() === 'Completed task: Call the client')).toBe(false)
   })
 
-  it('a 403 on Complete (the viewer\'s rule-1 verdict changed server-side since the last read) explains inline on that row', async () => {
+  it('a 403 on Complete (the viewer\'s rule-1 verdict changed server-side since the last read) explains inline, then the settle refetch (can_manage now false) removes every control', async () => {
     // can_manage: true at read time (the Complete button renders), but the
     // server's own re-decision under the row lock says otherwise by the
     // time the click lands — the realistic race this copy exists for.
@@ -2599,9 +2799,28 @@ describe('PersonDetailView — Tasks (SLICE_016.md §12.8)', () => {
     })
     const { wrapper } = await mountView()
     activeWrapper = wrapper
+
+    // Round-2 review, item 9: swap the GET so the settle refetch this
+    // 403 triggers shows the row's own re-decision (can_manage: false) —
+    // the note precedent (db_notes.rs's "Delete 403 ... removes Edit/
+    // Delete once the refetch shows can_manage: false").
+    const defaultImpl = apiFetchMock.getMockImplementation()!
+    apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === `/people/${PERSON_ID}` && (init?.method ?? 'GET') === 'GET') {
+        return detail([PHONE_A], [], [], [
+          taskFixture({ id: 'task-1', title: 'Race target', can_manage: false }),
+        ])
+      }
+      return defaultImpl(path, init)
+    })
+
     await wrapper.get('[data-testid="complete-task"]').trigger('click')
     await flushPromises()
     expect(wrapper.get('[data-testid="task-action-error"]').text()).toBe('You can no longer manage this task.')
+    await settleTick()
+    expect(wrapper.find('[data-testid="complete-task"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="edit-task"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="delete-task"]').exists()).toBe(false)
   })
 
   it('a 404 on Complete (deleted elsewhere) refetches and the row is gone', async () => {
@@ -2641,6 +2860,39 @@ describe('PersonDetailView — Tasks (SLICE_016.md §12.8)', () => {
     expect(importedRow.textContent).toContain('System')
     // `can_manage: false` on the only task_completed row: no Reopen anywhere.
     expect(wrapper.find('[data-testid="reopen-task"]').exists()).toBe(false)
+  })
+
+  it('mixed History: two task_completed rows with different can_manage each carry (or lack) their OWN Reopen control, asserted per row', async () => {
+    stubApi(
+      detail([PHONE_A], [
+        taskCompletedEntry({ id: 'task-manageable', title: 'Manageable one', canManage: true }),
+        taskCompletedEntry({ id: 'task-not-manageable', title: 'Not manageable one', canManage: false }),
+      ]),
+    )
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    const manageableSummary = wrapper
+      .findAll('[data-testid="history-summary"]')
+      .find((s) => s.text().includes('Manageable one'))!
+    const notManageableSummary = wrapper
+      .findAll('[data-testid="history-summary"]')
+      .find((s) => s.text().includes('Not manageable one'))!
+    const manageableRow = manageableSummary.element.closest('li')!
+    const notManageableRow = notManageableSummary.element.closest('li')!
+    expect(manageableRow.querySelector('[data-testid="reopen-task"]')).toBeTruthy()
+    expect(notManageableRow.querySelector('[data-testid="reopen-task"]')).toBeFalsy()
+  })
+
+  it('an open task with a null assignee (and null created_by) renders "Unassigned" with no "undefined"', async () => {
+    stubApi(
+      detail([PHONE_A], [], [], [
+        taskFixture({ id: 'task-unassigned', title: 'Nobody has this yet', assignee: null, created_by: null }),
+      ]),
+    )
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    expect(wrapper.get('[data-testid="task-assignee"]').text()).toBe('Unassigned')
+    expect(wrapper.text()).not.toContain('undefined')
   })
 
   it('mutations are keyed with personMutationKey and settle by invalidating the person and today keys, never the People list', async () => {

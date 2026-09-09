@@ -516,6 +516,25 @@ function assigneeSuffix(assignee: ActorRef | null): string {
   return memberStatusById.value.get(assignee.id) === 'inactive' ? ' (inactive)' : ''
 }
 
+// Round-2 review, item 3: the Edit form's assignee picker is
+// `activeMemberOptions` plus, when the task being edited holds an
+// assignee who is NOT active (deactivated since the task was assigned,
+// or — reaching here only via an admin's edit — an imported task's
+// unmatched-then-since-assigned member), that one member appended with
+// an "(inactive)" suffix, so the field is never blank and an untouched
+// Save re-sends the stored id rather than silently switching assignee.
+const editTaskAssigneeOptions = computed(() => {
+  const options = [...activeMemberOptions.value]
+  const currentId = editingTask.value?.assigneeUserId
+  if (currentId && !options.some((option) => option.id === currentId)) {
+    const member = (membersData.value?.members ?? []).find((m) => m.user_id === currentId)
+    if (member) {
+      options.push({ id: member.user_id, display_name: `${member.display_name} (inactive)` })
+    }
+  }
+  return options
+})
+
 // Rule 2: a date-only pick is converted to LOCAL end of day (23:59:59 in
 // the browser's own zone) — client-side, no Organization timezone exists.
 // An optional time input picks an exact local instant on that date instead.
@@ -644,6 +663,48 @@ function setEditTaskButtonRef(id: string, el: unknown) {
   editTaskButtonRefs[id] = el instanceof HTMLButtonElement ? el : null
 }
 
+// Round-2 review, item 4: a Save 404 (the task was deleted elsewhere
+// between the last read and the write) is a minimal resolution — the
+// editor sits inside the `v-for`, so the settle refetch that follows
+// unmounts it outright rather than leaving it live the way the note
+// editor's "deleted elsewhere" case does. Once a refetch shows the task
+// being edited is neither open nor completed (genuinely gone, not just
+// completed by someone else — that would still show it under `history`),
+// clear the editor and surface one dismissible banner instead of trying
+// to keep a draft for a row that no longer exists.
+const taskEditGoneMessage = ref<string | null>(null)
+// Round-2 review, items 4 and 9: a refetch (any reason — this mutation's
+// own settle after a 403/404, realtime, focus) can show the task being
+// edited in one of three states relative to when editing started: still
+// open (possibly with `can_manage` now false — a 403 race), completed by
+// someone else while editing (also possibly `can_manage: false` now), or
+// genuinely gone (deleted elsewhere). Only the last shows the dismissible
+// banner; the first two just close the editor quietly, since the row
+// itself is still visible, only read-only now.
+watch(
+  () => detail.value,
+  () => {
+    const editing = editingTask.value
+    if (!editing) return
+    const stillOpen = tasks.value.find((t) => t.id === editing.id)
+    if (stillOpen) {
+      if (!stillOpen.can_manage) editingTask.value = null
+      return
+    }
+    const completedEntry = history.value.find(
+      (entry) => entry.kind === 'task_completed' && entry.id === editing.id,
+    )
+    if (completedEntry) {
+      if (completedEntry.kind === 'task_completed' && !completedEntry.detail.can_manage) {
+        editingTask.value = null
+      }
+      return
+    }
+    editingTask.value = null
+    taskEditGoneMessage.value = 'This task was deleted by someone else.'
+  },
+)
+
 function startEditTask(task: Task) {
   if (editingTask.value?.id === task.id) return
   editingTask.value = {
@@ -652,7 +713,13 @@ function startEditTask(task: Task) {
     kind: task.kind,
     dateStr: task.due_at ? isoToLocalDateInput(task.due_at) : '',
     timeStr: task.due_at ? isoToLocalTimeInput(task.due_at) : '',
-    assigneeUserId: task.assignee?.id ?? '',
+    // Round-2 review, item 3: an imported task can have no assignee at
+    // all (rule 1); default the field to the viewer rather than leaving
+    // it blank, so Save can never send `assignee_user_id: ""`. Reaching
+    // this form at all already requires `can_manage` (an admin, since a
+    // NULL-assignee task's creator is also NULL), so the viewer is
+    // always a legitimate active member to fall back to.
+    assigneeUserId: task.assignee?.id ?? me.value?.user.id ?? '',
     dateTouched: false,
     originalDueAt: task.due_at,
     error: null,
@@ -745,7 +812,12 @@ const completeTask = useCompleteTaskMutation(orgId, () => props.id)
 const reopenTask = useReopenTaskMutation(orgId, () => props.id)
 const taskActionError = ref<{ id: string; message: string } | null>(null)
 
+// Round-2 review, item 2: the handler itself guards on `isPending`, not
+// only the button's `:disabled` — a real double-click can fire both
+// native click events before Vue's next render paints the disabled
+// attribute, so the template guard alone is not sufficient.
 function onCompleteTask(task: Task) {
+  if (completeTask.isPending.value) return
   taskActionError.value = null
   completeTask.mutate(
     { personId: props.id, taskId: task.id },
@@ -757,6 +829,7 @@ function isCompletingTask(taskId: string): boolean {
 }
 
 function onReopenTask(taskId: string) {
+  if (reopenTask.isPending.value) return
   taskActionError.value = null
   reopenTask.mutate(
     { personId: props.id, taskId },
@@ -956,6 +1029,7 @@ watch(
     taskAddError.value = null
     editingTask.value = null
     taskActionError.value = null
+    taskEditGoneMessage.value = null
     deleteTaskDialogOpen.value = false
   },
 )
@@ -1526,6 +1600,23 @@ watch(
         </p>
       </Card>
 
+      <div
+        v-if="taskEditGoneMessage"
+        role="alert"
+        class="mb-4 flex items-center justify-between gap-3 rounded-xl border border-border bg-surface-0 p-3 text-body text-danger"
+        data-testid="task-edit-gone-banner"
+      >
+        <span>{{ taskEditGoneMessage }}</span>
+        <button
+          type="button"
+          :class="buttonClasses('ghost')"
+          data-testid="task-edit-gone-dismiss"
+          @click="taskEditGoneMessage = null"
+        >
+          Dismiss
+        </button>
+      </div>
+
       <Card>
         <h2 class="mb-4 text-section font-semibold text-text">
           Tasks
@@ -1672,7 +1763,7 @@ watch(
                   />
                   <Select
                     v-model="editingTaskAssigneeModel"
-                    :options="activeMemberOptions"
+                    :options="editTaskAssigneeOptions"
                     option-label="display_name"
                     option-value="id"
                     aria-label="Assignee"
@@ -1994,6 +2085,14 @@ watch(
                   data-testid="task-completed-detail"
                 >
                   {{ row.task.description }}
+                </p>
+                <p
+                  v-if="row.task && taskActionError?.id === row.task.id"
+                  role="alert"
+                  class="mt-1 text-small text-danger"
+                  data-testid="task-action-error"
+                >
+                  {{ taskActionError.message }}
                 </p>
                 <p class="text-small text-text-muted">
                   {{ row.actor?.display_name ?? 'System' }} ·

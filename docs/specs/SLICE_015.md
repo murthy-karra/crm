@@ -371,7 +371,10 @@ body on the channel (D-023, rule 7), pinned by a parsed-payload test.
   the LATER-batch `isMutating` guards and the realtime hold apply unchanged.
   Three mutations join `queries.ts`: `useAddNoteMutation`,
   `useEditNoteMutation`, `useDeleteNoteMutation`.
-- `PersonPreview.vue`, `OperatorPanel.vue`, the People page and Today are
+- `PersonPreview.vue` keeps notes out of the preview: its activity fold
+  narrows the widened `HistoryEntry` union by excluding the `note` kind (a
+  compile touch recorded at implementation, no behaviour change for the
+  other kinds). `OperatorPanel.vue`, the People page and Today are
   unchanged.
 - **Types:** `Note`, `NoteDetail` (the history detail), the `HistoryEntry`
   `note` arm, `PersonChange` `'note_changed'`.
@@ -402,8 +405,9 @@ body on the channel (D-023, rule 7), pinned by a parsed-payload test.
 - **Failure:** database unavailability is 503 `unavailable` on every route.
   A concurrent delete between a client's detail fetch and its PUT is a 404
   the client resolves by refetching.
-- **Idempotency:** add is not idempotent. The composer's pending state and
-  the mutation key prevent a double-submit, but a POST that commits while
+- **Idempotency:** add is not idempotent. The composer's pending state
+  prevents a same-tab double-submit (the mutation key serialises settle
+  logic, it does not deduplicate requests), but a POST that commits while
   its response is lost over the tunnel produces a duplicate if the member
   resubmits (the realtime refetch shows the first note before they do,
   which is the practical mitigation; the additive fix is the client-minted
@@ -423,7 +427,7 @@ Approval of this specification satisfies AGENTS §11 for:
 |---|---|---|
 | No note model → §2 table, §3 commands | Thesis §11 CRM core; FUB notes destination | Additive migration; no existing table changes. SLICE_002 §2 erasable-set pointer. |
 | Three new routes (§5) | Person page notes | Additive; same error envelope; no new error codes; rule-1 permission decided in the command. SLICE_002 §5 rows. |
-| `history[]` seven kinds → eight (`note`) | Timeline | Additive kind in a closed union; the Web adds the arm; the Operator's `history_detail` adds a body-free arm. SLICE_002 §5 pointer. |
+| `history[]` seven kinds → eight (`note`) | Timeline | Additive kind in a closed union; the Web adds the arm; the Operator's tool view filters the kind out of `history` (§5) and `history_detail` gains no arm. SLICE_002 §5 pointer. |
 | `PersonChange` six variants → seven (`note_changed`) | Invalidate on note changes | Additive; unknown tokens already tolerated by the Web handler. SLICE_003 §6 pointer. |
 | Operator `PersonDetail` → `+ notes`; its `history` excludes the `note` kind | Operator sees what the page shows without crowding out facts | Additive view field, untrusted text; the history filter is a backend projection choice. SLICE_005 §5 pointer. |
 | O-012 "blocks free-text notes" → amended | D-053 | Recorded in the decision log on 2026-09-08. |

@@ -11,7 +11,9 @@ import PrimeVue from 'primevue/config'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { apiFetch } from '../api/client'
+import { personMutationKey } from '../api/queries'
 import type { MeResponse, PersonSummary, TodayItem, TodayResponse, TodaySourcesResponse } from '../api/types'
+import { formatAbsoluteTime, formatRelativeTime } from '../lib/format'
 import TodayView from './TodayView.vue'
 
 vi.mock('../api/client', async (importOriginal) => {
@@ -99,7 +101,7 @@ function stubApi(items: TodayItem[], sources: TodaySourcesResponse['sources'] = 
   })
 }
 
-async function mountView() {
+async function mountView(queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -109,13 +111,12 @@ async function mountView() {
   })
   await router.push('/')
   await router.isReady()
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const wrapper = mount(TodayView, {
     global: { plugins: [router, [VueQueryPlugin, { queryClient }], [PrimeVue, { unstyled: true }]] },
     attachTo: document.body,
   })
   await flushPromises()
-  return { wrapper, router }
+  return { wrapper, router, queryClient }
 }
 
 beforeEach(() => {
@@ -391,6 +392,88 @@ describe('TodayView — task reasons on the ranked queue (Slice 016b §5, §8)',
     expect(completeIndex).toBeGreaterThanOrEqual(0)
     expect(refetchIndex).toBeGreaterThan(completeIndex)
   })
+
+  // Round-2 review test tightening 10: the row must survive a resolved
+  // POST as long as the FOLLOWING `GET /today` refetch has not itself
+  // resolved yet — pessimistic per §8 ("held while pending... the
+  // row/item leaves only once the natural refetch... stops returning
+  // it"), never an optimistic removal the instant the POST itself
+  // succeeds.
+  it('the item leaves only after the refetch resolves, not the instant the POST resolves', async () => {
+    stubApiWithTasks([taskOverdueItem()])
+    const { wrapper } = await mountView()
+    let releaseComplete: () => void = () => {}
+    const completeGate = new Promise<void>((resolve) => { releaseComplete = resolve })
+    let releaseRefetch: () => void = () => {}
+    const refetchGate = new Promise<void>((resolve) => { releaseRefetch = resolve })
+    let todayCallCount = 0
+    const defaultImpl = apiFetchMock.getMockImplementation()!
+    apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === '/today') {
+        todayCallCount += 1
+        if (todayCallCount > 1) {
+          await refetchGate
+          return {
+            generated_at: '2026-09-09T13:00:00.000Z',
+            items: [],
+            truncated: false,
+            sources: { status: 'complete', issues: [], system_feed_issues: [] },
+          }
+        }
+      }
+      if (path.endsWith('/complete') && (init?.method ?? 'GET') === 'POST') await completeGate
+      return defaultImpl(path, init)
+    })
+
+    const button = wrapper.get('[data-testid="today-task-complete"]')
+    await button.trigger('click')
+    await nextTick()
+
+    // The POST resolves...
+    releaseComplete()
+    await flushPromises()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await flushPromises()
+    // ...but the refetch it triggered is still gated: the row must still
+    // be on the page.
+    expect(wrapper.findAll('tbody tr').length).toBe(1)
+
+    // Only once the refetch itself resolves (with the item now absent)
+    // does the row leave.
+    releaseRefetch()
+    await flushPromises()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await flushPromises()
+    expect(wrapper.findAll('tbody tr').length).toBe(0)
+  })
+
+  // Round-2 review test tightening 11: a Person qualifying for BOTH the
+  // `set_outcome` recommended action (SLICE_006c §5a) AND a task reason
+  // (Slice 016b) — the two features were built independently, so this
+  // pins that they compose rather than one silently dropping the other's
+  // control (`set_outcome`'s "Set outcome" precedent from Recommended
+  // never became the task Complete button's replacement, and vice versa).
+  it('a set_outcome item with a task reason keeps BOTH badges, BOTH action buttons, and the Set outcome recommendation', async () => {
+    const item = taskOverdueItem()
+    item.recommended_action = 'set_outcome'
+    item.reasons = [
+      { code: 'call_outcome_needed', call_id: CALL_ID, ended_at: ENDED_AT },
+      item.reasons[0],
+    ]
+    stubApiWithTasks([item])
+    const { wrapper } = await mountView()
+    const row = wrapper.get('tbody tr')
+    const cells = row.findAll('td')
+
+    const badges = cells[1].findAll('span').map((b) => b.text())
+    expect(badges).toContain('Outcome needed')
+    expect(badges.some((b) => b.startsWith('Call back'))).toBe(true)
+
+    expect(cells[4].text()).toContain('Set outcome')
+
+    const actionButtons = cells[5].findAll('button').map((b) => b.text())
+    expect(actionButtons).toEqual(['Set outcome', 'Complete'])
+  })
 })
 
 describe('TodayView — reasonLabel default arm', () => {
@@ -405,17 +488,40 @@ describe('TodayView — reasonLabel default arm', () => {
 })
 
 describe('TodayView — the Tasks panel (docs/specs/SLICE_016.md §8, §12.16)', () => {
+  // Round-2 review test tightening 7: distinct titles per fixture (the
+  // prior version shared the default title on both, so a group swap bug
+  // would still have passed), per-group membership asserted POSITIVELY in
+  // one group and NEGATIVELY in the other (a `.toContain` on only one side
+  // cannot catch a task placed in BOTH groups or leaked across), and a
+  // real `href` assertion on the Person link (the prior
+  // `.exists() || true` was a tautology — always `true` regardless of
+  // whether the link existed at all).
   it('groups Overdue and Due soon against generated_at, and shows kind/title/due time/person link', async () => {
-    const overdue = taskWithPerson({ id: 't-overdue', due_at: '2026-09-09T10:00:00.000Z' })
-    const dueSoon = taskWithPerson({ id: 't-due-soon', due_at: '2026-09-09T18:00:00.000Z', person: { id: 'p-2', display_name: 'Sam Soon' } })
+    const overdue = taskWithPerson({ id: 't-overdue', title: 'Overdue fixture task', due_at: '2026-09-09T10:00:00.000Z' })
+    const dueSoon = taskWithPerson({
+      id: 't-due-soon',
+      title: 'Due-soon fixture task',
+      due_at: '2026-09-09T18:00:00.000Z',
+      person: { id: 'p-2', display_name: 'Sam Soon' },
+    })
     stubApiWithTasks([], [overdue, dueSoon], '2026-09-09T12:00:00.000Z')
     const { wrapper } = await mountView()
     const overdueGroup = wrapper.get('[data-testid="task-panel-group-overdue"]')
     const dueSoonGroup = wrapper.get('[data-testid="task-panel-group-due_soon"]')
-    expect(overdueGroup.text()).toContain('Prepare the closing documents')
+
+    expect(overdueGroup.text()).toContain('Overdue fixture task')
+    expect(overdueGroup.text()).toContain('Priya Panel')
+    expect(dueSoonGroup.text()).toContain('Due-soon fixture task')
     expect(dueSoonGroup.text()).toContain('Sam Soon')
-    expect(wrapper.get('[data-testid="task-panel-row-t-overdue"]').findComponent({ name: 'RouterLink' }).exists() || true).toBe(true)
-    expect(wrapper.get('[data-testid="task-panel-row-t-overdue"]').text()).toContain('Follow up')
+
+    expect(overdueGroup.text()).not.toContain('Due-soon fixture task')
+    expect(overdueGroup.text()).not.toContain('Sam Soon')
+    expect(dueSoonGroup.text()).not.toContain('Overdue fixture task')
+    expect(dueSoonGroup.text()).not.toContain('Priya Panel')
+
+    const overdueRow = wrapper.get('[data-testid="task-panel-row-t-overdue"]')
+    expect(overdueRow.text()).toContain('Follow up')
+    expect(overdueRow.get('a').attributes('href')).toBe('/people/p-panel')
   })
 
   it('shows "Nothing due" for an empty group and hides it once tasks arrive', async () => {
@@ -480,6 +586,96 @@ describe('TodayView — the Tasks panel (docs/specs/SLICE_016.md §8, §12.16)',
   })
 })
 
+// Round-2 review test tightening 8: the Snooze POST body's exact `due_at`
+// value under a pinned system clock and timezone, across a DST boundary in
+// each direction (spring forward in March, fall back in November) — a
+// plain "does it POST" test cannot catch a DST offset bug in
+// `tomorrowLocalEndOfDay`.
+const nodeProcess = (globalThis as unknown as { process: { env: Record<string, string | undefined> } }).process
+
+describe('TodayView — Tasks panel Snooze body across DST (round-2 review test tightening 8)', () => {
+  let originalTz: string | undefined
+  beforeEach(() => {
+    originalTz = nodeProcess.env.TZ
+  })
+  afterEach(() => {
+    nodeProcess.env.TZ = originalTz
+    vi.useRealTimers()
+  })
+
+  it.each([
+    // 2026-03-08 is the US spring-forward date: "tomorrow" from March 7
+    // ends in EDT (UTC-4), not EST (UTC-5).
+    ['2026-03-07T15:00:00Z', '2026-03-09T03:59:59.000Z'],
+    // 2026-11-01 is the US fall-back date: "tomorrow" from Oct 31 ends in
+    // EST (UTC-5), not EDT (UTC-4).
+    ['2026-10-31T15:00:00Z', '2026-11-02T04:59:59.000Z'],
+  ])('posts due_at = tomorrow 23:59:59 America/New_York as UTC, system time %s', async (systemTime, expectedDueAt) => {
+    nodeProcess.env.TZ = 'America/New_York'
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(systemTime))
+    const task = taskWithPerson({ id: 't-snooze-dst' })
+    let capturedBody: string | undefined
+    apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === '/me') return me()
+      if (path === '/today') return { generated_at: systemTime, items: [], truncated: false, sources: { status: 'complete', issues: [], system_feed_issues: [] } }
+      if (path === '/today/sources') return { limit: 5, sources: [] }
+      if (path === '/today/feeds') return { feeds: [] }
+      if (path === '/tasks?scope=mine') return { tasks: [task], generated_at: systemTime, truncated: false }
+      if (path.endsWith('/snooze') && (init?.method ?? 'GET') === 'POST') {
+        capturedBody = init?.body as string
+        return { task: { ...task, due_at: expectedDueAt }, changed: true }
+      }
+      throw new Error(`unexpected ${path}`)
+    })
+    const { wrapper } = await mountView()
+    await wrapper.get('[data-testid="task-panel-snooze-t-snooze-dst"]').trigger('click')
+    await flushPromises()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await flushPromises()
+    expect(capturedBody).toBeDefined()
+    expect(JSON.parse(capturedBody!)).toEqual({ due_at: expectedDueAt })
+  })
+})
+
+// Round-2 review test tightening 9: the panel's due cell (`panelDueCellText`,
+// already unit-tested in lib/tasks.test.ts) exercised THROUGH the mounted
+// component under a pinned timezone, at the exact instant that crosses
+// local midnight relative to the response's own `generated_at` — proving
+// the component wires the right two ISO strings into the helper, not just
+// that the helper itself is correct in isolation.
+describe('TodayView — Tasks panel due cell past local midnight (round-2 review test tightening 9)', () => {
+  let originalTz: string | undefined
+  beforeEach(() => {
+    originalTz = nodeProcess.env.TZ
+    nodeProcess.env.TZ = 'America/New_York'
+  })
+  afterEach(() => {
+    nodeProcess.env.TZ = originalTz
+  })
+
+  it('shows a time for a task still within generated_at\'s local calendar day', async () => {
+    // generated_at = 2026-07-15T14:00:00Z = 10:00 EDT. due_at =
+    // 2026-07-16T03:30:00Z = 23:30 EDT on July 15 — same local day.
+    const task = taskWithPerson({ id: 't-same-local-day', due_at: '2026-07-16T03:30:00.000Z' })
+    stubApiWithTasks([], [task], '2026-07-15T14:00:00.000Z')
+    const { wrapper } = await mountView()
+    const row = wrapper.get('[data-testid="task-panel-row-t-same-local-day"]')
+    expect(row.text()).toMatch(/\d{1,2}:\d{2}\s?[AP]M/)
+    expect(row.text()).not.toContain('Jul 16, 2026')
+  })
+
+  it('shows the date for a task past generated_at\'s local midnight', async () => {
+    // due_at = 2026-07-16T04:30:00Z = 00:30 EDT on July 16 — the next
+    // local day relative to generated_at's July 15.
+    const task = taskWithPerson({ id: 't-next-local-day', due_at: '2026-07-16T04:30:00.000Z' })
+    stubApiWithTasks([], [task], '2026-07-15T14:00:00.000Z')
+    const { wrapper } = await mountView()
+    const row = wrapper.get('[data-testid="task-panel-row-t-next-local-day"]')
+    expect(row.text()).toContain('Jul 16, 2026')
+  })
+})
+
 describe('TodayView — system_feed_issues generic fallback and task_due label (Slice 016b §5, §8)', () => {
   it('renders "Due tasks could not load." for a task_due issue', async () => {
     apiFetchMock.mockImplementation(async (path: string) => {
@@ -520,5 +716,227 @@ describe('TodayView — system_feed_issues generic fallback and task_due label (
     const { wrapper } = await mountView()
     expect(wrapper.text()).toContain('A Today rule could not load.')
     expect(wrapper.text()).not.toContain('undefined')
+  })
+})
+
+// Round-2 review test tightening 12: three otherwise-untouched claims,
+// each cheap to lose silently in a future refactor of the same code the
+// task-reason work above just changed.
+describe('TodayView — Waiting cell regression and rendering safety (round-2 review test tightening 12)', () => {
+  it("shows the exact relative text and title attribute for a non-task item's real waiting_since, unaffected by the task fallback", async () => {
+    stubApiWithTasks([inquiryItem()])
+    const { wrapper } = await mountView()
+    const waitingCell = wrapper.get('tbody tr').findAll('td')[3]
+    const span = waitingCell.get('span')
+    expect(span.text()).toBe(formatRelativeTime('2026-08-23T09:00:00.000Z'))
+    expect(span.attributes('title')).toBe(formatAbsoluteTime('2026-08-23T09:00:00.000Z'))
+  })
+
+  it('does not show "Showing the first 200" when truncated is false', async () => {
+    stubApiWithTasks([], [taskWithPerson()], '2026-09-09T12:00:00.000Z', false)
+    const { wrapper } = await mountView()
+    expect(wrapper.text()).not.toContain('Showing the first 200')
+  })
+
+  it('never renders an untrusted task title or Person display_name as HTML: <img onerror> and <b> render as literal text with no injected element, and the Person link carries only the id', async () => {
+    const XSS_TITLE = '<img src=x onerror=alert(1)>'
+    const XSS_NAME = '<b>Bold Name</b>'
+    const task = taskWithPerson({
+      id: 't-xss',
+      title: XSS_TITLE,
+      person: { id: 'p-xss', display_name: XSS_NAME },
+    })
+    stubApiWithTasks([], [task])
+    const { wrapper } = await mountView()
+    const row = wrapper.get('[data-testid="task-panel-row-t-xss"]')
+
+    // No element was ever created from this untrusted markup.
+    expect(row.find('img').exists()).toBe(false)
+    expect(row.find('b').exists()).toBe(false)
+    // It appears only as literal, unescaped-looking text content (a text
+    // node, never parsed as HTML).
+    expect(row.text()).toContain(XSS_TITLE)
+    expect(row.text()).toContain(XSS_NAME)
+    // The link target is built from the Person id alone.
+    expect(row.get('a').attributes('href')).toBe('/people/p-xss')
+  })
+})
+
+// Round-2 review fix 1 + its tests: `completeTask`/`snoozeTask` are ONE
+// shared mutation instance whose `mutationKey` reactively follows
+// `completeTaskPersonId`/`snoozeTaskPersonId`. A synchronous ref-set
+// immediately followed by `.mutate()` let Vue Query's `MutationObserver`
+// reset mid-flight (the key change propagated AFTER `.mutate()` had
+// already fired), detaching the call from its own `onError`/`onSettled` —
+// `completingTask`/`snoozingTask` never cleared, so every later click
+// (even for an entirely different Person) was permanently inert. The fix
+// (`await nextTick()` between the ref-set and `.mutate()`) is proven here
+// by two SEQUENTIAL actions on different People's panel rows actually
+// both completing, not just the first.
+describe('TodayView — Tasks panel action mutation keying (round-2 review fix 1)', () => {
+  it('sequential Complete on two panel rows of different People: two POSTs, and the first button re-enables after its own settle', async () => {
+    const taskA = taskWithPerson({ id: 't-seq-a' })
+    const taskB = taskWithPerson({ id: 't-seq-b', person: { id: 'p-panel-2', display_name: 'Panel Two' } })
+    stubApiWithTasks([], [taskA, taskB])
+    const { wrapper } = await mountView()
+
+    const buttonA = wrapper.get('[data-testid="task-panel-complete-t-seq-a"]')
+    await buttonA.trigger('click')
+    await flushPromises()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await flushPromises()
+    expect(buttonA.attributes('disabled')).toBeUndefined()
+
+    const buttonB = wrapper.get('[data-testid="task-panel-complete-t-seq-b"]')
+    await buttonB.trigger('click')
+    await flushPromises()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await flushPromises()
+    expect(buttonB.attributes('disabled')).toBeUndefined()
+
+    const completeCalls = apiFetchMock.mock.calls.filter(
+      ([p, init]: [string, RequestInit?]) => p.endsWith('/complete') && (init?.method ?? 'GET') === 'POST',
+    )
+    expect(completeCalls).toHaveLength(2)
+  })
+
+  it('sequential Snooze on two panel rows of different People: two POSTs, and the first button re-enables after its own settle', async () => {
+    const taskA = taskWithPerson({ id: 't-snz-a' })
+    const taskB = taskWithPerson({ id: 't-snz-b', person: { id: 'p-panel-2', display_name: 'Panel Two' } })
+    stubApiWithTasks([], [taskA, taskB])
+    const { wrapper } = await mountView()
+
+    const buttonA = wrapper.get('[data-testid="task-panel-snooze-t-snz-a"]')
+    await buttonA.trigger('click')
+    await flushPromises()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await flushPromises()
+    expect(buttonA.attributes('disabled')).toBeUndefined()
+
+    const buttonB = wrapper.get('[data-testid="task-panel-snooze-t-snz-b"]')
+    await buttonB.trigger('click')
+    await flushPromises()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await flushPromises()
+    expect(buttonB.attributes('disabled')).toBeUndefined()
+
+    const snoozeCalls = apiFetchMock.mock.calls.filter(
+      ([p, init]: [string, RequestInit?]) => p.endsWith('/snooze') && (init?.method ?? 'GET') === 'POST',
+    )
+    expect(snoozeCalls).toHaveLength(2)
+  })
+
+  it('a 403 on panel Complete re-enables the button and renders "You can no longer manage this task."', async () => {
+    const task = taskWithPerson({ id: 't-forbidden' })
+    stubApiWithTasks([], [task])
+    apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === '/me') return me()
+      if (path === '/today') return { generated_at: ENDED_AT, items: [], truncated: false, sources: { status: 'complete', issues: [], system_feed_issues: [] } }
+      if (path === '/today/sources') return { limit: 5, sources: [] }
+      if (path === '/today/feeds') return { feeds: [] }
+      if (path === '/tasks?scope=mine') return { tasks: [task], generated_at: '2026-09-09T12:00:00.000Z', truncated: false }
+      if (path.endsWith('/complete') && (init?.method ?? 'GET') === 'POST') {
+        const { ApiError } = await import('../api/client')
+        throw new ApiError(403, 'forbidden')
+      }
+      throw new Error(`unexpected ${path}`)
+    })
+    const { wrapper } = await mountView()
+    const button = wrapper.get('[data-testid="task-panel-complete-t-forbidden"]')
+    await button.trigger('click')
+    await flushPromises()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await flushPromises()
+    expect(button.attributes('disabled')).toBeUndefined()
+    expect(wrapper.get('[data-testid="task-action-error-banner"]').text()).toContain(
+      'You can no longer manage this task.',
+    )
+  })
+
+  it('while a panel Complete is gated, exactly one mutation is in flight under personMutationKey(ORG_ID, \'p-panel\')', async () => {
+    const task = taskWithPerson({ id: 't-gated' })
+    stubApiWithTasks([], [task])
+    const { wrapper, queryClient } = await mountView()
+    let releaseComplete: () => void = () => {}
+    const gate = new Promise<void>((resolve) => { releaseComplete = resolve })
+    const defaultImpl = apiFetchMock.getMockImplementation()!
+    apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path.endsWith('/complete') && (init?.method ?? 'GET') === 'POST') await gate
+      return defaultImpl(path, init)
+    })
+    const button = wrapper.get('[data-testid="task-panel-complete-t-gated"]')
+    await button.trigger('click')
+    await flushPromises()
+
+    const key = personMutationKey(ORG_ID, 'p-panel')
+    expect(queryClient.isMutating({ mutationKey: key })).toBe(1)
+    const entry = queryClient.getMutationCache().getAll().find((m) => m.state.status === 'pending')
+    expect(entry?.options.mutationKey).toEqual(key)
+
+    releaseComplete()
+    await flushPromises()
+  })
+})
+
+// Round-2 review fix 2: a page-level, dismissible alert for a task
+// action's error, keyed by task id and independent of any row — proven
+// both from the ranked queue's Complete (which never had an error slot at
+// all) and from a panel row a 404 refetch just removed (its own inline
+// error would have vanished along with the row).
+describe('TodayView — task action error banner (round-2 review fix 2)', () => {
+  it('shows a dismissible banner for a 503 on the ranked queue\'s Complete button', async () => {
+    stubApiWithTasks([taskOverdueItem()])
+    apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === '/me') return me()
+      if (path === '/today') return { generated_at: ENDED_AT, items: [taskOverdueItem()], truncated: false, sources: { status: 'complete', issues: [], system_feed_issues: [] } }
+      if (path === '/today/sources') return { limit: 5, sources: [] }
+      if (path === '/today/feeds') return { feeds: [] }
+      if (path === '/tasks?scope=mine') return { tasks: [], generated_at: ENDED_AT, truncated: false }
+      if (path.endsWith('/complete') && (init?.method ?? 'GET') === 'POST') {
+        const { ApiError } = await import('../api/client')
+        throw new ApiError(503, 'unavailable')
+      }
+      throw new Error(`unexpected ${path}`)
+    })
+    const { wrapper } = await mountView()
+    await wrapper.get('[data-testid="today-task-complete"]').trigger('click')
+    await flushPromises()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await flushPromises()
+    const banner = wrapper.get('[data-testid="task-action-error-banner"]')
+    expect(banner.text()).toContain('The server is temporarily unavailable. Try again shortly.')
+    await wrapper.get('[data-testid="task-action-error-dismiss"]').trigger('click')
+    await nextTick()
+    expect(wrapper.find('[data-testid="task-action-error-banner"]').exists()).toBe(false)
+  })
+
+  it('a 404 on a panel Complete still explains the error even after the settle refetch removes the row', async () => {
+    const task = taskWithPerson({ id: 't-gone' })
+    stubApiWithTasks([], [task])
+    let refetchedAway = false
+    apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === '/me') return me()
+      if (path === '/today') return { generated_at: ENDED_AT, items: [], truncated: false, sources: { status: 'complete', issues: [], system_feed_issues: [] } }
+      if (path === '/today/sources') return { limit: 5, sources: [] }
+      if (path === '/today/feeds') return { feeds: [] }
+      if (path === '/tasks?scope=mine') {
+        return { tasks: refetchedAway ? [] : [task], generated_at: '2026-09-09T12:00:00.000Z', truncated: false }
+      }
+      if (path.endsWith('/complete') && (init?.method ?? 'GET') === 'POST') {
+        refetchedAway = true
+        const { ApiError } = await import('../api/client')
+        throw new ApiError(404, 'not_found')
+      }
+      throw new Error(`unexpected ${path}`)
+    })
+    const { wrapper } = await mountView()
+    await wrapper.get('[data-testid="task-panel-complete-t-gone"]').trigger('click')
+    await flushPromises()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await flushPromises()
+    // The row is gone (the refetch now omits the task)...
+    expect(wrapper.find('[data-testid="task-panel-row-t-gone"]').exists()).toBe(false)
+    // ...but the banner, independent of any row, still explains what happened.
+    expect(wrapper.get('[data-testid="task-action-error-banner"]').text().length).toBeGreaterThan(0)
   })
 })

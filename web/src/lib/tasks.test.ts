@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { TASK_KIND_LABEL, clipTitle, panelDueCellText, tomorrowLocalEndOfDay } from './tasks'
+import { TASK_KIND_LABEL, clipTitle, groupTasks, panelDueCellText, tomorrowLocalEndOfDay } from './tasks'
 
 describe('TASK_KIND_LABEL', () => {
   it('covers all five closed kinds', () => {
@@ -58,6 +58,52 @@ describe('tomorrowLocalEndOfDay', () => {
 
   it('returns tomorrow at 23:59:59 local time as the equivalent UTC instant', () => {
     expect(tomorrowLocalEndOfDay()).toBe('2026-07-17T03:59:59.000Z')
+  })
+})
+
+// Round-2 review fix 3: `groupTasks` compares with `Date.parse`, never a
+// raw ISO-string `<` — a whole-second `due_at` sorts AFTER a
+// fractional-second `generated_at` lexically ('.' is 0x2E, 'Z' is 0x5A),
+// which would misclassify a task due at exactly `generated_at` (minus a
+// fractional remainder) as "Due soon" instead of "Overdue".
+describe('groupTasks', () => {
+  function taskDueAt(due_at: string | null) {
+    return { due_at }
+  }
+
+  it('a task due exactly at generated_at is Due soon (not strictly before)', () => {
+    const t = taskDueAt('2026-09-09T12:00:00.000Z')
+    const { overdue, dueSoon } = groupTasks([t], '2026-09-09T12:00:00.000Z')
+    expect(overdue).toEqual([])
+    expect(dueSoon).toEqual([t])
+  })
+
+  it('a task due one second before generated_at is Overdue', () => {
+    const t = taskDueAt('2026-09-09T11:59:59.000Z')
+    const { overdue, dueSoon } = groupTasks([t], '2026-09-09T12:00:00.000Z')
+    expect(overdue).toEqual([t])
+    expect(dueSoon).toEqual([])
+  })
+
+  it('a whole-second due_at is Overdue against a fractional-second generated_at, despite sorting "after" it as a raw string', () => {
+    const dueAt = '2026-09-09T12:00:00Z'
+    const generatedAt = '2026-09-09T12:00:00.500000Z'
+    // The raw-string comparison this fix replaces would have been wrong:
+    // '.' (0x2E) sorts below 'Z' (0x5A), so the shorter due_at string is
+    // lexically GREATER than the fractional generated_at string, even
+    // though the instant it names is chronologically earlier.
+    expect(dueAt > generatedAt).toBe(true)
+    const t = taskDueAt(dueAt)
+    const { overdue, dueSoon } = groupTasks([t], generatedAt)
+    expect(overdue).toEqual([t])
+    expect(dueSoon).toEqual([])
+  })
+
+  it('a null due_at is never Overdue', () => {
+    const t = taskDueAt(null)
+    const { overdue, dueSoon } = groupTasks([t], '2026-09-09T12:00:00.000Z')
+    expect(overdue).toEqual([])
+    expect(dueSoon).toEqual([t])
   })
 })
 

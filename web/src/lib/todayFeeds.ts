@@ -99,9 +99,19 @@ export function adminFeedStatus(feed: {
 
 /** §6: "a `fallback:true` entry reads 'The *feed* rule is invalid; the
  * default rule is being used.'" Lowercased feed name reads naturally inside
- * the sentence, matching the existing today-source issue copy style. */
+ * the sentence, matching the existing today-source issue copy style.
+ *
+ * Round-2 review fix 6: goes through the same guarded lookup
+ * `todayFeedIssueMessage` below already uses, rather than indexing
+ * `TODAY_FEED_LABEL` directly — a parsed HTTP response carries no
+ * runtime guarantee that `feed_key` is one of the keys this bundle
+ * recognizes (a future additive key), and an unguarded index would
+ * interpolate `undefined` into the sentence instead of falling back. */
 export function fallbackFeedMessage(issue: SystemFeedIssue): string {
-  return `The ${TODAY_FEED_LABEL[issue.feed_key].toLowerCase()} rule is invalid; the default rule is being used.`
+  const label = (TODAY_FEED_LABEL as Record<string, string | undefined>)[issue.feed_key]
+  return label
+    ? `The ${label.toLowerCase()} rule is invalid; the default rule is being used.`
+    : 'A Today rule is invalid; the default rule is being used.'
 }
 
 /** Slice 016b (docs/specs/SLICE_016.md §8): the non-fallback "<label> could

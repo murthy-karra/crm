@@ -40,7 +40,7 @@ import {
   memberFeedMarker,
   todayFeedIssueMessage,
 } from '../lib/todayFeeds'
-import { TASK_KIND_LABEL, clipTitle, panelDueCellText, tomorrowLocalEndOfDay } from '../lib/tasks'
+import { TASK_KIND_LABEL, clipTitle, groupTasks, panelDueCellText, tomorrowLocalEndOfDay } from '../lib/tasks'
 
 const route = useRoute()
 const router = useRouter()
@@ -86,12 +86,26 @@ const snoozingTask = ref<{ personId: string; taskId: string } | null>(null)
 
 /** Pessimistic (§8: "held while pending"); the row/item leaves only once
  * the natural refetch (settled via `settleTaskMutation`) stops returning
- * it — no optimistic cache write here. */
-function onCompleteTaskItem(personId: string, taskId: string) {
+ * it — no optimistic cache write here.
+ *
+ * Round-2 review fix 1: `completeTask`'s `mutationKey` is
+ * `computed(() => personMutationKey(orgId, completeTaskPersonId))` — a
+ * REACTIVE key. Vue Query's `MutationObserver` applies a `mutationKey`
+ * change through a pre-flush watcher, which runs asynchronously relative
+ * to a synchronous `completeTaskPersonId.value = personId` immediately
+ * followed by `.mutate()`: the key change had not yet propagated when
+ * `.mutate()` fired, so the observer picked it up moments later and
+ * reset, detaching the very call this function just made from its own
+ * `onError`/`onSettled` — leaving `completingTask` stuck forever and
+ * every later click inert. Awaiting `nextTick()` between setting the ref
+ * and calling `.mutate()` lets that watcher flush first, so the mutation
+ * always starts already keyed to the right Person. */
+async function onCompleteTaskItem(personId: string, taskId: string) {
   if (completingTask.value) return
   taskActionError.value = null
   completingTask.value = { personId, taskId }
   completeTaskPersonId.value = personId
+  await nextTick()
   completeTask.mutate(
     { personId, taskId },
     {
@@ -106,12 +120,15 @@ function isCompletingTaskItem(personId: string, taskId: string): boolean {
 
 /** Snooze to tomorrow at local end of day (rule 2). A `changed: false`
  * response (the task is already due then) is not an error — the row
- * simply stays, no error copy (§8). */
-function onSnoozeTaskItem(personId: string, taskId: string) {
+ * simply stays, no error copy (§8). Same `nextTick()` fix as
+ * `onCompleteTaskItem` above, for the identical reactive-`mutationKey`
+ * reason. */
+async function onSnoozeTaskItem(personId: string, taskId: string) {
   if (snoozingTask.value) return
   taskActionError.value = null
   snoozingTask.value = { personId, taskId }
   snoozeTaskPersonId.value = personId
+  await nextTick()
   snoozeTask.mutate(
     { personId, taskId, dueAt: tomorrowLocalEndOfDay() },
     {
@@ -136,16 +153,16 @@ function taskReason(item: TodayItem): TaskReasonVariant | null {
 }
 
 const generatedAt = computed(() => tasksQuery.data.value?.generated_at ?? new Date().toISOString())
-const overdueTasks = computed(() => {
+// Round-2 review fix 3: `groupTasks` (lib/tasks.ts) compares with
+// `Date.parse`, not raw ISO-string `<` (a whole-second `due_at` sorted
+// AFTER a fractional-second `generated_at` lexically, misclassifying it).
+const taskGroups = computed(() => {
   const data = tasksQuery.data.value
-  if (!data) return []
-  return data.tasks.filter((task) => task.due_at !== null && task.due_at < data.generated_at)
+  if (!data) return { overdue: [], dueSoon: [] }
+  return groupTasks(data.tasks, data.generated_at)
 })
-const dueSoonTasks = computed(() => {
-  const data = tasksQuery.data.value
-  if (!data) return []
-  return data.tasks.filter((task) => !(task.due_at !== null && task.due_at < data.generated_at))
-})
+const overdueTasks = computed(() => taskGroups.value.overdue)
+const dueSoonTasks = computed(() => taskGroups.value.dueSoon)
 const orderedFeeds = computed(() => {
   const byKey = new Map((feedsQuery.data.value?.feeds ?? []).map((f) => [f.feed_key, f]))
   return TODAY_FEED_ORDER.map((key) => byKey.get(key)).filter((f): f is NonNullable<typeof f> => f !== undefined)
@@ -265,7 +282,10 @@ function retrySources() {
 
 function refreshToday() {
   sourceNotice.value = null
-  void Promise.all([todayQuery.refetch(), sourcesQuery.refetch(), feedsQuery.refetch()])
+  // Round-2 review fix 5: the Tasks panel's own read was missing from the
+  // Refresh button's join — a stale panel could persist indefinitely
+  // after a Refresh that otherwise looked complete.
+  void Promise.all([todayQuery.refetch(), sourcesQuery.refetch(), feedsQuery.refetch(), tasksQuery.refetch()])
 }
 
 const emptyTitle = computed(() =>
@@ -282,6 +302,12 @@ watch([orgId, actorId, authSessionLifetime], () => {
   removing.value = null
   removalFocus.value = null
   showSources.value = false
+  // Round-2 review fix 5: an actor/org/session change (account switch,
+  // re-auth) must not leave a stale task action's guard/error stuck for
+  // the new identity.
+  completingTask.value = null
+  snoozingTask.value = null
+  taskActionError.value = null
 })
 
 // The cap notice may link directly to this panel. This is view-local route
@@ -556,7 +582,7 @@ const columns: ColumnDef<TodayItem>[] = [
           class="mt-3"
           :data-testid="`task-panel-group-${group.key}`"
         >
-          <h3 class="text-small font-semibold uppercase tracking-wide text-text-muted">
+          <h3 class="text-small font-semibold text-text-muted">
             {{ group.label }}
           </h3>
           <p
@@ -607,13 +633,6 @@ const columns: ColumnDef<TodayItem>[] = [
               >
                 Tomorrow
               </button>
-              <p
-                v-if="taskActionError?.id === task.id"
-                role="alert"
-                class="w-full text-small text-danger"
-              >
-                {{ taskActionError.message }}
-              </p>
             </li>
           </ul>
         </div>
@@ -822,6 +841,28 @@ const columns: ColumnDef<TodayItem>[] = [
           Manage sources
         </button>
       </div>
+    </div>
+
+    <!-- Round-2 review fix 2: a page-level, dismissible alert for a task
+         action's error, keyed by task id and independent of any row — the
+         016a "deleted elsewhere" banner pattern (PersonDetailView.vue).
+         Neither the ranked queue's Complete button nor a panel row whose
+         own refetch just removed it had anywhere to show this before. -->
+    <div
+      v-if="taskActionError"
+      role="alert"
+      class="mb-4 flex items-center justify-between gap-3 rounded-xl border border-border bg-surface-0 p-3 text-body text-danger"
+      data-testid="task-action-error-banner"
+    >
+      <span>{{ taskActionError.message }}</span>
+      <button
+        type="button"
+        :class="buttonClasses('ghost')"
+        data-testid="task-action-error-dismiss"
+        @click="taskActionError = null"
+      >
+        Dismiss
+      </button>
     </div>
 
     <div

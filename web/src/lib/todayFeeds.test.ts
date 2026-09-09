@@ -90,6 +90,20 @@ describe('fallbackFeedMessage', () => {
       'The client replied rule is invalid; the default rule is being used.',
     )
   })
+
+  // Round-2 review fix 6: goes through the same guarded lookup
+  // `todayFeedIssueMessage` uses, rather than indexing `TODAY_FEED_LABEL`
+  // directly — a parsed HTTP response carries no runtime guarantee that
+  // `feed_key` is a key this bundle recognizes.
+  it('never interpolates "undefined" for an unrecognized feed key', () => {
+    const message = fallbackFeedMessage({
+      feed_key: 'some_future_feed' as unknown as 'client_replied',
+      error: 'invalid_definition',
+      fallback: true,
+    })
+    expect(message).not.toContain('undefined')
+    expect(message).toBe('A Today rule is invalid; the default rule is being used.')
+  })
 })
 
 // Slice 016b (docs/specs/SLICE_016.md §5, §8): the `task_due` issue token

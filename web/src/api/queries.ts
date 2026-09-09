@@ -1056,9 +1056,50 @@ function sortTagRefs(tags: TagRef[]): TagRef[] {
   })
 }
 
-export function useAssignPersonMutation(orgId: MaybeRefOrGetter<string>, providedQueryClient?: QueryClient) {
+// --- Item 5 (014 LATER): isMutating guards on the four Person mutations ---
+//
+// Each of the four Person mutations (assign/stage/apply-tag/remove-tag)
+// gets a `mutationKey` that includes the Person id, so a settle-invalidate
+// can ask "is another mutation for this same Person still in flight?"
+// before clobbering its optimistic value — the last one to settle is the
+// one that actually invalidates. The bare prefix (no orgId/personId) also
+// lets the realtime path (realtime/useRealtime.ts) ask "is any Person
+// mutation pending at all?": `isMutating`/`invalidateQueries` match
+// `mutationKey` by prefix, the same partial-match semantics `queryKey`
+// filters already use, so `{ mutationKey: [PERSON_MUTATION_KEY_PREFIX] }`
+// matches every Person mutation regardless of which Person or Organization.
+export const PERSON_MUTATION_KEY_PREFIX = 'person-mutation'
+
+export function personMutationKey(orgId: string, personId: string) {
+  return [PERSON_MUTATION_KEY_PREFIX, orgId, personId] as const
+}
+
+/** Invalidates `queryKey` unless another mutation for this same Person is
+ * still pending. Called from `onSuccess`/`onError`/`onSettled`: TanStack
+ * Query's `Mutation#execute` (query-core's mutation.ts) runs these
+ * callbacks and only THEN dispatches the `'success'`/`'error'` state
+ * change, so the calling mutation itself is still counted as `isMutating`
+ * at this point — `isMutating` for this Person's key is therefore always
+ * >= 1 (itself); `> 1` is what detects a genuinely different, still-
+ * in-flight sibling mutation for the same Person. */
+function invalidateUnlessPersonMutationPending(
+  qc: QueryClient,
+  orgId: string,
+  personId: string,
+  queryKey: readonly unknown[],
+) {
+  if (qc.isMutating({ mutationKey: personMutationKey(orgId, personId) }) > 1) return
+  void qc.invalidateQueries({ queryKey })
+}
+
+export function useAssignPersonMutation(
+  orgId: MaybeRefOrGetter<string>,
+  personId: MaybeRefOrGetter<string>,
+  providedQueryClient?: QueryClient,
+) {
   const qc = providedQueryClient ?? useQueryClient()
   return useMutation({
+    mutationKey: computed(() => personMutationKey(toValue(orgId), toValue(personId))),
     mutationFn: ({ personId, assignedUserId }: { personId: string; assignedUserId: string | null }) =>
       apiFetch<MutatePersonResponse>(`/people/${personId}/assignment`, {
         method: 'POST',
@@ -1078,26 +1119,41 @@ export function useAssignPersonMutation(orgId: MaybeRefOrGetter<string>, provide
     onError: (_error, _variables, context) => {
       restorePersonMutationSnapshot(qc, context?.snapshot)
     },
+    // Field-only (014 LATER item 4): a rapid stage-then-assignee pair must
+    // not let this response's stale `stage` snapshot (as of when the
+    // assignment command ran) overwrite a still-in-flight or already-
+    // settled stage change — write only the field this mutation owns, into
+    // the detail and every cached People row (writeOptimisticPersonSummary
+    // already does both).
     onSuccess: (data, variables, context) => {
       const id = context?.id ?? toValue(orgId)
-      qc.setQueryData(queryKeys.person(id, variables.personId), (old: PersonDetailResponse | undefined) =>
-        old ? { ...old, person: data.person } : old,
-      )
+      writeOptimisticPersonSummary(qc, id, variables.personId, (person) => ({
+        ...person,
+        assigned_user: data.person.assigned_user,
+      }))
     },
     // Fires whether the mutation resolved or rejected — an uncertain
     // network failure may still have committed server-side, and a real
     // `person.changed` invalidation racing a pending mutation only ever
     // arrives after that mutation's own commit (§3 "Realtime"), so this
     // final invalidate's refetch is guaranteed to see the true state.
-    onSettled: (_data, _error, _variables, context) => {
-      void qc.invalidateQueries({ queryKey: queryKeys.org(context?.id ?? toValue(orgId)) })
+    // Item 5 (014 LATER): skipped while another mutation for the same
+    // Person is still pending — that one invalidates when it settles.
+    onSettled: (_data, _error, variables, context) => {
+      const id = context?.id ?? toValue(orgId)
+      invalidateUnlessPersonMutationPending(qc, id, variables.personId, queryKeys.org(id))
     },
   }, providedQueryClient)
 }
 
-export function useChangeStageMutation(orgId: MaybeRefOrGetter<string>, providedQueryClient?: QueryClient) {
+export function useChangeStageMutation(
+  orgId: MaybeRefOrGetter<string>,
+  personId: MaybeRefOrGetter<string>,
+  providedQueryClient?: QueryClient,
+) {
   const qc = providedQueryClient ?? useQueryClient()
   return useMutation({
+    mutationKey: computed(() => personMutationKey(toValue(orgId), toValue(personId))),
     mutationFn: ({ personId, stageId }: { personId: string; stageId: string }) =>
       apiFetch<MutatePersonResponse>(`/people/${personId}/stage`, {
         method: 'POST',
@@ -1113,14 +1169,21 @@ export function useChangeStageMutation(orgId: MaybeRefOrGetter<string>, provided
     onError: (_error, _variables, context) => {
       restorePersonMutationSnapshot(qc, context?.snapshot)
     },
+    // Field-only (014 LATER item 4): see useAssignPersonMutation's
+    // onSuccess above — same reasoning, this mutation's own field is
+    // `stage`.
     onSuccess: (data, variables, context) => {
       const id = context?.id ?? toValue(orgId)
-      qc.setQueryData(queryKeys.person(id, variables.personId), (old: PersonDetailResponse | undefined) =>
-        old ? { ...old, person: data.person } : old,
-      )
+      writeOptimisticPersonSummary(qc, id, variables.personId, (person) => ({
+        ...person,
+        stage: data.person.stage,
+      }))
     },
-    onSettled: (_data, _error, _variables, context) => {
-      void qc.invalidateQueries({ queryKey: queryKeys.org(context?.id ?? toValue(orgId)) })
+    // Item 5 (014 LATER): skipped while another mutation for the same
+    // Person is still pending — that one invalidates when it settles.
+    onSettled: (_data, _error, variables, context) => {
+      const id = context?.id ?? toValue(orgId)
+      invalidateUnlessPersonMutationPending(qc, id, variables.personId, queryKeys.org(id))
     },
   }, providedQueryClient)
 }
@@ -1658,9 +1721,14 @@ export function useDeleteTagMutation(orgId: MaybeRefOrGetter<string>, providedQu
 }
 
 /** `PUT /api/people/{id}/tags/{tag_id}` — target-state idempotent; no body. */
-export function useAddPersonTagMutation(orgId: MaybeRefOrGetter<string>, providedQueryClient?: QueryClient) {
+export function useAddPersonTagMutation(
+  orgId: MaybeRefOrGetter<string>,
+  personId: MaybeRefOrGetter<string>,
+  providedQueryClient?: QueryClient,
+) {
   const qc = providedQueryClient ?? useQueryClient()
   return useMutation({
+    mutationKey: computed(() => personMutationKey(toValue(orgId), toValue(personId))),
     mutationFn: ({ personId, tagId }: { personId: string; tagId: string }) =>
       apiFetch<PersonTagMutationResponse>(
         `/people/${encodeURIComponent(personId)}/tags/${encodeURIComponent(tagId)}`,
@@ -1685,11 +1753,14 @@ export function useAddPersonTagMutation(orgId: MaybeRefOrGetter<string>, provide
     // above) invalidates the Person key after rollback — a timeout or
     // 5xx whose write actually committed server-side otherwise leaves a
     // rolled-back chip that contradicts the server until some unrelated
-    // invalidation happens to refetch it.
+    // invalidation happens to refetch it. Item 5 (014 LATER): guarded the
+    // same way as assign/stage's onSettled — skipped while another
+    // mutation for this same Person is still pending.
     onError: (error, variables, snapshot) => {
       restorePersonDetailSnapshot(qc, snapshot)
       refetchOnStalePersonTagReference(qc, orgId, variables.personId, error)
-      void qc.invalidateQueries({ queryKey: queryKeys.person(toValue(orgId), variables.personId) })
+      const id = toValue(orgId)
+      invalidateUnlessPersonMutationPending(qc, id, variables.personId, queryKeys.person(id, variables.personId))
     },
     onSuccess: (result, variables) => {
       const id = toValue(orgId)
@@ -1697,15 +1768,20 @@ export function useAddPersonTagMutation(orgId: MaybeRefOrGetter<string>, provide
         old ? { ...old, tags: result.tags } : old,
       )
       void qc.invalidateQueries({ queryKey: queryKeys.tags(id) })
-      void qc.invalidateQueries({ queryKey: queryKeys.person(id, variables.personId) })
+      invalidateUnlessPersonMutationPending(qc, id, variables.personId, queryKeys.person(id, variables.personId))
     },
   }, providedQueryClient)
 }
 
 /** `DELETE /api/people/{id}/tags/{tag_id}` — target-state idempotent. */
-export function useRemovePersonTagMutation(orgId: MaybeRefOrGetter<string>, providedQueryClient?: QueryClient) {
+export function useRemovePersonTagMutation(
+  orgId: MaybeRefOrGetter<string>,
+  personId: MaybeRefOrGetter<string>,
+  providedQueryClient?: QueryClient,
+) {
   const qc = providedQueryClient ?? useQueryClient()
   return useMutation({
+    mutationKey: computed(() => personMutationKey(toValue(orgId), toValue(personId))),
     mutationFn: ({ personId, tagId }: { personId: string; tagId: string }) =>
       apiFetch<PersonTagMutationResponse>(
         `/people/${encodeURIComponent(personId)}/tags/${encodeURIComponent(tagId)}`,
@@ -1726,11 +1802,13 @@ export function useRemovePersonTagMutation(orgId: MaybeRefOrGetter<string>, prov
       return snapshot
     },
     // Round-1 review fix: see useAddPersonTagMutation's onError above —
-    // same "any error invalidates the Person key after rollback" rule.
+    // same "any error invalidates the Person key after rollback" rule,
+    // and the same item 5 isMutating guard.
     onError: (error, variables, snapshot) => {
       restorePersonDetailSnapshot(qc, snapshot)
       refetchOnStalePersonTagReference(qc, orgId, variables.personId, error)
-      void qc.invalidateQueries({ queryKey: queryKeys.person(toValue(orgId), variables.personId) })
+      const id = toValue(orgId)
+      invalidateUnlessPersonMutationPending(qc, id, variables.personId, queryKeys.person(id, variables.personId))
     },
     onSuccess: (result, variables) => {
       const id = toValue(orgId)
@@ -1738,7 +1816,7 @@ export function useRemovePersonTagMutation(orgId: MaybeRefOrGetter<string>, prov
         old ? { ...old, tags: result.tags } : old,
       )
       void qc.invalidateQueries({ queryKey: queryKeys.tags(id) })
-      void qc.invalidateQueries({ queryKey: queryKeys.person(id, variables.personId) })
+      invalidateUnlessPersonMutationPending(qc, id, variables.personId, queryKeys.person(id, variables.personId))
     },
   }, providedQueryClient)
 }

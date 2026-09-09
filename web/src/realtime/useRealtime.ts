@@ -9,7 +9,7 @@ import { onScopeDispose, ref, toValue, watch, type MaybeRefOrGetter, type Ref } 
 import type { QueryClient, QueryKey } from '@tanstack/vue-query'
 import { UnauthorizedError } from 'centrifuge'
 import { ApiError } from '../api/client'
-import { fetchRealtimeToken, queryKeys } from '../api/queries'
+import { fetchRealtimeToken, queryKeys, PERSON_MUTATION_KEY_PREFIX } from '../api/queries'
 import { queryClient as sharedQueryClient } from '../query-client'
 import { invalidationsFor, reconnectInvalidations } from './events'
 
@@ -128,6 +128,16 @@ export function useRealtime(options: UseRealtimeOptions): UseRealtimeResult {
   let pending = new Map<string, QueryKey>()
   let flushTimer: ReturnType<typeof setTimeout> | null = null
 
+  // Item 5 (014 LATER): `key[2]` is the resource kind in every
+  // `queryKeys.people(...)`/`queryKeys.person(...)` shape
+  // (`['org', orgId, 'people', ...]` / `['org', orgId, 'person', personId]`)
+  // — the only two shapes a `person.changed` invalidation can revert an
+  // optimistic row through. `queryKeys.org(orgId)` (the reconnect sweep) is
+  // a 2-element key and never matches, so it keeps refetching normally.
+  function isPeopleOrPersonKey(key: QueryKey): boolean {
+    return key[2] === 'people' || key[2] === 'person'
+  }
+
   function scheduleInvalidation(keys: QueryKey[]): void {
     if (keys.length === 0) return
     for (const key of keys) {
@@ -138,8 +148,19 @@ export function useRealtime(options: UseRealtimeOptions): UseRealtimeResult {
       const keysToFlush = [...pending.values()]
       pending = new Map()
       flushTimer = null
+      // While any Person mutation is pending (anywhere — this is a
+      // blanket, not a per-Person, check), a People/Person key is marked
+      // stale without refetching: an unrelated Person's `person.changed`
+      // must not revert a still-in-flight optimistic row. The mutation's
+      // own settle-invalidate (a normal, refetching invalidate) is what
+      // actually refreshes the data once it settles.
+      const holdRefetch = qc.isMutating({ mutationKey: [PERSON_MUTATION_KEY_PREFIX] }) > 0
       for (const key of keysToFlush) {
-        void qc.invalidateQueries({ queryKey: key })
+        if (holdRefetch && isPeopleOrPersonKey(key)) {
+          void qc.invalidateQueries({ queryKey: key, refetchType: 'none' })
+        } else {
+          void qc.invalidateQueries({ queryKey: key })
+        }
       }
     }, coalesceMs)
   }

@@ -71,8 +71,8 @@ const orgTags = computed(() => orgTagsData.value?.tags ?? [])
 const appliedTagIds = computed(() => new Set(personTags.value.map((tag) => tag.id)))
 const availableTags = computed(() => orgTags.value.filter((tag) => !appliedTagIds.value.has(tag.id)))
 
-const addPersonTag = useAddPersonTagMutation(orgId)
-const removePersonTag = useRemovePersonTagMutation(orgId)
+const addPersonTag = useAddPersonTagMutation(orgId, () => props.id)
+const removePersonTag = useRemovePersonTagMutation(orgId, () => props.id)
 const createTag = useCreateTagMutation(orgId)
 const addTagPending = computed(() => addPersonTag.isPending.value || createTag.isPending.value)
 
@@ -240,8 +240,8 @@ const assigneeOptions = computed(() => [
   })),
 ])
 
-const { mutate: setStage, isPending: stagePending, error: stageError } = useChangeStageMutation(orgId)
-const { mutate: setAssignee, isPending: assigneePending, error: assigneeError } = useAssignPersonMutation(orgId)
+const { mutate: setStage, isPending: stagePending, error: stageError } = useChangeStageMutation(orgId, () => props.id)
+const { mutate: setAssignee, isPending: assigneePending, error: assigneeError } = useAssignPersonMutation(orgId, () => props.id)
 
 function onStageChange(value: unknown) {
   if (typeof value !== 'string') return

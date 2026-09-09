@@ -632,6 +632,110 @@ async fn task_only_item_has_null_latest_inquiry_and_waiting_since_and_action_fol
 
 // --- §12.10: tier and order -----------------------------------------------
 
+/// docs/specs/SLICE_016.md §5 as amended at review round 1 (D-054, the
+/// 011c list-only precedent): a task-only item on a Person who HAS an
+/// inquiry carries that inquiry as a real `InquiryRef` and a consistent
+/// `last_inquiry_at`; `null` is reserved for zero-inquiry People. The
+/// Person is kept outside the built-in set by a contact attempt after
+/// the inquiry (answered, not fresh), so the axis's task-only prefix is
+/// what admits them. Written by the coordinator at the round-2
+/// confirmation, which found the hydration landed without a positive test.
+#[sqlx::test]
+#[ignore]
+async fn task_only_item_on_a_person_with_an_answered_inquiry_carries_the_real_inquiry_ref(
+    migrator_pool: PgPool,
+) {
+    let f = fixture(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let now = now_trunc();
+
+    let received_at = now - ChronoDuration::days(3);
+    let person_id =
+        insert_inquiry_person(&app_pool, f.org_id, f.stage_id, f.admin_id, received_at).await;
+    // Answered two days ago: outside "unanswered" and not fresh, so the
+    // Person is not a person-state candidate and no call feed applies.
+    sqlx::query(
+        "INSERT INTO contact_attempted (organization_id, actor_kind, actor_user_id, origin, \
+            occurred_at, correlation_id, causation_id, person_id, channel, outcome) \
+         VALUES ($1, 'user', $2, 'web_session', $3, $4, $5, $6, 'call', 'reached')",
+    )
+    .bind(f.org_id)
+    .bind(f.admin_id)
+    .bind(now - ChronoDuration::days(2))
+    .bind(Uuid::new_v4())
+    .bind(Uuid::new_v4())
+    .bind(person_id)
+    .execute(&app_pool)
+    .await
+    .unwrap();
+    let inquiry_id: Uuid =
+        sqlx::query_scalar("SELECT id FROM inquiry WHERE organization_id = $1 AND person_id = $2")
+            .bind(f.org_id)
+            .bind(person_id)
+            .fetch_one(&app_pool)
+            .await
+            .unwrap();
+
+    // No task yet: the answered Person is absent (positive control for the
+    // "outside the built-in set" premise).
+    let before = today::query_at(
+        &mut app_pool.acquire().await.unwrap(),
+        &visibility_scope(f.org_id),
+        UserId::new(f.admin_id),
+        now,
+    )
+    .await
+    .unwrap();
+    assert!(
+        find_item(&before.items, person_id).is_none(),
+        "an answered, non-fresh Person must not be a built-in candidate"
+    );
+
+    create_task_for(
+        &app_pool,
+        f.org_id,
+        f.admin_id,
+        f.admin_id,
+        person_id,
+        TaskKind::FollowUp,
+        Some(now + ChronoDuration::hours(1)),
+    )
+    .await;
+
+    let list = today::query_at(
+        &mut app_pool.acquire().await.unwrap(),
+        &visibility_scope(f.org_id),
+        UserId::new(f.admin_id),
+        now,
+    )
+    .await
+    .unwrap();
+    let item = find_item(&list.items, person_id).expect("task-only item admitted");
+    assert!(
+        matches!(
+            task_reason_kind(item, person_id),
+            Some(TodayReason::TaskDue { .. })
+        ),
+        "a task due in one hour is task_due"
+    );
+    let latest = item
+        .latest_inquiry
+        .as_ref()
+        .expect("a Person with an inquiry carries a real InquiryRef (D-054, list-only precedent)");
+    assert_eq!(latest.id.as_uuid(), inquiry_id);
+    assert_eq!(latest.received_at, received_at);
+    assert_eq!(
+        item.person.last_inquiry_at,
+        Some(received_at),
+        "PersonSummary.last_inquiry_at is consistent with the InquiryRef"
+    );
+    assert_eq!(item.person.inquiry_count, 1);
+    assert!(
+        item.waiting_since.is_none(),
+        "task-only items carry no waiting time"
+    );
+}
+
 #[sqlx::test]
 #[ignore]
 async fn retained_normal_item_with_overdue_task_is_raised_and_ordered_after_fresh_high_before_task_only(

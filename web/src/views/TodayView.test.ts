@@ -384,11 +384,24 @@ describe('TodayView — task reasons on the ranked queue (Slice 016b §5, §8)',
     await nextTick()
     expect(apiFetchMock.mock.calls.filter(([p, init]) => p.endsWith('/complete') && (init?.method ?? 'GET') === 'POST')).toHaveLength(1)
     releaseComplete()
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    await flushPromises()
-    const paths = apiFetchMock.mock.calls.map(([p, init]: [string, RequestInit?]) => `${(init?.method ?? 'GET')} ${p}`)
-    const completeIndex = paths.findIndex((p) => p.includes('/complete'))
-    const refetchIndex = paths.findIndex((p, i) => i > completeIndex && p === 'GET /today')
+    // The settle refetch is scheduled on its own macrotask from `onSuccess`
+    // after the POST resolves, so a single `setTimeout(0)` registered here
+    // can run before it (coordinator's final gate: 1 failure in 6 runs).
+    // Poll for the refetch instead of assuming one tick suffices.
+    const requestPaths = () =>
+      apiFetchMock.mock.calls.map(([p, init]: [string, RequestInit?]) => `${(init?.method ?? 'GET')} ${p}`)
+    const completeIndexOf = (paths: string[]) => paths.findIndex((p) => p.includes('/complete'))
+    const refetchIndexOf = (paths: string[]) => {
+      const c = completeIndexOf(paths)
+      return paths.findIndex((p, i) => i > c && p === 'GET /today')
+    }
+    for (let attempt = 0; attempt < 50 && refetchIndexOf(requestPaths()) < 0; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      await flushPromises()
+    }
+    const paths = requestPaths()
+    const completeIndex = completeIndexOf(paths)
+    const refetchIndex = refetchIndexOf(paths)
     expect(completeIndex).toBeGreaterThanOrEqual(0)
     expect(refetchIndex).toBeGreaterThan(completeIndex)
   })

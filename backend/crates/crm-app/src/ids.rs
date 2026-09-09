@@ -1353,3 +1353,52 @@ mod note_id_tests {
         );
     }
 }
+
+/// A task identity (Slice 016). Kept distinct from every other UUID —
+/// above all `PersonId` and `NoteId`, its closest neighbors in every
+/// task-related call site — so a Person or note id cannot accidentally
+/// cross a task query boundary at compile time.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
+#[repr(transparent)]
+pub struct TaskId(pub Uuid);
+
+impl TaskId {
+    pub fn new(id: Uuid) -> Self {
+        Self(id)
+    }
+
+    pub fn as_uuid(self) -> Uuid {
+        self.0
+    }
+}
+
+impl fmt::Display for TaskId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
+impl fmt::Debug for TaskId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self, f)
+    }
+}
+
+#[cfg(test)]
+mod task_id_tests {
+    use super::*;
+
+    #[test]
+    fn task_id_is_transparent_and_readable() {
+        let raw = Uuid::new_v4();
+        let id = TaskId::new(raw);
+        assert_eq!(id.as_uuid(), raw);
+        assert_eq!(id.to_string(), raw.to_string());
+        assert_eq!(format!("{id:?}"), raw.to_string());
+        assert_eq!(
+            serde_json::to_string(&id).unwrap(),
+            serde_json::to_string(&raw).unwrap()
+        );
+    }
+}

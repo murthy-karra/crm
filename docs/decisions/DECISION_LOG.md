@@ -917,9 +917,13 @@ is not yet decided:
 4. Timeline rendering: pointer rows fetch/decrypt on demand through a
    dedicated endpoint; never embedded in `history[]` JSON.
 
-Blocks: call summaries/transcripts, recordings (with O-002), free-text
-notes (deferred from D-032). Must be resolved, and the raw-payload
-migration done, before any of those slices is planned.
+Blocks: call summaries/transcripts, recordings (with O-002). Must be
+resolved, and the raw-payload migration done, before any of those slices
+is planned. *Amended by D-053 (2026-09-08):* free-text notes (deferred
+from D-032) no longer wait on this decision; Slice 015 ships note bodies
+as plaintext in the erasable CRUD set, and note bodies migrate onto the
+key hierarchy when this decision lands (D-053 states the constraints that
+keep that a column move).
 
 
 ### O-013 — "Delete my data": Person erasure, suppression, and who fields the request (OPEN — must be addressed, not immediately)
@@ -1849,3 +1853,39 @@ Blocks: nothing. Feeds the Slice 012 specification and brief. Recorded
 lever, not taken: column-level `UPDATE` grants plus a `SECURITY DEFINER`
 trigger function would make the invariant database-enforced against
 application bugs.
+
+### D-053 — Notes ship as plaintext erasable CRUD; O-012 amended (2026-09-08)
+
+Accepted (user, at Slice 015 planning; chosen over resolving O-012 first).
+O-012 as recorded on 2026-08-23 blocked free-text notes until the
+per-Person key hierarchy and the raw-payload migration existed. Notes are
+CRM core (thesis §11) and the recorded path back into the parked FUB
+migration, and `inquiry.message` already ships as plaintext free-text
+customer content in the erasable CRUD set (SLICE_002 §2, D-015 §6).
+
+1. **The `note` table joins the erasable CRUD set** beside `person`,
+   `contact_method` and `inquiry`: plaintext, cascaded with the Person
+   (D-015 §5 erasure), never on a history fact row (D-015 §3). AGENTS §4.6
+   already lists notes under ordinary relational CRUD.
+2. **Constraints that keep the later O-012 migration a column move, not a
+   redesign:** the body is read at exactly two sites (the Person detail's
+   history projection and the mutation receipt); it never travels on the
+   realtime channel (D-023), the Operator ledger (D-029), spans or logs
+   (AGENTS §9); delete is a tombstone that empties the body; the body is
+   capped at 10,000 characters; no derived column, filter clause or Today
+   rule reads it.
+3. **Accepted cost, stated:** when O-012 lands, the timeline switches from
+   an inline body to an on-demand fetch (O-012 §4), a Web change plus one
+   endpoint; the Operator's person view switches from inline untrusted
+   text to a request-time decrypt (O-012 §3). Nothing else moves.
+4. **Safe defaults adopted with this decision** (veto-able, recorded in
+   the Slice 015 specification): any active member writes a note; the
+   author or an Organization admin edits or deletes it (the D-051 shape,
+   without D-051's "while unused" clause, which has no analogue); a
+   deactivated author's notes stay visible and attributed (D-027 §2), so
+   O-004 stays open; the Operator's `get_person` view carries the latest
+   five note bodies as untrusted text, the exposure class inquiry messages
+   already have.
+
+Blocks: nothing. Feeds the Slice 015 specification. O-012 §"Blocks"
+amended above; O-013's erasure runbook gains `note`.

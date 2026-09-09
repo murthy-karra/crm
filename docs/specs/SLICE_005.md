@@ -271,6 +271,12 @@ integration tests can drive it).
 user-authored text); `PersonCard` is unchanged and no tag tools are added. See
 [SLICE_011e.md](SLICE_011e.md) §5.
 
+*Amendment pointer (Slice 015, 2026-09-09, declared additive, AGENTS.md
+§11, D-053 §4):* `PersonDetail` gains `notes: Vec<NoteView>` (latest five;
+bodies as `UntrustedText`, clipped to 500 characters) and its `history`
+excludes the `note` kind; `PersonCard` is unchanged and no note tools are
+added. See [SLICE_015.md](SLICE_015.md) §5.
+
 ```rust
 pub struct PersonCard { id, display_name: UntrustedText, stage_name, assigned_user_display_name: Option<String>,
                         primary_email: Option<UntrustedText>, primary_phone: Option<UntrustedText>,

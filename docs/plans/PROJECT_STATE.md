@@ -1,28 +1,26 @@
 # Project State
 
-Last updated: 2026-09-08 (Slice 015 Notes specified and reviewed; awaiting
-the user's approval at the Phase 6 gate; LiveKit down, see Environment).
+Last updated: 2026-09-09 (Slice 015 Notes approved; lane started in
+../crm-worktrees/notes-1; LiveKit down, see Environment).
 
 ## Current phase
 
-**SLICE 015 (NOTES) — SPECIFIED AND REVIEWED, AWAITING APPROVAL
-(2026-09-08).** The user chose notes as the next slice (the first of the two
-remaining CRM-core models; the FUB notes-rung destination). Planning hit one
-genuine blocker: O-012 blocked free-text notes until the per-Person key
-hierarchy existed. The user accepted **D-053** (plaintext erasable CRUD
-notes now, O-012 amended, constraints keeping the later key migration a
-column move). Specification: [SLICE_015.md](../specs/SLICE_015.md) (one
-rung, one lane, S–M, about 0.8× 011e-e1). Independent review returned READY
-WITH CORRECTIONS and the tester added fourteen items; all applied (the
-load-bearing ones: the Operator's history view excludes note entries,
-`note_changed` invalidates only the Person detail, the note lookup binds
-`person_id`, capture test for bodies in spans/logs). No blocking decision
-remains. Safe defaults the user may veto at the gate: author-or-admin
-edit/delete; tombstone delete; Operator `get_person` carries the latest five
-note bodies as untrusted text (500-char clip). Uncommitted on `main`: the
-spec, D-053 and the O-012 amendment in the decision log, this file. The
-implementation brief (`docs/tasks/SLICE_015_IMPL.md`) is written at
-approval.
+**SLICE 015 (NOTES) — LANE IN IMPLEMENTATION (started 2026-09-09).** The
+user approved the specification and the Phase 6 gate on 2026-09-09 ("yes,
+proceed"). One lane (`implement` profile, Claude Sonnet 5) in
+`../crm-worktrees/notes-1` on `slice-015-notes` from `main` at the brief
+commit, backend then Web, per the
+[implementation brief](../tasks/SLICE_015_IMPL.md); the coordinator (Fable)
+owns review, test analysis, the once-only final-tree gates and the commit
+and merge gates. Specification: [SLICE_015.md](../specs/SLICE_015.md).
+D-053 recorded (plaintext erasable CRUD notes; O-012 amended). Amendment
+pointers recorded in SLICE_002 §§2/5, SLICE_003 §6, SLICE_005 §5.
+Safe defaults the user accepted at the gate: author-or-admin edit/delete;
+tombstone delete; Operator `get_person` carries the latest five note bodies
+as untrusted text (500-char clip) and its history excludes note entries.
+Lane checkpoint that returns to the coordinator: routes live before Web
+work (brief step 3). Not authorized: commit on `main`, merge, push,
+deployment, updating the shared development runtime.
 
 Previously: **LATER BATCH (2026-09-08) — COMPLETE AND MERGED TO LOCAL MAIN** at `3ff6c5f`
 (with the user's approval; not pushed, not deployed). Source
@@ -968,8 +966,9 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. **Approve Slice 015 (Notes) at the Phase 6 gate**, then one lane
-   implements per the brief. After 015: Tasks (the last CRM-core model),
+1. **Slice 015 (Notes) is in implementation**; next is the lane's step-3
+   checkpoint, then review rounds, the final-tree gates, commit and merge.
+   After 015: Tasks (the last CRM-core model),
    then the O-015 attachment-cap raise, then the small LATER batch.
 2. **(Former text, kept for the candidate list.)** Slices 012–014 and the
    LATER batch done. Candidates for the next
@@ -1017,9 +1016,9 @@ and now lives only in git history.
 
 ## Approval currently required
 
-- **Slice 015 (Notes): "Proceed with implementation?"** at the Phase 6
-  gate (spec reviewed, D-053 recorded). Also pending: commit of the planning
-  documents (spec, decision log, this file, the LiveKit-down line).
+- **Slice 015 (Notes): none until the lane reports.** Implementation was
+  approved on 2026-09-09; the next gates are commit approval on the lane
+  branch after verification, then merge to `main`.
 - None for 011e: both rungs merged, the dev runtime updated and the branches
   cleaned up with approval on 2026-09-07. `main` pushed on 2026-09-07; deployment is not authorized. The next slice or chunk
   (candidates below) needs the user's request.

@@ -69,6 +69,11 @@ On the D-016 Mac (and through the tunnel):
 `tag` and `person_tag` (Organization-scoped, composite FKs to `person`, no
 history fact per AGENTS §4.6). See [SLICE_011e.md](SLICE_011e.md) §2.
 
+*Amendment pointer (Slice 015, 2026-09-09, D-053):* the erasable CRUD set
+gains `note` (plaintext body, tombstone delete, cascaded with the Person;
+the D-015 §7 erasure runbook must cover it). See
+[SLICE_015.md](SLICE_015.md) §2.
+
 ### Classification (D-007, D-015)
 
 - **Erasable CRUD set** (plaintext, D-015 §3/§6): `person`,
@@ -386,6 +391,14 @@ routes `GET|POST /api/tags`, `PUT|DELETE /api/tags/{tag_id}` and
 `PUT|DELETE /api/people/{person_id}/tags/{tag_id}`; `GET /api/people` rows are
 unchanged. Permission for rename/delete is D-051. See
 [SLICE_011e.md](SLICE_011e.md) §5.
+
+*Amendment pointer (Slice 015, 2026-09-09, declared additive, AGENTS.md
+§11):* `history[]` admits an eighth kind, `note` (rank 7, positioned at
+creation time, detail `{body, updated_at, edited, can_manage}`); three new
+routes `POST /api/people/{person_id}/notes` and
+`PUT|DELETE /api/people/{person_id}/notes/{note_id}`; `GET /api/people` rows
+are unchanged. Permission for edit/delete is D-053 §4. See
+[SLICE_015.md](SLICE_015.md) §5.
 
 
 **Additive amendment (approved 2026-09-06):** [SLICE_011b §5](SLICE_011b.md#5-http-contract)

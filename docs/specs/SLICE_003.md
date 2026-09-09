@@ -382,6 +382,12 @@ after a tag is applied to or removed from a Person (only when a row changed;
 rename and delete of a tag publish nothing). See
 [SLICE_011e.md](SLICE_011e.md) §5.
 
+*Amendment pointer (Slice 015, 2026-09-09, declared additive, AGENTS.md
+§11):* `data.change` also admits `note_changed`, published on
+`person.changed` after a note is added, edited to a different body, or
+deleted; ids only, never a body. The Web handler invalidates only the Person
+detail for it. See [SLICE_015.md](SLICE_015.md) §5.
+
 **Channel.** `org:<organization_id>` (lowercase hyphenated UUID),
 namespace `org`. One channel per Organization. No per-user channel this
 slice (nothing targets a user yet; additive later).

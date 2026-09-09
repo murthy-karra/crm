@@ -1,15 +1,18 @@
 # Slice 015 — Notes
 
-**Status: REVIEWED, awaiting the user's approval (2026-09-08).** Prepared
+**Status: APPROVED by the user on 2026-09-09 ("yes, proceed") after
+independent review and D-053.** Approval covers the declared contracts (§7)
+and the §1 safe defaults; it authorizes implementation after the Phase 6
+gate (passed 2026-09-09), not commit, merge, push or deployment.
+Implementation per the [implementation brief](../tasks/SLICE_015_IMPL.md).
+Prepared
 against local `main` at `ce15b7d` (the LATER batch merged, pushed and
 serving on the shared development runtime). Independent review on
 2026-09-08 returned READY WITH CORRECTIONS and the adversarial test
 analysis added fourteen items; every correction and every adopted item is
 applied below (the load-bearing ones: the Operator's history view excludes
 note entries, `note_changed` invalidates only the Person detail, and the
-note lookup binds `person_id`). Nothing here is authorized until the user
-approves it; approval will authorize implementation and tests after the
-Phase 6 gate, not commit, merge, push or deployment.
+note lookup binds `person_id`).
 
 Free-text **notes** on a Person: written by any member from the Person page,
 shown in the Person timeline at the moment they were written, editable and

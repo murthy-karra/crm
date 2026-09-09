@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT n.id, n.created_at, n.updated_at, n.origin, n.correlation_id,\n                  n.author_user_id, au.display_name as \"author_display_name?\",\n                  n.body\n           FROM note n\n           LEFT JOIN app_user au ON au.id = n.author_user_id\n           WHERE n.organization_id = $1 AND n.person_id = $2 AND n.deleted_at IS NULL\n           ORDER BY n.created_at, n.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "origin",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "correlation_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "author_user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "author_display_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "body",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "81aee907fc02e60fbfbd88cde486381d848c0fc33dfdfc1476af8a45ba410828"
+}

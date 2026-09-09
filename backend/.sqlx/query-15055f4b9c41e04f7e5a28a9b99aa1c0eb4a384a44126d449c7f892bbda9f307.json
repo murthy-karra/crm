@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE note SET body = '', deleted_at = now(), deleted_by_user_id = $4\n           WHERE id = $1 AND organization_id = $2 AND person_id = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "15055f4b9c41e04f7e5a28a9b99aa1c0eb4a384a44126d449c7f892bbda9f307"
+}

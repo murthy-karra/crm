@@ -1,0 +1,54 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT n.id, n.author_user_id, au.display_name as \"author_display_name?\",\n                  n.body, n.created_at, n.updated_at\n           FROM note n\n           LEFT JOIN app_user au ON au.id = n.author_user_id\n           WHERE n.id = $1 AND n.organization_id = $2 AND n.person_id = $3\n             AND n.deleted_at IS NULL\n           FOR UPDATE OF n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "author_user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "author_display_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "body",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "ef840369cef20840a2c618cf1f340a4e9e2941c285caadb32619b6b9a7f4fb2f"
+}

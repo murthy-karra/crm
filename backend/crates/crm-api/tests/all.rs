@@ -101,6 +101,9 @@ mod db_intake_system_routing;
 #[path = "db_intake_workbench.rs"]
 mod db_intake_workbench;
 
+#[path = "db_notes.rs"]
+mod db_notes;
+
 #[path = "db_operator.rs"]
 mod db_operator;
 

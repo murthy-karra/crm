@@ -1,0 +1,59 @@
+{
+ "base": "https://app.tarams.org",
+ "results": [
+  {
+   "n": 1,
+   "name": "login → Today renders with data",
+   "pass": true,
+   "evidence": "heading present; Loading blocks remaining: 0"
+  },
+  {
+   "n": 2,
+   "name": "hover prefetch then preview without Loading",
+   "pass": true,
+   "evidence": "detail prefetched on hover: true; \"Loading person…\" seen: false"
+  },
+  {
+   "n": 3,
+   "name": "stage change is optimistic and does not revert",
+   "pass": true,
+   "evidence": "during flight: \"Nurture\", after settle: \"Nurture\" (target Nurture, was Lead)"
+  },
+  {
+   "n": "3b",
+   "name": "assignee change is optimistic and does not revert",
+   "pass": true,
+   "evidence": "during flight: \"Unassigned\", after: \"Unassigned\" (target Unassigned, was Alice Anderson)"
+  },
+  {
+   "n": 4,
+   "name": "tag apply and optimistic remove",
+   "pass": true,
+   "evidence": "chip appeared 2813 ms after create row click; gone during delete flight: true; gone after: true"
+  },
+  {
+   "n": 5,
+   "name": "Today rules editor shows locked chips; no remove; no Clear all when locked-only",
+   "pass": true,
+   "evidence": "locked me chip: 1; anchor remove control: 0; Clear all present: 0"
+  },
+  {
+   "n": 6,
+   "name": "FilterBar: selected trigger with count, chip chevron, Clear all with a non-locked clause",
+   "pass": false,
+   "evidence": "trigger \"Stage\" → \"Stage · 1\"; chevron svg in chip: 2; chip aria-label \"null\"; Clear all: 1"
+  },
+  {
+   "n": 7,
+   "name": "popover anchored to its chip in a wrapped row",
+   "pass": true,
+   "evidence": "vertical gap 7 px, horizontal overlap true; chip {\"x\":80,\"y\":203,\"width\":159.59375,\"height\":42}; popover {\"x\":81,\"y\":252,\"width\":320,\"height\":503}"
+  },
+  {
+   "n": 8,
+   "name": "caching headers through the tunnel",
+   "pass": true,
+   "evidence": "{\"/\":{\"cache-control\":\"no-cache\",\"cf-cache-status\":\"DYNAMIC\",\"etag\":null},\"/assets/index-WtkJVROi.js\":{\"cache-control\":\"max-age=14400\",\"cf-cache-status\":\"REVALIDATED\",\"etag\":\"W/\\\"207949-1788908141607\\\"\"}}"
+  }
+ ]
+}

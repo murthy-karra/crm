@@ -2267,3 +2267,528 @@ async fn note_activity_and_operator_call_never_leak_a_body_into_traces_or_wrong_
         }
     }
 }
+
+// --- Slice 016a: tasks (§12.7) -----------------------------------------
+
+/// docs/specs/SLICE_016.md §12.7: eleven open tasks — ten dated ones
+/// (ascending `due_at`) plus one NULL-due task inserted last in the
+/// `due_at ASC NULLS LAST` order: the ten dated ones appear, in order,
+/// and the NULL-due eleventh is absent (cap at ten). The reverse shape —
+/// ten NULL-due tasks plus one dated task — puts the dated one first and
+/// still caps at ten. Sentinel titles each appear exactly once as
+/// untrusted text; a completed and a tombstoned task's sentinels never
+/// appear; `history` carries no `task_completed` entry (excluded before
+/// the `MAX_HISTORY` truncation, same as `note`).
+#[sqlx::test]
+#[ignore]
+async fn get_person_tasks_are_open_capped_at_ten_by_due_at_order(migrator_pool: PgPool) {
+    let f = fixture(migrator_pool).await;
+    let plain = router_with(&f.migrator_pool, None).await;
+    let alice = crate::common::login_cookie(&plain, "alice@acme.test", "pw").await;
+    let person_id = create_person(
+        &plain,
+        &alice,
+        "Grace",
+        "Hopper",
+        "grace-tasks@example.test",
+        None,
+        None,
+        Some(f.alice_id),
+    )
+    .await;
+
+    let app_pool = crate::common::connect_as_app(&f.migrator_pool).await;
+    let base = Utc::now();
+    // Ten dated tasks, ascending due_at, each with a unique sentinel.
+    for i in 1..=10 {
+        sqlx::query(
+            "INSERT INTO task (organization_id, person_id, assignee_user_id, created_by_user_id,
+                                title, origin, correlation_id, due_at)
+             VALUES ($1, $2, $3, $3, $4, 'web_session', gen_random_uuid(), $5)",
+        )
+        .bind(f.org_acme)
+        .bind(person_id)
+        .bind(f.alice_id)
+        .bind(format!("SENTINEL_TASK_S{i:02}"))
+        .bind(base + chrono::Duration::hours(i))
+        .execute(&app_pool)
+        .await
+        .unwrap();
+    }
+    // An eleventh, NULL-due task: sorts last (NULLS LAST) and must be
+    // excluded by the ten-item cap.
+    sqlx::query(
+        "INSERT INTO task (organization_id, person_id, assignee_user_id, created_by_user_id,
+                            title, origin, correlation_id, due_at)
+         VALUES ($1, $2, $3, $3, 'SENTINEL_TASK_NULL_DUE', 'web_session', gen_random_uuid(), NULL)",
+    )
+    .bind(f.org_acme)
+    .bind(person_id)
+    .bind(f.alice_id)
+    .execute(&app_pool)
+    .await
+    .unwrap();
+    // A completed task and a tombstoned task: excluded entirely (open
+    // only), and their sentinels must never appear.
+    sqlx::query(
+        "INSERT INTO task (organization_id, person_id, assignee_user_id, created_by_user_id,
+                            title, origin, correlation_id, due_at, completed_at, completed_by_user_id)
+         VALUES ($1, $2, $3, $3, 'SENTINEL_TASK_COMPLETED', 'web_session', gen_random_uuid(), $4, now(), $3)",
+    )
+    .bind(f.org_acme)
+    .bind(person_id)
+    .bind(f.alice_id)
+    .bind(base)
+    .execute(&app_pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO task (organization_id, person_id, assignee_user_id, created_by_user_id,
+                            title, origin, correlation_id, due_at, deleted_at, deleted_by_user_id)
+         VALUES ($1, $2, $3, $3, '', 'web_session', gen_random_uuid(), $4, now(), $3)",
+    )
+    .bind(f.org_acme)
+    .bind(person_id)
+    .bind(f.alice_id)
+    .bind(base)
+    .execute(&app_pool)
+    .await
+    .unwrap();
+
+    let (router, provider) = router_scripted(
+        &f.migrator_pool,
+        vec![
+            tool_step("get_person", json!({ "person_id": person_id })),
+            text_step("Here is what I found."),
+        ],
+    )
+    .await;
+    let alice_scripted = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
+    let response = post_turn(
+        &router,
+        &alice_scripted,
+        message("What tasks are open for Grace?"),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let prompt = requests_json(&provider);
+    for i in 1..=10 {
+        let sentinel = format!("SENTINEL_TASK_S{i:02}");
+        assert_eq!(
+            prompt.matches(&sentinel).count(),
+            1,
+            "S{i} must appear exactly once: {prompt}"
+        );
+        assert!(
+            prompt.contains(&format!(r#"{{\"untrusted_text\":\"{sentinel}\"}}"#)),
+            "S{i} must be wrapped as untrusted text: {prompt}"
+        );
+    }
+    assert!(
+        !prompt.contains("SENTINEL_TASK_NULL_DUE"),
+        "the eleventh (NULL-due) task must be excluded by the ten-item cap: {prompt}"
+    );
+    assert!(
+        !prompt.contains("SENTINEL_TASK_COMPLETED"),
+        "a completed task must never appear in the open-tasks view: {prompt}"
+    );
+    assert!(
+        !prompt.contains(r#"\"kind\":\"task_completed\""#),
+        "history must carry no task_completed entries: {prompt}"
+    );
+
+    // The ledger holds no sentinel.
+    let turns = turn_rows(&app_pool).await;
+    for (turn_id, ..) in &turns {
+        let tools = tool_rows(&app_pool, *turn_id).await;
+        let serialized = format!("{tools:?}");
+        for i in 1..=10 {
+            assert!(!serialized.contains(&format!("SENTINEL_TASK_S{i:02}")));
+        }
+    }
+
+    // The reverse shape on a second Person: ten NULL-due tasks plus one
+    // dated task — the dated one sorts first.
+    let person2_id = create_person(
+        &plain,
+        &alice,
+        "Ada",
+        "Lovelace",
+        "ada-tasks@example.test",
+        None,
+        None,
+        Some(f.alice_id),
+    )
+    .await;
+    for i in 1..=10 {
+        sqlx::query(
+            "INSERT INTO task (organization_id, person_id, assignee_user_id, created_by_user_id,
+                                title, origin, correlation_id, due_at, created_at, updated_at)
+             VALUES ($1, $2, $3, $3, $4, 'web_session', gen_random_uuid(), NULL, $5, $5)",
+        )
+        .bind(f.org_acme)
+        .bind(person2_id)
+        .bind(f.alice_id)
+        .bind(format!("SENTINEL_TASK_NULL_{i:02}"))
+        .bind(base + chrono::Duration::seconds(i))
+        .execute(&app_pool)
+        .await
+        .unwrap();
+    }
+    sqlx::query(
+        "INSERT INTO task (organization_id, person_id, assignee_user_id, created_by_user_id,
+                            title, origin, correlation_id, due_at)
+         VALUES ($1, $2, $3, $3, 'SENTINEL_TASK_DATED_FIRST', 'web_session', gen_random_uuid(), $4)",
+    )
+    .bind(f.org_acme)
+    .bind(person2_id)
+    .bind(f.alice_id)
+    .bind(base + chrono::Duration::hours(1))
+    .execute(&app_pool)
+    .await
+    .unwrap();
+
+    let (router2, provider2) = router_scripted(
+        &f.migrator_pool,
+        vec![
+            tool_step("get_person", json!({ "person_id": person2_id })),
+            text_step("Here is what I found."),
+        ],
+    )
+    .await;
+    let alice2 = crate::common::login_cookie(&router2, "alice@acme.test", "pw").await;
+    let response2 = post_turn(&router2, &alice2, message("What tasks are open for Ada?")).await;
+    assert_eq!(response2.status(), StatusCode::OK);
+    let prompt2 = requests_json(&provider2);
+    let dated_pos = prompt2.find("SENTINEL_TASK_DATED_FIRST");
+    let first_null_pos = prompt2.find("SENTINEL_TASK_NULL_01");
+    assert!(
+        dated_pos.is_some() && first_null_pos.is_some(),
+        "both the dated task and at least one NULL-due task must appear: {prompt2}"
+    );
+    assert!(
+        dated_pos < first_null_pos,
+        "the dated task must sort before every NULL-due task: {prompt2}"
+    );
+    // Exactly nine of the ten NULL-due tasks fit under the ten-item cap
+    // (one dated + nine NULL = ten); the LAST-created NULL task (highest
+    // `created_at`) is the one excluded.
+    let null_present_count = (1..=10)
+        .filter(|i| prompt2.contains(&format!("SENTINEL_TASK_NULL_{i:02}")))
+        .count();
+    assert_eq!(
+        null_present_count, 9,
+        "exactly nine of the ten NULL-due tasks must fit under the cap: {prompt2}"
+    );
+    assert!(
+        !prompt2.contains("SENTINEL_TASK_NULL_10"),
+        "the last-created NULL-due task must be the one excluded by the cap: {prompt2}"
+    );
+    let _ = (f.carol_id, f.org_best, f.bob_id);
+}
+
+/// docs/specs/SLICE_016.md §12.7 capture test: a create with a sentinel
+/// title, an update to a second sentinel, a complete, a reopen, a snooze,
+/// a delete, a rejected `\u{0}` title (its own sentinel), a 422 (a
+/// sentinel assignee-bearing body), a 403, a 404, and an Operator tool
+/// call over a third sentinel — captured at TRACE with `FmtSpan::FULL`
+/// (the `db_notes.rs`-mirrored harness). Neither sentinel appears in the
+/// captured trace output, nor in any HTTP response body other than the
+/// mutation receipts (rule 7's site) and the detail read.
+#[sqlx::test]
+#[ignore]
+async fn task_activity_and_operator_call_never_leak_a_title_into_traces_or_wrong_responses(
+    migrator_pool: PgPool,
+) {
+    let f = fixture(migrator_pool).await;
+    let router = router_with(&f.migrator_pool, None).await;
+    let alice = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
+    let person_id = create_person(
+        &router,
+        &alice,
+        "Ida",
+        "TaskCapture",
+        "ida-task-capture@example.test",
+        None,
+        None,
+        Some(f.alice_id),
+    )
+    .await;
+    // A second member, neither assignee nor creator, for the 403 case.
+    let carol = crate::common::login_cookie(&router, "carol@acme.test", "pw").await;
+
+    const CREATE_SENTINEL: &str = "SENTINEL_TASK_CAPTURE_CREATE_DO_NOT_LEAK";
+    const UPDATE_SENTINEL: &str = "SENTINEL_TASK_CAPTURE_UPDATE_DO_NOT_LEAK";
+    const OPERATOR_SENTINEL: &str = "SENTINEL_TASK_CAPTURE_OPERATOR_DO_NOT_LEAK";
+    const REJECT_SENTINEL: &str = "SENTINEL_TASK_CAPTURE_REJECT_DO_NOT_LEAK";
+    const INVALID_ASSIGNEE_SENTINEL: &str = "SENTINEL_TASK_CAPTURE_422_DO_NOT_LEAK";
+
+    let buffer = Arc::new(Mutex::new(Vec::new()));
+    let subscriber = tracing_subscriber::registry().with(
+        tracing_subscriber::fmt::layer()
+            .with_writer(CaptureWriter(buffer.clone()))
+            .with_ansi(false)
+            .with_span_events(tracing_subscriber::fmt::format::FmtSpan::FULL),
+    );
+    let guard = tracing::subscriber::set_default(subscriber);
+
+    let create_resp = crate::common::post_json_with_cookie(
+        &router,
+        &format!("/api/people/{person_id}/tasks"),
+        &alice,
+        json!({ "title": CREATE_SENTINEL }),
+    )
+    .await;
+    assert_eq!(create_resp.status(), StatusCode::CREATED);
+    let create_body = crate::common::body_json(create_resp).await;
+    assert_eq!(
+        create_body["task"]["title"], CREATE_SENTINEL,
+        "the 201 receipt legitimately echoes the title"
+    );
+    let task_id = create_body["task"]["id"].as_str().unwrap().to_string();
+
+    let update_resp = crate::common::put_json_with_cookie(
+        &router,
+        &format!("/api/people/{person_id}/tasks/{task_id}"),
+        &alice,
+        json!({
+            "title": UPDATE_SENTINEL, "kind": "call", "due_at": null,
+            "assignee_user_id": f.alice_id,
+        }),
+    )
+    .await;
+    assert_eq!(update_resp.status(), StatusCode::OK);
+    let update_body = crate::common::body_json(update_resp).await;
+    assert_eq!(
+        update_body["task"]["title"], UPDATE_SENTINEL,
+        "the 200 receipt legitimately echoes the title"
+    );
+
+    let complete_resp = crate::common::post_json_with_cookie(
+        &router,
+        &format!("/api/people/{person_id}/tasks/{task_id}/complete"),
+        &alice,
+        json!({}),
+    )
+    .await;
+    assert_eq!(complete_resp.status(), StatusCode::OK);
+
+    let reopen_resp = crate::common::post_json_with_cookie(
+        &router,
+        &format!("/api/people/{person_id}/tasks/{task_id}/reopen"),
+        &alice,
+        json!({}),
+    )
+    .await;
+    assert_eq!(reopen_resp.status(), StatusCode::OK);
+
+    let snooze_resp = crate::common::post_json_with_cookie(
+        &router,
+        &format!("/api/people/{person_id}/tasks/{task_id}/snooze"),
+        &alice,
+        json!({ "due_at": Utc::now() + chrono::Duration::hours(3) }),
+    )
+    .await;
+    assert_eq!(snooze_resp.status(), StatusCode::OK);
+
+    let delete_resp = crate::common::delete_with_cookie(
+        &router,
+        &format!("/api/people/{person_id}/tasks/{task_id}"),
+        &alice,
+    )
+    .await;
+    assert_eq!(delete_resp.status(), StatusCode::OK);
+    let delete_body = crate::common::body_json(delete_resp).await;
+    assert!(!delete_body.to_string().contains(UPDATE_SENTINEL));
+
+    // A rejected control-character title carries its OWN sentinel (the
+    // `db_notes.rs` review pattern): a body with nothing sensitive in it
+    // could never prove anything about capture safety.
+    let rejected_resp = crate::common::post_json_with_cookie(
+        &router,
+        &format!("/api/people/{person_id}/tasks"),
+        &alice,
+        json!({ "title": format!("{REJECT_SENTINEL}\u{0}") }),
+    )
+    .await;
+    assert_eq!(rejected_resp.status(), StatusCode::BAD_REQUEST);
+    let rejected_body = crate::common::body_json(rejected_resp).await;
+    assert!(
+        !rejected_body.to_string().contains(REJECT_SENTINEL),
+        "the malformed_request error envelope must never echo the rejected title: {rejected_body}"
+    );
+
+    // A 422 whose REJECTED title carries a sentinel (an invalid assignee):
+    // the invalid_assignee envelope must never echo it either.
+    let invalid_assignee_resp = crate::common::post_json_with_cookie(
+        &router,
+        &format!("/api/people/{person_id}/tasks"),
+        &alice,
+        json!({ "title": INVALID_ASSIGNEE_SENTINEL, "assignee_user_id": Uuid::new_v4() }),
+    )
+    .await;
+    assert_eq!(
+        invalid_assignee_resp.status(),
+        StatusCode::UNPROCESSABLE_ENTITY
+    );
+    let invalid_assignee_body = crate::common::body_json(invalid_assignee_resp).await;
+    assert!(
+        !invalid_assignee_body
+            .to_string()
+            .contains(INVALID_ASSIGNEE_SENTINEL),
+        "the invalid_assignee envelope must never echo the rejected title: {invalid_assignee_body}"
+    );
+
+    // A live task for the 403 (carol is neither assignee nor creator) and
+    // 404 (nonexistent id) cases, plus the Operator call below.
+    let live_resp = crate::common::post_json_with_cookie(
+        &router,
+        &format!("/api/people/{person_id}/tasks"),
+        &alice,
+        json!({ "title": OPERATOR_SENTINEL }),
+    )
+    .await;
+    assert_eq!(live_resp.status(), StatusCode::CREATED);
+    let live_task_id = crate::common::body_json(live_resp).await["task"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let forbidden_resp = crate::common::put_json_with_cookie(
+        &router,
+        &format!("/api/people/{person_id}/tasks/{live_task_id}"),
+        &carol,
+        json!({
+            "title": "Hijack attempt", "kind": "follow_up", "due_at": null,
+            "assignee_user_id": f.alice_id,
+        }),
+    )
+    .await;
+    assert_eq!(forbidden_resp.status(), StatusCode::FORBIDDEN);
+    let forbidden_body = crate::common::body_json(forbidden_resp).await;
+    assert_eq!(forbidden_body, json!({ "error": "forbidden" }));
+
+    let missing_resp = crate::common::put_json_with_cookie(
+        &router,
+        &format!("/api/people/{person_id}/tasks/{}", Uuid::new_v4()),
+        &alice,
+        json!({
+            "title": "Does not exist", "kind": "follow_up", "due_at": null,
+            "assignee_user_id": f.alice_id,
+        }),
+    )
+    .await;
+    assert_eq!(missing_resp.status(), StatusCode::NOT_FOUND);
+
+    // The Operator's own tool call over the live sentinel task.
+    let (operator_router, provider) = router_scripted(
+        &f.migrator_pool,
+        vec![
+            tool_step("get_person", json!({ "person_id": person_id })),
+            text_step("Noted."),
+        ],
+    )
+    .await;
+    let alice_scripted =
+        crate::common::login_cookie(&operator_router, "alice@acme.test", "pw").await;
+    let turn_resp = post_turn(
+        &operator_router,
+        &alice_scripted,
+        message("What's the open task say?"),
+    )
+    .await;
+    assert_eq!(turn_resp.status(), StatusCode::OK);
+    let turn_body = crate::common::body_json(turn_resp).await;
+    assert!(
+        !turn_body.to_string().contains(OPERATOR_SENTINEL),
+        "the turn's own HTTP response must never echo the task title: {turn_body}"
+    );
+
+    // A foreign Organization's Person is still refused.
+    let foreign_router = router_with(&f.migrator_pool, None).await;
+    let bob = crate::common::login_cookie(&foreign_router, "bob@best.test", "pw").await;
+    let foreign_get =
+        crate::common::get_with_cookie(&foreign_router, &format!("/api/people/{person_id}"), &bob)
+            .await;
+    assert_eq!(foreign_get.status(), StatusCode::NOT_FOUND);
+
+    drop(guard);
+
+    let captured = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
+    for sentinel in [
+        CREATE_SENTINEL,
+        UPDATE_SENTINEL,
+        OPERATOR_SENTINEL,
+        REJECT_SENTINEL,
+        INVALID_ASSIGNEE_SENTINEL,
+    ] {
+        assert!(
+            !captured.contains(sentinel),
+            "sentinel {sentinel:?} leaked into the captured trace output: {captured}"
+        );
+    }
+
+    // Positive controls: prove the harness would have caught a leak.
+    for span_name in [
+        "task.create",
+        "task.update",
+        "task.complete",
+        "task.reopen",
+        "task.snooze",
+        "task.delete",
+    ] {
+        assert!(
+            captured.contains(span_name),
+            "the {span_name} span must appear in the captured output: {captured}"
+        );
+    }
+    assert!(
+        captured.contains("task command failed"),
+        "the warn! log line on a failed task command must be captured: {captured}"
+    );
+    fn has_field(captured: &str, field: &str, value: &str) -> bool {
+        captured.contains(&format!("{field}={value}"))
+            || captured.contains(&format!("{field}=\"{value}\""))
+    }
+    assert!(
+        has_field(&captured, "error_kind", "malformed_request"),
+        "the rejected create's malformed_request outcome must be captured: {captured}"
+    );
+    assert!(
+        has_field(&captured, "error_kind", "invalid_assignee"),
+        "the 422's invalid_assignee outcome must be captured: {captured}"
+    );
+    assert!(
+        has_field(&captured, "error_kind", "not_found"),
+        "the missing-task update's not_found outcome must be captured: {captured}"
+    );
+    assert!(
+        has_field(&captured, "error_kind", "forbidden")
+            || has_field(&captured, "outcome", "forbidden"),
+        "carol's forbidden update outcome must be captured: {captured}"
+    );
+
+    // The prompt sent to the model provider IS allowed to carry the
+    // sentinel (the whole point of the Operator's untrusted-text view) —
+    // confirmed separately by the cap/sentinel test above; here the
+    // constraint is only the trace output and the HTTP response bodies.
+    let _ = requests_json(&provider);
+
+    // The operator_tool_call ledger holds no sentinel either.
+    let app_pool = crate::common::connect_as_app(&f.migrator_pool).await;
+    let turns = turn_rows(&app_pool).await;
+    for (turn_id, ..) in &turns {
+        let tools = tool_rows(&app_pool, *turn_id).await;
+        let serialized = format!("{tools:?}");
+        for sentinel in [
+            CREATE_SENTINEL,
+            UPDATE_SENTINEL,
+            OPERATOR_SENTINEL,
+            REJECT_SENTINEL,
+            INVALID_ASSIGNEE_SENTINEL,
+        ] {
+            assert!(!serialized.contains(sentinel));
+        }
+    }
+}

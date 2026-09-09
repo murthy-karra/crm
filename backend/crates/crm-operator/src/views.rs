@@ -208,6 +208,13 @@ pub struct PersonDetail {
     /// the same exposure class `inquiries[].message` already has
     /// (D-053 §4).
     pub notes: Vec<NoteView>,
+    /// Open tasks, in `open_for_person` order (`due_at ASC NULLS LAST,
+    /// created_at, id`), at most ten (Slice 016a, docs/specs/SLICE_016.md
+    /// §7). Task titles are user-authored text about a client sent to the
+    /// model provider — the same exposure class notes and inquiry
+    /// messages already have (D-053 §4, D-054 §3). No `can_manage`: the
+    /// Operator has no write tool for tasks in 016a (§7).
+    pub tasks: Vec<TaskView>,
 }
 
 /// One note in the Operator's `PersonDetail.notes` (docs/specs/
@@ -220,6 +227,22 @@ pub struct NoteView {
     pub author_display_name: Option<String>,
     pub created_at: DateTime<Utc>,
     pub body: UntrustedText,
+}
+
+/// One open task in the Operator's `PersonDetail.tasks` (docs/specs/
+/// SLICE_016.md §7): `title` is subject to `UntrustedText`'s 500-character
+/// clip and whitespace flattening, the `inquiries[].message`/`NoteView`
+/// precedent (a task title cannot exceed 500 characters at the source, so
+/// the clip never actually engages — kept for the same defense-in-depth
+/// reason every other outside-text view carries it). `assignee_display_name`
+/// is `None` for an imported task whose FUB assignee matched no member
+/// (§1 rule 1).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskView {
+    pub title: UntrustedText,
+    pub kind: String,
+    pub due_at: Option<DateTime<Utc>>,
+    pub assignee_display_name: Option<String>,
 }
 
 /// Source evaluation state shared by every Today-derived Operator output.

@@ -1038,6 +1038,7 @@ mod tests {
                 sources: sources(),
                 tags: vec![],
                 notes: vec![],
+                tasks: vec![],
             })
         }
         async fn get_today(

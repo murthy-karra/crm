@@ -1,32 +1,22 @@
 # Project State
 
-Last updated: 2026-09-09 (Slice 016b implemented and verified on the
-branch; awaiting merge approval; LiveKit down, see Environment).
+Last updated: 2026-09-09 (Slice 016b merged to local main at faa2878; Slice
+016 complete; runtime update, push and cleanup pending; LiveKit down).
 
 ## Current phase
 
-**SLICE 016b (TASKS: TODAY AXIS AND PANEL) — IMPLEMENTED AND VERIFIED;
-AWAITING MERGE APPROVAL (2026-09-09).** Branch `slice-016b-today` in
-`../crm-worktrees/tasks-2`, ten commits from `main` at `a5b301e`, head =
-the record's gate table on top of `ca55dc1` (the coordinator's completion:
-a positive latest-inquiry test, a deflaked Today Vitest, the record);
-worktree clean. Lane (Claude Sonnet 5) delivered the axis, the panel read,
-Operator explanations, the §11 evidence (whose `EXPLAIN` gate caught and
-fixed a planner degeneration), the Web half, the walkthrough (eleven
-screenshots) and two fix rounds. Final-tree gates on `ca55dc1`:
-`sqlx-prepare` clean, `check` green (774 Rust, 747 Vitest), `check-db`
-716 of 716 first run. Reviews: round 1 backend (no axis defect; a spec
-self-conflict on `latest_inquiry` resolved in D-054's favour; a
-clock-resolution test fix), round 2 Web (a real defect: the shared
-mutation hook detached its observer so only one Complete/Snooze worked per
-page load; fixed), confirmation READY with recorded test debt (the lane's
-context compacted mid-batch and about half the test sub-parts were
-dropped; the load-bearing one, the untested hydration, closed by the
-coordinator). Evidence:
-[SLICE_016b_VERIFICATION.md](../tasks/SLICE_016b_VERIFICATION.md). Not
-authorized yet: merge, dev API restart, `dev-web-prod` rebuild, push,
-deployment. No migration in this rung. `crm_slice016b_qa` remains on the
-dev Postgres.
+**SLICE 016 (TASKS) — COMPLETE ON LOCAL MAIN: RUNG 016b MERGED at `faa2878`
+(2026-09-09, with the user's approval; not pushed, runtime not yet
+updated).** Source `slice-016b-today` at `e68b51d` (eleven commits).
+Final-tree gates on `ca55dc1`: `sqlx-prepare` clean, `check` green (774
+Rust, 747 Vitest), `check-db` 716 of 716 first run. Evidence:
+[SLICE_016b_VERIFICATION.md](../tasks/SLICE_016b_VERIFICATION.md). Still
+pending, each needing the user's approval: restart the dev API (the Today
+query and the new route; no migration in this rung) and rebuild and
+relaunch `dev-web-prod`; push `main`; delete the branch and the worktree
+`../crm-worktrees/tasks-2`; drop `crm_slice016b_qa`. Deployment is not
+authorized. After that no slice is active; candidates are in "Next
+recommended action".
 
 Previously: **LATER BATCH (2026-09-08) — COMPLETE AND MERGED TO LOCAL MAIN** at `3ff6c5f`
 (with the user's approval; not pushed, not deployed). Source
@@ -746,6 +736,7 @@ together on 2026-09-06).
 | — | LATER batch: `inquiry` append-only triggers (cascade-aware), three largest test files split into nine, field-only success writes and `isMutating` guards on the Person mutations | `3ff6c5f` (branch head `5fe4231`), pushed 2026-09-08 |
 | 015 | Notes: `note` table (tombstone delete, import-ready), three commands and routes, `note` timeline kind, `note_changed`, Operator `PersonDetail.notes` (untrusted, history filtered), Person page composer with inline edit/delete (D-053) | `fd5a184` (branch head `00e2e67`), pushed 2026-09-09 |
 | 016a | Tasks model: `task` table (tombstone, import-ready, Today index), six commands and routes, `tasks[]` on the detail, `task_completed` timeline kind, `task_changed`, Operator `PersonDetail.tasks` (untrusted, history filtered), Person page Tasks card (D-054) | `f106afc` (branch head `1d6c3bf`), pushed 2026-09-09 |
+| 016b | Tasks on Today: the fixed built-in task axis (`task_due`/`task_overdue`, D-054 exception), `GET /api/tasks?scope=mine`, Operator explanations, the Today badge, Complete button and Tasks panel with Snooze | `faa2878` (branch head `e68b51d`), local only |
 | — | Gate-speedup chunk (check 35m→79s, check-db 37m→~2m) | 2026-08-28 |
 | — | Test-binary consolidation (40 files → 1 binary) | `6427ee8` |
 
@@ -1026,10 +1017,11 @@ and now lives only in git history.
 
 ## Approval currently required
 
-- **Rung 016b: merge approval.** All commits are on `slice-016b-today`,
-  none on `main`. Requested: (1) merge into local `main`; (2) then,
-  separately, restart the dev API and rebuild `dev-web-prod` (no
-  migration); (3) push; (4) cleanup. Deployment is not authorized.
+- **Rung 016b: merged.** Requested next, separately: (1) update the
+  shared development runtime (restart the dev API, rebuild
+  `dev-web-prod`; no migration); (2) push `main`; (3) cleanup (delete
+  branch and worktree, drop `crm_slice016b_qa`). Deployment is not
+  authorized.
 - None for 011e: both rungs merged, the dev runtime updated and the branches
   cleaned up with approval on 2026-09-07. `main` pushed on 2026-09-07; deployment is not authorized. The next slice or chunk
   (candidates below) needs the user's request.

@@ -72,3 +72,17 @@ Realty.
   `explain_priority` both succeeding rather than the model inventing data.
 - The QA API and Web processes were stopped by their exact PIDs; the
   `crm_slice016b_qa` database is left for the coordinator.
+
+## Addendum: Today observed on the shared development runtime (coordinator, 2026-09-09)
+
+After the merge (`faa2878`), the dev API restart and the `dev-web-prod`
+rebuild, the coordinator signed in as Alice at `127.0.0.1:5173`, created a
+task due today on Skip Carolson (a seeded fixture) from the Person page,
+and opened Today: the Tasks panel listed it under Due soon with the kind
+label, the title, 11:59 PM, Complete and Tomorrow
+(`screenshots/09-today-panel-dev-runtime.png`; the group headings are no
+longer uppercase after round 2), and the ranked queue carried the task
+reason. Completing it from the panel removed it from Today after the
+refetch. The test task is completed, not deleted; it is visible in the
+Person's History.
+

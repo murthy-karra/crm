@@ -1,22 +1,22 @@
 # Project State
 
-Last updated: 2026-09-09 (Slice 016b merged to local main at faa2878; Slice
-016 complete; runtime update, push and cleanup pending; LiveKit down).
+Last updated: 2026-09-09 (Slice 016 Tasks complete: both rungs merged,
+runtime updated, pushed, cleaned up; no slice active; LiveKit down).
 
 ## Current phase
 
-**SLICE 016 (TASKS) — COMPLETE ON LOCAL MAIN: RUNG 016b MERGED at `faa2878`
-(2026-09-09, with the user's approval; not pushed, runtime not yet
-updated).** Source `slice-016b-today` at `e68b51d` (eleven commits).
-Final-tree gates on `ca55dc1`: `sqlx-prepare` clean, `check` green (774
-Rust, 747 Vitest), `check-db` 716 of 716 first run. Evidence:
-[SLICE_016b_VERIFICATION.md](../tasks/SLICE_016b_VERIFICATION.md). Still
-pending, each needing the user's approval: restart the dev API (the Today
-query and the new route; no migration in this rung) and rebuild and
-relaunch `dev-web-prod`; push `main`; delete the branch and the worktree
-`../crm-worktrees/tasks-2`; drop `crm_slice016b_qa`. Deployment is not
-authorized. After that no slice is active; candidates are in "Next
-recommended action".
+**SLICE 016 (TASKS) — COMPLETE: BOTH RUNGS MERGED, RUNTIME UPDATED, PUSHED,
+CLEANED UP (2026-09-09, each with the user's approval).** `main` at the
+016b merge `faa2878` plus records; pushed to `origin/main`. No migration in
+016b; the dev API and `dev-web-prod` were restarted by exact PID and
+relaunched from `main` (API on `127.0.0.1:3000`, health 200, the tasks
+route answering; preview on `5173`; logs under `/private/tmp/claude-501/`).
+Branch `slice-016b-today`, the worktree and `crm_slice016b_qa` deleted.
+Today observed live on the dev runtime: the Tasks panel and the task reason
+rendered for a task due today and Complete from the panel removed it (QA
+record addendum). Evidence: [SLICE_016a_VERIFICATION.md](../tasks/SLICE_016a_VERIFICATION.md),
+[SLICE_016b_VERIFICATION.md](../tasks/SLICE_016b_VERIFICATION.md).
+Deployment is not authorized. No slice active.
 
 Previously: **LATER BATCH (2026-09-08) — COMPLETE AND MERGED TO LOCAL MAIN** at `3ff6c5f`
 (with the user's approval; not pushed, not deployed). Source
@@ -736,7 +736,7 @@ together on 2026-09-06).
 | — | LATER batch: `inquiry` append-only triggers (cascade-aware), three largest test files split into nine, field-only success writes and `isMutating` guards on the Person mutations | `3ff6c5f` (branch head `5fe4231`), pushed 2026-09-08 |
 | 015 | Notes: `note` table (tombstone delete, import-ready), three commands and routes, `note` timeline kind, `note_changed`, Operator `PersonDetail.notes` (untrusted, history filtered), Person page composer with inline edit/delete (D-053) | `fd5a184` (branch head `00e2e67`), pushed 2026-09-09 |
 | 016a | Tasks model: `task` table (tombstone, import-ready, Today index), six commands and routes, `tasks[]` on the detail, `task_completed` timeline kind, `task_changed`, Operator `PersonDetail.tasks` (untrusted, history filtered), Person page Tasks card (D-054) | `f106afc` (branch head `1d6c3bf`), pushed 2026-09-09 |
-| 016b | Tasks on Today: the fixed built-in task axis (`task_due`/`task_overdue`, D-054 exception), `GET /api/tasks?scope=mine`, Operator explanations, the Today badge, Complete button and Tasks panel with Snooze | `faa2878` (branch head `e68b51d`), local only |
+| 016b | Tasks on Today: the fixed built-in task axis (`task_due`/`task_overdue`, D-054 exception), `GET /api/tasks?scope=mine`, Operator explanations, the Today badge, Complete button and Tasks panel with Snooze | `faa2878` (branch head `e68b51d`), pushed 2026-09-09 |
 | — | Gate-speedup chunk (check 35m→79s, check-db 37m→~2m) | 2026-08-28 |
 | — | Test-binary consolidation (40 files → 1 binary) | `6427ee8` |
 
@@ -905,7 +905,7 @@ and now lives only in git history.
   process start time vs binary mtime; kill by exact PID only. Bit us
   again 2026-08-29 (011a filters). Run ./scripts/db-migrate after
   checking out a branch with a new migration.
-- dev-api and dev-web-prod currently run the post-016a build (restarted by
+- dev-api and dev-web-prod currently run the post-016b build (restarted by
   exact PID and relaunched 2026-09-09 by the coordinator, detached with
   nohup; logs under `/private/tmp/claude-501/`).
 
@@ -1017,11 +1017,9 @@ and now lives only in git history.
 
 ## Approval currently required
 
-- **Rung 016b: merged.** Requested next, separately: (1) update the
-  shared development runtime (restart the dev API, rebuild
-  `dev-web-prod`; no migration); (2) push `main`; (3) cleanup (delete
-  branch and worktree, drop `crm_slice016b_qa`). Deployment is not
-  authorized.
+- None for Slice 016: both rungs merged, runtime updated, pushed and
+  cleaned up on 2026-09-09. Deployment is not authorized. The next slice
+  or chunk needs the user's request.
 - None for 011e: both rungs merged, the dev runtime updated and the branches
   cleaned up with approval on 2026-09-07. `main` pushed on 2026-09-07; deployment is not authorized. The next slice or chunk
   (candidates below) needs the user's request.

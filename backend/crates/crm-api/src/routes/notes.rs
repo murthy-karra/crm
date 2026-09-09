@@ -37,7 +37,10 @@ pub fn router() -> Router<AppState> {
             "/api/people/{person_id}/notes/{note_id}",
             put(edit_note).layer(DefaultBodyLimit::max(MAX_NOTE_BODY_BYTES)),
         )
-        .route("/api/people/{person_id}/notes/{note_id}", delete(delete_note))
+        .route(
+            "/api/people/{person_id}/notes/{note_id}",
+            delete(delete_note),
+        )
 }
 
 /// A `{person_id}` path segment, matching the established Person-route

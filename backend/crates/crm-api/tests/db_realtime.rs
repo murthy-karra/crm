@@ -819,12 +819,13 @@ async fn note_changed_payload_carries_no_body_key(migrator_pool: PgPool) {
     )
     .await;
     let app_pool = crate::common::connect_as_app(&migrator_pool).await;
-    let stage_id: Uuid =
-        sqlx::query_scalar("SELECT id FROM stage WHERE organization_id = $1 ORDER BY position LIMIT 1")
-            .bind(org_id)
-            .fetch_one(&app_pool)
-            .await
-            .unwrap();
+    let stage_id: Uuid = sqlx::query_scalar(
+        "SELECT id FROM stage WHERE organization_id = $1 ORDER BY position LIMIT 1",
+    )
+    .bind(org_id)
+    .fetch_one(&app_pool)
+    .await
+    .unwrap();
     let person_id: Uuid = sqlx::query_scalar(
         "INSERT INTO person (organization_id, first_name, stage_id) VALUES ($1, 'Fixture', $2) RETURNING id",
     )

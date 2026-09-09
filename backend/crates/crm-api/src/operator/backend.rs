@@ -297,12 +297,13 @@ impl ToolBackend for SqlxToolBackend {
         // view. `history_detail` gains no `"note"` arm — a body never
         // reaches the model through this projection, only through
         // `notes` as `UntrustedText`.
-        let all_history: Vec<_> = person_queries::history_for_person(&mut conn, org_id(ctx), person_id)
-            .await
-            .map_err(db_error)?
-            .into_iter()
-            .filter(|e| e.kind != "note")
-            .collect();
+        let all_history: Vec<_> =
+            person_queries::history_for_person(&mut conn, org_id(ctx), person_id)
+                .await
+                .map_err(db_error)?
+                .into_iter()
+                .filter(|e| e.kind != "note")
+                .collect();
         let skip = all_history.len().saturating_sub(MAX_HISTORY);
         let history = all_history
             .iter()

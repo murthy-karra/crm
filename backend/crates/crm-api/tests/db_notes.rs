@@ -156,53 +156,156 @@ async fn note_check_constraints_matrix(migrator_pool: PgPool) {
     }
 
     // Empty live body.
-    assert!(insert(
-        &app_pool, f.org_id, f.person_id, Some(f.member_id), "", "web_session",
-        false, None, None, None,
-    ).await.is_err(), "empty live body must violate the CHECK");
+    assert!(
+        insert(
+            &app_pool,
+            f.org_id,
+            f.person_id,
+            Some(f.member_id),
+            "",
+            "web_session",
+            false,
+            None,
+            None,
+            None,
+        )
+        .await
+        .is_err(),
+        "empty live body must violate the CHECK"
+    );
 
     // 10,001 characters.
-    assert!(insert(
-        &app_pool, f.org_id, f.person_id, Some(f.member_id), &"a".repeat(10_001), "web_session",
-        false, None, None, None,
-    ).await.is_err(), "10,001-char body must violate the CHECK");
+    assert!(
+        insert(
+            &app_pool,
+            f.org_id,
+            f.person_id,
+            Some(f.member_id),
+            &"a".repeat(10_001),
+            "web_session",
+            false,
+            None,
+            None,
+            None,
+        )
+        .await
+        .is_err(),
+        "10,001-char body must violate the CHECK"
+    );
 
     // Untrimmed body.
-    assert!(insert(
-        &app_pool, f.org_id, f.person_id, Some(f.member_id), "  padded  ", "web_session",
-        false, None, None, None,
-    ).await.is_err(), "untrimmed body must violate the CHECK");
+    assert!(
+        insert(
+            &app_pool,
+            f.org_id,
+            f.person_id,
+            Some(f.member_id),
+            "  padded  ",
+            "web_session",
+            false,
+            None,
+            None,
+            None,
+        )
+        .await
+        .is_err(),
+        "untrimmed body must violate the CHECK"
+    );
 
     // Tombstone carrying a body.
-    assert!(insert(
-        &app_pool, f.org_id, f.person_id, Some(f.member_id), "still here", "web_session",
-        true, Some(f.member_id), None, None,
-    ).await.is_err(), "a tombstone must have an empty body");
+    assert!(
+        insert(
+            &app_pool,
+            f.org_id,
+            f.person_id,
+            Some(f.member_id),
+            "still here",
+            "web_session",
+            true,
+            Some(f.member_id),
+            None,
+            None,
+        )
+        .await
+        .is_err(),
+        "a tombstone must have an empty body"
+    );
 
     // Tombstone missing deleted_by_user_id.
-    assert!(insert(
-        &app_pool, f.org_id, f.person_id, Some(f.member_id), "", "web_session",
-        true, None, None, None,
-    ).await.is_err(), "deleted_at without deleted_by_user_id must violate the CHECK");
+    assert!(
+        insert(
+            &app_pool,
+            f.org_id,
+            f.person_id,
+            Some(f.member_id),
+            "",
+            "web_session",
+            true,
+            None,
+            None,
+            None,
+        )
+        .await
+        .is_err(),
+        "deleted_at without deleted_by_user_id must violate the CHECK"
+    );
 
     // source without source_external_id.
-    assert!(insert(
-        &app_pool, f.org_id, f.person_id, Some(f.member_id), "A body", "migration",
-        false, None, Some("fub"), None,
-    ).await.is_err(), "source without source_external_id must violate the CHECK");
+    assert!(
+        insert(
+            &app_pool,
+            f.org_id,
+            f.person_id,
+            Some(f.member_id),
+            "A body",
+            "migration",
+            false,
+            None,
+            Some("fub"),
+            None,
+        )
+        .await
+        .is_err(),
+        "source without source_external_id must violate the CHECK"
+    );
 
     // Non-migration origin with a NULL author.
-    assert!(insert(
-        &app_pool, f.org_id, f.person_id, None, "A body", "web_session",
-        false, None, None, None,
-    ).await.is_err(), "a non-migration origin requires a non-NULL author");
+    assert!(
+        insert(
+            &app_pool,
+            f.org_id,
+            f.person_id,
+            None,
+            "A body",
+            "web_session",
+            false,
+            None,
+            None,
+            None,
+        )
+        .await
+        .is_err(),
+        "a non-migration origin requires a non-NULL author"
+    );
 
     // The boundary: exactly 10,000 trimmed characters succeeds.
     let ok = insert(
-        &app_pool, f.org_id, f.person_id, Some(f.member_id), &"a".repeat(10_000), "web_session",
-        false, None, None, None,
-    ).await;
-    assert!(ok.is_ok(), "exactly 10,000 trimmed characters must be accepted: {ok:?}");
+        &app_pool,
+        f.org_id,
+        f.person_id,
+        Some(f.member_id),
+        &"a".repeat(10_000),
+        "web_session",
+        false,
+        None,
+        None,
+        None,
+    )
+    .await;
+    assert!(
+        ok.is_ok(),
+        "exactly 10,000 trimmed characters must be accepted: {ok:?}"
+    );
 }
 
 /// docs/specs/SLICE_015.md §9.1: a body of exactly 10,000 four-byte code
@@ -284,7 +387,10 @@ async fn note_source_external_id_partial_unique_index_and_resurrection_guard(
     .bind(f.person_id)
     .execute(&app_pool)
     .await;
-    assert!(dup.is_err(), "a duplicate (org, source, external_id) must be rejected");
+    assert!(
+        dup.is_err(),
+        "a duplicate (org, source, external_id) must be rejected"
+    );
 
     // A different Organization, same external id: allowed.
     let cross_org = sqlx::query(
@@ -296,7 +402,10 @@ async fn note_source_external_id_partial_unique_index_and_resurrection_guard(
     .bind(other_person_id)
     .execute(&app_pool)
     .await;
-    assert!(cross_org.is_ok(), "the same external id in another Organization must be allowed");
+    assert!(
+        cross_org.is_ok(),
+        "the same external id in another Organization must be allowed"
+    );
     let _ = other_admin_id;
 
     // Tombstone the original, then a re-insert of the same external id is
@@ -824,12 +933,15 @@ async fn delete_note_author_and_admin_succeed_third_member_forbidden_and_tombsto
     .unwrap();
     assert!(deleted.deleted);
 
-    let (body, deleted_at, deleted_by): (String, Option<chrono::DateTime<chrono::Utc>>, Option<Uuid>) =
-        sqlx::query_as("SELECT body, deleted_at, deleted_by_user_id FROM note WHERE id = $1")
-            .bind(note.id.as_uuid())
-            .fetch_one(&migrator_pool)
-            .await
-            .unwrap();
+    let (body, deleted_at, deleted_by): (
+        String,
+        Option<chrono::DateTime<chrono::Utc>>,
+        Option<Uuid>,
+    ) = sqlx::query_as("SELECT body, deleted_at, deleted_by_user_id FROM note WHERE id = $1")
+        .bind(note.id.as_uuid())
+        .fetch_one(&migrator_pool)
+        .await
+        .unwrap();
     assert_eq!(body, "");
     assert!(deleted_at.is_some());
     assert_eq!(deleted_by, Some(f.admin_id));
@@ -998,10 +1110,14 @@ async fn imported_note_renders_with_null_actor_admin_only_can_manage_and_member_
         .find(|e| e["id"] == imported_id.to_string())
         .unwrap();
     assert_eq!(entry["actor"], serde_json::Value::Null);
-    assert_eq!(entry["detail"]["can_manage"], true, "admin can manage an imported note");
+    assert_eq!(
+        entry["detail"]["can_manage"], true,
+        "admin can manage an imported note"
+    );
 
     let detail_as_member = crate::common::body_json(
-        crate::common::get_with_cookie(&router, &format!("/api/people/{}", f.person_id), &bob).await,
+        crate::common::get_with_cookie(&router, &format!("/api/people/{}", f.person_id), &bob)
+            .await,
     )
     .await;
     let member_entry = detail_as_member["history"]
@@ -1154,7 +1270,8 @@ async fn note_route_error_precedence_wire_shapes_and_can_manage(migrator_pool: P
     assert_eq!(alice_entry["detail"]["can_manage"], true);
 
     let detail_as_bob = crate::common::body_json(
-        crate::common::get_with_cookie(&router, &format!("/api/people/{}", f.person_id), &bob).await,
+        crate::common::get_with_cookie(&router, &format!("/api/people/{}", f.person_id), &bob)
+            .await,
     )
     .await;
     let bob_entry = detail_as_bob["history"]
@@ -1175,7 +1292,8 @@ async fn note_route_error_precedence_wire_shapes_and_can_manage(migrator_pool: P
     .await
     .unwrap();
     let detail_after_deactivation = crate::common::body_json(
-        crate::common::get_with_cookie(&router, &format!("/api/people/{}", f.person_id), &bob).await,
+        crate::common::get_with_cookie(&router, &format!("/api/people/{}", f.person_id), &bob)
+            .await,
     )
     .await;
     let entry_after = detail_after_deactivation["history"]
@@ -1236,12 +1354,21 @@ async fn note_changed_publishes_exactly_once_per_changing_write(migrator_pool: P
 
     // Same body: changed:false, no additional event.
     let no_op = crate::common::body_json(
-        crate::common::put_json_with_cookie(&router, &edit_uri, &alice, json!({ "body": "Loud note" }))
-            .await,
+        crate::common::put_json_with_cookie(
+            &router,
+            &edit_uri,
+            &alice,
+            json!({ "body": "Loud note" }),
+        )
+        .await,
     )
     .await;
     assert_eq!(no_op["changed"], false);
-    assert_eq!(recorded(&publisher).await.len(), 1, "no publish on changed:false");
+    assert_eq!(
+        recorded(&publisher).await.len(),
+        1,
+        "no publish on changed:false"
+    );
 
     // A changing edit: a second event.
     let changed = crate::common::body_json(

@@ -36,7 +36,7 @@ pub use service::{
 pub use tools::tool_definitions;
 pub use views::{
     Ahead, ContactMethodView, FilterOutcome, FilterResult, HistoryEntryView, InquiryView,
-    NextWorkItem, NoteView, NotOnTodayReason, PersonCard, PersonDetail, PhoneOption,
+    NextWorkItem, NotOnTodayReason, NoteView, PersonCard, PersonDetail, PhoneOption,
     PriorityExplanation, ProposalView, SavedListRef, SearchResult, StartCallProposalOutcome,
     SystemFeedIssueView, TodayItemView, TodaySourceIssueView, TodaySourcesView, TodayView,
     UntrustedText, WirePersonCard, ORDERING_RULE,

@@ -119,7 +119,10 @@ mod tests {
 
     #[test]
     fn newline_and_tab_are_kept_other_control_characters_are_rejected() {
-        assert_eq!(NoteBody::parse("line one\nline two\tend").unwrap(), "line one\nline two\tend");
+        assert_eq!(
+            NoteBody::parse("line one\nline two\tend").unwrap(),
+            "line one\nline two\tend"
+        );
         assert!(matches!(
             NoteBody::parse("bad\u{0}null"),
             Err(NoteError::MalformedRequest)

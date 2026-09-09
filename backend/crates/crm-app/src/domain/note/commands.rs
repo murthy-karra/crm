@@ -44,7 +44,9 @@ async fn lock_current_membership(
     if row.status != "active" {
         return Ok(None);
     }
-    Ok(Some(Role::from_db_str(&row.role).ok_or(NoteError::Corrupt)?))
+    Ok(Some(
+        Role::from_db_str(&row.role).ok_or(NoteError::Corrupt)?,
+    ))
 }
 
 /// Rule 1 (D-053 §4, docs/specs/SLICE_015.md §1): admin, or the note's
@@ -249,9 +251,10 @@ async fn edit_note_attempt(
     person_queries::lock_person(&mut tx, cmd.person_id, ctx.organization_id)
         .await?
         .ok_or(NoteError::NotFound)?;
-    let row = queries::lock_note_for_update(&mut tx, ctx.organization_id, cmd.person_id, cmd.note_id)
-        .await?
-        .ok_or(NoteError::NotFound)?;
+    let row =
+        queries::lock_note_for_update(&mut tx, ctx.organization_id, cmd.person_id, cmd.note_id)
+            .await?
+            .ok_or(NoteError::NotFound)?;
     let role = lock_current_membership(&mut tx, ctx.organization_id, ctx.actor_user_id).await?;
 
     if !permitted(role, ctx.actor_user_id, &row) {
@@ -337,9 +340,10 @@ async fn delete_note_attempt(
     person_queries::lock_person(&mut tx, cmd.person_id, ctx.organization_id)
         .await?
         .ok_or(NoteError::NotFound)?;
-    let row = queries::lock_note_for_update(&mut tx, ctx.organization_id, cmd.person_id, cmd.note_id)
-        .await?
-        .ok_or(NoteError::NotFound)?;
+    let row =
+        queries::lock_note_for_update(&mut tx, ctx.organization_id, cmd.person_id, cmd.note_id)
+            .await?
+            .ok_or(NoteError::NotFound)?;
     let role = lock_current_membership(&mut tx, ctx.organization_id, ctx.actor_user_id).await?;
 
     if !permitted(role, ctx.actor_user_id, &row) {

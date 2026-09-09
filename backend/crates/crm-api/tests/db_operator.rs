@@ -2075,7 +2075,10 @@ async fn note_activity_and_operator_call_never_leak_a_body_into_traces_or_wrong_
     .await;
     assert_eq!(add_resp.status(), StatusCode::CREATED);
     let add_body = crate::common::body_json(add_resp).await;
-    assert_eq!(add_body["note"]["body"], ADD_SENTINEL, "the 201 receipt legitimately echoes the body");
+    assert_eq!(
+        add_body["note"]["body"], ADD_SENTINEL,
+        "the 201 receipt legitimately echoes the body"
+    );
     let note_id = add_body["note"]["id"].as_str().unwrap().to_string();
 
     let edit_resp = crate::common::put_json_with_cookie(
@@ -2087,7 +2090,10 @@ async fn note_activity_and_operator_call_never_leak_a_body_into_traces_or_wrong_
     .await;
     assert_eq!(edit_resp.status(), StatusCode::OK);
     let edit_body = crate::common::body_json(edit_resp).await;
-    assert_eq!(edit_body["note"]["body"], EDIT_SENTINEL, "the 200 receipt legitimately echoes the body");
+    assert_eq!(
+        edit_body["note"]["body"], EDIT_SENTINEL,
+        "the 200 receipt legitimately echoes the body"
+    );
 
     let delete_resp = crate::common::delete_with_cookie(
         &router,
@@ -2172,12 +2178,9 @@ async fn note_activity_and_operator_call_never_leak_a_body_into_traces_or_wrong_
     // A foreign Organization's Person is still refused.
     let foreign_router = router_with(&f.migrator_pool, None).await;
     let bob = crate::common::login_cookie(&foreign_router, "bob@best.test", "pw").await;
-    let foreign_get = crate::common::get_with_cookie(
-        &foreign_router,
-        &format!("/api/people/{person_id}"),
-        &bob,
-    )
-    .await;
+    let foreign_get =
+        crate::common::get_with_cookie(&foreign_router, &format!("/api/people/{person_id}"), &bob)
+            .await;
     assert_eq!(foreign_get.status(), StatusCode::NOT_FOUND);
 
     drop(guard);

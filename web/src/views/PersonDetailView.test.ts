@@ -34,9 +34,9 @@ import type {
   Tag,
   TagRef,
 } from '../api/types'
-import { queryKeys } from '../api/queries'
+import { personMutationKey, queryKeys } from '../api/queries'
 import type { CallRoom, CallRoomEvents, CallRoomFactory } from '../telephony/useCall'
-import { defineComponent } from 'vue'
+import { defineComponent, nextTick } from 'vue'
 import PersonDetailView from './PersonDetailView.vue'
 import CallHostPanel from '../components/CallHostPanel.vue'
 import { provideCallHost } from '../telephony/callHost'
@@ -1484,7 +1484,7 @@ describe('PersonDetailView — Notes (SLICE_015 §9.10)', () => {
     await flushPromises()
   }
 
-  it('the composer is disabled while empty or whitespace-only, and Ctrl/Cmd+Enter submits', async () => {
+  it('the composer is disabled while empty or whitespace-only; a plain Enter does nothing; Ctrl+Enter and Cmd (meta)+Enter both submit', async () => {
     stubApi(detail([PHONE_A]))
     const { wrapper } = await mountView()
     activeWrapper = wrapper
@@ -1496,10 +1496,27 @@ describe('PersonDetailView — Notes (SLICE_015 §9.10)', () => {
     await textarea.setValue('A real note')
     expect(wrapper.get('[data-testid="note-composer-submit"]').attributes('disabled')).toBeUndefined()
 
+    function posts() {
+      return apiFetchMock.mock.calls.filter(
+        ([path, init]) => path === `/people/${PERSON_ID}/notes` && (init?.method ?? 'GET') === 'POST',
+      )
+    }
+
+    // A plain Enter (no modifier) must never submit — the textarea takes
+    // a literal newline instead.
+    await textarea.trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    expect(posts()).toHaveLength(0)
+
     await textarea.trigger('keydown', { key: 'Enter', ctrlKey: true })
     await flushPromises()
-    const posts = apiFetchMock.mock.calls.filter(([path, init]) => path === `/people/${PERSON_ID}/notes` && (init?.method ?? 'GET') === 'POST')
-    expect(posts).toHaveLength(1)
+    expect(posts()).toHaveLength(1)
+
+    // Cmd (meta) + Enter submits too (macOS), a second, independent note.
+    await textarea.setValue('A second real note')
+    await textarea.trigger('keydown', { key: 'Enter', metaKey: true })
+    await flushPromises()
+    expect(posts()).toHaveLength(2)
   })
 
   it('a live counter appears past 9,000 code points and disables past 10,000 — counting code points, not UTF-16 units', async () => {
@@ -1538,6 +1555,93 @@ describe('PersonDetailView — Notes (SLICE_015 §9.10)', () => {
     expect(wrapper.get('[data-testid="note-body"]').text()).toBe('Called and left a voicemail')
   })
 
+  // The `useRealtime.test.ts` keying/settle precedent (~333–371): fake
+  // timers ONLY inside this one test (not the describe block, whose other
+  // tests rely on real timers via `settleTick`), enabled after the
+  // initial mount settles so `mountView()`'s own `flushPromises()` is
+  // never itself at the mercy of the fake clock.
+  it('keys the add mutation with personMutationKey and settles by invalidating only the person key, not the People list', async () => {
+    stubApi(detail([PHONE_A]))
+    const { wrapper, queryClient } = await mountView()
+    activeWrapper = wrapper
+
+    vi.useFakeTimers()
+    try {
+      let releaseAdd: () => void = () => {}
+      const addGate = new Promise<void>((resolve) => { releaseAdd = resolve })
+      const defaultImpl = apiFetchMock.getMockImplementation()!
+      apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+        if (path === `/people/${PERSON_ID}/notes` && (init?.method ?? 'GET') === 'POST') {
+          await addGate
+        }
+        return defaultImpl(path, init)
+      })
+
+      await wrapper.get('[data-testid="note-composer-textarea"]').setValue('Called and left a voicemail')
+      await wrapper.get('[data-testid="note-composer-submit"]').trigger('click')
+      await nextTick()
+
+      expect(queryClient.isMutating({ mutationKey: personMutationKey(ORG_ID, PERSON_ID) })).toBe(1)
+
+      const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+      releaseAdd()
+      await nextTick()
+      await nextTick()
+      await vi.advanceTimersByTimeAsync(0)
+      await nextTick()
+
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.person(ORG_ID, PERSON_ID) })
+      expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: queryKeys.people(ORG_ID) })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('while an add is pending: the button reads "Adding…" and is disabled, the textarea is disabled, and a click plus Ctrl+Enter both no-op (exactly one POST) until it settles', async () => {
+    stubApi(detail([PHONE_A]))
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+
+    let releaseAdd: () => void = () => {}
+    const addGate = new Promise<void>((resolve) => { releaseAdd = resolve })
+    const defaultImpl = apiFetchMock.getMockImplementation()!
+    apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === `/people/${PERSON_ID}/notes` && (init?.method ?? 'GET') === 'POST') {
+        await addGate
+      }
+      return defaultImpl(path, init)
+    })
+
+    const textarea = wrapper.get('[data-testid="note-composer-textarea"]')
+    await textarea.setValue('Called and left a voicemail')
+    await wrapper.get('[data-testid="note-composer-submit"]').trigger('click')
+    await flushPromises()
+
+    const submit = wrapper.get('[data-testid="note-composer-submit"]')
+    expect(submit.text()).toBe('Adding…')
+    expect(submit.attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="note-composer-textarea"]').attributes('disabled')).toBeDefined()
+
+    function posts() {
+      return apiFetchMock.mock.calls.filter(
+        ([path, init]) => path === `/people/${PERSON_ID}/notes` && (init?.method ?? 'GET') === 'POST',
+      )
+    }
+    expect(posts()).toHaveLength(1)
+
+    // A click and a Ctrl+Enter while still pending both no-op.
+    await submit.trigger('click')
+    await textarea.trigger('keydown', { key: 'Enter', ctrlKey: true })
+    await flushPromises()
+    expect(posts()).toHaveLength(1)
+
+    releaseAdd()
+    await flushPromises()
+    await settleTick()
+    expect((wrapper.get('[data-testid="note-composer-textarea"]').element as HTMLTextAreaElement).value).toBe('')
+    expect(wrapper.findAll('[data-testid="note-body"]')).toHaveLength(1)
+  })
+
   it('a failed add (400) keeps the draft and shows the note-specific malformed_request copy', async () => {
     stubApi(detail([PHONE_A]), { noteAdd: () => new ApiError(400, 'malformed_request') })
     const { wrapper } = await mountView()
@@ -1551,6 +1655,28 @@ describe('PersonDetailView — Notes (SLICE_015 §9.10)', () => {
     expect(wrapper.get('[data-testid="note-composer-submit"]').attributes('disabled')).toBeUndefined()
   })
 
+  it('a 404 on add (the Person vanished) uses the page\'s existing not-found handling once the settle refetch lands', async () => {
+    stubApi(detail([PHONE_A]), { noteAdd: () => new ApiError(404, 'not_found') })
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    const textarea = wrapper.get('[data-testid="note-composer-textarea"]')
+    await textarea.setValue('Should trigger a vanished-person 404')
+    await wrapper.get('[data-testid="note-composer-submit"]').trigger('click')
+    await flushPromises()
+
+    // The Person has, in fact, vanished: the detail GET the settle's
+    // refetch issues now 404s too.
+    const defaultImpl = apiFetchMock.getMockImplementation()!
+    apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === `/people/${PERSON_ID}` && (init?.method ?? 'GET') === 'GET') {
+        throw new ApiError(404, 'not_found')
+      }
+      return defaultImpl(path, init)
+    })
+    await settleTick()
+    expect(wrapper.text()).toContain('Person not found.')
+  })
+
   it('renders a note row pre-wrap, "Note by <author>", and the edited marker', async () => {
     stubApi(detail([PHONE_A], [
       noteEntry({ id: 'note-1', body: 'Line one\nLine two', edited: false }),
@@ -1561,10 +1687,34 @@ describe('PersonDetailView — Notes (SLICE_015 §9.10)', () => {
     const bodies = wrapper.findAll('[data-testid="note-body"]')
     expect(bodies[0].text()).toBe('Line one\nLine two')
     expect(bodies[0].classes()).toContain('whitespace-pre-wrap')
-    const rows = wrapper.findAll('li')
-    const summaries = rows.map((row) => row.text())
-    expect(summaries.some((text) => text.includes('Note by Alice') && !text.includes('edited'))).toBe(true)
-    expect(summaries.some((text) => text.includes('Note by Alice') && text.includes('edited'))).toBe(true)
+    // The "· edited" marker is matched on the SUMMARY paragraph
+    // specifically (not the whole row's text, which also contains the
+    // body and the actor/time meta line — a body containing the literal
+    // word "edited" must never be mistaken for the marker).
+    const summaries = wrapper.findAll('[data-testid="history-summary"]').map((p) => p.text())
+    expect(summaries).toContain('Note by Alice')
+    expect(summaries).toContain('Note by Alice · edited')
+  })
+
+  it('a body containing markup renders literally (text interpolation, never v-html) — no img element is created', async () => {
+    const hostile = '<img src=x onerror="x">'
+    stubApi(detail([PHONE_A], [noteEntry({ id: 'note-1', body: hostile })]))
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    expect(wrapper.get('[data-testid="note-body"]').text()).toBe(hostile)
+    expect(wrapper.find('img').exists()).toBe(false)
+  })
+
+  it('an imported note with no matched author (actor: null) renders the summary "Note", never "Note by undefined"', async () => {
+    stubApi(detail([PHONE_A], [noteEntry({ id: 'note-1', body: 'Imported from FUB', actor: null })]))
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    const summaries = wrapper.findAll('[data-testid="history-summary"]').map((p) => p.text())
+    expect(summaries).toContain('Note')
+    expect(summaries.some((text) => text.includes('undefined'))).toBe(false)
+    // The meta line uses the same null-actor fallback every other history
+    // kind already uses ("System"), not a note-specific string.
+    expect(wrapper.text()).toContain('System')
   })
 
   it('Edit/Delete render only where detail.can_manage is true, with 40px targets and accessible names', async () => {
@@ -1574,16 +1724,32 @@ describe('PersonDetailView — Notes (SLICE_015 §9.10)', () => {
     ]))
     const { wrapper } = await mountView()
     activeWrapper = wrapper
-    expect(wrapper.findAll('[data-testid="edit-note"]')).toHaveLength(1)
-    expect(wrapper.findAll('[data-testid="delete-note"]')).toHaveLength(1)
-    const edit = wrapper.get('[data-testid="edit-note"]')
+
+    // A page-wide length-1 count would also pass with INVERTED logic (the
+    // buttons attached to the wrong row) — locate each note's own `li` by
+    // its body and check inside it specifically.
+    const rows = wrapper.findAll('li')
+    const mineRow = rows.find((row) => row.find('[data-testid="note-body"]').exists() && row.text().includes('Mine'))
+    const theirsRow = rows.find((row) => row.find('[data-testid="note-body"]').exists() && row.text().includes('Not mine'))
+    expect(mineRow).toBeTruthy()
+    expect(theirsRow).toBeTruthy()
+
+    const edit = mineRow!.get('[data-testid="edit-note"]')
+    const del = mineRow!.get('[data-testid="delete-note"]')
     expect(edit.attributes('aria-label')).toBe('Edit note')
     expect(edit.classes()).toContain('h-10')
     expect(edit.classes()).toContain('w-10')
-    const del = wrapper.get('[data-testid="delete-note"]')
     expect(del.attributes('aria-label')).toBe('Delete note')
     expect(del.classes()).toContain('h-10')
     expect(del.classes()).toContain('w-10')
+
+    expect(theirsRow!.find('[data-testid="edit-note"]').exists()).toBe(false)
+    expect(theirsRow!.find('[data-testid="delete-note"]').exists()).toBe(false)
+
+    // And, page-wide, exactly one of each — belonging to the row just
+    // checked above.
+    expect(wrapper.findAll('[data-testid="edit-note"]')).toHaveLength(1)
+    expect(wrapper.findAll('[data-testid="delete-note"]')).toHaveLength(1)
   })
 
   it('inline edit: Save persists, Cancel discards, Escape cancels and returns focus to Edit', async () => {
@@ -1617,6 +1783,37 @@ describe('PersonDetailView — Notes (SLICE_015 §9.10)', () => {
     expect(wrapper.get('[data-testid="note-body"]').text()).toBe('Edited body')
   })
 
+  it('Escape does nothing while a save is pending — the same guard the Cancel button itself uses', async () => {
+    stubApi(detail([PHONE_A], [noteEntry({ id: 'note-1', body: 'Original body' })]))
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+
+    let releaseEdit: () => void = () => {}
+    const editGate = new Promise<void>((resolve) => { releaseEdit = resolve })
+    const defaultImpl = apiFetchMock.getMockImplementation()!
+    apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === `/people/${PERSON_ID}/notes/note-1` && (init?.method ?? 'GET') === 'PUT') {
+        await editGate
+      }
+      return defaultImpl(path, init)
+    })
+
+    await wrapper.get('[data-testid="edit-note"]').trigger('click')
+    const textarea = wrapper.get('[data-testid="note-edit-textarea"]')
+    await textarea.setValue('Editing…')
+    await wrapper.get('[data-testid="note-edit-save"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="note-edit-textarea"]').attributes('disabled')).toBeDefined()
+
+    await wrapper.get('[data-testid="note-edit-textarea"]').trigger('keydown', { key: 'Escape' })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="note-edit-textarea"]').exists()).toBe(true)
+
+    releaseEdit()
+    await flushPromises()
+    await settleTick()
+  })
+
   it('an inline edit survives a refetch that removes the note, keeping the draft and explaining it was deleted elsewhere', async () => {
     stubApi(detail([PHONE_A], [noteEntry({ id: 'note-1', body: 'Original body' })]), {
       // Simulate another tab deleting the note the instant this tab's own
@@ -1638,6 +1835,35 @@ describe('PersonDetailView — Notes (SLICE_015 §9.10)', () => {
     await wrapper.get('[data-testid="note-edit-gone-dismiss"]').trigger('click')
     await flushPromises()
     expect(wrapper.find('[data-testid="note-edit-gone"]').exists()).toBe(false)
+  })
+
+  it('a realtime-driven refetch (no mutation in flight) that removes the note being edited shows the same "deleted elsewhere" state', async () => {
+    stubApi(detail([PHONE_A], [noteEntry({ id: 'note-1', body: 'Original body' })]))
+    const { wrapper, queryClient } = await mountView()
+    activeWrapper = wrapper
+
+    await wrapper.get('[data-testid="edit-note"]').trigger('click')
+    await wrapper.get('[data-testid="note-edit-textarea"]').setValue('A draft nobody sent yet')
+
+    // Another tab deleted the note; this tab's OWN note_changed-driven
+    // refetch (not a mutation of its own) picks that up.
+    const defaultImpl = apiFetchMock.getMockImplementation()!
+    apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === `/people/${PERSON_ID}` && (init?.method ?? 'GET') === 'GET') {
+        return detail([PHONE_A])
+      }
+      return defaultImpl(path, init)
+    })
+    const putsBefore = apiFetchMock.mock.calls.filter(([, init]) => (init?.method ?? 'GET') === 'PUT').length
+    await queryClient.invalidateQueries({ queryKey: queryKeys.person(ORG_ID, PERSON_ID) })
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="note-edit-gone-message"]').text()).toBe('This note was deleted by someone else.')
+    expect((wrapper.get('[data-testid="note-edit-gone-draft"]').element as HTMLTextAreaElement).value).toBe(
+      'A draft nobody sent yet',
+    )
+    const putsAfter = apiFetchMock.mock.calls.filter(([, init]) => (init?.method ?? 'GET') === 'PUT').length
+    expect(putsAfter).toBe(putsBefore)
   })
 
   it('delete opens a ConfirmDialog with the exact copy, disables Confirm while pending, and removes the row on success', async () => {
@@ -1674,6 +1900,98 @@ describe('PersonDetailView — Notes (SLICE_015 §9.10)', () => {
     expect(wrapper.find('[data-testid="note-body"]').exists()).toBe(false)
   })
 
+  it('a Save 403 (role/authorship changed under the viewer) shows the specific copy and removes Edit/Delete once the refetch shows can_manage: false', async () => {
+    stubApi(detail([PHONE_A], [noteEntry({ id: 'note-1', body: 'Mine', canManage: true })]), {
+      noteEdit: () => new ApiError(403, 'forbidden'),
+    })
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    await wrapper.get('[data-testid="edit-note"]').trigger('click')
+    await wrapper.get('[data-testid="note-edit-textarea"]').setValue('Trying to save')
+
+    // The role/authorship change that CAUSED the 403 is also what the
+    // settle refetch's own GET now reflects.
+    const defaultImpl = apiFetchMock.getMockImplementation()!
+    apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === `/people/${PERSON_ID}` && (init?.method ?? 'GET') === 'GET') {
+        return detail([PHONE_A], [noteEntry({ id: 'note-1', body: 'Mine', canManage: false })])
+      }
+      return defaultImpl(path, init)
+    })
+
+    await wrapper.get('[data-testid="note-edit-save"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="note-edit-error"]').text()).toBe('You can no longer edit this note.')
+
+    await settleTick()
+    await wrapper.get('[data-testid="note-edit-cancel"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="edit-note"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="delete-note"]').exists()).toBe(false)
+  })
+
+  it('a Delete 404 (deleted elsewhere) explains "Not found." in the dialog, removes the row after the refetch, and Cancel closes it', async () => {
+    stubApi(detail([PHONE_A], [noteEntry({ id: 'note-1', body: 'Gone already' })]), {
+      noteDelete: () => new ApiError(404, 'not_found'),
+    })
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    await wrapper.get('[data-testid="delete-note"]').trigger('click')
+    await flushPromises()
+
+    const defaultImpl = apiFetchMock.getMockImplementation()!
+    apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === `/people/${PERSON_ID}` && (init?.method ?? 'GET') === 'GET') {
+        return detail([PHONE_A])
+      }
+      return defaultImpl(path, init)
+    })
+
+    const confirmButton = [...document.body.querySelectorAll('button')].find((b) => b.textContent === 'Delete')
+    confirmButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flushPromises()
+    expect(document.body.textContent).toContain('Not found.')
+
+    await settleTick()
+    expect(wrapper.find('[data-testid="note-body"]').exists()).toBe(false)
+
+    // PrimeVue renders the button's text with surrounding whitespace from
+    // the template's own line breaks/indentation — `.trim()` first,
+    // unlike the exact-match "Delete"/"Working…" labels elsewhere, which
+    // have no such whitespace.
+    const cancelButton = [...document.body.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Cancel')
+    cancelButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flushPromises()
+    expect(document.body.textContent).not.toContain('Delete this note? This cannot be undone.')
+  })
+
+  it('a Delete 403 shows the permission copy in the dialog and removes Edit/Delete once the refetch shows can_manage: false', async () => {
+    stubApi(detail([PHONE_A], [noteEntry({ id: 'note-1', body: 'Not yours anymore', canManage: true })]), {
+      noteDelete: () => new ApiError(403, 'forbidden'),
+    })
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    await wrapper.get('[data-testid="delete-note"]').trigger('click')
+    await flushPromises()
+
+    const defaultImpl = apiFetchMock.getMockImplementation()!
+    apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === `/people/${PERSON_ID}` && (init?.method ?? 'GET') === 'GET') {
+        return detail([PHONE_A], [noteEntry({ id: 'note-1', body: 'Not yours anymore', canManage: false })])
+      }
+      return defaultImpl(path, init)
+    })
+
+    const confirmButton = [...document.body.querySelectorAll('button')].find((b) => b.textContent === 'Delete')
+    confirmButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flushPromises()
+    expect(document.body.textContent).toContain('You do not have permission to do that.')
+
+    await settleTick()
+    expect(wrapper.find('[data-testid="edit-note"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="delete-note"]').exists()).toBe(false)
+  })
+
   it('an unrecognised history kind renders as a generic Activity row instead of throwing', async () => {
     const unknownEntry = {
       kind: 'future_kind',
@@ -1689,6 +2007,8 @@ describe('PersonDetailView — Notes (SLICE_015 §9.10)', () => {
     const { wrapper } = await mountView()
     activeWrapper = wrapper
     await flushPromises()
-    expect(wrapper.text()).toContain('Activity')
+    const summaries = wrapper.findAll('[data-testid="history-summary"]').filter((p) => p.text() === 'Activity')
+    expect(summaries).toHaveLength(1)
+    expect(wrapper.find('[data-testid="note-body"]').exists()).toBe(false)
   })
 })

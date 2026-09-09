@@ -375,7 +375,7 @@ function startEditNote(note: NotePayload) {
 }
 
 function cancelEditNote() {
-  if (!editingNote.value) return
+  if (!editingNote.value || editNote.isPending.value) return
   const id = editingNote.value.id
   editingNote.value = null
   void nextTick(() => editButtonRefs[id]?.focus())
@@ -1308,7 +1308,10 @@ watch(
                 </div>
               </template>
               <template v-else>
-                <p class="text-body text-text">
+                <p
+                  class="text-body text-text"
+                  data-testid="history-summary"
+                >
                   {{ row.summary }}
                 </p>
                 <p

@@ -2124,6 +2124,11 @@ async fn note_activity_and_operator_call_never_leak_a_body_into_traces_or_wrong_
     )
     .await;
     assert_eq!(rejected_resp.status(), StatusCode::BAD_REQUEST);
+    let rejected_body = crate::common::body_json(rejected_resp).await;
+    assert!(
+        !rejected_body.to_string().contains(REJECT_SENTINEL),
+        "the malformed_request error envelope must never echo the rejected body: {rejected_body}"
+    );
 
     // A live note for the 403 (carol is neither author nor admin) and 404
     // (nonexistent id) cases, plus the Operator call below.

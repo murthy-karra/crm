@@ -21,8 +21,8 @@ Acme Realty via the Web "New lead" form during the walkthrough itself.
 | 1 | Alice writes a note on the Person | PASS | composer clears; "Note by Alice Anderson" row appears with the pre-wrap body |
 | 2 | Alice edits a typo, sees "edited" | PASS | row reads "Note by Alice Anderson · edited" with the corrected body |
 | 3 | Carol (a plain Acme member) sees the note after a refetch, with no Edit/Delete | PASS | note row renders for Carol; no `Edit note`/`Delete note` buttons present |
-| 4 | The admin (Alice) deletes it and it disappears | PASS | ConfirmDialog reads exactly "Delete this note? This cannot be undone."; row gone after confirm |
-| 5 | A second Organization's identical-looking Person shows nothing throughout | PASS | Bob (Best Realty, a different Organization) navigating to the same Person id sees "Person not found." — stronger than "no notes visible": the Person itself is invisible, confirming tenant isolation end to end |
+| 4 | The admin (Alice) deletes it and it disappears | PASS (observed for Alice only) | ConfirmDialog reads exactly "Delete this note? This cannot be undone."; row gone for Alice after confirm. No screenshot of Carol's view after the delete was taken; her side of "disappears for both" is not directly evidenced by this walkthrough |
+| 5 | A second Organization's identical Person shows nothing throughout | Not run as specified | This walkthrough did not create a second, identically-named Person in Best Realty. What was observed instead: Bob (Best Realty) navigating directly to Grace Hopper's Person id got "Person not found." — this demonstrates id-level tenant isolation (a foreign Person id is invisible), not the spec's own scenario of a second Organization's own, separately-created identical-looking Person showing no notes |
 | 6 | The Operator, asked about the Person, can quote the note | PASS | asked "What does the latest note on Grace Hopper say?" before the delete step; replied with the note's exact text, quoted, plus the Person reference card |
 
 Screenshots (`screenshots/`): `01-person-before-note.png` (composer at the

@@ -524,10 +524,11 @@ async fn add_note_shape_history_entry_and_foreign_person_404(migrator_pool: PgPo
     let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let publisher = Publisher::recording();
 
+    let ctx = command_context(f.org_id, f.member_id);
     let note = note::add_note(
         &app_pool,
         &publisher,
-        &command_context(f.org_id, f.member_id),
+        &ctx,
         AddNote {
             person_id: PersonId::new(f.person_id),
             body: "  Hello there  ".to_string(),
@@ -555,6 +556,18 @@ async fn add_note_shape_history_entry_and_foreign_person_404(migrator_pool: PgPo
     assert_eq!(entry["detail"]["body"], "Hello there");
     assert_eq!(entry["origin"], "web_session");
     assert_eq!(entry["actor"]["id"], f.member_id.to_string());
+    // Round 2, item 1: correlation_id matches the session's own, and
+    // occurred_at == recorded_at == created_at (an edit never moves the
+    // entry, so this must already hold at creation).
+    assert_eq!(
+        entry["correlation_id"],
+        serde_json::to_value(ctx.correlation_id).unwrap()
+    );
+    assert_eq!(
+        entry["occurred_at"],
+        serde_json::to_value(note.created_at).unwrap()
+    );
+    assert_eq!(entry["recorded_at"], entry["occurred_at"]);
 
     // Foreign/nonexistent Person: 404, no row.
     let before = note_row_count(&migrator_pool, f.org_id).await;
@@ -570,6 +583,65 @@ async fn add_note_shape_history_entry_and_foreign_person_404(migrator_pool: PgPo
     .await;
     assert!(matches!(foreign, Err(NoteError::NotFound)));
     assert_eq!(note_row_count(&migrator_pool, f.org_id).await, before);
+
+    // Round 2, item 1: over HTTP with alice's own cookie, a REAL
+    // cross-Organization Person and a random uuid are byte-identical
+    // 404s — not merely "both 404", but the SAME response body — with no
+    // row landing in either Organization and no additional publication.
+    let (other_org_id, other_admin_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Best Realty",
+        "erin-add-fk@best.test",
+        "Erin",
+        PW,
+    )
+    .await;
+    let other_stage_id = first_stage_id(&app_pool, other_org_id).await;
+    let other_person_id = insert_bare_person(&app_pool, other_org_id, other_stage_id).await;
+    let _ = other_admin_id;
+
+    let events_before = recorded(&publisher).await.len();
+    let org_a_before = note_row_count(&migrator_pool, f.org_id).await;
+    let org_b_before = note_row_count(&migrator_pool, other_org_id).await;
+
+    let random_uuid_resp = crate::common::post_json_with_cookie(
+        &router,
+        &format!("/api/people/{}/notes", Uuid::new_v4()),
+        &alice,
+        json!({ "body": "Nonexistent person" }),
+    )
+    .await;
+    assert_eq!(random_uuid_resp.status(), StatusCode::NOT_FOUND);
+    let random_uuid_body = crate::common::body_json(random_uuid_resp).await;
+
+    let cross_org_resp = crate::common::post_json_with_cookie(
+        &router,
+        &format!("/api/people/{other_person_id}/notes"),
+        &alice,
+        json!({ "body": "Nonexistent person" }),
+    )
+    .await;
+    assert_eq!(cross_org_resp.status(), StatusCode::NOT_FOUND);
+    let cross_org_body = crate::common::body_json(cross_org_resp).await;
+    assert_eq!(
+        random_uuid_body, cross_org_body,
+        "a real cross-Organization Person id must be byte-identical to a random uuid 404"
+    );
+    assert_eq!(
+        note_row_count(&migrator_pool, f.org_id).await,
+        org_a_before,
+        "no row must land in Organization A"
+    );
+    assert_eq!(
+        note_row_count(&migrator_pool, other_org_id).await,
+        org_b_before,
+        "no row must land in Organization B either"
+    );
+    assert_eq!(
+        recorded(&publisher).await.len(),
+        events_before,
+        "no publish on either 404"
+    );
 }
 
 /// docs/specs/SLICE_015.md §9.3: a 200 KB body is 400 `malformed_request`

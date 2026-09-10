@@ -832,16 +832,40 @@ async fn retained_normal_item_with_overdue_task_is_raised_and_ordered_after_fres
     );
 }
 
+/// Test-local only (no shared-fixture change): inserts a Person with an
+/// explicit `id` rather than the server-generated `gen_random_uuid()`
+/// `insert_bare_person` above uses, so
+/// `task_only_items_sharing_due_at_are_ordered_by_ascending_person_id`
+/// below can pin Person-id order independently of insertion order.
+async fn insert_bare_person_with_id(
+    pool: &PgPool,
+    id: Uuid,
+    organization_id: Uuid,
+    stage_id: Uuid,
+) -> Uuid {
+    sqlx::query_scalar(
+        "INSERT INTO person (id, organization_id, first_name, stage_id) \
+         VALUES ($1, $2, 'Fixture', $3) RETURNING id",
+    )
+    .bind(id)
+    .bind(organization_id)
+    .bind(stage_id)
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
 /// LATER batch (2026-09-10) item 7b (016b LATER, curated):
 /// docs/specs/SLICE_016.md §5's documented tie-break — task-only items
 /// order by `due_at ASC, id ASC`, where `id` is the PERSON id (the
 /// call-only precedent) — proven with THREE task-only Persons sharing the
 /// exact same overdue `due_at` (high tier), not just the two-item cases
-/// elsewhere in this file. `person_id`s are only known after insertion
-/// (server-generated `gen_random_uuid()`), so the expected order is
-/// derived by sorting the actual ids, then compared against the query's
-/// actual item order — the query itself is the only source of truth for
-/// "is this ordering deterministic and does it match the documented rule".
+/// elsewhere in this file. Review round 1 fix: Person insertion order,
+/// task-creation order and the expected (ascending Person id) order are
+/// all pinned to be pairwise distinct via explicit local ids, so a
+/// dropped `id ASC` tie-break cannot pass this test by accident (the
+/// tester's finding: server-generated ids alone would coincidentally
+/// match the wrong order about one run in six).
 #[sqlx::test]
 #[ignore]
 async fn task_only_items_sharing_due_at_are_ordered_by_ascending_person_id(migrator_pool: PgPool) {
@@ -850,21 +874,36 @@ async fn task_only_items_sharing_due_at_are_ordered_by_ascending_person_id(migra
     let now = Utc::now();
     let due = now - ChronoDuration::minutes(30);
 
-    let mut people = Vec::with_capacity(3);
-    for _ in 0..3 {
-        let person_id = insert_bare_person(&app_pool, f.org_id, f.stage_id).await;
+    // Review round 1 fix: with server-generated v4 ids, insertion order
+    // and Person-id order are already uncorrelated with each other AND
+    // with task-id order (tasks get their own independent v4 ids), so
+    // the three could coincidentally agree — the tester found dropping
+    // `id ASC` from the SQL would still pass one run in six. Explicit
+    // local ids pin all three orders to be pairwise distinct: Person
+    // insertion order (0003, 0001, 0002) != task-creation order (0002,
+    // 0003, 0001) != the expected Today order, ascending Person id
+    // (0001, 0002, 0003) — so only a genuine `id ASC` tie-break can make
+    // this test pass.
+    let id_0001 = Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
+    let id_0002 = Uuid::parse_str("00000000-0000-0000-0000-000000000002").unwrap();
+    let id_0003 = Uuid::parse_str("00000000-0000-0000-0000-000000000003").unwrap();
+
+    for id in [id_0003, id_0001, id_0002] {
+        insert_bare_person_with_id(&app_pool, id, f.org_id, f.stage_id).await;
+    }
+    for id in [id_0002, id_0003, id_0001] {
         create_task_for(
             &app_pool,
             f.org_id,
             f.admin_id,
             f.admin_id,
-            person_id,
+            id,
             TaskKind::FollowUp,
             Some(due),
         )
         .await;
-        people.push(person_id);
     }
+    let people = vec![id_0001, id_0002, id_0003];
 
     let list = today::query_at(
         &mut app_pool.acquire().await.unwrap(),

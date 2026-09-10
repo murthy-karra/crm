@@ -223,8 +223,10 @@ dashboard shows it (§6).
 
 Order matters: **update the API first, then deploy the worker.** A new
 worker in front of an old API would relay up to 34 MiB into a 2 MiB
-endpoint → 413 → bounce, which is today's outcome, not worse, but the
-reverse order proves nothing.
+endpoint; the old API answers 413 mid-upload and closes, which the relay
+sees as a connection reset, so it throws and the MTA retries until the API
+is updated (verified in review: a retry loop, not a bounce, and not worse
+than today), but the reverse order proves nothing.
 
 1. Restart the dev API from `main` (kill by exact PID; the binary runs
    orphaned).

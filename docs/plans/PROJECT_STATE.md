@@ -1,29 +1,31 @@
 # Project State
 
-Last updated: 2026-09-09 (D-056 accepted: inbound mail cap at Cloudflare's
-25 MiB ceiling; Slice 017 specified and awaiting review, then the
-implementation gate).
+Last updated: 2026-09-09 (Slice 017 merged at `f06eba3`, pushed, dev API
+updated; the worker deploy and the live large-mail walkthrough are pending
+the user's Workers-plan check).
 
 ## Current phase
 
-**SLICE 017 (INBOUND MAIL SIZE CAP) — APPROVED 2026-09-09, LANE IN
-IMPLEMENTATION** (one lane, `implement` profile, `../crm-worktrees/017` on
-`slice-017-mail-size-cap`; the planning documents are committed on `main`). The user asked what is next;
-the recorded queue after Tasks was the O-015 attachment-cap raise. Its one
-open input, the cap value, was decided as **D-056**: Cloudflare's own
-25 MiB inbound ceiling, the endpoint at a derived 34 MiB, and the relay
-streaming instead of buffering; the frozen `{"recipient","raw"}` envelope
-is untouched. Drafted: [SLICE_017.md](../specs/SLICE_017.md) and
-[SLICE_017_IMPL.md](../tasks/SLICE_017_IMPL.md); pointer amendments in
-007b §5, 007g §3 and 009 §1; O-015 question 1 marked resolved. Precondition
-to verify before the walkthrough: the account's Workers plan (Free allows
-10 ms CPU per invocation; the relay's base64 needs Paid). No branch or
-code changed at approval time. Independent review: READY WITH
-CORRECTIONS, ten findings (DB-test budget for the debug profile, the
-`scripts/inbound-email` argv failure pulled into scope, a Free-plan stop
-before the worker deploy, `duplex: 'half'` unconditional, the
-pre-authentication memory exposure recorded LATER, five detail items), all
-applied; none a human decision.
+**SLICE 017 (INBOUND MAIL SIZE CAP) — MERGED, PUSHED, DEV API UPDATED;
+WORKER DEPLOY AND WALKTHROUGH PENDING (2026-09-09).** D-056: the relay's
+threshold is Cloudflare's own 25 MiB inbound ceiling and the relay streams a
+chunked base64 JSON body; the endpoint's body limit is a derived 34 MiB;
+the frozen `{"recipient","raw"}` envelope is untouched;
+`scripts/inbound-email` keeps the message and the bearer off every argv.
+One lane (Sonnet 5), four commits, two review rounds (round 1 READY WITH
+FIXES, six small items applied; round 2 a read-only confirmation), final-tree
+gates once on `33f8284`: `check` green (778 Rust, 747 Web, 11 worker tests,
+15 s), `check-db` 718 of 718 (266 s, no flake). Merged `--no-ff` at
+`f06eba3` with the user's approval, pushed with the records; the dev API
+restarted by exact PID (pid 41716, binary 21:34) and proven on the new limit
+(3 MiB + bad bearer → 401, 35 MiB → 413); worktree and branch deleted.
+Evidence: [SLICE_017_VERIFICATION.md](../tasks/SLICE_017_VERIFICATION.md).
+**Pending, the user's actions:** verify the Workers plan (Free = 10 ms CPU,
+stop; Paid = `cd infra/email-worker && wrangler deploy`), then a small real
+message and a 15–20 MB attachment to a capture and an intake address; the
+coordinator watches the dev API log and appends the evidence. Until the
+deploy the production relay still bounces above 1.4 MiB. Deployment is not
+authorized.
 
 Previously: **SLICE 016 (TASKS) — COMPLETE: BOTH RUNGS MERGED, RUNTIME UPDATED, PUSHED,
 CLEANED UP (2026-09-09, each with the user's approval).** `main` at the
@@ -654,25 +656,27 @@ clear-all.
 
 ## Current slice
 
-Slice 017 — Inbound mail size cap — `docs/specs/SLICE_017.md` (APPROVED
-2026-09-09), brief `docs/tasks/SLICE_017_IMPL.md`. One S rung, one lane,
-branch `slice-017-mail-size-cap` in `../crm-worktrees/017`, in
-implementation.
+Slice 017 — Inbound mail size cap — merged 2026-09-09 (`docs/specs/SLICE_017.md`,
+verification `docs/tasks/SLICE_017_VERIFICATION.md`); only the user's worker
+deploy and the live walkthrough remain. No implementation lane is active.
 
-Last completed: Slice 016 (Tasks; `docs/specs/SLICE_016.md`, verification
-`docs/tasks/SLICE_016a_VERIFICATION.md` and `SLICE_016b_VERIFICATION.md`,
-merged and pushed 2026-09-09), Slice 015 (Notes; `docs/specs/SLICE_015.md`,
-`docs/tasks/SLICE_015_VERIFICATION.md`), the LATER batch
-(`docs/tasks/LATER_BATCH_2026-09-08.md`), Slices 014, 013, 012 and the
-011 ladder (a → b → b-sort → c → d → e, all done; `docs/plans/SLICE_011_LADDER.md`).
+Last completed before it: Slice 016 (Tasks; `docs/specs/SLICE_016.md`,
+verification `docs/tasks/SLICE_016a_VERIFICATION.md` and
+`SLICE_016b_VERIFICATION.md`, merged and pushed 2026-09-09), Slice 015 (Notes),
+the LATER batch of 2026-09-08, Slices 014, 013, 012 and the 011 ladder
+(`docs/plans/SLICE_011_LADDER.md`).
 
 ## Current branch
 
-`main` at `7a9f9f8`, pushed to `origin/main` on 2026-09-09, clean. No
-worktrees. The shared development runtime (`./scripts/dev-api` on
-`127.0.0.1:3000`, `./scripts/dev-web-prod` on 5173) runs the post-016b
-build; `crm_dev` is migrated through `20260913000001`. Deployment is not
-authorized.
+`main` at the Slice 017 merge `f06eba3` plus the record commits, pushed to
+`origin/main` on 2026-09-09, clean. No worktrees, no slice branches. The
+shared development runtime: `./scripts/dev-api` on `127.0.0.1:3000` runs the
+post-017 build (pid 41716, relaunched 2026-09-09 21:34, log under
+`/private/tmp/claude-501/`); `./scripts/dev-web-prod` on 5173 runs the
+post-016b bundle (no web change since); `crm_dev` is migrated through
+`20260913000001` (017 adds no migration). The deployed Email Worker is
+still the pre-017 relay until the user runs `wrangler deploy`. Deployment
+is not authorized.
 
 ## Last accepted decision
 
@@ -734,6 +738,7 @@ together on 2026-09-06).
 | 015 | Notes: `note` table (tombstone delete, import-ready), three commands and routes, `note` timeline kind, `note_changed`, Operator `PersonDetail.notes` (untrusted, history filtered), Person page composer with inline edit/delete (D-053) | `fd5a184` (branch head `00e2e67`), pushed 2026-09-09 |
 | 016a | Tasks model: `task` table (tombstone, import-ready, Today index), six commands and routes, `tasks[]` on the detail, `task_completed` timeline kind, `task_changed`, Operator `PersonDetail.tasks` (untrusted, history filtered), Person page Tasks card (D-054) | `f106afc` (branch head `1d6c3bf`), pushed 2026-09-09 |
 | 016b | Tasks on Today: the fixed built-in task axis (`task_due`/`task_overdue`, D-054 exception), `GET /api/tasks?scope=mine`, Operator explanations, the Today badge, Complete button and Tasks panel with Snooze | `faa2878` (branch head `e68b51d`), pushed 2026-09-09 |
+| 017 | Inbound mail size cap: relay threshold at Cloudflare's 25 MiB ceiling with a streaming chunked base64 body, endpoint 34 MiB, `scripts/inbound-email` off argv (D-056; O-015 question 1 resolved) | `f06eba3` (branch head `33f8284`), pushed 2026-09-09 |
 | — | Gate-speedup chunk (check 35m→79s, check-db 37m→~2m) | 2026-08-28 |
 | — | Test-binary consolidation (40 files → 1 binary) | `6427ee8` |
 
@@ -965,20 +970,23 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. **Slice 017 (inbound mail size cap, D-056):** the lane implements the
-   brief in `../crm-worktrees/017` on `slice-017-mail-size-cap` with the
-   `implement` profile; the coordinator runs the final-tree gates once, review and test analysis (two rounds at
-   most), then the commit, merge and push gates. After the merge: restart
-   the dev API by exact PID, verify the Workers plan, the user deploys the
-   worker (`cd infra/email-worker && wrangler deploy`), then the real
-   large-attachment walkthrough (spec §6) and the verification record.
-2. **Then the small LATER batch** from the 015/016 verification records:
+1. **Slice 017 walkthrough (spec §6), the user's actions first:** check the
+   account's Workers plan (dashboard → Workers & Pages → Plans). Free: stop
+   (10 ms CPU per invocation; the streaming relay would temp-fail large mail
+   into a late bounce) and decide between the Paid upgrade and the raw
+   `message/rfc822` pass-through contract change (D-056 §3). Paid: `cd
+   infra/email-worker && wrangler deploy`, then send a small real message to
+   a capture address, then a 15–20 MB attachment to a capture address (CC)
+   and to the intake address; the coordinator watches the dev API log
+   (`intake.inbound_email` span: `byte_len`, latency) and appends the worker
+   CPU time from the dashboard to the verification record.
+2. **Then the small LATER batch** from the 015/016/017 verification records:
    the `reason_text` `+00:00`-versus-`Z` timestamp inconsistency, the note
    composer Escape handler and post-delete focus, the composer double-submit
    test, the `is_control` separator gap, the remaining task cap-grid tests,
-   and the snooze 24-hour-window nuance (a 48-hour "Due soon" lookahead or
-   a snoozed group if users find it surprising). A brief, no spec, as on
-   2026-09-08.
+   the snooze 24-hour-window nuance, and the ~60 MB trim of the inbound
+   handler's peak memory (drop `sealed` after `insert_pending`). A brief, no
+   spec, as on 2026-09-08.
 3. **Then the next real slice needs the user's pick** (recommended order):
    the Operator `create_task` / `complete_task` rung (S; D-054 §3; needs a
    decision on whether `complete_task` is the first AGENTS §5.4
@@ -987,16 +995,18 @@ and now lives only in git history.
    resuming the parked FUB migration ladder (`docs/plans/SLICE_010_LADDER.md`;
    its three parked decisions are asked at resume).
 4. Standing: the Telnyx SIP password rotation (user action); O-012/O-013
-   before any external customer holds real consumer data; deployment is a
-   separate authorization; the 009 walkthrough steps 3–5 remain deferred.
+   before any external customer holds real consumer data; the O-015
+   questions 2 and 3 (object storage, retention) at the recordings slice;
+   deployment is a separate authorization; the 009 walkthrough steps 3–5
+   remain deferred.
 
 ## Approval currently required
 
-- **Slice 017:** implementation approved 2026-09-09 (covering the planning
-  commit and the lane). Still to ask, in order: the code commit and the
-  merge to `main`, the push, the worker deploy (`wrangler deploy`, the
-  user's action, only on the Workers Paid plan).
-- Deployment is not authorized. The worker deploy (`wrangler deploy`) after
-  the 017 merge is the user's action and is asked for separately.
+- **Slice 017:** merged, pushed and the dev API updated with the user's
+  approval on 2026-09-09. Remaining are the user's own actions: the Workers
+  plan check and `wrangler deploy` (only on Paid), then the real sends. If
+  the plan is Free, one decision returns: upgrade, or the pass-through
+  contract change under its own approval.
+- Deployment is not authorized.
 - R1 (auto-hangup of a live call on identity change) is a product choice for
   a later slice, not blocking.

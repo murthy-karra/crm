@@ -2015,3 +2015,38 @@ to the object-storage slice). Resolves O-015 question 1; questions 2
 
 Blocks: nothing. Feeds SLICE_017. Amends by pointer SLICE_007b §5,
 SLICE_007g §3 and SLICE_009 §1 (the stated 2 MiB limitation closes).
+
+### D-057 — Operator `complete_task` executes with a receipt and Undo; `create_task` proposes (2026-09-10)
+
+Accepted by the user on 2026-09-10 (the coordinator's recommendation; the
+alternatives presented were propose-then-confirm for both tools, and
+execute-with-Undo for both). Resolves the risk-class decision D-054 §3
+deferred to this rung; the D-034 mechanism question is a planning default,
+not a product decision (below).
+
+1. **`complete_task` is the first AGENTS §5.4 "low-risk and reversible"
+   action.** On the agent's request the Operator completes an open task
+   at once, the UI shows a receipt built from server data, and an Undo
+   reopens it (the existing reopen command). Rationale: completing a task
+   is already one click on the Today panel and is reversible, so an Undo
+   is the same trust level as the panel. The application, not the model,
+   classifies the action and enforces the receipt.
+2. **`create_task` stays "consequential": propose, then confirm.** The
+   tool only creates a proposal (the SLICE_006b shape); the agent confirms
+   from a card built from server data before the task exists. Rationale:
+   the title and the due instant are content the model may have
+   mis-heard, and a task lands on a Person's record.
+3. **Authorization is the D-053 shape unchanged:** the Operator acts as
+   the signed-in member; `complete_task` succeeds only where that member
+   could complete from the panel (assignee, creator or Organization
+   admin); `create_task` assigns to the acting member unless told
+   otherwise and every referenced Person and task is Organization-scoped.
+4. **Mechanism, a planning default (D-034 stands):** no `crm-operator ->
+   crm-app` edge; both tools are `ToolBackend` seam methods implemented
+   by crm-api's adapter over the existing task commands, and
+   `operator_proposal.tool` widens to admit `create_task`. The planner
+   confirms this shape; if it does not hold, the mechanism returns as a
+   decision.
+
+Blocks: nothing. Feeds the Slice 018 specification. Amends by pointer
+D-054 §3 (the rung's decision is taken).

@@ -90,8 +90,10 @@ pub enum ApiError {
         call_id: Option<uuid::Uuid>,
     },
     // --- Slice 007b (docs/specs/SLICE_007b.md §5) -----------------------
-    /// `POST /inbound/email` body over its 2 MiB limit; kept in the shared
-    /// error envelope rather than Axum's default plain-text 413.
+    /// `POST /inbound/email` body over its 34 MiB limit (raised from 2 MiB
+    /// by D-056/docs/specs/SLICE_017.md, derived from Cloudflare's 25 MiB
+    /// inbound ceiling); kept in the shared error envelope rather than
+    /// Axum's default plain-text 413.
     PayloadTooLarge,
     // --- Slice 009 (docs/specs/SLICE_009.md §8) --------------------------
     /// A held-queue row already reached a terminal state incompatible

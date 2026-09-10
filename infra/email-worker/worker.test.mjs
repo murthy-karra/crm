@@ -1,51 +1,107 @@
-// node --test unit for the worker's one bug-prone pure computation
-// (docs/specs/SLICE_007g.md criterion 7): corrupt base64 would be
-// silently 200-accepted by the endpoint and file garbage into
-// Unresolved — the failure mode a live walkthrough can miss.
+// node --test unit for the worker's bug-prone pure computations
+// (docs/specs/SLICE_007g.md criterion 7; docs/specs/SLICE_017.md §5):
+// corrupt base64 would be silently 200-accepted by the endpoint and file
+// garbage into Unresolved — the failure mode a live walkthrough can miss.
 //
 // Run: node --test infra/email-worker/worker.test.mjs
-// (wired into ./scripts/check's web section; node is already required.)
+// (wired into ./scripts/check's web section; node is already required.
+// Node 24 has the TransformStream/ReadableStream/Response globals this
+// file and worker.js both rely on.)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-// `btoa` exists in Node ≥16 on globalThis, matching the Workers runtime.
-import { base64Encode, MAX_RAW_BYTES } from './worker.js';
+import { base64Transform, MAX_RAW_BYTES } from './worker.js';
 
-function roundtrip(bytes) {
-  const encoded = base64Encode(bytes);
-  const decoded = Buffer.from(encoded, 'base64');
-  return new Uint8Array(decoded);
+function fixtureBytes(len) {
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) bytes[i] = (i * 31 + 7) % 256;
+  return bytes;
 }
 
-test('round-trips exact bytes at every alignment', () => {
-  for (const len of [0, 1, 2, 3, 4, 5, 8191, 8192, 8193, 98303, 98304, 98305]) {
-    const bytes = new Uint8Array(len);
-    for (let i = 0; i < len; i++) bytes[i] = (i * 31 + 7) % 256;
-    assert.deepEqual(roundtrip(bytes), bytes, `len ${len}`);
+// Feeds `bytes` into a fresh `base64Transform()` as a sequence of chunks
+// sized from `sizes` (a fixed chunk size, or an array of sizes cycled
+// until `bytes` is exhausted — the "mixed split" case), asserting every
+// encoded chunk is ASCII `Uint8Array` bytes (never a string, spec
+// criterion: "ASCII Uint8Array chunks out"), and returns the
+// concatenated encoded text.
+async function encodeThroughTransform(bytes, sizes) {
+  const sizeList = Array.isArray(sizes) ? sizes : [sizes];
+  const chunks = [];
+  let offset = 0;
+  let s = 0;
+  while (offset < bytes.length) {
+    const size = sizeList[s % sizeList.length];
+    chunks.push(bytes.subarray(offset, offset + size));
+    offset += size;
+    s++;
+  }
+
+  const source = new ReadableStream({
+    start(controller) {
+      for (const chunk of chunks) controller.enqueue(chunk);
+      controller.close();
+    },
+  });
+
+  const reader = source.pipeThrough(base64Transform()).getReader();
+  const outChunks = [];
+  let totalLen = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    assert.ok(
+      value instanceof Uint8Array,
+      'encoded chunks must be ASCII bytes, never a string',
+    );
+    outChunks.push(value);
+    totalLen += value.length;
+  }
+  const out = new Uint8Array(totalLen);
+  let o = 0;
+  for (const c of outChunks) {
+    out.set(c, o);
+    o += c.length;
+  }
+  return Buffer.from(out).toString('ascii');
+}
+
+test('base64Transform round-trips exact bytes at every chunk alignment, padding only at the end', async () => {
+  const sizes = [1, 2, 3, 4, 5, 8191, 8192, 8193, 98303, 98304, 98305];
+  for (const size of sizes) {
+    // A couple of same-size chunks plus a short final remainder already
+    // exercises the carry recurrence at this exact chunk size (carry-in
+    // -> combined -> carry-out, repeated, then flushed); it needs no
+    // megabytes of fixture data, unlike feeding one huge shared buffer
+    // one byte at a time for the size-1 case.
+    const bytes = fixtureBytes(size * 2 + 5);
+    const encodedText = await encodeThroughTransform(bytes, size);
+    const firstPad = encodedText.indexOf('=');
+    assert.ok(
+      firstPad === -1 || firstPad >= encodedText.length - 2,
+      `padding only at the end for chunk size ${size}`,
+    );
+    const decoded = new Uint8Array(Buffer.from(encodedText, 'base64'));
+    assert.deepEqual(decoded, bytes, `chunk size ${size}`);
   }
 });
 
-test('handles full binary range including NUL and high bytes', () => {
-  const bytes = new Uint8Array(512);
-  for (let i = 0; i < 512; i++) bytes[i] = i % 256;
-  assert.deepEqual(roundtrip(bytes), bytes);
+test('base64Transform round-trips exact bytes across a mixed chunk-size split', async () => {
+  const mixedSizes = [1, 8191, 2, 98304, 3, 5, 4];
+  const total = mixedSizes.reduce((sum, n) => sum + n, 0);
+  const bytes = fixtureBytes(total);
+  const encodedText = await encodeThroughTransform(bytes, mixedSizes);
+  const firstPad = encodedText.indexOf('=');
+  assert.ok(firstPad === -1 || firstPad >= encodedText.length - 2, 'padding only at the end');
+  const decoded = new Uint8Array(Buffer.from(encodedText, 'base64'));
+  assert.deepEqual(decoded, bytes);
 });
 
-test('a max-size message round-trips without corruption', () => {
-  const bytes = new Uint8Array(MAX_RAW_BYTES);
-  for (let i = 0; i < bytes.length; i++) bytes[i] = (i ^ (i >> 8)) % 256;
-  const encoded = base64Encode(bytes);
-  // No mid-stream padding: '=' may appear only at the very end.
-  const firstPad = encoded.indexOf('=');
-  assert.ok(firstPad === -1 || firstPad >= encoded.length - 2, 'padding only at the end');
-  assert.deepEqual(roundtrip(bytes), bytes);
-});
-
-test('the size threshold fits the endpoint body cap after encoding', () => {
-  // ceil(4/3 * raw) + JSON envelope must stay under 2 MiB.
+test('the derivation pin: encoded MAX_RAW_BYTES plus envelope overhead fits the endpoint 34 MiB cap', () => {
+  // 4 * ceil(MAX_RAW_BYTES / 3) + 4096 <= 34 MiB (the endpoint's
+  // MAX_INBOUND_EMAIL_BODY_BYTES, mirrored — docs/specs/SLICE_017.md §5.4).
   const encodedLen = Math.ceil(MAX_RAW_BYTES / 3) * 4;
   const envelopeOverhead = 4096;
-  assert.ok(encodedLen + envelopeOverhead < 2 * 1024 * 1024);
+  assert.ok(encodedLen + envelopeOverhead <= 34 * 1024 * 1024);
 });
 
 // --- The email() response-handling matrix (adversarial M1): the logic
@@ -54,12 +110,56 @@ test('the size threshold fits the endpoint body cap after encoding', () => {
 // never reject). Stubbed message + mocked fetch; no network.
 import worker from './worker.js';
 
-function makeMessage(bytes, { to = 'acme-realty-k7f3q2wd@leads.elysianfeld.com' } = {}) {
+// A genuine multi-chunk `ReadableStream` (unlike `new Response(bytes).body`,
+// which hands the whole buffer to the runtime as one piece): used to prove
+// the base64 carry crosses `email()`'s own stream chunks, not only the
+// chunks `base64Transform()` is fed directly in the unit tests above.
+function chunkedStream(bytes, chunkSize) {
+  let offset = 0;
+  return new ReadableStream({
+    pull(controller) {
+      if (offset >= bytes.length) {
+        controller.close();
+        return;
+      }
+      const end = Math.min(offset + chunkSize, bytes.length);
+      controller.enqueue(bytes.subarray(offset, end));
+      offset = end;
+    },
+  });
+}
+
+// Like chunkedStream(), but errors instead of closing after a few chunks —
+// simulating workerd's own message.raw stream breaking mid-read (a broken
+// upstream connection, an internal error, etc.). The relay must temp-fail
+// (throw), never bounce, and must never let a truncated body reach the
+// endpoint as if it were a complete message.
+function failingStream(bytes, chunkSize, failAfterChunks) {
+  let offset = 0;
+  let chunksSent = 0;
+  return new ReadableStream({
+    pull(controller) {
+      if (chunksSent >= failAfterChunks) {
+        controller.error(new Error('source failed'));
+        return;
+      }
+      const end = Math.min(offset + chunkSize, bytes.length);
+      controller.enqueue(bytes.subarray(offset, end));
+      offset = end;
+      chunksSent++;
+    },
+  });
+}
+
+function makeMessage(
+  bytes,
+  { to = 'acme-realty-k7f3q2wd@leads.elysianfeld.com', chunkSize } = {},
+) {
   const rejected = [];
   return {
     to,
     rawSize: bytes.length,
-    raw: new Response(bytes).body,
+    raw: chunkSize ? chunkedStream(bytes, chunkSize) : new Response(bytes).body,
     setReject(reason) {
       rejected.push(reason);
     },
@@ -76,7 +176,13 @@ async function withFetch(status, fn) {
   const calls = [];
   const original = globalThis.fetch;
   globalThis.fetch = async (url, init) => {
-    calls.push({ url, init });
+    // Actually drain init.body (a real fetch/undici would, to write the
+    // request) rather than just storing the ReadableStream reference —
+    // otherwise email()'s inboundEmailBody() stream is handed to `fetch`
+    // but its pull() never runs, and the whole streaming machinery goes
+    // untested by every matrix test below.
+    const body = init.body ? await new Response(init.body).arrayBuffer() : null;
+    calls.push({ url, init, body });
     return new Response('{}', { status });
   };
   try {
@@ -103,10 +209,61 @@ test('a 200 relays the envelope recipient, bearer, and exact bytes', async () =>
     assert.equal(calls.length, 1);
     assert.equal(calls[0].url, ENV.CRM_INBOUND_API_URL);
     assert.equal(calls[0].init.headers.authorization, 'Bearer test-secret-value');
-    const body = JSON.parse(calls[0].init.body);
+    assert.equal(calls[0].init.duplex, 'half');
+    const text = Buffer.from(calls[0].body).toString('utf8');
+    const body = JSON.parse(text);
     assert.equal(body.recipient, message.to);
     assert.deepEqual(new Uint8Array(Buffer.from(body.raw, 'base64')), bytes);
     assert.equal(message.rejected.length, 0);
+  });
+});
+
+test('a 25 MiB message relays as a streamed body and decodes to the exact bytes', async () => {
+  const bytes = fixtureBytes(MAX_RAW_BYTES);
+  // A chunk size that is not a multiple of 3, so the base64 carry crosses
+  // chunk boundaries through email() itself (spec §5.2), not only inside
+  // base64Transform()'s own directly-fed unit tests above.
+  const message = makeMessage(bytes, { chunkSize: 65_537 });
+  await withFetch(200, async (calls) => {
+    await worker.email(message, ENV);
+    assert.equal(calls.length, 1);
+    const { init, body } = calls[0];
+    assert.ok(
+      init.body instanceof ReadableStream,
+      'the request body must be a stream, never a string',
+    );
+    assert.equal(init.duplex, 'half');
+    const text = Buffer.from(body).toString('utf8');
+    const parsed = JSON.parse(text);
+    assert.equal(parsed.recipient, message.to);
+    const decoded = Buffer.from(parsed.raw, 'base64');
+    // Not assert.deepEqual: a mismatch would print both 25 MiB buffers.
+    assert.equal(Buffer.compare(decoded, Buffer.from(bytes)), 0, 'decoded bytes differ');
+    assert.equal(message.rejected.length, 0);
+  });
+});
+
+test('a recipient with a quoted local part containing " and \\ produces valid JSON with the exact recipient', async () => {
+  // RFC 5321 quoted local part carrying an escaped embedded quote and a
+  // literal backslash — JSON.stringify must escape both correctly.
+  const trickyRecipient = String.raw`"weird\"quoted"@example.com`;
+  const message = makeMessage(new Uint8Array([9, 8, 7]), { to: trickyRecipient });
+  await withFetch(200, async (calls) => {
+    await worker.email(message, ENV);
+    const text = Buffer.from(calls[0].body).toString('utf8');
+    const parsed = JSON.parse(text); // throws if the JSON is malformed
+    assert.equal(parsed.recipient, trickyRecipient);
+  });
+});
+
+test('a source stream failure temp-fails and never posts a truncated body', async () => {
+  const bytes = new Uint8Array(32 * 1024);
+  const message = makeMessage(bytes);
+  message.raw = failingStream(bytes, 4096, 3); // fails on the 4th pull, well short of EOF
+  await withFetch(200, async (calls) => {
+    await assert.rejects(() => worker.email(message, ENV));
+    assert.equal(calls.length, 0, 'a broken source must never complete a fetch call');
+    assert.equal(message.rejected.length, 0, 'a source failure must temp-fail, never bounce');
   });
 });
 

@@ -7,6 +7,8 @@ use axum::http::{Request, StatusCode};
 use axum::Router;
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
+use rand::rngs::StdRng;
+use rand::{Rng, SeedableRng};
 use serde_json::{json, Value};
 use sqlx::PgPool;
 use tower::ServiceExt;
@@ -217,6 +219,106 @@ async fn valid_delivery_stores_one_row_that_decrypts_to_the_exact_bytes(migrator
     )
     .unwrap();
     assert_eq!(opened, PLAIN_EML);
+}
+
+/// A ~20 MiB multipart message for the Slice 017 size-cap tests (spec
+/// §5.8/§5.9): a short text part plus a base64 `application/pdf` part of
+/// fixed-seed pseudo-random bytes, MIME-wrapped at 76 columns like a real
+/// mail client would produce. Never a committed file (D-056/SLICE_017
+/// §5) — generated fresh per test run. 15 MiB of attachment bytes
+/// base64-encodes to exactly 20 MiB before line-wrapping, landing the
+/// whole message at the specified "~20 MiB".
+fn large_attachment_email(headers: &str, boundary: &str) -> Vec<u8> {
+    const ATTACHMENT_RAW_LEN: usize = 15 * 1024 * 1024;
+    let mut rng = StdRng::seed_from_u64(0x5117_2017_0805_1cae);
+    let mut attachment = vec![0u8; ATTACHMENT_RAW_LEN];
+    rng.fill_bytes(&mut attachment);
+    let encoded = STANDARD.encode(&attachment);
+
+    let mut raw = Vec::with_capacity(encoded.len() + encoded.len() / 76 * 2 + headers.len() + 512);
+    raw.extend_from_slice(headers.as_bytes());
+    raw.extend_from_slice(
+        format!(
+            "MIME-Version: 1.0\r\n\
+             Content-Type: multipart/mixed; boundary=\"{boundary}\"\r\n\
+             \r\n\
+             --{boundary}\r\n\
+             Content-Type: text/plain; charset=utf-8\r\n\
+             Content-Transfer-Encoding: 7bit\r\n\
+             \r\n\
+             Please see the attached disclosure packet.\r\n\
+             \r\n\
+             --{boundary}\r\n\
+             Content-Type: application/pdf; name=\"disclosure.pdf\"\r\n\
+             Content-Transfer-Encoding: base64\r\n\
+             Content-Disposition: attachment; filename=\"disclosure.pdf\"\r\n\
+             \r\n"
+        )
+        .as_bytes(),
+    );
+    for chunk in encoded.as_bytes().chunks(76) {
+        raw.extend_from_slice(chunk);
+        raw.extend_from_slice(b"\r\n");
+    }
+    raw.extend_from_slice(format!("--{boundary}--\r\n").as_bytes());
+    raw
+}
+
+/// Criteria 1, 2 at size (docs/specs/SLICE_017.md §5.8): a ~20 MiB
+/// multipart message delivered to an intake address is stored once,
+/// `byte_len` equals the raw size, and the row decrypts to the exact
+/// bytes — the same pattern as
+/// `valid_delivery_stores_one_row_that_decrypts_to_the_exact_bytes`
+/// above, at the new size boundary. No redelivery half: dedup at size
+/// restates `byte_identical_redelivery_is_a_noop` (`content_hmac` is
+/// size-independent in kind) and would cost another expensive
+/// debug-profile crypto open for no new coverage.
+#[sqlx::test]
+#[ignore]
+async fn a_20_mib_multipart_message_stores_once_and_decrypts_to_the_exact_bytes(
+    migrator_pool: PgPool,
+) {
+    let org_id = crate::common::create_org(&migrator_pool, "Acme Realty Large").await;
+    let (slug, token) = intake_row(&migrator_pool, org_id).await;
+    let router = build_router(&migrator_pool, Publisher::recording()).await;
+    let addr = recipient(&slug, &token);
+
+    let headers = format!(
+        "From: sender@example.com\r\nTo: {addr}\r\nSubject: disclosure packet\r\nMessage-ID: <large-017-1@example.com>\r\n"
+    );
+    let raw = large_attachment_email(&headers, "large-017-boundary");
+
+    let resp = post_inbound_email(&router, Some(TEST_INBOUND_EMAIL_SECRET), &addr, &raw).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(
+        crate::common::body_json(resp).await,
+        json!({ "status": "accepted" })
+    );
+
+    assert_eq!(raw_payload_count(&migrator_pool, org_id).await, 1);
+    let (id,): (Uuid,) = sqlx::query_as("SELECT id FROM raw_payload WHERE organization_id = $1")
+        .bind(org_id)
+        .fetch_one(&migrator_pool)
+        .await
+        .unwrap();
+    let row = raw_payload_row(&migrator_pool, id).await;
+    assert_eq!(row.byte_len as usize, raw.len());
+
+    let opened = crypto::open(
+        &test_config().raw_payload_key,
+        OrganizationId::new(org_id),
+        RawPayloadId::new(id),
+        &row.nonce,
+        &row.ciphertext,
+    )
+    .unwrap();
+    // Not assert_eq!: a mismatch would Debug-print both ~21 MB vectors.
+    assert!(
+        opened == raw,
+        "decrypted bytes differ from the delivered message ({} vs {} bytes)",
+        opened.len(),
+        raw.len()
+    );
 }
 
 /// Criterion 3: no Person, Inquiry, fact, or routing row is created.

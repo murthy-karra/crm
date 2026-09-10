@@ -1,8 +1,11 @@
 //! Service-free HTTP tests for `POST /inbound/email`
 //! (docs/specs/SLICE_007b.md §11): 401 without a bearer on a stateless
 //! app, 503 against an unreachable database, no CORS headers, and an
-//! oversize body with a bad bearer still 413ing with the envelope
-//! (pinning the extractor-before-handler ordering, §5).
+//! oversize body (fixed-length or chunked) with a bad bearer still 413ing
+//! with the envelope (pinning the extractor-before-handler ordering, §5).
+//! docs/specs/SLICE_017.md §5.6-5.7: the 413 boundary moved to 34 MiB and
+//! gained a chunked sibling and an under-limit 401 boundary from the
+//! other side.
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
@@ -147,13 +150,14 @@ async fn route_is_outside_cors_and_carries_no_cors_headers() {
 /// §5: an oversize body 413s even with a bad bearer — the body is fully
 /// (un)buffered before this route's own bearer check runs — and still
 /// carries the `ApiError::PayloadTooLarge` JSON envelope, not axum's
-/// default plain-text rejection.
+/// default plain-text rejection. docs/specs/SLICE_017.md §5.6: moved to
+/// 34 MiB + 1 (from 2 MiB + 1) with the endpoint's raised cap.
 #[tokio::test]
 async fn oversize_body_with_bad_bearer_is_413_with_the_envelope() {
     let state = AppState::new(&test_config(&[])).unwrap();
     let app = crm_api::build_app(state);
 
-    let oversize = vec![b'x'; 2 * 1024 * 1024 + 1];
+    let oversize = vec![b'x'; 34 * 1024 * 1024 + 1];
     let response = app
         .oneshot(request(Some("a-wrong-bearer-value"), oversize))
         .await
@@ -163,5 +167,69 @@ async fn oversize_body_with_bad_bearer_is_413_with_the_envelope() {
     assert_eq!(
         body_json(response).await,
         serde_json::json!({ "error": "payload_too_large" })
+    );
+}
+
+/// docs/specs/SLICE_017.md §5.6: the same 413-before-bearer boundary, but
+/// as a chunked, unknown-length body (`Body::from_stream`) rather than one
+/// fixed-length `Vec`. §3 states this needs no handler code — `Bytes`
+/// extraction and `DefaultBodyLimit` already enforce the cap while
+/// reading an unsized body — this test pins that it is actually true.
+#[tokio::test]
+async fn oversize_chunked_body_with_bad_bearer_is_413_with_the_envelope() {
+    let state = AppState::new(&test_config(&[])).unwrap();
+    let app = crm_api::build_app(state);
+
+    const CHUNK_LEN: usize = 64 * 1024;
+    const TOTAL_LEN: usize = 34 * 1024 * 1024 + 1;
+    let mut remaining = TOTAL_LEN;
+    let mut chunks: Vec<Result<Vec<u8>, std::convert::Infallible>> = Vec::new();
+    while remaining > 0 {
+        let len = remaining.min(CHUNK_LEN);
+        chunks.push(Ok(vec![b'x'; len]));
+        remaining -= len;
+    }
+    let body = Body::from_stream(futures_util::stream::iter(chunks));
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/inbound/email")
+        .header("content-type", "application/json")
+        .header("authorization", "Bearer a-wrong-bearer-value")
+        .body(body)
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
+    assert_eq!(
+        body_json(response).await,
+        serde_json::json!({ "error": "payload_too_large" })
+    );
+}
+
+/// docs/specs/SLICE_017.md §5.7: the boundary from the other side — a
+/// body of exactly `4 * ceil(25 MiB / 3) + 64` bytes (the base64 of a
+/// full 25 MiB message plus a small envelope allowance, still under the
+/// endpoint's 34 MiB cap) with a bad bearer is 401, never 413. Pins that
+/// the endpoint never rejects for size what the relay can legitimately
+/// send.
+#[tokio::test]
+async fn body_at_the_relays_largest_legitimate_size_with_a_bad_bearer_is_401_not_413() {
+    let state = AppState::new(&test_config(&[])).unwrap();
+    let app = crm_api::build_app(state);
+
+    let raw_ceiling: usize = 25 * 1024 * 1024;
+    let encoded_len = 4 * raw_ceiling.div_ceil(3);
+    let body = vec![b'x'; encoded_len + 64];
+
+    let response = app
+        .oneshot(request(Some("a-wrong-bearer-value"), body))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        body_json(response).await,
+        serde_json::json!({ "error": "unauthenticated" })
     );
 }

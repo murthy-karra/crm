@@ -7,7 +7,12 @@ import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, apiFetch } from '../api/client'
-import type { OperatorTurnRequest, OperatorTurnResponse } from '../api/types'
+import type {
+  OperatorCreateTaskProposal,
+  OperatorReceipt,
+  OperatorTurnRequest,
+  OperatorTurnResponse,
+} from '../api/types'
 import { defineComponent, ref } from 'vue'
 import OperatorPanel from './OperatorPanel.vue'
 import { CALL_HOST_KEY, provideCallHost, type CallHost } from '../telephony/callHost'
@@ -49,6 +54,7 @@ function response(overrides: Partial<OperatorTurnResponse> = {}): OperatorTurnRe
     turn_id: 'turn-1',
     reply: 'Call Grace first.',
     proposal: null,
+    receipt: null,
     references: {
       people: [
         {
@@ -186,7 +192,12 @@ describe('OperatorPanel', () => {
     expect(wrapper.get('[data-testid="operator-send"]').attributes('disabled')).toBeDefined()
     expect(wrapper.get('[data-testid="operator-user"]').text()).toBe('Who next?')
     expect(apiFetchMock).toHaveBeenCalledWith('/operator/turns', expect.objectContaining({ method: 'POST' }))
-    expect(lastRequest()).toEqual({ message: 'Who next?', history: [], context: { route: 'today' } })
+    expect(lastRequest()).toEqual({
+      message: 'Who next?',
+      history: [],
+      context: { route: 'today' },
+      utc_offset_minutes: -new Date().getTimezoneOffset(),
+    })
 
     resolve(response())
     await flushPromises()
@@ -342,6 +353,7 @@ describe('OperatorPanel identity boundary (SLICE_011c §6)', () => {
       message: 'What belongs to this session?',
       history: [],
       context: { route: 'today' },
+      utc_offset_minutes: -new Date().getTimezoneOffset(),
     })
     expect(wrapper.text()).not.toContain(PRIVATE_SENTINEL)
   })
@@ -579,5 +591,298 @@ describe('OperatorPanel — local pre-checks never consume the proposal (SLICE_0
     expect(wrapper.text()).not.toContain(PRIVATE_SENTINEL)
     expect(wrapper.find('[data-testid="operator-proposal"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="operator-proposal-started"]').exists()).toBe(false)
+  })
+})
+
+// ---- Slice 018: complete_task receipt / Undo, create_task proposal --------
+
+const TASK_ID = '3f1c1a3e-2b6a-4c1e-9a1f-0d3e4f5a6b8f'
+const TASK_PROPOSAL_ID = '4f1c1a3e-2b6a-4c1e-9a1f-0d3e4f5a6b90'
+const PERSON_ID = ID
+
+function receipt(overrides: Partial<OperatorReceipt> = {}): OperatorReceipt {
+  return {
+    kind: 'complete_task',
+    task_id: TASK_ID,
+    person: response().references.people[0]!,
+    title: 'Call about the listing',
+    task_kind: 'call',
+    due_at: new Date().toISOString(),
+    completed_at: new Date().toISOString(),
+    ...overrides,
+  }
+}
+
+function taskProposal(
+  expiresInMs = 120_000,
+  overrides: Partial<OperatorCreateTaskProposal> = {},
+): OperatorCreateTaskProposal {
+  return {
+    id: TASK_PROPOSAL_ID,
+    kind: 'create_task',
+    person: response().references.people[0]!,
+    title: 'Call Grace',
+    task_kind: 'follow_up',
+    due_at: null,
+    assignee: { id: 'user-alice', display_name: 'Alice' },
+    expires_at: new Date(Date.now() + expiresInMs).toISOString(),
+    ...overrides,
+  }
+}
+
+const REOPEN_PATH = `/people/${PERSON_ID}/tasks/${TASK_ID}/reopen`
+const CONFIRM_TASK_PATH = `/operator/proposals/${TASK_PROPOSAL_ID}/confirm`
+
+function stubTurn(turn: OperatorTurnResponse, extra?: (path: string, init?: RequestInit) => Promise<unknown> | undefined) {
+  apiFetchMock.mockImplementation((path: string, init?: RequestInit) => {
+    const method = init?.method ?? 'GET'
+    if (method === 'POST' && path === '/operator/turns') return Promise.resolve(turn)
+    const handled = extra?.(path, init)
+    if (handled) return handled
+    return Promise.reject(new Error(`unexpected ${method} ${path}`))
+  })
+}
+
+describe('OperatorPanel — complete_task receipt and Undo (SLICE_018 §8)', () => {
+  it('renders the receipt only from `receipt` — a reply claiming a different title never reaches the card', async () => {
+    stubTurn(response({ receipt: receipt({ title: 'Real title' }), reply: 'I completed "A totally different title".' }))
+    const { wrapper } = await mountPanel()
+    await sendTurn(wrapper)
+
+    const card = wrapper.get('[data-testid="operator-receipt"]')
+    expect(card.text()).toContain('Real title')
+    expect(card.text()).not.toContain('A totally different title')
+  })
+
+  it('no receipt card for already_completed/forbidden outcomes (receipt is null)', async () => {
+    stubTurn(response({ receipt: null, reply: 'That task is already done.' }))
+    const { wrapper } = await mountPanel()
+    await sendTurn(wrapper)
+    expect(wrapper.find('[data-testid="operator-receipt"]').exists()).toBe(false)
+  })
+
+  it('Undo: 200 changed:true shows "Reopened" and finalizes the button', async () => {
+    stubTurn(response({ receipt: receipt() }), (path, init) => {
+      if (path === REOPEN_PATH && init?.method === 'POST') {
+        return Promise.resolve({ task: { id: TASK_ID }, changed: true })
+      }
+      return undefined
+    })
+    const { wrapper } = await mountPanel()
+    await sendTurn(wrapper)
+
+    await wrapper.get('[data-testid="operator-receipt-undo"]').trigger('click')
+    await flushPromises()
+    expect(apiFetchMock).toHaveBeenCalledWith(REOPEN_PATH, expect.objectContaining({ method: 'POST' }))
+    expect(wrapper.get('[data-testid="operator-receipt-message"]').text()).toBe('Reopened')
+    expect(wrapper.get('[data-testid="operator-receipt-undo"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('Undo: 200 changed:false (someone reopened first) is the same final "Reopened" copy', async () => {
+    stubTurn(response({ receipt: receipt() }), (path, init) => {
+      if (path === REOPEN_PATH && init?.method === 'POST') {
+        return Promise.resolve({ task: { id: TASK_ID }, changed: false })
+      }
+      return undefined
+    })
+    const { wrapper } = await mountPanel()
+    await sendTurn(wrapper)
+
+    await wrapper.get('[data-testid="operator-receipt-undo"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="operator-receipt-message"]').text()).toBe('Reopened')
+    expect(wrapper.get('[data-testid="operator-receipt-undo"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('Undo: 404 shows "This task no longer exists." and finalizes', async () => {
+    stubTurn(response({ receipt: receipt() }), (path, init) => {
+      if (path === REOPEN_PATH && init?.method === 'POST') {
+        return Promise.reject(new ApiError(404, 'not_found'))
+      }
+      return undefined
+    })
+    const { wrapper } = await mountPanel()
+    await sendTurn(wrapper)
+
+    await wrapper.get('[data-testid="operator-receipt-undo"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="operator-receipt-message"]').text()).toBe('This task no longer exists.')
+    expect(wrapper.get('[data-testid="operator-receipt-undo"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('Undo: 403 shows "You can no longer change this task." and finalizes', async () => {
+    stubTurn(response({ receipt: receipt() }), (path, init) => {
+      if (path === REOPEN_PATH && init?.method === 'POST') {
+        return Promise.reject(new ApiError(403, 'forbidden'))
+      }
+      return undefined
+    })
+    const { wrapper } = await mountPanel()
+    await sendTurn(wrapper)
+
+    await wrapper.get('[data-testid="operator-receipt-undo"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="operator-receipt-message"]').text()).toBe('You can no longer change this task.')
+    expect(wrapper.get('[data-testid="operator-receipt-undo"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('Undo: a network error stays retryable (button clickable again)', async () => {
+    stubTurn(response({ receipt: receipt() }), (path, init) => {
+      if (path === REOPEN_PATH && init?.method === 'POST') {
+        return Promise.reject(new ApiError(0, 'network_error'))
+      }
+      return undefined
+    })
+    const { wrapper } = await mountPanel()
+    await sendTurn(wrapper)
+
+    await wrapper.get('[data-testid="operator-receipt-undo"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="operator-receipt-message"]').text()).toBe(
+      'Could not reach the server. Check your connection and try again.',
+    )
+    expect(wrapper.get('[data-testid="operator-receipt-undo"]').attributes('disabled')).toBeUndefined()
+  })
+})
+
+describe('OperatorPanel — create_task proposal card (SLICE_018 §8)', () => {
+  it('renders the card from the server proposal object only: Person, title, kind, due, assignee', async () => {
+    stubTurn(
+      response({
+        proposal: taskProposal(120_000, { due_at: '2026-09-12T23:59:00.000Z' }),
+        reply: 'Ready to confirm.',
+      }),
+    )
+    const { wrapper } = await mountPanel()
+    await sendTurn(wrapper)
+
+    const card = wrapper.get('[data-testid="operator-task-proposal"]')
+    expect(card.text()).toContain('Grace Hopper')
+    expect(card.text()).toContain('Call Grace')
+    expect(card.text()).toContain('Follow up')
+    expect(card.text()).toContain('Alice')
+  })
+
+  it('Confirm posts to the confirm route; 201 shows "Task added." and finalizes', async () => {
+    stubTurn(response({ proposal: taskProposal() }), (path, init) => {
+      if (path === CONFIRM_TASK_PATH && init?.method === 'POST') {
+        return Promise.resolve({
+          task: { id: 'new-task-1', person_id: PERSON_ID, title: 'Call Grace' },
+        })
+      }
+      return undefined
+    })
+    const { wrapper } = await mountPanel()
+    await sendTurn(wrapper)
+
+    await wrapper.get('[data-testid="operator-task-proposal-confirm"]').trigger('click')
+    await flushPromises()
+    expect(apiFetchMock).toHaveBeenCalledWith(CONFIRM_TASK_PATH, expect.objectContaining({ method: 'POST' }))
+    expect(wrapper.get('[data-testid="operator-task-proposal-message"]').text()).toBe('Task added.')
+    expect(wrapper.get('[data-testid="operator-task-proposal-confirm"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="operator-task-proposal-dismiss"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('Dismiss is local: no request, card finalized', async () => {
+    stubTurn(response({ proposal: taskProposal() }))
+    const { wrapper } = await mountPanel()
+    await sendTurn(wrapper)
+    const before = apiFetchMock.mock.calls.length
+
+    await wrapper.get('[data-testid="operator-task-proposal-dismiss"]').trigger('click')
+    await flushPromises()
+    expect(apiFetchMock.mock.calls.length).toBe(before)
+    expect(wrapper.get('[data-testid="operator-task-proposal-message"]').text()).toBe('Dismissed.')
+    expect(wrapper.get('[data-testid="operator-task-proposal-confirm"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('an expired proposal disables Confirm with the expiry copy', async () => {
+    stubTurn(response({ proposal: taskProposal(-1000) }))
+    const { wrapper } = await mountPanel()
+    await sendTurn(wrapper)
+
+    expect(wrapper.get('[data-testid="operator-task-proposal-confirm"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="operator-task-proposal-expired"]').text()).toBe(
+      'This suggestion expired — ask again.',
+    )
+  })
+
+  it('409 proposal_consumed shows "This task was already added." and finalizes', async () => {
+    stubTurn(response({ proposal: taskProposal() }), (path, init) => {
+      if (path === CONFIRM_TASK_PATH && init?.method === 'POST') {
+        return Promise.reject(new ApiError(409, 'proposal_consumed', { task_id: 'other-task' }))
+      }
+      return undefined
+    })
+    const { wrapper } = await mountPanel()
+    await sendTurn(wrapper)
+
+    await wrapper.get('[data-testid="operator-task-proposal-confirm"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="operator-task-proposal-message"]').text()).toBe(
+      'This task was already added.',
+    )
+    expect(wrapper.get('[data-testid="operator-task-proposal-confirm"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('409 proposal_expired from confirm shows the expiry copy and finalizes', async () => {
+    stubTurn(response({ proposal: taskProposal() }), (path, init) => {
+      if (path === CONFIRM_TASK_PATH && init?.method === 'POST') {
+        return Promise.reject(new ApiError(409, 'proposal_expired'))
+      }
+      return undefined
+    })
+    const { wrapper } = await mountPanel()
+    await sendTurn(wrapper)
+
+    await wrapper.get('[data-testid="operator-task-proposal-confirm"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="operator-task-proposal-message"]').text()).toBe(
+      'This suggestion expired — ask again.',
+    )
+    expect(wrapper.get('[data-testid="operator-task-proposal-confirm"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('a task error (invalid_assignee) shows the existing TASK_ERROR_COPY and stays retryable', async () => {
+    stubTurn(response({ proposal: taskProposal() }), (path, init) => {
+      if (path === CONFIRM_TASK_PATH && init?.method === 'POST') {
+        return Promise.reject(new ApiError(422, 'invalid_assignee'))
+      }
+      return undefined
+    })
+    const { wrapper } = await mountPanel()
+    await sendTurn(wrapper)
+
+    await wrapper.get('[data-testid="operator-task-proposal-confirm"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="operator-task-proposal-message"]').text()).toBe('That member is not active')
+    expect(wrapper.get('[data-testid="operator-task-proposal-confirm"]').attributes('disabled')).toBeUndefined()
+  })
+})
+
+describe('OperatorPanel — receipts clear with proposals on identity change (SLICE_018 §8)', () => {
+  it('clears a receipt on an identity-key change', async () => {
+    stubTurn(response({ receipt: receipt({ title: PRIVATE_SENTINEL }) }))
+    const { wrapper, identityKey } = await mountPanel()
+    await sendTurn(wrapper)
+    expect(wrapper.find('[data-testid="operator-receipt"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain(PRIVATE_SENTINEL)
+
+    identityKey.value = `${ORG_ID}:actor-b:0`
+    await flushPromises()
+    expect(wrapper.find('[data-testid="operator-receipt"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain(PRIVATE_SENTINEL)
+  })
+
+  it('clears a create_task proposal on an identity-key change', async () => {
+    stubTurn(response({ proposal: taskProposal(120_000, { title: PRIVATE_SENTINEL }) }))
+    const { wrapper, identityKey } = await mountPanel()
+    await sendTurn(wrapper)
+    expect(wrapper.find('[data-testid="operator-task-proposal"]').exists()).toBe(true)
+
+    identityKey.value = `${ORG_ID}:actor-b:0`
+    await flushPromises()
+    expect(wrapper.find('[data-testid="operator-task-proposal"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain(PRIVATE_SENTINEL)
   })
 })

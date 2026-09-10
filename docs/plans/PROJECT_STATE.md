@@ -1,22 +1,34 @@
 # Project State
 
-Last updated: 2026-09-10 (D-057 accepted; Slice 018, the Operator
-`create_task` / `complete_task` rung, in planning; the LATER batch of
+Last updated: 2026-09-10 (Slice 018, the Operator `create_task` /
+`complete_task` rung, approved at the implementation gate and its lane
+dispatched; the LATER batch of
 2026-09-10 merged and pushed; the Slice 017 live large-mail sends remain
 deferred by the user).
 
 ## Current phase
 
-**SLICE 018 (OPERATOR `create_task` / `complete_task`) — PLANNING
-(2026-09-10).** The user picked this rung from the queue. **D-057 accepted
+**SLICE 018 (OPERATOR `create_task` / `complete_task`) — APPROVED
+2026-09-10, LANE IN IMPLEMENTATION.** [SLICE_018.md](../specs/SLICE_018.md)
+and its [brief](../tasks/SLICE_018_IMPL.md) were drafted from the
+planner's analysis (which found three things D-057 did not anticipate:
+`TaskView` has no id, the PII-free proposal table needs a sidecar for the
+proposed title, and the confirm route gates on telephony), independently
+reviewed READY WITH CORRECTIONS (thirteen, all applied, none a human
+decision; two veto-able defaults named at the gate: unconfirmed titles
+retained until Person erasure, no per-row "completed via Operator"
+marker), and approved. One lane (Claude Sonnet 5) in
+`../crm-worktrees/018` on `slice-018-operator-tasks`; Part A backend with
+a hard checkpoint, then Part B Web. Pointer lines added to SLICE_005 §5,
+SLICE_006b §4, SLICE_016 §7; D-057 carries the O-013 runbook note. The user picked this rung from the queue. **D-057 accepted
 (user, 2026-09-10):** `complete_task` executes at once with a receipt and
 Undo, the first AGENTS §5.4 "low-risk and reversible" action;
 `create_task` proposes then confirms in the SLICE_006b shape; D-053
 authorization unchanged; the mechanism is a planning default (no
 `crm-operator -> crm-app` edge, seam methods, `operator_proposal.tool`
-widened) that the planner confirms. Planner analysis dispatched; next the
-independent review of the plan, then the specification `SLICE_018.md` and
-the lane brief, then the implementation gate.
+widened) that the planner confirms. Coordinator next: audit at the
+Part A checkpoint, release Part B, then review and test analysis, the
+once-only gates, the walkthrough, and the commit and merge gates.
 
 Previously: **LATER BATCH (2026-09-10) — COMPLETE AND MERGED TO LOCAL MAIN** at
 `753d685` (2026-09-10, with the user's approval; not pushed, not deployed).
@@ -1011,9 +1023,10 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. **Slice 018 planning:** reconcile the planner's analysis, run the
-   reviewer on it, draft `docs/specs/SLICE_018.md` and the brief, then the
-   implementation gate.
+1. **Slice 018 lane:** Part A checkpoint audit, Part B release, review
+   round, final-tree gates (`sqlx-prepare`, `check`, `check-db`),
+   walkthrough, commit and merge gates; after the merge `./scripts/db-migrate`
+   on `crm_dev`, the dev API restart by exact PID and `dev-web-prod`.
 2. **Slice 017 walkthrough (spec §6), deferred by the user:** send a small
    real message and a 15–20 MB attachment to a capture address and the
    intake address; the coordinator reads the dev API log (`byte_len`,
@@ -1033,8 +1046,9 @@ and now lives only in git history.
 
 ## Approval currently required
 
-- **Slice 018:** none yet; the implementation gate follows the spec and
-  brief.
+- **Slice 018:** implementation gate approved by the user on 2026-09-10.
+  Next approvals: merge to `main` (with the `crm_dev` migration and the
+  runtime restarts), then push.
 - **LATER batch 2026-09-10:** merged to local `main` at `753d685` and the
   runtime updated and `main` pushed with the user's approval on 2026-09-10.
   Nothing pending.

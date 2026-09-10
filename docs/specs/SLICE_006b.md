@@ -167,6 +167,14 @@ fence wording changes.
   the declared contract change). The model can never supply a number —
   only ids, re-validated server-side.
 
+*Amendment pointer (Slice 018, 2026-09-10, declared additive, AGENTS.md
+§11): the confirm route branches on the claimed row's `tool` after the
+claim; `create_task` answers 201 `{"task": Task}` without telephony;
+`proposal_consumed` widens to `{"call_id", "task_id"}`;
+`operator_proposal.tool` admits `create_task`, `contact_method_id` becomes
+nullable for that tool and a sidecar `operator_task_proposal` holds the
+payload. See [SLICE_018.md](SLICE_018.md) §4–§5.*
+
 ## 5. Prompt
 
 `crm-operator/prompts/system.md`: the Operator may *prepare* a call

@@ -2049,4 +2049,6 @@ not a product decision (below).
    decision.
 
 Blocks: nothing. Feeds the Slice 018 specification. Amends by pointer
-D-054 §3 (the rung's decision is taken).
+D-054 §3 (the rung's decision is taken). O-013's erasure runbook gains
+`operator_task_proposal` (the proposed title, retained until Person
+erasure; SLICE_018 §4).

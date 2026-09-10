@@ -387,6 +387,12 @@ the explanation builder (`explain.rs`, pure, unit-tested).
 > the turn response gained a nullable `proposal` object, and
 > `POST /api/operator/proposals/{id}/confirm` joined the route group.
 
+> Amended by SLICE_018 §5 (declared additive change, AGENTS.md §11):
+> the turn request gains optional `utc_offset_minutes`; the response gains
+> nullable `receipt` and `proposal` becomes a `kind`-discriminated union
+> (`start_call` unchanged, plus `create_task`).
+> See [SLICE_018.md](SLICE_018.md) §5.
+
 
 `POST /api/operator/turns` — `AuthContext` (any active member of the
 active Organization; platform-only sessions 401 by construction, as

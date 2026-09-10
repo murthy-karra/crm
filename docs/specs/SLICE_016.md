@@ -457,6 +457,10 @@ no title on the channel, pinned by a parsed-payload test.
   model-authored text; both need a decision on mechanism (D-034's
   `operator_proposal` CHECK and the `crm-operator → crm-app` edge).
 
+*Amendment pointer (Slice 018, 2026-09-10, declared additive, AGENTS.md
+§11): D-057 took the decision; `TaskView` gains `task_id`; the two tools
+land as seam methods with no crate edge. See [SLICE_018.md](SLICE_018.md).*
+
 ## 8. Web (016a Person page; 016b Today; UI_STYLE and D-045 bind)
 
 **Person page (016a):** a **Tasks** card above History listing open tasks

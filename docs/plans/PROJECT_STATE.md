@@ -1,12 +1,35 @@
 # Project State
 
-Last updated: 2026-09-10 (Slice 017 merged and the relay deployed on Workers
-Paid; the live large-mail walkthrough deferred by the user; the LATER batch
-of 2026-09-10 approved at the implementation gate and its lane dispatched).
+Last updated: 2026-09-10 (the LATER batch of 2026-09-10 merged at
+`753d685` with the user's approval, dev runtime updated, worktree and
+branch deleted; not pushed; the Slice 017 live large-mail sends remain
+deferred by the user).
 
 ## Current phase
 
-**SLICE 017 (INBOUND MAIL SIZE CAP) — MERGED, PUSHED, DEV API UPDATED;
+**LATER BATCH (2026-09-10) — COMPLETE AND MERGED TO LOCAL MAIN** at
+`753d685` (2026-09-10, with the user's approval; not pushed, not deployed).
+Source `chore/later-batch-2026-09-10` at `bb58e35` (eight item commits,
+three round-1 fix commits and the
+[verification record](../tasks/LATER_BATCH_2026-09-10_VERIFICATION.md)).
+One lane (Claude Sonnet 5), no migration, no wire change, 12 code files.
+Review round 1 of two: reviewer READY WITH FIXES, tester no blocking
+finding; three fixes applied (a real validator gap: ignorables around a
+space passed as a task title; the seven note CHECK assertions to SQLSTATE
+23514; a deterministic tie-break test); round 2 not needed. Final-tree
+gates run once by the coordinator on `9671d65`: `check` green (782 Rust,
+751 Web, 11 worker, 13 s), `check-db` 720 of 720 first run (261 s). Item 8
+trend: peak RSS of the 20 MiB intake test 331 MB → 289 MB. Runtime updated:
+the dev API stopped by exact PID (41716) and relaunched from `main` (pid
+83913, binary 12:03, `/api/health` 200); the production web server
+rebuilt and relaunched (preview pid 84325, `5173` 200). Worktree
+`../crm-worktrees/later-2` and the branch deleted. LATER items carried in
+the record (unreachable focus fallback without a ring, fractional-seconds
+case, wildcard task-kind arm, two-entry preview fixture, a pre-existing
+task-edit Vitest flake). **`main` is ahead of `origin/main` by six
+commits; push needs the user's word.** No slice active.
+
+Previously: **SLICE 017 (INBOUND MAIL SIZE CAP) — MERGED, PUSHED, DEV API UPDATED;
 WORKER DEPLOY AND WALKTHROUGH PENDING (2026-09-09).** D-056: the relay's
 threshold is Cloudflare's own 25 MiB inbound ceiling and the relay streams a
 chunked base64 JSON body; the endpoint's body limit is a derived 34 MiB;
@@ -977,12 +1000,9 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. **The LATER batch of 2026-09-10** — brief
-   [LATER_BATCH_2026-09-10.md](../tasks/LATER_BATCH_2026-09-10.md) (eight
-   items: Operator reason timestamps to `Z`, task-title separators, SQLSTATE
-   assertions, three note-composer niceties, curated task-axis tests, the
-   inbound handler memory trim). Awaiting the implementation gate; then one
-   lane in `../crm-worktrees/later-2`, the usual review, gates and merge.
+1. **Push `main`** (six commits ahead of `origin/main`: the Slice 017
+   records, the batch gate record, the merge and this record) on the user's
+   word.
 2. **Slice 017 walkthrough (spec §6), deferred by the user:** send a small
    real message and a 15–20 MB attachment to a capture address and the
    intake address; the coordinator reads the dev API log (`byte_len`,
@@ -1004,13 +1024,11 @@ and now lives only in git history.
 
 ## Approval currently required
 
-- **LATER batch 2026-09-10:** implementation gate approved by the user on
-  2026-09-10 ("do it"). One lane (Claude Sonnet 5) in
-  `../crm-worktrees/later-2` on `chore/later-batch-2026-09-10` from
-  `ac85eb5`. Next approvals: commit of records, then merge to `main`.
+- **LATER batch 2026-09-10:** merged to local `main` at `753d685` and the
+  runtime updated with the user's approval on 2026-09-10. Pending: the push
+  of `main` (six commits ahead).
 - **Slice 017:** complete apart from the deferred live sends (the user's
-  action, no approval needed). The two record commits after the merge are
-  not yet pushed; they go with the next push.
+  action, no approval needed). Its record commits go with the next push.
 - Deployment is not authorized.
 - R1 (auto-hangup of a live call on identity change) is a product choice for
   a later slice, not blocking.

@@ -82,9 +82,14 @@ status line, which is coordinator-owned. No web change.
 5. **Script.** `scripts/inbound-email`: write the base64 to a temp file and
    build the body with `jq --rawfile raw <file>` (trim the trailing
    newline), write the body to a temp file and post it with
-   `--data-binary @file`; verify once with a generated 20 MiB `.eml`
-   against the local API (spec §7). The trend timing comes from the
-   walkthrough's release binary, not from the debug-profile tests.
+   `--data-binary @file`. Prove the argument-length fix in the lane with a
+   generated ~1 MiB `.eml` posted to the running dev API at
+   `127.0.0.1:3000` with a syntactically valid but unknown recipient: HTTP
+   200 `{"status":"rejected"}`, nothing stored (the old script fails there
+   with "argument list too long"). The 20 MiB post is the coordinator's
+   after the merge, once the dev API runs the new limit (spec §7). The
+   trend timing comes from the walkthrough's release binary, not from the
+   debug-profile tests.
 
 ## Rules for the lane
 
@@ -92,11 +97,18 @@ status line, which is coordinator-owned. No web change.
   unrelated refactors or cleanup.
 - Checkpoint-commit on the branch as steps land (worker, endpoint, tests)
   so a stalled session loses nothing; use absolute paths.
+- Setup in the fresh worktree: `source ~/.nvm/nvm.sh` before any `pnpm`
+  or `node`; `pnpm install --frozen-lockfile` in `web/`; the first Cargo
+  build is cold. Copy `.env` from the main checkout for the script proof
+  and the targeted tests; it is gitignored and is never committed.
 - Run `./scripts/check` yourself (it runs the worker tests and the Rust
   and Web checks) in the background with a timeout and report its result
-  verbatim; **do not run `./scripts/check-db`** — the coordinator runs it
-  once on the final tree, and two database-backed runs must never overlap
-  in one checkout.
+  verbatim. Run the DB-backed tests you touch as **targeted** runs only
+  (replicate `scripts/check-db` step 2's nextest invocation with a name
+  filter for `db_inbound_email` and `db_capture_receive`), also in the
+  background with a timeout; **never run `./scripts/check-db` itself** —
+  the coordinator runs it once on the final tree — and never start a
+  second database-backed run while one is alive.
 - Never log or print message content, recipients, tokens or the bearer in
   tests, fixtures, spans or the handoff; the generated attachment is
   pseudo-random bytes.

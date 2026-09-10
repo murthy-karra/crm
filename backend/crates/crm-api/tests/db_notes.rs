@@ -157,136 +157,164 @@ async fn note_check_constraints_matrix(migrator_pool: PgPool) {
     }
 
     // Empty live body.
-    assert!(
-        insert(
-            &app_pool,
-            f.org_id,
-            f.person_id,
-            Some(f.member_id),
-            "",
-            "web_session",
-            false,
-            None,
-            None,
-            None,
-        )
-        .await
-        .is_err(),
-        "empty live body must violate the CHECK"
+    let err = insert(
+        &app_pool,
+        f.org_id,
+        f.person_id,
+        Some(f.member_id),
+        "",
+        "web_session",
+        false,
+        None,
+        None,
+        None,
+    )
+    .await
+    .expect_err("empty live body must violate the CHECK");
+    assert_eq!(
+        err.as_database_error()
+            .expect("a CHECK violation")
+            .code()
+            .as_deref(),
+        Some("23514")
     );
 
     // 10,001 characters.
-    assert!(
-        insert(
-            &app_pool,
-            f.org_id,
-            f.person_id,
-            Some(f.member_id),
-            &"a".repeat(10_001),
-            "web_session",
-            false,
-            None,
-            None,
-            None,
-        )
-        .await
-        .is_err(),
-        "10,001-char body must violate the CHECK"
+    let err = insert(
+        &app_pool,
+        f.org_id,
+        f.person_id,
+        Some(f.member_id),
+        &"a".repeat(10_001),
+        "web_session",
+        false,
+        None,
+        None,
+        None,
+    )
+    .await
+    .expect_err("10,001-char body must violate the CHECK");
+    assert_eq!(
+        err.as_database_error()
+            .expect("a CHECK violation")
+            .code()
+            .as_deref(),
+        Some("23514")
     );
 
     // Untrimmed body.
-    assert!(
-        insert(
-            &app_pool,
-            f.org_id,
-            f.person_id,
-            Some(f.member_id),
-            "  padded  ",
-            "web_session",
-            false,
-            None,
-            None,
-            None,
-        )
-        .await
-        .is_err(),
-        "untrimmed body must violate the CHECK"
+    let err = insert(
+        &app_pool,
+        f.org_id,
+        f.person_id,
+        Some(f.member_id),
+        "  padded  ",
+        "web_session",
+        false,
+        None,
+        None,
+        None,
+    )
+    .await
+    .expect_err("untrimmed body must violate the CHECK");
+    assert_eq!(
+        err.as_database_error()
+            .expect("a CHECK violation")
+            .code()
+            .as_deref(),
+        Some("23514")
     );
 
     // Tombstone carrying a body.
-    assert!(
-        insert(
-            &app_pool,
-            f.org_id,
-            f.person_id,
-            Some(f.member_id),
-            "still here",
-            "web_session",
-            true,
-            Some(f.member_id),
-            None,
-            None,
-        )
-        .await
-        .is_err(),
-        "a tombstone must have an empty body"
+    let err = insert(
+        &app_pool,
+        f.org_id,
+        f.person_id,
+        Some(f.member_id),
+        "still here",
+        "web_session",
+        true,
+        Some(f.member_id),
+        None,
+        None,
+    )
+    .await
+    .expect_err("a tombstone must have an empty body");
+    assert_eq!(
+        err.as_database_error()
+            .expect("a CHECK violation")
+            .code()
+            .as_deref(),
+        Some("23514")
     );
 
     // Tombstone missing deleted_by_user_id.
-    assert!(
-        insert(
-            &app_pool,
-            f.org_id,
-            f.person_id,
-            Some(f.member_id),
-            "",
-            "web_session",
-            true,
-            None,
-            None,
-            None,
-        )
-        .await
-        .is_err(),
-        "deleted_at without deleted_by_user_id must violate the CHECK"
+    let err = insert(
+        &app_pool,
+        f.org_id,
+        f.person_id,
+        Some(f.member_id),
+        "",
+        "web_session",
+        true,
+        None,
+        None,
+        None,
+    )
+    .await
+    .expect_err("deleted_at without deleted_by_user_id must violate the CHECK");
+    assert_eq!(
+        err.as_database_error()
+            .expect("a CHECK violation")
+            .code()
+            .as_deref(),
+        Some("23514")
     );
 
     // source without source_external_id.
-    assert!(
-        insert(
-            &app_pool,
-            f.org_id,
-            f.person_id,
-            Some(f.member_id),
-            "A body",
-            "migration",
-            false,
-            None,
-            Some("fub"),
-            None,
-        )
-        .await
-        .is_err(),
-        "source without source_external_id must violate the CHECK"
+    let err = insert(
+        &app_pool,
+        f.org_id,
+        f.person_id,
+        Some(f.member_id),
+        "A body",
+        "migration",
+        false,
+        None,
+        Some("fub"),
+        None,
+    )
+    .await
+    .expect_err("source without source_external_id must violate the CHECK");
+    assert_eq!(
+        err.as_database_error()
+            .expect("a CHECK violation")
+            .code()
+            .as_deref(),
+        Some("23514")
     );
 
     // Non-migration origin with a NULL author.
-    assert!(
-        insert(
-            &app_pool,
-            f.org_id,
-            f.person_id,
-            None,
-            "A body",
-            "web_session",
-            false,
-            None,
-            None,
-            None,
-        )
-        .await
-        .is_err(),
-        "a non-migration origin requires a non-NULL author"
+    let err = insert(
+        &app_pool,
+        f.org_id,
+        f.person_id,
+        None,
+        "A body",
+        "web_session",
+        false,
+        None,
+        None,
+        None,
+    )
+    .await
+    .expect_err("a non-migration origin requires a non-NULL author");
+    assert_eq!(
+        err.as_database_error()
+            .expect("a CHECK violation")
+            .code()
+            .as_deref(),
+        Some("23514")
     );
 
     // The boundary: exactly 10,000 trimmed characters succeeds.

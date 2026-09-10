@@ -155,15 +155,24 @@ impl TaskTitle {
         {
             return Err(TaskError::MalformedRequest);
         }
-        // A title made up entirely of default-ignorable code points
-        // (zero-width space/non-joiner/joiner, word joiner, BOM) is
-        // visually empty — reject it the same way the `count == 0`
-        // branch above rejects a literally empty title. The DB CHECK
+        // A title that is empty once default-ignorable code points
+        // (zero-width space/non-joiner/joiner, word joiner, BOM) are
+        // removed is visually empty — reject it the same way the
+        // `count == 0` branch above rejects a literally empty title.
+        // Review round 1 fix: `trim()` only strips White_Space, so an
+        // ignorable separated from another ignorable by an ordinary
+        // space (e.g. "\u{200B} \u{200B}") survives `trim()` untouched;
+        // filtering ignorables out first and requiring everything left
+        // to be whitespace catches that case too. The DB CHECK
         // (`char_length(title) BETWEEN 1 AND 500`) is unaffected: this
         // validator only narrows what it already accepts, never widens
         // it, so no stored title becomes invalid under the CHECK that
         // was not already invalid at the command layer.
-        if trimmed.chars().all(is_default_ignorable) {
+        if trimmed
+            .chars()
+            .filter(|c| !is_default_ignorable(*c))
+            .all(char::is_whitespace)
+        {
             return Err(TaskError::MalformedRequest);
         }
         Ok(trimmed.to_string())
@@ -275,6 +284,17 @@ mod tests {
         ));
         assert!(matches!(
             TaskTitle::parse("\u{200B}\u{200C}\u{200D}\u{2060}\u{FEFF}"),
+            Err(TaskError::MalformedRequest)
+        ));
+        // Review round 1 fix: ignorables separated by an ordinary space
+        // survive `trim()` (which only strips White_Space, not U+200B)
+        // and must still be rejected once the ignorables are filtered out.
+        assert!(matches!(
+            TaskTitle::parse("\u{200B} \u{200B}"),
+            Err(TaskError::MalformedRequest)
+        ));
+        assert!(matches!(
+            TaskTitle::parse("\u{200B} \u{FEFF}"),
             Err(TaskError::MalformedRequest)
         ));
         // A default-ignorable code point alongside real content is fine —

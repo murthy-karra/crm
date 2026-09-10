@@ -177,3 +177,9 @@ attachment on both receiving paths); the observed worker CPU time and the
 release-binary span duration are appended here when they exist. The
 worker in production is still the pre-017 relay (1.4 MiB bounce) until
 that deploy.
+
+**Walkthrough stopped at spec §6 step 2 (2026-09-09): the user confirmed the
+account is on the Workers Free plan** (10 ms CPU per invocation). Per
+D-056 §3 the streaming relay is not deployed; the decision between the
+Workers Paid upgrade and the raw `message/rfc822` pass-through contract
+change is with the user. The production relay remains the pre-017 build.

@@ -20,12 +20,13 @@ gates once on `33f8284`: `check` green (778 Rust, 747 Web, 11 worker tests,
 restarted by exact PID (pid 41716, binary 21:34) and proven on the new limit
 (3 MiB + bad bearer → 401, 35 MiB → 413); worktree and branch deleted.
 Evidence: [SLICE_017_VERIFICATION.md](../tasks/SLICE_017_VERIFICATION.md).
-**Pending, the user's actions:** verify the Workers plan (Free = 10 ms CPU,
-stop; Paid = `cd infra/email-worker && wrangler deploy`), then a small real
-message and a 15–20 MB attachment to a capture and an intake address; the
-coordinator watches the dev API log and appends the evidence. Until the
-deploy the production relay still bounces above 1.4 MiB. Deployment is not
-authorized.
+**Walkthrough stopped at §6 step 2: the account is on the Workers Free
+plan (user, 2026-09-09).** Per D-056 §3 the streaming relay is not deployed;
+the production relay is still the pre-017 build and bounces above 1.4 MiB.
+**Decision pending with the user:** the Workers Paid upgrade (no code
+change; then `wrangler deploy` and the real sends) or a raw
+`message/rfc822` pass-through body as an additive second form on the frozen
+route (a contract change, its own S rung). Deployment is not authorized.
 
 Previously: **SLICE 016 (TASKS) — COMPLETE: BOTH RUNGS MERGED, RUNTIME UPDATED, PUSHED,
 CLEANED UP (2026-09-09, each with the user's approval).** `main` at the
@@ -1003,10 +1004,10 @@ and now lives only in git history.
 ## Approval currently required
 
 - **Slice 017:** merged, pushed and the dev API updated with the user's
-  approval on 2026-09-09. Remaining are the user's own actions: the Workers
-  plan check and `wrangler deploy` (only on Paid), then the real sends. If
-  the plan is Free, one decision returns: upgrade, or the pass-through
-  contract change under its own approval.
+  approval on 2026-09-09. The Workers plan is Free, so the worker deploy is
+  stopped. **Decision required:** the Workers Paid upgrade, or the raw
+  pass-through contract change (017b) under its own approval; the real
+  sends follow whichever is chosen.
 - Deployment is not authorized.
 - R1 (auto-hangup of a live call on identity change) is a product choice for
   a later slice, not blocking.

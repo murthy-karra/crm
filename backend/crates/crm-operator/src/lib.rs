@@ -19,7 +19,8 @@ pub mod tools;
 pub mod views;
 
 pub use backend::{
-    AgeCondition, PeopleFilterSpec, SavedListSelector, ToolBackend, ToolError, ToolResult,
+    AgeCondition, CreateTaskSpec, PeopleFilterSpec, SavedListSelector, ToolBackend, ToolError,
+    ToolResult,
 };
 pub use context::OperatorContext;
 pub use provider::{
@@ -35,11 +36,12 @@ pub use service::{
 };
 pub use tools::tool_definitions;
 pub use views::{
-    Ahead, ContactMethodView, FilterOutcome, FilterResult, HistoryEntryView, InquiryView,
-    NextWorkItem, NotOnTodayReason, NoteView, PersonCard, PersonDetail, PhoneOption,
-    PriorityExplanation, ProposalView, SavedListRef, SearchResult, StartCallProposalOutcome,
-    SystemFeedIssueView, TaskView, TodayItemView, TodaySourceIssueView, TodaySourcesView,
-    TodayView, UntrustedText, WirePersonCard, ORDERING_RULE,
+    Ahead, CompleteTaskOutcome, ContactMethodView, CreateTaskProposalOutcome, FilterOutcome,
+    FilterResult, HistoryEntryView, InquiryView, MemberRef, NextWorkItem, NotOnTodayReason,
+    NoteView, PersonCard, PersonDetail, PhoneOption, PriorityExplanation, ProposalView,
+    SavedListRef, SearchResult, StartCallProposalOutcome, SystemFeedIssueView, TaskProposalView,
+    TaskReceiptView, TaskView, TodayItemView, TodaySourceIssueView, TodaySourcesView, TodayView,
+    TurnProposal, UntrustedText, WirePersonCard, ORDERING_RULE,
 };
 
 /// The system prompt (docs/specs/SLICE_005.md §3). Not a contract; the

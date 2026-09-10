@@ -110,6 +110,112 @@ pub struct PhoneOption {
     pub value: UntrustedText,
 }
 
+/// The turn's single proposal slot (docs/specs/SLICE_018.md §2, §3): the
+/// wire's `proposal` field is a `kind`-discriminated union of exactly these
+/// two shapes, so the loop enforces "at most one inserted proposal per
+/// turn" (either kind) with one `Option`, not two independent ones.
+#[derive(Debug, Clone)]
+pub enum TurnProposal {
+    StartCall(Box<ProposalView>),
+    CreateTask(Box<TaskProposalView>),
+}
+
+/// `complete_task`'s outcome (docs/specs/SLICE_018.md §2): the first
+/// AGENTS §5.4 "low-risk and reversible" action — it executes at once.
+/// Only `Completed` sets the turn's receipt; `AlreadyCompleted` and
+/// `Forbidden` do not (docs/specs/SLICE_018.md §2's loop rules).
+#[derive(Debug, Clone)]
+pub enum CompleteTaskOutcome {
+    Completed(Box<TaskReceiptView>),
+    AlreadyCompleted(Box<TaskReceiptView>),
+    Forbidden,
+}
+
+/// `complete_task`'s receipt (docs/specs/SLICE_018.md §2): the wire card
+/// renders from this object only, never from model prose. `Debug` is a
+/// hand-written, redacting impl (never `#[derive(Debug)]`, the `TaskView`
+/// pattern): a stray `?receipt`/`{:?}` in a log, panic, or test-failure
+/// message must never print the title itself, only its length.
+#[derive(Clone, Serialize)]
+pub struct TaskReceiptView {
+    pub task_id: Uuid,
+    pub person: PersonCard,
+    pub title: UntrustedText,
+    pub kind: String,
+    pub due_at: Option<DateTime<Utc>>,
+    pub completed_at: Option<DateTime<Utc>>,
+    /// `None` for an imported row (docs/specs/SLICE_018.md §2).
+    pub completed_by_display_name: Option<String>,
+}
+
+impl std::fmt::Debug for TaskReceiptView {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TaskReceiptView")
+            .field("task_id", &self.task_id)
+            .field("person", &self.person)
+            .field("title_chars", &self.title.as_str().chars().count())
+            .field("kind", &self.kind)
+            .field("due_at", &self.due_at)
+            .field("completed_at", &self.completed_at)
+            .field(
+                "completed_by_display_name",
+                &self.completed_by_display_name,
+            )
+            .finish()
+    }
+}
+
+/// `create_task`'s outcome (docs/specs/SLICE_018.md §2): only *proposes* —
+/// never creates. `NeedsClarification` is a successful call (resets the
+/// malformed-call counter, the `filter_people` precedent), not a strike.
+#[derive(Debug, Clone)]
+pub enum CreateTaskProposalOutcome {
+    Proposed(Box<TaskProposalView>),
+    NeedsClarification {
+        unknown_assignees: Vec<String>,
+        ambiguous_assignees: Vec<String>,
+        members: Vec<String>,
+    },
+}
+
+/// A resolved assignee (docs/specs/SLICE_018.md §2): `display_name` is
+/// trusted reference-table text (an active member's own name), not
+/// outside text — unlike `TaskProposalView.title` — so it is a plain
+/// `String`, the `PersonCard.assigned_user_display_name` precedent.
+#[derive(Debug, Clone, Serialize)]
+pub struct MemberRef {
+    pub id: Uuid,
+    pub display_name: String,
+}
+
+/// `create_task`'s proposal (docs/specs/SLICE_018.md §2): the wire card
+/// renders from this object only, never from model prose. `Debug` is a
+/// hand-written, redacting impl — the same reason as [`TaskReceiptView`].
+#[derive(Clone, Serialize)]
+pub struct TaskProposalView {
+    pub proposal_id: Uuid,
+    pub person: PersonCard,
+    pub title: UntrustedText,
+    pub kind: String,
+    pub due_at: Option<DateTime<Utc>>,
+    pub assignee: MemberRef,
+    pub expires_at: DateTime<Utc>,
+}
+
+impl std::fmt::Debug for TaskProposalView {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TaskProposalView")
+            .field("proposal_id", &self.proposal_id)
+            .field("person", &self.person)
+            .field("title_chars", &self.title.as_str().chars().count())
+            .field("kind", &self.kind)
+            .field("due_at", &self.due_at)
+            .field("assignee", &self.assignee)
+            .field("expires_at", &self.expires_at)
+            .finish()
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PersonCard {
     pub id: Uuid,
@@ -245,6 +351,10 @@ pub struct NoteView {
 /// this type — only its length.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct TaskView {
+    /// docs/specs/SLICE_018.md §2 item 1 (additive, model-facing only —
+    /// not a wire change): so the Operator can act on "the call task" it
+    /// just listed with `complete_task`.
+    pub task_id: Uuid,
     pub title: UntrustedText,
     pub kind: String,
     pub due_at: Option<DateTime<Utc>>,
@@ -254,6 +364,7 @@ pub struct TaskView {
 impl std::fmt::Debug for TaskView {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TaskView")
+            .field("task_id", &self.task_id)
             .field("title_chars", &self.title.as_str().chars().count())
             .field("kind", &self.kind)
             .field("due_at", &self.due_at)
@@ -587,5 +698,68 @@ task_only_items_follow_their_tier_by_due_at_then_id"
         .unwrap();
         assert_eq!(invalid["status"], "list_invalid");
         assert_eq!(invalid["error"], "invalid_tag");
+    }
+
+    fn person_card_for_redaction_tests() -> PersonCard {
+        PersonCard {
+            id: Uuid::nil(),
+            display_name: UntrustedText::new("Grace Hopper"),
+            stage_name: "Lead".to_string(),
+            assigned_user_display_name: None,
+            primary_email: None,
+            primary_phone: None,
+            inquiry_count: 0,
+            last_inquiry_at: None,
+        }
+    }
+
+    /// docs/specs/SLICE_018.md §2: "Both new views carry the redacting
+    /// `Debug` of `TaskView`" — a stray `?receipt`/`{:?}` must never print
+    /// the title itself, only its length (AGENTS §9).
+    #[test]
+    fn task_receipt_view_debug_never_prints_the_title() {
+        let receipt = TaskReceiptView {
+            task_id: Uuid::nil(),
+            person: person_card_for_redaction_tests(),
+            title: UntrustedText::new("SECRET-TITLE"),
+            kind: "call".to_string(),
+            due_at: None,
+            completed_at: None,
+            completed_by_display_name: None,
+        };
+        let debug = format!("{receipt:?}");
+        assert!(!debug.contains("SECRET-TITLE"));
+        assert!(debug.contains("title_chars"));
+    }
+
+    #[test]
+    fn task_proposal_view_debug_never_prints_the_title() {
+        let proposal = TaskProposalView {
+            proposal_id: Uuid::nil(),
+            person: person_card_for_redaction_tests(),
+            title: UntrustedText::new("SECRET-TITLE"),
+            kind: "call".to_string(),
+            due_at: None,
+            assignee: MemberRef {
+                id: Uuid::nil(),
+                display_name: "Alice".to_string(),
+            },
+            expires_at: Utc::now(),
+        };
+        let debug = format!("{proposal:?}");
+        assert!(!debug.contains("SECRET-TITLE"));
+        assert!(debug.contains("title_chars"));
+    }
+
+    #[test]
+    fn task_view_gains_task_id() {
+        let view = TaskView {
+            task_id: Uuid::nil(),
+            title: UntrustedText::new("x"),
+            kind: "call".to_string(),
+            due_at: None,
+            assignee_display_name: None,
+        };
+        assert_eq!(view.task_id, Uuid::nil());
     }
 }

@@ -3,12 +3,13 @@
 //! the existing `domain::` queries; tests implement it with fakes.
 
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::context::OperatorContext;
 use crate::views::{
-    FilterOutcome, NextWorkItem, PersonDetail, PriorityExplanation, SearchResult,
-    StartCallProposalOutcome, TodayView,
+    CompleteTaskOutcome, CreateTaskProposalOutcome, FilterOutcome, NextWorkItem, PersonDetail,
+    PriorityExplanation, SearchResult, StartCallProposalOutcome, TodayView,
 };
 
 // --- `filter_people` / `run_saved_list` input types (docs/specs/
@@ -81,6 +82,25 @@ pub struct SavedListSelector {
     pub limit: usize,
 }
 
+/// `create_task`'s parsed, bounded arguments (docs/specs/SLICE_018.md §2,
+/// §3): the seam type — crm-operator-owned, no crm-app type crosses it
+/// (D-034). `due_at` is already a composed UTC instant by the time this is
+/// built (the parser's job, from `due_date`/`due_time` and the turn's
+/// `utc_offset_minutes`, pure — never a database); the model never
+/// supplies an instant directly. `title`/`kind` are already structurally
+/// validated (the mirrored `TaskTitle`/`TaskKind` checks); the adapter
+/// re-runs the real validators.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CreateTaskSpec {
+    pub person_id: Uuid,
+    pub title: String,
+    pub kind: String,
+    pub due_at: Option<DateTime<Utc>>,
+    /// `None` means the default ("me"); `Some(name)` is `"me"` or a
+    /// member's display name, cleaned and clipped by the parser.
+    pub assignee: Option<String>,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum ToolError {
     /// Nonexistent *or* not visible under the caller's scope — byte-identical
@@ -132,6 +152,30 @@ pub trait ToolBackend: Send + Sync {
         person_id: Uuid,
         contact_method_id: Option<Uuid>,
     ) -> ToolResult<StartCallProposalOutcome>;
+
+    /// `complete_task` (docs/specs/SLICE_018.md §2, D-057 §1): the first
+    /// "low-risk and reversible" action — executes at once, as the
+    /// signed-in member, exactly where the Task panel's own Complete
+    /// button would succeed (D-053 rule 1). `person_id` and `task_id`
+    /// bind together (the "reached through the Person path" invariant);
+    /// a mismatch, foreign, or nonexistent pair is `ToolError::NotFound`,
+    /// byte-identical.
+    async fn complete_task(
+        &self,
+        ctx: &OperatorContext,
+        person_id: Uuid,
+        task_id: Uuid,
+    ) -> ToolResult<CompleteTaskOutcome>;
+
+    /// `create_task` (docs/specs/SLICE_018.md §2, D-057 §2): only
+    /// *proposes* — never creates. Execution happens on the model-free
+    /// confirm endpoint after a human click, the `propose_start_call`
+    /// shape.
+    async fn propose_create_task(
+        &self,
+        ctx: &OperatorContext,
+        spec: &CreateTaskSpec,
+    ) -> ToolResult<CreateTaskProposalOutcome>;
 
     /// Resolve `spec`'s names against the caller's Organization, build and
     /// validate a `FilterDefinition`, and run `filtered_summaries`

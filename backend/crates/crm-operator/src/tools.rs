@@ -47,6 +47,18 @@ pub const EXPLAIN_PRIORITY: &str = "explain_priority";
 pub const START_CALL: &str = "start_call";
 pub const FILTER_PEOPLE: &str = "filter_people";
 pub const RUN_SAVED_LIST: &str = "run_saved_list";
+pub const COMPLETE_TASK: &str = "complete_task";
+pub const CREATE_TASK: &str = "create_task";
+
+/// docs/specs/SLICE_018.md §3: `create_task.title`'s bounds, mirroring
+/// `crm_app::domain::task::model::TaskTitle::parse` (D-034: no dependency).
+pub const CREATE_TASK_TITLE_MIN_CHARS: usize = 1;
+pub const CREATE_TASK_TITLE_MAX_CHARS: usize = 500;
+/// `create_task.assignee`'s clip (docs/specs/SLICE_018.md §3).
+pub const CREATE_TASK_ASSIGNEE_MAX_CHARS: usize = 80;
+/// The closed `kind` enum, mirroring `crm_app::domain::task::model::TaskKind`
+/// (D-034: no dependency; the adapter re-runs `TaskKind::from_db_str`).
+pub const TASK_KINDS: &[&str] = &["call", "email", "text", "follow_up", "other"];
 
 /// The tool contract offered to the model on every call.
 pub fn tool_definitions() -> Vec<ToolDefinition> {
@@ -274,6 +286,68 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
             }),
         },
         ToolDefinition {
+            name: COMPLETE_TASK,
+            description: "Mark one of a Person's open tasks complete. This executes immediately (the app shows a receipt with an Undo button) — use only when the member explicitly asks to complete, finish, or mark done a task. Use the task's id from something already read this session (get_person's tasks, get_today, or explain_priority's reasons); this tool cannot find a task by title.",
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "person_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "The Person's id, from a previous tool result."
+                    },
+                    "task_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "The task's id, from that Person's tasks or a Today reason."
+                    }
+                },
+                "required": ["person_id", "task_id"],
+                "additionalProperties": false
+            }),
+        },
+        ToolDefinition {
+            name: CREATE_TASK,
+            description: "Propose adding a task for a Person. This does NOT create the task: it prepares a proposal the user must confirm in the app before anything is saved. Use only when the member explicitly asks to add, create, or set a task or reminder. The due date and time, if any, come from the member's own words and the current local time line; never invent a date or a time zone — if the tool reports the due date could not be used, propose without one and say so.",
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "person_id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "title": {
+                        "type": "string",
+                        "minLength": CREATE_TASK_TITLE_MIN_CHARS,
+                        "maxLength": CREATE_TASK_TITLE_MAX_CHARS,
+                        "description": "One line, in the member's own words."
+                    },
+                    "kind": {
+                        "type": "string",
+                        "enum": TASK_KINDS,
+                        "description": "Defaults to follow_up."
+                    },
+                    "due_date": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                        "description": "Calendar date in the member's local time; omit for no due time."
+                    },
+                    "due_time": {
+                        "type": "string",
+                        "pattern": "^\\d{2}:\\d{2}$",
+                        "description": "24-hour local time; omit for end of day. Requires due_date."
+                    },
+                    "assignee": {
+                        "type": "string",
+                        "maxLength": CREATE_TASK_ASSIGNEE_MAX_CHARS,
+                        "description": "\"me\" (default) or a member's display name."
+                    }
+                },
+                "required": ["person_id", "title"],
+                "additionalProperties": false
+            }),
+        },
+        ToolDefinition {
             name: RUN_SAVED_LIST,
             description: "Run a saved People list the user can see (their own personal lists plus the Organization's shared lists) by name, in the list's own stored sort order. If more than one visible list shares the name, this returns candidates with ids instead of results; call again with list_id set to the chosen one.",
             parameters: json!({
@@ -332,6 +406,23 @@ pub enum ToolInvocation {
     RunSavedList {
         selector: SavedListSelector,
     },
+    CompleteTask {
+        person_id: Uuid,
+        task_id: Uuid,
+    },
+    /// `due_at` is not composed here (this type is pure and offset-free);
+    /// `due_date`/`due_time` are structurally validated only. Composition
+    /// into a UTC instant happens where the turn's `utc_offset_minutes` is
+    /// in scope (docs/specs/SLICE_018.md §2, §3) — `service.rs`'s
+    /// dispatch, not this parser.
+    CreateTask {
+        person_id: Uuid,
+        title: String,
+        kind: String,
+        due_date: Option<chrono::NaiveDate>,
+        due_time: Option<chrono::NaiveTime>,
+        assignee: Option<String>,
+    },
 }
 
 impl ToolInvocation {
@@ -345,6 +436,8 @@ impl ToolInvocation {
             ToolInvocation::StartCall { .. } => START_CALL,
             ToolInvocation::FilterPeople { .. } => FILTER_PEOPLE,
             ToolInvocation::RunSavedList { .. } => RUN_SAVED_LIST,
+            ToolInvocation::CompleteTask { .. } => COMPLETE_TASK,
+            ToolInvocation::CreateTask { .. } => CREATE_TASK,
         }
     }
 }
@@ -380,6 +473,21 @@ pub enum ArgumentError {
     MissingOneOf(&'static str, &'static str),
     /// `run_saved_list` with both `name` and `list_id`.
     ConflictingProperties(&'static str, &'static str),
+    /// `create_task.title` failed the mirrored `TaskTitle` validation:
+    /// empty (after trim), over 500 code points, a control character,
+    /// U+2028/U+2029, or ignorable-only (docs/specs/SLICE_018.md §3).
+    InvalidTitle,
+    /// A closed-enum property held a string outside its vocabulary
+    /// (`create_task.kind`).
+    InvalidEnum(&'static str),
+    /// `create_task.due_date` did not match `^\d{4}-\d{2}-\d{2}$` or named
+    /// no real calendar date.
+    InvalidDate(&'static str),
+    /// `create_task.due_time` did not match `^\d{2}:\d{2}$` or named no
+    /// real time of day.
+    InvalidTime(&'static str),
+    /// `create_task.due_time` was given without `due_date`.
+    DueTimeWithoutDueDate,
 }
 
 impl ArgumentError {
@@ -407,6 +515,16 @@ impl ArgumentError {
             ArgumentError::MissingOneOf(a, b) => format!("exactly one of {a} or {b} is required"),
             ArgumentError::ConflictingProperties(a, b) => {
                 format!("only one of {a} or {b} may be given")
+            }
+            ArgumentError::InvalidTitle => {
+                "title must be 1-500 characters with no line breaks or control characters"
+                    .to_string()
+            }
+            ArgumentError::InvalidEnum(name) => format!("invalid value for property: {name}"),
+            ArgumentError::InvalidDate(name) => format!("invalid calendar date: {name}"),
+            ArgumentError::InvalidTime(name) => format!("invalid time of day: {name}"),
+            ArgumentError::DueTimeWithoutDueDate => {
+                "due_time requires due_date".to_string()
             }
         }
     }
@@ -444,6 +562,15 @@ fn known_properties(name: &str) -> Option<&'static [&'static str]> {
             "limit",
         ]),
         RUN_SAVED_LIST => Some(&["name", "list_id", "limit"]),
+        COMPLETE_TASK => Some(&["person_id", "task_id"]),
+        CREATE_TASK => Some(&[
+            "person_id",
+            "title",
+            "kind",
+            "due_date",
+            "due_time",
+            "assignee",
+        ]),
         _ => None,
     }
 }
@@ -509,7 +636,151 @@ pub fn parse_invocation(name: &str, arguments: &str) -> Result<ToolInvocation, A
         RUN_SAVED_LIST => Ok(ToolInvocation::RunSavedList {
             selector: parse_saved_list_selector(object)?,
         }),
+        COMPLETE_TASK => Ok(ToolInvocation::CompleteTask {
+            person_id: parse_uuid(object.get("person_id"))?,
+            task_id: parse_uuid_named(object.get("task_id"), "task_id")?,
+        }),
+        CREATE_TASK => {
+            let title = parse_task_title(object.get("title"))?;
+            let kind = parse_task_kind(object.get("kind"))?;
+            let due_date = parse_due_date(object.get("due_date"))?;
+            let due_time = parse_due_time(object.get("due_time"))?;
+            if due_time.is_some() && due_date.is_none() {
+                return Err(ArgumentError::DueTimeWithoutDueDate);
+            }
+            let assignee = parse_assignee(object.get("assignee"))?;
+            Ok(ToolInvocation::CreateTask {
+                person_id: parse_uuid(object.get("person_id"))?,
+                title,
+                kind,
+                due_date,
+                due_time,
+                assignee,
+            })
+        }
         _ => Err(ArgumentError::UnknownTool),
+    }
+}
+
+/// Mirrors `crm_app::domain::task::model::TaskTitle::parse` structurally
+/// (D-034: crm-operator cannot depend on crm-app); the adapter re-runs the
+/// real validator on confirm (docs/specs/SLICE_018.md §3).
+fn parse_task_title(value: Option<&Value>) -> Result<String, ArgumentError> {
+    let raw = value
+        .ok_or(ArgumentError::MissingProperty("title"))?
+        .as_str()
+        .ok_or(ArgumentError::WrongType("title"))?;
+    let trimmed = raw.trim();
+    let count = trimmed.chars().count();
+    if count == 0 || count > CREATE_TASK_TITLE_MAX_CHARS {
+        return Err(ArgumentError::InvalidTitle);
+    }
+    if trimmed
+        .chars()
+        .any(|c| c.is_control() || c == '\u{2028}' || c == '\u{2029}')
+    {
+        return Err(ArgumentError::InvalidTitle);
+    }
+    if trimmed
+        .chars()
+        .filter(|c| !is_default_ignorable(*c))
+        .all(char::is_whitespace)
+    {
+        return Err(ArgumentError::InvalidTitle);
+    }
+    Ok(trimmed.to_string())
+}
+
+/// U+200B–U+200D, U+2060, U+FEFF — the same default-ignorable set
+/// `crm_app::domain::task::model::TaskTitle::parse` treats as visually
+/// empty.
+fn is_default_ignorable(c: char) -> bool {
+    matches!(c, '\u{200B}'..='\u{200D}' | '\u{2060}' | '\u{FEFF}')
+}
+
+/// `create_task.kind`: absent/null defaults to `follow_up`
+/// (`TaskKind::default`); present must be one of [`TASK_KINDS`].
+fn parse_task_kind(value: Option<&Value>) -> Result<String, ArgumentError> {
+    match value {
+        None | Some(Value::Null) => Ok("follow_up".to_string()),
+        Some(Value::String(s)) if TASK_KINDS.contains(&s.as_str()) => Ok(s.clone()),
+        Some(Value::String(_)) => Err(ArgumentError::InvalidEnum("kind")),
+        Some(_) => Err(ArgumentError::WrongType("kind")),
+    }
+}
+
+fn is_yyyy_mm_dd(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    bytes.len() == 10
+        && bytes[4] == b'-'
+        && bytes[7] == b'-'
+        && bytes
+            .iter()
+            .enumerate()
+            .all(|(i, b)| i == 4 || i == 7 || b.is_ascii_digit())
+}
+
+/// `create_task.due_date`: absent/null is `None`; present must match
+/// `^\d{4}-\d{2}-\d{2}$` and name a real calendar date.
+fn parse_due_date(value: Option<&Value>) -> Result<Option<chrono::NaiveDate>, ArgumentError> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    if value.is_null() {
+        return Ok(None);
+    }
+    let s = value.as_str().ok_or(ArgumentError::WrongType("due_date"))?;
+    if !is_yyyy_mm_dd(s) {
+        return Err(ArgumentError::InvalidDate("due_date"));
+    }
+    chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d")
+        .map(Some)
+        .map_err(|_| ArgumentError::InvalidDate("due_date"))
+}
+
+fn is_hh_mm(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    bytes.len() == 5
+        && bytes[2] == b':'
+        && bytes
+            .iter()
+            .enumerate()
+            .all(|(i, b)| i == 2 || b.is_ascii_digit())
+}
+
+/// `create_task.due_time`: absent/null is `None`; present must match
+/// `^\d{2}:\d{2}$` and name a real time of day.
+fn parse_due_time(value: Option<&Value>) -> Result<Option<chrono::NaiveTime>, ArgumentError> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    if value.is_null() {
+        return Ok(None);
+    }
+    let s = value.as_str().ok_or(ArgumentError::WrongType("due_time"))?;
+    if !is_hh_mm(s) {
+        return Err(ArgumentError::InvalidTime("due_time"));
+    }
+    chrono::NaiveTime::parse_from_str(s, "%H:%M")
+        .map(Some)
+        .map_err(|_| ArgumentError::InvalidTime("due_time"))
+}
+
+/// `create_task.assignee`: absent/null/whitespace-only is `None` (the
+/// default, "me"); otherwise cleaned and clipped exactly like
+/// `search_people.query` (docs/specs/SLICE_018.md §3).
+fn parse_assignee(value: Option<&Value>) -> Result<Option<String>, ArgumentError> {
+    match value {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(s)) => {
+            let cleaned = clean_and_clip(s, CREATE_TASK_ASSIGNEE_MAX_CHARS);
+            if cleaned.is_empty() {
+                Ok(None)
+            } else {
+                Ok(Some(cleaned))
+            }
+        }
+        Some(_) => Err(ArgumentError::WrongType("assignee")),
     }
 }
 
@@ -1256,6 +1527,226 @@ mod tests {
                 known_properties(FILTER_PEOPLE).unwrap().contains(field),
                 "missing known_properties entry: {field}"
             );
+        }
+    }
+
+    // --- complete_task / create_task (docs/specs/SLICE_018.md §3, §12) --
+
+    #[test]
+    fn complete_task_requires_both_ids() {
+        let person = Uuid::new_v4();
+        let task = Uuid::new_v4();
+        assert_eq!(
+            parse_invocation(
+                COMPLETE_TASK,
+                &json!({"person_id": person, "task_id": task}).to_string()
+            ),
+            Ok(ToolInvocation::CompleteTask {
+                person_id: person,
+                task_id: task
+            })
+        );
+        assert_eq!(
+            parse_invocation(COMPLETE_TASK, &json!({"person_id": person}).to_string()),
+            Err(ArgumentError::MissingProperty("task_id"))
+        );
+        assert_eq!(
+            parse_invocation(COMPLETE_TASK, &json!({"task_id": task}).to_string()),
+            Err(ArgumentError::MissingProperty("person_id"))
+        );
+    }
+
+    #[test]
+    fn create_task_requires_person_id_and_title() {
+        let person = Uuid::new_v4();
+        assert_eq!(
+            parse_invocation(CREATE_TASK, &json!({"title": "Call Grace"}).to_string()),
+            Err(ArgumentError::MissingProperty("person_id"))
+        );
+        assert_eq!(
+            parse_invocation(CREATE_TASK, &json!({"person_id": person}).to_string()),
+            Err(ArgumentError::MissingProperty("title"))
+        );
+        match parse_invocation(
+            CREATE_TASK,
+            &json!({"person_id": person, "title": "  Call Grace  "}).to_string(),
+        )
+        .unwrap()
+        {
+            ToolInvocation::CreateTask { title, kind, .. } => {
+                assert_eq!(title, "Call Grace");
+                assert_eq!(kind, "follow_up");
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn create_task_title_matrix() {
+        let person = Uuid::new_v4();
+        let args = |title: &str| json!({ "person_id": person, "title": title }).to_string();
+
+        assert_eq!(
+            parse_invocation(CREATE_TASK, &args("")),
+            Err(ArgumentError::InvalidTitle)
+        );
+        assert_eq!(
+            parse_invocation(CREATE_TASK, &args("   ")),
+            Err(ArgumentError::InvalidTitle)
+        );
+        assert_eq!(
+            parse_invocation(CREATE_TASK, &args(&"a".repeat(501))),
+            Err(ArgumentError::InvalidTitle)
+        );
+        assert!(parse_invocation(CREATE_TASK, &args(&"a".repeat(500))).is_ok());
+        assert_eq!(
+            parse_invocation(CREATE_TASK, &args("line one\nline two")),
+            Err(ArgumentError::InvalidTitle)
+        );
+        assert_eq!(
+            parse_invocation(CREATE_TASK, &args("bad\u{0}null")),
+            Err(ArgumentError::InvalidTitle)
+        );
+        assert_eq!(
+            parse_invocation(CREATE_TASK, &args("line one\u{2028}line two")),
+            Err(ArgumentError::InvalidTitle)
+        );
+        assert_eq!(
+            parse_invocation(CREATE_TASK, &args("para one\u{2029}para two")),
+            Err(ArgumentError::InvalidTitle)
+        );
+        assert_eq!(
+            parse_invocation(CREATE_TASK, &args("\u{200B}\u{FEFF}")),
+            Err(ArgumentError::InvalidTitle)
+        );
+        // A default-ignorable code point alongside real content is fine.
+        match parse_invocation(CREATE_TASK, &args("Call\u{200B}back")).unwrap() {
+            ToolInvocation::CreateTask { title, .. } => {
+                assert_eq!(title, "Call\u{200B}back");
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn create_task_kind_defaults_and_validates() {
+        let person = Uuid::new_v4();
+        let args = |kind: &str| {
+            json!({ "person_id": person, "title": "x", "kind": kind }).to_string()
+        };
+        for kind in TASK_KINDS {
+            match parse_invocation(CREATE_TASK, &args(kind)).unwrap() {
+                ToolInvocation::CreateTask { kind: k, .. } => assert_eq!(&k, kind),
+                other => panic!("{other:?}"),
+            }
+        }
+        assert_eq!(
+            parse_invocation(CREATE_TASK, &args("urgent")),
+            Err(ArgumentError::InvalidEnum("kind"))
+        );
+        match parse_invocation(
+            CREATE_TASK,
+            &json!({"person_id": person, "title": "x"}).to_string(),
+        )
+        .unwrap()
+        {
+            ToolInvocation::CreateTask { kind, .. } => assert_eq!(kind, "follow_up"),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn create_task_due_date_and_time_matrix() {
+        let person = Uuid::new_v4();
+        let base = |extra: Value| {
+            let mut obj = json!({ "person_id": person, "title": "x" });
+            obj.as_object_mut().unwrap().extend(
+                extra
+                    .as_object()
+                    .unwrap()
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.clone())),
+            );
+            obj.to_string()
+        };
+
+        // Valid date, no time.
+        match parse_invocation(CREATE_TASK, &base(json!({"due_date": "2026-09-12"}))).unwrap() {
+            ToolInvocation::CreateTask {
+                due_date, due_time, ..
+            } => {
+                assert_eq!(
+                    due_date,
+                    Some(chrono::NaiveDate::from_ymd_opt(2026, 9, 12).unwrap())
+                );
+                assert_eq!(due_time, None);
+            }
+            other => panic!("{other:?}"),
+        }
+
+        // Valid date and time.
+        match parse_invocation(
+            CREATE_TASK,
+            &base(json!({"due_date": "2026-09-12", "due_time": "14:30"})),
+        )
+        .unwrap()
+        {
+            ToolInvocation::CreateTask { due_time, .. } => {
+                assert_eq!(
+                    due_time,
+                    Some(chrono::NaiveTime::from_hms_opt(14, 30, 0).unwrap())
+                );
+            }
+            other => panic!("{other:?}"),
+        }
+
+        // Malformed pattern.
+        assert_eq!(
+            parse_invocation(CREATE_TASK, &base(json!({"due_date": "09-12-2026"}))),
+            Err(ArgumentError::InvalidDate("due_date"))
+        );
+        // Real pattern, not a real calendar date.
+        assert_eq!(
+            parse_invocation(CREATE_TASK, &base(json!({"due_date": "2026-02-30"}))),
+            Err(ArgumentError::InvalidDate("due_date"))
+        );
+        assert_eq!(
+            parse_invocation(CREATE_TASK, &base(json!({"due_time": "9:30"}))),
+            Err(ArgumentError::InvalidTime("due_time"))
+        );
+        assert_eq!(
+            parse_invocation(CREATE_TASK, &base(json!({"due_time": "25:00"}))),
+            Err(ArgumentError::InvalidTime("due_time"))
+        );
+        // due_time without due_date.
+        assert_eq!(
+            parse_invocation(CREATE_TASK, &base(json!({"due_time": "14:30"}))),
+            Err(ArgumentError::DueTimeWithoutDueDate)
+        );
+    }
+
+    #[test]
+    fn create_task_assignee_clips_at_80_chars_and_blank_is_default() {
+        let person = Uuid::new_v4();
+        let args = |assignee: &str| {
+            json!({ "person_id": person, "title": "x", "assignee": assignee }).to_string()
+        };
+        match parse_invocation(CREATE_TASK, &args("me")).unwrap() {
+            ToolInvocation::CreateTask { assignee, .. } => {
+                assert_eq!(assignee, Some("me".to_string()));
+            }
+            other => panic!("{other:?}"),
+        }
+        match parse_invocation(CREATE_TASK, &args("   ")).unwrap() {
+            ToolInvocation::CreateTask { assignee, .. } => assert_eq!(assignee, None),
+            other => panic!("{other:?}"),
+        }
+        let long = "z".repeat(200);
+        match parse_invocation(CREATE_TASK, &args(&long)).unwrap() {
+            ToolInvocation::CreateTask { assignee, .. } => {
+                assert_eq!(assignee.unwrap().chars().count(), CREATE_TASK_ASSIGNEE_MAX_CHARS);
+            }
+            other => panic!("{other:?}"),
         }
     }
 }

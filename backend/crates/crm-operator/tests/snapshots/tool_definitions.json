@@ -294,6 +294,80 @@
     }
   },
   {
+    "name": "complete_task",
+    "description": "Mark one of a Person's open tasks complete. This executes immediately (the app shows a receipt with an Undo button) — use only when the member explicitly asks to complete, finish, or mark done a task. Use the task's id from something already read this session (get_person's tasks, get_today, or explain_priority's reasons); this tool cannot find a task by title.",
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "person_id": {
+          "description": "The Person's id, from a previous tool result.",
+          "format": "uuid",
+          "type": "string"
+        },
+        "task_id": {
+          "description": "The task's id, from that Person's tasks or a Today reason.",
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "person_id",
+        "task_id"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "create_task",
+    "description": "Propose adding a task for a Person. This does NOT create the task: it prepares a proposal the user must confirm in the app before anything is saved. Use only when the member explicitly asks to add, create, or set a task or reminder. The due date and time, if any, come from the member's own words and the current local time line; never invent a date or a time zone — if the tool reports the due date could not be used, propose without one and say so.",
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "assignee": {
+          "description": "\"me\" (default) or a member's display name.",
+          "maxLength": 80,
+          "type": "string"
+        },
+        "due_date": {
+          "description": "Calendar date in the member's local time; omit for no due time.",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "due_time": {
+          "description": "24-hour local time; omit for end of day. Requires due_date.",
+          "pattern": "^\\d{2}:\\d{2}$",
+          "type": "string"
+        },
+        "kind": {
+          "description": "Defaults to follow_up.",
+          "enum": [
+            "call",
+            "email",
+            "text",
+            "follow_up",
+            "other"
+          ],
+          "type": "string"
+        },
+        "person_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "title": {
+          "description": "One line, in the member's own words.",
+          "maxLength": 500,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "person_id",
+        "title"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "name": "run_saved_list",
     "description": "Run a saved People list the user can see (their own personal lists plus the Organization's shared lists) by name, in the list's own stored sort order. If more than one visible list shares the name, this returns candidates with ids instead of results; call again with list_id set to the chosen one.",
     "parameters": {

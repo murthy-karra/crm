@@ -370,12 +370,25 @@ fn clip_chars(text: &str, max: usize) -> String {
 /// The "current time" prompt line (docs/specs/SLICE_018.md §2): rendered
 /// in the client's local offset instead of `Z` when one was supplied, so
 /// the model can resolve "Friday"; `Z` (the pre-018 shape) when it was not.
+///
+/// Walkthrough finding: an RFC 3339 instant alone is not enough — models
+/// are unreliable at deriving the weekday from a date, so a live run
+/// resolved "Friday" to the wrong day. The offset arm now prefixes the
+/// weekday name (`%A` on the offset-adjusted time, e.g. "Thursday,
+/// 2026-09-10T14:41:00-07:00"); the RFC 3339 part itself is unchanged. The
+/// no-offset `Z` arm is unchanged — with no client offset there is no
+/// reliable local calendar day to name.
 fn local_time_line(now: chrono::DateTime<chrono::Utc>, utc_offset_minutes: Option<i32>) -> String {
     match utc_offset_minutes {
         Some(minutes) => match FixedOffset::east_opt(minutes * 60) {
-            Some(offset) => now
-                .with_timezone(&offset)
-                .to_rfc3339_opts(chrono::SecondsFormat::Secs, false),
+            Some(offset) => {
+                let local = now.with_timezone(&offset);
+                format!(
+                    "{}, {}",
+                    local.format("%A"),
+                    local.to_rfc3339_opts(chrono::SecondsFormat::Secs, false)
+                )
+            }
             // Out-of-range values never reach here (the HTTP layer rejects
             // them, ±840 max), but fail to the pre-018 shape rather than
             // panic if that invariant is ever broken.
@@ -2761,19 +2774,25 @@ mod tests {
 
     /// docs/specs/SLICE_018.md §2, §3: the local-time line renders in the
     /// client's offset when one is supplied, and stays `Z` when it is not.
+    ///
+    /// Walkthrough finding: an RFC 3339 instant alone let a live model
+    /// resolve "Friday" to the wrong day, so the offset arm now leads with
+    /// the weekday name — pinned here against a known date (2026-09-10 is
+    /// a Thursday) so a regression (dropped weekday, wrong locale, wrong
+    /// day from an off-by-one offset) fails this test.
     #[test]
     fn local_time_line_renders_the_offset_or_falls_back_to_z() {
         let now = Utc.with_ymd_and_hms(2026, 9, 11, 3, 30, 0).unwrap();
-        // -240 minutes = UTC-4 (America/New_York in September).
+        // -240 minutes = UTC-4 (America/New_York in September); the
+        // offset-adjusted instant rolls back to 2026-09-10, a Thursday.
         let with_offset = local_time_line(now, Some(-240));
-        assert!(
-            with_offset.starts_with("2026-09-10T23:30:00-04:00"),
-            "{with_offset}"
-        );
+        assert_eq!(with_offset, "Thursday, 2026-09-10T23:30:00-04:00");
         assert!(!with_offset.ends_with('Z'));
 
+        // The no-offset `Z` arm is unchanged: no weekday, plain RFC 3339.
         let without_offset = local_time_line(now, None);
-        assert!(without_offset.ends_with('Z'), "{without_offset}");
+        assert_eq!(without_offset, "2026-09-11T03:30:00Z");
+        assert!(without_offset.ends_with('Z'));
     }
 
     /// docs/specs/SLICE_013.md §3: string-pinned like

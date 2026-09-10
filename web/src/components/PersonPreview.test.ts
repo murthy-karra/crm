@@ -28,8 +28,8 @@ const fixture: PersonDetailResponse = {
 const cleanups: Array<() => void> = []
 afterEach(() => { cleanups.splice(0).forEach((cleanup) => cleanup()); vi.clearAllMocks() })
 
-async function mountPreview() {
-  vi.mocked(apiFetch).mockResolvedValue(fixture)
+async function mountPreview(response: PersonDetailResponse = fixture) {
+  vi.mocked(apiFetch).mockResolvedValue(response)
   const active = ref(false)
   const outcome = ref(false)
   const start = vi.fn()
@@ -89,5 +89,50 @@ describe('Person preview actions', () => {
     await ask.trigger('click')
     expect(launch).toHaveBeenCalledExactlyOnceWith('person-1')
     expect(vi.mocked(apiFetch).mock.calls.every(([, options]) => !options?.method || options.method === 'GET')).toBe(true)
+  })
+
+  // LATER batch (2026-09-10) item 6 (015 LATER): notes and completed
+  // tasks are out of scope for the People preview card (UI_STYLE.md §7:
+  // "No notes or email-composer capabilities are invented from the
+  // concept"). `recent`'s filter already excludes both kinds by
+  // construction (the type narrowing to `PreviewableHistoryEntry` makes it
+  // a compile error to add a 'note'/'task_completed' arm to `activity()`),
+  // but no test previously exercised a history that actually carried a
+  // note — pin the runtime behavior, not just the type-level guarantee.
+  it('never renders a note even when the history carries one, alongside an ordinary entry', async () => {
+    const withNote: PersonDetailResponse = {
+      ...fixture,
+      history: [
+        {
+          id: 'hist-note-1',
+          occurred_at: '2026-09-01T12:00:00Z',
+          recorded_at: '2026-09-01T12:00:00Z',
+          actor: null,
+          origin: 'web_session',
+          correlation_id: 'corr-note-1',
+          kind: 'note',
+          detail: {
+            body: 'A private note about financing that must never leak into the preview',
+            updated_at: '2026-09-01T12:00:00Z',
+            edited: false,
+            can_manage: true,
+          },
+        },
+        {
+          id: 'hist-stage-1',
+          occurred_at: '2026-09-01T13:00:00Z',
+          recorded_at: '2026-09-01T13:00:00Z',
+          actor: { id: 'u-alice', display_name: 'Alice' },
+          origin: 'web_session',
+          correlation_id: 'corr-stage-1',
+          kind: 'stage_changed',
+          detail: { from_stage: null, to_stage: { id: 'stage-1', name: 'Lead' }, reason: 'manual' },
+        },
+      ],
+    }
+    const { wrapper } = await mountPreview(withNote)
+    expect(wrapper.text()).not.toContain('A private note about financing')
+    expect(wrapper.findAll('.preview-timeline li')).toHaveLength(1)
+    expect(wrapper.text()).toContain('Stage changed')
   })
 })

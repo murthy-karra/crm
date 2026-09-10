@@ -1,8 +1,8 @@
 # Project State
 
-Last updated: 2026-09-09 (Slice 017 merged at `f06eba3`, pushed, dev API
-updated; the worker deploy and the live large-mail walkthrough are pending
-the user's Workers-plan check).
+Last updated: 2026-09-10 (Slice 017 merged and the relay deployed on Workers
+Paid; the live large-mail walkthrough deferred by the user; the LATER batch
+of 2026-09-10 drafted and awaiting the implementation gate).
 
 ## Current phase
 
@@ -24,10 +24,15 @@ Evidence: [SLICE_017_VERIFICATION.md](../tasks/SLICE_017_VERIFICATION.md).
 plan (user, 2026-09-09).** Per D-056 §3 the streaming relay is not deployed;
 the production relay is still the pre-017 build and bounces above 1.4 MiB.
 **Decided (user, 2026-09-09): upgrade the account to Workers Paid** (no
-code change; the pass-through fallback stays recorded, not built). Next:
-the user performs the upgrade in the dashboard, then `wrangler deploy` (by
-the user, or by the coordinator on request from the main checkout), then
-the real sends. Deployment of the application is not authorized.
+code change; the pass-through fallback stays recorded, not built). The
+user upgraded and approved the deploy from the coordinator's machine:
+`wrangler deploy` on 2026-09-09 23:25 local put version `63c168c5` at 100 %
+(the secret and the Email Routing route survived). **The real sends (a
+small message, then a 15–20 MB attachment, to a capture address and the
+intake address) are deferred by the user**; the evidence goes into the
+verification record when they happen (the dev API log and the Workers
+dashboard keep the outcomes). Deployment of the application is not
+authorized.
 
 Previously: **SLICE 016 (TASKS) — COMPLETE: BOTH RUNGS MERGED, RUNTIME UPDATED, PUSHED,
 CLEANED UP (2026-09-09, each with the user's approval).** `main` at the
@@ -972,23 +977,18 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. **Slice 017 walkthrough (spec §6), the user's actions first:** check the
-   account's Workers plan (dashboard → Workers & Pages → Plans). Free: stop
-   (10 ms CPU per invocation; the streaming relay would temp-fail large mail
-   into a late bounce) and decide between the Paid upgrade and the raw
-   `message/rfc822` pass-through contract change (D-056 §3). Paid: `cd
-   infra/email-worker && wrangler deploy`, then send a small real message to
-   a capture address, then a 15–20 MB attachment to a capture address (CC)
-   and to the intake address; the coordinator watches the dev API log
-   (`intake.inbound_email` span: `byte_len`, latency) and appends the worker
-   CPU time from the dashboard to the verification record.
-2. **Then the small LATER batch** from the 015/016/017 verification records:
-   the `reason_text` `+00:00`-versus-`Z` timestamp inconsistency, the note
-   composer Escape handler and post-delete focus, the composer double-submit
-   test, the `is_control` separator gap, the remaining task cap-grid tests,
-   the snooze 24-hour-window nuance, and the ~60 MB trim of the inbound
-   handler's peak memory (drop `sealed` after `insert_pending`). A brief, no
-   spec, as on 2026-09-08.
+1. **The LATER batch of 2026-09-10** — brief
+   [LATER_BATCH_2026-09-10.md](../tasks/LATER_BATCH_2026-09-10.md) (eight
+   items: Operator reason timestamps to `Z`, task-title separators, SQLSTATE
+   assertions, three note-composer niceties, curated task-axis tests, the
+   inbound handler memory trim). Awaiting the implementation gate; then one
+   lane in `../crm-worktrees/later-2`, the usual review, gates and merge.
+2. **Slice 017 walkthrough (spec §6), deferred by the user:** send a small
+   real message and a 15–20 MB attachment to a capture address and the
+   intake address; the coordinator reads the dev API log (`byte_len`,
+   latency) and the Workers dashboard (invocation outcome, CPU time) and
+   appends both to `SLICE_017_VERIFICATION.md`. The relay is already
+   deployed; nothing blocks the sends.
 3. **Then the next real slice needs the user's pick** (recommended order):
    the Operator `create_task` / `complete_task` rung (S; D-054 §3; needs a
    decision on whether `complete_task` is the first AGENTS §5.4
@@ -1004,11 +1004,11 @@ and now lives only in git history.
 
 ## Approval currently required
 
-- **Slice 017:** merged, pushed and the dev API updated with the user's
-  approval on 2026-09-09. The Workers plan is Free, so the worker deploy is
-  stopped. Decided 2026-09-09: the Workers Paid upgrade (user action in
-  the dashboard). Then `wrangler deploy` and the real sends; the
-  walkthrough evidence is appended to the verification record.
+- **LATER batch 2026-09-10:** the implementation gate (the brief is
+  drafted; no spec needed).
+- **Slice 017:** complete apart from the deferred live sends (the user's
+  action, no approval needed). The two record commits after the merge are
+  not yet pushed; they go with the next push.
 - Deployment is not authorized.
 - R1 (auto-hangup of a live call on identity change) is a product choice for
   a later slice, not blocking.

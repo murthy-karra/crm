@@ -2982,16 +2982,29 @@ async fn capture_across_today_tasks_and_operator_tools_finds_a_task_title_only_i
     );
     let guard = tracing::subscriber::set_default(subscriber);
 
-    let (router, provider) = router_scripted(
-        &f.migrator_pool,
-        vec![
+    // docs/specs/SLICE_018.md §12: the CaptureWriter test gains a sentinel
+    // in `create_task` arguments too — a model-*supplied* title, not only
+    // a stored one, must never reach a span or log either. One extra
+    // round (`max_rounds: 5`) admits the extra tool call beyond the
+    // three-tool-call-then-text shape every other capture test here uses.
+    let (router, provider) = {
+        let provider = provider(vec![
             tool_step("get_today", json!({ "limit": 20 })),
             tool_step("get_next_work_item", json!({})),
             tool_step("explain_priority", json!({ "person_id": person_id })),
+            tool_step(
+                "create_task",
+                json!({ "person_id": person_id, "title": SENTINEL }),
+            ),
             text_step("done"),
-        ],
-    )
-    .await;
+        ]);
+        let limits = Limits {
+            max_rounds: 5,
+            ..Limits::default()
+        };
+        let router = router_with(&f.migrator_pool, Some(runtime(&provider, limits, 4))).await;
+        (router, provider)
+    };
     let alice = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
 
     let today_http = crate::common::get_with_cookie(&router, "/api/today", &alice).await;

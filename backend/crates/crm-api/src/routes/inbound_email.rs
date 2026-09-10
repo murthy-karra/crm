@@ -106,15 +106,27 @@ async fn inbound_email(
 
     // Never record the JsonRejection/base64-error Display text (§9,
     // criterion 13) — the `?`/`map_err` below always discard it.
-    let req: InboundEmailRequest<'_> = serde_json::from_slice(&body).map_err(|_| {
-        span.record("outcome", "malformed");
-        ApiError::MalformedRequest
-    })?;
-
-    let raw = STANDARD.decode(req.raw.as_bytes()).map_err(|_| {
-        span.record("outcome", "malformed");
-        ApiError::MalformedRequest
-    })?;
+    //
+    // LATER batch (2026-09-10) item 8: `req.raw` borrows from `body`
+    // (`Cow<'a, str>`), so this block ends that borrow and produces
+    // `raw: Vec<u8>` before `body` (the buffered base64 JSON, ~1.33x the
+    // decoded size) and `req` are dropped — `receive_inbound_email`'s
+    // Phase B holds the decoded ciphertext/plaintext/parsed-attachment
+    // buffers concurrently and never needs the original request body
+    // again. `recipient` is a plain `String` (never borrowed from `body`),
+    // so moving it out of the block is free.
+    let (recipient, raw) = {
+        let req: InboundEmailRequest<'_> = serde_json::from_slice(&body).map_err(|_| {
+            span.record("outcome", "malformed");
+            ApiError::MalformedRequest
+        })?;
+        let raw = STANDARD.decode(req.raw.as_bytes()).map_err(|_| {
+            span.record("outcome", "malformed");
+            ApiError::MalformedRequest
+        })?;
+        (req.recipient, raw)
+    };
+    drop(body);
     if raw.is_empty() {
         span.record("outcome", "malformed");
         return Err(ApiError::MalformedRequest);
@@ -131,7 +143,7 @@ async fn inbound_email(
         &state.raw_payload_key,
         &state.publisher,
         &state.intake_mail,
-        &req.recipient,
+        &recipient,
         &raw,
     )
     .await;

@@ -1,15 +1,40 @@
 # Project State
 
 Last updated: 2026-09-10 (Slice 018, the Operator `create_task` /
-`complete_task` rung, approved at the implementation gate and its lane
-dispatched; the LATER batch of
+`complete_task` rung, merged at `d74c493` with the user's approval,
+`crm_dev` migrated, runtime updated, worktree and branch deleted; not
+pushed; the LATER batch of
 2026-09-10 merged and pushed; the Slice 017 live large-mail sends remain
 deferred by the user).
 
 ## Current phase
 
-**SLICE 018 (OPERATOR `create_task` / `complete_task`) — APPROVED
-2026-09-10, LANE IN IMPLEMENTATION.** [SLICE_018.md](../specs/SLICE_018.md)
+**SLICE 018 (OPERATOR `create_task` / `complete_task`) — COMPLETE AND
+MERGED TO LOCAL MAIN** at `d74c493` (2026-09-10, with the user's approval;
+not pushed, not deployed). Source `slice-018-operator-tasks` at `6910665`
+(thirteen lane commits, the walkthrough fix `20131e9`, the
+[verification record](../tasks/SLICE_018_VERIFICATION.md) and six
+screenshots under `docs/design/qa/slice-018-2026-09-10/`). One lane
+(Claude Sonnet 5), backend then Web with a checkpoint between. Review
+round 1 in two halves (no blocking finding; twenty fixes incl. two real
+Web defects: receipt state keyed by task id, and a finalized confirm
+failure left retryable); round 2 confirmed all, READY. Final-tree gates
+run once on `20131e9`: `sqlx-prepare` clean, `check` green (807 Rust,
+780 Web, 11 worker, 33 s), `check-db` 741 of 741 first run (254 s).
+Walkthrough on a QA runtime, 8 steps: complete with receipt, Undo,
+proposal, confirm, bob's confirm 404, confirm with the provider disabled,
+an expired proposal 409; one finding fixed on the branch (the model
+resolved "Friday" to Sunday because the time line named no weekday; the
+card exposed it before anything existed; the line now names the weekday).
+Runtime updated with the user's approval: `crm_dev` migrated
+(`20260914000001` applied), the dev API restarted by exact PID (30690,
+binary 14:51, `/api/health` 200), `dev-web-prod` rebuilt (preview pid
+31100). Worktree `../crm-worktrees/018`, the branch and `crm_slice018_qa`
+deleted. **`main` is ahead of `origin/main`; push needs the user's
+word.** A helper Chrome with remote debugging on port 9222 was launched
+for the walkthrough and left running. No slice active.
+
+Previously: **SLICE 018 — APPROVED 2026-09-10, LANE IN IMPLEMENTATION.** [SLICE_018.md](../specs/SLICE_018.md)
 and its [brief](../tasks/SLICE_018_IMPL.md) were drafted from the
 planner's analysis (which found three things D-057 did not anticipate:
 `TaskView` has no id, the PII-free proposal table needs a sidecar for the
@@ -1023,18 +1048,16 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. **Slice 018 lane:** Part A checkpoint audit, Part B release, review
-   round, final-tree gates (`sqlx-prepare`, `check`, `check-db`),
-   walkthrough, commit and merge gates; after the merge `./scripts/db-migrate`
-   on `crm_dev`, the dev API restart by exact PID and `dev-web-prod`.
+1. **Push `main`** on the user's word (the Slice 018 merge and records
+   plus the spec wording commit).
 2. **Slice 017 walkthrough (spec §6), deferred by the user:** send a small
    real message and a 15–20 MB attachment to a capture address and the
    intake address; the coordinator reads the dev API log (`byte_len`,
    latency) and the Workers dashboard (invocation outcome, CPU time) and
    appends both to `SLICE_017_VERIFICATION.md`. The relay is already
    deployed; nothing blocks the sends.
-3. **After 018, the next slice needs the user's pick** (recommended
-   order): custom fields
+3. **The next slice needs the user's pick** (recommended order): custom
+   fields
    (the last CRM-core model and the last FUB destination besides deals);
    resuming the parked FUB migration ladder (`docs/plans/SLICE_010_LADDER.md`;
    its three parked decisions are asked at resume).
@@ -1046,9 +1069,8 @@ and now lives only in git history.
 
 ## Approval currently required
 
-- **Slice 018:** implementation gate approved by the user on 2026-09-10.
-  Next approvals: merge to `main` (with the `crm_dev` migration and the
-  runtime restarts), then push.
+- **Slice 018:** merged, migrated, runtime updated and cleaned up with
+  the user's approval on 2026-09-10. Pending: the push of `main`.
 - **LATER batch 2026-09-10:** merged to local `main` at `753d685` and the
   runtime updated and `main` pushed with the user's approval on 2026-09-10.
   Nothing pending.

@@ -23,10 +23,11 @@ Evidence: [SLICE_017_VERIFICATION.md](../tasks/SLICE_017_VERIFICATION.md).
 **Walkthrough stopped at §6 step 2: the account is on the Workers Free
 plan (user, 2026-09-09).** Per D-056 §3 the streaming relay is not deployed;
 the production relay is still the pre-017 build and bounces above 1.4 MiB.
-**Decision pending with the user:** the Workers Paid upgrade (no code
-change; then `wrangler deploy` and the real sends) or a raw
-`message/rfc822` pass-through body as an additive second form on the frozen
-route (a contract change, its own S rung). Deployment is not authorized.
+**Decided (user, 2026-09-09): upgrade the account to Workers Paid** (no
+code change; the pass-through fallback stays recorded, not built). Next:
+the user performs the upgrade in the dashboard, then `wrangler deploy` (by
+the user, or by the coordinator on request from the main checkout), then
+the real sends. Deployment of the application is not authorized.
 
 Previously: **SLICE 016 (TASKS) — COMPLETE: BOTH RUNGS MERGED, RUNTIME UPDATED, PUSHED,
 CLEANED UP (2026-09-09, each with the user's approval).** `main` at the
@@ -1005,9 +1006,9 @@ and now lives only in git history.
 
 - **Slice 017:** merged, pushed and the dev API updated with the user's
   approval on 2026-09-09. The Workers plan is Free, so the worker deploy is
-  stopped. **Decision required:** the Workers Paid upgrade, or the raw
-  pass-through contract change (017b) under its own approval; the real
-  sends follow whichever is chosen.
+  stopped. Decided 2026-09-09: the Workers Paid upgrade (user action in
+  the dashboard). Then `wrangler deploy` and the real sends; the
+  walkthrough evidence is appended to the verification record.
 - Deployment is not authorized.
 - R1 (auto-hangup of a live call on identity change) is a product choice for
   a later slice, not blocking.

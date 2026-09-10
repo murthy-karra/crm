@@ -183,3 +183,5 @@ account is on the Workers Free plan** (10 ms CPU per invocation). Per
 D-056 §3 the streaming relay is not deployed; the decision between the
 Workers Paid upgrade and the raw `message/rfc822` pass-through contract
 change is with the user. The production relay remains the pre-017 build.
+Decided the same day: the Workers Paid upgrade; the deploy and the sends
+follow once the plan shows Paid.

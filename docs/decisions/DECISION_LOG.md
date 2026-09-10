@@ -2002,6 +2002,9 @@ to the object-storage slice). Resolves O-015 question 1; questions 2
    repository and is verified before the walkthrough. If it is Free, the
    upgrade is the user's decision and the pass-through fallback needs its
    own approval.
+   *Verified 2026-09-09 at the walkthrough: the account was on Workers
+   Free. The user chose the Workers Paid upgrade (no code change); the
+   pass-through fallback stays recorded, not built.*
 4. **Storage cost accepted** at design-partner scale (O-015's analysis):
    raw MIME stays whole and encrypted in Postgres `BYTEA`; `content_hmac`
    dedup is unchanged. WAL amplification and the storage-flood exposure of

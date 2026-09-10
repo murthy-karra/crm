@@ -1,0 +1,9 @@
+# Appended to generated/egress.yaml by deploy.sh when EGRESS_S3_BUCKET is set.
+# Egress >= 1.8 nests upload targets under `storage:` (pkg/config/base.go:
+# `StorageConfig yaml:"storage"`). No access key or secret here: the EC2
+# instance role supplies credentials through the AWS SDK's default chain
+# (egress README: "EMPTY if using IAM Role or instance profile").
+storage:
+  s3:
+    bucket: ${EGRESS_S3_BUCKET}
+    region: ${AWS_REGION}

@@ -1,5 +1,5 @@
 # Slice 006 telephony host (docs/specs/SLICE_006.md §11): Caddy (TLS),
-# Redis, LiveKit server (SFU + built-in TURN), LiveKit SIP. Everything on
+# Redis, LiveKit server (SFU + built-in TURN), LiveKit SIP, LiveKit Egress. Everything on
 # host networking: the SFU and SIP need wide UDP ranges, and LiveKit
 # recommends host mode for them. Render config first: ./deploy.sh.
 services:
@@ -38,6 +38,24 @@ services:
     volumes:
       - ./generated/sip.yaml:/sip/config.yaml:ro
 
+  # Recording (LiveKit Egress). Host networking so it reaches the server and
+  # Redis on loopback; SYS_ADMIN is mandatory since egress 1.7.6 (Chrome
+  # sandbox). Its only listener is the template server on 127.0.0.1:7980.
+  # Output goes to S3 via the instance role when EGRESS_S3_BUCKET is set;
+  # temp files land on the egress_tmp volume before upload.
+  egress:
+    image: livekit/egress:v1.14.1
+    restart: unless-stopped
+    network_mode: host
+    cap_add: [SYS_ADMIN]
+    depends_on: [redis, livekit]
+    environment:
+      EGRESS_CONFIG_FILE: /egress.yaml
+    volumes:
+      - ./generated/egress.yaml:/egress.yaml:ro
+      - egress_tmp:/tmp
+
 volumes:
   caddy_data:
   caddy_config:
+  egress_tmp:

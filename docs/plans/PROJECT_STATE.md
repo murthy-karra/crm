@@ -1,7 +1,7 @@
 # Project State
 
-Last updated: 2026-09-09 (Slice 016 Tasks complete: both rungs merged,
-runtime updated, pushed, cleaned up; no slice active; LiveKit down).
+Last updated: 2026-09-09 (Slice 016 Tasks complete; release profile added;
+telephony host moved to EC2 with dormant egress, D-055; no slice active).
 
 ## Current phase
 
@@ -891,11 +891,12 @@ and now lives only in git history.
   2026-08-28; revisit only if the affected surface changes.
 
 **Environment (standing):**
-- **LiveKit is DOWN (recorded 2026-09-08).** `livekit1.tarams.org` is
-  offline; the user is bringing it back during the week of 2026-09-08.
-  Until the user confirms it is back: place no live calls, run no
-  telephony walkthroughs, and do not treat call failures as app defects.
-  Call unit/DB tests are unaffected. Remove this line on restoration.
+- **LiveKit is back (2026-09-09) on a new host:** `livekit1.tarams.org`
+  is an EC2 `c6i.xlarge` in us-west-1 with the Slice 006 stack plus a
+  dormant LiveKit Egress (D-055); `./scripts/check-telephony` passes
+  against it with `CRM_TEST_LIVEKIT_API_URL=https://livekit1.tarams.org`
+  (the variable is empty in `.env`, so the script refuses unless it is
+  exported). The Telnyx SIP password rotation is still pending.
 - Dev tunnel routing lives ONLY in the Cloudflare dashboard (D-025);
   `config.yml`'s ingress section is documentation. A fresh clone or
   recreated tunnel needs the three dashboard routes set by hand per

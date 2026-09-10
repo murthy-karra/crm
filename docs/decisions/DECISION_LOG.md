@@ -1937,3 +1937,33 @@ variant" is superseded). D-022's deferral of done/snooze/dismiss on Today
 items stands: complete and snooze act on the task row, never on the Today
 item.
 
+### D-055 — Development telephony host on EC2; egress present but dormant (2026-09-09)
+
+Recorded (user, by direct change in another session; reviewed by the
+coordinator). The host behind `livekit1.tarams.org` is now an EC2
+`c6i.xlarge` in us-west-1 running the same Slice 006 stack (Caddy, Redis,
+LiveKit server with TURN, LiveKit SIP) plus LiveKit Egress; the earlier OVH
+box is no longer referenced by DNS. The telephony test suite passes against
+the new host (rooms and the webhook round trip with the real key pair).
+
+1. **Scope: the development telephony host.** The production hosting
+   direction in the architecture baseline (OVH bare metal) is not changed
+   by this entry; it is decided at the deployment slice, where EC2 is now a
+   candidate with a working template.
+2. **Egress is dormant capability, not a feature.** No application code
+   can start a recording (verified: no egress call in the workspace), and
+   O-002 (recording consent) and O-012 (recordings as per-Person-keyed,
+   shreddable blobs) remain open and blocking. The S3 target
+   (`EGRESS_S3_BUCKET`, instance-role credentials, no keys in files) is
+   infrastructure readiness only. Before any recording ships: O-002 and
+   O-012 resolved, the bucket with public access blocked, encryption at
+   rest and a lifecycle rule, and a cleanup for failed uploads left on the
+   host's `egress_tmp` volume.
+3. **Host posture, accepted for a single-purpose host:** egress runs with
+   host networking and `SYS_ADMIN` (required by LiveKit since egress
+   1.7.6); its rendered config is world-readable inside a 700 directory
+   because the image runs unprivileged.
+
+Blocks: nothing. Closes the 2026-09-08 "LiveKit down" environment note.
+Still pending from the old host: the Telnyx SIP password rotation.
+

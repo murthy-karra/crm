@@ -1,0 +1,14 @@
+# Rendered by deploy.sh from .env — do not edit generated/egress.yaml.
+# Egress co-locates with livekit-server on this host: it reaches the server
+# and the shared Redis over loopback, so the server's 127.0.0.1 bind and the
+# firewall stay unchanged. Recording admission is a CPU reservation: an
+# audio-only room composite without a layout costs 0.5 units (no Chrome),
+# one with a layout costs 1, and jobs are accepted while host CPU < 80%.
+api_key: ${LIVEKIT_API_KEY}
+api_secret: ${LIVEKIT_API_SECRET}
+ws_url: ws://127.0.0.1:7880
+redis:
+  address: 127.0.0.1:6379
+logging:
+  level: info
+  json: true

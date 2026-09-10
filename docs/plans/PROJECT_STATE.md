@@ -12,11 +12,16 @@ deferred by the user).
 **SLICE 019 (CUSTOM FIELDS) — PLANNING (2026-09-10).** The user picked
 custom fields (the last unbuilt CRM-core model, thesis §7 and §11; the
 last FUB destination besides deals, SLICE_010_LADDER 010f+; the reserved
-dynamic-SQL fork point in the filter ladder). No accepted decision covers
-them yet. Planner analysis dispatched; next the decisions (type set,
-timeline facts or CRUD, filter clauses in v1, who edits), the independent
-review of the plan, `docs/specs/SLICE_019.md` and the brief, then the
-implementation gate. `main` is still ahead of `origin/main` (the Slice
+dynamic-SQL fork point in the filter ladder). **D-058 accepted (user,
+2026-09-10): filtering deferred to a separate rung 019b; four FUB types;
+any active member sets values; archive-only definitions; CRUD per AGENTS
+§4.6; import-ready columns.** FUB's custom-field shape was verified from
+its API docs (text/date/number/dropdown, choices, isRecurring,
+hideIfEmpty, orderWeight). The first planner run stalled at its first
+step for 50 minutes and was stopped; the retry with a tool budget
+delivered in six minutes. `docs/specs/SLICE_019.md` (rung 019a) drafted
+from it and sent for independent review; next the corrections, the
+brief, then the implementation gate. `main` is still ahead of `origin/main` (the Slice
 018 merge and records); push on the user's word.
 
 Previously: **SLICE 018 (OPERATOR `create_task` / `complete_task`) — COMPLETE AND
@@ -1058,9 +1063,9 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. **Slice 019 planning:** reconcile the planner's analysis, ask the
-   user's decisions one at a time, run the reviewer on the plan, draft
-   `docs/specs/SLICE_019.md` and the brief, then the implementation gate.
+1. **Slice 019 planning:** apply the reviewer's corrections to
+   `docs/specs/SLICE_019.md`, draft the brief, then the implementation
+   gate.
 2. **Push `main`** on the user's word (the Slice 018 merge and records
    plus the spec wording commit).
 3. **Slice 017 walkthrough (spec §6), deferred by the user:** send a small

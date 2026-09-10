@@ -33,6 +33,7 @@ struct Fixture {
     org_id: Uuid,
     alice_id: Uuid,
     carol_id: Uuid,
+    bob_id: Uuid,
     /// Has the operator runtime configured with whatever steps `fixture`
     /// or `rebuild_with_steps` was last given.
     router: Router,
@@ -56,7 +57,7 @@ async fn fixture(migrator_pool: &PgPool, steps: Vec<ScriptedStep>) -> Fixture {
     .await;
     let carol_id = crate::common::create_user(migrator_pool, "carol@acme.test", "Carol", PW).await;
     crate::common::add_membership(migrator_pool, org_id, carol_id).await;
-    let (_other_org, _bob_id) = crate::common::create_org_with_stages_and_member(
+    let (_other_org_id, bob_id) = crate::common::create_org_with_stages_and_member(
         migrator_pool,
         "Best Realty",
         "bob@best.test",
@@ -83,6 +84,7 @@ async fn fixture(migrator_pool: &PgPool, steps: Vec<ScriptedStep>) -> Fixture {
         org_id,
         alice_id,
         carol_id,
+        bob_id,
         router,
         router_no_operator,
         alice,
@@ -142,12 +144,20 @@ async fn confirm(router: &Router, cookie: &str, proposal_id: &str) -> axum::resp
 
 /// A bare Person via intake, assigned to `f.alice`.
 async fn person(f: &Fixture, email: &str) -> Uuid {
+    person_as(f, &f.alice, Some(f.alice_id), email).await
+}
+
+/// As `person`, but under an arbitrary cookie/assignee — for a Person
+/// under a *different* Organization than `f.org_id` (the cookie's own
+/// active Organization decides the tenant, the ordinary multi-tenant
+/// `post_inquiry` precedent).
+async fn person_as(f: &Fixture, cookie: &str, assignee: Option<Uuid>, email: &str) -> Uuid {
     let resp = crate::common::post_inquiry(
         &f.router,
-        &f.alice,
+        cookie,
         "zillow",
         json!({ "email": email, "message": "hi" }),
-        Some(f.alice_id),
+        assignee,
     )
     .await;
     assert_eq!(resp.status(), StatusCode::CREATED, "intake fixture");
@@ -343,6 +353,12 @@ async fn complete_task_not_found_is_byte_identical_across_causes(migrator_pool: 
     .await;
     assert_eq!(del.status(), StatusCode::OK);
 
+    // A task that belongs to a Person under an entirely different
+    // Organization (Best Realty) — alice's own Organization id can never
+    // match this row's, regardless of which Person id she names.
+    let bob_person = person_as(&f, &f.bob, Some(f.bob_id), "bob-person@op.test").await;
+    let bob_task = create_task_for(&f, &f.bob, bob_person, Some(f.bob_id)).await;
+
     let cases = [
         // Foreign Organization: bob has no visibility into this task at all.
         (person_a, task_on_a, f.bob.clone()),
@@ -352,8 +368,12 @@ async fn complete_task_not_found_is_byte_identical_across_causes(migrator_pool: 
         (person_a, tombstoned, f.alice.clone()),
         // Random id.
         (person_a, Uuid::new_v4(), f.alice.clone()),
+        // A foreign Organization's task id, reached through alice's OWN
+        // Person path.
+        (person_a, bob_task, f.alice.clone()),
     ];
     let mut replies = Vec::new();
+    let mut turn_ids = Vec::new();
     for (pid, tid, cookie) in cases {
         let router = rebuild_with_steps(
             &f,
@@ -367,13 +387,42 @@ async fn complete_task_not_found_is_byte_identical_across_causes(migrator_pool: 
         let out = run_turn(&router, &cookie).await;
         assert_eq!(out["tool_calls"][0]["outcome"], "not_found");
         assert!(out["receipt"].is_null());
-        replies.push(out["tool_calls"][0].clone());
+        turn_ids.push(out["turn_id"].as_str().unwrap().parse::<Uuid>().unwrap());
+        // Byte-identical: strip the one field every record legitimately
+        // differs on (timing) and compare the rest verbatim (`person_ids`
+        // is `#[serde(skip)]` — never on the wire at all, checked below
+        // against the ledger instead).
+        let mut record = out["tool_calls"][0].clone();
+        record.as_object_mut().unwrap().remove("duration_ms");
+        replies.push(record);
     }
-    // All four not_found tool-call records carry the same shape (outcome
-    // only, no distinguishing detail leaks to the ledger-adjacent record).
+    for record in &replies {
+        assert_eq!(record["name"], "complete_task");
+        assert_eq!(record["outcome"], "not_found");
+    }
     for r in &replies[1..] {
-        assert_eq!(r["outcome"], replies[0]["outcome"]);
+        assert_eq!(r, &replies[0], "every not_found record is byte-identical");
     }
+
+    // The ledger's own `person_ids` column (not on the wire at all,
+    // `#[serde(skip)]`) is empty for every one of these calls: `not_found`
+    // touches no Person.
+    for turn_id in &turn_ids {
+        let person_ids: Vec<Uuid> =
+            sqlx::query_scalar("SELECT person_ids FROM operator_tool_call WHERE turn_id = $1")
+                .bind(turn_id)
+                .fetch_one(&f.migrator_pool)
+                .await
+                .unwrap();
+        assert!(person_ids.is_empty(), "not_found touches no Person");
+    }
+
+    // No case wrote anything: alice's own task and bob's are both
+    // untouched.
+    let (completed_at, ..) = task_row(&f.migrator_pool, task_on_a).await;
+    assert!(completed_at.is_none(), "alice's own task stays open");
+    let (bob_completed_at, ..) = task_row(&f.migrator_pool, bob_task).await;
+    assert!(bob_completed_at.is_none(), "bob's task stays open");
 }
 
 /// A second click that races the model: `changed: false`, no receipt-worthy
@@ -451,6 +500,10 @@ async fn operator_versus_panel_completion_gives_one_changed_true(migrator_pool: 
     assert_eq!(panel_resp.status(), StatusCode::OK);
     let panel_body = crate::common::body_json(panel_resp).await;
     let panel_changed = panel_body["changed"].as_bool().unwrap();
+    // The Operator's own call succeeds either way it races (Completed or
+    // AlreadyCompleted are both an "ok" tool outcome) — only the receipt
+    // distinguishes which one actually happened.
+    assert_eq!(turn_out["tool_calls"][0]["outcome"], "ok");
     let operator_changed = !turn_out["receipt"].is_null();
 
     assert_ne!(
@@ -626,6 +679,66 @@ async fn create_task_confirm_without_operator_runtime_sets_origin_and_correlatio
     assert_eq!(row_task_id, Some(task_id));
 }
 
+/// A full proposal with `kind`, `due_date` (composed at the turn's
+/// `utc_offset_minutes: 0`, end of day since no `due_time`), and a named
+/// assignee — the DB row and the wire response agree with each other and
+/// with the composed instant (docs/specs/SLICE_018.md §3, §4, §5).
+#[sqlx::test]
+#[ignore]
+async fn create_task_with_due_date_and_named_assignee_composes_and_confirms(migrator_pool: PgPool) {
+    let f = fixture(&migrator_pool, Vec::new()).await;
+    let person_id = person(&f, "due-date@op.test").await;
+    let router = rebuild_with_steps(
+        &f,
+        steps_one_call(
+            "create_task",
+            json!({
+                "person_id": person_id,
+                "title": "Call Carol's client",
+                "kind": "call",
+                "due_date": "2026-09-12",
+                "assignee": "Carol",
+            }),
+            "Ready.",
+        ),
+    )
+    .await;
+    let out = run_turn(&router, &f.alice).await;
+    let proposal_id = out["proposal"]["id"].as_str().unwrap().to_string();
+    let (_, _, _, _, turn_id) = proposal_row(&f.migrator_pool, proposal_id.parse().unwrap()).await;
+
+    let resp = confirm(&f.router_no_operator, &f.alice, &proposal_id).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+    let body = crate::common::body_json(resp).await;
+    let task_id: Uuid = body["task"]["id"].as_str().unwrap().parse().unwrap();
+
+    let expected_due: chrono::DateTime<chrono::Utc> = "2026-09-12T23:59:59Z".parse().unwrap();
+    let wire_due: chrono::DateTime<chrono::Utc> =
+        body["task"]["due_at"].as_str().unwrap().parse().unwrap();
+    assert_eq!(
+        wire_due, expected_due,
+        "the wire due_at matches the composed instant"
+    );
+
+    let (kind, assignee_user_id, due_at): (String, Uuid, chrono::DateTime<chrono::Utc>) =
+        sqlx::query_as("SELECT kind, assignee_user_id, due_at FROM task WHERE id = $1")
+            .bind(task_id)
+            .fetch_one(&f.migrator_pool)
+            .await
+            .unwrap();
+    assert_eq!(kind, "call");
+    assert_eq!(assignee_user_id, f.carol_id);
+    assert_eq!(
+        due_at, expected_due,
+        "the stored due_at matches the composed instant"
+    );
+
+    let (completed_at, origin, correlation_id) = task_row(&f.migrator_pool, task_id).await;
+    assert!(completed_at.is_none());
+    assert_eq!(origin, "operator");
+    assert_eq!(correlation_id, turn_id);
+}
+
 /// A Person deleted between propose and confirm cascades the sidecar
 /// away; the scoped claim still succeeds, the sidecar read finds no row
 /// → finalize `failed` with `not_found`, answer 404 (docs/specs/
@@ -677,6 +790,18 @@ async fn create_task_check_matrix(migrator_pool: PgPool) {
     let person_id = person(&f, "checks@op.test").await;
     let app_pool = crate::common::connect_as_app(&migrator_pool).await;
 
+    /// The exact CHECK constraint name a rejected insert violated (review
+    /// round 1: `is_err()` alone cannot tell one constraint from another).
+    fn violated_constraint(err: sqlx::Error) -> String {
+        match err {
+            sqlx::Error::Database(e) => e
+                .constraint()
+                .expect("a named CHECK constraint")
+                .to_string(),
+            other => panic!("expected a database constraint violation, got {other:?}"),
+        }
+    }
+
     // A create_task row with a contact_method_id violates the check.
     let rejected = sqlx::query(
         "INSERT INTO operator_proposal
@@ -691,10 +816,11 @@ async fn create_task_check_matrix(migrator_pool: PgPool) {
     .bind(person_id)
     .bind(Uuid::new_v4())
     .execute(&app_pool)
-    .await;
-    assert!(
-        rejected.is_err(),
-        "contact_method_id set on create_task must be rejected"
+    .await
+    .unwrap_err();
+    assert_eq!(
+        violated_constraint(rejected),
+        "operator_proposal_contact_method_id_check"
     );
 
     // A create_task row confirmed without a task_id violates the check.
@@ -710,10 +836,11 @@ async fn create_task_check_matrix(migrator_pool: PgPool) {
     .bind(Uuid::new_v4())
     .bind(person_id)
     .execute(&app_pool)
-    .await;
-    assert!(
-        rejected_confirmed.is_err(),
-        "confirmed create_task with no task_id must be rejected"
+    .await
+    .unwrap_err();
+    assert_eq!(
+        violated_constraint(rejected_confirmed),
+        "operator_proposal_check1"
     );
 
     // An invalid tool value is rejected.
@@ -729,8 +856,115 @@ async fn create_task_check_matrix(migrator_pool: PgPool) {
     .bind(Uuid::new_v4())
     .bind(person_id)
     .execute(&app_pool)
-    .await;
-    assert!(rejected_tool.is_err());
+    .await
+    .unwrap_err();
+    assert_eq!(
+        violated_constraint(rejected_tool),
+        "operator_proposal_tool_check"
+    );
+
+    // A start_call row (a random contact_method_id — the CHECK it would
+    // otherwise satisfy) with task_id also set: the per-tool hygiene CHECK
+    // catches it. `status = 'claimed'` (not `'proposed'`) isolates this
+    // from the proposed-status CHECK below, which would ALSO reject a
+    // `'proposed'` row carrying a non-null `task_id` regardless of tool —
+    // this row must violate exactly one CHECK, this one.
+    let rejected_start_call_task_id = sqlx::query(
+        "INSERT INTO operator_proposal
+           (id, organization_id, actor_user_id, turn_id, tool, person_id,
+            contact_method_id, task_id, status, expires_at)
+         VALUES ($1, $2, $3, $4, 'start_call', $5, $6, $7, 'claimed', now() + interval '2 minutes')",
+    )
+    .bind(Uuid::new_v4())
+    .bind(f.org_id)
+    .bind(f.alice_id)
+    .bind(Uuid::new_v4())
+    .bind(person_id)
+    .bind(Uuid::new_v4())
+    .bind(Uuid::new_v4())
+    .execute(&app_pool)
+    .await
+    .unwrap_err();
+    assert_eq!(
+        violated_constraint(rejected_start_call_task_id),
+        "operator_proposal_task_id_tool_check"
+    );
+
+    // A create_task row with call_id set: the other per-tool hygiene
+    // CHECK — `status = 'claimed'`, the same isolation reasoning.
+    let rejected_create_task_call_id = sqlx::query(
+        "INSERT INTO operator_proposal
+           (id, organization_id, actor_user_id, turn_id, tool, person_id,
+            contact_method_id, call_id, status, expires_at)
+         VALUES ($1, $2, $3, $4, 'create_task', $5, NULL, $6, 'claimed', now() + interval '2 minutes')",
+    )
+    .bind(Uuid::new_v4())
+    .bind(f.org_id)
+    .bind(f.alice_id)
+    .bind(Uuid::new_v4())
+    .bind(person_id)
+    .bind(Uuid::new_v4())
+    .execute(&app_pool)
+    .await
+    .unwrap_err();
+    assert_eq!(
+        violated_constraint(rejected_create_task_call_id),
+        "operator_proposal_call_id_tool_check"
+    );
+
+    // A create_task row still `status = 'proposed'` with task_id already
+    // set violates the proposed-status CHECK (task_id is one of the four
+    // columns that CHECK requires NULL while proposed).
+    let rejected_proposed_with_task_id = sqlx::query(
+        "INSERT INTO operator_proposal
+           (id, organization_id, actor_user_id, turn_id, tool, person_id,
+            contact_method_id, task_id, status, expires_at)
+         VALUES ($1, $2, $3, $4, 'create_task', $5, NULL, $6, 'proposed', now() + interval '2 minutes')",
+    )
+    .bind(Uuid::new_v4())
+    .bind(f.org_id)
+    .bind(f.alice_id)
+    .bind(Uuid::new_v4())
+    .bind(person_id)
+    .bind(Uuid::new_v4())
+    .execute(&app_pool)
+    .await
+    .unwrap_err();
+    assert_eq!(
+        violated_constraint(rejected_proposed_with_task_id),
+        "operator_proposal_check"
+    );
+
+    // Positive control: a well-formed create_task parent + sidecar pair
+    // inserts cleanly — proving the six rejections above are genuinely
+    // about the one violated field each, not some other structural error.
+    let proposal_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO operator_proposal
+           (id, organization_id, actor_user_id, turn_id, tool, person_id,
+            contact_method_id, status, expires_at)
+         VALUES ($1, $2, $3, $4, 'create_task', $5, NULL, 'proposed', now() + interval '2 minutes')",
+    )
+    .bind(proposal_id)
+    .bind(f.org_id)
+    .bind(f.alice_id)
+    .bind(Uuid::new_v4())
+    .bind(person_id)
+    .execute(&app_pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO operator_task_proposal
+           (proposal_id, organization_id, person_id, title, kind, due_at, assignee_user_id)
+         VALUES ($1, $2, $3, 'Well-formed', 'follow_up', NULL, $4)",
+    )
+    .bind(proposal_id)
+    .bind(f.org_id)
+    .bind(person_id)
+    .bind(f.alice_id)
+    .execute(&app_pool)
+    .await
+    .unwrap();
 }
 
 /// `crm_app` has no UPDATE and no DELETE on the sidecar (docs/specs/
@@ -741,18 +975,20 @@ async fn operator_task_proposal_grants_admit_no_update_or_delete(migrator_pool: 
     let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let update = sqlx::query("UPDATE operator_task_proposal SET title = title WHERE false")
         .execute(&app_pool)
-        .await;
-    assert!(
-        update.is_err(),
-        "crm_app must not be able to UPDATE operator_task_proposal"
-    );
+        .await
+        .unwrap_err();
+    match update {
+        sqlx::Error::Database(e) => assert_eq!(e.code().as_deref(), Some("42501")),
+        other => panic!("expected a permission-denied database error, got {other:?}"),
+    }
     let delete = sqlx::query("DELETE FROM operator_task_proposal WHERE false")
         .execute(&app_pool)
-        .await;
-    assert!(
-        delete.is_err(),
-        "crm_app must not be able to DELETE FROM operator_task_proposal"
-    );
+        .await
+        .unwrap_err();
+    match delete {
+        sqlx::Error::Database(e) => assert_eq!(e.code().as_deref(), Some("42501")),
+        other => panic!("expected a permission-denied database error, got {other:?}"),
+    }
 }
 
 /// Expired, consumed, double, and stuck-claimed (docs/specs/SLICE_006b.md
@@ -1124,7 +1360,42 @@ async fn create_task_assignee_resolution_matrix(migrator_pool: PgPool) {
         .unwrap();
     assert_eq!(before, after, "needs_clarification writes no row");
 
+    // A name that resolves to a member of a DIFFERENT Organization: unknown
+    // (never leaked across the tenant boundary) — "Bob" is a real member's
+    // display name, just not of this Organization.
+    let before_bob: i64 = sqlx::query_scalar("SELECT count(*) FROM operator_proposal")
+        .fetch_one(&f.migrator_pool)
+        .await
+        .unwrap();
+    let router = rebuild_with_steps(
+        &f,
+        steps_one_call(
+            "create_task",
+            json!({"person_id": person_id, "title": "For Bob", "assignee": "Bob"}),
+            "who is Bob?",
+        ),
+    )
+    .await;
+    let out = run_turn(&router, &f.alice).await;
+    assert!(out["proposal"].is_null());
+    assert_eq!(
+        out["tool_calls"][0]["outcome"], "ok",
+        "needs_clarification is not a strike"
+    );
+    let after_bob: i64 = sqlx::query_scalar("SELECT count(*) FROM operator_proposal")
+        .fetch_one(&f.migrator_pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        before_bob, after_bob,
+        "a foreign-Organization member's name writes no row"
+    );
+
     // Inactive member named.
+    let before_inactive: i64 = sqlx::query_scalar("SELECT count(*) FROM operator_proposal")
+        .fetch_one(&f.migrator_pool)
+        .await
+        .unwrap();
     deactivate_membership(&f.migrator_pool, f.org_id, f.carol_id).await;
     let router = rebuild_with_steps(
         &f,
@@ -1137,6 +1408,18 @@ async fn create_task_assignee_resolution_matrix(migrator_pool: PgPool) {
     .await;
     let out = run_turn(&router, &f.alice).await;
     assert!(out["proposal"].is_null());
+    assert_eq!(
+        out["tool_calls"][0]["outcome"], "ok",
+        "needs_clarification is not a strike"
+    );
+    let after_inactive: i64 = sqlx::query_scalar("SELECT count(*) FROM operator_proposal")
+        .fetch_one(&f.migrator_pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        before_inactive, after_inactive,
+        "a deactivated member's name writes no row"
+    );
 }
 
 // === Undo (through the existing reopen route) ==============================
@@ -1189,7 +1472,7 @@ async fn undo_through_reopen_changed_true_then_false_then_404_and_403(migrator_p
     .await;
     assert_eq!(missing.status(), StatusCode::NOT_FOUND);
 
-    let forbidden = crate::common::post_json_with_cookie(
+    let not_found_by_bob = crate::common::post_json_with_cookie(
         &f.router,
         &format!("/api/people/{person_id}/tasks/{task_id}/reopen"),
         &f.bob,
@@ -1197,9 +1480,28 @@ async fn undo_through_reopen_changed_true_then_false_then_404_and_403(migrator_p
     )
     .await;
     assert_eq!(
-        forbidden.status(),
+        not_found_by_bob.status(),
         StatusCode::NOT_FOUND,
         "bob cannot see this Person at all"
+    );
+
+    // A same-Organization member with no rule-1 standing (not the
+    // assignee, not the creator, not an admin) sees the Person and task,
+    // but is forbidden from the write.
+    let dave_id = crate::common::create_user(&migrator_pool, "dave@acme.test", "Dave", PW).await;
+    crate::common::add_membership(&migrator_pool, f.org_id, dave_id).await;
+    let dave = crate::common::login_cookie(&f.router, "dave@acme.test", PW).await;
+    let forbidden_by_dave = crate::common::post_json_with_cookie(
+        &f.router,
+        &format!("/api/people/{person_id}/tasks/{task_id}/reopen"),
+        &dave,
+        json!({}),
+    )
+    .await;
+    assert_eq!(forbidden_by_dave.status(), StatusCode::FORBIDDEN);
+    assert_eq!(
+        crate::common::body_json(forbidden_by_dave).await,
+        json!({ "error": "forbidden" })
     );
 }
 
@@ -1245,4 +1547,47 @@ async fn start_call_confirm_with_a_null_contact_method_id_is_503(migrator_pool: 
     let (status, failure, ..) = proposal_row(&f.migrator_pool, proposal_id).await;
     assert_eq!(status, "failed");
     assert_eq!(failure, Some("corrupt".to_string()));
+}
+
+// === turn request validation ================================================
+
+/// docs/specs/SLICE_018.md §3, §5, §12: `utc_offset_minutes` outside
+/// ±840, or non-integer, is 400 `malformed_request` — before any turn
+/// reaches the ledger (`validate()` runs before the spawned turn task that
+/// would insert the `operator_turn` row).
+#[sqlx::test]
+#[ignore]
+async fn turn_rejects_invalid_utc_offset_minutes(migrator_pool: PgPool) {
+    let f = fixture(&migrator_pool, Vec::new()).await;
+    let before: i64 = sqlx::query_scalar("SELECT count(*) FROM operator_turn")
+        .fetch_one(&f.migrator_pool)
+        .await
+        .unwrap();
+
+    for offset in [json!(841), json!(-841), json!(1.5), json!("60")] {
+        let resp = crate::common::post_json_with_cookie(
+            &f.router,
+            "/api/operator/turns",
+            &f.alice,
+            json!({
+                "message": "go",
+                "history": [],
+                "context": { "route": "other" },
+                "utc_offset_minutes": offset,
+            }),
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST, "offset {offset}");
+        assert_eq!(
+            crate::common::body_json(resp).await["error"],
+            "malformed_request",
+            "offset {offset}"
+        );
+    }
+
+    let after: i64 = sqlx::query_scalar("SELECT count(*) FROM operator_turn")
+        .fetch_one(&f.migrator_pool)
+        .await
+        .unwrap();
+    assert_eq!(before, after, "a rejected turn never reaches the ledger");
 }

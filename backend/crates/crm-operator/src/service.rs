@@ -2895,6 +2895,56 @@ mod tests {
         assert_eq!(backend.seen.lock().unwrap().len(), 1);
     }
 
+    /// Review round 1: the receipt guard keys on a *standing receipt*
+    /// (`state.receipt.is_some()`), not on "a complete_task already ran
+    /// this turn" — `Forbidden` never sets a receipt (docs/specs/
+    /// SLICE_018.md §2), so a second `complete_task` after a `Forbidden`
+    /// outcome is NOT blocked and reaches the backend again.
+    #[tokio::test]
+    async fn a_second_complete_task_after_a_forbidden_outcome_still_reaches_the_backend() {
+        let person = Uuid::new_v4();
+        let task_a = Uuid::new_v4();
+        let task_b = Uuid::new_v4();
+        let backend = FakeBackend {
+            complete_task_outcome: Some(FakeCompleteOutcome::Forbidden),
+            ..Default::default()
+        };
+        let (svc, _) = service(
+            vec![
+                ScriptedStep::Respond(ChatResponse::tool_calls(vec![
+                    call(
+                        "c1",
+                        "complete_task",
+                        json!({"person_id": person.to_string(), "task_id": task_a.to_string()}),
+                    ),
+                    call(
+                        "c2",
+                        "complete_task",
+                        json!({"person_id": person.to_string(), "task_id": task_b.to_string()}),
+                    ),
+                ])),
+                ScriptedStep::Respond(ChatResponse::text("done")),
+            ],
+            Limits::default(),
+        );
+        let out = svc
+            .run_turn(&ctx(), &backend, input("try to complete both"))
+            .await;
+        assert_eq!(out.outcome, TurnOutcome::Completed);
+        assert!(out.receipt.is_none(), "forbidden never sets a receipt");
+        assert_eq!(out.tool_calls.len(), 2);
+        assert_eq!(
+            out.tool_calls[1].outcome,
+            ToolCallOutcome::Ok,
+            "the second call was not blocked by the guard"
+        );
+        assert_eq!(
+            backend.seen.lock().unwrap().len(),
+            2,
+            "both calls reached the backend"
+        );
+    }
+
     /// A 503 outcome never surfaces its receipt (docs/specs/SLICE_018.md
     /// §2, the SLICE_006b §10 proposal rule extended).
     #[tokio::test]
@@ -3075,9 +3125,40 @@ mod tests {
             Some(Utc.with_ymd_and_hms(2026, 9, 13, 7, 59, 59).unwrap())
         );
 
-        // The ±840 bounds (14h) round-trip.
-        assert!(compose_due_at(Some(date), Some(noon), Some(840)).is_ok());
-        assert!(compose_due_at(Some(date), Some(noon), Some(-840)).is_ok());
+        // Crossing to the PREVIOUS UTC day: 00:30 local at +600 (UTC+10) ==
+        // 2026-09-11T14:30:00Z.
+        let half_past_midnight = chrono::NaiveTime::from_hms_opt(0, 30, 0).unwrap();
+        assert_eq!(
+            compose_due_at(Some(date), Some(half_past_midnight), Some(600)).unwrap(),
+            Some(Utc.with_ymd_and_hms(2026, 9, 11, 14, 30, 0).unwrap())
+        );
+
+        // The ±840 bounds (14h), exact instants, not just Ok:
+        // 2026-09-12T12:00:00+14:00 == 2026-09-11T22:00:00Z.
+        assert_eq!(
+            compose_due_at(Some(date), Some(noon), Some(840)).unwrap(),
+            Some(Utc.with_ymd_and_hms(2026, 9, 11, 22, 0, 0).unwrap())
+        );
+        // 2026-09-12T12:00:00-14:00 == 2026-09-13T02:00:00Z.
+        assert_eq!(
+            compose_due_at(Some(date), Some(noon), Some(-840)).unwrap(),
+            Some(Utc.with_ymd_and_hms(2026, 9, 13, 2, 0, 0).unwrap())
+        );
+
+        // BEYOND_ENVELOPE, accepted (docs/specs/SLICE_018.md §3): a FIXED
+        // offset carries no DST awareness at all — the same calendar date
+        // (2026-03-08, the US DST-start Sunday) composes by pure
+        // arithmetic regardless, proven here with two different offsets
+        // on the same date and default end-of-day time.
+        let dst_date = chrono::NaiveDate::from_ymd_opt(2026, 3, 8).unwrap();
+        assert_eq!(
+            compose_due_at(Some(dst_date), None, Some(-480)).unwrap(),
+            Some(Utc.with_ymd_and_hms(2026, 3, 9, 7, 59, 59).unwrap())
+        );
+        assert_eq!(
+            compose_due_at(Some(dst_date), None, Some(600)).unwrap(),
+            Some(Utc.with_ymd_and_hms(2026, 3, 8, 13, 59, 59).unwrap())
+        );
 
         // No due_date at all: no offset needed, composes to None.
         assert_eq!(compose_due_at(None, None, None).unwrap(), None);

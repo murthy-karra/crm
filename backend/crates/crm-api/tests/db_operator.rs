@@ -3056,6 +3056,23 @@ async fn capture_across_today_tasks_and_operator_tools_finds_a_task_title_only_i
         "the ledger row must hold no task title"
     );
 
+    // Review round 1: the sentinel argument didn't just fail to leak — the
+    // fourth tool call (create_task) actually succeeded, and the sidecar
+    // legitimately holds it (docs/specs/SLICE_018.md §4's sidecar
+    // precedent), the one place outside the ledger a model-authored title
+    // may land.
+    assert_eq!(
+        tools[3].2, "ok",
+        "create_task must have succeeded: {tools:?}"
+    );
+    let sidecar_count: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM operator_task_proposal WHERE title = $1")
+            .bind(SENTINEL)
+            .fetch_one(&f.migrator_pool)
+            .await
+            .unwrap();
+    assert_eq!(sidecar_count, 1);
+
     // Round-1 review must-close item 8: the positive control claimed by
     // this comment must actually assert BOTH spans — a prior version only
     // checked `today.query`, silently never proving the harness captures

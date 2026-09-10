@@ -2101,6 +2101,25 @@ describe('PersonDetailView — Notes (SLICE_015 §9.10)', () => {
     expect(wrapper.find('[data-testid="note-edit-gone"]').exists()).toBe(false)
   })
 
+  // LATER batch (2026-09-10) item 4.
+  it('Escape on the "deleted elsewhere" draft textarea does exactly what Dismiss does', async () => {
+    stubApi(detail([PHONE_A], [noteEntry({ id: 'note-1', body: 'Original body' })]), {
+      noteEdit: () => new ApiError(404, 'not_found'),
+    })
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    await wrapper.get('[data-testid="edit-note"]').trigger('click')
+    await wrapper.get('[data-testid="note-edit-textarea"]').setValue('A draft that will be orphaned')
+    await wrapper.get('[data-testid="note-edit-save"]').trigger('click')
+    await flushPromises()
+    await settleTick()
+    expect(wrapper.find('[data-testid="note-edit-gone"]').exists()).toBe(true)
+
+    await wrapper.get('[data-testid="note-edit-gone-draft"]').trigger('keydown', { key: 'Escape' })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="note-edit-gone"]').exists()).toBe(false)
+  })
+
   it('a realtime-driven refetch (no mutation in flight) that removes the note being edited shows the same "deleted elsewhere" state', async () => {
     stubApi(detail([PHONE_A], [noteEntry({ id: 'note-1', body: 'Original body' })]))
     const { wrapper, queryClient } = await mountView()
@@ -2162,6 +2181,24 @@ describe('PersonDetailView — Notes (SLICE_015 §9.10)', () => {
     await flushPromises()
     await settleTick()
     expect(wrapper.find('[data-testid="note-body"]').exists()).toBe(false)
+  })
+
+  // LATER batch (2026-09-10) item 4: after a delete, focus moves to the
+  // composer textarea (never falls to the body) — attached: true (the
+  // default `attachTo: document.body`) is required for `document.activeElement`
+  // to reflect a real focus rather than jsdom's no-op on a detached tree.
+  it('after a delete, focus moves to the note composer textarea', async () => {
+    stubApi(detail([PHONE_A], [noteEntry({ id: 'note-1', body: 'Delete me' })]))
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    await wrapper.get('[data-testid="delete-note"]').trigger('click')
+    await flushPromises()
+    const confirmButton = [...document.body.querySelectorAll('button')].find((b) => b.textContent === 'Delete')
+    confirmButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flushPromises()
+    await settleTick()
+    expect(wrapper.find('[data-testid="note-body"]').exists()).toBe(false)
+    expect(document.activeElement).toBe(wrapper.get('[data-testid="note-composer-textarea"]').element)
   })
 
   it('a Save 403 (role/authorship changed under the viewer) shows the specific copy and removes Edit/Delete once the refetch shows can_manage: false', async () => {

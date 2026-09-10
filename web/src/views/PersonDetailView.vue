@@ -329,6 +329,19 @@ function codePointLength(value: string): number {
 const addNote = useAddNoteMutation(orgId, () => props.id)
 const noteDraft = ref('')
 const noteAddError = ref<string | null>(null)
+// LATER batch (2026-09-10) item 4: where focus goes after a note delete —
+// the composer textarea (the common case), or the History heading if the
+// composer is not rendered (no such condition exists today, but nothing
+// guarantees one never will; falling to the document body either way is
+// the defect being fixed).
+const noteComposerTextareaRef = ref<HTMLTextAreaElement | null>(null)
+const historyHeadingRef = ref<HTMLHeadingElement | null>(null)
+function focusAfterNoteDelete() {
+  void nextTick(() => {
+    if (noteComposerTextareaRef.value) noteComposerTextareaRef.value.focus()
+    else historyHeadingRef.value?.focus()
+  })
+}
 const noteDraftCodePoints = computed(() => codePointLength(noteDraft.value))
 const noteDraftOverLimit = computed(() => noteDraftCodePoints.value > NOTE_MAX_CHARS)
 const noteAddDisabled = computed(
@@ -407,6 +420,17 @@ function onEditNoteKeydown(event: KeyboardEvent) {
   }
 }
 
+// LATER batch (2026-09-10) item 4: Escape on the "deleted elsewhere"
+// draft textarea does exactly what the Dismiss button does — no separate
+// focus-return behaviour (unlike `cancelEditNote` above, there is no
+// longer an edit button on this row to return focus to; the note is gone).
+function onNoteGoneKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    editingNote.value = null
+  }
+}
+
 // A get/set computed rather than `v-model="editingNote.draft"` directly: the
 // template's `v-if="row.note && editingNote?.id === row.note.id"` implies
 // `editingNote` is non-null without a form vue-tsc's template narrowing
@@ -471,6 +495,7 @@ function confirmDeleteNote() {
       onSuccess: () => {
         deleteNoteDialogOpen.value = false
         if (editingNote.value?.id === target.id) editingNote.value = null
+        focusAfterNoteDelete()
       },
     },
   )
@@ -1911,7 +1936,11 @@ watch(
       </Card>
 
       <Card>
-        <h2 class="mb-4 text-section font-semibold text-text">
+        <h2
+          ref="historyHeadingRef"
+          class="mb-4 text-section font-semibold text-text focus:outline-none"
+          tabindex="-1"
+        >
           History
         </h2>
 
@@ -1925,6 +1954,7 @@ watch(
           >Add a note</label>
           <textarea
             id="note-composer-textarea"
+            ref="noteComposerTextareaRef"
             v-model="noteDraft"
             :class="TEXTAREA_CLASSES"
             placeholder="Add a note…"
@@ -1989,6 +2019,7 @@ watch(
                 :class="[TEXTAREA_CLASSES, 'mt-2']"
                 aria-label="Note draft"
                 data-testid="note-edit-gone-draft"
+                @keydown="onNoteGoneKeydown"
               />
               <div class="mt-2">
                 <button
@@ -2047,7 +2078,7 @@ watch(
                 <div class="mt-2 flex items-center gap-2">
                   <button
                     type="button"
-                    :class="buttonClasses('primary')"
+                    :class="buttonClasses('secondary')"
                     :disabled="editNoteSaveDisabled"
                     data-testid="note-edit-save"
                     @click="saveEditNote"

@@ -96,14 +96,18 @@ export function describeProposalDue(dueAtIso: string | null): string | null {
 
 /** A `complete_task` receipt card's due line (§1's "was due today"
  * example): "today"/"yesterday" for the two adjacent local calendar days,
- * else a short date. `null` when the completed task carried no due date. */
+ * else a short date. `null` when the completed task carried no due date.
+ * "Yesterday" is `now`'s calendar day minus one, constructed with the
+ * `Date` day-rollover constructor — never `now`'s midnight minus a fixed
+ * 24h, which is wrong by an hour on either side of a DST transition (a
+ * local calendar day is 23h or 25h there, not always 24h). */
 export function describeReceiptDue(dueAtIso: string | null, now: Date = new Date()): string | null {
   if (dueAtIso === null) return null
   const due = new Date(dueAtIso)
   const dueMidnight = new Date(due.getFullYear(), due.getMonth(), due.getDate()).getTime()
   const nowMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
-  const oneDayMs = 24 * 60 * 60 * 1000
+  const yesterdayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1).getTime()
   if (dueMidnight === nowMidnight) return 'was due today'
-  if (dueMidnight === nowMidnight - oneDayMs) return 'was due yesterday'
+  if (dueMidnight === yesterdayMidnight) return 'was due yesterday'
   return `was due ${new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(due)}`
 }

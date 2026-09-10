@@ -1612,16 +1612,23 @@ export function useConfirmTaskProposal(
   return useMutation(
     {
       mutationKey: computed(() => personMutationKey(toValue(orgId), toValue(personId))),
-      mutationFn: (proposalId: string) =>
+      mutationFn: ({ proposalId }: { proposalId: string; personId: string }) =>
         apiFetch<CreateTaskResponse>(`/operator/proposals/${proposalId}/confirm`, {
           method: 'POST',
         }),
       retry: false,
-      onSuccess: () => {
-        settleTaskMutation(qc, toValue(orgId), toValue(personId))
+      // Review round 1: settle with `variables.personId` (the
+      // `useReopenTaskMutation` precedent), not a ref read at settle
+      // time — the ref is still updated by the caller before each
+      // `mutate()` (for `mutationKey` alone, which stays ref-based like
+      // every other task mutation here), but two confirms racing for
+      // different People must each settle their OWN Person, not
+      // whichever one the ref happened to hold when the promise resolved.
+      onSuccess: (_result, variables) => {
+        settleTaskMutation(qc, toValue(orgId), variables.personId)
       },
-      onError: () => {
-        settleTaskMutation(qc, toValue(orgId), toValue(personId))
+      onError: (_error, variables) => {
+        settleTaskMutation(qc, toValue(orgId), variables.personId)
       },
     },
     providedQueryClient,

@@ -79,8 +79,13 @@ interface TaskProposalCardState {
   message: string | null
 }
 
-/** docs/specs/SLICE_018.md §8: the receipt card's Undo state, keyed by
- * `task_id` (a receipt has no proposal id of its own). */
+/** docs/specs/SLICE_018.md §8: the receipt card's Undo state, keyed by the
+ * TRANSCRIPT ENTRY's own id, not `task_id` (review round 1: two distinct
+ * turns can both complete, or re-complete after an Undo, the SAME task —
+ * `session-only, the SLICE_006b proposal precedent` never claimed task
+ * ids are unique across a session's receipts — so keying by `task_id`
+ * would let a second receipt's card silently inherit the first one's
+ * already-`final`/already-`'Reopened'` Undo state). */
 interface ReceiptCardState {
   status: 'idle' | 'undoing' | 'done' | 'failed'
   final: boolean
@@ -99,10 +104,14 @@ const qc = useQueryClient()
 // Undo) is keyed by Organization.
 const orgId = computed(() => props.identityKey?.split(':')[0] ?? '')
 
-// `personId` is a ref updated immediately before each `mutate()` call: one
-// panel instance may confirm/undo across different People in one session,
-// but these hooks are constructed once at setup (docs/specs/SLICE_018.md
-// §8's own `useConfirmTaskProposal` doc comment explains the same choice).
+// `personId` is a ref updated immediately before each `mutate()` call —
+// one panel instance may confirm/undo across different People in one
+// session, but these hooks are constructed once at setup. It feeds only
+// `mutationKey` (the `isMutating`-gated settle system every task mutation
+// in `api/queries.ts` shares); the actual settle target is read from the
+// call's own `variables.personId` instead (`useReopenTaskMutation`'s own
+// shape, `useConfirmTaskProposal`'s own doc comment) — never this ref —
+// so two confirms racing for different People each settle their own.
 const taskConfirmPersonId = ref('')
 const confirmTask = useConfirmTaskProposal(orgId, taskConfirmPersonId)
 const undoPersonId = ref('')
@@ -110,7 +119,7 @@ const reopenTask = useReopenTaskMutation(orgId, undoPersonId)
 
 const proposalStates = reactive(new Map<string, ProposalCardState>())
 const taskProposalStates = reactive(new Map<string, TaskProposalCardState>())
-const receiptStates = reactive(new Map<string, ReceiptCardState>())
+const receiptStates = reactive(new Map<number, ReceiptCardState>())
 
 // A coarse clock so a pending card disables itself at `expires_at`
 // (SLICE_006b §1) without a per-card timer.
@@ -208,7 +217,7 @@ async function confirmTaskProposal(proposal: OperatorCreateTaskProposal) {
   state.message = null
   taskConfirmPersonId.value = proposal.person.id
   try {
-    await confirmTask.mutateAsync(proposal.id)
+    await confirmTask.mutateAsync({ proposalId: proposal.id, personId: proposal.person.id })
     if (!live || proposalLifetime !== lifetime) return
     state.status = 'confirmed'
     state.final = true
@@ -226,11 +235,29 @@ async function confirmTaskProposal(proposal: OperatorCreateTaskProposal) {
     if (err instanceof ApiError && err.code === 'proposal_consumed') {
       state.status = 'failed'
       state.final = true
-      state.message = 'This task was already added.'
+      // `task_id` is non-null only when the race's WINNER was this same
+      // create_task proposal (confirmed, a task now exists); null means a
+      // start_call-shaped consumption (claimed-then-crashed, or this
+      // proposal failed before ever producing a task) — never "already
+      // added" for a task that was never actually created.
+      state.message =
+        err.details.task_id != null
+          ? 'This task was already added.'
+          : 'This suggestion can no longer be used — ask again.'
       return
     }
-    // Every other task error (invalid_assignee, forbidden, not_found,
-    // unavailable, a network error) — retryable, the existing copy.
+    if (err instanceof ApiError && err.status !== 0) {
+      // CONTRACT (docs/specs/SLICE_018.md §5, §10): every pass-through
+      // task error (404/403/422/503/…) means the confirm route already
+      // finalized the proposal row `failed` server-side — never
+      // retryable; a fresh ask is required either way. Only a genuine
+      // network error (status 0, the request never reached the server)
+      // leaves the proposal itself untouched and stays retryable.
+      state.status = 'failed'
+      state.final = true
+      state.message = `${describeTaskError(err, 'This suggestion can no longer be used')} — ask again.`
+      return
+    }
     state.status = 'failed'
     state.final = false
     state.message = describeTaskError(err, 'Something went wrong. Try again.')
@@ -252,19 +279,19 @@ function dismissTaskProposal(proposal: OperatorCreateTaskProposal) {
 // --- Slice 018: complete_task receipt card / Undo (docs/specs/
 // SLICE_018.md §8) ----------------------------------------------------
 
-function receiptState(taskId: string): ReceiptCardState {
-  let state = receiptStates.get(taskId)
+function receiptState(entryId: number): ReceiptCardState {
+  let state = receiptStates.get(entryId)
   if (!state) {
     state = { status: 'idle', final: false, message: null }
-    receiptStates.set(taskId, state)
+    receiptStates.set(entryId, state)
   }
   return state
 }
 
-async function undoReceipt(receipt: OperatorReceipt) {
+async function undoReceipt(entryId: number, receipt: OperatorReceipt) {
   if (!isSessionVerified()) return
   const entryLifetime = lifetime
-  const state = receiptState(receipt.task_id)
+  const state = receiptState(entryId)
   if (state.status === 'undoing' || state.final) return
   state.status = 'undoing'
   state.message = null
@@ -598,9 +625,9 @@ defineExpose({ focus: () => textarea.value?.focus() })
                 class="h-4 w-4 shrink-0 text-text-muted"
                 stroke-width="1.75"
               />
-              <p class="text-body text-text">
+              <p class="min-w-0 text-body text-text">
                 Add task for <span class="font-semibold">{{ entry.createTaskProposal.person.display_name }}</span>:
-                <span class="font-semibold">{{ entry.createTaskProposal.title }}</span>
+                <span class="break-words font-semibold">{{ entry.createTaskProposal.title }}</span>
                 &middot; {{ TASK_KIND_LABEL[entry.createTaskProposal.task_kind] }}
                 <template v-if="describeProposalDue(entry.createTaskProposal.due_at)">
                   &middot; {{ describeProposalDue(entry.createTaskProposal.due_at) }}
@@ -658,8 +685,8 @@ defineExpose({ focus: () => textarea.value?.focus() })
                 class="h-4 w-4 shrink-0 text-text-muted"
                 stroke-width="1.75"
               />
-              <p class="text-body text-text">
-                Completed: <span class="font-semibold">{{ entry.receipt.title }}</span>
+              <p class="min-w-0 text-body text-text">
+                Completed: <span class="break-words font-semibold">{{ entry.receipt.title }}</span>
                 &middot; {{ TASK_KIND_LABEL[entry.receipt.task_kind] }}
                 <template v-if="describeReceiptDue(entry.receipt.due_at)">
                   &middot; {{ describeReceiptDue(entry.receipt.due_at) }}
@@ -670,20 +697,20 @@ defineExpose({ focus: () => textarea.value?.focus() })
               <button
                 type="button"
                 :class="buttonClasses('ghost')"
-                :disabled="receiptState(entry.receipt.task_id).status === 'undoing' || receiptState(entry.receipt.task_id).final"
+                :disabled="receiptState(entry.id).status === 'undoing' || receiptState(entry.id).final"
                 data-testid="operator-receipt-undo"
-                @click="undoReceipt(entry.receipt)"
+                @click="undoReceipt(entry.id, entry.receipt)"
               >
-                {{ receiptState(entry.receipt.task_id).status === 'undoing' ? 'Undoing…' : 'Undo' }}
+                {{ receiptState(entry.id).status === 'undoing' ? 'Undoing…' : 'Undo' }}
               </button>
             </div>
             <p
-              v-if="receiptState(entry.receipt.task_id).message"
+              v-if="receiptState(entry.id).message"
               class="mt-2 text-small"
-              :class="receiptState(entry.receipt.task_id).status === 'done' ? 'text-text-muted' : 'text-danger'"
+              :class="receiptState(entry.id).status === 'done' ? 'text-text-muted' : 'text-danger'"
               data-testid="operator-receipt-message"
             >
-              {{ receiptState(entry.receipt.task_id).message }}
+              {{ receiptState(entry.id).message }}
             </p>
           </div>
         </div>

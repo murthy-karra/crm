@@ -2,7 +2,7 @@
 
 Last updated: 2026-09-10 (Slice 017 merged and the relay deployed on Workers
 Paid; the live large-mail walkthrough deferred by the user; the LATER batch
-of 2026-09-10 drafted and awaiting the implementation gate).
+of 2026-09-10 approved at the implementation gate and its lane dispatched).
 
 ## Current phase
 
@@ -1004,8 +1004,10 @@ and now lives only in git history.
 
 ## Approval currently required
 
-- **LATER batch 2026-09-10:** the implementation gate (the brief is
-  drafted; no spec needed).
+- **LATER batch 2026-09-10:** implementation gate approved by the user on
+  2026-09-10 ("do it"). One lane (Claude Sonnet 5) in
+  `../crm-worktrees/later-2` on `chore/later-batch-2026-09-10` from
+  `ac85eb5`. Next approvals: commit of records, then merge to `main`.
 - **Slice 017:** complete apart from the deferred live sends (the user's
   action, no approval needed). The two record commits after the merge are
   not yet pushed; they go with the next push.

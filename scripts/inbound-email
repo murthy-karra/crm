@@ -58,8 +58,9 @@ api_url="${CRM_DEMO_API_URL:-http://127.0.0.1:3000}"
 response_file="$(mktemp)"
 b64_file="$(mktemp)"
 body_file="$(mktemp)"
+hdr_file="$(mktemp)"
 cleanup() {
-  rm -f "$response_file" "$b64_file" "$body_file"
+  rm -f "$response_file" "$b64_file" "$body_file" "$hdr_file"
 }
 trap cleanup EXIT
 
@@ -76,16 +77,23 @@ else
 fi
 
 # `--rawfile` reads the base64 straight off disk instead of taking it as a
-# process argument; `rtrimstr("\n")` drops the one trailing newline `base64`
-# always appends regardless of `-w0`/`-b 0` (which only control wrapping
-# *within* the output).
+# process argument. The GNU branch (`-w0`) still leaves the one trailing
+# newline `base64` always appends; the BSD branch above already strips
+# every newline via `tr -d '\n'`, making `rtrimstr("\n")` a no-op there —
+# either way, the filter leaves the exact base64 text with no newline.
 jq -n --arg recipient "$recipient" --rawfile raw "$b64_file" \
   '{recipient: $recipient, raw: ($raw | rtrimstr("\n"))}' > "$body_file"
+
+# The bearer goes into its own temp file and onto curl via `-H @file`
+# (added in curl 7.55) rather than a literal `-H "authorization: ..."`, so
+# it never appears on curl's own argv/`ps` for the whole upload. mktemp
+# creates the file 0600; only its content is written below.
+printf 'authorization: Bearer %s\n' "${CRM_INBOUND_EMAIL_SECRET}" > "$hdr_file"
 
 status="$(
   curl -sS -o "$response_file" -w '%{http_code}' \
       -X POST "$api_url/inbound/email" \
-      -H "authorization: Bearer ${CRM_INBOUND_EMAIL_SECRET}" \
+      -H @"$hdr_file" \
       -H 'content-type: application/json' \
       --data-binary @"$body_file"
 )"

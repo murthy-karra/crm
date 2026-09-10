@@ -123,7 +123,6 @@ function inboundEmailBody(recipient, rawStream) {
   const suffix = textEncoder.encode('"}');
   const reader = rawStream.pipeThrough(base64Transform()).getReader();
   let prefixSent = false;
-  let suffixSent = false;
 
   return new ReadableStream({
     async pull(controller) {
@@ -134,10 +133,9 @@ function inboundEmailBody(recipient, rawStream) {
       }
       const { done, value } = await reader.read();
       if (done) {
-        if (!suffixSent) {
-          suffixSent = true;
-          controller.enqueue(suffix);
-        }
+        // A closed stream is never pulled again, so this can only run
+        // once — no `suffixSent` guard needed.
+        controller.enqueue(suffix);
         controller.close();
         return;
       }

@@ -246,4 +246,15 @@ mod tests {
         let raw_ceiling: usize = 25 * 1024 * 1024;
         assert!(MAX_INBOUND_EMAIL_BODY_BYTES >= 4 * raw_ceiling.div_ceil(3) + 4096);
     }
+
+    /// docs/specs/SLICE_017.md §3: an escape-free base64 string must
+    /// borrow from the buffered body rather than copy it — dropping
+    /// `#[serde(borrow)]` would silently regress to an owned `String`
+    /// with no compile error, doubling peak memory for the 34 MiB body.
+    #[test]
+    fn raw_field_borrows_when_the_json_string_has_no_escapes() {
+        let req: InboundEmailRequest<'_> =
+            serde_json::from_slice(br#"{"recipient":"a","raw":"QUJD"}"#).unwrap();
+        assert!(matches!(req.raw, Cow::Borrowed(_)));
+    }
 }

@@ -129,6 +129,28 @@ function chunkedStream(bytes, chunkSize) {
   });
 }
 
+// Like chunkedStream(), but errors instead of closing after a few chunks —
+// simulating workerd's own message.raw stream breaking mid-read (a broken
+// upstream connection, an internal error, etc.). The relay must temp-fail
+// (throw), never bounce, and must never let a truncated body reach the
+// endpoint as if it were a complete message.
+function failingStream(bytes, chunkSize, failAfterChunks) {
+  let offset = 0;
+  let chunksSent = 0;
+  return new ReadableStream({
+    pull(controller) {
+      if (chunksSent >= failAfterChunks) {
+        controller.error(new Error('source failed'));
+        return;
+      }
+      const end = Math.min(offset + chunkSize, bytes.length);
+      controller.enqueue(bytes.subarray(offset, end));
+      offset = end;
+      chunksSent++;
+    },
+  });
+}
+
 function makeMessage(
   bytes,
   { to = 'acme-realty-k7f3q2wd@leads.elysianfeld.com', chunkSize } = {},
@@ -154,7 +176,13 @@ async function withFetch(status, fn) {
   const calls = [];
   const original = globalThis.fetch;
   globalThis.fetch = async (url, init) => {
-    calls.push({ url, init });
+    // Actually drain init.body (a real fetch/undici would, to write the
+    // request) rather than just storing the ReadableStream reference —
+    // otherwise email()'s inboundEmailBody() stream is handed to `fetch`
+    // but its pull() never runs, and the whole streaming machinery goes
+    // untested by every matrix test below.
+    const body = init.body ? await new Response(init.body).arrayBuffer() : null;
+    calls.push({ url, init, body });
     return new Response('{}', { status });
   };
   try {
@@ -182,7 +210,7 @@ test('a 200 relays the envelope recipient, bearer, and exact bytes', async () =>
     assert.equal(calls[0].url, ENV.CRM_INBOUND_API_URL);
     assert.equal(calls[0].init.headers.authorization, 'Bearer test-secret-value');
     assert.equal(calls[0].init.duplex, 'half');
-    const text = await new Response(calls[0].init.body).text();
+    const text = Buffer.from(calls[0].body).toString('utf8');
     const body = JSON.parse(text);
     assert.equal(body.recipient, message.to);
     assert.deepEqual(new Uint8Array(Buffer.from(body.raw, 'base64')), bytes);
@@ -199,17 +227,18 @@ test('a 25 MiB message relays as a streamed body and decodes to the exact bytes'
   await withFetch(200, async (calls) => {
     await worker.email(message, ENV);
     assert.equal(calls.length, 1);
-    const { init } = calls[0];
+    const { init, body } = calls[0];
     assert.ok(
       init.body instanceof ReadableStream,
       'the request body must be a stream, never a string',
     );
     assert.equal(init.duplex, 'half');
-    const text = await new Response(init.body).text();
+    const text = Buffer.from(body).toString('utf8');
     const parsed = JSON.parse(text);
     assert.equal(parsed.recipient, message.to);
-    const decoded = new Uint8Array(Buffer.from(parsed.raw, 'base64'));
-    assert.deepEqual(decoded, bytes);
+    const decoded = Buffer.from(parsed.raw, 'base64');
+    // Not assert.deepEqual: a mismatch would print both 25 MiB buffers.
+    assert.equal(Buffer.compare(decoded, Buffer.from(bytes)), 0, 'decoded bytes differ');
     assert.equal(message.rejected.length, 0);
   });
 });
@@ -221,9 +250,20 @@ test('a recipient with a quoted local part containing " and \\ produces valid JS
   const message = makeMessage(new Uint8Array([9, 8, 7]), { to: trickyRecipient });
   await withFetch(200, async (calls) => {
     await worker.email(message, ENV);
-    const text = await new Response(calls[0].init.body).text();
+    const text = Buffer.from(calls[0].body).toString('utf8');
     const parsed = JSON.parse(text); // throws if the JSON is malformed
     assert.equal(parsed.recipient, trickyRecipient);
+  });
+});
+
+test('a source stream failure temp-fails and never posts a truncated body', async () => {
+  const bytes = new Uint8Array(32 * 1024);
+  const message = makeMessage(bytes);
+  message.raw = failingStream(bytes, 4096, 3); // fails on the 4th pull, well short of EOF
+  await withFetch(200, async (calls) => {
+    await assert.rejects(() => worker.email(message, ENV));
+    assert.equal(calls.length, 0, 'a broken source must never complete a fetch call');
+    assert.equal(message.rejected.length, 0, 'a source failure must temp-fail, never bounce');
   });
 });
 

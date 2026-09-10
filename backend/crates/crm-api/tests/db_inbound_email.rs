@@ -312,7 +312,13 @@ async fn a_20_mib_multipart_message_stores_once_and_decrypts_to_the_exact_bytes(
         &row.ciphertext,
     )
     .unwrap();
-    assert_eq!(opened, raw);
+    // Not assert_eq!: a mismatch would Debug-print both ~21 MB vectors.
+    assert!(
+        opened == raw,
+        "decrypted bytes differ from the delivered message ({} vs {} bytes)",
+        opened.len(),
+        raw.len()
+    );
 }
 
 /// Criterion 3: no Person, Inquiry, fact, or routing row is created.

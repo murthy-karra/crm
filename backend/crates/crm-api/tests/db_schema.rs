@@ -1633,10 +1633,9 @@ async fn task_composite_fk_rejections(migrator_pool: PgPool) {
     .bind(actor_id)
     .execute(&app_pool)
     .await;
-    assert!(
-        cross_org_person.is_err(),
-        "a Person from another Organization must be rejected"
-    );
+    let err = cross_org_person.expect_err("a Person from another Organization must be rejected");
+    let db = err.as_database_error().expect("a composite-FK violation");
+    assert_eq!(db.code().as_deref(), Some("23503"));
 
     // (b) assignee_user_id is a real app_user with no membership in org A.
     let non_member_assignee = sqlx::query(
@@ -1650,10 +1649,9 @@ async fn task_composite_fk_rejections(migrator_pool: PgPool) {
     .bind(actor_id)
     .execute(&app_pool)
     .await;
-    assert!(
-        non_member_assignee.is_err(),
-        "a non-member assignee_user_id must be rejected"
-    );
+    let err = non_member_assignee.expect_err("a non-member assignee_user_id must be rejected");
+    let db = err.as_database_error().expect("a composite-FK violation");
+    assert_eq!(db.code().as_deref(), Some("23503"));
 
     // (c) created_by_user_id is a real app_user with no membership in org A.
     let non_member_creator = sqlx::query(
@@ -1667,10 +1665,9 @@ async fn task_composite_fk_rejections(migrator_pool: PgPool) {
     .bind(non_member_id)
     .execute(&app_pool)
     .await;
-    assert!(
-        non_member_creator.is_err(),
-        "a non-member created_by_user_id must be rejected"
-    );
+    let err = non_member_creator.expect_err("a non-member created_by_user_id must be rejected");
+    let db = err.as_database_error().expect("a composite-FK violation");
+    assert_eq!(db.code().as_deref(), Some("23503"));
 
     // (d) a completed task whose completed_by_user_id is a non-member.
     let non_member_completer = sqlx::query(
@@ -1684,10 +1681,9 @@ async fn task_composite_fk_rejections(migrator_pool: PgPool) {
     .bind(non_member_id)
     .execute(&app_pool)
     .await;
-    assert!(
-        non_member_completer.is_err(),
-        "a non-member completed_by_user_id must be rejected"
-    );
+    let err = non_member_completer.expect_err("a non-member completed_by_user_id must be rejected");
+    let db = err.as_database_error().expect("a composite-FK violation");
+    assert_eq!(db.code().as_deref(), Some("23503"));
 
     // (e) a tombstone whose deleted_by_user_id is a non-member.
     let non_member_deleter = sqlx::query(
@@ -1701,10 +1697,9 @@ async fn task_composite_fk_rejections(migrator_pool: PgPool) {
     .bind(non_member_id)
     .execute(&app_pool)
     .await;
-    assert!(
-        non_member_deleter.is_err(),
-        "a non-member deleted_by_user_id must be rejected"
-    );
+    let err = non_member_deleter.expect_err("a non-member deleted_by_user_id must be rejected");
+    let db = err.as_database_error().expect("a composite-FK violation");
+    assert_eq!(db.code().as_deref(), Some("23503"));
 
     let after: i64 = sqlx::query_scalar("SELECT count(*) FROM task WHERE organization_id = $1")
         .bind(org_id)

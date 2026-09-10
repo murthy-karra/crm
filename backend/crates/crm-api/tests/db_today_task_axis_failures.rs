@@ -358,6 +358,21 @@ async fn exhausted_recovery_budget_marks_the_whole_response_unavailable(migrator
         TodaySourcesStatus::Unavailable
     ));
     assert!(list.sources.issues.is_empty());
+    // LATER batch (2026-09-10) item 7c (016b LATER, curated): the
+    // `task_due` system-feed issue token is pushed before the recovery
+    // attempt even begins (`domain/today/mod.rs`'s axis failure branch),
+    // so it must survive into the Unavailable response too -- not just
+    // the (necessarily empty, on this path) item set the assertions above
+    // already cover.
+    assert!(issue_present(&list, "task_due"));
+    let task_issue = list
+        .sources
+        .system_feed_issues
+        .iter()
+        .find(|i| i.feed_key == "task_due")
+        .unwrap();
+    assert_eq!(task_issue.error, SystemFeedIssueError::Unavailable);
+    assert!(!task_issue.fallback);
 }
 
 // --- An unrecoverable call feed returns before the axis ever runs --------

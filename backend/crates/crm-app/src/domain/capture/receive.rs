@@ -82,6 +82,11 @@ pub async fn receive_captured_email(
         byte_len,
     )
     .await?;
+    // LATER batch (2026-09-10) item 8: same trim as
+    // domain/intake/receive.rs — `sealed` is dead once the row is
+    // inserted; the pipeline below re-reads the stored ciphertext rather
+    // than relying on this in-memory copy.
+    drop(sealed);
 
     process_and_record(
         pool,

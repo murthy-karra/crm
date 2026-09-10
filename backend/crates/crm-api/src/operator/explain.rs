@@ -48,6 +48,16 @@ pub fn priority_str(priority: TodayPriority) -> &'static str {
     }
 }
 
+/// LATER batch (2026-09-10), item 1: the prose label for a task `kind` in
+/// `reason_text` below — distinct from `TaskKind::as_str`'s wire value
+/// (`"follow_up"`), which every other variant's label already matches.
+fn task_kind_label(kind: crate::domain::task::TaskKind) -> &'static str {
+    match kind {
+        crate::domain::task::TaskKind::FollowUp => "follow-up",
+        other => other.as_str(),
+    }
+}
+
 /// One fixed line per reason code (docs/specs/SLICE_006c.md §5a), built
 /// from the coded payload only — never from outside text.
 pub fn reason_text(reason: &TodayReason) -> String {
@@ -56,20 +66,29 @@ pub fn reason_text(reason: &TodayReason) -> String {
             format!("a new inquiry from {source} in the last 24 hours")
         }
         TodayReason::NoContactAttempt { since } => {
-            format!("no contact attempt since {}", since.to_rfc3339())
+            format!(
+                "no contact attempt since {}",
+                since.to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
+            )
         }
         TodayReason::RepeatInquiry { inquiry_count } => {
             format!("{inquiry_count} inquiries in total")
         }
         TodayReason::CallOutcomeNeeded { ended_at, .. } => {
-            format!("a call at {} has no outcome yet", ended_at.to_rfc3339())
+            format!(
+                "a call at {} has no outcome yet",
+                ended_at.to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
+            )
         }
         // Slice 009 (docs/specs/SLICE_009.md §6): wins the reason slot in
         // place of the Inquiry-based trio, so this is typically the ONLY
         // reason on the item — a fixed line built from the coded payload
         // only, exactly like every other arm here.
         TodayReason::ClientReplied { occurred_at } => {
-            format!("the client replied at {}", occurred_at.to_rfc3339())
+            format!(
+                "the client replied at {}",
+                occurred_at.to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
+            )
         }
         // The list name is user-provided/untrusted. The structured reason
         // carries it for the UI, but model-facing explanation text stays
@@ -84,12 +103,16 @@ pub fn reason_text(reason: &TodayReason) -> String {
         TodayReason::TaskOverdue { kind, due_at, .. } => {
             format!(
                 "a {} task was due at {}",
-                kind.as_str(),
-                due_at.to_rfc3339()
+                task_kind_label(*kind),
+                due_at.to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
             )
         }
         TodayReason::TaskDue { kind, due_at, .. } => {
-            format!("a {} task is due at {}", kind.as_str(), due_at.to_rfc3339())
+            format!(
+                "a {} task is due at {}",
+                task_kind_label(*kind),
+                due_at.to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
+            )
         }
     }
 }
@@ -221,10 +244,11 @@ pub fn build_explanation(
 mod tests {
     use super::*;
     use crate::domain::person::model::{StageRef, UserRef};
+    use crate::domain::task::TaskKind;
     use crate::domain::today::{
         InquiryRef, RecommendedAction, TodayReason, TodaySources, TodaySourcesStatus,
     };
-    use crate::ids::{InquiryId, StageId};
+    use crate::ids::{InquiryId, StageId, TaskId};
     use chrono::{DateTime, TimeZone, Utc};
     use crm_operator::UntrustedText;
     use uuid::Uuid;
@@ -502,7 +526,7 @@ mod tests {
         };
         assert_eq!(
             reason_text(&reason),
-            "a call at 2026-08-22T14:00:00+00:00 has no outcome yet"
+            "a call at 2026-08-22T14:00:00Z has no outcome yet"
         );
 
         let mut it = item(call_id, TodayPriority::Low, 14);
@@ -515,7 +539,7 @@ mod tests {
         assert_eq!(json[0]["ended_at"], "2026-08-22T14:00:00Z");
         assert_eq!(
             json[0]["explanation"],
-            "a call at 2026-08-22T14:00:00+00:00 has no outcome yet"
+            "a call at 2026-08-22T14:00:00Z has no outcome yet"
         );
         assert_eq!(
             serde_json::to_value(it.recommended_action).unwrap(),
@@ -529,7 +553,7 @@ mod tests {
         let reason = TodayReason::ClientReplied { occurred_at };
         assert_eq!(
             reason_text(&reason),
-            "the client replied at 2026-08-22T09:00:00+00:00"
+            "the client replied at 2026-08-22T09:00:00Z"
         );
 
         let mut it = item(Uuid::new_v4(), TodayPriority::High, 9);
@@ -540,8 +564,61 @@ mod tests {
         assert_eq!(json[0]["occurred_at"], "2026-08-22T09:00:00Z");
         assert_eq!(
             json[0]["explanation"],
-            "the client replied at 2026-08-22T09:00:00+00:00"
+            "the client replied at 2026-08-22T09:00:00Z"
         );
+    }
+
+    // LATER batch (2026-09-10), item 1: `TaskOverdue`/`TaskDue` reason text
+    // uses seconds-precision `Z`, matching every other reason arm and the
+    // wire (`crm-operator/src/service.rs:380`'s `to_rfc3339_opts(Secs,
+    // true)`), and the prose task-kind label ("follow-up") rather than
+    // the wire value ("follow_up").
+    #[test]
+    fn task_overdue_reason_uses_the_follow_up_prose_label_and_second_precision_z() {
+        let due_at = ts(8);
+        let reason = TodayReason::TaskOverdue {
+            task_id: TaskId::new(Uuid::new_v4()),
+            title: "Call about the offer".to_string(),
+            kind: TaskKind::FollowUp,
+            due_at,
+        };
+        assert_eq!(
+            reason_text(&reason),
+            "a follow-up task was due at 2026-08-22T08:00:00Z"
+        );
+    }
+
+    #[test]
+    fn task_due_reason_keeps_other_kind_labels_unchanged_and_uses_second_precision_z() {
+        let due_at = ts(10);
+        let reason = TodayReason::TaskDue {
+            task_id: TaskId::new(Uuid::new_v4()),
+            title: "Call the client".to_string(),
+            kind: TaskKind::Call,
+            due_at,
+        };
+        assert_eq!(
+            reason_text(&reason),
+            "a call task is due at 2026-08-22T10:00:00Z"
+        );
+
+        let mut it = item(Uuid::new_v4(), TodayPriority::Normal, 10);
+        it.waiting_since = None;
+        it.latest_inquiry = None;
+        it.reasons = vec![reason];
+        let json = reasons_json(&it);
+        assert_eq!(json.len(), 1);
+        assert_eq!(json[0]["code"], "task_due");
+        assert_eq!(
+            json[0]["explanation"],
+            "a call task is due at 2026-08-22T10:00:00Z"
+        );
+        // The title never enters the fixed explanation line, exactly like
+        // a saved list's name — only the untrusted-wrapped `title` field.
+        assert!(!json[0]["explanation"]
+            .as_str()
+            .unwrap()
+            .contains("Call the client"));
     }
 
     #[test]

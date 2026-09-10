@@ -1903,6 +1903,51 @@ describe('PersonDetailView — Notes (SLICE_015 §9.10)', () => {
     expect(wrapper.findAll('[data-testid="note-body"]')).toHaveLength(1)
   })
 
+  // LATER batch (2026-09-10) item 5 (015 LATER, reviewer round 2): the
+  // test above proves the DOM `disabled` attribute blocks a second
+  // trigger, not `submitNote`'s own `noteAddDisabled` guard — vue-test-utils/
+  // jsdom never dispatch a `click` to an already-disabled button at all
+  // (the button's activation behaviour), so that test would pass exactly
+  // the same way even with the guard deleted. This test dispatches two
+  // Ctrl+Enter keydowns back-to-back with NO awaited tick between them —
+  // before Vue has re-rendered `disabled` on the textarea — so only the
+  // reactive guard (TanStack Query flips `isPending` synchronously inside
+  // `mutate()`, before any DOM update) can be what stops the second post.
+  it('a second submit while the add-note mutation is pending posts nothing (the guard itself, not the disabled attribute)', async () => {
+    stubApi(detail([PHONE_A]))
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+
+    let releaseAdd: () => void = () => {}
+    const addGate = new Promise<void>((resolve) => { releaseAdd = resolve })
+    const defaultImpl = apiFetchMock.getMockImplementation()!
+    apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === `/people/${PERSON_ID}/notes` && (init?.method ?? 'GET') === 'POST') {
+        await addGate
+      }
+      return defaultImpl(path, init)
+    })
+
+    const textarea = wrapper.get('[data-testid="note-composer-textarea"]')
+    await textarea.setValue('Called and left a voicemail')
+
+    function posts() {
+      return apiFetchMock.mock.calls.filter(
+        ([path, init]) => path === `/people/${PERSON_ID}/notes` && (init?.method ?? 'GET') === 'POST',
+      )
+    }
+
+    const ctrlEnter = { key: 'Enter', ctrlKey: true, bubbles: true } as const
+    textarea.element.dispatchEvent(new KeyboardEvent('keydown', ctrlEnter))
+    textarea.element.dispatchEvent(new KeyboardEvent('keydown', ctrlEnter))
+    await flushPromises()
+    expect(posts()).toHaveLength(1)
+
+    releaseAdd()
+    await flushPromises()
+    await settleTick()
+  })
+
   it('a failed add (400) keeps the draft and shows the note-specific malformed_request copy', async () => {
     stubApi(detail([PHONE_A]), { noteAdd: () => new ApiError(400, 'malformed_request') })
     const { wrapper } = await mountView()
@@ -2101,6 +2146,25 @@ describe('PersonDetailView — Notes (SLICE_015 §9.10)', () => {
     expect(wrapper.find('[data-testid="note-edit-gone"]').exists()).toBe(false)
   })
 
+  // LATER batch (2026-09-10) item 4.
+  it('Escape on the "deleted elsewhere" draft textarea does exactly what Dismiss does', async () => {
+    stubApi(detail([PHONE_A], [noteEntry({ id: 'note-1', body: 'Original body' })]), {
+      noteEdit: () => new ApiError(404, 'not_found'),
+    })
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    await wrapper.get('[data-testid="edit-note"]').trigger('click')
+    await wrapper.get('[data-testid="note-edit-textarea"]').setValue('A draft that will be orphaned')
+    await wrapper.get('[data-testid="note-edit-save"]').trigger('click')
+    await flushPromises()
+    await settleTick()
+    expect(wrapper.find('[data-testid="note-edit-gone"]').exists()).toBe(true)
+
+    await wrapper.get('[data-testid="note-edit-gone-draft"]').trigger('keydown', { key: 'Escape' })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="note-edit-gone"]').exists()).toBe(false)
+  })
+
   it('a realtime-driven refetch (no mutation in flight) that removes the note being edited shows the same "deleted elsewhere" state', async () => {
     stubApi(detail([PHONE_A], [noteEntry({ id: 'note-1', body: 'Original body' })]))
     const { wrapper, queryClient } = await mountView()
@@ -2162,6 +2226,24 @@ describe('PersonDetailView — Notes (SLICE_015 §9.10)', () => {
     await flushPromises()
     await settleTick()
     expect(wrapper.find('[data-testid="note-body"]').exists()).toBe(false)
+  })
+
+  // LATER batch (2026-09-10) item 4: after a delete, focus moves to the
+  // composer textarea (never falls to the body) — attached: true (the
+  // default `attachTo: document.body`) is required for `document.activeElement`
+  // to reflect a real focus rather than jsdom's no-op on a detached tree.
+  it('after a delete, focus moves to the note composer textarea', async () => {
+    stubApi(detail([PHONE_A], [noteEntry({ id: 'note-1', body: 'Delete me' })]))
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    await wrapper.get('[data-testid="delete-note"]').trigger('click')
+    await flushPromises()
+    const confirmButton = [...document.body.querySelectorAll('button')].find((b) => b.textContent === 'Delete')
+    confirmButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flushPromises()
+    await settleTick()
+    expect(wrapper.find('[data-testid="note-body"]').exists()).toBe(false)
+    expect(document.activeElement).toBe(wrapper.get('[data-testid="note-composer-textarea"]').element)
   })
 
   it('a Save 403 (role/authorship changed under the viewer) shows the specific copy and removes Edit/Delete once the refetch shows can_manage: false', async () => {

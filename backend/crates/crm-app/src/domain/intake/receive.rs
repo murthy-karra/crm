@@ -183,6 +183,14 @@ async fn receive_intake_email(
         byte_len,
     )
     .await?;
+    // LATER batch (2026-09-10) item 8: `sealed` (nonce + ciphertext, up to
+    // the raw message size) is dead once the insert above lands — Phase
+    // B below reads the ciphertext back from the row it just inserted
+    // (the AAD-correct decrypt needs the stored nonce/ciphertext pairing,
+    // not this in-memory copy), and holds its own plaintext/parsed
+    // buffers concurrently with it. Dropping it here trims one raw-size
+    // buffer's worth of peak memory off every inbound email.
+    drop(sealed);
 
     // Phase B (docs/specs/SLICE_007d.md §4d): the shared completion path,
     // with the email parse closure — MIME → format detection → field

@@ -832,6 +832,111 @@ async fn retained_normal_item_with_overdue_task_is_raised_and_ordered_after_fres
     );
 }
 
+/// Test-local only (no shared-fixture change): inserts a Person with an
+/// explicit `id` rather than the server-generated `gen_random_uuid()`
+/// `insert_bare_person` above uses, so
+/// `task_only_items_sharing_due_at_are_ordered_by_ascending_person_id`
+/// below can pin Person-id order independently of insertion order.
+async fn insert_bare_person_with_id(
+    pool: &PgPool,
+    id: Uuid,
+    organization_id: Uuid,
+    stage_id: Uuid,
+) -> Uuid {
+    sqlx::query_scalar(
+        "INSERT INTO person (id, organization_id, first_name, stage_id) \
+         VALUES ($1, $2, 'Fixture', $3) RETURNING id",
+    )
+    .bind(id)
+    .bind(organization_id)
+    .bind(stage_id)
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+/// LATER batch (2026-09-10) item 7b (016b LATER, curated):
+/// docs/specs/SLICE_016.md §5's documented tie-break — task-only items
+/// order by `due_at ASC, id ASC`, where `id` is the PERSON id (the
+/// call-only precedent) — proven with THREE task-only Persons sharing the
+/// exact same overdue `due_at` (high tier), not just the two-item cases
+/// elsewhere in this file. Review round 1 fix: Person insertion order,
+/// task-creation order and the expected (ascending Person id) order are
+/// all pinned to be pairwise distinct via explicit local ids, so a
+/// dropped `id ASC` tie-break cannot pass this test by accident (the
+/// tester's finding: server-generated ids alone would coincidentally
+/// match the wrong order about one run in six).
+#[sqlx::test]
+#[ignore]
+async fn task_only_items_sharing_due_at_are_ordered_by_ascending_person_id(migrator_pool: PgPool) {
+    let f = fixture(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let now = Utc::now();
+    let due = now - ChronoDuration::minutes(30);
+
+    // Review round 1 fix: with server-generated v4 ids, insertion order
+    // and Person-id order are already uncorrelated with each other AND
+    // with task-id order (tasks get their own independent v4 ids), so
+    // the three could coincidentally agree — the tester found dropping
+    // `id ASC` from the SQL would still pass one run in six. Explicit
+    // local ids pin all three orders to be pairwise distinct: Person
+    // insertion order (0003, 0001, 0002) != task-creation order (0002,
+    // 0003, 0001) != the expected Today order, ascending Person id
+    // (0001, 0002, 0003) — so only a genuine `id ASC` tie-break can make
+    // this test pass.
+    let id_0001 = Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
+    let id_0002 = Uuid::parse_str("00000000-0000-0000-0000-000000000002").unwrap();
+    let id_0003 = Uuid::parse_str("00000000-0000-0000-0000-000000000003").unwrap();
+
+    for id in [id_0003, id_0001, id_0002] {
+        insert_bare_person_with_id(&app_pool, id, f.org_id, f.stage_id).await;
+    }
+    for id in [id_0002, id_0003, id_0001] {
+        create_task_for(
+            &app_pool,
+            f.org_id,
+            f.admin_id,
+            f.admin_id,
+            id,
+            TaskKind::FollowUp,
+            Some(due),
+        )
+        .await;
+    }
+    let people = vec![id_0001, id_0002, id_0003];
+
+    let list = today::query_at(
+        &mut app_pool.acquire().await.unwrap(),
+        &visibility_scope(f.org_id),
+        UserId::new(f.admin_id),
+        now,
+    )
+    .await
+    .unwrap();
+
+    let mut actual_order: Vec<(usize, Uuid)> = people
+        .iter()
+        .map(|id| {
+            let index = list
+                .items
+                .iter()
+                .position(|item| item.person.id.as_uuid() == *id)
+                .expect("every task-only Person must be on the list");
+            (index, *id)
+        })
+        .collect();
+    actual_order.sort_by_key(|(index, _)| *index);
+    let actual_ids: Vec<Uuid> = actual_order.into_iter().map(|(_, id)| id).collect();
+
+    let mut expected_ids = people.clone();
+    expected_ids.sort();
+
+    assert_eq!(
+        actual_ids, expected_ids,
+        "three task-only items sharing due_at must break the tie on ascending Person id"
+    );
+}
+
 #[sqlx::test]
 #[ignore]
 async fn low_outcome_needed_item_is_never_raised_by_an_overdue_task(migrator_pool: PgPool) {
@@ -1090,6 +1195,69 @@ async fn task_only_prefix_admits_up_to_k_and_sets_truncated_on_the_extra_row(
     assert!(
         find_item(&list.items, p_later).is_none(),
         "the extra row is never admitted"
+    );
+}
+
+/// LATER batch (2026-09-10) item 7a (016b LATER, curated): a dedicated
+/// cap-boundary test proving task-only items count AGAINST the 200-item
+/// cap rather than being admitted on top of it — 199 fresh person-state
+/// candidates plus exactly ONE task-only row (K = 1, exactly satisfied)
+/// fills the list to precisely 200 with `truncated` false, the positive
+/// complement to
+/// `task_only_prefix_admits_up_to_k_and_sets_truncated_on_the_extra_row`
+/// above (199 + 2, K = 1, `truncated` true).
+#[sqlx::test]
+#[ignore]
+async fn task_only_item_exactly_fills_the_cap_without_truncation(migrator_pool: PgPool) {
+    let f = fixture(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let now = Utc::now();
+
+    // 199 fresh person-state candidates -> K = 1 for the task-only prefix.
+    insert_n_fresh_inquiry_people(
+        &app_pool,
+        f.org_id,
+        f.stage_id,
+        f.admin_id,
+        199,
+        now - ChronoDuration::hours(1),
+    )
+    .await;
+
+    // Exactly one task-only Person: K = 1 admits it with room to spare.
+    let p_task_only = insert_bare_person(&app_pool, f.org_id, f.stage_id).await;
+    create_task_for(
+        &app_pool,
+        f.org_id,
+        f.admin_id,
+        f.admin_id,
+        p_task_only,
+        TaskKind::FollowUp,
+        Some(now + ChronoDuration::minutes(1)),
+    )
+    .await;
+
+    let list = today::query_at(
+        &mut app_pool.acquire().await.unwrap(),
+        &visibility_scope(f.org_id),
+        UserId::new(f.admin_id),
+        now,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        list.items.len(),
+        200,
+        "199 person-state items plus the one task-only item is exactly 200"
+    );
+    assert!(
+        !list.truncated,
+        "a task-only item that exactly fits K must not set truncated"
+    );
+    assert!(
+        find_item(&list.items, p_task_only).is_some(),
+        "the task-only item counts toward, and fits within, the cap"
     );
 }
 

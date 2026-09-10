@@ -85,9 +85,12 @@ pub enum ApiError {
     /// Confirm on a proposal past `expires_at` (still `proposed`).
     ProposalExpired,
     /// Confirm on a proposal already claimed/confirmed/failed — consumed
-    /// beats expired; `call_id` is null when no call was ever created.
+    /// beats expired. `call_id`/`task_id` are each null unless that tool's
+    /// execution produced the corresponding row (docs/specs/SLICE_018.md
+    /// §5: additive widening of the pre-018 `{call_id}` shape).
     ProposalConsumed {
         call_id: Option<uuid::Uuid>,
+        task_id: Option<uuid::Uuid>,
     },
     // --- Slice 007b (docs/specs/SLICE_007b.md §5) -----------------------
     /// `POST /inbound/email` body over its 34 MiB limit (raised from 2 MiB
@@ -178,10 +181,14 @@ impl IntoResponse for ApiError {
                 None,
             ),
             ApiError::ProposalExpired => (StatusCode::CONFLICT, "proposal_expired", None),
-            ApiError::ProposalConsumed { call_id } => {
+            ApiError::ProposalConsumed { call_id, task_id } => {
                 return (
                     StatusCode::CONFLICT,
-                    Json(json!({ "error": "proposal_consumed", "call_id": call_id })),
+                    Json(json!({
+                        "error": "proposal_consumed",
+                        "call_id": call_id,
+                        "task_id": task_id,
+                    })),
                 )
                     .into_response();
             }

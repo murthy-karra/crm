@@ -523,9 +523,7 @@ impl ArgumentError {
             ArgumentError::InvalidEnum(name) => format!("invalid value for property: {name}"),
             ArgumentError::InvalidDate(name) => format!("invalid calendar date: {name}"),
             ArgumentError::InvalidTime(name) => format!("invalid time of day: {name}"),
-            ArgumentError::DueTimeWithoutDueDate => {
-                "due_time requires due_date".to_string()
-            }
+            ArgumentError::DueTimeWithoutDueDate => "due_time requires due_date".to_string(),
         }
     }
 }
@@ -1631,9 +1629,8 @@ mod tests {
     #[test]
     fn create_task_kind_defaults_and_validates() {
         let person = Uuid::new_v4();
-        let args = |kind: &str| {
-            json!({ "person_id": person, "title": "x", "kind": kind }).to_string()
-        };
+        let args =
+            |kind: &str| json!({ "person_id": person, "title": "x", "kind": kind }).to_string();
         for kind in TASK_KINDS {
             match parse_invocation(CREATE_TASK, &args(kind)).unwrap() {
                 ToolInvocation::CreateTask { kind: k, .. } => assert_eq!(&k, kind),
@@ -1744,7 +1741,10 @@ mod tests {
         let long = "z".repeat(200);
         match parse_invocation(CREATE_TASK, &args(&long)).unwrap() {
             ToolInvocation::CreateTask { assignee, .. } => {
-                assert_eq!(assignee.unwrap().chars().count(), CREATE_TASK_ASSIGNEE_MAX_CHARS);
+                assert_eq!(
+                    assignee.unwrap().chars().count(),
+                    CREATE_TASK_ASSIGNEE_MAX_CHARS
+                );
             }
             other => panic!("{other:?}"),
         }

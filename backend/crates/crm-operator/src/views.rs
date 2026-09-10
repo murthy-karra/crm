@@ -157,10 +157,7 @@ impl std::fmt::Debug for TaskReceiptView {
             .field("kind", &self.kind)
             .field("due_at", &self.due_at)
             .field("completed_at", &self.completed_at)
-            .field(
-                "completed_by_display_name",
-                &self.completed_by_display_name,
-            )
+            .field("completed_by_display_name", &self.completed_by_display_name)
             .finish()
     }
 }

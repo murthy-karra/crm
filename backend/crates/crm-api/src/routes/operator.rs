@@ -379,7 +379,10 @@ async fn post_turn(
                 .collect(),
         },
         tool_calls: output.tool_calls,
-        proposal: output.proposal.as_ref().map(WireProposal::from_turn_proposal),
+        proposal: output
+            .proposal
+            .as_ref()
+            .map(WireProposal::from_turn_proposal),
         receipt: output.receipt.as_ref().map(WireReceipt::from_view),
         outcome: output.outcome,
     };

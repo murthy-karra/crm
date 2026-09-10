@@ -229,9 +229,7 @@ async fn deactivate_membership(pool: &PgPool, org_id: Uuid, user_id: Uuid) {
 /// bug. No write, no publication on `forbidden`.
 #[sqlx::test]
 #[ignore]
-async fn complete_task_forbidden_for_a_third_member_with_a_positive_control(
-    migrator_pool: PgPool,
-) {
+async fn complete_task_forbidden_for_a_third_member_with_a_positive_control(migrator_pool: PgPool) {
     let f = fixture(&migrator_pool, Vec::new()).await;
     let dave_id = crate::common::create_user(&migrator_pool, "dave@acme.test", "Dave", PW).await;
     crate::common::add_membership(&migrator_pool, f.org_id, dave_id).await;
@@ -413,10 +411,16 @@ async fn complete_task_already_completed_is_idempotent_and_does_not_republish(
     )
     .await;
     let out = run_turn(&router, &f.alice).await;
-    assert!(out["receipt"].is_null(), "already_completed sets no receipt");
+    assert!(
+        out["receipt"].is_null(),
+        "already_completed sets no receipt"
+    );
     assert_eq!(out["tool_calls"][0]["outcome"], "ok");
     let after_second = crate::common::calls::recorded(&f.publisher).await.len();
-    assert_eq!(after_first, after_second, "no republish on already_completed");
+    assert_eq!(
+        after_first, after_second,
+        "no republish on already_completed"
+    );
 }
 
 /// `tokio::join!` an Operator turn against the panel's own complete route,
@@ -484,15 +488,17 @@ async fn complete_task_leaves_origin_unchanged_and_the_ledger_carries_no_title(
     let turn_id: Uuid = out["turn_id"].as_str().unwrap().parse().unwrap();
 
     let (_, origin_after, _) = task_row(&f.migrator_pool, task_id).await;
-    assert_eq!(origin_after, "web_session", "completion never rewrites origin");
+    assert_eq!(
+        origin_after, "web_session",
+        "completion never rewrites origin"
+    );
 
-    let row: (String,) = sqlx::query_as(
-        "SELECT tool_name FROM operator_tool_call WHERE turn_id = $1",
-    )
-    .bind(turn_id)
-    .fetch_one(&f.migrator_pool)
-    .await
-    .unwrap();
+    let row: (String,) =
+        sqlx::query_as("SELECT tool_name FROM operator_tool_call WHERE turn_id = $1")
+            .bind(turn_id)
+            .fetch_one(&f.migrator_pool)
+            .await
+            .unwrap();
     assert_eq!(row.0, "complete_task");
     // The ledger row's columns are id/tool_name/outcome/duration_ms/
     // person_ids only (docs/specs/SLICE_005.md §2) — no title-shaped
@@ -505,7 +511,10 @@ async fn complete_task_leaves_origin_unchanged_and_the_ledger_carries_no_title(
     .await
     .unwrap();
     for forbidden in ["title", "reply", "message"] {
-        assert!(!cols.iter().any(|c| c == forbidden), "unexpected column: {forbidden}");
+        assert!(
+            !cols.iter().any(|c| c == forbidden),
+            "unexpected column: {forbidden}"
+        );
     }
 }
 
@@ -563,15 +572,17 @@ async fn create_task_proposal_inserts_parent_and_sidecar_rows(migrator_pool: PgP
     assert_eq!(sidecar_kind, "follow_up");
     assert_eq!(sidecar_assignee, f.alice_id);
 
-    let (parent_tool, parent_cm): (String, Option<Uuid>) = sqlx::query_as(
-        "SELECT tool, contact_method_id FROM operator_proposal WHERE id = $1",
-    )
-    .bind(proposal_id)
-    .fetch_one(&f.migrator_pool)
-    .await
-    .unwrap();
+    let (parent_tool, parent_cm): (String, Option<Uuid>) =
+        sqlx::query_as("SELECT tool, contact_method_id FROM operator_proposal WHERE id = $1")
+            .bind(proposal_id)
+            .fetch_one(&f.migrator_pool)
+            .await
+            .unwrap();
     assert_eq!(parent_tool, "create_task");
-    assert_eq!(parent_cm, None, "create_task never carries a contact_method_id");
+    assert_eq!(
+        parent_cm, None,
+        "create_task never carries a contact_method_id"
+    );
 }
 
 /// Confirm needs neither telephony nor the operator runtime; the created
@@ -595,11 +606,7 @@ async fn create_task_confirm_without_operator_runtime_sets_origin_and_correlatio
     .await;
     let out = run_turn(&router, &f.alice).await;
     let proposal_id = out["proposal"]["id"].as_str().unwrap().to_string();
-    let (_, _, _, _, turn_id) = proposal_row(
-        &f.migrator_pool,
-        proposal_id.parse().unwrap(),
-    )
-    .await;
+    let (_, _, _, _, turn_id) = proposal_row(&f.migrator_pool, proposal_id.parse().unwrap()).await;
 
     // Confirm on the router WITHOUT an operator runtime: model-free.
     let resp = confirm(&f.router_no_operator, &f.alice, &proposal_id).await;
@@ -655,8 +662,7 @@ async fn create_task_confirm_after_person_deleted_is_404(migrator_pool: PgPool) 
 
     let resp = confirm(&f.router_no_operator, &f.alice, &proposal_id).await;
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
-    let (status, failure, ..) =
-        proposal_row(&f.migrator_pool, proposal_id.parse().unwrap()).await;
+    let (status, failure, ..) = proposal_row(&f.migrator_pool, proposal_id.parse().unwrap()).await;
     assert_eq!(status, "failed");
     assert_eq!(failure, Some("not_found".to_string()));
 }
@@ -686,7 +692,10 @@ async fn create_task_check_matrix(migrator_pool: PgPool) {
     .bind(Uuid::new_v4())
     .execute(&app_pool)
     .await;
-    assert!(rejected.is_err(), "contact_method_id set on create_task must be rejected");
+    assert!(
+        rejected.is_err(),
+        "contact_method_id set on create_task must be rejected"
+    );
 
     // A create_task row confirmed without a task_id violates the check.
     let rejected_confirmed = sqlx::query(
@@ -733,11 +742,17 @@ async fn operator_task_proposal_grants_admit_no_update_or_delete(migrator_pool: 
     let update = sqlx::query("UPDATE operator_task_proposal SET title = title WHERE false")
         .execute(&app_pool)
         .await;
-    assert!(update.is_err(), "crm_app must not be able to UPDATE operator_task_proposal");
+    assert!(
+        update.is_err(),
+        "crm_app must not be able to UPDATE operator_task_proposal"
+    );
     let delete = sqlx::query("DELETE FROM operator_task_proposal WHERE false")
         .execute(&app_pool)
         .await;
-    assert!(delete.is_err(), "crm_app must not be able to DELETE FROM operator_task_proposal");
+    assert!(
+        delete.is_err(),
+        "crm_app must not be able to DELETE FROM operator_task_proposal"
+    );
 }
 
 /// Expired, consumed, double, and stuck-claimed (docs/specs/SLICE_006b.md
@@ -763,11 +778,13 @@ async fn create_task_expired_consumed_and_stuck_claimed(migrator_pool: PgPool) {
     .await;
     let out = run_turn(&router, &f.alice).await;
     let expired_id = out["proposal"]["id"].as_str().unwrap().to_string();
-    sqlx::query("UPDATE operator_proposal SET expires_at = now() - interval '1 second' WHERE id = $1")
-        .bind(expired_id.parse::<Uuid>().unwrap())
-        .execute(&f.migrator_pool)
-        .await
-        .unwrap();
+    sqlx::query(
+        "UPDATE operator_proposal SET expires_at = now() - interval '1 second' WHERE id = $1",
+    )
+    .bind(expired_id.parse::<Uuid>().unwrap())
+    .execute(&f.migrator_pool)
+    .await
+    .unwrap();
     let resp = confirm(&f.router_no_operator, &f.alice, &expired_id).await;
     assert_eq!(resp.status(), StatusCode::CONFLICT);
     assert_eq!(
@@ -850,12 +867,18 @@ async fn create_task_double_confirm_race_yields_one_201(migrator_pool: PgPool) {
     let (ra, rb) = tokio::join!(a, b);
     let statuses = [ra.status(), rb.status()];
     assert_eq!(
-        statuses.iter().filter(|s| **s == StatusCode::CREATED).count(),
+        statuses
+            .iter()
+            .filter(|s| **s == StatusCode::CREATED)
+            .count(),
         1,
         "{statuses:?}"
     );
     assert_eq!(
-        statuses.iter().filter(|s| **s == StatusCode::CONFLICT).count(),
+        statuses
+            .iter()
+            .filter(|s| **s == StatusCode::CONFLICT)
+            .count(),
         1,
         "{statuses:?}"
     );
@@ -898,8 +921,7 @@ async fn create_task_race_assignee_deactivated_is_422(migrator_pool: PgPool) {
         crate::common::body_json(resp).await,
         json!({ "error": "invalid_assignee" })
     );
-    let (status, failure, ..) =
-        proposal_row(&f.migrator_pool, proposal_id.parse().unwrap()).await;
+    let (status, failure, ..) = proposal_row(&f.migrator_pool, proposal_id.parse().unwrap()).await;
     assert_eq!(status, "failed");
     assert_eq!(failure, Some("invalid_assignee".to_string()));
 }
@@ -940,9 +962,16 @@ async fn create_task_actor_deactivated_401_at_the_door_forbidden_at_the_command(
 
     deactivate_membership(&f.migrator_pool, f.org_id, f.alice_id).await;
     let resp = confirm(&f.router_no_operator, &f.alice, &proposal_id).await;
-    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED, "the auth gate fires first");
+    assert_eq!(
+        resp.status(),
+        StatusCode::UNAUTHORIZED,
+        "the auth gate fires first"
+    );
     let (status, ..) = proposal_row(&f.migrator_pool, proposal_id.parse().unwrap()).await;
-    assert_eq!(status, "proposed", "an unauthenticated confirm claims nothing");
+    assert_eq!(
+        status, "proposed",
+        "an unauthenticated confirm claims nothing"
+    );
 
     // The command's own Forbidden pass-through, exercised directly.
     let app_pool = crate::common::connect_as_app(&migrator_pool).await;
@@ -1000,15 +1029,23 @@ async fn create_task_confirm_by_another_member_and_by_the_same_user_elsewhere_is
     assert_eq!(by_carol.status(), StatusCode::NOT_FOUND);
     let (status_after_carol, ..) =
         proposal_row(&f.migrator_pool, proposal_id.parse().unwrap()).await;
-    assert_eq!(status_after_carol, "proposed", "an unmatched confirm claims nothing");
+    assert_eq!(
+        status_after_carol, "proposed",
+        "an unmatched confirm claims nothing"
+    );
 
     // The SAME user (alice), but her session's active Organization is
     // switched to a second Organization she also belongs to — the same
     // cookie continues to authenticate her, now under a different
     // organization_id, which the claim's WHERE clause also binds.
-    let (org_c, _org_c_admin) =
-        crate::common::create_org_with_stages_and_member(&migrator_pool, "Org C", "orgc-admin@op.test", "OrgC Admin", PW)
-            .await;
+    let (org_c, _org_c_admin) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Org C",
+        "orgc-admin@op.test",
+        "OrgC Admin",
+        PW,
+    )
+    .await;
     crate::common::add_membership(&migrator_pool, org_c, f.alice_id).await;
     sqlx::query("UPDATE user_session SET active_organization_id = $1 WHERE user_id = $2")
         .bind(org_c)
@@ -1019,7 +1056,10 @@ async fn create_task_confirm_by_another_member_and_by_the_same_user_elsewhere_is
     let by_alice_other_org = confirm(&f.router_no_operator, &f.alice, &proposal_id).await;
     assert_eq!(by_alice_other_org.status(), StatusCode::NOT_FOUND);
     let (status_after, ..) = proposal_row(&f.migrator_pool, proposal_id.parse().unwrap()).await;
-    assert_eq!(status_after, "proposed", "still untouched — still 404 the ordinary way");
+    assert_eq!(
+        status_after, "proposed",
+        "still untouched — still 404 the ordinary way"
+    );
 }
 
 /// Assignee resolution: `"me"`, an exact display name, an ambiguous name,
@@ -1156,7 +1196,11 @@ async fn undo_through_reopen_changed_true_then_false_then_404_and_403(migrator_p
         json!({}),
     )
     .await;
-    assert_eq!(forbidden.status(), StatusCode::NOT_FOUND, "bob cannot see this Person at all");
+    assert_eq!(
+        forbidden.status(),
+        StatusCode::NOT_FOUND,
+        "bob cannot see this Person at all"
+    );
 }
 
 // === start_call regression under the rewritten CHECKs =======================
@@ -1174,10 +1218,12 @@ async fn start_call_confirm_with_a_null_contact_method_id_is_503(migrator_pool: 
     let f = fixture(&migrator_pool, Vec::new()).await;
     let person_id = person(&f, "corrupt@op.test").await;
 
-    sqlx::query("ALTER TABLE operator_proposal DROP CONSTRAINT operator_proposal_contact_method_id_check")
-        .execute(&f.migrator_pool)
-        .await
-        .unwrap();
+    sqlx::query(
+        "ALTER TABLE operator_proposal DROP CONSTRAINT operator_proposal_contact_method_id_check",
+    )
+    .execute(&f.migrator_pool)
+    .await
+    .unwrap();
     let proposal_id = Uuid::new_v4();
     sqlx::query(
         "INSERT INTO operator_proposal

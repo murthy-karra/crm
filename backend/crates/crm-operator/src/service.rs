@@ -1173,9 +1173,8 @@ fn compose_due_at(
     let time = due_time.unwrap_or_else(|| {
         chrono::NaiveTime::from_hms_opt(23, 59, 59).expect("23:59:59 is always valid")
     });
-    let offset = FixedOffset::east_opt(offset_minutes * 60).ok_or_else(|| {
-        ToolError::InvalidArguments("invalid time zone offset".to_string())
-    })?;
+    let offset = FixedOffset::east_opt(offset_minutes * 60)
+        .ok_or_else(|| ToolError::InvalidArguments("invalid time zone offset".to_string()))?;
     let naive = NaiveDateTime::new(date, time);
     let local = offset
         .from_local_datetime(&naive)
@@ -1529,22 +1528,20 @@ mod tests {
         ) -> Result<CreateTaskProposalOutcome, ToolError> {
             self.note(ctx)?;
             match self.create_task_outcome {
-                Some(FakeCreateOutcome::Proposed) => {
-                    Ok(CreateTaskProposalOutcome::Proposed(Box::new(
-                        TaskProposalView {
-                            proposal_id: Uuid::new_v4(),
-                            person: card(spec.person_id, "P"),
-                            title: UntrustedText::new(&spec.title),
-                            kind: spec.kind.clone(),
-                            due_at: spec.due_at,
-                            assignee: MemberRef {
-                                id: ctx.actor_user_id,
-                                display_name: "Alice".to_string(),
-                            },
-                            expires_at: ctx.now + chrono::Duration::seconds(120),
+                Some(FakeCreateOutcome::Proposed) => Ok(CreateTaskProposalOutcome::Proposed(
+                    Box::new(TaskProposalView {
+                        proposal_id: Uuid::new_v4(),
+                        person: card(spec.person_id, "P"),
+                        title: UntrustedText::new(&spec.title),
+                        kind: spec.kind.clone(),
+                        due_at: spec.due_at,
+                        assignee: MemberRef {
+                            id: ctx.actor_user_id,
+                            display_name: "Alice".to_string(),
                         },
-                    )))
-                }
+                        expires_at: ctx.now + chrono::Duration::seconds(120),
+                    }),
+                )),
                 Some(FakeCreateOutcome::NeedsClarification) => {
                     Ok(CreateTaskProposalOutcome::NeedsClarification {
                         unknown_assignees: vec!["Bob".to_string()],
@@ -2939,11 +2936,7 @@ mod tests {
         let (svc, _) = service(
             vec![
                 ScriptedStep::Respond(ChatResponse::tool_calls(vec![
-                    call(
-                        "c1",
-                        "start_call",
-                        json!({"person_id": person.to_string()}),
-                    ),
+                    call("c1", "start_call", json!({"person_id": person.to_string()})),
                     call(
                         "c2",
                         "create_task",
@@ -2955,7 +2948,11 @@ mod tests {
             Limits::default(),
         );
         let out = svc
-            .run_turn(&ctx(), &backend, input_with_offset("call and add a task", 0))
+            .run_turn(
+                &ctx(),
+                &backend,
+                input_with_offset("call and add a task", 0),
+            )
             .await;
         assert_eq!(out.outcome, TurnOutcome::Completed);
         assert!(matches!(out.proposal, Some(TurnProposal::StartCall(_))));

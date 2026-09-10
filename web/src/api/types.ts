@@ -1163,6 +1163,11 @@ export interface OperatorTurnRequest {
   /** ≤ 6 items, each ≤ 2000 chars, ≤ 6000 total; oldest dropped first. */
   history: OperatorHistoryMessage[]
   context: OperatorScreenContext
+  /** docs/specs/SLICE_018.md §3, §5: `-new Date().getTimezoneOffset()`;
+   * additive, −840..=840 (400 outside that range). Used server-side only
+   * for `create_task`'s due-instant composition and the prompt's local-time
+   * line — never trusted identity or authorization context. */
+  utc_offset_minutes: number
 }
 
 /** `WirePersonCard`: plain strings — the only source of cards in the drawer. */
@@ -1189,14 +1194,60 @@ export interface OperatorToolCall {
 export type OperatorTurnOutcome = 'completed' | 'tool_budget_exhausted' | 'malformed_tool_call'
 
 /** SLICE_006b §4: the turn's `start_call` proposal. The card renders from
- * this server-built object only — never from model prose. */
-export interface OperatorProposal {
+ * this server-built object only — never from model prose. Renamed from
+ * `OperatorProposal` (docs/specs/SLICE_018.md §5, §8): `OperatorProposal`
+ * is now the `kind`-discriminated union of this and
+ * `OperatorCreateTaskProposal`. */
+export interface OperatorStartCallProposal {
   id: string
   kind: 'start_call'
   person: OperatorPersonCard
   phone: string
   contact_method_id: string
   expires_at: string
+}
+
+/** docs/specs/SLICE_018.md §5: `assignee` on a `create_task` proposal —
+ * `display_name` is trusted reference-table text (an active member's own
+ * name), not outside text, so a plain string. */
+export interface OperatorMemberRef {
+  id: string
+  display_name: string
+}
+
+/** docs/specs/SLICE_018.md §5: the turn's `create_task` proposal. The card
+ * renders from this server-built object only — never from model prose;
+ * `title` is untrusted (model-authored) text, rendered by interpolation
+ * only, the same discipline as `reply`. */
+export interface OperatorCreateTaskProposal {
+  id: string
+  kind: 'create_task'
+  person: OperatorPersonCard
+  title: string
+  task_kind: TaskKind
+  due_at: string | null
+  assignee: OperatorMemberRef
+  expires_at: string
+}
+
+/** docs/specs/SLICE_018.md §5: a `kind`-discriminated union — the wire's
+ * `proposal` field is exactly one of these two shapes. */
+export type OperatorProposal = OperatorStartCallProposal | OperatorCreateTaskProposal
+
+/** docs/specs/SLICE_018.md §5: the turn's `complete_task` receipt, present
+ * only on 200 outcomes. The card renders from this server-built object
+ * only — never from model prose; `title` is untrusted (model-independent,
+ * but still user-authored) text, rendered by interpolation only. No
+ * `completed_by_display_name` on the wire (model-facing only, not part of
+ * this frozen shape). */
+export interface OperatorReceipt {
+  kind: 'complete_task'
+  task_id: string
+  person: OperatorPersonCard
+  title: string
+  task_kind: TaskKind
+  due_at: string | null
+  completed_at: string
 }
 
 export interface OperatorTurnResponse {
@@ -1206,6 +1257,9 @@ export interface OperatorTurnResponse {
   references: { people: OperatorPersonCard[] }
   tool_calls: OperatorToolCall[]
   proposal: OperatorProposal | null
+  /** docs/specs/SLICE_018.md §5: additive nullable, present only on 200
+   * outcomes. */
+  receipt: OperatorReceipt | null
   outcome: OperatorTurnOutcome
 }
 

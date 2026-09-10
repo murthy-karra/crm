@@ -393,6 +393,11 @@ the explanation builder (`explain.rs`, pure, unit-tested).
 > (`start_call` unchanged, plus `create_task`).
 > See [SLICE_018.md](SLICE_018.md) §5.
 
+> Amended by SLICE_019 §6 (declared additive change, AGENTS.md §11):
+> `PersonDetail` gains `custom_fields` (label and value both untrusted
+> text); the tool definitions and snapshot are unchanged.
+> See [SLICE_019.md](SLICE_019.md) §6.
+
 
 `POST /api/operator/turns` — `AuthContext` (any active member of the
 active Organization; platform-only sessions 401 by construction, as

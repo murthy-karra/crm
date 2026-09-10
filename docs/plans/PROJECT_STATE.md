@@ -1,15 +1,29 @@
 # Project State
 
-Last updated: 2026-09-10 (Slice 018, the Operator `create_task` /
-`complete_task` rung, merged at `d74c493` with the user's approval,
-`crm_dev` migrated, runtime updated, worktree and branch deleted; not
-pushed; the LATER batch of
+Last updated: 2026-09-10 (Slice 019a, custom fields, approved at the
+implementation gate and its lane dispatched; Slice 018 merged at
+`d74c493`, runtime updated; `main` not pushed; the LATER batch of
 2026-09-10 merged and pushed; the Slice 017 live large-mail sends remain
 deferred by the user).
 
 ## Current phase
 
-**SLICE 019 (CUSTOM FIELDS) — PLANNING (2026-09-10).** The user picked
+**SLICE 019a (CUSTOM FIELDS) — APPROVED 2026-09-10, LANE IN
+IMPLEMENTATION.** [SLICE_019.md](../specs/SLICE_019.md) and its
+[brief](../tasks/SLICE_019_IMPL.md), reviewed READY WITH CORRECTIONS
+(fifteen applied: no derived key; rename/archive/restore folded into one
+`PUT` per resource, eight routes and seven commands; numbers cross the
+Rust boundary as validated decimal strings because no decimal crate is
+enabled and `Cargo.*` is unowned; a Person-only realtime arm; the admin
+extractor precedence verified; the static `order` route beside the uuid
+parameter verified and pinned), approved with one named default:
+definition management is admin-only. One lane (Claude Sonnet 5) in
+`../crm-worktrees/019` on `slice-019-custom-fields`; Part A backend with
+a hard checkpoint (review round 1), then Part B Web (round 2). Pointer
+lines added to SLICE_002 §2 and §5, SLICE_003 §6, SLICE_005 §5, the 011
+and 010 ladders.
+
+Previously: **SLICE 019 (CUSTOM FIELDS) — PLANNING (2026-09-10).** The user picked
 custom fields (the last unbuilt CRM-core model, thesis §7 and §11; the
 last FUB destination besides deals, SLICE_010_LADDER 010f+; the reserved
 dynamic-SQL fork point in the filter ladder). **D-058 accepted (user,
@@ -1063,9 +1077,11 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. **Slice 019 planning:** apply the reviewer's corrections to
-   `docs/specs/SLICE_019.md`, draft the brief, then the implementation
-   gate.
+1. **Slice 019a lane:** Part A checkpoint audit and review round 1,
+   Part B release, round 2, final-tree gates (`sqlx-prepare`, `check`,
+   `check-db`), walkthrough, commit and merge gates; after the merge
+   `./scripts/db-migrate` on `crm_dev`, the dev API restart by exact PID
+   and `dev-web-prod`.
 2. **Push `main`** on the user's word (the Slice 018 merge and records
    plus the spec wording commit).
 3. **Slice 017 walkthrough (spec §6), deferred by the user:** send a small
@@ -1086,6 +1102,9 @@ and now lives only in git history.
 
 ## Approval currently required
 
+- **Slice 019a:** implementation gate approved by the user on
+  2026-09-10. Next approvals: merge to `main` (with the `crm_dev`
+  migration and the runtime restarts), then push.
 - **Slice 018:** merged, migrated, runtime updated and cleaned up with
   the user's approval on 2026-09-10. Pending: the push of `main`.
 - **LATER batch 2026-09-10:** merged to local `main` at `753d685` and the

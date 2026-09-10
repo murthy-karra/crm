@@ -157,3 +157,8 @@ Snooze/dismiss (thesis §8, separate), O-008 AI suggestions, O-010
 search, an Operator `filter_people` tool (natural post-ladder
 extension), custom fields, OR-groups/absolute dates,
 realtime count push, org-pushed work sources, mobile.
+
+*Amendment pointer (Slice 019, 2026-09-10, D-058):* custom fields now have
+a model (019a) and a scheduled clause rung (019b) designed as fixed
+static-SQL slots, so the QueryBuilder fork above is not taken. See
+[SLICE_019.md](../specs/SLICE_019.md) §4.

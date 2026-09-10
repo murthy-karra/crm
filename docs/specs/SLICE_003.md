@@ -404,6 +404,12 @@ snoozed or deleted (never on `changed: false`); ids only, never a title.
 The Web handler invalidates the Person detail and Today (and, after 016b,
 the viewer's tasks panel) for it. See [SLICE_016.md](SLICE_016.md) §6.
 
+*Amendment pointer (Slice 019, 2026-09-10, declared additive, AGENTS.md
+§11):* `data.change` also admits `custom_field_changed`, published on
+`person.changed` after a value is set or cleared (never on `changed:
+false`); ids only, never a label or value. The Web handler invalidates
+only the Person detail for it. See [SLICE_019.md](SLICE_019.md) §5.
+
 **Channel.** `org:<organization_id>` (lowercase hyphenated UUID),
 namespace `org`. One channel per Organization. No per-user channel this
 slice (nothing targets a user yet; additive later).

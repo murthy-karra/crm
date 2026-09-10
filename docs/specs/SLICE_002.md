@@ -78,6 +78,12 @@ the D-015 §7 erasure runbook must cover it). See
 gains `task` (plaintext single-line title, tombstone delete, cascaded with
 the Person; the runbook must cover it). See [SLICE_016.md](SLICE_016.md) §2.
 
+*Amendment pointer (Slice 019, 2026-09-10, D-058):* the erasable CRUD set
+gains `person_custom_field_value` (typed plaintext values, hard delete on
+clear, cascaded with the Person; the runbook must cover it). Definitions
+and options are Organization schema, archive-only. See
+[SLICE_019.md](SLICE_019.md) §2.
+
 ### Classification (D-007, D-015)
 
 - **Erasable CRUD set** (plaintext, D-015 §3/§6): `person`,
@@ -411,6 +417,15 @@ tasks); `history[]` admits a ninth kind, `task_completed` (rank 8, at
 `PUT|DELETE …/tasks/{task_id}` and `POST …/tasks/{task_id}/{complete|reopen|snooze}`;
 rung 016b adds `GET /api/tasks?scope=mine`; `GET /api/people` rows are
 unchanged. Permission is D-054 §3. See [SLICE_016.md](SLICE_016.md) §4.
+
+*Amendment pointer (Slice 019, 2026-09-10, declared additive, AGENTS.md
+§11):* `GET /api/people/{id}` gains a top-level `custom_fields: [Value]`
+(set values on live fields); eight new routes: `GET|POST /api/custom-fields`,
+`PUT /api/custom-fields/order`, `PUT /api/custom-fields/{field_id}`,
+`POST …/{field_id}/options`, `PUT …/{field_id}/options/{option_id}`
+(definition writes admin-only), and `PUT|DELETE
+/api/people/{person_id}/custom-fields/{field_id}` (any member); `GET
+/api/people` rows are unchanged. See [SLICE_019.md](SLICE_019.md) §4.
 
 
 **Additive amendment (approved 2026-09-06):** [SLICE_011b §5](SLICE_011b.md#5-http-contract)

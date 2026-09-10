@@ -100,10 +100,12 @@ here without a new decision:
 ### Loop rules (crm-operator `service.rs`)
 
 - At most **one executed action per turn**: `state.receipt` beside
-  `state.proposal`. A second `complete_task` in the same turn is a
-  structured `invalid_arguments` (no backend call), the existing
-  one-proposal guard's shape. A proposal and an execution may share a
-  turn.
+  `state.proposal`. A `complete_task` after a standing receipt in the
+  same turn is a structured `invalid_arguments` (no backend call), the
+  existing one-proposal guard's shape; after a `forbidden`,
+  `already_completed` or `not_found` outcome (nothing executed) another
+  `complete_task` may run, so a mis-identified task can be retried once
+  the model re-reads. A proposal and an execution may share a turn.
 - `Completed` sets `state.receipt`; `AlreadyCompleted` and `Forbidden` do
   not. A 503 outcome never surfaces a receipt or a proposal (SLICE_006b
   §10).
@@ -243,7 +245,8 @@ Migration ownership: the lane, one file, plus `.sqlx` regeneration.
 
 - `POST /api/operator/turns` — request gains additive optional
   `utc_offset_minutes` (integer −840..=840; absent or null = unknown;
-  out of range → 400 `invalid_request`). Response gains additive nullable
+  out of range or non-integer → 400 `malformed_request`, the API's
+  existing 400 envelope). Response gains additive nullable
   `"receipt": {"kind":"complete_task","task_id","person": WirePersonCard,
   "title": string,"task_kind","due_at": ts|null,"completed_at": ts}`,
   present only on 200 outcomes; and `"proposal"` becomes a
@@ -261,9 +264,13 @@ Migration ownership: the lane, one file, plus `.sqlx` regeneration.
   `not_found` (nonexistent, foreign or another user's, byte-identical);
   409 `proposal_expired`; 409 `proposal_consumed` whose body widens
   additively to `{"call_id": uuid|null, "task_id": uuid|null}`;
-  pass-through task errors 404 (Person gone), 403 (actor deactivated),
-  422 `invalid_assignee` (assignee deactivated since proposal), 503,
-  each finalizing the proposal `failed` with the error's `kind()` code.
+  pass-through task errors 404 (Person gone), 422 `invalid_assignee`
+  (assignee deactivated since proposal), 503, each finalizing the
+  proposal `failed` with the error's `kind()` code. An actor deactivated
+  since the proposal is refused 401 by the session extractor before the
+  route runs, so the command's 403 is unreachable over HTTP and the
+  proposal is left `proposed` to expire (verified in implementation; the
+  command's `Forbidden` pass-through is tested directly).
   Two branch cases stated: a Person deleted between propose and confirm
   cascades the sidecar away, the scoped claim still succeeds, the sidecar
   read finds no row → finalize `failed` with `not_found`, answer 404; a
@@ -370,9 +377,9 @@ the missed-event case.
 | Already completed (a panel click won the race) | `already_completed` with completer and time; no receipt, no Undo |
 | Database failure inside the tool | `ToolError::Backend` → turn 503 `tool_error`; the command's transaction rolled back |
 | Turn timeout mid-command | rolled back if before commit; if after commit the completion stands, the turn is a 503 with no receipt and no Undo card, the panel shows the 503 copy, the Person page and Today show it completed on the next refetch and the ordinary Reopen is available (accepted at millisecond transactions, D-050); ledger shows the tool `error` |
-| Second `complete_task` or second proposal in a turn | structured `invalid_arguments`, no backend call |
+| Second `complete_task` after a receipt, or second proposal, in a turn | structured `invalid_arguments`, no backend call |
 | Confirm expired, consumed, double | 409 `proposal_expired`; 409 `proposal_consumed {call_id, task_id}`; a concurrent double-confirm yields one 201 |
-| Person deleted, assignee or actor deactivated between propose and confirm | 404 / 422 `invalid_assignee` / 403; proposal `failed` with that code |
+| Person deleted, assignee or actor deactivated between propose and confirm | 404 / 422 `invalid_assignee` (proposal `failed` with that code) / 401 at the session gate (proposal left to expire) |
 | Undo: task deleted, rights lost, already reopened | 404 copy / 403 copy / `changed:false` treated as success |
 
 ## 11. Observability

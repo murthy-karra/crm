@@ -9,11 +9,13 @@
 
 use async_trait::async_trait;
 use sqlx::pool::PoolConnection;
-use sqlx::{PgConnection, PgPool, Postgres};
+use sqlx::{Connection, PgConnection, PgPool, Postgres};
 use uuid::Uuid;
 
 use crate::auth::AuthContext;
 use crate::domain::admin::queries as admin_queries;
+use crate::domain::admin::MembershipStatus;
+use crate::domain::envelope::CommandContext;
 use crate::domain::inquiry::queries as inquiry_queries;
 use crate::domain::person::filter::FilterNames;
 use crate::domain::person::model::PersonSummary;
@@ -22,16 +24,18 @@ use crate::domain::person::PersonVisibilityScope;
 use crate::domain::saved_list::{self, SavedListError};
 use crate::domain::stage;
 use crate::domain::tag;
-use crate::domain::task;
+use crate::domain::task::{self, TaskError};
 use crate::domain::today::{self, TodayItem, TodayList};
-use crate::ids::{ContactMethodId, OrganizationId, PersonId, SavedListId, UserId};
+use crate::ids::{ContactMethodId, OrganizationId, PersonId, SavedListId, TaskId, TurnId, UserId};
 use crate::operator::explain;
 use crate::operator::filter::{self as name_resolver, NameMatch, Resolved};
+use crate::realtime::Publisher;
 use crm_operator::{
-    ContactMethodView, FilterOutcome, FilterResult, HistoryEntryView, InquiryView, NextWorkItem,
-    NoteView, OperatorContext, PeopleFilterSpec, PersonCard, PersonDetail, PhoneOption,
-    PriorityExplanation, ProposalView, SavedListRef, SavedListSelector, SearchResult,
-    StartCallProposalOutcome, TaskView, TodayItemView, TodayView, ToolBackend, ToolError,
+    CompleteTaskOutcome, ContactMethodView, CreateTaskProposalOutcome, CreateTaskSpec,
+    FilterOutcome, FilterResult, HistoryEntryView, InquiryView, MemberRef, NextWorkItem, NoteView,
+    OperatorContext, PeopleFilterSpec, PersonCard, PersonDetail, PhoneOption, PriorityExplanation,
+    ProposalView, SavedListRef, SavedListSelector, SearchResult, StartCallProposalOutcome,
+    TaskProposalView, TaskReceiptView, TaskView, TodayItemView, TodayView, ToolBackend, ToolError,
     ToolResult, UntrustedText,
 };
 
@@ -46,21 +50,31 @@ const MAX_TASKS: usize = 10;
 
 pub struct SqlxToolBackend {
     pool: PgPool,
-    /// `start_call` proposal lifetime (docs/specs/SLICE_006b.md §2).
+    /// `start_call`/`create_task` proposal lifetime (docs/specs/
+    /// SLICE_006b.md §2; docs/specs/SLICE_018.md §4, same TTL).
     proposal_ttl: std::time::Duration,
     /// `run_saved_list`'s two reads (`list_saved_lists`/`saved_list_detail`,
-    /// docs/specs/SLICE_013.md §2) need the request's `AuthContext` — no
-    /// other method on this backend touches it, and never its
-    /// `actor_email` or `active_organization_name`.
+    /// docs/specs/SLICE_013.md §2) and `complete_task`/`propose_create_task`
+    /// (docs/specs/SLICE_018.md §2, the `CommandContext::for_operator`
+    /// identity and the context-mismatch guard) need the request's
+    /// `AuthContext` — never its `actor_email` or `active_organization_name`.
     auth: AuthContext,
+    /// Every task command takes one (docs/specs/SLICE_018.md §2).
+    publisher: Publisher,
 }
 
 impl SqlxToolBackend {
-    pub fn new(pool: PgPool, proposal_ttl: std::time::Duration, auth: AuthContext) -> Self {
+    pub fn new(
+        pool: PgPool,
+        proposal_ttl: std::time::Duration,
+        auth: AuthContext,
+        publisher: Publisher,
+    ) -> Self {
         Self {
             pool,
             proposal_ttl,
             auth,
+            publisher,
         }
     }
 
@@ -214,6 +228,64 @@ fn user_id(ctx: &OperatorContext) -> UserId {
     UserId::new(ctx.actor_user_id)
 }
 
+/// Fails closed if this backend's own `AuthContext` (set once at
+/// construction, `routes/operator.rs`) ever disagreed with the per-call
+/// `OperatorContext` (set once per turn) about who is asking — unreachable
+/// in production (both are built from the same request's `auth`), but
+/// `complete_task`/`propose_create_task` must never silently act (write,
+/// even propose) on behalf of the wrong identity if that constructor
+/// invariant is ever broken. The `run_saved_list` shape (docs/specs/
+/// SLICE_018.md §6).
+fn ensure_context_matches(auth: &AuthContext, ctx: &OperatorContext) -> ToolResult<()> {
+    if auth.active_organization_id != org_id(ctx) || auth.actor_user_id != user_id(ctx) {
+        return Err(ToolError::Backend("operator context mismatch".to_string()));
+    }
+    Ok(())
+}
+
+/// `create_task`'s assignee resolution (docs/specs/SLICE_018.md §3): `"me"`
+/// always resolves to the acting member (the session's own trusted
+/// identity, never a name lookup); anything else resolves against ACTIVE
+/// members only, by the same `find_by_name` rule `filter_people`'s
+/// `assignees` axis uses (exact match first, then case-insensitive
+/// trimmed; a collision is ambiguous, not an arbitrary pick).
+enum AssigneeResolution {
+    Resolved(UserId, String),
+    Unknown,
+    Ambiguous,
+}
+
+fn resolve_task_assignee(
+    name: &str,
+    members: &[admin_queries::MemberView],
+    ctx: &OperatorContext,
+) -> AssigneeResolution {
+    if name == "me" {
+        return AssigneeResolution::Resolved(user_id(ctx), ctx.actor_display_name.clone());
+    }
+    let active: Vec<&admin_queries::MemberView> = members
+        .iter()
+        .filter(|m| m.status == MembershipStatus::Active)
+        .collect();
+    match name_resolver::find_by_name(name, &active, |m| m.display_name.as_str()) {
+        NameMatch::One(member) => {
+            AssigneeResolution::Resolved(member.user_id, member.display_name.clone())
+        }
+        NameMatch::Many(_) => AssigneeResolution::Ambiguous,
+        NameMatch::None => AssigneeResolution::Unknown,
+    }
+}
+
+/// The clarification's `members` vocabulary (docs/specs/SLICE_013.md §2's
+/// `FilterOutcome::NeedsClarification` precedent): active members only.
+fn active_member_names(members: &[admin_queries::MemberView]) -> Vec<String> {
+    members
+        .iter()
+        .filter(|m| m.status == MembershipStatus::Active)
+        .map(|m| m.display_name.clone())
+        .collect()
+}
+
 async fn today_for(conn: PoolConnection<Postgres>, ctx: &OperatorContext) -> ToolResult<TodayList> {
     today::query_owned(
         conn,
@@ -363,6 +435,7 @@ impl ToolBackend for SqlxToolBackend {
             .into_iter()
             .take(MAX_TASKS)
             .map(|t| TaskView {
+                task_id: t.id.as_uuid(),
                 title: UntrustedText::new(&t.title),
                 kind: t.kind.as_str().to_string(),
                 due_at: t.due_at,
@@ -526,6 +599,174 @@ impl ToolBackend for SqlxToolBackend {
             contact_method_id: method.id,
             expires_at,
         })))
+    }
+
+    /// `complete_task` (docs/specs/SLICE_018.md §2, §6, D-057 §1): runs
+    /// `crm_app::domain::task::complete_task` as the signed-in member with
+    /// `CommandContext::for_operator` — the exact command and authorization
+    /// path the Task panel's own Complete button uses. `visible_summary`
+    /// first (the every-tool precedent) both gates an invisible Person and
+    /// supplies the `PersonCard` the receipt needs without a second round
+    /// trip after the command commits.
+    async fn complete_task(
+        &self,
+        ctx: &OperatorContext,
+        person_id: Uuid,
+        task_id: Uuid,
+    ) -> ToolResult<CompleteTaskOutcome> {
+        ensure_context_matches(&self.auth, ctx)?;
+        let person_id = PersonId::new(person_id);
+        let task_id = TaskId::new(task_id);
+        let mut conn = self.conn().await?;
+        let summary = visible_summary(&mut conn, ctx, person_id).await?;
+        drop(conn);
+
+        let cmd_ctx = CommandContext::for_operator(&self.auth, TurnId::new(ctx.turn_id));
+        let result = task::complete_task(
+            &self.pool,
+            &self.publisher,
+            &cmd_ctx,
+            task::CompleteTask { person_id, task_id },
+        )
+        .await;
+
+        match result {
+            Ok(outcome) => {
+                let t = outcome.task;
+                let view = Box::new(TaskReceiptView {
+                    task_id: t.id.as_uuid(),
+                    person: card_from_summary(&summary),
+                    title: UntrustedText::new(&t.title),
+                    kind: t.kind.as_str().to_string(),
+                    due_at: t.due_at,
+                    completed_at: t.completed_at,
+                    completed_by_display_name: t.completed_by.map(|u| u.display_name),
+                });
+                if outcome.changed {
+                    Ok(CompleteTaskOutcome::Completed(view))
+                } else {
+                    Ok(CompleteTaskOutcome::AlreadyCompleted(view))
+                }
+            }
+            // Rule 1 forbids: no write, no publication (docs/specs/
+            // SLICE_018.md §6) — a structured outcome, not a `ToolError`.
+            Err(TaskError::Forbidden) => Ok(CompleteTaskOutcome::Forbidden),
+            // Byte-identical to a foreign/nonexistent task or a tombstone
+            // (docs/specs/SLICE_018.md §3): the task lock inside the
+            // command is scoped by (id, organization_id, person_id), the
+            // same invariant `visible_summary` above already applied to
+            // the Person half of the pair.
+            Err(TaskError::NotFound) => Err(ToolError::NotFound),
+            // Neither reachable here: `CompleteTask` carries no title and
+            // no assignee for the command to validate.
+            Err(TaskError::MalformedRequest | TaskError::InvalidAssignee) => Err(
+                ToolError::Backend("unexpected task command error".to_string()),
+            ),
+            Err(TaskError::Corrupt | TaskError::Database(_)) => {
+                Err(ToolError::Backend("database query failed".to_string()))
+            }
+        }
+    }
+
+    /// `create_task` (docs/specs/SLICE_018.md §2, §3, §4, D-057 §2): only
+    /// *proposes* — re-runs the real `TaskTitle`/`TaskKind` validators,
+    /// resolves the assignee against active members (`"me"` default), and
+    /// inserts the `operator_proposal` parent plus the `operator_task_
+    /// proposal` sidecar in one transaction. Execution happens on the
+    /// model-free confirm endpoint after a human click.
+    async fn propose_create_task(
+        &self,
+        ctx: &OperatorContext,
+        spec: &CreateTaskSpec,
+    ) -> ToolResult<CreateTaskProposalOutcome> {
+        ensure_context_matches(&self.auth, ctx)?;
+        let person_id = PersonId::new(spec.person_id);
+        let mut conn = self.conn().await?;
+        let summary = visible_summary(&mut conn, ctx, person_id).await?;
+
+        // The adapter re-runs the real validators (docs/specs/SLICE_018.md
+        // §3) — the parser's mirrored checks are structural only.
+        let title = task::TaskTitle::parse(&spec.title)
+            .map_err(|_| ToolError::InvalidArguments("invalid task title".to_string()))?;
+        let kind = task::TaskKind::from_db_str(&spec.kind)
+            .ok_or_else(|| ToolError::InvalidArguments("invalid task kind".to_string()))?;
+
+        let members = admin_queries::members(&mut conn, org_id(ctx))
+            .await
+            .map_err(db_error)?;
+        let assignee_name = spec.assignee.as_deref().unwrap_or("me");
+        let (assignee_user_id, assignee_display_name) =
+            match resolve_task_assignee(assignee_name, &members, ctx) {
+                AssigneeResolution::Resolved(id, name) => (id, name),
+                AssigneeResolution::Unknown => {
+                    return Ok(CreateTaskProposalOutcome::NeedsClarification {
+                        unknown_assignees: vec![assignee_name.to_string()],
+                        ambiguous_assignees: Vec::new(),
+                        members: active_member_names(&members),
+                    });
+                }
+                AssigneeResolution::Ambiguous => {
+                    return Ok(CreateTaskProposalOutcome::NeedsClarification {
+                        unknown_assignees: Vec::new(),
+                        ambiguous_assignees: vec![assignee_name.to_string()],
+                        members: active_member_names(&members),
+                    });
+                }
+            };
+
+        let proposal_id = Uuid::new_v4();
+        let ttl_secs = i64::try_from(self.proposal_ttl.as_secs()).unwrap_or(120);
+        let mut tx = conn.begin().await.map_err(db_error)?;
+        let expires_at = sqlx::query_scalar!(
+            r#"INSERT INTO operator_proposal
+                 (id, organization_id, actor_user_id, turn_id, tool,
+                  person_id, contact_method_id, status, expires_at)
+               VALUES ($1, $2, $3, $4, 'create_task', $5, NULL, 'proposed',
+                       now() + make_interval(secs => $6::double precision))
+               RETURNING expires_at"#,
+            proposal_id,
+            ctx.organization_id,
+            ctx.actor_user_id,
+            ctx.turn_id,
+            person_id.0,
+            ttl_secs as f64,
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(db_error)?;
+
+        sqlx::query!(
+            r#"INSERT INTO operator_task_proposal
+                 (proposal_id, organization_id, person_id, title, kind, due_at, assignee_user_id)
+               VALUES ($1, $2, $3, $4, $5, $6, $7)"#,
+            proposal_id,
+            ctx.organization_id,
+            person_id.0,
+            title,
+            kind.as_str(),
+            spec.due_at,
+            assignee_user_id.0,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(db_error)?;
+
+        tx.commit().await.map_err(db_error)?;
+
+        Ok(CreateTaskProposalOutcome::Proposed(Box::new(
+            TaskProposalView {
+                proposal_id,
+                person: card_from_summary(&summary),
+                title: UntrustedText::new(&title),
+                kind: kind.as_str().to_string(),
+                due_at: spec.due_at,
+                assignee: MemberRef {
+                    id: assignee_user_id.as_uuid(),
+                    display_name: assignee_display_name,
+                },
+                expires_at,
+            },
+        )))
     }
 
     /// docs/specs/SLICE_013.md §2: resolve `spec`'s names against the
@@ -800,6 +1041,7 @@ mod tests {
             fake_pool(),
             std::time::Duration::from_secs(120),
             auth(Uuid::new_v4(), Uuid::new_v4()),
+            Publisher::recording(),
         );
         // Every id here is independently random: both the organization
         // and the actor disagree with `backend`'s own `auth`.
@@ -810,6 +1052,45 @@ mod tests {
             limit: 10,
         };
         let result = backend.run_saved_list(&mismatched_ctx, &selector).await;
+        assert!(matches!(result, Err(ToolError::Backend(_))), "{result:?}");
+    }
+
+    /// docs/specs/SLICE_018.md §6, §12: the same fail-closed guard on
+    /// `complete_task` — a lazy pool never opens a connection, so this
+    /// needs no database (the guard returns before any query runs).
+    #[tokio::test]
+    async fn complete_task_fails_closed_on_a_context_mismatch() {
+        let backend = SqlxToolBackend::new(
+            fake_pool(),
+            std::time::Duration::from_secs(120),
+            auth(Uuid::new_v4(), Uuid::new_v4()),
+            Publisher::recording(),
+        );
+        let mismatched_ctx = ctx(Uuid::new_v4(), Uuid::new_v4());
+        let result = backend
+            .complete_task(&mismatched_ctx, Uuid::new_v4(), Uuid::new_v4())
+            .await;
+        assert!(matches!(result, Err(ToolError::Backend(_))), "{result:?}");
+    }
+
+    /// Same guard on `propose_create_task`.
+    #[tokio::test]
+    async fn propose_create_task_fails_closed_on_a_context_mismatch() {
+        let backend = SqlxToolBackend::new(
+            fake_pool(),
+            std::time::Duration::from_secs(120),
+            auth(Uuid::new_v4(), Uuid::new_v4()),
+            Publisher::recording(),
+        );
+        let mismatched_ctx = ctx(Uuid::new_v4(), Uuid::new_v4());
+        let spec = CreateTaskSpec {
+            person_id: Uuid::new_v4(),
+            title: "Call Grace".to_string(),
+            kind: "follow_up".to_string(),
+            due_at: None,
+            assignee: None,
+        };
+        let result = backend.propose_create_task(&mismatched_ctx, &spec).await;
         assert!(matches!(result, Err(ToolError::Backend(_))), "{result:?}");
     }
 }

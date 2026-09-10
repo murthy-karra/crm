@@ -1,8 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../api/client'
 import {
+  currentUtcOffsetMinutes,
   deriveScreenContext,
   describeOperatorError,
+  describeProposalDue,
+  describeReceiptDue,
   historyWindow,
   isOrganizationRoute,
   isToggleShortcut,
@@ -80,6 +83,58 @@ describe('describeOperatorError (§10 copy)', () => {
     expect(describeOperatorError(new ApiError(0, 'network_error'))).toMatch(/Could not reach/)
     expect(describeOperatorError(new ApiError(400, 'malformed_request'))).toBe('Something went wrong. Try again.')
     expect(describeOperatorError(new Error('x'))).toBe('Something went wrong. Try again.')
+  })
+})
+
+// --- Slice 018: describeReceiptDue / describeProposalDue / currentUtcOffsetMinutes
+// (docs/specs/SLICE_018.md §3, §8) ------------------------------------------
+
+describe('describeReceiptDue (SLICE_018 §8)', () => {
+  it('today, yesterday, two days ago, null, and a future date — with a pinned now', () => {
+    const now = new Date(2026, 8, 15, 10, 0, 0) // local 2026-09-15 10:00
+
+    expect(describeReceiptDue(new Date(2026, 8, 15, 3, 0, 0).toISOString(), now)).toBe('was due today')
+    expect(describeReceiptDue(new Date(2026, 8, 14, 23, 0, 0).toISOString(), now)).toBe('was due yesterday')
+
+    const twoDaysAgo = describeReceiptDue(new Date(2026, 8, 13, 12, 0, 0).toISOString(), now)
+    expect(twoDaysAgo).toMatch(/^was due /)
+    expect(twoDaysAgo).not.toBe('was due today')
+    expect(twoDaysAgo).not.toBe('was due yesterday')
+
+    expect(describeReceiptDue(null, now)).toBeNull()
+
+    const future = describeReceiptDue(new Date(2026, 8, 20, 9, 0, 0).toISOString(), now)
+    expect(future).toMatch(/^was due /)
+    expect(future).not.toBe('was due today')
+  })
+
+  it('the day after a DST transition still reads "yesterday" — a calendar day, not a fixed 24h', () => {
+    // 2026-03-08 is the US DST-start Sunday (clocks spring forward, a
+    // 23-hour local day where the host runs a DST-observing zone); "now"
+    // is the very next day. A fixed `now - 24h` computation would miss
+    // this local midnight by an hour and read this as "two days ago".
+    const now = new Date(2026, 2, 9, 10, 0, 0)
+    const dueOnTransitionDay = new Date(2026, 2, 8, 6, 0, 0)
+    expect(describeReceiptDue(dueOnTransitionDay.toISOString(), now)).toBe('was due yesterday')
+  })
+})
+
+describe('describeProposalDue (SLICE_018 §8)', () => {
+  it('is null for no due date, and "due …" otherwise', () => {
+    expect(describeProposalDue(null)).toBeNull()
+    const due = new Date(2026, 8, 12, 23, 59, 0)
+    expect(describeProposalDue(due.toISOString())).toMatch(/^due /)
+  })
+})
+
+describe('currentUtcOffsetMinutes (SLICE_018 §3)', () => {
+  it('sign-flips Date.prototype.getTimezoneOffset', () => {
+    const spy = vi.spyOn(Date.prototype, 'getTimezoneOffset').mockReturnValue(-330)
+    try {
+      expect(currentUtcOffsetMinutes()).toBe(330)
+    } finally {
+      spy.mockRestore()
+    }
   })
 })
 

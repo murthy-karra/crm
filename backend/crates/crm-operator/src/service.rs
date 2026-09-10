@@ -7,19 +7,23 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use chrono::{FixedOffset, NaiveDateTime, TimeZone};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tracing::Instrument;
 use uuid::Uuid;
 
-use crate::backend::{ToolBackend, ToolError};
+use crate::backend::{CreateTaskSpec, ToolBackend, ToolError};
 use crate::context::OperatorContext;
 use crate::provider::{
     ChatMessage, ChatRequest, ChatResponse, InferenceProvider, ProviderError, ToolCall, ToolChoice,
     Usage,
 };
 use crate::tools::{self, parse_invocation, tool_definitions, ArgumentError, ToolInvocation};
-use crate::views::{FilterOutcome, PersonCard, ProposalView, StartCallProposalOutcome};
+use crate::views::{
+    CompleteTaskOutcome, CreateTaskProposalOutcome, FilterOutcome, PersonCard,
+    StartCallProposalOutcome, TaskReceiptView, TurnProposal,
+};
 use crate::SYSTEM_PROMPT;
 
 /// Total characters of replayed history (§4).
@@ -103,6 +107,14 @@ pub struct TurnInput {
     pub message: String,
     pub history: Vec<HistoryMessage>,
     pub screen: ScreenContext,
+    /// docs/specs/SLICE_018.md §3: client-supplied, harmless data (the
+    /// browser's `-new Date().getTimezoneOffset()`), already range-checked
+    /// (−840..=840) by the HTTP layer before this is built; `None` when the
+    /// client did not supply one. Threaded to `build_messages`'s local-time
+    /// line and to the `create_task` due-instant composition — never part
+    /// of `OperatorContext` (which stays "from `AuthContext` and nothing
+    /// else", §7).
+    pub utc_offset_minutes: Option<i32>,
 }
 
 impl std::fmt::Debug for TurnInput {
@@ -117,6 +129,7 @@ impl std::fmt::Debug for TurnInput {
                 &format_args!("[{} messages]", self.history.len()),
             )
             .field("screen", &self.screen)
+            .field("utc_offset_minutes", &self.utc_offset_minutes)
             .finish()
     }
 }
@@ -204,10 +217,15 @@ pub struct TurnOutput {
     pub reply: Option<String>,
     pub references: References,
     pub tool_calls: Vec<ToolCallRecord>,
-    /// The turn's inserted `start_call` proposal, if any (at most one per
-    /// turn, docs/specs/SLICE_006b.md §3). The wire renders the card from
-    /// this object only, never from model prose.
-    pub proposal: Option<ProposalView>,
+    /// The turn's single inserted proposal, if any — `start_call` or
+    /// `create_task`, at most one per turn either way (docs/specs/
+    /// SLICE_006b.md §3; docs/specs/SLICE_018.md §2). The wire renders the
+    /// card from this object only, never from model prose.
+    pub proposal: Option<TurnProposal>,
+    /// The turn's `complete_task` receipt, if any — at most one per turn
+    /// (docs/specs/SLICE_018.md §2). The wire renders the card from this
+    /// object only, never from model prose.
+    pub receipt: Option<TaskReceiptView>,
     pub outcome: TurnOutcome,
     pub usage: Usage,
     pub model_call_count: u32,
@@ -215,11 +233,16 @@ pub struct TurnOutput {
 
 impl std::fmt::Debug for TurnOutput {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let proposal_id = self.proposal.as_ref().map(|p| match p {
+            TurnProposal::StartCall(view) => view.proposal_id,
+            TurnProposal::CreateTask(view) => view.proposal_id,
+        });
         f.debug_struct("TurnOutput")
             .field("reply", &self.reply.as_ref().map(|r| r.chars().count()))
             .field("references", &self.references.people.len())
             .field("tool_calls", &self.tool_calls)
-            .field("proposal", &self.proposal.as_ref().map(|p| p.proposal_id))
+            .field("proposal", &proposal_id)
+            .field("receipt", &self.receipt.as_ref().map(|r| r.task_id))
             .field("outcome", &self.outcome)
             .field("usage", &self.usage)
             .field("model_call_count", &self.model_call_count)
@@ -282,9 +305,17 @@ struct TurnState {
     consecutive_malformed: u8,
     consecutive_over_cap: u8,
     started: Instant,
-    /// At most one inserted proposal per turn (docs/specs/SLICE_006b.md
-    /// §3); `NeedsNumberChoice`/`NoPhone` do not set this.
-    proposal: Option<ProposalView>,
+    /// At most one inserted proposal per turn, either kind (docs/specs/
+    /// SLICE_006b.md §3; docs/specs/SLICE_018.md §2); `NeedsNumberChoice`/
+    /// `NoPhone`/`NeedsClarification` do not set this.
+    proposal: Option<TurnProposal>,
+    /// At most one `complete_task` receipt per turn (docs/specs/
+    /// SLICE_018.md §2); `AlreadyCompleted`/`Forbidden` do not set this.
+    receipt: Option<TaskReceiptView>,
+    /// Copied from `TurnInput` at construction (docs/specs/SLICE_018.md
+    /// §3): the `create_task` due-instant composition's only source of the
+    /// client's time zone.
+    utc_offset_minutes: Option<i32>,
 }
 
 enum LoopEnd {
@@ -297,6 +328,15 @@ enum ExecError {
     /// decides whether the strike count ends the turn.
     Malformed,
     Abort(TurnOutcome),
+}
+
+/// What a successful `dispatch()` call does to the turn's single proposal/
+/// receipt slots (docs/specs/SLICE_018.md §2). Kept out of `views.rs`: this
+/// is a loop-internal concept, not a seam type.
+enum ToolEffect {
+    None,
+    Proposal(TurnProposal),
+    Receipt(Box<TaskReceiptView>),
 }
 
 fn tool_error_json(code: &str, detail: &str) -> String {
@@ -317,12 +357,45 @@ fn ledger_name(model_supplied: &str) -> &'static str {
         tools::START_CALL => tools::START_CALL,
         tools::FILTER_PEOPLE => tools::FILTER_PEOPLE,
         tools::RUN_SAVED_LIST => tools::RUN_SAVED_LIST,
+        tools::COMPLETE_TASK => tools::COMPLETE_TASK,
+        tools::CREATE_TASK => tools::CREATE_TASK,
         _ => "unknown",
     }
 }
 
 fn clip_chars(text: &str, max: usize) -> String {
     text.chars().take(max).collect()
+}
+
+/// The "current time" prompt line (docs/specs/SLICE_018.md §2): rendered
+/// in the client's local offset instead of `Z` when one was supplied, so
+/// the model can resolve "Friday"; `Z` (the pre-018 shape) when it was not.
+///
+/// Walkthrough finding: an RFC 3339 instant alone is not enough — models
+/// are unreliable at deriving the weekday from a date, so a live run
+/// resolved "Friday" to the wrong day. The offset arm now prefixes the
+/// weekday name (`%A` on the offset-adjusted time, e.g. "Thursday,
+/// 2026-09-10T14:41:00-07:00"); the RFC 3339 part itself is unchanged. The
+/// no-offset `Z` arm is unchanged — with no client offset there is no
+/// reliable local calendar day to name.
+fn local_time_line(now: chrono::DateTime<chrono::Utc>, utc_offset_minutes: Option<i32>) -> String {
+    match utc_offset_minutes {
+        Some(minutes) => match FixedOffset::east_opt(minutes * 60) {
+            Some(offset) => {
+                let local = now.with_timezone(&offset);
+                format!(
+                    "{}, {}",
+                    local.format("%A"),
+                    local.to_rfc3339_opts(chrono::SecondsFormat::Secs, false)
+                )
+            }
+            // Out-of-range values never reach here (the HTTP layer rejects
+            // them, ±840 max), but fail to the pre-018 shape rather than
+            // panic if that invariant is ever broken.
+            None => now.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+        },
+        None => now.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+    }
 }
 
 fn screen_line(screen: &ScreenContext) -> Option<String> {
@@ -377,7 +450,7 @@ impl OperatorService {
                 "{}\n\nThe member you are assisting is {}. The current time is {}.",
                 SYSTEM_PROMPT.trim_end(),
                 actor_name,
-                ctx.now.to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
+                local_time_line(ctx.now, input.utc_offset_minutes)
             ),
         });
         for message in truncate_history(input.history, self.limits.max_history) {
@@ -408,6 +481,7 @@ impl OperatorService {
         backend: &dyn ToolBackend,
         input: TurnInput,
     ) -> TurnOutput {
+        let utc_offset_minutes = input.utc_offset_minutes;
         let mut state = TurnState {
             messages: self.build_messages(ctx, input),
             tool_calls: Vec::new(),
@@ -418,6 +492,8 @@ impl OperatorService {
             consecutive_over_cap: 0,
             started: Instant::now(),
             proposal: None,
+            receipt: None,
+            utc_offset_minutes,
         };
 
         let result = tokio::time::timeout(
@@ -435,12 +511,13 @@ impl OperatorService {
             Err(_elapsed) => (None, TurnOutcome::TurnTimeout),
         };
 
-        // A 503 outcome never surfaces its proposal (docs/specs/
-        // SLICE_006b.md §10: "never shown; expires inert").
-        let proposal = if outcome.is_reply() {
-            state.proposal
+        // A 503 outcome never surfaces its proposal or receipt (docs/specs/
+        // SLICE_006b.md §10: "never shown; expires inert"; docs/specs/
+        // SLICE_018.md §2, same rule extended to the receipt).
+        let (proposal, receipt) = if outcome.is_reply() {
+            (state.proposal, state.receipt)
         } else {
-            None
+            (None, None)
         };
 
         TurnOutput {
@@ -448,6 +525,7 @@ impl OperatorService {
             references: state.refs.finish(),
             tool_calls: state.tool_calls,
             proposal,
+            receipt,
             outcome,
             usage: state.usage,
             model_call_count: state.model_call_count,
@@ -631,6 +709,11 @@ impl OperatorService {
         // count_saved_list_matches` already uses. crm-operator itself
         // never sees a name, id, or day count to record here even if it
         // wanted to (D-034 fence; D-029).
+        // docs/specs/SLICE_018.md §11: `task_id`/`action_outcome`/
+        // `title_chars` are recorded in `dispatch()` below for
+        // `complete_task`/`create_task` — crm-operator's own data (the
+        // model-supplied `task_id`, the backend's outcome tag, the title's
+        // length), never the title itself.
         let span = tracing::info_span!(
             "operator.tool_call",
             tool = name,
@@ -642,7 +725,10 @@ impl OperatorService {
             match_count = tracing::field::Empty,
             more_than_500 = tracing::field::Empty,
             returned = tracing::field::Empty,
-            saved_list_scope = tracing::field::Empty
+            saved_list_scope = tracing::field::Empty,
+            task_id = tracing::field::Empty,
+            action_outcome = tracing::field::Empty,
+            title_chars = tracing::field::Empty
         );
 
         let invocation = match parse_invocation(&call.name, &call.arguments) {
@@ -666,10 +752,15 @@ impl OperatorService {
             }
         };
 
-        // One inserted proposal per turn (docs/specs/SLICE_006b.md §3):
-        // a second `start_call` after a `Proposed` outcome is a structured
-        // rejection with no backend hit.
-        if matches!(invocation, ToolInvocation::StartCall { .. }) && state.proposal.is_some() {
+        // One inserted proposal per turn, either kind (docs/specs/
+        // SLICE_006b.md §3; docs/specs/SLICE_018.md §2): a second
+        // `start_call`/`create_task` after a `Proposed` outcome is a
+        // structured rejection with no backend hit.
+        if matches!(
+            invocation,
+            ToolInvocation::StartCall { .. } | ToolInvocation::CreateTask { .. }
+        ) && state.proposal.is_some()
+        {
             let duration_ms = elapsed_ms(started);
             span.record("outcome", "invalid_arguments");
             span.record("duration_ms", duration_ms);
@@ -683,7 +774,31 @@ impl OperatorService {
                 tool_call_id: call.id.clone(),
                 content: tool_error_json(
                     "invalid_arguments",
-                    "a call is already proposed in this turn; the user must confirm or dismiss it first",
+                    "a call or task is already proposed in this turn; the user must confirm or dismiss it first",
+                ),
+            });
+            state.consecutive_malformed += 1;
+            return Err(ExecError::Malformed);
+        }
+
+        // At most one executed `complete_task` per turn (docs/specs/
+        // SLICE_018.md §2): the same guard shape as the proposal slot
+        // above, keyed on whether a receipt already stands.
+        if matches!(invocation, ToolInvocation::CompleteTask { .. }) && state.receipt.is_some() {
+            let duration_ms = elapsed_ms(started);
+            span.record("outcome", "invalid_arguments");
+            span.record("duration_ms", duration_ms);
+            state.tool_calls.push(ToolCallRecord {
+                name,
+                outcome: ToolCallOutcome::InvalidArguments,
+                duration_ms,
+                person_ids: Vec::new(),
+            });
+            state.messages.push(ChatMessage::Tool {
+                tool_call_id: call.id.clone(),
+                content: tool_error_json(
+                    "invalid_arguments",
+                    "a task was already completed in this turn",
                 ),
             });
             state.consecutive_malformed += 1;
@@ -702,14 +817,14 @@ impl OperatorService {
             person_ids: Vec::new(),
         });
 
-        let result = dispatch(ctx, backend, &invocation)
+        let result = dispatch(ctx, backend, &invocation, state.utc_offset_minutes)
             .instrument(span.clone())
             .await;
         let duration_ms = elapsed_ms(started);
         span.record("duration_ms", duration_ms);
 
         match result {
-            Ok((value, bucket, cards, proposal)) => {
+            Ok((value, bucket, cards, effect)) => {
                 span.record("outcome", "ok");
                 state.tool_calls[slot] = ToolCallRecord {
                     name,
@@ -717,8 +832,10 @@ impl OperatorService {
                     duration_ms,
                     person_ids: cards.iter().map(|c| c.id).collect(),
                 };
-                if proposal.is_some() {
-                    state.proposal = proposal;
+                match effect {
+                    ToolEffect::None => {}
+                    ToolEffect::Proposal(p) => state.proposal = Some(p),
+                    ToolEffect::Receipt(r) => state.receipt = Some(*r),
                 }
                 state.refs.add(bucket, cards);
                 state.messages.push(ChatMessage::Tool {
@@ -784,12 +901,17 @@ fn argument_message(err: &ArgumentError) -> String {
 fn not_found_detail(invocation: &ToolInvocation) -> &'static str {
     match invocation {
         ToolInvocation::RunSavedList { .. } => "you cannot see a list by that name",
+        // docs/specs/SLICE_018.md §3: "no such task on that Person" —
+        // distinct from every other tool's Person-not-found wording, since
+        // `person_id` and `task_id` both name resources here.
+        ToolInvocation::CompleteTask { .. } => "no such task on that Person",
         ToolInvocation::SearchPeople { .. }
         | ToolInvocation::GetPerson { .. }
         | ToolInvocation::GetToday { .. }
         | ToolInvocation::GetNextWorkItem
         | ToolInvocation::ExplainPriority { .. }
         | ToolInvocation::StartCall { .. }
+        | ToolInvocation::CreateTask { .. }
         | ToolInvocation::FilterPeople { .. } => "no such person in your Organization",
     }
 }
@@ -803,12 +925,14 @@ fn elapsed_ms(started: Instant) -> u32 {
 }
 
 /// Runs one validated invocation and returns the JSON the model sees, the
-/// reference bucket, and the cards for `references` / `person_ids`.
+/// reference bucket, the cards for `references` / `person_ids`, and the
+/// effect (if any) on the turn's single proposal/receipt slots.
 async fn dispatch(
     ctx: &OperatorContext,
     backend: &dyn ToolBackend,
     invocation: &ToolInvocation,
-) -> Result<(Value, RefBucket, Vec<PersonCard>, Option<ProposalView>), ToolError> {
+    utc_offset_minutes: Option<i32>,
+) -> Result<(Value, RefBucket, Vec<PersonCard>, ToolEffect), ToolError> {
     fn to_value<T: Serialize>(v: &T) -> Result<Value, ToolError> {
         serde_json::to_value(v).map_err(|e| ToolError::Backend(format!("serialize: {e}")))
     }
@@ -817,30 +941,35 @@ async fn dispatch(
         ToolInvocation::SearchPeople { query, limit } => {
             let result = backend.search_people(ctx, query, *limit).await?;
             let value = to_value(&result)?;
-            Ok((value, RefBucket::Search, result.matches, None))
+            Ok((value, RefBucket::Search, result.matches, ToolEffect::None))
         }
         ToolInvocation::GetPerson { person_id } => {
             let detail = backend.get_person(ctx, *person_id).await?;
             let value = to_value(&detail)?;
-            Ok((value, RefBucket::Primary, vec![detail.person], None))
+            Ok((
+                value,
+                RefBucket::Primary,
+                vec![detail.person],
+                ToolEffect::None,
+            ))
         }
         ToolInvocation::GetToday { limit } => {
             let view = backend.get_today(ctx, *limit).await?;
             let value = to_value(&view)?;
             let cards = view.items.into_iter().map(|i| i.person).collect();
-            Ok((value, RefBucket::Today, cards, None))
+            Ok((value, RefBucket::Today, cards, ToolEffect::None))
         }
         ToolInvocation::GetNextWorkItem => {
             let next = backend.get_next_work_item(ctx).await?;
             let value = to_value(&next)?;
             let cards = next.item.map(|i| i.person).into_iter().collect();
-            Ok((value, RefBucket::Primary, cards, None))
+            Ok((value, RefBucket::Primary, cards, ToolEffect::None))
         }
         ToolInvocation::ExplainPriority { person_id } => {
             let explanation = backend.explain_priority(ctx, *person_id).await?;
             let value = to_value(&explanation)?;
             let card = explanation.person().clone();
-            Ok((value, RefBucket::Primary, vec![card], None))
+            Ok((value, RefBucket::Primary, vec![card], ToolEffect::None))
         }
         ToolInvocation::StartCall {
             person_id,
@@ -862,20 +991,25 @@ async fn dispatch(
                         "expires_at": view.expires_at,
                     });
                     let card = view.person.clone();
-                    Ok((value, RefBucket::Primary, vec![card], Some(view)))
+                    Ok((
+                        value,
+                        RefBucket::Primary,
+                        vec![card],
+                        ToolEffect::Proposal(TurnProposal::StartCall(Box::new(view))),
+                    ))
                 }
                 StartCallProposalOutcome::NeedsNumberChoice { phones } => {
                     let value = json!({
                         "status": "choice_required",
                         "phones": to_value(&phones)?,
                     });
-                    Ok((value, RefBucket::Primary, Vec::new(), None))
+                    Ok((value, RefBucket::Primary, Vec::new(), ToolEffect::None))
                 }
                 StartCallProposalOutcome::NoPhone => {
                     let value = json!({
                         "status": "no_phone",
                     });
-                    Ok((value, RefBucket::Primary, Vec::new(), None))
+                    Ok((value, RefBucket::Primary, Vec::new(), ToolEffect::None))
                 }
             }
         }
@@ -896,7 +1030,7 @@ async fn dispatch(
                     Vec::new()
                 }
             };
-            Ok((value, RefBucket::Search, cards, None))
+            Ok((value, RefBucket::Search, cards, ToolEffect::None))
         }
         ToolInvocation::RunSavedList { selector } => {
             let outcome = backend.run_saved_list(ctx, selector).await?;
@@ -907,15 +1041,165 @@ async fn dispatch(
                     Vec::new()
                 }
             };
-            Ok((value, RefBucket::Search, cards, None))
+            Ok((value, RefBucket::Search, cards, ToolEffect::None))
+        }
+        // docs/specs/SLICE_018.md §2, §3, §11.
+        ToolInvocation::CompleteTask { person_id, task_id } => {
+            let outcome = backend.complete_task(ctx, *person_id, *task_id).await?;
+            let span = tracing::Span::current();
+            match outcome {
+                CompleteTaskOutcome::Completed(boxed) => {
+                    let view = *boxed;
+                    span.record("task_id", tracing::field::display(view.task_id));
+                    span.record("action_outcome", "completed");
+                    span.record("title_chars", view.title.as_str().chars().count());
+                    let value = json!({
+                        "status": "completed",
+                        "task": {
+                            "task_id": view.task_id,
+                            "title": to_value(&view.title)?,
+                            "kind": view.kind,
+                            "due_at": view.due_at,
+                            "completed_at": view.completed_at,
+                            "completed_by_display_name": view.completed_by_display_name,
+                        },
+                    });
+                    let card = view.person.clone();
+                    Ok((
+                        value,
+                        RefBucket::Primary,
+                        vec![card],
+                        ToolEffect::Receipt(Box::new(view)),
+                    ))
+                }
+                CompleteTaskOutcome::AlreadyCompleted(boxed) => {
+                    let view = *boxed;
+                    span.record("task_id", tracing::field::display(view.task_id));
+                    span.record("action_outcome", "already_completed");
+                    span.record("title_chars", view.title.as_str().chars().count());
+                    let value = json!({
+                        "status": "already_completed",
+                        "task": {
+                            "task_id": view.task_id,
+                            "title": to_value(&view.title)?,
+                            "kind": view.kind,
+                            "due_at": view.due_at,
+                            "completed_at": view.completed_at,
+                            "completed_by_display_name": view.completed_by_display_name,
+                        },
+                    });
+                    let card = view.person.clone();
+                    Ok((value, RefBucket::Primary, vec![card], ToolEffect::None))
+                }
+                CompleteTaskOutcome::Forbidden => {
+                    span.record("task_id", tracing::field::display(*task_id));
+                    span.record("action_outcome", "forbidden");
+                    let value = json!({ "status": "forbidden" });
+                    Ok((value, RefBucket::Primary, Vec::new(), ToolEffect::None))
+                }
+            }
+        }
+        ToolInvocation::CreateTask {
+            person_id,
+            title,
+            kind,
+            due_date,
+            due_time,
+            assignee,
+        } => {
+            let span = tracing::Span::current();
+            span.record("title_chars", title.chars().count());
+            let due_at = compose_due_at(*due_date, *due_time, utc_offset_minutes)?;
+            let spec = CreateTaskSpec {
+                person_id: *person_id,
+                title: title.clone(),
+                kind: kind.clone(),
+                due_at,
+                assignee: assignee.clone(),
+            };
+            let outcome = backend.propose_create_task(ctx, &spec).await?;
+            match outcome {
+                CreateTaskProposalOutcome::Proposed(boxed) => {
+                    let view = *boxed;
+                    span.record("action_outcome", "proposed");
+                    // The model sees a confirmation-pending summary; the
+                    // wire card renders from `TurnOutput::proposal`, and
+                    // the model is told the user must confirm in the UI.
+                    let value = json!({
+                        "status": "proposed",
+                        "proposal": {
+                            "person": to_value(&view.person)?,
+                            "title": to_value(&view.title)?,
+                            "kind": view.kind,
+                            "due_at": view.due_at,
+                            "assignee": to_value(&view.assignee)?,
+                            "expires_at": view.expires_at,
+                        },
+                    });
+                    let card = view.person.clone();
+                    Ok((
+                        value,
+                        RefBucket::Primary,
+                        vec![card],
+                        ToolEffect::Proposal(TurnProposal::CreateTask(Box::new(view))),
+                    ))
+                }
+                CreateTaskProposalOutcome::NeedsClarification {
+                    unknown_assignees,
+                    ambiguous_assignees,
+                    members,
+                } => {
+                    span.record("action_outcome", "needs_clarification");
+                    let value = json!({
+                        "status": "needs_clarification",
+                        "unknown_assignees": unknown_assignees,
+                        "ambiguous_assignees": ambiguous_assignees,
+                        "members": members,
+                    });
+                    Ok((value, RefBucket::Primary, Vec::new(), ToolEffect::None))
+                }
+            }
         }
     }
+}
+
+/// Composes `create_task`'s due instant from the parser's already-validated
+/// `due_date`/`due_time` and the turn's `utc_offset_minutes` (docs/specs/
+/// SLICE_018.md §3): pure `NaiveDate` + `NaiveTime` + `FixedOffset` ->
+/// `DateTime<Utc>`, no database. A missing `due_date` composes to `None`
+/// (no due time). A `due_date` with no offset fails closed —
+/// `invalid_arguments`, never a UTC guess. Absent `due_time` defaults to
+/// end of day, local (23:59:59).
+fn compose_due_at(
+    due_date: Option<chrono::NaiveDate>,
+    due_time: Option<chrono::NaiveTime>,
+    utc_offset_minutes: Option<i32>,
+) -> Result<Option<chrono::DateTime<chrono::Utc>>, ToolError> {
+    let Some(date) = due_date else {
+        return Ok(None);
+    };
+    let Some(offset_minutes) = utc_offset_minutes else {
+        return Err(ToolError::InvalidArguments(
+            "a due date needs the client's local time zone, which was not supplied".to_string(),
+        ));
+    };
+    let time = due_time.unwrap_or_else(|| {
+        chrono::NaiveTime::from_hms_opt(23, 59, 59).expect("23:59:59 is always valid")
+    });
+    let offset = FixedOffset::east_opt(offset_minutes * 60)
+        .ok_or_else(|| ToolError::InvalidArguments("invalid time zone offset".to_string()))?;
+    let naive = NaiveDateTime::new(date, time);
+    let local = offset
+        .from_local_datetime(&naive)
+        .single()
+        .ok_or_else(|| ToolError::InvalidArguments("ambiguous local time".to_string()))?;
+    Ok(Some(local.with_timezone(&chrono::Utc)))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::backend::{PeopleFilterSpec, SavedListSelector};
+    use crate::backend::{CreateTaskSpec, PeopleFilterSpec, SavedListSelector};
     use crate::providers::scripted::{ScriptedProvider, ScriptedStep};
     use crate::views::*;
     use async_trait::async_trait;
@@ -987,6 +1271,25 @@ mod tests {
         /// of `Matched` — still `Ok(...)`, so the loop treats it as a
         /// successful call (docs/specs/SLICE_013.md §1 rule 2).
         filter_people_needs_clarification: bool,
+        /// `complete_task` fixture (docs/specs/SLICE_018.md §2): `Some`
+        /// selects the returned outcome; `None` (the default) is
+        /// `ToolError::NotFound`, the every-other-unset-fixture default.
+        complete_task_outcome: Option<FakeCompleteOutcome>,
+        /// `propose_create_task` fixture, same shape.
+        create_task_outcome: Option<FakeCreateOutcome>,
+    }
+
+    #[derive(Clone, Copy)]
+    enum FakeCompleteOutcome {
+        Completed,
+        AlreadyCompleted,
+        Forbidden,
+    }
+
+    #[derive(Clone, Copy)]
+    enum FakeCreateOutcome {
+        Proposed,
+        NeedsClarification,
     }
 
     impl FakeBackend {
@@ -1195,6 +1498,73 @@ mod tests {
                 matches,
             }))
         }
+
+        async fn complete_task(
+            &self,
+            ctx: &OperatorContext,
+            person_id: Uuid,
+            task_id: Uuid,
+        ) -> Result<CompleteTaskOutcome, ToolError> {
+            self.note(ctx)?;
+            match self.complete_task_outcome {
+                Some(FakeCompleteOutcome::Completed) => {
+                    Ok(CompleteTaskOutcome::Completed(Box::new(TaskReceiptView {
+                        task_id,
+                        person: card(person_id, "P"),
+                        title: UntrustedText::new("Call about the listing"),
+                        kind: "call".to_string(),
+                        due_at: Some(ctx.now),
+                        completed_at: Some(ctx.now),
+                        completed_by_display_name: Some("Alice".to_string()),
+                    })))
+                }
+                Some(FakeCompleteOutcome::AlreadyCompleted) => Ok(
+                    CompleteTaskOutcome::AlreadyCompleted(Box::new(TaskReceiptView {
+                        task_id,
+                        person: card(person_id, "P"),
+                        title: UntrustedText::new("Call about the listing"),
+                        kind: "call".to_string(),
+                        due_at: Some(ctx.now),
+                        completed_at: Some(ctx.now),
+                        completed_by_display_name: Some("Bob".to_string()),
+                    })),
+                ),
+                Some(FakeCompleteOutcome::Forbidden) => Ok(CompleteTaskOutcome::Forbidden),
+                None => Err(ToolError::NotFound),
+            }
+        }
+
+        async fn propose_create_task(
+            &self,
+            ctx: &OperatorContext,
+            spec: &CreateTaskSpec,
+        ) -> Result<CreateTaskProposalOutcome, ToolError> {
+            self.note(ctx)?;
+            match self.create_task_outcome {
+                Some(FakeCreateOutcome::Proposed) => Ok(CreateTaskProposalOutcome::Proposed(
+                    Box::new(TaskProposalView {
+                        proposal_id: Uuid::new_v4(),
+                        person: card(spec.person_id, "P"),
+                        title: UntrustedText::new(&spec.title),
+                        kind: spec.kind.clone(),
+                        due_at: spec.due_at,
+                        assignee: MemberRef {
+                            id: ctx.actor_user_id,
+                            display_name: "Alice".to_string(),
+                        },
+                        expires_at: ctx.now + chrono::Duration::seconds(120),
+                    }),
+                )),
+                Some(FakeCreateOutcome::NeedsClarification) => {
+                    Ok(CreateTaskProposalOutcome::NeedsClarification {
+                        unknown_assignees: vec!["Bob".to_string()],
+                        ambiguous_assignees: vec![],
+                        members: vec!["Alice".to_string()],
+                    })
+                }
+                None => Err(ToolError::NotFound),
+            }
+        }
     }
 
     fn call(id: &str, name: &str, args: Value) -> ToolCall {
@@ -1218,6 +1588,16 @@ mod tests {
             message: message.to_string(),
             history: vec![],
             screen: ScreenContext::other(),
+            utc_offset_minutes: None,
+        }
+    }
+
+    /// docs/specs/SLICE_018.md §3: the due-instant composition's only
+    /// source of the client's time zone.
+    fn input_with_offset(message: &str, utc_offset_minutes: i32) -> TurnInput {
+        TurnInput {
+            utc_offset_minutes: Some(utc_offset_minutes),
+            ..input(message)
         }
     }
 
@@ -1716,6 +2096,21 @@ mod tests {
             ) -> Result<FilterOutcome, ToolError> {
                 unreachable!()
             }
+            async fn complete_task(
+                &self,
+                _: &OperatorContext,
+                _: Uuid,
+                _: Uuid,
+            ) -> Result<CompleteTaskOutcome, ToolError> {
+                unreachable!()
+            }
+            async fn propose_create_task(
+                &self,
+                _: &OperatorContext,
+                _: &CreateTaskSpec,
+            ) -> Result<CreateTaskProposalOutcome, ToolError> {
+                unreachable!()
+            }
         }
         let (svc, _) = service(
             vec![ScriptedStep::Respond(ChatResponse::tool_calls(vec![call(
@@ -1793,6 +2188,7 @@ mod tests {
                 content: "SECRET-HISTORY".into(),
             }],
             screen: ScreenContext::other(),
+            utc_offset_minutes: None,
         };
         let debug = format!("{input:?}");
         assert!(!debug.contains("SECRET"));
@@ -1915,6 +2311,7 @@ mod tests {
                 message: "now".into(),
                 history,
                 screen: ScreenContext::other(),
+                utc_offset_minutes: None,
             },
         )
         .await;
@@ -1951,6 +2348,7 @@ mod tests {
                 message: "now".into(),
                 history,
                 screen: ScreenContext::other(),
+                utc_offset_minutes: None,
             },
         )
         .await;
@@ -1978,6 +2376,7 @@ mod tests {
                     route: ScreenRoute::Person,
                     person_id: Some(pid),
                 },
+                utc_offset_minutes: None,
             },
         )
         .await;
@@ -2122,7 +2521,10 @@ mod tests {
         );
         let out = svc.run_turn(&ctx(), &backend, input("call P")).await;
         assert_eq!(out.outcome, TurnOutcome::Completed);
-        let proposal = out.proposal.expect("proposal on the output");
+        let proposal = match out.proposal.expect("proposal on the output") {
+            TurnProposal::StartCall(view) => view,
+            other => panic!("expected a start_call proposal: {other:?}"),
+        };
         assert_eq!(proposal.contact_method_id, phone_method);
         assert_eq!(proposal.person.id, person);
         assert_eq!(out.tool_calls.len(), 1);
@@ -2332,7 +2734,7 @@ mod tests {
             "Never claim a call was placed",
             "Never propose a call the user did not ask for",
             "you can never dial a number from the conversation",
-            "eight tools",
+            "ten tools",
         ] {
             assert!(prompt.contains(rule), "prompt lost the rule: {rule}");
         }
@@ -2341,6 +2743,56 @@ mod tests {
             "the read-only framing is gone (006b)"
         );
         assert!(!prompt.contains("six tools"), "the tool count is stale");
+        assert!(!prompt.contains("eight tools"), "the tool count is stale");
+    }
+
+    /// docs/specs/SLICE_018.md §7: string-pinned like
+    /// `the_prompt_carries_the_start_call_rules` above.
+    #[test]
+    fn the_prompt_carries_the_task_rules() {
+        let prompt = include_str!("../prompts/system.md");
+        for rule in [
+            "complete_task",
+            "create_task",
+            "may complete a task",
+            "complete_task executes at once",
+            "may propose a task",
+            "creates nothing until the member confirms",
+            "never claim a task exists before",
+            "needs_clarification",
+            "who the task is assigned to",
+            "who completed it and when",
+            "never guessing a time zone",
+        ] {
+            assert!(prompt.contains(rule), "prompt lost the rule: {rule}");
+        }
+        assert!(
+            !prompt.contains("create tasks"),
+            "the \"cannot create tasks\" sentence must be gone (SLICE_018 §7)"
+        );
+    }
+
+    /// docs/specs/SLICE_018.md §2, §3: the local-time line renders in the
+    /// client's offset when one is supplied, and stays `Z` when it is not.
+    ///
+    /// Walkthrough finding: an RFC 3339 instant alone let a live model
+    /// resolve "Friday" to the wrong day, so the offset arm now leads with
+    /// the weekday name — pinned here against a known date (2026-09-10 is
+    /// a Thursday) so a regression (dropped weekday, wrong locale, wrong
+    /// day from an off-by-one offset) fails this test.
+    #[test]
+    fn local_time_line_renders_the_offset_or_falls_back_to_z() {
+        let now = Utc.with_ymd_and_hms(2026, 9, 11, 3, 30, 0).unwrap();
+        // -240 minutes = UTC-4 (America/New_York in September); the
+        // offset-adjusted instant rolls back to 2026-09-10, a Thursday.
+        let with_offset = local_time_line(now, Some(-240));
+        assert_eq!(with_offset, "Thursday, 2026-09-10T23:30:00-04:00");
+        assert!(!with_offset.ends_with('Z'));
+
+        // The no-offset `Z` arm is unchanged: no weekday, plain RFC 3339.
+        let without_offset = local_time_line(now, None);
+        assert_eq!(without_offset, "2026-09-11T03:30:00Z");
+        assert!(without_offset.ends_with('Z'));
     }
 
     /// docs/specs/SLICE_013.md §3: string-pinned like
@@ -2362,5 +2814,378 @@ mod tests {
         ] {
             assert!(prompt.contains(rule), "prompt lost the rule: {rule}");
         }
+    }
+
+    // --- Slice 018: complete_task / create_task (docs/specs/SLICE_018.md
+    // §2, §12) --------------------------------------------------------
+
+    #[tokio::test]
+    async fn complete_task_sets_the_turn_receipt() {
+        let person = Uuid::new_v4();
+        let task = Uuid::new_v4();
+        let backend = FakeBackend {
+            complete_task_outcome: Some(FakeCompleteOutcome::Completed),
+            ..Default::default()
+        };
+        let (svc, _) = service(
+            vec![
+                ScriptedStep::Respond(ChatResponse::tool_calls(vec![call(
+                    "c1",
+                    "complete_task",
+                    json!({"person_id": person.to_string(), "task_id": task.to_string()}),
+                )])),
+                ScriptedStep::Respond(ChatResponse::text("Done — marked it complete.")),
+            ],
+            Limits::default(),
+        );
+        let out = svc.run_turn(&ctx(), &backend, input("mark it done")).await;
+        assert_eq!(out.outcome, TurnOutcome::Completed);
+        let receipt = out.receipt.expect("receipt on the output");
+        assert_eq!(receipt.task_id, task);
+        assert_eq!(receipt.person.id, person);
+        assert!(out.proposal.is_none());
+    }
+
+    /// `already_completed`/`forbidden` never set a receipt (docs/specs/
+    /// SLICE_018.md §2).
+    #[tokio::test]
+    async fn already_completed_and_forbidden_set_no_receipt() {
+        for outcome in [
+            FakeCompleteOutcome::AlreadyCompleted,
+            FakeCompleteOutcome::Forbidden,
+        ] {
+            let person = Uuid::new_v4();
+            let task = Uuid::new_v4();
+            let backend = FakeBackend {
+                complete_task_outcome: Some(outcome),
+                ..Default::default()
+            };
+            let (svc, _) = service(
+                vec![
+                    ScriptedStep::Respond(ChatResponse::tool_calls(vec![call(
+                        "c1",
+                        "complete_task",
+                        json!({"person_id": person.to_string(), "task_id": task.to_string()}),
+                    )])),
+                    ScriptedStep::Respond(ChatResponse::text("noted")),
+                ],
+                Limits::default(),
+            );
+            let out = svc.run_turn(&ctx(), &backend, input("mark it done")).await;
+            assert_eq!(out.outcome, TurnOutcome::Completed);
+            assert!(out.receipt.is_none());
+        }
+    }
+
+    #[tokio::test]
+    async fn second_complete_task_after_a_receipt_is_rejected_without_backend_hit() {
+        let person = Uuid::new_v4();
+        let task_a = Uuid::new_v4();
+        let task_b = Uuid::new_v4();
+        let backend = FakeBackend {
+            complete_task_outcome: Some(FakeCompleteOutcome::Completed),
+            ..Default::default()
+        };
+        let (svc, _) = service(
+            vec![
+                ScriptedStep::Respond(ChatResponse::tool_calls(vec![
+                    call(
+                        "c1",
+                        "complete_task",
+                        json!({"person_id": person.to_string(), "task_id": task_a.to_string()}),
+                    ),
+                    call(
+                        "c2",
+                        "complete_task",
+                        json!({"person_id": person.to_string(), "task_id": task_b.to_string()}),
+                    ),
+                ])),
+                ScriptedStep::Respond(ChatResponse::text("done")),
+            ],
+            Limits::default(),
+        );
+        let out = svc
+            .run_turn(&ctx(), &backend, input("mark both done"))
+            .await;
+        assert_eq!(out.outcome, TurnOutcome::Completed);
+        assert!(out.receipt.is_some(), "the first receipt stands");
+        assert_eq!(out.tool_calls.len(), 2);
+        assert_eq!(out.tool_calls[1].outcome, ToolCallOutcome::InvalidArguments);
+        assert_eq!(backend.seen.lock().unwrap().len(), 1);
+    }
+
+    /// Review round 1: the receipt guard keys on a *standing receipt*
+    /// (`state.receipt.is_some()`), not on "a complete_task already ran
+    /// this turn" — `Forbidden` never sets a receipt (docs/specs/
+    /// SLICE_018.md §2), so a second `complete_task` after a `Forbidden`
+    /// outcome is NOT blocked and reaches the backend again.
+    #[tokio::test]
+    async fn a_second_complete_task_after_a_forbidden_outcome_still_reaches_the_backend() {
+        let person = Uuid::new_v4();
+        let task_a = Uuid::new_v4();
+        let task_b = Uuid::new_v4();
+        let backend = FakeBackend {
+            complete_task_outcome: Some(FakeCompleteOutcome::Forbidden),
+            ..Default::default()
+        };
+        let (svc, _) = service(
+            vec![
+                ScriptedStep::Respond(ChatResponse::tool_calls(vec![
+                    call(
+                        "c1",
+                        "complete_task",
+                        json!({"person_id": person.to_string(), "task_id": task_a.to_string()}),
+                    ),
+                    call(
+                        "c2",
+                        "complete_task",
+                        json!({"person_id": person.to_string(), "task_id": task_b.to_string()}),
+                    ),
+                ])),
+                ScriptedStep::Respond(ChatResponse::text("done")),
+            ],
+            Limits::default(),
+        );
+        let out = svc
+            .run_turn(&ctx(), &backend, input("try to complete both"))
+            .await;
+        assert_eq!(out.outcome, TurnOutcome::Completed);
+        assert!(out.receipt.is_none(), "forbidden never sets a receipt");
+        assert_eq!(out.tool_calls.len(), 2);
+        assert_eq!(
+            out.tool_calls[1].outcome,
+            ToolCallOutcome::Ok,
+            "the second call was not blocked by the guard"
+        );
+        assert_eq!(
+            backend.seen.lock().unwrap().len(),
+            2,
+            "both calls reached the backend"
+        );
+    }
+
+    /// A 503 outcome never surfaces its receipt (docs/specs/SLICE_018.md
+    /// §2, the SLICE_006b §10 proposal rule extended).
+    #[tokio::test]
+    async fn a_503_outcome_never_surfaces_its_receipt() {
+        let person = Uuid::new_v4();
+        let task = Uuid::new_v4();
+        let backend = FakeBackend {
+            complete_task_outcome: Some(FakeCompleteOutcome::Completed),
+            ..Default::default()
+        };
+        let (svc, _) = service(
+            vec![
+                ScriptedStep::Respond(ChatResponse::tool_calls(vec![call(
+                    "c1",
+                    "complete_task",
+                    json!({"person_id": person.to_string(), "task_id": task.to_string()}),
+                )])),
+                ScriptedStep::Fail(ProviderError::Timeout),
+            ],
+            Limits::default(),
+        );
+        let out = svc.run_turn(&ctx(), &backend, input("mark it done")).await;
+        assert!(!out.outcome.is_reply());
+        assert!(out.receipt.is_none());
+    }
+
+    /// The proposal slot is shared across `start_call` and `create_task`
+    /// (docs/specs/SLICE_018.md §2): a `create_task` after a `start_call`
+    /// proposal (and vice versa) is a structured rejection with no
+    /// backend hit.
+    #[tokio::test]
+    async fn the_proposal_slot_is_shared_across_start_call_and_create_task() {
+        let person = Uuid::new_v4();
+        let backend = FakeBackend {
+            phones: vec![Uuid::new_v4()],
+            create_task_outcome: Some(FakeCreateOutcome::Proposed),
+            ..Default::default()
+        };
+        let (svc, _) = service(
+            vec![
+                ScriptedStep::Respond(ChatResponse::tool_calls(vec![
+                    call("c1", "start_call", json!({"person_id": person.to_string()})),
+                    call(
+                        "c2",
+                        "create_task",
+                        json!({"person_id": person.to_string(), "title": "Follow up"}),
+                    ),
+                ])),
+                ScriptedStep::Respond(ChatResponse::text("done")),
+            ],
+            Limits::default(),
+        );
+        let out = svc
+            .run_turn(
+                &ctx(),
+                &backend,
+                input_with_offset("call and add a task", 0),
+            )
+            .await;
+        assert_eq!(out.outcome, TurnOutcome::Completed);
+        assert!(matches!(out.proposal, Some(TurnProposal::StartCall(_))));
+        assert_eq!(out.tool_calls.len(), 2);
+        assert_eq!(out.tool_calls[1].outcome, ToolCallOutcome::InvalidArguments);
+        // Only the start_call backend hit landed.
+        assert_eq!(backend.seen.lock().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn create_task_proposal_lands_in_turn_output() {
+        let person = Uuid::new_v4();
+        let backend = FakeBackend {
+            create_task_outcome: Some(FakeCreateOutcome::Proposed),
+            ..Default::default()
+        };
+        let (svc, _) = service(
+            vec![
+                ScriptedStep::Respond(ChatResponse::tool_calls(vec![call(
+                    "c1",
+                    "create_task",
+                    json!({
+                        "person_id": person.to_string(),
+                        "title": "Call Grace",
+                        "due_date": "2026-09-12",
+                    }),
+                )])),
+                ScriptedStep::Respond(ChatResponse::text("Ready — confirm to add the task.")),
+            ],
+            Limits::default(),
+        );
+        let out = svc
+            .run_turn(&ctx(), &backend, input_with_offset("add a task", -240))
+            .await;
+        assert_eq!(out.outcome, TurnOutcome::Completed);
+        let proposal = match out.proposal.expect("proposal on the output") {
+            TurnProposal::CreateTask(view) => view,
+            other => panic!("expected a create_task proposal: {other:?}"),
+        };
+        assert_eq!(proposal.person.id, person);
+        assert_eq!(proposal.title.as_str(), "Call Grace");
+        // 2026-09-12 23:59:59 at UTC-4 == 2026-09-13T03:59:59Z.
+        assert_eq!(
+            proposal.due_at,
+            Some(Utc.with_ymd_and_hms(2026, 9, 13, 3, 59, 59).unwrap())
+        );
+    }
+
+    #[tokio::test]
+    async fn create_task_needs_clarification_sets_no_proposal() {
+        let person = Uuid::new_v4();
+        let backend = FakeBackend {
+            create_task_outcome: Some(FakeCreateOutcome::NeedsClarification),
+            ..Default::default()
+        };
+        let (svc, _) = service(
+            vec![
+                ScriptedStep::Respond(ChatResponse::tool_calls(vec![call(
+                    "c1",
+                    "create_task",
+                    json!({"person_id": person.to_string(), "title": "Call Grace", "assignee": "Bob"}),
+                )])),
+                ScriptedStep::Respond(ChatResponse::text("which member?")),
+            ],
+            Limits::default(),
+        );
+        let out = svc.run_turn(&ctx(), &backend, input("add a task")).await;
+        assert_eq!(out.outcome, TurnOutcome::Completed);
+        assert!(out.proposal.is_none());
+        assert_eq!(out.tool_calls[0].outcome, ToolCallOutcome::Ok);
+    }
+
+    /// docs/specs/SLICE_018.md §3: a `due_date` with no client offset
+    /// fails closed as `invalid_arguments` — never a UTC guess.
+    #[tokio::test]
+    async fn create_task_with_a_due_date_and_no_offset_is_invalid_arguments() {
+        let person = Uuid::new_v4();
+        let backend = FakeBackend {
+            create_task_outcome: Some(FakeCreateOutcome::Proposed),
+            ..Default::default()
+        };
+        let (svc, _) = service(
+            vec![
+                ScriptedStep::Respond(ChatResponse::tool_calls(vec![call(
+                    "c1",
+                    "create_task",
+                    json!({"person_id": person.to_string(), "title": "Call Grace", "due_date": "2026-09-12"}),
+                )])),
+                ScriptedStep::Respond(ChatResponse::text("noted")),
+            ],
+            Limits::default(),
+        );
+        // No offset supplied at all.
+        let out = svc.run_turn(&ctx(), &backend, input("add a task")).await;
+        assert_eq!(out.outcome, TurnOutcome::Completed);
+        assert!(out.proposal.is_none());
+        assert_eq!(out.tool_calls[0].outcome, ToolCallOutcome::InvalidArguments);
+        // No backend hit: composition failed before propose_create_task ran.
+        assert_eq!(backend.seen.lock().unwrap().len(), 0);
+    }
+
+    /// docs/specs/SLICE_018.md §3: due-instant composition — explicit
+    /// time, end-of-day default, and the ±840 offset bounds.
+    #[test]
+    fn compose_due_at_matrix() {
+        let date = chrono::NaiveDate::from_ymd_opt(2026, 9, 12).unwrap();
+        let noon = chrono::NaiveTime::from_hms_opt(12, 0, 0).unwrap();
+
+        // Explicit time, positive offset (UTC+9): 2026-09-12T12:00:00+09:00
+        // == 2026-09-12T03:00:00Z.
+        assert_eq!(
+            compose_due_at(Some(date), Some(noon), Some(540)).unwrap(),
+            Some(Utc.with_ymd_and_hms(2026, 9, 12, 3, 0, 0).unwrap())
+        );
+
+        // No due_time: end of day, local (23:59:59), negative offset
+        // (UTC-8): 2026-09-13T07:59:59Z.
+        assert_eq!(
+            compose_due_at(Some(date), None, Some(-480)).unwrap(),
+            Some(Utc.with_ymd_and_hms(2026, 9, 13, 7, 59, 59).unwrap())
+        );
+
+        // Crossing to the PREVIOUS UTC day: 00:30 local at +600 (UTC+10) ==
+        // 2026-09-11T14:30:00Z.
+        let half_past_midnight = chrono::NaiveTime::from_hms_opt(0, 30, 0).unwrap();
+        assert_eq!(
+            compose_due_at(Some(date), Some(half_past_midnight), Some(600)).unwrap(),
+            Some(Utc.with_ymd_and_hms(2026, 9, 11, 14, 30, 0).unwrap())
+        );
+
+        // The ±840 bounds (14h), exact instants, not just Ok:
+        // 2026-09-12T12:00:00+14:00 == 2026-09-11T22:00:00Z.
+        assert_eq!(
+            compose_due_at(Some(date), Some(noon), Some(840)).unwrap(),
+            Some(Utc.with_ymd_and_hms(2026, 9, 11, 22, 0, 0).unwrap())
+        );
+        // 2026-09-12T12:00:00-14:00 == 2026-09-13T02:00:00Z.
+        assert_eq!(
+            compose_due_at(Some(date), Some(noon), Some(-840)).unwrap(),
+            Some(Utc.with_ymd_and_hms(2026, 9, 13, 2, 0, 0).unwrap())
+        );
+
+        // BEYOND_ENVELOPE, accepted (docs/specs/SLICE_018.md §3): a FIXED
+        // offset carries no DST awareness at all — the same calendar date
+        // (2026-03-08, the US DST-start Sunday) composes by pure
+        // arithmetic regardless, proven here with two different offsets
+        // on the same date and default end-of-day time.
+        let dst_date = chrono::NaiveDate::from_ymd_opt(2026, 3, 8).unwrap();
+        assert_eq!(
+            compose_due_at(Some(dst_date), None, Some(-480)).unwrap(),
+            Some(Utc.with_ymd_and_hms(2026, 3, 9, 7, 59, 59).unwrap())
+        );
+        assert_eq!(
+            compose_due_at(Some(dst_date), None, Some(600)).unwrap(),
+            Some(Utc.with_ymd_and_hms(2026, 3, 8, 13, 59, 59).unwrap())
+        );
+
+        // No due_date at all: no offset needed, composes to None.
+        assert_eq!(compose_due_at(None, None, None).unwrap(), None);
+
+        // due_date with no offset: invalid_arguments, never a UTC guess.
+        assert!(matches!(
+            compose_due_at(Some(date), None, None),
+            Err(ToolError::InvalidArguments(_))
+        ));
     }
 }

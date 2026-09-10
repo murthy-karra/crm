@@ -71,3 +71,43 @@ export function describeOperatorError(err: unknown): string {
 export function isToggleShortcut(event: Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'altKey'>): boolean {
   return (event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 'k'
 }
+
+// --- Slice 018: complete_task / create_task (docs/specs/SLICE_018.md §3,
+// §8) ------------------------------------------------------------------
+
+/** The turn request's `utc_offset_minutes` (§3): `-new Date().
+ * getTimezoneOffset()`, sign-flipped so a positive value means "ahead of
+ * UTC" (east) — the D-054 §3 client rule with the browser as "the client". */
+export function currentUtcOffsetMinutes(): number {
+  return -new Date().getTimezoneOffset()
+}
+
+/** A `create_task` proposal card's due line (§8's "due Fri 12 Sep, 11:59
+ * PM" example): local weekday, day, month, and time. `null` when the
+ * proposal carries no due date (the tool reported the date could not be
+ * used, or none was asked for). */
+export function describeProposalDue(dueAtIso: string | null): string | null {
+  if (dueAtIso === null) return null
+  const due = new Date(dueAtIso)
+  const date = new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short' }).format(due)
+  const time = new Intl.DateTimeFormat(undefined, { timeStyle: 'short' }).format(due)
+  return `due ${date}, ${time}`
+}
+
+/** A `complete_task` receipt card's due line (§1's "was due today"
+ * example): "today"/"yesterday" for the two adjacent local calendar days,
+ * else a short date. `null` when the completed task carried no due date.
+ * "Yesterday" is `now`'s calendar day minus one, constructed with the
+ * `Date` day-rollover constructor — never `now`'s midnight minus a fixed
+ * 24h, which is wrong by an hour on either side of a DST transition (a
+ * local calendar day is 23h or 25h there, not always 24h). */
+export function describeReceiptDue(dueAtIso: string | null, now: Date = new Date()): string | null {
+  if (dueAtIso === null) return null
+  const due = new Date(dueAtIso)
+  const dueMidnight = new Date(due.getFullYear(), due.getMonth(), due.getDate()).getTime()
+  const nowMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const yesterdayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1).getTime()
+  if (dueMidnight === nowMidnight) return 'was due today'
+  if (dueMidnight === yesterdayMidnight) return 'was due yesterday'
+  return `was due ${new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(due)}`
+}

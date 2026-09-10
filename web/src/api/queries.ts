@@ -1592,6 +1592,49 @@ export function useConfirmProposal(orgId: MaybeRefOrGetter<string>, queryClient?
   )
 }
 
+/**
+ * `POST /api/operator/proposals/{id}/confirm` for a `create_task` proposal
+ * (docs/specs/SLICE_018.md §5, §8): the same route `useConfirmProposal`
+ * calls, but typed `{task}` — `useConfirmProposal` is typed for the call
+ * response and reads `data.call.id`, the wrong shape here — and settling
+ * through `settleTaskMutation` (the ordinary task-mutation invalidation
+ * set: Person detail, Today, the Tasks panel), not the call cache.
+ * `personId` is read fresh at call time by the caller (the proposal's own
+ * `person.id`), since one panel instance may confirm proposals for
+ * different People across a session — see `OperatorPanel.vue`.
+ */
+export function useConfirmTaskProposal(
+  orgId: MaybeRefOrGetter<string>,
+  personId: MaybeRefOrGetter<string>,
+  providedQueryClient?: QueryClient,
+) {
+  const qc = providedQueryClient ?? useQueryClient()
+  return useMutation(
+    {
+      mutationKey: computed(() => personMutationKey(toValue(orgId), toValue(personId))),
+      mutationFn: ({ proposalId }: { proposalId: string; personId: string }) =>
+        apiFetch<CreateTaskResponse>(`/operator/proposals/${proposalId}/confirm`, {
+          method: 'POST',
+        }),
+      retry: false,
+      // Review round 1: settle with `variables.personId` (the
+      // `useReopenTaskMutation` precedent), not a ref read at settle
+      // time — the ref is still updated by the caller before each
+      // `mutate()` (for `mutationKey` alone, which stays ref-based like
+      // every other task mutation here), but two confirms racing for
+      // different People must each settle their OWN Person, not
+      // whichever one the ref happened to hold when the promise resolved.
+      onSuccess: (_result, variables) => {
+        settleTaskMutation(qc, toValue(orgId), variables.personId)
+      },
+      onError: (_error, variables) => {
+        settleTaskMutation(qc, toValue(orgId), variables.personId)
+      },
+    },
+    providedQueryClient,
+  )
+}
+
 /** `POST /api/calls/{id}/dial` → 202 `{call}` (still `placing`; the dial task
  * moves it to `ringing`). 409 `invalid_call_state` on a second request. The
  * 202 body is deliberately not written to the cache: the 201 already seeded
@@ -2018,7 +2061,12 @@ export function useDeleteNoteMutation(
 // the LATER-batch `isMutating` guards and the realtime hold apply exactly
 // as they do for assign/stage/tags/notes.
 
-function settleTaskMutation(qc: QueryClient, orgId: string, personId: string) {
+/** Exported (docs/specs/SLICE_018.md §8): `OperatorPanel.vue` calls this
+ * directly when a turn response carries a `receipt` — a completion the
+ * Operator already executed, so the panel must invalidate the same three
+ * keys a `useCompleteTaskMutation` success would, without itself being one
+ * (there is no local mutate() call to hang an `onSuccess` off). */
+export function settleTaskMutation(qc: QueryClient, orgId: string, personId: string) {
   settlePersonMutation(qc, orgId, personId, [
     queryKeys.person(orgId, personId),
     queryKeys.today(orgId),

@@ -18,14 +18,20 @@ use uuid::Uuid;
 use crate::auth::AuthContext;
 use crate::domain::commands::{self, StartCall};
 use crate::domain::envelope::CommandContext;
+use crate::domain::task::{self, CreateTask, TaskKind};
 use crate::error::ApiError;
-use crate::ids::{CallId, ContactMethodId, PersonId, ProposalId, TurnId};
+use crate::ids::{CallId, ContactMethodId, PersonId, ProposalId, TaskId, TurnId, UserId};
 use crate::operator::{record_turn, SqlxToolBackend, TurnRecord};
 use crate::state::AppState;
 use crm_operator::{
-    HistoryMessage, HistoryRole, OperatorContext, ProposalView, ScreenContext, ScreenRoute,
-    ToolCallRecord, TurnInput, TurnOutcome, WirePersonCard,
+    HistoryMessage, HistoryRole, OperatorContext, ScreenContext, ScreenRoute, TaskReceiptView,
+    ToolCallRecord, TurnInput, TurnOutcome, TurnProposal, WirePersonCard,
 };
+
+/// docs/specs/SLICE_018.md §3: the client's `-new Date().getTimezoneOffset()`
+/// sign-flipped, bounds matching the D-054 §3 client rule (14h either way).
+const UTC_OFFSET_MIN: i32 = -840;
+const UTC_OFFSET_MAX: i32 = 840;
 
 /// Generous: 14,000 chars of `\uXXXX`-escaped JSON is ~170 KB.
 const MAX_BODY_BYTES: usize = 256 * 1024;
@@ -54,6 +60,13 @@ struct TurnRequest {
     history: Vec<HistoryItem>,
     #[serde(default)]
     context: Option<ContextItem>,
+    /// docs/specs/SLICE_018.md §3, §5: additive optional; absent or null =
+    /// unknown. Client-supplied, harmless data (AGENTS §5.2 stays
+    /// satisfied: it never becomes trusted identity or authorization
+    /// context, only the `create_task` due-instant composition's time
+    /// zone and the prompt's local-time line).
+    #[serde(default)]
+    utc_offset_minutes: Option<i32>,
 }
 
 #[derive(Deserialize)]
@@ -76,31 +89,92 @@ struct WireReferences {
     people: Vec<WirePersonCard>,
 }
 
-/// `proposal` on the wire (docs/specs/SLICE_006b.md §4): the drawer's
-/// card renders from this object only, never from model prose.
+/// `assignee` on a `create_task` proposal card (docs/specs/SLICE_018.md
+/// §5).
 #[derive(Serialize)]
-struct WireProposal {
-    // Typed even though `ProposalView` hands over bare `Uuid`s (the
-    // D-028 fence): the two wraps in `from_view` are the one place a
-    // transposition could slip through serialize-only code (reviewer
-    // N4 MINOR-1). Wire-identical via serde transparency.
-    id: ProposalId,
-    kind: &'static str,
-    person: WirePersonCard,
-    phone: String,
-    contact_method_id: ContactMethodId,
-    expires_at: chrono::DateTime<chrono::Utc>,
+struct WireMemberRef {
+    id: UserId,
+    display_name: String,
+}
+
+/// `proposal` on the wire (docs/specs/SLICE_006b.md §4; docs/specs/
+/// SLICE_018.md §5): a `kind`-discriminated union. The drawer's card
+/// renders from this object only, never from model prose.
+#[derive(Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+enum WireProposal {
+    StartCall {
+        // Typed even though `ProposalView` hands over bare `Uuid`s (the
+        // D-028 fence): the two wraps in `from_turn_proposal` are the one
+        // place a transposition could slip through serialize-only code
+        // (reviewer N4 MINOR-1). Wire-identical via serde transparency.
+        id: ProposalId,
+        person: WirePersonCard,
+        phone: String,
+        contact_method_id: ContactMethodId,
+        expires_at: chrono::DateTime<chrono::Utc>,
+    },
+    CreateTask {
+        id: ProposalId,
+        person: WirePersonCard,
+        title: String,
+        task_kind: String,
+        due_at: Option<chrono::DateTime<chrono::Utc>>,
+        assignee: WireMemberRef,
+        expires_at: chrono::DateTime<chrono::Utc>,
+    },
 }
 
 impl WireProposal {
-    fn from_view(view: &ProposalView) -> Self {
+    fn from_turn_proposal(proposal: &TurnProposal) -> Self {
+        match proposal {
+            TurnProposal::StartCall(view) => WireProposal::StartCall {
+                id: ProposalId::new(view.proposal_id),
+                person: view.person.to_wire(),
+                phone: view.phone.as_str().to_string(),
+                contact_method_id: ContactMethodId::new(view.contact_method_id),
+                expires_at: view.expires_at,
+            },
+            TurnProposal::CreateTask(view) => WireProposal::CreateTask {
+                id: ProposalId::new(view.proposal_id),
+                person: view.person.to_wire(),
+                title: view.title.as_str().to_string(),
+                task_kind: view.kind.clone(),
+                due_at: view.due_at,
+                assignee: WireMemberRef {
+                    id: UserId::new(view.assignee.id),
+                    display_name: view.assignee.display_name.clone(),
+                },
+                expires_at: view.expires_at,
+            },
+        }
+    }
+}
+
+/// `receipt` on the wire (docs/specs/SLICE_018.md §5): present only on 200
+/// outcomes. Deliberately narrower than `TaskReceiptView` — no
+/// `completed_by_display_name` (not part of the frozen wire shape).
+#[derive(Serialize)]
+struct WireReceipt {
+    kind: &'static str,
+    task_id: TaskId,
+    person: WirePersonCard,
+    title: String,
+    task_kind: String,
+    due_at: Option<chrono::DateTime<chrono::Utc>>,
+    completed_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+impl WireReceipt {
+    fn from_view(view: &TaskReceiptView) -> Self {
         Self {
-            id: ProposalId::new(view.proposal_id),
-            kind: "start_call",
+            kind: "complete_task",
+            task_id: TaskId::new(view.task_id),
             person: view.person.to_wire(),
-            phone: view.phone.as_str().to_string(),
-            contact_method_id: ContactMethodId::new(view.contact_method_id),
-            expires_at: view.expires_at,
+            title: view.title.as_str().to_string(),
+            task_kind: view.kind.clone(),
+            due_at: view.due_at,
+            completed_at: view.completed_at,
         }
     }
 }
@@ -112,6 +186,7 @@ struct TurnResponse {
     references: WireReferences,
     tool_calls: Vec<ToolCallRecord>,
     proposal: Option<WireProposal>,
+    receipt: Option<WireReceipt>,
     outcome: TurnOutcome,
 }
 
@@ -138,6 +213,15 @@ fn validate(req: TurnRequest) -> Result<TurnInput, ApiError> {
     if total > MAX_HISTORY_TOTAL_CHARS {
         return Err(ApiError::MalformedRequest);
     }
+    // docs/specs/SLICE_018.md §3, §5: −840..=840; absent/null already
+    // decoded to `None` above. A non-integer (a float, a string) never
+    // reaches here — it fails `Json<TurnRequest>` deserialization first,
+    // the existing `JsonRejection -> MalformedRequest` path in `post_turn`.
+    if let Some(offset) = req.utc_offset_minutes {
+        if !(UTC_OFFSET_MIN..=UTC_OFFSET_MAX).contains(&offset) {
+            return Err(ApiError::MalformedRequest);
+        }
+    }
     let screen = match req.context {
         Some(ctx) => ScreenContext {
             route: ctx.route,
@@ -160,6 +244,7 @@ fn validate(req: TurnRequest) -> Result<TurnInput, ApiError> {
             })
             .collect(),
         screen,
+        utc_offset_minutes: req.utc_offset_minutes,
     })
 }
 
@@ -176,6 +261,9 @@ async fn post_turn(
 
     let runtime = state.operator.clone().ok_or(ApiError::OperatorDisabled)?;
     let pool = state.db.clone().ok_or(ApiError::Unavailable)?;
+    // docs/specs/SLICE_018.md §2: `SqlxToolBackend` gains a `Publisher`
+    // because every task command takes one.
+    let publisher = state.publisher.clone();
 
     // Fail fast — never queue (§7). Rejections are a span event only; no
     // ledger row (§2 PII rule: they never became a turn).
@@ -225,7 +313,8 @@ async fn post_turn(
             // `slot`) already read what it needed by copy or clone.
             let _slot = slot;
             let started = Instant::now();
-            let backend = SqlxToolBackend::new(pool.clone(), runtime.proposal_ttl(), auth);
+            let backend =
+                SqlxToolBackend::new(pool.clone(), runtime.proposal_ttl(), auth, publisher);
             let output = runtime.service.run_turn(&ctx, &backend, input).await;
             let completed_at = Utc::now();
 
@@ -290,18 +379,25 @@ async fn post_turn(
                 .collect(),
         },
         tool_calls: output.tool_calls,
-        proposal: output.proposal.as_ref().map(WireProposal::from_view),
+        proposal: output
+            .proposal
+            .as_ref()
+            .map(WireProposal::from_turn_proposal),
+        receipt: output.receipt.as_ref().map(WireReceipt::from_view),
         outcome: output.outcome,
     };
     Ok(Json(response).into_response())
 }
 
 /// `POST /api/operator/proposals/{id}/confirm` (docs/specs/SLICE_006b.md
-/// §4): the human click that executes a proposed call. Deterministic and
-/// model-free — needs no operator runtime, takes no turn semaphore, works
-/// with the provider down. Claim-then-execute: the claim serializes
-/// double-confirms on the row; a claimed row is consumed forever (a crash
-/// before finalize leaves `claimed`, which reads as consumed).
+/// §4; docs/specs/SLICE_018.md §5): the human click that executes a
+/// proposed call or task. Deterministic and model-free — needs no
+/// operator runtime, takes no turn semaphore, works with the provider
+/// down. Claim-then-execute: the claim serializes double-confirms on the
+/// row; a claimed row is consumed forever (a crash before finalize leaves
+/// `claimed`, which reads as consumed). The claim's `tool` column decides
+/// which branch runs below — `start_call` needs telephony, `create_task`
+/// needs neither telephony nor the operator runtime.
 #[tracing::instrument(
     name = "operator.proposal_confirm",
     skip_all,
@@ -311,6 +407,8 @@ async fn post_turn(
         actor_id = %auth.actor_user_id,
         turn_id = tracing::field::Empty,
         call_id = tracing::field::Empty,
+        task_id = tracing::field::Empty,
+        tool = tracing::field::Empty,
         outcome = tracing::field::Empty,
     )
 )]
@@ -329,7 +427,7 @@ async fn confirm_proposal(
            SET status = 'claimed'
            WHERE id = $1 AND organization_id = $2 AND actor_user_id = $3
              AND status = 'proposed' AND expires_at > now()
-           RETURNING person_id, contact_method_id, turn_id"#,
+           RETURNING tool, person_id, contact_method_id, task_id, turn_id"#,
         proposal_id.0,
         auth.active_organization_id.0,
         auth.actor_user_id.0,
@@ -342,7 +440,7 @@ async fn confirm_proposal(
         // 2. Distinguish 404 / consumed / expired with one scoped read.
         //    Consumed beats expired: any row no longer `proposed` was used.
         let probe = sqlx::query!(
-            r#"SELECT status, call_id FROM operator_proposal
+            r#"SELECT status, call_id, task_id FROM operator_proposal
                WHERE id = $1 AND organization_id = $2 AND actor_user_id = $3"#,
             proposal_id.0,
             auth.active_organization_id.0,
@@ -358,7 +456,10 @@ async fn confirm_proposal(
             }
             Some(p) if p.status != "proposed" => {
                 span.record("outcome", "proposal_consumed");
-                Err(ApiError::ProposalConsumed { call_id: p.call_id })
+                Err(ApiError::ProposalConsumed {
+                    call_id: p.call_id,
+                    task_id: p.task_id,
+                })
             }
             Some(_) => {
                 span.record("outcome", "proposal_expired");
@@ -373,9 +474,59 @@ async fn confirm_proposal(
     // correlation-chain lookup on the error path).
     let turn_id = TurnId::new(row.turn_id);
     span.record("turn_id", tracing::field::display(turn_id));
+    span.record("tool", row.tool.as_str());
 
-    // 3. Execute the exact command the Call button uses, as the session
-    //    user, with the turn id as the correlation id (SLICE_006b §3).
+    match row.tool.as_str() {
+        "start_call" => {
+            confirm_start_call(
+                &state,
+                pool,
+                &auth,
+                &span,
+                proposal_id,
+                turn_id,
+                row.person_id,
+                row.contact_method_id,
+            )
+            .await
+        }
+        "create_task" => {
+            confirm_create_task(&state, pool, &auth, &span, proposal_id, turn_id).await
+        }
+        // Unreachable by the `operator_proposal_tool_check` CHECK (docs/
+        // specs/SLICE_018.md §4); fail closed rather than panic, the
+        // `start_call` branch's `contact_method_id` assertion precedent.
+        _ => {
+            finalize_failed(pool, proposal_id, "corrupt", None).await;
+            span.record("outcome", "corrupt");
+            Err(ApiError::Unavailable)
+        }
+    }
+}
+
+/// The `start_call` confirm branch (docs/specs/SLICE_006b.md §4): executes
+/// the exact command the Call button uses, as the session user, with the
+/// turn id as the correlation id.
+#[allow(clippy::too_many_arguments)]
+async fn confirm_start_call(
+    state: &AppState,
+    pool: &sqlx::PgPool,
+    auth: &AuthContext,
+    span: &tracing::Span,
+    proposal_id: ProposalId,
+    turn_id: TurnId,
+    person_id: uuid::Uuid,
+    contact_method_id: Option<uuid::Uuid>,
+) -> Result<Response, ApiError> {
+    let Some(contact_method_id) = contact_method_id else {
+        // Unreachable by the `operator_proposal_contact_method_id_check`
+        // CHECK (docs/specs/SLICE_018.md §4: `contact_method_id` is
+        // non-null iff `tool = 'start_call'`); fail closed to 503 rather
+        // than panic — one assertion.
+        finalize_failed(pool, proposal_id, "corrupt", None).await;
+        span.record("outcome", "corrupt");
+        return Err(ApiError::Unavailable);
+    };
     let telephony = match state.telephony.as_ref() {
         Some(t) => t,
         None => {
@@ -384,15 +535,15 @@ async fn confirm_proposal(
             return Err(ApiError::TelephonyDisabled);
         }
     };
-    let ctx = CommandContext::for_operator(&auth, turn_id);
+    let ctx = CommandContext::for_operator(auth, turn_id);
     match commands::start_call(
         pool,
         &state.publisher,
         telephony,
         &ctx,
         StartCall {
-            person_id: PersonId::new(row.person_id),
-            contact_method_id: ContactMethodId::new(row.contact_method_id),
+            person_id: PersonId::new(person_id),
+            contact_method_id: ContactMethodId::new(contact_method_id),
         },
     )
     .await
@@ -452,6 +603,101 @@ async fn confirm_proposal(
     }
 }
 
+/// The `create_task` confirm branch (docs/specs/SLICE_018.md §5): needs no
+/// telephony and no operator runtime — reads the sidecar row, calls
+/// `crm_app::domain::task::create_task` with `CommandContext::for_operator`,
+/// finalizes `confirmed` + `task_id`, and answers 201 `{"task": Task}`,
+/// byte-identical to `POST /api/people/{id}/tasks`.
+async fn confirm_create_task(
+    state: &AppState,
+    pool: &sqlx::PgPool,
+    auth: &AuthContext,
+    span: &tracing::Span,
+    proposal_id: ProposalId,
+    turn_id: TurnId,
+) -> Result<Response, ApiError> {
+    // A Person deleted between propose and confirm cascades the sidecar
+    // away (docs/specs/SLICE_018.md §5): the scoped claim still succeeded,
+    // but the sidecar read finds no row — finalize `failed` with
+    // `not_found`, answer 404.
+    // Review round 1: scoped to the confirming session's own Organization
+    // too, not the proposal id alone — belt-and-braces alongside the
+    // claim's own `(organization_id, actor_user_id)` bind above (the claim
+    // already guarantees this row's parent proposal is this Organization's,
+    // but the sidecar read names its own scope explicitly rather than
+    // relying on that alone).
+    let sidecar = sqlx::query!(
+        r#"SELECT person_id, title, kind, due_at, assignee_user_id
+           FROM operator_task_proposal WHERE proposal_id = $1 AND organization_id = $2"#,
+        proposal_id.0,
+        auth.active_organization_id.0,
+    )
+    .fetch_optional(pool)
+    .await
+    .map_err(|_| ApiError::Unavailable)?;
+
+    let Some(sidecar) = sidecar else {
+        finalize_failed(pool, proposal_id, "not_found", None).await;
+        span.record("outcome", "not_found");
+        return Err(ApiError::NotFound);
+    };
+
+    let Some(kind) = TaskKind::from_db_str(&sidecar.kind) else {
+        // Unreachable: the sidecar's own CHECK admits only the closed
+        // enum's strings. Fail closed to 503 rather than panic.
+        finalize_failed(pool, proposal_id, "corrupt", None).await;
+        span.record("outcome", "corrupt");
+        return Err(ApiError::Unavailable);
+    };
+
+    let ctx = CommandContext::for_operator(auth, turn_id);
+    match task::create_task(
+        pool,
+        &state.publisher,
+        &ctx,
+        CreateTask {
+            person_id: PersonId::new(sidecar.person_id),
+            title: sidecar.title,
+            kind,
+            due_at: sidecar.due_at,
+            assignee_user_id: Some(UserId::new(sidecar.assignee_user_id)),
+        },
+    )
+    .await
+    {
+        Ok(created) => {
+            span.record("task_id", tracing::field::display(created.id));
+            span.record("outcome", "confirmed");
+            let finalized = sqlx::query!(
+                r#"UPDATE operator_proposal
+                   SET status = 'confirmed', task_id = $2, confirmed_at = now()
+                   WHERE id = $1 AND status = 'claimed'"#,
+                proposal_id.0,
+                created.id.0,
+            )
+            .execute(pool)
+            .await;
+            if let Err(err) = finalized {
+                tracing::error!(error = %err, "proposal finalize failed after create_task");
+            }
+            Ok((
+                axum::http::StatusCode::CREATED,
+                Json(serde_json::json!({ "task": created })),
+            )
+                .into_response())
+        }
+        Err(err) => {
+            let kind = err.kind();
+            span.record("outcome", kind);
+            // Unlike `start_call`, `create_task` never leaves a partial
+            // row on failure (it is one transaction) — no correlation-chain
+            // lookup, `call_id`/`task_id` both stay NULL on the failed row.
+            finalize_failed(pool, proposal_id, kind, None).await;
+            Err(ApiError::from(err))
+        }
+    }
+}
+
 /// Best-effort `failed` finalization; the command's error is the truth.
 async fn finalize_failed(
     pool: &sqlx::PgPool,
@@ -471,5 +717,58 @@ async fn finalize_failed(
     .await;
     if let Err(err) = result {
         tracing::error!(error = %err, "proposal failed-finalize failed");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn req(utc_offset_minutes: Option<i32>) -> TurnRequest {
+        TurnRequest {
+            message: "hi".to_string(),
+            history: Vec::new(),
+            context: None,
+            utc_offset_minutes,
+        }
+    }
+
+    /// docs/specs/SLICE_018.md §3, §5: the accepted boundary values
+    /// (−840, 840) and the absent/`null` case (`None`) thread straight
+    /// through to `TurnInput.utc_offset_minutes` — never re-derived or
+    /// defaulted to a guess.
+    #[test]
+    fn utc_offset_minutes_boundaries_and_none_are_accepted_and_threaded() {
+        // `ApiError` derives no `Debug` (D-029-adjacent: never printed by
+        // accident), so `unwrap()`/`expect()` are unavailable here —
+        // matched explicitly instead.
+        let Ok(input) = validate(req(Some(840))) else {
+            panic!("840 must be accepted");
+        };
+        assert_eq!(input.utc_offset_minutes, Some(840));
+        let Ok(input) = validate(req(Some(-840))) else {
+            panic!("-840 must be accepted");
+        };
+        assert_eq!(input.utc_offset_minutes, Some(-840));
+        let Ok(input) = validate(req(None)) else {
+            panic!("None must be accepted");
+        };
+        assert_eq!(input.utc_offset_minutes, None);
+    }
+
+    /// One minute outside either bound is `malformed_request` (400) — a
+    /// non-integer never reaches `validate()` at all (it fails
+    /// `Json<TurnRequest>` deserialization first, `post_turn`'s existing
+    /// `JsonRejection -> MalformedRequest` path).
+    #[test]
+    fn utc_offset_minutes_outside_bounds_is_malformed_request() {
+        assert!(matches!(
+            validate(req(Some(841))),
+            Err(ApiError::MalformedRequest)
+        ));
+        assert!(matches!(
+            validate(req(Some(-841))),
+            Err(ApiError::MalformedRequest)
+        ));
     }
 }

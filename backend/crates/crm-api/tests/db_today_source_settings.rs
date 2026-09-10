@@ -21,6 +21,7 @@ use crm_api::domain::today::{
 };
 use crm_api::ids::{CorrelationId, OrganizationId, SavedListId, StageId, UserId};
 use crm_api::operator::SqlxToolBackend;
+use crm_api::realtime::Publisher;
 use crm_app::domain::today::test_support::{
     scope as with_today_hooks, HookFuture, TodayQueryHook, TodayQueryHooks, TodayQueryPhase,
 };
@@ -649,6 +650,7 @@ async fn operator_turn_timeout_cancels_owned_today_query_and_replaces_its_connec
         one_app_pool.clone(),
         Duration::from_secs(120),
         auth_context(organization_id, viewer_id),
+        Publisher::recording(),
     );
     let context = OperatorContext {
         actor_user_id: viewer_id,
@@ -661,6 +663,7 @@ async fn operator_turn_timeout_cancels_owned_today_query_and_replaces_its_connec
         message: "Show my Today work".to_owned(),
         history: Vec::new(),
         screen: ScreenContext::other(),
+        utc_offset_minutes: None,
     };
     let (arrived_tx, arrived_rx) = oneshot::channel();
     let hooks = TodayQueryHooks::new(Arc::new(OperatorAfterBuiltinsGate {

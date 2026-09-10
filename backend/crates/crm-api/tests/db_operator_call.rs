@@ -420,7 +420,9 @@ async fn consumed_beats_expired_and_stuck_claimed_reads_as_consumed(migrator_poo
     assert_eq!(resp.status(), StatusCode::CONFLICT);
     assert_eq!(
         crate::common::body_json(resp).await,
-        json!({"error": "proposal_consumed", "call_id": null})
+        // task_id: docs/specs/SLICE_018.md §5's declared additive
+        // widening of this body (always null for a start_call proposal).
+        json!({"error": "proposal_consumed", "call_id": null, "task_id": null})
     );
 }
 
@@ -635,7 +637,9 @@ async fn room_failure_finalizes_failed_with_the_settled_call_id(migrator_pool: P
     assert_eq!(resp.status(), StatusCode::CONFLICT);
     assert_eq!(
         crate::common::body_json(resp).await,
-        json!({"error": "proposal_consumed", "call_id": call_id.to_string()})
+        // task_id: docs/specs/SLICE_018.md §5's declared additive
+        // widening of this body (always null for a start_call proposal).
+        json!({"error": "proposal_consumed", "call_id": call_id.to_string(), "task_id": null})
     );
 }
 

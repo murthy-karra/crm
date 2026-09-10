@@ -395,6 +395,7 @@ async fn today_source_operator_and_http_share_order_positions_and_list_only_card
         app_pool.clone(),
         Duration::from_secs(120),
         auth_context(organization_id, alice_id),
+        Publisher::recording(),
     );
     let ctx = operator_context(organization_id, alice_id);
     let operator_today = backend.get_today(&ctx, 20).await.unwrap();
@@ -548,6 +549,7 @@ async fn today_source_operator_reports_bounded_absence_after_source_cap(migrator
         app_pool.clone(),
         Duration::from_secs(120),
         auth_context(organization_id, alice_id),
+        Publisher::recording(),
     );
     let ctx = operator_context(organization_id, alice_id);
     let today = backend.get_today(&ctx, 200).await.unwrap();
@@ -647,6 +649,7 @@ async fn today_source_operator_exposes_partial_empty_metadata_and_wraps_issue_na
         app_pool.clone(),
         Duration::from_secs(120),
         auth_context(organization_id, alice_id),
+        Publisher::recording(),
     );
     let ctx = operator_context(organization_id, alice_id);
     let today = backend.get_today(&ctx, 20).await.unwrap();
@@ -871,6 +874,7 @@ async fn operator_parity_under_a_customized_feed_a(migrator_pool: PgPool) {
         app_pool.clone(),
         Duration::from_secs(120),
         auth_context(organization_id, admin_id),
+        Publisher::recording(),
     );
     let ctx = operator_context(organization_id, admin_id);
 
@@ -956,6 +960,7 @@ async fn operator_parity_under_a_disabled_feed(migrator_pool: PgPool) {
         app_pool.clone(),
         Duration::from_secs(120),
         auth_context(organization_id, admin_id),
+        Publisher::recording(),
     );
     let ctx = operator_context(organization_id, admin_id);
 
@@ -1068,6 +1073,7 @@ async fn operator_parity_under_a_fallback_feed(migrator_pool: PgPool) {
         app_pool.clone(),
         Duration::from_secs(120),
         auth_context(organization_id, admin_id),
+        Publisher::recording(),
     );
     let ctx = operator_context(organization_id, admin_id);
 

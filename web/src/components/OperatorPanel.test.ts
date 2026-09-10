@@ -7,6 +7,7 @@ import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, apiFetch } from '../api/client'
+import { queryKeys } from '../api/queries'
 import type {
   OperatorCreateTaskProposal,
   OperatorReceipt,
@@ -106,7 +107,7 @@ async function mountPanel(
     global: { plugins: [router, [VueQueryPlugin, { queryClient }]] },
     attachTo: document.body,
   })
-  return { wrapper, router, host: host!, identityKey }
+  return { wrapper, router, host: host!, identityKey, queryClient }
 }
 
 /** The structural surface both harnesses (provideCallHost wrapper and the
@@ -135,6 +136,14 @@ function deferred<T>() {
   return { promise, resolve, reject }
 }
 
+/** `settleTaskMutation`/`settlePersonMutation` defer their invalidate
+ * decision past a macrotask (`setTimeout(fn, 0)`, docs/specs/SLICE_018.md
+ * §8, review round 1) — `flushPromises()` alone only drains microtasks, so
+ * a test asserting post-settle invalidation needs a real timer tick too. */
+function waitForMacrotask() {
+  return new Promise<void>((resolve) => setTimeout(resolve, 0))
+}
+
 const PRIVATE_SENTINEL = 'PRIVATE LIST NAME — ALICE ONLY'
 
 function privateTurn(): OperatorTurnResponse {
@@ -151,10 +160,16 @@ function privateTurn(): OperatorTurnResponse {
 
 beforeEach(() => {
   apiFetchMock.mockReset()
+  // docs/specs/SLICE_018.md §3: pinned so `utc_offset_minutes` assertions
+  // check a real sign-flip, not the tautological "recompute the same
+  // expression the component itself might use" the un-mocked value would
+  // give. -330 (UTC+5:30, e.g. IST) -> the request carries 330.
+  vi.spyOn(Date.prototype, 'getTimezoneOffset').mockReturnValue(-330)
 })
 
 afterEach(() => {
   document.body.innerHTML = ''
+  vi.restoreAllMocks()
 })
 
 describe('OperatorPanel', () => {
@@ -196,7 +211,7 @@ describe('OperatorPanel', () => {
       message: 'Who next?',
       history: [],
       context: { route: 'today' },
-      utc_offset_minutes: -new Date().getTimezoneOffset(),
+      utc_offset_minutes: 330,
     })
 
     resolve(response())
@@ -353,7 +368,7 @@ describe('OperatorPanel identity boundary (SLICE_011c §6)', () => {
       message: 'What belongs to this session?',
       history: [],
       context: { route: 'today' },
-      utc_offset_minutes: -new Date().getTimezoneOffset(),
+      utc_offset_minutes: 330,
     })
     expect(wrapper.text()).not.toContain(PRIVATE_SENTINEL)
   })
@@ -726,10 +741,14 @@ describe('OperatorPanel — complete_task receipt and Undo (SLICE_018 §8)', () 
     expect(wrapper.get('[data-testid="operator-receipt-undo"]').attributes('disabled')).toBeDefined()
   })
 
-  it('Undo: a network error stays retryable (button clickable again)', async () => {
+  it('Undo: a network error stays retryable, and a second click after the error actually retries', async () => {
+    let reopenCalls = 0
+    let fail = true
     stubTurn(response({ receipt: receipt() }), (path, init) => {
       if (path === REOPEN_PATH && init?.method === 'POST') {
-        return Promise.reject(new ApiError(0, 'network_error'))
+        reopenCalls += 1
+        if (fail) return Promise.reject(new ApiError(0, 'network_error'))
+        return Promise.resolve({ task: { id: TASK_ID }, changed: true })
       }
       return undefined
     })
@@ -742,6 +761,44 @@ describe('OperatorPanel — complete_task receipt and Undo (SLICE_018 §8)', () 
       'Could not reach the server. Check your connection and try again.',
     )
     expect(wrapper.get('[data-testid="operator-receipt-undo"]').attributes('disabled')).toBeUndefined()
+    expect(reopenCalls).toBe(1)
+
+    // The button is genuinely retryable, not just visually so: flip the
+    // stub to succeed and click again.
+    fail = false
+    await wrapper.get('[data-testid="operator-receipt-undo"]').trigger('click')
+    await flushPromises()
+    expect(reopenCalls).toBe(2)
+    expect(wrapper.get('[data-testid="operator-receipt-message"]').text()).toBe('Reopened')
+    expect(wrapper.get('[data-testid="operator-receipt-undo"]').attributes('disabled')).toBeDefined()
+  })
+
+  // Review round 1 (W1): Undo state is keyed by the TRANSCRIPT ENTRY's id,
+  // not `task_id` — two receipts for the same task (e.g. re-completed
+  // after an Undo, or just two turns reporting the same task in one
+  // session) must never share Undo state.
+  it('keys receipt Undo state by transcript entry, not task_id: undoing the first receipt leaves a second receipt for the same task retryable', async () => {
+    stubTurn(response({ receipt: receipt() }), (path, init) => {
+      if (path === REOPEN_PATH && init?.method === 'POST') {
+        return Promise.resolve({ task: { id: TASK_ID }, changed: true })
+      }
+      return undefined
+    })
+    const { wrapper } = await mountPanel()
+    await sendTurn(wrapper)
+    await sendTurn(wrapper)
+
+    const cards = wrapper.findAll('[data-testid="operator-receipt"]')
+    expect(cards).toHaveLength(2)
+
+    await cards[0]!.get('[data-testid="operator-receipt-undo"]').trigger('click')
+    await flushPromises()
+    expect(cards[0]!.get('[data-testid="operator-receipt-message"]').text()).toBe('Reopened')
+    expect(cards[0]!.get('[data-testid="operator-receipt-undo"]').attributes('disabled')).toBeDefined()
+
+    const secondUndo = cards[1]!.get('[data-testid="operator-receipt-undo"]')
+    expect(secondUndo.attributes('disabled')).toBeUndefined()
+    expect(cards[1]!.find('[data-testid="operator-receipt-message"]').exists()).toBe(false)
   })
 })
 
@@ -843,9 +900,14 @@ describe('OperatorPanel — create_task proposal card (SLICE_018 §8)', () => {
     expect(wrapper.get('[data-testid="operator-task-proposal-confirm"]').attributes('disabled')).toBeDefined()
   })
 
-  it('a task error (invalid_assignee) shows the existing TASK_ERROR_COPY and stays retryable', async () => {
+  // CONTRACT (docs/specs/SLICE_018.md §5, §10): a pass-through task error
+  // from confirm means the backend already finalized the proposal row
+  // `failed` — never retryable, regardless of which task error it is.
+  it('a pass-through task error (invalid_assignee, 422) finalizes with the TASK_ERROR_COPY, and a second click posts nothing more', async () => {
+    let confirmCalls = 0
     stubTurn(response({ proposal: taskProposal() }), (path, init) => {
       if (path === CONFIRM_TASK_PATH && init?.method === 'POST') {
+        confirmCalls += 1
         return Promise.reject(new ApiError(422, 'invalid_assignee'))
       }
       return undefined
@@ -855,8 +917,64 @@ describe('OperatorPanel — create_task proposal card (SLICE_018 §8)', () => {
 
     await wrapper.get('[data-testid="operator-task-proposal-confirm"]').trigger('click')
     await flushPromises()
-    expect(wrapper.get('[data-testid="operator-task-proposal-message"]').text()).toBe('That member is not active')
-    expect(wrapper.get('[data-testid="operator-task-proposal-confirm"]').attributes('disabled')).toBeUndefined()
+    expect(wrapper.get('[data-testid="operator-task-proposal-message"]').text()).toBe(
+      'That member is not active — ask again.',
+    )
+    expect(wrapper.get('[data-testid="operator-task-proposal-confirm"]').attributes('disabled')).toBeDefined()
+    expect(confirmCalls).toBe(1)
+
+    // Disabled means unclickable in the real DOM, but drive the handler
+    // directly to prove the guard itself (not just the disabled attribute)
+    // refuses a second attempt.
+    await wrapper.get('[data-testid="operator-task-proposal-confirm"]').trigger('click')
+    await flushPromises()
+    expect(confirmCalls).toBe(1)
+  })
+
+  it('409 proposal_consumed with a null task_id (never actually created) reads as "no longer be used", not "already added"', async () => {
+    stubTurn(response({ proposal: taskProposal() }), (path, init) => {
+      if (path === CONFIRM_TASK_PATH && init?.method === 'POST') {
+        return Promise.reject(new ApiError(409, 'proposal_consumed', { task_id: null }))
+      }
+      return undefined
+    })
+    const { wrapper } = await mountPanel()
+    await sendTurn(wrapper)
+
+    await wrapper.get('[data-testid="operator-task-proposal-confirm"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="operator-task-proposal-message"]').text()).toBe(
+      'This suggestion can no longer be used — ask again.',
+    )
+    expect(wrapper.get('[data-testid="operator-task-proposal-confirm"]').attributes('disabled')).toBeDefined()
+  })
+})
+
+// ---- Review round 1 (W6): titles are untrusted text, never markup -------
+
+describe('OperatorPanel — receipt and create_task titles render as literal text (SLICE_018 §8)', () => {
+  const HOSTILE_TITLE = 'Call <a href="https://evil.example">now</a>'
+
+  it('a receipt title with markup renders as literal text, never a link', async () => {
+    stubTurn(response({ receipt: receipt({ title: HOSTILE_TITLE }) }))
+    const { wrapper } = await mountPanel()
+    await sendTurn(wrapper)
+
+    const card = wrapper.get('[data-testid="operator-receipt"]')
+    expect(card.text()).toContain(HOSTILE_TITLE)
+    expect(card.find('a').exists()).toBe(false)
+    expect(card.element.querySelector('a')).toBeNull()
+  })
+
+  it('a create_task proposal title with markup renders as literal text, never a link', async () => {
+    stubTurn(response({ proposal: taskProposal(120_000, { title: HOSTILE_TITLE }) }))
+    const { wrapper } = await mountPanel()
+    await sendTurn(wrapper)
+
+    const card = wrapper.get('[data-testid="operator-task-proposal"]')
+    expect(card.text()).toContain(HOSTILE_TITLE)
+    expect(card.find('a').exists()).toBe(false)
+    expect(card.element.querySelector('a')).toBeNull()
   })
 })
 
@@ -884,5 +1002,140 @@ describe('OperatorPanel — receipts clear with proposals on identity change (SL
     await flushPromises()
     expect(wrapper.find('[data-testid="operator-task-proposal"]').exists()).toBe(false)
     expect(wrapper.text()).not.toContain(PRIVATE_SENTINEL)
+  })
+})
+
+// ---- Review round 1 (W4): the same three keys settleTaskMutation always
+// invalidates (Person detail, Today, Tasks panel) — Undo's own invalidate
+// only after the reopen POST resolves, never before. -----------------------
+
+describe('OperatorPanel — task-mutation cache invalidation (SLICE_018 §8)', () => {
+  const EXPECTED_KEYS = [
+    queryKeys.person(ORG_ID, PERSON_ID),
+    queryKeys.today(ORG_ID),
+    queryKeys.tasks(ORG_ID),
+  ]
+
+  it('a turn response carrying a receipt invalidates Person/Today/Tasks', async () => {
+    stubTurn(response({ receipt: receipt() }))
+    const { wrapper, queryClient } = await mountPanel()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+    await sendTurn(wrapper)
+    await waitForMacrotask()
+
+    for (const key of EXPECTED_KEYS) {
+      expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ queryKey: key }))
+    }
+  })
+
+  it('Undo invalidates only after the reopen POST resolves, and the POST precedes the invalidate', async () => {
+    const gate = deferred<unknown>()
+    stubTurn(response({ receipt: receipt() }), (path, init) => {
+      if (path === REOPEN_PATH && init?.method === 'POST') return gate.promise
+      return undefined
+    })
+    const { wrapper, queryClient } = await mountPanel()
+    await sendTurn(wrapper)
+    // The turn response itself carries a receipt, which already settles
+    // (invalidates) once on arrival — the spy starts only after that
+    // settles, so it observes Undo's OWN invalidate in isolation.
+    await waitForMacrotask()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+    await wrapper.get('[data-testid="operator-receipt-undo"]').trigger('click')
+    await flushPromises()
+    await waitForMacrotask()
+    expect(invalidateSpy).not.toHaveBeenCalled()
+
+    gate.resolve({ task: { id: TASK_ID }, changed: true })
+    await flushPromises()
+    await waitForMacrotask()
+
+    for (const key of EXPECTED_KEYS) {
+      expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ queryKey: key }))
+    }
+    const reopenCallIndex = apiFetchMock.mock.calls.findIndex(
+      ([path, init]) => path === REOPEN_PATH && (init as RequestInit | undefined)?.method === 'POST',
+    )
+    expect(reopenCallIndex).toBeGreaterThan(-1)
+    const reopenOrder = apiFetchMock.mock.invocationCallOrder[reopenCallIndex]!
+    const firstInvalidateOrder = invalidateSpy.mock.invocationCallOrder[0]!
+    expect(reopenOrder).toBeLessThan(firstInvalidateOrder)
+  })
+
+  it('a 201 create_task confirm invalidates Person/Today/Tasks', async () => {
+    stubTurn(response({ proposal: taskProposal() }), (path, init) => {
+      if (path === CONFIRM_TASK_PATH && init?.method === 'POST') {
+        return Promise.resolve({ task: { id: 'new-task-1', person_id: PERSON_ID, title: 'Call Grace' } })
+      }
+      return undefined
+    })
+    const { wrapper, queryClient } = await mountPanel()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    await sendTurn(wrapper)
+
+    await wrapper.get('[data-testid="operator-task-proposal-confirm"]').trigger('click')
+    await flushPromises()
+    await waitForMacrotask()
+
+    for (const key of EXPECTED_KEYS) {
+      expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ queryKey: key }))
+    }
+  })
+})
+
+// ---- Review round 1 (W7): a second click while a mutation is in flight
+// posts nothing more — the in-component guard, not just the disabled
+// attribute (SLICE_018 §8, the same "drive the handler directly" style as
+// the existing invalid_assignee double-click test above). --------------
+
+describe('OperatorPanel — double-click guards (SLICE_018 §8)', () => {
+  it('double-clicking Undo while the reopen is pending posts exactly one reopen request', async () => {
+    const gate = deferred<unknown>()
+    stubTurn(response({ receipt: receipt() }), (path, init) => {
+      if (path === REOPEN_PATH && init?.method === 'POST') return gate.promise
+      return undefined
+    })
+    const { wrapper } = await mountPanel()
+    await sendTurn(wrapper)
+
+    const undo = wrapper.get('[data-testid="operator-receipt-undo"]')
+    await undo.trigger('click')
+    await undo.trigger('click')
+    await flushPromises()
+
+    const reopenCalls = apiFetchMock.mock.calls.filter(
+      ([path, init]) => path === REOPEN_PATH && (init as RequestInit | undefined)?.method === 'POST',
+    )
+    expect(reopenCalls).toHaveLength(1)
+
+    gate.resolve({ task: { id: TASK_ID }, changed: true })
+    await flushPromises()
+    expect(wrapper.get('[data-testid="operator-receipt-message"]').text()).toBe('Reopened')
+  })
+
+  it('double-clicking Confirm on a create_task proposal while pending posts exactly one confirm request', async () => {
+    const gate = deferred<unknown>()
+    stubTurn(response({ proposal: taskProposal() }), (path, init) => {
+      if (path === CONFIRM_TASK_PATH && init?.method === 'POST') return gate.promise
+      return undefined
+    })
+    const { wrapper } = await mountPanel()
+    await sendTurn(wrapper)
+
+    const confirm = wrapper.get('[data-testid="operator-task-proposal-confirm"]')
+    await confirm.trigger('click')
+    await confirm.trigger('click')
+    await flushPromises()
+
+    const confirmCalls = apiFetchMock.mock.calls.filter(
+      ([path, init]) => path === CONFIRM_TASK_PATH && (init as RequestInit | undefined)?.method === 'POST',
+    )
+    expect(confirmCalls).toHaveLength(1)
+
+    gate.resolve({ task: { id: 'new-task-1', person_id: PERSON_ID, title: 'Call Grace' } })
+    await flushPromises()
+    expect(wrapper.get('[data-testid="operator-task-proposal-message"]').text()).toBe('Task added.')
   })
 })

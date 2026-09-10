@@ -26,8 +26,8 @@ rebuilt and relaunched (preview pid 84325, `5173` 200). Worktree
 `../crm-worktrees/later-2` and the branch deleted. LATER items carried in
 the record (unreachable focus fallback without a ring, fractional-seconds
 case, wildcard task-kind arm, two-entry preview fixture, a pre-existing
-task-edit Vitest flake). **`main` is ahead of `origin/main` by six
-commits; push needs the user's word.** No slice active.
+task-edit Vitest flake). **`main` is ahead of `origin/main` by 18 commits (six on the first-parent
+line plus the twelve merged batch commits); push needs the user's word.** No slice active.
 
 Previously: **SLICE 017 (INBOUND MAIL SIZE CAP) — MERGED, PUSHED, DEV API UPDATED;
 WORKER DEPLOY AND WALKTHROUGH PENDING (2026-09-09).** D-056: the relay's
@@ -1000,9 +1000,9 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. **Push `main`** (six commits ahead of `origin/main`: the Slice 017
-   records, the batch gate record, the merge and this record) on the user's
-   word.
+1. **Push `main`** (18 commits ahead of `origin/main`: the Slice 017
+   records, the batch gate record, the merge with its twelve batch commits,
+   and the two state records) on the user's word.
 2. **Slice 017 walkthrough (spec §6), deferred by the user:** send a small
    real message and a 15–20 MB attachment to a capture address and the
    intake address; the coordinator reads the dev API log (`byte_len`,
@@ -1026,7 +1026,7 @@ and now lives only in git history.
 
 - **LATER batch 2026-09-10:** merged to local `main` at `753d685` and the
   runtime updated with the user's approval on 2026-09-10. Pending: the push
-  of `main` (six commits ahead).
+  of `main` (18 commits ahead, six on the first-parent line).
 - **Slice 017:** complete apart from the deferred live sends (the user's
   action, no approval needed). Its record commits go with the next push.
 - Deployment is not authorized.

@@ -832,6 +832,72 @@ async fn retained_normal_item_with_overdue_task_is_raised_and_ordered_after_fres
     );
 }
 
+/// LATER batch (2026-09-10) item 7b (016b LATER, curated):
+/// docs/specs/SLICE_016.md §5's documented tie-break — task-only items
+/// order by `due_at ASC, id ASC`, where `id` is the PERSON id (the
+/// call-only precedent) — proven with THREE task-only Persons sharing the
+/// exact same overdue `due_at` (high tier), not just the two-item cases
+/// elsewhere in this file. `person_id`s are only known after insertion
+/// (server-generated `gen_random_uuid()`), so the expected order is
+/// derived by sorting the actual ids, then compared against the query's
+/// actual item order — the query itself is the only source of truth for
+/// "is this ordering deterministic and does it match the documented rule".
+#[sqlx::test]
+#[ignore]
+async fn task_only_items_sharing_due_at_are_ordered_by_ascending_person_id(migrator_pool: PgPool) {
+    let f = fixture(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let now = Utc::now();
+    let due = now - ChronoDuration::minutes(30);
+
+    let mut people = Vec::with_capacity(3);
+    for _ in 0..3 {
+        let person_id = insert_bare_person(&app_pool, f.org_id, f.stage_id).await;
+        create_task_for(
+            &app_pool,
+            f.org_id,
+            f.admin_id,
+            f.admin_id,
+            person_id,
+            TaskKind::FollowUp,
+            Some(due),
+        )
+        .await;
+        people.push(person_id);
+    }
+
+    let list = today::query_at(
+        &mut app_pool.acquire().await.unwrap(),
+        &visibility_scope(f.org_id),
+        UserId::new(f.admin_id),
+        now,
+    )
+    .await
+    .unwrap();
+
+    let mut actual_order: Vec<(usize, Uuid)> = people
+        .iter()
+        .map(|id| {
+            let index = list
+                .items
+                .iter()
+                .position(|item| item.person.id.as_uuid() == *id)
+                .expect("every task-only Person must be on the list");
+            (index, *id)
+        })
+        .collect();
+    actual_order.sort_by_key(|(index, _)| *index);
+    let actual_ids: Vec<Uuid> = actual_order.into_iter().map(|(_, id)| id).collect();
+
+    let mut expected_ids = people.clone();
+    expected_ids.sort();
+
+    assert_eq!(
+        actual_ids, expected_ids,
+        "three task-only items sharing due_at must break the tie on ascending Person id"
+    );
+}
+
 #[sqlx::test]
 #[ignore]
 async fn low_outcome_needed_item_is_never_raised_by_an_overdue_task(migrator_pool: PgPool) {
@@ -1090,6 +1156,69 @@ async fn task_only_prefix_admits_up_to_k_and_sets_truncated_on_the_extra_row(
     assert!(
         find_item(&list.items, p_later).is_none(),
         "the extra row is never admitted"
+    );
+}
+
+/// LATER batch (2026-09-10) item 7a (016b LATER, curated): a dedicated
+/// cap-boundary test proving task-only items count AGAINST the 200-item
+/// cap rather than being admitted on top of it — 199 fresh person-state
+/// candidates plus exactly ONE task-only row (K = 1, exactly satisfied)
+/// fills the list to precisely 200 with `truncated` false, the positive
+/// complement to
+/// `task_only_prefix_admits_up_to_k_and_sets_truncated_on_the_extra_row`
+/// above (199 + 2, K = 1, `truncated` true).
+#[sqlx::test]
+#[ignore]
+async fn task_only_item_exactly_fills_the_cap_without_truncation(migrator_pool: PgPool) {
+    let f = fixture(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let now = Utc::now();
+
+    // 199 fresh person-state candidates -> K = 1 for the task-only prefix.
+    insert_n_fresh_inquiry_people(
+        &app_pool,
+        f.org_id,
+        f.stage_id,
+        f.admin_id,
+        199,
+        now - ChronoDuration::hours(1),
+    )
+    .await;
+
+    // Exactly one task-only Person: K = 1 admits it with room to spare.
+    let p_task_only = insert_bare_person(&app_pool, f.org_id, f.stage_id).await;
+    create_task_for(
+        &app_pool,
+        f.org_id,
+        f.admin_id,
+        f.admin_id,
+        p_task_only,
+        TaskKind::FollowUp,
+        Some(now + ChronoDuration::minutes(1)),
+    )
+    .await;
+
+    let list = today::query_at(
+        &mut app_pool.acquire().await.unwrap(),
+        &visibility_scope(f.org_id),
+        UserId::new(f.admin_id),
+        now,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        list.items.len(),
+        200,
+        "199 person-state items plus the one task-only item is exactly 200"
+    );
+    assert!(
+        !list.truncated,
+        "a task-only item that exactly fits K must not set truncated"
+    );
+    assert!(
+        find_item(&list.items, p_task_only).is_some(),
+        "the task-only item counts toward, and fits within, the cap"
     );
 }
 

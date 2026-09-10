@@ -144,11 +144,38 @@ impl TaskTitle {
         if count == 0 || count > 500 {
             return Err(TaskError::MalformedRequest);
         }
-        if trimmed.chars().any(|c| c.is_control()) {
+        // LATER batch (2026-09-10) item 2: U+2028 (LINE SEPARATOR) and
+        // U+2029 (PARAGRAPH SEPARATOR) are line breaks like `\n`/`\r` but
+        // are not `is_control()` (Unicode category Zl/Zp, not Cc) — a
+        // task title is a single line, so both are rejected exactly like
+        // every control character already is.
+        if trimmed
+            .chars()
+            .any(|c| c.is_control() || c == '\u{2028}' || c == '\u{2029}')
+        {
+            return Err(TaskError::MalformedRequest);
+        }
+        // A title made up entirely of default-ignorable code points
+        // (zero-width space/non-joiner/joiner, word joiner, BOM) is
+        // visually empty — reject it the same way the `count == 0`
+        // branch above rejects a literally empty title. The DB CHECK
+        // (`char_length(title) BETWEEN 1 AND 500`) is unaffected: this
+        // validator only narrows what it already accepts, never widens
+        // it, so no stored title becomes invalid under the CHECK that
+        // was not already invalid at the command layer.
+        if trimmed.chars().all(is_default_ignorable) {
             return Err(TaskError::MalformedRequest);
         }
         Ok(trimmed.to_string())
     }
+}
+
+/// U+200B–U+200D (zero-width space, non-joiner, joiner), U+2060 (word
+/// joiner) and U+FEFF (zero-width no-break space / byte-order mark): the
+/// default-ignorable set `TaskTitle::parse` treats as visually empty
+/// (LATER batch 2026-09-10, item 2).
+fn is_default_ignorable(c: char) -> bool {
+    matches!(c, '\u{200B}'..='\u{200D}' | '\u{2060}' | '\u{FEFF}')
 }
 
 #[cfg(test)]
@@ -221,6 +248,41 @@ mod tests {
             TaskTitle::parse("bad\rreturn"),
             Err(TaskError::MalformedRequest)
         ));
+    }
+
+    // LATER batch (2026-09-10) item 2.
+    #[test]
+    fn line_and_paragraph_separators_are_rejected_like_a_control_character() {
+        assert!(matches!(
+            TaskTitle::parse("line one\u{2028}line two"),
+            Err(TaskError::MalformedRequest)
+        ));
+        assert!(matches!(
+            TaskTitle::parse("para one\u{2029}para two"),
+            Err(TaskError::MalformedRequest)
+        ));
+    }
+
+    #[test]
+    fn a_title_of_only_default_ignorable_code_points_is_rejected_as_empty() {
+        assert!(matches!(
+            TaskTitle::parse("\u{200B}"),
+            Err(TaskError::MalformedRequest)
+        ));
+        assert!(matches!(
+            TaskTitle::parse("\u{FEFF}"),
+            Err(TaskError::MalformedRequest)
+        ));
+        assert!(matches!(
+            TaskTitle::parse("\u{200B}\u{200C}\u{200D}\u{2060}\u{FEFF}"),
+            Err(TaskError::MalformedRequest)
+        ));
+        // A default-ignorable code point alongside real content is fine —
+        // only an ENTIRELY default-ignorable title is treated as empty.
+        assert_eq!(
+            TaskTitle::parse("Call\u{200B}back").unwrap(),
+            "Call\u{200B}back"
+        );
     }
 
     #[test]

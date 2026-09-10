@@ -336,7 +336,7 @@ enum ExecError {
 enum ToolEffect {
     None,
     Proposal(TurnProposal),
-    Receipt(TaskReceiptView),
+    Receipt(Box<TaskReceiptView>),
 }
 
 fn tool_error_json(code: &str, detail: &str) -> String {
@@ -822,7 +822,7 @@ impl OperatorService {
                 match effect {
                     ToolEffect::None => {}
                     ToolEffect::Proposal(p) => state.proposal = Some(p),
-                    ToolEffect::Receipt(r) => state.receipt = Some(r),
+                    ToolEffect::Receipt(r) => state.receipt = Some(*r),
                 }
                 state.refs.add(bucket, cards);
                 state.messages.push(ChatMessage::Tool {
@@ -1056,7 +1056,7 @@ async fn dispatch(
                         value,
                         RefBucket::Primary,
                         vec![card],
-                        ToolEffect::Receipt(view),
+                        ToolEffect::Receipt(Box::new(view)),
                     ))
                 }
                 CompleteTaskOutcome::AlreadyCompleted(boxed) => {

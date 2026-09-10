@@ -1,13 +1,24 @@
 # Project State
 
-Last updated: 2026-09-10 (the LATER batch of 2026-09-10 merged at
-`753d685` with the user's approval, dev runtime updated, worktree and
-branch deleted, pushed to `origin/main` at `ae9d154`; the Slice 017 live
-large-mail sends remain deferred by the user).
+Last updated: 2026-09-10 (D-057 accepted; Slice 018, the Operator
+`create_task` / `complete_task` rung, in planning; the LATER batch of
+2026-09-10 merged and pushed; the Slice 017 live large-mail sends remain
+deferred by the user).
 
 ## Current phase
 
-**LATER BATCH (2026-09-10) — COMPLETE AND MERGED TO LOCAL MAIN** at
+**SLICE 018 (OPERATOR `create_task` / `complete_task`) — PLANNING
+(2026-09-10).** The user picked this rung from the queue. **D-057 accepted
+(user, 2026-09-10):** `complete_task` executes at once with a receipt and
+Undo, the first AGENTS §5.4 "low-risk and reversible" action;
+`create_task` proposes then confirms in the SLICE_006b shape; D-053
+authorization unchanged; the mechanism is a planning default (no
+`crm-operator -> crm-app` edge, seam methods, `operator_proposal.tool`
+widened) that the planner confirms. Planner analysis dispatched; next the
+independent review of the plan, then the specification `SLICE_018.md` and
+the lane brief, then the implementation gate.
+
+Previously: **LATER BATCH (2026-09-10) — COMPLETE AND MERGED TO LOCAL MAIN** at
 `753d685` (2026-09-10, with the user's approval; not pushed, not deployed).
 Source `chore/later-batch-2026-09-10` at `bb58e35` (eight item commits,
 three round-1 fix commits and the
@@ -1000,20 +1011,21 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. **Slice 017 walkthrough (spec §6), deferred by the user:** send a small
+1. **Slice 018 planning:** reconcile the planner's analysis, run the
+   reviewer on it, draft `docs/specs/SLICE_018.md` and the brief, then the
+   implementation gate.
+2. **Slice 017 walkthrough (spec §6), deferred by the user:** send a small
    real message and a 15–20 MB attachment to a capture address and the
    intake address; the coordinator reads the dev API log (`byte_len`,
    latency) and the Workers dashboard (invocation outcome, CPU time) and
    appends both to `SLICE_017_VERIFICATION.md`. The relay is already
    deployed; nothing blocks the sends.
-2. **Then the next real slice needs the user's pick** (recommended order):
-   the Operator `create_task` / `complete_task` rung (S; D-054 §3; needs a
-   decision on whether `complete_task` is the first AGENTS §5.4
-   execute-with-receipt action and on the D-034 mechanism); custom fields
+3. **After 018, the next slice needs the user's pick** (recommended
+   order): custom fields
    (the last CRM-core model and the last FUB destination besides deals);
    resuming the parked FUB migration ladder (`docs/plans/SLICE_010_LADDER.md`;
    its three parked decisions are asked at resume).
-3. Standing: the Telnyx SIP password rotation (user action); O-012/O-013
+4. Standing: the Telnyx SIP password rotation (user action); O-012/O-013
    before any external customer holds real consumer data; the O-015
    questions 2 and 3 (object storage, retention) at the recordings slice;
    deployment is a separate authorization; the 009 walkthrough steps 3–5
@@ -1021,6 +1033,8 @@ and now lives only in git history.
 
 ## Approval currently required
 
+- **Slice 018:** none yet; the implementation gate follows the spec and
+  brief.
 - **LATER batch 2026-09-10:** merged to local `main` at `753d685` and the
   runtime updated and `main` pushed with the user's approval on 2026-09-10.
   Nothing pending.

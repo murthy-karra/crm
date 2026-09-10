@@ -9,7 +9,17 @@ deferred by the user).
 
 ## Current phase
 
-**SLICE 018 (OPERATOR `create_task` / `complete_task`) — COMPLETE AND
+**SLICE 019 (CUSTOM FIELDS) — PLANNING (2026-09-10).** The user picked
+custom fields (the last unbuilt CRM-core model, thesis §7 and §11; the
+last FUB destination besides deals, SLICE_010_LADDER 010f+; the reserved
+dynamic-SQL fork point in the filter ladder). No accepted decision covers
+them yet. Planner analysis dispatched; next the decisions (type set,
+timeline facts or CRUD, filter clauses in v1, who edits), the independent
+review of the plan, `docs/specs/SLICE_019.md` and the brief, then the
+implementation gate. `main` is still ahead of `origin/main` (the Slice
+018 merge and records); push on the user's word.
+
+Previously: **SLICE 018 (OPERATOR `create_task` / `complete_task`) — COMPLETE AND
 MERGED TO LOCAL MAIN** at `d74c493` (2026-09-10, with the user's approval;
 not pushed, not deployed). Source `slice-018-operator-tasks` at `6910665`
 (thirteen lane commits, the walkthrough fix `20131e9`, the
@@ -1048,20 +1058,22 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. **Push `main`** on the user's word (the Slice 018 merge and records
+1. **Slice 019 planning:** reconcile the planner's analysis, ask the
+   user's decisions one at a time, run the reviewer on the plan, draft
+   `docs/specs/SLICE_019.md` and the brief, then the implementation gate.
+2. **Push `main`** on the user's word (the Slice 018 merge and records
    plus the spec wording commit).
-2. **Slice 017 walkthrough (spec §6), deferred by the user:** send a small
+3. **Slice 017 walkthrough (spec §6), deferred by the user:** send a small
    real message and a 15–20 MB attachment to a capture address and the
    intake address; the coordinator reads the dev API log (`byte_len`,
    latency) and the Workers dashboard (invocation outcome, CPU time) and
    appends both to `SLICE_017_VERIFICATION.md`. The relay is already
    deployed; nothing blocks the sends.
-3. **The next slice needs the user's pick** (recommended order): custom
-   fields
-   (the last CRM-core model and the last FUB destination besides deals);
-   resuming the parked FUB migration ladder (`docs/plans/SLICE_010_LADDER.md`;
-   its three parked decisions are asked at resume).
-4. Standing: the Telnyx SIP password rotation (user action); O-012/O-013
+4. **After 019, the next slice needs the user's pick** (recommended:
+   resuming the parked FUB migration ladder,
+   `docs/plans/SLICE_010_LADDER.md`; its three parked decisions are asked
+   at resume).
+5. Standing: the Telnyx SIP password rotation (user action); O-012/O-013
    before any external customer holds real consumer data; the O-015
    questions 2 and 3 (object storage, retention) at the recordings slice;
    deployment is a separate authorization; the 009 walkthrough steps 3–5

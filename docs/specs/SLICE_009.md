@@ -85,7 +85,9 @@ the worker uses envelope RCPT TO, which is why BCC and reply-all
 both deliver; multi-RCPT double-delivery is absorbed by dedup, §4).
 Known limitation (stated): the 2 MiB endpoint cap bounces
 attachment-heavy mail — an honest agent-visible bounce (007g §3),
-never silent loss.
+never silent loss. *Closed 2026-09-09 by D-056 /
+[SLICE_017](SLICE_017.md): the cap is now Cloudflare's own 25 MiB inbound
+ceiling, so no message Cloudflare accepts is bounced by us for size.*
 
 Token hygiene: `CaptureToken` newtype in the `IntakeToken` mold (no
 Display/PartialEq, redacted Debug, constant-time `verify`). Lookup:

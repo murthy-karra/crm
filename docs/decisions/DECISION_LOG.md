@@ -1503,6 +1503,11 @@ exports from the same masters.
 
 ### O-015 — Correspondence/payload blob size, storage location, and retention (OPEN)
 
+*Question 1 resolved by D-056 (2026-09-09): the cap is Cloudflare's own
+25 MiB inbound ceiling (endpoint body limit 34 MiB), delivered by Slice
+017 with a streaming relay. Questions 2 (storage location) and 3
+(retention) remain open.*
+
 Recorded 2026-08-29 (user, in discussion after the perf baseline work).
 Three coupled questions about the encrypted raw blobs
 (`raw_payload.ciphertext`, `correspondence_raw.ciphertext`). Most of
@@ -1967,3 +1972,43 @@ the new host (rooms and the webhook round trip with the real key pair).
 Blocks: nothing. Closes the 2026-09-08 "LiveKit down" environment note.
 Still pending from the old host: the Telnyx SIP password rotation.
 
+
+### D-056 — Inbound mail size cap at Cloudflare's 25 MiB ceiling; the relay streams (2026-09-09)
+
+Accepted by the user on 2026-09-09 (the coordinator's recommendation; the
+alternatives presented were 10 MiB as a constants-only change and deferral
+to the object-storage slice). Resolves O-015 question 1; questions 2
+(storage location) and 3 (retention) stay open. Delivered by Slice 017.
+
+1. **The cap is Cloudflare's own inbound limit.** Email Routing rejects
+   messages over 25 MiB before any worker runs, so the relay's threshold
+   moves from ~1.4 MiB to 25 MiB and no message Cloudflare accepts is
+   bounced by us for size. The relay's reject branch stays as defence in
+   depth. The endpoint's per-route body limit becomes 34 MiB, derived from
+   the raw ceiling (`4 * ceil(25 MiB / 3)` plus the JSON envelope): a value
+   change on the frozen SLICE_007b §5 row "Body over 2 MiB → 413". The
+   envelope, the handler order and every response shape are unchanged.
+2. **The relay streams.** Buffering 25 MiB plus its base64 plus the JSON
+   copy would need most of a Worker's 128 MB isolate, so the relay encodes
+   chunk by chunk into a streamed request body (chunked transfer encoding;
+   a fixed-length body was set aside because it couples the relay to
+   `rawSize` accuracy and has no seat in the `node --test` harness). The
+   `{"recipient","raw"}` contract is untouched. A raw `message/rfc822`
+   pass-through body — no base64, near-zero CPU — was considered and
+   recorded as the fallback, not adopted: it is a contract change.
+3. **Precondition: the Workers plan.** The Free plan allows 10 ms of CPU
+   per invocation and Cloudflare warns Email Workers exceed it; encoding
+   megabytes is CPU-bound. The account's plan is not recorded in the
+   repository and is verified before the walkthrough. If it is Free, the
+   upgrade is the user's decision and the pass-through fallback needs its
+   own approval.
+4. **Storage cost accepted** at design-partner scale (O-015's analysis):
+   raw MIME stays whole and encrypted in Postgres `BYTEA`; `content_hmac`
+   dedup is unchanged. WAL amplification and the storage-flood exposure of
+   a public intake address scale with the cap, not in kind; a
+   per-Organization inbound byte budget that fails closed with an honest
+   bounce is the D-050 control, recorded LATER with the
+   production-deployment trigger.
+
+Blocks: nothing. Feeds SLICE_017. Amends by pointer SLICE_007b §5,
+SLICE_007g §3 and SLICE_009 §1 (the stated 2 MiB limitation closes).

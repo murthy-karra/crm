@@ -63,6 +63,13 @@ production (k8s) ingress; more formats (007h).
 
 ## 3. The Email Worker relay (`infra/email-worker/`)
 
+> **Amended 2026-09-09 by D-056 / [SLICE_017](SLICE_017.md):** the
+> threshold is 25 MiB (Cloudflare's own inbound ceiling) and the relay
+> streams a chunked base64 JSON body instead of buffering the message;
+> the "Oversize" bullet's derivation and "chunked base64 encoding" now
+> read per SLICE_017 §2, and the abort timeout is 60 s. The contract, the
+> 4xx matrix, the bearer posture and the no-content logging rule stand.
+
 A small committed Worker (`worker.js` + `wrangler.toml`), deployed by
 hand with `wrangler` (runbook §10):
 

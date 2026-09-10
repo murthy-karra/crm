@@ -138,6 +138,13 @@ with AAD = `organization_id ‖ raw_payload_id`, `store::insert_pending`
 
 ## 5. HTTP contract (frozen at approval; AGENTS.md §11)
 
+> **Amended 2026-09-09 by D-056 / [SLICE_017](SLICE_017.md):** the
+> per-route limit is `DefaultBodyLimit::max(34 MiB)`
+> (`MAX_INBOUND_EMAIL_BODY_BYTES`, derived from the 25 MiB raw ceiling),
+> so the row "Body over 2 MiB" reads "Body over 34 MiB" and the
+> "effective max raw ~1.5 MiB" note reads 25 MiB. Every other line of this
+> section stands; criteria 9 and 10 in §10 move with the value.
+
 `POST /inbound/email` — its own router, `.merge`d **outside** the CORS
 layer exactly like `routes/livekit_webhook.rs`, wrapped in
 `with_request_tracing`, with a per-route `DefaultBodyLimit::max(2 MiB)`

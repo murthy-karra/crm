@@ -1,11 +1,31 @@
 # Project State
 
-Last updated: 2026-09-09 (Slice 016 Tasks complete; release profile added;
-telephony host moved to EC2 with dormant egress, D-055; no slice active).
+Last updated: 2026-09-09 (D-056 accepted: inbound mail cap at Cloudflare's
+25 MiB ceiling; Slice 017 specified and awaiting review, then the
+implementation gate).
 
 ## Current phase
 
-**SLICE 016 (TASKS) — COMPLETE: BOTH RUNGS MERGED, RUNTIME UPDATED, PUSHED,
+**SLICE 017 (INBOUND MAIL SIZE CAP) — APPROVED 2026-09-09, LANE IN
+IMPLEMENTATION** (one lane, `implement` profile, `../crm-worktrees/017` on
+`slice-017-mail-size-cap`; the planning documents are committed on `main`). The user asked what is next;
+the recorded queue after Tasks was the O-015 attachment-cap raise. Its one
+open input, the cap value, was decided as **D-056**: Cloudflare's own
+25 MiB inbound ceiling, the endpoint at a derived 34 MiB, and the relay
+streaming instead of buffering; the frozen `{"recipient","raw"}` envelope
+is untouched. Drafted: [SLICE_017.md](../specs/SLICE_017.md) and
+[SLICE_017_IMPL.md](../tasks/SLICE_017_IMPL.md); pointer amendments in
+007b §5, 007g §3 and 009 §1; O-015 question 1 marked resolved. Precondition
+to verify before the walkthrough: the account's Workers plan (Free allows
+10 ms CPU per invocation; the relay's base64 needs Paid). No branch or
+code changed at approval time. Independent review: READY WITH
+CORRECTIONS, ten findings (DB-test budget for the debug profile, the
+`scripts/inbound-email` argv failure pulled into scope, a Free-plan stop
+before the worker deploy, `duplex: 'half'` unconditional, the
+pre-authentication memory exposure recorded LATER, five detail items), all
+applied; none a human decision.
+
+Previously: **SLICE 016 (TASKS) — COMPLETE: BOTH RUNGS MERGED, RUNTIME UPDATED, PUSHED,
 CLEANED UP (2026-09-09, each with the user's approval).** `main` at the
 016b merge `faa2878` plus records; pushed to `origin/main`. No migration in
 016b; the dev API and `dev-web-prod` were restarted by exact PID and
@@ -634,65 +654,42 @@ clear-all.
 
 ## Current slice
 
-No slice is active. Last completed: the LATER batch
-(`docs/tasks/LATER_BATCH_2026-09-08.md`, verification
-`docs/tasks/LATER_BATCH_2026-09-08_VERIFICATION.md`, merged 2026-09-08),
-Slice 014 (`docs/specs/SLICE_014.md`,
-verification `docs/tasks/SLICE_014_VERIFICATION.md`, merged 2026-09-08),
-Slices 012 (`docs/specs/SLICE_012.md`,
-verification `docs/tasks/SLICE_012_VERIFICATION.md`) and 013
-(`docs/specs/SLICE_013.md`, verification `docs/tasks/SLICE_013_VERIFICATION.md`),
-both merged 2026-09-08. Previous: Slice 011e — Tags —
-`docs/specs/SLICE_011e.md` (approved 2026-09-07),
-companion `docs/specs/SLICE_011e_EXPLAINED.md`, brief
-`docs/tasks/SLICE_011e_IMPL.md`, verification record
-`docs/tasks/SLICE_011e_VERIFICATION.md`. Both rungs merged: e1 `51331e9`,
-e2 `b6dc49b`. No slice is active; the next slice needs the user's request. Ladder:
-docs/plans/SLICE_011_LADDER.md (011a → 011b → 011b-sort → 011c → 011d all
-done → **011e**, the last rung).
+Slice 017 — Inbound mail size cap — `docs/specs/SLICE_017.md` (APPROVED
+2026-09-09), brief `docs/tasks/SLICE_017_IMPL.md`. One S rung, one lane,
+branch `slice-017-mail-size-cap` in `../crm-worktrees/017`, in
+implementation.
 
-Previous: Slice 011d — Tweakable built-in Today rules — `docs/specs/SLICE_011d.md`
-(approved and delivered 2026-09-07; verification record
-`docs/tasks/SLICE_011d_VERIFICATION.md`), companion `docs/specs/SLICE_011d_EXPLAINED.md`,
-brief `docs/tasks/SLICE_011d_IMPL.md`.
+Last completed: Slice 016 (Tasks; `docs/specs/SLICE_016.md`, verification
+`docs/tasks/SLICE_016a_VERIFICATION.md` and `SLICE_016b_VERIFICATION.md`,
+merged and pushed 2026-09-09), Slice 015 (Notes; `docs/specs/SLICE_015.md`,
+`docs/tasks/SLICE_015_VERIFICATION.md`), the LATER batch
+(`docs/tasks/LATER_BATCH_2026-09-08.md`), Slices 014, 013, 012 and the
+011 ladder (a → b → b-sort → c → d → e, all done; `docs/plans/SLICE_011_LADDER.md`).
 
 ## Current branch
 
-`main` pushed to `origin/main` on 2026-09-07 (the push carried 011d's
-`b8b53e2` and the state commits). No worktrees. The shared development
-runtime was updated the same day with the user's approval: `crm_dev`
-migrated (`20260908000001` applied), the old API (pid 54346, started
-2026-09-06) stopped by exact PID, and `./scripts/dev-api` relaunched; the
-new binary answers the 011d routes (401 unauthenticated, not 404). Earlier: `main`
-at `929b6ab`, pushed to `origin/main` on 2026-09-06 (the push carried
-011b's `2af023c`/`9d62e86` and 011c's `6117b4a`/`b4c4226`/`929b6ab`). The
-011b and 011c slice branches were deleted locally after the merge; they never
-existed on the remote. Deployment was not authorized. The shared
-development runtime still runs the pre-011b binary and `crm_dev` lacks both
-new migrations; restarting it needs `./scripts/db-migrate` first.
+`main` at `7a9f9f8`, pushed to `origin/main` on 2026-09-09, clean. No
+worktrees. The shared development runtime (`./scripts/dev-api` on
+`127.0.0.1:3000`, `./scripts/dev-web-prod` on 5173) runs the post-016b
+build; `crm_dev` is migrated through `20260913000001`. Deployment is not
+authorized.
 
 ## Last accepted decision
 
+D-056 (2026-09-09) — the inbound mail size cap is Cloudflare's 25 MiB
+inbound ceiling (endpoint 34 MiB); the relay streams; the Workers plan is
+a verified precondition; the raw pass-through body is the recorded
+fallback, not adopted. Resolves O-015 question 1.
+D-055 (2026-09-09) — the development telephony host is an EC2 `c6i.xlarge`
+with a dormant LiveKit Egress; production hosting is still decided at the
+deployment slice.
+D-054 (2026-09-09) — due tasks reach Today through a fixed built-in axis
+(a recorded temporary exception to D-043) plus a task panel.
+D-053 (2026-09-08) — notes ship as plaintext erasable CRUD; O-012 amended.
 D-052 (2026-09-08) — trigger-maintained derived columns are a read-model
-mechanism; the history insert remains the only business mutation.
-D-051 (2026-09-07, `97b889f`) — tag rename and delete by Organization admins,
-plus the creator while the tag is unused; hard delete with `invalid_tag`
-through the existing stale-reference paths. Any member creates and applies.
-D-050 (2026-09-07, `1d951a6`) — operating envelope (25k People, 50 members,
-5 concurrent Today loads, one active tab), two review rounds per slice, and
-performance gating on paired regression plus plan shape only.
-D-049 (2026-09-06) — Slice 011d ships as one L rung with parallel backend and
-web lanes; a one-time exception to the S–M rung rule, not a change to it.
-D-048 (2026-09-06) — a saved list's sort order is part of its definition.
-D-047 (2026-09-06) — up to five Today sources per agent and explicit partial
-availability. D-046 preserves creator-only personal lists and separate
-shared/personal caps. D-045 governs the current white/glass Web design; D-044 establishes
-the Elysium CRM identity. D-043 remains the slice-shaping product decision:
-smart lists are first-class and FUB-shaped; lists feed Today; built-in
-Today logic becomes org-tweakable system feeds; the filter model IS the
-Today configuration language. Plus the three ladder-acceptance decisions
-in SLICE_011_LADDER.md (order a→e; D-043 §3 strict; Source = latest inquiry)
-and the 2026-08-29 sort-rung decision above.
+mechanism. D-051 (tags), D-050 (operating envelope, two review rounds,
+relative-only performance gates), D-049–D-043 (the 011 ladder), D-045/D-044
+(design and identity) stand as recorded in the log.
 
 ## Slice ledger
 
@@ -968,67 +965,38 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. **Slice 015 (Notes) is merged**; after the runtime update, observe the live cross-tab `note_changed` path on the
-   shared dev runtime (the one walkthrough item the QA environment could
-   not exercise). After 015: Tasks (the last CRM-core model),
-   then the O-015 attachment-cap raise, then the small LATER batch.
-2. **(Former text, kept for the candidate list.)** Slices 012–014 and the
-   LATER batch done. Candidates for the next
-   request, unordered: push `main`; the remaining LATER items (accessibility,
-   test hardenings, performance levers, design residue; see the verification
-   records) (person-state 503 test,
-   equivalence pins, feeds page first-load error test, the `db_calls` timing
-   flake, splitting the three largest test files, popover
-   `aria-activedescendant`, `inquiry` append-only triggers, the exact-500
-   boundary test, the invalid-source error detail); notes and tasks models
-   (thesis core scope; the path back into the parked FUB migration, whose
-   010f tags-import portion now has its destination model and whose
-   importer must insert history in stable Person order per D-052).
-   (Former text: e2 in progress, one lane,
-   `implement` profile, backend then Web). The small LATER items from the 011d
-   verification record can still be batched before or between the rungs:
-   the person-state 503 test, two equivalence pins, the feeds page
-   first-load error test, the `db_calls` timing flake (pre-existing, fails
-   on `main` 1 in 3), and splitting the three largest test files.
-2. Deployment remains a separate action needing approval; the shared
-   development runtime and the remote are current as of 2026-09-07.
-   The equivalence gate (Lane B step 3) and the merge-join toggle question
-   (step 5) return to the coordinator. The shared development runtime is
-   already migrated and serving the merged 011c code.
-2. Post-merge polish landed on main (2026-09-06): the People page explains
-   list creation when reached from Lists (three steps plus a recorded
-   walkthrough video in a wide dialog), and a direct load of any protected URL no longer bounces to
-   Today when session verification settles mid-navigation (replay now waits
-   for the initial navigation); a named list's header now wraps its toolbar
-   below a long title instead of squeezing the title. `playwright-core` was
-   added as a Web dev dependency only for the guide recording script.
-3. Follow-ups this slice surfaced, unordered: R1 (call host not fenced on a
-   session boundary, pre-existing, telephony files); the Today built-in query
-   hazard deserves a durable fix in 011d or the queued denormalization chunk
-   rather than relying on a planner toggle for ever; the Web reviewer's three
-   uncovered criterion-10 test scenarios (fake-clock timer, real-wiring
-   same-actor relogin, cancellation race); `scripts/check-db` does not
-   schema-check test-target queries that `scripts/sqlx-prepare` now caches.
-   011b-sort remains separately queued.
-2. Updating the shared development runtime, pushing and deployment are
-   separate actions; the shared API/database still predate 011b.
-3. Later, unordered: 009 walkthrough steps 3–5;
-   Telnyx SIP rotation; delete
-   `slice-011a-filter-vocabulary` (needs approval).
+1. **Slice 017 (inbound mail size cap, D-056):** the lane implements the
+   brief in `../crm-worktrees/017` on `slice-017-mail-size-cap` with the
+   `implement` profile; the coordinator runs the final-tree gates once, review and test analysis (two rounds at
+   most), then the commit, merge and push gates. After the merge: restart
+   the dev API by exact PID, verify the Workers plan, the user deploys the
+   worker (`cd infra/email-worker && wrangler deploy`), then the real
+   large-attachment walkthrough (spec §6) and the verification record.
+2. **Then the small LATER batch** from the 015/016 verification records:
+   the `reason_text` `+00:00`-versus-`Z` timestamp inconsistency, the note
+   composer Escape handler and post-delete focus, the composer double-submit
+   test, the `is_control` separator gap, the remaining task cap-grid tests,
+   and the snooze 24-hour-window nuance (a 48-hour "Due soon" lookahead or
+   a snoozed group if users find it surprising). A brief, no spec, as on
+   2026-09-08.
+3. **Then the next real slice needs the user's pick** (recommended order):
+   the Operator `create_task` / `complete_task` rung (S; D-054 §3; needs a
+   decision on whether `complete_task` is the first AGENTS §5.4
+   execute-with-receipt action and on the D-034 mechanism); custom fields
+   (the last CRM-core model and the last FUB destination besides deals);
+   resuming the parked FUB migration ladder (`docs/plans/SLICE_010_LADDER.md`;
+   its three parked decisions are asked at resume).
+4. Standing: the Telnyx SIP password rotation (user action); O-012/O-013
+   before any external customer holds real consumer data; deployment is a
+   separate authorization; the 009 walkthrough steps 3–5 remain deferred.
 
 ## Approval currently required
 
-- None for Slice 016: both rungs merged, runtime updated, pushed and
-  cleaned up on 2026-09-09. Deployment is not authorized. The next slice
-  or chunk needs the user's request.
-- None for 011e: both rungs merged, the dev runtime updated and the branches
-  cleaned up with approval on 2026-09-07. `main` pushed on 2026-09-07; deployment is not authorized. The next slice or chunk
-  (candidates below) needs the user's request.
-- None for 011d: merged, pushed, and the dev runtime updated with approval
-  on 2026-09-07. Deployment is not authorized.
-- All three 011c decisions were taken on 2026-09-06 (late evening): the §8
-  planner amendment is approved, the Phase B pairing limitation accepted, and
-  the local commit and merge performed, then the push. **Deployment is not
-  authorized.** Updating the shared development runtime is a separate action.
+- **Slice 017:** implementation approved 2026-09-09 (covering the planning
+  commit and the lane). Still to ask, in order: the code commit and the
+  merge to `main`, the push, the worker deploy (`wrangler deploy`, the
+  user's action, only on the Workers Paid plan).
+- Deployment is not authorized. The worker deploy (`wrangler deploy`) after
+  the 017 merge is the user's action and is asked for separately.
 - R1 (auto-hangup of a live call on identity change) is a product choice for
   a later slice, not blocking.

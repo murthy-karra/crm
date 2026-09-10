@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT person_id, title, kind, due_at, assignee_user_id\n           FROM operator_task_proposal WHERE proposal_id = $1",
+  "query": "SELECT person_id, title, kind, due_at, assignee_user_id\n           FROM operator_task_proposal WHERE proposal_id = $1 AND organization_id = $2",
   "describe": {
     "columns": [
       {
@@ -31,6 +31,7 @@
     ],
     "parameters": {
       "Left": [
+        "Uuid",
         "Uuid"
       ]
     },
@@ -42,5 +43,5 @@
       false
     ]
   },
-  "hash": "e79ab7989cc01fc6832d80ad0806987688844e38f22885f7023033683728a70c"
+  "hash": "e1e55babaa947d3a14451bc9dc392df17b1ce4c552f9b9d600e33830ecd3a0a0"
 }

@@ -620,10 +620,17 @@ async fn confirm_create_task(
     // away (docs/specs/SLICE_018.md §5): the scoped claim still succeeded,
     // but the sidecar read finds no row — finalize `failed` with
     // `not_found`, answer 404.
+    // Review round 1: scoped to the confirming session's own Organization
+    // too, not the proposal id alone — belt-and-braces alongside the
+    // claim's own `(organization_id, actor_user_id)` bind above (the claim
+    // already guarantees this row's parent proposal is this Organization's,
+    // but the sidecar read names its own scope explicitly rather than
+    // relying on that alone).
     let sidecar = sqlx::query!(
         r#"SELECT person_id, title, kind, due_at, assignee_user_id
-           FROM operator_task_proposal WHERE proposal_id = $1"#,
+           FROM operator_task_proposal WHERE proposal_id = $1 AND organization_id = $2"#,
         proposal_id.0,
+        auth.active_organization_id.0,
     )
     .fetch_optional(pool)
     .await
@@ -710,5 +717,58 @@ async fn finalize_failed(
     .await;
     if let Err(err) = result {
         tracing::error!(error = %err, "proposal failed-finalize failed");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn req(utc_offset_minutes: Option<i32>) -> TurnRequest {
+        TurnRequest {
+            message: "hi".to_string(),
+            history: Vec::new(),
+            context: None,
+            utc_offset_minutes,
+        }
+    }
+
+    /// docs/specs/SLICE_018.md §3, §5: the accepted boundary values
+    /// (−840, 840) and the absent/`null` case (`None`) thread straight
+    /// through to `TurnInput.utc_offset_minutes` — never re-derived or
+    /// defaulted to a guess.
+    #[test]
+    fn utc_offset_minutes_boundaries_and_none_are_accepted_and_threaded() {
+        // `ApiError` derives no `Debug` (D-029-adjacent: never printed by
+        // accident), so `unwrap()`/`expect()` are unavailable here —
+        // matched explicitly instead.
+        let Ok(input) = validate(req(Some(840))) else {
+            panic!("840 must be accepted");
+        };
+        assert_eq!(input.utc_offset_minutes, Some(840));
+        let Ok(input) = validate(req(Some(-840))) else {
+            panic!("-840 must be accepted");
+        };
+        assert_eq!(input.utc_offset_minutes, Some(-840));
+        let Ok(input) = validate(req(None)) else {
+            panic!("None must be accepted");
+        };
+        assert_eq!(input.utc_offset_minutes, None);
+    }
+
+    /// One minute outside either bound is `malformed_request` (400) — a
+    /// non-integer never reaches `validate()` at all (it fails
+    /// `Json<TurnRequest>` deserialization first, `post_turn`'s existing
+    /// `JsonRejection -> MalformedRequest` path).
+    #[test]
+    fn utc_offset_minutes_outside_bounds_is_malformed_request() {
+        assert!(matches!(
+            validate(req(Some(841))),
+            Err(ApiError::MalformedRequest)
+        ));
+        assert!(matches!(
+            validate(req(Some(-841))),
+            Err(ApiError::MalformedRequest)
+        ));
     }
 }

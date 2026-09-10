@@ -1,12 +1,15 @@
 //! `POST /inbound/email` (docs/specs/SLICE_007b.md §5): its own router,
 //! mounted outside CORS exactly like `routes/livekit_webhook.rs`, with a
-//! per-route `DefaultBodyLimit::max(2 MiB)`. Order: an oversize body 413s
+//! per-route `DefaultBodyLimit::max(34 MiB)` (raised from 2 MiB by
+//! D-056/docs/specs/SLICE_017.md §3). Order: an oversize body 413s
 //! ahead of everything else (`Bytes` extraction fails before the handler's
 //! own checks run — the accepted livekit-webhook-precedent deviation from
 //! "bearer first" for this one case); then bearer (constant-time compare);
 //! then JSON; then base64. Every rejection shape (unparseable recipient,
 //! unknown slug, wrong token) collapses to the same 200
 //! `{"status":"rejected"}` — no address-enumeration oracle (§8).
+
+use std::borrow::Cow;
 
 use axum::body::Bytes;
 use axum::extract::rejection::BytesRejection;
@@ -24,7 +27,14 @@ use crate::domain::intake::{receive_inbound_email, InboundEmailOutcome, ReceiveI
 use crate::error::ApiError;
 use crate::state::AppState;
 
-const MAX_INBOUND_EMAIL_BODY_BYTES: usize = 2 * 1024 * 1024;
+// Cloudflare's Email Routing inbound ceiling is 25 MiB (D-056); base64
+// inflates that by 4/3 (`4 * ceil(25 MiB / 3) = 34_952_536` bytes) and the
+// JSON envelope adds a few KiB, so 34 MiB is the clean endpoint constant
+// that admits everything the relay can legitimately send
+// (docs/specs/SLICE_017.md §3; the derivation is pinned by
+// `max_inbound_email_body_bytes_admits_the_relays_largest_legitimate_body`
+// below).
+const MAX_INBOUND_EMAIL_BODY_BYTES: usize = 34 * 1024 * 1024;
 
 pub fn router() -> Router<AppState> {
     Router::new().route(
@@ -34,9 +44,14 @@ pub fn router() -> Router<AppState> {
 }
 
 #[derive(Deserialize)]
-struct InboundEmailRequest {
+struct InboundEmailRequest<'a> {
     recipient: String,
-    raw: String,
+    // Borrowed from the buffered body (docs/specs/SLICE_017.md §3):
+    // serde_json borrows a `Cow::Borrowed` when the JSON string has no
+    // escapes, which base64 never does, so the 34 MiB text is not copied
+    // a second time here.
+    #[serde(borrow)]
+    raw: Cow<'a, str>,
 }
 
 #[tracing::instrument(
@@ -91,7 +106,7 @@ async fn inbound_email(
 
     // Never record the JsonRejection/base64-error Display text (§9,
     // criterion 13) — the `?`/`map_err` below always discard it.
-    let req: InboundEmailRequest = serde_json::from_slice(&body).map_err(|_| {
+    let req: InboundEmailRequest<'_> = serde_json::from_slice(&body).map_err(|_| {
         span.record("outcome", "malformed");
         ApiError::MalformedRequest
     })?;
@@ -221,5 +236,14 @@ mod tests {
         assert!(!constant_time_eq(b"abcd", b"abce"));
         assert!(!constant_time_eq(b"abc", b"abcd"));
         assert!(!constant_time_eq(b"", b"abcd"));
+    }
+
+    /// docs/specs/SLICE_017.md §5.7: the endpoint must never reject a body
+    /// the relay can legitimately send — the base64 of a full 25 MiB
+    /// message plus a 4 KiB envelope allowance.
+    #[test]
+    fn max_inbound_email_body_bytes_admits_the_relays_largest_legitimate_body() {
+        let raw_ceiling: usize = 25 * 1024 * 1024;
+        assert!(MAX_INBOUND_EMAIL_BODY_BYTES >= 4 * raw_ceiling.div_ceil(3) + 4096);
     }
 }

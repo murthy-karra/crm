@@ -11,6 +11,8 @@ use axum::http::{Request, StatusCode};
 use axum::Router;
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
+use rand::rngs::StdRng;
+use rand::{Rng, SeedableRng};
 use serde_json::{json, Value};
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -352,6 +354,123 @@ async fn cc_from_agent_login_creates_outbound_row_clears_today_and_shape_pins_hi
     );
     assert!(!whole.contains(&f.client_email), "address leaked");
     assert!(!whole.contains("showing"), "subject leaked");
+}
+
+// --- Slice 017 size cap: the same ~20 MiB message on the CC path -------
+
+/// A ~20 MiB multipart message for the Slice 017 size-cap tests (spec
+/// §5.8/§5.9): a short text part plus a base64 `application/pdf` part of
+/// fixed-seed pseudo-random bytes, MIME-wrapped at 76 columns like a real
+/// mail client would produce. Never a committed file (D-056/SLICE_017
+/// §5) — generated fresh per test run. Duplicated from
+/// `db_inbound_email.rs`'s own copy rather than shared (this file's own
+/// established precedent for small test-only helpers, e.g.
+/// `insert_correspondence_raw_fixture` below). 15 MiB of attachment bytes
+/// base64-encodes to exactly 20 MiB before line-wrapping, landing the
+/// whole message at the specified "~20 MiB".
+fn large_attachment_email(headers: &str, boundary: &str) -> Vec<u8> {
+    const ATTACHMENT_RAW_LEN: usize = 15 * 1024 * 1024;
+    let mut rng = StdRng::seed_from_u64(0x5117_2017_0805_1cae);
+    let mut attachment = vec![0u8; ATTACHMENT_RAW_LEN];
+    rng.fill_bytes(&mut attachment);
+    let encoded = STANDARD.encode(&attachment);
+
+    let mut raw = Vec::with_capacity(encoded.len() + encoded.len() / 76 * 2 + headers.len() + 512);
+    raw.extend_from_slice(headers.as_bytes());
+    raw.extend_from_slice(
+        format!(
+            "MIME-Version: 1.0\r\n\
+             Content-Type: multipart/mixed; boundary=\"{boundary}\"\r\n\
+             \r\n\
+             --{boundary}\r\n\
+             Content-Type: text/plain; charset=utf-8\r\n\
+             Content-Transfer-Encoding: 7bit\r\n\
+             \r\n\
+             Please see the attached disclosure packet.\r\n\
+             \r\n\
+             --{boundary}\r\n\
+             Content-Type: application/pdf; name=\"disclosure.pdf\"\r\n\
+             Content-Transfer-Encoding: base64\r\n\
+             Content-Disposition: attachment; filename=\"disclosure.pdf\"\r\n\
+             \r\n"
+        )
+        .as_bytes(),
+    );
+    for chunk in encoded.as_bytes().chunks(76) {
+        raw.extend_from_slice(chunk);
+        raw.extend_from_slice(b"\r\n");
+    }
+    raw.extend_from_slice(format!("--{boundary}--\r\n").as_bytes());
+    raw
+}
+
+/// docs/specs/SLICE_017.md §5.9: the same ~20 MiB size as
+/// `db_inbound_email.rs`'s intake-path test, sent instead from an agent's
+/// own login address to a client, Cc'd to the agent's capture address
+/// (the `cc_from_agent_login_creates_outbound_row_...` shape above) —
+/// stores exactly one `correspondence_raw` row of the right size and
+/// follows the existing outbound capture outcome, with the correspondence
+/// entry appearing in the Person's history. No second crypto-open here
+/// (unlike the intake-path test): `byte_len` alone confirms it is the
+/// right row, keeping this test's own debug-profile crypto cost to one
+/// seal.
+#[sqlx::test]
+#[ignore]
+async fn a_20_mib_cc_delivery_stores_one_correspondence_raw_row_and_appears_in_history(
+    migrator_pool: PgPool,
+) {
+    let f = fixture(
+        &migrator_pool,
+        "Acme Realty Large Cc",
+        "client-large@example.com",
+    )
+    .await;
+    let router = build_router(&migrator_pool, Publisher::recording()).await;
+    let alice_cookie = crate::common::login_cookie(&router, &f.alice_email, PW).await;
+    let capture_addr = capture_recipient(&f.alice_token);
+
+    let headers = format!(
+        "From: Alice <{}>\r\nTo: Client <{}>\r\nCc: {capture_addr}\r\nSubject: disclosure packet\r\nMessage-ID: <large-017-cc-1@example.com>\r\n",
+        f.alice_email, f.client_email,
+    );
+    let raw = large_attachment_email(&headers, "large-017-cc-boundary");
+
+    let resp = post_inbound_email(&router, &capture_addr, &raw).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(
+        crate::common::body_json(resp).await,
+        json!({ "status": "accepted" })
+    );
+
+    assert_eq!(
+        count(&migrator_pool, "correspondence_raw", f.org_id).await,
+        1
+    );
+    let (byte_len,): (i32,) =
+        sqlx::query_as("SELECT byte_len FROM correspondence_raw WHERE organization_id = $1")
+            .bind(f.org_id)
+            .fetch_one(&migrator_pool)
+            .await
+            .unwrap();
+    assert_eq!(byte_len as usize, raw.len());
+
+    let (direction, via): (String, String) = sqlx::query_as(
+        "SELECT direction, via FROM correspondence_captured
+         WHERE organization_id = $1 AND person_id = $2",
+    )
+    .bind(f.org_id)
+    .bind(f.person_id)
+    .fetch_one(&migrator_pool)
+    .await
+    .unwrap();
+    assert_eq!(direction, "outbound");
+    assert_eq!(via, "cc");
+
+    let history = person_history(&router, &alice_cookie, f.person_id).await;
+    assert!(
+        history.iter().any(|h| h["kind"] == "correspondence"),
+        "the correspondence entry must appear in the Person's history"
+    );
 }
 
 // --- Criterion 2: client reply-all inbound + client_replied ------------

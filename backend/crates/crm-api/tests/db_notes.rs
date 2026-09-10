@@ -345,10 +345,9 @@ async fn note_composite_fk_rejections(migrator_pool: PgPool) {
     .bind(f.member_id)
     .execute(&app_pool)
     .await;
-    assert!(
-        cross_org_person.is_err(),
-        "a Person from another Organization must be rejected"
-    );
+    let err = cross_org_person.expect_err("a Person from another Organization must be rejected");
+    let db = err.as_database_error().expect("a composite-FK violation");
+    assert_eq!(db.code().as_deref(), Some("23503"));
 
     // (b) author_user_id is a real app_user with no membership in org A.
     let non_member_author = sqlx::query(
@@ -360,10 +359,9 @@ async fn note_composite_fk_rejections(migrator_pool: PgPool) {
     .bind(non_member_id)
     .execute(&app_pool)
     .await;
-    assert!(
-        non_member_author.is_err(),
-        "a non-member author_user_id must be rejected"
-    );
+    let err = non_member_author.expect_err("a non-member author_user_id must be rejected");
+    let db = err.as_database_error().expect("a composite-FK violation");
+    assert_eq!(db.code().as_deref(), Some("23503"));
 
     // (c) a tombstone whose deleted_by_user_id is a non-member.
     let non_member_deleter = sqlx::query(
@@ -377,10 +375,9 @@ async fn note_composite_fk_rejections(migrator_pool: PgPool) {
     .bind(non_member_id)
     .execute(&app_pool)
     .await;
-    assert!(
-        non_member_deleter.is_err(),
-        "a non-member deleted_by_user_id must be rejected"
-    );
+    let err = non_member_deleter.expect_err("a non-member deleted_by_user_id must be rejected");
+    let db = err.as_database_error().expect("a composite-FK violation");
+    assert_eq!(db.code().as_deref(), Some("23503"));
 
     assert_eq!(
         note_row_count(&migrator_pool, f.org_id).await,

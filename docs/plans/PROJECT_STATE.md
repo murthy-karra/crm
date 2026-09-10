@@ -2,8 +2,8 @@
 
 Last updated: 2026-09-10 (the LATER batch of 2026-09-10 merged at
 `753d685` with the user's approval, dev runtime updated, worktree and
-branch deleted; not pushed; the Slice 017 live large-mail sends remain
-deferred by the user).
+branch deleted, pushed to `origin/main` at `ae9d154`; the Slice 017 live
+large-mail sends remain deferred by the user).
 
 ## Current phase
 
@@ -26,8 +26,8 @@ rebuilt and relaunched (preview pid 84325, `5173` 200). Worktree
 `../crm-worktrees/later-2` and the branch deleted. LATER items carried in
 the record (unreachable focus fallback without a ring, fractional-seconds
 case, wildcard task-kind arm, two-entry preview fixture, a pre-existing
-task-edit Vitest flake). **`main` is ahead of `origin/main` by 18 commits (six on the first-parent
-line plus the twelve merged batch commits); push needs the user's word.** No slice active.
+task-edit Vitest flake). **Pushed to `origin/main` at `ae9d154` on 2026-09-10 with the user's
+approval.** No slice active.
 
 Previously: **SLICE 017 (INBOUND MAIL SIZE CAP) — MERGED, PUSHED, DEV API UPDATED;
 WORKER DEPLOY AND WALKTHROUGH PENDING (2026-09-09).** D-056: the relay's
@@ -1000,23 +1000,20 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. **Push `main`** (18 commits ahead of `origin/main`: the Slice 017
-   records, the batch gate record, the merge with its twelve batch commits,
-   and the two state records) on the user's word.
-2. **Slice 017 walkthrough (spec §6), deferred by the user:** send a small
+1. **Slice 017 walkthrough (spec §6), deferred by the user:** send a small
    real message and a 15–20 MB attachment to a capture address and the
    intake address; the coordinator reads the dev API log (`byte_len`,
    latency) and the Workers dashboard (invocation outcome, CPU time) and
    appends both to `SLICE_017_VERIFICATION.md`. The relay is already
    deployed; nothing blocks the sends.
-3. **Then the next real slice needs the user's pick** (recommended order):
+2. **Then the next real slice needs the user's pick** (recommended order):
    the Operator `create_task` / `complete_task` rung (S; D-054 §3; needs a
    decision on whether `complete_task` is the first AGENTS §5.4
    execute-with-receipt action and on the D-034 mechanism); custom fields
    (the last CRM-core model and the last FUB destination besides deals);
    resuming the parked FUB migration ladder (`docs/plans/SLICE_010_LADDER.md`;
    its three parked decisions are asked at resume).
-4. Standing: the Telnyx SIP password rotation (user action); O-012/O-013
+3. Standing: the Telnyx SIP password rotation (user action); O-012/O-013
    before any external customer holds real consumer data; the O-015
    questions 2 and 3 (object storage, retention) at the recordings slice;
    deployment is a separate authorization; the 009 walkthrough steps 3–5
@@ -1025,10 +1022,10 @@ and now lives only in git history.
 ## Approval currently required
 
 - **LATER batch 2026-09-10:** merged to local `main` at `753d685` and the
-  runtime updated with the user's approval on 2026-09-10. Pending: the push
-  of `main` (18 commits ahead, six on the first-parent line).
+  runtime updated and `main` pushed with the user's approval on 2026-09-10.
+  Nothing pending.
 - **Slice 017:** complete apart from the deferred live sends (the user's
-  action, no approval needed). Its record commits go with the next push.
+  action, no approval needed). Records pushed 2026-09-10.
 - Deployment is not authorized.
 - R1 (auto-hangup of a live call on identity change) is a product choice for
   a later slice, not blocking.

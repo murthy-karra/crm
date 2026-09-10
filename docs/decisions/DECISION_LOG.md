@@ -2052,3 +2052,40 @@ Blocks: nothing. Feeds the Slice 018 specification. Amends by pointer
 D-054 §3 (the rung's decision is taken). O-013's erasure runbook gains
 `operator_task_proposal` (the proposed title, retained until Person
 erasure; SLICE_018 §4).
+
+### D-058 — Custom fields v1: four typed kinds, member-set values, archive-only definitions, filtering deferred (2026-09-10)
+
+Accepted by the user on 2026-09-10 (the coordinator's recommendation; the
+alternative presented was including custom-field filter clauses in the
+same slice). Delivered by Slice 019a; the filter rung is 019b, separately
+approved.
+
+1. **Filtering is deferred.** Slice 019a ships definitions, per-Person
+   values, the Person page, the Manage page and the Operator read. Custom
+   fields join the filter vocabulary in a later rung (019b) with its own
+   approval, because that rung amends SLICE_011a §4b ("one clause per
+   kind" becomes one per field with a slot cap) and touches all fourteen
+   bound statements. The dynamic-SQL fork the 011 ladder reserved is not
+   taken: 019b is designed as fixed static-SQL slots.
+2. **Safe defaults accepted with the decision** (veto-able, recorded in
+   the specification): the type set is Follow Up Boss's four — text,
+   number, date, single choice (a yes/no is a two-option choice; boolean
+   and recurring dates are additive later types); any active member sets
+   or clears a value on a Person, the rule every Person mutation uses
+   today (AGENTS §4.4; assignment never restricts visibility); definitions
+   and options are archived, never hard-deleted, because a value is
+   customer data across up to 25,000 People (a deliberate divergence from
+   D-051's hard delete for tags, whose links carry no content); a value
+   change is ordinary relational CRUD, already settled by AGENTS §4.6, in
+   the D-053 content posture (plaintext, erasable, cascaded with the
+   Person, never on the realtime channel, ledger, spans or logs; reaching
+   the Operator as untrusted text).
+3. **Import readiness, schema only:** definitions carry `source` and
+   `external_key` (FUB's `name`) and values carry `origin` and
+   `correlation_id`, so the parked Slice 010 ladder's 010f rung can map
+   FUB custom fields without a schema change. No import code in 019.
+
+Blocks: nothing. Feeds the Slice 019 specification. Amends by pointer
+SLICE_011_LADDER "explicitly not in this ladder" (custom fields now have a
+scheduled rung) and SLICE_010_LADDER 010f (the destination exists after
+019a). O-013's erasure runbook gains `person_custom_field_value`.

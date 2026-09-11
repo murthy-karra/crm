@@ -1,0 +1,11 @@
+{
+  "steps": [
+    "64 MiB capture budget pause after one identity; operator ceiling change; UI rejects over-ceiling request; stale reviewed policy rejected; fresh explicit allowance approval does not resume",
+    "explicit source resume completes; lower deployment ceiling pauses DB-only preview; restoring ceiling does not resume; explicit preview resume completes same report without source captures"
+  ],
+  "pageErrors": [],
+  "liveFubCalls": 0,
+  "snapshotId": "9c068f75-ac51-4484-adaa-c823f2aaaaeb",
+  "previewId": "7af72e05-e2ef-4fae-a442-57fe10f48f53",
+  "status": "passed"
+}

@@ -140,6 +140,13 @@ impl ReaderError {
 }
 #[async_trait]
 pub trait FubReader: Send + Sync {
+    async fn snapshot(
+        &self,
+        _api_key: &str,
+        _request: &super::snapshot_source::Request,
+    ) -> Result<Capture, ReaderError> {
+        Err(ReaderError::Unavailable)
+    }
     async fn identity(&self, api_key: &str) -> Result<(Identity, Vec<u8>), ReaderError>;
     async fn probe(&self, api_key: &str, probe: Probe) -> Result<ProbeResult, ReaderError>;
 }
@@ -185,6 +192,14 @@ impl HttpFubReader {
         })
     }
     async fn get(&self, api_key: &str, path: &str) -> Result<Capture, ReaderError> {
+        self.get_bounded(api_key, path, MAX_RESPONSE_BYTES).await
+    }
+    async fn get_bounded(
+        &self,
+        api_key: &str,
+        path: &str,
+        maximum: usize,
+    ) -> Result<Capture, ReaderError> {
         let Some((system, key)) = &self.system else {
             return Err(ReaderError::Unavailable);
         };
@@ -238,7 +253,7 @@ impl HttpFubReader {
         loop {
             match response.chunk().await {
                 Ok(Some(chunk)) => {
-                    let available = MAX_RESPONSE_BYTES - capture.body.len();
+                    let available = maximum - capture.body.len();
                     capture
                         .body
                         .extend_from_slice(&chunk[..chunk.len().min(available)]);
@@ -333,6 +348,14 @@ pub fn parse_identity(body: &[u8]) -> Result<Identity, ReaderError> {
 }
 #[async_trait]
 impl FubReader for HttpFubReader {
+    async fn snapshot(
+        &self,
+        api_key: &str,
+        request: &super::snapshot_source::Request,
+    ) -> Result<Capture, ReaderError> {
+        self.get_bounded(api_key, &request.path()?, 4 * 1024 * 1024)
+            .await
+    }
     async fn identity(&self, api_key: &str) -> Result<(Identity, Vec<u8>), ReaderError> {
         let capture = self.get(api_key, "identity").await?;
         match parse_identity(&capture.body) {

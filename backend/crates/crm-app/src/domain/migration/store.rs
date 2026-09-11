@@ -229,7 +229,11 @@ pub async fn cancel_connection_jobs(
 ) -> Result<(), MigrationError> {
     sqlx::query("SELECT id FROM migration_assessment WHERE organization_id=$1 AND connection_id=$2 AND state IN ('queued','running','waiting_retry','paused') FOR UPDATE").bind(org.0).bind(id).fetch_all(&mut *conn).await?;
     sqlx::query("UPDATE migration_assessment_check c SET state='cancelled' FROM migration_assessment a WHERE a.id=c.assessment_id AND a.organization_id=c.organization_id AND a.organization_id=$1 AND a.connection_id=$2 AND a.state IN ('queued','running','waiting_retry','paused') AND c.state<>'completed'").bind(org.0).bind(id).execute(&mut *conn).await?;
-    sqlx::query("UPDATE migration_assessment SET state='cancelled',pause_reason=NULL,completed_at=now(),lease_token=NULL,lease_expires_at=NULL,next_attempt_at=NULL,updated_at=now() WHERE organization_id=$1 AND connection_id=$2 AND state IN ('queued','running','waiting_retry','paused')").bind(org.0).bind(id).execute(conn).await?;
+    sqlx::query("UPDATE migration_assessment SET state='cancelled',pause_reason=NULL,completed_at=now(),lease_token=NULL,lease_expires_at=NULL,next_attempt_at=NULL,updated_at=now() WHERE organization_id=$1 AND connection_id=$2 AND state IN ('queued','running','waiting_retry','paused')").bind(org.0).bind(id).execute(&mut *conn).await?;
+    let runs=sqlx::query_scalar::<_,Uuid>("UPDATE migration_snapshot SET state=CASE WHEN state='proposed' THEN 'expired' ELSE 'paused' END,pause_reason=CASE WHEN state='proposed' THEN NULL ELSE 'connection_changed' END,identity_required=true,lease_token=NULL,lease_expires_at=NULL,next_attempt_at=NULL WHERE organization_id=$1 AND connection_id=$2 AND state IN ('proposed','queued','running','waiting_retry','paused') RETURNING id").bind(org.0).bind(id).fetch_all(&mut *conn).await?;
+    for run in runs {
+        super::snapshot::release_source(conn, org, run).await?;
+    }
     Ok(())
 }
 

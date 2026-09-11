@@ -2221,3 +2221,12 @@ future import, and the existing 010a retry contract. No business import, source
 writes, actual customer-data processing or runtime deployment is included.
 The user's live FUB validation deferral remains in force; synthetic evidence
 does not close it or the D-015/O-012/O-013 customer-data prerequisites.
+
+**D-063 follow-up — integration, deployment and cleanup authorized (2026-09-11).**
+After implementation and synthetic verification completed, the user requested
+“commit, merge, deploy and cleanup”. This authorizes committing the verified
+010b changes, merging/publishing main, deploying the existing shared-development
+API/Web and additive migration, and removing the merged worktree/branch and
+temporary synthetic QA resources. Preserve release recovery artifacts and
+customer data. Live authorized FUB validation remains deferred; no production
+cluster, import/cutover or real-source operation is implied.

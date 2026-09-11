@@ -141,6 +141,9 @@ The four coordinator findings and two independent findings are revised with
 corresponding contracts, negative cases and execution steps;
 [review status](SLICE_010b_REVIEW.md) remains explicit.
 The user accepted the remaining allowance/delegation policy and approved the
-specification/brief under D-063. Next: freeze concrete profile/schema/DTO details,
-implement backend, complete its checkpoint, then implement Web and final checks.
-Live FUB testing remains deferred. Planning itself created no application code.
+specification/brief under D-063. Implementation subsequently completed the
+[concrete contract](../specs/SLICE_010b_CONTRACT.md), backend checkpoint, Web,
+both bounded reviews and all required synthetic/full gates. See the
+[implementation verification](SLICE_010b_VERIFICATION.md) for the final inventory,
+evidence and release handoff. Live FUB testing remains deferred. Planning itself
+created no application code; the implementation is still unmerged and undeployed.

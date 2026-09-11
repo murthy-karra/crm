@@ -1,0 +1,51 @@
+{
+  "date": "2026-09-11",
+  "status": "passed",
+  "execution": "sequential, final backend/Web tree",
+  "baseline": "49581a0",
+  "branch": "codex/slice-010b-core-snapshot",
+  "node": "24.16.0",
+  "pnpm": "11.22.0",
+  "commands": [
+    {
+      "command": "./scripts/sqlx-prepare",
+      "status": "passed",
+      "workspace_compile_seconds": 36.98,
+      "database": "throwaway",
+      "tracked_metadata_changed": false,
+      "private_log": "/private/tmp/crm-010b-final-sqlx-prepare.log",
+      "private_log_sha256": "9db7532005fcf6fa834eb714493924359b8699f334e6e2ffbb7eddae89508102"
+    },
+    {
+      "command": "./scripts/check",
+      "status": "passed",
+      "total_seconds": 56,
+      "rust_tests_passed": 860,
+      "doctests_passed": 5,
+      "web_tests_passed": 933,
+      "web_test_files": 55,
+      "email_worker_tests_passed": 11,
+      "db_tests_skipped": 809,
+      "private_log": "/private/tmp/crm-010b-final-check.log",
+      "private_log_sha256": "19aabbfba0efe0f698a6bd0e4d101e19b4f16e17bd42425fb88fb8c42dce07a8"
+    },
+    {
+      "command": "./scripts/check-db",
+      "status": "passed",
+      "total_seconds": 386,
+      "test_seconds": 330.602,
+      "db_tests_passed": 809,
+      "service_free_tests_skipped": 860,
+      "slow_test_markers": 1,
+      "private_log": "/private/tmp/crm-010b-final-check-db.log",
+      "private_log_sha256": "d98287b8469c3437290e19d547837f9794210b410cd4b9930c6a5d82a535f75f"
+    }
+  ],
+  "nonfatal_warnings": [
+    "Vite output chunk exceeds 500 kB",
+    "SQLx potentially unused offline queries"
+  ],
+  "review_fix_rounds_completed": 2,
+  "live_fub_validation": "user-deferred",
+  "deployment_performed": false
+}

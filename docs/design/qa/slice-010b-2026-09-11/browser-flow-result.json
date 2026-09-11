@@ -1,0 +1,17 @@
+{
+  "steps": [
+    "retained preview, overlap members, escaped notes, 390px",
+    "explicit prepare/confirm, progress reload, pause, prior report, partial preview, separate source resume, new frozen report",
+    "cancelled capture retains evidence; disconnected source permits retained reads and DB-only preview",
+    "cross-tab logout clears preview; other Organization has no prior data; member route and API denied"
+  ],
+  "pageErrors": [],
+  "liveFubCalls": 0,
+  "partialPreview": "893f644b-08b9-4030-8c03-ed2f5a12b731",
+  "completePreview": "652ab333-219a-4047-9de2-95bea3f615a7",
+  "cancelledPreview": "d539fdd4-604f-42ea-a1ba-e21fe3511aa6",
+  "disconnectedPreview": "76a3e948-50ca-467b-b045-25ac2785b05d",
+  "status": "passed",
+  "pausedRun": "d28897c7-4177-4403-b6b7-72359f067e46",
+  "cancelledRun": "b0174112-5ca8-4800-88b1-f04293bdfe12"
+}

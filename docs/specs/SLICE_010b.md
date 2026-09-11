@@ -526,8 +526,9 @@ No realtime contract: recover from PostgreSQL on focus/reconnect.
     D-050; no repeated 019b benchmark or above-envelope concurrency exercise.
 11. Run targeted unit/Web/DB tests, `./scripts/sqlx-prepare`, `./scripts/check`,
     `./scripts/check-db` once on the frozen implementation; never overlap DB gates.
-    Map all acceptance items and failures to the verification record. No tests in
-    this section have been executed for 010b; only planning/document checks apply.
+    Map all acceptance items and failures to the verification record. Implementation
+    subsequently passed the required checks; see [verification](../tasks/SLICE_010b_VERIFICATION.md)
+    for the exact tested tree, results and deferred external source qualification.
 12. Account raw/derived/failure/report bytes separately from physical storage.
     Concurrent capture/preview reservations cannot exceed run/Organization limits;
     crash/reclaim fences the former writer. Verify partial/cancelled retention,

@@ -1,13 +1,13 @@
 # Project state
 
-Last updated: 2026-09-11 (010b implementation authorized under D-063).
+Last updated: 2026-09-11 (010b implementation and synthetic verification complete).
 This file holds current operational status, active work and live residuals.
 [PROJECT_HISTORY.md](PROJECT_HISTORY.md) preserves earlier progress, the slice
 ledger and historical measurements; its old instructions are not current work.
 
 ## Current state
 
-**010a is deployed in shared development; 010b implementation is authorized and starting.**
+**010a is deployed in shared development; 010b is implemented and synthetically verified in its unmerged worktree.**
 The latest release record identifies source `0735015` (implementation `e4e0658`,
 merge `cd224fe`) at [app.tarams.org](https://app.tarams.org/manage/migration).
 It records migration `20260916000001` on `crm_dev`, API PID 9429 and Web PID 9455.
@@ -40,18 +40,27 @@ No production-cluster deployment or recurring monitor is established by this wor
   sequencing remains D-061. The approved contract includes representation-aware
   capture, retained-read authorization, frozen preview inputs, bounded overlap
   groups, durable logical-byte reservations and revisioned budget increases.
-  Backend implementation precedes the Web flow and final synthetic verification.
-  Live FUB validation and runtime deployment remain outside this assignment.
+  Backend and Web are complete, including explicit budget review, separate source
+  and preview recovery, partial/previous reports and session fencing. Both bounded
+  review/fix rounds are complete. Final sequential `sqlx-prepare`, `check` and
+  `check-db` passed: 860 Rust tests, 5 doctests, 933 Web tests, 11 email-worker tests
+  and 809 DB tests. The 25,000-People group case and real-API/production-build Chrome
+  workflow, storage recovery and desktop/390px verification passed. See the
+  [verification record](../tasks/SLICE_010b_VERIFICATION.md) and its sanitized evidence.
+  The subsequent D-063 follow-up authorizes integration, shared-development
+  deployment and cleanup; that release is in progress. Live FUB validation stays deferred.
 
 ## Current branch
 
-The approved planning baseline follows documentation commit `a498a2c` on main.
+The approved planning baseline is `49581a0`, following documentation commit
+`a498a2c` on main.
 Implementation uses branch `codex/slice-010b-core-snapshot` in
 `/Users/karrad/projects/crm-worktrees/010b`, with one primary writer for backend
-and its sole additive migration, followed by Web. The coordinator owns current
-state and verification evidence. Inspect Git for current implementation changes.
-Application deployment remains source `0735015`; no 010b runtime deployment is
-part of this assignment.
+and its sole additive migration, followed by Web. Implementation changes remain
+uncommitted and unmerged. The coordinator owns current state and verification
+evidence. Inspect Git for current changes before integration.
+Application deployment remains source `0735015` while the authorized 010b
+release is prepared. Deployment completion will be recorded with actual evidence.
 
 ## Last accepted decision
 
@@ -75,8 +84,8 @@ Foundations F-01/F-02/F-03 remain proposals except where separately accepted.
 
 ## Parked / queued tracks
 
-- **Slice 010b (FUB migration): IMPLEMENTATION.** 010a is deployed; live validation
-  remains deferred. The reviewed 010b spec/brief are approved under D-063.
+- **Slice 010b (FUB migration): RELEASE IN PROGRESS.** 010a is deployed; live validation
+  remains deferred. The approved 010b implementation passed its synthetic/full gates.
   [Current summary](SLICE_010_MIGRATION_SUMMARY.md); historical survey retained
   in [the ladder](SLICE_010_LADDER.md). New, empty Organization first and
   010a's source/credential contracts are accepted. Full inventory, mapping,
@@ -204,11 +213,19 @@ and now lives only in git history.
 
 ## Latest verification
 
+- 2026-09-11 010b implementation: both bounded review/fix rounds complete;
+  sequential `sqlx-prepare`, `check` (860 Rust, 5 doctests, 933 Web, 11 worker tests)
+  and `check-db` (809 DB tests) passed. Synthetic real-API/Chrome flows, storage
+  exhaustion/recovery, tenant/session boundaries, 25k indexed pagination and six
+  final desktop/390px screenshots passed. All 37 final source hashes match.
+  Temporary QA servers were stopped; shared-development 010a was not redeployed.
+  See [verification](../tasks/SLICE_010b_VERIFICATION.md). Live FUB validation remains deferred.
+
 - 2026-09-11 revised 010b plan: independent review returned READY-WITH-FIXES;
   two findings were corrected and targeted confirmation returned READY. All
   47 local document paths/anchors, whitespace and documentation-only scope
-  checks passed. See the review record for dispositions. No 010b code, tests,
-  browser walkthrough, live FUB call or deployment was performed.
+  checks passed. See the review record for dispositions. During that planning
+  phase, no 010b code, tests, browser walkthrough, live FUB call or deployment was performed.
 
 - 2026-09-11 documentation publication: staged whitespace and scope checks
   passed for 26 documentation/evidence paths; six JSON files parsed and the
@@ -243,10 +260,10 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. Implement approved 010b in its isolated worktree: freeze concrete source/schema/
-   wire details, complete backend and its checkpoint, then Web and final synthetic
-   verification. No new hardware, shared queue platform or email relocation
-   belongs in this slice.
+1. Integrate the verified 010b worktree, then handle its deployment as a separate
+   release action. Reuse the recorded source/build evidence and inspect current
+   Git/runtime state before operating. Later import work needs a new approved
+   specification; no import policy follows from this capture/preview implementation.
 2. Use readiness C gates to prepare for first real customer data; use V gates for
    the user's later authorized FUB validation. Identify dataset type and satisfy
    applicable prerequisites before connecting. No live call is scheduled here.
@@ -265,8 +282,9 @@ and now lives only in git history.
   identify contract changes and acceptance under AGENTS §11/§16.
 - 010a cleanup/integration and shared-development deployment are complete under
   D-060. Live FUB validation remains deferred by the user. 010b contracts, implementation and synthetic verification are approved under
-  D-063. Runtime deployment, customer-data processing and later import/cutover
-  remain outside scope. No repeated implementation authorization is needed.
+  D-063. Its follow-up authorizes commit, merge/publication, shared-development
+  deployment and cleanup. Customer-data processing, live source validation and
+  later import/cutover remain outside scope. No repeated release authorization is needed.
 - Slice 017 live sends remain the user's deferred action, not a new approval gate.
 - Recovery targets, retention/erasure policy details and support-access policy
   remain open in the readiness plan and decision log. No values were invented.

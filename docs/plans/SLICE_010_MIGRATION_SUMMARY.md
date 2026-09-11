@@ -1,19 +1,26 @@
 # Slice 010 — FUB migration planning summary
 
 **Status: 010a DEPLOYED AND VERIFIED (2026-09-11); live FUB validation deferred.
-010b core-first implementation is approved under D-063; later import rungs remain unapproved.** The user
+010b core-first implementation is synthetically verified under D-063 and remains unmerged/undeployed; later import rungs remain unapproved.** The user
 selected **a new, empty CRM Organization first** (D-059), then approved 010a's
 API-first assessment and encrypted saved credentials (D-060). Other
 recommendations remain proposals. Inspected against main `b2fb368`, after 019b.
 No FUB account was connected or customer data fetched.
 
-**Implementation follow-up:** the user approved the next rung, which now
+**010a planning follow-up (historical):** the user approved the next rung, which now
 has a [010a specification](../specs/SLICE_010a.md) and
 [bounded brief](../tasks/SLICE_010a_IMPL.md). D-060 accepts API-first assessment,
 encrypted saved credentials and its additive contracts. Live validation is
 explicitly deferred while no FUB test account is available. The first assessment
 uses six bounded checks, not full source enumeration. This does not reduce the
 later snapshot, preservation or reconciliation requirements.
+
+**Current implementation:** 010b captures the six core record families and
+generates retained, deterministic previews with explicit remaining coverage,
+storage allowances and recovery. Both bounded reviews, all full gates and
+synthetic API/browser verification passed. See the
+[010b verification record](../tasks/SLICE_010b_VERIFICATION.md). Runtime release
+and authorized live-source qualification remain separate.
 
 ## 1. Outcome and first milestone
 
@@ -204,8 +211,8 @@ This summary does not silently expand current Person, note, task or field APIs.
 The **010a specification and bounded brief** are implemented and synthetically
 verified (D-060), with API-first access, encrypted persistent credentials and a
 bounded probe profile. The proposed policies for later rungs remain unapproved.
-010a owns encrypted evidence for its bounded probes; 010b owns full snapshot
-storage and pagination checkpoints. Recorded synthetic acceptance proves:
+010a owns encrypted evidence for its bounded probes; 010b owns core snapshot
+storage and pagination checkpoints. Recorded 010a synthetic acceptance proves:
 
 1. Organization admin access and cross-Organization denial, including forged
    run/connection IDs and source-account replacement.
@@ -232,5 +239,6 @@ also accepted core-first 010b planning (D-061): People, users, stages, custom
 fields, notes and tasks, with all remaining families explicitly tracked. See
 [the approved specification](../specs/SLICE_010b.md) and
 [execution brief](../tasks/SLICE_010b_IMPL.md). D-063 subsequently accepts their
-reviewed contracts, storage policy, implementation and synthetic verification;
-live source validation and deployment remain separate.
+reviewed contracts, storage policy, implementation and synthetic verification.
+That implementation and its required gates are now complete in the isolated
+worktree; live source validation and deployment remain separate.

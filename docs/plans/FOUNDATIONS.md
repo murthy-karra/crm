@@ -131,28 +131,29 @@ application and release owners implement the checks. Named owners are unassigned
 | Step | Outcome / trigger | Owned surface | Proof / remaining gate |
 |---|---|---|---|
 | Documentation milestone (this task) | Current entry point, preserved history, reviewable proposals/readiness | Coordinator: overview, README/index, project state/history, this plan; helper: readiness file only | Relative links/anchors and whitespace; verify history preserved and no runtime files changed |
-| 010b review corrections | Completed and independently reviewed READY; implementation approved by D-063 | 010b spec/brief and source-profile evidence | Approved contracts and synthetic-development allowances; backend checkpoint then Web and final verification |
+| 010b implementation | Completed under D-063; shared-development release authorized and in progress | 010b spec/brief, source-profile evidence and implementation | Both bounded reviews and all synthetic/full gates passed; see the implementation verification record |
 | First customer-data readiness | Before any real customer payload/evidence enters the system | Owning privacy/data/recovery specs and runbook under readiness C gates | Settle applicable open decisions; isolated restore/erasure proof; source authorization alone does not close readiness |
 | Production-readiness slice | Before production deployment or multi-instance operation | Explicitly assigned deployment, identity/secrets, observability, runtime-role and migration surfaces | Readiness P evidence, agreed service/recovery targets; no production implementation in this milestone |
 | Later capabilities | Before native release or tenant relocation, respectively | Client compatibility or relocation spec | Accept detailed contracts and demonstrate the corresponding F-01/F-03 exercise |
 
 The coordinator's prior 010b draft review identified four issues, now addressed
-in the revised draft and tracked in the [review record](../tasks/SLICE_010b_REVIEW.md):
+in the approved specification and tracked in the [review record](../tasks/SLICE_010b_REVIEW.md):
 
 1. Distinguish note list/detail representations from genuine source drift; do
    not treat normal enrichment as changed raw bytes for the same representation.
 2. Separate authorization to read retained captures from eligibility for new
    upstream work after credential changes; preserve current Organization/admin
    checks and the accepted evidence visibility policy.
-3. Specify what the proposed byte budgets count and how an authorized operator
-   can recover from exhaustion. The draft 2 GiB/run and 4 GiB/Organization values
+3. Specify what the logical byte budgets count and how an authorized operator
+   can recover from exhaustion. The accepted synthetic-development 2 GiB/run and 4 GiB/Organization values
    are not accepted customer quotas or permission to delete evidence.
 4. Define when item/family denial produces an explicit gap versus a paused run;
    reconcile that with credential and permission failure handling.
 
 These coordinator findings have accepted corrections under D-063; the review record
-tracks independent readiness and remaining acceptance. They are not accepted
-010b contracts. Core-first sequencing remains accepted under D-061;
+tracks independent readiness and user acceptance of the 010b contracts. The
+separate F-01/F-02/F-03 foundations remain proposals. Core-first sequencing
+remains accepted under D-061;
 email bulk placement under D-062 does not change its six-family scope.
 
 ## Handoff exercise and maintenance

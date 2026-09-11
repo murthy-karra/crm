@@ -21,6 +21,7 @@ use crate::state::AppState;
 const MAX_CREDENTIAL_BODY_BYTES: usize = 16 * 1024;
 pub fn router() -> Router<AppState> {
     Router::new()
+        .merge(super::migration_snapshots::router())
         .route("/api/migrations/fub/", get(summary))
         .route(
             "/api/migrations/fub/connections",

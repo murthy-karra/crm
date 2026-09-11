@@ -2,8 +2,9 @@
 
 Checked 2026-09-11 against official public pages and their embedded OpenAPI
 `oasDefinition`. No FUB account, customer record or API credential was used.
-This is documentation evidence for a draft; live behavior remains user-deferred.
-The [specification](../specs/SLICE_010b.md) marks proposed profiles explicitly.
+This is public documentation evidence; live behavior remains user-deferred.
+D-063 approves the [specification](../specs/SLICE_010b.md). Concrete defensive
+parser/profile rules are application contracts, not vendor guarantees.
 
 ## Enumeration
 
@@ -35,19 +36,19 @@ JSON fixtures. Create minimal synthetic fixtures from the published shapes;
 do not label repaired examples as captured live responses. Public schema
 `info.version` is not a verified running server version.
 
-### Interpretation for the revised draft
+### Interpretation for the approved specification
 
 Notes list and enriched detail are separate representations of the same source
 ID. Their expected additional fields are not evidence of a source edit; compare
-content only under a qualified representation/field profile. The draft's
+content only under a qualified representation/field profile. The specification's
 deterministic semantic HMAC is an application comparison rule, not a vendor
 version identifier; original HTTP bytes remain preserved independently.
 
 The documented restricted note-detail 404 supports an explicit item gap, not a
 deletion claim. This evidence does not qualify arbitrary collection 403/404s as
-complete enumeration or prove that credentials are still valid. The revised
-draft pauses unqualified denials and retains successful list evidence. No new
-live endpoint observation or permission was obtained during this draft revision.
+complete enumeration or prove that credentials are still valid. The approved
+specification pauses unqualified denials and retains successful list evidence. No new
+live endpoint observation or permission was obtained during source qualification.
 
 ## Remaining coverage
 
@@ -72,3 +73,31 @@ deleted-user scope, task partition completeness, notes list/detail visibility,
 per-endpoint continuation/exhaustion, source-user permissions and registered
 identification. Do not close these questions using an index entry, example
 payload or successful synthetic test alone.
+
+## Implementation qualification refresh — 2026-09-11
+
+All seven saved schema hashes matched the manifest. Current public HTML
+confirmed People, users, tasks, stages and note detail; a repeat public notes-list
+fetch returned 403, so its saved schema remains the evidence. No authenticated
+API request was made and no approved scope was disproved.
+
+- People, users, stages, custom fields and notes list explicitly document limit
+  and offset. Tasks omits pagination query parameters but its response example
+  contains offset/limit/total; global pagination guidance is supporting evidence,
+  not live qualification of tasks. This gap remains explicit.
+- Global documentation recommends `next` and shows People; the users example
+  includes `next: null`. The endpoint schemas do not supply a complete per-endpoint
+  terminal-page contract. Missing tokens and short pages alone cannot prove
+  completion; require coherent collection/position/total evidence or pause.
+- Custom fields' example represents total as a decimal string. Metadata parsing
+  must tolerate qualified integer/string forms without floating-point loss.
+- People `includeUnclaimed=true` covers leads offered to the current source user,
+  not every unclaimed lead in the account. Users `fields=allFields` excludes
+  `calling`; requesting that field requires `allFields,calling`. Freeze the
+  actual selection and report omitted/unknown field coverage explicitly.
+- Note detail must match the captured positive source ID. Its restricted 404
+  supports only a committed item gap, never deletion or collection exhaustion.
+
+Source links above and the global pagination/common-parameter references support
+these distinctions. Lossless semantic JSON comparison and duplicate-key rejection
+are application safeguards; source payload bytes remain independently preserved.

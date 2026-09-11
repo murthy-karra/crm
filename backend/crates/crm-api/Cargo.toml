@@ -84,3 +84,8 @@ required-features = ["perf-harness"]
 [[test]]
 name = "livekit_telephony"
 test = false
+
+[[example]]
+name = "snapshot_qa"
+path = "examples/snapshot_qa.rs"
+required-features = ["test-support"]

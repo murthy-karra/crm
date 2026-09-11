@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { KeyRound, RefreshCw, ShieldCheck, X } from 'lucide-vue-next'
 import PageHeader from '../components/PageHeader.vue'
 import Card from '../components/Card.vue'
+import CoreSnapshotPanel from '../components/migration/CoreSnapshotPanel.vue'
 import FormField from '../components/FormField.vue'
 import { queryKeys, useAuthSessionLifetime, useMe } from '../api/queries'
 import { ApiError } from '../api/client'
@@ -55,6 +56,7 @@ const credentialRecovery = ref(false)
 const actionPending = ref<'assess' | 'retry' | 'cancel' | 'disconnect' | null>(null)
 const actionError = ref<string | null>(null)
 const selectedReport = ref<'current' | 'previous'>('current')
+const snapshotSourceBusy = ref(false)
 let operationGeneration = 0
 let disposed = false
 
@@ -298,7 +300,7 @@ function checkStatusLabel(check: FubAssessmentCheck) {
   <div>
     <PageHeader
       title="Migration"
-      subtitle="Assess a Follow Up Boss account before planning a migration. This reads the source account and does not import records."
+      subtitle="Assess a Follow Up Boss account, capture core records and review migration evidence. No records are imported here."
     />
 
     <Card class="mb-6">
@@ -308,7 +310,7 @@ function checkStatusLabel(check: FubAssessmentCheck) {
             Follow Up Boss connection
           </h2>
           <p class="mt-1 max-w-2xl text-body text-text-muted">
-            The API key is saved encrypted for future assessments. The assessment is read-only and does not copy People or other source records into this Organization.
+            The API key is saved encrypted for assessments and confirmed snapshots. The assessment is read-only and does not copy People or other source records into this Organization.
           </p>
         </div>
         <span
@@ -451,6 +453,14 @@ function checkStatusLabel(check: FubAssessmentCheck) {
       </template>
     </Card>
 
+    <CoreSnapshotPanel
+      v-if="canRead"
+      :key="scope.join(':')"
+      :connection="connection"
+      :assessment-busy="isPollingState(currentAssessment?.state)"
+      @source-busy="snapshotSourceBusy = $event"
+    />
+
     <Card class="mb-6">
       <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -464,7 +474,7 @@ function checkStatusLabel(check: FubAssessmentCheck) {
         <button
           type="button"
           :class="buttonClasses('primary')"
-          :disabled="!connection || connection.status !== 'connected' || currentAssessment !== null || actionPending !== null"
+          :disabled="!connection || connection.status !== 'connected' || currentAssessment !== null || actionPending !== null || snapshotSourceBusy"
           data-testid="assess-fub"
           @click="assess"
         >

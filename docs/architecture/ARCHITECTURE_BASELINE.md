@@ -1,6 +1,6 @@
 # Architecture Baseline
 
-Reviewed 2026-09-11 against accepted decisions through D-062 and current source.
+Reviewed 2026-09-11 against accepted decisions through D-063 and current source.
 This is a derived system map, not another decision log. The
 [decision log](../decisions/DECISION_LOG.md) and [AGENTS.md](../../AGENTS.md)
 win on conflict. Observed runtime state and release evidence belong in
@@ -93,9 +93,14 @@ is process-local: several API copies do not create one shared rate limiter.
 Credential validation must also be considered when coordinating source calls.
 
 010a assesses bounded source access; it is not a complete download or import.
-[010b](../specs/SLICE_010b.md) is a draft for resumable capture/preview of People,
+[010b](../specs/SLICE_010b.md) is implemented and synthetically verified under D-063:
+resumable capture/preview of People,
 users, stages, custom fields, notes and tasks. Other families remain explicit
-future work (D-060/061). Fidelity, idempotency and reconciliation stay mandatory.
+future work (D-060/061). Its unmerged implementation adds shared assessment/snapshot
+source permits within one process, durable storage reservations, explicit budget
+increases and DB-only preview recovery. [Verification](../tasks/SLICE_010b_VERIFICATION.md)
+records passing full gates; runtime deployment and live FUB validation remain
+separate. Fidelity, idempotency and reconciliation stay mandatory.
 
 ## Network and telephony
 

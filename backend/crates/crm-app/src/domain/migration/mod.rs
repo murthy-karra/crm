@@ -5,6 +5,11 @@
 pub mod commands;
 pub mod crypto;
 pub mod reader;
+pub mod snapshot;
+pub(crate) mod snapshot_compare;
+pub mod snapshot_preview;
+pub mod snapshot_source;
+pub mod snapshot_worker;
 pub(crate) mod store;
 pub mod worker;
 

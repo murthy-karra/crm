@@ -53,7 +53,8 @@ fn validate_new_field_options(
     let mut seen_lower = HashSet::with_capacity(raw_options.len());
     let mut normalized = Vec::with_capacity(raw_options.len());
     for raw in raw_options {
-        let label = normalize_and_validate_label(raw).map_err(|_| CustomFieldError::InvalidValue)?;
+        let label =
+            normalize_and_validate_label(raw).map_err(|_| CustomFieldError::InvalidValue)?;
         if !seen_lower.insert(label.to_lowercase()) {
             return Err(CustomFieldError::InvalidValue);
         }
@@ -303,7 +304,11 @@ pub async fn update_custom_field(
         Ok(outcome) => {
             tracing::Span::current().record(
                 "outcome",
-                if outcome.changed { "changed" } else { "unchanged" },
+                if outcome.changed {
+                    "changed"
+                } else {
+                    "unchanged"
+                },
             );
         }
         Err(_) => record_outcome(&result),
@@ -329,7 +334,8 @@ async fn update_custom_field_attempt(
 
     let currently_live = row.archived_at.is_none();
     if row.label == label && currently_live == !cmd.archived {
-        let field = load_custom_field_or_corrupt(&mut tx, ctx.organization_id, cmd.field_id).await?;
+        let field =
+            load_custom_field_or_corrupt(&mut tx, ctx.organization_id, cmd.field_id).await?;
         tx.commit().await?;
         return Ok(UpdateCustomFieldOutcome {
             field,
@@ -514,7 +520,8 @@ async fn add_custom_field_option_attempt(
     {
         return Err(CustomFieldError::OptionLabelTaken);
     }
-    let live_count = queries::count_live_options(&mut tx, ctx.organization_id, cmd.field_id).await?;
+    let live_count =
+        queries::count_live_options(&mut tx, ctx.organization_id, cmd.field_id).await?;
     if live_count >= MAX_LIVE_OPTIONS {
         return Err(CustomFieldError::OptionLimitReached);
     }
@@ -566,7 +573,11 @@ pub async fn update_custom_field_option(
         Ok(outcome) => {
             tracing::Span::current().record(
                 "outcome",
-                if outcome.changed { "changed" } else { "unchanged" },
+                if outcome.changed {
+                    "changed"
+                } else {
+                    "unchanged"
+                },
             );
         }
         Err(_) => record_outcome(&result),
@@ -592,18 +603,15 @@ async fn update_custom_field_option_attempt(
     queries::lock_field_for_update(&mut tx, ctx.organization_id, cmd.field_id)
         .await?
         .ok_or(CustomFieldError::NotFound)?;
-    let option = queries::lock_option_for_update(
-        &mut tx,
-        ctx.organization_id,
-        cmd.field_id,
-        cmd.option_id,
-    )
-    .await?
-    .ok_or(CustomFieldError::NotFound)?;
+    let option =
+        queries::lock_option_for_update(&mut tx, ctx.organization_id, cmd.field_id, cmd.option_id)
+            .await?
+            .ok_or(CustomFieldError::NotFound)?;
 
     let currently_live = option.archived_at.is_none();
     if option.label == label && currently_live == !cmd.archived {
-        let field = load_custom_field_or_corrupt(&mut tx, ctx.organization_id, cmd.field_id).await?;
+        let field =
+            load_custom_field_or_corrupt(&mut tx, ctx.organization_id, cmd.field_id).await?;
         tx.commit().await?;
         return Ok(UpdateCustomFieldOptionOutcome {
             field,
@@ -690,7 +698,11 @@ pub async fn set_person_custom_field_value(
         Ok(outcome) => {
             tracing::Span::current().record(
                 "outcome",
-                if outcome.changed { "changed" } else { "unchanged" },
+                if outcome.changed {
+                    "changed"
+                } else {
+                    "unchanged"
+                },
             );
         }
         Err(_) => record_outcome(&result),
@@ -806,7 +818,11 @@ pub async fn clear_person_custom_field_value(
         Ok(outcome) => {
             tracing::Span::current().record(
                 "outcome",
-                if outcome.changed { "changed" } else { "unchanged" },
+                if outcome.changed {
+                    "changed"
+                } else {
+                    "unchanged"
+                },
             );
         }
         Err(_) => record_outcome(&result),

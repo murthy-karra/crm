@@ -6,11 +6,11 @@ use crate::domain::admin::AdminCommandError;
 use crate::domain::capture::address::RotateError as CaptureRotateError;
 use crate::domain::capture::commands::CaptureCommandError;
 use crate::domain::commands::{CallError, CommandError};
+use crate::domain::custom_field::CustomFieldError;
 use crate::domain::intake::workbench::WorkbenchError;
 use crate::domain::note::NoteError;
 use crate::domain::person::filter::FilterError;
 use crate::domain::saved_list::SavedListError;
-use crate::domain::custom_field::CustomFieldError;
 use crate::domain::tag::TagError;
 use crate::domain::task::TaskError;
 
@@ -246,9 +246,7 @@ impl IntoResponse for ApiError {
             }
             ApiError::TypeMismatch => (StatusCode::UNPROCESSABLE_ENTITY, "type_mismatch", None),
             ApiError::InvalidValue => (StatusCode::UNPROCESSABLE_ENTITY, "invalid_value", None),
-            ApiError::OptionLimitReached => {
-                (StatusCode::CONFLICT, "option_limit_reached", None)
-            }
+            ApiError::OptionLimitReached => (StatusCode::CONFLICT, "option_limit_reached", None),
             ApiError::OptionLabelTaken => (StatusCode::CONFLICT, "option_label_taken", None),
             ApiError::FieldArchived => (StatusCode::CONFLICT, "field_archived", None),
             ApiError::UnknownOption => (StatusCode::UNPROCESSABLE_ENTITY, "unknown_option", None),

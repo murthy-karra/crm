@@ -3363,12 +3363,7 @@ async fn get_person_returns_custom_fields_as_untrusted_text_and_a_foreign_person
     )
     .await;
     let alice = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
-    let response = post_turn(
-        &router,
-        &alice,
-        message("What is Grace's referral source?"),
-    )
-    .await;
+    let response = post_turn(&router, &alice, message("What is Grace's referral source?")).await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = crate::common::body_json(response).await;
     assert_eq!(body["tool_calls"][0]["outcome"], "ok");

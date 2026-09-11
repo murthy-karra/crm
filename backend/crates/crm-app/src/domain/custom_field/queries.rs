@@ -546,7 +546,8 @@ pub async fn list_definitions(
 
     let mut out = Vec::with_capacity(live.len() + archived.len());
     for row in live.into_iter().chain(archived) {
-        let field_type = FieldType::from_db_str(&row.field_type).ok_or(CustomFieldError::Corrupt)?;
+        let field_type =
+            FieldType::from_db_str(&row.field_type).ok_or(CustomFieldError::Corrupt)?;
         out.push(CustomField {
             id: CustomFieldId::new(row.id),
             label: row.label,
@@ -593,7 +594,8 @@ pub async fn values_for_person(
 
     let mut out = Vec::with_capacity(rows.len());
     for row in rows {
-        let field_type = FieldType::from_db_str(&row.field_type).ok_or(CustomFieldError::Corrupt)?;
+        let field_type =
+            FieldType::from_db_str(&row.field_type).ok_or(CustomFieldError::Corrupt)?;
         let value = match field_type {
             FieldType::Text => {
                 CustomFieldValue::Text(row.text_value.ok_or(CustomFieldError::Corrupt)?)

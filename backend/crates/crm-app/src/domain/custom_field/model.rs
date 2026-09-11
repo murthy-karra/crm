@@ -329,8 +329,7 @@ mod tests {
     fn custom_field_value_rejects_zero_two_and_unknown_keys() {
         let zero: Result<CustomFieldValue, _> = serde_json::from_str("{}");
         assert!(zero.is_err());
-        let two: Result<CustomFieldValue, _> =
-            serde_json::from_str(r#"{"text":"a","number":"1"}"#);
+        let two: Result<CustomFieldValue, _> = serde_json::from_str(r#"{"text":"a","number":"1"}"#);
         assert!(two.is_err());
         let unknown: Result<CustomFieldValue, _> = serde_json::from_str(r#"{"bogus":"a"}"#);
         assert!(unknown.is_err());

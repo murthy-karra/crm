@@ -50,8 +50,7 @@ pub fn router() -> Router<AppState> {
         )
         .route(
             "/api/custom-fields/{field_id}/options",
-            post(add_custom_field_option)
-                .layer(DefaultBodyLimit::max(MAX_CUSTOM_FIELD_BODY_BYTES)),
+            post(add_custom_field_option).layer(DefaultBodyLimit::max(MAX_CUSTOM_FIELD_BODY_BYTES)),
         )
         .route(
             "/api/custom-fields/{field_id}/options/{option_id}",

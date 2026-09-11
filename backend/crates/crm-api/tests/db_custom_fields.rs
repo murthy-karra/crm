@@ -14,11 +14,13 @@ use uuid::Uuid;
 use crm_api::domain::admin::{MembershipStatus, Role};
 use crm_api::domain::custom_field::{
     self, AddCustomFieldOption, ClearPersonCustomFieldValue, CreateCustomField, CustomFieldError,
-    CustomFieldValue, FieldType, ReorderCustomFields, SetPersonCustomFieldValue,
-    UpdateCustomField, UpdateCustomFieldOption,
+    CustomFieldValue, FieldType, ReorderCustomFields, SetPersonCustomFieldValue, UpdateCustomField,
+    UpdateCustomFieldOption,
 };
 use crm_api::domain::envelope::{CommandContext, Origin};
-use crm_api::ids::{CorrelationId, CustomFieldId, CustomFieldOptionId, OrganizationId, PersonId, UserId};
+use crm_api::ids::{
+    CorrelationId, CustomFieldId, CustomFieldOptionId, OrganizationId, PersonId, UserId,
+};
 use crm_api::realtime::Publisher;
 
 const PW: &str = "correct horse battery staple";
@@ -90,8 +92,7 @@ async fn fixture(migrator_pool: &PgPool) -> Fixture {
     )
     .await;
     promote_to_admin(migrator_pool, org_id, admin_id).await;
-    let member_id =
-        crate::common::create_user(migrator_pool, "bob-cf@acme.test", "Bob", PW).await;
+    let member_id = crate::common::create_user(migrator_pool, "bob-cf@acme.test", "Bob", PW).await;
     crate::common::add_membership_with(
         migrator_pool,
         org_id,
@@ -562,7 +563,10 @@ async fn cross_organization_field_option_and_person_are_404(migrator_pool: PgPoo
         },
     )
     .await;
-    assert!(matches!(cross_org_option_add, Err(CustomFieldError::NotFound)));
+    assert!(matches!(
+        cross_org_option_add,
+        Err(CustomFieldError::NotFound)
+    ));
 }
 
 #[sqlx::test]
@@ -705,14 +709,16 @@ async fn archive_hides_the_field_from_the_detail_read_while_row_and_values_survi
     )
     .await
     .unwrap();
-    assert!(hidden.is_empty(), "archived fields are hidden from the detail read");
+    assert!(
+        hidden.is_empty(),
+        "archived fields are hidden from the detail read"
+    );
 
     // Still present, and still holds its value, in the full definitions
     // list (the Manage page's Archived section).
-    let all_fields =
-        custom_field::list_definitions(&mut conn, OrganizationId::new(f.org_id))
-            .await
-            .unwrap();
+    let all_fields = custom_field::list_definitions(&mut conn, OrganizationId::new(f.org_id))
+        .await
+        .unwrap();
     let archived_row = all_fields.iter().find(|c| c.id == field.id).unwrap();
     assert!(archived_row.archived_at.is_some());
     assert_eq!(archived_row.person_count, 1);
@@ -730,7 +736,10 @@ async fn archive_hides_the_field_from_the_detail_read_while_row_and_values_survi
     .unwrap();
     assert!(restored.changed);
     assert!(restored.field.archived_at.is_none());
-    assert_eq!(restored.field.position, 3, "un-archive appends: max(live) + 1");
+    assert_eq!(
+        restored.field.position, 3,
+        "un-archive appends: max(live) + 1"
+    );
     assert_eq!(
         restored.field.person_count, person_count_while_archived,
         "person_count is unchanged across archive/restore"
@@ -867,7 +876,10 @@ async fn setting_an_archived_or_foreign_option_is_the_same_unknown_option(migrat
         },
     )
     .await;
-    assert!(matches!(archived_option, Err(CustomFieldError::UnknownOption)));
+    assert!(matches!(
+        archived_option,
+        Err(CustomFieldError::UnknownOption)
+    ));
 
     let foreign_option = custom_field::set_person_custom_field_value(
         &app_pool,
@@ -880,7 +892,10 @@ async fn setting_an_archived_or_foreign_option_is_the_same_unknown_option(migrat
         },
     )
     .await;
-    assert!(matches!(foreign_option, Err(CustomFieldError::UnknownOption)));
+    assert!(matches!(
+        foreign_option,
+        Err(CustomFieldError::UnknownOption)
+    ));
 
     let nonexistent_option = custom_field::set_person_custom_field_value(
         &app_pool,
@@ -1426,13 +1441,12 @@ async fn deleting_the_person_cascades_the_value(migrator_pool: PgPool) {
         .await
         .unwrap();
 
-    let remaining: i64 = sqlx::query_scalar(
-        "SELECT count(*) FROM person_custom_field_value WHERE field_id = $1",
-    )
-    .bind(field.id.as_uuid())
-    .fetch_one(&migrator_pool)
-    .await
-    .unwrap();
+    let remaining: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM person_custom_field_value WHERE field_id = $1")
+            .bind(field.id.as_uuid())
+            .fetch_one(&migrator_pool)
+            .await
+            .unwrap();
     assert_eq!(remaining, 0, "deleting the Person must cascade the value");
 }
 

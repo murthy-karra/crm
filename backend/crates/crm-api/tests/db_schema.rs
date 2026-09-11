@@ -2033,27 +2033,30 @@ async fn custom_field_and_related_grants_are_exactly_slice_019_section_2_with_no
     let select = sqlx::query("SELECT * FROM custom_field")
         .fetch_all(&app_pool)
         .await;
-    assert!(select.is_ok(), "custom_field: SELECT must succeed for crm_app");
-    let field_id = insert_custom_field_for_schema_test(
-        &app_pool,
-        org_id,
-        actor_id,
-        "Budget",
-        "number",
-        1,
-    )
-    .await
-    .expect("custom_field: INSERT must succeed for crm_app");
+    assert!(
+        select.is_ok(),
+        "custom_field: SELECT must succeed for crm_app"
+    );
+    let field_id =
+        insert_custom_field_for_schema_test(&app_pool, org_id, actor_id, "Budget", "number", 1)
+            .await
+            .expect("custom_field: INSERT must succeed for crm_app");
     let update = sqlx::query("UPDATE custom_field SET label = 'Renamed' WHERE id = $1")
         .bind(field_id)
         .execute(&app_pool)
         .await;
-    assert!(update.is_ok(), "custom_field: UPDATE must succeed for crm_app");
+    assert!(
+        update.is_ok(),
+        "custom_field: UPDATE must succeed for crm_app"
+    );
     let delete = sqlx::query("DELETE FROM custom_field WHERE id = $1")
         .bind(field_id)
         .execute(&app_pool)
         .await;
-    assert!(delete.is_err(), "custom_field: DELETE must be denied for crm_app");
+    assert!(
+        delete.is_err(),
+        "custom_field: DELETE must be denied for crm_app"
+    );
 
     // custom_field_option: SELECT/INSERT/UPDATE, no DELETE.
     let choice_field_id = insert_custom_field_for_schema_test(
@@ -2229,25 +2232,45 @@ async fn person_custom_field_value_check_constraints_matrix(migrator_pool: PgPoo
 
     // Zero columns set.
     let err = insert_value_row_for_schema_test(
-        &app_pool, org_id, person_id, text_field_id, "text", None, None, None, None,
-        Some(actor_id), "web_session",
+        &app_pool,
+        org_id,
+        person_id,
+        text_field_id,
+        "text",
+        None,
+        None,
+        None,
+        None,
+        Some(actor_id),
+        "web_session",
     )
     .await
     .unwrap_err();
     assert_eq!(
-        err.as_database_error().and_then(|d| d.code().map(|c| c.into_owned())),
+        err.as_database_error()
+            .and_then(|d| d.code().map(|c| c.into_owned())),
         Some("23514".to_string())
     );
 
     // Two columns set (text_value and number_value both non-null).
     let err = insert_value_row_for_schema_test(
-        &app_pool, org_id, person_id, text_field_id, "text", Some("hello"), Some("1"), None, None,
-        Some(actor_id), "web_session",
+        &app_pool,
+        org_id,
+        person_id,
+        text_field_id,
+        "text",
+        Some("hello"),
+        Some("1"),
+        None,
+        None,
+        Some(actor_id),
+        "web_session",
     )
     .await
     .unwrap_err();
     assert_eq!(
-        err.as_database_error().and_then(|d| d.code().map(|c| c.into_owned())),
+        err.as_database_error()
+            .and_then(|d| d.code().map(|c| c.into_owned())),
         Some("23514".to_string())
     );
 
@@ -2255,39 +2278,72 @@ async fn person_custom_field_value_check_constraints_matrix(migrator_pool: PgPoo
     // text_value: exactly one column is non-null (satisfies
     // num_nonnulls), but it is the WRONG column for the declared type.
     let err = insert_value_row_for_schema_test(
-        &app_pool, org_id, person_id, text_field_id, "text", None, Some("1"), None, None,
-        Some(actor_id), "web_session",
+        &app_pool,
+        org_id,
+        person_id,
+        text_field_id,
+        "text",
+        None,
+        Some("1"),
+        None,
+        None,
+        Some(actor_id),
+        "web_session",
     )
     .await
     .unwrap_err();
     assert_eq!(
-        err.as_database_error().and_then(|d| d.code().map(|c| c.into_owned())),
+        err.as_database_error()
+            .and_then(|d| d.code().map(|c| c.into_owned())),
         Some("23514".to_string())
     );
 
     // updated_by_user_id NULL with a non-migration origin.
     let err = insert_value_row_for_schema_test(
-        &app_pool, org_id, person_id, text_field_id, "text", Some("hello"), None, None, None,
-        None, "web_session",
+        &app_pool,
+        org_id,
+        person_id,
+        text_field_id,
+        "text",
+        Some("hello"),
+        None,
+        None,
+        None,
+        None,
+        "web_session",
     )
     .await
     .unwrap_err();
     assert_eq!(
-        err.as_database_error().and_then(|d| d.code().map(|c| c.into_owned())),
+        err.as_database_error()
+            .and_then(|d| d.code().map(|c| c.into_owned())),
         Some("23514".to_string())
     );
     // ... but NULL is fine when origin = 'migration' (the task.sql
     // pattern, spec §2).
     insert_value_row_for_schema_test(
-        &app_pool, org_id, person_id, text_field_id, "text", Some("hello"), None, None, None,
-        None, "migration",
+        &app_pool,
+        org_id,
+        person_id,
+        text_field_id,
+        "text",
+        Some("hello"),
+        None,
+        None,
+        None,
+        None,
+        "migration",
     )
     .await
     .expect("a migration-origin row may have a NULL updated_by_user_id");
 
     // text_value format: too long, contains a newline, untrimmed.
     let other_person_id = insert_bare_person_for_schema_test(&app_pool, org_id, stage_id).await;
-    for bad_text in ["a".repeat(501), "line one\nline two".to_string(), " padded ".to_string()] {
+    for bad_text in [
+        "a".repeat(501),
+        "line one\nline two".to_string(),
+        " padded ".to_string(),
+    ] {
         let err = insert_value_row_for_schema_test(
             &app_pool,
             org_id,
@@ -2304,7 +2360,8 @@ async fn person_custom_field_value_check_constraints_matrix(migrator_pool: PgPoo
         .await
         .unwrap_err();
         assert_eq!(
-            err.as_database_error().and_then(|d| d.code().map(|c| c.into_owned())),
+            err.as_database_error()
+                .and_then(|d| d.code().map(|c| c.into_owned())),
             Some("23514".to_string()),
             "{bad_text:?} should violate the text_value CHECK"
         );
@@ -2356,22 +2413,31 @@ async fn custom_field_composite_fk_rejections(migrator_pool: PgPool) {
         insert_custom_field_option_for_schema_test(&app_pool, org_a, choice_field_a, "Cold", 1)
             .await
             .unwrap();
-    let other_choice_field_a = insert_custom_field_for_schema_test(
-        &app_pool, org_a, actor_a, "Other choice", "choice", 4,
-    )
-    .await
-    .unwrap();
+    let other_choice_field_a =
+        insert_custom_field_for_schema_test(&app_pool, org_a, actor_a, "Other choice", "choice", 4)
+            .await
+            .unwrap();
 
     // Cross-Organization value: a Person of org_b, a field of org_a.
     let person_b = insert_bare_person_for_schema_test(&app_pool, org_b, stage_b).await;
     let err = insert_value_row_for_schema_test(
-        &app_pool, org_b, person_b, text_field_a, "text", Some("hi"), None, None, None,
-        Some(actor_a), "web_session",
+        &app_pool,
+        org_b,
+        person_b,
+        text_field_a,
+        "text",
+        Some("hi"),
+        None,
+        None,
+        None,
+        Some(actor_a),
+        "web_session",
     )
     .await
     .unwrap_err();
     assert_eq!(
-        err.as_database_error().and_then(|d| d.code().map(|c| c.into_owned())),
+        err.as_database_error()
+            .and_then(|d| d.code().map(|c| c.into_owned())),
         Some("23503".to_string())
     );
 
@@ -2379,26 +2445,46 @@ async fn custom_field_composite_fk_rejections(migrator_pool: PgPool) {
     // field_type = 'text' — no (field_id, organization_id, field_type)
     // row exists to satisfy the FK.
     let err = insert_value_row_for_schema_test(
-        &app_pool, org_a, person_a, number_field_a, "text", Some("hi"), None, None, None,
-        Some(actor_a), "web_session",
+        &app_pool,
+        org_a,
+        person_a,
+        number_field_a,
+        "text",
+        Some("hi"),
+        None,
+        None,
+        None,
+        Some(actor_a),
+        "web_session",
     )
     .await
     .unwrap_err();
     assert_eq!(
-        err.as_database_error().and_then(|d| d.code().map(|c| c.into_owned())),
+        err.as_database_error()
+            .and_then(|d| d.code().map(|c| c.into_owned())),
         Some("23503".to_string())
     );
 
     // An option that belongs to a DIFFERENT field than the one the value
     // row names.
     let err = insert_value_row_for_schema_test(
-        &app_pool, org_a, person_a, other_choice_field_a, "choice", None, None, None,
-        Some(option_a), Some(actor_a), "web_session",
+        &app_pool,
+        org_a,
+        person_a,
+        other_choice_field_a,
+        "choice",
+        None,
+        None,
+        None,
+        Some(option_a),
+        Some(actor_a),
+        "web_session",
     )
     .await
     .unwrap_err();
     assert_eq!(
-        err.as_database_error().and_then(|d| d.code().map(|c| c.into_owned())),
+        err.as_database_error()
+            .and_then(|d| d.code().map(|c| c.into_owned())),
         Some("23503".to_string())
     );
 }
@@ -2428,8 +2514,17 @@ async fn custom_field_type_change_is_refused_while_a_value_exists(migrator_pool:
             .await
             .unwrap();
     insert_value_row_for_schema_test(
-        &app_pool, org_id, person_id, field_id, "number", None, Some("12.5"), None, None,
-        Some(actor_id), "web_session",
+        &app_pool,
+        org_id,
+        person_id,
+        field_id,
+        "number",
+        None,
+        Some("12.5"),
+        None,
+        None,
+        Some(actor_id),
+        "web_session",
     )
     .await
     .unwrap();

@@ -13,13 +13,13 @@ use crate::domain::admin::Role;
 use crate::domain::commands::{
     self, AssignPerson, ChangePersonStage, ContactChannel, ContactOutcome, LogContactAttempt,
 };
+use crate::domain::custom_field::{self, ClearPersonCustomFieldValue, SetPersonCustomFieldValue};
 use crate::domain::envelope::CommandContext;
 use crate::domain::inquiry::queries as inquiry_queries;
 use crate::domain::person::filter::{FilterDefinition, PersonFilterParams};
 use crate::domain::person::queries as person_queries;
 use crate::domain::person::sort::PersonSort;
 use crate::domain::person::PersonVisibilityScope;
-use crate::domain::custom_field::{self, ClearPersonCustomFieldValue, SetPersonCustomFieldValue};
 use crate::domain::tag::{self, AddPersonTag, RemovePersonTag};
 use crate::domain::task;
 use crate::error::ApiError;
@@ -528,7 +528,10 @@ async fn clear_person_custom_field_value(
         pool,
         &state.publisher,
         &ctx,
-        ClearPersonCustomFieldValue { person_id, field_id },
+        ClearPersonCustomFieldValue {
+            person_id,
+            field_id,
+        },
     )
     .await?;
 

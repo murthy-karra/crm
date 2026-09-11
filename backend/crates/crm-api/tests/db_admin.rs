@@ -517,7 +517,10 @@ async fn platform_admin_with_zero_memberships_has_null_organization_and_is_401_o
         serde_json::json!({ "label": "Should be 401" }),
     )
     .await;
-    assert_eq!(custom_field_option_post_resp.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        custom_field_option_post_resp.status(),
+        StatusCode::UNAUTHORIZED
+    );
     let custom_field_option_put_resp = put_json_with_cookie(
         &router,
         &format!("/api/custom-fields/{fake_field_id}/options/{fake_option_id}"),
@@ -525,7 +528,10 @@ async fn platform_admin_with_zero_memberships_has_null_organization_and_is_401_o
         serde_json::json!({ "label": "Should be 401", "archived": false }),
     )
     .await;
-    assert_eq!(custom_field_option_put_resp.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        custom_field_option_put_resp.status(),
+        StatusCode::UNAUTHORIZED
+    );
     let custom_field_value_put_resp = put_json_with_cookie(
         &router,
         &format!("/api/people/{fake_person_id}/custom-fields/{fake_field_id}"),
@@ -533,7 +539,10 @@ async fn platform_admin_with_zero_memberships_has_null_organization_and_is_401_o
         serde_json::json!({ "value": { "text": "Should be 401" } }),
     )
     .await;
-    assert_eq!(custom_field_value_put_resp.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        custom_field_value_put_resp.status(),
+        StatusCode::UNAUTHORIZED
+    );
     let custom_field_value_delete_resp = delete_with_cookie(
         &router,
         &format!("/api/people/{fake_person_id}/custom-fields/{fake_field_id}"),

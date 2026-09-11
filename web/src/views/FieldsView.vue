@@ -7,6 +7,7 @@
 // choice fields (add, rename, archive, restore; creation order, no
 // reorder); an Archived section with Restore; a "New field" form.
 import { computed, h, nextTick, ref } from 'vue'
+import { useQueryClient } from '@tanstack/vue-query'
 import type { ColumnDef } from '@tanstack/vue-table'
 import Select from 'primevue/select'
 import { ArrowDown, ArrowUp, Plus, X } from 'lucide-vue-next'
@@ -16,6 +17,7 @@ import DataTable from '../components/DataTable.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import FormField from '../components/FormField.vue'
 import {
+  queryKeys,
   useAddCustomFieldOptionMutation,
   useCreateCustomFieldMutation,
   useCustomFieldsQuery,
@@ -31,6 +33,7 @@ import { describeApiError } from '../lib/errors'
 
 const { data: me } = useMe()
 const orgId = computed(() => me.value?.organization?.id ?? '')
+const queryClient = useQueryClient()
 
 const { data, isPending, isError, error } = useCustomFieldsQuery(orgId)
 const fields = computed(() => data.value?.fields ?? [])
@@ -92,9 +95,13 @@ function submitCreate() {
       newOptions.value = ['']
     },
     onError: (err) => {
-      createError.value = err instanceof ApiError && err.code === 'custom_field_label_taken'
-        ? `"${body.label}" is already in use.`
-        : describeApiError(err, 'Could not create this field.')
+      if (err instanceof ApiError && err.code === 'custom_field_label_taken') {
+        createError.value = `"${body.label}" is already in use.`
+      } else if (err instanceof ApiError && err.code === 'custom_field_limit_reached') {
+        createError.value = 'This Organization already has 50 fields.'
+      } else {
+        createError.value = describeApiError(err, 'Could not create this field.')
+      }
     },
   })
 }
@@ -139,15 +146,31 @@ function saveRename(field: CustomField) {
 // ---- Reorder (up/down; PUT the full live order) ------------------------
 
 const reorderMutation = useReorderCustomFieldsMutation(orgId)
+const listError = ref<string | null>(null)
 function moveField(fieldId: string, delta: -1 | 1) {
   if (reorderMutation.isPending.value) return
+  listError.value = null
   const ids = liveFields.value.map((f) => f.id)
   const index = ids.indexOf(fieldId)
   const targetIndex = index + delta
   if (index === -1 || targetIndex < 0 || targetIndex >= ids.length) return
   const reordered = [...ids]
   ;[reordered[index], reordered[targetIndex]] = [reordered[targetIndex]!, reordered[index]!]
-  reorderMutation.mutate({ field_ids: reordered })
+  reorderMutation.mutate(
+    { field_ids: reordered },
+    {
+      onError: (err) => {
+        listError.value = describeApiError(err, 'Could not reorder fields.')
+        // A 422 means the live set changed under us (a field was archived
+        // or restored elsewhere) — the list this ordering was built from is
+        // stale, so refetch it rather than leaving the up/down arrows
+        // pointed at an order the server just refused.
+        if (err instanceof ApiError && err.status === 422) {
+          void queryClient.invalidateQueries({ queryKey: queryKeys.customFields(orgId.value) })
+        }
+      },
+    },
+  )
 }
 
 // ---- Archive (ConfirmDialog naming the count) / restore ------------------
@@ -183,7 +206,17 @@ const archiveMessage = computed(() => {
 const restoreMutation = useUpdateCustomFieldMutation(orgId)
 function restoreField(field: CustomField) {
   if (restoreMutation.isPending.value) return
-  restoreMutation.mutate({ fieldId: field.id, body: { label: field.label, archived: false } })
+  listError.value = null
+  restoreMutation.mutate(
+    { fieldId: field.id, body: { label: field.label, archived: false } },
+    {
+      onError: (err) => {
+        listError.value = err instanceof ApiError && err.code === 'custom_field_label_taken'
+          ? `"${field.label}" is already in use.`
+          : describeApiError(err, 'Could not restore this field.')
+      },
+    },
+  )
 }
 function isRestoring(fieldId: string): boolean {
   return restoreMutation.isPending.value && restoreMutation.variables.value?.fieldId === fieldId
@@ -214,9 +247,13 @@ function submitAddOption() {
         newOptionLabel.value = ''
       },
       onError: (err) => {
-        addOptionError.value = err instanceof ApiError && err.code === 'option_label_taken'
-          ? `"${label}" is already an option on this field.`
-          : describeApiError(err, 'Could not add this option.')
+        if (err instanceof ApiError && err.code === 'option_label_taken') {
+          addOptionError.value = `"${label}" is already an option on this field.`
+        } else if (err instanceof ApiError && err.code === 'option_limit_reached') {
+          addOptionError.value = 'This field already has 50 options.'
+        } else {
+          addOptionError.value = describeApiError(err, 'Could not add this option.')
+        }
       },
     },
   )
@@ -257,15 +294,34 @@ function saveOptionRename(option: CustomFieldOption) {
     },
   )
 }
+const optionActionError = ref<string | null>(null)
 function archiveOption(option: CustomFieldOption) {
   const field = optionsField.value
   if (!field || updateOptionMutation.isPending.value) return
-  updateOptionMutation.mutate({ fieldId: field.id, optionId: option.id, body: { label: option.label, archived: true } })
+  optionActionError.value = null
+  updateOptionMutation.mutate(
+    { fieldId: field.id, optionId: option.id, body: { label: option.label, archived: true } },
+    {
+      onError: (err) => {
+        optionActionError.value = describeApiError(err, 'Could not archive this option.')
+      },
+    },
+  )
 }
 function restoreOption(option: CustomFieldOption) {
   const field = optionsField.value
   if (!field || updateOptionMutation.isPending.value) return
-  updateOptionMutation.mutate({ fieldId: field.id, optionId: option.id, body: { label: option.label, archived: false } })
+  optionActionError.value = null
+  updateOptionMutation.mutate(
+    { fieldId: field.id, optionId: option.id, body: { label: option.label, archived: false } },
+    {
+      onError: (err) => {
+        optionActionError.value = err instanceof ApiError && err.code === 'option_label_taken'
+          ? `"${option.label}" is already an option on this field.`
+          : describeApiError(err, 'Could not restore this option.')
+      },
+    },
+  )
 }
 function isOptionPending(optionId: string): boolean {
   return updateOptionMutation.isPending.value && updateOptionMutation.variables.value?.optionId === optionId
@@ -589,6 +645,14 @@ const archivedColumns: ColumnDef<CustomField>[] = [
         count-noun-singular="field"
         empty-message="No custom fields yet."
       />
+      <p
+        v-if="listError"
+        role="alert"
+        class="mt-2 text-small text-danger"
+        data-testid="fields-list-error"
+      >
+        {{ listError }}
+      </p>
 
       <Card
         v-if="optionsField"
@@ -597,6 +661,14 @@ const archivedColumns: ColumnDef<CustomField>[] = [
         <h2 class="mb-4 text-section font-semibold text-text">
           Options for {{ optionsField.label }}
         </h2>
+        <p
+          v-if="optionActionError"
+          role="alert"
+          class="mb-3 text-small text-danger"
+          data-testid="option-action-error"
+        >
+          {{ optionActionError }}
+        </p>
         <ul class="mb-4 divide-y divide-border">
           <li
             v-for="option in liveOptions"

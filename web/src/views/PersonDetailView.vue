@@ -355,14 +355,20 @@ function renderedTextValue(value: PersonCustomFieldValue | undefined): string {
 
 interface CustomFieldEditorState {
   draft: string
+  server: string
+  dirty: boolean
   error: string | null
 }
 const fieldEditors = reactive<Record<string, CustomFieldEditorState>>({})
 
-// Initialize a row's draft the first time it is seen, never overwriting one
-// already in progress (typing, or a pending save); drop an editor once its
-// field is archived/removed so a later restore re-initializes from the
-// server instead of replaying a stale draft.
+// Initialize a row's editor the first time it is seen, tracking the last
+// known server string separately from the local draft: a refetch (realtime,
+// this mutation's own settle, a sibling tab) that changes the server value
+// while the viewer has an in-progress, uncommitted edit (`dirty`) must not
+// clobber their draft — but once they are not mid-edit, the draft should
+// track the server truth like any other read-only field. Drop an editor
+// once its field is archived/removed so a later restore re-initializes from
+// the server instead of replaying a stale draft.
 watch(
   customFieldRows,
   (rows) => {
@@ -371,8 +377,13 @@ watch(
       if (!liveIds.has(id)) delete fieldEditors[id]
     }
     for (const row of rows) {
-      if (!(row.field.id in fieldEditors)) {
-        fieldEditors[row.field.id] = { draft: renderedTextValue(row.value), error: null }
+      const server = renderedTextValue(row.value)
+      const editor = fieldEditors[row.field.id]
+      if (!editor) {
+        fieldEditors[row.field.id] = { draft: server, server, dirty: false, error: null }
+      } else if (server !== editor.server) {
+        editor.server = server
+        if (!editor.dirty) editor.draft = server
       }
     }
   },
@@ -382,18 +393,28 @@ watch(
 const setCustomFieldValue = useSetCustomFieldValueMutation(orgId, () => props.id)
 const clearCustomFieldValue = useClearCustomFieldValueMutation(orgId, () => props.id)
 
+// A local set of in-flight field ids rather than reading the shared
+// mutation objects' `.isPending`/`.variables` — with a single shared
+// mutation per (set|clear) action, a second row's call while the first is
+// still in flight overwrites `.variables`, so the shared-observer read used
+// to misreport which row was actually pending. `mutateAsync` + try/catch
+// below (rather than `.mutate` + callbacks) lets each row track its own
+// membership in this set precisely.
+const pendingCustomFieldIds = reactive(new Set<string>())
 function isCustomFieldPending(fieldId: string): boolean {
-  return (
-    (setCustomFieldValue.isPending.value && setCustomFieldValue.variables.value?.fieldId === fieldId) ||
-    (clearCustomFieldValue.isPending.value && clearCustomFieldValue.variables.value?.fieldId === fieldId)
-  )
+  return pendingCustomFieldIds.has(fieldId)
 }
 
-// §7: a 409 `field_archived` (archived since the page loaded) or a 404
-// (the Person or field vanished) refetches definitions and the Person so
-// the next render reflects reality instead of a stale row.
+// §7: a 409 `field_archived` (archived since the page loaded), a 404 (the
+// Person or field vanished), or a 422 `unknown_option` (the held/chosen
+// option was archived-then-hard-gone from the definition between load and
+// save) refetches definitions and the Person so the next render reflects
+// reality instead of a stale row.
 function refetchCustomFieldsOnStaleReference(err: unknown) {
-  if (err instanceof ApiError && (err.status === 409 || err.status === 404)) {
+  if (
+    err instanceof ApiError &&
+    (err.status === 409 || err.status === 404 || (err.status === 422 && err.code === 'unknown_option'))
+  ) {
     void queryClient.invalidateQueries({ queryKey: queryKeys.customFields(orgId.value) })
     void queryClient.invalidateQueries({ queryKey: queryKeys.person(orgId.value, props.id) })
   }
@@ -401,35 +422,41 @@ function refetchCustomFieldsOnStaleReference(err: unknown) {
 
 /** An empty (post-trim) draft clears the value rather than sending an
  * empty-string text value, which the server would reject as `invalid_value`
- * (the CHECK's 1–500-character floor). */
-function saveTextOrDateField(row: CustomFieldRow) {
+ * (the CHECK's 1–500-character floor). A no-op when the draft has not
+ * actually changed (`!dirty`) — this is what makes Escape-then-blur safe
+ * (revert clears `dirty` before the blur handler runs) and stops every
+ * blur, edited or not, from making a round trip. `event` is only consulted
+ * for the date input's `validity.badInput` (a partially-typed date native
+ * control reports as an empty, otherwise-valid value; §2 would silently
+ * clear such a field without this check). */
+async function saveTextOrDateField(row: CustomFieldRow, event?: Event) {
   const editor = fieldEditors[row.field.id]
-  if (!editor || isCustomFieldPending(row.field.id)) return
+  if (!editor || !editor.dirty || pendingCustomFieldIds.has(row.field.id)) return
+  if (row.field.field_type === 'date' && event) {
+    const input = event.target as HTMLInputElement
+    if (input.validity?.badInput) {
+      editor.error = 'Enter a complete date.'
+      return
+    }
+  }
   editor.error = null
   const draft = editor.draft.trim()
-  if (draft === '') {
-    clearCustomFieldValue.mutate(
-      { personId: props.id, fieldId: row.field.id },
-      {
-        onError: (err) => {
-          editor.error = describeApiError(err, 'Could not clear this value.')
-          refetchCustomFieldsOnStaleReference(err)
-        },
-      },
-    )
-    return
+  pendingCustomFieldIds.add(row.field.id)
+  try {
+    if (draft === '') {
+      await clearCustomFieldValue.mutateAsync({ personId: props.id, fieldId: row.field.id })
+    } else {
+      const value: CustomFieldValuePayload =
+        row.field.field_type === 'number' ? { number: draft } : row.field.field_type === 'date' ? { date: draft } : { text: draft }
+      await setCustomFieldValue.mutateAsync({ personId: props.id, fieldId: row.field.id, body: { value } })
+    }
+    editor.dirty = false
+  } catch (err) {
+    editor.error = describeApiError(err, draft === '' ? 'Could not clear this value.' : 'Could not save this value.')
+    refetchCustomFieldsOnStaleReference(err)
+  } finally {
+    pendingCustomFieldIds.delete(row.field.id)
   }
-  const value: CustomFieldValuePayload =
-    row.field.field_type === 'number' ? { number: draft } : row.field.field_type === 'date' ? { date: draft } : { text: draft }
-  setCustomFieldValue.mutate(
-    { personId: props.id, fieldId: row.field.id, body: { value } },
-    {
-      onError: (err) => {
-        editor.error = describeApiError(err, 'Could not save this value.')
-        refetchCustomFieldsOnStaleReference(err)
-      },
-    },
-  )
 }
 
 // §2: the same pattern `^-?[0-9]{1,15}(\.[0-9]{1,4})?$` the server
@@ -440,19 +467,24 @@ const NUMBER_PATTERN = /^-?[0-9]{1,15}(\.[0-9]{1,4})?$/
 
 function saveNumberField(row: CustomFieldRow) {
   const editor = fieldEditors[row.field.id]
-  if (!editor || isCustomFieldPending(row.field.id)) return
+  if (!editor || !editor.dirty || pendingCustomFieldIds.has(row.field.id)) return
   const draft = editor.draft.trim()
   if (draft !== '' && !NUMBER_PATTERN.test(draft)) {
     editor.error = 'Enter a number with up to 4 decimal places.'
     return
   }
-  saveTextOrDateField(row)
+  void saveTextOrDateField(row)
 }
 
+/** Restores the last-known server string and clears the in-progress edit —
+ * `dirty = false` is what stops the `@blur` this Escape triggers (via
+ * `.blur()` below) from re-sending: `saveTextOrDateField` returns early on
+ * a clean editor, so no suppress flag is needed. */
 function revertCustomField(row: CustomFieldRow) {
   const editor = fieldEditors[row.field.id]
   if (!editor) return
-  editor.draft = renderedTextValue(row.value)
+  editor.draft = editor.server
+  editor.dirty = false
   editor.error = null
 }
 
@@ -463,7 +495,7 @@ function revertCustomField(row: CustomFieldRow) {
 function onTextOrDateFieldKeydown(row: CustomFieldRow, event: KeyboardEvent) {
   if (event.key === 'Enter') {
     event.preventDefault()
-    saveTextOrDateField(row)
+    void saveTextOrDateField(row, event)
   } else if (event.key === 'Escape') {
     event.preventDefault()
     revertCustomField(row)
@@ -484,7 +516,9 @@ function onNumberFieldKeydown(row: CustomFieldRow, event: KeyboardEvent) {
 
 function onCustomFieldInput(row: CustomFieldRow, event: Event) {
   const editor = fieldEditors[row.field.id]
-  if (editor) editor.draft = (event.target as HTMLInputElement).value
+  if (!editor) return
+  editor.draft = (event.target as HTMLInputElement).value
+  editor.dirty = true
 }
 
 // ---- Choice editor: a Select, mutates immediately (the stage/assignee
@@ -516,38 +550,44 @@ function choiceOptions(row: CustomFieldRow): ChoiceOptionItem[] {
   return options
 }
 
-// No "same as currently held" no-op guard: values are pessimistic (no
-// optimistic write), so the cache can still show the pre-mutation value
-// while a prior selection is in flight — comparing against it could skip
-// a genuine, later change (e.g. selecting "Warm" then immediately Clear).
-// The server's own upsert is already idempotent (`changed: false` when
-// nothing actually differs), so re-sending the same option_id (the
-// "keep current" archived entry re-selected) is always safe.
+// A targeted no-op guard: skip the request only when the Select re-fires
+// its currently-held value AND that value is the synthetic "keep current
+// (archived)" entry — PrimeVue's Select can re-emit `update:model-value`
+// for the option already selected (e.g. a re-render reconciling the same
+// item), and since that entry exists solely to let an archived-but-held
+// option keep displaying, re-sending it is pure noise, never a genuine
+// change. This is deliberately NOT a blanket "same as currently held"
+// check: values are pessimistic (no optimistic write), so the cache can
+// still show the pre-mutation value while a prior selection is in flight,
+// and a blanket check could then skip a genuine, later change (e.g.
+// selecting "Warm" then immediately Clear). A live option being re-selected
+// is not skipped — the server's own upsert is idempotent there regardless.
 function onChoiceChange(row: CustomFieldRow, optionId: unknown) {
   if (typeof optionId !== 'string' && optionId !== null) return
-  const editor = fieldEditors[row.field.id]
-  if (editor) editor.error = null
-  if (optionId === null) {
-    clearCustomFieldValue.mutate(
-      { personId: props.id, fieldId: row.field.id },
-      {
-        onError: (err) => {
-          if (editor) editor.error = describeApiError(err, 'Could not clear this value.')
-          refetchCustomFieldsOnStaleReference(err)
-        },
-      },
-    )
+  const held = heldOptionId(row)
+  if (optionId === held && held !== null && !row.field.options.some((o) => o.id === held && o.archived_at === null)) {
     return
   }
-  setCustomFieldValue.mutate(
-    { personId: props.id, fieldId: row.field.id, body: { value: { option_id: optionId } } },
-    {
-      onError: (err) => {
-        if (editor) editor.error = describeApiError(err, 'Could not save this value.')
-        refetchCustomFieldsOnStaleReference(err)
-      },
-    },
-  )
+  void applyChoiceChange(row, optionId)
+}
+
+async function applyChoiceChange(row: CustomFieldRow, optionId: string | null) {
+  const editor = fieldEditors[row.field.id]
+  if (editor) editor.error = null
+  if (pendingCustomFieldIds.has(row.field.id)) return
+  pendingCustomFieldIds.add(row.field.id)
+  try {
+    if (optionId === null) {
+      await clearCustomFieldValue.mutateAsync({ personId: props.id, fieldId: row.field.id })
+    } else {
+      await setCustomFieldValue.mutateAsync({ personId: props.id, fieldId: row.field.id, body: { value: { option_id: optionId } } })
+    }
+  } catch (err) {
+    if (editor) editor.error = describeApiError(err, optionId === null ? 'Could not clear this value.' : 'Could not save this value.')
+    refetchCustomFieldsOnStaleReference(err)
+  } finally {
+    pendingCustomFieldIds.delete(row.field.id)
+  }
 }
 
 // ---- Notes (SLICE_015 §5, §9.10) -------------------------------------------
@@ -1895,7 +1935,7 @@ watch(
                 :disabled="isCustomFieldPending(row.field.id)"
                 data-testid="custom-field-date-input"
                 @input="onCustomFieldInput(row, $event)"
-                @blur="saveTextOrDateField(row)"
+                @blur="saveTextOrDateField(row, $event)"
                 @keydown="onTextOrDateFieldKeydown(row, $event)"
               >
               <Select

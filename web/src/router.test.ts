@@ -236,6 +236,13 @@ describe('router guards (SLICE_004 §10)', () => {
       expect(router.currentRoute.value.path).toBe('/today')
     })
 
+    it('is bounced from /manage/migration to /today (not an admin; SLICE_010a §6)', async () => {
+      vi.mocked(fetchMe).mockResolvedValue(MEMBER)
+      const router = freshRouter()
+      await router.push('/manage/migration')
+      expect(router.currentRoute.value.path).toBe('/today')
+    })
+
     it('is bounced from /platform to /today (not a platform admin)', async () => {
       vi.mocked(fetchMe).mockResolvedValue(MEMBER)
       const router = freshRouter()
@@ -281,6 +288,13 @@ describe('router guards (SLICE_004 §10)', () => {
       const router = freshRouter()
       await router.push('/manage/today-feeds')
       expect(router.currentRoute.value.path).toBe('/manage/today-feeds')
+    })
+
+    it('reaches /manage/migration (SLICE_010a §6)', async () => {
+      vi.mocked(fetchMe).mockResolvedValue(ADMIN)
+      const router = freshRouter()
+      await router.push('/manage/migration')
+      expect(router.currentRoute.value.path).toBe('/manage/migration')
     })
 
     it('is still bounced from /platform (not a platform admin)', async () => {

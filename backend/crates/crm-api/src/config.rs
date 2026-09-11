@@ -136,6 +136,7 @@ fn decode_hex_32(raw: &str) -> Option<[u8; 32]> {
 
 #[derive(Debug, Clone)]
 pub struct Config {
+    pub fub_system: crm_app::domain::migration::reader::FubSystemConfig,
     pub bind_addr: SocketAddr,
     pub database_url: Option<String>,
     pub database_connect_timeout: Duration,
@@ -598,6 +599,10 @@ impl Config {
         };
 
         Ok(Config {
+            fub_system: crm_app::domain::migration::reader::FubSystemConfig {
+                name: get("CRM_FUB_SYSTEM_NAME").filter(|v| !v.is_empty()),
+                key: get("CRM_FUB_SYSTEM_KEY").filter(|v| !v.is_empty()),
+            },
             bind_addr,
             database_url,
             database_connect_timeout: Duration::from_millis(timeout_ms),

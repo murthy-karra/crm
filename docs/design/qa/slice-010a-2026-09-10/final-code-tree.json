@@ -1,0 +1,31 @@
+{
+  "base": "b2fb368",
+  "branch": "codex/slice-010a-fub-assessment",
+  "files": {
+    ".env.example": "365b33bb3eb65a2539d1e7ac2fcd4c504040742dd34b09ee7f06f3e45f484e33",
+    "backend/crates/crm-api/migrations/20260916000001_fub_migration_assessment.sql": "6166e25d35328c3357cd6cccd086aefec1d3c82f1fa6f3d7b9b01f60ad02078f",
+    "backend/crates/crm-api/src/config.rs": "39b47bf1ffa1a6beb9af0945d8f4c611a97a242b0ccefe1edc153062b49b685f",
+    "backend/crates/crm-api/src/error.rs": "a1dc848f1062f0e538b916f2c26e93db4236b3a5e6738afa060c789e7c7a23cb",
+    "backend/crates/crm-api/src/lib.rs": "cffac06f0898ab41fc4e2463ad2b45e901341339d7b01cc3d69ee75368d63fac",
+    "backend/crates/crm-api/src/routes/migrations.rs": "e5f56dcee1645f79fb510d3b7da9f9cd5e05934f5789f2045547a2bd25bd8053",
+    "backend/crates/crm-api/src/routes/mod.rs": "10e460493fd57ac41eee1916aad2d1a949b60828127db0deb2abdb32c6c319f2",
+    "backend/crates/crm-api/src/state.rs": "f6c205845377372ac07b2d5c99f0616fa2014f9fd3396f9770055916edbd3750",
+    "backend/crates/crm-api/tests/all.rs": "15107edf20c1ce1ed7691bab43dd15786fda8249661600258ccdd4d41ab6600f",
+    "backend/crates/crm-api/tests/db_migration.rs": "01b79d0d2ca17fef8513eb917103c2495ab355929023cbb0542e49c9b1c174e3",
+    "backend/crates/crm-app/src/domain/migration/commands.rs": "76617823b019bce616a98f7b04013fd9632c9493659a9b8189cbe2c79a8327ac",
+    "backend/crates/crm-app/src/domain/migration/crypto.rs": "691962832e7a3a591bbbb8f6443d2ec2630a26214c99cf6aa9feefffc10e26b5",
+    "backend/crates/crm-app/src/domain/migration/mod.rs": "48f83f851688a97d519e6e2eca0383142f97a7a405145ccd6bf6124fbeea7936",
+    "backend/crates/crm-app/src/domain/migration/reader.rs": "c2949af8a50a25903cae3742d821b33dea9a6133bdf9ecd90d808077ad24e884",
+    "backend/crates/crm-app/src/domain/migration/store.rs": "48b5fb5179d759fe11ceb8bd505950719d5b571f51bcbb36ddb22a66ce74da82",
+    "backend/crates/crm-app/src/domain/migration/worker.rs": "4dbbc80a947db6df9ffbd64b8afa53d3ccac842c28ee6ce8004b51eaa295cbf2",
+    "backend/crates/crm-app/src/domain/mod.rs": "129c253e2e263161f73eb8dd991927f313663fb982d254eebb175c58a2182810",
+    "web/src/api/migrations.ts": "c614a06a94991f20cef70c56573de2eff0b61fc3a94a08cd9e65ddec0e6338f6",
+    "web/src/api/queries.ts": "2f32d8cd5a8f10a29b21856bc9217f1d2290e8c07b2b6af7ad56129de2df0d3f",
+    "web/src/components/AppShell.test.ts": "0566ef1d70a932007701aab78f54f25f65a50f5fa1a81fb88dfbaf170cf8c650",
+    "web/src/components/AppShell.vue": "ca2f74d7cfc934516472c940384ffd98afb8ea13b7af51b14bad1dec38dd1224",
+    "web/src/router.test.ts": "0c0cb61e8cc9061ca1686885988d54b5b7bbc2b7a6a3f17beb08ea25f111304b",
+    "web/src/router.ts": "e80f3baea676b9cf19250206482651c685b88102cfbce43461262867f3b23011",
+    "web/src/views/MigrationView.test.ts": "56d14486eee5a769f03b631c61364f3ad0fefb2fb5864a9ed3e683a9f4c49f9a",
+    "web/src/views/MigrationView.vue": "6e2563328bdeec91198a88be25add89fb4d1ab14b77cc3a17d989559a066941e"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "result": "passed",
+  "source": "synthetic FUB reader + real CRM API",
+  "checks": [
+    "connect, assess, partial report and reload",
+    "previous report retained while active",
+    "cancel active and paused",
+    "retry paused",
+    "replace/disconnect and disabled assessment",
+    "clear credential on submission/leave, no browser persistence",
+    "member route denial and Organization change",
+    "contained narrow-screen table",
+    "no browser runtime errors"
+  ],
+  "live_validation": "explicitly user-deferred"
+}

@@ -368,6 +368,7 @@ describe('AppShell Manage nav (SLICE_011e §5)', () => {
     expect(wrapper.find('a[href="/manage/members"]').exists()).toBe(false)
     expect(wrapper.find('a[href="/manage/intake"]').exists()).toBe(false)
     expect(wrapper.find('a[href="/manage/today-feeds"]').exists()).toBe(false)
+    expect(wrapper.find('a[href="/manage/migration"]').exists()).toBe(false)
     wrapper.unmount()
   })
 })

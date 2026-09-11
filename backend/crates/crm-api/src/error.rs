@@ -8,6 +8,7 @@ use crate::domain::capture::commands::CaptureCommandError;
 use crate::domain::commands::{CallError, CommandError};
 use crate::domain::custom_field::CustomFieldError;
 use crate::domain::intake::workbench::WorkbenchError;
+use crate::domain::migration::MigrationError;
 use crate::domain::note::NoteError;
 use crate::domain::person::filter::FilterError;
 use crate::domain::saved_list::SavedListError;
@@ -136,6 +137,8 @@ pub enum ApiError {
     /// A choice value named an option that is archived, belongs to a
     /// different field, or does not exist — byte-identical for all three.
     UnknownOption,
+    MigrationConflict,
+    InvalidMigrationCredential,
 }
 
 impl IntoResponse for ApiError {
@@ -254,6 +257,12 @@ impl IntoResponse for ApiError {
             ApiError::OptionLabelTaken => (StatusCode::CONFLICT, "option_label_taken", None),
             ApiError::FieldArchived => (StatusCode::CONFLICT, "field_archived", None),
             ApiError::UnknownOption => (StatusCode::UNPROCESSABLE_ENTITY, "unknown_option", None),
+            ApiError::MigrationConflict => (StatusCode::CONFLICT, "migration_conflict", None),
+            ApiError::InvalidMigrationCredential => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "invalid_migration_credential",
+                None,
+            ),
         };
 
         let body = Json(json!({ "error": code }));
@@ -265,6 +274,22 @@ impl IntoResponse for ApiError {
             )
                 .into_response(),
             None => (status, body).into_response(),
+        }
+    }
+}
+
+impl From<MigrationError> for ApiError {
+    fn from(err: MigrationError) -> Self {
+        match err {
+            MigrationError::Forbidden => ApiError::Forbidden,
+            MigrationError::NotFound => Self::NotFound,
+            MigrationError::Conflict | MigrationError::SourceAccountMismatch => {
+                Self::MigrationConflict
+            }
+            MigrationError::InvalidInput => Self::MalformedRequest,
+            MigrationError::InvalidCredential => Self::InvalidMigrationCredential,
+            MigrationError::ReaderUnavailable | MigrationError::Database(_) => Self::Unavailable,
+            MigrationError::Crypto => Self::InternalError,
         }
     }
 }

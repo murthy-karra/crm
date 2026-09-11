@@ -1,0 +1,15 @@
+{
+  "command": "PATH=/Users/karrad/.nvm/versions/node/v24.16.0/bin:$PATH ./scripts/check",
+  "exit_code": 0,
+  "result": "passed",
+  "rust_tests": 839,
+  "doctests": 5,
+  "web_tests": 889,
+  "email_worker_tests": 11,
+  "elapsed_seconds": 15,
+  "log_sha256": "ef7409009cd6e45d9ae00c1598d5a9af9664fb089ab4b89b943abf72175b6913",
+  "notes": [
+    "Formatting, Clippy, production build shape, dependency fences, Web lint/typecheck/build passed.",
+    "Existing Vite large-chunk warning remains."
+  ]
+}

@@ -153,6 +153,12 @@ function routes(): RouteRecordRaw[] {
       meta: { requiresOrgAdmin: true, title: 'Fields' },
     },
     {
+      path: '/manage/migration',
+      name: 'manage-migration',
+      component: () => import('./views/MigrationView.vue'),
+      meta: { requiresOrgAdmin: true, title: 'Migration' },
+    },
+    {
       path: '/platform',
       name: 'platform-organizations',
       component: () => import('./views/PlatformOrganizationsView.vue'),

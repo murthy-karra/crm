@@ -2,7 +2,7 @@
 // D-045: compact white navigation; shared session, Operator and call ownership.
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch, type Component } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import { AtSign, Building2, Inbox, ListChecks, ListFilter, LogOut, Mail, SlidersHorizontal, Sparkles, Sun, Tag as TagIcon, UserCog, UserPlus, Users } from 'lucide-vue-next'
+import { AtSign, Building2, Inbox, ListChecks, ListFilter, LogOut, Mail, SlidersHorizontal, Sparkles, Sun, Tag as TagIcon, UserCog, UserPlus, Users, Waypoints } from 'lucide-vue-next'
 import { useAuthSessionLifetime, useLogoutMutation, useMe } from '../api/queries'
 import {
   resetSessionCoordination,
@@ -113,6 +113,7 @@ const navGroups = computed<NavGroup[]>(() => {
       // SLICE_019.md §7: definitions/options are admin-only (D-058 §2),
       // unlike Tags below.
       { label: 'Fields', to: '/manage/fields', icon: SlidersHorizontal },
+      { label: 'Migration', to: '/manage/migration', icon: Waypoints },
     )
   }
   manageItems.push({ label: 'Tags', to: '/manage/tags', icon: TagIcon })

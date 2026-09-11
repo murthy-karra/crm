@@ -7,6 +7,8 @@
 //! before anything else runs. This is also the one place outside text is
 //! wrapped as `UntrustedText`.
 
+use std::collections::HashMap;
+
 use async_trait::async_trait;
 use sqlx::pool::PoolConnection;
 use sqlx::{Connection, PgConnection, PgPool, Postgres};
@@ -121,6 +123,8 @@ fn build_filter_names(
             .map(|m| (m.user_id, m.display_name.clone()))
             .collect(),
         tag_names: tags.iter().map(|t| (t.id, t.name.clone())).collect(),
+        custom_field_names: HashMap::new(),
+        custom_option_names: HashMap::new(),
     }
 }
 

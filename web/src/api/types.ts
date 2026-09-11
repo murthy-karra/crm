@@ -283,6 +283,10 @@ export type FilterClauseKind =
   | 'awaiting_call_outcome'
   | 'tags'
   | 'not_tags'
+  | 'custom_text'
+  | 'custom_number'
+  | 'custom_date'
+  | 'custom_choice'
 
 export type FilterClause =
   | { kind: 'stage'; stage_ids: string[] }
@@ -302,6 +306,10 @@ export type FilterClause =
   // not_tags (none-of), one clause per kind, same 20-clause cap. -----------
   | { kind: 'tags'; tag_ids: string[] }
   | { kind: 'not_tags'; tag_ids: string[] }
+  | { kind: 'custom_text'; field_id: string; test: { op: 'is_set' | 'is_not_set' } | { op: 'contains' | 'not_contains'; text: string } }
+  | { kind: 'custom_number'; field_id: string; test: { op: 'is_set' | 'is_not_set' } | { op: 'range' | 'not_range'; min?: string; max?: string } }
+  | { kind: 'custom_date'; field_id: string; test: { op: 'is_set' | 'is_not_set' } | { op: 'range' | 'not_range'; min?: string; max?: string } }
+  | { kind: 'custom_choice'; field_id: string; test: { op: 'is_set' | 'is_not_set' } | { op: 'any_of' | 'none_of'; option_ids: string[] } }
 
 export interface FilterDefinition {
   version: 1
@@ -343,6 +351,8 @@ export type SavedListFilterError =
   | 'invalid_stage'
   | 'invalid_assignee'
   | 'invalid_tag'
+  | 'invalid_field'
+  | 'invalid_option'
 
 export interface SavedListsResponse {
   lists: SavedListMetadata[]

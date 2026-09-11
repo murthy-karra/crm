@@ -1,0 +1,26 @@
+{
+  "fixture": {
+    "builtins": 100,
+    "call_only": 10,
+    "definitions": 50,
+    "members": 50,
+    "people": 25000,
+    "shape_sha256": "4c977de366d2532cae45c534a76ca0fd9e5e8d18a044a283d4db9716d3096622",
+    "source_candidates": 100,
+    "values_per_person": 5
+  },
+  "preflight": {
+    "frozen_families": 14,
+    "live_families": 14
+  },
+  "protocol": "slice-019b-authenticated-request-v1",
+  "serial": {
+    "samples": 40,
+    "warmups": 5
+  },
+  "today": {
+    "concurrency": 5,
+    "measured_waves": 8,
+    "warmup_waves": 2
+  }
+}

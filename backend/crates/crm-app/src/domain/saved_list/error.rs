@@ -17,6 +17,8 @@ pub enum SavedListError {
     InvalidAssignee,
     /// docs/specs/SLICE_011e.md §4b.
     InvalidTag,
+    InvalidField,
+    InvalidOption,
     UnsupportedFilter,
     RevisionExhausted,
     Corrupt,
@@ -36,6 +38,8 @@ impl From<FilterError> for SavedListError {
             FilterError::InvalidStage => Self::InvalidStage,
             FilterError::InvalidAssignee => Self::InvalidAssignee,
             FilterError::InvalidTag => Self::InvalidTag,
+            FilterError::InvalidField => Self::InvalidField,
+            FilterError::InvalidOption => Self::InvalidOption,
             FilterError::Database(error) => Self::Database(error),
         }
     }
@@ -58,6 +62,8 @@ impl SavedListError {
             Self::InvalidStage => "invalid_stage",
             Self::InvalidAssignee => "invalid_assignee",
             Self::InvalidTag => "invalid_tag",
+            Self::InvalidField => "invalid_field",
+            Self::InvalidOption => "invalid_option",
             Self::UnsupportedFilter => "unsupported_filter",
             Self::RevisionExhausted => "revision_exhausted",
             Self::Corrupt => "corrupt",

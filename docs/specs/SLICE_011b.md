@@ -1,5 +1,8 @@
 # Slice 011b — Saved lists
 
+**Slice 019b amendment (approved 2026-09-10):**
+[Custom-field filtering](SLICE_019b.md). Amends §§3–5: stored v1 filters may contain the new typed custom-field clauses; invalid_field and invalid_option preserve repairable definitions and fail counts closed. The approved 019b specification records old-binary rollback and criteria-retention behavior.
+
 **Approved amendment — Slice 011c (2026-09-06):**
 [SLICE_011c §§2–6](SLICE_011c.md) extend §§3–7 with per-agent Today source
 controls/routes, live saved-definition evaluation, atomic source-preference

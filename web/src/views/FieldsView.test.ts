@@ -322,11 +322,11 @@ describe('FieldsView — reorder', () => {
 })
 
 describe('FieldsView — archive / restore', () => {
-  it('names the affected-people count and sends archived: true on confirm', async () => {
+  it('explains the saved-filter consequence and sends archived: true on confirm', async () => {
     const { wrapper } = await mountView()
     await wrapper.findAll('[data-testid="archive-field"]')[0].trigger('click')
     await flushPromises()
-    expect(document.querySelector('[role="dialog"]')?.textContent).toContain('3 people have a value on it')
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Filters using this field will need repair or restoration.')
     dialogButton('Archive')?.click()
     await flushPromises()
     const call = lastCall('PUT', `/custom-fields/${BUDGET.id}`)
@@ -334,11 +334,11 @@ describe('FieldsView — archive / restore', () => {
     expect(document.querySelector('[role="dialog"]')).toBeFalsy()
   })
 
-  it('states "no values yet" for a zero-count field', async () => {
+  it('uses the same generic filter consequence for a zero-count field', async () => {
     const { wrapper } = await mountView()
     await wrapper.findAll('[data-testid="archive-field"]')[1].trigger('click')
     await flushPromises()
-    expect(document.querySelector('[role="dialog"]')?.textContent).toContain('It has no values yet.')
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Filters using this field will need repair or restoration.')
   })
 
   it('restores an archived field with archived: false', async () => {

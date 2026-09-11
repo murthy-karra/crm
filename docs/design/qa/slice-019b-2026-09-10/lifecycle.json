@@ -1,0 +1,11 @@
+{
+  "list_id": "a63d73f9-33b3-48f3-ba73-80dfc5d57c45",
+  "initial_revision": 1,
+  "option_archive_status": 200,
+  "archived_filter_error": "invalid_field",
+  "archived_revision": 1,
+  "archived_count_status": 422,
+  "restored_revision": 1,
+  "restored_filter_error": null,
+  "restored_count": 1
+}

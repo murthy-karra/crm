@@ -1,0 +1,77 @@
+- complementary:
+  - img "Elysium CRM"
+  - generic: 0R
+  - generic "019b QA Realty"
+  - navigation "Main navigation":
+    - paragraph: Work
+    - link "Today":
+      - /url: /today
+      - generic: Today
+    - link "People":
+      - /url: /people
+      - generic: People
+    - link "Lists":
+      - /url: /lists
+      - generic: Lists
+    - link "Email capture":
+      - /url: /email-capture
+      - generic: Email capture
+    - paragraph: Intake
+    - link "New lead":
+      - /url: /intake/new
+      - generic: New lead
+    - link "Unresolved":
+      - /url: /intake/unresolved
+      - generic: Unresolved
+    - paragraph: Manage
+    - link "Tags":
+      - /url: /manage/tags
+      - generic: Tags
+  - generic: 0M
+  - paragraph: 019b QA Member
+  - button "Log out":
+- heading "019b Five field QA" [level=1]
+- button "Refresh"
+- button "Save" [disabled]:
+  - text: Save
+- button "Delete":
+  - text: Delete
+- button "Remove from Today"
+- generic: List name
+- textbox "List name": 019b Five field QA
+- status: Match count paused
+- paragraph: Referrer contains Alice · Referral note contains %_ · Budget is at least 500000 · Anniversary is between 2026-09-01 and 2026-09-30 · Lead temperature is Warm
+- paragraph: Personal list — only you can use it
+- paragraph: For your Today only. Today uses the saved version; broad stage or source lists can continue showing a person after contact. Add an activity criterion for repeat-contact work.
+- paragraph: 1 of 5 Today sources in use.
+- alert:
+  - paragraph: This list references an item that is no longer available. People are paused until the criteria are repaired.
+- generic "People filters":
+  - button "Assignee":
+    - text: Assignee
+  - button "Stage":
+    - text: Stage
+  - button "Filters":
+    - text: Filters
+- generic "Applied filters":
+  - 'button "Edit Referrer: Contains Alice"':
+    - generic: "Referrer: Contains Alice"
+  - button "Remove Referrer filter":
+  - 'button "Edit Referral note: Contains %_"':
+    - generic: "Referral note: Contains %_"
+  - button "Remove Referral note filter":
+  - 'button "Edit Budget (Archived): At least 500000"':
+    - generic: "Budget (Archived): At least 500000"
+  - button "Remove Budget filter":
+  - 'button "Edit Anniversary: Between 2026-09-01 and 2026-09-30"':
+    - generic: "Anniversary: Between 2026-09-01 and 2026-09-30"
+  - button "Remove Anniversary filter":
+  - 'button "Edit Lead temperature: Is one of Warm (Archived)"':
+    - generic: "Lead temperature: Is one of Warm (Archived)"
+  - button "Remove Lead temperature filter":
+  - button "Clear all"
+- generic: Match all filters
+- status
+- button "Ask AI Operator ⌘K":
+  - text: Ask AI Operator
+  - generic: ⌘K

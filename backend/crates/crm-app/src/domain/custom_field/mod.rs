@@ -19,5 +19,11 @@ pub use commands::{
     UpdateCustomFieldOption, UpdateCustomFieldOptionOutcome, UpdateCustomFieldOutcome,
 };
 pub use error::CustomFieldError;
-pub use model::{CustomField, CustomFieldOption, CustomFieldValue, FieldType, Value};
-pub use queries::{list_definitions, load_custom_field, values_for_person};
+pub use model::{
+    validate_date_range, validate_number_pattern, validate_text_value, CustomField,
+    CustomFieldOption, CustomFieldValue, FieldType, Value,
+};
+pub use queries::{
+    filter_names_for_fields, list_definitions, live_field_type_for_filter, load_custom_field,
+    option_ids_belong_to_field_for_filter, values_for_person,
+};

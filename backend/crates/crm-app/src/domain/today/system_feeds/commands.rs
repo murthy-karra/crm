@@ -10,6 +10,7 @@ use chrono::{DateTime, Utc};
 use sqlx::{PgConnection, PgPool};
 
 use crate::domain::admin::Role;
+use crate::domain::custom_field;
 use crate::domain::envelope::{Actor, CommandContext};
 use crate::domain::facts::{self, TodayFeedChangedFact};
 use crate::domain::person::filter::{Assignee, Clause, FilterDefinition};
@@ -876,7 +877,12 @@ async fn preview_today_system_feed_attempt(
         }
     };
 
-    let names = filter_names(&mut tx, ctx.organization_id).await?;
+    let mut names = filter_names(&mut tx, ctx.organization_id).await?;
+    let field_ids = cmd.filter.custom_field_ids();
+    let (custom_field_names, custom_option_names) =
+        custom_field::filter_names_for_fields(&mut tx, ctx.organization_id, &field_ids).await?;
+    names.custom_field_names = custom_field_names;
+    names.custom_option_names = custom_option_names;
     let description = cmd.filter.describe(&names);
     let subject_display_name = names
         .user_names

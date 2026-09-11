@@ -2089,3 +2089,11 @@ Blocks: nothing. Feeds the Slice 019 specification. Amends by pointer
 SLICE_011_LADDER "explicitly not in this ladder" (custom fields now have a
 scheduled rung) and SLICE_010_LADDER 010f (the destination exists after
 019a). O-013's erasure runbook gains `person_custom_field_value`.
+
+
+**D-058 follow-up — Slice 019b specification approved (2026-09-10).**
+The user approved `docs/specs/SLICE_019b.md` after independent Astra review
+returned READY: “approved. go ahead and implement it.” Approval includes the
+five-slot custom-field filter vocabulary, archive/absence semantics, declared
+contract changes and verification plan; Terra high implements the reviewed
+brief. Commit, merge, push and deployment are outside this authorization.

@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 use crate::auth::AuthContext;
 use crate::domain::admin::{queries as admin_queries, Role};
+use crate::domain::custom_field;
 use crate::domain::person::filter::{FilterDefinition, FilterError, FilterNames};
 use crate::domain::person::queries as person_queries;
 use crate::domain::person::sort::{PersonSort, SortDecodeResult};
@@ -63,6 +64,8 @@ pub enum SavedListFilterError {
     InvalidAssignee,
     /// docs/specs/SLICE_011e.md §4b.
     InvalidTag,
+    InvalidField,
+    InvalidOption,
 }
 
 impl SavedListFilterError {
@@ -72,6 +75,8 @@ impl SavedListFilterError {
             Self::InvalidStage => "invalid_stage",
             Self::InvalidAssignee => "invalid_assignee",
             Self::InvalidTag => "invalid_tag",
+            Self::InvalidField => "invalid_field",
+            Self::InvalidOption => "invalid_option",
         }
     }
 }
@@ -348,7 +353,7 @@ pub async fn saved_list_detail(
 
     // Resolve labels before references so stale IDs produce neutral
     // placeholders rather than disappearing from a repairable definition.
-    let names = filter_names(conn, auth.active_organization_id).await?;
+    let names = filter_names(conn, auth.active_organization_id, &filter).await?;
     let description = filter.describe(&names);
     let filter_error = match filter
         .validate_references(conn, auth.active_organization_id)
@@ -358,6 +363,8 @@ pub async fn saved_list_detail(
         Err(FilterError::InvalidStage) => Some(SavedListFilterError::InvalidStage),
         Err(FilterError::InvalidAssignee) => Some(SavedListFilterError::InvalidAssignee),
         Err(FilterError::InvalidTag) => Some(SavedListFilterError::InvalidTag),
+        Err(FilterError::InvalidField) => Some(SavedListFilterError::InvalidField),
+        Err(FilterError::InvalidOption) => Some(SavedListFilterError::InvalidOption),
         Err(FilterError::Database(error)) => return Err(SavedListError::Database(error)),
         Err(FilterError::Malformed) => Some(SavedListFilterError::UnsupportedFilter),
     };
@@ -376,6 +383,7 @@ pub async fn saved_list_detail(
 async fn filter_names(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
+    filter: &FilterDefinition,
 ) -> Result<FilterNames, SavedListError> {
     let stages = stage::list(conn, organization_id).await?;
     let members = admin_queries::members(conn, organization_id).await?;
@@ -399,10 +407,16 @@ async fn filter_names(
         .into_iter()
         .map(|tag| (tag.id, tag.name))
         .collect::<HashMap<_, _>>();
+    let (custom_field_names, custom_option_names) =
+        custom_field::filter_names_for_fields(conn, organization_id, &filter.custom_field_ids())
+            .await
+            .map_err(SavedListError::Database)?;
     Ok(FilterNames {
         stage_names,
         user_names,
         tag_names,
+        custom_field_names,
+        custom_option_names,
     })
 }
 
@@ -456,6 +470,8 @@ pub async fn count_saved_list_matches(
         Err(FilterError::InvalidStage) => return Err(SavedListError::InvalidStage),
         Err(FilterError::InvalidAssignee) => return Err(SavedListError::InvalidAssignee),
         Err(FilterError::InvalidTag) => return Err(SavedListError::InvalidTag),
+        Err(FilterError::InvalidField) => return Err(SavedListError::InvalidField),
+        Err(FilterError::InvalidOption) => return Err(SavedListError::InvalidOption),
         Err(FilterError::Database(error)) => return Err(SavedListError::Database(error)),
         Err(FilterError::Malformed) => return Err(SavedListError::UnsupportedFilter),
     }

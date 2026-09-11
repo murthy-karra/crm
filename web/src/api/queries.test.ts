@@ -10,6 +10,7 @@ import {
   queryKeys,
   fetchMe,
   prefetchTodayData,
+  useAddNoteMutation,
   useAddPersonTagMutation,
   useAssignPersonMutation,
   useChangeStageMutation,
@@ -22,6 +23,10 @@ import {
   useRemovePersonTagMutation,
   useRenameTagMutation,
   useUpdateSavedListMutation,
+  useClearCustomFieldValueMutation,
+  useSetCustomFieldValueMutation,
+  useUpdateCustomFieldMutation,
+  useUpdateCustomFieldOptionMutation,
 } from './queries'
 import { beginSessionTransition, settleSessionTransition } from '../sessionLifecycle'
 import type {
@@ -829,12 +834,10 @@ describe('optimistic stage and assignment mutations (SLICE_014 §3)', () => {
   })
 
   // LATER item 5 (docs/tasks/LATER_BATCH_2026-09-08.md): the four Person
-  // mutations share a mutationKey scoped to (orgId, personId); the
-  // deferred settle check (settlePersonMutation) skips the org-branch
-  // invalidate while a sibling mutation for the same Person is still
-  // genuinely pending, so only the LAST one to settle actually
-  // invalidates.
-  it('skips the settle-invalidate while a sibling mutation for the same Person is still pending, and only the last one to settle invalidates', async () => {
+  // mutations share a mutationKey scoped to (orgId, personId). A completed
+  // mutation marks its requested surfaces stale without refetching while a
+  // sibling is pending; the last settlement performs the active stale sweep.
+  it('marks the first settlement stale without refetching while a sibling is pending, then the last settlement invalidates', async () => {
     const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
     seedPersonAndPeopleCaches(queryClient)
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
@@ -851,22 +854,23 @@ describe('optimistic stage and assignment mutations (SLICE_014 §3)', () => {
     await flushPromises()
 
     // The stage mutation settles FIRST while the assignment is still
-    // genuinely pending (its own deferred is not yet resolved): by the
-    // time settlePersonMutation's deferred check runs, isMutating still
-    // finds the assignment truly in flight, so this settle-invalidate is
-    // skipped.
+    // genuinely pending. Its Organization key is retained as stale but
+    // cannot refetch until the assignment releases the hold.
     stageDeferred.resolve(mutatePersonResponse(personSummary({ stage: STAGE_HOT })))
     await stageCall
     await flushSettleTimers()
-    expect(invalidate).not.toHaveBeenCalled()
+    expect(invalidate).toHaveBeenCalledTimes(1)
+    expect(invalidate.mock.calls[0]?.[0]).toMatchObject({
+      queryKey: queryKeys.org(ORG_ID), refetchType: 'none',
+    })
 
     // The assignment settles last (nothing else pending for this Person):
-    // it invalidates, exactly once.
+    // it invalidates normally and releases the stale active-query sweep.
     assignDeferred.resolve(mutatePersonResponse(personSummary({ assigned_user: MEMBER_BOB })))
     await assignCall
     await flushSettleTimers()
-    expect(invalidate).toHaveBeenCalledTimes(1)
-    expect(invalidate.mock.calls[0]?.[0]).toMatchObject({ queryKey: queryKeys.org(ORG_ID) })
+    expect(invalidate).toHaveBeenCalledTimes(2)
+    expect(invalidate.mock.calls[1]?.[0]).toMatchObject({ queryKey: queryKeys.org(ORG_ID) })
 
     scope.stop()
   })
@@ -1099,5 +1103,129 @@ describe('queryKeys.people', () => {
 
   it('carries both the filter and the sort token when both are present', () => {
     expect(queryKeys.people(ORG_ID, filter, 'name.asc')).toEqual(['org', ORG_ID, 'people', filter, 'name.asc'])
+  })
+})
+
+
+describe('Slice 019b custom-field cache settlement', () => {
+  function invalidationKeys(invalidate: { mock: { calls: unknown[][] } }) {
+    return invalidate.mock.calls.map((call) =>
+      (call[0] as { queryKey?: readonly unknown[] } | undefined)?.queryKey,
+    )
+  }
+
+  it('invalidates the full Organization branch after a field or option update', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+    const scope = effectScope()
+    const updateField = scope.run(() => useUpdateCustomFieldMutation(ORG_ID, queryClient))!
+    const updateOption = scope.run(() => useUpdateCustomFieldOptionMutation(ORG_ID, queryClient))!
+    apiFetchMock.mockResolvedValueOnce({ field: { id: 'field-1' }, changed: true })
+    await updateField.mutateAsync({ fieldId: 'field-1', body: { label: 'Budget', archived: true } })
+    apiFetchMock.mockResolvedValueOnce({ field: { id: 'field-1' }, changed: true })
+    await updateOption.mutateAsync({ fieldId: 'field-1', optionId: 'option-1', body: { label: 'Warm', archived: false } })
+    expect(invalidationKeys(invalidate)).toEqual([queryKeys.org(ORG_ID), queryKeys.org(ORG_ID)])
+    scope.stop()
+  })
+
+  it('settles set and clear across every custom-filter-dependent key', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+    const scope = effectScope()
+    const setValue = scope.run(() => useSetCustomFieldValueMutation(ORG_ID, PERSON_ID, queryClient))!
+    const clearValue = scope.run(() => useClearCustomFieldValueMutation(ORG_ID, PERSON_ID, queryClient))!
+    const outcome = { custom_fields: [], changed: true }
+    apiFetchMock.mockResolvedValueOnce(outcome)
+    await setValue.mutateAsync({ personId: PERSON_ID, fieldId: 'field-1', body: { value: { number: '500000' } } })
+    await flushSettleTimers()
+    apiFetchMock.mockResolvedValueOnce(outcome)
+    await clearValue.mutateAsync({ personId: PERSON_ID, fieldId: 'field-1' })
+    await flushSettleTimers()
+    const expected = [
+      queryKeys.person(ORG_ID, PERSON_ID),
+      queryKeys.people(ORG_ID),
+      queryKeys.today(ORG_ID),
+      queryKeys.savedListCounts(ORG_ID),
+      queryKeys.customFields(ORG_ID),
+    ]
+    expect(invalidationKeys(invalidate)).toEqual([...expected, ...expected])
+    scope.stop()
+  })
+
+  it('keeps custom-value keys stale until a later pending note releases the hold', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+    const refetch = vi.spyOn(queryClient, 'refetchQueries')
+    const customPending = deferred<{ custom_fields: []; changed: boolean }>()
+    const notePending = deferred<{ note: { id: string } }>()
+    const scope = effectScope()
+    const setValue = scope.run(() => useSetCustomFieldValueMutation(ORG_ID, PERSON_ID, queryClient))!
+    const addNote = scope.run(() => useAddNoteMutation(ORG_ID, PERSON_ID, queryClient))!
+    apiFetchMock.mockReturnValueOnce(customPending.promise).mockReturnValueOnce(notePending.promise)
+
+    const customCall = setValue.mutateAsync({ personId: PERSON_ID, fieldId: 'field-1', body: { value: { number: '500000' } } })
+    await flushPromises()
+    const noteCall = addNote.mutateAsync({ personId: PERSON_ID, body: 'Follow up tomorrow.' })
+    await flushPromises()
+    customPending.resolve({ custom_fields: [], changed: true })
+    await customCall
+    await flushSettleTimers()
+
+    const customKeys = [
+      queryKeys.person(ORG_ID, PERSON_ID),
+      queryKeys.people(ORG_ID),
+      queryKeys.today(ORG_ID),
+      queryKeys.savedListCounts(ORG_ID),
+      queryKeys.customFields(ORG_ID),
+    ]
+    expect(invalidate.mock.calls.map(([filters]) => filters)).toEqual(
+      customKeys.map((queryKey) => ({ queryKey, refetchType: 'none' })),
+    )
+    expect(refetch).not.toHaveBeenCalled()
+
+    notePending.resolve({ note: { id: 'note-1' } })
+    await noteCall
+    await flushSettleTimers()
+    expect(refetch).toHaveBeenCalledWith({ queryKey: queryKeys.org(ORG_ID), type: 'active', stale: true })
+    scope.stop()
+  })
+
+  it('keeps custom-value error keys stale until a later pending note releases the hold', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+    const refetch = vi.spyOn(queryClient, 'refetchQueries')
+    const customPending = deferred<{ custom_fields: []; changed: boolean }>()
+    const notePending = deferred<{ note: { id: string } }>()
+    const scope = effectScope()
+    const setValue = scope.run(() => useSetCustomFieldValueMutation(ORG_ID, PERSON_ID, queryClient))!
+    const addNote = scope.run(() => useAddNoteMutation(ORG_ID, PERSON_ID, queryClient))!
+    apiFetchMock.mockReturnValueOnce(customPending.promise).mockReturnValueOnce(notePending.promise)
+
+    const customCall = setValue.mutateAsync({ personId: PERSON_ID, fieldId: 'field-1', body: { value: { number: '500000' } } })
+    const handledCustomError = customCall.catch((error: unknown) => error)
+    await flushPromises()
+    const noteCall = addNote.mutateAsync({ personId: PERSON_ID, body: 'Follow up tomorrow.' })
+    await flushPromises()
+    customPending.reject(new Error('connection lost'))
+    expect(await handledCustomError).toMatchObject({ message: 'connection lost' })
+    await flushSettleTimers()
+
+    const customKeys = [
+      queryKeys.person(ORG_ID, PERSON_ID),
+      queryKeys.people(ORG_ID),
+      queryKeys.today(ORG_ID),
+      queryKeys.savedListCounts(ORG_ID),
+      queryKeys.customFields(ORG_ID),
+    ]
+    expect(invalidate.mock.calls.map(([filters]) => filters)).toEqual(
+      customKeys.map((queryKey) => ({ queryKey, refetchType: 'none' })),
+    )
+    expect(refetch).not.toHaveBeenCalled()
+
+    notePending.resolve({ note: { id: 'note-1' } })
+    await noteCall
+    await flushSettleTimers()
+    expect(refetch).toHaveBeenCalledWith({ queryKey: queryKeys.org(ORG_ID), type: 'active', stale: true })
+    scope.stop()
   })
 })

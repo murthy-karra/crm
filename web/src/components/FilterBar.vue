@@ -5,13 +5,16 @@ import { computed, nextTick, ref, useId, watch } from 'vue'
 import Popover, { type PopoverPassThroughOptions } from 'primevue/popover'
 import { ChevronDown, ChevronRight, Lock, SlidersHorizontal, X } from 'lucide-vue-next'
 import StageLabel from './StageLabel.vue'
-import type { AgeOp, Assignee, FilterClause, FilterClauseKind, Member, Stage, StageRef, TagRef } from '../api/types'
+import CustomFilterEditor from './CustomFilterEditor.vue'
+import type { AgeOp, Assignee, CustomField, FilterClause, FilterClauseKind, Member, Stage, StageRef, TagRef } from '../api/types'
 import { BUTTON_BASE, buttonClasses, INPUT_CLASSES } from '../lib/controls'
 import {
   CLAUSE_KIND_LABEL,
   FILTER_CLAUSE_KINDS,
   committedClauses,
   describeClause,
+  isCustomClause,
+  type CustomFilterClause,
   type FilterNames,
 } from '../lib/filter'
 
@@ -22,6 +25,7 @@ type BoolClause = Extract<FilterClause, { kind: BoolKind }>
 type OptionKind = 'stage' | 'assigned_to' | 'source' | 'tags' | 'not_tags'
 type OptionValue = string | { user_id: string }
 type Option = { key: string; label: string; value: OptionValue; stage?: StageRef; inactive?: boolean }
+type CustomKind = CustomFilterClause['kind']
 
 const props = defineProps<{
   clauses: FilterClause[]
@@ -40,6 +44,9 @@ const props = defineProps<{
   sourcesTruncated?: boolean
   tagsPending?: boolean
   tagsError?: boolean
+  customFields?: CustomField[]
+  customFieldsPending?: boolean
+  customFieldsError?: boolean
   // SLICE_011d §6: the Today rules editor's locked-clause mode — the anchor
   // clause is shown but cannot be removed or negated (spec §1 rule 4), and
   // (for the two person-state feeds) `assigned_to` must keep `me` (rule 3).
@@ -51,6 +58,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:clauses': [FilterClause[]]
   'retry-options': [OptionKind]
+  'retry-custom-fields': []
 }>()
 
 const id = useId()
@@ -59,6 +67,7 @@ const panel = ref<HTMLElement | null>(null)
 const toolbar = ref<HTMLElement | null>(null)
 const open = ref(false)
 const editingKind = ref<FilterClauseKind | null>(null)
+const editingFieldId = ref<string | null>(null)
 const search = ref('')
 let trigger: HTMLElement | null = null
 let restoreFocus = false
@@ -67,12 +76,24 @@ const names = computed<FilterNames>(() => ({
   stageNames: Object.fromEntries(props.stages.map((stage) => [stage.id, stage.name])),
   memberNames: Object.fromEntries(props.members.map((member) => [member.user_id, member.display_name])),
   tagNames: Object.fromEntries(props.tags.map((tag) => [tag.id, tag.name])),
+  customFields: Object.fromEntries((props.customFields ?? []).map((field) => [field.id, field])),
 }))
 const menuKinds = computed(() => FILTER_CLAUSE_KINDS.filter((kind) =>
-  kind !== 'stage' && kind !== 'assigned_to' && matchesSearch(CLAUSE_KIND_LABEL[kind]),
+  kind !== 'stage' && kind !== 'assigned_to' && !isCustomKind(kind) && matchesSearch(CLAUSE_KIND_LABEL[kind]),
 ))
-const title = computed(() => editingKind.value ? CLAUSE_KIND_LABEL[editingKind.value] : 'Filters')
-const activeClause = computed(() => applied.value.find((clause) => clause.kind === editingKind.value))
+const title = computed(() => customEditorField.value?.label ?? (editingKind.value ? CLAUSE_KIND_LABEL[editingKind.value] : 'Filters'))
+const activeClause = computed(() => applied.value.find((clause) => clause.kind === editingKind.value && (!isCustomClause(clause) || clause.field_id === editingFieldId.value)))
+const customEditorField = computed(() => {
+  if (!editingKind.value || !isCustomKind(editingKind.value) || !editingFieldId.value) return undefined
+  return (props.customFields ?? []).find((field) => field.id === editingFieldId.value && field.archived_at === null)
+})
+const customFields = computed(() => (props.customFields ?? [])
+  .filter((field) => field.archived_at === null)
+  .filter((field) => matchesSearch(`${field.label} ${field.field_type}`))
+  .sort((a, b) => a.position - b.position || a.id.localeCompare(b.id)))
+const customCount = computed(() => applied.value.filter(isCustomClause).length)
+const atCustomLimit = computed(() => customCount.value >= 5)
+const atTotalLimit = computed(() => applied.value.length >= 20)
 const ageKind = computed(() => {
   const kind = editingKind.value
   return kind === 'created' || kind === 'last_inquiry' || kind === 'last_contact' || kind === 'last_inbound' ? kind : null
@@ -122,6 +143,23 @@ const checkboxClasses = 'h-4 w-4 shrink-0 accent-accent focus-visible:ring-2 foc
 
 function matchesSearch(value: string) {
   return value.toLocaleLowerCase().includes(search.value.trim().toLocaleLowerCase())
+}
+function isCustomKind(kind: FilterClauseKind): kind is CustomKind {
+  return kind === 'custom_text' || kind === 'custom_number' || kind === 'custom_date' || kind === 'custom_choice'
+}
+function clauseKey(clause: FilterClause) {
+  return isCustomClause(clause) ? `${clause.kind}-${clause.field_id}` : clause.kind
+}
+function customFieldTypeLabel(field: CustomField): string {
+  if (field.field_type === 'text') return 'Text'
+  if (field.field_type === 'number') return 'Number'
+  if (field.field_type === 'date') return 'Date'
+  return 'Single choice'
+}
+function removeClauseLabel(clause: FilterClause): string {
+  if (!isCustomClause(clause)) return `Remove ${CLAUSE_KIND_LABEL[clause.kind]} filter`
+  const field = (props.customFields ?? []).find((candidate) => candidate.id === clause.field_id)
+  return field ? `Remove ${field.label} filter` : 'Remove unavailable custom field filter'
 }
 function stageFor(id: string): StageRef {
   return props.stages.find((stage) => stage.id === id) ?? { id, name: 'Unknown stage' }
@@ -218,18 +256,19 @@ const hasClearableClause = computed(() => applied.value.some((clause) => !isLock
 function updateClauses(next: FilterClause[]) {
   if (JSON.stringify(next) !== JSON.stringify(props.clauses)) emit('update:clauses', next)
 }
-function replaceClause(kind: FilterClauseKind, clause: FilterClause | null) {
-  const next = applied.value.filter((item) => item.kind !== kind)
+function replaceClause(kind: FilterClauseKind, clause: FilterClause | null, fieldId?: string) {
+  const matches = (item: FilterClause) => item.kind === kind && (!isCustomClause(item) || item.field_id === fieldId)
+  const next = applied.value.filter((item) => !matches(item))
   if (clause) {
-    const index = applied.value.findIndex((item) => item.kind === kind)
+    const index = applied.value.findIndex(matches)
     next.splice(index < 0 ? next.length : index, 0, clause)
   }
   updateClauses(next)
 }
-function removeClause(kind: FilterClauseKind) {
+function removeClause(kind: FilterClauseKind, fieldId?: string) {
   if (isLockedClauseKind(kind)) return
   if (kind === editingKind.value) resetAgeDraft()
-  replaceClause(kind, null)
+  replaceClause(kind, null, fieldId)
 }
 function clearAll() {
   resetAgeDraft()
@@ -329,9 +368,40 @@ async function focusEditor() {
 }
 function selectKind(kind: FilterClauseKind | null) {
   editingKind.value = kind
+  editingFieldId.value = null
   search.value = ''
   syncAgeDraft()
   void focusEditor()
+}
+function selectCustomField(field: CustomField) {
+  editingKind.value = `custom_${field.field_type}` as CustomKind
+  editingFieldId.value = field.id
+  search.value = ''
+  void focusEditor()
+}
+async function openCustomEditor(fieldId: string, kind: CustomKind, event: Event) {
+  if (open.value && editingKind.value === kind && editingFieldId.value === fieldId && trigger === event.currentTarget) {
+    closeEditor()
+    return
+  }
+  if (!commitDays()) return
+  trigger = event.currentTarget as HTMLElement
+  restoreFocus = false
+  editingKind.value = kind
+  editingFieldId.value = fieldId
+  search.value = ''
+  open.value = true
+  popover.value?.show(event)
+  await nextTick()
+  popover.value?.alignOverlay()
+}
+function applyCustomClause(clause: CustomFilterClause) {
+  replaceClause(clause.kind, clause, clause.field_id)
+  closeEditor()
+}
+function cancelCustomEditor() {
+  restoreFocus = true
+  popover.value?.hide()
 }
 async function openEditor(kind: FilterClauseKind | null, event: Event) {
   if (open.value && editingKind.value === kind && trigger === event.currentTarget) {
@@ -366,6 +436,7 @@ function onHide() {
   commitDays()
   open.value = false
   editingKind.value = null
+  editingFieldId.value = null
   if (restoreFocus || document.activeElement === document.body || panel.value?.contains(document.activeElement)) {
     const target = trigger?.isConnected ? trigger : toolbar.value?.querySelector<HTMLElement>('button')
     target?.focus()
@@ -424,18 +495,18 @@ function onHide() {
     >
       <span
         v-for="clause in applied"
-        :key="clause.kind"
-        :data-testid="`filter-chip-${clause.kind}`"
+        :key="clauseKey(clause)"
+        :data-testid="`filter-chip-${clauseKey(clause)}`"
         class="inline-flex max-w-full items-stretch rounded-lg border border-border bg-surface-0 text-small text-text"
       >
         <button
           type="button"
           class="flex min-h-10 min-w-0 flex-wrap items-center gap-1 rounded-l-lg px-3 py-2 text-left hover:bg-surface-1 focus-visible:ring-2 focus-visible:ring-focus"
           :aria-label="`Edit ${describeClause(clause, names)}`"
-          :aria-expanded="open && editingKind === clause.kind"
+          :aria-expanded="open && editingKind === clause.kind && (!isCustomClause(clause) || editingFieldId === clause.field_id)"
           :aria-controls="`${id}-popover`"
           aria-haspopup="dialog"
-          @click="openEditor(clause.kind, $event)"
+          @click="isCustomClause(clause) ? openCustomEditor(clause.field_id, clause.kind, $event) : openEditor(clause.kind, $event)"
         >
           <template v-if="clause.kind === 'stage'">
             <span>Stage:</span>
@@ -474,10 +545,10 @@ function onHide() {
         <button
           v-else
           type="button"
-          :data-testid="`filter-chip-remove-${clause.kind}`"
+          :data-testid="`filter-chip-remove-${clauseKey(clause)}`"
           class="inline-flex min-h-10 w-10 shrink-0 items-center justify-center rounded-r-lg hover:bg-surface-1 focus-visible:ring-2 focus-visible:ring-focus"
-          :aria-label="`Remove ${CLAUSE_KIND_LABEL[clause.kind]} filter`"
-          @click="removeClause(clause.kind)"
+          :aria-label="removeClauseLabel(clause)"
+          @click="removeClause(clause.kind, isCustomClause(clause) ? clause.field_id : undefined)"
         >
           <X
             class="h-4 w-4"
@@ -565,8 +636,72 @@ function onHide() {
                 aria-hidden="true"
               />
             </button>
+            <template v-if="customFieldsPending">
+              <p
+                role="status"
+                class="px-2 py-3 text-small text-text-muted"
+              >
+                Loading custom fields…
+              </p>
+            </template>
+            <template v-else-if="customFieldsError">
+              <div
+                role="alert"
+                class="px-2 py-3 text-small text-danger"
+              >
+                Couldn't load custom fields.
+                <button
+                  type="button"
+                  :class="buttonClasses('ghost')"
+                  @click="emit('retry-custom-fields')"
+                >
+                  Retry
+                </button>
+              </div>
+            </template>
+            <template v-else>
+              <p class="mt-3 px-2 text-small font-medium text-text-muted">
+                Custom fields
+              </p>
+              <button
+                v-for="field in customFields"
+                :key="field.id"
+                type="button"
+                :data-testid="`filter-add-custom-${field.id}`"
+                :class="rowClasses"
+                :disabled="(atCustomLimit || atTotalLimit) && !applied.some((clause) => isCustomClause(clause) && clause.field_id === field.id)"
+                @click="selectCustomField(field)"
+              >
+                <span class="min-w-0 flex-1">
+                  <span class="block break-words">{{ field.label }}</span>
+                  <span class="block text-small text-text-muted">{{ customFieldTypeLabel(field) }}</span>
+                </span>
+                <span
+                  v-if="applied.some((clause) => isCustomClause(clause) && clause.field_id === field.id)"
+                  class="text-small text-text-muted"
+                >Active</span>
+                <ChevronRight
+                  class="h-4 w-4 shrink-0"
+                  stroke-width="1.5"
+                  aria-hidden="true"
+                />
+              </button>
+              <p
+                v-if="!customFields.length"
+                class="px-2 py-3 text-small text-text-muted"
+              >
+                No custom fields available.
+              </p>
+              <p
+                v-if="atCustomLimit || atTotalLimit"
+                role="status"
+                class="px-2 py-2 text-small text-text-muted"
+              >
+                {{ atCustomLimit ? 'Five custom fields are selected.' : 'Twenty filters are selected.' }} Remove one to add another.
+              </p>
+            </template>
             <p
-              v-if="!menuKinds.length"
+              v-if="!menuKinds.length && !customFields.length && !customFieldsPending && !customFieldsError"
               class="px-2 py-3 text-small text-text-muted"
             >
               No matching filters.
@@ -675,6 +810,35 @@ function onHide() {
             >
               Showing the first 500 sources. Search covers these options.
             </p>
+          </template>
+
+          <template v-else-if="isCustomKind(editingKind) && customEditorField">
+            <CustomFilterEditor
+              :field="customEditorField"
+              :clause="activeClause && isCustomClause(activeClause) ? activeClause : undefined"
+              @apply="applyCustomClause"
+              @cancel="cancelCustomEditor"
+            />
+          </template>
+
+          <template v-else-if="isCustomKind(editingKind)">
+            <p
+              role="alert"
+              class="text-small text-danger"
+            >
+              This custom field is unavailable. Remove this filter or restore the field.
+            </p>
+            <div class="mt-4 flex justify-end border-t border-border pt-3">
+              <button
+                v-if="editingFieldId"
+                type="button"
+                data-testid="custom-filter-repair-remove"
+                :class="buttonClasses('ghost')"
+                @click="removeClause(editingKind, editingFieldId); closeEditor()"
+              >
+                Remove filter
+              </button>
+            </div>
           </template>
 
           <template v-else-if="ageKind">
@@ -789,13 +953,16 @@ function onHide() {
             </div>
           </template>
 
-          <div class="mt-4 flex items-center justify-between gap-2 border-t border-border pt-3">
+          <div
+            v-if="!isCustomKind(editingKind)"
+            class="mt-4 flex items-center justify-between gap-2 border-t border-border pt-3"
+          >
             <button
               v-if="activeClause && editingKind && !isLockedClauseKind(editingKind)"
               type="button"
               data-testid="filter-clear-selection"
               :class="buttonClasses('ghost')"
-              @click="removeClause(editingKind)"
+              @click="removeClause(editingKind, editingFieldId ?? undefined)"
             >
               Clear selection
             </button>

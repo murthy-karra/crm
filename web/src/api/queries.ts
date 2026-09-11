@@ -1188,15 +1188,23 @@ function settlePersonMutation(
   queryKeyOrKeys: readonly unknown[] | readonly (readonly unknown[])[],
 ) {
   setTimeout(() => {
-    if (qc.isMutating({ mutationKey: personMutationKey(orgId, personId) }) === 0) {
-      const keys = Array.isArray(queryKeyOrKeys[0])
-        ? (queryKeyOrKeys as readonly (readonly unknown[])[])
-        : [queryKeyOrKeys as readonly unknown[]]
+    const keys = Array.isArray(queryKeyOrKeys[0])
+      ? (queryKeyOrKeys as readonly (readonly unknown[])[])
+      : [queryKeyOrKeys as readonly unknown[]]
+    if (qc.isMutating({ mutationKey: personMutationKey(orgId, personId) }) !== 0) {
+      // Keep every completed mutation's requested surfaces stale while a
+      // sibling mutation holds refetches. The final settlement below refetches
+      // active stale Organization queries, so a note/tag's narrow key cannot
+      // discard a preceding custom-value membership refresh.
       for (const key of keys) {
-        void qc.invalidateQueries({ queryKey: key })
+        void qc.invalidateQueries({ queryKey: key, refetchType: 'none' })
       }
-      void qc.refetchQueries({ queryKey: queryKeys.org(orgId), type: 'active', stale: true })
+      return
     }
+    for (const key of keys) {
+      void qc.invalidateQueries({ queryKey: key })
+    }
+    void qc.refetchQueries({ queryKey: queryKeys.org(orgId), type: 'active', stale: true })
   }, 0)
 }
 
@@ -2298,8 +2306,9 @@ export function useDeleteTaskMutation(
 // a Person page mount does not re-fetch it on every navigation. Value
 // mutations are deliberately PESSIMISTIC, the note/task precedent: `onMutate`
 // writes nothing to the cache; they key with `personMutationKey` and settle
-// through `settlePersonMutation` on `queryKeys.person(orgId, personId)` only
-// (rules 5/6 — a value touches no People row, Today, or list count).
+// through the five filter-dependent keys. Custom fields now participate in
+// People, saved-list counts, and Today membership, so every active dependent
+// view must refetch once sibling Person mutations have settled.
 
 /** `GET /api/custom-fields` — any active member; live first (`position, id`),
  * then archived (`archived_at DESC, id`). */
@@ -2353,7 +2362,7 @@ export function useUpdateCustomFieldMutation(orgId: MaybeRefOrGetter<string>, pr
       }),
     retry: false,
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: queryKeys.customFields(toValue(orgId)) })
+      void qc.invalidateQueries({ queryKey: queryKeys.org(toValue(orgId)) })
     },
   }, providedQueryClient)
 }
@@ -2387,7 +2396,7 @@ export function useUpdateCustomFieldOptionMutation(orgId: MaybeRefOrGetter<strin
       ),
     retry: false,
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: queryKeys.customFields(toValue(orgId)) })
+      void qc.invalidateQueries({ queryKey: queryKeys.org(toValue(orgId)) })
     },
   }, providedQueryClient)
 }
@@ -2413,11 +2422,23 @@ export function useSetCustomFieldValueMutation(
     retry: false,
     onError: (_error, variables) => {
       const id = toValue(orgId)
-      settlePersonMutation(qc, id, variables.personId, queryKeys.person(id, variables.personId))
+      settlePersonMutation(qc, id, variables.personId, [
+        queryKeys.person(id, variables.personId),
+        queryKeys.people(id),
+        queryKeys.today(id),
+        queryKeys.savedListCounts(id),
+        queryKeys.customFields(id),
+      ])
     },
     onSuccess: (_result, variables) => {
       const id = toValue(orgId)
-      settlePersonMutation(qc, id, variables.personId, queryKeys.person(id, variables.personId))
+      settlePersonMutation(qc, id, variables.personId, [
+        queryKeys.person(id, variables.personId),
+        queryKeys.people(id),
+        queryKeys.today(id),
+        queryKeys.savedListCounts(id),
+        queryKeys.customFields(id),
+      ])
     },
   }, providedQueryClient)
 }
@@ -2441,11 +2462,23 @@ export function useClearCustomFieldValueMutation(
     retry: false,
     onError: (_error, variables) => {
       const id = toValue(orgId)
-      settlePersonMutation(qc, id, variables.personId, queryKeys.person(id, variables.personId))
+      settlePersonMutation(qc, id, variables.personId, [
+        queryKeys.person(id, variables.personId),
+        queryKeys.people(id),
+        queryKeys.today(id),
+        queryKeys.savedListCounts(id),
+        queryKeys.customFields(id),
+      ])
     },
     onSuccess: (_result, variables) => {
       const id = toValue(orgId)
-      settlePersonMutation(qc, id, variables.personId, queryKeys.person(id, variables.personId))
+      settlePersonMutation(qc, id, variables.personId, [
+        queryKeys.person(id, variables.personId),
+        queryKeys.people(id),
+        queryKeys.today(id),
+        queryKeys.savedListCounts(id),
+        queryKeys.customFields(id),
+      ])
     },
   }, providedQueryClient)
 }

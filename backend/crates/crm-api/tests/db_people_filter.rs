@@ -20,6 +20,73 @@ fn hours_ago(h: i64) -> DateTime<Utc> {
     Utc::now() - ChronoDuration::hours(h)
 }
 
+#[sqlx::test]
+#[ignore]
+async fn custom_field_filter_text_negative_includes_absent_and_archived_field_is_invalid(
+    migrator_pool: PgPool,
+) {
+    let (org_id, actor_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Custom filter Realty",
+        "custom-filter@acme.test",
+        "Custom Filter",
+        "pw",
+    )
+    .await;
+    let app = crate::common::connect_as_app(&migrator_pool).await;
+    let stage_id = first_stage_id(&app, org_id).await;
+    let matching = insert_person(&app, org_id, stage_id, Some(actor_id)).await;
+    let absent = insert_person(&app, org_id, stage_id, Some(actor_id)).await;
+    let field_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO custom_field (organization_id, label, field_type, position, created_by_user_id)
+         VALUES ($1, 'Referrer', 'text', 1, $2) RETURNING id",
+    )
+    .bind(org_id)
+    .bind(actor_id)
+    .fetch_one(&app)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO person_custom_field_value
+         (organization_id, person_id, field_id, field_type, text_value, updated_by_user_id, origin, correlation_id)
+         VALUES ($1, $2, $3, 'text', 'Alice', $4, 'web_session', gen_random_uuid())",
+    )
+    .bind(org_id)
+    .bind(matching)
+    .bind(field_id)
+    .bind(actor_id)
+    .execute(&app)
+    .await
+    .unwrap();
+
+    let router = crate::common::build_router(&migrator_pool).await;
+    let cookie = crate::common::login_cookie(&router, "custom-filter@acme.test", "pw").await;
+    let filter = json!({"version": 1, "clauses": [{"kind": "custom_text", "field_id": field_id, "test": {"op": "not_contains", "text": "Alice"}}]});
+    let response =
+        crate::common::get_with_cookie(&router, &filter_uri("/api/people", &filter), &cookie).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let ids: Vec<Uuid> = crate::common::body_json(response).await["people"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|row| serde_json::from_value(row["id"].clone()).unwrap())
+        .collect();
+    assert_eq!(ids, vec![absent]);
+
+    sqlx::query("UPDATE custom_field SET archived_at = now() WHERE id = $1")
+        .bind(field_id)
+        .execute(&app)
+        .await
+        .unwrap();
+    let response =
+        crate::common::get_with_cookie(&router, &filter_uri("/api/people", &filter), &cookie).await;
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(
+        crate::common::body_json(response).await,
+        json!({"error": "invalid_field"})
+    );
+}
+
 fn days_ago(d: i64) -> DateTime<Utc> {
     Utc::now() - ChronoDuration::days(d)
 }
@@ -1624,7 +1691,7 @@ async fn people_filter_request_span_records_path_only_with_the_query_string_stri
     use std::sync::{Arc, Mutex};
     use tracing_subscriber::layer::SubscriberExt;
 
-    let (_org_id, _alice_id) = crate::common::create_org_with_stages_and_member(
+    let (org_id, alice_id) = crate::common::create_org_with_stages_and_member(
         &migrator_pool,
         "Acme F25",
         "alice@acmef25.test",
@@ -1632,6 +1699,19 @@ async fn people_filter_request_span_records_path_only_with_the_query_string_stri
         "pw",
     )
     .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let field_label = "SENTINEL_CUSTOM_FIELD_LABEL";
+    let comparison_literal = "SENTINEL_CUSTOM_COMPARISON_LITERAL";
+    let field_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO custom_field (organization_id, label, field_type, position, created_by_user_id) \
+         VALUES ($1, $2, 'text', 1, $3) RETURNING id",
+    )
+    .bind(org_id)
+    .bind(field_label)
+    .bind(alice_id)
+    .fetch_one(&app_pool)
+    .await
+    .unwrap();
     let router = crate::common::build_router(&migrator_pool).await;
     let cookie = crate::common::login_cookie(&router, "alice@acmef25.test", "pw").await;
 
@@ -1663,7 +1743,10 @@ async fn people_filter_request_span_records_path_only_with_the_query_string_stri
     );
     let _guard = tracing::subscriber::set_default(subscriber);
 
-    let filter = json!({"version": 1, "clauses": [{"kind": "source", "sources": ["zillow"]}]});
+    let filter = json!({"version": 1, "clauses": [
+        {"kind": "source", "sources": ["zillow"]},
+        {"kind":"custom_text","field_id":field_id,"test":{"op":"contains","text":comparison_literal}}
+    ]});
     let _ =
         crate::common::get_with_cookie(&router, &filter_uri("/api/people", &filter), &cookie).await;
 
@@ -1681,6 +1764,12 @@ async fn people_filter_request_span_records_path_only_with_the_query_string_stri
         !captured.contains("zillow"),
         "no filter value ever reaches a span: {captured}"
     );
+    for secret in [field_label, comparison_literal] {
+        assert!(
+            !captured.contains(secret),
+            "custom filter label or literal leaked into a span: {captured}"
+        );
+    }
 }
 
 // --- 011d correction (b): per-axis parity across People, count, every ------

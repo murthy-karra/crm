@@ -1,0 +1,112 @@
+- complementary:
+  - img "Elysium CRM"
+  - generic: 0R
+  - generic "019b QA Realty"
+  - navigation "Main navigation":
+    - paragraph: Work
+    - link "Today" [active]:
+      - /url: /today
+      - generic: Today
+    - link "People":
+      - /url: /people
+      - generic: People
+    - link "Lists":
+      - /url: /lists
+      - generic: Lists
+    - link "Email capture":
+      - /url: /email-capture
+      - generic: Email capture
+    - paragraph: Intake
+    - link "New lead":
+      - /url: /intake/new
+      - generic: New lead
+    - link "Unresolved":
+      - /url: /intake/unresolved
+      - generic: Unresolved
+    - paragraph: Manage
+    - link "Tags":
+      - /url: /manage/tags
+      - generic: Tags
+  - generic: 0M
+  - paragraph: 019b QA Member
+  - button "Log out":
+- heading "Today" [level=1]
+- paragraph: Updated just now · 3 items of work
+- button "Refresh"
+- button "Manage sources"
+- region "Tasks":
+  - heading "Tasks" [level=2]
+  - heading "Overdue" [level=3]
+  - paragraph: Nothing due
+  - heading "Due soon" [level=3]
+  - paragraph: Nothing due
+- status:
+  - text: Some Today rules or sources could not load. Available work is shown.
+  - list:
+    - link "019b Five field QA":
+      - /url: /lists/a63d73f9-33b3-48f3-ba73-80dfc5d57c45
+    - text: could not load.
+  - button "Retry"
+  - button "Manage sources"
+- table:
+  - rowgroup:
+    - row "Name Reasons Priority Waiting Recommended":
+      - columnheader "Name"
+      - columnheader "Reasons"
+      - columnheader "Priority"
+      - columnheader "Waiting"
+      - columnheader "Recommended"
+      - columnheader
+  - rowgroup:
+    - row "Grace QA qa019b-grace@example.test New inquiry No contact attempt High 2 hours ago Email qa019b-grace@example.test Log contact":
+      - cell "Grace QA qa019b-grace@example.test":
+        - link "Grace QA qa019b-grace@example.test":
+          - /url: /people/92ce392b-b3f9-4a0f-b97a-b85872a4c015
+          - paragraph: Grace QA
+          - paragraph: qa019b-grace@example.test
+      - cell "New inquiry No contact attempt":
+        - generic: New inquiry
+        - generic: No contact attempt
+      - cell "High"
+      - cell "2 hours ago"
+      - cell "Email qa019b-grace@example.test":
+        - generic: Email
+        - generic: qa019b-grace@example.test
+      - cell "Log contact":
+        - button "Log contact"
+    - row "Ada QA qa019b-ada@example.test New inquiry No contact attempt High 2 hours ago Email qa019b-ada@example.test Log contact":
+      - cell "Ada QA qa019b-ada@example.test":
+        - link "Ada QA qa019b-ada@example.test":
+          - /url: /people/7d699d67-fdbd-4137-8b26-037a973a895e
+          - paragraph: Ada QA
+          - paragraph: qa019b-ada@example.test
+      - cell "New inquiry No contact attempt":
+        - generic: New inquiry
+        - generic: No contact attempt
+      - cell "High"
+      - cell "2 hours ago"
+      - cell "Email qa019b-ada@example.test":
+        - generic: Email
+        - generic: qa019b-ada@example.test
+      - cell "Log contact":
+        - button "Log contact"
+    - row "Empty QA qa019b-empty@example.test New inquiry No contact attempt High 2 hours ago Email qa019b-empty@example.test Log contact":
+      - cell "Empty QA qa019b-empty@example.test":
+        - link "Empty QA qa019b-empty@example.test":
+          - /url: /people/45477b02-a4a6-4485-bc4b-e93526c2718d
+          - paragraph: Empty QA
+          - paragraph: qa019b-empty@example.test
+      - cell "New inquiry No contact attempt":
+        - generic: New inquiry
+        - generic: No contact attempt
+      - cell "High"
+      - cell "2 hours ago"
+      - cell "Email qa019b-empty@example.test":
+        - generic: Email
+        - generic: qa019b-empty@example.test
+      - cell "Log contact":
+        - button "Log contact"
+- paragraph: 3 items
+- button "Ask AI Operator ⌘K":
+  - text: Ask AI Operator
+  - generic: ⌘K

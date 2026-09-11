@@ -1,0 +1,101 @@
+- complementary:
+  - img "Elysium CRM"
+  - generic: 0R
+  - generic "019b Other Realty"
+  - navigation "Main navigation":
+    - paragraph: Work
+    - link "Today":
+      - /url: /today
+      - generic: Today
+    - link "People":
+      - /url: /people
+      - generic: People
+    - link "Lists":
+      - /url: /lists
+      - generic: Lists
+    - link "Email capture":
+      - /url: /email-capture
+      - generic: Email capture
+    - paragraph: Intake
+    - link "New lead":
+      - /url: /intake/new
+      - generic: New lead
+    - link "Unresolved":
+      - /url: /intake/unresolved
+      - generic: Unresolved
+    - paragraph: Manage
+    - link "Members":
+      - /url: /manage/members
+      - generic: Members
+    - link "Intake":
+      - /url: /manage/intake
+      - generic: Intake
+    - link "Today rules":
+      - /url: /manage/today-feeds
+      - generic: Today rules
+    - link "Fields":
+      - /url: /manage/fields
+      - generic: Fields
+    - link "Tags":
+      - /url: /manage/tags
+      - generic: Tags
+  - generic: 0A
+  - paragraph: 019b QA Other Admin
+  - button "Log out":
+- heading "People" [level=1]
+- button "Save as list":
+  - text: Save as list
+- link "New lead":
+  - /url: /intake/new
+  - text: New lead
+- generic "People views":
+  - button "All people" [pressed]
+  - button "My people"
+- generic "People filters":
+  - button "Assignee":
+    - text: Assignee
+  - button "Stage":
+    - text: Stage
+  - button "Filters" [expanded]:
+    - text: Filters
+- status: 0 people
+- paragraph: No people yet
+- paragraph: Leads you add or receive will appear here.
+- link "Add a lead":
+  - /url: /intake/new
+- button "Ask AI Operator ⌘K":
+  - text: Ask AI Operator
+  - generic: ⌘K
+- dialog "Filters":
+  - heading "Filters" [level=2]
+  - button "Close filter editor":
+  - generic: Search filters
+  - searchbox "Search filters" [active]
+  - button "Source (latest inquiry)":
+    - generic: Source (latest inquiry)
+  - button "Created":
+    - generic: Created
+  - button "Last inquiry":
+    - generic: Last inquiry
+  - button "Last contact attempt":
+    - generic: Last contact attempt
+  - button "Last received email":
+    - generic: Last received email
+  - button "Received email":
+    - generic: Received email
+  - button "Has phone":
+    - generic: Has phone
+  - button "Has email":
+    - generic: Has email
+  - button "Awaiting a response":
+    - generic: Awaiting a response
+  - button "Client replied, unanswered":
+    - generic: Client replied, unanswered
+  - button "A call of mine needs an outcome":
+    - generic: A call of mine needs an outcome
+  - button "Tagged":
+    - generic: Tagged
+  - button "Not tagged":
+    - generic: Not tagged
+  - paragraph: Custom fields
+  - paragraph: No custom fields available.

@@ -197,10 +197,7 @@ function confirmArchive() {
 const archiveMessage = computed(() => {
   const field = pendingArchive.value
   if (!field) return ''
-  const count = field.person_count
-  return count > 0
-    ? `Archive "${field.label}"? ${count} ${count === 1 ? 'person has' : 'people have'} a value on it. Values are kept and reappear if you restore it.`
-    : `Archive "${field.label}"? It has no values yet.`
+  return `Archive "${field.label}"? Values are kept and reappear if you restore it. Filters using this field will need repair or restoration.`
 })
 
 const restoreMutation = useUpdateCustomFieldMutation(orgId)

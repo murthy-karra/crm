@@ -11,6 +11,7 @@
 //! files. Run only via ./scripts/check-db.
 
 use chrono::{Duration as ChronoDuration, Utc};
+use serde_json::json;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -28,6 +29,89 @@ use crm_api::ids::{OrganizationId, StageId, UserId};
 use crate::common::today_system_feed::*;
 
 // --- §9.6: preview --------------------------------------------------------
+
+/// Preview descriptions use the same bounded custom-name lookup as saved
+/// lists and the persisted feed view.  The raw label is only asserted in the
+/// returned description; it must not be needed by the filter itself.
+#[sqlx::test]
+#[ignore]
+async fn preview_resolves_custom_field_labels(migrator_pool: PgPool) {
+    let (organization_id, admin_id) = create_org_with_admin(
+        &migrator_pool,
+        "011d preview custom label",
+        "admin@d011-preview-custom-label.test",
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let field_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO custom_field (organization_id, label, field_type, position, created_by_user_id) \
+         VALUES ($1, 'Sentinel custom label', 'text', 1, $2) RETURNING id",
+    )
+    .bind(organization_id)
+    .bind(admin_id)
+    .fetch_one(&app_pool)
+    .await
+    .unwrap();
+    let mut filter = canonical_unanswered_filter();
+    filter.clauses.push(
+        serde_json::from_value(json!({
+            "kind":"custom_text", "field_id":field_id,
+            "test":{"op":"contains", "text":"needle"}
+        }))
+        .unwrap(),
+    );
+    let preview = commands::preview_today_system_feed(
+        &app_pool,
+        &command_context(organization_id, admin_id),
+        PreviewTodaySystemFeed {
+            feed_key: FeedKey::UnansweredInquiry,
+            filter,
+            fresh_within_hours: Some(24),
+            subject: UserId::new(admin_id),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(preview
+        .description
+        .iter()
+        .any(|line| line.contains("Sentinel custom label")));
+}
+
+/// Preview identifies an absent subject before exposing an otherwise-invalid
+/// custom reference, preserving the required 404-before-422 precedence.
+#[sqlx::test]
+#[ignore]
+async fn preview_missing_subject_precedes_invalid_custom_reference(migrator_pool: PgPool) {
+    let (organization_id, admin_id) = create_org_with_admin(
+        &migrator_pool,
+        "011d preview precedence",
+        "admin@d011-preview-precedence.test",
+    )
+    .await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let mut filter = canonical_unanswered_filter();
+    filter.clauses.push(
+        serde_json::from_value(json!({
+            "kind":"custom_text", "field_id":Uuid::new_v4(),
+            "test":{"op":"is_set"}
+        }))
+        .unwrap(),
+    );
+    let error = commands::preview_today_system_feed(
+        &app_pool,
+        &command_context(organization_id, admin_id),
+        PreviewTodaySystemFeed {
+            feed_key: FeedKey::UnansweredInquiry,
+            filter,
+            fresh_within_hours: Some(24),
+            subject: UserId::new(Uuid::new_v4()),
+        },
+    )
+    .await
+    .unwrap_err();
+    assert!(matches!(error, TodayFeedError::NotFound));
+}
 
 #[sqlx::test]
 #[ignore]

@@ -1,0 +1,99 @@
+[
+  {
+    "case": "case-insensitive text",
+    "status": 200,
+    "names": [
+      "Grace"
+    ],
+    "passed": true
+  },
+  {
+    "case": "literal percent underscore",
+    "status": 200,
+    "names": [
+      "Grace"
+    ],
+    "passed": true
+  },
+  {
+    "case": "one-sided number",
+    "status": 200,
+    "names": [
+      "Grace"
+    ],
+    "passed": true
+  },
+  {
+    "case": "zero is set",
+    "status": 200,
+    "names": [
+      "Ada"
+    ],
+    "passed": true
+  },
+  {
+    "case": "one-sided calendar date",
+    "status": 200,
+    "names": [
+      "Grace"
+    ],
+    "passed": true
+  },
+  {
+    "case": "held choice",
+    "status": 200,
+    "names": [
+      "Grace"
+    ],
+    "passed": true
+  },
+  {
+    "case": "negative includes empty",
+    "status": 200,
+    "names": [
+      "Ada",
+      "Empty"
+    ],
+    "passed": true
+  },
+  {
+    "case": "empty number",
+    "status": 200,
+    "names": [
+      "Empty"
+    ],
+    "passed": true
+  },
+  {
+    "case": "independent text fields",
+    "status": 200,
+    "names": [],
+    "passed": true
+  },
+  {
+    "case": "all five slots",
+    "status": 200,
+    "names": [
+      "Grace"
+    ],
+    "passed": true
+  },
+  {
+    "case": "foreign organization field",
+    "status": 422,
+    "error": "invalid_field",
+    "passed": true
+  },
+  {
+    "case": "platform-only actor",
+    "status": 401,
+    "error": "unauthenticated",
+    "passed": true
+  },
+  {
+    "case": "unpadded date rejected",
+    "status": 400,
+    "error": "malformed_request",
+    "passed": true
+  }
+]

@@ -1,5 +1,8 @@
 # Slice 011d — Tweakable built-in Today rules
 
+**Slice 019b amendment (approved 2026-09-10):**
+[Custom-field filtering](SLICE_019b.md). Amends §§2–6: custom-field predicates apply independently to both person-state matrices and the call paths; admin edits/previews and stored-rule fallback carry the new reference errors. Locked anchors and canonical fallback remain binding.
+
 **Status: APPROVED by the user on 2026-09-07 after independent review; implementation deliberately held for a later session.** Approval covers the declared contracts and the seven §1 safe defaults; it does not authorize commit, merge, push or deployment of implementation work.
 Prepared on 2026-09-06 against local `main` at `f51bff8` (011c merged and
 pushed; 011b-sort merged). Independent review on 2026-09-06 returned READY

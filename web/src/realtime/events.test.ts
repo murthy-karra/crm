@@ -105,14 +105,13 @@ describe('invalidationsFor', () => {
     expect(keys).not.toContainEqual(queryKeys.today(ORG_ID))
   })
 
-  // SLICE_019.md §5, §9: `custom_field_changed` is the SAME narrow case as
-  // `note_changed` — a value touches no People row, Today queue, or list
-  // count (custom fields join the filter vocabulary only in the later 019b
-  // rung), so this falls into the same dedicated branch, not the wide
-  // default.
-  it('maps custom_field_changed to the Person detail only', () => {
+  it('maps custom_field_changed to every custom-filter-dependent surface', () => {
     expect(invalidationsFor(personChanged('custom_field_changed'), ORG_ID)).toEqual([
       queryKeys.person(ORG_ID, PERSON_ID),
+      queryKeys.people(ORG_ID),
+      queryKeys.today(ORG_ID),
+      queryKeys.savedListCounts(ORG_ID),
+      queryKeys.customFields(ORG_ID),
     ])
   })
 

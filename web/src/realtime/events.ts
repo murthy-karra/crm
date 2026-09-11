@@ -24,9 +24,8 @@ import { queryKeys } from '../api/queries'
 // SLICE_019.md §5 adds `custom_field_changed`: published after a set/clear
 // that changed a row — never on `changed: false`, never on a definition/
 // option write (rename/archive/restore publish nothing, the tag-rename
-// precedent). A value touches nothing but the Person detail (§5), so it
-// falls into the same narrow `note_changed`-style branch, not the wide
-// default.
+// precedent). Slice 019b makes values part of People, saved-list count, and
+// Today membership, so this has its own broad filter-dependent invalidation.
 export type PersonChange =
   | 'inquiry_received'
   | 'assignment_changed'
@@ -108,12 +107,21 @@ export function invalidationsFor(event: unknown, orgId: string): QueryKey[] {
       // the Person detail only. Older bundles that don't recognize
       // `note_changed` fall through to the wide default, which is safe
       // (over-invalidation, never under-invalidation).
-      // SLICE_019.md §5, §9: a custom-field value change is the same
-      // narrow case as `note_changed` — it touches no People row, Today
-      // queue, or list count (a custom field never appears in the filter
-      // vocabulary in 019a).
-      if (data.change === 'note_changed' || data.change === 'custom_field_changed') {
+      if (data.change === 'note_changed') {
         return [queryKeys.person(orgId, personId)]
+      }
+      // Slice 019b: custom fields now participate in People filters,
+      // saved-list counts, and Today source/rule membership. Definitions are
+      // included so a settled value change cannot leave a stale field picker
+      // alongside the refreshed filtered surfaces.
+      if (data.change === 'custom_field_changed') {
+        return [
+          queryKeys.person(orgId, personId),
+          queryKeys.people(orgId),
+          queryKeys.today(orgId),
+          queryKeys.savedListCounts(orgId),
+          queryKeys.customFields(orgId),
+        ]
       }
       // SLICE_016.md §6: a due task changes the viewer's Today, so this
       // gets `queryKeys.today` in addition to the Person detail — but

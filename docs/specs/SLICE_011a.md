@@ -1,5 +1,8 @@
 # Slice 011a — Filter vocabulary + ad-hoc People filtering
 
+**Slice 019b amendment (approved 2026-09-10):**
+[Custom-field filtering](SLICE_019b.md). Amends §§4a–4e, 5 and 6: four typed custom-field clause kinds join v1; up to five custom clauses within twenty total, one per field; fixed SQL slots, two reference errors and field-keyed Web editors. Existing clause behavior remains unchanged.
+
 **Approved amendment — Slice 011c (2026-09-06):**
 [SLICE_011c §§4/8](SLICE_011c.md) supplement §§4c/4e with bounded static Today
 membership, ordered-ID and hydration projections using the same v1 filter

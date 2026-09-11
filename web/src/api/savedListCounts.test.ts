@@ -314,16 +314,16 @@ describe('useSavedListCountScheduler', () => {
   // Slice 011e e2 review round 1, F1: `invalid_tag` must reach `kind:
   // 'invalid'`, not silently fall through to `kind: 'unavailable'` the
   // way an unrecognized code would.
-  it('marks a count rejected 422 invalid_tag as kind: invalid, not unavailable', async () => {
+  it.each(['invalid_tag', 'invalid_field', 'invalid_option'] as const)('marks a count rejected 422 %s as repairable', async (code) => {
     const fetches = installDeferredFetches()
     const harness = await mountScheduler()
     const list = item(1)
     harness.items.value = [list]
     await flushPromises()
 
-    fetches.requests[0]!.response.reject(new ApiError(422, 'invalid_tag'))
+    fetches.requests[0]!.response.reject(new ApiError(422, code))
     await flushPromises()
 
-    expect(harness.scheduler.stateFor(list)).toEqual({ kind: 'invalid', error: 'invalid_tag' })
+    expect(harness.scheduler.stateFor(list)).toEqual({ kind: 'invalid', error: code })
   })
 })

@@ -169,6 +169,18 @@ pub async fn person_state_candidates(
     feed_a: &ResolvedFeed,
     feed_b: &ResolvedFeed,
 ) -> Result<(Vec<TodayCandidate>, bool), sqlx::Error> {
+    #[cfg(feature = "test-support")]
+    let _frozen = crate::domain::person::filter_test_support::frozen_selected();
+    #[cfg(feature = "test-support")]
+    if let Some(adapter) = crate::domain::person::filter_test_support::frozen_adapter() {
+        return adapter
+            .person_state(conn, organization_id, viewer, now, feed_a, feed_b)
+            .await;
+    }
+    #[cfg(feature = "test-support")]
+    crate::domain::person::filter_test_support::live_adapter_executed(
+        crate::domain::person::filter_test_support::FilterStatementFamily::PersonState,
+    );
     let params_a = feed_a.filter.to_query_params(viewer);
     let params_b = feed_b.filter.to_query_params(viewer);
     let fresh_hours_a = feed_a.fresh_within_hours.unwrap_or(24);
@@ -232,6 +244,176 @@ pub async fn person_state_candidates(
         params_a.tag_ids_none.as_deref(),
         params_b.tag_ids_any.as_deref(),
         params_b.tag_ids_none.as_deref(),
+        params_a.custom_slot(0).map(|s| s.field_id),
+        params_a.custom_slot(0).map(|s| s.field_type),
+        params_a.custom_slot(0).map(|s| s.operation),
+        params_a
+            .custom_slot(0)
+            .and_then(|s| s.text_operand.as_deref()),
+        params_a
+            .custom_slot(0)
+            .and_then(|s| s.number_min.as_deref()),
+        params_a
+            .custom_slot(0)
+            .and_then(|s| s.number_max.as_deref()),
+        params_a.custom_slot(0).and_then(|s| s.date_min),
+        params_a.custom_slot(0).and_then(|s| s.date_max),
+        params_a
+            .custom_slot(0)
+            .and_then(|s| s.option_ids.as_deref()),
+        params_a.custom_slot(1).map(|s| s.field_id),
+        params_a.custom_slot(1).map(|s| s.field_type),
+        params_a.custom_slot(1).map(|s| s.operation),
+        params_a
+            .custom_slot(1)
+            .and_then(|s| s.text_operand.as_deref()),
+        params_a
+            .custom_slot(1)
+            .and_then(|s| s.number_min.as_deref()),
+        params_a
+            .custom_slot(1)
+            .and_then(|s| s.number_max.as_deref()),
+        params_a.custom_slot(1).and_then(|s| s.date_min),
+        params_a.custom_slot(1).and_then(|s| s.date_max),
+        params_a
+            .custom_slot(1)
+            .and_then(|s| s.option_ids.as_deref()),
+        params_a.custom_slot(2).map(|s| s.field_id),
+        params_a.custom_slot(2).map(|s| s.field_type),
+        params_a.custom_slot(2).map(|s| s.operation),
+        params_a
+            .custom_slot(2)
+            .and_then(|s| s.text_operand.as_deref()),
+        params_a
+            .custom_slot(2)
+            .and_then(|s| s.number_min.as_deref()),
+        params_a
+            .custom_slot(2)
+            .and_then(|s| s.number_max.as_deref()),
+        params_a.custom_slot(2).and_then(|s| s.date_min),
+        params_a.custom_slot(2).and_then(|s| s.date_max),
+        params_a
+            .custom_slot(2)
+            .and_then(|s| s.option_ids.as_deref()),
+        params_a.custom_slot(3).map(|s| s.field_id),
+        params_a.custom_slot(3).map(|s| s.field_type),
+        params_a.custom_slot(3).map(|s| s.operation),
+        params_a
+            .custom_slot(3)
+            .and_then(|s| s.text_operand.as_deref()),
+        params_a
+            .custom_slot(3)
+            .and_then(|s| s.number_min.as_deref()),
+        params_a
+            .custom_slot(3)
+            .and_then(|s| s.number_max.as_deref()),
+        params_a.custom_slot(3).and_then(|s| s.date_min),
+        params_a.custom_slot(3).and_then(|s| s.date_max),
+        params_a
+            .custom_slot(3)
+            .and_then(|s| s.option_ids.as_deref()),
+        params_a.custom_slot(4).map(|s| s.field_id),
+        params_a.custom_slot(4).map(|s| s.field_type),
+        params_a.custom_slot(4).map(|s| s.operation),
+        params_a
+            .custom_slot(4)
+            .and_then(|s| s.text_operand.as_deref()),
+        params_a
+            .custom_slot(4)
+            .and_then(|s| s.number_min.as_deref()),
+        params_a
+            .custom_slot(4)
+            .and_then(|s| s.number_max.as_deref()),
+        params_a.custom_slot(4).and_then(|s| s.date_min),
+        params_a.custom_slot(4).and_then(|s| s.date_max),
+        params_a
+            .custom_slot(4)
+            .and_then(|s| s.option_ids.as_deref()),
+        params_b.custom_slot(0).map(|s| s.field_id),
+        params_b.custom_slot(0).map(|s| s.field_type),
+        params_b.custom_slot(0).map(|s| s.operation),
+        params_b
+            .custom_slot(0)
+            .and_then(|s| s.text_operand.as_deref()),
+        params_b
+            .custom_slot(0)
+            .and_then(|s| s.number_min.as_deref()),
+        params_b
+            .custom_slot(0)
+            .and_then(|s| s.number_max.as_deref()),
+        params_b.custom_slot(0).and_then(|s| s.date_min),
+        params_b.custom_slot(0).and_then(|s| s.date_max),
+        params_b
+            .custom_slot(0)
+            .and_then(|s| s.option_ids.as_deref()),
+        params_b.custom_slot(1).map(|s| s.field_id),
+        params_b.custom_slot(1).map(|s| s.field_type),
+        params_b.custom_slot(1).map(|s| s.operation),
+        params_b
+            .custom_slot(1)
+            .and_then(|s| s.text_operand.as_deref()),
+        params_b
+            .custom_slot(1)
+            .and_then(|s| s.number_min.as_deref()),
+        params_b
+            .custom_slot(1)
+            .and_then(|s| s.number_max.as_deref()),
+        params_b.custom_slot(1).and_then(|s| s.date_min),
+        params_b.custom_slot(1).and_then(|s| s.date_max),
+        params_b
+            .custom_slot(1)
+            .and_then(|s| s.option_ids.as_deref()),
+        params_b.custom_slot(2).map(|s| s.field_id),
+        params_b.custom_slot(2).map(|s| s.field_type),
+        params_b.custom_slot(2).map(|s| s.operation),
+        params_b
+            .custom_slot(2)
+            .and_then(|s| s.text_operand.as_deref()),
+        params_b
+            .custom_slot(2)
+            .and_then(|s| s.number_min.as_deref()),
+        params_b
+            .custom_slot(2)
+            .and_then(|s| s.number_max.as_deref()),
+        params_b.custom_slot(2).and_then(|s| s.date_min),
+        params_b.custom_slot(2).and_then(|s| s.date_max),
+        params_b
+            .custom_slot(2)
+            .and_then(|s| s.option_ids.as_deref()),
+        params_b.custom_slot(3).map(|s| s.field_id),
+        params_b.custom_slot(3).map(|s| s.field_type),
+        params_b.custom_slot(3).map(|s| s.operation),
+        params_b
+            .custom_slot(3)
+            .and_then(|s| s.text_operand.as_deref()),
+        params_b
+            .custom_slot(3)
+            .and_then(|s| s.number_min.as_deref()),
+        params_b
+            .custom_slot(3)
+            .and_then(|s| s.number_max.as_deref()),
+        params_b.custom_slot(3).and_then(|s| s.date_min),
+        params_b.custom_slot(3).and_then(|s| s.date_max),
+        params_b
+            .custom_slot(3)
+            .and_then(|s| s.option_ids.as_deref()),
+        params_b.custom_slot(4).map(|s| s.field_id),
+        params_b.custom_slot(4).map(|s| s.field_type),
+        params_b.custom_slot(4).map(|s| s.operation),
+        params_b
+            .custom_slot(4)
+            .and_then(|s| s.text_operand.as_deref()),
+        params_b
+            .custom_slot(4)
+            .and_then(|s| s.number_min.as_deref()),
+        params_b
+            .custom_slot(4)
+            .and_then(|s| s.number_max.as_deref()),
+        params_b.custom_slot(4).and_then(|s| s.date_min),
+        params_b.custom_slot(4).and_then(|s| s.date_max),
+        params_b
+            .custom_slot(4)
+            .and_then(|s| s.option_ids.as_deref()),
     )
     .fetch_all(conn)
     .await?;
@@ -266,6 +448,18 @@ pub async fn call_membership(
     retained_ids: &[Uuid],
     now: DateTime<Utc>,
 ) -> Result<Vec<(Uuid, Uuid, DateTime<Utc>)>, sqlx::Error> {
+    #[cfg(feature = "test-support")]
+    let _frozen = crate::domain::person::filter_test_support::frozen_selected();
+    #[cfg(feature = "test-support")]
+    if let Some(adapter) = crate::domain::person::filter_test_support::frozen_adapter() {
+        return adapter
+            .call_membership(conn, organization_id, viewer, call_feed, retained_ids, now)
+            .await;
+    }
+    #[cfg(feature = "test-support")]
+    crate::domain::person::filter_test_support::live_adapter_executed(
+        crate::domain::person::filter_test_support::FilterStatementFamily::CallMembership,
+    );
     if retained_ids.is_empty() {
         return Ok(Vec::new());
     }
@@ -301,6 +495,61 @@ pub async fn call_membership(
         now,
         params.tag_ids_any.as_deref(),
         params.tag_ids_none.as_deref(),
+        params.custom_slot(0).map(|s| s.field_id),
+        params.custom_slot(0).map(|s| s.field_type),
+        params.custom_slot(0).map(|s| s.operation),
+        params
+            .custom_slot(0)
+            .and_then(|s| s.text_operand.as_deref()),
+        params.custom_slot(0).and_then(|s| s.number_min.as_deref()),
+        params.custom_slot(0).and_then(|s| s.number_max.as_deref()),
+        params.custom_slot(0).and_then(|s| s.date_min),
+        params.custom_slot(0).and_then(|s| s.date_max),
+        params.custom_slot(0).and_then(|s| s.option_ids.as_deref()),
+        params.custom_slot(1).map(|s| s.field_id),
+        params.custom_slot(1).map(|s| s.field_type),
+        params.custom_slot(1).map(|s| s.operation),
+        params
+            .custom_slot(1)
+            .and_then(|s| s.text_operand.as_deref()),
+        params.custom_slot(1).and_then(|s| s.number_min.as_deref()),
+        params.custom_slot(1).and_then(|s| s.number_max.as_deref()),
+        params.custom_slot(1).and_then(|s| s.date_min),
+        params.custom_slot(1).and_then(|s| s.date_max),
+        params.custom_slot(1).and_then(|s| s.option_ids.as_deref()),
+        params.custom_slot(2).map(|s| s.field_id),
+        params.custom_slot(2).map(|s| s.field_type),
+        params.custom_slot(2).map(|s| s.operation),
+        params
+            .custom_slot(2)
+            .and_then(|s| s.text_operand.as_deref()),
+        params.custom_slot(2).and_then(|s| s.number_min.as_deref()),
+        params.custom_slot(2).and_then(|s| s.number_max.as_deref()),
+        params.custom_slot(2).and_then(|s| s.date_min),
+        params.custom_slot(2).and_then(|s| s.date_max),
+        params.custom_slot(2).and_then(|s| s.option_ids.as_deref()),
+        params.custom_slot(3).map(|s| s.field_id),
+        params.custom_slot(3).map(|s| s.field_type),
+        params.custom_slot(3).map(|s| s.operation),
+        params
+            .custom_slot(3)
+            .and_then(|s| s.text_operand.as_deref()),
+        params.custom_slot(3).and_then(|s| s.number_min.as_deref()),
+        params.custom_slot(3).and_then(|s| s.number_max.as_deref()),
+        params.custom_slot(3).and_then(|s| s.date_min),
+        params.custom_slot(3).and_then(|s| s.date_max),
+        params.custom_slot(3).and_then(|s| s.option_ids.as_deref()),
+        params.custom_slot(4).map(|s| s.field_id),
+        params.custom_slot(4).map(|s| s.field_type),
+        params.custom_slot(4).map(|s| s.operation),
+        params
+            .custom_slot(4)
+            .and_then(|s| s.text_operand.as_deref()),
+        params.custom_slot(4).and_then(|s| s.number_min.as_deref()),
+        params.custom_slot(4).and_then(|s| s.number_max.as_deref()),
+        params.custom_slot(4).and_then(|s| s.date_min),
+        params.custom_slot(4).and_then(|s| s.date_max),
+        params.custom_slot(4).and_then(|s| s.option_ids.as_deref()),
     )
     .fetch_all(conn)
     .await?;
@@ -410,6 +659,26 @@ pub async fn call_only_candidates(
     limit: i64,
     now: DateTime<Utc>,
 ) -> Result<Vec<TodayCandidate>, sqlx::Error> {
+    #[cfg(feature = "test-support")]
+    let _frozen = crate::domain::person::filter_test_support::frozen_selected();
+    #[cfg(feature = "test-support")]
+    if let Some(adapter) = crate::domain::person::filter_test_support::frozen_adapter() {
+        return adapter
+            .call_only(
+                conn,
+                organization_id,
+                viewer,
+                call_feed,
+                retained_ids,
+                limit,
+                now,
+            )
+            .await;
+    }
+    #[cfg(feature = "test-support")]
+    crate::domain::person::filter_test_support::live_adapter_executed(
+        crate::domain::person::filter_test_support::FilterStatementFamily::CallOnly,
+    );
     let params = call_feed.filter.to_query_params(viewer);
     let rows = sqlx::query_file_as!(
         CallOnlyRow,
@@ -443,6 +712,61 @@ pub async fn call_only_candidates(
         now,
         params.tag_ids_any.as_deref(),
         params.tag_ids_none.as_deref(),
+        params.custom_slot(0).map(|s| s.field_id),
+        params.custom_slot(0).map(|s| s.field_type),
+        params.custom_slot(0).map(|s| s.operation),
+        params
+            .custom_slot(0)
+            .and_then(|s| s.text_operand.as_deref()),
+        params.custom_slot(0).and_then(|s| s.number_min.as_deref()),
+        params.custom_slot(0).and_then(|s| s.number_max.as_deref()),
+        params.custom_slot(0).and_then(|s| s.date_min),
+        params.custom_slot(0).and_then(|s| s.date_max),
+        params.custom_slot(0).and_then(|s| s.option_ids.as_deref()),
+        params.custom_slot(1).map(|s| s.field_id),
+        params.custom_slot(1).map(|s| s.field_type),
+        params.custom_slot(1).map(|s| s.operation),
+        params
+            .custom_slot(1)
+            .and_then(|s| s.text_operand.as_deref()),
+        params.custom_slot(1).and_then(|s| s.number_min.as_deref()),
+        params.custom_slot(1).and_then(|s| s.number_max.as_deref()),
+        params.custom_slot(1).and_then(|s| s.date_min),
+        params.custom_slot(1).and_then(|s| s.date_max),
+        params.custom_slot(1).and_then(|s| s.option_ids.as_deref()),
+        params.custom_slot(2).map(|s| s.field_id),
+        params.custom_slot(2).map(|s| s.field_type),
+        params.custom_slot(2).map(|s| s.operation),
+        params
+            .custom_slot(2)
+            .and_then(|s| s.text_operand.as_deref()),
+        params.custom_slot(2).and_then(|s| s.number_min.as_deref()),
+        params.custom_slot(2).and_then(|s| s.number_max.as_deref()),
+        params.custom_slot(2).and_then(|s| s.date_min),
+        params.custom_slot(2).and_then(|s| s.date_max),
+        params.custom_slot(2).and_then(|s| s.option_ids.as_deref()),
+        params.custom_slot(3).map(|s| s.field_id),
+        params.custom_slot(3).map(|s| s.field_type),
+        params.custom_slot(3).map(|s| s.operation),
+        params
+            .custom_slot(3)
+            .and_then(|s| s.text_operand.as_deref()),
+        params.custom_slot(3).and_then(|s| s.number_min.as_deref()),
+        params.custom_slot(3).and_then(|s| s.number_max.as_deref()),
+        params.custom_slot(3).and_then(|s| s.date_min),
+        params.custom_slot(3).and_then(|s| s.date_max),
+        params.custom_slot(3).and_then(|s| s.option_ids.as_deref()),
+        params.custom_slot(4).map(|s| s.field_id),
+        params.custom_slot(4).map(|s| s.field_type),
+        params.custom_slot(4).map(|s| s.operation),
+        params
+            .custom_slot(4)
+            .and_then(|s| s.text_operand.as_deref()),
+        params.custom_slot(4).and_then(|s| s.number_min.as_deref()),
+        params.custom_slot(4).and_then(|s| s.number_max.as_deref()),
+        params.custom_slot(4).and_then(|s| s.date_min),
+        params.custom_slot(4).and_then(|s| s.date_max),
+        params.custom_slot(4).and_then(|s| s.option_ids.as_deref()),
     )
     .fetch_all(conn)
     .await?;

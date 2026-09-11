@@ -1,0 +1,47 @@
+[
+  {
+    "file": "README.md",
+    "sha256": "b2cddf1bc5bceed6c3afa1cd1f509dd454bf0c09106a62ac16b0fa2a0e06d6b7",
+    "bytes": 7864
+  },
+  {
+    "file": "baseline-sql-manifest.json",
+    "sha256": "33603e1a141447c3083cde511a14ac624eb7677b5d9f64db7f819f9d2352d17e",
+    "bytes": 3995
+  },
+  {
+    "file": "comparisons.json",
+    "sha256": "47c3f6427b0cbf4cb5c202ec7593ee12aa68a08fbe2cc9fde310a8594dbd1a6a",
+    "bytes": 3586
+  },
+  {
+    "file": "harness-stdout.txt",
+    "sha256": "35827ae67beb1d7e4a461828a97cf38cbc4bf05e7abefb5e04a4fe75406cb628",
+    "bytes": 9928
+  },
+  {
+    "file": "measured-cross-arm.json",
+    "sha256": "6dcc3edb9f5177d1649137b8c9b4904fc4bd413eaade9826858205bb4d527619",
+    "bytes": 1332
+  },
+  {
+    "file": "plan-summary.json",
+    "sha256": "708a47e003900a0d622bb9e89eeea93dc40b847a292581de50f72bcb5ce41e16",
+    "bytes": 4793
+  },
+  {
+    "file": "plans.json",
+    "sha256": "f47ca98bc238e1a4cee0d973e89a488c78c9f3228d3897250cdd662adb917564",
+    "bytes": 296704
+  },
+  {
+    "file": "protocol.json",
+    "sha256": "220c5e931cc4e7477620dc1d60f2887252c48549569c249ea8689c46e1db1915",
+    "bytes": 540
+  },
+  {
+    "file": "raw-timings.json",
+    "sha256": "5a4ff6fb9cce6e4a5b5700bbdb6570a6fdc63c01336c415f54881b15591df34c",
+    "bytes": 1152011
+  }
+]

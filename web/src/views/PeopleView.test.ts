@@ -8,6 +8,8 @@ import { queryKeys } from '../api/queries'
 import type {
   CreateSavedListRequest,
   CreateSavedListResponse,
+  CustomField,
+  CustomFieldsResponse,
   FilterClause,
   InquirySourcesResponse,
   MeResponse,
@@ -41,6 +43,12 @@ const meFilter: FilterClause[] = [{ kind: 'assigned_to', assignees: ['me'] }]
 const TAG_ID = '88888888-8888-4888-8888-888888888888'
 const tagsFilter: FilterClause[] = [{ kind: 'tags', tag_ids: [TAG_ID] }]
 const notTagsFilter: FilterClause[] = [{ kind: 'not_tags', tag_ids: [TAG_ID] }]
+const CUSTOM_FIELD_ID = '99999999-9999-4999-8999-999999999991'
+const customTextFilter: FilterClause[] = [{ kind: 'custom_text', field_id: CUSTOM_FIELD_ID, test: { op: 'contains', text: 'Harbor' } }]
+const CUSTOM_TEXT_FIELD: CustomField = {
+  id: CUSTOM_FIELD_ID, label: 'Referrer', field_type: 'text', position: 1,
+  archived_at: null, person_count: 0, options: [],
+}
 
 function me(orgId = ORG_ID, role: 'member' | 'admin' = 'member'): MeResponse {
   return {
@@ -123,6 +131,7 @@ interface StubOptions {
   people?: (filter: string | null, sort: string | null) => PeopleResponse | Promise<PeopleResponse> | ApiError
   sources?: () => InquirySourcesResponse | Promise<InquirySourcesResponse>
   tags?: () => TagsResponse | Promise<TagsResponse>
+  customFields?: () => CustomFieldsResponse | Promise<CustomFieldsResponse>
   person?: (id: string) => PersonDetailResponse | Promise<PersonDetailResponse> | ApiError
   savedList?: (id: string) => SavedListDetailResponse | Promise<SavedListDetailResponse> | ApiError
   savedCount?: (id: string, revision: number) => SavedListCountResponse | Promise<SavedListCountResponse> | ApiError
@@ -138,6 +147,7 @@ function stub(options: StubOptions = {}) {
     if (path === '/organization/members') return { members: [] }
     if (path === '/inquiry-sources') return options.sources?.() ?? { sources: ['website', 'zillow'], truncated: false }
     if (path === '/tags') return options.tags?.() ?? { tags: [] }
+    if (path === '/custom-fields') return options.customFields?.() ?? { fields: [] }
     if (path === '/saved-lists' && init?.method === 'POST') {
       const body = JSON.parse(String(init.body)) as CreateSavedListRequest
       const response = options.createSavedList?.(body)
@@ -535,6 +545,22 @@ describe('People result feedback and failures', () => {
     expect(wrapper.findComponent(FilterBar).props('sourcesTruncated')).toBe(true)
     expect(wrapper.findComponent(FilterBar).props('sourcesError')).toBe(false)
   })
+
+  it('passes custom-field loading state and retries the definitions query', async () => {
+    const response = deferred<CustomFieldsResponse>()
+    let retried = false
+    stub({ customFields: () => retried ? { fields: [CUSTOM_TEXT_FIELD] } : response.promise })
+    const { wrapper } = await mountView()
+    expect(wrapper.findComponent(FilterBar).props('customFieldsPending')).toBe(true)
+    response.reject(new ApiError(503, 'unavailable'))
+    await flushPromises()
+    expect(wrapper.findComponent(FilterBar).props('customFieldsError')).toBe(true)
+    retried = true
+    wrapper.findComponent(FilterBar).vm.$emit('retry-custom-fields')
+    await flushPromises()
+    expect(wrapper.findComponent(FilterBar).props('customFields')).toEqual([CUSTOM_TEXT_FIELD])
+    expect(wrapper.findComponent(FilterBar).props('customFieldsError')).toBe(false)
+  })
 })
 
 describe('Saved-list workspace safety', () => {
@@ -581,6 +607,34 @@ describe('Saved-list workspace safety', () => {
     expect(peoplePaths()).toEqual([])
     expect(wrapper.text()).toContain('People are paused until the criteria are repaired.')
     expect(wrapper.text()).toContain('Match count paused')
+  })
+
+  it.each([
+    {
+      error: 'invalid_field' as const,
+      filter: customTextFilter,
+      fields: [{ ...CUSTOM_TEXT_FIELD, archived_at: '2026-09-10T00:00:00.000Z' }],
+    },
+    {
+      error: 'invalid_option' as const,
+      filter: [{ kind: 'custom_choice', field_id: CUSTOM_FIELD_ID, test: { op: 'any_of', option_ids: ['99999999-9999-4999-8999-999999999992'] } }] satisfies FilterClause[],
+      fields: [{ ...CUSTOM_TEXT_FIELD, field_type: 'choice' as const }],
+    },
+  ])('pauses an $error custom-field list until removing the invalid clause', async ({ error, filter, fields }) => {
+    stub({
+      customFields: () => ({ fields }),
+      savedList: (id) => ({
+        ...editableSavedDetail(id, filter),
+        filter_error: error,
+      }),
+    })
+    const { wrapper } = await mountView(`/lists/${SAVED_LIST_A}`)
+    expect(peoplePaths()).toEqual([])
+    expect(wrapper.text()).toContain('People are paused until the criteria are repaired.')
+    edit(wrapper, [])
+    await flushPromises()
+    expect(peoplePaths()).toContain(filteredPath([]))
+    expect(peoplePaths()).not.toContain('/people')
   })
 
   // §9.14's "the writer repairs by editing": once the WORKING draft no

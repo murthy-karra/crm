@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE custom_field cf\n           SET position = u.ord::integer, updated_at = now()\n           FROM unnest($2::uuid[]) WITH ORDINALITY AS u(id, ord)\n           WHERE cf.id = u.id AND cf.organization_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4f93beae3a23e5d1fecf9d4f3fe374d33f322fd1f3c761d5b59835f45b88a791"
+}

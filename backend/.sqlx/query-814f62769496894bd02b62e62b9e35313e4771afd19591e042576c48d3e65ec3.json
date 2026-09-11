@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE custom_field_option\n           SET label = $4, archived_at = $5, updated_at = now()\n           WHERE id = $1 AND field_id = $2 AND organization_id = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "814f62769496894bd02b62e62b9e35313e4771afd19591e042576c48d3e65ec3"
+}

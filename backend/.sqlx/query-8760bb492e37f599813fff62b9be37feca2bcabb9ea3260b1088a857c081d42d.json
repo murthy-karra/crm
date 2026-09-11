@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE custom_field\n           SET label = $3, archived_at = $4, position = COALESCE($5, position), updated_at = now()\n           WHERE id = $1 AND organization_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8760bb492e37f599813fff62b9be37feca2bcabb9ea3260b1088a857c081d42d"
+}

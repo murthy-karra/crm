@@ -65,6 +65,9 @@ mod db_capture_unmatched;
 #[path = "db_contact_attempts.rs"]
 mod db_contact_attempts;
 
+#[path = "db_custom_fields.rs"]
+mod db_custom_fields;
+
 #[path = "db_identity.rs"]
 mod db_identity;
 

@@ -1,0 +1,53 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT cf.id, cf.label, cf.field_type, cf.position, cf.archived_at,\n                  count(v.person_id) as \"person_count!\"\n           FROM custom_field cf\n           LEFT JOIN person_custom_field_value v\n             ON v.field_id = cf.id AND v.organization_id = cf.organization_id\n           WHERE cf.id = $1 AND cf.organization_id = $2\n           GROUP BY cf.id, cf.label, cf.field_type, cf.position, cf.archived_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "label",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "field_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "position",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "archived_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "person_count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "2596a3e5a2bd61f59eeac44349099c9774a1c0841146fc25ad8f830c8a6e8290"
+}

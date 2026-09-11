@@ -35,3 +35,21 @@ If two authoritative files still conflict, stop and report the conflict before i
 The current phase, active slice, pending approvals, and next action are always
 recorded in `plans/PROJECT_STATE.md`. The repository, not chat memory, is
 authoritative.
+
+## Engineer handoff
+
+- [System map](architecture/ARCHITECTURE_BASELINE.md): current components,
+  boundaries and the distinction between development and planned production.
+- [Current state](plans/PROJECT_STATE.md): active work, release evidence,
+  residuals and the next action.
+- [Historical progress](plans/PROJECT_HISTORY.md): archived checkpoints, slice
+  ledger and old measurements; not current implementation instructions.
+- [Foundations proposal](plans/FOUNDATIONS.md): Organization portability, durable
+  work and release compatibility, with ownership and capability triggers.
+- [Readiness checklist](plans/PRODUCTION_READINESS.md): live validation, first
+  customer data, import/cutover and production evidence gates.
+
+The two plans contain proposals and open decisions, not accepted ADRs. Accept
+new policies in the decision log and amend owning specs before implementing
+contract changes. Update the system map when a boundary or operating entry point
+changes; move completed progress into history while preserving live residuals.

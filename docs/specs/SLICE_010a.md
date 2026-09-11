@@ -1,16 +1,17 @@
 # Slice 010a — FUB connection and migration assessment
 
-**Delivery: implemented, synthetically verified, merged and pushed (2026-09-11);
-not deployed. Live FUB validation remains user-deferred.** See
-[verification](../tasks/SLICE_010a_VERIFICATION.md).
+**Delivery: implemented, synthetically verified, merged, pushed and deployed to
+shared development (2026-09-11). Live FUB validation remains user-deferred.** See
+[verification](../tasks/SLICE_010a_VERIFICATION.md) and
+[release](../tasks/SLICE_010a_RELEASE.md).
 
 **Status: APPROVED for implementation, 2026-09-10.** The user explicitly
 approved API-first assessment with encrypted saved credentials after reviewing
 this specification and brief (D-060). D-059 accepts a new, empty destination
 Organization first. Source qualification and live validation remain required;
 no live account has been tested. D-060's 2026-09-11 follow-up separately authorizes source cleanup, commit, merge
-and push. Runtime deployment and reading a real customer book remain outside
-that authorization.
+and push. A later same-day follow-up authorized the shared-development
+deployment; reading a real customer book remains outside that authorization.
 
 **Validation amendment:** the user explicitly chose “Not yet; leave live
 validation pending” when asked about a synthetic FUB test account. Complete

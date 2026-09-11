@@ -1,0 +1,10 @@
+{
+  "result": "passed",
+  "checks": [
+    "Admin navigation, empty-key state and reload passed",
+    "390px layout passed",
+    "Member navigation denial passed"
+  ],
+  "runtime_errors": 0,
+  "live_fub_requests": false
+}

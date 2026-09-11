@@ -1,7 +1,7 @@
 # Slice 010 — FUB migration planning summary
 
-**Status: 010a MERGED AND PUSHED (2026-09-11), synthetically verified;
-not deployed. Later rungs remain planning.** The user
+**Status: 010a DEPLOYED AND VERIFIED (2026-09-11); live FUB validation deferred.
+010b core-first planning is active; later implementation remains unapproved.** The user
 selected **a new, empty CRM Organization first** (D-059), then approved 010a's
 API-first assessment and encrypted saved credentials (D-060). Other
 recommendations remain proposals. Inspected against main `b2fb368`, after 019b.
@@ -53,7 +53,7 @@ See [015](../specs/SLICE_015.md), [016](../specs/SLICE_016.md),
 | Tasks | Destination supports call/email/text/follow-up/other. Source task types, date-only deadlines, timezones, completion history and unmatched assignees need a mapping policy. |
 | Inquiry and communication history | Import only facts supported by source evidence. Preserve source attribution and original timestamps separately from import time. A Person creation date is not necessarily an Inquiry; `lastCommunication` alone is not a call or text. |
 | Addresses, relationships, appointments, deals | No complete corresponding destination was found in the current model. Inventory separately and retain retrievable source material; do not claim full usable import. A gap may require its own model slice before a customer's cutover. |
-| Email bodies, recordings, automation/settings | Assess retrieval and representation independently. Mailbox reconstruction, recording handling, action plans and full Smart List conversion are separate work, not implied by a contact migration. |
+| Email bodies, recordings, automation/settings | Assess retrieval and representation independently. D-062 places email bulk content outside PostgreSQL, with scoped metadata and storage references in PostgreSQL; backend selection and relocation are future work. Mailbox reconstruction, recording handling, action plans and full Smart List conversion are separate work, not implied by a contact migration. |
 
 The old survey's automatic synthetic Inquiry/contact-attempt proposals are
 not adopted. They need reevaluation under `Person != Inquiry` and factual
@@ -148,7 +148,7 @@ the cutover rung.
 | Order / rung | User-visible result and completion condition |
 |---|---|
 | 1 — 010a | Secure API connection and honest bounded access report, implemented and synthetically verified. Live authorized FUB validation is user-deferred; no export upload or imported CRM business records. |
-| 2 — 010b | Resumable encrypted raw snapshot and detailed preview: mappings, duplicates, unsupported values and coverage. Raw data carries source account/entity IDs, API/export version where available, capture time and content hash. |
+| 2 — 010b | Core-first encrypted resumable snapshot and preview (D-061): People/users/stages/custom fields/notes/tasks; mappings, overlap candidates, unsupported values and explicit remaining coverage. Raw captures carry source IDs, API/schema/profile versions, capture times and keyed hashes. Further snapshot work must address history, communications, media and other uncovered families before cutover. |
 | 3 — 010c | Confirmed People/contact/stage/assignment import into the new Organization using explicit provenance and matching rules. Restart or repeat produces no duplicates. Source attribution and Person/Inquiry semantics are resolved first. |
 | 4 — 010f+ core rungs | Tags, custom definitions/options/values, notes and tasks through small typed import commands. Preserve authorship/timestamps and protect locally edited or tombstoned records on rerun. Exact rung splits follow the snapshot. |
 | 5 — 010d | Supported historical inquiry/call/text/correspondence facts, each with verified meaning. Inaccessible content stays a disclosed gap. Resolve Today behavior before enabling imported backlog for agents. |
@@ -226,4 +226,10 @@ and D-050's single relevant performance run when applicable. No implementation
 or release action was authorized by the initial planning request. The user's
 subsequent D-060 approval authorized 010a implementation and verification;
 the 2026-09-11 follow-up authorized source cleanup, commit, merge and push,
-now completed. Runtime deployment and live FUB validation remain pending.
+now completed. A later same-day follow-up authorized 010a deployment, which
+is complete and verified; live FUB validation remains user-deferred. The user
+also accepted core-first 010b planning (D-061): People, users, stages, custom
+fields, notes and tasks, with all remaining families explicitly tracked. See
+[the draft specification](../specs/SLICE_010b.md) and
+[execution brief](../tasks/SLICE_010b_IMPL.md); their contracts and implementation
+are not yet approved.

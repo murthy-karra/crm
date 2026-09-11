@@ -43,9 +43,20 @@ The two primary product goals are:
 
 ## Current State
 
-Slices 000 through 011a are merged. The product today: lead intake over HTTP and real inbound email (Cloudflare Email Routing on `leads.elysianfeld.com` → the `infra/email-worker` relay → pinned-format parsing, with LLM extraction via Groq for freeform mail and an admin-only Unresolved workbench for everything else); People with stages, assignment, and append-only history; ad-hoc People filtering (the Slice 011 smart-lists ladder is in progress); a deterministic, explainable Today work queue with realtime updates; correspondence capture (CC/BCC); outbound calling (LiveKit + Telnyx SIP) with mandatory call outcomes; a read-only AI Operator (the **Ask** drawer); organization administration (invitations, roles, deactivation, a platform-admin surface); and configurable intake routing (default assignee, round-robin, unassigned).
+The implemented product includes People, intake/correspondence, calling, tags,
+notes, tasks, typed custom fields, saved filters and configurable Today work.
+The AI Operator has read tools and scoped command tools with confirmation or
+receipt/Undo behavior. FUB assessment (010a) is deployed in shared development;
+010b core capture/preview is a draft. Live FUB validation remains deferred.
+Native SwiftUI and Jetpack Compose applications are planned, not implemented.
 
-Current operational status, per-slice history, and the next approval gate are recorded in `docs/plans/PROJECT_STATE.md`; each shipped slice's contract lives in its `docs/specs/SLICE_*.md`.
+Start with the [system map](docs/architecture/ARCHITECTURE_BASELINE.md) and
+[current operational state](docs/plans/PROJECT_STATE.md). Use the
+[history and slice ledger](docs/plans/PROJECT_HISTORY.md) for earlier milestones.
+The [foundations proposal](docs/plans/FOUNDATIONS.md) and
+[readiness checklist](docs/plans/PRODUCTION_READINESS.md) distinguish accepted
+requirements, future decisions and evidence still needed. Shared contracts live
+in their owning slice specifications and code.
 
 ## Development
 

@@ -1,0 +1,997 @@
+# Project history
+
+Archived from PROJECT_STATE.md on 2026-09-11 during the foundations handoff work.
+This is historical evidence, not current operational status or implementation
+instructions. Dates, branch names, approvals and performance conclusions below
+belong to their recorded checkpoints; later decisions (including D-050) govern.
+Use [PROJECT_STATE.md](PROJECT_STATE.md) for current work, live residuals and next
+actions, and the [decision log](../decisions/DECISION_LOG.md) for authority.
+Per-slice verification/release records remain the detailed evidence.
+
+## Historical progress
+
+The entries below retain the state at each recorded checkpoint. Current status,
+authorization and next actions are in their named sections, not these older notes.
+
+Previously: **SLICE 019b (CUSTOM-FIELD FILTERING) — COMPLETE, MERGED, DEPLOYED AND
+CLEANED UP (2026-09-10).** User authorized commit, deployment, merge with main
+and loose-branch cleanup. Implementation `a642987`, merge `237639d`, followed
+by a release-record commit. Only local main remains; no push was requested or
+performed, and `origin/main` is still `6bad52a`.
+
+Five custom clauses now work across People, personal saved lists, Today sources
+and admin rules. Astra high planned and independently reviewed; Terra high
+implemented backend and Web, with coordinator integration and thin helpers.
+Both implementation review/fix rounds completed and all thirteen findings were
+fixed. Final `sqlx-prepare`, `check` (831 Rust, 5 doctests, 878 Web, 11 worker)
+and `check-db` (785/785) passed. Browser QA passed; the single performance run
+passed thirteen paired p95 budgets and eighteen inspected plans. Zero-source
+Today serial grew 19.348 ms within its accepted 25 ms allowance.
+
+Deployed the unchanged tested source from main: API PID 67757 on 3000,
+Web preview PID 68235 on 5173, exposed through `app.tarams.org`. Public health,
+authenticated read/filter checks, six bundle asset comparisons and realtime
+WebSocket upgrade passed. No migrations or configuration changes were needed.
+Only the exact former API/Web listener PIDs were stopped. Rollback artifacts
+are retained privately. The 019b branch and worktree were removed; the synthetic
+QA database and the unrelated untracked `notes.txt` remain untouched.
+
+[Implementation verification](../tasks/SLICE_019b_VERIFICATION.md) and
+[release record](../tasks/SLICE_019b_RELEASE.md) contain exact revisions,
+commands, screenshots, performance data and release limits. API and Web must
+ship together. No active implementation lane; Slice 017 live sends remain deferred.
+
+Previously: **SLICE 019a (TYPED CUSTOM FIELDS) — COMPLETE, MERGED, PUSHED
+(2026-09-10, with the user's approval).** Merge `7dc4a2f`; source
+`slice-019-custom-fields` at `c2214f8` (fifteen lane commits, the
+[verification record](../tasks/SLICE_019_VERIFICATION.md) and seven
+screenshots under `docs/design/qa/slice-019-2026-09-10/`). One lane
+(Claude Sonnet 5), backend then Web with a checkpoint between. Review
+round 1 in two halves: backend READY WITH FIXES; Web NOT READY on one
+blocking defect (editor drafts seeded once and never re-synced, so with
+cached definitions an editor rendered empty and a blur deleted the stored
+value), reproduced by both reviewer and tester; twenty-one fixes applied
+in one round; round 2 confirmed all, READY. Final-tree gates once on
+`7d17ab1`: `sqlx-prepare` clean, `check` green (823 Rust, 822 Web, 11
+worker), `check-db` 776 of 776 first run. Walkthrough on a QA runtime,
+seven steps: admin creates the four types; a member sets and clears
+values, is refused 403 on the admin API and redirected from the Fields
+page; a second Organization sees nothing and gets 404; archive hides and
+keeps the value; the Operator answers from `custom_fields`; restore
+brings the value back. Runtime updated: `crm_dev` migrated
+(`20260915000001`), the dev API restarted by exact PID (70740, binary
+19:04, `/api/health` 200), `dev-web-prod` rebuilt (preview pid 71190).
+Worktree `../crm-worktrees/019`, the branch and `crm_slice019_qa`
+deleted. `main` pushed to `origin/main`, carrying the Slice 018 merge and
+records as well. Rung 019b (custom-field filter clauses) is scheduled,
+unspecified and needs its own approval (D-058 §1). No slice active.
+
+Previously: **SLICE 019a (CUSTOM FIELDS) — APPROVED 2026-09-10, LANE IN
+IMPLEMENTATION.** [SLICE_019.md](../specs/SLICE_019.md) and its
+[brief](../tasks/SLICE_019_IMPL.md), reviewed READY WITH CORRECTIONS
+(fifteen applied: no derived key; rename/archive/restore folded into one
+`PUT` per resource, eight routes and seven commands; numbers cross the
+Rust boundary as validated decimal strings because no decimal crate is
+enabled and `Cargo.*` is unowned; a Person-only realtime arm; the admin
+extractor precedence verified; the static `order` route beside the uuid
+parameter verified and pinned), approved with one named default:
+definition management is admin-only. One lane (Claude Sonnet 5) in
+`../crm-worktrees/019` on `slice-019-custom-fields`; Part A backend with
+a hard checkpoint (review round 1), then Part B Web (round 2). Pointer
+lines added to SLICE_002 §2 and §5, SLICE_003 §6, SLICE_005 §5, the 011
+and 010 ladders.
+
+Previously: **SLICE 019 (CUSTOM FIELDS) — PLANNING (2026-09-10).** The user picked
+custom fields (the last unbuilt CRM-core model, thesis §7 and §11; the
+last FUB destination besides deals, SLICE_010_LADDER 010f+; the reserved
+dynamic-SQL fork point in the filter ladder). **D-058 accepted (user,
+2026-09-10): filtering deferred to a separate rung 019b; four FUB types;
+any active member sets values; archive-only definitions; CRUD per AGENTS
+§4.6; import-ready columns.** FUB's custom-field shape was verified from
+its API docs (text/date/number/dropdown, choices, isRecurring,
+hideIfEmpty, orderWeight). The first planner run stalled at its first
+step for 50 minutes and was stopped; the retry with a tool budget
+delivered in six minutes. `docs/specs/SLICE_019.md` (rung 019a) drafted
+from it and sent for independent review; next the corrections, the
+brief, then the implementation gate. `main` is still ahead of `origin/main` (the Slice
+018 merge and records); push on the user's word.
+
+Previously: **SLICE 018 (OPERATOR `create_task` / `complete_task`) — COMPLETE AND
+MERGED TO LOCAL MAIN** at `d74c493` (2026-09-10, with the user's approval;
+not pushed, not deployed). Source `slice-018-operator-tasks` at `6910665`
+(thirteen lane commits, the walkthrough fix `20131e9`, the
+[verification record](../tasks/SLICE_018_VERIFICATION.md) and six
+screenshots under `docs/design/qa/slice-018-2026-09-10/`). One lane
+(Claude Sonnet 5), backend then Web with a checkpoint between. Review
+round 1 in two halves (no blocking finding; twenty fixes incl. two real
+Web defects: receipt state keyed by task id, and a finalized confirm
+failure left retryable); round 2 confirmed all, READY. Final-tree gates
+run once on `20131e9`: `sqlx-prepare` clean, `check` green (807 Rust,
+780 Web, 11 worker, 33 s), `check-db` 741 of 741 first run (254 s).
+Walkthrough on a QA runtime, 8 steps: complete with receipt, Undo,
+proposal, confirm, bob's confirm 404, confirm with the provider disabled,
+an expired proposal 409; one finding fixed on the branch (the model
+resolved "Friday" to Sunday because the time line named no weekday; the
+card exposed it before anything existed; the line now names the weekday).
+Runtime updated with the user's approval: `crm_dev` migrated
+(`20260914000001` applied), the dev API restarted by exact PID (30690,
+binary 14:51, `/api/health` 200), `dev-web-prod` rebuilt (preview pid
+31100). Worktree `../crm-worktrees/018`, the branch and `crm_slice018_qa`
+deleted. **`main` is ahead of `origin/main`; push needs the user's
+word.** A helper Chrome with remote debugging on port 9222 was launched
+for the walkthrough and left running. No slice active.
+
+Previously: **SLICE 018 — APPROVED 2026-09-10, LANE IN IMPLEMENTATION.** [SLICE_018.md](../specs/SLICE_018.md)
+and its [brief](../tasks/SLICE_018_IMPL.md) were drafted from the
+planner's analysis (which found three things D-057 did not anticipate:
+`TaskView` has no id, the PII-free proposal table needs a sidecar for the
+proposed title, and the confirm route gates on telephony), independently
+reviewed READY WITH CORRECTIONS (thirteen, all applied, none a human
+decision; two veto-able defaults named at the gate: unconfirmed titles
+retained until Person erasure, no per-row "completed via Operator"
+marker), and approved. One lane (Claude Sonnet 5) in
+`../crm-worktrees/018` on `slice-018-operator-tasks`; Part A backend with
+a hard checkpoint, then Part B Web. Pointer lines added to SLICE_005 §5,
+SLICE_006b §4, SLICE_016 §7; D-057 carries the O-013 runbook note. The user picked this rung from the queue. **D-057 accepted
+(user, 2026-09-10):** `complete_task` executes at once with a receipt and
+Undo, the first AGENTS §5.4 "low-risk and reversible" action;
+`create_task` proposes then confirms in the SLICE_006b shape; D-053
+authorization unchanged; the mechanism is a planning default (no
+`crm-operator -> crm-app` edge, seam methods, `operator_proposal.tool`
+widened) that the planner confirms. Coordinator next: audit at the
+Part A checkpoint, release Part B, then review and test analysis, the
+once-only gates, the walkthrough, and the commit and merge gates.
+
+Previously: **LATER BATCH (2026-09-10) — COMPLETE AND MERGED TO LOCAL MAIN** at
+`753d685` (2026-09-10, with the user's approval; not pushed, not deployed).
+Source `chore/later-batch-2026-09-10` at `bb58e35` (eight item commits,
+three round-1 fix commits and the
+[verification record](../tasks/LATER_BATCH_2026-09-10_VERIFICATION.md)).
+One lane (Claude Sonnet 5), no migration, no wire change, 12 code files.
+Review round 1 of two: reviewer READY WITH FIXES, tester no blocking
+finding; three fixes applied (a real validator gap: ignorables around a
+space passed as a task title; the seven note CHECK assertions to SQLSTATE
+23514; a deterministic tie-break test); round 2 not needed. Final-tree
+gates run once by the coordinator on `9671d65`: `check` green (782 Rust,
+751 Web, 11 worker, 13 s), `check-db` 720 of 720 first run (261 s). Item 8
+trend: peak RSS of the 20 MiB intake test 331 MB → 289 MB. Runtime updated:
+the dev API stopped by exact PID (41716) and relaunched from `main` (pid
+83913, binary 12:03, `/api/health` 200); the production web server
+rebuilt and relaunched (preview pid 84325, `5173` 200). Worktree
+`../crm-worktrees/later-2` and the branch deleted. LATER items carried in
+the record (unreachable focus fallback without a ring, fractional-seconds
+case, wildcard task-kind arm, two-entry preview fixture, a pre-existing
+task-edit Vitest flake). **Pushed to `origin/main` at `ae9d154` on 2026-09-10 with the user's
+approval.** No slice active.
+
+Previously: **SLICE 017 (INBOUND MAIL SIZE CAP) — MERGED, PUSHED, DEV API UPDATED;
+WORKER DEPLOY AND WALKTHROUGH PENDING (2026-09-09).** D-056: the relay's
+threshold is Cloudflare's own 25 MiB inbound ceiling and the relay streams a
+chunked base64 JSON body; the endpoint's body limit is a derived 34 MiB;
+the frozen `{"recipient","raw"}` envelope is untouched;
+`scripts/inbound-email` keeps the message and the bearer off every argv.
+One lane (Sonnet 5), four commits, two review rounds (round 1 READY WITH
+FIXES, six small items applied; round 2 a read-only confirmation), final-tree
+gates once on `33f8284`: `check` green (778 Rust, 747 Web, 11 worker tests,
+15 s), `check-db` 718 of 718 (266 s, no flake). Merged `--no-ff` at
+`f06eba3` with the user's approval, pushed with the records; the dev API
+restarted by exact PID (pid 41716, binary 21:34) and proven on the new limit
+(3 MiB + bad bearer → 401, 35 MiB → 413); worktree and branch deleted.
+Evidence: [SLICE_017_VERIFICATION.md](../tasks/SLICE_017_VERIFICATION.md).
+**Walkthrough stopped at §6 step 2: the account is on the Workers Free
+plan (user, 2026-09-09).** Per D-056 §3 the streaming relay is not deployed;
+the production relay is still the pre-017 build and bounces above 1.4 MiB.
+**Decided (user, 2026-09-09): upgrade the account to Workers Paid** (no
+code change; the pass-through fallback stays recorded, not built). The
+user upgraded and approved the deploy from the coordinator's machine:
+`wrangler deploy` on 2026-09-09 23:25 local put version `63c168c5` at 100 %
+(the secret and the Email Routing route survived). **The real sends (a
+small message, then a 15–20 MB attachment, to a capture address and the
+intake address) are deferred by the user**; the evidence goes into the
+verification record when they happen (the dev API log and the Workers
+dashboard keep the outcomes). Deployment of the application is not
+authorized.
+
+Previously: **SLICE 016 (TASKS) — COMPLETE: BOTH RUNGS MERGED, RUNTIME UPDATED, PUSHED,
+CLEANED UP (2026-09-09, each with the user's approval).** `main` at the
+016b merge `faa2878` plus records; pushed to `origin/main`. No migration in
+016b; the dev API and `dev-web-prod` were restarted by exact PID and
+relaunched from `main` (API on `127.0.0.1:3000`, health 200, the tasks
+route answering; preview on `5173`; logs under `/private/tmp/claude-501/`).
+Branch `slice-016b-today`, the worktree and `crm_slice016b_qa` deleted.
+Today observed live on the dev runtime: the Tasks panel and the task reason
+rendered for a task due today and Complete from the panel removed it (QA
+record addendum). Evidence: [SLICE_016a_VERIFICATION.md](../tasks/SLICE_016a_VERIFICATION.md),
+[SLICE_016b_VERIFICATION.md](../tasks/SLICE_016b_VERIFICATION.md).
+Deployment is not authorized. No slice active.
+
+Previously: **LATER BATCH (2026-09-08) — COMPLETE AND MERGED TO LOCAL MAIN** at `3ff6c5f`
+(with the user's approval; not pushed, not deployed). Source
+`chore/later-batch-2026-09-08` at `5fe4231` (seven commits incl. the
+round-1 fixes `28a3bf1` and the
+[verification record](../tasks/LATER_BATCH_2026-09-08_VERIFICATION.md)).
+Final-tree gates run once by the coordinator: `sqlx-prepare` clean, `check`
+green (757 Rust, 656 Web), `check-db` 622 of 622 first run. Review round 1
+of two: reviewer READY WITH FIXES, tester one blocking regression (fixed),
+all applied; round 2 not needed. Runtime updated with approval: `crm_dev`
+migrated (`20260911000001` applied; triggers only, the API needed no
+restart), the production web server rebuilt and relaunched from `main`
+(preview pid 28850, 20:09), branch and worktree `../crm-worktrees/later-1`
+deleted. Open flakes carried forward: the `db_calls` correction-ordering
+test (strict assertion kept, unreproduced in 21 runs) and the
+`db_today_system_feed_evaluation` stage-clause test (one load failure, passes
+isolated). `main` was pushed to `origin/main` on 2026-09-08 at `88df7f5`
+with the user's approval; deployment is not authorized.
+
+Previously: **LATER BATCH (2026-09-08) — LANE IN IMPLEMENTATION.** The user chose the
+"worth a small batch soon" group from the LATER lists: `inquiry` append-only
+triggers (one migration), the `db_calls` timing flake, splitting the three
+largest test files, field-only `onSuccess` writes in the optimistic
+mutations, and `isMutating` guards on the settle-invalidate and the realtime
+invalidation. Brief: [LATER_BATCH_2026-09-08.md](../tasks/LATER_BATCH_2026-09-08.md);
+no spec (recorded LATER items; no contract or behaviour decision). One lane
+(Claude Sonnet 5) in `../crm-worktrees/later-1` on
+`chore/later-batch-2026-09-08`. Progress: item 2 done (`2482b4c`, the
+`db_calls` flake was a test asserting strict order on `recorded_at` alone
+while the query already tie-breaks on `id`; test-only fix, gates green
+757 / 650 / 617 of 617). Item 1 hit its checkpoint: a plain append-only
+trigger blocks the `person` → `inquiry` cascade that D-015 §5 erasure relies
+on; coordinator decision: a cascade-aware `reject_direct_mutation()`
+(updates and direct deletes rejected, cascaded deletes allowed via
+`pg_trigger_depth()`), recorded in the brief. **All five items complete**
+(`c18d7e6`/`1b488a9` item 1 with five tests; `b4a4a04` item 3: the three
+files split into nine, fixtures moved to `tests/common/`, test-name sets
+identical per group and 729 = 729 overall; `cbdcbc7` items 4 and 5). The
+lane caught two of its own bugs before landing: the trigger must check
+`pg_trigger_depth() > 1` (a direct statement's own trigger already runs at
+depth 1) and the settle guard must check `isMutating > 1` (TanStack v5 runs
+`onSettled` before the success state change, so the calling mutation counts
+itself). Lane final gates: `check` green (757 Rust, 653 Vitest); `check-db`
+622 of 622 on the second run after one load-dependent failure in a moved
+`db_today_system_feed_evaluation` test that passes 6 of 6 in isolation
+(pre-existing shape, not in this batch's scope; classified in review).
+Coordinator audit passed (22 files, all under tests, migrations and
+`web/src`). **Review round 1 (of two) complete** on `cbdcbc7`: reviewer READY
+WITH FIXES, tester one BLOCKING regression — two sibling mutations for the
+same Person settling in the same tick both skip the invalidation (each sees
+the other pending), so nothing refetches; fix: decide after the mutation's
+own state flips (deferred check, invalidate when the count is zero, and
+release the realtime hold by refetching active stale queries under the
+Organization prefix from all four mutations). Also: the item 2 "fix" was
+reverted to the spec-backed strict assertion (the flake was never reproduced
+and remains open); `TRUNCATE inquiry` gains a test; the cascade guard also
+requires the parent Person to be gone; a duplicated fixture removed.
+Consolidated fix round dispatched. LATER: an in-trigger `DELETE FROM
+inquiry` would pass the depth check (none exists; the header forbids one);
+same-field rapid pairs show the earlier response until the later settles;
+the hold is Organization-blind (one org active at a time);
+`useLogContactMutation` still writes the whole `person` and has no
+mutation key; the `db_today_system_feed_evaluation` load flake (moved test,
+unchanged body, not reproduced in 5 isolated runs plus the trio).
+
+Previously: **Slice 014 — COMPLETE AND MERGED TO LOCAL MAIN** at `ac270fb` (2026-09-08,
+with the user's approval; not pushed, not deployed). Source
+`slice-014-perceived-latency` at `3495f71` (six commits incl. the round-1
+fixes `fa9bcab`, the walkthrough archive and the
+[verification record](../tasks/SLICE_014_VERIFICATION.md)). Final gate run
+once by the coordinator: `check` green (757 Rust, 650 Web); no `check-db`
+needed (Web-only). Review round 1 of two: reviewer READY WITH FIXES, tester
+no blocking finding, all fixes applied; round 2 not needed. Measured over
+the tunnel in production mode: cold login DOMContentLoaded 0.22–0.58 s (was
+1.3–3.1 s), warm Today data 0.17–1.36 s (was 2.2–2.5 s), 3 scripts before
+DOMContentLoaded (was 50–60); walkthrough 9 of 9. **The tunnel now serves the
+merged production build from the main checkout** (`./scripts/dev-web-prod`,
+preview pid 62908, started 17:36); the slice-tree preview was stopped by
+exact PID; the branch and worktree `../crm-worktrees/014` were deleted with
+approval. Standing note: after a merge or pull, re-run
+`./scripts/dev-web-prod` and reload; `./scripts/dev-web` is for HMR on
+loopback when 5173 is free. `main` was pushed to `origin/main` on 2026-09-08
+at `57dbde1` with the user's approval (carrying Slice 014 and its records);
+deployment is not authorized.
+
+Previously: **Slice 014 — APPROVED 2026-09-08, LANE IN IMPLEMENTATION (Web-only).**
+[SLICE_014.md](../specs/SLICE_014.md) and its
+[brief](../tasks/SLICE_014_IMPL.md) were drafted from the planner's analysis
+(which corrected the investigation on one point: through the tunnel the
+browser calls `api.tarams.org` directly, so production serving needs only
+Vite's preview server on 5173 and no tunnel change; and found three of the
+four 2026-08-29 FilterBar gaps already fixed by the 2026-09-06 pass),
+independently reviewed READY WITH CORRECTIONS (the request-count gate
+restated as before-DOMContentLoaded so the Today preload does not defeat it;
+the caching claim corrected to what `vite preview` actually emits; tag
+mutations write `data.tags` not `data.person`; a held-response Vitest for
+the single-request claim; a shared `preloadTodayView` export), all applied,
+and approved with both workflow confirmations: the tunnel is normally served
+from the production bundle (`scripts/dev-web-prod`; dev mode stays for
+loopback), and the running dev server (`pnpm run dev` pid 24542, Vite pid
+24563, up since 2026-09-06) is stopped by exact PID at verification so the
+production server can take port 5173. Four parts in order: A production
+serving, B optimistic stage/assignment/tag mutations, C Today chunk preload
+and data prefetch plus hover prefetch of Person detail, D FilterBar residue.
+One lane (Claude Sonnet 5) in `../crm-worktrees/014` on
+`slice-014-perceived-latency`; checkpoint after part A. Coordinator runs the
+tunnel probe and walkthrough at the end.
+
+Progress (2026-09-08): **part A complete** (`5301b5b`): `preview: { port }`
+in `vite.config.ts` (Vite 8.2.1's preview resolver verified in source to
+inherit host, strictPort, allowedHosts and proxy from `server`),
+`scripts/dev-web-prod`, README and `.env.example` notes. Scratch-port
+measurement of the production bundle: **3 script requests before
+DOMContentLoaded** (was 50–60), DCL 50 ms on loopback, the login page renders
+and `/api/me` reaches the API through the preview proxy. Web gate green (614
+Vitest). Coordinator audit passed; parts B–D released. **Parts B–D complete**
+(`1401008` optimistic stage/assignment/tag mutations with snapshot rollback
+and settle-invalidate; `3e4fd5d` `preload.ts` shared by the router and
+LoginView, `prefetchTodayData` from the guard, `onRowIntent` hover/focus
+prefetch with a 150 ms dwell; `9f1ce13` FilterBar selected triggers, chip
+chevron, Clear all only with a non-locked clause). Two real problems found
+and fixed by the lane: a cached stage object leaking `position` into the
+optimistic row, and the new prefetch reaching the live dev API from
+`router.test.ts` until mocked. Web gate green, 643 Vitest. Coordinator audit
+passed (15 files, all under `web/`). **Review round 1 (of two) complete** on
+`9f1ce13`: reviewer READY WITH FIXES, tester no blocking finding; prefix
+isolation, clean reference shapes, guard placement, the shared Today chunk
+and the network-leak fix all verified. Consolidated fix round dispatched:
+tag mutations invalidate the person key on any error; a transparent border
+on the selected FilterBar trigger; one shared `fetchPerson`; test hardenings
+(a vacuous other-row assertion, the assignment row write and rollback, a
+real racing-invalidation test with a held stale GET, server tag order on
+success, the 149/150 ms boundary and unmount, client mocks in the new test
+files). LATER: field-only `onSuccess` writes for rapid mutation pairs,
+insertion-order tag sorting vs collation, pointerleave timer clearing, the
+unrelated-person invalidation transient. **Fix round complete** (`fa9bcab`:
+all nine items; the stricter integration test caught a spurious extra
+`GET /me` from a missing test-client `staleTime`; the racing-invalidation
+test now holds a stale GET open past the mutation and passes
+deterministically). Coordinator audit passed (19 files against `main`, all
+under `web/` plus the four part-A files); **final gate run once on
+`fa9bcab`: `check` green, 757 Rust / 650 Vitest.** The pre-approved tunnel
+switch was performed on 2026-09-08 (pre-approved): the dev server (pids
+24542/24563, up since 2026-09-06) stopped by exact PID; `scripts/dev-web-prod`
+from the slice tree serves the production build on 5173 (preview pid 55779);
+through the tunnel `/` answers `cache-control: no-cache` (`cf-cache-status:
+DYNAMIC`) and hashed assets `max-age=14400`. **Probe re-run in production
+mode (3 runs):** cold `/login` DCL 0.22–0.58 s (one jittery run 2.0 s) from
+1.3–3.1 s; warm Today data 0.17–1.36 s from 2.2–2.5 s; login → Today
+0.97–1.6 s of which the login POST is 0.76–1.1 s; filter change still
+flash-free; 3 scripts before DOMContentLoaded (gate ≤ 10). **Walkthrough
+9 of 9** in production mode over the tunnel (hover prefetch removes the
+preview's Loading; optimistic stage/assignee hold through a 1.5 s delayed
+response; tag apply/remove; locked chips; selected trigger "Stage · 2",
+chevron, Clear all; popover 7 px under its chip when wrapped); archive
+`docs/design/qa/slice-014-2026-09-08/`; the lane stalled on the walkthrough
+script twice and the coordinator wrote and ran it. Verification record on
+the branch: `docs/tasks/SLICE_014_VERIFICATION.md`. Next: the merge gate. **Standing note:** the tunnel is now served from the
+production bundle; after a merge or pull, re-run `./scripts/dev-web-prod`
+(from the main checkout once Slice 014 merges) and reload; use
+`./scripts/dev-web` for HMR on loopback only when 5173 is free.
+
+Previously: **PLANNING Slice 014 — perceived-latency chunk plus FilterBar UX polish
+(Web-only).** The user chose the coordinator's suggestions 1 and 2 on
+2026-09-08: `main` was pushed to `origin/main` at `32b36de` (carrying Slices
+012 and 013, D-052 and the state records), and planning started for the held
+perceived-latency chunk together with lane C (the four FilterBar UX gaps
+recorded since 011a), so the FilterBar is touched once. Planner analysis
+dispatched; a spec, one review round and one implementation gate follow.
+Push and deployment beyond this are not authorized.
+
+Previously: **Slices 012 and 013 — BOTH COMPLETE AND MERGED TO LOCAL MAIN.** Slice 013 merged at `9af47c1` (2026-09-08, with the user's
+approval; not pushed, not deployed) from `slice-013-operator-filter` at
+`151d38a` (ten commits after the rebase, incl. the
+[verification record](../tasks/SLICE_013_VERIFICATION.md)). Final-tree gates
+run once by the coordinator on the rebased tree: `sqlx-prepare` clean (no
+new statements), `check` green (757 Rust, 614 Web), `check-db` 617 of 617
+first run. Review round 1 of two: reviewer READY WITH FIXES, tester no
+blocking finding, all fixes applied; round 2 not needed. No migration; the
+old dev API (pid 12421) stopped by exact PID, the merged binary built and
+`./scripts/dev-api` relaunched (pid 17478, binary of 13:25; health 200, the
+Operator route answers 401 unauthenticated). Branch and worktree
+`../crm-worktrees/013` deleted with approval. The Operator now has eight
+tools. Lane C (FilterBar UX polish) remains held for the perceived-latency
+chunk. `main` pushed 2026-09-08 (`32b36de`); deployment is not authorized.
+
+**Slice 012 — COMPLETE AND MERGED TO LOCAL MAIN** at `26ddab7` (2026-09-08,
+with the user's approval; not pushed, not deployed). Source
+`slice-012-activity-columns` at `e32ffd7` (six commits incl. the round-1
+fixes `77a51c8` and the [verification record](../tasks/SLICE_012_VERIFICATION.md)).
+Final-tree gates run once by the coordinator under the shared lock:
+`sqlx-prepare` clean, `check` green (718 Rust, 614 Web), `check-db` 603 of 603
+first run. Review round 1 of two: reviewer READY WITH FIXES, tester no
+blocking finding, all fixes applied; round 2 not needed. The shared
+development runtime was updated with approval: `crm_dev` migrated
+(`20260910000001` applied), the old API (pid 16112) stopped by exact PID, the
+merged binary built and `./scripts/dev-api` relaunched. The branch and the
+worktree `../crm-worktrees/012` were deleted. **Slice 013** rebased cleanly
+onto `26ddab7` (`3d68a7c`; the three `tests/all.rs` registrations merged
+without conflict); its round-1 fixes (`fe3321b`, `3d68a7c`: trait defaults
+removed, alias dedup, empty-item drop, context-mismatch guard, six test
+hardenings; lane gates 756 / 601 of 601) passed the coordinator audit; the
+coordinator's once-only final-tree gates are running on the rebased tree.
+
+Previously: **Slices 012 and 013 — APPROVED 2026-09-08, TWO PARALLEL LANES IN
+IMPLEMENTATION.** After the ladder closed, the user chose to run the
+"worth a small chunk soon" items in parallel worktrees ("Go"). Planner
+analyses, then [SLICE_012.md](../specs/SLICE_012.md) (denormalized
+last-activity columns on `person`; trigger-maintained per **D-052**; the
+fourteen statements switch to the columns behind a frozen-text equivalence
+gate; one migration; size M) and [SLICE_013.md](../specs/SLICE_013.md)
+(Operator `filter_people` and `run_saved_list`, name-based, read-only,
+D-046-faithful; size S), each with a brief, were drafted and independently
+reviewed the same day: both READY WITH CORRECTIONS, all applied (012: create
+the triggers before the backfill so no deploy-window row is lost; one index
+not three; probe-gate placement; a testable backfill block. 013: a missed
+closed code set in the count scheduler analogue, `get_today` drawer side
+effect of `MAX_REFERENCES` 25, `validate_references` cut as redundant).
+Lane A (012) in `../crm-worktrees/012` on `slice-012-activity-columns`; lane
+B (013) in `../crm-worktrees/013` on `slice-013-operator-filter`; both from
+`main` after the planning commit; one Claude Sonnet 5 writer each; Claude
+Fable 5.1 coordinates. Ownership per the specs' §10; only `tests/all.rs` is
+shared (alphabetical insertion, "keep both"). Merge order A then B. Lane C
+(FilterBar UX polish) stays held for the perceived-latency chunk. Gate runs
+across the two lanes are serialized by a directory lock because
+`sqlx-prepare`/`check-db` use fixed throwaway database names.
+
+Progress (2026-09-08): **lane A steps 1–3 complete** (`a503640`: migration in
+the reviewed order, three triggers, marked backfill block, one NULLS FIRST
+index, 11 invariant tests incl. real two-transaction concurrency, 3 schema
+tests; `805699b`: the fourteen pre-switch statements frozen as a Rust module
+under `tests/fixtures/statements_b45b04f/` and `db_statement_equivalence.rs`
+green against the live text; lane gates `check` 717, `check-db` 602 of 602;
+coordinator audit passed; one accepted implementation detail: `pub`
+visibility on the Today source/feed statement functions so the equivalence
+test can call them). Steps 4–5 (the read-side switch behind the equivalence
+test, then performance evidence) released. **Lane B step 1 complete**
+(`ab1657f`: input types, two trait methods with bridging defaults to be
+removed in step 3, `FilterOutcome` views, both tool schemas and parsing with
+`limit` defaulting to 10, regenerated snapshot, `kind_label` mirror test in
+crm-api, fake backends; `check` 734 Rust / 614 Vitest; coordinator audit
+passed). Steps 2–6 released with decisions: `RefBucket::Search` for both
+tools; `validate()` failures after resolution are `invalid_arguments`, unknown
+names are clarifications; names clipped and control-stripped at parse time.
+**Lane A steps 4–5 complete** (`9f02ead` the read-side switch of all fourteen
+statements with the equivalence test green throughout and the §8.6 pins
+added; `df72926` the performance archive
+`docs/design/perf/slice-012-2026-09-08/` with the harness committed behind
+the `perf-harness` feature). Lane gates `check` 717, `check-db` 603 of 603
+(three `db_calls` timing flakes under load, clean on re-run). Measured: seed
+of 25k People with triggers 2.1 s; backfill 323 ms; paired regression all
+seven rows within gate with payloads equal, `person_state` 353 → 22 ms,
+`source_candidates` 46 → 2 ms, the `never` filter 22 → 5 ms; the gated
+`waiting` probe runs once per gated candidate (20,333) with the index
+descended 5,293 times. One fixture fix in `db_operator.rs` (a direct
+`UPDATE inquiry SET received_at` backdate now keeps the column in step, the
+same action the erasure runbook would take). Disclosed, not touched: an
+011e-era `perf-harness` test binds 25 parameters to a 27-parameter
+statement, broken at the branch point. Coordinator audit passed; review
+round 1 (reviewer and tester) launched on `df72926`. **Lane B steps 2–6
+complete** (`b0511e3` pure name resolver; `2a8279a` the adapter with the
+request's `AuthContext` threaded into the backend constructor, bridging trait
+defaults removed; `b815e04` dispatch, ledger names, `MAX_REFERENCES` 25,
+declared span fields, prompt; `163b876` thirteen database tests;
+`7da1b21` a real bug check-db caught: duplicate-named saved lists resolved
+to the first match instead of a clarification, plus two fixture fixes).
+Lane gates `sqlx-prepare` no new entries, `check` 751 Rust / 614 Vitest,
+`check-db` 600 of 600. Two test files outside the boundary
+(`db_today_source_operator.rs`, `db_today_source_settings.rs`) received
+mechanical placeholder `AuthContext` fixtures because the constructor
+signature changed; accepted. Coordinator audit passed; review round 1
+(reviewer and tester) launched on `7da1b21`. **Review round 1 results:**
+Slice 012 reviewer READY WITH FIXES and tester no blocking finding (byte-identity
+of all fourteen switched statements verified against the base commit; fixes:
+exercise the `last_inquiry`/`last_inbound` axes and the new `$5/$27` source
+guard in the equivalence test, a cross-Organization backfill correlation
+case, a blocking assertion in the concurrency test, a migration-order pin,
+`ELSIF` in the correspondence trigger, an exact `db_operator.rs` fix-up, and
+gate-2 plans re-captured under `plan_cache_mode = force_generic_plan`);
+Slice 013 reviewer READY WITH FIXES (one required fix: the bridging trait
+default bodies the lane reported removed are still present; coordinator
+confirmed on the tree) with D-046, §5.2, telemetry and injection containment
+verified; Slice 013 tester no blocking finding (fixes: deduplicate aliases
+that resolve to one id instead of a strike — a revised coordinator decision;
+drop empty name items; a fail-closed context-mismatch guard in
+`run_saved_list`; cross-Organization same-name test with People on both
+sides; admin-by-`list_id` test; a service unit for the counter reset; exact
+span-field assertions incl. absent uuids; same-display-name members test).
+Both fix rounds dispatched (lane A for 012, lane B for 013).
+LATER recorded: `inquiry` lacks a `reject_mutation` trigger (migrator can
+update it; `crm_app` cannot); every history insert now takes the Person row
+lock (BEYOND_ENVELOPE; a future importer must insert in stable Person order);
+the 011e-era perf-harness "25 vs 27 parameters" claim could not be reproduced
+by the tester and awaits the lane's exact error or retraction.
+
+Previous phase: **Slice 011e (tags) — COMPLETE. RUNG e2 MERGED TO LOCAL MAIN** at `b6dc49b`
+(2026-09-07, with the user's approval; not pushed, not deployed). Source
+`slice-011e-tag-clauses` at `1796e85` (seven commits: vocabulary `db2be0a`,
+fourteen statements `2cecee3`, `invalid_tag` `23340d1`, Web `147ef64`,
+performance `ad6f10a`, round-1 fixes `3d33ff7`, verification record
+`1796e85`). Final-tree gates run once by the coordinator: `sqlx-prepare`
+clean, `check` green (717 Rust, 614 Web tests), `check-db` 587 of 587 first
+run. Review round 1 of two: reviewer READY WITH FIXES, tester no blocking
+finding, all fixes applied; round 2 not needed. Performance (D-050): paired
+regression unchanged with the clause absent; plan shape an index-only scan
+on `person_tag_org_tag_person_idx` after the §4 binding amendment. Evidence
+in the [verification record](../tasks/SLICE_011e_VERIFICATION.md) and
+`docs/design/perf/slice-011e-2026-09-08/`. The branch and the worktree
+`../crm-worktrees/011e-e2` were deleted with the user's approval; no 011e
+branch remains and none existed on the remote. The shared development runtime
+was updated the same evening (no migration in e2): the old API (pid 37778)
+stopped by exact PID, the merged binary built and `./scripts/dev-api`
+relaunched (pid 16112, binary of 22:06; health 200, the new filter kind
+reaches authentication). **This completes the Slice 011 ladder** (011a, 011b,
+011b-sort, 011c, 011d, 011e). `main` was pushed to `origin/main` on 2026-09-07 at
+`aef151b` with the user's approval (the push carried 011e e1/e2, D-051, the
+perceived-latency investigation and the state records); deployment is not
+authorized.
+
+Implementation history: the user passed the e2 Phase 6 gate on 2026-09-07;
+one lane (Claude Sonnet 5) followed brief steps 1–5 with a coordinator audit
+after step 2 and after step 5; Claude Fable 5.1 coordinated, took the
+predicate-binding decision in review round 1, and amended spec §4/§8/§9.14
+by pointer.
+
+Previous rung: **RUNG e1 COMPLETE AND MERGED TO LOCAL MAIN** at
+`51331e9` (2026-09-07, with the user's approval; not pushed, not deployed).
+Source `slice-011e-tags` at `4af2e13` (five commits: backend `502f418`, Web
+`e7530d2`, walkthrough `a563cce`, round-1 fixes `8d7c748`, verification
+record `4af2e13`). The branch and the worktree `../crm-worktrees/011e-e1`
+were deleted on 2026-09-07 with the user's approval; no 011e branch remains
+locally and none ever existed on the remote. Final-tree gates run
+once by the coordinator: `sqlx-prepare` clean, `check` green (704 Rust, 598
+Web tests), `check-db` 566 of 566 first run. Review round 1 of two: reviewer
+READY WITH FIXES, tester no blocking finding, all fixes applied; round 2 not
+needed. Walkthrough 11 of 11. Full evidence in the
+[verification record](../tasks/SLICE_011e_VERIFICATION.md). The shared
+development runtime was updated the same evening with the user's approval:
+`crm_dev` migrated (`20260909000001` applied), the old API (pid 89707,
+binary of 15:51) stopped by exact PID, the merged binary built and
+`./scripts/dev-api` relaunched. **Next rung: e2** (the `tags`/`not_tags`
+clauses across the fourteen statements) per the brief; its Phase 6 gate is
+the next approval. Specification approved and committed as `97b889f`.
+
+Implementation history: the user passed the e1 Phase 6 gate on 2026-09-07
+("proceed in a worktree"); one lane, one writer (Claude Sonnet 5, `implement`
+profile) followed brief steps 1–6 with a coordinator audit after the backend
+half and after each later commit; Claude Fable 5.1 coordinated.
+
+Previous phase: **Slice 011d (tweakable built-in Today rules) — COMPLETE AND MERGED TO
+LOCAL MAIN** at `b8b53e2` (2026-09-07, with the user's approval; not pushed,
+not deployed). The two lane branches, all three worktrees and, on 2026-09-07 at the
+user's request, the merged integration branch
+`slice-011d-today-system-feeds` (was `77a8963`) were deleted; no 011d
+branch remains locally or on the remote. Verification summary: 144 files against the previous
+`main`. Final-tree gates run once by the coordinator:
+`sqlx-prepare` clean, `check` green (699 Rust, 572 Web tests), `check-db`
+541 of 541 on the second run after a pre-existing `db_calls` timing flake
+that also fails on `main`. Review round 2: READY. Full evidence in the
+[verification record](../tasks/SLICE_011d_VERIFICATION.md). Seven production
+defects were found and fixed before merge (listed there). Implementation
+history follows.
+The user said "start 011d" on 2026-09-07. Integration branch
+`slice-011d-today-system-feeds` from `main` at `66b44ff`; Lane B (Claude
+Sonnet 5) in `../crm-worktrees/011d-lane-b` on `slice-011d-lane-b` doing brief
+steps 1–3 (vocabulary, persistence, feed path behind the `Legacy | Feeds`
+seam plus the equivalence suite), then stopping for the coordinator; Lane W
+(Claude Sonnet 5) in `../crm-worktrees/011d-lane-w` on `slice-011d-lane-w`
+doing steps 1–4 (types, chips, Today rules page, Today markers) with Vitest.
+Claude Fable 5.1 coordinates.
+
+Progress so far (2026-09-07):
+
+- **Lane W steps 1–4 complete** on `slice-011d-lane-w` (`ab5f7b3`, `ef31a9b`):
+  types and hooks mirroring spec §6, three boolean chips plus a locked-clause
+  mode, the `/manage/today-feeds` page with preview/revert/typed-off
+  confirmation and 409 reload, the Today Rules section and notices. Web gate
+  green on the final lane tree (lint, typecheck, 560 Vitest tests, build).
+  Coordinator audited the 20 changed files: all under `web/`, matching the
+  report. Step 5 (browser walkthrough) waits for Lane B's routes. Two
+  ten-minute agent stalls occurred; work was checkpointed and resumed.
+- **Lane B steps 1–3 complete** on `slice-011d-lane-b` (`99e8d99`,
+  `bd631c2`, `0280e1f`): the three clause kinds across all eleven statements
+  with regenerated SQLx metadata; migration `20260908000001` (feed table,
+  `today_feed_changed` fact, backfill) and org seeding; the `Legacy | Feeds`
+  provider seam with `person_state.sql`, `call_membership.sql`,
+  `call_only.sql`, and `system_feed_issues` on every `TodaySources` site;
+  `db_today_feed_equivalence.rs` (5 tests, byte-identical `TodayList` JSON
+  across a rich mixed fixture, two tenants, deactivated caller, a list
+  source enabled, call feed disabled/enabled) plus every existing Today
+  suite passing under `Feeds` by default. Gates on the lane tree: `check`
+  (699 tests), `check-db` (471 of 471). Coordinator audited the 56 changed
+  files: all under `backend/`. A machine-sleep interruption was resumed
+  without loss. The `Legacy` provider stays until step 6.
+- **Lane B corrections and step 4 complete** (`5ffeb2e`, `a4dc96b`,
+  `c0f9bd6`): the three corrections verified by the coordinator (no issue for
+  a disabled feed; per-axis parity tests in `db_people_filter.rs`; call-feed
+  connection recovery with three failure-injection tests in
+  `db_today_system_feed_call_failures.rs`); commands, preview, the six routes
+  in `routes/today_feeds.rs`, the Operator field, telemetry, and
+  `db_today_system_feed_commands.rs` (15 tests). Lane B found and fixed a
+  real preview bug (read-only set before the `FOR SHARE` membership lock,
+  which PostgreSQL rejects). Gates on the lane tree: `check` green,
+  `check-db` 493 of 493.
+- **Coordinator decision (2026-09-07):** the call feed's two statements
+  bound no filter matrix, so extra clauses on that feed were ignored, which
+  contradicts spec §1 rule 4. Decision: extend both call statements with the
+  full matrix (spec §5 "feed C matrix params"), not restrict validation.
+  Assigned to Lane B with the remaining §9 coverage gaps (deleted-stage and
+  unsupported-JSON fallback evaluation tests, preview timeout 503, Operator
+  parity under customized/disabled/fallback feeds) and then step 5
+  performance evidence paired against `Legacy`.
+
+- **Lane B round 3 complete** (`401c18e`, `549243a`, `145335a`, `97cdbec`):
+  call feed bound to the full filter matrix; fallback, preview-timeout and
+  Operator-parity coverage; step 5 evidence at
+  `docs/design/perf/slice-011d-2026-09-07/` (paired Legacy vs Feeds serial p95
+  204 ms vs 177 ms, payload-identical apart from `system_feed_issues`; the
+  011c matrix all complete; person-state EXPLAIN a nested-loop anti join with
+  index use with and without the merge-join toggle). Gates on the lane tree:
+  `check` green, `check-db` 504 of 504.
+- **Lanes merged** into `slice-011d-today-system-feeds` at `3496d71` via the
+  third worktree `../crm-worktrees/011d-integration` (113 files, no
+  conflicts).
+- **D-050 applied** (committed on main as `1d951a6` by a peer session; spec
+  §8 pointer `ae449ad`): step 5 gates only on the paired regression and the
+  person-state plan shape, both already met; the 1/10/20 matrix and pool wait
+  are trend data; the merge-join toggle question is closed as keep both
+  settings; at most two review-then-fix rounds.
+- **Review round 1 (of two) complete** on the merged tree. Reviewer:
+  equivalence gate CONFIRMED by SQL analysis and both suites; READY WITH
+  FIXES. One BLOCKING defect: `person_state.sql` projects a nullable boolean
+  into a non-null decode, so a customized feed with `unassigned` plus one
+  unassigned replied Person would 503 the whole Organization's Today. Plus:
+  call-feed statements use `now()` instead of the bound clock; Update
+  validates references before the revision check (422 before 409); no
+  HTTP-level route tests; five §9.2 cases missing. Tester: the same clock and
+  precedence defects, the 199/200/201 × call-only cap case, a mislabeled
+  failure test, a weak revert-fact test, a vacuous telemetry test, and
+  several cheap boundary/idempotency tests; Operator parity had no gap.
+  Beyond-envelope items (concurrency 20, pool wait) recorded as trend only.
+- **Lane B fix round assigned** with every in-envelope finding, the
+  call-statement EXPLAINs D-050 asks for, and then step 6: delete the
+  `Legacy` provider and freeze its SQL under `tests/fixtures/today_f51bff8/`.
+- **Lane W step 5 assigned**: browser walkthrough on the merged tree in a
+  scratch QA runtime (011c pattern, scratch database, the user's dev
+  processes untouched). Two Web items from the tester wait for its report:
+  a session-identity fence on the preview dialog, and the 409 flow's draft
+  handling (coordinator choice: keep the reload but say so explicitly in the
+  notice, and keep the editor open if the refetch fails).
+
+Planning history follows. On 2026-09-06 the user asked to look at 011d. The read-only planner
+analysed the rung against the code and found that the ladder's pre-declared
+d1/d2 seam does not exist (the three Today arms are one statement with one
+precedence rule and one cap). Offered three cuts, the user chose **one L rung
+with parallel backend and web lanes** (D-049). Claude Fable 5.1 then wrote
+[SLICE_011d.md](../specs/SLICE_011d.md), its
+[companion](../specs/SLICE_011d_EXPLAINED.md) and the two-lane
+[brief](../tasks/SLICE_011d_IMPL.md); the independent reviewer returned READY
+WITH CORRECTIONS with no blocking decision, and all eight corrections were
+applied (migration version, rule 7 on the call feed, the call-only sentinel
+gating, the invalid-definition example, 403-before-400 precedence, `Feed.filter`
+semantics under `filter_error`, a `Legacy | Feeds` provider seam for the
+equivalence and paired-perf gates, `unavailable` precedence over `partial`).
+The user approved the specification with its seven §1 safe defaults on
+2026-09-07, held implementation briefly, then started it the same day.
+
+Previous phase, for context:
+
+**Slice 011c (saved lists feed Today) — COMPLETE, MERGED AND PUSHED.**
+The user approved the §8 planner amendment, accepted the Phase B pairing
+limitation and approved the local commit and merge on 2026-09-06 (late
+evening). Both 011b and 011c were then pushed to `origin/main` at the user's
+request; deployment was not authorized.
+
+How it got here: the Codex lanes (Astra / Terra, `xhigh`) specified, built,
+reviewed and browser-walked the slice, then ran out of usage on the evening of
+2026-09-06 with the tree uncommitted and three items open (Phase B HTTP
+performance, final-tree gates, independent acceptance review). The user asked
+Claude to finish. Claude Fable 5.1 took the coordinator, sole-gate-runner and
+acceptance-reviewer roles; Claude Sonnet 5 lanes made the bounded corrections;
+the lane ledger is in the [implementation brief](../tasks/SLICE_011c_IMPL.md#takeover-on-2026-09-06-evening-codex-usage-exhausted)
+and every result in the [verification record](../tasks/SLICE_011c_VERIFICATION.md).
+
+What the takeover found and did:
+
+- The tree as left passed `check-db` (422 of 422) and the Web gate but failed
+  clippy on three test-file lints; a telemetry test was never registered; the
+  Phase B harness did not compile. All fixed; the harness lints clean.
+- Acceptance review found no blocking backend or Operator defect. The Web
+  session-privacy review found a P1 availability lockout (an auth attempt that
+  never settles left every tab paused for ever with no exit) plus three small
+  router/copy defects; all fixed with tests (C011C-I17–I20) and the lockout
+  recovery verified live. One pre-existing telephony gap is a residual (R1).
+- **Phase B exposed a pre-existing Today planner hazard:** once autovacuum
+  fills the visibility map, PostgreSQL 18 replans the built-in query's
+  per-Person effective-contact probe into a Merge Anti Join that scans the
+  whole corrections index per Person (~2.2 s instead of ~0.2 s for a 30k-Person
+  book; the frozen original query shows 2.6 s). Run 1 failed on it. A
+  transaction-local `SET LOCAL enable_mergejoin = off` beside the approved JIT
+  setting pins the fast plan with no result change (frozen-fixture parity
+  tests pass) and no effect on the source statements; run 2 with it passed
+  every final-arm criterion (522/522 complete, all p95 caps met, five-source
+  concurrency-20 p95 2,710 ms against 4,500, pool headroom ≥ 414 ms). It is
+  recorded in [spec §8](../specs/SLICE_011c.md) as the fourth planning change,
+  approved by the user after the evidence was in. Evidence, both runs retained:
+  [Phase B archive](../design/perf/slice-011c-http-2026-09-06/README.md).
+- Final-tree gates were run once by the coordinator after run 2 and passed
+  (`sqlx-prepare`; `check` with 675 Rust and 446 Web tests; `check-db` 423 of
+  423); see the verification record for the actual results.
+
+QA setup incident (Codex phase): a bootstrap command used the shared migration
+URL and rewrote the existing development owner's local credential hash and
+timestamp. The previous password's equivalence is unknown and its hash cannot
+be restored. Exact effects are recorded in
+[the verification record](../tasks/SLICE_011c_VERIFICATION.md#shared-development-credential-incident).
+Do not describe shared development data as untouched for this slice. The QA
+runtime and its generated databases were cleaned up at the takeover's end.
+
+The user approved **five Today sources per agent** and **available work with
+an explicit notice when one source fails** (D-047). 011b-sort remains separately
+queued; it is not a functional prerequisite for 011c. The approved specification
+preserves built-in Today work, private-list visibility and deterministic order,
+and addresses the measured cost of evaluating filters against a large history.
+
+## Historical checkpoint: Slice 011b-sort
+
+Started 2026-09-06 (late evening) at the user's request. The planner's
+recommendation is reconciled into a draft specification
+[SLICE_011b_SORT.md](../specs/SLICE_011b_SORT.md) and brief
+[SLICE_011b_SORT_IMPL.md](../tasks/SLICE_011b_SORT_IMPL.md); independent
+review returned READY-WITH-FIXES and the eight corrections are applied. The
+user took the one genuine decision, **D-048**: sort is part of the list
+definition, with clickable headers plus an "Added" column as the accepted
+control. The user approved implementation the same evening. Branch
+`slice-011b-sort` from `main` at `31c9980`: two Claude Sonnet 5 lanes built the
+backend and Web halves in parallel, the coordinator passed the 100k
+performance gate (sorted p95 20–132 ms against the same-run 343.6 ms
+four-clause baseline; custom plans retained; no lever needed), independent
+review and adversarial analysis found no P1/P2 defect and their test and
+hardening items were applied by two fix lanes, and the final gates passed
+once on the final tree (Rust 689 + 5 doctests, Web 518, database 459 of 459).
+Full evidence: [SLICE_011b_SORT_VERIFICATION.md](../tasks/SLICE_011b_SORT_VERIFICATION.md).
+Implementation commit `bd23f42`, merged to `main` as `d52a0ad` and pushed to
+`origin/main` on 2026-09-06 at the user's request; the slice branch was deleted
+locally and never existed on the remote. Deployment was not authorized.
+
+## Historical checkpoint: earlier slices
+
+**Slice 011b (saved lists) — COMPLETE AND MERGED TO LOCAL MAIN.**
+The user authorized starting the slice with **Astra / ultra** for
+specification, coordination, and independent review, and **Terra / ultra**
+for implementation, tests, and fixes. This supersedes the older
+Sonnet/Fable assignment for this slice. The spec and implementation brief
+were drafted against `1635fc4`, which includes the 011a filter UX
+fixes (`0117b87`) and D-045 workspace/Person-preview changes. Independent Astra/ultra specification review is **READY** after corrections.
+The user approved the slice after reading the plain-language companion;
+implementation, tests and fixes are authorized.
+
+The implementation now passes the full repository and database gates, the
+synthetic browser walkthrough and independent source/performance review.
+Personal/shared lists, counts, copy/edit/delete flows, privacy and recovery are
+implemented in `2af023c` and merged to local `main`. The user approved this
+commit and merge on 2026-09-06; no push or deployment was performed. See
+[verification evidence](../tasks/SLICE_011b_VERIFICATION.md) for actual results
+and limits, including the 50k-Person query plans.
+
+Official FUB guidance was rechecked on 2026-09-06: creating lists from
+People filters, explicit save/update, admin management of shared lists,
+independent duplication, and deletion of only the definition all remain
+supported patterns. D-046, not an inferred FUB policy, is authoritative
+for personal-list privacy and the separate limits.
+
+Decisions taken this phase (user, 2026-08-29):
+
+- **Per-list sort stays OUT of 011b** and becomes its own small
+  follow-up rung immediately after 011b (v1 restricted to non-derived
+  columns). Ladder amendment recorded at 011b spec approval as **011b-sort**.
+  Rationale recorded: variable ORDER BY vs the fixed-matrix
+  static-SQL discipline, and sort determines WHICH 500 rows survive
+  truncation on >500-match lists.
+
+Decisions accepted at restart (user, 2026-09-06; **D-046**):
+
+- Personal list names and criteria are creator-only, including from admins.
+  Organization-wide Person visibility is unchanged.
+- Shared lists ≤200/Organization plus personal lists ≤50/creator/Organization;
+  no combined cap. These count definitions, not People matching a list.
+
+Also 2026-08-29: a three-agent docs-freshness audit ran over the whole
+docs tree; the spec supersession-pointer chain verified fully intact
+(zero missing pointers). All findings were fixed with per-item user
+approval: README rewritten to current state (feature summary, real
+directory list, gate-speedup check steps, Email intake section, 4 new
+env-table rows, runtime-neutral Docker wording); D-013 amended to
+bless .env.example's non-credential defaults; O-005 deduped and O-005/
+O-007 marked resolved, O-014 annotated with shipped status, D-023 §4
+supersession note added, accepted-decisions-continue-below pointer
+added; thesis §8 (D-043) and §16 (achieved) annotated; ARCHITECTURE_
+BASELINE gained an "Amendments since baseline" section + the contracts/
+correction; ZITADEL dev-vs-prod parentheticals added (AGENTS §3/§4.2,
+baseline); status headers fixed on SLICE_007_LADDER / SLICE_011_LADDER /
+SLICE_006c_PLAN / type-safety-hardening; orphan CRM_ENVIRONMENT deleted
+from .env.example. Uncommitted, awaiting the commit gate.
+
+Also this session (2026-08-29): the user's "011a filters don't work"
+report was root-caused to the KNOWN orphaned-dev-api hazard — the
+running crm-api predated the 011a merge and silently ignored
+`?filter=`. Killed by PID, relaunched via ./scripts/dev-api, filter
+path verified live (garbage filter 400s; assigned_to narrows
+correctly). 011a FilterBar UX intuitiveness gaps noted for a later
+polish pass: draft chips look active while filtering nothing,
+detached editor panel, undiscoverable chip-click-to-edit, no
+clear-all.
+
+## Earlier accepted-decision summary
+
+D-061 (2026-09-11) — 010b captures People, users, stages, custom fields, notes and
+tasks first, explicitly tracking other data as remaining snapshot work. This
+accepts sequencing, not reduced cutover fidelity or implementation contracts.
+D-060's latest follow-up authorizes the completed 010a shared-development
+release and preserves the user's deferred live-account validation.
+
+D-060 (2026-09-10) — API-first bounded FUB assessment with encrypted saved
+credentials; implementation and synthetic verification complete. Its
+2026-09-11 follow-up authorizes source cleanup, commit, merge and push.
+D-059 establishes a new, empty destination Organization first; later import,
+recovery and cutover policies remain open. D-058 delivered custom fields and
+019b filtering.
+
+D-056 (2026-09-09) — the inbound mail size cap is Cloudflare's 25 MiB
+inbound ceiling (endpoint 34 MiB); the relay streams; the Workers plan is
+a verified precondition; the raw pass-through body is the recorded
+fallback, not adopted. Resolves O-015 question 1.
+D-055 (2026-09-09) — the development telephony host is an EC2 `c6i.xlarge`
+with a dormant LiveKit Egress; production hosting is still decided at the
+deployment slice.
+D-054 (2026-09-09) — due tasks reach Today through a fixed built-in axis
+(a recorded temporary exception to D-043) plus a task panel.
+D-053 (2026-09-08) — notes ship as plaintext erasable CRUD; O-012 amended.
+D-052 (2026-09-08) — trigger-maintained derived columns are a read-model
+mechanism. D-051 (tags), D-050 (operating envelope, two review rounds,
+relative-only performance gates), D-049–D-043 (the 011 ladder), D-045/D-044
+(design and identity) stand as recorded in the log.
+
+## Slice ledger
+
+Source through 010a is merged to main and pushed. Live/deployment residuals
+remain in Current state and the per-slice verification records; source
+publication does not close them.
+
+| Slice | What | Merge |
+|---|---|---|
+| 000 | Foundation (workspace, health/ready, compose, scripts) | `e5182d1` |
+| 001 | Identity/sessions (Argon2id, HMAC tokens, role split) | `587a087` |
+| — | Tunnel + CORS (app./api.tarams.org; later D-024/D-025) | `3b6df76` |
+| 002 | Intake + People/history + web stack (D-017) | 2026-08-21 |
+| 003 | Realtime (Centrifugo, D-023) + Today | 2026-08-22 |
+| 004 | Administration (platform admin, invitations, D-026/27) | 2026-08-22 |
+| 005 | Read-only AI Operator (crm-operator, 5 tools, D-028/29) | 2026-08-22 |
+| 006 | Calling (LiveKit/Telnyx) | `332e78a` |
+| 006a | crm-app extraction | `a17aed3` |
+| 006b | Operator start_call (propose→confirm, D-034) | `3f36d25` |
+| 006c | Call outcome (D-032/D-033, low tier) | `58ecad8` |
+| 007a | Intake address | `81af77f` |
+| 007b | Inbound email endpoint | `4b3462a` |
+| 007c | System actor + unattended routing (D-035) | `fe0b99b` |
+| 007d | First pinned email format (D-036) | `a75b9a8` |
+| 007e | Unresolved workbench (D-037) | 2026-08-25 |
+| 007f | LLM extraction via Groq (D-038) | 2026-08-25 |
+| 007g | Real receiving: Cloudflare Email Routing + worker (D-039) | `9604f76` |
+| 007h1 | Forwarded-wrapper unwrap, Gmail inline (D-040) | `105f730` |
+| — | Type-safety hardening ladder, 8/8 chunks (S1…S2) | `069f55a` |
+| 008 | Intake routing modes / round-robin (D-041) | `defdab1` |
+| 009 | Correspondence capture v1 (D-042; largest slice, 78 files) | `807d7c2` |
+| 011a | Filter vocabulary + ad-hoc People filtering (D-043) | `4aee12d` |
+| 011b | Personal and shared saved People lists (D-046) | `9d62e86` (implementation `2af023c`) |
+| 011c | Saved lists feed Today (D-047; §8 planner amendment approved) | `929b6ab` (implementation `6117b4a`) |
+| 011b-sort | Per-list sorting for saved People lists (D-048) | `d52a0ad` (implementation `bd23f42`) |
+| 011d | Tweakable built-in Today rules: system feeds, three derived clauses, admin surface, change fact (D-049, D-050) | `b8b53e2` (integration `77a8963`), pushed 2026-09-07 |
+| 011e-e1 | Tags model, commands, six routes, Person page and Tags page, Operator field (D-051) | `51331e9` (branch head `4af2e13`), pushed |
+| 011e-e2 | `tags`/`not_tags` clauses across the fourteen statements, `invalid_tag` paths, FilterBar chips, performance evidence | `b6dc49b` (branch head `1796e85`), pushed 2026-09-07 |
+| 012 | Denormalized last-activity columns on Person, trigger-maintained (D-052); fourteen statements read the columns; equivalence gate; perf archive | `26ddab7` (branch head `e32ffd7`), pushed |
+| 013 | Operator `filter_people` and `run_saved_list` read-only tools, name-based, D-046-faithful, `MAX_REFERENCES` 25 | `9af47c1` (branch head `151d38a`), pushed 2026-09-08 |
+| 014 | Production bundle through the tunnel (`dev-web-prod`), optimistic stage/assignment/tag mutations, Today chunk preload and data prefetch, hover prefetch of Person detail, FilterBar residue | `ac270fb` (branch head `3495f71`), pushed 2026-09-08 |
+| — | LATER batch: `inquiry` append-only triggers (cascade-aware), three largest test files split into nine, field-only success writes and `isMutating` guards on the Person mutations | `3ff6c5f` (branch head `5fe4231`), pushed 2026-09-08 |
+| 015 | Notes: `note` table (tombstone delete, import-ready), three commands and routes, `note` timeline kind, `note_changed`, Operator `PersonDetail.notes` (untrusted, history filtered), Person page composer with inline edit/delete (D-053) | `fd5a184` (branch head `00e2e67`), pushed 2026-09-09 |
+| 016a | Tasks model: `task` table (tombstone, import-ready, Today index), six commands and routes, `tasks[]` on the detail, `task_completed` timeline kind, `task_changed`, Operator `PersonDetail.tasks` (untrusted, history filtered), Person page Tasks card (D-054) | `f106afc` (branch head `1d6c3bf`), pushed 2026-09-09 |
+| 016b | Tasks on Today: the fixed built-in task axis (`task_due`/`task_overdue`, D-054 exception), `GET /api/tasks?scope=mine`, Operator explanations, the Today badge, Complete button and Tasks panel with Snooze | `faa2878` (branch head `e68b51d`), pushed 2026-09-09 |
+| 017 | Inbound mail size cap: relay threshold at Cloudflare's 25 MiB ceiling with a streaming chunked base64 body, endpoint 34 MiB, `scripts/inbound-email` off argv (D-056; O-015 question 1 resolved) | `f06eba3` (branch head `33f8284`), pushed 2026-09-09 |
+| 018 | Operator create-task proposals and complete-task receipts with Undo (D-057) | `d74c493`, pushed with 019a |
+| 019a | Typed custom-field definitions and Person values (D-058) | `7dc4a2f`, pushed 2026-09-10 |
+| 019b | Custom-field filtering across People, lists and Today | `237639d`, deployed 2026-09-10; pushed 2026-09-11 |
+| 010a | Bounded FUB assessment, encrypted credentials/evidence and recovery (D-060); live validation deferred | `cd224fe` (implementation `e4e0658`), pushed and deployed 2026-09-11 |
+| — | Gate-speedup chunk (check 35m→79s, check-db 37m→~2m) | 2026-08-28 |
+| — | Test-binary consolidation (40 files → 1 binary) | `6427ee8` |
+
+Closing-state documents: docs/design/type-safety-hardening.md (ladder
+closing state + residuals), docs/tasks/GATE_SPEEDUP.md (gate-speedup
+resume artifact), docs/design/intake-throughput.md (intake capacity
+notes).
+
+## Historical perceived-latency analysis
+
+**Historical perceived-latency analysis (2026-08-29–09-07).** The associated
+read-model and Web work was subsequently delivered by Slices 012 and 014;
+the measurements below are retained as historical evidence, not a current queue. *Re-measured over the public tunnel on 2026-09-07 at the
+user's request, in a real browser: see
+[perceived-latency-2026-09-07.md](../design/perceived-latency-2026-09-07.md).
+Headline: the per-request edge floor is now 90–250 ms (two edge hops, jitter;
+not app code) and POST bodies pay 300–700 ms more; dev-mode Vite ships 50–60
+module requests per load and a 9-module route chunk before People's first
+data request (rows at 0.4–0.8 s); login → Today data 1.4–1.8 s over four
+sequential stages; the filter path is already flash-free
+(`keepPreviousData` landed). Ranked levers: production build through the
+tunnel first, optimistic mutations second, chunk preload and detail
+hover-prefetch third. The earlier notes below stand.* Scale baselines measured 2026-08-29 against a
+"Perf Test Realty" org seeded via the live API (dev DB only; wiped by
+the next dev-bootstrap), first at 5k people, then at **100k people +
+66,589 contact attempts + ~5k repeat inquiries** (the mature-FUB-team
+case; write path held 104–107 leads/s across the whole 15-minute
+seed, no degradation). At 100k: core filters stay FLAT (people
+unfiltered 23 ms, assigned_to 21 ms, source 25 ms, last_contact-
+within-7d 22 ms — the fixed matrix + indexes hold); ABSENCE-proving
+filters degrade (has_phone-false 43 ms; last_contact-never 234 ms;
+4-clause combo with a never clause 318 ms); **Today = 966 ms admin /
+590 ms member** (linear in org size × history — ~97 ms at 5k). The
+ladder's "fine to ~50k" holds for filters but NOT for Today (~500 ms
+at 50k extrapolated). Consequence: the recorded denormalized
+last-activity-columns lever (person.last_contact_at /
+last_inbound_at / last_inquiry_at maintained at write time) now has a
+measured trigger and should be its own small chunk BEFORE or WITH
+011c (which multiplies Today's cost); it also collapses the
+never-filters to indexed column tests. Tunnel-path measurements
+(2026-08-29): ~60 ms edge floor per request; browser-realistic
+People ≈ 90–140 ms; payloads edge-compressed 229 KB→27 KB (origin
+CompressionLayer would shrink only the Mac→edge leg). Since the
+backend is flat and fast, perceived speed work is web-side:
+`placeholderData: keepPreviousData` on people/filter queries (kills
+the Loading… flash on every chip edit), optimistic updates on
+stage/assignment mutations, hover prefetch of person detail, collapse
+the me→org-queries waterfall (2 sequential RTTs over the tunnel), and
+prod-build web serving for the tunnel (dev Vite ships hundreds of
+unbundled modules through it). Bundles naturally with the FilterBar
+UX polish items (draft-chip affordance, anchored editors, clear-all).
+100-AGENT CONCURRENCY TEST (same org, 2026-08-29): STRESS (no think
+time) saturates the sqlx-default 10-connection pool — every request
+queues to ~2.3–2.8 s and 9% 503 via the 2 s acquire timeout, Today the
+biggest consumer; REALISTIC (2–5 s think time, ~24 req/s) is healthy
+at p50 (people/filters 23–60 ms) but Today p50 612 ms / p95 1.8 s and
+a 1.2% 503 rate — 100 active agents in one 100k-person org is past
+comfort TODAY. Root cause is capacity = pool(10) / Today(~1 s);
+the denormalization chunk multiplies capacity ~40x and is the fix;
+explicit pool sizing (max_connections currently sqlx default 10,
+state.rs) is the cheap secondary lever. Login (Argon2id) 236 ms avg
+sequential — by design, fine. THE HARNESS IS COMMITTED: ./scripts/perf
+(seed | bench | agents) + docs/design/PERF_BASELINE.md (full tables,
+EXPLAIN anatomy of Today, method caveats: debug build, skewed books,
+Python client) — re-run bench after any query/index/pool change and
+compare against the baseline doc.
+
+## Earlier verification checkpoints
+
+- 2026-09-06, 011b final implementation tree on
+  `codex/slice-011b-saved-lists`, base `1635fc4`: Terra ran
+  `./scripts/check` (30s; 651 Rust tests, 5 doctests, 388 Web tests,
+  9 email-worker tests, lint/type checking/build) and then
+  `./scripts/check-db` (139s; SQLx prepare check and 379 DB tests), all passing.
+  Astra source/performance review found no remaining actionable finding.
+  Coordinator completed the isolated browser walkthrough and verified both
+  existing People queries plus all 147 prior SQLx files unchanged. Full
+  [evidence and criterion mapping](../tasks/SLICE_011b_VERIFICATION.md) includes
+  the 50k dense/sparse plans and the native-confirm automation limitation.
+- 2026-09-06, 011b documentation phase at `1635fc4`: independent
+  Astra/ultra review READY after A1/A2 and R1–R3 corrections (typed version
+  validation, membership freshness, dirty-copy preservation, uncertain
+  create handling and count concurrency). Coordinator verified all nine
+  relative Markdown file links in the five changed documents and
+  `git diff --check`. No application/DB tests were run for this docs-only
+  change; implementation and performance evidence remain future work.
+- 2026-08-28, test-binary consolidation on `main`: coordinator's own
+  final-tree run — check 14s warm; check-db 2:11 (363/363). Test
+  reconciliation keyed on (file, test-name): 439/363 before = after,
+  exact.
+- 2026-08-28, 011a on `slice-011a-filter-vocabulary` before merge:
+  lane gates green post-fix (check; check-db 49 blocks 0 failed;
+  filter unit 65; db_people_filter 31; web 300); coordinator
+  final-tree check + check-db green (own run).
+- 2026-08-29, live against the running dev stack: post-011a filter
+  path verified (garbage `?filter=` → 400; assigned_to filter → 4/16
+  people, single assignee).

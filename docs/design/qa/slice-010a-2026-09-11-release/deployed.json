@@ -1,0 +1,13 @@
+{
+  "revision": "0735015a583f6207c78d0141644a0753328f85f6",
+  "api_listener": [
+    9429
+  ],
+  "web_listener": [
+    9455
+  ],
+  "api_launcher": 9429,
+  "web_launcher": 9443,
+  "api_sha256": "e5840032ed5a5a2138349477224b70bbda8ce498482b2a28528c0faedbaf6bb0",
+  "index_sha256": "f03025b867dc1ce07e89b31a7c15c8a98cf1617c08764878f8a5d41321791d2d"
+}

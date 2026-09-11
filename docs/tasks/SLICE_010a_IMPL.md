@@ -1,8 +1,9 @@
 # Slice 010a — Bounded implementation brief
 
-**Delivery: implemented, synthetically verified, merged and pushed (2026-09-11);
-not deployed. Live FUB validation remains user-deferred.** See
-[verification](../tasks/SLICE_010a_VERIFICATION.md).
+**Delivery: implemented, synthetically verified, merged, pushed and deployed
+to shared development (2026-09-11). Live FUB validation remains user-deferred.**
+See [verification](../tasks/SLICE_010a_VERIFICATION.md) and
+[release](SLICE_010a_RELEASE.md).
 
 **Status: APPROVED for implementation, 2026-09-10 (D-060).**
 Specification: [SLICE_010a.md](../specs/SLICE_010a.md).
@@ -14,7 +15,8 @@ of request-receipt idempotency, backend correction ownership moved to Astra
 high under MODEL_ROUTING's escalation rule. Terra then completed Web; both
 review/fix rounds and final synthetic verification are complete. The coordinator
 owns documentation and source integration. On 2026-09-11 the user authorized
-cleanup, commit, merge and push (D-060 follow-up); deployment remains separate.
+cleanup, commit, merge and push (D-060 follow-up), then separately authorized
+the completed shared-development deployment.
 
 ## 1. Entry conditions
 
@@ -59,7 +61,7 @@ writers or new infrastructure are necessary.
    validation if access is available, and record remaining unverified evidence.
    The initial planning request did not authorize source integration or
    deployment. The 2026-09-11 follow-up authorizes cleanup, commit, merge and
-   push; deployment remains separate.
+   push. The later deployment follow-up is recorded in SLICE_010a_RELEASE.md.
 
 ## 3. Ownership and existing seams
 

@@ -1,11 +1,13 @@
 # Slice 010a — Implementation verification
 
 **IMPLEMENTED, SYNTHETICALLY VERIFIED, MERGED AND PUSHED. Live FUB validation
-is explicitly user-deferred; 010a is not deployed.** Implementation `e4e0658`,
+is explicitly user-deferred. Shared-development deployment is verified.**
+Implementation `e4e0658`,
 merge `cd224fe`, base `b2fb368`. Source published on 2026-09-11; the original
 `codex/slice-010a-fub-assessment` branch and
 `/Users/karrad/projects/crm-worktrees/010a` checkout were removed after merge.
-The shared development runtime remains on released 019b.
+The shared-development runtime now runs 010a from `0735015`; see the
+[2026-09-11 release record](SLICE_010a_RELEASE.md).
 
 ## Delivered scope
 
@@ -149,4 +151,7 @@ follow-up). No application behavior or shared contract changed during integratio
 
 The private backup location is recorded locally in
 `/private/tmp/crm-010a-integration-backup-path`; private contents are not in Git.
-Live FUB validation, 010a deployment and later migration rungs remain pending.
+At this source-integration checkpoint, live validation and deployment remained
+pending. The subsequent authorized 010a deployment is now complete and verified
+in [SLICE_010a_RELEASE.md](SLICE_010a_RELEASE.md). Live FUB validation remains
+user-deferred; 010b is planning only.

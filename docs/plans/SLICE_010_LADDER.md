@@ -1,7 +1,6 @@
 # Slice 010 — Follow Up Boss migration ladder
 
-**Current status: 010a MERGED AND PUSHED (2026-09-11), synthetically verified;
-not deployed.** The user requested
+**Current status: 010a DEPLOYED AND VERIFIED; 010b CORE-FIRST DRAFT (2026-09-11).** The user requested
 a refreshed migration summary and chose a new, empty destination Organization
 first (D-059). The current migration plan is
 [SLICE_010_MIGRATION_SUMMARY.md](SLICE_010_MIGRATION_SUMMARY.md).
@@ -10,8 +9,11 @@ The [010a specification](../specs/SLICE_010a.md) and
 API-first bounded assessment with encrypted saved credentials, full snapshot
 and importability in 010b. [Verification](../tasks/SLICE_010a_VERIFICATION.md)
 records passing full gates and synthetic browser QA. Source cleanup, commit,
-merge and push completed on 2026-09-11 (D-060 follow-up). Deployment remains
-separate, and live validation is explicitly user-deferred.
+merge and push completed on 2026-09-11 (D-060 follow-up). The subsequent
+shared-development [deployment](../tasks/SLICE_010a_RELEASE.md) is verified;
+live validation is explicitly user-deferred. D-061 accepts core-first 010b
+planning: [draft specification](../specs/SLICE_010b.md) and
+[brief](../tasks/SLICE_010b_IMPL.md). No 010b implementation is approved.
 Later rungs remain unapproved. Notes, tasks, tags and custom fields now
 have destination models. API-first assessment and encrypted saved credentials
 are settled for 010a; live-source qualification and later fidelity, mapping,

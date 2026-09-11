@@ -1,0 +1,105 @@
+{
+  "result": "passed",
+  "checks": [
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/health",
+      "status": 200
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/internal/ready",
+      "status": 200
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "unauthenticated_migration_status": 401
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/api/health",
+      "status": 200
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/internal/ready",
+      "status": 200
+    },
+    {
+      "base": "https://api.tarams.org",
+      "unauthenticated_migration_status": 401
+    },
+    {
+      "actor": "alice@acme.test",
+      "migration_summary_status": 200,
+      "empty_summary": true
+    },
+    {
+      "path": "/api/me",
+      "status": 200
+    },
+    {
+      "path": "/api/people",
+      "status": 200
+    },
+    {
+      "path": "/api/today",
+      "status": 200
+    },
+    {
+      "path": "/api/custom-fields",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-lists",
+      "status": 200
+    },
+    {
+      "actor": "carol@acme.test",
+      "migration_summary_status": 403,
+      "empty_summary": false
+    },
+    {
+      "actor": "bob@best.test",
+      "migration_summary_status": 200,
+      "empty_summary": true
+    },
+    {
+      "base": "http://127.0.0.1:5173",
+      "index_matches": true
+    },
+    {
+      "base": "https://app.tarams.org",
+      "index_matches": true
+    },
+    {
+      "asset": "/assets/MigrationView-JiqN3S1u.js",
+      "sha256": "f0161e56e3af9b7e5a30bb282f61e6928159cfbeb9d4ec05c02d433fc5daa125",
+      "matches": true
+    },
+    {
+      "asset": "/assets/controls-9wkFfIDo.js",
+      "sha256": "927a5865c7e69bee88ca72f6e897bc881fa9bf237a9dcc94aad850d86f091278",
+      "matches": true
+    },
+    {
+      "asset": "/assets/createLucideIcon-D6vr18O0.js",
+      "sha256": "e7f4a63b686169cb31647f683edd0d2b2e1475d89fe52a051684bb28eef087f3",
+      "matches": true
+    },
+    {
+      "asset": "/assets/index-Q7oWyYne.css",
+      "sha256": "1b91481b504ce7c6dcba132dd3e3737a0a42acad617aee5216a6d120bb64c8a2",
+      "matches": true
+    },
+    {
+      "asset": "/assets/index-qxBaer5p.js",
+      "sha256": "71db86419cf65bccdf3f0d6c9a551b38ddcd18ec2663fb70c749c5cbdacca6c2",
+      "matches": true
+    }
+  ],
+  "migration": 20260916000001,
+  "business_counts_unchanged": true,
+  "no_source_connections_or_assessments": true,
+  "live_fub_requests": false
+}

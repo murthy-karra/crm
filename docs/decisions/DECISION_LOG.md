@@ -1533,7 +1533,10 @@ exit: "large media moves to object storage when recordings ship."
    independent of questions 2 and 3, at a Postgres-bytes cost that is
    negligible at design-partner scale. **OPEN: what cap?**
 
-2. **Storage location.** Recommendation, reasoned through: when
+2. **Storage location.** Follow-up 2026-09-11: D-062 accepts keeping email
+   bulk content outside PostgreSQL; backend selection and implementation remain
+   future work. The whole-message preservation rationale below still applies.
+   Original recommendation, reasoned through: when
    recordings force object storage into existence, move the **whole
    encrypted raw MIME** there with a pointer row in Postgres — NOT
    per-attachment extraction. Whole-message relocation preserves D-012
@@ -2142,3 +2145,56 @@ and commit, merge, push”. This authorizes documentation cleanup, committing
 010a, merging into main, publishing main (including the three local 019b
 commits), and removing the merged 010a worktree/branch. It does not authorize
 a runtime deployment, real-source access or later migration rungs.
+
+**D-060 follow-up — shared-development deployment authorized (2026-09-11).**
+The user requested “Deploy 010a and start 010b planning. I will do the validation
+against an authorized FUB later in a few days.” This authorizes the existing
+shared-development API/Web refresh and additive 010a migration. Live source
+validation remains deferred; no production-cluster deployment or live account
+access is implied. Completion is recorded in
+[SLICE_010a_RELEASE.md](../tasks/SLICE_010a_RELEASE.md).
+
+### D-061 — 010b captures core records first and explicitly tracks remaining data (2026-09-11)
+
+Accepted by the user during 010b planning. Presented with a bounded first
+snapshot versus requiring all accessible history/data in 010b, the user chose
+“Core records first; explicitly track remaining data.” The core families are
+People, users, stages, custom fields, notes and tasks. Other families remain
+visible as not yet captured, with later snapshot work explicitly tracked.
+
+This sequences extraction work; it does not reduce D-012's eventual migration
+fidelity, classify missing content as preserved, or approve a core-only cutover.
+Embedded data returned with core records is preserved, with its actual coverage
+described separately from full collection retrieval. New-Organization-first
+(D-059) still applies to import. Mapping, deduplication, retention, recovery and
+cutover policies are not accepted merely by this scope choice.
+
+Planning is authorized; the 010b specification, shared-contract changes and
+implementation still require review and approval. Live authorized FUB validation
+remains user-deferred. See [the draft](../specs/SLICE_010b.md).
+
+### D-062 — Email bulk content belongs outside PostgreSQL (2026-09-11)
+
+Accepted by the user during storage-capacity planning for a 50-agent
+Organization: “emails gotta go to object storage or even a storage servers
+with large disks”, citing the cost of bare-metal NVMe capacity.
+
+Email bodies and raw messages, including their embedded attachments, are to
+reside in bulk storage outside PostgreSQL. PostgreSQL retains authorized
+metadata, relationships, integrity/deduplication identifiers and storage
+references. Preserve complete raw content under D-012 and the whole-message
+approach in O-015; this is a placement decision, not permission to strip content.
+
+Object storage or dedicated storage servers remain candidates. No vendor,
+storage software, hardware layout, capacity, replication or retention policy
+is selected by this decision. Body-search design remains future work; this
+does not authorize copying full email bodies into PostgreSQL search/read models
+or changing D-042's current metadata/subject visibility rules.
+
+The existing encrypted `raw_payload`/`correspondence_raw` BYTEA implementation
+remains in place until a separately specified relocation step defines durable
+writes, scoped reads, recovery, backup/restore consistency and existing-data
+migration. O-012/O-013 prerequisites remain open. No runtime/schema change or
+infrastructure purchase is authorized here. Email capture stays outside 010b's
+six core families; this decision guides later email capture and migration work,
+without relocating 010b's other source evidence implicitly.

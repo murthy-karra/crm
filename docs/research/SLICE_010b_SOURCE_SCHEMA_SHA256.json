@@ -1,0 +1,35 @@
+{
+  "checked": "2026-09-11",
+  "kind": "public_documentation_not_live_api",
+  "local_directory": "/private/tmp/crm-010b-source",
+  "files": {
+    "customfields-get-oas.json": {
+      "sha256": "b339d002748633de0cc4e7f32adeb649ed6ef8e1c094d6af9992eabf971ee914",
+      "bytes": 5344
+    },
+    "notes-get-oas.json": {
+      "sha256": "af8a6611b330ef0e4876d20b2c7a17a80724efb4b401d59bb9235fb9fa6d8ae9",
+      "bytes": 2456
+    },
+    "notes-id-get-oas.json": {
+      "sha256": "85681b485780e057185ae84effb724d671491643b75aefd82cb88a7d9fa95581",
+      "bytes": 3644
+    },
+    "people-get-oas.json": {
+      "sha256": "9a9b1049ec0ede0a1088ad15aa4c364b181f33c2dad9831b4c62c8bab6bba1aa",
+      "bytes": 11579
+    },
+    "stages-get-oas.json": {
+      "sha256": "0cee791c70fae36bc4b69b3b147e3228de6b00ed3dc7fd4ef7fa50a499e029bf",
+      "bytes": 5554
+    },
+    "tasks-get-oas.json": {
+      "sha256": "a8e28b780b314e2f982ef6c70d3347fe22e3126f081c833f188e2cbd1db7323b",
+      "bytes": 4346
+    },
+    "users-get-oas.json": {
+      "sha256": "819f9cb3519c1d723e677b1f60a72b483b94a6aeb05557558246c863ffe092be",
+      "bytes": 4722
+    }
+  }
+}

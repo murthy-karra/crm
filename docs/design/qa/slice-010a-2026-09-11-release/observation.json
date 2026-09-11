@@ -1,0 +1,15 @@
+{
+  "result": "passed",
+  "logs": {
+    "api.log": {
+      "warnings": 0,
+      "errors": 0
+    },
+    "web.log": {
+      "warnings": 0,
+      "errors": 0
+    }
+  },
+  "expected_listeners": true,
+  "live_fub_validation": "user_deferred"
+}

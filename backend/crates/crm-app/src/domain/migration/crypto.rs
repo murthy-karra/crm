@@ -287,3 +287,103 @@ mod binding_tests {
         );
     }
 }
+
+/// Snapshot payloads bind the Organization, snapshot, row and closed purpose.
+/// Even two rows in one snapshot cannot exchange ciphertext.
+pub fn seal_snapshot(
+    key: &RawPayloadKey,
+    org: OrganizationId,
+    run: uuid::Uuid,
+    row: uuid::Uuid,
+    purpose: &str,
+    bytes: &[u8],
+) -> Result<Sealed, CryptoError> {
+    seal_purpose(
+        key,
+        format!("crm-fub-core-v1:{run}:{purpose}").as_bytes(),
+        org,
+        row,
+        1,
+        bytes,
+    )
+}
+pub fn open_snapshot(
+    key: &RawPayloadKey,
+    org: OrganizationId,
+    run: uuid::Uuid,
+    row: uuid::Uuid,
+    purpose: &str,
+    nonce: &[u8],
+    bytes: &[u8],
+) -> Result<Vec<u8>, CryptoError> {
+    open_purpose(
+        key,
+        format!("crm-fub-core-v1:{run}:{purpose}").as_bytes(),
+        org,
+        row,
+        1,
+        nonce,
+        bytes,
+    )
+}
+pub fn snapshot_hmac(
+    key: &RawPayloadKey,
+    org: OrganizationId,
+    purpose: &str,
+    bytes: &[u8],
+) -> [u8; 32] {
+    request_digest(key, &format!("snapshot:{org:?}:{purpose}"), bytes)
+}
+
+#[cfg(test)]
+mod snapshot_tests {
+    use super::*;
+    #[test]
+    fn snapshot_payloads_and_lookup_keys_bind_tenant_run_row_and_purpose() {
+        let key = RawPayloadKey::new([7; 32]);
+        let org = OrganizationId::new(uuid::Uuid::new_v4());
+        let other = OrganizationId::new(uuid::Uuid::new_v4());
+        let run = uuid::Uuid::new_v4();
+        let row = uuid::Uuid::new_v4();
+        let sealed = seal_snapshot(&key, org, run, row, "capture", b"synthetic payload").unwrap();
+        assert_eq!(
+            open_snapshot(
+                &key,
+                org,
+                run,
+                row,
+                "capture",
+                &sealed.nonce,
+                &sealed.ciphertext
+            )
+            .unwrap(),
+            b"synthetic payload"
+        );
+        for (o, r, id, p) in [
+            (other, run, row, "capture"),
+            (org, uuid::Uuid::new_v4(), row, "capture"),
+            (org, run, uuid::Uuid::new_v4(), "capture"),
+            (org, run, row, "record"),
+        ] {
+            assert!(open_snapshot(&key, o, r, id, p, &sealed.nonce, &sealed.ciphertext).is_err());
+        }
+        assert!(open_snapshot(
+            &RawPayloadKey::new([8; 32]),
+            org,
+            run,
+            row,
+            "capture",
+            &sealed.nonce,
+            &sealed.ciphertext
+        )
+        .is_err());
+        assert_ne!(
+            snapshot_hmac(&key, org, "contact:email", b"synthetic@test"),
+            snapshot_hmac(&key, other, "contact:email", b"synthetic@test")
+        );
+        assert_ne!(
+            snapshot_hmac(&key, org, "contact:email", b"synthetic@test"),
+            snapshot_hmac(&key, org, "semantic", b"synthetic@test")
+        );
+    }
+}

@@ -337,6 +337,7 @@ pub async fn start_fub_assessment(
     {
         return Err(MigrationError::Conflict);
     }
+    super::snapshot::exclusive(&mut tx, ctx.organization_id, Uuid::nil()).await?;
     if sqlx::query("SELECT 1 FROM migration_assessment WHERE organization_id=$1 AND state IN ('queued','running','waiting_retry')").bind(ctx.organization_id.0).fetch_optional(&mut *tx).await?.is_some(){return Err(MigrationError::Conflict)}
     let id = Uuid::new_v4();
     let raw = crypto::open_identity(
@@ -386,6 +387,7 @@ pub async fn retry_fub_assessment(
         return Err(MigrationError::Conflict);
     }
     if a.state == "paused" {
+        super::snapshot::exclusive(&mut tx, ctx.organization_id, Uuid::nil()).await?;
         if sqlx::query("SELECT 1 FROM migration_assessment WHERE organization_id=$1 AND state IN ('queued','running','waiting_retry')").bind(ctx.organization_id.0).fetch_optional(&mut *tx).await?.is_some(){return Err(MigrationError::Conflict)}
         sqlx::query("UPDATE migration_assessment SET state='queued',pause_reason=NULL,next_attempt_at=NULL,initiated_by_user_id=$3,updated_at=now() WHERE id=$1 AND organization_id=$2").bind(a.id).bind(ctx.organization_id.0).bind(ctx.actor_user_id.0).execute(&mut *tx).await?;
         sqlx::query("UPDATE migration_assessment_check SET state='pending',next_attempt_at=NULL,cycle_attempts=0 WHERE assessment_id=$1 AND organization_id=$2 AND state<>'completed'").bind(a.id).bind(ctx.organization_id.0).execute(&mut *tx).await?;

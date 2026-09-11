@@ -1,19 +1,22 @@
 # Slice 010 — Follow Up Boss migration ladder
 
-**Current status: 010a DEPLOYED AND VERIFIED; 010b IMPLEMENTATION APPROVED (2026-09-11).** The user requested
+**Current status: 010a DEPLOYED AND VERIFIED; 010b IMPLEMENTED AND SYNTHETICALLY VERIFIED (2026-09-11).** The user requested
 a refreshed migration summary and chose a new, empty destination Organization
 first (D-059). The current migration plan is
 [SLICE_010_MIGRATION_SUMMARY.md](SLICE_010_MIGRATION_SUMMARY.md).
 The [010a specification](../specs/SLICE_010a.md) and
 [brief](../tasks/SLICE_010a_IMPL.md) were approved (D-060) and implemented:
-API-first bounded assessment with encrypted saved credentials, full snapshot
-and importability in 010b. [Verification](../tasks/SLICE_010a_VERIFICATION.md)
+API-first bounded assessment with encrypted saved credentials, followed by
+core snapshot and preview in 010b. [Verification](../tasks/SLICE_010a_VERIFICATION.md)
 records passing full gates and synthetic browser QA. Source cleanup, commit,
 merge and push completed on 2026-09-11 (D-060 follow-up). The subsequent
 shared-development [deployment](../tasks/SLICE_010a_RELEASE.md) is verified;
 live validation is explicitly user-deferred. D-061 accepts core-first 010b
 sequencing: [approved specification](../specs/SLICE_010b.md) and
-[brief](../tasks/SLICE_010b_IMPL.md). D-063 approves their reviewed contracts, implementation and synthetic verification.
+[brief](../tasks/SLICE_010b_IMPL.md). D-063 approves their reviewed contracts,
+implementation and synthetic verification. The unmerged 010b implementation
+passed both bounded reviews and all required gates;
+[verification](../tasks/SLICE_010b_VERIFICATION.md) records evidence and remaining release work.
 Later rungs remain unapproved. Notes, tasks, tags and custom fields now
 have destination models. API-first assessment and encrypted saved credentials
 are settled for 010a; live-source qualification and later fidelity, mapping,

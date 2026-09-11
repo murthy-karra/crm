@@ -47,7 +47,8 @@ The implemented product includes People, intake/correspondence, calling, tags,
 notes, tasks, typed custom fields, saved filters and configurable Today work.
 The AI Operator has read tools and scoped command tools with confirmation or
 receipt/Undo behavior. FUB assessment (010a) is deployed in shared development;
-010b core capture/preview is a draft. Live FUB validation remains deferred.
+010b core capture/preview is implemented and synthetically verified, with its
+shared-development release in progress. Live FUB validation remains deferred.
 Native SwiftUI and Jetpack Compose applications are planned, not implemented.
 
 Start with the [system map](docs/architecture/ARCHITECTURE_BASELINE.md) and

@@ -1,0 +1,16 @@
+{
+  "status": "passed",
+  "local_markdown_target_paths_checked": 84,
+  "changed_json_files_parsed_before_final_manifests": 10,
+  "source_sha256_matches": 37,
+  "independent_source_and_gate_audit": "passed",
+  "git_diff_check": "passed",
+  "all_changed_text_trailing_whitespace_check": "passed",
+  "bounded_credential_pattern_matches": 0,
+  "qa_ports_confirmed_closed": [
+    3011,
+    5181
+  ],
+  "business_table_counts_unchanged_after_all_walkthroughs": 45,
+  "full_test_gates_repeated_during_handoff": false
+}

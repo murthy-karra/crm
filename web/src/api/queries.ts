@@ -231,6 +231,8 @@ export const queryKeys = {
   customFields: (orgId: string) => ['org', orgId, 'custom-fields'] as const,
   // Slice 010a: the report contains access-sensitive source account metadata,
   // so its cache is isolated by Organization, actor, and opaque auth lifetime.
+  snapshots: (orgId: string, actorId: string, sessionLifetime: number) =>
+    ['org', orgId, 'migration-snapshots', actorId, sessionLifetime] as const,
   migration: (orgId: string, actorId: string, sessionLifetime: number) =>
     ['org', orgId, 'migration', actorId, sessionLifetime] as const,
 }

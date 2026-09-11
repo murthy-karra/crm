@@ -1,0 +1,99 @@
+{
+  "status": "passed",
+  "api": "http://127.0.0.1:3011",
+  "organization_id": "e3a88985-8225-463d-a767-f3caf1a415ba",
+  "actor_id": "3d6d0c50-cdff-4f03-8233-922aa08daad8",
+  "connection_id": "09407aee-dcec-4088-8dc9-219e18a2dc25",
+  "snapshot_id": "d67d05fe-9ea0-4dc4-8bee-237300fec9e6",
+  "preview_id": "3f65f2a5-9154-4b42-b3c1-1babc5e9628a",
+  "capture_state": "completed_with_gaps",
+  "capture_state_observations": [
+    "completed_with_gaps"
+  ],
+  "preview_state": "completed",
+  "preview_state_observations": [
+    "completed"
+  ],
+  "accepted_captures": "9",
+  "raw_bytes": "5097",
+  "retained_bytes_observed": "30479",
+  "record_counts": {
+    "users": 2,
+    "stages": 2,
+    "custom_fields": 3,
+    "people": 3,
+    "notes": 2,
+    "tasks": 3
+  },
+  "record_page_counts": {
+    "users": 2,
+    "stages": 2,
+    "custom_fields": 3,
+    "people": 3,
+    "notes": 2,
+    "tasks": 3
+  },
+  "groups": [
+    {
+      "id": "48d2b790-79c9-49d5-a68d-6487da567f68",
+      "kind": "email",
+      "member_count": "2",
+      "source_ids": [
+        "101",
+        "102"
+      ],
+      "pages": 2
+    },
+    {
+      "id": "f2d970c0-1fa6-4dc4-b03e-610593ae8dbb",
+      "kind": "phone",
+      "member_count": "3",
+      "source_ids": [
+        "101",
+        "102",
+        "103"
+      ],
+      "pages": 3
+    }
+  ],
+  "group_pages": 2,
+  "coverage_family_count": 18,
+  "business_tables_compared": 45,
+  "business_counts_unchanged": true,
+  "issues_by_family": {
+    "users": [
+      "unresolved_active_member"
+    ],
+    "stages": [
+      "unresolved_stage"
+    ],
+    "custom_fields": [
+      "recurring_date_decision",
+      "unresolved_custom_field",
+      "unsupported_field_kind"
+    ],
+    "people": [
+      "normalized_contact_overlap",
+      "unresolved_custom_value_mapping",
+      "unresolved_source_user",
+      "unresolved_stage"
+    ],
+    "notes": [
+      "note_detail_unavailable",
+      "note_representation_decision",
+      "unresolved_note_author"
+    ],
+    "tasks": [
+      "comparable_source_variants",
+      "projection_limited",
+      "task_due_time_decision",
+      "unresolved_source_person",
+      "unresolved_source_user",
+      "unsupported_task_kind"
+    ]
+  },
+  "live_fub_calls": 0,
+  "fixture_provenance": "synthetic-only",
+  "helper_correction": "An initial assertion incorrectly expected an unknown source field in the bounded preview projection; the preserved-source omission marker is the correct API contract.",
+  "existing_capture_and_preview_reused_after_helper_correction": true
+}

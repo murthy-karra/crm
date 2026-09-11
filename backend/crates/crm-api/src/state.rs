@@ -13,6 +13,7 @@ use crate::telephony::Telephony;
 
 #[derive(Clone)]
 pub struct AppState {
+    pub snapshot_policy: crate::domain::migration::snapshot::SnapshotPolicy,
     pub db: Option<PgPool>,
     pub database_connect_timeout: Duration,
     pub session_secret: SessionSecret,
@@ -90,6 +91,7 @@ impl AppState {
             .map_err(|_| sqlx::Error::Protocol("FUB reader configuration invalid".into()))?,
         );
         Ok(Self {
+            snapshot_policy: config.snapshot_policy.clone(),
             db,
             database_connect_timeout: config.database_connect_timeout,
             session_secret: config.session_secret.clone(),
@@ -119,6 +121,7 @@ impl AppState {
     /// struct literal (docs/specs/SLICE_002.md §14a).
     pub fn for_tests(pool: PgPool, config: &Config, publisher: Publisher) -> Self {
         Self {
+            snapshot_policy: config.snapshot_policy.clone(),
             db: Some(pool),
             database_connect_timeout: config.database_connect_timeout,
             session_secret: config.session_secret.clone(),

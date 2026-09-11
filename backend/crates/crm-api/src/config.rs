@@ -136,6 +136,7 @@ fn decode_hex_32(raw: &str) -> Option<[u8; 32]> {
 
 #[derive(Debug, Clone)]
 pub struct Config {
+    pub snapshot_policy: crm_app::domain::migration::snapshot::SnapshotPolicy,
     pub fub_system: crm_app::domain::migration::reader::FubSystemConfig,
     pub bind_addr: SocketAddr,
     pub database_url: Option<String>,
@@ -192,6 +193,7 @@ pub struct Config {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ConfigError {
+    InvalidSnapshotBudget,
     InvalidBindAddr(String),
     NonLoopbackBindAddr(SocketAddr),
     InvalidConnectTimeout(String),
@@ -260,6 +262,7 @@ pub enum ConfigError {
 impl fmt::Display for ConfigError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            ConfigError::InvalidSnapshotBudget => write!(f,"FUB snapshot ceilings must be positive decimal i64 bytes"),
             ConfigError::InvalidBindAddr(value) => {
                 write!(f, "CRM_API_BIND_ADDR is not a valid socket address: {value}")
             }
@@ -598,7 +601,32 @@ impl Config {
             None => None,
         };
 
+        let snapshot_ceiling = |name: &str, default: i64| -> Result<i64, ConfigError> {
+            match get(name).filter(|v| !v.is_empty()) {
+                None => Ok(default),
+                Some(value) => {
+                    if !value.bytes().all(|b| b.is_ascii_digit()) {
+                        return Err(ConfigError::InvalidSnapshotBudget);
+                    }
+                    value
+                        .parse::<i64>()
+                        .ok()
+                        .filter(|v| *v > 0)
+                        .ok_or(ConfigError::InvalidSnapshotBudget)
+                }
+            }
+        };
         Ok(Config {
+            snapshot_policy: crm_app::domain::migration::snapshot::SnapshotPolicy {
+                run_ceiling_bytes: snapshot_ceiling(
+                    "CRM_FUB_SNAPSHOT_RUN_CEILING_BYTES",
+                    2147483648,
+                )?,
+                org_ceiling_bytes: snapshot_ceiling(
+                    "CRM_FUB_SNAPSHOT_ORG_CEILING_BYTES",
+                    4294967296,
+                )?,
+            },
             fub_system: crm_app::domain::migration::reader::FubSystemConfig {
                 name: get("CRM_FUB_SYSTEM_NAME").filter(|v| !v.is_empty()),
                 key: get("CRM_FUB_SYSTEM_KEY").filter(|v| !v.is_empty()),

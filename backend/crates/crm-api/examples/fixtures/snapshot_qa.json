@@ -1,0 +1,309 @@
+{
+  "fixture_notice": "Entirely synthetic Slice 010b browser-QA data. This is not a captured FUB account or evidence of live endpoint behavior.",
+  "identity": {
+    "account": {
+      "id": 101,
+      "domain": "Synthetic Snapshot Realty"
+    },
+    "user": {
+      "id": 7,
+      "name": "Synthetic Admin",
+      "email": "alice@acme.test"
+    }
+  },
+  "users": [
+    {
+      "id": 7,
+      "name": "Synthetic Admin",
+      "email": "alice@acme.test",
+      "role": "Admin",
+      "status": "Active",
+      "timezone": "America/Los_Angeles",
+      "calling": {
+        "enabled": false
+      }
+    },
+    {
+      "id": 8,
+      "name": "Synthetic Former Agent",
+      "email": "former@source.invalid",
+      "role": "Agent",
+      "status": "Deleted",
+      "isDeleted": true
+    }
+  ],
+  "stages": [
+    {
+      "id": 11,
+      "name": "Lead",
+      "orderWeight": 1,
+      "isProtected": false,
+      "peopleCount": 2
+    },
+    {
+      "id": 12,
+      "name": "Synthetic Unmapped Stage",
+      "orderWeight": 2,
+      "isProtected": false,
+      "peopleCount": 1
+    }
+  ],
+  "customfields": [
+    {
+      "id": 21,
+      "name": "customSyntheticPreferredArea",
+      "type": "dropdown",
+      "choices": [
+        "North",
+        "South"
+      ],
+      "isRecurring": false,
+      "label": "Synthetic Preferred Area"
+    },
+    {
+      "id": 22,
+      "name": "customSyntheticAnniversary",
+      "type": "date",
+      "isRecurring": true,
+      "label": "Synthetic Anniversary"
+    },
+    {
+      "id": 23,
+      "name": "customSyntheticFutureKind",
+      "type": "future_source_kind",
+      "unknownMetadata": {
+        "preserveMe": true
+      },
+      "label": "Synthetic Future Kind"
+    }
+  ],
+  "people": [
+    {
+      "id": 101,
+      "firstName": "Synthetic",
+      "lastName": "One",
+      "stage": "Lead",
+      "assignedUserId": 7,
+      "emails": [
+        {
+          "value": "overlap@people.invalid",
+          "type": "home"
+        }
+      ],
+      "phones": [
+        {
+          "value": "+1 (202) 555-0100",
+          "type": "office"
+        }
+      ],
+      "tags": [
+        "Synthetic embedded tag"
+      ],
+      "addresses": [
+        {
+          "street": "1 Synthetic Street",
+          "city": "Example",
+          "state": "CA",
+          "code": "90000"
+        }
+      ],
+      "relationships": [
+        {
+          "id": 102,
+          "type": "Household"
+        }
+      ],
+      "unknownExactInteger": 9007199254740993,
+      "customSyntheticPreferredArea": "North",
+      "customSyntheticAnniversary": "2020-09-11"
+    },
+    {
+      "id": 102,
+      "firstName": "Synthetic",
+      "lastName": "Two",
+      "stage": "Lead",
+      "assignedUserId": 7,
+      "emails": [
+        {
+          "value": "OVERLAP@people.invalid",
+          "type": "work"
+        }
+      ],
+      "phones": [
+        {
+          "value": "2025550100",
+          "type": "office"
+        }
+      ],
+      "customSyntheticPreferredArea": "Unrecognized Option"
+    },
+    {
+      "id": 103,
+      "firstName": "Synthetic",
+      "lastName": "Three",
+      "stage": "Synthetic Unmapped Stage",
+      "assignedUserId": 8,
+      "emails": [
+        {
+          "value": "third@people.invalid",
+          "type": "home"
+        }
+      ],
+      "phones": [
+        {
+          "value": "+12025550100",
+          "type": "office"
+        }
+      ],
+      "isTrash": true,
+      "isUnclaimed": true,
+      "customSyntheticFutureKind": {
+        "preserveMe": true
+      }
+    }
+  ],
+  "notes": [
+    {
+      "id": 301,
+      "personId": 101,
+      "created": "2026-09-01T12:00:00Z",
+      "subject": "Synthetic HTML note",
+      "body": "<p>Synthetic note <img src=x onerror=alert('synthetic')></p>",
+      "isHtml": true,
+      "createdBy": "Synthetic Admin",
+      "updated": "2026-09-01T12:00:00Z"
+    },
+    {
+      "id": 302,
+      "personId": 102,
+      "created": "2026-09-02T12:00:00Z",
+      "subject": "Synthetic restricted detail",
+      "body": "List evidence remains available when detail is restricted.",
+      "isHtml": false,
+      "createdBy": "Synthetic Former Agent",
+      "updated": "2026-09-02T12:00:00Z"
+    }
+  ],
+  "note_details": {
+    "301": {
+      "id": 301,
+      "personId": 101,
+      "created": "2026-09-01T12:00:00Z",
+      "subject": "Synthetic HTML note",
+      "body": "<p>Synthetic note <img src=x onerror=alert('synthetic')></p>",
+      "isHtml": true,
+      "createdBy": "Synthetic Admin",
+      "createdById": 7,
+      "reactions": {
+        "👍": [
+          7
+        ]
+      },
+      "attachment": {
+        "url": "https://files.synthetic.invalid/never-fetch"
+      },
+      "updated": "2026-09-01T12:00:00Z",
+      "updatedById": 7,
+      "showContent": true,
+      "replies": [
+        {
+          "id": 401,
+          "body": "Synthetic reply",
+          "createdById": 8,
+          "refId": 301,
+          "refType": "Note",
+          "created": "2026-09-03T12:00:00Z",
+          "updated": "2026-09-03T12:00:00Z",
+          "reactions": {
+            "👍": [
+              7
+            ]
+          }
+        }
+      ],
+      "systemName": "synthetic-fixture",
+      "systemId": 1
+    },
+    "302": {
+      "id": 302,
+      "personId": 102,
+      "created": "2026-09-02T12:00:00Z",
+      "subject": "Synthetic restricted detail",
+      "body": "List evidence remains available when detail is restricted.",
+      "isHtml": false,
+      "createdBy": "Synthetic Former Agent",
+      "createdById": 8,
+      "reactions": {},
+      "updated": "2026-09-02T12:00:00Z",
+      "updatedById": 8,
+      "showContent": true,
+      "replies": []
+    }
+  },
+  "tasks_open": [
+    {
+      "id": 501,
+      "personId": 101,
+      "name": "Synthetic date-only task",
+      "type": "Call",
+      "dueDate": "2026-09-15",
+      "dueDateTime": null,
+      "isCompleted": 0,
+      "assignedUserId": 7,
+      "AssignedTo": "Synthetic Admin",
+      "createdBy": "Synthetic Admin",
+      "updatedBy": "Synthetic Admin",
+      "created": "2026-09-01T12:00:00Z",
+      "updated": "2026-09-02T12:00:00Z"
+    },
+    {
+      "id": 502,
+      "personId": 103,
+      "name": "Synthetic unresolved task",
+      "type": "Future task kind",
+      "dueDate": "2026-09-16",
+      "dueDateTime": "2026-09-16T09:00:00",
+      "isCompleted": 0,
+      "assignedUserId": 8,
+      "AssignedTo": "Synthetic Former Agent",
+      "createdBy": "Synthetic Admin",
+      "updatedBy": "Synthetic Admin",
+      "created": "2026-09-01T12:00:00Z",
+      "updated": "2026-09-02T12:00:00Z"
+    }
+  ],
+  "tasks_completed": [
+    {
+      "id": 501,
+      "personId": 101,
+      "name": "Synthetic date-only task",
+      "type": "Call",
+      "dueDate": "2026-09-15",
+      "dueDateTime": null,
+      "isCompleted": 1,
+      "completed": "2026-09-11T10:00:00Z",
+      "assignedUserId": 7,
+      "AssignedTo": "Synthetic Admin",
+      "createdBy": "Synthetic Admin",
+      "updatedBy": "Synthetic Admin",
+      "created": "2026-09-01T12:00:00Z",
+      "updated": "2026-09-11T10:00:00Z"
+    },
+    {
+      "id": 503,
+      "personId": 102,
+      "name": "Synthetic completed task",
+      "type": "Email",
+      "dueDate": "2026-09-01",
+      "dueDateTime": "2026-09-01T17:00:00Z",
+      "isCompleted": 1,
+      "completed": "2026-09-01T16:00:00Z",
+      "assignedUserId": 7,
+      "AssignedTo": "Synthetic Admin",
+      "createdBy": "Synthetic Admin",
+      "updatedBy": "Synthetic Admin",
+      "created": "2026-09-01T12:00:00Z",
+      "updated": "2026-09-01T16:00:00Z"
+    }
+  ]
+}

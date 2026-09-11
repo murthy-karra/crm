@@ -244,6 +244,14 @@ pub async fn run(config: Config) -> Result<(), BoxError> {
         )
     });
 
+    let _snapshot_worker = state.db.as_ref().map(|pool| {
+        domain::migration::snapshot_worker::spawn(
+            pool.clone(),
+            config.raw_payload_key.clone(),
+            state.migration_reader.clone(),
+            state.snapshot_policy.clone(),
+        )
+    });
     let app = build_app(state);
 
     let listener = TcpListener::bind(config.bind_addr).await?;

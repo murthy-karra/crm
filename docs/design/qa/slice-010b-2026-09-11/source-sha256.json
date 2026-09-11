@@ -1,0 +1,155 @@
+{
+  "baseline": "49581a0",
+  "branch": "codex/slice-010b-core-snapshot",
+  "scope": "Final implementation and contract; private environment excluded",
+  "files": [
+    {
+      "path": ".env.example",
+      "sha256": "b4fc984c3dab22a66a1dc7ea593d0a9ec056e01117c9ed2314f26a149f4a13b2"
+    },
+    {
+      "path": "backend/crates/crm-api/Cargo.toml",
+      "sha256": "7fec8d59a1eb24250a7dd58a9032b12d8af142d7774f00d2ae621ac65e5226ba"
+    },
+    {
+      "path": "backend/crates/crm-api/examples/fixtures/snapshot_qa.json",
+      "sha256": "6083f4f54006e47dd7f79cf441ea57badffd3541c3ffe46faeddbcd5c8e32245"
+    },
+    {
+      "path": "backend/crates/crm-api/examples/snapshot_qa.rs",
+      "sha256": "56a0579beffb6958fa3a60af9cc2c3a936b97c0c6a6e0333ddc6cc043a313b1f"
+    },
+    {
+      "path": "backend/crates/crm-api/migrations/20260917000001_fub_core_snapshot.sql",
+      "sha256": "c2e89d593beb4465bb0fcc488ec4348eb98b763ad47ac6119745bbce5cbdab4f"
+    },
+    {
+      "path": "backend/crates/crm-api/src/config.rs",
+      "sha256": "9156282348f224ca7ab80da56713f9b0f47c471e195d9b4330fd988e17263df6"
+    },
+    {
+      "path": "backend/crates/crm-api/src/lib.rs",
+      "sha256": "8d8119250035ddf34201829c2528436c0231d4601dd7cc9ddd380fc7bc2f0e0b"
+    },
+    {
+      "path": "backend/crates/crm-api/src/routes/migration_snapshots.rs",
+      "sha256": "208c0fbbb627ec8d840ac13fbc2006cd2ed0813cbaba456e5c1864e0816f73b5"
+    },
+    {
+      "path": "backend/crates/crm-api/src/routes/migrations.rs",
+      "sha256": "918450b55f3a4bd1c5c657b5dcf29b63d16bd0e8d8176bed495b0fe15e912367"
+    },
+    {
+      "path": "backend/crates/crm-api/src/routes/mod.rs",
+      "sha256": "518bb98f4144237330f283f5f9cae8c0192c70c9f208ede609f059d01cbaccf1"
+    },
+    {
+      "path": "backend/crates/crm-api/src/state.rs",
+      "sha256": "b8d2221678d4a789d2b081dea106e01e89fd7d016cc79b0dc5f00053814436cf"
+    },
+    {
+      "path": "backend/crates/crm-api/tests/all.rs",
+      "sha256": "b780e456eb976ac93f44a9c19ba22b2c0e6a4511c2c76ebae2d110af5661916f"
+    },
+    {
+      "path": "backend/crates/crm-api/tests/db_snapshot_http.rs",
+      "sha256": "7d89b8410d914b34fa97cca05e3da606fcfca6be38d6693ff9b567c76e921053"
+    },
+    {
+      "path": "backend/crates/crm-api/tests/db_snapshot_scale.rs",
+      "sha256": "7635199f158fb42a0370806322b43f46c508b3c0f9abc36c3d3e9eaea692ebd9"
+    },
+    {
+      "path": "backend/crates/crm-api/tests/db_snapshot_worker.rs",
+      "sha256": "e1f726797f9f8788f40eac43240b7189e329f457e90f03a4b6de65efa2f8b109"
+    },
+    {
+      "path": "backend/crates/crm-app/src/domain/migration/commands.rs",
+      "sha256": "83e014a5b91da39f4e517432028bbd38c05e47009bf3d08cbc5484defdc26866"
+    },
+    {
+      "path": "backend/crates/crm-app/src/domain/migration/crypto.rs",
+      "sha256": "767aa8e7f277f93ba8097b37f99d6b50592bb0ab1c81ab18b9467de6b172566f"
+    },
+    {
+      "path": "backend/crates/crm-app/src/domain/migration/mod.rs",
+      "sha256": "a1919eeadf6863da31f8fa43da6994e4260de1e37489753d0600f02eb9fcfb5a"
+    },
+    {
+      "path": "backend/crates/crm-app/src/domain/migration/reader.rs",
+      "sha256": "ddc0b22b184e245280d44511298648e7c81ddb4acddcb3ea6d35c5c86c8fe912"
+    },
+    {
+      "path": "backend/crates/crm-app/src/domain/migration/snapshot.rs",
+      "sha256": "f57122b0da9ebeb8335e3188552fa0d5bc8242743b6e54399cdb60ff46795388"
+    },
+    {
+      "path": "backend/crates/crm-app/src/domain/migration/snapshot_compare.rs",
+      "sha256": "dd980c11e656922c0e8cc10acae4dd801ac23f8b0a7c859411bbac4f3d0f265e"
+    },
+    {
+      "path": "backend/crates/crm-app/src/domain/migration/snapshot_preview.rs",
+      "sha256": "88158d7e606641a08456f8a7fd2ad008dd2dceb23927d8f991d335739ea0d421"
+    },
+    {
+      "path": "backend/crates/crm-app/src/domain/migration/snapshot_source.rs",
+      "sha256": "fddfe1beb627a2eb5b5617cfbcddb36ded940d00f08dc07510c23b8bae7271d2"
+    },
+    {
+      "path": "backend/crates/crm-app/src/domain/migration/snapshot_worker.rs",
+      "sha256": "5763a06317d498d11edf1a6496ed742687c08d53dde5b81cf90699b881a5da4b"
+    },
+    {
+      "path": "backend/crates/crm-app/src/domain/migration/store.rs",
+      "sha256": "f34bf7d64613434eef33ca000ad32149e5959f857a5c9c302249a8a9a9eac868"
+    },
+    {
+      "path": "docs/specs/SLICE_010b_CONTRACT.md",
+      "sha256": "fc02a33cb461e58aa1354ca8a5c585164d8ef084e0ffe051e55f2c7bea76a137"
+    },
+    {
+      "path": "web/src/api/queries.ts",
+      "sha256": "e4b99061b27a8cdcf13e18aa4fe1de4effc364f463f08c12c59e929dca941c77"
+    },
+    {
+      "path": "web/src/api/snapshots.ts",
+      "sha256": "30e251f17b106e060cfc3ce847ba87c72ea30ae865c5b2b910342fbe2e72f1c0"
+    },
+    {
+      "path": "web/src/components/migration/CoreSnapshotPanel.test.ts",
+      "sha256": "b97ccb4864bfda5668cbc0f470c1934bfb630cb94d96984f63d86a8afa1fd5ee"
+    },
+    {
+      "path": "web/src/components/migration/CoreSnapshotPanel.vue",
+      "sha256": "7a1f494db6abbda07dd918d484eedd50dd12158810664ef0803fcaaec3d478a9"
+    },
+    {
+      "path": "web/src/components/migration/SnapshotBudgetPanel.test.ts",
+      "sha256": "c2c897a8a3a754bfe77939e778ea9e95130d7fad28ff02a7c906c0fe3e8a2f10"
+    },
+    {
+      "path": "web/src/components/migration/SnapshotBudgetPanel.vue",
+      "sha256": "18f2377c3184a7741ecd1ed369a0d387c20819a501b1999e7583b559c60be3fb"
+    },
+    {
+      "path": "web/src/components/migration/SnapshotPreviewPanel.test.ts",
+      "sha256": "9b2cc7583653da7efda918a441bbc7e2732cfffb7a67c4e227a57a76d71f4d93"
+    },
+    {
+      "path": "web/src/components/migration/SnapshotPreviewPanel.vue",
+      "sha256": "3e5f9a69710852a1f25c4b8097ab3e7aaa250fa56c72ad0cb657135cca792250"
+    },
+    {
+      "path": "web/src/components/migration/format.ts",
+      "sha256": "82adc1adbf69bcbfa5f6588df8a262c152b6bb3707201400c9d81a8a33c03ee4"
+    },
+    {
+      "path": "web/src/views/MigrationView.test.ts",
+      "sha256": "b177c86b84f019caca1df1cd1b18a02f74346d23d060eca70c6f85c5226153fe"
+    },
+    {
+      "path": "web/src/views/MigrationView.vue",
+      "sha256": "d6160cc117bad18ff26db808c6a90febebc4bc3da88de2bfd17fc9848be599ba"
+    }
+  ]
+}

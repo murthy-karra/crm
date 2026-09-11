@@ -1,0 +1,90 @@
+{
+  "scope": "Sanitized final evidence bundle; excludes this manifest",
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 3192,
+      "sha256": "6bfd31e587141123f9b70316f53b95e74ea4b586103eec8f481d8f42a1c7120a"
+    },
+    {
+      "path": "browser-budget-result.json",
+      "bytes": 583,
+      "sha256": "719ec59b029a3ed7ab65cec0ae5840c164782e169cd39cf7325d22a7538b1c3f"
+    },
+    {
+      "path": "browser-flow-result.json",
+      "bytes": 848,
+      "sha256": "64a82b22e21ca3fdd241eb8e0f906790812e153b042529886f10c366361fbaf2"
+    },
+    {
+      "path": "budget-review-390px.png",
+      "bytes": 95563,
+      "sha256": "1fc8d05df783ef73076ea9bb2a8ab7ec88d9196434bb3bc4a8fa1774254209b4"
+    },
+    {
+      "path": "budget-review-desktop.png",
+      "bytes": 229590,
+      "sha256": "f203f9ff51e976dd5a37f2329ed9009b8d738f6609591ed3227b16c6c112d41b"
+    },
+    {
+      "path": "build-sha256.json",
+      "bytes": 12332,
+      "sha256": "17d034b745e884e0d2530cb242b1f66d04ccaa3061d086bb7eb0b739fbb54f76"
+    },
+    {
+      "path": "business-counts.json",
+      "bytes": 3540,
+      "sha256": "ece143bbc75a76d1cf6de7f0e47ec1dd04d3779afa2ea8fb4683dc2374462b49"
+    },
+    {
+      "path": "final-browser-result.json",
+      "bytes": 298,
+      "sha256": "6ce05d22925f13dc639f873708bb8f1cb9c28d0729b839711ca6b1021bd9d633"
+    },
+    {
+      "path": "gate-results.json",
+      "bytes": 1668,
+      "sha256": "e5db08b1d157732eb9b9147dcfcfeb4d58017f648ba60abe737ad541ee7d4a6f"
+    },
+    {
+      "path": "handoff-checks.json",
+      "bytes": 512,
+      "sha256": "ba2aee4d01ec573b02d2fcf9884508f856fbab39fae81d7b955960d8bebb4bb0"
+    },
+    {
+      "path": "normal-api-result.json",
+      "bytes": 2517,
+      "sha256": "6e74e19f8fd6da472923778e0360b881eadf748daeac87d23b9394a0b8ab9e2a"
+    },
+    {
+      "path": "notes-390px.png",
+      "bytes": 52184,
+      "sha256": "1f5c221d840a387ef39b921e2e363080f132b0e2f4994ab8bbc940cdc398d585"
+    },
+    {
+      "path": "preview-preservation-notice.png",
+      "bytes": 115012,
+      "sha256": "7e1739e97922b35cc6ec218d562c2a3bf3efb09f16e0270e5e269f6c270b8d3a"
+    },
+    {
+      "path": "query-plans.json",
+      "bytes": 67796,
+      "sha256": "7533ce255b8cd7ce828288761d2c85f4af4723022eab153cfaf6101f4126cc77"
+    },
+    {
+      "path": "snapshot-390px.png",
+      "bytes": 81668,
+      "sha256": "cf12eb850e36f0a912043bff039b24a6a36197667c700dadf0238af410fe3d4d"
+    },
+    {
+      "path": "snapshot-desktop.png",
+      "bytes": 207779,
+      "sha256": "01bea50ac35756f057d3e687aea059cd028f17c6437a36c6fd0ec22a381f85e3"
+    },
+    {
+      "path": "source-sha256.json",
+      "bytes": 6107,
+      "sha256": "89246f807827d0c45a738ab4653f1f8bc174abd6c15665eed3cb42c2c11746f1"
+    }
+  ]
+}

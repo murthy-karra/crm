@@ -81,6 +81,7 @@ function summary(overrides: Partial<FubMigrationSummary> = {}): FubMigrationSumm
 function stub(getSummary: () => FubMigrationSummary, role: 'admin' | 'member' = 'admin') {
   apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
     if (path === '/me') return me(role)
+    if (path.startsWith('/migrations/fub/snapshots?')) return { snapshots: [], next_cursor: null, active_snapshot_id: null, latest_completed_snapshot_id: null }
     if (path === '/migrations/fub/' && (init?.method ?? 'GET') === 'GET') return getSummary()
     if (path === '/migrations/fub/connections' && init?.method === 'POST') return { connection: summary().connection, request_id: 'request-id' }
     if (path === `/migrations/fub/connections/${CONNECTION_ID}/credential` && init?.method === 'PUT') return { connection: summary().connection, request_id: 'request-id' }

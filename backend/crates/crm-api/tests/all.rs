@@ -274,3 +274,9 @@ mod today;
 
 #[path = "db_migration.rs"]
 mod db_migration;
+
+mod db_snapshot_http;
+
+mod db_snapshot_worker;
+
+mod db_snapshot_scale;

@@ -80,7 +80,7 @@ pub async fn insert_pending(
     content_hmac: &[u8],
     byte_len: i32,
 ) -> Result<RawPayloadId, sqlx::Error> {
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, organization_id).await?;
     let source = source.as_str();
     let payload_format = payload_format.as_str();
     let origin = origin.as_str();
@@ -195,6 +195,8 @@ pub async fn resolved_outcome_for_inquiry(
     organization_id: OrganizationId,
     inquiry_id: InquiryId,
 ) -> Result<ResolvedLookup, sqlx::Error> {
+    let mut workspace_read = crate::auth::workspace::read(tx, organization_id).await?;
+    let tx = &mut *workspace_read;
     let row = sqlx::query_as!(
         ResolvedLookupRow,
         r#"SELECT i.id as inquiry_id, i.person_id, ir.person_created, rd.strategy,
@@ -228,6 +230,8 @@ pub async fn list_unresolved(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
 ) -> Result<(Vec<UnresolvedItem>, bool), sqlx::Error> {
+    let mut workspace_read = crate::auth::workspace::read(conn, organization_id).await?;
+    let conn = &mut *workspace_read;
     let mut rows = sqlx::query!(
         r#"SELECT id, source, received_at, resolution, unresolved_reason, byte_len
            FROM raw_payload
@@ -285,6 +289,8 @@ pub async fn unresolved_row_for_detail(
     id: RawPayloadId,
     organization_id: OrganizationId,
 ) -> Result<Option<DetailRawPayload>, sqlx::Error> {
+    let mut workspace_read = crate::auth::workspace::read(conn, organization_id).await?;
+    let conn = &mut *workspace_read;
     let row = sqlx::query!(
         r#"SELECT id, source, payload_format, received_at, resolution,
                   unresolved_reason, byte_len, nonce, ciphertext

@@ -26,7 +26,7 @@ const { createAppRouter } = await import('./router')
 function meResponse(overrides: Partial<MeResponse>): MeResponse {
   return {
     user: { id: 'u1', email: 'alice@acme.test', display_name: 'Alice' },
-    organization: { id: 'org1', name: 'Acme Realty', role: 'member' },
+    organization: { workspace_mode: 'operational', workspace_revision: '1', id: 'org1', name: 'Acme Realty', role: 'member' },
     platform_admin: false,
     ...overrides,
   }
@@ -34,9 +34,9 @@ function meResponse(overrides: Partial<MeResponse>): MeResponse {
 
 // SLICE_004 §10's three session shapes, plus the composed "both" case.
 const MEMBER = meResponse({})
-const ADMIN = meResponse({ organization: { id: 'org1', name: 'Acme Realty', role: 'admin' } })
+const ADMIN = meResponse({ organization: { workspace_mode: 'operational', workspace_revision: '1', id: 'org1', name: 'Acme Realty', role: 'admin' } })
 const PLATFORM_ONLY = meResponse({ organization: null, platform_admin: true })
-const BOTH = meResponse({ organization: { id: 'org1', name: 'Acme Realty', role: 'admin' }, platform_admin: true })
+const BOTH = meResponse({ organization: { workspace_mode: 'operational', workspace_revision: '1', id: 'org1', name: 'Acme Realty', role: 'admin' }, platform_admin: true })
 // Not one of §10's three shapes — session::verify's invariant (§3) forbids
 // it — but the guard must still fail closed rather than loop (router.ts
 // comment).
@@ -450,5 +450,29 @@ describe('router guards (SLICE_004 §10)', () => {
       expect(router.currentRoute.value.path).toBe('/login')
       expect(prefetchTodayData).not.toHaveBeenCalled()
     })
+  })
+})
+
+
+describe('workspace review routes', () => {
+  it('sends members from every private business deep link to the waiting page without Today prefetch', async () => {
+    const held = meResponse({ organization: { ...MEMBER.organization!, workspace_mode: 'migration_review', workspace_revision: '2' } })
+    vi.mocked(fetchMe).mockResolvedValue(held)
+    const router = freshRouter()
+    for (const path of ['/today', '/people', '/people/p', '/manage/migration', '/intake/new']) {
+      await router.push(path)
+      expect(router.currentRoute.value.path).toBe('/workspace-review')
+    }
+    expect(prefetchTodayData).not.toHaveBeenCalled()
+  })
+  it('admits administrator People review and migration while redirecting ordinary work', async () => {
+    vi.mocked(fetchMe).mockResolvedValue(meResponse({ organization: { ...ADMIN.organization!, workspace_mode: 'migration_review', workspace_revision: '2' } }))
+    const router = freshRouter()
+    for (const path of ['/people', '/people/p', '/manage/migration', '/manage/members']) {
+      await router.push(path); expect(router.currentRoute.value.path).toBe(path)
+    }
+    await router.push('/today'); expect(router.currentRoute.value.path).toBe('/manage/migration')
+    await router.push('/intake/new'); expect(router.currentRoute.value.path).toBe('/manage/migration')
+    expect(prefetchTodayData).not.toHaveBeenCalled()
   })
 })

@@ -286,6 +286,12 @@ async fn post_turn(
         turn_id: Uuid::new_v4(),
         now: Utc::now(),
     };
+    let deadline = tokio::time::Instant::now() + runtime.turn_timeout();
+    let admitted_until = Utc::now()
+        + chrono::Duration::from_std(runtime.turn_timeout()).map_err(|_| ApiError::Unavailable)?;
+    crate::auth::workspace::admit_operator(&pool, &auth, ctx.turn_id, admitted_until)
+        .await
+        .map_err(ApiError::database)?;
     let context_route = input.screen.route;
 
     let span = tracing::info_span!(
@@ -315,7 +321,10 @@ async fn post_turn(
             let started = Instant::now();
             let backend =
                 SqlxToolBackend::new(pool.clone(), runtime.proposal_ttl(), auth, publisher);
-            let output = runtime.service.run_turn(&ctx, &backend, input).await;
+            let output = runtime
+                .service
+                .run_turn_at_deadline(&ctx, &backend, input, deadline)
+                .await;
             let completed_at = Utc::now();
 
             let span = tracing::Span::current();
@@ -352,6 +361,16 @@ async fn post_turn(
                 );
             }
 
+            if crate::auth::workspace::release_operator(
+                &pool,
+                crate::ids::OrganizationId::new(ctx.organization_id),
+                ctx.turn_id,
+            )
+            .await
+            .is_err()
+            {
+                tracing::warn!("operator admission release unavailable");
+            }
             (ctx.turn_id, output)
         }
         .instrument(span),
@@ -420,6 +439,17 @@ async fn confirm_proposal(
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
     let span = tracing::Span::current();
 
+    let mut admission = crate::auth::workspace::begin(pool, auth.active_organization_id)
+        .await
+        .map_err(ApiError::database)?;
+    crate::auth::workspace::read_check(
+        &mut admission,
+        auth.active_organization_id,
+        auth.actor_user_id,
+        true,
+    )
+    .await
+    .map_err(ApiError::database)?;
     // 1. Claim (single-use gate). Scoped to (org, actor): a foreign or
     //    other-user proposal is indistinguishable from a nonexistent one.
     let claimed = sqlx::query!(
@@ -432,9 +462,11 @@ async fn confirm_proposal(
         auth.active_organization_id.0,
         auth.actor_user_id.0,
     )
-    .fetch_optional(pool)
+    .fetch_optional(&mut *admission)
     .await
-    .map_err(|_| ApiError::Unavailable)?;
+    .map_err(ApiError::database)?;
+
+    admission.commit().await.map_err(ApiError::database)?;
 
     let Some(row) = claimed else {
         // 2. Distinguish 404 / consumed / expired with one scoped read.

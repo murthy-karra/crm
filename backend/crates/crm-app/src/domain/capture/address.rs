@@ -164,7 +164,7 @@ pub async fn rotate_capture_token(
     pool: &PgPool,
     ctx: &CommandContext,
 ) -> Result<CaptureToken, RotateError> {
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
 
     let old_token: Option<String> = sqlx::query_scalar!(
         r#"SELECT token FROM capture_address WHERE organization_id = $1 AND user_id = $2 FOR UPDATE"#,

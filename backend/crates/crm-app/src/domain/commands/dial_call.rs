@@ -57,7 +57,7 @@ async fn dial_call_attempt(
     ctx: &CommandContext,
     call_id: CallId,
 ) -> Result<(CallView, JoinHandle<DialTaskOutcome>), CallError> {
-    let mut conn = pool.acquire().await?;
+    let mut conn = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
     let call = call_queries::call_by_id(&mut conn, ctx.organization_id, call_id)
         .await?
         .ok_or(CallError::CallNotFound)?;
@@ -80,7 +80,7 @@ async fn dial_call_attempt(
     let view = call_queries::call_view_by_id(&mut conn, ctx.organization_id, call_id)
         .await?
         .ok_or(CallError::Corrupt)?;
-    drop(conn);
+    conn.commit().await?;
 
     let handle = DialTask {
         pool: pool.clone(),

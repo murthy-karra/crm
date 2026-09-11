@@ -25,7 +25,7 @@ const REQUEST = '55555555-5555-5555-5555-555555555555'
 const cleanup: Array<() => void> = []
 type Handler = (path: string, init?: RequestInit) => unknown | Promise<unknown>
 function me(org = ORG, actor = 'u-alice', role: 'admin' | 'member' = 'admin'): MeResponse {
-  return { user: { id: actor, email: 'alice@example.test', display_name: 'Alice' }, organization: { id: org, name: 'Example Realty', role }, platform_admin: false }
+  return { user: { id: actor, email: 'alice@example.test', display_name: 'Alice' }, organization: { id: org, name: 'Example Realty', workspace_mode: 'operational', workspace_revision: '1', role }, platform_admin: false }
 }
 function connection(): FubConnection {
   return { id: CONNECTION, revision: 7, source_account_id: 42, source_display_name: 'synthetic.fub.example', source_access_scope: 'unknown', status: 'connected', created_at: '2026-09-10T12:00:00Z', updated_at: '2026-09-10T12:00:00Z' }

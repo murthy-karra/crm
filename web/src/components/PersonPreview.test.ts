@@ -137,3 +137,24 @@ describe('Person preview actions', () => {
     expect(wrapper.text()).toContain('Stage changed')
   })
 })
+
+
+describe('review-only Person preview', () => {
+  it('retains contacts and profile inspection but removes every outbound and Operator action', async () => {
+    const { wrapper, start, launch } = await mountPreview()
+    await wrapper.setProps({ readOnly: true })
+    expect(wrapper.find('[aria-label="Call person"]').exists()).toBe(false)
+    expect(wrapper.find('a[href^="mailto:"]').exists()).toBe(false)
+    expect(wrapper.find('[aria-label="View full profile"]').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('Ask Operator')
+    expect(start).not.toHaveBeenCalled(); expect(launch).not.toHaveBeenCalled()
+  })
+  it('labels import history without creating an Inquiry or source attribution', async () => {
+    const response = structuredClone(fixture)
+    response.history.push({ id: 'fact', kind: 'person_imported', occurred_at: '2026-09-11T12:00:00Z', recorded_at: '2026-09-11T12:00:00Z', actor: null, origin: 'migration', correlation_id: 'import', detail: { import_id: 'import', plan_id: 'plan', source_record_id: 'record', capture_id: 'capture', on_behalf_of_user_id: 'actor' } })
+    const { wrapper } = await mountPreview(response)
+    expect(wrapper.text()).toContain('Imported from Follow Up Boss')
+    expect(wrapper.text()).not.toContain('Inquiry received')
+    expect(wrapper.text()).toContain('Latest source')
+  })
+})

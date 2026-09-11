@@ -1,0 +1,10 @@
+[
+  {
+    "name": "member-workspace-waiting-and-logout",
+    "passed": true
+  },
+  {
+    "name": "late-person-response-cannot-survive-admin-demotion",
+    "passed": true
+  }
+]

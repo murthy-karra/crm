@@ -231,6 +231,6 @@ describe('independent session lifecycle coordinators', () => {
 
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled())
     await vi.waitFor(() => expect(lifecycle.isSessionVerified()).toBe(true))
-    await expect(apiFetch('/today')).resolves.toEqual({ ok: true })
+    await expect(apiFetch('/platform/organizations')).resolves.toEqual({ ok: true })
   })
 })

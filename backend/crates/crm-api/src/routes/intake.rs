@@ -155,11 +155,11 @@ async fn list_unresolved(
     auth: AuthContext,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
-    let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
+    let mut conn = pool.acquire().await.map_err(ApiError::database)?;
 
     let (items, truncated) = store::list_unresolved(&mut conn, auth.active_organization_id)
         .await
-        .map_err(|_| ApiError::Unavailable)?;
+        .map_err(ApiError::database)?;
 
     let items: Vec<_> = items
         .into_iter()

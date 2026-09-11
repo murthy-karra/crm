@@ -188,7 +188,7 @@ async fn correct_call_outcome_attempt(
     cmd: CorrectCallOutcome,
 ) -> Result<CorrectionResult, CallError> {
     let requested = cmd.outcome.as_outcome();
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
 
     // 1. Lock the call (foreign/nonexistent → byte-identical 404).
     let call = call_queries::lock_call(&mut tx, ctx.organization_id, cmd.call_id)

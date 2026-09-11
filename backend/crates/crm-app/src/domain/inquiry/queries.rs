@@ -80,6 +80,8 @@ pub async fn list_for_person(
     organization_id: OrganizationId,
     person_id: PersonId,
 ) -> Result<Vec<InquirySummary>, sqlx::Error> {
+    let mut workspace_read = crate::auth::workspace::read(conn, organization_id).await?;
+    let conn = &mut *workspace_read;
     let rows = sqlx::query_as!(
         InquirySummaryRow,
         r#"SELECT id, source, source_external_id, message, received_at
@@ -104,6 +106,8 @@ pub async fn distinct_sources(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
 ) -> Result<(Vec<String>, bool), sqlx::Error> {
+    let mut workspace_read = crate::auth::workspace::read(conn, organization_id).await?;
+    let conn = &mut *workspace_read;
     let mut rows = sqlx::query_scalar!(
         r#"SELECT DISTINCT source FROM inquiry WHERE organization_id = $1 ORDER BY source ASC LIMIT 501"#,
         organization_id.0,

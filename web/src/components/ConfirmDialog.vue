@@ -6,6 +6,7 @@
 // §2) does not drift across the two screens. `error` renders inline inside
 // the dialog — this is where `last_admin`'s "You are the last active admin.
 // Promote someone else first." (§1 step 5, §10) surfaces.
+import { useId } from 'vue'
 import Dialog from 'primevue/dialog'
 import { buttonClasses, dialogPt, type ButtonVariant } from '../lib/controls'
 import { describeMutationError } from '../lib/errors'
@@ -22,6 +23,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{ 'update:visible': [value: boolean]; confirm: [] }>()
+const titleId = useId()
 
 function close() {
   if (props.isPending) return
@@ -32,6 +34,7 @@ function close() {
 <template>
   <Dialog
     :visible="visible"
+    :aria-labelledby="titleId"
     modal
     :closable="false"
     :close-on-escape="!isPending"
@@ -40,7 +43,10 @@ function close() {
     @update:visible="(value: boolean) => !value && close()"
   >
     <template #header>
-      <h2 class="text-section font-semibold text-text">
+      <h2
+        :id="titleId"
+        class="text-section font-semibold text-text"
+      >
         {{ title }}
       </h2>
     </template>

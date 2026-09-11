@@ -82,12 +82,15 @@ import { CONTACT_CHANNEL_LABEL, CONTACT_OUTCOME_LABEL, correctedOutcomeLabel } f
 import { describeOutcomeError } from '../telephony/errors'
 import { callCompletedSummary, formatTalkSeconds } from '../telephony/format'
 import { useCallHost } from '../telephony/callHost'
+import { workspaceOperational } from '../workspaceLifecycle'
+import PersonImportProvenance from '../components/migration/PersonImportProvenance.vue'
 
 const props = defineProps<{
   id: string
 }>()
 
 const { data: me } = useMe()
+const canOperate = computed(() => workspaceOperational(me.value))
 const orgId = computed(() => me.value?.organization?.id ?? '')
 const queryClient = useQueryClient()
 
@@ -184,11 +187,13 @@ function closeAddTag(returnFocus: boolean) {
 }
 
 function toggleAddTag() {
+  if (!canOperate.value) return
   if (addTagOpen.value) closeAddTag(false)
   else openAddTag()
 }
 
 function applyTag(tagId: string) {
+  if (!canOperate.value) return
   addPersonTag.mutate(
     { personId: props.id, tagId },
     {
@@ -199,6 +204,7 @@ function applyTag(tagId: string) {
 }
 
 function createAndApplyTag(name: string) {
+  if (!canOperate.value) return
   createTag.mutate(
     { name },
     {
@@ -259,6 +265,7 @@ onBeforeUnmount(() => {
 
 const removeTagError = ref<string | null>(null)
 function removeTag(tagId: string) {
+  if (!canOperate.value) return
   removeTagError.value = null
   removePersonTag.mutate(
     { personId: props.id, tagId },
@@ -287,16 +294,19 @@ const { mutate: setStage, isPending: stagePending, error: stageError } = useChan
 const { mutate: setAssignee, isPending: assigneePending, error: assigneeError } = useAssignPersonMutation(orgId, () => props.id)
 
 function onStageChange(value: unknown) {
+  if (!canOperate.value) return
   if (typeof value !== 'string') return
   setStage({ personId: props.id, stageId: value })
 }
 
 function onAssigneeChange(value: unknown) {
+  if (!canOperate.value) return
   if (typeof value !== 'string' && value !== null) return
   setAssignee({ personId: props.id, assignedUserId: value })
 }
 
 const HISTORY_ICON: Record<HistoryEntry['kind'], Component> = {
+  person_imported: Inbox,
   inquiry_received: Inbox,
   routing_decision: Route,
   assignment_changed: UserCheck,
@@ -430,6 +440,7 @@ function refetchCustomFieldsOnStaleReference(err: unknown) {
  * control reports as an empty, otherwise-valid value; §2 would silently
  * clear such a field without this check). */
 async function saveTextOrDateField(row: CustomFieldRow, event?: Event) {
+  if (!canOperate.value) return
   const editor = fieldEditors[row.field.id]
   if (!editor || !editor.dirty || pendingCustomFieldIds.has(row.field.id)) return
   if (row.field.field_type === 'date' && event) {
@@ -466,6 +477,7 @@ async function saveTextOrDateField(row: CustomFieldRow, event?: Event) {
 const NUMBER_PATTERN = /^-?[0-9]{1,15}(\.[0-9]{1,4})?$/
 
 function saveNumberField(row: CustomFieldRow) {
+  if (!canOperate.value) return
   const editor = fieldEditors[row.field.id]
   if (!editor || !editor.dirty || pendingCustomFieldIds.has(row.field.id)) return
   const draft = editor.draft.trim()
@@ -572,6 +584,7 @@ function onChoiceChange(row: CustomFieldRow, optionId: unknown) {
 }
 
 async function applyChoiceChange(row: CustomFieldRow, optionId: string | null) {
+  if (!canOperate.value) return
   const editor = fieldEditors[row.field.id]
   if (editor) editor.error = null
   if (pendingCustomFieldIds.has(row.field.id)) return
@@ -625,6 +638,7 @@ const noteAddDisabled = computed(
 )
 
 function submitNote() {
+  if (!canOperate.value) return
   if (noteAddDisabled.value) return
   noteAddError.value = null
   addNote.mutate(
@@ -727,6 +741,7 @@ const editNoteSaveDisabled = computed(() => {
 })
 
 function saveEditNote() {
+  if (!canOperate.value) return
   const editing = editingNote.value
   if (!editing || editNoteSaveDisabled.value) return
   editing.error = null
@@ -909,6 +924,7 @@ function resetTaskAddForm() {
 }
 
 function submitTask() {
+  if (!canOperate.value) return
   if (taskAddDisabled.value) return
   taskAddError.value = null
   const dueAt = taskAddDate.value === '' ? null : dateAndOptionalTimeToLocalInstant(taskAddDate.value, taskAddTime.value)
@@ -1077,6 +1093,7 @@ const editTaskSaveDisabled = computed(() => {
 })
 
 function saveEditTask() {
+  if (!canOperate.value) return
   const editing = editingTask.value
   if (!editing || editTaskSaveDisabled.value) return
   editing.error = null
@@ -1118,6 +1135,7 @@ const taskActionError = ref<{ id: string; message: string } | null>(null)
 // native click events before Vue's next render paints the disabled
 // attribute, so the template guard alone is not sufficient.
 function onCompleteTask(task: Task) {
+  if (!canOperate.value) return
   if (completeTask.isPending.value) return
   taskActionError.value = null
   completeTask.mutate(
@@ -1130,6 +1148,7 @@ function isCompletingTask(taskId: string): boolean {
 }
 
 function onReopenTask(taskId: string) {
+  if (!canOperate.value) return
   if (reopenTask.isPending.value) return
   taskActionError.value = null
   reopenTask.mutate(
@@ -1180,7 +1199,7 @@ const host = useCallHost()
 const { call } = host
 
 const phones = computed(() => contactMethods.value.filter((cm) => cm.kind === 'phone'))
-const callDisabled = computed(() => phones.value.length === 0 || call.active.value)
+const callDisabled = computed(() => !canOperate.value || phones.value.length === 0 || call.active.value)
 
 // ---- Call outcome (SLICE_006c §10, §5a) -------------------------------------
 // The panel's post-call prompt moved to the call host (SLICE_006b §6);
@@ -1208,6 +1227,7 @@ const historyOutcomeError = ref<string | null>(null)
 const historyOutcomeSaving = ref(false)
 
 function openChangeOutcome(target: OutcomeTarget | null) {
+  if (!canOperate.value) return
   if (!target || outcomePromptOpen.value) return
   changeOutcomeTarget.value = target
   historyOutcomeError.value = null
@@ -1217,6 +1237,7 @@ function openChangeOutcome(target: OutcomeTarget | null) {
 }
 
 function onChangeOutcomeSave(outcome: CallOutcomeCorrection) {
+  if (!canOperate.value) return
   const target = changeOutcomeTarget.value
   if (!target || historyOutcomeSaving.value || historyOutcome.isPending.value) return
   historyOutcomeSaving.value = true
@@ -1346,6 +1367,7 @@ const ROUTING_STRATEGY_LABEL: Record<RoutingStrategy, string> = {
 
 function historySummary(entry: HistoryEntry): string {
   switch (entry.kind) {
+    case 'person_imported': return 'Person imported from Follow Up Boss'
     case 'inquiry_received': {
       const { source, person_created, matched_by } = entry.detail
       return person_created
@@ -1600,7 +1622,10 @@ watch(
           <h1 class="text-title font-semibold tracking-title text-text">
             {{ person.display_name }}
           </h1>
-          <div class="flex items-center gap-3">
+          <div
+            v-if="canOperate"
+            class="flex items-center gap-3"
+          >
             <button
               type="button"
               :class="buttonClasses('secondary')"
@@ -1669,7 +1694,7 @@ watch(
               option-value="id"
               aria-label="Stage"
               :loading="stagesPending"
-              :disabled="stagePending"
+              :disabled="!canOperate || stagePending"
               :pt="selectPt()"
               class="w-56"
               @update:model-value="onStageChange"
@@ -1700,7 +1725,7 @@ watch(
               option-value="id"
               aria-label="Assignee"
               :loading="membersPending"
-              :disabled="assigneePending"
+              :disabled="!canOperate || assigneePending"
               :pt="selectPt()"
               class="w-56"
               @update:model-value="onAssigneeChange"
@@ -1726,6 +1751,7 @@ watch(
               >
                 <span class="inline-flex min-h-10 items-center px-3">{{ tag.name }}</span>
                 <button
+                  v-if="canOperate"
                   type="button"
                   class="inline-flex min-h-10 w-10 shrink-0 items-center justify-center rounded-r-lg hover:bg-surface-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50"
                   :aria-label="`Remove tag ${tag.name}`"
@@ -1742,6 +1768,7 @@ watch(
               </span>
 
               <div
+                v-if="canOperate"
                 ref="addTagRoot"
                 class="relative"
               >
@@ -1869,7 +1896,7 @@ watch(
             Details
           </h2>
           <RouterLink
-            v-if="isOrgAdmin"
+            v-if="isOrgAdmin && canOperate"
             to="/manage/fields"
             class="text-small text-text-muted underline-offset-2 hover:underline"
           >
@@ -1883,7 +1910,7 @@ watch(
         >
           No custom fields yet.
           <RouterLink
-            v-if="isOrgAdmin"
+            v-if="isOrgAdmin && canOperate"
             to="/manage/fields"
             class="text-accent underline-offset-2 hover:underline"
           >
@@ -1907,7 +1934,7 @@ watch(
                 :value="fieldEditors[row.field.id]?.draft ?? ''"
                 :class="INPUT_CLASSES"
                 :aria-label="row.field.label"
-                :disabled="isCustomFieldPending(row.field.id)"
+                :disabled="!canOperate || isCustomFieldPending(row.field.id)"
                 data-testid="custom-field-text-input"
                 @input="onCustomFieldInput(row, $event)"
                 @blur="saveTextOrDateField(row)"
@@ -1920,7 +1947,7 @@ watch(
                 inputmode="decimal"
                 :class="INPUT_CLASSES"
                 :aria-label="row.field.label"
-                :disabled="isCustomFieldPending(row.field.id)"
+                :disabled="!canOperate || isCustomFieldPending(row.field.id)"
                 data-testid="custom-field-number-input"
                 @input="onCustomFieldInput(row, $event)"
                 @blur="saveNumberField(row)"
@@ -1932,7 +1959,7 @@ watch(
                 type="date"
                 :class="INPUT_CLASSES"
                 :aria-label="row.field.label"
-                :disabled="isCustomFieldPending(row.field.id)"
+                :disabled="!canOperate || isCustomFieldPending(row.field.id)"
                 data-testid="custom-field-date-input"
                 @input="onCustomFieldInput(row, $event)"
                 @blur="saveTextOrDateField(row, $event)"
@@ -1945,7 +1972,7 @@ watch(
                 option-label="label"
                 option-value="id"
                 :aria-label="row.field.label"
-                :disabled="isCustomFieldPending(row.field.id)"
+                :disabled="!canOperate || isCustomFieldPending(row.field.id)"
                 :pt="selectPt()"
                 class="w-full"
                 data-testid="custom-field-choice-select"
@@ -2019,12 +2046,18 @@ watch(
         </button>
       </div>
 
+      <PersonImportProvenance
+        v-if="isOrgAdmin"
+        :person-id="props.id"
+      />
+
       <Card>
         <h2 class="mb-4 text-section font-semibold text-text">
           Tasks
         </h2>
 
         <div
+          v-if="canOperate"
           class="mb-4 rounded-xl border border-border p-3"
           data-testid="task-add-form"
         >
@@ -2256,7 +2289,7 @@ watch(
               </template>
             </div>
             <div
-              v-if="task.can_manage && editingTask?.id !== task.id"
+              v-if="canOperate && task.can_manage && editingTask?.id !== task.id"
               class="flex shrink-0 items-center gap-1"
             >
               <button
@@ -2322,6 +2355,7 @@ watch(
         </h2>
 
         <div
+          v-if="canOperate"
           class="mb-4 rounded-xl border border-border p-3"
           data-testid="note-composer"
         >
@@ -2509,7 +2543,7 @@ watch(
               </template>
             </div>
             <div
-              v-if="row.note && row.note.canManage && editingNote?.id !== row.note.id"
+              v-if="canOperate && row.note && row.note.canManage && editingNote?.id !== row.note.id"
               class="flex shrink-0 items-center gap-1"
             >
               <button
@@ -2541,7 +2575,7 @@ watch(
               </button>
             </div>
             <button
-              v-if="row.change"
+              v-if="canOperate && row.change"
               type="button"
               :class="buttonClasses('ghost')"
               :disabled="outcomePromptOpen"
@@ -2551,7 +2585,7 @@ watch(
               {{ row.change.outcome === null ? 'Set outcome' : 'Change outcome' }}
             </button>
             <button
-              v-if="row.task && row.task.canManage"
+              v-if="canOperate && row.task && row.task.canManage"
               type="button"
               :class="buttonClasses('ghost')"
               :disabled="isReopeningTask(row.task.id)"
@@ -2602,7 +2636,7 @@ watch(
       />
 
       <LogContactDialog
-        :visible="logContactOpen"
+        :visible="canOperate && logContactOpen"
         :org-id="orgId"
         :person-id="person.id"
         :person-name="person.display_name"
@@ -2610,7 +2644,7 @@ watch(
       />
 
       <ChangeOutcomeDialog
-        :visible="changeOutcomeOpen"
+        :visible="canOperate && changeOutcomeOpen"
         :person-name="person.display_name"
         :current-outcome="changeOutcomeTarget?.outcome ?? null"
         :saving="historyOutcomeSaving || historyOutcome.isPending.value"

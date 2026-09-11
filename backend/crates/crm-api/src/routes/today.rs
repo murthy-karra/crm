@@ -142,11 +142,11 @@ async fn get_today_with_clock(
         Some(now) => today::query_owned_at(conn, &scope, auth.actor_user_id, now).await,
         None => today::query_owned(conn, &scope, auth.actor_user_id, chrono::Utc::now()).await,
     }
-    .map_err(|_| ApiError::Unavailable)?;
+    .map_err(ApiError::database)?;
     #[cfg(not(feature = "test-support"))]
     let list = today::query_owned(conn, &scope, auth.actor_user_id, chrono::Utc::now())
         .await
-        .map_err(|_| ApiError::Unavailable)?;
+        .map_err(ApiError::database)?;
 
     Ok(Json(list))
 }
@@ -156,7 +156,7 @@ async fn get_sources(
     auth: AuthContext,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
-    let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
+    let mut conn = pool.acquire().await.map_err(ApiError::database)?;
     let sources = today::list_today_work_sources(&mut conn, &auth).await?;
     Ok(Json(
         json!({ "limit": today::TODAY_SOURCE_LIMIT, "sources": sources }),

@@ -96,6 +96,7 @@ export interface CallError {
 
 export interface UseCallOptions {
   orgId: MaybeRefOrGetter<string>
+  operational?: MaybeRefOrGetter<boolean>
   createRoom: CallRoomFactory
   /** Defaults to the Vue-provided client; tests pass their own. */
   queryClient?: QueryClient
@@ -374,6 +375,7 @@ export function useCall(options: UseCallOptions): UseCallResult {
   }
 
   async function startInner(targetPersonId: string, origin: StartOrigin): Promise<void> {
+    if (options.operational !== undefined && !toValue(options.operational)) return
     const s: Session = {
       room: null,
       hangupSent: false,
@@ -552,6 +554,14 @@ export function useCall(options: UseCallOptions): UseCallResult {
       else ringback.stop()
     },
   )
+
+  watch(() => options.operational === undefined || toValue(options.operational), enabled => {
+    if (enabled) return
+    ringback.stop(); clearSettleTimers()
+    const current = session
+    if (current && !current.ending && (active.value || starting)) void endCall(current, current.wasConnected ? 'ended' : 'failed')
+    else dismiss()
+  }, { flush: 'sync' })
 
   // Leaving the page mid-call: hang up (once) and leave the room, rather
   // than leaving the PSTN leg to the server's `agent:*` participant_left

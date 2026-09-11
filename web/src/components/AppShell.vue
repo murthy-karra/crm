@@ -6,12 +6,14 @@ import { AtSign, Building2, Inbox, ListChecks, ListFilter, LogOut, Mail, Sliders
 import { useAuthSessionLifetime, useLogoutMutation, useMe } from '../api/queries'
 import {
   resetSessionCoordination,
+  isSessionVerified,
   SessionCoordinationUnavailableError,
   useRouteAuthorizationReplayPending,
   useSessionBlockedByOutstandingAttempt,
   useSessionCoordinationUnavailable,
   useSessionVerificationInFlight,
 } from '../sessionLifecycle'
+import { refreshWorkspace, useWorkspacePending, useWorkspaceError, workspaceOperational } from '../workspaceLifecycle'
 import { initials } from '../lib/format'
 import { buttonClasses } from '../lib/controls'
 import { describeApiError } from '../lib/errors'
@@ -58,9 +60,21 @@ const {
   refetch: refetchMe,
 } = useMe()
 const logoutMutation = useLogoutMutation()
+const workspacePending = useWorkspacePending()
+const workspaceError = useWorkspaceError()
+const operational = computed(() => workspaceOperational(me.value))
+const review = computed(() => me.value?.organization?.workspace_mode === 'migration_review')
+function retryWorkspace() { void refreshWorkspace().catch(() => {}) }
+watch(() => [me.value?.organization?.id, me.value?.organization?.role, me.value?.organization?.workspace_mode, me.value?.organization?.workspace_revision], () => {
+  if (!review.value || route.meta.public || route.meta.requiresPlatformAdmin) return
+  if (me.value?.organization?.role !== 'admin') {
+    if (route.name !== 'workspace-review') void router.replace('/workspace-review')
+  } else if (!['people', 'person-detail', 'manage-migration', 'manage-members'].includes(String(route.name))) void router.replace('/manage/migration')
+}, { flush: 'sync' })
 
 provideCallHost({
   orgId: () => me.value?.organization?.id ?? '',
+  operational: () => operational.value,
   createRoom: props.createRoom,
 })
 
@@ -79,6 +93,11 @@ const navGroups = computed<NavGroup[]>(() => {
         items: [{ label: 'Organizations', to: '/platform', icon: Building2 }],
       },
     ]
+  }
+  if (review.value) {
+    return me.value.organization.role === 'admin'
+      ? [{ label: 'Review', items: [{ label: 'Migration', to: '/manage/migration', icon: Waypoints }, { label: 'People', to: '/people', icon: Users }, { label: 'Members', to: '/manage/members', icon: UserCog }] }]
+      : [{ label: 'Workspace', items: [{ label: 'Review status', to: '/workspace-review', icon: Waypoints }] }]
   }
   const groups: NavGroup[] = [
     {
@@ -177,9 +196,9 @@ function resetSession() {
 const orgId = computed(() => me.value?.organization?.id ?? '')
 const actorId = computed(() => me.value?.user.id ?? '')
 const authSessionLifetime = useAuthSessionLifetime()
-const operatorIdentityKey = computed(() => `${orgId.value}:${actorId.value}:${authSessionLifetime.value}`)
+const operatorIdentityKey = computed(() => `${orgId.value}:${actorId.value}:${authSessionLifetime.value}:${me.value?.organization?.workspace_revision}`)
 const { status: realtimeStatus } = useRealtime({
-  orgId,
+  orgId: computed(() => operational.value ? orgId.value : ''),
   createClient: createRealtimeClient,
   resolveUrl: () => resolveRealtimeUrl(window.location),
 })
@@ -200,7 +219,7 @@ const orgLabel = computed(() => me.value?.organization?.name ?? (me.value?.platf
 // the drawer closes (v-if), matching "local history ... component state
 // only".
 const askAvailable = computed(() =>
-  !sessionUnavailable.value && me.value?.organization != null && isOrganizationRoute(route.path),
+  !sessionUnavailable.value && operational.value && me.value?.organization != null && isOrganizationRoute(route.path),
 )
 const askOpen = ref(false)
 const operatorPanel = ref<InstanceType<typeof OperatorPanel> | null>(null)
@@ -256,8 +275,26 @@ function onWindowKeydown(event: KeyboardEvent) {
   }
 }
 
-onMounted(() => window.addEventListener('keydown', onWindowKeydown))
-onBeforeUnmount(() => window.removeEventListener('keydown', onWindowKeydown))
+function onWorkspaceResume(event: Event) {
+  // Focusing a field or the Operator composer is not a returning browser tab.
+  if (event.type === 'focus' && event.target !== event.currentTarget) return
+  // Role/mode can change without replacing the cookie lifecycle marker. A
+  // returning private tab must verify authority even when its /me cache is fresh.
+  if (document.visibilityState !== 'visible' || route.meta.public || !me.value ||
+    sessionUnavailable.value || !isSessionVerified()) return
+  void refreshWorkspace().catch(() => {})
+}
+const workspaceResumeEvents = ['focus', 'visibilitychange', 'pageshow'] as const
+onMounted(() => {
+  window.addEventListener('keydown', onWindowKeydown)
+  // Capture runs before ordinary focus/visibility query refetch listeners, so
+  // the shared refresh aborts old reads and fences the cache synchronously.
+  for (const event of workspaceResumeEvents) window.addEventListener(event, onWorkspaceResume, true)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onWindowKeydown)
+  for (const event of workspaceResumeEvents) window.removeEventListener(event, onWorkspaceResume, true)
+})
 
 function logout() {
   logoutMutation.mutate(undefined, {
@@ -423,7 +460,36 @@ function logout() {
               {{ meIsFetching ? 'Retrying…' : sessionCoordinationUnavailable ? 'Check again' : 'Try again' }}
             </button>
           </div>
-          <slot v-else />
+          <template v-else>
+            <div
+              v-if="workspacePending"
+              class="rounded-xl border border-border bg-surface-0 p-5"
+              data-testid="workspace-verification"
+            >
+              <p class="text-body text-text-muted">
+                {{ workspaceError ?? 'Updating workspace access…' }}
+              </p>
+              <button
+                v-if="workspaceError"
+                type="button"
+                :class="buttonClasses('secondary')"
+                class="mt-3"
+                @click="retryWorkspace"
+              >
+                Try again
+              </button>
+            </div>
+            <div v-show="!workspacePending">
+              <p
+                v-if="review && me?.organization?.role === 'admin'"
+                class="mb-4 rounded-lg border border-border bg-surface-1 px-4 py-3 text-small text-text-muted"
+                data-testid="workspace-review-banner"
+              >
+                Workspace under review. You can inspect records and manage membership. Ordinary work and outbound actions are unavailable until a later activation.
+              </p>
+              <slot />
+            </div>
+          </template>
         </div>
       </div>
       <!-- Closing preserves same-session state; an actor, Organization, or
@@ -474,7 +540,7 @@ function logout() {
           @close="closeAsk"
         />
       </Transition>
-      <CallHostPanel />
+      <CallHostPanel v-if="operational" />
     </div>
   </div>
 </template>

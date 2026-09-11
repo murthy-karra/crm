@@ -24,7 +24,7 @@ const cleanup: Array<() => void> = []
 function me(role: 'admin' | 'member' = 'admin'): MeResponse {
   return {
     user: { id: 'u-alice', email: 'alice@example.test', display_name: 'Alice' },
-    organization: { id: ORG_ID, name: 'Example Realty', role },
+    organization: { id: ORG_ID, name: 'Example Realty', workspace_mode: 'operational', workspace_revision: '1', role },
     platform_admin: false,
   }
 }
@@ -81,6 +81,7 @@ function summary(overrides: Partial<FubMigrationSummary> = {}): FubMigrationSumm
 function stub(getSummary: () => FubMigrationSummary, role: 'admin' | 'member' = 'admin') {
   apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
     if (path === '/me') return me(role)
+    if (path.startsWith('/migrations/fub/imports?')) return { imports: [], next_cursor: null }
     if (path.startsWith('/migrations/fub/snapshots?')) return { snapshots: [], next_cursor: null, active_snapshot_id: null, latest_completed_snapshot_id: null }
     if (path === '/migrations/fub/' && (init?.method ?? 'GET') === 'GET') return getSummary()
     if (path === '/migrations/fub/connections' && init?.method === 'POST') return { connection: summary().connection, request_id: 'request-id' }

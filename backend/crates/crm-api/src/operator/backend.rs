@@ -10,7 +10,6 @@
 use std::collections::HashMap;
 
 use async_trait::async_trait;
-use sqlx::pool::PoolConnection;
 use sqlx::{Connection, PgConnection, PgPool, Postgres};
 use uuid::Uuid;
 
@@ -87,11 +86,19 @@ impl SqlxToolBackend {
         }
     }
 
-    async fn conn(&self) -> ToolResult<sqlx::pool::PoolConnection<sqlx::Postgres>> {
-        self.pool
-            .acquire()
+    async fn conn(&self) -> ToolResult<sqlx::Transaction<'_, sqlx::Postgres>> {
+        let mut tx = crate::auth::workspace::begin(&self.pool, self.auth.active_organization_id)
             .await
-            .map_err(|_| ToolError::Backend("database connection unavailable".into()))
+            .map_err(db_error)?;
+        crate::auth::workspace::read_check(
+            &mut tx,
+            self.auth.active_organization_id,
+            self.auth.actor_user_id,
+            true,
+        )
+        .await
+        .map_err(db_error)?;
+        Ok(tx)
     }
 }
 
@@ -315,7 +322,13 @@ fn active_member_names(members: &[admin_queries::MemberView]) -> Vec<String> {
         .collect()
 }
 
-async fn today_for(conn: PoolConnection<Postgres>, ctx: &OperatorContext) -> ToolResult<TodayList> {
+async fn today_for(
+    conn: sqlx::Transaction<'_, Postgres>,
+    ctx: &OperatorContext,
+    pool: &sqlx::PgPool,
+) -> ToolResult<TodayList> {
+    conn.rollback().await.map_err(db_error)?;
+    let conn = pool.acquire().await.map_err(db_error)?;
     today::query_owned(
         conn,
         &PersonVisibilityScope::Organization(org_id(ctx)),
@@ -488,7 +501,7 @@ impl ToolBackend for SqlxToolBackend {
             })
             .collect();
 
-        let today = today_for(conn, ctx).await?;
+        let today = today_for(conn, ctx, &self.pool).await?;
         let on_your_today = today.items.iter().any(|i| i.person.id == person_id);
 
         Ok(PersonDetail {
@@ -508,7 +521,7 @@ impl ToolBackend for SqlxToolBackend {
 
     async fn get_today(&self, ctx: &OperatorContext, limit: usize) -> ToolResult<TodayView> {
         let conn = self.conn().await?;
-        let list = today_for(conn, ctx).await?;
+        let list = today_for(conn, ctx, &self.pool).await?;
         let items = list
             .items
             .iter()
@@ -527,7 +540,7 @@ impl ToolBackend for SqlxToolBackend {
 
     async fn get_next_work_item(&self, ctx: &OperatorContext) -> ToolResult<NextWorkItem> {
         let conn = self.conn().await?;
-        let list = today_for(conn, ctx).await?;
+        let list = today_for(conn, ctx, &self.pool).await?;
         Ok(NextWorkItem {
             item: list.items.first().map(|item| item_view(1, item)),
             total: list.items.len(),
@@ -545,7 +558,7 @@ impl ToolBackend for SqlxToolBackend {
         let person_id = PersonId::new(person_id);
         let mut conn = self.conn().await?;
         let summary = visible_summary(&mut conn, ctx, person_id).await?;
-        let list = today_for(conn, ctx).await?;
+        let list = today_for(conn, ctx, &self.pool).await?;
         Ok(explain::build_explanation(
             &list,
             &summary,
@@ -638,6 +651,7 @@ impl ToolBackend for SqlxToolBackend {
         .await
         .map_err(db_error)?;
 
+        conn.commit().await.map_err(db_error)?;
         Ok(StartCallProposalOutcome::Proposed(Box::new(ProposalView {
             proposal_id,
             person: card_from_summary(&summary),
@@ -798,6 +812,7 @@ impl ToolBackend for SqlxToolBackend {
         .map_err(db_error)?;
 
         tx.commit().await.map_err(db_error)?;
+        conn.commit().await.map_err(db_error)?;
 
         Ok(CreateTaskProposalOutcome::Proposed(Box::new(
             TaskProposalView {

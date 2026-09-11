@@ -2,8 +2,9 @@
 // extension (`409 {"error": "call_in_progress", "call_id": uuid}`); the
 // extra field must survive into `ApiError.details` so the panel can offer
 // "Hang up previous call" (§10).
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, apiFetch } from './client'
+import { observeWorkspace, resetWorkspace } from '../workspaceLifecycle'
 import {
   SessionVerificationPendingError,
   beginSessionTransition,
@@ -25,7 +26,11 @@ function deferred<T>() {
   return { promise, resolve }
 }
 
+beforeEach(() => {
+  observeWorkspace({ user: { id: 'actor', email: 'actor@example.test', display_name: 'Actor' }, organization: { id: 'org', name: 'Org', role: 'admin', workspace_mode: 'operational', workspace_revision: '1' }, platform_admin: false })
+})
 afterEach(() => {
+  resetWorkspace()
   vi.unstubAllGlobals()
 })
 

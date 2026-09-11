@@ -273,6 +273,8 @@ pub async fn latest_for_person(
     person_id: PersonId,
     limit: i64,
 ) -> Result<Vec<NoteSummary>, NoteError> {
+    let mut workspace_read = crate::auth::workspace::read(conn, organization_id).await?;
+    let conn = &mut *workspace_read;
     let mut rows = sqlx::query_as!(
         NoteSummaryDb,
         r#"SELECT au.display_name as "author_display_name?", n.created_at, n.body

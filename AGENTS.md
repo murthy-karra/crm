@@ -123,6 +123,12 @@ Organization(active_organization_id)
 
 Do not implement Team- or AssignedUser-scoped visibility until an accepted decision requires it.
 
+D-064/D-065 add a separate migration-review readiness gate: imported workspaces
+remain available only for admin review until a later activation capability.
+Preserve Organization-wide `PersonVisibilityScope`; enforce the workspace gate
+in the typed read/write paths under Slice 010c. Admin role alone does not bypass
+the review hold on ordinary mutations, Today, Operator or outbound actions.
+
 ### 4.5 Keep Person, Inquiry, Deal, and Identity separate
 
 These are distinct concepts:

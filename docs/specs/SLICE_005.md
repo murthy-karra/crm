@@ -1,5 +1,13 @@
 # Slice 005 — Operator retrieval
 
+**Approved amendment — 010c (D-065, 2026-09-11):**
+[010c](SLICE_010c.md) disables operational Operator use during migration review
+for every role. A separate IDs-only admission covers the complete absolute turn
+deadline before scheduling/inference; the existing terminal ledger stays
+append-only. Tool reads/commands recheck workspace authority and proposal
+confirmation checks it before consuming a single-use claim. Terminal audit and
+admission cleanup remain allowed. Existing tools gain no new import or bypass path.
+
 **Approved amendment — Slice 011c (2026-09-06):**
 [SLICE_011c §6](SLICE_011c.md) amends §§3/7/14's Today-related tool outputs
 with source availability, truncation context, list priority/reasons/actions and

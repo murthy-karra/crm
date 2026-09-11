@@ -2,7 +2,7 @@
 // transition, remote leave → `hangup` exactly once, mic denied → `hangup`,
 // `call.changed` → refetch, error copy per code. Service-free: `apiFetch`
 // is mocked and the room is a fake emitter (no SDK, no WebRTC).
-import { effectScope, nextTick, watch } from 'vue'
+import { effectScope, nextTick, ref, watch } from 'vue'
 import { QueryClient } from '@tanstack/vue-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
@@ -125,7 +125,7 @@ class FakeRoom implements CallRoom {
   }
 }
 
-function harness(configure: (room: FakeRoom) => void = () => {}, createRingbackContext?: RingbackContextFactory) {
+function harness(configure: (room: FakeRoom) => void = () => {}, createRingbackContext?: RingbackContextFactory, operational?: () => boolean) {
   const rooms: FakeRoom[] = []
   const createRoom: CallRoomFactory = () => {
     const room = new FakeRoom()
@@ -137,7 +137,7 @@ function harness(configure: (room: FakeRoom) => void = () => {}, createRingbackC
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
   const scope = effectScope()
-  const result = scope.run(() => useCall({ orgId: ORG_ID, createRoom, queryClient, createRingbackContext }))
+  const result = scope.run(() => useCall({ orgId: ORG_ID, createRoom, queryClient, createRingbackContext, operational }))
   if (!result) throw new Error('effectScope.run returned undefined')
   return { ...result, rooms, queryClient, scope, room: () => rooms[rooms.length - 1] }
 }
@@ -921,5 +921,34 @@ describe('useCall settle refetch (SLICE_006c §10 Save-stuck guard)', () => {
     h2.scope.stop()
     await vi.advanceTimersByTimeAsync(4000)
     expect(requests().filter((r) => r === `GET /calls/${CALL_ID}`)).toHaveLength(0)
+  })
+})
+
+
+describe('workspace review call teardown', () => {
+  it('ends existing media and sends only idempotent hangup when ordinary work is fenced', async () => {
+    stubApi(); const operational = ref(true)
+    const h = harness(undefined, undefined, () => operational.value)
+    await placeCall(h)
+    apiFetchMock.mockClear()
+    operational.value = false
+    await flushPromises()
+    expect(h.room().disconnectCalls).toBeGreaterThan(0)
+    expect(hangupRequests()).toEqual([`POST /calls/${CALL_ID}/hangup`])
+    await h.start(PERSON_ID, CONTACT_METHOD_ID)
+    expect(requests().filter(request => request.endsWith('/dial'))).toEqual([])
+    expect(requests().filter(request => request.includes('/people/'))).toEqual([])
+    h.scope.stop()
+  })
+  it('does not consume a proposal after review begins during a pending microphone request', async () => {
+    stubApi(); const operational = ref(true); let resolve!: () => void
+    const gate = new Promise<void>(done => { resolve = done })
+    const h = harness(room => { room.micGate = gate }, undefined, () => operational.value)
+    const confirm = vi.fn(async () => startResponse())
+    const started = h.startProposed(PERSON_ID, confirm)
+    await flushPromises(); operational.value = false; resolve(); await started
+    expect(confirm).not.toHaveBeenCalled(); expect(apiFetchMock).not.toHaveBeenCalled()
+    expect(h.room().disconnectCalls).toBeGreaterThan(0)
+    h.scope.stop()
   })
 })

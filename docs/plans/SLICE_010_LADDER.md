@@ -1,6 +1,6 @@
 # Slice 010 — Follow Up Boss migration ladder
 
-**Current status: 010a AND 010b DEPLOYED AND VERIFIED (2026-09-11).** The user requested
+**Current status: 010a AND 010b DEPLOYED; 010c IMPLEMENTED, UNRELEASED (2026-09-11).** The user requested
 a refreshed migration summary and chose a new, empty destination Organization
 first (D-059). The current migration plan is
 [SLICE_010_MIGRATION_SUMMARY.md](SLICE_010_MIGRATION_SUMMARY.md).
@@ -18,7 +18,16 @@ implementation and synthetic verification. 010b passed both bounded reviews and
 all required gates, then was committed, merged, pushed and deployed under the
 user's follow-up. [Verification](../tasks/SLICE_010b_VERIFICATION.md) and the
 [release record](../tasks/SLICE_010b_RELEASE.md) preserve evidence and deferred live qualification.
-Later rungs remain unapproved. Notes, tasks, tags and custom fields now
+The user requested [010c planning](../specs/SLICE_010c.md), with an
+[execution brief](../tasks/SLICE_010c_IMPL.md). D-064 accepts separate People
+despite shared contacts, explicit matching stage creation, and admin review-only
+operation until later activation. Independent review is READY, and D-065 now
+approves complete 010c contracts, implementation and synthetic verification.
+Implementation and all required synthetic checks are complete;
+[evidence](../design/qa/slice-010c-2026-09-11/README.md) records the result.
+Git integration, publication and cleanup are authorized by the D-065 follow-up.
+Deployment and other later rungs remain outside that approval.
+Notes, tasks, tags and custom fields now
 have destination models. API-first assessment and encrypted saved credentials
 are settled for 010a; live-source qualification and later fidelity, mapping,
 recovery and cutover decisions remain open. The historical survey below is preserved

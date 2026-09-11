@@ -141,7 +141,7 @@ async fn create_saved_list_attempt(
         serde_json::to_string(&filter_value).map_err(|_| SavedListError::MalformedRequest)?;
     let (sort_key, sort_direction) = PersonSort::storage_columns(sort);
 
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
     // Membership is deliberately re-read and share-locked inside this
     // transaction before the advisory lock. An admin demotion/deactivation
     // cannot interleave with authorization and a subsequent write.
@@ -268,7 +268,7 @@ async fn update_saved_list_attempt(
     let filter_json =
         serde_json::to_string(&filter_value).map_err(|_| SavedListError::MalformedRequest)?;
 
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
     let role = lock_current_membership(&mut tx, ctx.organization_id, ctx.actor_user_id).await?;
     acquire_saved_lists_lock(&mut tx, ctx.organization_id).await?;
     let row =
@@ -381,7 +381,7 @@ async fn delete_saved_list_attempt(
     cmd: DeleteSavedList,
 ) -> Result<DeleteSavedListOutcome, SavedListError> {
     validate_expected_revision(cmd.expected_revision)?;
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
     let role = lock_current_membership(&mut tx, ctx.organization_id, ctx.actor_user_id).await?;
     acquire_saved_lists_lock(&mut tx, ctx.organization_id).await?;
     let row = visible_row_or_tombstone_for_update(

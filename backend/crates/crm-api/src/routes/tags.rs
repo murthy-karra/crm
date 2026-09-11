@@ -78,7 +78,7 @@ async fn list_tags(
     auth: AuthContext,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
-    let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
+    let mut conn = pool.acquire().await.map_err(ApiError::database)?;
     let rows = tag::list_for_organization(&mut conn, auth.active_organization_id).await?;
     let tags: Vec<Tag> = rows
         .into_iter()

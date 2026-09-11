@@ -25,7 +25,7 @@ const apiFetchMock = vi.mocked(apiFetch)
 
 const MEMBER: MeResponse = {
   user: { id: 'actor-1', email: 'alice@acme.test', display_name: 'Alice' },
-  organization: { id: 'org-1', name: 'Acme Realty', role: 'member' },
+  organization: { workspace_mode: 'operational', workspace_revision: '1', id: 'org-1', name: 'Acme Realty', role: 'member' },
   platform_admin: false,
 }
 

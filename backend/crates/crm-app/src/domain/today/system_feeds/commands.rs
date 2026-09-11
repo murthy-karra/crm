@@ -318,7 +318,7 @@ async fn update_today_system_feed_attempt(
     validate_expected_revision(cmd.expected_revision)?;
     validate_feed_definition_structural(&cmd.filter)?;
 
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
     lock_current_membership_require_admin(&mut tx, ctx.organization_id, ctx.actor_user_id).await?;
     acquire_today_feeds_lock(&mut tx, ctx.organization_id).await?;
 
@@ -449,7 +449,7 @@ async fn revert_today_system_feed_attempt(
 ) -> Result<TodaySystemFeedOutcome, TodayFeedError> {
     validate_expected_revision(cmd.expected_revision)?;
 
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
     lock_current_membership_require_admin(&mut tx, ctx.organization_id, ctx.actor_user_id).await?;
     acquire_today_feeds_lock(&mut tx, ctx.organization_id).await?;
 
@@ -559,7 +559,7 @@ async fn set_today_system_feed_enabled_attempt(
 ) -> Result<TodaySystemFeedOutcome, TodayFeedError> {
     validate_expected_revision(cmd.expected_revision)?;
 
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
     lock_current_membership_require_admin(&mut tx, ctx.organization_id, ctx.actor_user_id).await?;
     acquire_today_feeds_lock(&mut tx, ctx.organization_id).await?;
 
@@ -748,6 +748,7 @@ async fn preview_today_system_feed_attempt(
     sqlx::query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
         .execute(&mut *tx)
         .await?;
+    crate::auth::workspace::ordinary(&mut tx, ctx.organization_id).await?;
 
     lock_current_membership_require_admin(&mut tx, ctx.organization_id, ctx.actor_user_id).await?;
     validate_feed_definition_structural(&cmd.filter)?;

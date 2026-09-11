@@ -2232,3 +2232,59 @@ customer data. Live authorized FUB validation remains deferred; no production
 cluster, import/cutover or real-source operation is implied.
 Completion and recovery evidence are recorded in
 [SLICE_010b_RELEASE.md](../tasks/SLICE_010b_RELEASE.md).
+
+### D-064 — 010c preserves separate People, approved stages and review-only use (2026-09-11)
+
+Accepted by the user while requesting the 010c plan:
+
+1. **“Keep separate People; flag overlaps.”** Distinct FUB People remain distinct
+   CRM People even when email/phone values overlap. Shared household details do
+   not authorize merging; overlap evidence remains visible.
+2. **“Approve matching stage creation.”** Admins may explicitly approve creating
+   matching CRM stages for unfamiliar source stages to preserve the pipeline.
+   A suggestion or source label alone does not authorize stage creation.
+3. **“Review-only until activation.”** Imported records remain available for
+   admin review while ordinary agent use and outbound actions wait for a later
+   activation capability. This is an explicit migration-readiness exception to
+   normal operational Organization-wide member access under D-004/005, not
+   Team/AssignedUser Person visibility. It does not establish communication
+   consent or resolve private-source audience rules for eventual activation.
+
+D-059's new, empty destination remains in force. The
+[010c specification](../specs/SLICE_010c.md) proposes the concrete workspace gate,
+mapping/provenance/recovery contracts and verification. Only these three choices
+are accepted here; the complete specification and implementation still require
+review and approval. Cancellation/repair/delta and later activation policy are
+not inferred from the choices above. Live authorized FUB validation remains
+user-deferred, and D-015/O-012/O-013 customer-data prerequisites remain open.
+
+### D-065 — Reviewed 010c specification and implementation approved (2026-09-11)
+
+After independent review returned READY and the completed specification/brief
+were presented, the user said **“approved for implementation.”** This accepts
+[SLICE_010c.md](../specs/SLICE_010c.md) and its
+[execution brief](../tasks/SLICE_010c_IMPL.md), including their declared shared
+contracts and the five reviewed corrections. D-064's three policy choices remain
+in force. Implementation, concrete contract detail within this scope, isolated
+synthetic verification and the required review/check gates are authorized.
+
+The accepted scope includes retained-evidence People/contact/stage/assignment
+import, frozen plans, provenance and reconciliation, per-item byte admission,
+native/index eligibility, workspace read/write guards and Operator admission,
+the admin review hold and compatible-runtime recovery. Cancellation retains
+committed imports; activation and confirmed-mapping repair/deltas remain later
+work. Existing Organizations default operational. No new source request,
+customer-data processing, live FUB validation, commit/merge/push or deployment
+is authorized by this implementation approval. The user's validation deferral
+and D-015/O-012/O-013 prerequisites remain unchanged.
+
+**D-065 follow-up — integration, publication and cleanup authorized (2026-09-11).**
+After implementation and synthetic verification completed, the user requested
+“commit, merge, push and cleanup”. This authorizes committing the verified 010c
+changes, merging and publishing main, and removing the merged branch/worktree
+and disposable 010c synthetic QA resources. Preserve committed verification
+evidence, customer data and existing release recovery artifacts. Runtime
+deployment is not included in this follow-up; shared development remains on
+010b. Live authorized FUB validation remains user-deferred, and activation and
+customer-data readiness retain their existing gates. Integration results belong
+to [SLICE_010c_VERIFICATION.md](../tasks/SLICE_010c_VERIFICATION.md).

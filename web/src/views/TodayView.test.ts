@@ -29,7 +29,7 @@ const CALL_ID = '55555555-5555-5555-5555-555555555555'
 function me(): MeResponse {
   return {
     user: { id: 'u-alice', email: 'alice@acme.test', display_name: 'Alice' },
-    organization: { id: ORG_ID, name: 'Acme Realty', role: 'member' },
+    organization: { workspace_mode: 'operational', workspace_revision: '1', id: ORG_ID, name: 'Acme Realty', role: 'member' },
     platform_admin: false,
   }
 }

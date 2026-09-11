@@ -113,7 +113,7 @@ impl TryFrom<RawCallRow> for CallRow {
 }
 
 /// `call_by_id(conn, organization_id, id)` (docs/specs/SLICE_006.md §3).
-pub async fn call_by_id(
+pub(crate) async fn terminal_call_by_id(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
     id: CallId,
@@ -182,6 +182,8 @@ pub async fn active_call_for_user(
     organization_id: OrganizationId,
     caller_user_id: UserId,
 ) -> Result<Option<CallId>, sqlx::Error> {
+    let mut workspace_read = crate::auth::workspace::read(conn, organization_id).await?;
+    let conn = &mut *workspace_read;
     let row = sqlx::query!(
         r#"SELECT id FROM call
            WHERE organization_id = $1 AND caller_user_id = $2
@@ -350,14 +352,32 @@ pub async fn caller_display_name(
 
 /// `GET /api/calls/{id}` (docs/specs/SLICE_006.md §5): any member of the
 /// Organization; foreign → `None`.
+pub(crate) async fn terminal_call_view_by_id(
+    conn: &mut PgConnection,
+    organization_id: OrganizationId,
+    id: CallId,
+) -> Result<Option<CallView>, sqlx::Error> {
+    let Some(row) = terminal_call_by_id(conn, organization_id, id).await? else {
+        return Ok(None);
+    };
+    let display_name = caller_display_name(conn, row.caller_user_id).await?;
+    Ok(Some(CallView::from_row(&row, display_name)))
+}
+
+/// Public call reads share the authoritative workspace/member read boundary.
+pub async fn call_by_id(
+    conn: &mut PgConnection,
+    organization_id: OrganizationId,
+    id: CallId,
+) -> Result<Option<CallRow>, sqlx::Error> {
+    let mut permit = crate::auth::workspace::read(conn, organization_id).await?;
+    terminal_call_by_id(&mut permit, organization_id, id).await
+}
 pub async fn call_view_by_id(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
     id: CallId,
 ) -> Result<Option<CallView>, sqlx::Error> {
-    let Some(row) = call_by_id(conn, organization_id, id).await? else {
-        return Ok(None);
-    };
-    let display_name = caller_display_name(conn, row.caller_user_id).await?;
-    Ok(Some(CallView::from_row(&row, display_name)))
+    let mut permit = crate::auth::workspace::read(conn, organization_id).await?;
+    terminal_call_view_by_id(&mut permit, organization_id, id).await
 }

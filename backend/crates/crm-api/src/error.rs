@@ -137,13 +137,36 @@ pub enum ApiError {
     /// A choice value named an option that is archived, belongs to a
     /// different field, or does not exist — byte-identical for all three.
     UnknownOption,
+    WorkspaceInMigrationReview,
+    WorkspaceIngressDeferred,
     MigrationConflict,
+    ImportError(&'static str),
     InvalidMigrationCredential,
+}
+
+impl ApiError {
+    pub(crate) fn database(error: sqlx::Error) -> Self {
+        if crate::auth::workspace::is_review_error(&error) {
+            Self::WorkspaceInMigrationReview
+        } else if crate::auth::workspace::is_forbidden_error(&error) {
+            Self::Forbidden
+        } else {
+            Self::Unavailable
+        }
+    }
 }
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let (status, code, retry_after_secs) = match self {
+            ApiError::WorkspaceInMigrationReview => {
+                (StatusCode::CONFLICT, "workspace_in_migration_review", None)
+            }
+            ApiError::WorkspaceIngressDeferred => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "workspace_in_migration_review",
+                Some(5),
+            ),
             ApiError::MalformedRequest => (StatusCode::BAD_REQUEST, "malformed_request", None),
             ApiError::InvalidCredentials => (StatusCode::UNAUTHORIZED, "invalid_credentials", None),
             ApiError::NoMembership => (StatusCode::FORBIDDEN, "no_membership", None),
@@ -257,6 +280,15 @@ impl IntoResponse for ApiError {
             ApiError::OptionLabelTaken => (StatusCode::CONFLICT, "option_label_taken", None),
             ApiError::FieldArchived => (StatusCode::CONFLICT, "field_archived", None),
             ApiError::UnknownOption => (StatusCode::UNPROCESSABLE_ENTITY, "unknown_option", None),
+            ApiError::ImportError(code) => (
+                if matches!(code, "source_not_eligible" | "invalid_import_choice") {
+                    StatusCode::UNPROCESSABLE_ENTITY
+                } else {
+                    StatusCode::CONFLICT
+                },
+                code,
+                None,
+            ),
             ApiError::MigrationConflict => (StatusCode::CONFLICT, "migration_conflict", None),
             ApiError::InvalidMigrationCredential => (
                 StatusCode::UNPROCESSABLE_ENTITY,
@@ -281,11 +313,22 @@ impl IntoResponse for ApiError {
 impl From<MigrationError> for ApiError {
     fn from(err: MigrationError) -> Self {
         match err {
+            MigrationError::Database(ref e) if crate::auth::workspace::is_review_error(e) => {
+                Self::WorkspaceInMigrationReview
+            }
             MigrationError::Forbidden => ApiError::Forbidden,
             MigrationError::NotFound => Self::NotFound,
             MigrationError::Conflict | MigrationError::SourceAccountMismatch => {
                 Self::MigrationConflict
             }
+            MigrationError::ImportExpired => Self::ImportError("import_expired"),
+            MigrationError::ImportConflict => Self::ImportError("import_conflict"),
+            MigrationError::ImportBusy => Self::ImportError("import_busy"),
+            MigrationError::InvalidImportChoice => Self::ImportError("invalid_import_choice"),
+            MigrationError::SourceNotEligible => Self::ImportError("source_not_eligible"),
+            MigrationError::StorageLimit => Self::ImportError("storage_limit"),
+            MigrationError::WorkspaceNotEmpty => Self::ImportError("workspace_not_empty"),
+            MigrationError::ReleaseNotReady => Self::Unavailable,
             MigrationError::InvalidInput => Self::MalformedRequest,
             MigrationError::InvalidCredential => Self::InvalidMigrationCredential,
             MigrationError::ReaderUnavailable | MigrationError::Database(_) => Self::Unavailable,
@@ -301,7 +344,11 @@ impl From<MigrationError> for ApiError {
 impl From<CommandError> for ApiError {
     fn from(err: CommandError) -> Self {
         match err {
+            CommandError::Database(ref e) if crate::auth::workspace::is_review_error(e) => {
+                Self::WorkspaceInMigrationReview
+            }
             CommandError::PersonNotFound => ApiError::NotFound,
+            CommandError::Forbidden => ApiError::Forbidden,
             CommandError::InvalidAssignee => ApiError::InvalidAssignee,
             CommandError::InvalidStage => ApiError::InvalidStage,
             CommandError::NoStagesConfigured | CommandError::Crypto | CommandError::Corrupt => {
@@ -317,6 +364,9 @@ impl From<CommandError> for ApiError {
 impl From<WorkbenchError> for ApiError {
     fn from(err: WorkbenchError) -> Self {
         match err {
+            WorkbenchError::Database(ref e) if crate::auth::workspace::is_review_error(e) => {
+                Self::WorkspaceInMigrationReview
+            }
             WorkbenchError::NotFound => ApiError::NotFound,
             WorkbenchError::Discarded => ApiError::Discarded,
             WorkbenchError::AlreadyResolved => ApiError::AlreadyResolved,
@@ -332,6 +382,9 @@ impl From<WorkbenchError> for ApiError {
 impl From<AdminCommandError> for ApiError {
     fn from(err: AdminCommandError) -> Self {
         match err {
+            AdminCommandError::Database(ref e) if crate::auth::workspace::is_review_error(e) => {
+                Self::WorkspaceInMigrationReview
+            }
             AdminCommandError::NotFound => ApiError::NotFound,
             AdminCommandError::OrganizationNameTaken => ApiError::OrganizationNameTaken,
             AdminCommandError::InvalidEmail => ApiError::InvalidEmail,
@@ -355,6 +408,9 @@ impl From<AdminCommandError> for ApiError {
 impl From<CallError> for ApiError {
     fn from(err: CallError) -> Self {
         match err {
+            CallError::Database(ref e) if crate::auth::workspace::is_review_error(e) => {
+                Self::WorkspaceInMigrationReview
+            }
             CallError::PersonNotFound | CallError::CallNotFound => ApiError::NotFound,
             CallError::InvalidContactMethod => ApiError::InvalidContactMethod,
             CallError::CallInProgress { call_id } => ApiError::CallInProgress { call_id },
@@ -374,6 +430,9 @@ impl From<CallError> for ApiError {
 impl From<CaptureCommandError> for ApiError {
     fn from(err: CaptureCommandError) -> Self {
         match err {
+            CaptureCommandError::Database(ref e) if crate::auth::workspace::is_review_error(e) => {
+                Self::WorkspaceInMigrationReview
+            }
             CaptureCommandError::NotFound => ApiError::NotFound,
             CaptureCommandError::Conflict => ApiError::CaptureConflict,
             CaptureCommandError::Crypto | CaptureCommandError::Corrupt => ApiError::InternalError,
@@ -395,6 +454,9 @@ impl From<CaptureCommandError> for ApiError {
 impl From<FilterError> for ApiError {
     fn from(err: FilterError) -> Self {
         match err {
+            FilterError::Database(ref e) if crate::auth::workspace::is_review_error(e) => {
+                Self::WorkspaceInMigrationReview
+            }
             FilterError::Malformed => ApiError::MalformedRequest,
             FilterError::InvalidStage => ApiError::InvalidStage,
             FilterError::InvalidAssignee => ApiError::InvalidAssignee,
@@ -413,6 +475,9 @@ impl From<FilterError> for ApiError {
 impl From<SavedListError> for ApiError {
     fn from(err: SavedListError) -> Self {
         match err {
+            SavedListError::Database(ref e) if crate::auth::workspace::is_review_error(e) => {
+                Self::WorkspaceInMigrationReview
+            }
             SavedListError::Unauthenticated => ApiError::Unauthenticated,
             SavedListError::NotFound => ApiError::NotFound,
             SavedListError::Forbidden => ApiError::Forbidden,
@@ -443,6 +508,9 @@ impl From<SavedListError> for ApiError {
 impl From<TagError> for ApiError {
     fn from(err: TagError) -> Self {
         match err {
+            TagError::Database(ref e) if crate::auth::workspace::is_review_error(e) => {
+                Self::WorkspaceInMigrationReview
+            }
             TagError::NotFound => ApiError::NotFound,
             TagError::Forbidden => ApiError::Forbidden,
             TagError::MalformedRequest => ApiError::MalformedRequest,
@@ -461,6 +529,9 @@ impl From<TagError> for ApiError {
 impl From<NoteError> for ApiError {
     fn from(err: NoteError) -> Self {
         match err {
+            NoteError::Database(ref e) if crate::auth::workspace::is_review_error(e) => {
+                Self::WorkspaceInMigrationReview
+            }
             NoteError::NotFound => ApiError::NotFound,
             NoteError::Forbidden => ApiError::Forbidden,
             NoteError::MalformedRequest => ApiError::MalformedRequest,
@@ -478,6 +549,9 @@ impl From<NoteError> for ApiError {
 impl From<TaskError> for ApiError {
     fn from(err: TaskError) -> Self {
         match err {
+            TaskError::Database(ref e) if crate::auth::workspace::is_review_error(e) => {
+                Self::WorkspaceInMigrationReview
+            }
             TaskError::NotFound => ApiError::NotFound,
             TaskError::Forbidden => ApiError::Forbidden,
             TaskError::MalformedRequest => ApiError::MalformedRequest,
@@ -495,6 +569,9 @@ impl From<TaskError> for ApiError {
 impl From<CustomFieldError> for ApiError {
     fn from(err: CustomFieldError) -> Self {
         match err {
+            CustomFieldError::Database(ref e) if crate::auth::workspace::is_review_error(e) => {
+                Self::WorkspaceInMigrationReview
+            }
             CustomFieldError::NotFound => ApiError::NotFound,
             CustomFieldError::Forbidden => ApiError::Forbidden,
             CustomFieldError::MalformedRequest => ApiError::MalformedRequest,
@@ -517,6 +594,9 @@ impl From<crate::domain::today::system_feeds::error::TodayFeedError> for ApiErro
     fn from(err: crate::domain::today::system_feeds::error::TodayFeedError) -> Self {
         use crate::domain::today::system_feeds::error::TodayFeedError;
         match err {
+            TodayFeedError::Database(ref e) if crate::auth::workspace::is_review_error(e) => {
+                Self::WorkspaceInMigrationReview
+            }
             TodayFeedError::Unauthenticated => ApiError::Unauthenticated,
             TodayFeedError::Forbidden => ApiError::Forbidden,
             TodayFeedError::MalformedRequest => ApiError::MalformedRequest,
@@ -545,6 +625,9 @@ impl From<crate::domain::today::system_feeds::error::TodayFeedError> for ApiErro
 impl From<CaptureRotateError> for ApiError {
     fn from(err: CaptureRotateError) -> Self {
         match err {
+            CaptureRotateError::Database(ref e) if crate::auth::workspace::is_review_error(e) => {
+                Self::WorkspaceInMigrationReview
+            }
             // Unreachable for an active member (backfill + mint-if-absent
             // on every activation path) — a read path fails closed rather
             // than assuming, so this maps to the generic unavailable

@@ -4,6 +4,10 @@
 
 pub mod commands;
 pub mod crypto;
+pub(crate) mod import_display;
+pub(crate) mod import_source;
+pub mod import_worker;
+pub mod imports;
 pub mod reader;
 pub mod snapshot;
 pub(crate) mod snapshot_compare;
@@ -181,6 +185,14 @@ pub enum MigrationError {
     Conflict,
     InvalidInput,
     InvalidCredential,
+    ImportConflict,
+    ImportExpired,
+    ImportBusy,
+    InvalidImportChoice,
+    SourceNotEligible,
+    StorageLimit,
+    WorkspaceNotEmpty,
+    ReleaseNotReady,
     SourceAccountMismatch,
     ReaderUnavailable,
     Database(sqlx::Error),
@@ -199,6 +211,14 @@ impl std::fmt::Display for MigrationError {
             Self::Conflict => "conflict",
             Self::InvalidInput => "invalid input",
             Self::InvalidCredential => "invalid credential",
+            Self::ImportExpired => "import expired",
+            Self::ImportConflict => "import conflict",
+            Self::ImportBusy => "import busy",
+            Self::InvalidImportChoice => "invalid import choice",
+            Self::SourceNotEligible => "source not eligible",
+            Self::StorageLimit => "storage limit",
+            Self::WorkspaceNotEmpty => "workspace not empty",
+            Self::ReleaseNotReady => "release not ready",
             Self::SourceAccountMismatch => "source account mismatch",
             Self::ReaderUnavailable => "reader unavailable",
             Self::Database(_) => "database",

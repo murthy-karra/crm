@@ -1,0 +1,355 @@
+#!/usr/bin/env python3
+"""Read-only, operator-owned release evidence for the 010c workspace gate.
+
+Usage: migration-release-preflight --artifacts known-builds.json
+       --candidates candidates.json --inventory processes.json
+       --target environment-id --purpose launch|confirm
+
+The database is queried with psql using the operator's standard libpq PG*
+environment. No credentials are accepted on argv, printed, or read from JSON.
+All three files must be owned by this OS user/root and not group/world writable.
+They describe verified deployment facts, never tenant-supplied authorization.
+
+JSON inputs (version is numeric 1; counts in the report are decimal strings):
+  artifacts: {version, artifacts:[{sha256,role,gate_version,revision}]}
+  candidates: {version, artifacts:[{role,path}]}
+  inventory: {version,target,observed_at,complete,pre_010c_retired,
+              processes:[{id,role,sha256}]}
+Roles: api, worker, cli, migrator. Known gate versions: crm-workspace-v1,
+pre-010c. Revisions are full Git hashes. Inventory timestamps are UTC RFC3339;
+the complete inventory must be no older than five minutes. It covers active
+processes/workloads AND launch/admin paths, including in-process workers.
+
+Exit 0 means the requested purpose passes; 1 means policy blocked; 2 means
+invalid/unavailable evidence. JSON stdout contains no source/customer content.
+This script neither deploys nor terminates processes, changes bindings, enables
+confirmation, or signs a runtime permit. Run it immediately before launch;
+startup/confirmation independently enforce current server-owned gate state.
+"""
+
+import argparse
+import datetime as dt
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import stat
+import subprocess
+import sys
+
+GATE = "crm-workspace-v1"
+LEGACY = "pre-010c"
+ROLES = frozenset({"api", "worker", "cli", "migrator"})
+MAX_JSON_BYTES = 1024 * 1024
+MAX_ENTRIES = 4096
+MAX_AGE_SECONDS = 300
+MAX_FUTURE_SECONDS = 30
+HEX64 = re.compile(r"[0-9a-f]{64}\Z")
+REVISION = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})\Z")
+LABEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}\Z")
+
+
+class EvidenceError(Exception):
+    """Closed error code only; never render underlying input or subprocess errors."""
+
+
+def fail(code="invalid_evidence"):
+    raise EvidenceError(code)
+
+
+def object_fields(value, fields):
+    if not isinstance(value, dict) or set(value) != set(fields):
+        fail()
+
+
+def versioned(value, array_key):
+    object_fields(value, {"version", array_key})
+    if type(value["version"]) is not int or value["version"] != 1:
+        fail()
+    entries = value[array_key]
+    if not isinstance(entries, list) or len(entries) > MAX_ENTRIES:
+        fail()
+    return entries
+
+
+def timestamp(value):
+    if (not isinstance(value, str)
+            or re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,6})?Z", value) is None):
+        fail()
+    try:
+        parsed = dt.datetime.fromisoformat(value[:-1] + "+00:00")
+    except ValueError:
+        fail()
+    if parsed.utcoffset() != dt.timedelta(0):
+        fail()
+    return parsed
+
+
+def utc_text(value):
+    return value.astimezone(dt.timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def matches(pattern, value):
+    return isinstance(value, str) and pattern.fullmatch(value) is not None
+
+
+def valid_role(value):
+    return isinstance(value, str) and value in ROLES
+
+
+def known_artifacts(document):
+    known = {}
+    for item in versioned(document, "artifacts"):
+        object_fields(item, {"sha256", "role", "gate_version", "revision"})
+        if (not matches(HEX64, item["sha256"])
+                or not valid_role(item["role"])
+                or not isinstance(item["gate_version"], str)
+                or item["gate_version"] not in {GATE, LEGACY}
+                or not matches(REVISION, item["revision"])):
+            fail()
+        key = (item["role"], item["sha256"])
+        if key in known:
+            fail()
+        known[key] = item
+    return known
+
+
+def validate_state(state):
+    object_fields(state, {"schema_present", "binding_count", "gate_versions", "database_name"})
+    count = state["binding_count"]
+    if (type(state["schema_present"]) is not bool
+            or not isinstance(count, str)
+            or re.fullmatch(r"0|[1-9][0-9]{0,19}", count) is None
+            or not isinstance(state["database_name"], str)
+            or not 1 <= len(state["database_name"]) <= 128):
+        fail("database_evidence_invalid")
+    versions = state["gate_versions"]
+    if (not isinstance(versions, list) or len(versions) > MAX_ENTRIES
+            or any(not isinstance(v, str) or not 1 <= len(v) <= 128 for v in versions)
+            or len(set(versions)) != len(versions)
+            or (int(count) == 0) != (len(versions) == 0)
+            or (not state["schema_present"] and int(count) != 0)):
+        fail("database_evidence_invalid")
+
+
+def evaluate(artifacts, candidates, inventory, state, target, now):
+    """Pure evaluator. Only main() supplies production state from live SQL."""
+    known = known_artifacts(artifacts)
+    validate_state(state)
+    if not matches(LABEL, target):
+        fail()
+    object_fields(inventory, {
+        "version", "target", "observed_at", "complete", "pre_010c_retired", "processes",
+    })
+    if (type(inventory["version"]) is not int or inventory["version"] != 1
+            or not matches(LABEL, inventory["target"])
+            or type(inventory["complete"]) is not bool
+            or type(inventory["pre_010c_retired"]) is not bool
+            or not isinstance(inventory["processes"], list)
+            or len(inventory["processes"]) > MAX_ENTRIES):
+        fail()
+    observed = timestamp(inventory["observed_at"])
+    reasons = set()
+    if inventory["target"] != target:
+        reasons.add("inventory_target_mismatch")
+    age = (now - observed).total_seconds()
+    if age > MAX_AGE_SECONDS or age < -MAX_FUTURE_SECONDS:
+        reasons.add("inventory_stale")
+    if not inventory["complete"]:
+        reasons.add("inventory_incomplete")
+
+    selected = []
+    candidate_keys = set()
+    for item in versioned(candidates, "artifacts"):
+        # Production candidates have been hashed from files before evaluation.
+        object_fields(item, {"role", "sha256"})
+        if not valid_role(item["role"]) or not matches(HEX64, item["sha256"]):
+            fail()
+        key = (item["role"], item["sha256"])
+        if key in candidate_keys:
+            fail()
+        candidate_keys.add(key)
+        match = known.get(key)
+        if match is None:
+            reasons.add("candidate_unknown")
+        selected.append({
+            "role": item["role"], "sha256": item["sha256"],
+            "gate_version": match["gate_version"] if match else None,
+            "revision": match["revision"] if match else None,
+        })
+    if not selected:
+        reasons.add("candidate_missing")
+
+    process_ids = set()
+    active_gates = set()
+    for process in inventory["processes"]:
+        object_fields(process, {"id", "role", "sha256"})
+        if (not matches(LABEL, process["id"]) or not valid_role(process["role"])
+                or not matches(HEX64, process["sha256"])):
+            fail()
+        if process["id"] in process_ids:
+            fail()
+        process_ids.add(process["id"])
+        match = known.get((process["role"], process["sha256"]))
+        if match is None:
+            reasons.add("process_unknown")
+        else:
+            active_gates.add(match["gate_version"])
+
+    candidate_gates = {item["gate_version"] for item in selected if item["gate_version"]}
+    all_gates = candidate_gates | active_gates
+    if GATE in all_gates and LEGACY in all_gates:
+        reasons.add("mixed_gate_fleet")
+    if inventory["pre_010c_retired"] and LEGACY in active_gates:
+        reasons.add("retirement_contradicted")
+    if int(state["binding_count"]) > 0:
+        if set(state["gate_versions"]) != {GATE}:
+            reasons.add("binding_gate_unsupported")
+        if LEGACY in all_gates:
+            reasons.add("review_binding_requires_compatible_artifacts")
+        if not inventory["pre_010c_retired"]:
+            reasons.add("retirement_required")
+
+    launch_allowed = not reasons
+    confirmation_reasons = set(reasons)
+    if not state["schema_present"]:
+        confirmation_reasons.add("workspace_schema_missing")
+    if not inventory["pre_010c_retired"]:
+        confirmation_reasons.add("retirement_required")
+    if candidate_gates != {GATE} or LEGACY in active_gates:
+        confirmation_reasons.add("confirmation_requires_compatible_artifacts")
+
+    return {
+        "version": 1,
+        "gate_version": GATE,
+        "target": target,
+        "checked_at": utc_text(now),
+        "evidence_expires_at": utc_text(observed + dt.timedelta(seconds=MAX_AGE_SECONDS)),
+        "database_name": state["database_name"],
+        "binding_count": state["binding_count"],
+        "required_gate_versions": sorted(state["gate_versions"]),
+        "process_count": str(len(process_ids)),
+        "pre_010c_retired": inventory["pre_010c_retired"],
+        "candidates": selected,
+        "launch_allowed": launch_allowed,
+        "confirmation_ready": not confirmation_reasons,
+        "launch_reasons": sorted(reasons),
+        "confirmation_reasons": sorted(confirmation_reasons),
+    }
+
+
+def unique_object(pairs):
+    output = {}
+    for key, value in pairs:
+        if key in output:
+            fail()
+        output[key] = value
+    return output
+
+
+def decode_json(raw):
+    if len(raw) > MAX_JSON_BYTES:
+        fail()
+    try:
+        return json.loads(raw, object_pairs_hook=unique_object,
+                          parse_constant=lambda _value: fail())
+    except (ValueError, UnicodeError, RecursionError):
+        fail()
+
+
+def operator_file(path):
+    try:
+        with open(path, "rb") as source:
+            info = os.fstat(source.fileno())
+            if (not stat.S_ISREG(info.st_mode) or info.st_uid not in {0, os.geteuid()}
+                    or info.st_mode & (stat.S_IWGRP | stat.S_IWOTH)):
+                fail("operator_file_permissions")
+            raw = source.read(MAX_JSON_BYTES + 1)
+    except OSError:
+        fail("operator_file_unavailable")
+    return decode_json(raw), hashlib.sha256(raw).hexdigest()
+
+
+def hash_candidates(document):
+    output = []
+    for item in versioned(document, "artifacts"):
+        object_fields(item, {"role", "path"})
+        if (not valid_role(item["role"]) or not isinstance(item["path"], str)
+                or not item["path"] or "\0" in item["path"]):
+            fail()
+        digest = hashlib.sha256()
+        try:
+            with open(Path(item["path"]), "rb") as source:
+                before = os.fstat(source.fileno())
+                if (not stat.S_ISREG(before.st_mode) or before.st_uid not in {0, os.geteuid()}
+                        or before.st_mode & (stat.S_IWGRP | stat.S_IWOTH)):
+                    fail("candidate_file_permissions")
+                for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                    digest.update(chunk)
+                after = os.fstat(source.fileno())
+                if (before.st_size, before.st_mtime_ns, before.st_ctime_ns) != (
+                        after.st_size, after.st_mtime_ns, after.st_ctime_ns):
+                    fail("candidate_changed")
+        except OSError:
+            fail("candidate_unavailable")
+        output.append({"role": item["role"], "sha256": digest.hexdigest()})
+    return {"version": 1, "artifacts": output}
+
+
+def sql_json(sql):
+    try:
+        result = subprocess.run(
+            ["psql", "-X", "--no-password", "-qAt", "-v", "ON_ERROR_STOP=1", "-c", sql],
+            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            timeout=15, check=False,
+            env={**os.environ, "PGCONNECT_TIMEOUT": "5", "PGOPTIONS": "-c default_transaction_read_only=on -c statement_timeout=5000"},
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        fail("database_unavailable")
+    if result.returncode != 0:
+        fail("database_unavailable")
+    try:
+        return decode_json(result.stdout)
+    except EvidenceError:
+        fail("database_evidence_invalid")
+
+
+def database_state():
+    schema = sql_json("SELECT json_build_object('present',to_regclass('public.migration_workspace') IS NOT NULL,'database_name',current_database())")
+    object_fields(schema, {"present", "database_name"})
+    if type(schema["present"]) is not bool:
+        fail("database_evidence_invalid")
+    if not schema["present"]:
+        return {"schema_present": False, "binding_count": "0", "gate_versions": [],
+                "database_name": schema["database_name"]}
+    # Deliberately no run-state filter: cancelled/completed bindings still hold.
+    return sql_json("SELECT json_build_object('schema_present',true,'binding_count',count(*)::text,'gate_versions',COALESCE(json_agg(DISTINCT gate_version),'[]'::json),'database_name',current_database()) FROM public.migration_workspace")
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    for option in ["artifacts", "candidates", "inventory", "target"]:
+        parser.add_argument("--" + option, required=True)
+    parser.add_argument("--purpose", choices=["launch", "confirm"], required=True)
+    args = parser.parse_args(argv)
+    try:
+        artifacts, artifacts_hash = operator_file(args.artifacts)
+        candidates, candidates_hash = operator_file(args.candidates)
+        inventory, inventory_hash = operator_file(args.inventory)
+        candidates = hash_candidates(candidates)
+        state = database_state()
+        report = evaluate(artifacts, candidates, inventory, state, args.target, dt.datetime.now(dt.timezone.utc))
+        report.update({"purpose": args.purpose, "artifact_manifest_sha256": artifacts_hash,
+                       "candidate_manifest_sha256": candidates_hash, "inventory_sha256": inventory_hash})
+        print(json.dumps(report, sort_keys=True, separators=(",", ":")))
+        allowed = report["launch_allowed"] if args.purpose == "launch" else report["confirmation_ready"]
+        return 0 if allowed else 1
+    except EvidenceError as error:
+        print(json.dumps({"version": 1, "gate_version": GATE, "launch_allowed": False,
+                          "confirmation_ready": False, "error": str(error)}, sort_keys=True))
+        return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

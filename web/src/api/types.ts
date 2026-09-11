@@ -23,6 +23,8 @@ export type MembershipStatus = 'active' | 'inactive'
 
 export interface MeOrganization extends OrganizationSummary {
   role: MembershipRole
+  workspace_mode: 'operational' | 'migration_review'
+  workspace_revision: string
 }
 
 // SLICE_004 §5 item 2: `organization` is null for a platform-only session
@@ -563,7 +565,16 @@ export interface TaskCompletedDetail {
   can_manage: boolean
 }
 
+export interface PersonImportedDetail {
+  import_id: string
+  plan_id: string
+  source_record_id: string
+  capture_id: string
+  on_behalf_of_user_id: string
+}
+
 export type HistoryEntry =
+  | (HistoryEntryBase & { kind: 'person_imported'; detail: PersonImportedDetail })
   | (HistoryEntryBase & { kind: 'inquiry_received'; detail: InquiryReceivedDetail })
   | (HistoryEntryBase & { kind: 'routing_decision'; detail: RoutingDecisionDetail })
   | (HistoryEntryBase & { kind: 'assignment_changed'; detail: AssignmentChangedDetail })

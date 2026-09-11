@@ -33,6 +33,8 @@ pub async fn list_for_organization(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
 ) -> Result<Vec<TagRow>, TagError> {
+    let mut workspace_read = crate::auth::workspace::read(conn, organization_id).await?;
+    let conn = &mut *workspace_read;
     let rows = sqlx::query_as!(
         TagRowDb,
         r#"SELECT t.id, t.name,
@@ -72,6 +74,8 @@ pub async fn list_for_person(
     organization_id: OrganizationId,
     person_id: PersonId,
 ) -> Result<Vec<TagRef>, TagError> {
+    let mut workspace_read = crate::auth::workspace::read(conn, organization_id).await?;
+    let conn = &mut *workspace_read;
     let rows = sqlx::query_as!(
         TagRefDb,
         r#"SELECT t.id, t.name
@@ -119,6 +123,8 @@ pub async fn names_for(
     organization_id: OrganizationId,
     ids: &[TagId],
 ) -> Result<HashMap<TagId, String>, TagError> {
+    let mut workspace_read = crate::auth::workspace::read(conn, organization_id).await?;
+    let conn = &mut *workspace_read;
     if ids.is_empty() {
         return Ok(HashMap::new());
     }

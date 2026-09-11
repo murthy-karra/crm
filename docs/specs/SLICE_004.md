@@ -1,5 +1,14 @@
 # Slice 004 — Administration
 
+**Approved amendment — 010c (D-065, 2026-09-11):**
+[010c](SLICE_010c.md) adds server-owned `workspace_mode` and decimal-string
+`workspace_revision` to the shared session Organization payload (login, `/me`,
+invitation acceptance). This is separate from administrative status or membership.
+In migration review, ordinary members retain session/status/logout; current
+admins have conventional read-only review and migration controls. Identity and
+membership governance remains allowed; ordinary business/settings operations
+obey the workspace guard. No platform-admin tenant-data bypass is added.
+
 Status: APPROVED (user, 2026-08-22; planner pass, then independent
 review — 19 findings, all applied as safe defaults or implementation
 notes, none blocking; §14 safe defaults and §5 declared contract changes

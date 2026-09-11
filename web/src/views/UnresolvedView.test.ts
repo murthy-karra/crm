@@ -27,7 +27,7 @@ const ROW_ID = '44444444-4444-4444-4444-444444444444'
 function me(role: MembershipRole): MeResponse {
   return {
     user: { id: 'u-alice', email: 'alice@acme.test', display_name: 'Alice' },
-    organization: { id: ORG_ID, name: 'Acme Realty', role },
+    organization: { id: ORG_ID, name: 'Acme Realty', workspace_mode: 'operational', workspace_revision: '1', role },
     platform_admin: false,
   }
 }

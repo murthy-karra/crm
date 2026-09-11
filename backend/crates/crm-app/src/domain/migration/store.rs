@@ -12,6 +12,7 @@ pub async fn require_admin(
     conn: &mut PgConnection,
     ctx: &CommandContext,
 ) -> Result<(), MigrationError> {
+    crate::auth::workspace::shared(conn, ctx.organization_id).await?;
     // Lock authority until transaction commit; a concurrent revocation waits.
     if sqlx::query("SELECT 1 FROM organization_membership WHERE organization_id=$1 AND user_id=$2 AND role='admin' AND status='active' FOR SHARE").bind(ctx.organization_id.0).bind(ctx.actor_user_id.0).fetch_optional(conn).await?.is_some(){Ok(())}else{Err(MigrationError::Forbidden)}
 }
@@ -23,6 +24,7 @@ pub async fn active_admin(
     Ok(sqlx::query("SELECT 1 FROM organization_membership WHERE organization_id=$1 AND user_id=$2 AND role='admin' AND status='active'").bind(org.0).bind(user.0).fetch_optional(pool).await?.is_some())
 }
 pub async fn lock_org(conn: &mut PgConnection, org: OrganizationId) -> Result<(), MigrationError> {
+    crate::auth::workspace::shared(conn, org).await?;
     sqlx::query("SELECT id FROM organization WHERE id=$1 FOR UPDATE")
         .bind(org.0)
         .fetch_one(conn)

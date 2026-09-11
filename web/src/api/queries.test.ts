@@ -148,7 +148,7 @@ afterEach(async () => {
 function savedMe(orgId = ORG_ID, actorId = 'actor-a'): MeResponse {
   return {
     user: { id: actorId, email: `${actorId}@example.test`, display_name: actorId },
-    organization: { id: orgId, name: 'Example', role: 'member' },
+    organization: { workspace_mode: 'operational', workspace_revision: '1', id: orgId, name: 'Example', role: 'member' },
     platform_admin: false,
   }
 }
@@ -1227,5 +1227,25 @@ describe('Slice 019b custom-field cache settlement', () => {
     await flushSettleTimers()
     expect(refetch).toHaveBeenCalledWith({ queryKey: queryKeys.org(ORG_ID), type: 'active', stale: true })
     scope.stop()
+  })
+})
+
+
+describe('workspace refresh cache boundary', () => {
+  it('installs a changed authoritative /me without cancelling its own query and clears private caches and receipts', async () => {
+    const { queryClient: shared } = await import('../query-client')
+    const workspace = await import('../workspaceLifecycle')
+    workspace.resetWorkspace(); shared.clear()
+    const operational = savedMe(); workspace.observeWorkspace(operational)
+    shared.setQueryData(queryKeys.me, operational)
+    shared.setQueryData(queryKeys.person(ORG_ID, PERSON_ID), personDetail())
+    shared.getMutationCache().build(shared, { mutationFn: async () => ({ private: 'receipt' }) })
+    const held = { ...operational, organization: { ...operational.organization!, workspace_mode: 'migration_review' as const, workspace_revision: '2' } }
+    apiFetchMock.mockResolvedValue(held)
+    const result = await shared.fetchQuery({ queryKey: queryKeys.me, queryFn: () => fetchMe(), staleTime: 0 })
+    expect(result).toEqual(held); expect(shared.getQueryData(queryKeys.me)).toEqual(held)
+    expect(shared.getQueryData(queryKeys.person(ORG_ID, PERSON_ID))).toBeUndefined()
+    expect(shared.getMutationCache().getAll()).toHaveLength(0)
+    workspace.resetWorkspace(); shared.clear()
   })
 })

@@ -1,6 +1,6 @@
 # Project state
 
-Last updated: 2026-09-11 (010b committed, merged, pushed, deployed and cleaned up).
+Last updated: 2026-09-11 (010b released; 010c implemented and synthetically verified, unreleased).
 This file holds current operational status, active work and live residuals.
 [PROJECT_HISTORY.md](PROJECT_HISTORY.md) preserves earlier progress, the slice
 ledger and historical measurements; its old instructions are not current work.
@@ -28,6 +28,22 @@ No production-cluster deployment or recurring monitor is established by this wor
 
 ## Current slice
 
+- **010c implementation:** approved under D-065, implemented on
+  `codex/slice-010c-people-import` in `/Users/karrad/projects/crm-worktrees/010c`.
+  The [spec](../specs/SLICE_010c.md) and [brief](../tasks/SLICE_010c_IMPL.md) cover
+  People/contact/stage/assignment import from retained 010b evidence, separate
+  People with contact overlap flags, explicit mappings, atomic empty-Organization
+  entry and a durable administrator review hold. Both bounded implementation
+  reviews and their corrections are complete; executed query-plan and browser
+  findings received targeted fix confirmation. The final sequential gates passed:
+  877 Rust tests, five doctests, 1,002 Web tests, 845 DB tests, 14 release-preflight
+  tests and 11 email-worker tests. All 59 query plans/258 assertions and the single
+  paired reader benchmark passed. Production-Web browser verification passed all 50 recorded checkpoints,
+  including six states at six viewport widths. [Evidence summary](../design/qa/slice-010c-2026-09-11/README.md) and
+  [verification chronology](../tasks/SLICE_010c_VERIFICATION.md) retain the exact
+  source, checks and limits. The D-065 follow-up authorizes Git integration,
+  publication and cleanup; these are now in progress. Changes remain uncommitted;
+  no shared-development deployment, live FUB operation or activation occurred.
 - **Foundations documentation:** user authorized the three deliverables on
   2026-09-11: refresh the system map/state, draft foundations, define readiness.
   [System map](../architecture/ARCHITECTURE_BASELINE.md),
@@ -61,6 +77,16 @@ the release record for current source/runtime identity before further work.
 
 ## Last accepted decision
 
+**D-065:** the complete reviewed 010c specification, shared contracts and synthetic
+implementation/check work are approved. Its follow-up authorizes commit, merge,
+push and cleanup. Deployment, activation, real-data processing and live-source
+validation are not included.
+
+**D-064:** 010c preserves distinct source People despite shared contacts, allows
+explicitly approved matching stages, and keeps imported records in an admin
+review workspace until later activation. D-065 subsequently accepts the complete
+010c contracts after independent READY review.
+
 **D-063:** the reviewed 010b specification, contracts, implementation and synthetic
 verification are approved. Initial synthetic-development allowances are 2 GiB/run
 and 4 GiB retained/Organization; current admins may explicitly raise them within
@@ -86,7 +112,7 @@ Foundations F-01/F-02/F-03 remain proposals except where separately accepted.
   [Current summary](SLICE_010_MIGRATION_SUMMARY.md); historical survey retained
   in [the ladder](SLICE_010_LADDER.md). New, empty Organization first and
   010a's source/credential contracts are accepted. Full inventory, mapping,
-  imports and cutover need their own specifications and approvals.
+  imports and cutover need their own specifications and approvals. 010c is the current implementation rung; the deployed 010b release remains unchanged.
 - **Remote gates (gate-speedup phase 2): DEFERRED** pending local
   phase-1 results (now in: local gates are ~3 min — pressure is low).
   Survey recorded so it is not re-litigated: first choice GitHub
@@ -210,6 +236,23 @@ and now lives only in git history.
 
 ## Latest verification
 
+- 2026-09-11 010c implementation: both bounded reviews and targeted corrections
+  are complete. Final gates passed: 877 Rust, 5 doctests, 1,002 Web, 845 DB,
+  14 preflight and 11 email-worker tests. All 59 plans/258 assertions and the
+  single paired reader benchmark passed. Production Web/real synthetic API
+  passed import/replay/provenance, role and late-response fencing, isolation,
+  storage resume/cancellation and six-state/six-width browser checks. Source and
+  runtime manifests, 32 screenshots and logs are in the
+  [evidence summary](../design/qa/slice-010c-2026-09-11/README.md).
+  Implementation remains uncommitted/unreleased; live FUB validation is deferred.
+
+- 2026-09-11 010c planning: independent full review returned READY-WITH-FIXES;
+  five corrections received targeted READY confirmation. Documentation paths,
+  Markdown anchors, whitespace and documentation-only scope passed: 111 local
+  paths and three anchors across eight changed Markdown files. No application/DB/browser/performance test, source call,
+  commit/push, restore or runtime operation was performed. See the
+  [plan review](../tasks/SLICE_010c_REVIEW.md).
+
 - 2026-09-11 010b release: API/migrator and staged Web builds passed; database
   backup catalog read; additive migration applied. All 29 HTTP/auth/asset checks,
   tunnel 200/200/101 and public admin/member/reload/desktop/390px browser checks
@@ -266,22 +309,30 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. Resume authorized FUB qualification when the user is ready, against an agreed
-   dataset and applicable readiness gates. Later import work needs a new approved
-   specification; no import policy follows from this capture/preview implementation.
-2. Use readiness C gates to prepare for first real customer data; use V gates for
+1. Complete the authorized 010c Git integration, publication and cleanup.
+   Shared-development deployment remains a later step; an authorized release
+   must use the 010c compatibility preflight and preserve review bindings.
+   No deployment or activation is included in the D-065 follow-up.
+2. Resume authorized FUB qualification when the user is ready, against an agreed
+   dataset and applicable readiness gates. Later data families, mapping repair,
+   deltas and activation need their own approved specification.
+3. Use readiness C gates to prepare for first real customer data; use V gates for
    the user's later authorized FUB validation. Identify dataset type and satisfy
    applicable prerequisites before connecting. No live call is scheduled here.
-3. Review F-01/F-02/F-03 proposals as their triggers approach. First production
+4. Review F-01/F-02/F-03 proposals as their triggers approach. First production
    planning owns recovery/service targets, deployment, identity/secrets and
    worker roles. Native support windows and tenant relocation come at their
    respective capabilities; do not expand D-050 now.
-4. Existing user-deferred work remains: Slice 017 live sends/walkthrough, 009
+5. Existing user-deferred work remains: Slice 017 live sends/walkthrough, 009
    walkthrough steps 3–5, and Telnyx SIP password rotation. See live residuals
    and the owning verification records before acting.
 
 ## Approval currently required
 
+- D-065 approves 010c's complete workspace/session/import/history/persistence
+  contracts and implementation. No repeat specification approval is needed for
+  owned implementation detail. Release, activation and source operations remain
+  outside this authorization.
 - The foundations documentation assignment is authorized; its new architecture
   and policy proposals are not automatically accepted. Their owning specs must
   identify contract changes and acceptance under AGENTS §11/§16.

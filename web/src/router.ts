@@ -1,3 +1,4 @@
+import { workspaceOperational } from './workspaceLifecycle'
 import { watch } from 'vue'
 import {
   START_LOCATION,
@@ -40,6 +41,7 @@ declare module 'vue-router' {
 
 function routes(): RouteRecordRaw[] {
   return [
+    { path: '/workspace-review', name: 'workspace-review', component: () => import('./views/WorkspaceReviewView.vue'), meta: { title: 'Workspace under review' } },
     {
       path: '/login',
       name: 'login',
@@ -360,6 +362,12 @@ export function createAppRouter(history: RouterHistory): Router {
       return to.meta.requiresPlatformAdmin ? true : { path: '/platform' }
     }
 
+    if (session.organization.workspace_mode === 'migration_review' && !to.meta.requiresPlatformAdmin) {
+      if (session.organization.role !== 'admin') return to.name === 'workspace-review' ? true : { path: '/workspace-review' }
+      const allowed = ['people', 'person-detail', 'manage-migration', 'manage-members']
+      if (!allowed.includes(String(to.name))) return { path: '/manage/migration' }
+    } else if (to.name === 'workspace-review') return { path: '/today' }
+
     if (to.meta.requiresOrgAdmin && session.organization.role !== 'admin') {
       return { path: '/today' }
     }
@@ -374,7 +382,7 @@ export function createAppRouter(history: RouterHistory): Router {
     // Every earlier return above (public routes, the pending/unavailable
     // early returns, unauthenticated, platform-only) has already exited
     // before this point, so nothing is prefetched for any of those cases.
-    if (to.name === 'today') {
+    if (to.name === 'today' && workspaceOperational(session)) {
       prefetchTodayData(queryClient, session)
     }
 

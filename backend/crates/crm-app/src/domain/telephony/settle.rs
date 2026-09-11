@@ -45,6 +45,7 @@ pub async fn settle_in_tx(
     signal: &Signal,
     now: DateTime<Utc>,
 ) -> Result<Option<SettleOutcome>, sqlx::Error> {
+    crate::auth::workspace::shared(tx, organization_id).await?;
     let Some(mut call) = queries::lock_call(tx, organization_id, call_id).await? else {
         return Ok(None);
     };
@@ -57,6 +58,12 @@ pub async fn settle_in_tx(
             publications: Vec::new(),
         }));
     };
+
+    if transition.is_terminal() {
+        crate::auth::workspace::terminal_call(tx, organization_id, call_id.0).await?;
+    } else {
+        crate::auth::workspace::ordinary(tx, organization_id).await?;
+    }
 
     // --- UPDATE call ------------------------------------------------------
     match &transition {
@@ -176,6 +183,11 @@ pub async fn settle_in_tx(
         .await?;
     }
 
+    if transition.is_terminal() {
+        sqlx::query("SELECT set_config('crm.terminal_call','',true)")
+            .execute(&mut *tx)
+            .await?;
+    }
     Ok(Some(SettleOutcome {
         call,
         transition,

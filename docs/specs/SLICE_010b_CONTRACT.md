@@ -1,5 +1,13 @@
 # Slice 010b concrete backend contract
 
+**Approved amendment — 010c (D-065, 2026-09-11):**
+[010c's contract](SLICE_010c_CONTRACT.md) adds import-owned reservations and
+retained-byte charges to the existing snapshot/Organization ledgers. Source and
+preview reservation ownership, cancellation and authority remain distinct;
+source cancellation cannot release import admission. Raw bytes/profile semantics
+are unchanged. Import requalifies exact accepted raw evidence and does not treat
+bounded preview projections as executable destination values.
+
 Implementation detail under D-063 and SLICE_010b; frozen before coding, 2026-09-11.
 
 ## Source profile

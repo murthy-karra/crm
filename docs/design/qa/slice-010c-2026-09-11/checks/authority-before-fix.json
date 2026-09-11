@@ -1,0 +1,292 @@
+[
+  {
+    "ms": 2825,
+    "event": "response",
+    "path": "/api/me",
+    "status": 200,
+    "role": "admin",
+    "mode": "migration_review"
+  },
+  {
+    "ms": 2832,
+    "event": "navigation",
+    "path": "/manage/migration"
+  },
+  {
+    "ms": 2842,
+    "event": "request",
+    "method": "GET",
+    "path": "/api/migrations/fub/"
+  },
+  {
+    "ms": 2844,
+    "event": "request",
+    "method": "GET",
+    "path": "/api/migrations/fub/imports"
+  },
+  {
+    "ms": 2844,
+    "event": "request",
+    "method": "GET",
+    "path": "/api/migrations/fub/snapshots"
+  },
+  {
+    "ms": 2844,
+    "event": "request",
+    "method": "GET",
+    "path": "/api/migrations/fub/snapshots"
+  },
+  {
+    "ms": 2896,
+    "event": "navigation",
+    "path": "/people/11efa25a-9a7d-4385-9e98-80020eab17d7"
+  },
+  {
+    "ms": 2914,
+    "event": "request",
+    "method": "GET",
+    "path": "/api/me"
+  },
+  {
+    "ms": 2914,
+    "event": "navigation",
+    "path": "/people/11efa25a-9a7d-4385-9e98-80020eab17d7"
+  },
+  {
+    "ms": 2928,
+    "event": "navigation",
+    "path": "/people/11efa25a-9a7d-4385-9e98-80020eab17d7"
+  },
+  {
+    "ms": 2932,
+    "event": "navigation",
+    "path": "/people/11efa25a-9a7d-4385-9e98-80020eab17d7"
+  },
+  {
+    "ms": 2939,
+    "event": "request",
+    "method": "GET",
+    "path": "/api/people/11efa25a-9a7d-4385-9e98-80020eab17d7"
+  },
+  {
+    "ms": 2942,
+    "event": "request",
+    "method": "GET",
+    "path": "/api/tags"
+  },
+  {
+    "ms": 2942,
+    "event": "request",
+    "method": "GET",
+    "path": "/api/stages"
+  },
+  {
+    "ms": 2942,
+    "event": "request",
+    "method": "GET",
+    "path": "/api/organization/members"
+  },
+  {
+    "ms": 2943,
+    "event": "request",
+    "method": "GET",
+    "path": "/api/custom-fields"
+  },
+  {
+    "ms": 2943,
+    "event": "response",
+    "path": "/api/me",
+    "status": 200,
+    "role": "admin",
+    "mode": "migration_review"
+  },
+  {
+    "ms": 3073,
+    "event": "response",
+    "path": "/api/stages",
+    "status": 200
+  },
+  {
+    "ms": 3074,
+    "event": "response",
+    "path": "/api/custom-fields",
+    "status": 200
+  },
+  {
+    "ms": 3075,
+    "event": "response",
+    "path": "/api/tags",
+    "status": 200
+  },
+  {
+    "ms": 3075,
+    "event": "response",
+    "path": "/api/organization/members",
+    "status": 200
+  },
+  {
+    "ms": 3089,
+    "event": "person-held"
+  },
+  {
+    "ms": 3092,
+    "event": "before-demotion",
+    "path": "/people/11efa25a-9a7d-4385-9e98-80020eab17d7",
+    "readyState": "complete",
+    "visibility": "visible"
+  },
+  {
+    "ms": 3106,
+    "event": "server-member",
+    "role": "member",
+    "mode": "migration_review"
+  },
+  {
+    "ms": 3107,
+    "event": "focus-dispatched"
+  },
+  {
+    "ms": 3611,
+    "event": "state",
+    "path": "/people/11efa25a-9a7d-4385-9e98-80020eab17d7",
+    "readyState": "complete",
+    "headings": [],
+    "bodyStart": "SR\nSynthetic import review review-mtxcxsqy\n\nReview\n\nMigration\nPeople\nMembers\nSA\n\nSynthetic import review Admin\n\nWorkspace under review. You can inspect records and manage membership. Ordinary work and outbound actions are unavailable until a later activation.\n\nPeople\nLoading…"
+  },
+  {
+    "ms": 4113,
+    "event": "state",
+    "path": "/people/11efa25a-9a7d-4385-9e98-80020eab17d7",
+    "readyState": "complete",
+    "headings": [],
+    "bodyStart": "SR\nSynthetic import review review-mtxcxsqy\n\nReview\n\nMigration\nPeople\nMembers\nSA\n\nSynthetic import review Admin\n\nWorkspace under review. You can inspect records and manage membership. Ordinary work and outbound actions are unavailable until a later activation.\n\nPeople\nLoading…"
+  },
+  {
+    "ms": 4616,
+    "event": "state",
+    "path": "/people/11efa25a-9a7d-4385-9e98-80020eab17d7",
+    "readyState": "complete",
+    "headings": [],
+    "bodyStart": "SR\nSynthetic import review review-mtxcxsqy\n\nReview\n\nMigration\nPeople\nMembers\nSA\n\nSynthetic import review Admin\n\nWorkspace under review. You can inspect records and manage membership. Ordinary work and outbound actions are unavailable until a later activation.\n\nPeople\nLoading…"
+  },
+  {
+    "ms": 5118,
+    "event": "state",
+    "path": "/people/11efa25a-9a7d-4385-9e98-80020eab17d7",
+    "readyState": "complete",
+    "headings": [],
+    "bodyStart": "SR\nSynthetic import review review-mtxcxsqy\n\nReview\n\nMigration\nPeople\nMembers\nSA\n\nSynthetic import review Admin\n\nWorkspace under review. You can inspect records and manage membership. Ordinary work and outbound actions are unavailable until a later activation.\n\nPeople\nLoading…"
+  },
+  {
+    "ms": 5621,
+    "event": "state",
+    "path": "/people/11efa25a-9a7d-4385-9e98-80020eab17d7",
+    "readyState": "complete",
+    "headings": [],
+    "bodyStart": "SR\nSynthetic import review review-mtxcxsqy\n\nReview\n\nMigration\nPeople\nMembers\nSA\n\nSynthetic import review Admin\n\nWorkspace under review. You can inspect records and manage membership. Ordinary work and outbound actions are unavailable until a later activation.\n\nPeople\nLoading…"
+  },
+  {
+    "ms": 6125,
+    "event": "state",
+    "path": "/people/11efa25a-9a7d-4385-9e98-80020eab17d7",
+    "readyState": "complete",
+    "headings": [],
+    "bodyStart": "SR\nSynthetic import review review-mtxcxsqy\n\nReview\n\nMigration\nPeople\nMembers\nSA\n\nSynthetic import review Admin\n\nWorkspace under review. You can inspect records and manage membership. Ordinary work and outbound actions are unavailable until a later activation.\n\nPeople\nLoading…"
+  },
+  {
+    "ms": 6628,
+    "event": "state",
+    "path": "/people/11efa25a-9a7d-4385-9e98-80020eab17d7",
+    "readyState": "complete",
+    "headings": [],
+    "bodyStart": "SR\nSynthetic import review review-mtxcxsqy\n\nReview\n\nMigration\nPeople\nMembers\nSA\n\nSynthetic import review Admin\n\nWorkspace under review. You can inspect records and manage membership. Ordinary work and outbound actions are unavailable until a later activation.\n\nPeople\nLoading…"
+  },
+  {
+    "ms": 7131,
+    "event": "state",
+    "path": "/people/11efa25a-9a7d-4385-9e98-80020eab17d7",
+    "readyState": "complete",
+    "headings": [],
+    "bodyStart": "SR\nSynthetic import review review-mtxcxsqy\n\nReview\n\nMigration\nPeople\nMembers\nSA\n\nSynthetic import review Admin\n\nWorkspace under review. You can inspect records and manage membership. Ordinary work and outbound actions are unavailable until a later activation.\n\nPeople\nLoading…"
+  },
+  {
+    "ms": 7634,
+    "event": "state",
+    "path": "/people/11efa25a-9a7d-4385-9e98-80020eab17d7",
+    "readyState": "complete",
+    "headings": [],
+    "bodyStart": "SR\nSynthetic import review review-mtxcxsqy\n\nReview\n\nMigration\nPeople\nMembers\nSA\n\nSynthetic import review Admin\n\nWorkspace under review. You can inspect records and manage membership. Ordinary work and outbound actions are unavailable until a later activation.\n\nPeople\nLoading…"
+  },
+  {
+    "ms": 8138,
+    "event": "state",
+    "path": "/people/11efa25a-9a7d-4385-9e98-80020eab17d7",
+    "readyState": "complete",
+    "headings": [],
+    "bodyStart": "SR\nSynthetic import review review-mtxcxsqy\n\nReview\n\nMigration\nPeople\nMembers\nSA\n\nSynthetic import review Admin\n\nWorkspace under review. You can inspect records and manage membership. Ordinary work and outbound actions are unavailable until a later activation.\n\nPeople\nLoading…"
+  },
+  {
+    "ms": 8640,
+    "event": "state",
+    "path": "/people/11efa25a-9a7d-4385-9e98-80020eab17d7",
+    "readyState": "complete",
+    "headings": [],
+    "bodyStart": "SR\nSynthetic import review review-mtxcxsqy\n\nReview\n\nMigration\nPeople\nMembers\nSA\n\nSynthetic import review Admin\n\nWorkspace under review. You can inspect records and manage membership. Ordinary work and outbound actions are unavailable until a later activation.\n\nPeople\nLoading…"
+  },
+  {
+    "ms": 9142,
+    "event": "state",
+    "path": "/people/11efa25a-9a7d-4385-9e98-80020eab17d7",
+    "readyState": "complete",
+    "headings": [],
+    "bodyStart": "SR\nSynthetic import review review-mtxcxsqy\n\nReview\n\nMigration\nPeople\nMembers\nSA\n\nSynthetic import review Admin\n\nWorkspace under review. You can inspect records and manage membership. Ordinary work and outbound actions are unavailable until a later activation.\n\nPeople\nLoading…"
+  },
+  {
+    "ms": 9177,
+    "event": "person-released"
+  },
+  {
+    "ms": 9177,
+    "event": "response",
+    "path": "/api/people/11efa25a-9a7d-4385-9e98-80020eab17d7",
+    "status": 200
+  },
+  {
+    "ms": 9186,
+    "event": "request",
+    "method": "GET",
+    "path": "/api/people/11efa25a-9a7d-4385-9e98-80020eab17d7/import-provenance"
+  },
+  {
+    "ms": 9196,
+    "event": "response",
+    "path": "/api/people/11efa25a-9a7d-4385-9e98-80020eab17d7/import-provenance",
+    "status": 403
+  },
+  {
+    "ms": 9199,
+    "event": "request",
+    "method": "GET",
+    "path": "/api/me"
+  },
+  {
+    "ms": 9207,
+    "event": "response",
+    "path": "/api/me",
+    "status": 200,
+    "role": "member",
+    "mode": "migration_review"
+  },
+  {
+    "ms": 9212,
+    "event": "navigation",
+    "path": "/workspace-review"
+  },
+  {
+    "ms": 10679,
+    "event": "after-release",
+    "path": "/workspace-review",
+    "readyState": "complete",
+    "bodyStart": "SR\nSynthetic import review review-mtxcxsqy\n\nWorkspace\n\nReview status\nSA\n\nSynthetic import review Admin\n\nWorkspace under review\n\nYour Organization’s administrators are reviewing imported records.\n\nPeople, Today, calls and the AI Operator will remain unavailable until a later activation. You can refresh this status or log out.\n\nRefresh status"
+  }
+]

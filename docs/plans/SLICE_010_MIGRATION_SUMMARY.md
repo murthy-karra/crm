@@ -1,10 +1,12 @@
 # Slice 010 — FUB migration planning summary
 
 **Status: 010a DEPLOYED AND VERIFIED (2026-09-11); live FUB validation deferred.
-010b core-first capture/preview is also deployed and verified under D-063; later import rungs remain unapproved.** The user
+010b core-first capture/preview is also deployed and verified under D-063;
+010c is implemented and synthetically verified under D-065; it is not released.** The user
 selected **a new, empty CRM Organization first** (D-059), then approved 010a's
 API-first assessment and encrypted saved credentials (D-060). Other
-recommendations remain proposals. Inspected against main `b2fb368`, after 019b.
+recommendations remain proposals. Initial survey used main `b2fb368`, after 019b;
+010c code findings use main `c6c5930`, after 010b's release.
 No FUB account was connected or customer data fetched.
 
 **010a planning follow-up (historical):** the user approved the next rung, which now
@@ -23,6 +25,16 @@ synthetic API/browser verification passed. See the
 [shared-development release](../tasks/SLICE_010b_RELEASE.md) passed; authorized
 live-source qualification remains deferred.
 
+**Current implementation:** [010c](../specs/SLICE_010c.md) and its
+[brief](../tasks/SLICE_010c_IMPL.md) define a retained-evidence People import.
+D-064 accepts separate People with overlap flags, explicitly approved matching
+stages and an admin review workspace until later activation. D-065 approves the
+complete spec/brief after independent READY review. The implementation
+does not create Inquiry history or release imported People to normal agent use.
+All required implementation checks passed; [evidence](../design/qa/slice-010c-2026-09-11/README.md)
+records the exact source and proof. The D-065 follow-up authorizes Git integration,
+publication and cleanup. Deployment and live FUB validation remain separate.
+
 ## 1. Outcome and first milestone
 
 An Organization admin should understand what their FUB account contains,
@@ -40,8 +52,8 @@ The approved destination is new and empty at the initial import. Normal
 Organization setup, default stages and invited members are compatible with
 that direction. The import spec must define the precise emptiness check,
 prevent accidental import into a populated destination, and distinguish an
-idempotent rerun from an unrelated second import. Shared household contact
-methods and duplicate source People still need explicit matching rules.
+idempotent rerun from an unrelated second import. D-064 now settles shared
+household contacts: distinct source People stay separate with flagged overlaps.
 
 ## 2. What changed since the parked plan
 
@@ -157,10 +169,10 @@ the cutover rung.
 |---|---|
 | 1 — 010a | Secure API connection and honest bounded access report, implemented and synthetically verified. Live authorized FUB validation is user-deferred; no export upload or imported CRM business records. |
 | 2 — 010b | Core-first encrypted resumable snapshot and preview (D-061): People/users/stages/custom fields/notes/tasks; mappings, overlap candidates, unsupported values and explicit remaining coverage. Raw captures carry source IDs, API/schema/profile versions, capture times and keyed hashes. Further snapshot work must address history, communications, media and other uncovered families before cutover. |
-| 3 — 010c | Confirmed People/contact/stage/assignment import into the new Organization using explicit provenance and matching rules. Restart or repeat produces no duplicates. Source attribution and Person/Inquiry semantics are resolved first. |
+| 3 — 010c | People/contact/stage/assignment import into the new empty Organization is implemented and synthetically verified under D-065. Separate People, explicitly approved matching stages and admin review-only use remain D-064. Frozen-plan recovery/provenance avoids duplicates and synthetic Inquiry history; release/activation remain separate. |
 | 4 — 010f+ core rungs | Tags, custom definitions/options/values, notes and tasks through small typed import commands. Preserve authorship/timestamps and protect locally edited or tombstoned records on rerun. Exact rung splits follow the snapshot. |
 | 5 — 010d | Supported historical inquiry/call/text/correspondence facts, each with verified meaning. Inaccessible content stays a disclosed gap. Resolve Today behavior before enabling imported backlog for agents. |
-| 6 — 010e | Per-entity delta capture, final reconciliation and explicit cutover. Validate changes/deletions during the snapshot, then agree a source-write cutoff and final delta. No source cancellation, phone transfer or ongoing two-way sync is implied. |
+| 6 — 010e | Per-entity delta capture, final reconciliation and explicit cutover/activation. Resolve source privacy, enforce communication restrictions and review Today before releasing the D-064 hold; validate changes/deletions and agree a source-write cutoff/final delta. No source cancellation, phone transfer or ongoing two-way sync is implied. |
 
 No calendar estimate is credible before source access, volume and fidelity
 gaps are measured. The existing 25k-People/50-member/five-concurrent-Today
@@ -171,23 +183,27 @@ envelope and D-050 verification budget remain the baseline.
 | Topic | Recommendation | Alternative / consequence | Gate |
 |---|---|---|---|
 | Destination | **Accepted: new, empty Organization first (D-059).** | Existing-Organization merge remains a separate future scope. | Precise emptiness/rerun rules in 010c. |
+| Shared contacts | **Accepted D-064: separate source People; flag overlaps.** | Automatic household merge is not selected. | Concrete normalization/provenance in 010c. |
+| Unknown stages | **Accepted D-064: explicit matching stage creation.** | Mandatory mapping into current stages is not selected. | Approved manifest, collision/order checks in 010c. |
+| Initial use | **Accepted D-064: admin review-only until activation.** | Immediate agent operation is not selected. | Server-enforced hold in 010c; later activation owns readiness and release. |
 | Source route | **Accepted for 010a (D-060): API-first assessment.** Separately identified exports can supplement later rungs. | CSV-first was the alternative, with documented coverage limits. Do not silently narrow fidelity. | Actual source authorization before live calls. |
 | Credentials | **Accepted for 010a (D-060):** Organization-scoped encrypted storage, redacted types, revocation/replacement, no key in browser storage/logs/Operator context. | Memory-only credentials were the alternative. Use existing development key conventions; do not introduce OpenBao early. | Implemented and synthetically verified; live validation remains deferred. |
 | Recovery and updates | Checkpointed resume, immutable raw captures, source-ID mapping and conflict-aware updates. Keep FUB operational until reconciliation. | Automatic destructive rollback is a separate design; a new destination does not authorize wiping it after users add data. “Additive only” does not solve changes or deletions in a delta. | Before 010b/010c persistence/commit contracts. |
 | Cutover readiness | Agree required entity coverage with the target team; proposed core includes notes/tasks/tags/custom fields. No silent truncation, inferred consent, or hidden gaps. | A deliberately smaller migration needs an explicit fidelity decision and visible exclusions. | Before confirming a real import/cutover. |
 
-Additional mapping decisions belong to their rung: duplicate source People,
-unmatched agents/ponds, contacts without usable contact methods, Trash,
+Additional mapping decisions belong to their rung: unmatched agents/ponds,
+contacts without usable contact methods, Trash,
 date-only task deadlines, unsupported field limits, communication preferences,
 and source deletion versus local edits. Preserve available opt-out/suppression
 information; do not enable outbound communication until it can be enforced.
 Older overdue tasks can overwhelm Today; do not fabricate contact attempts or
 alter the ranking silently to hide that backlog.
 
-FUB source access and CRM visibility are different: this CRM gives active
-members Organization-wide Person visibility. The preview must expose any
-change in audience and resolve handling of restricted/private source content
-before import, without silently inventing a new CRM authorization policy.
+FUB source access and CRM visibility are different: operational Organizations
+give active members Organization-wide Person visibility. D-064 explicitly accepts
+an admin-only migration review hold; the proposed 010c gate enforces it. The
+preview must still expose audience changes and restricted/private source data;
+later activation requires those policies to be resolved before wider access.
 
 O-012/O-013 remain prerequisites before the first external customer's real
 consumer data is held, as recorded in the [decision log](../decisions/DECISION_LOG.md).
@@ -244,3 +260,8 @@ reviewed contracts, storage policy, implementation and synthetic verification.
 That implementation and its required gates are complete. The user's follow-up
 authorized commit, merge/publication, shared-development deployment and cleanup,
 now completed; live source validation remains deferred.
+
+The next authorized deliverable is the implementation and synthetic verification
+of the reviewed 010c specification/brief, grounded in the
+[current code record](../research/SLICE_010c_CODE_CONTRACTS.md). D-065 accepts the
+full implementation contract in addition to D-064's earlier three policies.

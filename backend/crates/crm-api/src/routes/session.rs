@@ -38,6 +38,8 @@ struct OrganizationPayload {
     id: OrganizationId,
     name: String,
     role: Role,
+    workspace_mode: String,
+    workspace_revision: String,
 }
 
 /// Amended by docs/specs/SLICE_004.md §5 (declared change): `organization`
@@ -66,6 +68,8 @@ impl SessionResponse {
                     id: org.id,
                     name: org.name.clone(),
                     role: org.role,
+                    workspace_mode: org.workspace_mode.clone(),
+                    workspace_revision: org.workspace_revision.to_string(),
                 }),
             platform_admin: identity.platform_admin,
         }
@@ -98,7 +102,7 @@ async fn login(
     .bind(&req.email)
     .fetch_optional(pool)
     .await
-    .map_err(|_| ApiError::Unavailable)?;
+    .map_err(ApiError::database)?;
 
     // Verify against a dummy hash when no credential row exists (unknown
     // user, or an existing user without a local password) so failure
@@ -141,7 +145,7 @@ async fn login(
     .bind(credential.id)
     .fetch_optional(pool)
     .await
-    .map_err(|_| ApiError::Unavailable)?;
+    .map_err(ApiError::database)?;
 
     let active_organization = match membership {
         Some((organization_id, organization_name, role_str)) => {
@@ -156,7 +160,7 @@ async fn login(
             let is_platform_admin =
                 crate::domain::admin::queries::is_platform_admin(pool, credential.id)
                     .await
-                    .map_err(|_| ApiError::Unavailable)?;
+                    .map_err(ApiError::database)?;
             if !is_platform_admin {
                 return Err(ApiError::NoMembership);
             }
@@ -174,7 +178,7 @@ async fn login(
         state.session_ttl,
     )
     .await
-    .map_err(|_| ApiError::Unavailable)?;
+    .map_err(ApiError::database)?;
 
     // Session fixation: revoke the previously presented session, but only
     // now that login has actually succeeded, and only if it belonged to
@@ -206,8 +210,18 @@ async fn login(
     let platform_admin = active_organization.is_none()
         || crate::domain::admin::queries::is_platform_admin(pool, credential.id)
             .await
-            .map_err(|_| ApiError::Unavailable)?;
+            .map_err(ApiError::database)?;
 
+    let workspace = if let Some((id, _, _)) = &active_organization {
+        let mut conn = pool.acquire().await.map_err(ApiError::database)?;
+        Some(
+            crate::auth::workspace::mode(&mut conn, OrganizationId::new(*id))
+                .await
+                .map_err(ApiError::database)?,
+        )
+    } else {
+        None
+    };
     let identity = session::SessionIdentity {
         user_id: UserId::new(credential.id),
         email: credential.email,
@@ -216,6 +230,8 @@ async fn login(
             id: OrganizationId::new(id),
             name,
             role,
+            workspace_mode: workspace.as_ref().expect("organization mode").0.clone(),
+            workspace_revision: workspace.as_ref().expect("organization mode").1,
         }),
         platform_admin,
     };
@@ -232,7 +248,7 @@ async fn logout(State(state): State<AppState>, jar: CookieJar) -> Result<Respons
         // logged out while the token stays valid server-side (spec §4).
         session::revoke_by_token(pool, &state.session_secret, cookie.value())
             .await
-            .map_err(|_| ApiError::Unavailable)?;
+            .map_err(ApiError::database)?;
     }
 
     let clearing = session::build_clearing_cookie(

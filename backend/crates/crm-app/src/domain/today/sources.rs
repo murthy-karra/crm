@@ -571,6 +571,9 @@ pub async fn list_today_work_sources(
     conn: &mut PgConnection,
     auth: &AuthContext,
 ) -> Result<Vec<TodaySource>, SavedListError> {
+    let mut permit =
+        crate::auth::workspace::operational_read(conn, auth.active_organization_id).await?;
+    let conn = &mut *permit;
     let mut sources =
         evaluated_sources_raw(conn, auth.active_organization_id, auth.actor_user_id).await?;
     for source in &mut sources {
@@ -598,7 +601,7 @@ pub async fn enable_today_work_source(
     cmd: EnableTodayWorkSource,
 ) -> Result<TodaySourceChange, SavedListError> {
     validate_expected_revision(cmd.expected_list_revision)?;
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
     saved_list::lock_current_membership(&mut tx, ctx.organization_id, ctx.actor_user_id).await?;
     saved_list::acquire_saved_lists_lock(&mut tx, ctx.organization_id).await?;
     let list = saved_list::visible_live_row_for_update(
@@ -686,7 +689,7 @@ pub async fn disable_today_work_source(
     ctx: &CommandContext,
     cmd: DisableTodayWorkSource,
 ) -> Result<TodaySourceChange, SavedListError> {
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
     saved_list::lock_current_membership(&mut tx, ctx.organization_id, ctx.actor_user_id).await?;
     saved_list::acquire_saved_lists_lock(&mut tx, ctx.organization_id).await?;
     // Tombstones remain visible to their creator/shared viewers specifically

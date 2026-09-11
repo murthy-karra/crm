@@ -13,8 +13,11 @@ use crate::telephony::Telephony;
 
 #[derive(Clone)]
 pub struct AppState {
+    pub import_release_path: Option<std::path::PathBuf>,
+    pub import_release: Option<Arc<crate::auth::workspace::ReleaseReadiness>>,
     pub snapshot_policy: crate::domain::migration::snapshot::SnapshotPolicy,
     pub db: Option<PgPool>,
+    pub workspace_read_slots: Arc<tokio::sync::Semaphore>,
     pub database_connect_timeout: Duration,
     pub session_secret: SessionSecret,
     pub session_ttl: Duration,
@@ -91,7 +94,14 @@ impl AppState {
             .map_err(|_| sqlx::Error::Protocol("FUB reader configuration invalid".into()))?,
         );
         Ok(Self {
+            import_release_path: None,
+            import_release: None,
             snapshot_policy: config.snapshot_policy.clone(),
+            workspace_read_slots: Arc::new(tokio::sync::Semaphore::new(
+                db.as_ref().map_or(1, |p| {
+                    (p.options().get_max_connections() / 2).max(1) as usize
+                }),
+            )),
             db,
             database_connect_timeout: config.database_connect_timeout,
             session_secret: config.session_secret.clone(),
@@ -121,7 +131,12 @@ impl AppState {
     /// struct literal (docs/specs/SLICE_002.md §14a).
     pub fn for_tests(pool: PgPool, config: &Config, publisher: Publisher) -> Self {
         Self {
+            import_release_path: None,
+            import_release: None,
             snapshot_policy: config.snapshot_policy.clone(),
+            workspace_read_slots: Arc::new(tokio::sync::Semaphore::new(
+                (pool.options().get_max_connections() / 2).max(1) as usize,
+            )),
             db: Some(pool),
             database_connect_timeout: config.database_connect_timeout,
             session_secret: config.session_secret.clone(),
@@ -163,5 +178,27 @@ impl AppState {
     pub fn with_telephony(mut self, telephony: Arc<Telephony>) -> Self {
         self.telephony = Some(telephony);
         self
+    }
+}
+
+impl AppState {
+    /// Read only server-owned evidence. A replaced operator report becomes usable
+    /// without restarting the API, and stale evidence never advertises Confirm.
+    pub async fn current_import_release(
+        &self,
+    ) -> Option<Arc<crate::auth::workspace::ReleaseReadiness>> {
+        let pool = self.db.as_ref()?;
+        if let Some(path) = &self.import_release_path {
+            return crate::auth::workspace::ReleaseReadiness::load_report(pool, path)
+                .await
+                .ok()
+                .map(Arc::new);
+        }
+        let release = self.import_release.as_ref()?;
+        release
+            .require_current(&mut *pool.acquire().await.ok()?)
+            .await
+            .ok()?;
+        Some(release.clone())
     }
 }

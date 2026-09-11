@@ -1,6 +1,7 @@
+import { configureWorkspaceLifecycle, observeWorkspace, resetWorkspace, currentWorkspaceEpoch, assertWorkspaceEpoch, workspaceOperational } from '../workspaceLifecycle'
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/vue-query'
 import { type MaybeRefOrGetter, computed, toValue, watch } from 'vue'
-import { queryClient } from '../query-client'
+import { queryClient, notifyUnauthorized } from '../query-client'
 import { ApiError, apiFetch } from './client'
 import {
   SessionVerificationPendingError,
@@ -245,8 +246,11 @@ export function useAuthSessionLifetime() {
 }
 
 async function fetchMeForGeneration(generation: number, signal?: AbortSignal): Promise<MeResponse> {
+  const workspaceEpoch = currentWorkspaceEpoch()
   const data = await apiFetch<MeResponse>('/me', { signal })
+  assertWorkspaceEpoch(workspaceEpoch)
   if (!isCurrentSessionGeneration(generation)) throw new SessionVerificationPendingError()
+  observeWorkspace(data)
   return data
 }
 
@@ -259,8 +263,28 @@ export async function fetchMe(signal?: AbortSignal): Promise<MeResponse> {
   return fetchMeForGeneration(currentSessionGeneration(), signal)
 }
 
+configureWorkspaceLifecycle({
+  discard: () => {
+    void queryClient.cancelQueries({ predicate: query => query.queryKey[0] !== 'me' })
+    queryClient.getMutationCache().clear()
+    queryClient.removeQueries({ predicate: query => query.queryKey[0] !== 'me' })
+  },
+  verify: async () => {
+    const generation = currentSessionGeneration()
+    let data: MeResponse
+    try { data = await apiFetch<MeResponse>('/me') } catch (error) {
+      if (isCurrentSessionGeneration(generation) && error instanceof ApiError && error.status === 401) notifyUnauthorized()
+      throw error
+    }
+    if (!isCurrentSessionGeneration(generation)) throw new SessionVerificationPendingError()
+    return data
+  },
+  install: identity => queryClient.setQueryData(queryKeys.me, identity),
+})
+
 configureSessionLifecycle({
   discardPrivateState: () => {
+    resetWorkspace()
     void queryClient.cancelQueries()
     queryClient.clear()
   },
@@ -288,11 +312,13 @@ configureSessionLifecycle({
  */
 export function useMe() {
   const sessionVerificationPending = useSessionVerificationPending()
-  return useQuery({
+  const query = useQuery({
     queryKey: queryKeys.me,
     queryFn: ({ signal }) => fetchMe(signal),
     enabled: computed(() => !sessionVerificationPending.value),
   })
+  watch(query.data, value => { if (value) observeWorkspace(value) }, { immediate: true, flush: 'sync' })
+  return query
 }
 
 /**
@@ -776,6 +802,7 @@ export function useTodaySources(orgId: MaybeRefOrGetter<string>, actorId: MaybeR
  * caller (router.ts) only reaches this after confirming one.
  */
 export function prefetchTodayData(qc: QueryClient, session: MeResponse): void {
+  if (!workspaceOperational(session)) return
   const orgId = session.organization?.id
   if (!orgId) return
   const actorId = session.user.id

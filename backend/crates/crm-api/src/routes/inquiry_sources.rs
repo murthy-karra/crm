@@ -22,12 +22,12 @@ async fn list_inquiry_sources(
     auth: AuthContext,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
-    let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
+    let mut conn = pool.acquire().await.map_err(ApiError::database)?;
 
     let (sources, truncated) =
         inquiry_queries::distinct_sources(&mut conn, auth.active_organization_id)
             .await
-            .map_err(|_| ApiError::Unavailable)?;
+            .map_err(ApiError::database)?;
 
     Ok(Json(json!({ "sources": sources, "truncated": truncated })))
 }

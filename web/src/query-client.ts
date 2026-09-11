@@ -5,6 +5,7 @@ import { ApiError } from './api/client'
 // intentionally never imports router.ts directly — router.ts already
 // imports `queryClient` from here, so a static import back would be a
 // circular module dependency. This setter is the decoupling point.
+export function notifyUnauthorized(): void { unauthorizedHandler?.() }
 let unauthorizedHandler: (() => void) | null = null
 export function setUnauthorizedHandler(handler: () => void): void {
   unauthorizedHandler = handler

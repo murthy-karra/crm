@@ -72,7 +72,7 @@ function count(item: CountItem, value: number): SavedListCountResponse {
 function me(displayName = 'Agent'): MeResponse {
   return {
     user: { id: ACTOR_ID, email: 'agent@example.test', display_name: displayName },
-    organization: { id: ORG_ID, name: 'Example Realty', role: 'member' },
+    organization: { workspace_mode: 'operational', workspace_revision: '1', id: ORG_ID, name: 'Example Realty', role: 'member' },
     platform_admin: false,
   }
 }

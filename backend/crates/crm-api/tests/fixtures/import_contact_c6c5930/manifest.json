@@ -1,0 +1,104 @@
+{
+  "baseline_commit": "c6c5930ee4975706a87398e0a7e7766b05417cf5",
+  "scope": "Reader-only SQL baseline. Current HTTP/auth/workspace guard and task-only fallback are shared by both arms.",
+  "statements": [
+    {
+      "file": "sql/call_membership.sql",
+      "source": "backend/crates/crm-app/src/domain/today/system_feeds/sql/call_membership.sql",
+      "extraction": "whole file",
+      "sha256": "ed5c1680476bfa6f41ebef270b53e0e5d5ac1dfd60481965c48cf96b718b5657",
+      "bytes": 19433
+    },
+    {
+      "file": "sql/call_only.sql",
+      "source": "backend/crates/crm-app/src/domain/today/system_feeds/sql/call_only.sql",
+      "extraction": "whole file",
+      "sha256": "3a686f3e1abb293ba831fe3b7427f120a4657c508d6db2ba09f7c2a46e2ace3e",
+      "bytes": 21804
+    },
+    {
+      "file": "sql/count_filtered_matches.sql",
+      "source": "backend/crates/crm-app/src/domain/person/queries.rs",
+      "extraction": "raw string in count_filtered_matches",
+      "sha256": "fc38a85fb2124820fac12e18db7b33740ffdd4229d4f9bfde302612990611105",
+      "bytes": 19306
+    },
+    {
+      "file": "sql/filtered_summaries.sql",
+      "source": "backend/crates/crm-app/src/domain/person/sql/filtered_summaries.sql",
+      "extraction": "whole file",
+      "sha256": "d42edfa7ac0efa2557c633bcff72b56b52b4d2bd1e61eaf8e75889cd3b80558f",
+      "bytes": 20671
+    },
+    {
+      "file": "sql/filtered_summaries_assignee_asc.sql",
+      "source": "backend/crates/crm-app/src/domain/person/sql/filtered_summaries_assignee_asc.sql",
+      "extraction": "whole file",
+      "sha256": "27d0a146cab352203f545a5855f6976be7edc58bd4587bc6ec14c81ede54a178",
+      "bytes": 20700
+    },
+    {
+      "file": "sql/filtered_summaries_assignee_desc.sql",
+      "source": "backend/crates/crm-app/src/domain/person/sql/filtered_summaries_assignee_desc.sql",
+      "extraction": "whole file",
+      "sha256": "41fcb1cdee6fb2e6b69d765a52f21dca4849e7479715e7e8f3aac4e6124a0e06",
+      "bytes": 20700
+    },
+    {
+      "file": "sql/filtered_summaries_created_asc.sql",
+      "source": "backend/crates/crm-app/src/domain/person/sql/filtered_summaries_created_asc.sql",
+      "extraction": "whole file",
+      "sha256": "08d88882eff99adba22eba8053f599b9c028369d3985058426d316c3d34d336d",
+      "bytes": 20667
+    },
+    {
+      "file": "sql/filtered_summaries_name_asc.sql",
+      "source": "backend/crates/crm-app/src/domain/person/sql/filtered_summaries_name_asc.sql",
+      "extraction": "whole file",
+      "sha256": "adb8c050821121dca973ffe69340c977c3bc54d14d439d33ab4518db2d0afef4",
+      "bytes": 20727
+    },
+    {
+      "file": "sql/filtered_summaries_name_desc.sql",
+      "source": "backend/crates/crm-app/src/domain/person/sql/filtered_summaries_name_desc.sql",
+      "extraction": "whole file",
+      "sha256": "deefe638489f357490c9c4490aa7115cf5167ce3027dac21662c4b76dfe6c756",
+      "bytes": 20727
+    },
+    {
+      "file": "sql/filtered_summaries_stage_asc.sql",
+      "source": "backend/crates/crm-app/src/domain/person/sql/filtered_summaries_stage_asc.sql",
+      "extraction": "whole file",
+      "sha256": "737649b460693cb8147de65ba6cfc1017139e9024fa2be44156ca29087db244b",
+      "bytes": 20685
+    },
+    {
+      "file": "sql/filtered_summaries_stage_desc.sql",
+      "source": "backend/crates/crm-app/src/domain/person/sql/filtered_summaries_stage_desc.sql",
+      "extraction": "whole file",
+      "sha256": "efa2979afc11994589ee09ef48e56a483cc007d30bed88df611c902712eb6522",
+      "bytes": 20685
+    },
+    {
+      "file": "sql/person_state.sql",
+      "source": "backend/crates/crm-app/src/domain/today/system_feeds/sql/person_state.sql",
+      "extraction": "whole file",
+      "sha256": "582305813704b72be89ec008a4cbcbb1ae6fbae2962856bd7f567b001d23d41f",
+      "bytes": 42197
+    },
+    {
+      "file": "sql/source_candidates.sql",
+      "source": "backend/crates/crm-app/src/domain/today/source_candidates.sql",
+      "extraction": "whole file",
+      "sha256": "9f301ed0828fe7a1463e53174133b4f1cedc5c3e7b20238761df4f6e9051cd1e",
+      "bytes": 20113
+    },
+    {
+      "file": "sql/source_membership.sql",
+      "source": "backend/crates/crm-app/src/domain/today/source_membership.sql",
+      "extraction": "whole file",
+      "sha256": "651ccc7b21ef81d3b7d39a00f273018dfcd88274732e10e935725a04be6ac854",
+      "bytes": 17945
+    }
+  ]
+}

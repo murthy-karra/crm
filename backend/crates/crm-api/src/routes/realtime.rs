@@ -25,7 +25,25 @@ pub fn router() -> Router<AppState> {
     skip_all,
     fields(actor_id = %auth.actor_user_id, organization_id = %auth.active_organization_id)
 )]
-async fn mint_token(State(state): State<AppState>, auth: AuthContext) -> Json<serde_json::Value> {
+async fn mint_token(
+    State(state): State<AppState>,
+    auth: AuthContext,
+) -> Result<Json<serde_json::Value>, crate::error::ApiError> {
+    let pool = state
+        .db
+        .as_ref()
+        .ok_or(crate::error::ApiError::Unavailable)?;
+    let mut tx = crate::auth::workspace::begin(pool, auth.active_organization_id)
+        .await
+        .map_err(crate::error::ApiError::database)?;
+    crate::auth::workspace::read_check(
+        &mut tx,
+        auth.active_organization_id,
+        auth.actor_user_id,
+        true,
+    )
+    .await
+    .map_err(crate::error::ApiError::database)?;
     let jwt = token::mint(
         &state.realtime_token_secret,
         auth.actor_user_id,
@@ -33,5 +51,8 @@ async fn mint_token(State(state): State<AppState>, auth: AuthContext) -> Json<se
         Utc::now(),
         state.realtime_token_ttl,
     );
-    Json(json!({ "token": jwt }))
+    tx.rollback()
+        .await
+        .map_err(crate::error::ApiError::database)?;
+    Ok(Json(json!({ "token": jwt })))
 }

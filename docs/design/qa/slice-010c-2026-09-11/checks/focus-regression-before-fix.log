@@ -1,0 +1,32 @@
+
+ RUN  v4.1.11 /Users/karrad/projects/crm-worktrees/010c/web
+
+ ❯ src/App.test.ts (5 tests | 1 failed) 116ms
+     × rechecks a settled cookie generation, coalesces visible events and rejects the old Person bytes after demotion 18ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/App.test.ts > workspace authority when a private tab resumes > rechecks a settled cookie generation, coalesces visible events and rejects the old Person bytes after demotion
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/App.test.ts:139:41
+    137|
+    138|     window.dispatchEvent(new Event('focus'))
+    139|     expect(useWorkspacePending().value).toBe(true)
+       |                                         ^
+    140|     expect(personSignal.aborted).toBe(true)
+    141|     expect(queryClient.getQueryData(['org', 'org', 'private-old-person…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 passed (5)
+   Start at  12:43:28
+   Duration  828ms (transform 346ms, setup 15ms, import 477ms, tests 116ms, environment 134ms)

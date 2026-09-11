@@ -143,7 +143,7 @@ async fn list_saved_lists(
     auth: AuthContext,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
-    let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
+    let mut conn = pool.acquire().await.map_err(ApiError::database)?;
     let lists = saved_list::list_saved_lists(&mut conn, &auth).await?;
     Ok(Json(json!({ "lists": lists })))
 }
@@ -154,7 +154,7 @@ async fn get_saved_list(
     auth: AuthContext,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
-    let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
+    let mut conn = pool.acquire().await.map_err(ApiError::database)?;
     let detail = saved_list::saved_list_detail(&mut conn, &auth, list_id)
         .await?
         .ok_or(ApiError::NotFound)?;
@@ -264,7 +264,7 @@ async fn count_saved_list(
     let revision = parse_canonical_revision(query.revision)?;
 
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
-    let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
+    let mut conn = pool.acquire().await.map_err(ApiError::database)?;
     let count = saved_list::count_saved_list_matches(&mut conn, &auth, list_id, revision)
         .await?
         .ok_or(ApiError::NotFound)?;

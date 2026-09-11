@@ -72,26 +72,28 @@ async fn capture_address(
     auth: AuthContext,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
-    let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
+    let mut conn = pool.acquire().await.map_err(ApiError::database)?;
 
     let mut token =
         address::current_token(&mut conn, auth.active_organization_id, auth.actor_user_id)
             .await
-            .map_err(|_| ApiError::Unavailable)?;
+            .map_err(ApiError::database)?;
 
     if token.is_none() {
-        let mut tx = pool.begin().await.map_err(|_| ApiError::Unavailable)?;
+        let mut tx = crate::auth::workspace::begin(pool, auth.active_organization_id)
+            .await
+            .map_err(ApiError::database)?;
         address::mint_capture_address_if_absent(
             &mut tx,
             auth.active_organization_id,
             auth.actor_user_id,
         )
         .await
-        .map_err(|_| ApiError::Unavailable)?;
-        tx.commit().await.map_err(|_| ApiError::Unavailable)?;
+        .map_err(ApiError::database)?;
+        tx.commit().await.map_err(ApiError::database)?;
         token = address::current_token(&mut conn, auth.active_organization_id, auth.actor_user_id)
             .await
-            .map_err(|_| ApiError::Unavailable)?;
+            .map_err(ApiError::database)?;
     }
     let token = token.ok_or(ApiError::Unavailable)?;
 
@@ -140,12 +142,12 @@ async fn list_unmatched(
     auth: AuthContext,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
-    let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
+    let mut conn = pool.acquire().await.map_err(ApiError::database)?;
 
     let (items, truncated) =
         store::list_unmatched(&mut conn, auth.active_organization_id, auth.actor_user_id)
             .await
-            .map_err(|_| ApiError::Unavailable)?;
+            .map_err(ApiError::database)?;
 
     let items: Vec<_> = items
         .into_iter()

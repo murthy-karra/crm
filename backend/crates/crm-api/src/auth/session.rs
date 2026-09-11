@@ -32,6 +32,8 @@ pub struct SessionOrganization {
     pub id: OrganizationId,
     pub name: String,
     pub role: Role,
+    pub workspace_mode: String,
+    pub workspace_revision: i64,
 }
 
 #[derive(Debug, Clone)]
@@ -55,6 +57,8 @@ struct SessionIdentityRow {
     organization_id: Option<Uuid>,
     organization_name: Option<String>,
     membership_role: Option<String>,
+    workspace_mode: Option<String>,
+    workspace_revision: Option<i64>,
     platform_admin: bool,
 }
 
@@ -146,7 +150,7 @@ pub async fn verify(
     let row = sqlx::query_as::<_, SessionIdentityRow>(
         "SELECT u.id AS user_id, u.email, u.display_name,
                 o.id AS organization_id, o.name AS organization_name,
-                m.role AS membership_role,
+                m.role AS membership_role, o.workspace_mode, o.workspace_revision,
                 (pa.user_id IS NOT NULL) AS platform_admin
          FROM user_session s
          JOIN app_user u ON u.id = s.user_id
@@ -183,6 +187,8 @@ pub async fn verify(
                 id: OrganizationId::new(id),
                 name,
                 role,
+                workspace_mode: row.workspace_mode.ok_or(sqlx::Error::RowNotFound)?,
+                workspace_revision: row.workspace_revision.ok_or(sqlx::Error::RowNotFound)?,
             })
         }
         (None, None, None) if row.platform_admin => None,

@@ -1,0 +1,159 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n     p.id, p.first_name, p.last_name, p.created_at,\n     s.id as stage_id, s.name as stage_name,\n     u.id as \"assigned_user_id?\", u.display_name as \"assigned_user_display_name?\",\n     (SELECT cm.value FROM contact_method cm\n        WHERE cm.person_id = p.id AND cm.organization_id = p.organization_id AND cm.kind = 'email'\n        ORDER BY cm.import_order ASC NULLS LAST, cm.created_at ASC, cm.id ASC LIMIT 1) as \"primary_email?\",\n     (SELECT cm.value FROM contact_method cm\n        WHERE cm.person_id = p.id AND cm.organization_id = p.organization_id AND cm.kind = 'phone'\n        ORDER BY cm.import_order ASC NULLS LAST, cm.created_at ASC, cm.id ASC LIMIT 1) as \"primary_phone?\",\n     (SELECT count(*) FROM inquiry i\n        WHERE i.person_id = p.id AND i.organization_id = p.organization_id) as \"inquiry_count!\",\n     p.last_inquiry_at as \"last_inquiry_at?\"\n   FROM person p\n   JOIN stage s ON s.id = p.stage_id\n   LEFT JOIN app_user u ON u.id = p.assigned_user_id\n   LEFT JOIN LATERAL (\n       SELECT i2.source\n       FROM inquiry i2\n       WHERE i2.person_id = p.id AND i2.organization_id = p.organization_id\n       ORDER BY i2.received_at DESC, i2.id DESC\n       LIMIT 1\n   ) latest_src ON true\n   WHERE p.organization_id = $1\n     AND ($2::uuid[] IS NULL OR p.stage_id = ANY($2))\n     AND ($3::uuid[] IS NULL OR p.assigned_user_id = ANY($3)\n          OR ($4::boolean AND p.assigned_user_id IS NULL))\n     AND ($5::text[] IS NULL OR latest_src.source = ANY($5))\n     AND ($6::int IS NULL\n          OR COALESCE(p.created_at, '-infinity'::timestamptz) > COALESCE($21, now()) - make_interval(days => $6))\n     AND ($7::int IS NULL\n          OR COALESCE(p.created_at, '-infinity'::timestamptz) <= COALESCE($21, now()) - make_interval(days => $7))\n     AND ($8::boolean IS NULL OR (p.created_at IS NULL) = $8)\n     AND ($9::int IS NULL\n          OR COALESCE(p.last_inquiry_at, '-infinity'::timestamptz) > COALESCE($21, now()) - make_interval(days => $9))\n     AND ($10::int IS NULL\n          OR COALESCE(p.last_inquiry_at, '-infinity'::timestamptz) <= COALESCE($21, now()) - make_interval(days => $10))\n     AND ($11::boolean IS NULL OR (p.last_inquiry_at IS NULL) = $11)\n     AND ($12::int IS NULL\n          OR COALESCE(p.last_contact_at, '-infinity'::timestamptz) > COALESCE($21, now()) - make_interval(days => $12))\n     AND ($13::int IS NULL\n          OR COALESCE(p.last_contact_at, '-infinity'::timestamptz) <= COALESCE($21, now()) - make_interval(days => $13))\n     AND ($14::boolean IS NULL OR (p.last_contact_at IS NULL) = $14)\n     AND ($15::int IS NULL\n          OR COALESCE(p.last_inbound_at, '-infinity'::timestamptz) > COALESCE($21, now()) - make_interval(days => $15))\n     AND ($16::int IS NULL\n          OR COALESCE(p.last_inbound_at, '-infinity'::timestamptz) <= COALESCE($21, now()) - make_interval(days => $16))\n     AND ($17::boolean IS NULL OR (p.last_inbound_at IS NULL) = $17)\n     AND ($18::boolean IS NULL OR (p.last_inbound_at IS NOT NULL) = $18)\n     AND ($19::boolean IS NULL OR (EXISTS (\n           SELECT 1 FROM contact_method cm3\n           WHERE cm3.person_id = p.id AND cm3.organization_id = p.organization_id\n             AND cm3.kind = 'phone'\n         )) = $19)\n     AND ($20::boolean IS NULL OR (EXISTS (\n           SELECT 1 FROM contact_method cm4\n           WHERE cm4.person_id = p.id AND cm4.organization_id = p.organization_id\n             AND cm4.kind = 'email'\n         )) = $20)\n     -- docs/specs/SLICE_011d.md §2: awaiting_response — an inquiry after the\n     -- effective last contact attempt (equivalently: exists an inquiry whose\n     -- received_at exceeds the same p.last_contact_at this matrix already\n     -- reads for the last_contact age axis).\n     AND ($22::boolean IS NULL OR (EXISTS (\n           SELECT 1 FROM inquiry ia\n           WHERE ia.person_id = p.id AND ia.organization_id = p.organization_id\n             AND ia.received_at > COALESCE(p.last_contact_at, '-infinity'::timestamptz)\n         )) = $22)\n     -- docs/specs/SLICE_011d.md §2: client_replied_unanswered — the latest\n     -- inbound correspondence exists and is later than both the effective\n     -- last contact attempt and the latest outbound correspondence.\n     AND ($23::boolean IS NULL OR (\n           p.last_inbound_at IS NOT NULL\n           AND p.last_inbound_at > COALESCE(p.last_contact_at, '-infinity'::timestamptz)\n           AND p.last_inbound_at > COALESCE(p.last_outbound_at, '-infinity'::timestamptz)\n         ) = $23)\n     -- docs/specs/SLICE_011d.md §2: awaiting_call_outcome — a call of the\n     -- viewer's ($25) to the Person is ended/failed with a non-null\n     -- ended_at and its root automatic contact attempt has no correction\n     -- (exactly the compiled-in outcome_call membership).\n     AND ($24::boolean IS NULL OR (EXISTS (\n           SELECT 1 FROM call c\n           WHERE c.organization_id = p.organization_id\n             AND c.person_id = p.id\n             AND c.caller_user_id = $25\n             AND c.status IN ('ended', 'failed')\n             AND c.ended_at IS NOT NULL\n             AND EXISTS (\n                 SELECT 1 FROM contact_attempted root\n                 WHERE root.organization_id = c.organization_id\n                   AND root.causation_id = c.id\n                   AND root.corrects_id IS NULL\n                   AND NOT EXISTS (SELECT 1 FROM contact_attempted x WHERE x.corrects_id = root.id)\n             )\n         )) = $24)\n     -- docs/specs/SLICE_011e.md §4: tags (any-of) / not_tags (none-of).\n     AND ($26::uuid[] IS NULL OR EXISTS (\n           SELECT 1 FROM person_tag pt\n           WHERE pt.organization_id = $1\n             AND pt.person_id = p.id AND pt.tag_id = ANY($26)))\n  AND ($27::uuid[] IS NULL OR NOT EXISTS (\n        SELECT 1 FROM person_tag pt2\n        WHERE pt2.organization_id = $1\n          AND pt2.person_id = p.id AND pt2.tag_id = ANY($27)))\n  AND ($28::uuid IS NULL OR (\n        EXISTS (SELECT 1 FROM custom_field cf\n                WHERE cf.id = $28 AND cf.organization_id = $1\n                  AND cf.archived_at IS NULL AND cf.field_type = $29)\n        AND (\n          ($30 = 'is_set' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $28 AND v.field_type = $29))\n          OR ($30 = 'is_not_set' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $28 AND v.field_type = $29))\n          OR ($29 = 'text' AND $30 = 'contains' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $28 AND v.field_type = $29 AND lower(v.text_value) LIKE '%' || replace(replace(replace(lower($31), E'\\\\', E'\\\\\\\\'), '%', '\\%'), '_', '\\_') || '%' ESCAPE E'\\\\'))\n          OR ($29 = 'text' AND $30 = 'not_contains' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $28 AND v.field_type = $29 AND lower(v.text_value) LIKE '%' || replace(replace(replace(lower($31), E'\\\\', E'\\\\\\\\'), '%', '\\%'), '_', '\\_') || '%' ESCAPE E'\\\\'))\n          OR ($29 = 'number' AND $30 = 'range' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $28 AND v.field_type = $29 AND ($32::text IS NULL OR v.number_value >= $32::numeric) AND ($33::text IS NULL OR v.number_value <= $33::numeric)))\n          OR ($29 = 'number' AND $30 = 'not_range' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $28 AND v.field_type = $29 AND ($32::text IS NULL OR v.number_value >= $32::numeric) AND ($33::text IS NULL OR v.number_value <= $33::numeric)))\n          OR ($29 = 'date' AND $30 = 'range' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $28 AND v.field_type = $29 AND ($34::date IS NULL OR v.date_value >= $34) AND ($35::date IS NULL OR v.date_value <= $35)))\n          OR ($29 = 'date' AND $30 = 'not_range' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $28 AND v.field_type = $29 AND ($34::date IS NULL OR v.date_value >= $34) AND ($35::date IS NULL OR v.date_value <= $35)))\n          OR ($29 = 'choice' AND $30 = 'any_of' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $28 AND v.field_type = $29 AND v.option_id = ANY($36)))\n          OR ($29 = 'choice' AND $30 = 'none_of' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $28 AND v.field_type = $29 AND v.option_id = ANY($36)))\n        )\n      ))\n  AND ($37::uuid IS NULL OR (\n        EXISTS (SELECT 1 FROM custom_field cf\n                WHERE cf.id = $37 AND cf.organization_id = $1\n                  AND cf.archived_at IS NULL AND cf.field_type = $38)\n        AND (\n          ($39 = 'is_set' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $37 AND v.field_type = $38))\n          OR ($39 = 'is_not_set' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $37 AND v.field_type = $38))\n          OR ($38 = 'text' AND $39 = 'contains' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $37 AND v.field_type = $38 AND lower(v.text_value) LIKE '%' || replace(replace(replace(lower($40), E'\\\\', E'\\\\\\\\'), '%', '\\%'), '_', '\\_') || '%' ESCAPE E'\\\\'))\n          OR ($38 = 'text' AND $39 = 'not_contains' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $37 AND v.field_type = $38 AND lower(v.text_value) LIKE '%' || replace(replace(replace(lower($40), E'\\\\', E'\\\\\\\\'), '%', '\\%'), '_', '\\_') || '%' ESCAPE E'\\\\'))\n          OR ($38 = 'number' AND $39 = 'range' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $37 AND v.field_type = $38 AND ($41::text IS NULL OR v.number_value >= $41::numeric) AND ($42::text IS NULL OR v.number_value <= $42::numeric)))\n          OR ($38 = 'number' AND $39 = 'not_range' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $37 AND v.field_type = $38 AND ($41::text IS NULL OR v.number_value >= $41::numeric) AND ($42::text IS NULL OR v.number_value <= $42::numeric)))\n          OR ($38 = 'date' AND $39 = 'range' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $37 AND v.field_type = $38 AND ($43::date IS NULL OR v.date_value >= $43) AND ($44::date IS NULL OR v.date_value <= $44)))\n          OR ($38 = 'date' AND $39 = 'not_range' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $37 AND v.field_type = $38 AND ($43::date IS NULL OR v.date_value >= $43) AND ($44::date IS NULL OR v.date_value <= $44)))\n          OR ($38 = 'choice' AND $39 = 'any_of' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $37 AND v.field_type = $38 AND v.option_id = ANY($45)))\n          OR ($38 = 'choice' AND $39 = 'none_of' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $37 AND v.field_type = $38 AND v.option_id = ANY($45)))\n        )\n      ))\n  AND ($46::uuid IS NULL OR (\n        EXISTS (SELECT 1 FROM custom_field cf\n                WHERE cf.id = $46 AND cf.organization_id = $1\n                  AND cf.archived_at IS NULL AND cf.field_type = $47)\n        AND (\n          ($48 = 'is_set' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $46 AND v.field_type = $47))\n          OR ($48 = 'is_not_set' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $46 AND v.field_type = $47))\n          OR ($47 = 'text' AND $48 = 'contains' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $46 AND v.field_type = $47 AND lower(v.text_value) LIKE '%' || replace(replace(replace(lower($49), E'\\\\', E'\\\\\\\\'), '%', '\\%'), '_', '\\_') || '%' ESCAPE E'\\\\'))\n          OR ($47 = 'text' AND $48 = 'not_contains' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $46 AND v.field_type = $47 AND lower(v.text_value) LIKE '%' || replace(replace(replace(lower($49), E'\\\\', E'\\\\\\\\'), '%', '\\%'), '_', '\\_') || '%' ESCAPE E'\\\\'))\n          OR ($47 = 'number' AND $48 = 'range' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $46 AND v.field_type = $47 AND ($50::text IS NULL OR v.number_value >= $50::numeric) AND ($51::text IS NULL OR v.number_value <= $51::numeric)))\n          OR ($47 = 'number' AND $48 = 'not_range' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $46 AND v.field_type = $47 AND ($50::text IS NULL OR v.number_value >= $50::numeric) AND ($51::text IS NULL OR v.number_value <= $51::numeric)))\n          OR ($47 = 'date' AND $48 = 'range' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $46 AND v.field_type = $47 AND ($52::date IS NULL OR v.date_value >= $52) AND ($53::date IS NULL OR v.date_value <= $53)))\n          OR ($47 = 'date' AND $48 = 'not_range' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $46 AND v.field_type = $47 AND ($52::date IS NULL OR v.date_value >= $52) AND ($53::date IS NULL OR v.date_value <= $53)))\n          OR ($47 = 'choice' AND $48 = 'any_of' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $46 AND v.field_type = $47 AND v.option_id = ANY($54)))\n          OR ($47 = 'choice' AND $48 = 'none_of' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $46 AND v.field_type = $47 AND v.option_id = ANY($54)))\n        )\n      ))\n  AND ($55::uuid IS NULL OR (\n        EXISTS (SELECT 1 FROM custom_field cf\n                WHERE cf.id = $55 AND cf.organization_id = $1\n                  AND cf.archived_at IS NULL AND cf.field_type = $56)\n        AND (\n          ($57 = 'is_set' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $55 AND v.field_type = $56))\n          OR ($57 = 'is_not_set' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $55 AND v.field_type = $56))\n          OR ($56 = 'text' AND $57 = 'contains' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $55 AND v.field_type = $56 AND lower(v.text_value) LIKE '%' || replace(replace(replace(lower($58), E'\\\\', E'\\\\\\\\'), '%', '\\%'), '_', '\\_') || '%' ESCAPE E'\\\\'))\n          OR ($56 = 'text' AND $57 = 'not_contains' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $55 AND v.field_type = $56 AND lower(v.text_value) LIKE '%' || replace(replace(replace(lower($58), E'\\\\', E'\\\\\\\\'), '%', '\\%'), '_', '\\_') || '%' ESCAPE E'\\\\'))\n          OR ($56 = 'number' AND $57 = 'range' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $55 AND v.field_type = $56 AND ($59::text IS NULL OR v.number_value >= $59::numeric) AND ($60::text IS NULL OR v.number_value <= $60::numeric)))\n          OR ($56 = 'number' AND $57 = 'not_range' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $55 AND v.field_type = $56 AND ($59::text IS NULL OR v.number_value >= $59::numeric) AND ($60::text IS NULL OR v.number_value <= $60::numeric)))\n          OR ($56 = 'date' AND $57 = 'range' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $55 AND v.field_type = $56 AND ($61::date IS NULL OR v.date_value >= $61) AND ($62::date IS NULL OR v.date_value <= $62)))\n          OR ($56 = 'date' AND $57 = 'not_range' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $55 AND v.field_type = $56 AND ($61::date IS NULL OR v.date_value >= $61) AND ($62::date IS NULL OR v.date_value <= $62)))\n          OR ($56 = 'choice' AND $57 = 'any_of' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $55 AND v.field_type = $56 AND v.option_id = ANY($63)))\n          OR ($56 = 'choice' AND $57 = 'none_of' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $55 AND v.field_type = $56 AND v.option_id = ANY($63)))\n        )\n      ))\n  AND ($64::uuid IS NULL OR (\n        EXISTS (SELECT 1 FROM custom_field cf\n                WHERE cf.id = $64 AND cf.organization_id = $1\n                  AND cf.archived_at IS NULL AND cf.field_type = $65)\n        AND (\n          ($66 = 'is_set' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $64 AND v.field_type = $65))\n          OR ($66 = 'is_not_set' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $64 AND v.field_type = $65))\n          OR ($65 = 'text' AND $66 = 'contains' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $64 AND v.field_type = $65 AND lower(v.text_value) LIKE '%' || replace(replace(replace(lower($67), E'\\\\', E'\\\\\\\\'), '%', '\\%'), '_', '\\_') || '%' ESCAPE E'\\\\'))\n          OR ($65 = 'text' AND $66 = 'not_contains' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $64 AND v.field_type = $65 AND lower(v.text_value) LIKE '%' || replace(replace(replace(lower($67), E'\\\\', E'\\\\\\\\'), '%', '\\%'), '_', '\\_') || '%' ESCAPE E'\\\\'))\n          OR ($65 = 'number' AND $66 = 'range' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $64 AND v.field_type = $65 AND ($68::text IS NULL OR v.number_value >= $68::numeric) AND ($69::text IS NULL OR v.number_value <= $69::numeric)))\n          OR ($65 = 'number' AND $66 = 'not_range' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $64 AND v.field_type = $65 AND ($68::text IS NULL OR v.number_value >= $68::numeric) AND ($69::text IS NULL OR v.number_value <= $69::numeric)))\n          OR ($65 = 'date' AND $66 = 'range' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $64 AND v.field_type = $65 AND ($70::date IS NULL OR v.date_value >= $70) AND ($71::date IS NULL OR v.date_value <= $71)))\n          OR ($65 = 'date' AND $66 = 'not_range' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $64 AND v.field_type = $65 AND ($70::date IS NULL OR v.date_value >= $70) AND ($71::date IS NULL OR v.date_value <= $71)))\n          OR ($65 = 'choice' AND $66 = 'any_of' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $64 AND v.field_type = $65 AND v.option_id = ANY($72)))\n          OR ($65 = 'choice' AND $66 = 'none_of' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $64 AND v.field_type = $65 AND v.option_id = ANY($72)))\n        )\n      ))\nORDER BY u.display_name ASC  NULLS LAST, p.created_at DESC, p.id ASC\n   LIMIT 501\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "first_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "last_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "stage_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "stage_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "assigned_user_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "assigned_user_display_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "primary_email?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "primary_phone?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "inquiry_count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 11,
+        "name": "last_inquiry_at?",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "UuidArray",
+        "Bool",
+        "TextArray",
+        "Int4",
+        "Int4",
+        "Bool",
+        "Int4",
+        "Int4",
+        "Bool",
+        "Int4",
+        "Int4",
+        "Bool",
+        "Int4",
+        "Int4",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Timestamptz",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Uuid",
+        "UuidArray",
+        "UuidArray",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Date",
+        "Date",
+        "UuidArray",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Date",
+        "Date",
+        "UuidArray",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Date",
+        "Date",
+        "UuidArray",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Date",
+        "Date",
+        "UuidArray",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Date",
+        "Date",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null,
+      null,
+      true
+    ]
+  },
+  "hash": "63f37a19805c6ec956c1da4e2242d72cb55a5f14469bce324dd4ba9e1378e18d"
+}

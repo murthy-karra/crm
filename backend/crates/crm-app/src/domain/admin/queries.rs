@@ -888,6 +888,7 @@ pub async fn update_intake_routing_settings(
     mode: IntakeRoutingMode,
     assignee_user_id: Option<UserId>,
 ) -> Result<(), sqlx::Error> {
+    crate::auth::workspace::ordinary(conn, organization_id).await?;
     sqlx::query!(
         r#"UPDATE organization
            SET intake_routing_mode = $2, intake_default_assignee_user_id = $3, updated_at = now()

@@ -481,6 +481,24 @@ impl OperatorService {
         backend: &dyn ToolBackend,
         input: TurnInput,
     ) -> TurnOutput {
+        self.run_turn_at_deadline(
+            ctx,
+            backend,
+            input,
+            tokio::time::Instant::now() + self.limits.turn_timeout,
+        )
+        .await
+    }
+
+    /// The caller's admission deadline includes scheduling and tool execution.
+    /// An expired admission never begins a provider request.
+    pub async fn run_turn_at_deadline(
+        &self,
+        ctx: &OperatorContext,
+        backend: &dyn ToolBackend,
+        input: TurnInput,
+        deadline: tokio::time::Instant,
+    ) -> TurnOutput {
         let utc_offset_minutes = input.utc_offset_minutes;
         let mut state = TurnState {
             messages: self.build_messages(ctx, input),
@@ -496,19 +514,21 @@ impl OperatorService {
             utc_offset_minutes,
         };
 
-        let result = tokio::time::timeout(
-            self.limits.turn_timeout,
-            self.drive(ctx, backend, &mut state),
-        )
-        .await;
+        let result = if tokio::time::Instant::now() >= deadline {
+            None
+        } else {
+            tokio::time::timeout_at(deadline, self.drive(ctx, backend, &mut state))
+                .await
+                .ok()
+        };
 
         let (reply, outcome) = match result {
-            Ok(LoopEnd::Reply(text, outcome)) => (
+            Some(LoopEnd::Reply(text, outcome)) => (
                 Some(clip_chars(&text, self.limits.max_reply_chars)),
                 outcome,
             ),
-            Ok(LoopEnd::Abort(outcome)) => (None, outcome),
-            Err(_elapsed) => (None, TurnOutcome::TurnTimeout),
+            Some(LoopEnd::Abort(outcome)) => (None, outcome),
+            None => (None, TurnOutcome::TurnTimeout),
         };
 
         // A 503 outcome never surfaces its proposal or receipt (docs/specs/

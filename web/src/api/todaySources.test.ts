@@ -25,7 +25,7 @@ const LIST_ID = '44444444-4444-4444-4444-444444444444'
 function me(actorId = ACTOR_A, organizationId = ORG_ID): MeResponse {
   return {
     user: { id: actorId, email: `${actorId}@example.test`, display_name: actorId },
-    organization: { id: organizationId, name: 'Example Realty', role: 'member' },
+    organization: { workspace_mode: 'operational', workspace_revision: '1', id: organizationId, name: 'Example Realty', role: 'member' },
     platform_admin: false,
   }
 }

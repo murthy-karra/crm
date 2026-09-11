@@ -1,3 +1,4 @@
+import { assertWorkspaceEpoch, currentWorkspaceEpoch, refreshWorkspace, trackWorkspaceRequest, workspaceRequestAllowed } from '../workspaceLifecycle'
 import {
   SessionVerificationPendingError,
   currentSessionGeneration,
@@ -64,6 +65,18 @@ function isErrorEnvelope(value: unknown): value is ErrorEnvelope {
  * `/api/people`.
  */
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const privateRequest = path !== '/me' && path !== '/session' && path !== '/invitations/preview' && path !== '/invitations/accept'
+  if (privateRequest) requireVerifiedSession()
+  if (privateRequest && !workspaceRequestAllowed(path, init.method ?? 'GET')) throw new ApiError(409, 'workspace_in_migration_review')
+  const workspaceEpoch = privateRequest ? currentWorkspaceEpoch() : undefined
+  const controller = privateRequest ? new AbortController() : undefined
+  const release = controller ? trackWorkspaceRequest(controller) : undefined
+  const signal = controller ? (init.signal ? AbortSignal.any([init.signal, controller.signal]) : controller.signal) : init.signal
+  try { return await apiFetchAttempt<T>(path, { ...init, signal }, workspaceEpoch) }
+  finally { release?.() }
+}
+
+async function apiFetchAttempt<T>(path: string, init: RequestInit, workspaceEpoch?: number): Promise<T> {
   // `/me` is the coordinator's authoritative verification request. Session
   // establishment endpoints must also remain usable while the old shared
   // cookie is being replaced. Every other Web API request is private and is
@@ -80,6 +93,7 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     if (sessionGeneration !== undefined && !isCurrentSessionGeneration(sessionGeneration)) {
       throw new SessionVerificationPendingError()
     }
+    if (workspaceEpoch !== undefined) assertWorkspaceEpoch(workspaceEpoch)
   }
   const headers = new Headers(init.headers)
   if (init.body !== undefined && !headers.has('Content-Type')) {
@@ -103,6 +117,7 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     assertCurrentSession()
     if (isErrorEnvelope(body)) {
       const { error, ...details } = body
+      if (privateRequest && (error === 'workspace_in_migration_review' || response.status === 401 || response.status === 403)) void refreshWorkspace().catch(() => {})
       throw new ApiError(response.status, error, details)
     }
     throw new ApiError(response.status, 'unknown_error')

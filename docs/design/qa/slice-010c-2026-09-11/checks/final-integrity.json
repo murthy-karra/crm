@@ -1,0 +1,18 @@
+{
+  "changed_source_paths_verified": 236,
+  "explicit_deletions_verified": 18,
+  "no_release_or_live_source_operation": true,
+  "original_main_clean": true,
+  "private_directory_mode": "0700",
+  "private_environment_mode": "0600",
+  "private_environment_restored": true,
+  "qa_database": "crm_slice010c_qa",
+  "qa_database_retained_synthetic_only": true,
+  "qa_ports_closed": [
+    3012,
+    5182
+  ],
+  "runtime_artifacts_verified": 73,
+  "source_map_sha256": "45f1c940403f29e56479dd17714ca033b0a9e99a7d1b4575adb086909ee787ad",
+  "uncommitted_implementation": true
+}

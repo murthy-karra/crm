@@ -251,7 +251,7 @@ export function useRealtime(options: UseRealtimeOptions): UseRealtimeResult {
       }
       connectFor(orgId)
     },
-    { immediate: true },
+    { immediate: true, flush: 'sync' },
   )
 
   function disconnect(): void {

@@ -245,6 +245,8 @@ pub async fn list_summaries(
     conn: &mut PgConnection,
     scope: &PersonVisibilityScope,
 ) -> Result<(Vec<PersonSummary>, bool), sqlx::Error> {
+    let mut workspace_read = crate::auth::workspace::read(conn, scope.organization_id()).await?;
+    let conn = &mut *workspace_read;
     let organization_id = scope.organization_id();
     let mut rows = sqlx::query_as!(
         PersonSummaryRow,
@@ -254,10 +256,10 @@ pub async fn list_summaries(
              u.id as "assigned_user_id?", u.display_name as "assigned_user_display_name?",
              (SELECT cm.value FROM contact_method cm
                 WHERE cm.person_id = p.id AND cm.kind = 'email'
-                ORDER BY cm.created_at ASC LIMIT 1) as "primary_email?",
+                ORDER BY cm.import_order ASC NULLS LAST, cm.created_at ASC, cm.id ASC LIMIT 1) as "primary_email?",
              (SELECT cm.value FROM contact_method cm
                 WHERE cm.person_id = p.id AND cm.kind = 'phone'
-                ORDER BY cm.created_at ASC LIMIT 1) as "primary_phone?",
+                ORDER BY cm.import_order ASC NULLS LAST, cm.created_at ASC, cm.id ASC LIMIT 1) as "primary_phone?",
              (SELECT count(*) FROM inquiry i WHERE i.person_id = p.id) as "inquiry_count!",
              (SELECT max(i.received_at) FROM inquiry i WHERE i.person_id = p.id) as "last_inquiry_at?"
            FROM person p
@@ -306,6 +308,8 @@ pub async fn filtered_summaries_at(
     params: &PersonFilterParams,
     reference_now: DateTime<Utc>,
 ) -> Result<(Vec<PersonSummary>, bool), sqlx::Error> {
+    let mut workspace_read = crate::auth::workspace::read(conn, scope.organization_id()).await?;
+    let conn = &mut *workspace_read;
     filtered_summaries_with_reference_now(conn, scope, params, Some(reference_now)).await
 }
 
@@ -469,6 +473,8 @@ pub async fn filtered_summaries_sorted(
     params: &PersonFilterParams,
     sort: PersonSort,
 ) -> Result<(Vec<PersonSummary>, bool), sqlx::Error> {
+    let mut workspace_read = crate::auth::workspace::read(conn, scope.organization_id()).await?;
+    let conn = &mut *workspace_read;
     #[cfg(feature = "test-support")]
     let _frozen = crate::domain::person::filter_test_support::frozen_selected();
     #[cfg(feature = "test-support")]
@@ -652,6 +658,8 @@ pub async fn count_filtered_matches(
     scope: &PersonVisibilityScope,
     params: &PersonFilterParams,
 ) -> Result<(i64, bool), sqlx::Error> {
+    let mut workspace_read = crate::auth::workspace::read(conn, scope.organization_id()).await?;
+    let conn = &mut *workspace_read;
     #[cfg(feature = "test-support")]
     let _frozen = crate::domain::person::filter_test_support::frozen_selected();
     #[cfg(feature = "test-support")]
@@ -862,6 +870,8 @@ pub async fn search_summaries(
     term: &str,
     limit: i64,
 ) -> Result<(Vec<PersonSummary>, bool), sqlx::Error> {
+    let mut workspace_read = crate::auth::workspace::read(conn, scope.organization_id()).await?;
+    let conn = &mut *workspace_read;
     let organization_id = scope.organization_id();
     let pattern = format!("%{}%", escape_like(term.trim()));
     let normalized_email = normalize_email(term);
@@ -876,10 +886,10 @@ pub async fn search_summaries(
              u.id as "assigned_user_id?", u.display_name as "assigned_user_display_name?",
              (SELECT cm.value FROM contact_method cm
                 WHERE cm.person_id = p.id AND cm.kind = 'email'
-                ORDER BY cm.created_at ASC LIMIT 1) as "primary_email?",
+                ORDER BY cm.import_order ASC NULLS LAST, cm.created_at ASC, cm.id ASC LIMIT 1) as "primary_email?",
              (SELECT cm.value FROM contact_method cm
                 WHERE cm.person_id = p.id AND cm.kind = 'phone'
-                ORDER BY cm.created_at ASC LIMIT 1) as "primary_phone?",
+                ORDER BY cm.import_order ASC NULLS LAST, cm.created_at ASC, cm.id ASC LIMIT 1) as "primary_phone?",
              (SELECT count(*) FROM inquiry i WHERE i.person_id = p.id) as "inquiry_count!",
              (SELECT max(i.received_at) FROM inquiry i WHERE i.person_id = p.id) as "last_inquiry_at?"
            FROM person p
@@ -927,6 +937,8 @@ pub async fn summary_by_id(
     organization_id: OrganizationId,
     person_id: PersonId,
 ) -> Result<Option<PersonSummary>, sqlx::Error> {
+    let mut workspace_read = crate::auth::workspace::read(conn, organization_id).await?;
+    let conn = &mut *workspace_read;
     let row = sqlx::query_as!(
         PersonSummaryRow,
         r#"SELECT
@@ -935,10 +947,10 @@ pub async fn summary_by_id(
              u.id as "assigned_user_id?", u.display_name as "assigned_user_display_name?",
              (SELECT cm.value FROM contact_method cm
                 WHERE cm.person_id = p.id AND cm.kind = 'email'
-                ORDER BY cm.created_at ASC LIMIT 1) as "primary_email?",
+                ORDER BY cm.import_order ASC NULLS LAST, cm.created_at ASC, cm.id ASC LIMIT 1) as "primary_email?",
              (SELECT cm.value FROM contact_method cm
                 WHERE cm.person_id = p.id AND cm.kind = 'phone'
-                ORDER BY cm.created_at ASC LIMIT 1) as "primary_phone?",
+                ORDER BY cm.import_order ASC NULLS LAST, cm.created_at ASC, cm.id ASC LIMIT 1) as "primary_phone?",
              (SELECT count(*) FROM inquiry i WHERE i.person_id = p.id) as "inquiry_count!",
              (SELECT max(i.received_at) FROM inquiry i WHERE i.person_id = p.id) as "last_inquiry_at?"
            FROM person p
@@ -967,11 +979,13 @@ pub async fn contact_methods_for_person(
     organization_id: OrganizationId,
     person_id: PersonId,
 ) -> Result<Vec<ContactMethodItem>, sqlx::Error> {
+    let mut workspace_read = crate::auth::workspace::read(conn, organization_id).await?;
+    let conn = &mut *workspace_read;
     sqlx::query_as!(
         ContactMethodItem,
         r#"SELECT id, kind, value FROM contact_method
            WHERE organization_id = $1 AND person_id = $2
-           ORDER BY created_at ASC"#,
+           ORDER BY import_order ASC NULLS LAST, created_at ASC, id ASC"#,
         organization_id.0,
         person_id.0,
     )
@@ -1553,7 +1567,10 @@ pub async fn history_for_person(
     organization_id: OrganizationId,
     person_id: PersonId,
 ) -> Result<Vec<HistoryEntry>, sqlx::Error> {
+    let mut workspace_read = crate::auth::workspace::read(conn, organization_id).await?;
+    let conn = &mut *workspace_read;
     let mut entries = Vec::new();
+    entries.extend(imported_history(conn, organization_id, person_id).await?);
     entries.extend(inquiry_received_history(conn, organization_id, person_id).await?);
     entries.extend(routing_decision_history(conn, organization_id, person_id).await?);
     entries.extend(assignment_changed_history(conn, organization_id, person_id).await?);
@@ -1687,4 +1704,14 @@ mod sort_sql_parity_tests {
             "ORDER BY p.created_at DESC, p.id ASC"
         );
     }
+}
+
+async fn imported_history(
+    conn: &mut PgConnection,
+    org: OrganizationId,
+    person: PersonId,
+) -> Result<Vec<HistoryEntry>, sqlx::Error> {
+    use sqlx::Row;
+    let rows=sqlx::query("SELECT id,occurred_at,recorded_at,correlation_id,on_behalf_of_user_id,import_id,plan_id,source_record_id,capture_id FROM person_imported WHERE organization_id=$1 AND person_id=$2").bind(org.0).bind(person.0).fetch_all(conn).await?;
+    Ok(rows.into_iter().map(|r|HistoryEntry{kind:"person_imported",kind_rank:0,id:r.get("id"),occurred_at:r.get("occurred_at"),recorded_at:r.get("recorded_at"),actor:None,origin:"migration".into(),correlation_id:CorrelationId::new(r.get("correlation_id")),detail:serde_json::json!({"import_id":r.get::<Uuid,_>("import_id"),"plan_id":r.get::<Uuid,_>("plan_id"),"source_record_id":r.get::<Uuid,_>("source_record_id"),"capture_id":r.get::<Uuid,_>("capture_id"),"on_behalf_of_user_id":r.get::<Uuid,_>("on_behalf_of_user_id")})}).collect())
 }

@@ -41,7 +41,7 @@ const BOB_ID = '22222222-2222-2222-2222-222222222222'
 function me(): MeResponse {
   return {
     user: { id: ADMIN_ID, email: 'admin@example.test', display_name: 'Admin Alice' },
-    organization: { id: ORG_ID, name: 'Example Realty', role: 'admin' },
+    organization: { workspace_mode: 'operational', workspace_revision: '1', id: ORG_ID, name: 'Example Realty', role: 'admin' },
     platform_admin: false,
   }
 }

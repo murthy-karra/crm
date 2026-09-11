@@ -114,6 +114,11 @@ fn build_app_with_today_router_inner(state: AppState, today_router: Router<AppSt
             .merge(routes::tasks::router())
             .merge(routes::custom_fields::router())
             .merge(routes::migrations::router())
+            .merge(routes::migration_imports::router())
+            .layer(axum::middleware::from_fn_with_state(
+                state.clone(),
+                auth::workspace_http::guard,
+            ))
             .with_state(state),
     );
 
@@ -196,7 +201,14 @@ fn with_request_tracing(router: Router) -> Router {
 pub async fn run(config: Config) -> Result<(), BoxError> {
     telemetry::init();
 
-    let state = AppState::new(&config)?;
+    let mut state = AppState::new(&config)?;
+    auth::workspace::artifact_fingerprint().await?;
+    if let Some(pool) = &state.db {
+        auth::workspace::startup_compatible(&mut *pool.acquire().await?).await?;
+        if let Some(path) = std::env::var_os("CRM_MIGRATION_RELEASE_REPORT") {
+            state.import_release_path = Some(std::path::PathBuf::from(path));
+        }
+    }
 
     // The call sweep (docs/specs/SLICE_006.md §3): in-process, only when
     // calling is enabled and a database is configured. Never started by
@@ -250,6 +262,13 @@ pub async fn run(config: Config) -> Result<(), BoxError> {
             config.raw_payload_key.clone(),
             state.migration_reader.clone(),
             state.snapshot_policy.clone(),
+        )
+    });
+    let _people_import_worker = state.db.as_ref().map(|pool| {
+        domain::migration::import_worker::spawn(
+            pool.clone(),
+            config.raw_payload_key.clone(),
+            config.snapshot_policy.clone(),
         )
     });
     let app = build_app(state);

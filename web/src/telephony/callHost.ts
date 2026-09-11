@@ -8,7 +8,7 @@
 // verbatim): the post-call forced-outcome prompt and its save mutation.
 // What did NOT move: the History Set/Change-outcome dialog and the
 // `?outcome=` deep link — person-page concerns.
-import { computed, inject, provide, ref, type ComputedRef, type InjectionKey, type MaybeRefOrGetter, type Ref } from 'vue'
+import { computed, inject, provide, ref, toValue, watch, type ComputedRef, type InjectionKey, type MaybeRefOrGetter, type Ref } from 'vue'
 import { useConfirmProposal, useCorrectCallOutcome } from '../api/queries'
 import type { CallOutcomeCorrection, OperatorProposal } from '../api/types'
 import { ApiError } from '../api/client'
@@ -43,12 +43,13 @@ export const CALL_HOST_KEY: InjectionKey<CallHost> = Symbol('call-host')
 
 export interface CallHostOptions {
   orgId: MaybeRefOrGetter<string>
+  operational?: MaybeRefOrGetter<boolean>
   createRoom: CallRoomFactory
   queryClient?: QueryClient
 }
 
 export function createCallHost(options: CallHostOptions): CallHost {
-  const call = useCall({ orgId: options.orgId, createRoom: options.createRoom, queryClient: options.queryClient })
+  const call = useCall({ orgId: options.orgId, operational: options.operational, createRoom: options.createRoom, queryClient: options.queryClient })
   const qc = options.queryClient ?? useQueryClient()
   const confirmMutation = useConfirmProposal(options.orgId, options.queryClient)
   const calleeName = ref('')
@@ -59,8 +60,9 @@ export function createCallHost(options: CallHostOptions): CallHost {
   const outcomeError = ref<string | null>(null)
   const saving = ref(false)
 
+  const canOperate = computed(() => options.operational === undefined || toValue(options.operational))
   const outcomePromptOpen = computed(() =>
-    showsOutcomePrompt(call.phase.value, call.error.value !== null, call.call.value, outcomeSaved.value !== null),
+    canOperate.value && showsOutcomePrompt(call.phase.value, call.error.value !== null, call.call.value, outcomeSaved.value !== null),
   )
   const outcomeSaving = computed(() => saving.value || panelOutcome.isPending.value)
 
@@ -72,7 +74,7 @@ export function createCallHost(options: CallHostOptions): CallHost {
   }
 
   function saveOutcome(outcome: CallOutcomeCorrection) {
-    if (saving.value || panelOutcome.isPending.value) return
+    if (!canOperate.value || saving.value || panelOutcome.isPending.value) return
     const callId = call.callId.value
     const personId = call.personId.value
     if (callId === '' || personId === '') return
@@ -103,12 +105,14 @@ export function createCallHost(options: CallHostOptions): CallHost {
   }
 
   function startFromPerson(personId: string, personName: string, contactMethodId: string): void {
+    if (!canOperate.value) return
     calleeName.value = personName
     resetOutcome()
     void call.start(personId, contactMethodId)
   }
 
   async function startFromProposal(proposal: OperatorProposal): Promise<string | null> {
+    if (!canOperate.value) return 'workspace_in_migration_review'
     // Local pre-checks: nothing is POSTed, the proposal is not consumed,
     // and — unlike the Call button — an unsaved D-033 outcome prompt is
     // never silently discarded (SLICE_006c §5a).
@@ -127,6 +131,8 @@ export function createCallHost(options: CallHostOptions): CallHost {
     })
     return call.phase.value === 'failed' ? (call.error.value?.code ?? 'unknown_error') : null
   }
+
+  watch(canOperate, value => { if (!value) { calleeName.value = ''; resetOutcome(); confirmMutation.reset() } }, { flush: 'sync' })
 
   function dismissCall(): void {
     call.dismiss()

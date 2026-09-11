@@ -1,14 +1,39 @@
 # Project State
 
-Last updated: 2026-09-10 (Slice 019a, custom fields, approved at the
-implementation gate and its lane dispatched; Slice 018 merged at
-`d74c493`, runtime updated; `main` not pushed; the LATER batch of
-2026-09-10 merged and pushed; the Slice 017 live large-mail sends remain
+Last updated: 2026-09-10 (Slice 019a, typed custom fields, merged at
+`7dc4a2f` with the user's approval, `crm_dev` migrated, runtime updated,
+worktree, branch and test database deleted, and `main` pushed together
+with the Slice 018 work; the Slice 017 live large-mail sends remain
 deferred by the user).
 
 ## Current phase
 
-**SLICE 019a (CUSTOM FIELDS) — APPROVED 2026-09-10, LANE IN
+**SLICE 019a (TYPED CUSTOM FIELDS) — COMPLETE, MERGED, PUSHED
+(2026-09-10, with the user's approval).** Merge `7dc4a2f`; source
+`slice-019-custom-fields` at `c2214f8` (fifteen lane commits, the
+[verification record](../tasks/SLICE_019_VERIFICATION.md) and seven
+screenshots under `docs/design/qa/slice-019-2026-09-10/`). One lane
+(Claude Sonnet 5), backend then Web with a checkpoint between. Review
+round 1 in two halves: backend READY WITH FIXES; Web NOT READY on one
+blocking defect (editor drafts seeded once and never re-synced, so with
+cached definitions an editor rendered empty and a blur deleted the stored
+value), reproduced by both reviewer and tester; twenty-one fixes applied
+in one round; round 2 confirmed all, READY. Final-tree gates once on
+`7d17ab1`: `sqlx-prepare` clean, `check` green (823 Rust, 822 Web, 11
+worker), `check-db` 776 of 776 first run. Walkthrough on a QA runtime,
+seven steps: admin creates the four types; a member sets and clears
+values, is refused 403 on the admin API and redirected from the Fields
+page; a second Organization sees nothing and gets 404; archive hides and
+keeps the value; the Operator answers from `custom_fields`; restore
+brings the value back. Runtime updated: `crm_dev` migrated
+(`20260915000001`), the dev API restarted by exact PID (70740, binary
+19:04, `/api/health` 200), `dev-web-prod` rebuilt (preview pid 71190).
+Worktree `../crm-worktrees/019`, the branch and `crm_slice019_qa`
+deleted. `main` pushed to `origin/main`, carrying the Slice 018 merge and
+records as well. Rung 019b (custom-field filter clauses) is scheduled,
+unspecified and needs its own approval (D-058 §1). No slice active.
+
+Previously: **SLICE 019a (CUSTOM FIELDS) — APPROVED 2026-09-10, LANE IN
 IMPLEMENTATION.** [SLICE_019.md](../specs/SLICE_019.md) and its
 [brief](../tasks/SLICE_019_IMPL.md), reviewed READY WITH CORRECTIONS
 (fifteen applied: no derived key; rename/archive/restore folded into one
@@ -1077,41 +1102,35 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. **Slice 019a lane:** Part A checkpoint audit and review round 1,
-   Part B release, round 2, final-tree gates (`sqlx-prepare`, `check`,
-   `check-db`), walkthrough, commit and merge gates; after the merge
-   `./scripts/db-migrate` on `crm_dev`, the dev API restart by exact PID
-   and `dev-web-prod`.
-2. **Push `main`** on the user's word (the Slice 018 merge and records
-   plus the spec wording commit).
-3. **Slice 017 walkthrough (spec §6), deferred by the user:** send a small
+1. **The next slice needs the user's pick.** Candidates: rung 019b,
+   custom-field filter clauses (D-058 §1; its own specification and
+   approval; amends SLICE_011a §4b to one clause per field with a slot
+   cap across the fourteen bound statements); resuming the parked FUB
+   migration ladder (`docs/plans/SLICE_010_LADDER.md`; tags, notes,
+   tasks and custom fields now exist as destinations; its three parked
+   decisions are asked at resume); or a small LATER batch from the 018
+   and 019 verification records.
+2. **Slice 017 walkthrough (spec §6), deferred by the user:** send a small
    real message and a 15–20 MB attachment to a capture address and the
    intake address; the coordinator reads the dev API log (`byte_len`,
    latency) and the Workers dashboard (invocation outcome, CPU time) and
-   appends both to `SLICE_017_VERIFICATION.md`. The relay is already
-   deployed; nothing blocks the sends.
-4. **After 019, the next slice needs the user's pick** (recommended:
-   resuming the parked FUB migration ladder,
-   `docs/plans/SLICE_010_LADDER.md`; its three parked decisions are asked
-   at resume).
-5. Standing: the Telnyx SIP password rotation (user action); O-012/O-013
+   appends both to `SLICE_017_VERIFICATION.md`. The relay is deployed;
+   nothing blocks the sends.
+3. Standing: the Telnyx SIP password rotation (user action); O-012/O-013
    before any external customer holds real consumer data; the O-015
    questions 2 and 3 (object storage, retention) at the recordings slice;
    deployment is a separate authorization; the 009 walkthrough steps 3–5
-   remain deferred.
+   remain deferred; a helper Chrome with remote debugging on port 9222,
+   launched for the walkthroughs, can be quit.
 
 ## Approval currently required
 
-- **Slice 019a:** implementation gate approved by the user on
-  2026-09-10. Next approvals: merge to `main` (with the `crm_dev`
-  migration and the runtime restarts), then push.
-- **Slice 018:** merged, migrated, runtime updated and cleaned up with
-  the user's approval on 2026-09-10. Pending: the push of `main`.
-- **LATER batch 2026-09-10:** merged to local `main` at `753d685` and the
-  runtime updated and `main` pushed with the user's approval on 2026-09-10.
-  Nothing pending.
+- **Slice 019a:** merged, migrated, runtime updated, cleaned up and pushed
+  with the user's approval on 2026-09-10. Nothing pending.
+- **Slice 018:** pushed with 019a on 2026-09-10. Nothing pending.
 - **Slice 017:** complete apart from the deferred live sends (the user's
-  action, no approval needed). Records pushed 2026-09-10.
+  action, no approval needed).
+- The next slice needs the user's pick.
 - Deployment is not authorized.
 - R1 (auto-hangup of a live call on identity change) is a product choice for
   a later slice, not blocking.

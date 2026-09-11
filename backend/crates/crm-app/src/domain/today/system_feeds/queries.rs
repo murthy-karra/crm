@@ -243,6 +243,8 @@ pub async fn admin_feed_view(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
 ) -> Result<[Feed; 3], TodayFeedError> {
+    let mut permit = crate::auth::workspace::read(conn, organization_id).await?;
+    let conn = &mut *permit;
     let stored = load_stored_rows(conn, organization_id).await?;
     let names = filter_names(conn, organization_id).await?;
 
@@ -267,6 +269,8 @@ pub async fn member_feed_view(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
 ) -> Result<[MemberFeed; 3], sqlx::Error> {
+    let mut permit = crate::auth::workspace::operational_read(conn, organization_id).await?;
+    let conn = &mut *permit;
     let names = filter_names(conn, organization_id).await?;
     let resolved = super::load_feed_rows(conn, organization_id).await?;
     let mut out = Vec::with_capacity(3);

@@ -112,7 +112,7 @@ async fn link_unmatched_attempt(
     agent_user_id: UserId,
     cmd: LinkUnmatched,
 ) -> Result<(), CaptureCommandError> {
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, organization_id).await?;
 
     let held = store::lock_for_transition(&mut tx, cmd.id, organization_id, agent_user_id)
         .await?
@@ -235,7 +235,7 @@ pub async fn dismiss_unmatched(
     agent_user_id: UserId,
     id: CaptureMessageId,
 ) -> Result<(), CaptureCommandError> {
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, organization_id).await?;
 
     let held = store::lock_for_transition(&mut tx, id, organization_id, agent_user_id)
         .await?

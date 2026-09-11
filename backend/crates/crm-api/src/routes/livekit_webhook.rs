@@ -150,7 +150,7 @@ async fn livekit_webhook(
     };
 
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
-    let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
+    let mut conn = pool.acquire().await.map_err(ApiError::database)?;
     let call = match call_queries::call_by_room(&mut conn, room).await {
         Ok(Some(call)) => call,
         Ok(None) => {
@@ -175,7 +175,7 @@ async fn livekit_webhook(
         Utc::now(),
     )
     .await
-    .map_err(|_| ApiError::Unavailable)?;
+    .map_err(ApiError::database)?;
     match outcome {
         Some(outcome) if !outcome.is_noop() => {
             span.record("outcome", "applied");

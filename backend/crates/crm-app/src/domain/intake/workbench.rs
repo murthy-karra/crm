@@ -246,7 +246,7 @@ pub async fn retry_intake(
     id: RawPayloadId,
 ) -> Result<ReceiveInquiryOutcome, WorkbenchError> {
     // Step 1: guarded reset in its own transaction.
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
     let locked = store::lock_for_processing(&mut tx, id, ctx.organization_id)
         .await?
         .ok_or(WorkbenchError::NotFound)?;
@@ -371,7 +371,7 @@ pub async fn discard_raw_payload(
 ) -> Result<DiscardOutcome, WorkbenchError> {
     let discarded_at = Utc::now();
 
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
     let locked = store::lock_for_processing(&mut tx, id, ctx.organization_id)
         .await?
         .ok_or(WorkbenchError::NotFound)?;

@@ -202,11 +202,11 @@ async fn get_call(
     auth: AuthContext,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
-    let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
+    let mut conn = pool.acquire().await.map_err(ApiError::database)?;
 
     let call = call_queries::call_view_by_id(&mut conn, auth.active_organization_id, call_id)
         .await
-        .map_err(|_| ApiError::Unavailable)?
+        .map_err(ApiError::database)?
         .ok_or(ApiError::NotFound)?;
     Ok(Json(json!({ "call": call })))
 }

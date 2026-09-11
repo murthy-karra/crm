@@ -1,12 +1,14 @@
 <script setup lang="ts">
-// Admin-only Slice 010a assessment. This page intentionally has no import
-// controls: it records bounded source-read evidence and exposes unknowns.
+// Current administrators assess source access, retain snapshots and preview
+// People imports before explicitly entering workspace review.
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { KeyRound, RefreshCw, ShieldCheck, X } from 'lucide-vue-next'
 import PageHeader from '../components/PageHeader.vue'
 import Card from '../components/Card.vue'
 import CoreSnapshotPanel from '../components/migration/CoreSnapshotPanel.vue'
+import PeopleImportPanel from '../components/migration/PeopleImportPanel.vue'
+import { refreshWorkspace, useWorkspacePending, useWorkspaceEpoch } from '../workspaceLifecycle'
 import FormField from '../components/FormField.vue'
 import { queryKeys, useAuthSessionLifetime, useMe } from '../api/queries'
 import { ApiError } from '../api/client'
@@ -26,12 +28,14 @@ import { describeApiError } from '../lib/errors'
 
 const { data: me } = useMe()
 const sessionLifetime = useAuthSessionLifetime()
+const workspacePending = useWorkspacePending()
+const workspaceEpoch = useWorkspaceEpoch()
 const queryClient = useQueryClient()
 const orgId = computed(() => me.value?.organization?.id ?? '')
 const actorId = computed(() => me.value?.user.id ?? '')
 const scope = computed(() => [orgId.value, actorId.value, sessionLifetime.value] as const)
 const migrationKey = computed(() => queryKeys.migration(orgId.value, actorId.value, sessionLifetime.value))
-const canRead = computed(() => me.value?.organization?.role === 'admin' && orgId.value !== '' && actorId.value !== '')
+const canRead = computed(() => !workspacePending.value && me.value?.organization?.role === 'admin' && orgId.value !== '' && actorId.value !== '')
 
 const { data: summary, error: summaryError, isPending, isFetching, refetch } = useQuery({
   queryKey: migrationKey,
@@ -110,6 +114,11 @@ watch(scope, (next, previous) => {
     queryClient.removeQueries({ queryKey: queryKeys.migration(previous[0], previous[1], previous[2]), exact: true })
   }
 })
+watch(canRead, allowed => {
+  if (allowed) return
+  operationGeneration++; clearCredential(); credentialPending.value = false; actionPending.value = null
+  credentialError.value = null; credentialRecovery.value = false; actionError.value = null
+}, { flush: 'sync' })
 watch(currentAssessment, (assessment) => {
   if (!assessment) selectedReport.value = 'previous'
 })
@@ -124,7 +133,7 @@ function sameScope(expected: readonly [string, string, number]) {
 }
 
 function currentOperation(expected: readonly [string, string, number], generation: number) {
-  return sameScope(expected) && generation === operationGeneration
+  return canRead.value && sameScope(expected) && generation === operationGeneration
 }
 
 async function submitCredential() {
@@ -300,7 +309,7 @@ function checkStatusLabel(check: FubAssessmentCheck) {
   <div>
     <PageHeader
       title="Migration"
-      subtitle="Assess a Follow Up Boss account, capture core records and review migration evidence. No records are imported here."
+      subtitle="Assess Follow Up Boss, capture core records and review migration evidence. Explicitly confirm a People import for admin review before later activation."
     />
 
     <Card class="mb-6">
@@ -453,9 +462,11 @@ function checkStatusLabel(check: FubAssessmentCheck) {
       </template>
     </Card>
 
+    <PeopleImportPanel :refresh-workspace="refreshWorkspace" />
+
     <CoreSnapshotPanel
       v-if="canRead"
-      :key="scope.join(':')"
+      :key="`${scope.join(':')}:${workspaceEpoch}`"
       :connection="connection"
       :assessment-busy="isPollingState(currentAssessment?.state)"
       @source-busy="snapshotSourceBusy = $event"

@@ -380,6 +380,8 @@ pub async fn open_for_person(
     organization_id: OrganizationId,
     person_id: PersonId,
 ) -> Result<Vec<Task>, TaskError> {
+    let mut workspace_read = crate::auth::workspace::read(conn, organization_id).await?;
+    let conn = &mut *workspace_read;
     let rows = sqlx::query_as!(
         TaskRowFullDb,
         r#"SELECT t.id, t.title, t.kind, t.due_at,
@@ -527,6 +529,8 @@ pub async fn open_for_assignee(
     user_id: UserId,
     now: DateTime<Utc>,
 ) -> Result<Vec<TaskWithPerson>, TaskError> {
+    let mut workspace_read = crate::auth::workspace::read(conn, organization_id).await?;
+    let conn = &mut *workspace_read;
     let rows = sqlx::query_as!(
         TaskWithPersonRowDb,
         r#"SELECT t.id, t.title, t.kind, t.due_at,
@@ -539,11 +543,11 @@ pub async fn open_for_assignee(
                   (SELECT cm.value FROM contact_method cm
                      WHERE cm.person_id = p.id AND cm.organization_id = p.organization_id
                        AND cm.kind = 'email'
-                     ORDER BY cm.created_at ASC LIMIT 1) AS "primary_email?",
+                     ORDER BY cm.import_order ASC NULLS LAST, cm.created_at ASC, cm.id ASC LIMIT 1) AS "primary_email?",
                   (SELECT cm.value FROM contact_method cm
                      WHERE cm.person_id = p.id AND cm.organization_id = p.organization_id
                        AND cm.kind = 'phone'
-                     ORDER BY cm.created_at ASC LIMIT 1) AS "primary_phone?"
+                     ORDER BY cm.import_order ASC NULLS LAST, cm.created_at ASC, cm.id ASC LIMIT 1) AS "primary_phone?"
            FROM task t
            JOIN person p ON p.id = t.person_id AND p.organization_id = t.organization_id
            LEFT JOIN app_user au ON au.id = t.assignee_user_id

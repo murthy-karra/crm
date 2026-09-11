@@ -505,6 +505,8 @@ pub async fn load_custom_field(
     organization_id: OrganizationId,
     field_id: CustomFieldId,
 ) -> Result<Option<CustomField>, CustomFieldError> {
+    let mut workspace_read = crate::auth::workspace::read(conn, organization_id).await?;
+    let conn = &mut *workspace_read;
     let field = sqlx::query!(
         r#"SELECT cf.id, cf.label, cf.field_type, cf.position, cf.archived_at,
                   count(v.person_id) as "person_count!"
@@ -577,6 +579,8 @@ pub async fn list_definitions(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
 ) -> Result<Vec<CustomField>, CustomFieldError> {
+    let mut workspace_read = crate::auth::workspace::read(conn, organization_id).await?;
+    let conn = &mut *workspace_read;
     let live: Vec<FieldAggregateRow> = sqlx::query!(
         r#"SELECT cf.id, cf.label, cf.field_type, cf.position, cf.archived_at,
                   count(v.person_id) as "person_count!"
@@ -673,6 +677,8 @@ pub async fn values_for_person(
     organization_id: OrganizationId,
     person_id: PersonId,
 ) -> Result<Vec<Value>, CustomFieldError> {
+    let mut workspace_read = crate::auth::workspace::read(conn, organization_id).await?;
+    let conn = &mut *workspace_read;
     let rows = sqlx::query!(
         r#"SELECT v.field_id, cf.label as field_label, cf.field_type,
                   v.text_value,

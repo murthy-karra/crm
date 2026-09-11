@@ -126,7 +126,7 @@ impl Stream {
         }
     }
 
-    fn collection(self) -> &'static str {
+    pub(crate) fn collection(self) -> &'static str {
         match self.family() {
             Family::CustomFields => "customfields",
             other => other.as_str(),
@@ -394,7 +394,7 @@ fn decimal(node: &Node) -> Option<String> {
     }
 }
 
-fn positive_id(node: &Node) -> Option<String> {
+pub(crate) fn positive_id(node: &Node) -> Option<String> {
     decimal(node).filter(|v| v != "0")
 }
 
@@ -694,7 +694,8 @@ fn project_value(node: &Node, depth: usize, flags: &mut BTreeSet<&'static str>) 
 }
 
 /// Numbers store normalized coefficient/exponent text, never floating point.
-enum Node {
+#[derive(Clone)]
+pub(crate) enum Node {
     Null,
     Bool(bool),
     Number(String),
@@ -715,28 +716,28 @@ impl Node {
         }
     }
 
-    fn get(&self, key: &str) -> Option<&Self> {
+    pub(crate) fn get(&self, key: &str) -> Option<&Self> {
         if let Self::Object(value) = self {
             value.get(key)
         } else {
             None
         }
     }
-    fn string(&self) -> Option<&str> {
+    pub(crate) fn string(&self) -> Option<&str> {
         if let Self::String(value) = self {
             Some(value)
         } else {
             None
         }
     }
-    fn array(&self) -> Option<&[Self]> {
+    pub(crate) fn array(&self) -> Option<&[Self]> {
         if let Self::Array(value) = self {
             Some(value)
         } else {
             None
         }
     }
-    fn encode(&self, out: &mut Vec<u8>) {
+    pub(crate) fn encode(&self, out: &mut Vec<u8>) {
         match self {
             Self::Null => out.extend_from_slice(b"null"),
             Self::Bool(true) => out.extend_from_slice(b"true"),
@@ -777,14 +778,14 @@ impl Node {
     }
 }
 
-struct JsonParser<'a> {
+pub(crate) struct JsonParser<'a> {
     bytes: &'a [u8],
     pos: usize,
     nodes: usize,
 }
 
 impl<'a> JsonParser<'a> {
-    fn parse(bytes: &'a [u8]) -> Result<Node, ParseError> {
+    pub(crate) fn parse(bytes: &'a [u8]) -> Result<Node, ParseError> {
         let mut parser = Self {
             bytes,
             pos: 0,

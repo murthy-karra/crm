@@ -41,7 +41,7 @@ pub async fn rotate_intake_token(
     pool: &PgPool,
     ctx: &CommandContext,
 ) -> Result<IntakeToken, RotateError> {
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
 
     let old: Option<String> = sqlx::query_scalar!(
         r#"SELECT intake_token FROM organization WHERE id = $1 FOR UPDATE"#,

@@ -23,3 +23,5 @@ pub mod today;
 pub mod today_feeds;
 
 pub mod migration_snapshots;
+
+pub mod migration_imports;

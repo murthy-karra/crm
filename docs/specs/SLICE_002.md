@@ -1,5 +1,13 @@
 # Slice 002 — Lead Intake
 
+**Approved amendment — 010c (D-065, 2026-09-11):**
+[010c](SLICE_010c.md) owns a separate retained-evidence Person/contact import,
+explicit import-stage creation, import facts/provenance and deterministic
+`import_order, created_at, id` primary-contact presentation. It does not call
+intake identity matching or synthesize Inquiries. Its workspace readiness guard
+applies before ordinary reads/writes and raw intake; operational normalization,
+Inquiry-source filtering and Organization visibility scope retain their meaning.
+
 Status: IMPLEMENTED, verified (2026-08-21; planner draft independently
 reviewed — 17 findings applied; spec re-reviewed — 12 further items
 applied; §14 defaults reviewed with and approved by the user;

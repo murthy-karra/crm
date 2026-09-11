@@ -1,0 +1,35 @@
+[
+  {
+    "case": "people_created_desc",
+    "serial_old_p95_ns": 145418833,
+    "serial_new_p95_ns": 144051417,
+    "serial_budget_ns": 170418833,
+    "serial_hashes_equal": true,
+    "concurrency_old_p95_ns": null,
+    "concurrency_new_p95_ns": null,
+    "concurrency_budget_ns": null,
+    "concurrency_hashes_equal": true
+  },
+  {
+    "case": "today_zero_sources",
+    "serial_old_p95_ns": 61238166,
+    "serial_new_p95_ns": 63143417,
+    "serial_budget_ns": 86238166,
+    "serial_hashes_equal": true,
+    "concurrency_old_p95_ns": 67652500,
+    "concurrency_new_p95_ns": 73350875,
+    "concurrency_budget_ns": 92652500,
+    "concurrency_hashes_equal": true
+  },
+  {
+    "case": "today_five_sources",
+    "serial_old_p95_ns": 102981208,
+    "serial_new_p95_ns": 99225625,
+    "serial_budget_ns": 127981208,
+    "serial_hashes_equal": true,
+    "concurrency_old_p95_ns": 167377041,
+    "concurrency_new_p95_ns": 157946833,
+    "concurrency_budget_ns": 192377041,
+    "concurrency_hashes_equal": true
+  }
+]

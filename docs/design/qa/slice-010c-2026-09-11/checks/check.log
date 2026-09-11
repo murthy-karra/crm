@@ -1,0 +1,1040 @@
+..............
+----------------------------------------------------------------------
+Ran 14 tests in 0.006s
+
+OK
+==> cargo fmt --check
+==> [1s]
+==> cargo clippy
+    Checking crm-app v0.1.0 (/Users/karrad/projects/crm-worktrees/010c/backend/crates/crm-app)
+    Checking crm-api v0.1.0 (/Users/karrad/projects/crm-worktrees/010c/backend/crates/crm-api)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 19.66s
+==> [20s]
+==> cargo check (production shape, no test features)
+    Checking crm-app v0.1.0 (/Users/karrad/projects/crm-worktrees/010c/backend/crates/crm-app)
+    Checking crm-api v0.1.0 (/Users/karrad/projects/crm-worktrees/010c/backend/crates/crm-api)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.92s
+==> [3s]
+==> crate-boundary fences (resolved graph)
+==> [0s]
+==> cargo nextest run
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.17s
+────────────
+ Nextest run ID 136c0bb4-190b-4ecd-b42a-c78d3e3188f6 with nextest profile: default
+    Starting 877 tests across 7 binaries (845 tests skipped)
+        PASS [   0.016s] (  1/877) crm-api auth::session::tests::cookie_has_expected_attributes
+        PASS [   0.016s] (  2/877) crm-api auth::session::tests::clearing_cookie_matches_attributes_and_expires_immediately
+        PASS [   0.017s] (  3/877) crm-api config::tests::accepts_cookie_secure_true
+        PASS [   0.018s] (  4/877) crm-api auth::session::tests::generated_token_has_expected_format
+        PASS [   0.019s] (  5/877) crm-api auth::session::tests::hash_is_deterministic_for_same_secret_and_token
+        PASS [   0.020s] (  6/877) crm-api auth::session::tests::hash_differs_across_secrets
+        PASS [   0.024s] (  7/877) crm-api config::tests::accepts_custom_centrifugo_api_url
+        PASS [   0.025s] (  8/877) crm-api auth::session::tests::clearing_cookie_domain_matches_when_configured
+        PASS [   0.025s] (  9/877) crm-api auth::session::tests::cookie_domain_set_when_configured
+        PASS [   0.027s] ( 10/877) crm-api auth::session::tests::cookie_secure_flag_follows_config
+        PASS [   0.014s] ( 11/877) crm-api config::tests::accepts_custom_telephony_limits
+        PASS [   0.014s] ( 12/877) crm-api config::tests::accepts_custom_values
+        PASS [   0.015s] ( 13/877) crm-api config::tests::accepts_custom_invitation_ttl
+        PASS [   0.016s] ( 14/877) crm-api config::tests::accepts_custom_realtime_ttl
+        PASS [   0.013s] ( 15/877) crm-api config::tests::accepts_valid_cookie_domain
+        PASS [   0.016s] ( 16/877) crm-api config::tests::accepts_realtime_token_secret_exactly_32_bytes
+        PASS [   0.013s] ( 17/877) crm-api config::tests::accepts_valid_raw_payload_key_and_decodes_it
+        PASS [   0.015s] ( 18/877) crm-api config::tests::centrifugo_api_key_is_redacted_in_debug
+        PASS [   0.016s] ( 19/877) crm-api config::tests::accepts_valid_cors_origin
+        PASS [   0.014s] ( 20/877) crm-api config::tests::d039_local_part_env_values_render_the_final_address_form
+        PASS [   0.016s] ( 21/877) crm-api config::tests::defaults_invitation_ttl
+        PASS [   0.016s] ( 22/877) crm-api config::tests::defaults_centrifugo_api_url_and_ttl
+        PASS [   0.016s] ( 23/877) crm-api config::tests::empty_groq_key_is_disabled_not_an_error
+        PASS [   0.019s] ( 24/877) crm-api config::tests::defaults_when_unset
+        PASS [   0.017s] ( 25/877) crm-api config::tests::empty_realtime_token_secret_is_too_short_zero_not_missing
+        PASS [   0.015s] ( 26/877) crm-api config::tests::groq_key_is_redacted_in_debug
+        PASS [   0.023s] ( 27/877) crm-api config::tests::empty_livekit_key_is_disabled_not_an_error
+        PASS [   0.016s] ( 28/877) crm-api config::tests::inbound_email_secret_empty_is_none
+        PASS [   0.019s] ( 29/877) crm-api config::tests::inbound_email_secret_is_redacted_in_debug
+        PASS [   0.014s] ( 30/877) crm-api config::tests::intake_mail_accepts_a_bare_hostname_and_the_local_part_scheme
+        PASS [   0.016s] ( 31/877) crm-api config::tests::inbound_email_secret_short_is_an_error
+        PASS [   0.025s] ( 32/877) crm-api config::tests::inbound_email_secret_accepts_exactly_32_bytes
+        PASS [   0.021s] ( 33/877) crm-api config::tests::inbound_email_secret_unset_is_none
+        PASS [   0.018s] ( 34/877) crm-api config::tests::intake_mail_defaults_to_elysianfeld_subdomain_scheme
+        PASS [   0.017s] ( 35/877) crm-api config::tests::intake_mail_rejects_non_bare_hostnames_and_unknown_schemes
+        PASS [   0.014s] ( 36/877) crm-api config::tests::livekit_enabled_with_full_config
+        PASS [   0.013s] ( 37/877) crm-api config::tests::livekit_key_requires_every_other_livekit_value
+        PASS [   0.012s] ( 38/877) crm-api config::tests::livekit_secret_is_redacted_in_debug
+        PASS [   0.013s] ( 39/877) crm-api config::tests::livekit_secret_is_trimmed_like_the_key
+        PASS [   0.017s] ( 40/877) crm-api config::tests::livekit_urls_are_validated_even_without_a_key
+        PASS [   0.015s] ( 41/877) crm-api config::tests::operator_bounds_are_validated_even_without_a_key
+        PASS [   0.014s] ( 42/877) crm-api config::tests::realtime_token_secret_is_redacted_in_debug
+        PASS [   0.019s] ( 43/877) crm-api config::tests::operator_base_url_requires_https_except_loopback
+        PASS [   0.014s] ( 44/877) crm-api config::tests::operator_model_override_and_empty_falls_back
+        PASS [   0.015s] ( 45/877) crm-api config::tests::rejects_centrifugo_api_url_with_trailing_slash
+        PASS [   0.017s] ( 46/877) crm-api config::tests::operator_defaults_and_disabled_without_key
+        PASS [   0.016s] ( 47/877) crm-api config::tests::raw_payload_key_is_redacted_in_debug
+        PASS [   0.020s] ( 48/877) crm-api config::tests::operator_call_timeout_must_not_exceed_turn_timeout
+        PASS [   0.016s] ( 49/877) crm-api config::tests::rejects_cookie_domain_with_whitespace
+        PASS [   0.012s] ( 50/877) crm-api config::tests::rejects_https_centrifugo_api_url
+        PASS [   0.013s] ( 51/877) crm-api config::tests::rejects_invalid_bind_addr
+        PASS [   0.015s] ( 52/877) crm-api config::tests::rejects_cors_origin_without_scheme
+        PASS [   0.016s] ( 53/877) crm-api config::tests::rejects_cors_origin_with_trailing_slash
+        PASS [   0.014s] ( 54/877) crm-api config::tests::rejects_invalid_cookie_secure
+        PASS [   0.015s] ( 55/877) crm-api config::tests::rejects_empty_centrifugo_api_key
+        PASS [   0.014s] ( 56/877) crm-api config::tests::rejects_invalid_realtime_ttl
+        PASS [   0.013s] ( 57/877) crm-api config::tests::rejects_invitation_ttl_below_bounds
+        PASS [   0.018s] ( 58/877) crm-api config::tests::rejects_invalid_invitation_ttl
+        PASS [   0.016s] ( 59/877) crm-api config::tests::rejects_invitation_ttl_above_bounds
+        PASS [   0.014s] ( 60/877) crm-api config::tests::rejects_missing_centrifugo_api_key
+        PASS [   0.013s] ( 61/877) crm-api config::tests::rejects_missing_realtime_token_secret
+        PASS [   0.014s] ( 62/877) crm-api config::tests::rejects_missing_raw_payload_key
+        PASS [   0.014s] ( 63/877) crm-api config::tests::rejects_missing_session_secret
+        PASS [   0.013s] ( 64/877) crm-api config::tests::rejects_non_loopback_bind_addr
+        PASS [   0.013s] ( 65/877) crm-api config::tests::rejects_non_hex_raw_payload_key
+        PASS [   0.011s] ( 66/877) crm-api config::tests::rejects_realtime_ttl_above_bounds
+        PASS [   0.016s] ( 67/877) crm-api config::tests::rejects_raw_payload_key_63_chars
+        PASS [   0.011s] ( 68/877) crm-api config::tests::rejects_realtime_ttl_below_bounds
+        PASS [   0.013s] ( 69/877) crm-api config::tests::rejects_raw_payload_key_65_chars
+        PASS [   0.013s] ( 70/877) crm-api config::tests::rejects_session_ttl_above_bounds
+        PASS [   0.013s] ( 71/877) crm-api config::tests::rejects_short_session_secret
+        PASS [   0.015s] ( 72/877) crm-api config::tests::rejects_session_ttl_below_bounds
+        PASS [   0.014s] ( 73/877) crm-api config::tests::rejects_timeout_above_bounds
+        PASS [   0.017s] ( 74/877) crm-api config::tests::rejects_short_realtime_token_secret
+        PASS [   0.013s] ( 75/877) crm-api config::tests::session_secret_is_redacted_in_debug
+        PASS [   0.018s] ( 76/877) crm-api config::tests::rejects_timeout_below_bounds
+        PASS [   0.014s] ( 77/877) crm-api config::tests::telephony_defaults_and_disabled_without_key
+        PASS [   0.016s] ( 78/877) crm-api config::tests::telephony_bounds_are_validated_even_without_a_key
+        PASS [   0.019s] ( 79/877) crm-api error::tests::filter_error_codes
+        PASS [   0.013s] ( 80/877) crm-api error::tests::slice_006c_error_codes
+        PASS [   0.016s] ( 81/877) crm-api extraction::tests::request_has_no_tools_and_asks_for_strict_json
+        PASS [   0.017s] ( 82/877) crm-api extraction::tests::from_config_is_none_without_a_groq_key
+        PASS [   0.017s] ( 83/877) crm-api extraction::tests::prompt_names_the_injection_rule_and_the_schema
+        PASS [   0.015s] ( 84/877) crm-api extraction::tests::user_message_wraps_only_the_three_fields_under_the_untrusted_key
+        PASS [   0.014s] ( 85/877) crm-api operator::explain::tests::a_low_item_explanation_is_consistent_with_position_and_rule
+        PASS [   0.020s] ( 86/877) crm-api operator::backend::tests::propose_create_task_fails_closed_on_a_context_mismatch
+        PASS [   0.020s] ( 87/877) crm-api operator::backend::tests::complete_task_fails_closed_on_a_context_mismatch
+        PASS [   0.019s] ( 88/877) crm-api operator::backend::tests::run_saved_list_fails_closed_on_a_context_mismatch
+        PASS [   0.014s] ( 89/877) crm-api operator::explain::tests::absent_person_is_only_not_in_the_returned_today_result
+        PASS [   0.015s] ( 90/877) crm-api operator::explain::tests::call_outcome_needed_reason_is_explained_with_the_call_time
+        PASS [   0.012s] ( 91/877) crm-api operator::explain::tests::placement_counts_ahead_per_tier_across_the_boundary
+        PASS [   0.014s] ( 92/877) crm-api operator::explain::tests::client_replied_reason_is_explained_with_the_reply_time
+        PASS [   0.014s] ( 93/877) crm-api operator::explain::tests::list_reason_name_is_untrusted_and_never_enters_fixed_explanation
+        PASS [   0.013s] ( 94/877) crm-api operator::explain::tests::on_today_explanation_reports_position_and_rule
+        PASS [   0.011s] ( 95/877) crm-api operator::explain::tests::placement_counts_low_items_ahead_and_priority_str_is_low
+        PASS [   0.014s] ( 96/877) crm-api operator::explain::tests::task_due_reason_keeps_other_kind_labels_unchanged_and_uses_second_precision_z
+        PASS [   0.015s] ( 97/877) crm-api operator::filter::tests::age_and_boolean_axes_pass_through_unresolved
+        PASS [   0.018s] ( 98/877) crm-api operator::explain::tests::task_overdue_reason_uses_the_follow_up_prose_label_and_second_precision_z
+        PASS [   0.012s] ( 99/877) crm-api operator::filter::tests::find_by_name_reports_a_collision_even_among_exact_matches
+        PASS [   0.019s] (100/877) crm-api operator::filter::tests::ambiguous_display_name_is_a_distinct_dimension_from_unknown
+        PASS [   0.018s] (101/877) crm-api operator::filter::tests::duplicate_names_resolving_to_one_id_are_collapsed
+        PASS [   0.015s] (102/877) crm-api operator::filter::tests::inactive_members_are_not_resolved
+        PASS [   0.015s] (103/877) crm-api operator::filter::tests::find_by_name_prefers_exact_then_case_insensitive_then_reports_collision
+        PASS [   0.014s] (104/877) crm-api operator::filter::tests::multiple_dimensions_can_fail_at_once
+        PASS [   0.018s] (105/877) crm-api operator::filter::tests::me_and_unassigned_are_tokens_that_win_over_a_member_so_named
+        PASS [   0.013s] (106/877) crm-api operator::filter::tests::resolves_an_exact_stage_name
+        PASS [   0.015s] (107/877) crm-api operator::filter::tests::resolves_a_case_insensitive_trimmed_stage_name
+        PASS [   0.012s] (108/877) crm-api operator::filter::tests::stage_case_insensitive_collision_fails_closed_as_unknown
+        PASS [   0.013s] (109/877) crm-api operator::filter::tests::tags_any_and_none_resolve_into_separate_clauses
+        PASS [   0.013s] (110/877) crm-api operator::filter::tests::two_members_with_the_exact_same_display_name_are_ambiguous
+        PASS [   0.014s] (111/877) crm-api operator::filter::tests::unknown_stage_name_reports_available_stages
+        PASS [   0.014s] (112/877) crm-api operator::filter::tests::unknown_tags_any_and_none_are_combined
+        PASS [   0.014s] (113/877) crm-api operator::tests::a_rejected_same_user_attempt_does_not_consume_a_permit
+        PASS [   0.014s] (114/877) crm-api operator::tests::same_user_cannot_hold_two_slots_and_release_is_raii
+        PASS [   0.014s] (115/877) crm-api operator::tests::semaphore_full_is_busy_and_does_not_mark_the_user
+        PASS [   0.012s] (116/877) crm-api routes::inbound_email::tests::constant_time_eq_rejects_length_mismatch_and_wrong_bytes
+        PASS [   0.014s] (117/877) crm-api routes::inbound_email::tests::max_inbound_email_body_bytes_admits_the_relays_largest_legitimate_body
+        PASS [   0.013s] (118/877) crm-api routes::livekit_webhook::tests::event_mapping
+        PASS [   0.016s] (119/877) crm-api routes::inbound_email::tests::raw_field_borrows_when_the_json_string_has_no_escapes
+        PASS [   0.014s] (120/877) crm-api routes::operator::tests::utc_offset_minutes_boundaries_and_none_are_accepted_and_threaded
+        PASS [   0.014s] (121/877) crm-api routes::operator::tests::utc_offset_minutes_outside_bounds_is_malformed_request
+        PASS [   0.023s] (122/877) crm-api::all capture::dismiss_unmatched_with_non_uuid_path_returns_400
+        PASS [   0.021s] (123/877) crm-api::all capture::get_address_without_cookie_returns_401
+        PASS [   0.024s] (124/877) crm-api::all capture::dismiss_unmatched_without_cookie_returns_401
+        PASS [   0.019s] (125/877) crm-api::all capture::link_unmatched_with_non_uuid_path_returns_400
+        PASS [   0.018s] (126/877) crm-api::all capture::link_unmatched_without_cookie_returns_401
+        PASS [   0.014s] (127/877) crm-api::all db_inbound_email_intake::real_gmail_structure_unwraps_to_the_inner_view
+        PASS [   0.020s] (128/877) crm-api::all capture::list_unmatched_without_cookie_returns_401
+        PASS [   0.021s] (129/877) crm-api::all capture::rotate_address_without_cookie_returns_401
+        PASS [   0.014s] (130/877) crm-api::all db_today_builtin_parity::today_9d62e86::model::tests::client_replied_reason_is_exactly_code_occurred_at
+        PASS [   0.014s] (131/877) crm-api::all db_person_last_activity::migration_declares_triggers_before_backfill_before_index
+        PASS [   0.014s] (132/877) crm-api::all db_intake_system_routing::actor_kind_as_str_matches_the_stored_value
+        PASS [   0.013s] (133/877) crm-api::all db_today_builtin_parity::today_9d62e86::model::tests::priority_serialises_snake_case_and_low_sorts_last
+        PASS [   0.015s] (134/877) crm-api::all db_today_builtin_parity::today_9d62e86::model::tests::call_outcome_needed_reason_is_exactly_code_call_id_ended_at
+        PASS [   0.013s] (135/877) crm-api::all db_today_builtin_parity::today_9d62e86::model::tests::recommended_action_serialises_set_outcome
+        PASS [   0.014s] (136/877) crm-api::all db_today_builtin_parity::today_9d62e86::rank::tests::absent_client_replied_falls_through_to_the_inquiry_branch_unchanged
+        PASS [   0.011s] (137/877) crm-api::all db_today_builtin_parity::today_9d62e86::rank::tests::both_ways_candidate_keeps_the_inquiry_tier_and_appends_the_reason_last
+        PASS [   0.012s] (138/877) crm-api::all db_today_builtin_parity::today_9d62e86::rank::tests::client_replied_fresh_is_high_priority_stale_is_normal
+        PASS [   0.012s] (139/877) crm-api::all db_today_builtin_parity::today_9d62e86::rank::tests::call_only_candidate_is_low_set_outcome_with_the_single_reason
+        PASS [   0.012s] (140/877) crm-api::all db_today_builtin_parity::today_9d62e86::rank::tests::client_replied_keeps_a_person_out_of_the_low_only_tier_even_without_by_inquiry
+        PASS [   0.011s] (141/877) crm-api::all db_today_builtin_parity::today_9d62e86::rank::tests::client_replied_still_appends_call_outcome_needed_last
+        PASS [   0.014s] (142/877) crm-api::all db_today_builtin_parity::today_9d62e86::rank::tests::client_replied_recommended_action_follows_the_phone_rule
+        PASS [   0.012s] (143/877) crm-api::all db_today_builtin_parity::today_9d62e86::rank::tests::client_replied_wins_the_reason_slot_over_the_inquiry_trio
+        PASS [   0.012s] (144/877) crm-api::all db_today_builtin_parity::today_9d62e86::rank::tests::fresh_candidate_gets_new_inquiry_reason_and_high_priority
+        PASS [   0.012s] (145/877) crm-api::all db_today_builtin_parity::today_9d62e86::rank::tests::fresh_is_not_consulted_for_a_call_only_candidate
+        PASS [   0.011s] (146/877) crm-api::all db_today_builtin_parity::today_9d62e86::rank::tests::rank_carries_through_last_contact_attempt_and_waiting_since
+        PASS [   0.014s] (147/877) crm-api::all db_today_builtin_parity::today_9d62e86::rank::tests::no_contact_attempt_reason_is_always_present
+        PASS [   0.014s] (148/877) crm-api::all db_today_builtin_parity::today_9d62e86::rank::tests::rank_preserves_input_order_never_resorts
+        PASS [   0.014s] (149/877) crm-api::all db_today_builtin_parity::today_9d62e86::rank::tests::reason_order_is_fixed_new_inquiry_then_no_contact_then_repeat
+        PASS [   0.011s] (150/877) crm-api::all db_today_builtin_parity::today_9d62e86::rank::tests::repeat_inquiry_reason_present_iff_count_at_least_two
+        PASS [   0.012s] (151/877) crm-api::all db_today_builtin_parity::today_9d62e86::rank::tests::stale_candidate_has_no_new_inquiry_reason_and_normal_priority
+        PASS [   0.015s] (152/877) crm-api::all db_today_builtin_parity::today_9d62e86::rank::tests::recommended_action_is_call_when_phone_present_else_email
+        PASS [   0.017s] (153/877) crm-api::all health::health_returns_ok_with_request_id_and_body
+        PASS [   0.017s] (154/877) crm-api::all health::unknown_route_returns_404_with_request_id
+        PASS [   0.017s] (155/877) crm-api::all health::ready_returns_503_without_database_url
+        PASS [   0.016s] (156/877) crm-api::all inbound_email::no_bearer_is_401_on_a_stateless_app
+        PASS [   0.020s] (157/877) crm-api::all inbound_email::body_at_the_relays_largest_legitimate_size_with_a_bad_bearer_is_401_not_413
+        PASS [   0.020s] (158/877) crm-api::all inbound_email::oversize_body_with_bad_bearer_is_413_with_the_envelope
+        PASS [   0.021s] (159/877) crm-api::all inbound_email::oversize_chunked_body_with_bad_bearer_is_413_with_the_envelope
+        PASS [   0.017s] (160/877) crm-api::all inbound_email::secret_unset_is_401_even_with_a_bearer_present
+        PASS [   0.018s] (161/877) crm-api::all inbound_email::route_is_outside_cors_and_carries_no_cors_headers
+        PASS [   0.016s] (162/877) crm-api::all intake::get_unresolved_without_cookie_returns_401
+        PASS [   0.015s] (163/877) crm-api::all intake::post_inquiries_without_cookie_returns_401
+        PASS [   0.015s] (164/877) crm-api::all intake_settings::get_intake_settings_without_cookie_returns_401
+        PASS [   0.016s] (165/877) crm-api::all intake_settings::put_intake_settings_without_cookie_returns_401
+        PASS [   0.016s] (166/877) crm-api::all intake_workbench::non_uuid_id_is_400_before_auth
+        PASS [   0.015s] (167/877) crm-api::all intake_workbench::rotate_without_cookie_returns_401
+        PASS [   0.016s] (168/877) crm-api::all intake_workbench::workbench_endpoints_without_cookie_return_401
+        PASS [   0.011s] (169/877) crm-api::all operator::filter_people_mirrors_every_clause_kind::every_clause_kind_has_a_filter_people_schema_field
+        PASS [   0.222s] (170/877) crm-api::all health::ready_returns_503_within_timeout_when_database_accepts_but_never_responds
+        PASS [   0.223s] (171/877) crm-api::all health::ready_returns_503_within_timeout_when_database_refuses_connection
+        PASS [   0.016s] (172/877) crm-api::all operator::post_turn_without_cookie_returns_401
+        PASS [   0.011s] (173/877) crm-api::all operator::runtime_is_absent_without_a_key
+        PASS [   0.220s] (174/877) crm-api::all inbound_email::unreachable_database_with_valid_bearer_and_body_is_503
+        PASS [   0.012s] (175/877) crm-api::all operator_deps::crm_app_has_no_axum_crm_operator_or_crm_api_dependency
+        PASS [   0.011s] (176/877) crm-api::all operator_deps::crm_operator_has_no_sqlx_axum_or_crm_api_dependency
+        PASS [   0.015s] (177/877) crm-api::all people::get_person_with_non_uuid_path_returns_400
+        PASS [   0.015s] (178/877) crm-api::all people::get_person_without_cookie_returns_401
+        PASS [   0.431s] (179/877) crm-api::all capture::get_address_returns_503_when_database_unreachable
+        PASS [   0.431s] (180/877) crm-api::all capture::rotate_address_returns_503_when_database_unreachable
+        PASS [   0.422s] (181/877) crm-api::all intake::get_unresolved_returns_503_when_database_unreachable
+        PASS [   0.424s] (182/877) crm-api::all intake::post_inquiries_returns_503_when_database_unreachable
+        PASS [   0.017s] (183/877) crm-api::all people::list_people_with_malformed_sort_and_no_cookie_still_returns_401
+        PASS [   0.425s] (184/877) crm-api::all intake_settings::get_intake_settings_returns_503_when_database_unreachable
+        PASS [   0.424s] (185/877) crm-api::all intake_settings::put_intake_settings_returns_503_when_database_unreachable
+        PASS [   0.015s] (186/877) crm-api::all people::list_people_without_cookie_returns_401
+        PASS [   0.422s] (187/877) crm-api::all operator::post_turn_returns_503_unavailable_when_database_unreachable
+        PASS [   0.016s] (188/877) crm-api::all people::set_assignment_with_non_uuid_path_returns_400
+        PASS [   0.015s] (189/877) crm-api::all people::set_assignment_without_cookie_returns_401
+        PASS [   0.421s] (190/877) crm-api::all people::get_person_returns_503_when_database_unreachable
+        PASS [   0.016s] (191/877) crm-api::all people::set_stage_with_non_uuid_path_returns_400
+        PASS [   0.423s] (192/877) crm-api::all people::inquiry_sources_returns_503_when_database_unreachable
+        PASS [   0.422s] (193/877) crm-api::all people::list_people_returns_503_when_database_unreachable
+        PASS [   0.016s] (194/877) crm-api::all people::set_stage_without_cookie_returns_401
+        PASS [   0.014s] (195/877) crm-api::all realtime::mint_token_without_cookie_returns_401
+        PASS [   0.014s] (196/877) crm-api::all saved_lists::saved_list_index_requires_authentication_before_any_read
+        PASS [   0.023s] (197/877) crm-api::all saved_lists::malformed_saved_list_path_is_400_before_authentication
+        PASS [   0.015s] (198/877) crm-api::all session::cors_header_present_for_configured_origin_only
+        PASS [   0.020s] (199/877) crm-api::all saved_lists::saved_list_mutations_require_authentication_before_body_parsing
+        PASS [   0.014s] (200/877) crm-api::all session::login_with_malformed_json_returns_400
+        PASS [   0.015s] (201/877) crm-api::all session::login_with_missing_field_returns_400
+        PASS [   0.014s] (202/877) crm-api::all session::login_with_non_json_content_type_returns_400
+        PASS [   0.423s] (203/877) crm-api::all people::list_people_with_empty_sort_returns_503_when_database_unreachable
+        PASS [   0.424s] (204/877) crm-api::all people::list_people_with_filter_returns_503_when_database_unreachable
+        PASS [   0.016s] (205/877) crm-api::all session::logout_without_cookie_is_idempotent_and_clears_cookie
+        PASS [   0.015s] (206/877) crm-api::all session::me_with_syntactically_invalid_cookie_returns_401_without_touching_database
+        PASS [   0.014s] (207/877) crm-api::all session::me_without_cookie_returns_401
+        PASS [   0.015s] (208/877) crm-api::all session::members_without_cookie_returns_401
+        PASS [   0.014s] (209/877) crm-api::all session::no_cors_header_when_unconfigured
+        PASS [   0.424s] (210/877) crm-api::all people::list_people_with_malformed_sort_returns_503_when_database_unreachable
+        PASS [   0.425s] (211/877) crm-api::all people::list_people_with_valid_sort_returns_503_when_database_unreachable
+        PASS [   0.425s] (212/877) crm-api::all people::list_people_with_repeated_sort_returns_503_when_database_unreachable
+        PASS [   0.016s] (213/877) crm-api::all stages::list_stages_without_cookie_returns_401
+        PASS [   0.016s] (214/877) crm-api::all telephony::every_call_route_with_a_non_uuid_id_returns_400_before_auth
+        PASS [   0.014s] (215/877) crm-api::all telephony::every_call_route_without_cookie_returns_401
+        PASS [   0.011s] (216/877) crm-api::all telephony::telephony_is_absent_without_a_livekit_key
+        PASS [   0.424s] (217/877) crm-api::all people::set_assignment_returns_503_when_database_unreachable
+        PASS [   0.015s] (218/877) crm-api::all telephony::webhook_body_over_64_kib_is_413
+        PASS [   0.014s] (219/877) crm-api::all telephony::webhook_with_a_valid_signature_but_an_ignored_event_is_200_without_a_database
+        PASS [   0.017s] (220/877) crm-api::all telephony::webhook_is_outside_the_cors_layer
+        PASS [   0.017s] (221/877) crm-api::all telephony::webhook_without_signature_or_with_telephony_disabled_is_401
+        PASS [   0.014s] (222/877) crm-api::all today::get_today_without_cookie_returns_401
+        PASS [   0.220s] (223/877) crm-api::all session::login_returns_503_when_database_unreachable
+        PASS [   0.011s] (224/877) crm-app auth::password::tests::rejects_malformed_hash
+        PASS [   0.421s] (225/877) crm-api::all people::set_stage_returns_503_when_database_unreachable
+        PASS [   0.013s] (226/877) crm-app auth::token_format::tests::rejects_non_base64url_characters
+        PASS [   0.221s] (227/877) crm-api::all session::me_returns_503_when_database_unreachable
+        PASS [   0.010s] (228/877) crm-app auth::token_format::tests::rejects_wrong_length_token_format
+        PASS [   0.011s] (229/877) crm-app config::tests::centrifugo_api_key_and_livekit_secret_reject_empty
+        PASS [   0.011s] (230/877) crm-app config::tests::inbound_email_secret_enforces_minimum_length
+        PASS [   0.011s] (231/877) crm-app config::tests::raw_payload_key_round_trips_its_bytes
+        PASS [   0.011s] (232/877) crm-app config::tests::realtime_token_secret_rejects_short_and_empty_as_too_short
+        PASS [   0.011s] (233/877) crm-app domain::admin::commands::tests::decode_error_maps_to_corrupt
+        PASS [   0.012s] (234/877) crm-app domain::admin::commands::token::tests::generated_token_has_valid_format
+        PASS [   0.011s] (235/877) crm-app domain::admin::commands::token::tests::hash_differs_across_tokens
+        PASS [   0.010s] (236/877) crm-app domain::admin::commands::token::tests::hash_does_not_depend_on_session_secret
+        PASS [   0.010s] (237/877) crm-app domain::admin::commands::token::tests::hash_is_deterministic
+        PASS [   0.014s] (238/877) crm-app domain::admin::validation::tests::candidates_are_base_then_2_to_9_then_random
+        PASS [   0.012s] (239/877) crm-app domain::admin::validation::tests::display_name_accepts_exactly_120
+        PASS [   0.010s] (240/877) crm-app domain::admin::validation::tests::display_name_rejects_empty_after_trim
+        PASS [   0.010s] (241/877) crm-app domain::admin::validation::tests::display_name_rejects_over_120
+        PASS [   0.011s] (242/877) crm-app domain::admin::validation::tests::display_name_trims_and_accepts_in_bounds
+        PASS [   0.423s] (243/877) crm-api::all realtime::mint_token_returns_503_when_database_unreachable
+        PASS [   0.010s] (244/877) crm-app domain::admin::validation::tests::normalizes_trims_and_lowercases
+        PASS [   0.010s] (245/877) crm-app domain::admin::validation::tests::organization_name_rejects_over_120
+        PASS [   0.011s] (246/877) crm-app domain::admin::validation::tests::organization_name_rejects_empty_after_trim
+        PASS [   0.010s] (247/877) crm-app domain::admin::validation::tests::organization_name_trims_and_accepts_in_bounds
+        PASS [   0.009s] (248/877) crm-app domain::admin::validation::tests::password_rejects_over_256
+        PASS [   0.011s] (249/877) crm-app domain::admin::validation::tests::password_accepts_exactly_12
+        PASS [   0.011s] (250/877) crm-app domain::admin::validation::tests::password_accepts_exactly_256
+        PASS [   0.011s] (251/877) crm-app domain::admin::validation::tests::password_rejects_under_12
+        PASS [   0.011s] (252/877) crm-app domain::admin::validation::tests::rejects_empty_local_or_domain
+        PASS [   0.011s] (253/877) crm-app domain::admin::validation::tests::rejects_empty_email
+        PASS [   0.012s] (254/877) crm-app domain::admin::validation::tests::rejects_missing_at
+        PASS [   0.012s] (255/877) crm-app domain::admin::validation::tests::rejects_over_254_chars
+        PASS [   0.012s] (256/877) crm-app domain::admin::validation::tests::rejects_multiple_at
+        PASS [   0.012s] (257/877) crm-app domain::admin::validation::tests::slugify_lowercases_collapses_and_trims
+        PASS [   0.012s] (258/877) crm-app domain::admin::validation::tests::token_is_eight_chars_from_the_mint_alphabet_and_varies
+        PASS [   0.012s] (259/877) crm-app domain::admin::validation::tests::slugify_clips_to_38_and_never_ends_with_a_dash
+        PASS [   0.011s] (260/877) crm-app domain::capture::ladder::tests::step1_member_from_with_multiple_matched_recipients_creates_one_row_each
+        PASS [   0.012s] (261/877) crm-app domain::capture::ladder::tests::step1_member_from_with_no_recipient_match_and_no_candidate_is_held_with_no_counterparty
+        PASS [   0.013s] (262/877) crm-app domain::capture::ladder::tests::direction_as_str_matches_the_column_vocabulary
+        PASS [   0.011s] (263/877) crm-app domain::capture::ladder::tests::step1_member_from_with_no_recipient_match_is_held_outbound_presumed
+        PASS [   0.012s] (264/877) crm-app domain::capture::ladder::tests::step1_member_from_with_one_matched_recipient_is_outbound
+        PASS [   0.012s] (265/877) crm-app domain::capture::ladder::tests::step1_takes_priority_over_step2_even_when_from_also_matches_a_person
+        PASS [   0.249s] (266/877) crm-app auth::password::tests::hash_is_argon2id_phc_string
+        PASS [   0.011s] (267/877) crm-app domain::capture::ladder::tests::step2_from_matches_a_person_is_inbound_regardless_of_recipient_matches
+        PASS [   0.011s] (268/877) crm-app domain::capture::ladder::tests::step3_unmatched_from_with_matched_recipients_is_outbound
+        PASS [   0.011s] (269/877) crm-app domain::capture::ladder::tests::step3_fires_even_with_no_from_address_at_all
+        PASS [   0.424s] (270/877) crm-api::all session::logout_with_cookie_returns_503_and_leaves_cookie_when_database_unreachable
+        PASS [   0.013s] (271/877) crm-app domain::capture::ladder::tests::step4_no_from_and_no_recipient_candidate_is_held_with_no_counterparty
+        PASS [   0.011s] (272/877) crm-app domain::capture::ladder::tests::step4_no_from_falls_back_to_the_first_non_member_recipient
+        PASS [   0.015s] (273/877) crm-app domain::capture::ladder::tests::step4_unmatched_from_present_is_held_inbound_presumed_using_from_as_counterparty
+        PASS [   0.015s] (274/877) crm-app domain::capture::pipeline::tests::cc_path_uses_the_header_date_and_is_never_backdated
+        PASS [   0.017s] (275/877) crm-app domain::capture::pipeline::tests::cc_path_falls_back_to_receipt_time_when_the_header_date_is_absent
+        PASS [   0.012s] (276/877) crm-app domain::capture::pipeline::tests::forward_path_falls_back_to_receipt_time_and_not_backdated_when_inner_date_unparseable
+        PASS [   0.016s] (277/877) crm-app domain::capture::pipeline::tests::forward_path_derives_message_id_from_the_last_outer_reference_and_thread_key_from_the_first
+        PASS [   0.013s] (278/877) crm-app domain::capture::pipeline::tests::forward_path_message_id_is_none_when_the_outer_mail_carries_no_references
+        PASS [   0.012s] (279/877) crm-app domain::capture::pipeline::tests::future_header_date_is_clamped_to_receipt_time_on_the_cc_path
+        PASS [   0.014s] (280/877) crm-app domain::capture::pipeline::tests::forward_path_uses_the_inner_date_and_is_backdated
+        PASS [   0.011s] (281/877) crm-app domain::capture::pipeline::tests::header_date_below_the_2000_floor_is_clamped_to_the_floor_on_the_cc_path
+        PASS [   0.012s] (282/877) crm-app domain::capture::pipeline::tests::header_date_in_2019_passes_through_the_floor_unchanged_on_the_cc_path
+        PASS [   0.011s] (283/877) crm-app domain::capture::pipeline::tests::unparseable_bytes_yield_none
+        PASS [   0.011s] (284/877) crm-app domain::capture::token::tests::a_capture_address_never_parses_as_an_intake_local_part_address
+        PASS [   0.013s] (285/877) crm-app domain::capture::token::tests::debug_is_redacted
+        PASS [   0.011s] (286/877) crm-app domain::capture::token::tests::mint_produces_a_token_of_the_right_length_and_alphabet
+        PASS [   0.011s] (287/877) crm-app domain::capture::token::tests::parses_a_well_formed_capture_address_case_and_whitespace_insensitively
+        PASS [   0.012s] (288/877) crm-app domain::capture::token::tests::rejects_every_shape_of_intake_local_part_address
+        PASS [   0.013s] (289/877) crm-app domain::capture::token::tests::rejects_wrong_domain_wrong_subdomain_and_malformed_shapes
+        PASS [   0.011s] (290/877) crm-app domain::capture::token::tests::token_lookup_digest_is_deterministic_and_depends_on_the_token
+        PASS [   0.012s] (291/877) crm-app domain::capture::token::tests::renders_the_save_prefixed_address
+        PASS [   0.013s] (292/877) crm-app domain::capture::token::tests::verify_matches_identical_and_rejects_length_mismatch_or_wrong_bytes
+        PASS [   0.012s] (293/877) crm-app domain::commands::correct_call_outcome::tests::accepts_exactly_the_five_call_outcomes
+        PASS [   0.012s] (294/877) crm-app domain::commands::correct_call_outcome::tests::rejects_sent_and_unknown_values
+        PASS [   0.013s] (295/877) crm-app domain::commands::receive_inquiry::tests::decode_unresolved_reason_covers_the_vocabulary_and_falls_back
+        PASS [   0.013s] (296/877) crm-app domain::commands::log_contact_attempt::tests::contact_outcome_round_trips_every_value
+        PASS [   0.013s] (297/877) crm-app domain::commands::receive_inquiry::tests::routing_strategy_from_str_fails_closed_on_an_unknown_value
+        PASS [   0.012s] (298/877) crm-app domain::commands::receive_inquiry::tests::routing_strategy_round_trips_every_variant
+        PASS [   0.012s] (299/877) crm-app domain::commands::tests::decode_error_maps_to_corrupt
+        PASS [   0.011s] (300/877) crm-app domain::contact::tests::normalized_email_debug_is_redacted
+        PASS [   0.012s] (301/877) crm-app domain::contact::tests::normalization_is_idempotent_for_every_representative_input
+        PASS [   0.012s] (302/877) crm-app domain::contact::tests::normalized_phone_debug_is_redacted
+        PASS [   0.422s] (303/877) crm-api::all stages::list_stages_returns_503_when_database_unreachable
+        PASS [   0.012s] (304/877) crm-app domain::contact::tests::normalizes_10_digit_us_phone
+        PASS [   0.012s] (305/877) crm-app domain::contact::tests::normalizes_11_digit_us_phone_with_leading_one
+        PASS [   0.011s] (306/877) crm-app domain::contact::tests::normalizes_email_case_and_whitespace
+        PASS [   0.012s] (307/877) crm-app domain::contact::tests::rejects_email_without_at_sign
+        PASS [   0.013s] (308/877) crm-app domain::contact::tests::normalizes_international_digit_count_with_plus_prefix
+        PASS [   0.011s] (309/877) crm-app domain::contact::tests::rejects_garbage_phone
+        PASS [   0.014s] (310/877) crm-app domain::contact::tests::rejects_empty_or_whitespace_only_email
+        PASS [   0.012s] (311/877) crm-app domain::contact::tests::rejects_phone_with_fewer_than_10_digits
+        PASS [   0.011s] (312/877) crm-app domain::custom_field::commands::tests::normalize_and_validate_label_rejects_line_and_paragraph_separators
+        PASS [   0.012s] (313/877) crm-app domain::custom_field::commands::tests::normalize_and_validate_label_trims_and_bounds
+        PASS [   0.014s] (314/877) crm-app domain::custom_field::commands::tests::validate_new_field_options_rejects_options_on_non_choice_types
+        PASS [   0.013s] (315/877) crm-app domain::custom_field::commands::tests::validate_new_field_options_requires_nonempty_bounded_distinct_choice_options
+        PASS [   0.013s] (316/877) crm-app domain::custom_field::model::tests::custom_field_value_debug_never_prints_the_value
+        PASS [   0.010s] (317/877) crm-app domain::custom_field::model::tests::custom_field_value_rejects_zero_two_and_unknown_keys
+        PASS [   0.014s] (318/877) crm-app domain::custom_field::model::tests::custom_field_value_serializes_to_the_spec_wire_shape
+        PASS [   0.011s] (319/877) crm-app domain::custom_field::model::tests::date_range_accepts_the_window_and_rejects_outside_it
+        PASS [   0.012s] (320/877) crm-app domain::custom_field::model::tests::field_type_as_str_and_from_db_str_round_trip
+        PASS [   0.012s] (321/877) crm-app domain::custom_field::model::tests::number_pattern_accepts_the_spec_examples
+        PASS [   0.011s] (322/877) crm-app domain::custom_field::model::tests::text_value_rejects_any_control_character
+        PASS [   0.013s] (323/877) crm-app domain::custom_field::model::tests::number_pattern_rejects_the_spec_examples
+        PASS [   0.012s] (324/877) crm-app domain::custom_field::model::tests::text_value_trims_space_tab_cr_lf_and_bounds_length
+        PASS [   0.014s] (325/877) crm-app domain::envelope::tests::actor_accessors_round_trip_both_variants
+        PASS [   0.010s] (326/877) crm-app domain::facts::tests::membership_change_reason_as_str_matches_the_column_vocabulary
+        PASS [   0.012s] (327/877) crm-app domain::facts::tests::assignment_reason_as_str_matches_the_column_vocabulary
+        PASS [   0.012s] (328/877) crm-app domain::facts::tests::stage_change_reason_as_str_matches_the_column_vocabulary
+        PASS [   0.014s] (329/877) crm-app domain::inquiry::parse::tests::normalized_accessors_are_none_when_the_field_is_absent
+        PASS [   0.011s] (330/877) crm-app domain::inquiry::parse::tests::parse_accepts_email_only
+        PASS [   0.014s] (331/877) crm-app domain::inquiry::parse::tests::normalized_accessors_expose_the_typed_redacted_values
+        PASS [   0.012s] (332/877) crm-app domain::inquiry::parse::tests::parse_accepts_phone_only
+        PASS [   0.012s] (333/877) crm-app domain::inquiry::parse::tests::parse_leaves_short_message_untouched
+        PASS [   0.013s] (334/877) crm-app domain::inquiry::parse::tests::parse_rejects_invalid_json
+        PASS [   0.423s] (335/877) crm-api::all today::get_today_returns_503_when_database_unreachable
+        PASS [   0.012s] (336/877) crm-app domain::inquiry::parse::tests::parse_rejects_no_contact_method
+        PASS [   0.011s] (337/877) crm-app domain::inquiry::parse::tests::parse_rejects_non_object_json
+        PASS [   0.013s] (338/877) crm-app domain::inquiry::parse::tests::parse_rejects_unnormalizable_contact_methods
+        PASS [   0.011s] (339/877) crm-app domain::inquiry::parse::tests::parse_treats_blank_names_as_absent
+        PASS [   0.013s] (340/877) crm-app domain::inquiry::parse::tests::parse_truncates_message_to_4kib
+        PASS [   0.011s] (341/877) crm-app domain::inquiry::parse::tests::parsed_lead_debug_never_prints_contact_info
+        PASS [   0.013s] (342/877) crm-app domain::inquiry::parse::tests::source_accepts_64_chars
+        PASS [   0.013s] (343/877) crm-app domain::inquiry::parse::tests::source_rejects_disallowed_characters
+        PASS [   0.012s] (344/877) crm-app domain::inquiry::parse::tests::source_rejects_empty
+        PASS [   0.011s] (345/877) crm-app domain::inquiry::parse::tests::source_rejects_over_64_chars
+        PASS [   0.012s] (346/877) crm-app domain::inquiry::parse::tests::source_trims_and_lowercases
+        PASS [   0.011s] (347/877) crm-app domain::intake::address::tests::accepts_uppercase_whitespace_and_hex_tokens
+        PASS [   0.011s] (348/877) crm-app domain::intake::address::tests::an_org_whose_slug_is_leads_is_unambiguous_across_both_forms
+        PASS [   0.014s] (349/877) crm-app domain::intake::address::tests::intake_token_verify_matches_identical_and_rejects_length_mismatch_or_wrong_bytes
+        PASS [   0.015s] (350/877) crm-app domain::intake::address::tests::intake_token_debug_is_redacted
+        PASS [   0.014s] (351/877) crm-app domain::intake::address::tests::parses_both_forms_regardless_of_configured_scheme
+        PASS [   0.011s] (352/877) crm-app domain::intake::email::format::tests::every_registered_format_has_a_valid_source_and_unique_name
+        PASS [   0.015s] (353/877) crm-app domain::intake::address::tests::rejects_wrong_domain_extra_labels_tags_and_malformed_parts
+        PASS [   0.014s] (354/877) crm-app domain::intake::address::tests::renders_both_schemes
+        PASS [   0.016s] (355/877) crm-app domain::intake::address::tests::slug_check_mirrors_the_db_constraint
+        PASS [   0.013s] (356/877) crm-app domain::intake::email::format::tests::to_parsed_lead_normalizes_and_preserves_raw_values
+        PASS [   0.012s] (357/877) crm-app domain::intake::email::format::tests::to_parsed_lead_without_normalizable_contact_is_no_contact_method
+        PASS [   0.015s] (358/877) crm-app domain::intake::email::format::tests::to_parsed_lead_truncates_message_like_generic_v1
+        PASS [   0.013s] (359/877) crm-app domain::intake::email::formats::cypress_bay::tests::forwarded_arm_applies_the_same_domain_and_subject_rules
+        PASS [   0.014s] (360/877) crm-app domain::intake::email::formats::cypress_bay::tests::extracts_all_fields_with_multiline_message
+        PASS [   0.015s] (361/877) crm-app domain::intake::email::formats::cypress_bay::tests::empty_body_extracts_nothing
+        PASS [   0.014s] (362/877) crm-app domain::intake::email::formats::cypress_bay::tests::labels_are_line_anchored_and_exact_case
+        PASS [   0.013s] (363/877) crm-app domain::intake::email::formats::cypress_bay::tests::matches_right_domain_and_subject
+        PASS [   0.014s] (364/877) crm-app domain::intake::email::formats::cypress_bay::tests::missing_fields_are_none_and_single_word_name_is_first_name_only
+        PASS [   0.013s] (365/877) crm-app domain::intake::email::formats::cypress_bay::tests::right_subject_wrong_domain_does_not_match
+        PASS [   0.014s] (366/877) crm-app domain::intake::email::formats::cypress_bay::tests::right_domain_wrong_subject_does_not_match
+        PASS [   0.018s] (367/877) crm-app domain::intake::email::formats::cypress_bay::tests::matches_is_domain_not_full_address_and_case_insensitive
+        PASS [   0.017s] (368/877) crm-app domain::intake::email::formats::cypress_bay::tests::subject_is_trimmed_before_comparison
+        PASS [   0.017s] (369/877) crm-app domain::intake::email::forward::tests::absent_to_and_cc_lines_yield_empty_lists_not_a_no_op
+        PASS [   0.016s] (370/877) crm-app domain::intake::email::forward::tests::adversarial_from_lines_never_panic_and_never_forge_the_pinned_domain
+        PASS [   0.013s] (371/877) crm-app domain::intake::email::forward::tests::angle_bracket_from_uppercases_are_normalized
+        PASS [   0.013s] (372/877) crm-app domain::intake::email::forward::tests::banner_with_an_empty_inner_body_is_a_no_op
+        PASS [   0.013s] (373/877) crm-app domain::intake::email::forward::tests::bare_address_from_line_parses_without_display
+        PASS [   0.017s] (374/877) crm-app domain::intake::email::forward::tests::banner_without_a_parseable_inner_from_is_a_no_op
+        PASS [   0.017s] (375/877) crm-app domain::intake::email::forward::tests::continuation_lines_fold_into_the_previous_header
+        PASS [   0.018s] (376/877) crm-app domain::intake::email::forward::tests::depth_is_capped_and_pathological_many_banner_bodies_stay_bounded
+        PASS [   0.012s] (377/877) crm-app domain::intake::email::forward::tests::inner_to_and_cc_are_extracted_with_display_names_and_multiple_entries
+        PASS [   0.012s] (378/877) crm-app domain::intake::email::forward::tests::inner_view_carries_no_message_id_or_references
+        PASS [   0.014s] (379/877) crm-app domain::intake::email::forward::tests::fwd_subject_without_a_banner_is_a_no_op
+        PASS [   0.016s] (380/877) crm-app domain::intake::email::forward::tests::gmail_forward_unwraps_to_the_inner_view_with_forwarded_trust
+        PASS [   0.012s] (381/877) crm-app domain::intake::email::forward::tests::missing_body_is_a_no_op
+        PASS [   0.014s] (382/877) crm-app domain::intake::email::forward::tests::nested_forwards_unwrap_to_the_innermost_within_the_cap
+        PASS [   0.012s] (383/877) crm-app domain::intake::email::forward::tests::parses_the_gmail_quoted_date_with_a_regular_space
+        PASS [   0.012s] (384/877) crm-app domain::intake::email::forward::tests::parses_the_gmail_quoted_date_with_the_narrow_no_break_space
+        PASS [   0.013s] (385/877) crm-app domain::intake::email::forward::tests::preamble_above_the_banner_is_dropped
+        PASS [   0.014s] (386/877) crm-app domain::intake::email::forward::tests::parses_am_and_the_noon_midnight_edge
+        PASS [   0.012s] (387/877) crm-app domain::intake::email::forward::tests::unparseable_inner_dates_fall_back_to_none
+        PASS [   0.014s] (388/877) crm-app domain::intake::email::mime::tests::debug_never_prints_content
+        PASS [   0.012s] (389/877) crm-app domain::intake::email::mime::tests::debug_never_prints_the_new_fields_content
+        PASS [   0.011s] (390/877) crm-app domain::intake::email::mime::tests::html_only_mail_falls_back_to_converted_text
+        PASS [   0.015s] (391/877) crm-app domain::intake::email::mime::tests::header_date_is_parsed_but_missing_date_is_fine
+        PASS [   0.013s] (392/877) crm-app domain::intake::email::mime::tests::message_id_nul_bytes_are_stripped_and_length_is_capped
+        PASS [   0.014s] (393/877) crm-app domain::intake::email::mime::tests::missing_references_and_message_id_are_empty_not_erroring
+        PASS [   0.014s] (394/877) crm-app domain::intake::email::mime::tests::nul_bytes_are_stripped_from_every_field
+        PASS [   0.018s] (395/877) crm-app domain::intake::email::mime::tests::message_id_is_normalized_bracket_free
+        PASS [   0.525s] (396/877) crm-app auth::password::tests::dummy_verification_does_not_panic
+        PASS [   0.014s] (397/877) crm-app domain::intake::email::mime::tests::parses_plain_text_mail_with_lowercased_from
+        PASS [   0.014s] (398/877) crm-app domain::intake::email::mime::tests::recipient_list_is_capped
+        PASS [   0.013s] (399/877) crm-app domain::intake::email::mime::tests::references_and_in_reply_to_are_extracted_bracket_free_in_header_order
+        PASS [   0.016s] (400/877) crm-app domain::intake::email::mime::tests::structureless_bytes_are_unparseable
+        PASS [   0.013s] (401/877) crm-app domain::intake::email::mime::tests::to_is_extracted_and_lowercased_with_no_cc_present
+        PASS [   0.016s] (402/877) crm-app domain::intake::email::mime::tests::to_and_cc_are_extracted_lowercased_with_multiple_recipients
+        PASS [   0.016s] (403/877) crm-app domain::intake::email::tests::only_forward_rs_matches_the_forward_banner
+        PASS [   0.013s] (404/877) crm-app domain::intake::extraction::tests::a_valid_lead_passes_and_normalizes
+        PASS [   0.018s] (405/877) crm-app domain::intake::email::tests::only_mime_rs_references_the_mime_crate
+        PASS [   0.015s] (406/877) crm-app domain::intake::extraction::tests::build_input_scopes_and_truncates
+        PASS [   0.014s] (407/877) crm-app domain::intake::extraction::tests::control_bytes_in_reply_fields_are_stripped_never_stored
+        PASS [   0.015s] (408/877) crm-app domain::intake::extraction::tests::extractor_reply_debug_never_prints_content
+        PASS [   0.014s] (409/877) crm-app domain::intake::extraction::tests::hallucinated_contacts_fail_the_whole_attempt
+        PASS [   0.016s] (410/877) crm-app domain::intake::extraction::tests::forwarded_mail_extraction_input_is_the_inner_view
+        PASS [   0.014s] (411/877) crm-app domain::intake::extraction::tests::honest_reformatting_passes_the_matcher
+        PASS [   0.013s] (412/877) crm-app domain::intake::extraction::tests::no_normalizable_contact_is_a_quality_failure
+        PASS [   0.012s] (413/877) crm-app domain::intake::extraction::tests::schema_violations_fail_closed
+        PASS [   0.016s] (414/877) crm-app domain::intake::extraction::tests::out_of_range_confidence_is_schema_invalid_with_null_confidence
+        PASS [   0.016s] (415/877) crm-app domain::intake::extraction::tests::short_phones_and_cross_run_synthesis_are_rejected
+        PASS [   0.016s] (416/877) crm-app domain::intake::extraction::tests::subject_longer_than_the_cap_truncates_and_flags
+        PASS [   0.013s] (417/877) crm-app domain::intake::extraction::worker::attempt_outcome_tests::attempt_outcome_round_trips_every_variant
+        PASS [   0.012s] (418/877) crm-app domain::intake::extraction::worker::attempt_outcome_tests::is_transport_matches_exactly_the_three_provider_outage_tags
+        PASS [   0.015s] (419/877) crm-app domain::intake::extraction::tests::the_gate_is_inclusive_at_point_seven_for_both_verdicts
+        PASS [   0.012s] (420/877) crm-app domain::intake::extraction::worker::attempt_outcome_tests::quality_failure_conversion_covers_every_variant
+        PASS [   0.016s] (421/877) crm-app domain::intake::receive::tests::constant_time_eq_matches_identical_and_rejects_length_mismatch_or_wrong_bytes
+        PASS [   0.014s] (422/877) crm-app domain::intake::receive::tests::dummy_token_is_exactly_eight_bytes
+        PASS [   0.013s] (423/877) crm-app domain::intake::rotation::tests::a_newcomer_joins_at_the_end_of_the_cycle
+        PASS [   0.013s] (424/877) crm-app domain::intake::rotation::tests::advances_to_the_member_after_the_anchor
+        PASS [   0.012s] (425/877) crm-app domain::intake::rotation::tests::empty_pool_is_none_regardless_of_anchor
+        PASS [   0.013s] (426/877) crm-app domain::intake::rotation::tests::continues_from_a_deactivated_pointer_member_instead_of_resetting
+        PASS [   0.015s] (427/877) crm-app domain::intake::rotation::tests::intake_routing_mode_parse_fails_closed_on_unknown_values
+        PASS [   0.016s] (428/877) crm-app domain::intake::rotation::tests::created_at_ties_break_on_user_id
+        PASS [   0.012s] (429/877) crm-app domain::intake::rotation::tests::missing_anchor_row_falls_back_to_the_front
+        PASS [   0.012s] (430/877) crm-app domain::intake::rotation::tests::intake_routing_mode_round_trips_every_variant
+        PASS [   0.013s] (431/877) crm-app domain::intake::rotation::tests::no_anchor_starts_at_the_front
+        PASS [   0.013s] (432/877) crm-app domain::intake::rotation::tests::single_member_pool_always_returns_to_itself
+        PASS [   0.014s] (433/877) crm-app domain::intake::rotation::tests::reactivation_resumes_the_original_slot
+        PASS [   0.012s] (434/877) crm-app domain::intake::rotation::tests::wraps_from_the_last_member_back_to_the_first
+        PASS [   0.015s] (435/877) crm-app domain::intake::rotation::tests::skips_a_deactivated_member_absent_from_ordered
+        PASS [   0.015s] (436/877) crm-app domain::intake::tests::system_actor_accessors_and_envelope
+        PASS [   0.015s] (437/877) crm-app domain::intake::tests::user_actor_accessors_and_envelope
+        PASS [   0.016s] (438/877) crm-app domain::intake::tests::system_actor_on_behalf_of_reaches_the_envelope
+        PASS [   0.013s] (439/877) crm-app domain::intake::workbench::tests::cap_is_utf8_boundary_safe_and_tracks_truncation
+        PASS [   0.012s] (440/877) crm-app domain::intake::workbench::tests::decode_error_maps_to_corrupt
+        PASS [   0.013s] (441/877) crm-app domain::intake::workbench::tests::content_and_detail_debug_never_print_content
+        PASS [   0.013s] (442/877) crm-app domain::migration::crypto::binding_tests::tenant_row_purpose_and_tamper_are_rejected
+        PASS [   0.014s] (443/877) crm-app domain::migration::crypto::snapshot_tests::snapshot_payloads_and_lookup_keys_bind_tenant_run_row_and_purpose
+        PASS [   0.016s] (444/877) crm-app domain::migration::crypto::tests::purpose_and_aad_are_bound
+        PASS [   0.019s] (445/877) crm-app domain::migration::import_display::tests::import_display_clipping_is_reported_even_without_omitted_entries
+        PASS [   0.015s] (446/877) crm-app domain::migration::import_display::tests::import_display_source_numbers_and_untrusted_content_remain_exact_text
+        PASS [   0.014s] (447/877) crm-app domain::migration::import_display::tests::import_display_stage_and_user_fields_link_to_full_source_text
+        PASS [   0.019s] (448/877) crm-app domain::migration::import_display::tests::import_display_segments_reject_invalid_limits_and_offsets_and_allow_eof
+        PASS [   0.016s] (449/877) crm-app domain::migration::import_source::tests::import_source_assignment_and_visibility_are_not_guessed
+        PASS [   0.012s] (450/877) crm-app domain::migration::import_source::tests::import_source_explicit_trash_flag_is_held_without_truthy_coercion
+        PASS [   0.015s] (451/877) crm-app domain::migration::import_source::tests::import_source_exact_ids_unknown_values_and_semantics_survive
+        PASS [   0.013s] (452/877) crm-app domain::migration::import_source::tests::import_source_names_shapes_and_contactless_people_preserve_meaning
+        PASS [   0.011s] (453/877) crm-app domain::migration::import_source::tests::import_source_native_byte_limits_apply_after_normalization
+        PASS [   0.010s] (454/877) crm-app domain::migration::import_source::tests::import_source_primary_shapes_and_empty_entries_are_explicit
+        PASS [   0.041s] (455/877) crm-app domain::migration::import_display::tests::import_display_segments_progress_and_reconstruct_exact_utf8
+        PASS [   0.014s] (456/877) crm-app domain::migration::import_source::tests::import_source_primary_precedes_dedup_and_people_remain_separate
+        PASS [   0.013s] (457/877) crm-app domain::migration::import_source::tests::import_source_rejects_wrong_family_duplicate_keys_and_unbounded_pages
+        PASS [   0.014s] (458/877) crm-app domain::migration::import_source::tests::import_source_stage_creation_limits_do_not_discard_mapping_evidence
+        PASS [   0.013s] (459/877) crm-app domain::migration::reader::tests::http_preserves_malformed_success_and_redacts_debug
+        PASS [   0.017s] (460/877) crm-app domain::migration::reader::tests::http_bounds_and_preserves_oversized_prefix_and_disabled_reader_fails_closed
+        PASS [   0.016s] (461/877) crm-app domain::migration::reader::tests::http_does_not_follow_redirects_or_hostile_continuations
+        PASS [   0.016s] (462/877) crm-app domain::migration::reader::tests::identity_requires_positive_account_and_user
+        PASS [   0.011s] (463/877) crm-app domain::migration::reader::tests::source_timing_bounds_and_successful_budget_headers
+        PASS [   0.068s] (464/877) crm-app domain::migration::import_display::tests::import_display_full_large_fields_survive_segmented_inspection
+        PASS [   0.014s] (465/877) crm-app domain::migration::reader::tests::totals_are_bounded_normalized_and_honest
+        PASS [   0.014s] (466/877) crm-app domain::migration::snapshot_compare::tests::matches_require_unique_actual_keys_not_names
+        PASS [   0.014s] (467/877) crm-app domain::migration::snapshot_compare::tests::custom_field_options_types_and_recurring_dates_remain_explicit
+        PASS [   0.012s] (468/877) crm-app domain::migration::snapshot_compare::tests::note_html_enrichment_author_and_normalization_are_separate_issues
+        PASS [   0.013s] (469/877) crm-app domain::migration::snapshot_compare::tests::person_custom_values_use_real_validators_and_exact_number_wrappers
+        PASS [   0.015s] (470/877) crm-app domain::migration::snapshot_compare::tests::projection_and_variant_markers_do_not_fabricate_missing_source_fields
+        PASS [   0.011s] (471/877) crm-app domain::migration::snapshot_compare::tests::task_timestamp_and_companion_date_do_not_create_false_ambiguity
+        PASS [   0.013s] (472/877) crm-app domain::migration::snapshot_compare::tests::source_references_keep_large_integer_identity_and_reject_fractional_or_zero_ids
+        PASS [   0.013s] (473/877) crm-app domain::migration::snapshot_source::tests::browser_unsafe_integers_are_wrapped_even_when_rust_can_represent_them
+        PASS [   0.014s] (474/877) crm-app domain::migration::snapshot_source::tests::contacts_use_existing_normalization_and_projection_is_labeled_and_bounded
+        PASS [   0.012s] (475/877) crm-app domain::migration::snapshot_source::tests::exhaustion_requires_coherent_metadata_not_just_short_or_empty_pages
+        PASS [   0.012s] (476/877) crm-app domain::migration::snapshot_source::tests::next_mode_is_explicit_and_loops_or_incomplete_terminals_pause
+        PASS [   0.013s] (477/877) crm-app domain::migration::snapshot_source::tests::ids_are_positive_lossless_decimal_strings_and_invalid_items_are_retained
+        PASS [   0.013s] (478/877) crm-app domain::migration::snapshot_source::tests::note_details_require_the_requested_id_and_expose_content_gaps
+        PASS [   0.012s] (479/877) crm-app domain::migration::snapshot_source::tests::original_nested_projection_markers_are_untrusted_and_explicitly_flagged
+        PASS [   0.010s] (480/877) crm-app domain::migration::snapshot_source::tests::projection_preserves_safe_integer_types_and_labels_exact_decimal_wrappers
+        PASS [   0.012s] (481/877) crm-app domain::migration::snapshot_source::tests::profile_paths_and_representation_boundaries
+        PASS [   0.120s] (482/877) crm-app domain::migration::import_display::tests::import_display_arrays_and_escaped_strings_have_a_strict_summary_bound
+        PASS [   0.013s] (483/877) crm-app domain::migration::snapshot_source::tests::semantic_encoding_preserves_unknown_fields_arrays_and_large_numbers
+        PASS [   0.044s] (484/877) crm-app domain::migration::snapshot_source::tests::contact_and_flat_projection_amplification_have_explicit_bounds
+        PASS [   0.012s] (485/877) crm-app domain::note::model::tests::empty_and_whitespace_only_are_rejected
+        PASS [   0.013s] (486/877) crm-app domain::migration::snapshot_source::tests::token_is_encoded_data_and_never_an_executable_url
+        PASS [   0.011s] (487/877) crm-app domain::note::model::tests::exactly_10_000_chars_is_accepted_and_10_001_is_rejected
+        PASS [   0.014s] (488/877) crm-app domain::note::model::tests::exactly_10_000_four_byte_code_points_is_accepted
+        PASS [   0.014s] (489/877) crm-app domain::note::model::tests::lone_carriage_return_not_part_of_crlf_is_rejected_as_a_control_character
+        PASS [   0.013s] (490/877) crm-app domain::note::model::tests::newline_and_tab_are_kept_other_control_characters_are_rejected
+        PASS [   0.011s] (491/877) crm-app domain::note::model::tests::normalizes_crlf_and_trims
+        PASS [   0.014s] (492/877) crm-app domain::person::filter::tests::custom_date_bounds_require_exact_canonical_lexemes
+        PASS [   0.017s] (493/877) crm-app domain::person::filter::tests::bind_age_debug_asserts_on_an_out_of_range_days_value_that_bypassed_validate
+        PASS [   0.061s] (494/877) crm-app domain::migration::snapshot_source::tests::duplicate_decoded_keys_malformed_numbers_and_bounded_recursion_are_classified
+        PASS [   0.012s] (495/877) crm-app domain::person::filter::tests::custom_descriptions_resolve_bounded_names_and_keep_negative_absence_explicit
+        PASS [   0.011s] (496/877) crm-app domain::person::filter::tests::custom_slot_and_choice_caps_are_exact
+        PASS [   0.012s] (497/877) crm-app domain::person::filter::tests::custom_field_clauses_round_trip_and_bind_in_wire_order
+        PASS [   0.012s] (498/877) crm-app domain::person::filter::tests::custom_field_structural_limits_and_invalid_operands_fail_closed
+        PASS [   0.012s] (499/877) crm-app domain::person::filter::tests::custom_wire_shape_rejects_null_duplicate_and_noncanonical_operands
+        PASS [   0.012s] (500/877) crm-app domain::person::filter::tests::days_3651_is_malformed
+        PASS [   0.012s] (501/877) crm-app domain::person::filter::tests::days_bounds_are_inclusive
+        PASS [   0.011s] (502/877) crm-app domain::person::filter::tests::deeply_nested_json_is_a_decode_error_not_a_panic
+        PASS [   0.011s] (503/877) crm-app domain::person::filter::tests::derived_clause_kind_labels
+        PASS [   0.012s] (504/877) crm-app domain::person::filter::tests::days_zero_is_malformed
+        PASS [   0.012s] (505/877) crm-app domain::person::filter::tests::derived_clauses_cannot_duplicate_kind_with_each_other_axis
+        PASS [   0.011s] (506/877) crm-app domain::person::filter::tests::derived_clauses_validate_with_no_extra_rules
+        PASS [   0.011s] (507/877) crm-app domain::person::filter::tests::describe_assigned_to_me_and_unassigned
+        PASS [   0.011s] (508/877) crm-app domain::person::filter::tests::describe_derived_clauses_true_and_false
+        PASS [   0.013s] (509/877) crm-app domain::person::filter::tests::describe_assigned_to_unknown_user_placeholder
+        PASS [   0.012s] (510/877) crm-app domain::person::filter::tests::describe_has_email_true_and_false
+        PASS [   0.013s] (511/877) crm-app domain::person::filter::tests::describe_created_within_days
+        PASS [   0.012s] (512/877) crm-app domain::person::filter::tests::describe_has_phone_true_and_false
+        PASS [   0.012s] (513/877) crm-app domain::person::filter::tests::describe_has_replied_true_and_false
+        PASS [   0.010s] (514/877) crm-app domain::person::filter::tests::describe_last_contact_never
+        PASS [   0.012s] (515/877) crm-app domain::person::filter::tests::describe_last_contact_not_within_days_carries_or_never_suffix
+        PASS [   0.013s] (516/877) crm-app domain::person::filter::tests::describe_last_inquiry_never
+        PASS [   0.014s] (517/877) crm-app domain::person::filter::tests::describe_last_inbound_within_and_never
+        PASS [   0.015s] (518/877) crm-app domain::person::filter::tests::describe_not_tags_single_name
+        PASS [   0.014s] (519/877) crm-app domain::person::filter::tests::describe_source_joins
+        PASS [   0.012s] (520/877) crm-app domain::person::filter::tests::describe_stage_joins_multiple_names_and_placeholders_unknown_ids
+        PASS [   0.013s] (521/877) crm-app domain::person::filter::tests::describe_stage_two_names
+        PASS [   0.011s] (522/877) crm-app domain::person::filter::tests::describe_tags_joins_multiple_names_and_placeholders_unknown_ids
+        PASS [   0.011s] (523/877) crm-app domain::person::filter::tests::duplicate_clause_kind_is_malformed
+        PASS [   0.013s] (524/877) crm-app domain::person::filter::tests::duplicate_kind_key_fails_closed
+        PASS [   0.012s] (525/877) crm-app domain::person::filter::tests::duplicate_op_key_in_age_spec_fails_closed
+        PASS [   0.012s] (526/877) crm-app domain::person::filter::tests::duplicate_tag_id_within_tags_is_malformed
+        PASS [   0.011s] (527/877) crm-app domain::person::filter::tests::duplicate_tags_clause_kind_is_malformed
+        PASS [   0.014s] (528/877) crm-app domain::person::filter::tests::duplicate_stage_ids_key_fails_closed
+        PASS [   0.011s] (529/877) crm-app domain::person::filter::tests::duplicate_value_within_an_array_is_malformed
+        PASS [   0.016s] (530/877) crm-app domain::person::filter::tests::duplicate_user_id_key_in_assignee_object_fails_closed
+        PASS [   0.011s] (531/877) crm-app domain::person::filter::tests::empty_value_array_is_malformed
+        PASS [   0.012s] (532/877) crm-app domain::person::filter::tests::empty_tag_ids_is_malformed
+        PASS [   0.012s] (533/877) crm-app domain::person::filter::tests::filter_names_debug_redacts_labels
+        PASS [   0.015s] (534/877) crm-app domain::person::filter::tests::empty_clauses_is_valid
+        PASS [   0.015s] (535/877) crm-app domain::person::filter::tests::i64_max_and_a_value_above_i32_range_are_rejected_by_validate
+        PASS [   0.012s] (536/877) crm-app domain::person::filter::tests::kinds_field_includes_tags_and_not_tags
+        PASS [   0.011s] (537/877) crm-app domain::person::filter::tests::kinds_field_is_comma_joined_in_clause_order
+        PASS [   0.013s] (538/877) crm-app domain::person::filter::tests::malformed_source_shape_is_rejected_at_decode_not_validate
+        PASS [   0.013s] (539/877) crm-app domain::person::filter::tests::me_alongside_the_viewers_own_explicit_user_id_is_valid_and_binds_twice
+        PASS [   0.012s] (540/877) crm-app domain::person::filter::tests::missing_kind_fails_closed
+        PASS [   0.014s] (541/877) crm-app domain::person::filter::tests::more_than_fifty_tag_ids_is_malformed
+        PASS [   0.013s] (542/877) crm-app domain::person::filter::tests::more_than_fifty_values_is_malformed
+        PASS [   0.011s] (543/877) crm-app domain::person::filter::tests::more_than_twenty_clauses_is_malformed
+        PASS [   0.012s] (544/877) crm-app domain::person::filter::tests::never_is_allowed_on_the_other_three_age_axes
+        PASS [   0.013s] (545/877) crm-app domain::person::filter::tests::never_on_created_is_malformed
+        PASS [   0.012s] (546/877) crm-app domain::person::filter::tests::never_with_extra_days_field_fails_closed
+        PASS [   0.013s] (547/877) crm-app domain::person::filter::tests::non_canonical_assignee_user_id_forms_are_rejected_canonical_accepted
+        PASS [   0.011s] (548/877) crm-app domain::person::filter::tests::non_canonical_source_with_uppercase_is_rejected_never_normalized
+        PASS [   0.012s] (549/877) crm-app domain::person::filter::tests::non_canonical_stage_id_forms_are_rejected_canonical_accepted
+        PASS [   0.013s] (550/877) crm-app domain::person::filter::tests::non_canonical_source_with_whitespace_is_rejected_never_normalized
+        PASS [   0.013s] (551/877) crm-app domain::person::filter::tests::non_canonical_tag_id_fails_closed_at_decode
+        PASS [   0.012s] (552/877) crm-app domain::person::filter::tests::non_integer_days_values_are_rejected_end_to_end
+        PASS [   0.012s] (553/877) crm-app domain::person::filter::tests::one_sided_custom_ranges_round_trip_without_null_operands
+        PASS [   0.013s] (554/877) crm-app domain::person::filter::tests::round_trips_every_clause_kind_and_age_op
+        PASS [   0.014s] (555/877) crm-app domain::person::filter::tests::round_trips_tags_and_not_tags
+        PASS [   0.011s] (556/877) crm-app domain::person::filter::tests::tags_and_not_tags_kind_labels
+        PASS [   0.013s] (557/877) crm-app domain::person::filter::tests::round_trips_the_three_derived_clause_kinds
+        PASS [   0.011s] (558/877) crm-app domain::person::filter::tests::tags_and_not_tags_together_is_valid_not_a_duplicate_kind
+        PASS [   0.011s] (559/877) crm-app domain::person::filter::tests::to_query_params_appends_me_to_the_bound_user_array
+        PASS [   0.013s] (560/877) crm-app domain::person::filter::tests::to_query_params_binds_tag_axes_and_leaves_them_null_when_absent
+        PASS [   0.013s] (561/877) crm-app domain::person::filter::tests::to_query_params_binds_the_three_derived_axes_and_always_binds_viewer_id
+        PASS [   0.012s] (562/877) crm-app domain::person::filter::tests::to_query_params_leaves_axis_params_null_when_clause_absent
+        PASS [   0.844s] (563/877) crm-app auth::password::tests::roundtrip_hash_and_verify
+        PASS [   0.013s] (564/877) crm-app domain::person::filter::tests::to_query_params_resolves_me_and_binds_unassigned_as_empty_nonnull_array
+        PASS [   0.014s] (565/877) crm-app domain::person::filter::tests::unknown_age_op_fails_closed
+        PASS [   0.011s] (566/877) crm-app domain::person::filter::tests::unknown_field_at_top_level_fails_closed
+        PASS [   0.015s] (567/877) crm-app domain::person::filter::tests::unknown_assignee_token_fails_closed
+        PASS [   0.013s] (568/877) crm-app domain::person::filter::tests::unknown_field_inside_a_clause_fails_closed
+        PASS [   0.013s] (569/877) crm-app domain::person::filter::tests::unknown_field_inside_a_tags_clause_fails_closed
+        PASS [   0.012s] (570/877) crm-app domain::person::filter::tests::unknown_field_inside_an_age_spec_fails_closed
+        PASS [   0.012s] (571/877) crm-app domain::person::filter::tests::unknown_field_inside_an_assignee_object_fails_closed
+        PASS [   0.011s] (572/877) crm-app domain::person::filter::tests::unknown_version_fails_closed
+        PASS [   0.013s] (573/877) crm-app domain::person::filter::tests::unknown_kind_fails_closed
+        PASS [   0.012s] (574/877) crm-app domain::person::filter::tests::well_formed_but_stale_source_passes_structural_validation
+        PASS [   0.011s] (575/877) crm-app domain::person::model::tests::falls_back_to_primary_email
+        PASS [   0.012s] (576/877) crm-app domain::person::model::tests::prefers_full_name
+        PASS [   0.012s] (577/877) crm-app domain::person::model::tests::uses_first_name_only_when_last_is_absent
+        PASS [   0.015s] (578/877) crm-app domain::person::model::tests::falls_back_to_primary_phone_when_no_email
+        PASS [   0.015s] (579/877) crm-app domain::person::queries::sort_sql_parity_tests::each_sorted_statement_has_its_declared_order_by_line
+        PASS [   0.012s] (580/877) crm-app domain::person::queries::tests::escape_like_escapes_wildcards_and_backslash
+        PASS [   0.013s] (581/877) crm-app domain::person::queries::sort_sql_parity_tests::every_sorted_statement_matches_the_canonical_text_apart_from_its_order_by
+        PASS [   0.012s] (582/877) crm-app domain::person::sort::tests::all_eight_tokens_round_trip_through_string_conversions
+        PASS [   0.013s] (583/877) crm-app domain::person::sort::tests::all_eight_tokens_round_trip
+        PASS [   0.011s] (584/877) crm-app domain::person::sort::tests::created_desc_normalizes_to_none_every_other_token_to_some_self
+        PASS [   0.012s] (585/877) crm-app domain::person::sort::tests::serde_round_trips_and_rejects_invalid_json_strings
+        PASS [   0.014s] (586/877) crm-app domain::person::sort::tests::malformed_tokens_are_rejected
+        PASS [   0.012s] (587/877) crm-app domain::person::sort::tests::storage_columns_round_trip_through_decode_stored
+        PASS [   0.012s] (588/877) crm-app domain::person::visibility::tests::organization_id_returns_the_wrapped_id
+        PASS [   0.013s] (589/877) crm-app domain::person::sort::tests::unrecognized_stored_pairs_are_unreadable
+        PASS [   0.011s] (590/877) crm-app domain::raw_payload::crypto::tests::content_hmac_depends_on_the_key
+        PASS [   0.015s] (591/877) crm-app domain::raw_payload::crypto::tests::content_hmac_depends_on_the_content
+        PASS [   0.013s] (592/877) crm-app domain::raw_payload::crypto::tests::content_hmac_is_deterministic
+        PASS [   0.012s] (593/877) crm-app domain::raw_payload::crypto::tests::distinct_calls_use_distinct_nonces
+        PASS [   0.012s] (594/877) crm-app domain::raw_payload::crypto::tests::seal_correspondence_open_correspondence_roundtrip
+        PASS [   0.012s] (595/877) crm-app domain::raw_payload::crypto::tests::seal_correspondence_tampered_ciphertext_fails_to_open
+        PASS [   0.012s] (596/877) crm-app domain::raw_payload::crypto::tests::seal_correspondence_wrong_aad_fails_to_open
+        PASS [   0.011s] (597/877) crm-app domain::raw_payload::crypto::tests::seal_correspondence_wrong_key_fails_to_open
+        PASS [   0.011s] (598/877) crm-app domain::raw_payload::crypto::tests::seal_open_roundtrip
+        PASS [   0.011s] (599/877) crm-app domain::raw_payload::crypto::tests::serde_json_value_serializes_object_keys_in_sorted_order
+        PASS [   0.011s] (600/877) crm-app domain::raw_payload::crypto::tests::wrong_key_fails_to_open
+        PASS [   0.013s] (601/877) crm-app domain::raw_payload::crypto::tests::tampered_ciphertext_fails_to_open
+        PASS [   0.012s] (602/877) crm-app domain::raw_payload::crypto::tests::wrong_aad_fails_to_open
+        PASS [   0.011s] (603/877) crm-app domain::raw_payload::tests::resolution_parse_fails_closed_on_an_unknown_value
+        PASS [   0.011s] (604/877) crm-app domain::raw_payload::tests::resolution_round_trips_every_variant
+        PASS [   0.012s] (605/877) crm-app domain::raw_payload::tests::payload_format_round_trips_every_variant
+        PASS [   0.012s] (606/877) crm-app domain::raw_payload::tests::payload_format_parse_fails_closed_on_an_unknown_value
+        PASS [   0.014s] (607/877) crm-app domain::tag::commands::tests::normalize_and_validate_name_trims_and_bounds
+        PASS [   0.011s] (608/877) crm-app domain::tag::model::tests::creator_can_manage_only_while_unused
+        PASS [   0.011s] (609/877) crm-app domain::task::model::tests::empty_and_whitespace_only_are_rejected
+        PASS [   0.014s] (610/877) crm-app domain::tag::model::tests::admin_can_always_manage
+        PASS [   0.014s] (611/877) crm-app domain::tag::model::tests::non_creator_member_can_never_manage
+        PASS [   0.012s] (612/877) crm-app domain::task::model::tests::a_title_of_only_default_ignorable_code_points_is_rejected_as_empty
+        PASS [   0.012s] (613/877) crm-app domain::task::model::tests::exactly_500_four_byte_code_points_is_accepted
+        PASS [   0.014s] (614/877) crm-app domain::task::model::tests::exactly_500_chars_is_accepted_and_501_is_rejected
+        PASS [   0.013s] (615/877) crm-app domain::task::model::tests::kind_as_str_and_from_db_str_round_trip
+        PASS [   0.015s] (616/877) crm-app domain::task::model::tests::kind_default_is_follow_up
+        PASS [   0.012s] (617/877) crm-app domain::task::model::tests::trims_and_accepts_a_plain_title
+        PASS [   0.012s] (618/877) crm-app domain::task::model::tests::other_control_characters_are_rejected
+        PASS [   0.013s] (619/877) crm-app domain::task::model::tests::line_and_paragraph_separators_are_rejected_like_a_control_character
+        PASS [   0.013s] (620/877) crm-app domain::telephony::transitions::tests::answered_row_of_the_table
+        PASS [   0.014s] (621/877) crm-app domain::task::model::tests::newline_and_tab_are_rejected_unlike_a_note_body
+        PASS [   0.011s] (622/877) crm-app domain::telephony::transitions::tests::d031_attempt_mapping
+        PASS [   0.011s] (623/877) crm-app domain::telephony::transitions::tests::every_state_times_signal_is_covered_and_consistent
+        PASS [   0.011s] (624/877) crm-app domain::telephony::transitions::tests::placing_row_of_the_table
+        PASS [   0.011s] (625/877) crm-app domain::telephony::transitions::tests::ringing_row_of_the_table
+        PASS [   0.012s] (626/877) crm-app domain::telephony::transitions::tests::sip_failure_to_signal_mapping
+        PASS [   0.011s] (627/877) crm-app domain::telephony::transitions::tests::terminal_states_absorb_every_signal
+        PASS [   0.011s] (628/877) crm-app domain::today::model::tests::call_outcome_needed_reason_is_exactly_code_call_id_ended_at
+        PASS [   0.011s] (629/877) crm-app domain::today::model::tests::priority_serialises_snake_case_and_low_sorts_last
+        PASS [   0.012s] (630/877) crm-app domain::today::model::tests::client_replied_reason_is_exactly_code_occurred_at
+        PASS [   0.012s] (631/877) crm-app domain::today::model::tests::recommended_action_serialises_set_outcome
+        PASS [   0.011s] (632/877) crm-app domain::today::rank::tests::client_replied_fresh_is_high_priority_stale_is_normal
+        PASS [   0.013s] (633/877) crm-app domain::today::rank::tests::absent_client_replied_falls_through_to_the_inquiry_branch_unchanged
+        PASS [   0.012s] (634/877) crm-app domain::today::rank::tests::both_ways_candidate_keeps_the_inquiry_tier_and_appends_the_reason_last
+        PASS [   0.011s] (635/877) crm-app domain::today::rank::tests::client_replied_recommended_action_follows_the_phone_rule
+        PASS [   0.014s] (636/877) crm-app domain::today::rank::tests::call_only_candidate_is_low_set_outcome_with_the_single_reason
+        PASS [   0.014s] (637/877) crm-app domain::today::rank::tests::client_replied_keeps_a_person_out_of_the_low_only_tier_even_without_by_inquiry
+        PASS [   0.013s] (638/877) crm-app domain::today::rank::tests::client_replied_still_appends_call_outcome_needed_last
+        PASS [   0.012s] (639/877) crm-app domain::today::rank::tests::client_replied_wins_the_reason_slot_over_the_inquiry_trio
+        PASS [   0.013s] (640/877) crm-app domain::today::rank::tests::fresh_candidate_gets_new_inquiry_reason_and_high_priority
+        PASS [   0.012s] (641/877) crm-app domain::today::rank::tests::rank_carries_through_last_contact_attempt_and_waiting_since
+        PASS [   0.014s] (642/877) crm-app domain::today::rank::tests::no_contact_attempt_reason_is_always_present
+        PASS [   0.011s] (643/877) crm-app domain::today::rank::tests::reason_order_is_fixed_new_inquiry_then_no_contact_then_repeat
+        PASS [   0.012s] (644/877) crm-app domain::today::rank::tests::rank_preserves_input_order_never_resorts
+        PASS [   0.014s] (645/877) crm-app domain::today::rank::tests::fresh_is_not_consulted_for_a_call_only_candidate
+        PASS [   0.015s] (646/877) crm-app domain::today::rank::tests::recommended_action_is_call_when_phone_present_else_email
+        PASS [   0.011s] (647/877) crm-app domain::today::rank::tests::repeat_inquiry_reason_present_iff_count_at_least_two
+        PASS [   0.011s] (648/877) crm-app domain::today::system_feeds::tests::canonical_defaults_match_the_spec_3_table
+        PASS [   0.010s] (649/877) crm-app domain::today::system_feeds::tests::feed_key_round_trips_through_as_str_and_decode
+        PASS [   0.012s] (650/877) crm-app domain::today::system_feeds::tests::only_the_two_person_state_feeds_have_a_freshness_window
+        PASS [   0.014s] (651/877) crm-app domain::today::rank::tests::stale_candidate_has_no_new_inquiry_reason_and_normal_priority
+        PASS [   0.013s] (652/877) crm-app domain::today::system_feeds::tests::canonical_definitions_validate
+        PASS [   0.011s] (653/877) crm-app ids::call_id_tests::debug_matches_display_not_the_derived_tuple_form
+        PASS [   0.014s] (654/877) crm-app domain::today::test_support::tests::timed_out_drain_keeps_the_capture_for_a_late_server_scope
+        PASS [   0.011s] (655/877) crm-app ids::call_id_tests::display_matches_the_inner_uuid
+        PASS [   0.011s] (656/877) crm-app ids::call_id_tests::new_and_as_uuid_round_trip
+        PASS [   0.011s] (657/877) crm-app ids::capture_address_id_tests::debug_matches_display_not_the_derived_tuple_form
+        PASS [   0.010s] (658/877) crm-app ids::capture_address_id_tests::display_matches_the_inner_uuid
+        PASS [   0.011s] (659/877) crm-app ids::call_id_tests::serde_round_trip_is_transparent_with_bare_uuid
+        PASS [   0.026s] (660/877) crm-app domain::today::test_support::tests::client_failure_drain_retains_events_until_the_server_scope_quiesces
+        PASS [   0.011s] (661/877) crm-app ids::capture_address_id_tests::new_and_as_uuid_round_trip
+        PASS [   0.010s] (662/877) crm-app ids::capture_address_id_tests::serde_round_trip_is_transparent_with_bare_uuid
+        PASS [   0.011s] (663/877) crm-app ids::capture_message_id_tests::display_matches_the_inner_uuid
+        PASS [   0.011s] (664/877) crm-app ids::contact_method_id_tests::debug_matches_display_not_the_derived_tuple_form
+        PASS [   0.014s] (665/877) crm-app ids::capture_message_id_tests::debug_matches_display_not_the_derived_tuple_form
+        PASS [   0.013s] (666/877) crm-app ids::capture_message_id_tests::new_and_as_uuid_round_trip
+        PASS [   0.014s] (667/877) crm-app ids::capture_message_id_tests::serde_round_trip_is_transparent_with_bare_uuid
+        PASS [   0.012s] (668/877) crm-app ids::contact_method_id_tests::new_and_as_uuid_round_trip
+        PASS [   0.013s] (669/877) crm-app ids::contact_method_id_tests::display_matches_the_inner_uuid
+        PASS [   0.012s] (670/877) crm-app ids::contact_method_id_tests::serde_round_trip_is_transparent_with_bare_uuid
+        PASS [   0.012s] (671/877) crm-app ids::correlation_id_tests::debug_matches_display_not_the_derived_tuple_form
+        PASS [   0.010s] (672/877) crm-app ids::correlation_id_tests::display_matches_the_inner_uuid
+        PASS [   0.012s] (673/877) crm-app ids::correlation_id_tests::new_and_as_uuid_round_trip
+        PASS [   0.013s] (674/877) crm-app ids::correlation_id_tests::serde_round_trip_is_transparent_with_bare_uuid
+        PASS [   0.013s] (675/877) crm-app ids::correspondence_raw_id_tests::debug_matches_display_not_the_derived_tuple_form
+        PASS [   0.011s] (676/877) crm-app ids::correspondence_raw_id_tests::new_and_as_uuid_round_trip
+        PASS [   0.013s] (677/877) crm-app ids::correspondence_raw_id_tests::display_matches_the_inner_uuid
+        PASS [   0.013s] (678/877) crm-app ids::correspondence_raw_id_tests::serde_round_trip_is_transparent_with_bare_uuid
+        PASS [   0.011s] (679/877) crm-app ids::custom_field_id_tests::custom_field_id_is_transparent_and_readable
+        PASS [   0.011s] (680/877) crm-app ids::inquiry_id_tests::debug_matches_display_not_the_derived_tuple_form
+        PASS [   0.013s] (681/877) crm-app ids::custom_field_option_id_tests::custom_field_option_id_is_transparent_and_readable
+        PASS [   0.011s] (682/877) crm-app ids::inquiry_id_tests::new_and_as_uuid_round_trip
+        PASS [   0.010s] (683/877) crm-app ids::inquiry_id_tests::serde_round_trip_is_transparent_with_bare_uuid
+        PASS [   0.012s] (684/877) crm-app ids::inquiry_id_tests::display_matches_the_inner_uuid
+        PASS [   0.011s] (685/877) crm-app ids::invitation_id_tests::debug_matches_display_not_the_derived_tuple_form
+        PASS [   0.012s] (686/877) crm-app ids::invitation_id_tests::display_matches_the_inner_uuid
+        PASS [   0.014s] (687/877) crm-app ids::invitation_id_tests::new_and_as_uuid_round_trip
+        PASS [   0.013s] (688/877) crm-app ids::invitation_id_tests::serde_round_trip_is_transparent_with_bare_uuid
+        PASS [   0.013s] (689/877) crm-app ids::note_id_tests::note_id_is_transparent_and_readable
+        PASS [   0.011s] (690/877) crm-app ids::person_id_tests::debug_matches_display_not_the_derived_tuple_form
+        PASS [   0.013s] (691/877) crm-app ids::person_id_tests::display_matches_the_inner_uuid
+        PASS [   0.013s] (692/877) crm-app ids::person_id_tests::new_and_as_uuid_round_trip
+        PASS [   0.013s] (693/877) crm-app ids::person_id_tests::serde_round_trip_is_transparent_with_bare_uuid
+        PASS [   0.012s] (694/877) crm-app ids::proposal_id_tests::debug_matches_display_not_the_derived_tuple_form
+        PASS [   0.012s] (695/877) crm-app ids::proposal_id_tests::display_matches_the_inner_uuid
+        PASS [   0.012s] (696/877) crm-app ids::proposal_id_tests::new_and_as_uuid_round_trip
+        PASS [   0.012s] (697/877) crm-app ids::proposal_id_tests::serde_round_trip_is_transparent_with_bare_uuid
+        PASS [   0.012s] (698/877) crm-app ids::raw_payload_id_tests::debug_matches_display_not_the_derived_tuple_form
+        PASS [   0.011s] (699/877) crm-app ids::raw_payload_id_tests::new_and_as_uuid_round_trip
+        PASS [   0.012s] (700/877) crm-app ids::raw_payload_id_tests::display_matches_the_inner_uuid
+        PASS [   0.012s] (701/877) crm-app ids::raw_payload_id_tests::serde_round_trip_is_transparent_with_bare_uuid
+        PASS [   0.012s] (702/877) crm-app ids::saved_list_id_tests::saved_list_id_is_transparent_and_readable
+        PASS [   0.012s] (703/877) crm-app ids::stage_id_tests::display_matches_the_inner_uuid
+        PASS [   0.014s] (704/877) crm-app ids::stage_id_tests::debug_matches_display_not_the_derived_tuple_form
+        PASS [   0.010s] (705/877) crm-app ids::tag_id_tests::tag_id_is_transparent_and_readable
+        PASS [   0.012s] (706/877) crm-app ids::stage_id_tests::new_and_as_uuid_round_trip
+        PASS [   0.012s] (707/877) crm-app ids::stage_id_tests::serde_round_trip_is_transparent_with_bare_uuid
+        PASS [   0.010s] (708/877) crm-app ids::task_id_tests::task_id_is_transparent_and_readable
+        PASS [   0.012s] (709/877) crm-app ids::tests::debug_matches_display_not_the_derived_tuple_form
+        PASS [   0.012s] (710/877) crm-app ids::tests::display_matches_the_inner_uuid
+        PASS [   0.011s] (711/877) crm-app ids::turn_id_tests::debug_matches_display_not_the_derived_tuple_form
+        PASS [   0.012s] (712/877) crm-app ids::tests::serde_round_trip_is_transparent_with_bare_uuid
+        PASS [   0.011s] (713/877) crm-app ids::turn_id_tests::new_and_as_uuid_round_trip
+        PASS [   0.012s] (714/877) crm-app ids::turn_id_tests::display_matches_the_inner_uuid
+        PASS [   0.013s] (715/877) crm-app ids::tests::new_and_as_uuid_round_trip
+        PASS [   0.012s] (716/877) crm-app ids::turn_id_tests::serde_round_trip_is_transparent_with_bare_uuid
+        PASS [   0.011s] (717/877) crm-app ids::user_id_tests::debug_matches_display_not_the_derived_tuple_form
+        PASS [   0.011s] (718/877) crm-app ids::user_id_tests::display_matches_the_inner_uuid
+        PASS [   0.011s] (719/877) crm-app realtime::events::tests::call_changed_serializes_to_exact_shape
+        PASS [   0.012s] (720/877) crm-app ids::user_id_tests::new_and_as_uuid_round_trip
+        PASS [   0.012s] (721/877) crm-app realtime::events::tests::channel_for_is_org_prefixed_lowercase_uuid
+        PASS [   0.013s] (722/877) crm-app realtime::events::tests::accessors_return_the_envelope_fields
+        PASS [   0.014s] (723/877) crm-app ids::user_id_tests::serde_round_trip_is_transparent_with_bare_uuid
+        PASS [   0.016s] (724/877) crm-app realtime::events::tests::every_person_change_variant_serializes_to_its_snake_case_tag
+        PASS [   0.013s] (725/877) crm-app realtime::events::tests::intake_unresolved_changed_serializes_to_exact_shape
+        PASS [   0.012s] (726/877) crm-app realtime::events::tests::person_changed_serializes_to_exact_shape
+        PASS [   0.011s] (727/877) crm-app realtime::publisher::tests::disabled_publisher_disconnect_user_is_a_noop
+        PASS [   0.012s] (728/877) crm-app realtime::publisher::tests::outcome_tags_match_spec_vocabulary
+        PASS [   0.013s] (729/877) crm-app realtime::events::tests::publication_for_event_derives_channel_from_organization_id
+        PASS [   0.014s] (730/877) crm-app realtime::publisher::tests::publish_now_against_a_closed_port_returns_transport_error_within_budget
+        PASS [   0.012s] (731/877) crm-app realtime::publisher::tests::recording_publisher_captures_channel_and_exact_wire_value
+        PASS [   0.012s] (732/877) crm-app realtime::publisher::tests::recording_publisher_captures_disconnect_user
+        PASS [   0.011s] (733/877) crm-app realtime::publisher::tests::recording_publisher_is_synchronous_via_publish_after_commit
+        PASS [   0.012s] (734/877) crm-app realtime::token::tests::channels_is_exactly_the_active_organization_channel
+        PASS [   0.011s] (735/877) crm-app realtime::token::tests::claims_are_exact_and_in_order
+        PASS [   0.011s] (736/877) crm-app realtime::token::tests::header_is_exact
+        PASS [   0.012s] (737/877) crm-app realtime::token::tests::signature_differs_across_secrets
+        PASS [   0.011s] (738/877) crm-app realtime::token::tests::ttl_controls_exp_minus_iat
+        PASS [   0.013s] (739/877) crm-app realtime::token::tests::signature_verifies_with_the_configured_secret
+        PASS [   0.014s] (740/877) crm-app telephony::livekit::tests::a_2xx_non_json_dial_response_is_rejected_not_answered
+        PASS [   0.013s] (741/877) crm-app telephony::livekit::tests::an_unreachable_host_is_unavailable
+        PASS [   0.012s] (742/877) crm-app telephony::livekit::tests::debug_is_redacted_and_numbers_never_reach_errors
+        PASS [   0.014s] (743/877) crm-app telephony::livekit::tests::create_room_sends_the_request_shape_with_a_room_create_grant
+        PASS [   0.012s] (744/877) crm-app telephony::livekit::tests::delete_room_not_found_is_ok_and_other_errors_are_rejected
+        PASS [   0.014s] (745/877) crm-app telephony::livekit::tests::dial_accepts_snake_case_responses_and_empty_call_ids
+        PASS [   0.015s] (746/877) crm-app telephony::livekit::tests::dial_maps_sip_status_from_twirp_meta
+        PASS [   0.013s] (747/877) crm-app telephony::livekit::tests::empty_participant_list_is_absent
+        PASS [   0.014s] (748/877) crm-app telephony::livekit::tests::dial_sends_the_sip_request_shape_with_a_sip_call_grant
+        PASS [   0.013s] (749/877) crm-app telephony::livekit::tests::list_participants_uses_a_room_admin_grant_and_matches_identity
+        PASS [   0.012s] (750/877) crm-app telephony::livekit::tests::oversized_responses_are_cut_off
+        PASS [   0.011s] (751/877) crm-app telephony::scripted::tests::blocked_dial_waits_for_release_and_fails_on_drop
+        PASS [   0.011s] (752/877) crm-app telephony::scripted::tests::create_room_failure_switch
+        PASS [   0.010s] (753/877) crm-app telephony::scripted::tests::queue_drains_in_order_and_records_every_call
+        PASS [   0.011s] (754/877) crm-app telephony::tests::identities_and_room_names
+        PASS [   0.011s] (755/877) crm-app telephony::tests::phone_number_debug_is_redacted
+        PASS [   0.011s] (756/877) crm-app telephony::tests::sip_failure_mapping_from_status
+        PASS [   0.010s] (757/877) crm-app telephony::token::tests::header_is_exact
+        PASS [   0.011s] (758/877) crm-app telephony::token::tests::claims_are_exactly_section_3
+        PASS [   0.011s] (759/877) crm-app telephony::token::tests::join_token_debug_is_redacted
+        PASS [   0.010s] (760/877) crm-app telephony::token::tests::signature_verifies_with_the_secret_and_not_another
+        PASS [   0.011s] (761/877) crm-app telephony::webhook::tests::claim_edge_cases
+        PASS [   0.011s] (762/877) crm-app telephony::webhook::tests::expired_or_not_yet_valid_is_rejected
+        PASS [   0.011s] (763/877) crm-app telephony::webhook::tests::debug_never_prints_the_secret
+        PASS [   0.012s] (764/877) crm-app telephony::webhook::tests::malformed_tokens_and_none_alg_are_rejected
+        PASS [   0.010s] (765/877) crm-app telephony::webhook::tests::sha256_claim_is_standard_padded_base64
+        PASS [   0.012s] (766/877) crm-app telephony::webhook::tests::tampered_body_is_rejected
+        PASS [   0.012s] (767/877) crm-app telephony::webhook::tests::valid_signature_verifies
+        PASS [   0.012s] (768/877) crm-app telephony::webhook::tests::wrong_key_or_secret_is_rejected
+        PASS [   0.013s] (769/877) crm-operator provider::tests::usage_add_saturates
+        PASS [   0.013s] (770/877) crm-operator provider::tests::usage_add_keeps_none_only_when_both_absent
+        PASS [   0.018s] (771/877) crm-operator providers::groq::tests::api_key_is_redacted_in_debug
+        PASS [   0.019s] (772/877) crm-operator providers::groq::tests::connection_refused_is_unavailable
+        PASS [   0.022s] (773/877) crm-operator providers::groq::tests::http_statuses_map_to_provider_errors
+        PASS [   0.016s] (774/877) crm-operator providers::groq::tests::parse_failures_are_malformed
+        PASS [   0.010s] (775/877) crm-operator providers::groq::tests::parses_a_tool_call_response_and_usage
+        PASS [   0.010s] (776/877) crm-operator providers::groq::tests::request_body_carries_response_format_only_when_set
+        PASS [   0.011s] (777/877) crm-operator providers::groq::tests::request_body_is_openai_compatible
+        PASS [   0.011s] (778/877) crm-operator service::tests::a_503_outcome_never_surfaces_its_proposal
+        PASS [   0.011s] (779/877) crm-operator service::tests::a_503_outcome_never_surfaces_its_receipt
+        PASS [   0.011s] (780/877) crm-operator service::tests::a_needs_clarification_result_resets_the_malformed_strike_count
+        PASS [   0.011s] (781/877) crm-operator service::tests::a_second_complete_task_after_a_forbidden_outcome_still_reaches_the_backend
+        PASS [   0.011s] (782/877) crm-operator service::tests::already_completed_and_forbidden_set_no_receipt
+        PASS [   0.625s] (783/877) crm-app domain::migration::import_source::tests::import_source_large_provenance_is_complete_and_manifest_serializable
+        PASS [   0.011s] (784/877) crm-operator service::tests::backend_error_aborts_with_tool_error
+        PASS [   0.010s] (785/877) crm-operator service::tests::complete_task_sets_the_turn_receipt
+        PASS [   0.010s] (786/877) crm-operator service::tests::compose_due_at_matrix
+        PASS [   0.011s] (787/877) crm-operator service::tests::context_reaches_the_backend_unchanged_regardless_of_model_arguments
+        PASS [   0.010s] (788/877) crm-operator service::tests::create_task_needs_clarification_sets_no_proposal
+        PASS [   0.011s] (789/877) crm-operator service::tests::create_task_proposal_lands_in_turn_output
+        PASS [   0.011s] (790/877) crm-operator service::tests::create_task_with_a_due_date_and_no_offset_is_invalid_arguments
+        PASS [   0.011s] (791/877) crm-operator service::tests::debug_output_never_carries_message_or_reply_text
+        PASS [   0.011s] (792/877) crm-operator service::tests::empty_content_without_tool_calls_is_provider_error
+        PASS [   0.010s] (793/877) crm-operator service::tests::extra_tool_calls_beyond_per_round_cap_are_refused_not_executed
+        PASS [   0.011s] (794/877) crm-operator service::tests::fake_backend_filter_people_records_context_and_returns_matches
+        PASS [   0.011s] (795/877) crm-operator service::tests::fake_backend_filter_and_saved_list_share_the_backend_error_and_not_found_fixtures
+        PASS [   0.012s] (796/877) crm-operator service::tests::fake_backend_run_saved_list_records_context_and_returns_matches
+        PASS [   0.012s] (797/877) crm-operator service::tests::happy_path_one_tool_call_then_answer
+        PASS [   0.012s] (798/877) crm-operator service::tests::final_no_tools_call_failure_is_budget_exhausted_not_provider_error
+        PASS [   0.011s] (799/877) crm-operator service::tests::local_time_line_renders_the_offset_or_falls_back_to_z
+        PASS [   0.012s] (800/877) crm-operator service::tests::history_is_truncated_by_count_and_chars_oldest_first
+        PASS [   0.011s] (801/877) crm-operator service::tests::malformed_provider_body_is_provider_error
+        PASS [   0.011s] (802/877) crm-operator service::tests::malformed_strike_count_resets_after_a_valid_call
+        PASS [   0.010s] (803/877) crm-operator service::tests::multi_round_accumulates_records_in_order
+        PASS [   0.011s] (804/877) crm-operator service::tests::needs_number_choice_and_no_phone_set_no_proposal
+        PASS [   0.011s] (805/877) crm-operator service::tests::not_found_is_returned_to_the_model_and_the_turn_continues
+        PASS [   0.011s] (806/877) crm-operator service::tests::provider_timeout_is_model_timeout_without_retry
+        PASS [   0.011s] (807/877) crm-operator service::tests::rate_limited_is_provider_error_without_retry
+        PASS [   0.012s] (808/877) crm-operator service::tests::references_follow_precedence_dedup_and_cap
+        PASS [   0.011s] (809/877) crm-operator service::tests::reply_is_clipped_to_max_reply_chars
+        PASS [   0.012s] (810/877) crm-operator service::tests::round_cap_final_call_with_content_completes
+        PASS [   0.011s] (811/877) crm-operator service::tests::round_cap_makes_a_final_no_tools_call_then_canned_reply
+        PASS [   0.011s] (812/877) crm-operator service::tests::second_complete_task_after_a_receipt_is_rejected_without_backend_hit
+        PASS [   0.012s] (813/877) crm-operator service::tests::run_saved_list_not_found_uses_a_list_aware_detail_and_the_turn_continues
+        PASS [   0.012s] (814/877) crm-operator service::tests::second_start_call_after_a_proposal_is_rejected_without_backend_hit
+        PASS [   0.011s] (815/877) crm-operator service::tests::start_call_proposal_lands_in_turn_output_and_ledger
+        PASS [   0.010s] (816/877) crm-operator service::tests::the_prompt_carries_the_filter_people_and_run_saved_list_rules
+        PASS [   0.011s] (817/877) crm-operator service::tests::system_prompt_names_the_actor_and_screen_context_is_one_trusted_line
+        PASS [   0.011s] (818/877) crm-operator service::tests::start_call_with_invented_contact_method_is_not_found
+        PASS [   0.010s] (819/877) crm-operator service::tests::the_prompt_carries_the_task_rules
+        PASS [   0.010s] (820/877) crm-operator service::tests::the_prompt_carries_the_start_call_rules
+        PASS [   0.010s] (821/877) crm-operator service::tests::the_prompt_names_custom_field_labels_and_values
+        PASS [   0.010s] (822/877) crm-operator service::tests::tool_call_record_serializes_without_person_ids
+        PASS [   0.011s] (823/877) crm-operator service::tests::the_proposal_slot_is_shared_across_start_call_and_create_task
+        PASS [   0.011s] (824/877) crm-operator service::tests::unavailable_is_not_retried_when_under_five_seconds_remain
+        PASS [   0.012s] (825/877) crm-operator service::tests::two_consecutive_malformed_calls_end_the_turn
+        PASS [   0.011s] (826/877) crm-operator service::tests::two_over_cap_rounds_are_malformed
+        PASS [   0.011s] (827/877) crm-operator service::tests::unavailable_is_retried_once_when_budget_remains
+        PASS [   0.011s] (828/877) crm-operator service::tests::unavailable_twice_is_provider_error
+        PASS [   0.011s] (829/877) crm-operator service::tests::unknown_tool_yields_invalid_arguments_then_recovers
+        PASS [   0.216s] (830/877) crm-app telephony::livekit::tests::http_5xx_is_unavailable_and_a_hung_server_is_a_timeout
+        PASS [   0.011s] (831/877) crm-operator tools::tests::create_task_assignee_clips_at_80_chars_and_blank_is_default
+        PASS [   0.012s] (832/877) crm-operator tools::tests::complete_task_requires_both_ids
+        PASS [   0.012s] (833/877) crm-operator tools::tests::a_name_array_of_only_whitespace_leaves_an_empty_spec
+        PASS [   0.010s] (834/877) crm-operator tools::tests::create_task_due_date_and_time_matrix
+        PASS [   0.010s] (835/877) crm-operator tools::tests::create_task_kind_defaults_and_validates
+        PASS [   0.010s] (836/877) crm-operator tools::tests::create_task_requires_person_id_and_title
+        PASS [   0.010s] (837/877) crm-operator tools::tests::create_task_title_matrix
+        PASS [   0.011s] (838/877) crm-operator tools::tests::empty_arguments_are_an_empty_object
+        PASS [   0.010s] (839/877) crm-operator tools::tests::every_schema_forbids_additional_properties_and_has_no_trusted_ids
+        PASS [   0.010s] (840/877) crm-operator tools::tests::filter_people_limit_clamps_to_1_25_and_defaults_to_10
+        PASS [   0.010s] (841/877) crm-operator tools::tests::filter_people_name_arrays_are_clipped_but_sources_are_not
+        PASS [   0.011s] (842/877) crm-operator tools::tests::filter_people_name_arrays_strip_control_and_invisible_chars
+        PASS [   0.011s] (843/877) crm-operator tools::tests::filter_people_rejects_an_empty_array_for_a_present_property
+        PASS [   0.011s] (844/877) crm-operator tools::tests::filter_people_rejects_an_empty_spec
+        PASS [   0.011s] (845/877) crm-operator tools::tests::filter_people_rejects_created_never
+        PASS [   0.011s] (846/877) crm-operator tools::tests::filter_people_rejects_days_outside_1_3650
+        PASS [   0.011s] (847/877) crm-operator tools::tests::filter_people_rejects_wrong_types
+        PASS [   0.011s] (848/877) crm-operator tools::tests::filter_people_schema_declares_a_field_for_every_mirrored_clause
+        PASS [   0.011s] (849/877) crm-operator tools::tests::filter_people_rejects_more_than_fifty_values
+        PASS [   0.010s] (850/877) crm-operator tools::tests::filter_people_unknown_property_and_extra_age_field_are_rejected
+        PASS [   0.010s] (851/877) crm-operator tools::tests::run_saved_list_limit_clamps_to_1_25_and_defaults_to_10
+        PASS [   0.010s] (852/877) crm-operator tools::tests::person_id_tools_require_a_uuid
+        PASS [   0.010s] (853/877) crm-operator tools::tests::rejects_unknown_tool_non_json_and_extra_properties
+        PASS [   0.010s] (854/877) crm-operator tools::tests::run_saved_list_name_is_stripped_and_clipped
+        PASS [   0.010s] (855/877) crm-operator tools::tests::search_query_is_clipped_to_100_chars
+        PASS [   0.010s] (856/877) crm-operator tools::tests::run_saved_list_requires_exactly_one_of_name_or_list_id
+        PASS [   0.010s] (857/877) crm-operator tools::tests::search_people_parses_and_clamps
+        PASS [   0.011s] (858/877) crm-operator tools::tests::search_query_strips_control_and_invisible_chars
+        PASS [   0.010s] (859/877) crm-operator views::tests::filter_outcome_variants_tag_by_status_and_wrap_untrusted_text
+        PASS [   0.011s] (860/877) crm-operator tools::tests::unknown_property_name_is_clipped
+        PASS [   0.011s] (861/877) crm-operator tools::tests::tool_definitions_snapshot
+        PASS [   0.011s] (862/877) crm-operator views::tests::not_on_today_reason_flattens_into_explanation
+        PASS [   0.010s] (863/877) crm-operator views::tests::task_proposal_view_debug_never_prints_the_title
+        PASS [   0.010s] (864/877) crm-operator views::tests::person_card_prompt_and_wire_serializations_differ_only_in_wrapping
+        PASS [   0.011s] (865/877) crm-operator views::tests::ordering_rule_text_is_pinned_literally
+        PASS [   0.010s] (866/877) crm-operator views::tests::task_receipt_view_debug_never_prints_the_title
+        PASS [   0.321s] (867/877) crm-app telephony::livekit::tests::dial_maps_a_twirp_deadline_by_elapsed_time
+        PASS [   0.010s] (868/877) crm-operator views::tests::task_view_gains_task_id
+        PASS [   0.010s] (869/877) crm-operator views::tests::untrusted_text_clips_to_500_chars
+        PASS [   0.010s] (870/877) crm-operator views::tests::untrusted_text_serializes_under_named_key
+        PASS [   0.010s] (871/877) crm-operator views::tests::untrusted_text_strips_bidi_and_zero_width
+        PASS [   0.011s] (872/877) crm-operator views::tests::untrusted_text_strips_control_chars_and_flattens_whitespace
+        PASS [   0.319s] (873/877) crm-operator providers::groq::tests::hung_server_is_timeout_within_budget
+        PASS [   0.314s] (874/877) crm-operator service::tests::turn_timeout_inside_a_tool_records_the_started_tool_as_error
+        PASS [   0.314s] (875/877) crm-operator service::tests::turn_timeout_fires_with_a_sleeping_provider_and_keeps_partial_records
+        PASS [   2.046s] (876/877) crm-api::all telephony::every_call_route_returns_503_unavailable_when_database_unreachable
+        PASS [   2.015s] (877/877) crm-app realtime::publisher::tests::publish_now_against_a_hung_listener_times_out_within_budget
+────────────
+     Summary [   4.316s] 877 tests run: 877 passed, 845 skipped
+==> [5s]
+==> cargo test --doc
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.13s
+   Doc-tests crm_api
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests crm_app
+
+running 5 tests
+test crates/crm-app/src/ids.rs - ids::OrganizationId (line 42) - compile fail ... ok
+test crates/crm-app/src/ids.rs - ids::UserId (line 141) - compile fail ... ok
+test crates/crm-app/src/realtime/events.rs - realtime::events::Publication (line 208) - compile fail ... ok
+test crates/crm-app/src/ids.rs - ids::OrganizationId (line 30) - compile fail ... ok
+test crates/crm-app/src/ids.rs - ids::PersonId (line 243) - compile fail ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.37s
+
+   Doc-tests crm_operator
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+==> [2s]
+==> web + email-worker tests (background result)
+==> web lint
+$ eslint . --max-warnings 0
+==> [4s]
+==> web typecheck
+$ vue-tsc --noEmit -p tsconfig.app.json
+==> [5s]
+==> web test
+$ vitest run
+
+ RUN  v4.1.11 /Users/karrad/projects/crm-worktrees/010c/web
+
+
+ Test Files  66 passed (66)
+      Tests  1002 passed (1002)
+   Start at  12:47:11
+   Duration  7.39s (transform 6.28s, setup 1.03s, import 16.43s, tests 23.49s, environment 15.39s)
+
+==> [8s]
+==> web build
+$ vite build
+vite v8.2.1 building client environment for production...
+transforming...
+✓ 2008 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                              1.26 kB │ gzip:   0.53 kB
+dist/assets/inter-vietnamese-wght-normal-CBcvBZtf.woff2     10.25 kB
+dist/assets/inter-greek-ext-wght-normal-DlzME5K_.woff2      11.23 kB
+dist/assets/inter-cyrillic-wght-normal-DqGufNeO.woff2       18.74 kB
+dist/assets/inter-greek-wght-normal-CkhJZR-_.woff2          18.99 kB
+dist/assets/inter-cyrillic-ext-wght-normal-BOeWTOD4.woff2   25.96 kB
+dist/assets/inter-latin-wght-normal-Dx4kXJAl.woff2          48.25 kB
+dist/assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2      85.06 kB
+dist/assets/LoginView-Bu0ZrLP3.css                           0.18 kB │ gzip:   0.15 kB
+dist/assets/index-C9V_mudp.css                              37.79 kB │ gzip:   8.40 kB
+dist/assets/plus-Bch9nAXL.js                                 0.15 kB │ gzip:   0.15 kB
+dist/assets/copy-OUIz_4rP.js                                 0.23 kB │ gzip:   0.20 kB
+dist/assets/pencil-Bp0kZJ-K.js                               0.27 kB │ gzip:   0.22 kB
+dist/assets/Card-Cbf4Z50Z.js                                 0.29 kB │ gzip:   0.24 kB
+dist/assets/refresh-cw-J6CC8njb.js                           0.32 kB │ gzip:   0.22 kB
+dist/assets/phone-BMm72Wvc.js                                0.32 kB │ gzip:   0.23 kB
+dist/assets/trash-2-BwbYop1H.js                              0.32 kB │ gzip:   0.21 kB
+dist/assets/user-check-DlYR8GwN.js                           0.63 kB │ gzip:   0.37 kB
+dist/assets/FormField-C-tVpKBL.js                            0.67 kB │ gzip:   0.41 kB
+dist/assets/PageHeader-BA7SIxCH.js                           0.84 kB │ gzip:   0.47 kB
+dist/assets/todayFeeds-DgGlvI7u.js                           1.10 kB │ gzip:   0.48 kB
+dist/assets/createLucideIcon-Dqbor38u.js                     1.19 kB │ gzip:   0.70 kB
+dist/assets/WorkspaceReviewView-C1H3f7vj.js                  1.23 kB │ gzip:   0.75 kB
+dist/assets/ConfirmDialog-ChqdPDiu.js                        1.46 kB │ gzip:   0.79 kB
+dist/assets/overlayeventbus-DdBGfiN4.js                      1.64 kB │ gzip:   0.70 kB
+dist/assets/LoginView-D82uw3jO.js                            2.42 kB │ gzip:   1.36 kB
+dist/assets/LogContactDialog-DjJpSP8t.js                     2.59 kB │ gzip:   1.15 kB
+dist/assets/InviteView-DE9464r-.js                           3.01 kB │ gzip:   1.40 kB
+dist/assets/PlatformOrganizationsView-COfboGHF.js            3.21 kB │ gzip:   1.46 kB
+dist/assets/OneTimeLinkDialog-vJuteJKd.js                    3.94 kB │ gzip:   1.74 kB
+dist/assets/TagsView-Bj2xnJIp.js                             4.69 kB │ gzip:   2.01 kB
+dist/assets/NewInquiryView-xAELBEd7.js                       5.00 kB │ gzip:   2.24 kB
+dist/assets/IntakeSettingsView-D44Wj_Zg.js                   5.95 kB │ gzip:   2.35 kB
+dist/assets/PlatformOrganizationView-z-PZ2bFC.js             5.98 kB │ gzip:   2.21 kB
+dist/assets/ImportFieldViewer-49LV5c49.js                    7.10 kB │ gzip:   3.15 kB
+dist/assets/MembersView-C773itCW.js                          7.10 kB │ gzip:   2.40 kB
+dist/assets/UnresolvedView-DzViwpnE.js                       7.44 kB │ gzip:   2.83 kB
+dist/assets/EmailCaptureView-BAzRJc7-.js                     8.45 kB │ gzip:   3.15 kB
+dist/assets/ListsView-_dGrKUx1.js                            9.14 kB │ gzip:   3.43 kB
+dist/assets/FieldsView-DUdHDXaP.js                          14.87 kB │ gzip:   4.45 kB
+dist/assets/TodayView-CsYVx6d5.js                           16.74 kB │ gzip:   5.55 kB
+dist/assets/TodayFeedsView-BdivFpjS.js                      17.29 kB │ gzip:   5.77 kB
+dist/assets/ripple-BU4oS3IG.js                              38.15 kB │ gzip:   9.91 kB
+dist/assets/FilterBar-D-QuGfUN.js                           44.47 kB │ gzip:  13.05 kB
+dist/assets/PeopleView-MMPajQ0w.js                          47.08 kB │ gzip:  15.15 kB
+dist/assets/PersonDetailView-BbtSfls5.js                    51.27 kB │ gzip:  14.48 kB
+dist/assets/DataTable-nliYKVVz.js                           52.23 kB │ gzip:  14.28 kB
+dist/assets/dialog-osyA6aso.js                              59.44 kB │ gzip:  12.07 kB
+dist/assets/controls-BsIvlwcv.js                            68.04 kB │ gzip:  26.69 kB
+dist/assets/select-BWzVRCou.js                              78.49 kB │ gzip:  19.07 kB
+dist/assets/queries-D312wHES.js                             88.61 kB │ gzip:  24.08 kB
+dist/assets/MigrationView-DUPEN38Q.js                       94.08 kB │ gzip:  25.35 kB
+dist/assets/index-Bc-zeRPN.js                              221.37 kB │ gzip:  65.28 kB
+dist/assets/livekit-client.esm-CX-oniKy.js                 531.04 kB │ gzip: 137.52 kB
+
+✓ built in 614ms
+[plugin builtin:vite-reporter]
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+==> [1s]
+==> email-worker tests
+✔ base64Transform round-trips exact bytes at every chunk alignment, padding only at the end (11.208708ms)
+✔ base64Transform round-trips exact bytes across a mixed chunk-size split (0.661ms)
+✔ the derivation pin: encoded MAX_RAW_BYTES plus envelope overhead fits the endpoint 34 MiB cap (0.078416ms)
+✔ oversize mail is rejected without any fetch (20.194833ms)
+✔ a 200 relays the envelope recipient, bearer, and exact bytes (1.013042ms)
+✔ a 25 MiB message relays as a streamed body and decodes to the exact bytes (108.506125ms)
+✔ a recipient with a quoted local part containing " and \ produces valid JSON with the exact recipient (0.752125ms)
+✔ a source stream failure temp-fails and never posts a truncated body (0.861542ms)
+✔ 413 and 400 bounce honestly instead of retrying forever (2.325375ms)
+✔ 401 and 5xx throw (temp-fail -> MTA retry), never reject (0.977125ms)
+✔ a network failure propagates as a throw (0.195667ms)
+ℹ tests 11
+ℹ suites 0
+ℹ pass 11
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 201.617166
+==> [1s]
+==> all checks passed [total 31s]

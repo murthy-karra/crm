@@ -1,0 +1,7 @@
+# Frozen c6c5930 contact-reader baseline
+
+These static SQL files were obtained with `git show c6c5930:<source>`; the inline count statement is the exact Rust raw-string content. `manifest.json` records exact source paths, byte sizes, hashes and full commit. Runtime SQLx adapters preserve the baseline bind order and row decoding, including all five custom-field slots. They are test-only and cannot be selected through an HTTP field or production environment switch.
+
+The 010c pair measures authenticated filtered People (`created.desc`) and Today (zero/five saved sources), including five simultaneous Today requests. Both arms use the same current HTTP/auth/workspace guard, task-only fallback, database/schema, fixture and clock. It isolates the registered contact projection readers; it does not measure workspace-guard overhead or claim a frozen baseline for the task-only fallback, unfiltered list, search, by-ID, or contact-detail statements. Those readers require separate correctness/query-plan evidence.
+
+Measured ordinary contacts all have NULL `import_order` and strictly different timestamps, so parity is required. A preflight temporarily assigns reverse import order to a visible contact to prove that frozen/live bodies diverge, then restores NULL before timing. Shared-phone contacts span all 25,000 primary-Organization People without pair materialization. Ten due-task-only People are part of that same 25k envelope. All inputs are synthetic.

@@ -1,5 +1,13 @@
 # Slice 009 — Correspondence capture v1 (CC/BCC-first, metadata-only)
 
+**Approved amendment — 010c (D-065, 2026-09-11):**
+[010c](SLICE_010c.md) holds correspondence ingress/processing during migration
+review and returns retryable 503 before raw persistence or success acknowledgment.
+Explicit address provisioning, manual capture resolution and ordinary mutations
+are guarded; address setup intrinsic to permitted membership/invitation governance
+remains an explicit exception. This adds no replay queue, source inference or
+new correspondence visibility.
+
 **Approved amendment — Slice 011c (2026-09-06):**
 [SLICE_011c §§4/6/8](SLICE_011c.md) extend §6's Today response with explicit
 saved-list work and source availability. Built-in inquiry/client-reply ownership

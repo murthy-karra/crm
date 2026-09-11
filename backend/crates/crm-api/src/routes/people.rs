@@ -162,7 +162,7 @@ async fn list_people(
     let Query(query) = query.map_err(|_| ApiError::MalformedRequest)?;
 
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
-    let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
+    let mut conn = pool.acquire().await.map_err(ApiError::database)?;
     let scope = PersonVisibilityScope::from_auth(&auth);
 
     // Observability (docs/specs/SLICE_011b_SORT.md §6): the static sort
@@ -182,14 +182,14 @@ async fn list_people(
         // same cap math (§5a).
         (None, None) => person_queries::list_summaries(&mut conn, &scope)
             .await
-            .map_err(|_| ApiError::Unavailable)?,
+            .map_err(ApiError::database)?,
         // A sort with no ad-hoc filter still runs a sorted statement, with
         // all-NULL clause parameters — pinned equal to the full list (§4).
         (None, Some(sort)) => {
             let params = PersonFilterParams::default();
             person_queries::filtered_summaries_sorted(&mut conn, &scope, &params, sort)
                 .await
-                .map_err(|_| ApiError::Unavailable)?
+                .map_err(ApiError::database)?
         }
         (Some(raw), sort) => {
             // Present-but-empty `?filter=` (or `?filter`) is a 400: empty
@@ -225,11 +225,11 @@ async fn list_people(
             match sort {
                 None => person_queries::filtered_summaries(&mut conn, &scope, &params)
                     .await
-                    .map_err(|_| ApiError::Unavailable)?,
+                    .map_err(ApiError::database)?,
                 Some(sort) => {
                     person_queries::filtered_summaries_sorted(&mut conn, &scope, &params, sort)
                         .await
-                        .map_err(|_| ApiError::Unavailable)?
+                        .map_err(ApiError::database)?
                 }
             }
         }
@@ -244,27 +244,27 @@ async fn get_person(
     auth: AuthContext,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
-    let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
+    let mut conn = pool.acquire().await.map_err(ApiError::database)?;
     let scope = PersonVisibilityScope::from_auth(&auth);
     let organization_id = scope.organization_id();
 
     let person = person_queries::summary_by_id(&mut conn, organization_id, person_id)
         .await
-        .map_err(|_| ApiError::Unavailable)?
+        .map_err(ApiError::database)?
         .ok_or(ApiError::NotFound)?;
 
     let contact_methods =
         person_queries::contact_methods_for_person(&mut conn, organization_id, person_id)
             .await
-            .map_err(|_| ApiError::Unavailable)?;
+            .map_err(ApiError::database)?;
 
     let inquiries = inquiry_queries::list_for_person(&mut conn, organization_id, person_id)
         .await
-        .map_err(|_| ApiError::Unavailable)?;
+        .map_err(ApiError::database)?;
 
     let mut history = person_queries::history_for_person(&mut conn, organization_id, person_id)
         .await
-        .map_err(|_| ApiError::Unavailable)?;
+        .map_err(ApiError::database)?;
     // The `note` and `task_completed` history kinds' `can_manage`
     // (docs/specs/SLICE_015.md §5, docs/specs/SLICE_016.md §4, the
     // tags-route pattern): the domain query always emits `false` (it has

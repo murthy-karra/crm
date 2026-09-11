@@ -1,0 +1,32 @@
+[
+  [
+    "people_created_desc:frozen",
+    false,
+    true
+  ],
+  [
+    "people_created_desc:live",
+    true,
+    false
+  ],
+  [
+    "today_zero_sources:live",
+    true,
+    false
+  ],
+  [
+    "today_zero_sources:frozen",
+    false,
+    true
+  ],
+  [
+    "today_five_sources:frozen",
+    false,
+    true
+  ],
+  [
+    "today_five_sources:live",
+    true,
+    false
+  ]
+]

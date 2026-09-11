@@ -27,7 +27,7 @@ const OTHER_ORG_ID = '33333333-3333-3333-3333-333333333333'
 function me(overrides: Partial<MeResponse> = {}): MeResponse {
   return {
     user: { id: ADMIN_ID, email: 'admin@example.test', display_name: 'Admin Alice' },
-    organization: { id: ORG_ID, name: 'Example Realty', role: 'admin' },
+    organization: { workspace_mode: 'operational', workspace_revision: '1', id: ORG_ID, name: 'Example Realty', role: 'admin' },
     platform_admin: false,
     ...overrides,
   }
@@ -124,7 +124,7 @@ describe('PreviewTodayFeedDialog session-identity fence', () => {
     mountDialog(queryClient)
     await flushPromises()
 
-    queryClient.setQueryData(queryKeys.me, me({ organization: { id: OTHER_ORG_ID, name: 'Other Realty', role: 'admin' } }))
+    queryClient.setQueryData(queryKeys.me, me({ organization: { workspace_mode: 'operational', workspace_revision: '1', id: OTHER_ORG_ID, name: 'Other Realty', role: 'admin' } }))
     await flushPromises()
 
     response.resolve({ subject: { id: ADMIN_ID, display_name: 'Admin Alice' }, items: [], truncated: false, description: [] })

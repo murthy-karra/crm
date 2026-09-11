@@ -143,7 +143,7 @@ async fn list_custom_fields(
     auth: AuthContext,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
-    let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
+    let mut conn = pool.acquire().await.map_err(ApiError::database)?;
     let fields = custom_field::list_definitions(&mut conn, auth.active_organization_id).await?;
     Ok(Json(json!({ "fields": fields })))
 }

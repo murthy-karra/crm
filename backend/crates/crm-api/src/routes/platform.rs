@@ -96,11 +96,11 @@ async fn list_organizations(
     _ctx: PlatformAuthContext,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
-    let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
+    let mut conn = pool.acquire().await.map_err(ApiError::database)?;
 
     let organizations = admin_queries::list_for_platform(&mut conn)
         .await
-        .map_err(|_| ApiError::Unavailable)?;
+        .map_err(ApiError::database)?;
 
     Ok(Json(json!({ "organizations": organizations })))
 }
@@ -125,10 +125,10 @@ async fn create_organization_route(
     let organization =
         create_organization(pool, actor, CreateOrganization { name: req.name }).await?;
 
-    let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
+    let mut conn = pool.acquire().await.map_err(ApiError::database)?;
     let item = admin_queries::platform_organization_by_id(&mut conn, organization.id)
         .await
-        .map_err(|_| ApiError::Unavailable)?
+        .map_err(ApiError::database)?
         .ok_or(ApiError::Unavailable)?;
 
     Ok((StatusCode::CREATED, Json(json!({ "organization": item }))).into_response())
@@ -144,23 +144,23 @@ async fn get_organization_detail(
     // Organization by id, never the session's active one (module doc).
     let organization_id = OrganizationId::new(organization_id);
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
-    let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
+    let mut conn = pool.acquire().await.map_err(ApiError::database)?;
 
     let organization = admin_queries::platform_organization_by_id(&mut conn, organization_id)
         .await
-        .map_err(|_| ApiError::Unavailable)?
+        .map_err(ApiError::database)?
         .ok_or(ApiError::NotFound)?;
     let members = admin_queries::members(&mut conn, organization_id)
         .await
-        .map_err(|_| ApiError::Unavailable)?;
+        .map_err(ApiError::database)?;
     let invitations = admin_queries::list_invitations(&mut conn, organization_id)
         .await
-        .map_err(|_| ApiError::Unavailable)?;
+        .map_err(ApiError::database)?;
     // Slice 007a: an onboarding-configuration value (not tenant CRM data —
     // a recorded exclusion to D-021), top-level so the list stays untouched.
     let intake_address = admin_queries::organization_intake_address(&mut conn, organization_id)
         .await
-        .map_err(|_| ApiError::Unavailable)?
+        .map_err(ApiError::database)?
         .map(|(slug, token)| IntakeAddress { slug, token }.render(&state.intake_mail))
         .ok_or(ApiError::Unavailable)?;
 
@@ -234,10 +234,10 @@ async fn create_admin_invitation(
     // The FK on invitation.organization_id would otherwise turn a
     // nonexistent Organization into an opaque database error rather than
     // a clean 404 (docs/specs/SLICE_004.md §7).
-    let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
+    let mut conn = pool.acquire().await.map_err(ApiError::database)?;
     if !admin_queries::organization_exists(&mut conn, organization_id)
         .await
-        .map_err(|_| ApiError::Unavailable)?
+        .map_err(ApiError::database)?
     {
         return Err(ApiError::NotFound);
     }

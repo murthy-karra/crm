@@ -36,7 +36,7 @@ pub async fn insert_pending(
     content_hmac: &[u8],
     byte_len: i32,
 ) -> Result<CorrespondenceRawId, sqlx::Error> {
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, organization_id).await?;
 
     sqlx::query!(
         r#"INSERT INTO correspondence_raw
@@ -99,6 +99,8 @@ pub async fn read_for_link(
     id: CorrespondenceRawId,
     organization_id: OrganizationId,
 ) -> Result<Option<(DateTime<Utc>, Vec<u8>, Vec<u8>)>, sqlx::Error> {
+    let mut workspace_read = crate::auth::workspace::read(conn, organization_id).await?;
+    let conn = &mut *workspace_read;
     let row = sqlx::query!(
         r#"SELECT received_at, nonce, ciphertext
            FROM correspondence_raw WHERE id = $1 AND organization_id = $2"#,
@@ -190,6 +192,8 @@ pub async fn list_unmatched(
     organization_id: OrganizationId,
     agent_user_id: UserId,
 ) -> Result<(Vec<UnmatchedItem>, bool), sqlx::Error> {
+    let mut workspace_read = crate::auth::workspace::read(conn, organization_id).await?;
+    let conn = &mut *workspace_read;
     let rows = sqlx::query!(
         r#"SELECT id, counterparty_email, captured_at, direction_hint
            FROM capture_message

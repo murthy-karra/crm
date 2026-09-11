@@ -153,7 +153,7 @@ async fn add_note_attempt(
     let body = NoteBody::parse(&cmd.body)?;
     tracing::Span::current().record("body_chars", body.chars().count());
 
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
     person_queries::lock_person(&mut tx, cmd.person_id, ctx.organization_id)
         .await?
         .ok_or(NoteError::NotFound)?;
@@ -247,7 +247,7 @@ async fn edit_note_attempt(
 ) -> Result<EditNoteOutcome, NoteError> {
     let body = NoteBody::parse(&cmd.body)?;
 
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
     person_queries::lock_person(&mut tx, cmd.person_id, ctx.organization_id)
         .await?
         .ok_or(NoteError::NotFound)?;
@@ -336,7 +336,7 @@ async fn delete_note_attempt(
     ctx: &CommandContext,
     cmd: DeleteNote,
 ) -> Result<DeleteNoteOutcome, NoteError> {
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
     person_queries::lock_person(&mut tx, cmd.person_id, ctx.organization_id)
         .await?
         .ok_or(NoteError::NotFound)?;

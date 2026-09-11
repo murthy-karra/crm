@@ -22,7 +22,7 @@ const ORG_ID = '11111111-1111-1111-1111-111111111111'
 function me(): MeResponse {
   return {
     user: { id: 'u-alice', email: 'alice@acme.test', display_name: 'Alice' },
-    organization: { id: ORG_ID, name: 'Acme Realty', role: 'member' },
+    organization: { workspace_mode: 'operational', workspace_revision: '1', id: ORG_ID, name: 'Acme Realty', role: 'member' },
     platform_admin: false,
   }
 }

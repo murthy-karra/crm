@@ -72,7 +72,7 @@ const EMAIL: ContactMethod = { id: 'cm-email', kind: 'email', value: 'grace@exam
 function me(): MeResponse {
   return {
     user: { id: 'u-alice', email: 'alice@acme.test', display_name: 'Alice' },
-    organization: { id: ORG_ID, name: 'Acme Realty', role: 'member' },
+    organization: { workspace_mode: 'operational', workspace_revision: '1', id: ORG_ID, name: 'Acme Realty', role: 'member' },
     platform_admin: false,
   }
 }
@@ -347,6 +347,7 @@ function stubApi(personDetail: PersonDetailResponse, options: StubOptions = {}) 
   apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET'
     if (path === '/me') return options.meOverride ?? me()
+    if (path.endsWith('/import-provenance')) throw new ApiError(404, 'not_found')
     const personTagMatch = /^\/people\/([^/]+)\/tags\/([^/]+)$/.exec(path)
     if (personTagMatch && (method === 'PUT' || method === 'DELETE')) {
       const tagId = decodeURIComponent(personTagMatch[2])
@@ -1882,7 +1883,7 @@ describe('PersonDetailView — Custom fields (SLICE_019.md §9.11)', () => {
       customFieldDefinitions: [],
       meOverride: {
         user: { id: 'u-alice', email: 'alice@acme.test', display_name: 'Alice' },
-        organization: { id: ORG_ID, name: 'Acme Realty', role: 'admin' },
+        organization: { workspace_mode: 'operational', workspace_revision: '1', id: ORG_ID, name: 'Acme Realty', role: 'admin' },
         platform_admin: false,
       },
     })
@@ -3502,5 +3503,23 @@ describe('PersonDetailView — Tasks (SLICE_016.md §12.8)', () => {
     const summaries = wrapper.findAll('[data-testid="history-summary"]')
     expect(summaries.some((s) => s.text() === 'Activity')).toBe(true)
     expect(summaries.some((s) => s.text() === 'Completed task: A completed task')).toBe(true)
+  })
+})
+
+
+describe('Person review-only workspace', () => {
+  it('renders contacts, assignment and import history without offering ordinary writes or outbound actions', async () => {
+    const identity = me(); identity.organization = { ...identity.organization!, role: 'admin', workspace_mode: 'migration_review', workspace_revision: '2' }
+    const imported: HistoryEntry = { id: 'import-fact', kind: 'person_imported', occurred_at: '2026-09-11T12:00:00Z', recorded_at: '2026-09-11T12:00:00Z', actor: null, origin: 'migration', correlation_id: 'import', detail: { import_id: 'import', plan_id: 'plan', source_record_id: 'record', capture_id: 'capture', on_behalf_of_user_id: 'actor' } }
+    stubApi(detail([PHONE_A, EMAIL], [imported], [{ id: 'tag', name: 'Imported' }]), { meOverride: identity })
+    const { wrapper } = await mountView()
+    expect(wrapper.text()).toContain('Person imported from Follow Up Boss')
+    expect(wrapper.text()).toContain(EMAIL.value)
+    expect(wrapper.text()).toContain('No inquiries')
+    for (const id of ['log-contact', 'call-button', 'add-tag-button', 'remove-person-tag', 'task-add-form', 'note-composer']) expect(wrapper.find(`[data-testid="${id}"]`).exists(), id).toBe(false)
+    for (const select of wrapper.findAllComponents(Select)) expect(select.props('disabled')).toBe(true)
+    expect(requests().filter(request => !request.startsWith('GET '))).toEqual([])
+    expect(requests()).toContain(`GET /people/${PERSON_ID}/import-provenance`)
+    wrapper.unmount()
   })
 })

@@ -300,6 +300,7 @@ async fn query_inner_untraced(
     sqlx::query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
         .execute(&mut *tx)
         .await?;
+    crate::auth::workspace::ordinary(&mut tx, scope.organization_id()).await?;
     // Approved §8 transaction-local planning adjustment. `SET LOCAL` dies
     // with this transaction, including the error/drop path.
     sqlx::query("SET LOCAL jit = off").execute(&mut *tx).await?;

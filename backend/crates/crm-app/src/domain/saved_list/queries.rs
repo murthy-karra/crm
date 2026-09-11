@@ -223,6 +223,9 @@ pub async fn list_saved_lists(
     conn: &mut PgConnection,
     auth: &AuthContext,
 ) -> Result<Vec<SavedListMetadata>, SavedListError> {
+    let mut workspace_read =
+        crate::auth::workspace::read(conn, auth.active_organization_id).await?;
+    let conn = &mut *workspace_read;
     let rows = sqlx::query_as!(
         SavedListMetadataRowDb,
         r#"SELECT id, created_by_user_id, scope,
@@ -309,6 +312,9 @@ pub async fn saved_list_detail(
     auth: &AuthContext,
     list_id: SavedListId,
 ) -> Result<Option<SavedListDetail>, SavedListError> {
+    let mut workspace_read =
+        crate::auth::workspace::read(conn, auth.active_organization_id).await?;
+    let conn = &mut *workspace_read;
     let Some(row) = visible_live_row(
         conn,
         auth.active_organization_id,
@@ -438,6 +444,9 @@ pub async fn count_saved_list_matches(
     list_id: SavedListId,
     expected_revision: i64,
 ) -> Result<Option<SavedListCount>, SavedListError> {
+    let mut workspace_read =
+        crate::auth::workspace::read(conn, auth.active_organization_id).await?;
+    let conn = &mut *workspace_read;
     let Some(row) = visible_live_row(
         conn,
         auth.active_organization_id,

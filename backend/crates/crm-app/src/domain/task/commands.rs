@@ -165,7 +165,7 @@ async fn create_task_attempt(
     let title = TaskTitle::parse(&cmd.title)?;
     tracing::Span::current().record("title_chars", title.chars().count());
 
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
     person_queries::lock_person(&mut tx, cmd.person_id, ctx.organization_id)
         .await?
         .ok_or(TaskError::NotFound)?;
@@ -283,7 +283,7 @@ async fn update_task_attempt(
 ) -> Result<UpdateTaskOutcome, TaskError> {
     let title = TaskTitle::parse(&cmd.title)?;
 
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
     let (row, role) = lock_person_task_and_authorize(
         &mut tx,
         ctx.organization_id,
@@ -403,7 +403,7 @@ async fn complete_task_attempt(
     ctx: &CommandContext,
     cmd: CompleteTask,
 ) -> Result<CompleteTaskOutcome, TaskError> {
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
     let (row, _role) = lock_person_task_and_authorize(
         &mut tx,
         ctx.organization_id,
@@ -497,7 +497,7 @@ async fn reopen_task_attempt(
     ctx: &CommandContext,
     cmd: ReopenTask,
 ) -> Result<ReopenTaskOutcome, TaskError> {
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
     let (row, _role) = lock_person_task_and_authorize(
         &mut tx,
         ctx.organization_id,
@@ -591,7 +591,7 @@ async fn snooze_task_attempt(
     ctx: &CommandContext,
     cmd: SnoozeTask,
 ) -> Result<SnoozeTaskOutcome, TaskError> {
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
     let (row, _role) = lock_person_task_and_authorize(
         &mut tx,
         ctx.organization_id,
@@ -689,7 +689,7 @@ async fn delete_task_attempt(
     ctx: &CommandContext,
     cmd: DeleteTask,
 ) -> Result<DeleteTaskOutcome, TaskError> {
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
     let (_row, _role) = lock_person_task_and_authorize(
         &mut tx,
         ctx.organization_id,

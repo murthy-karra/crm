@@ -236,7 +236,7 @@ async fn create_custom_field_attempt(
     let label = normalize_and_validate_label(&cmd.label)?;
     let options = validate_new_field_options(cmd.field_type, &cmd.options)?;
 
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
     acquire_custom_fields_lock(&mut tx, ctx.organization_id).await?;
     let role = lock_current_membership(&mut tx, ctx.organization_id, ctx.actor_user_id).await?;
     require_admin(role)?;
@@ -334,7 +334,7 @@ async fn update_custom_field_attempt(
 ) -> Result<UpdateCustomFieldOutcome, CustomFieldError> {
     let label = normalize_and_validate_label(&cmd.label)?;
 
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
     acquire_custom_fields_lock(&mut tx, ctx.organization_id).await?;
     let role = lock_current_membership(&mut tx, ctx.organization_id, ctx.actor_user_id).await?;
     require_admin(role)?;
@@ -445,7 +445,7 @@ async fn reorder_custom_fields_attempt(
     ctx: &CommandContext,
     cmd: ReorderCustomFields,
 ) -> Result<ReorderCustomFieldsOutcome, CustomFieldError> {
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
     acquire_custom_fields_lock(&mut tx, ctx.organization_id).await?;
     let role = lock_current_membership(&mut tx, ctx.organization_id, ctx.actor_user_id).await?;
     require_admin(role)?;
@@ -516,7 +516,7 @@ async fn add_custom_field_option_attempt(
 ) -> Result<AddCustomFieldOptionOutcome, CustomFieldError> {
     let label = normalize_and_validate_label(&cmd.label)?;
 
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
     acquire_custom_fields_lock(&mut tx, ctx.organization_id).await?;
     let role = lock_current_membership(&mut tx, ctx.organization_id, ctx.actor_user_id).await?;
     require_admin(role)?;
@@ -612,7 +612,7 @@ async fn update_custom_field_option_attempt(
 ) -> Result<UpdateCustomFieldOptionOutcome, CustomFieldError> {
     let label = normalize_and_validate_label(&cmd.label)?;
 
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
     acquire_custom_fields_lock(&mut tx, ctx.organization_id).await?;
     let role = lock_current_membership(&mut tx, ctx.organization_id, ctx.actor_user_id).await?;
     require_admin(role)?;
@@ -743,7 +743,7 @@ async fn set_person_custom_field_value_attempt(
     ctx: &CommandContext,
     cmd: SetPersonCustomFieldValue,
 ) -> Result<PersonCustomFieldOutcome, CustomFieldError> {
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
     person_queries::lock_person(&mut tx, cmd.person_id, ctx.organization_id)
         .await?
         .ok_or(CustomFieldError::NotFound)?;
@@ -865,7 +865,7 @@ async fn clear_person_custom_field_value_attempt(
     ctx: &CommandContext,
     cmd: ClearPersonCustomFieldValue,
 ) -> Result<PersonCustomFieldOutcome, CustomFieldError> {
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
     person_queries::lock_person(&mut tx, cmd.person_id, ctx.organization_id)
         .await?
         .ok_or(CustomFieldError::NotFound)?;

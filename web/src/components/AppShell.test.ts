@@ -17,6 +17,7 @@ import {
   useSessionVerificationInFlight,
 } from '../sessionLifecycle'
 import AppShell from './AppShell.vue'
+import { configureWorkspaceLifecycle, observeWorkspace, refreshWorkspace, resetWorkspace } from '../workspaceLifecycle'
 
 const meRef = ref<MeResponse | undefined>(undefined)
 const authSessionLifetimeRef = ref(0)
@@ -45,7 +46,7 @@ vi.mock('../realtime/useRealtime', () => ({
 function orgSession(actorId = 'u1', orgId = 'o1'): MeResponse {
   return {
     user: { id: actorId, email: `${actorId}@acme.test`, display_name: actorId === 'u1' ? 'Alice' : 'Bob' },
-    organization: { id: orgId, name: orgId === 'o1' ? 'Acme Realty' : 'Other Realty', role: 'member' },
+    organization: { workspace_mode: 'operational', workspace_revision: '1', id: orgId, name: orgId === 'o1' ? 'Acme Realty' : 'Other Realty', role: 'member' },
     platform_admin: false,
   } as unknown as MeResponse
 }
@@ -94,6 +95,7 @@ function deferred() {
 }
 
 afterEach(() => {
+  resetWorkspace()
   setRouteAuthorizationReplayPending(false)
   authSessionLifetimeRef.value = 0
   meRef.value = undefined
@@ -369,6 +371,39 @@ describe('AppShell Manage nav (SLICE_011e §5)', () => {
     expect(wrapper.find('a[href="/manage/intake"]').exists()).toBe(false)
     expect(wrapper.find('a[href="/manage/today-feeds"]').exists()).toBe(false)
     expect(wrapper.find('a[href="/manage/migration"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+})
+
+
+describe('workspace review shell', () => {
+  it('keeps the migration child mounted but hides its content during same-identity workspace verification', async () => {
+    let setups = 0
+    const Child = defineComponent({ setup() { setups++; return () => h('p', { 'data-testid': 'retained-confirmation' }, 'Private confirmation state') } })
+    const identity = orgSession(); identity.organization!.role = 'admin'
+    const { wrapper } = await mountShell('/manage/migration', identity, Child)
+    observeWorkspace(identity)
+    let resolve!: (value: MeResponse) => void
+    configureWorkspaceLifecycle({ discard: vi.fn(), verify: () => new Promise(done => { resolve = done }), install: value => { meRef.value = value } })
+    const refresh = refreshWorkspace(); await flushPromises()
+    expect(wrapper.get('[data-testid="workspace-verification"]').text()).toContain('Updating workspace access')
+    expect(wrapper.get('[data-testid="retained-confirmation"]').isVisible()).toBe(false)
+    expect(wrapper.find('[data-testid="operator-panel"]').exists()).toBe(false)
+    expect(setups).toBe(1)
+    resolve({ ...identity, organization: { ...identity.organization!, workspace_mode: 'migration_review', workspace_revision: '2' } })
+    await refresh; await flushPromises()
+    expect(wrapper.get('[data-testid="retained-confirmation"]').isVisible()).toBe(true)
+    expect(wrapper.get('[data-testid="workspace-review-banner"]').text()).toContain('Ordinary work')
+    expect(setups).toBe(1)
+    wrapper.unmount()
+  })
+  it('shows only the member waiting navigation and logout in review mode', async () => {
+    const identity = orgSession(); identity.organization!.workspace_mode = 'migration_review'; identity.organization!.workspace_revision = '2'
+    const { wrapper } = await mountShell('/workspace-review', identity)
+    expect(wrapper.find('a[href="/workspace-review"]').exists()).toBe(true)
+    for (const path of ['/people', '/today', '/intake/new', '/manage/migration']) expect(wrapper.find(`a[href="${path}"]`).exists()).toBe(false)
+    expect(wrapper.find('[aria-label="Log out"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="operator-panel"]').exists()).toBe(false)
     wrapper.unmount()
   })
 })

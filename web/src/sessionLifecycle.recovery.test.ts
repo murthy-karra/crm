@@ -173,7 +173,7 @@ describe('session lifecycle recovery', () => {
 
     // A private request, previously fenced, now dispatches instead of
     // throwing `SessionVerificationPendingError`.
-    await expect(apiFetch('/today')).resolves.toEqual({ ok: true })
+    await expect(apiFetch('/platform/organizations')).resolves.toEqual({ ok: true })
   })
 
   it('cleans its own pre-dispatch pending record after lifecycle-marker publishing fails and storage recovers', async () => {

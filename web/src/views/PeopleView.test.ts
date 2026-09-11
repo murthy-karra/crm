@@ -53,7 +53,7 @@ const CUSTOM_TEXT_FIELD: CustomField = {
 function me(orgId = ORG_ID, role: 'member' | 'admin' = 'member'): MeResponse {
   return {
     user: { id: ALICE_ID, email: 'alice@acme.test', display_name: 'Alice' },
-    organization: { id: orgId, name: 'Acme Realty', role },
+    organization: { id: orgId, name: 'Acme Realty', workspace_mode: 'operational', workspace_revision: '1', role },
     platform_admin: false,
   }
 }
@@ -192,7 +192,7 @@ function stub(options: StubOptions = {}) {
   })
 }
 const cleanups: Array<() => void> = []
-async function mountView(initialPath = '/people') {
+async function mountView(initialPath = '/people', identity = me()) {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -208,7 +208,7 @@ async function mountView(initialPath = '/people') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 30_000 } } })
   // The real router seeds this cache before People mounts. Initial URL
   // parsing must happen before a cached session enables the People query.
-  queryClient.setQueryData(queryKeys.me, me())
+  queryClient.setQueryData(queryKeys.me, identity)
   const wrapper = mount(RouterView, {
     global: { plugins: [router, [VueQueryPlugin, { queryClient }], [PrimeVue, { unstyled: true }]] },
     attachTo: document.body,
@@ -1670,5 +1670,22 @@ describe('People row hover/focus prefetch (SLICE_014 §4)', () => {
     // The click did not issue a second request — the prefetch already
     // populated the cache within the default staleTime.
     expect(apiFetchMock.mock.calls.filter(([p]) => p === '/people/row-1')).toHaveLength(1)
+  })
+})
+
+
+describe('People workspace review', () => {
+  it('keeps search and People inspection while hiding creation, saved-list writes and Today configuration', async () => {
+    stub()
+    const identity = me(ORG_ID, 'admin'); identity.organization = { ...identity.organization!, workspace_mode: 'migration_review', workspace_revision: '2' }
+    const base = apiFetchMock.getMockImplementation()!
+    apiFetchMock.mockImplementation((path, init) => path === '/me' ? Promise.resolve(identity) : base(path, init))
+    const { wrapper } = await mountView('/people', identity)
+    expect(wrapper.text()).toContain('Grace Hopper')
+    expect(wrapper.text()).not.toContain('Save as list')
+    expect(wrapper.text()).not.toContain('New lead')
+    expect(wrapper.find('a[href="/intake/new"]').exists()).toBe(false)
+    expect(apiFetchMock.mock.calls.filter(([path]) => path.startsWith('/today'))).toEqual([])
+    expect(apiFetchMock.mock.calls.filter(([, init]) => init?.method && init.method !== 'GET')).toEqual([])
   })
 })

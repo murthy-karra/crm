@@ -10,6 +10,7 @@ pub mod hangup_call;
 pub mod log_contact_attempt;
 pub mod receive_inquiry;
 pub mod start_call;
+pub mod update_intake_settings;
 
 pub use assign_person::{assign_person, AssignPerson};
 pub use change_person_stage::{change_person_stage, ChangePersonStage};
@@ -33,6 +34,7 @@ use crate::domain::raw_payload::crypto::CryptoError;
 
 #[derive(Debug)]
 pub enum CommandError {
+    Forbidden,
     PersonNotFound,
     InvalidAssignee,
     InvalidStage,
@@ -83,6 +85,7 @@ impl CommandError {
     pub fn kind(&self) -> &'static str {
         match self {
             CommandError::PersonNotFound => "person_not_found",
+            CommandError::Forbidden => "forbidden",
             CommandError::InvalidAssignee => "invalid_assignee",
             CommandError::InvalidStage => "invalid_stage",
             CommandError::NoStagesConfigured => "no_stages_configured",
@@ -98,6 +101,7 @@ impl std::fmt::Display for CommandError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             CommandError::PersonNotFound => write!(f, "person not found"),
+            CommandError::Forbidden => write!(f, "forbidden"),
             CommandError::InvalidAssignee => write!(f, "invalid assignee"),
             CommandError::InvalidStage => write!(f, "invalid stage"),
             CommandError::NoStagesConfigured => write!(f, "organization has no stages configured"),

@@ -104,10 +104,12 @@ fn require_env(name: &str) -> Result<String, Box<dyn std::error::Error>> {
 }
 
 async fn connect(url: &str) -> Result<PgPool, Box<dyn std::error::Error>> {
-    PgPoolOptions::new()
+    let pool = PgPoolOptions::new()
         .connect(url)
         .await
-        .map_err(|_| "could not connect to the database".into())
+        .map_err(|_| "could not connect to the database")?;
+    crm_api::auth::workspace::startup_compatible(&mut *pool.acquire().await?).await?;
+    Ok(pool)
 }
 
 async fn migrator_pool() -> Result<PgPool, Box<dyn std::error::Error>> {

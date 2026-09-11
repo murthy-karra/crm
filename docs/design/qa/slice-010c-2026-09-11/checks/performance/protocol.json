@@ -1,0 +1,133 @@
+{
+  "baseline": {
+    "baseline_commit": "c6c5930ee4975706a87398e0a7e7766b05417cf5",
+    "scope": "Reader-only SQL baseline. Current HTTP/auth/workspace guard and task-only fallback are shared by both arms.",
+    "statements": [
+      {
+        "bytes": 19433,
+        "extraction": "whole file",
+        "file": "sql/call_membership.sql",
+        "sha256": "ed5c1680476bfa6f41ebef270b53e0e5d5ac1dfd60481965c48cf96b718b5657",
+        "source": "backend/crates/crm-app/src/domain/today/system_feeds/sql/call_membership.sql"
+      },
+      {
+        "bytes": 21804,
+        "extraction": "whole file",
+        "file": "sql/call_only.sql",
+        "sha256": "3a686f3e1abb293ba831fe3b7427f120a4657c508d6db2ba09f7c2a46e2ace3e",
+        "source": "backend/crates/crm-app/src/domain/today/system_feeds/sql/call_only.sql"
+      },
+      {
+        "bytes": 19306,
+        "extraction": "raw string in count_filtered_matches",
+        "file": "sql/count_filtered_matches.sql",
+        "sha256": "fc38a85fb2124820fac12e18db7b33740ffdd4229d4f9bfde302612990611105",
+        "source": "backend/crates/crm-app/src/domain/person/queries.rs"
+      },
+      {
+        "bytes": 20671,
+        "extraction": "whole file",
+        "file": "sql/filtered_summaries.sql",
+        "sha256": "d42edfa7ac0efa2557c633bcff72b56b52b4d2bd1e61eaf8e75889cd3b80558f",
+        "source": "backend/crates/crm-app/src/domain/person/sql/filtered_summaries.sql"
+      },
+      {
+        "bytes": 20700,
+        "extraction": "whole file",
+        "file": "sql/filtered_summaries_assignee_asc.sql",
+        "sha256": "27d0a146cab352203f545a5855f6976be7edc58bd4587bc6ec14c81ede54a178",
+        "source": "backend/crates/crm-app/src/domain/person/sql/filtered_summaries_assignee_asc.sql"
+      },
+      {
+        "bytes": 20700,
+        "extraction": "whole file",
+        "file": "sql/filtered_summaries_assignee_desc.sql",
+        "sha256": "41fcb1cdee6fb2e6b69d765a52f21dca4849e7479715e7e8f3aac4e6124a0e06",
+        "source": "backend/crates/crm-app/src/domain/person/sql/filtered_summaries_assignee_desc.sql"
+      },
+      {
+        "bytes": 20667,
+        "extraction": "whole file",
+        "file": "sql/filtered_summaries_created_asc.sql",
+        "sha256": "08d88882eff99adba22eba8053f599b9c028369d3985058426d316c3d34d336d",
+        "source": "backend/crates/crm-app/src/domain/person/sql/filtered_summaries_created_asc.sql"
+      },
+      {
+        "bytes": 20727,
+        "extraction": "whole file",
+        "file": "sql/filtered_summaries_name_asc.sql",
+        "sha256": "adb8c050821121dca973ffe69340c977c3bc54d14d439d33ab4518db2d0afef4",
+        "source": "backend/crates/crm-app/src/domain/person/sql/filtered_summaries_name_asc.sql"
+      },
+      {
+        "bytes": 20727,
+        "extraction": "whole file",
+        "file": "sql/filtered_summaries_name_desc.sql",
+        "sha256": "deefe638489f357490c9c4490aa7115cf5167ce3027dac21662c4b76dfe6c756",
+        "source": "backend/crates/crm-app/src/domain/person/sql/filtered_summaries_name_desc.sql"
+      },
+      {
+        "bytes": 20685,
+        "extraction": "whole file",
+        "file": "sql/filtered_summaries_stage_asc.sql",
+        "sha256": "737649b460693cb8147de65ba6cfc1017139e9024fa2be44156ca29087db244b",
+        "source": "backend/crates/crm-app/src/domain/person/sql/filtered_summaries_stage_asc.sql"
+      },
+      {
+        "bytes": 20685,
+        "extraction": "whole file",
+        "file": "sql/filtered_summaries_stage_desc.sql",
+        "sha256": "efa2979afc11994589ee09ef48e56a483cc007d30bed88df611c902712eb6522",
+        "source": "backend/crates/crm-app/src/domain/person/sql/filtered_summaries_stage_desc.sql"
+      },
+      {
+        "bytes": 42197,
+        "extraction": "whole file",
+        "file": "sql/person_state.sql",
+        "sha256": "582305813704b72be89ec008a4cbcbb1ae6fbae2962856bd7f567b001d23d41f",
+        "source": "backend/crates/crm-app/src/domain/today/system_feeds/sql/person_state.sql"
+      },
+      {
+        "bytes": 20113,
+        "extraction": "whole file",
+        "file": "sql/source_candidates.sql",
+        "sha256": "9f301ed0828fe7a1463e53174133b4f1cedc5c3e7b20238761df4f6e9051cd1e",
+        "source": "backend/crates/crm-app/src/domain/today/source_candidates.sql"
+      },
+      {
+        "bytes": 17945,
+        "extraction": "whole file",
+        "file": "sql/source_membership.sql",
+        "sha256": "651ccc7b21ef81d3b7d39a00f273018dfcd88274732e10e935725a04be6ac854",
+        "source": "backend/crates/crm-app/src/domain/today/source_membership.sql"
+      }
+    ]
+  },
+  "fixture": {
+    "builtins": 100,
+    "call_only": 10,
+    "contacts_per_person": 4,
+    "members": 50,
+    "people": 25000,
+    "shape_sha256": "b7474b1dd3d74ea2aa6a229cda4827588242a18e520ab7e9c4c92449bb3df6bb",
+    "shared_phone_members": 25000,
+    "source_candidates": 100,
+    "task_only": 10
+  },
+  "negative_gate": "Reversed import_order changed the live primary email, frozen baseline stayed stable; NULL restored before timing",
+  "preflight": {
+    "frozen_families": 6,
+    "live_families": 6
+  },
+  "protocol": "slice-010c-contact-reader-pair-v1",
+  "scope": "Reader-only comparison: workspace guard and task-only fallback shared by both arms; other changed reader correctness/plans are separately verified",
+  "serial": {
+    "samples": 40,
+    "warmups": 5
+  },
+  "today": {
+    "concurrency": 5,
+    "measured_waves": 8,
+    "warmup_waves": 2
+  }
+}

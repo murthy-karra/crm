@@ -311,7 +311,7 @@ async fn list_my_tasks(
     }
 
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
-    let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
+    let mut conn = pool.acquire().await.map_err(ApiError::database)?;
     let generated_at = Utc::now();
     let mut tasks = task::open_for_assignee(
         &mut conn,
@@ -320,7 +320,7 @@ async fn list_my_tasks(
         generated_at,
     )
     .await
-    .map_err(|_| ApiError::Unavailable)?;
+    .map_err(ApiError::from)?;
     let truncated = tasks.len() > 200;
     tasks.truncate(200);
 

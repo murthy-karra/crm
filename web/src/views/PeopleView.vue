@@ -9,6 +9,7 @@ import type { ColumnDef } from '@tanstack/vue-table'
 import PageHeader from '../components/PageHeader.vue'
 import DataTable from '../components/DataTable.vue'
 import PersonPreview from '../components/PersonPreview.vue'
+import { workspaceOperational } from '../workspaceLifecycle'
 import StageLabel from '../components/StageLabel.vue'
 import FilterBar from '../components/FilterBar.vue'
 import CreateListGuide from '../components/CreateListGuide.vue'
@@ -55,11 +56,12 @@ import type { TableSort } from '../components/DataTable.vue'
 const props = withDefaults(defineProps<{ savedListId?: string }>(), { savedListId: '' })
 
 const { data: me } = useMe()
+const canOperate = computed(() => workspaceOperational(me.value))
 const queryClient = useQueryClient()
 const orgId = computed(() => me.value?.organization?.id ?? '')
 const actorId = computed(() => me.value?.user.id ?? '')
 const authSessionLifetime = useAuthSessionLifetime()
-const todaySourcesQuery = useTodaySources(orgId, actorId)
+const todaySourcesQuery = useTodaySources(() => canOperate.value ? orgId.value : '', actorId)
 const enableTodaySource = useEnableTodaySourceMutation(orgId, actorId)
 const disableTodaySource = useDisableTodaySourceMutation(orgId, actorId)
 const todaySourceError = ref<string | null>(null)
@@ -267,6 +269,7 @@ function retryTodaySourceSettings() {
 }
 
 function toggleTodaySource() {
+  if (!canOperate.value) return
   if (todaySourcePending.value) return
   const identity = captureViewIdentity()
   const source = namedTodaySource.value
@@ -637,9 +640,10 @@ const createDialogSortSummary = computed(() => {
   const normalized = normalizeSort(sort)
   return normalized ? `Sorted by ${sortLabel(normalized)}` : ''
 })
-const canChooseShared = computed(() => me.value?.organization?.role === 'admin')
+const canChooseShared = computed(() => canOperate.value && me.value?.organization?.role === 'admin')
 
 function openSaveAs() {
+  if (!canOperate.value) return
   if (isNamedList.value && !namedDefinitionUsable.value) return
   createMutation.reset()
   createMode.value = 'save-as'
@@ -652,6 +656,7 @@ function openSaveAs() {
 }
 
 function openDuplicate() {
+  if (!canOperate.value) return
   if (!savedBaseline.value || !namedDefinitionUsable.value) return
   createMutation.reset()
   createMode.value = 'duplicate'
@@ -694,6 +699,7 @@ function terminalCreateRetry(error: unknown) {
 }
 
 async function submitCreate(intent: CreateIntent) {
+  if (!canOperate.value) return
   if (createMutation.isPending.value || createRetryUnavailable.value) return
   const retryingUncertainCreate = createUncertain.value && pendingCreate.value === intent
   createError.value = undefined
@@ -739,6 +745,7 @@ async function submitCreate(intent: CreateIntent) {
 }
 
 function onCreateSubmit(payload: { name: string; scope: 'personal' | 'shared' }) {
+  if (!canOperate.value) return
   if (createRetryUnavailable.value) return
   if (createUncertain.value && pendingCreate.value) {
     void submitCreate(pendingCreate.value)
@@ -777,6 +784,7 @@ function resetSavedDraft() {
 }
 
 async function saveSavedList() {
+  if (!canOperate.value) return
   const baseline = savedBaseline.value
   const identity = captureViewIdentity()
   if (!baseline || !namedCanEdit.value || !namedDefinitionUsable.value || !currentIdentityMatches(identity)) return
@@ -835,8 +843,8 @@ const currentSavedMetadata = computed(() =>
     ? undefined
     : savedListQuery.data.value.list,
 )
-const namedCanEdit = computed(() => currentSavedMetadata.value?.can_edit === true)
-const namedCanDelete = computed(() => currentSavedMetadata.value?.can_delete === true)
+const namedCanEdit = computed(() => canOperate.value && currentSavedMetadata.value?.can_edit === true)
+const namedCanDelete = computed(() => canOperate.value && currentSavedMetadata.value?.can_delete === true)
 const namedFilterUnavailable = computed(() => {
   const detail = savedListQuery.data.value
   if (!isNamedList.value || detail?.list.id !== props.savedListId) return false
@@ -1157,7 +1165,7 @@ const columns: ColumnDef<PersonSummary>[] = [
                 Refresh
               </button>
               <button
-                v-if="namedDefinitionUsable"
+                v-if="canOperate && namedDefinitionUsable"
                 type="button"
                 :class="buttonClasses('secondary')"
                 @click="openSaveAs"
@@ -1169,7 +1177,7 @@ const columns: ColumnDef<PersonSummary>[] = [
                 Save as
               </button>
               <button
-                v-if="savedBaseline && namedDefinitionUsable"
+                v-if="canOperate && savedBaseline && namedDefinitionUsable"
                 type="button"
                 :class="buttonClasses('secondary')"
                 @click="openDuplicate"
@@ -1207,7 +1215,7 @@ const columns: ColumnDef<PersonSummary>[] = [
                 Delete
               </button>
               <button
-                v-if="currentSavedMetadata && (namedDefinitionUsable || namedTodaySource)"
+                v-if="canOperate && currentSavedMetadata && (namedDefinitionUsable || namedTodaySource)"
                 type="button"
                 :class="buttonClasses('secondary')"
                 :disabled="todaySourcePending || (!namedTodaySource && !namedSourceEligible)"
@@ -1216,7 +1224,7 @@ const columns: ColumnDef<PersonSummary>[] = [
                 {{ namedTodaySource ? 'Remove from Today' : 'Use as a Today source' }}
               </button>
             </template>
-            <template v-else>
+            <template v-else-if="canOperate">
               <button
                 type="button"
                 :class="buttonClasses('secondary')"
@@ -1600,6 +1608,7 @@ const columns: ColumnDef<PersonSummary>[] = [
       v-if="selectedPerson"
       :key="`${orgId}:${selectedPerson.id}`"
       ref="preview"
+      :read-only="!canOperate"
       :org-id="orgId"
       :summary="selectedPerson"
       @close="closePreview"

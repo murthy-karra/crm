@@ -74,7 +74,7 @@ async fn start_call_attempt(
     // always carry a `call_id`.
     let mut inserted_row = false;
     for _ in 0..2 {
-        let mut tx = pool.begin().await?;
+        let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
 
         person_queries::lock_person(&mut tx, cmd.person_id, ctx.organization_id)
             .await?

@@ -217,6 +217,11 @@ async fn inbound_email(
             span.record("outcome", "internal");
             Err(ApiError::InternalError)
         }
+        Err(ReceiveInboundEmailError::Database(ref e))
+            if crate::auth::workspace::is_review_error(e) =>
+        {
+            Err(ApiError::WorkspaceIngressDeferred)
+        }
         Err(ReceiveInboundEmailError::Database(_)) => {
             span.record("outcome", "database");
             Err(ApiError::Unavailable)

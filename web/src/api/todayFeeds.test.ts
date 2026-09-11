@@ -39,7 +39,7 @@ const ACTOR_A = '22222222-2222-2222-2222-222222222222'
 function me(): MeResponse {
   return {
     user: { id: ACTOR_A, email: 'alice@example.test', display_name: 'Alice' },
-    organization: { id: ORG_ID, name: 'Example Realty', role: 'admin' },
+    organization: { workspace_mode: 'operational', workspace_revision: '1', id: ORG_ID, name: 'Example Realty', role: 'admin' },
     platform_admin: false,
   }
 }

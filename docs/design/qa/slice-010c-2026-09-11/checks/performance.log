@@ -1,0 +1,261 @@
+warning: constant `WARMUP_WAVES` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:26:11
+   |
+26 | pub const WARMUP_WAVES: usize = 6;
+   |           ^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `WARMUP_CONCURRENCY` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:27:11
+   |
+27 | pub const WARMUP_CONCURRENCY: usize = 10;
+   |           ^^^^^^^^^^^^^^^^^^
+
+warning: constant `WARMUP_ATTEMPTS_PER_CASE` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:28:11
+   |
+28 | pub const WARMUP_ATTEMPTS_PER_CASE: usize = WARMUP_WAVES * WARMUP_CONCURRENCY;
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `CRITICAL_CASES` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:33:11
+   |
+33 | pub const CRITICAL_CASES: usize = 4;
+   |           ^^^^^^^^^^^^^^
+
+warning: constant `CRITICAL_SAMPLE_SHAPE` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:34:11
+   |
+34 | pub const CRITICAL_SAMPLE_SHAPE: SampleShape = SampleShape::new(8, 2, 2);
+   |           ^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `CRITICAL_MEASURED_ATTEMPTS` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:35:11
+   |
+35 | pub const CRITICAL_MEASURED_ATTEMPTS: usize = CRITICAL_CASES * CRITICAL_SAMPLE_SHAPE.attempts();
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `SUPPLEMENTAL_CASES` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:40:11
+   |
+40 | pub const SUPPLEMENTAL_CASES: usize = 6;
+   |           ^^^^^^^^^^^^^^^^^^
+
+warning: constant `SUPPLEMENTAL_SAMPLE_SHAPE` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:41:11
+   |
+41 | pub const SUPPLEMENTAL_SAMPLE_SHAPE: SampleShape = SampleShape::new(5, 1, 1);
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `SUPPLEMENTAL_MEASURED_ATTEMPTS` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:42:11
+   |
+42 | pub const SUPPLEMENTAL_MEASURED_ATTEMPTS: usize =
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `INDEPENDENT_REPEAT_WAVES` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:47:11
+   |
+47 | pub const INDEPENDENT_REPEAT_WAVES: usize = 2;
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `INDEPENDENT_REPEAT_CONCURRENCY` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:48:11
+   |
+48 | pub const INDEPENDENT_REPEAT_CONCURRENCY: usize = 20;
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `INDEPENDENT_REPEAT_ATTEMPTS` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:49:11
+   |
+49 | pub const INDEPENDENT_REPEAT_ATTEMPTS: usize =
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `FINAL_ARM_MEASURED_ATTEMPTS` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:55:11
+   |
+55 | pub const FINAL_ARM_MEASURED_ATTEMPTS: usize =
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `PAIRED_ORIGINAL_MEASURED_ATTEMPTS` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:62:11
+   |
+62 | pub const PAIRED_ORIGINAL_MEASURED_ATTEMPTS: usize =
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `HTTP_OK` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:66:11
+   |
+66 | pub const HTTP_OK: u16 = 200;
+   |           ^^^^^^^
+
+warning: constant `REQUEST_P95_CONCURRENCY_1` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:67:11
+   |
+67 | pub const REQUEST_P95_CONCURRENCY_1: Duration = Duration::from_millis(1_250);
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `REQUEST_P95_CONCURRENCY_10` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:68:11
+   |
+68 | pub const REQUEST_P95_CONCURRENCY_10: Duration = Duration::from_millis(2_500);
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `REQUEST_P95_CONCURRENCY_20` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:69:11
+   |
+69 | pub const REQUEST_P95_CONCURRENCY_20: Duration = Duration::from_millis(4_500);
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `WHOLE_SOURCE_P95_LIMIT` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:70:11
+   |
+70 | pub const WHOLE_SOURCE_P95_LIMIT: Duration = Duration::from_millis(450);
+   |           ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `SOURCE_ENUMERATION_BUDGET` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:71:11
+   |
+71 | pub const SOURCE_ENUMERATION_BUDGET: Duration = Duration::from_millis(250);
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `WHOLE_SOURCE_BUDGET` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:72:11
+   |
+72 | pub const WHOLE_SOURCE_BUDGET: Duration = Duration::from_millis(500);
+   |           ^^^^^^^^^^^^^^^^^^^
+
+warning: constant `ACQUISITION_BUDGET` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:73:11
+   |
+73 | pub const ACQUISITION_BUDGET: Duration = Duration::from_secs(2);
+   |           ^^^^^^^^^^^^^^^^^^
+
+warning: struct `SampleShape` is never constructed
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:79:12
+   |
+79 | pub struct SampleShape {
+   |            ^^^^^^^^^^^
+
+warning: associated items `new` and `attempts` are never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:86:18
+   |
+85 | impl SampleShape {
+   | ---------------- associated items in this implementation
+86 |     pub const fn new(serial_attempts: usize, waves_at_10: usize, waves_at_20: usize) -> Self {
+   |                  ^^^
+...
+94 |     pub const fn attempts(self) -> usize {
+   |                  ^^^^^^^^
+
+warning: enum `FinalMatrixCase` is never used
+   --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:104:10
+    |
+104 | pub enum FinalMatrixCase {
+    |          ^^^^^^^^^^^^^^^
+
+warning: associated items `CRITICAL`, `SUPPLEMENTAL`, `sample_shape`, and `expected_sources_per_attempt` are never used
+   --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:118:15
+    |
+117 | impl FinalMatrixCase {
+    | -------------------- associated items in this implementation
+118 |     pub const CRITICAL: [Self; CRITICAL_CASES] = [
+    |               ^^^^^^^^
+...
+125 |     pub const SUPPLEMENTAL: [Self; SUPPLEMENTAL_CASES] = [
+    |               ^^^^^^^^^^^^
+...
+134 |     pub const fn sample_shape(self) -> SampleShape {
+    |                  ^^^^^^^^^^^^
+...
+149 |     pub const fn expected_sources_per_attempt(self) -> usize {
+    |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: variant `RequestTimeout` is never constructed
+   --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:278:5
+    |
+276 | pub enum ClientFailureKind {
+    |          ----------------- variant in this enum
+277 |     Transport,
+278 |     RequestTimeout,
+    |     ^^^^^^^^^^^^^^
+    |
+    = note: `ClientFailureKind` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: method `metadata` is never used
+   --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:300:12
+    |
+299 | impl<M> AttemptOutcome<M> {
+    | ------------------------- method in this implementation
+300 |     pub fn metadata(&self) -> Option<&M> {
+    |            ^^^^^^^^
+
+warning: struct `TimingSummary` is never constructed
+   --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:501:12
+    |
+501 | pub struct TimingSummary {
+    |            ^^^^^^^^^^^^^
+
+warning: function `summarize_timings` is never used
+   --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:511:8
+    |
+511 | pub fn summarize_timings<I>(timings: I) -> TimingSummary
+    |        ^^^^^^^^^^^^^^^^^
+
+warning: struct `AttemptAggregate` is never constructed
+   --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:553:12
+    |
+553 | pub struct AttemptAggregate {
+    |            ^^^^^^^^^^^^^^^^
+
+warning: function `aggregate_attempts` is never used
+   --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:567:8
+    |
+567 | pub fn aggregate_attempts<M, F, I>(
+    |        ^^^^^^^^^^^^^^^^^^
+
+warning: struct `NormalCompletionGate` is never constructed
+   --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:628:12
+    |
+628 | pub struct NormalCompletionGate {
+    |            ^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `NormalCompletionReport` is never constructed
+   --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:637:12
+    |
+637 | pub struct NormalCompletionReport {
+    |            ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: enum `NormalCompletionViolation` is never used
+   --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:648:10
+    |
+648 | pub enum NormalCompletionViolation {
+    |          ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `check_normal_completion` is never used
+   --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:659:8
+    |
+659 | pub fn check_normal_completion<M>(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `request_p95_limit` is never used
+   --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:715:14
+    |
+715 | pub const fn request_p95_limit(concurrency: usize) -> Option<Duration> {
+    |              ^^^^^^^^^^^^^^^^^
+
+warning: constant `WARMUP_WAVES` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:26:11
+   |
+26 | pub const WARMUP_WAVES: usize = 6;
+   |           ^^^^^^^^^^^^
+
+warning: `crm-api` (test "all") generated 74 warnings (36 duplicates)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.15s
+     Running tests/all.rs (target/debug/deps/all-1e584fd860a17517)
+
+running 1 test
+test db_import_contact_perf::slice_010c_contact_order_performance ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 957 filtered out; finished in 56.50s

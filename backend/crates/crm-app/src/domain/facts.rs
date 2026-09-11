@@ -111,6 +111,7 @@ pub async fn insert_routing_decision(
 pub enum AssignmentReason {
     Intake,
     Manual,
+    Migration,
 }
 
 impl AssignmentReason {
@@ -118,6 +119,7 @@ impl AssignmentReason {
         match self {
             AssignmentReason::Intake => "intake",
             AssignmentReason::Manual => "manual",
+            AssignmentReason::Migration => "migration",
         }
     }
 }
@@ -225,6 +227,7 @@ pub async fn insert_contact_attempted(
 pub enum StageChangeReason {
     Intake,
     Manual,
+    Migration,
 }
 
 impl StageChangeReason {
@@ -232,6 +235,7 @@ impl StageChangeReason {
         match self {
             StageChangeReason::Intake => "intake",
             StageChangeReason::Manual => "manual",
+            StageChangeReason::Migration => "migration",
         }
     }
 }

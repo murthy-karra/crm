@@ -125,6 +125,8 @@ pub async fn identify(
     email: Option<NormalizedEmail>,
     phone: Option<NormalizedPhone>,
 ) -> Result<Option<IdentifyMatch>, sqlx::Error> {
+    let mut workspace_read = crate::auth::workspace::read(conn, organization_id).await?;
+    let conn = &mut *workspace_read;
     if let Some(email) = email {
         if let Some(person_id) =
             find_earliest_person(conn, organization_id, ContactKind::Email, email.as_str()).await?

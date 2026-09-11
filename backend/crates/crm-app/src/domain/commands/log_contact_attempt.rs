@@ -150,7 +150,7 @@ async fn log_contact_attempt_attempt(
     ctx: &CommandContext,
     cmd: LogContactAttempt,
 ) -> Result<(PersonSummary, ContactAttemptRef), CommandError> {
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
 
     person_queries::lock_person(&mut tx, cmd.person_id, ctx.organization_id)
         .await?

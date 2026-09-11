@@ -242,13 +242,25 @@ pub async fn run_once(
 /// the 60 s lease. The row lock lives only for this short transaction —
 /// the LLM call happens outside any transaction (spec §4b).
 async fn claim_one(pool: &PgPool) -> Result<Option<ClaimedRow>, sqlx::Error> {
-    let mut tx = pool.begin().await?;
+    // Discover an eligible Organization without locking a raw row. The guard
+    // then precedes the exact candidate claim and its eligibility recheck.
+    let candidate=sqlx::query_as::<_,(Uuid,Uuid)>("SELECT r.id,r.organization_id FROM raw_payload r JOIN organization o ON o.id=r.organization_id WHERE o.workspace_mode='operational' AND r.resolution='unresolved' AND r.unresolved_reason='email_unrecognized_format' AND r.payload_format='rfc822_v1' AND r.extraction_attempts<$1 AND (r.extraction_next_attempt_at IS NULL OR r.extraction_next_attempt_at<=now()) ORDER BY r.received_at,r.id LIMIT 1").bind(MAX_QUALITY_ATTEMPTS).fetch_optional(pool).await?;
+    let Some((candidate_id, candidate_org)) = candidate else {
+        return Ok(None);
+    };
+    let mut tx = match crate::auth::workspace::begin(pool, OrganizationId::new(candidate_org)).await
+    {
+        Ok(tx) => tx,
+        Err(e) if crate::auth::workspace::is_review_error(&e) => return Ok(None),
+        Err(e) => return Err(e),
+    };
+
     let row = sqlx::query_as!(
         ClaimedRow,
         r#"SELECT id, organization_id, nonce, ciphertext, content_hmac,
                   received_at, extraction_attempts
            FROM raw_payload
-           WHERE resolution = 'unresolved'
+           WHERE id=$2 AND organization_id=$3 AND resolution = 'unresolved'
              AND unresolved_reason = 'email_unrecognized_format'
              AND payload_format = 'rfc822_v1'
              AND extraction_attempts < $1
@@ -258,6 +270,8 @@ async fn claim_one(pool: &PgPool) -> Result<Option<ClaimedRow>, sqlx::Error> {
            FOR UPDATE SKIP LOCKED
            LIMIT 1"#,
         MAX_QUALITY_ATTEMPTS,
+        candidate_id,
+        candidate_org,
     )
     .fetch_optional(&mut *tx)
     .await?;
@@ -352,6 +366,12 @@ async fn attempt_inner(
     report: &mut ExtractionReport,
     span: tracing::Span,
 ) -> Result<(), sqlx::Error> {
+    let gate = crate::auth::workspace::begin(pool, OrganizationId::new(row.organization_id)).await;
+    match gate {
+        Ok(tx) => tx.rollback().await?,
+        Err(e) if crate::auth::workspace::is_review_error(&e) => return Ok(()),
+        Err(e) => return Err(e),
+    }
     let correlation_id = CorrelationId::new(Uuid::new_v4());
     let started = Instant::now();
     let occurred_at = Utc::now();
@@ -618,7 +638,8 @@ async fn attempt_inner(
 /// The guarded reset: re-lock, verify still ours, flip to pending.
 /// Returns false when a concurrent discard/retry/resolve superseded us.
 async fn reset_to_pending(pool: &PgPool, row: &ClaimedRow) -> Result<bool, sqlx::Error> {
-    let mut tx = pool.begin().await?;
+    let mut tx =
+        crate::auth::workspace::begin(pool, OrganizationId::new(row.organization_id)).await?;
     let locked = store::lock_for_processing(
         &mut tx,
         RawPayloadId::new(row.id),
@@ -660,7 +681,8 @@ async fn un_reset(
     ledger: &LedgerRow,
     publisher: &Publisher,
 ) -> Result<bool, sqlx::Error> {
-    let mut tx = pool.begin().await?;
+    let mut tx =
+        crate::auth::workspace::begin(pool, OrganizationId::new(row.organization_id)).await?;
     let locked = store::lock_for_processing(
         &mut tx,
         RawPayloadId::new(row.id),
@@ -744,7 +766,8 @@ async fn apply(
     ledger: &LedgerRow,
     publisher: &Publisher,
 ) -> Result<(), sqlx::Error> {
-    let mut tx = pool.begin().await?;
+    let mut tx =
+        crate::auth::workspace::begin(pool, OrganizationId::new(row.organization_id)).await?;
     // Serialize with 007e actions and other workers.
     let locked = store::lock_for_processing(
         &mut tx,

@@ -55,7 +55,7 @@ async fn hangup_call_attempt(
     call_id: CallId,
 ) -> Result<CallView, CallError> {
     let mut conn = pool.acquire().await?;
-    let call = call_queries::call_by_id(&mut conn, ctx.organization_id, call_id)
+    let call = call_queries::terminal_call_by_id(&mut conn, ctx.organization_id, call_id)
         .await?
         .ok_or(CallError::CallNotFound)?;
     drop(conn);
@@ -87,7 +87,7 @@ async fn hangup_call_attempt(
     }
 
     let mut conn = pool.acquire().await?;
-    call_queries::call_view_by_id(&mut conn, ctx.organization_id, call_id)
+    call_queries::terminal_call_view_by_id(&mut conn, ctx.organization_id, call_id)
         .await?
         .ok_or(CallError::Corrupt)
 }

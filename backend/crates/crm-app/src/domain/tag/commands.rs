@@ -178,7 +178,7 @@ async fn create_tag_attempt(
 ) -> Result<CreateTagOutcome, TagError> {
     let name = normalize_and_validate_name(&cmd.name)?;
 
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
     // The membership check some sibling commands perform is unnecessary
     // here: creation is "any active member", which `AuthContext` already
     // established (docs/specs/SLICE_011e.md §3 table).
@@ -278,7 +278,7 @@ async fn add_person_tag_attempt(
     ctx: &CommandContext,
     cmd: AddPersonTag,
 ) -> Result<PersonTagOutcome, TagError> {
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
     person_queries::lock_person(&mut tx, cmd.person_id, ctx.organization_id)
         .await?
         .ok_or(TagError::NotFound)?;
@@ -357,7 +357,7 @@ async fn remove_person_tag_attempt(
     ctx: &CommandContext,
     cmd: RemovePersonTag,
 ) -> Result<PersonTagOutcome, TagError> {
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
     person_queries::lock_person(&mut tx, cmd.person_id, ctx.organization_id)
         .await?
         .ok_or(TagError::NotFound)?;
@@ -461,7 +461,7 @@ async fn rename_tag_attempt(
 ) -> Result<RenameTagOutcome, TagError> {
     let name = normalize_and_validate_name(&cmd.name)?;
 
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
     acquire_tags_lock(&mut tx, ctx.organization_id).await?;
     let row = queries::lock_tag_for_update(&mut tx, ctx.organization_id, cmd.tag_id)
         .await?
@@ -549,7 +549,7 @@ async fn delete_tag_attempt(
     ctx: &CommandContext,
     cmd: DeleteTag,
 ) -> Result<DeleteTagOutcome, TagError> {
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
     acquire_tags_lock(&mut tx, ctx.organization_id).await?;
     let row = queries::lock_tag_for_update(&mut tx, ctx.organization_id, cmd.tag_id)
         .await?

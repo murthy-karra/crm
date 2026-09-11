@@ -280,3 +280,21 @@ mod db_snapshot_http;
 mod db_snapshot_worker;
 
 mod db_snapshot_scale;
+
+#[cfg(feature = "perf-harness")]
+mod db_import_contact_perf;
+
+mod db_workspace_background;
+mod db_workspace_http;
+
+mod db_import_http;
+mod db_import_source;
+#[path = "fixtures/import_support.rs"]
+mod import_support;
+
+mod db_import_readers;
+
+mod db_import_gate;
+
+#[cfg(feature = "perf-harness")]
+mod db_import_plans;

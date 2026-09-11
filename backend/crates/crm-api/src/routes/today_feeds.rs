@@ -108,7 +108,7 @@ async fn list_today_feeds_admin(
     admin: OrgAdminContext,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
-    let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
+    let mut conn = pool.acquire().await.map_err(ApiError::database)?;
     let feeds = queries::admin_feed_view(&mut conn, admin.auth.active_organization_id).await?;
     Ok(Json(json!({ "feeds": feeds })))
 }
@@ -118,10 +118,10 @@ async fn list_today_feeds_member(
     auth: AuthContext,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
-    let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
+    let mut conn = pool.acquire().await.map_err(ApiError::database)?;
     let feeds = queries::member_feed_view(&mut conn, auth.active_organization_id)
         .await
-        .map_err(|_| ApiError::Unavailable)?;
+        .map_err(ApiError::database)?;
     Ok(Json(json!({ "feeds": feeds })))
 }
 

@@ -101,7 +101,16 @@ and process records. Implementation gate logs and synthetic helper source were
 also copied into its `implementation-private` directory. These are private local
 artifacts, not a production backup or retention policy.
 
-For application rollback, inspect current listener identity, stop only the
+**010c compatibility amendment (D-065):** the following historical rollback
+procedure applies only while no durable migration review workspace exists.
+Once an Organization has a `migration_workspace` binding, pre-010c API, worker
+and CLI artifacts cannot enforce its hold and must not run against that database.
+Recovery requires a verified compatible artifact and the 010c release preflight;
+do not delete a binding, reset its mode or restore the whole database to permit
+an older application. Before the first binding, retire every pre-gate process.
+See [the approved compatibility boundary](../specs/SLICE_010c_CONTRACT.md#compatibility-checkpoint).
+
+For application rollback within the historical 010b boundary, inspect current listener identity, stop only the
 current release API/Web processes, restore the saved executable/Web bundle, and
 launch them with the existing root configuration. Leave the additive 010b tables
 intact; do not drop captured evidence or restore the entire database as an

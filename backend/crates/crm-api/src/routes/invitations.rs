@@ -52,11 +52,11 @@ async fn preview(
     let token_hash = token::hash(&req.token);
 
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
-    let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
+    let mut conn = pool.acquire().await.map_err(ApiError::database)?;
 
     let invitation = admin_queries::find_invitation_by_token_hash(&mut conn, &token_hash)
         .await
-        .map_err(|_| ApiError::Unavailable)?
+        .map_err(ApiError::database)?
         .ok_or(ApiError::NotFound)?;
 
     match invitation.status(Utc::now()) {
@@ -109,7 +109,7 @@ async fn accept(
         state.session_ttl,
     )
     .await
-    .map_err(|_| ApiError::Unavailable)?;
+    .map_err(ApiError::database)?;
 
     let cookie = session::build_cookie(
         token,
@@ -119,6 +119,11 @@ async fn accept(
     );
     let response_jar = CookieJar::new().add(cookie);
 
+    let mut workspace_conn = pool.acquire().await.map_err(ApiError::database)?;
+    let workspace = crate::auth::workspace::mode(&mut workspace_conn, outcome.organization_id)
+        .await
+        .map_err(ApiError::database)?;
+    drop(workspace_conn);
     let identity = session::SessionIdentity {
         user_id: outcome.user_id,
         email: outcome.email,
@@ -127,6 +132,8 @@ async fn accept(
             id: outcome.organization_id,
             name: outcome.organization_name,
             role: outcome.role,
+            workspace_mode: workspace.0,
+            workspace_revision: workspace.1,
         }),
         platform_admin: false,
     };

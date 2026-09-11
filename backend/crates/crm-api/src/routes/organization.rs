@@ -86,11 +86,11 @@ async fn members(
     auth: AuthContext,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
-    let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
+    let mut conn = pool.acquire().await.map_err(ApiError::database)?;
 
     let members = admin_queries::members(&mut conn, auth.active_organization_id)
         .await
-        .map_err(|_| ApiError::Unavailable)?;
+        .map_err(ApiError::database)?;
 
     Ok(Json(json!({ "members": members })))
 }
@@ -165,11 +165,11 @@ async fn list_invitations(
     ctx: OrgAdminContext,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
-    let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
+    let mut conn = pool.acquire().await.map_err(ApiError::database)?;
 
     let invitations = admin_queries::list_invitations(&mut conn, ctx.auth.active_organization_id)
         .await
-        .map_err(|_| ApiError::Unavailable)?;
+        .map_err(ApiError::database)?;
 
     Ok(Json(json!({ "invitations": invitations })))
 }
@@ -272,11 +272,11 @@ async fn rotate_intake_address(
     // The slug is immutable — read it BEFORE rotating so nothing after
     // the commit can fail and misreport the (already-effective)
     // rotation.
-    let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
+    let mut conn = pool.acquire().await.map_err(ApiError::database)?;
     let (slug, _old_token) =
         admin_queries::organization_intake_address(&mut conn, ctx.auth.active_organization_id)
             .await
-            .map_err(|_| ApiError::Unavailable)?
+            .map_err(ApiError::database)?
             .ok_or(ApiError::Unavailable)?;
     drop(conn);
 
@@ -285,7 +285,11 @@ async fn rotate_intake_address(
         .await
         .map_err(|err| {
             span.record("outcome", err.kind());
-            ApiError::Unavailable
+            match err {
+                crate::domain::intake::rotate::RotateError::Database(error) => {
+                    ApiError::database(error)
+                }
+            }
         })?;
     span.record("outcome", "rotated");
 
@@ -307,11 +311,11 @@ async fn intake_address(
     ctx: OrgAdminContext,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
-    let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
+    let mut conn = pool.acquire().await.map_err(ApiError::database)?;
     let (slug, token) =
         admin_queries::organization_intake_address(&mut conn, ctx.auth.active_organization_id)
             .await
-            .map_err(|_| ApiError::Unavailable)?
+            .map_err(ApiError::database)?
             .ok_or(ApiError::Unavailable)?;
     let address = IntakeAddress { slug, token }.render(&state.intake_mail);
     Ok(Json(json!({
@@ -330,14 +334,14 @@ async fn intake_settings(
     ctx: OrgAdminContext,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
-    let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
+    let mut conn = pool.acquire().await.map_err(ApiError::database)?;
     let mode = admin_queries::intake_routing_mode(&mut conn, ctx.auth.active_organization_id)
         .await
-        .map_err(|_| ApiError::Unavailable)?;
+        .map_err(ApiError::database)?;
     let assignee =
         admin_queries::intake_default_assignee_user_id(&mut conn, ctx.auth.active_organization_id)
             .await
-            .map_err(|_| ApiError::Unavailable)?;
+            .map_err(ApiError::database)?;
     Ok(Json(json!({
         "intake_routing_mode": mode.as_str(),
         "intake_default_assignee_user_id": assignee,
@@ -409,47 +413,15 @@ async fn update_intake_settings(
     );
 
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
-    let mut conn = pool.acquire().await.map_err(|_| ApiError::Unavailable)?;
-    let organization_id = ctx.auth.active_organization_id;
-
-    let valid = match mode {
-        IntakeRoutingMode::DefaultAssignee => match assignee_user_id {
-            Some(user_id) => admin_queries::is_active_member(&mut conn, organization_id, user_id)
-                .await
-                .map_err(|_| ApiError::Unavailable)?,
-            None => false,
+    crate::domain::commands::update_intake_settings::update_intake_settings(
+        pool,
+        &CommandContext::from_auth(&ctx.auth),
+        crate::domain::commands::update_intake_settings::UpdateIntakeSettings {
+            mode,
+            assignee: assignee_user_id,
         },
-        IntakeRoutingMode::RoundRobin | IntakeRoutingMode::Unassigned => match assignee_user_id {
-            None => true,
-            Some(user_id) => {
-                let is_active =
-                    admin_queries::is_active_member(&mut conn, organization_id, user_id)
-                        .await
-                        .map_err(|_| ApiError::Unavailable)?;
-                if is_active {
-                    true
-                } else {
-                    let current =
-                        admin_queries::intake_default_assignee_user_id(&mut conn, organization_id)
-                            .await
-                            .map_err(|_| ApiError::Unavailable)?;
-                    current == Some(user_id)
-                }
-            }
-        },
-    };
-    if !valid {
-        return Err(ApiError::InvalidAssignee);
-    }
-
-    admin_queries::update_intake_routing_settings(
-        &mut conn,
-        organization_id,
-        mode,
-        assignee_user_id,
     )
-    .await
-    .map_err(|_| ApiError::Unavailable)?;
+    .await?;
 
     Ok(Json(json!({
         "intake_routing_mode": mode.as_str(),

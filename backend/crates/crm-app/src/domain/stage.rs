@@ -79,6 +79,8 @@ pub async fn list(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
 ) -> Result<Vec<Stage>, sqlx::Error> {
+    let mut workspace_read = crate::auth::workspace::read(conn, organization_id).await?;
+    let conn = &mut *workspace_read;
     let rows = sqlx::query_as!(
         StageRow,
         r#"SELECT id, name, position FROM stage WHERE organization_id = $1 ORDER BY position"#,

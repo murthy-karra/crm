@@ -13,7 +13,7 @@ import { OPERATOR_LAUNCHER } from '../lib/operatorLauncher'
 import { CALL_HOST_KEY } from '../telephony/callHost'
 import StageLabel from './StageLabel.vue'
 
-const props = defineProps<{ orgId: string; summary: PersonSummary }>()
+const props = defineProps<{ orgId: string; summary: PersonSummary; readOnly?: boolean }>()
 const emit = defineEmits<{ close: [] }>()
 const { data, isPending, isError, error, refetch } = usePerson(() => props.orgId, () => props.summary.id)
 const person = computed(() => data.value?.person ?? props.summary)
@@ -25,7 +25,7 @@ const tab = ref<'activity' | 'contact'>('activity')
 const phonePicker = ref(false)
 const phones = computed(() => data.value?.contact_methods.filter((method) => method.kind === 'phone') ?? [])
 const emails = computed(() => data.value?.contact_methods.filter((method) => method.kind === 'email') ?? [])
-const callDisabled = computed(() => !phones.value.length || !host || host.call.active.value || host.outcomePromptOpen.value)
+const callDisabled = computed(() => props.readOnly || !phones.value.length || !host || host.call.active.value || host.outcomePromptOpen.value)
 const profilePath = computed(() => `/people/${encodeURIComponent(props.summary.id)}`)
 const latestSource = computed(() => data.value?.inquiries[0]?.source ?? '—')
 
@@ -52,7 +52,7 @@ onMounted(() => document.addEventListener('keydown', onKeydown))
 onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
 defineExpose({ focus: () => root.value?.focus() })
 
-const icons = { inquiry_received: Inbox, routing_decision: Route, assignment_changed: UserCheck, stage_changed: Flag, contact_attempted: Phone, call_completed: Phone, correspondence: Mail }
+const icons = { person_imported: Inbox, inquiry_received: Inbox, routing_decision: Route, assignment_changed: UserCheck, stage_changed: Flag, contact_attempted: Phone, call_completed: Phone, correspondence: Mail }
 // SLICE_015 §1 / SLICE_016.md §8: notes and completed tasks are out of
 // scope for the People preview card (unlike PersonDetailView's History
 // card). `recent`'s own type-narrowing filter below excludes both kinds
@@ -62,6 +62,7 @@ const icons = { inquiry_received: Inbox, routing_decision: Route, assignment_cha
 type PreviewableHistoryEntry = Exclude<HistoryEntry, { kind: 'note' | 'task_completed' }>
 function activity(entry: PreviewableHistoryEntry): { title: string; description: string } {
   switch (entry.kind) {
+    case 'person_imported': return { title: 'Imported from Follow Up Boss', description: 'Review provenance in full profile' }
     case 'inquiry_received': return { title: 'Inquiry received', description: entry.detail.source }
     case 'assignment_changed': return { title: 'Assignment changed', description: entry.detail.to?.display_name ?? 'Unassigned' }
     case 'routing_decision': return { title: 'Inquiry routed', description: entry.detail.assignee?.display_name ?? 'Unassigned' }
@@ -174,7 +175,7 @@ const recent = computed(() => {
       <template v-else-if="data">
         <div class="preview-actions relative my-6">
           <button
-            v-if="host"
+            v-if="host && !readOnly"
             type="button"
             :class="buttonClasses()"
             :disabled="callDisabled"
@@ -189,7 +190,7 @@ const recent = computed(() => {
             />
           </button>
           <a
-            v-if="emails[0]"
+            v-if="emails[0] && !readOnly"
             :href="`mailto:${encodeURIComponent(emails[0].value)}`"
             :class="buttonClasses()"
             aria-label="Open email app"
@@ -203,8 +204,8 @@ const recent = computed(() => {
           <RouterLink
             :to="profilePath"
             :class="buttonClasses()"
-            aria-label="View and edit full profile"
-            title="View and edit full profile"
+            :aria-label="readOnly ? 'View full profile' : 'View and edit full profile'"
+            :title="readOnly ? 'View full profile' : 'View and edit full profile'"
           >
             <ArrowUpRight
               class="h-4 w-4"
@@ -213,7 +214,7 @@ const recent = computed(() => {
           </RouterLink>
         </div>
         <div
-          v-if="phonePicker"
+          v-if="phonePicker && !readOnly"
           class="glass-control mb-4 rounded-xl p-2"
           aria-label="Choose a phone number"
         >
@@ -345,7 +346,7 @@ const recent = computed(() => {
         </ul>
 
         <button
-          v-if="launchOperator"
+          v-if="launchOperator && !readOnly"
           type="button"
           class="glass-control mt-6 flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-left text-small text-text-muted hover:text-text"
           @click="launchOperator(person.id)"

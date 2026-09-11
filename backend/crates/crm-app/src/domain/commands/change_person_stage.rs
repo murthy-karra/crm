@@ -65,7 +65,7 @@ async fn change_person_stage_attempt(
     ctx: &CommandContext,
     cmd: ChangePersonStage,
 ) -> Result<(PersonSummary, bool), CommandError> {
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
 
     let person = person_queries::lock_person(&mut tx, cmd.person_id, ctx.organization_id)
         .await?

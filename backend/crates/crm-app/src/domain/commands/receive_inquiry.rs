@@ -375,7 +375,7 @@ where
     let mut backoff_ms = ADVISORY_LOCK_INITIAL_BACKOFF_MS;
 
     loop {
-        let mut tx = pool.begin().await?;
+        let mut tx = crate::auth::workspace::begin(pool, organization_id).await?;
         let locked = store::lock_for_processing(&mut tx, raw_payload_id, organization_id)
             .await?
             .ok_or(CommandError::Database(sqlx::Error::RowNotFound))?;

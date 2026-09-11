@@ -1,0 +1,280 @@
+[
+  {
+    "name": "browser-explicit-partial-mapping-inheritance",
+    "passed": true,
+    "plan_revision": "3",
+    "eligible_people": 4,
+    "held_people": 1
+  },
+  {
+    "name": "responsive-page",
+    "passed": true,
+    "page": "ready-import",
+    "width": 390,
+    "viewport": 390,
+    "document": 390,
+    "body": 390
+  },
+  {
+    "name": "responsive-page",
+    "passed": true,
+    "page": "ready-import",
+    "width": 640,
+    "viewport": 640,
+    "document": 640,
+    "body": 640
+  },
+  {
+    "name": "responsive-page",
+    "passed": true,
+    "page": "ready-import",
+    "width": 768,
+    "viewport": 768,
+    "document": 768,
+    "body": 768
+  },
+  {
+    "name": "responsive-page",
+    "passed": true,
+    "page": "ready-import",
+    "width": 1024,
+    "viewport": 1024,
+    "document": 1024,
+    "body": 1024
+  },
+  {
+    "name": "responsive-page",
+    "passed": true,
+    "page": "ready-import",
+    "width": 1280,
+    "viewport": 1280,
+    "document": 1280,
+    "body": 1280
+  },
+  {
+    "name": "responsive-page",
+    "passed": true,
+    "page": "ready-import",
+    "width": 1536,
+    "viewport": 1536,
+    "document": 1536,
+    "body": 1536
+  },
+  {
+    "name": "browser-dirty-mapping-confirmation-fence-and-discard",
+    "passed": true
+  },
+  {
+    "name": "uncertain-confirmation-exact-replay",
+    "passed": true,
+    "requests": 2
+  },
+  {
+    "name": "real-api-completed-import",
+    "passed": true,
+    "imported_people": 4,
+    "imported_contacts": 8,
+    "held_people": 1,
+    "separate_people": 4,
+    "long_field": {
+      "pages": 45,
+      "full_utf8_bytes": 2818088
+    },
+    "new_source_reader_calls": 0,
+    "workspace_mode": "migration_review"
+  },
+  {
+    "name": "member-workspace-waiting-and-logout",
+    "passed": true
+  },
+  {
+    "name": "responsive-page",
+    "passed": true,
+    "page": "member-waiting",
+    "width": 390,
+    "viewport": 390,
+    "document": 390,
+    "body": 390
+  },
+  {
+    "name": "responsive-page",
+    "passed": true,
+    "page": "member-waiting",
+    "width": 640,
+    "viewport": 640,
+    "document": 640,
+    "body": 640
+  },
+  {
+    "name": "responsive-page",
+    "passed": true,
+    "page": "member-waiting",
+    "width": 768,
+    "viewport": 768,
+    "document": 768,
+    "body": 768
+  },
+  {
+    "name": "responsive-page",
+    "passed": true,
+    "page": "member-waiting",
+    "width": 1024,
+    "viewport": 1024,
+    "document": 1024,
+    "body": 1024
+  },
+  {
+    "name": "responsive-page",
+    "passed": true,
+    "page": "member-waiting",
+    "width": 1280,
+    "viewport": 1280,
+    "document": 1280,
+    "body": 1280
+  },
+  {
+    "name": "responsive-page",
+    "passed": true,
+    "page": "member-waiting",
+    "width": 1536,
+    "viewport": 1536,
+    "document": 1536,
+    "body": 1536
+  },
+  {
+    "name": "member-waiting-logout-revokes-browser-session",
+    "passed": true
+  },
+  {
+    "name": "browser-completion-reload",
+    "passed": true
+  },
+  {
+    "name": "responsive-page",
+    "passed": true,
+    "page": "completed-import",
+    "width": 390,
+    "viewport": 390,
+    "document": 390,
+    "body": 390
+  },
+  {
+    "name": "responsive-page",
+    "passed": true,
+    "page": "completed-import",
+    "width": 640,
+    "viewport": 640,
+    "document": 640,
+    "body": 640
+  },
+  {
+    "name": "responsive-page",
+    "passed": true,
+    "page": "completed-import",
+    "width": 768,
+    "viewport": 768,
+    "document": 768,
+    "body": 768
+  },
+  {
+    "name": "responsive-page",
+    "passed": true,
+    "page": "completed-import",
+    "width": 1024,
+    "viewport": 1024,
+    "document": 1024,
+    "body": 1024
+  },
+  {
+    "name": "responsive-page",
+    "passed": true,
+    "page": "completed-import",
+    "width": 1280,
+    "viewport": 1280,
+    "document": 1280,
+    "body": 1280
+  },
+  {
+    "name": "responsive-page",
+    "passed": true,
+    "page": "completed-import",
+    "width": 1536,
+    "viewport": 1536,
+    "document": 1536,
+    "body": 1536
+  },
+  {
+    "name": "responsive-page",
+    "passed": true,
+    "page": "person-review",
+    "width": 390,
+    "viewport": 390,
+    "document": 390,
+    "body": 390
+  },
+  {
+    "name": "responsive-page",
+    "passed": true,
+    "page": "person-review",
+    "width": 640,
+    "viewport": 640,
+    "document": 640,
+    "body": 640
+  },
+  {
+    "name": "responsive-page",
+    "passed": true,
+    "page": "person-review",
+    "width": 768,
+    "viewport": 768,
+    "document": 768,
+    "body": 768
+  },
+  {
+    "name": "responsive-page",
+    "passed": true,
+    "page": "person-review",
+    "width": 1024,
+    "viewport": 1024,
+    "document": 1024,
+    "body": 1024
+  },
+  {
+    "name": "responsive-page",
+    "passed": true,
+    "page": "person-review",
+    "width": 1280,
+    "viewport": 1280,
+    "document": 1280,
+    "body": 1280
+  },
+  {
+    "name": "responsive-page",
+    "passed": true,
+    "page": "person-review",
+    "width": 1536,
+    "viewport": 1536,
+    "document": 1536,
+    "body": 1536
+  },
+  {
+    "name": "browser-read-only-person-provenance",
+    "passed": true
+  },
+  {
+    "name": "source-text-stays-inert",
+    "passed": true
+  },
+  {
+    "name": "member-workspace-waiting-and-logout",
+    "passed": true
+  },
+  {
+    "name": "late-person-response-cannot-survive-admin-demotion",
+    "passed": true
+  },
+  {
+    "name": "cross-organization-import-and-provenance-denial",
+    "passed": true
+  }
+]

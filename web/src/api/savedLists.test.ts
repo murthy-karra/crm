@@ -21,7 +21,7 @@ const cleanups: Array<() => void> = []
 function me(): MeResponse {
   return {
     user: { id: ACTOR_ID, email: 'agent@example.test', display_name: 'Agent' },
-    organization: { id: ORG_ID, name: 'Example', role: 'member' },
+    organization: { workspace_mode: 'operational', workspace_revision: '1', id: ORG_ID, name: 'Example', role: 'member' },
     platform_admin: false,
   }
 }

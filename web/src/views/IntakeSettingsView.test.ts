@@ -34,7 +34,7 @@ const DAVE_ID = '33333333-3333-3333-3333-333333333333'
 function me(): MeResponse {
   return {
     user: { id: 'u-alice', email: 'alice@acme.test', display_name: 'Alice' },
-    organization: { id: ORG_ID, name: 'Acme Realty', role: 'admin' },
+    organization: { workspace_mode: 'operational', workspace_revision: '1', id: ORG_ID, name: 'Acme Realty', role: 'admin' },
     platform_admin: false,
   }
 }

@@ -1,5 +1,13 @@
 # Slice 007b — Inbound email endpoint (encrypted raw → Unresolved, zero parsing)
 
+**Approved amendment — 010c (D-065, 2026-09-11):**
+[010c](SLICE_010c.md) checks workspace mode before raw persistence or acceptance.
+Held-Organization ingress returns retryable 503 `workspace_in_migration_review`
+with Retry-After, allowing the existing relay to temporary-fail delivery. It is
+not a successful acceptance or an application-owned durable queue. Raw/business
+phases and unattended extraction obey the same guard without consuming held-work
+attempts. Operational delivery behavior remains otherwise unchanged.
+
 Status: APPROVED (user, 2026-08-24; planner pass + independent review
 same day, reviewer amendments applied — no blocking findings; §5
 contract and §13 safe defaults accepted as written)

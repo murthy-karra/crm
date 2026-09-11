@@ -249,7 +249,7 @@ async fn process_attempt(
     correspondence_raw_id: CorrespondenceRawId,
     received_at: DateTime<Utc>,
 ) -> Result<PhaseBResult, ReceiveInboundEmailError> {
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::auth::workspace::begin(pool, organization_id).await?;
 
     let locked = store::lock_for_processing(&mut tx, correspondence_raw_id, organization_id)
         .await?

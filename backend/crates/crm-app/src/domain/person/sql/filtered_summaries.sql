@@ -4,10 +4,10 @@ SELECT
      u.id as "assigned_user_id?", u.display_name as "assigned_user_display_name?",
      (SELECT cm.value FROM contact_method cm
         WHERE cm.person_id = p.id AND cm.organization_id = p.organization_id AND cm.kind = 'email'
-        ORDER BY cm.created_at ASC LIMIT 1) as "primary_email?",
+        ORDER BY cm.import_order ASC NULLS LAST, cm.created_at ASC, cm.id ASC LIMIT 1) as "primary_email?",
      (SELECT cm.value FROM contact_method cm
         WHERE cm.person_id = p.id AND cm.organization_id = p.organization_id AND cm.kind = 'phone'
-        ORDER BY cm.created_at ASC LIMIT 1) as "primary_phone?",
+        ORDER BY cm.import_order ASC NULLS LAST, cm.created_at ASC, cm.id ASC LIMIT 1) as "primary_phone?",
      (SELECT count(*) FROM inquiry i
         WHERE i.person_id = p.id AND i.organization_id = p.organization_id) as "inquiry_count!",
      p.last_inquiry_at as "last_inquiry_at?"

@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT 1 as \"present!\" FROM custom_field_option\n           WHERE field_id = $1 AND organization_id = $2 AND archived_at IS NULL\n             AND lower(label) = lower($3) AND ($4::uuid IS NULL OR id <> $4)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "present!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "87d553b77cf58685e0d650ced338d55d9142750dc7070294480be0e805d01d09"
+}

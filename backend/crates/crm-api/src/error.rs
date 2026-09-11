@@ -6,6 +6,7 @@ use crate::domain::admin::AdminCommandError;
 use crate::domain::capture::address::RotateError as CaptureRotateError;
 use crate::domain::capture::commands::CaptureCommandError;
 use crate::domain::commands::{CallError, CommandError};
+use crate::domain::custom_field::CustomFieldError;
 use crate::domain::intake::workbench::WorkbenchError;
 use crate::domain::note::NoteError;
 use crate::domain::person::filter::FilterError;
@@ -117,6 +118,22 @@ pub enum ApiError {
     TagLimitReached,
     PersonTagLimitReached,
     TagNameTaken,
+    // --- Slice 019a (docs/specs/SLICE_019.md §4) -------------------------
+    CustomFieldLimitReached,
+    CustomFieldLabelTaken,
+    /// A value's variant, or a supplied `options` list, disagrees with the
+    /// field's `field_type`.
+    TypeMismatch,
+    /// A value or option-list failed pure-function validation (the number
+    /// pattern, the date window, the option-list bounds).
+    InvalidValue,
+    OptionLimitReached,
+    OptionLabelTaken,
+    /// A value write targeted a field that is currently archived.
+    FieldArchived,
+    /// A choice value named an option that is archived, belongs to a
+    /// different field, or does not exist — byte-identical for all three.
+    UnknownOption,
 }
 
 impl IntoResponse for ApiError {
@@ -221,6 +238,18 @@ impl IntoResponse for ApiError {
                 (StatusCode::CONFLICT, "person_tag_limit_reached", None)
             }
             ApiError::TagNameTaken => (StatusCode::CONFLICT, "tag_name_taken", None),
+            ApiError::CustomFieldLimitReached => {
+                (StatusCode::CONFLICT, "custom_field_limit_reached", None)
+            }
+            ApiError::CustomFieldLabelTaken => {
+                (StatusCode::CONFLICT, "custom_field_label_taken", None)
+            }
+            ApiError::TypeMismatch => (StatusCode::UNPROCESSABLE_ENTITY, "type_mismatch", None),
+            ApiError::InvalidValue => (StatusCode::UNPROCESSABLE_ENTITY, "invalid_value", None),
+            ApiError::OptionLimitReached => (StatusCode::CONFLICT, "option_limit_reached", None),
+            ApiError::OptionLabelTaken => (StatusCode::CONFLICT, "option_label_taken", None),
+            ApiError::FieldArchived => (StatusCode::CONFLICT, "field_archived", None),
+            ApiError::UnknownOption => (StatusCode::UNPROCESSABLE_ENTITY, "unknown_option", None),
         };
 
         let body = Json(json!({ "error": code }));
@@ -421,6 +450,30 @@ impl From<TaskError> for ApiError {
             TaskError::MalformedRequest => ApiError::MalformedRequest,
             TaskError::InvalidAssignee => ApiError::InvalidAssignee,
             TaskError::Corrupt | TaskError::Database(_) => ApiError::Unavailable,
+        }
+    }
+}
+
+/// `custom_field::CustomFieldError` -> `ApiError` (docs/specs/SLICE_019.md
+/// §4): rule-1 (admin-only definitions/options) permission is
+/// `Forbidden` -> the existing `403 forbidden` code (the
+/// `tag::TagError`/`task::TaskError` precedent); a corrupt stored
+/// field_type is an operational failure, never a user-facing code.
+impl From<CustomFieldError> for ApiError {
+    fn from(err: CustomFieldError) -> Self {
+        match err {
+            CustomFieldError::NotFound => ApiError::NotFound,
+            CustomFieldError::Forbidden => ApiError::Forbidden,
+            CustomFieldError::MalformedRequest => ApiError::MalformedRequest,
+            CustomFieldError::LimitReached => ApiError::CustomFieldLimitReached,
+            CustomFieldError::LabelTaken => ApiError::CustomFieldLabelTaken,
+            CustomFieldError::TypeMismatch => ApiError::TypeMismatch,
+            CustomFieldError::InvalidValue => ApiError::InvalidValue,
+            CustomFieldError::OptionLimitReached => ApiError::OptionLimitReached,
+            CustomFieldError::OptionLabelTaken => ApiError::OptionLabelTaken,
+            CustomFieldError::FieldArchived => ApiError::FieldArchived,
+            CustomFieldError::UnknownOption => ApiError::UnknownOption,
+            CustomFieldError::Corrupt | CustomFieldError::Database(_) => ApiError::Unavailable,
         }
     }
 }

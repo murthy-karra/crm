@@ -2,6 +2,7 @@
 //! acceptance criteria 1–2): `crm_app` grants exactly as specified, and the
 //! append-only trigger on each fact table. Run only via ./scripts/check-db.
 
+use chrono::NaiveDate;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -1921,5 +1922,669 @@ async fn task_indexes_exist(migrator_pool: PgPool) {
     assert!(
         index_names.contains(&"task_org_source_external_idx".to_string()),
         "missing task_org_source_external_idx in {index_names:?}"
+    );
+}
+
+// --- Slice 019a: custom_field, custom_field_option, person_custom_field_value
+
+async fn insert_custom_field_for_schema_test(
+    pool: &PgPool,
+    organization_id: Uuid,
+    actor_id: Uuid,
+    label: &str,
+    field_type: &str,
+    position: i32,
+) -> Result<Uuid, sqlx::Error> {
+    sqlx::query_scalar(
+        "INSERT INTO custom_field (organization_id, label, field_type, position, created_by_user_id)
+         VALUES ($1, $2, $3, $4, $5) RETURNING id",
+    )
+    .bind(organization_id)
+    .bind(label)
+    .bind(field_type)
+    .bind(position)
+    .bind(actor_id)
+    .fetch_one(pool)
+    .await
+}
+
+async fn insert_custom_field_option_for_schema_test(
+    pool: &PgPool,
+    organization_id: Uuid,
+    field_id: Uuid,
+    label: &str,
+    position: i32,
+) -> Result<Uuid, sqlx::Error> {
+    sqlx::query_scalar(
+        "INSERT INTO custom_field_option (organization_id, field_id, label, position)
+         VALUES ($1, $2, $3, $4) RETURNING id",
+    )
+    .bind(organization_id)
+    .bind(field_id)
+    .bind(label)
+    .bind(position)
+    .fetch_one(pool)
+    .await
+}
+
+/// A raw `person_custom_field_value` insert with every column exposed, for
+/// CHECK/FK matrix tests (docs/specs/SLICE_019.md §2, §12): the number
+/// column is bound the same way the application does (`CAST($n::text AS
+/// numeric)`, spec §2), so a raw test row and a command-written row are
+/// bit-for-bit comparable.
+#[allow(clippy::too_many_arguments)]
+async fn insert_value_row_for_schema_test(
+    pool: &PgPool,
+    organization_id: Uuid,
+    person_id: Uuid,
+    field_id: Uuid,
+    field_type: &str,
+    text_value: Option<&str>,
+    number_value: Option<&str>,
+    date_value: Option<NaiveDate>,
+    option_id: Option<Uuid>,
+    updated_by_user_id: Option<Uuid>,
+    origin: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "INSERT INTO person_custom_field_value
+            (organization_id, person_id, field_id, field_type, text_value, number_value,
+             date_value, option_id, updated_by_user_id, origin, correlation_id)
+         VALUES ($1, $2, $3, $4, $5, CAST($6::text AS numeric), $7, $8, $9, $10, gen_random_uuid())",
+    )
+    .bind(organization_id)
+    .bind(person_id)
+    .bind(field_id)
+    .bind(field_type)
+    .bind(text_value)
+    .bind(number_value)
+    .bind(date_value)
+    .bind(option_id)
+    .bind(updated_by_user_id)
+    .bind(origin)
+    .execute(pool)
+    .await
+    .map(|_| ())
+}
+
+/// docs/specs/SLICE_019.md §2, §12.1: `crm_app` grants for `custom_field`
+/// and `custom_field_option` (SELECT/INSERT/UPDATE, no DELETE —
+/// archive-only, D-058 §2) and `person_custom_field_value`
+/// (SELECT/INSERT/UPDATE/DELETE — a value is cleared by deleting the
+/// row).
+#[sqlx::test]
+#[ignore]
+async fn custom_field_and_related_grants_are_exactly_slice_019_section_2_with_no_delete_on_definitions(
+    migrator_pool: PgPool,
+) {
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let (org_id, actor_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Custom Field Grant Realty",
+        "custom-field-grant@acme.test",
+        "Custom Field Grant",
+        "correct horse battery staple",
+    )
+    .await;
+    let stage_id = first_stage_id_for_schema_test(&app_pool, org_id).await;
+    let person_id = insert_bare_person_for_schema_test(&app_pool, org_id, stage_id).await;
+
+    // custom_field: SELECT/INSERT/UPDATE, no DELETE.
+    let select = sqlx::query("SELECT * FROM custom_field")
+        .fetch_all(&app_pool)
+        .await;
+    assert!(
+        select.is_ok(),
+        "custom_field: SELECT must succeed for crm_app"
+    );
+    let field_id =
+        insert_custom_field_for_schema_test(&app_pool, org_id, actor_id, "Budget", "number", 1)
+            .await
+            .expect("custom_field: INSERT must succeed for crm_app");
+    let update = sqlx::query("UPDATE custom_field SET label = 'Renamed' WHERE id = $1")
+        .bind(field_id)
+        .execute(&app_pool)
+        .await;
+    assert!(
+        update.is_ok(),
+        "custom_field: UPDATE must succeed for crm_app"
+    );
+    let delete = sqlx::query("DELETE FROM custom_field WHERE id = $1")
+        .bind(field_id)
+        .execute(&app_pool)
+        .await;
+    assert!(
+        delete.is_err(),
+        "custom_field: DELETE must be denied for crm_app"
+    );
+
+    // custom_field_option: SELECT/INSERT/UPDATE, no DELETE.
+    let choice_field_id = insert_custom_field_for_schema_test(
+        &app_pool,
+        org_id,
+        actor_id,
+        "Lead temperature",
+        "choice",
+        2,
+    )
+    .await
+    .unwrap();
+    let select = sqlx::query("SELECT * FROM custom_field_option")
+        .fetch_all(&app_pool)
+        .await;
+    assert!(
+        select.is_ok(),
+        "custom_field_option: SELECT must succeed for crm_app"
+    );
+    let option_id =
+        insert_custom_field_option_for_schema_test(&app_pool, org_id, choice_field_id, "Cold", 1)
+            .await
+            .expect("custom_field_option: INSERT must succeed for crm_app");
+    let update = sqlx::query("UPDATE custom_field_option SET label = 'Chilly' WHERE id = $1")
+        .bind(option_id)
+        .execute(&app_pool)
+        .await;
+    assert!(
+        update.is_ok(),
+        "custom_field_option: UPDATE must succeed for crm_app"
+    );
+    let delete = sqlx::query("DELETE FROM custom_field_option WHERE id = $1")
+        .bind(option_id)
+        .execute(&app_pool)
+        .await;
+    assert!(
+        delete.is_err(),
+        "custom_field_option: DELETE must be denied for crm_app"
+    );
+
+    // person_custom_field_value: SELECT/INSERT/UPDATE/DELETE.
+    let select = sqlx::query("SELECT * FROM person_custom_field_value")
+        .fetch_all(&app_pool)
+        .await;
+    assert!(
+        select.is_ok(),
+        "person_custom_field_value: SELECT must succeed for crm_app"
+    );
+    insert_value_row_for_schema_test(
+        &app_pool,
+        org_id,
+        person_id,
+        field_id,
+        "number",
+        None,
+        Some("12.50"),
+        None,
+        None,
+        Some(actor_id),
+        "web_session",
+    )
+    .await
+    .expect("person_custom_field_value: INSERT must succeed for crm_app");
+    let update = sqlx::query(
+        "UPDATE person_custom_field_value SET number_value = 5 WHERE organization_id = $1 AND person_id = $2 AND field_id = $3",
+    )
+    .bind(org_id)
+    .bind(person_id)
+    .bind(field_id)
+    .execute(&app_pool)
+    .await;
+    assert!(
+        update.is_ok(),
+        "person_custom_field_value: UPDATE must succeed for crm_app"
+    );
+    let delete = sqlx::query(
+        "DELETE FROM person_custom_field_value WHERE organization_id = $1 AND person_id = $2 AND field_id = $3",
+    )
+    .bind(org_id)
+    .bind(person_id)
+    .bind(field_id)
+    .execute(&app_pool)
+    .await;
+    assert!(
+        delete.is_ok(),
+        "person_custom_field_value: DELETE must succeed for crm_app"
+    );
+}
+
+/// docs/specs/SLICE_019.md §2: the two partial unique label indexes, the
+/// source-import unique index, and the value field index all exist
+/// exactly as named.
+#[sqlx::test]
+#[ignore]
+async fn custom_field_indexes_exist(migrator_pool: PgPool) {
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+
+    let field_indexes: Vec<String> =
+        sqlx::query_scalar("SELECT indexname FROM pg_indexes WHERE tablename = 'custom_field'")
+            .fetch_all(&app_pool)
+            .await
+            .unwrap();
+    assert!(
+        field_indexes.contains(&"custom_field_org_live_label_key".to_string()),
+        "missing custom_field_org_live_label_key in {field_indexes:?}"
+    );
+    assert!(
+        field_indexes.contains(&"custom_field_org_source_key".to_string()),
+        "missing custom_field_org_source_key in {field_indexes:?}"
+    );
+
+    let (live_label_def,): (String,) = sqlx::query_as(
+        "SELECT indexdef FROM pg_indexes WHERE indexname = 'custom_field_org_live_label_key'",
+    )
+    .fetch_one(&app_pool)
+    .await
+    .unwrap();
+    assert!(live_label_def.contains("UNIQUE"), "{live_label_def}");
+    assert!(
+        live_label_def.contains("archived_at IS NULL"),
+        "{live_label_def}"
+    );
+
+    let option_indexes: Vec<String> = sqlx::query_scalar(
+        "SELECT indexname FROM pg_indexes WHERE tablename = 'custom_field_option'",
+    )
+    .fetch_all(&app_pool)
+    .await
+    .unwrap();
+    assert!(
+        option_indexes.contains(&"custom_field_option_live_label_key".to_string()),
+        "missing custom_field_option_live_label_key in {option_indexes:?}"
+    );
+
+    let value_indexes: Vec<String> = sqlx::query_scalar(
+        "SELECT indexname FROM pg_indexes WHERE tablename = 'person_custom_field_value'",
+    )
+    .fetch_all(&app_pool)
+    .await
+    .unwrap();
+    assert!(
+        value_indexes.contains(&"person_custom_field_value_field_idx".to_string()),
+        "missing person_custom_field_value_field_idx in {value_indexes:?}"
+    );
+}
+
+/// docs/specs/SLICE_019.md §2, §12: `num_nonnulls(...) = 1` (a zero-column
+/// and a two-column value both fail), the `field_type`-to-column CASE
+/// match (a `text` field_type with `number_value` set instead of
+/// `text_value` fails), `updated_by_user_id IS NOT NULL OR origin =
+/// 'migration'`, and the `text_value` format CHECK all fail with SQLSTATE
+/// 23514 — pinned by code only, not constraint name (the spec's stated
+/// reason: the long FK's auto-generated name exceeds 63 characters, so
+/// this file follows the same code-only convention throughout).
+#[sqlx::test]
+#[ignore]
+async fn person_custom_field_value_check_constraints_matrix(migrator_pool: PgPool) {
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let (org_id, actor_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Value Check Realty",
+        "value-check@acme.test",
+        "Value Check",
+        "correct horse battery staple",
+    )
+    .await;
+    let stage_id = first_stage_id_for_schema_test(&app_pool, org_id).await;
+    let person_id = insert_bare_person_for_schema_test(&app_pool, org_id, stage_id).await;
+    let text_field_id =
+        insert_custom_field_for_schema_test(&app_pool, org_id, actor_id, "Referrer", "text", 1)
+            .await
+            .unwrap();
+
+    // Zero columns set.
+    let err = insert_value_row_for_schema_test(
+        &app_pool,
+        org_id,
+        person_id,
+        text_field_id,
+        "text",
+        None,
+        None,
+        None,
+        None,
+        Some(actor_id),
+        "web_session",
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(
+        err.as_database_error()
+            .and_then(|d| d.code().map(|c| c.into_owned())),
+        Some("23514".to_string())
+    );
+
+    // Two columns set (text_value and number_value both non-null).
+    let err = insert_value_row_for_schema_test(
+        &app_pool,
+        org_id,
+        person_id,
+        text_field_id,
+        "text",
+        Some("hello"),
+        Some("1"),
+        None,
+        None,
+        Some(actor_id),
+        "web_session",
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(
+        err.as_database_error()
+            .and_then(|d| d.code().map(|c| c.into_owned())),
+        Some("23514".to_string())
+    );
+
+    // field_type = 'text' but the value is carried in number_value, not
+    // text_value: exactly one column is non-null (satisfies
+    // num_nonnulls), but it is the WRONG column for the declared type.
+    let err = insert_value_row_for_schema_test(
+        &app_pool,
+        org_id,
+        person_id,
+        text_field_id,
+        "text",
+        None,
+        Some("1"),
+        None,
+        None,
+        Some(actor_id),
+        "web_session",
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(
+        err.as_database_error()
+            .and_then(|d| d.code().map(|c| c.into_owned())),
+        Some("23514".to_string())
+    );
+
+    // updated_by_user_id NULL with a non-migration origin.
+    let err = insert_value_row_for_schema_test(
+        &app_pool,
+        org_id,
+        person_id,
+        text_field_id,
+        "text",
+        Some("hello"),
+        None,
+        None,
+        None,
+        None,
+        "web_session",
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(
+        err.as_database_error()
+            .and_then(|d| d.code().map(|c| c.into_owned())),
+        Some("23514".to_string())
+    );
+    // ... but NULL is fine when origin = 'migration' (the task.sql
+    // pattern, spec §2).
+    insert_value_row_for_schema_test(
+        &app_pool,
+        org_id,
+        person_id,
+        text_field_id,
+        "text",
+        Some("hello"),
+        None,
+        None,
+        None,
+        None,
+        "migration",
+    )
+    .await
+    .expect("a migration-origin row may have a NULL updated_by_user_id");
+
+    // text_value format: too long, contains a newline, untrimmed.
+    let other_person_id = insert_bare_person_for_schema_test(&app_pool, org_id, stage_id).await;
+    for bad_text in [
+        "a".repeat(501),
+        "line one\nline two".to_string(),
+        " padded ".to_string(),
+    ] {
+        let err = insert_value_row_for_schema_test(
+            &app_pool,
+            org_id,
+            other_person_id,
+            text_field_id,
+            "text",
+            Some(&bad_text),
+            None,
+            None,
+            None,
+            Some(actor_id),
+            "web_session",
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(
+            err.as_database_error()
+                .and_then(|d| d.code().map(|c| c.into_owned())),
+            Some("23514".to_string()),
+            "{bad_text:?} should violate the text_value CHECK"
+        );
+    }
+}
+
+/// docs/specs/SLICE_019.md §2, §12: the three composite FKs make a
+/// cross-Organization value, a type-mismatched value, and an option of a
+/// different field all unpersistable (SQLSTATE 23503).
+#[sqlx::test]
+#[ignore]
+async fn custom_field_composite_fk_rejections(migrator_pool: PgPool) {
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let (org_a, actor_a) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "FK Realty A",
+        "fk-a@acme.test",
+        "FK A",
+        "correct horse battery staple",
+    )
+    .await;
+    let (org_b, actor_b) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "FK Realty B",
+        "fk-b@best.test",
+        "FK B",
+        "correct horse battery staple",
+    )
+    .await;
+    let stage_a = first_stage_id_for_schema_test(&app_pool, org_a).await;
+    let stage_b = first_stage_id_for_schema_test(&app_pool, org_b).await;
+    let person_a = insert_bare_person_for_schema_test(&app_pool, org_a, stage_a).await;
+    let _ = stage_b;
+
+    let text_field_a =
+        insert_custom_field_for_schema_test(&app_pool, org_a, actor_a, "Referrer", "text", 1)
+            .await
+            .unwrap();
+    let number_field_a =
+        insert_custom_field_for_schema_test(&app_pool, org_a, actor_a, "Budget", "number", 2)
+            .await
+            .unwrap();
+    let choice_field_a =
+        insert_custom_field_for_schema_test(&app_pool, org_a, actor_a, "Temperature", "choice", 3)
+            .await
+            .unwrap();
+    let option_a =
+        insert_custom_field_option_for_schema_test(&app_pool, org_a, choice_field_a, "Cold", 1)
+            .await
+            .unwrap();
+    let other_choice_field_a =
+        insert_custom_field_for_schema_test(&app_pool, org_a, actor_a, "Other choice", "choice", 4)
+            .await
+            .unwrap();
+
+    // Cross-Organization value: a Person of org_b, a field of org_a.
+    let person_b = insert_bare_person_for_schema_test(&app_pool, org_b, stage_b).await;
+    let err = insert_value_row_for_schema_test(
+        &app_pool,
+        org_b,
+        person_b,
+        text_field_a,
+        "text",
+        Some("hi"),
+        None,
+        None,
+        None,
+        Some(actor_a),
+        "web_session",
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(
+        err.as_database_error()
+            .and_then(|d| d.code().map(|c| c.into_owned())),
+        Some("23503".to_string())
+    );
+
+    // Type-mismatched value: field is `number`, but the row claims
+    // field_type = 'text' — no (field_id, organization_id, field_type)
+    // row exists to satisfy the FK.
+    let err = insert_value_row_for_schema_test(
+        &app_pool,
+        org_a,
+        person_a,
+        number_field_a,
+        "text",
+        Some("hi"),
+        None,
+        None,
+        None,
+        Some(actor_a),
+        "web_session",
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(
+        err.as_database_error()
+            .and_then(|d| d.code().map(|c| c.into_owned())),
+        Some("23503".to_string())
+    );
+
+    // An option that belongs to a DIFFERENT field than the one the value
+    // row names.
+    let err = insert_value_row_for_schema_test(
+        &app_pool,
+        org_a,
+        person_a,
+        other_choice_field_a,
+        "choice",
+        None,
+        None,
+        None,
+        Some(option_a),
+        Some(actor_a),
+        "web_session",
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(
+        err.as_database_error()
+            .and_then(|d| d.code().map(|c| c.into_owned())),
+        Some("23503".to_string())
+    );
+
+    // Review round 1, B9: a value row correctly scoped to org_a (its own
+    // Person and field) but whose `updated_by_user_id` names org_b's
+    // actor — that actor is not an `organization_membership` row for
+    // org_a, so the (organization_id, updated_by_user_id) FK rejects it.
+    let err = insert_value_row_for_schema_test(
+        &app_pool,
+        org_a,
+        person_a,
+        text_field_a,
+        "text",
+        Some("hi"),
+        None,
+        None,
+        None,
+        Some(actor_b),
+        "web_session",
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(
+        err.as_database_error()
+            .and_then(|d| d.code().map(|c| c.into_owned())),
+        Some("23503".to_string())
+    );
+}
+
+/// docs/specs/SLICE_019.md §2, §3: `UPDATE custom_field SET field_type`
+/// is refused by the database (default `ON UPDATE NO ACTION`) while any
+/// value references the row, and succeeds once none does — the type is
+/// immutable in practice even though no application code ever attempts
+/// the change (spec §3: "the database also refuses a change while any
+/// value exists").
+#[sqlx::test]
+#[ignore]
+async fn custom_field_type_change_is_refused_while_a_value_exists(migrator_pool: PgPool) {
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let (org_id, actor_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Type Immutable Realty",
+        "type-immutable@acme.test",
+        "Type Immutable",
+        "correct horse battery staple",
+    )
+    .await;
+    let stage_id = first_stage_id_for_schema_test(&app_pool, org_id).await;
+    let person_id = insert_bare_person_for_schema_test(&app_pool, org_id, stage_id).await;
+    let field_id =
+        insert_custom_field_for_schema_test(&app_pool, org_id, actor_id, "Budget", "number", 1)
+            .await
+            .unwrap();
+    insert_value_row_for_schema_test(
+        &app_pool,
+        org_id,
+        person_id,
+        field_id,
+        "number",
+        None,
+        Some("12.5"),
+        None,
+        None,
+        Some(actor_id),
+        "web_session",
+    )
+    .await
+    .unwrap();
+
+    let blocked = sqlx::query("UPDATE custom_field SET field_type = 'text' WHERE id = $1")
+        .bind(field_id)
+        .execute(&app_pool)
+        .await;
+    assert!(
+        blocked.is_err(),
+        "a field_type change must be refused while a value exists"
+    );
+    assert_eq!(
+        blocked
+            .unwrap_err()
+            .as_database_error()
+            .and_then(|d| d.code().map(|c| c.into_owned())),
+        Some("23503".to_string())
+    );
+
+    sqlx::query(
+        "DELETE FROM person_custom_field_value WHERE organization_id = $1 AND person_id = $2 AND field_id = $3",
+    )
+    .bind(org_id)
+    .bind(person_id)
+    .bind(field_id)
+    .execute(&app_pool)
+    .await
+    .unwrap();
+
+    let allowed = sqlx::query("UPDATE custom_field SET field_type = 'text' WHERE id = $1")
+        .bind(field_id)
+        .execute(&app_pool)
+        .await;
+    assert!(
+        allowed.is_ok(),
+        "a field_type change must succeed once no value references the row"
     );
 }

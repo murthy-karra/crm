@@ -439,6 +439,7 @@ describe('useRealtime', () => {
       history: [],
       tags: [existingTag],
       tasks: [],
+      custom_fields: [],
     }
     h.queryClient.setQueryData(queryKeys.tags(ORG_ID), { tags: [{ ...newTag, person_count: 0, can_manage: true }] })
     h.queryClient.setQueryData(queryKeys.person(ORG_ID, personId), serverPerson)

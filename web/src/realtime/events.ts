@@ -21,6 +21,12 @@ import { queryKeys } from '../api/queries'
 // `changed: false`. A due task changes the viewer's Today, so (unlike
 // `note_changed`) it invalidates `queryKeys.today` too, but still never
 // People or list counts — see the dedicated branch below.
+// SLICE_019.md §5 adds `custom_field_changed`: published after a set/clear
+// that changed a row — never on `changed: false`, never on a definition/
+// option write (rename/archive/restore publish nothing, the tag-rename
+// precedent). A value touches nothing but the Person detail (§5), so it
+// falls into the same narrow `note_changed`-style branch, not the wide
+// default.
 export type PersonChange =
   | 'inquiry_received'
   | 'assignment_changed'
@@ -30,6 +36,7 @@ export type PersonChange =
   | 'tags_changed'
   | 'note_changed'
   | 'task_changed'
+  | 'custom_field_changed'
 
 interface RealtimeEnvelopeBase {
   v: 1
@@ -101,7 +108,11 @@ export function invalidationsFor(event: unknown, orgId: string): QueryKey[] {
       // the Person detail only. Older bundles that don't recognize
       // `note_changed` fall through to the wide default, which is safe
       // (over-invalidation, never under-invalidation).
-      if (data.change === 'note_changed') {
+      // SLICE_019.md §5, §9: a custom-field value change is the same
+      // narrow case as `note_changed` — it touches no People row, Today
+      // queue, or list count (a custom field never appears in the filter
+      // vocabulary in 019a).
+      if (data.change === 'note_changed' || data.change === 'custom_field_changed') {
         return [queryKeys.person(orgId, personId)]
       }
       // SLICE_016.md §6: a due task changes the viewer's Today, so this

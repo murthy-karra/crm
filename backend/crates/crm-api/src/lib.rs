@@ -112,6 +112,7 @@ fn build_app_with_today_router_inner(state: AppState, today_router: Router<AppSt
             .merge(routes::tags::router())
             .merge(routes::notes::router())
             .merge(routes::tasks::router())
+            .merge(routes::custom_fields::router())
             .with_state(state),
     );
 

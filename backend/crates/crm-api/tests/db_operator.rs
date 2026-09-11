@@ -174,6 +174,22 @@ fn requests_json(provider: &ScriptedProvider) -> String {
     serde_json::to_string(&provider.requests()).unwrap()
 }
 
+/// Slice 019a's two custom-field capture tests need an Organization
+/// admin (definitions are admin-only, D-058 §2); `fixture()`'s
+/// `alice_id` is a plain member everywhere else in this file, so this
+/// promotes her in place rather than widening the shared fixture.
+async fn promote_to_admin(pool: &PgPool, organization_id: Uuid, user_id: Uuid) {
+    sqlx::query(
+        "UPDATE organization_membership SET role = 'admin'
+         WHERE organization_id = $1 AND user_id = $2",
+    )
+    .bind(organization_id)
+    .bind(user_id)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
 // --- Validation and availability ---------------------------------------
 
 #[sqlx::test]
@@ -3277,5 +3293,345 @@ async fn operator_get_today_json_agrees_with_http_on_raised_and_task_only_items(
             http_title, op_title,
             "{label}: the same title text, differently wrapped"
         );
+    }
+}
+
+// --- Slice 019a: custom fields (§12) -----------------------------------
+
+/// docs/specs/SLICE_019.md §12: `custom_fields` present with both `label`
+/// and `value` wrapped as untrusted text; a foreign Organization's Person
+/// is still refused.
+#[sqlx::test]
+#[ignore]
+async fn get_person_returns_custom_fields_as_untrusted_text_and_a_foreign_person_is_still_refused(
+    migrator_pool: PgPool,
+) {
+    let f = fixture(migrator_pool).await;
+    let plain = router_with(&f.migrator_pool, None).await;
+    let alice = crate::common::login_cookie(&plain, "alice@acme.test", "pw").await;
+    let person_id = create_person(
+        &plain,
+        &alice,
+        "Grace",
+        "Hopper",
+        "grace-custom-fields@example.test",
+        None,
+        None,
+        Some(f.alice_id),
+    )
+    .await;
+
+    let app_pool = crate::common::connect_as_app(&f.migrator_pool).await;
+    promote_to_admin(&app_pool, f.org_acme, f.alice_id).await;
+    let ctx = crm_api::domain::envelope::CommandContext {
+        organization_id: OrganizationId::new(f.org_acme),
+        actor_user_id: UserId::new(f.alice_id),
+        origin: crm_api::domain::envelope::Origin::WebSession,
+        correlation_id: crm_api::ids::CorrelationId::new(Uuid::new_v4()),
+    };
+    let field = crm_api::domain::custom_field::create_custom_field(
+        &app_pool,
+        &ctx,
+        crm_api::domain::custom_field::CreateCustomField {
+            label: "Referral source".to_string(),
+            field_type: crm_api::domain::custom_field::FieldType::Text,
+            options: vec![],
+        },
+    )
+    .await
+    .unwrap()
+    .field;
+    crm_api::domain::custom_field::set_person_custom_field_value(
+        &app_pool,
+        &Publisher::recording(),
+        &ctx,
+        crm_api::domain::custom_field::SetPersonCustomFieldValue {
+            person_id: crm_api::ids::PersonId::new(person_id),
+            field_id: field.id,
+            value: crm_api::domain::custom_field::CustomFieldValue::Text("Open house".to_string()),
+        },
+    )
+    .await
+    .unwrap();
+
+    let (router, provider) = router_scripted(
+        &f.migrator_pool,
+        vec![
+            tool_step("get_person", json!({ "person_id": person_id })),
+            text_step("Referral source: Open house."),
+        ],
+    )
+    .await;
+    let alice = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
+    let response = post_turn(&router, &alice, message("What is Grace's referral source?")).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = crate::common::body_json(response).await;
+    assert_eq!(body["tool_calls"][0]["outcome"], "ok");
+
+    let prompt = requests_json(&provider);
+    assert!(
+        prompt.contains(r#"\"untrusted_text\":\"Referral source\""#),
+        "the label must be wrapped as untrusted text: {prompt}"
+    );
+    assert!(
+        prompt.contains(r#"\"untrusted_text\":\"Open house\""#),
+        "the value must be wrapped as untrusted text: {prompt}"
+    );
+
+    // A foreign Organization's Person is still `not_found`.
+    let (foreign_router, _foreign_provider) = router_scripted(
+        &f.migrator_pool,
+        vec![
+            tool_step("get_person", json!({ "person_id": person_id })),
+            text_step("I couldn't find that person."),
+        ],
+    )
+    .await;
+    let bob = crate::common::login_cookie(&foreign_router, "bob@best.test", "pw").await;
+    let foreign_response = post_turn(&foreign_router, &bob, message("Look up this person")).await;
+    assert_eq!(foreign_response.status(), StatusCode::OK);
+    let foreign_body = crate::common::body_json(foreign_response).await;
+    assert_eq!(foreign_body["tool_calls"][0]["outcome"], "not_found");
+}
+
+/// docs/specs/SLICE_019.md §9, §12 capture test: a value sentinel set
+/// through the HTTP route, a rejected too-long value carrying its own
+/// sentinel, a definition rename attempt carrying a label sentinel, then
+/// an Operator tool call over the live value sentinel — captured at TRACE
+/// with `FmtSpan::FULL` (the `note`/`task` capture-test harness above).
+/// Neither sentinel appears in the captured trace output, the ledger, or
+/// any HTTP response body other than the value route's own 200 receipt
+/// (which legitimately echoes the value back, the mutation-receipt site
+/// spec §9 permits). A foreign Organization's Person is still refused.
+#[sqlx::test]
+#[ignore]
+async fn custom_field_activity_never_leaks_a_value_into_traces_or_the_ledger(
+    migrator_pool: PgPool,
+) {
+    let f = fixture(migrator_pool).await;
+    let router = router_with(&f.migrator_pool, None).await;
+    let alice = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
+    let person_id = create_person(
+        &router,
+        &alice,
+        "Ida",
+        "Capture",
+        "ida-custom-field-capture@example.test",
+        None,
+        None,
+        Some(f.alice_id),
+    )
+    .await;
+
+    let app_pool = crate::common::connect_as_app(&f.migrator_pool).await;
+    promote_to_admin(&app_pool, f.org_acme, f.alice_id).await;
+    let ctx = crm_api::domain::envelope::CommandContext {
+        organization_id: OrganizationId::new(f.org_acme),
+        actor_user_id: UserId::new(f.alice_id),
+        origin: crm_api::domain::envelope::Origin::WebSession,
+        correlation_id: crm_api::ids::CorrelationId::new(Uuid::new_v4()),
+    };
+    let field = crm_api::domain::custom_field::create_custom_field(
+        &app_pool,
+        &ctx,
+        crm_api::domain::custom_field::CreateCustomField {
+            label: "Referrer".to_string(),
+            field_type: crm_api::domain::custom_field::FieldType::Text,
+            options: vec![],
+        },
+    )
+    .await
+    .unwrap()
+    .field;
+
+    const SET_SENTINEL: &str = "SENTINEL_CUSTOM_FIELD_SET_DO_NOT_LEAK";
+    const REJECT_SENTINEL: &str = "SENTINEL_CUSTOM_FIELD_REJECT_DO_NOT_LEAK";
+    const LABEL_SENTINEL: &str = "SENTINEL_CUSTOM_FIELD_LABEL_DO_NOT_LEAK";
+    const OPERATOR_SENTINEL: &str = "SENTINEL_CUSTOM_FIELD_OPERATOR_DO_NOT_LEAK";
+
+    let buffer = Arc::new(Mutex::new(Vec::new()));
+    let subscriber = tracing_subscriber::registry().with(
+        tracing_subscriber::fmt::layer()
+            .with_writer(CaptureWriter(buffer.clone()))
+            .with_ansi(false)
+            .with_span_events(tracing_subscriber::fmt::format::FmtSpan::FULL),
+    );
+    let guard = tracing::subscriber::set_default(subscriber);
+
+    let value_uri = format!("/api/people/{person_id}/custom-fields/{}", field.id);
+    let set_resp = crate::common::put_json_with_cookie(
+        &router,
+        &value_uri,
+        &alice,
+        json!({ "value": { "text": SET_SENTINEL } }),
+    )
+    .await;
+    assert_eq!(set_resp.status(), StatusCode::OK);
+    let set_body = crate::common::body_json(set_resp).await;
+    assert_eq!(
+        set_body["custom_fields"][0]["value"]["text"], SET_SENTINEL,
+        "the 200 receipt legitimately echoes the value"
+    );
+
+    // A too-long text value carries its own sentinel — a body with no
+    // sentinel at all could never prove anything about capture safety.
+    let rejected_resp = crate::common::put_json_with_cookie(
+        &router,
+        &value_uri,
+        &alice,
+        json!({ "value": { "text": format!("{REJECT_SENTINEL}{}", "x".repeat(500)) } }),
+    )
+    .await;
+    assert_eq!(rejected_resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let rejected_body = crate::common::body_json(rejected_resp).await;
+    assert!(
+        !rejected_body.to_string().contains(REJECT_SENTINEL),
+        "the invalid_value error envelope must never echo the rejected value: {rejected_body}"
+    );
+
+    // A member (not admin) attempts to rename the field with a sentinel
+    // label: 403, and the envelope never echoes it.
+    let carol = crate::common::login_cookie(&router, "carol@acme.test", "pw").await;
+    let forbidden_resp = crate::common::put_json_with_cookie(
+        &router,
+        &format!("/api/custom-fields/{}", field.id),
+        &carol,
+        json!({ "label": LABEL_SENTINEL, "archived": false }),
+    )
+    .await;
+    assert_eq!(forbidden_resp.status(), StatusCode::FORBIDDEN);
+    let forbidden_body = crate::common::body_json(forbidden_resp).await;
+    assert_eq!(forbidden_body, json!({ "error": "forbidden" }));
+    // `OrgAdminContext` denies this at the extractor, ahead of the
+    // command — `custom_field::update_custom_field` (and its
+    // `custom_field.update` span) is never even called for carol's
+    // attempt. The admin's OWN rename, right after, is the positive
+    // control that the span is captured when the command actually runs —
+    // review round 1, B5: carries LABEL_SENTINEL itself (a write that
+    // actually reaches the domain layer and the database, unlike carol's
+    // extractor-blocked attempt), so the trace/ledger negatives below
+    // prove something about a real write, not just a rejected one.
+    let admin_rename_resp = crate::common::put_json_with_cookie(
+        &router,
+        &format!("/api/custom-fields/{}", field.id),
+        &alice,
+        json!({ "label": LABEL_SENTINEL, "archived": false }),
+    )
+    .await;
+    assert_eq!(admin_rename_resp.status(), StatusCode::OK);
+    let admin_rename_body = crate::common::body_json(admin_rename_resp).await;
+    assert_eq!(admin_rename_body["changed"], true);
+
+    // The Operator's own tool call over the live value sentinel.
+    crate::common::put_json_with_cookie(
+        &router,
+        &value_uri,
+        &alice,
+        json!({ "value": { "text": OPERATOR_SENTINEL } }),
+    )
+    .await;
+    let (operator_router, provider) = router_scripted(
+        &f.migrator_pool,
+        vec![
+            tool_step("get_person", json!({ "person_id": person_id })),
+            text_step("Noted."),
+        ],
+    )
+    .await;
+    let alice_scripted =
+        crate::common::login_cookie(&operator_router, "alice@acme.test", "pw").await;
+    let turn_resp = post_turn(
+        &operator_router,
+        &alice_scripted,
+        message("What is the referrer?"),
+    )
+    .await;
+    assert_eq!(turn_resp.status(), StatusCode::OK);
+    let turn_body = crate::common::body_json(turn_resp).await;
+    // Review round 1, B5: positive controls BEFORE the trace/ledger
+    // negatives below — the tool call actually succeeded, and the model
+    // provider actually received the sentinel wrapped as untrusted text
+    // (the shape test elsewhere in this file already pins the exact
+    // wrapping); otherwise the later "never leaked" assertions could be
+    // vacuously true because nothing ever carried the sentinel anywhere.
+    assert_eq!(turn_body["tool_calls"][0]["outcome"], "ok");
+    assert!(
+        requests_json(&provider).contains(OPERATOR_SENTINEL),
+        "the prompt sent to the model provider must actually carry the sentinel"
+    );
+    assert!(
+        !turn_body.to_string().contains(OPERATOR_SENTINEL),
+        "the turn's own HTTP response must never echo the value: {turn_body}"
+    );
+
+    // A foreign Organization's Person is still refused.
+    let foreign_router = router_with(&f.migrator_pool, None).await;
+    let bob = crate::common::login_cookie(&foreign_router, "bob@best.test", "pw").await;
+    let foreign_get =
+        crate::common::get_with_cookie(&foreign_router, &format!("/api/people/{person_id}"), &bob)
+            .await;
+    assert_eq!(foreign_get.status(), StatusCode::NOT_FOUND);
+
+    drop(guard);
+
+    let captured = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
+    for sentinel in [
+        SET_SENTINEL,
+        REJECT_SENTINEL,
+        LABEL_SENTINEL,
+        OPERATOR_SENTINEL,
+    ] {
+        assert!(
+            !captured.contains(sentinel),
+            "sentinel {sentinel:?} leaked into the captured trace output: {captured}"
+        );
+    }
+
+    // Positive controls: the negative assertions above are vacuous unless
+    // capture is actually wired for these spans and outcomes.
+    for span_name in ["person_custom_field.set", "custom_field.update"] {
+        assert!(
+            captured.contains(span_name),
+            "the {span_name} span must appear in the captured output: {captured}"
+        );
+    }
+    fn has_field(captured: &str, field: &str, value: &str) -> bool {
+        captured.contains(&format!("{field}={value}"))
+            || captured.contains(&format!("{field}=\"{value}\""))
+    }
+    assert!(
+        has_field(&captured, "error_kind", "invalid_value")
+            || has_field(&captured, "outcome", "invalid_value"),
+        "the rejected value's invalid_value outcome must be captured: {captured}"
+    );
+    // Carol's forbidden rename is NOT expected to appear as a captured
+    // domain-layer outcome: `OrgAdminContext` denies it at the extractor,
+    // ahead of `custom_field::update_custom_field` — the command (and its
+    // span) never runs at all for that request, which is a stronger
+    // property than "captured but redacted", not a gap in this test.
+    assert!(
+        has_field(&captured, "outcome", "changed"),
+        "the admin's own successful rename outcome must be captured: {captured}"
+    );
+
+    // The prompt sent to the model provider IS allowed to carry the
+    // sentinel (the whole point of the Operator's untrusted-text view,
+    // confirmed as a positive control above, and confirmed separately by
+    // the shape test elsewhere in this file); here the constraint is only
+    // the trace output and the HTTP response bodies.
+
+    // The operator_tool_call ledger holds no sentinel either.
+    let turns = turn_rows(&app_pool).await;
+    for (turn_id, ..) in &turns {
+        let tools = tool_rows(&app_pool, *turn_id).await;
+        let serialized = format!("{tools:?}");
+        for sentinel in [
+            SET_SENTINEL,
+            REJECT_SENTINEL,
+            LABEL_SENTINEL,
+            OPERATOR_SENTINEL,
+        ] {
+            assert!(!serialized.contains(sentinel));
+        }
     }
 }

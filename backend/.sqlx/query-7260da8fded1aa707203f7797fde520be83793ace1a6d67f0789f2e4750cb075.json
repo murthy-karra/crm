@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO person_custom_field_value\n             (organization_id, person_id, field_id, field_type, text_value, number_value,\n              date_value, option_id, updated_by_user_id, origin, correlation_id)\n           VALUES ($1, $2, $3, $4, $5, CAST($6::text AS numeric), $7, $8, $9, $10, $11)\n           ON CONFLICT (organization_id, person_id, field_id) DO UPDATE\n             SET text_value = EXCLUDED.text_value,\n                 number_value = EXCLUDED.number_value,\n                 date_value = EXCLUDED.date_value,\n                 option_id = EXCLUDED.option_id,\n                 updated_by_user_id = EXCLUDED.updated_by_user_id,\n                 origin = EXCLUDED.origin,\n                 correlation_id = EXCLUDED.correlation_id,\n                 updated_at = now()\n           WHERE person_custom_field_value.text_value IS DISTINCT FROM EXCLUDED.text_value\n              OR person_custom_field_value.number_value IS DISTINCT FROM EXCLUDED.number_value\n              OR person_custom_field_value.date_value IS DISTINCT FROM EXCLUDED.date_value\n              OR person_custom_field_value.option_id IS DISTINCT FROM EXCLUDED.option_id",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Date",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7260da8fded1aa707203f7797fde520be83793ace1a6d67f0789f2e4750cb075"
+}

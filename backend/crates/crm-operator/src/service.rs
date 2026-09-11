@@ -1342,6 +1342,7 @@ mod tests {
                 tags: vec![],
                 notes: vec![],
                 tasks: vec![],
+                custom_fields: vec![],
             })
         }
         async fn get_today(
@@ -2769,6 +2770,18 @@ mod tests {
         assert!(
             !prompt.contains("create tasks"),
             "the \"cannot create tasks\" sentence must be gone (SLICE_018 §7)"
+        );
+    }
+
+    /// docs/specs/SLICE_019.md §6: the untrusted-text parenthetical names
+    /// custom field labels and values, pinned like
+    /// `the_prompt_carries_the_start_call_rules` above.
+    #[test]
+    fn the_prompt_names_custom_field_labels_and_values() {
+        let prompt = include_str!("../prompts/system.md");
+        assert!(
+            prompt.contains("custom field labels and values"),
+            "prompt lost the custom-field untrusted-text disclosure"
         );
     }
 

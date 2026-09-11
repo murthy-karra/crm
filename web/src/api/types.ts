@@ -576,6 +576,9 @@ export interface PersonDetailResponse {
   // Slice 016a §4: open tasks only, in `open_for_person` order
   // (`due_at ASC NULLS LAST, created_at, id`) — never re-sort client-side.
   tasks: Task[]
+  // Slice 019a §4: set values on LIVE fields only, in field position
+  // order — never re-sort client-side.
+  custom_fields: PersonCustomFieldValue[]
 }
 
 // --- Slice 011e: Tags (docs/specs/SLICE_011e.md §5) -------------------------
@@ -774,6 +777,117 @@ export interface ListTasksResponse {
   tasks: TaskWithPerson[]
   generated_at: string
   truncated: boolean
+}
+
+// --- Slice 019a: Custom fields (docs/specs/SLICE_019.md §4) -----------------
+// Typed custom fields on People: an Organization admin defines them under
+// Manage → Fields (label, type, and for `choice` its options); any active
+// member sets or clears a value on a Person. Definitions and options are
+// archived, never deleted — `archived_at` is `null` for a live row.
+
+export type CustomFieldType = 'text' | 'number' | 'date' | 'choice'
+
+export interface CustomFieldOption {
+  id: string
+  label: string
+  position: number
+  archived_at: string | null
+}
+
+/** `GET /api/custom-fields` row / every definition-write response's `field`
+ * (§4): options ordered `position, id`, always `[]` for a non-`choice` type. */
+export interface CustomField {
+  id: string
+  label: string
+  field_type: CustomFieldType
+  position: number
+  archived_at: string | null
+  person_count: number
+  options: CustomFieldOption[]
+}
+
+export interface CustomFieldsResponse {
+  fields: CustomField[]
+}
+
+export interface CreateCustomFieldRequest {
+  label: string
+  field_type: CustomFieldType
+  options?: string[]
+}
+
+export interface CreateCustomFieldResponse {
+  field: CustomField
+}
+
+/** `PUT /api/custom-fields/order`: the full live order, no more, no fewer. */
+export interface ReorderCustomFieldsRequest {
+  field_ids: string[]
+}
+
+export interface ReorderCustomFieldsResponse {
+  fields: CustomField[]
+}
+
+/** `PUT /api/custom-fields/{field_id}`: full replace (rename/archive/
+ * restore all in one shape — the `UpdateTaskRequest` precedent). */
+export interface UpdateCustomFieldRequest {
+  label: string
+  archived: boolean
+}
+
+export interface UpdateCustomFieldResponse {
+  field: CustomField
+  changed: boolean
+}
+
+export interface AddCustomFieldOptionRequest {
+  label: string
+}
+
+export interface AddCustomFieldOptionResponse {
+  field: CustomField
+}
+
+export interface UpdateCustomFieldOptionRequest {
+  label: string
+  archived: boolean
+}
+
+export interface UpdateCustomFieldOptionResponse {
+  field: CustomField
+  changed: boolean
+}
+
+/** The externally tagged value payload (§4): exactly one key. A `number` is
+ * always the server's/client's decimal STRING (§2: no decimal type crosses
+ * the wire) — never a JSON number, which the server rejects as 400. */
+export type CustomFieldValuePayload =
+  | { text: string }
+  | { number: string }
+  | { date: string }
+  | { option_id: string }
+
+/** A Person's value for one live custom field (§4) — `GET /api/people/{id}`'s
+ * `custom_fields[]` row and the shape of the value mutations' own list. */
+export interface PersonCustomFieldValue {
+  field_id: string
+  label: string
+  field_type: CustomFieldType
+  value: CustomFieldValuePayload
+  option_label: string | null
+  updated_at: string
+}
+
+export interface SetCustomFieldValueRequest {
+  value: CustomFieldValuePayload
+}
+
+/** `PUT`/`DELETE /api/people/{id}/custom-fields/{field_id}` — same shape
+ * for set and clear. */
+export interface PersonCustomFieldValueMutationResponse {
+  custom_fields: PersonCustomFieldValue[]
+  changed: boolean
 }
 
 // ---- Mutations: assignment / stage (§5 POST .../assignment, .../stage) ---

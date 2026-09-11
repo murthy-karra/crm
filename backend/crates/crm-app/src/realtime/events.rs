@@ -46,6 +46,16 @@ pub enum PersonChange {
     /// other variant here, ids only: no task title ever travels on the
     /// realtime channel (D-023, rule 7).
     TaskChanged,
+    /// Slice 019a's declared additive variant (docs/specs/SLICE_019.md
+    /// §5, §9): published after a `SetPersonCustomFieldValue`/
+    /// `ClearPersonCustomFieldValue` that changed a row — never on
+    /// `changed: false` — and, like every other variant here, ids only:
+    /// no custom-field label or value ever travels on the realtime
+    /// channel (D-023, rule 9). Definition/option writes (create, rename,
+    /// archive, restore, reorder) publish nothing (the tag-rename
+    /// precedent): the mutating client invalidates its own `customFields`
+    /// query.
+    CustomFieldChanged,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -302,6 +312,7 @@ mod tests {
             (PersonChange::TagsChanged, "tags_changed"),
             (PersonChange::NoteChanged, "note_changed"),
             (PersonChange::TaskChanged, "task_changed"),
+            (PersonChange::CustomFieldChanged, "custom_field_changed"),
         ] {
             let event = RealtimeEvent::person_changed(
                 OrganizationId::new(Uuid::new_v4()),

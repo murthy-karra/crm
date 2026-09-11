@@ -36,12 +36,12 @@ pub use service::{
 };
 pub use tools::tool_definitions;
 pub use views::{
-    Ahead, CompleteTaskOutcome, ContactMethodView, CreateTaskProposalOutcome, FilterOutcome,
-    FilterResult, HistoryEntryView, InquiryView, MemberRef, NextWorkItem, NotOnTodayReason,
-    NoteView, PersonCard, PersonDetail, PhoneOption, PriorityExplanation, ProposalView,
-    SavedListRef, SearchResult, StartCallProposalOutcome, SystemFeedIssueView, TaskProposalView,
-    TaskReceiptView, TaskView, TodayItemView, TodaySourceIssueView, TodaySourcesView, TodayView,
-    TurnProposal, UntrustedText, WirePersonCard, ORDERING_RULE,
+    Ahead, CompleteTaskOutcome, ContactMethodView, CreateTaskProposalOutcome, CustomFieldView,
+    FilterOutcome, FilterResult, HistoryEntryView, InquiryView, MemberRef, NextWorkItem,
+    NotOnTodayReason, NoteView, PersonCard, PersonDetail, PhoneOption, PriorityExplanation,
+    ProposalView, SavedListRef, SearchResult, StartCallProposalOutcome, SystemFeedIssueView,
+    TaskProposalView, TaskReceiptView, TaskView, TodayItemView, TodaySourceIssueView,
+    TodaySourcesView, TodayView, TurnProposal, UntrustedText, WirePersonCard, ORDERING_RULE,
 };
 
 /// The system prompt (docs/specs/SLICE_005.md §3). Not a contract; the

@@ -15,6 +15,7 @@ use uuid::Uuid;
 use crate::auth::AuthContext;
 use crate::domain::admin::queries as admin_queries;
 use crate::domain::admin::MembershipStatus;
+use crate::domain::custom_field::{self, CustomFieldValue};
 use crate::domain::envelope::CommandContext;
 use crate::domain::inquiry::queries as inquiry_queries;
 use crate::domain::person::filter::FilterNames;
@@ -32,21 +33,27 @@ use crate::operator::filter::{self as name_resolver, NameMatch, Resolved};
 use crate::realtime::Publisher;
 use crm_operator::{
     CompleteTaskOutcome, ContactMethodView, CreateTaskProposalOutcome, CreateTaskSpec,
-    FilterOutcome, FilterResult, HistoryEntryView, InquiryView, MemberRef, NextWorkItem, NoteView,
-    OperatorContext, PeopleFilterSpec, PersonCard, PersonDetail, PhoneOption, PriorityExplanation,
-    ProposalView, SavedListRef, SavedListSelector, SearchResult, StartCallProposalOutcome,
-    TaskProposalView, TaskReceiptView, TaskView, TodayItemView, TodayView, ToolBackend, ToolError,
-    ToolResult, UntrustedText,
+    CustomFieldView, FilterOutcome, FilterResult, HistoryEntryView, InquiryView, MemberRef,
+    NextWorkItem, NoteView, OperatorContext, PeopleFilterSpec, PersonCard, PersonDetail,
+    PhoneOption, PriorityExplanation, ProposalView, SavedListRef, SavedListSelector, SearchResult,
+    StartCallProposalOutcome, TaskProposalView, TaskReceiptView, TaskView, TodayItemView,
+    TodayView, ToolBackend, ToolError, ToolResult, UntrustedText,
 };
 
 /// `get_person` returns the latest 5 inquiries and latest 20 history
 /// entries (docs/specs/SLICE_005.md §3, §14 item 12); the latest 5 live
 /// notes (docs/specs/SLICE_015.md §5, the same `MAX_INQUIRIES` precedent);
-/// at most ten open tasks (docs/specs/SLICE_016.md §7).
+/// at most ten open tasks (docs/specs/SLICE_016.md §7); at most fifty
+/// live custom fields with a set value, the model's own per-Organization
+/// cap (docs/specs/SLICE_019.md §6) — `values_for_person` already returns
+/// at most fifty rows by construction (D-050: 50 live definitions per
+/// Organization), so this never actually truncates; kept for the same
+/// defense-in-depth reason every other view cap here is stated.
 const MAX_INQUIRIES: usize = 5;
 const MAX_HISTORY: usize = 20;
 const MAX_NOTES: usize = 5;
 const MAX_TASKS: usize = 10;
+const MAX_CUSTOM_FIELDS: usize = 50;
 
 pub struct SqlxToolBackend {
     pool: PgPool,
@@ -226,6 +233,24 @@ fn org_id(ctx: &OperatorContext) -> OrganizationId {
 // Same seam, for the User id (hardening chunk N2).
 fn user_id(ctx: &OperatorContext) -> UserId {
     UserId::new(ctx.actor_user_id)
+}
+
+/// The canonical rendering of a Person's custom-field value for the
+/// Operator (docs/specs/SLICE_019.md §6): text as is; number as its
+/// already-trimmed decimal string (`custom_field::values_for_person`
+/// reads `trim_scale(number_value)::text`, spec §2); date as
+/// `YYYY-MM-DD`; choice as the option label. The composite FK
+/// (`person_custom_field_value.option_id` -> `custom_field_option`)
+/// guarantees the referenced option row exists whenever `field_type` is
+/// `choice`, so `option_label` is always present in practice; the empty-
+/// string fallback is defense-in-depth, never invented text.
+fn render_custom_field_value(value: &custom_field::Value) -> String {
+    match &value.value {
+        CustomFieldValue::Text(text) => text.clone(),
+        CustomFieldValue::Number(number) => number.clone(),
+        CustomFieldValue::Date(date) => date.format("%Y-%m-%d").to_string(),
+        CustomFieldValue::Choice(_) => value.option_label.clone().unwrap_or_default(),
+    }
 }
 
 /// Fails closed if this backend's own `AuthContext` (set once at
@@ -443,6 +468,22 @@ impl ToolBackend for SqlxToolBackend {
             })
             .collect();
 
+        // Set values on live fields only, in field position order, at
+        // most fifty (docs/specs/SLICE_019.md §6). `CustomFieldError`
+        // maps to the same generic backend-failure reason as the other
+        // domain-error-wrapped reads above — never a label, a value, or
+        // a SQL-error string.
+        let custom_fields = custom_field::values_for_person(&mut conn, org_id(ctx), person_id)
+            .await
+            .map_err(|_| ToolError::Backend("database query failed".into()))?
+            .into_iter()
+            .take(MAX_CUSTOM_FIELDS)
+            .map(|v| CustomFieldView {
+                label: UntrustedText::new(&v.label),
+                value: UntrustedText::new(&render_custom_field_value(&v)),
+            })
+            .collect();
+
         let today = today_for(conn, ctx).await?;
         let on_your_today = today.items.iter().any(|i| i.person.id == person_id);
 
@@ -457,6 +498,7 @@ impl ToolBackend for SqlxToolBackend {
             tags,
             notes,
             tasks,
+            custom_fields,
         })
     }
 

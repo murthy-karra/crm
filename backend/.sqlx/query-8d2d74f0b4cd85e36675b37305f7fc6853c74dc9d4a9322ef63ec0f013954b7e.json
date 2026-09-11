@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM person_custom_field_value\n           WHERE organization_id = $1 AND person_id = $2 AND field_id = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8d2d74f0b4cd85e36675b37305f7fc6853c74dc9d4a9322ef63ec0f013954b7e"
+}

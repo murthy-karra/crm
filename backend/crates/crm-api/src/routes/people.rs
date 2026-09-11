@@ -1,5 +1,5 @@
 use axum::extract::rejection::{JsonRejection, QueryRejection};
-use axum::extract::{FromRequestParts, Path, Query, State};
+use axum::extract::{DefaultBodyLimit, FromRequestParts, Path, Query, State};
 use axum::http::request::Parts;
 use axum::response::Json;
 use axum::routing::{delete, get, post, put};
@@ -13,6 +13,7 @@ use crate::domain::admin::Role;
 use crate::domain::commands::{
     self, AssignPerson, ChangePersonStage, ContactChannel, ContactOutcome, LogContactAttempt,
 };
+use crate::domain::custom_field::{self, ClearPersonCustomFieldValue, SetPersonCustomFieldValue};
 use crate::domain::envelope::CommandContext;
 use crate::domain::inquiry::queries as inquiry_queries;
 use crate::domain::person::filter::{FilterDefinition, PersonFilterParams};
@@ -22,8 +23,13 @@ use crate::domain::person::PersonVisibilityScope;
 use crate::domain::tag::{self, AddPersonTag, RemovePersonTag};
 use crate::domain::task;
 use crate::error::ApiError;
-use crate::ids::{PersonId, StageId, TagId, UserId};
+use crate::ids::{CustomFieldId, PersonId, StageId, TagId, UserId};
 use crate::state::AppState;
+
+// The house 128 KiB body cap (docs/specs/SLICE_019.md §4) — review round 1,
+// B3: the value PUT route carried none, unlike every other write route in
+// this file and in `routes/custom_fields.rs`.
+const MAX_CUSTOM_FIELD_VALUE_BODY_BYTES: usize = 128 * 1024;
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -34,6 +40,15 @@ pub fn router() -> Router<AppState> {
         .route("/api/people/{id}/contact-attempts", post(log_contact))
         .route("/api/people/{id}/tags/{tag_id}", put(add_person_tag))
         .route("/api/people/{id}/tags/{tag_id}", delete(remove_person_tag))
+        .route(
+            "/api/people/{id}/custom-fields/{field_id}",
+            put(set_person_custom_field_value)
+                .layer(DefaultBodyLimit::max(MAX_CUSTOM_FIELD_VALUE_BODY_BYTES)),
+        )
+        .route(
+            "/api/people/{id}/custom-fields/{field_id}",
+            delete(clear_person_custom_field_value),
+        )
 }
 
 /// A `{id}` path segment parsed as a UUID and typed as `PersonId`
@@ -85,6 +100,28 @@ impl FromRequestParts<AppState> for PersonTagIdsPath {
         Ok(PersonTagIdsPath(
             PersonId::new(person_id),
             TagId::new(tag_id),
+        ))
+    }
+}
+
+/// The `{id}/custom-fields/{field_id}` pair (docs/specs/SLICE_019.md §4),
+/// the `PersonTagIdsPath` pattern: either id being a non-UUID is a 400
+/// independent of auth state.
+struct PersonCustomFieldIdsPath(PersonId, CustomFieldId);
+
+impl FromRequestParts<AppState> for PersonCustomFieldIdsPath {
+    type Rejection = ApiError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let Path((person_id, field_id)) = Path::<(Uuid, Uuid)>::from_request_parts(parts, state)
+            .await
+            .map_err(|_| ApiError::MalformedRequest)?;
+        Ok(PersonCustomFieldIdsPath(
+            PersonId::new(person_id),
+            CustomFieldId::new(field_id),
         ))
     }
 }
@@ -256,6 +293,13 @@ async fn get_person(
 
     let tags = tag::list_for_person(&mut conn, organization_id, person_id).await?;
 
+    // `custom_fields` (docs/specs/SLICE_019.md §4): set values on LIVE
+    // fields only, in field position order — assembled here beside
+    // `tags`/`tasks`, no change to `crm-app/src/domain/person/` (spec's
+    // stated ownership boundary).
+    let custom_fields =
+        custom_field::values_for_person(&mut conn, organization_id, person_id).await?;
+
     let tasks = task::open_for_person(&mut conn, organization_id, person_id).await?;
     // The Person detail's `tasks[]` `can_manage` (docs/specs/SLICE_016.md
     // §4): same viewer-relative overwrite as the history kind above — the
@@ -283,6 +327,7 @@ async fn get_person(
         "history": history,
         "tags": tags,
         "tasks": tasks,
+        "custom_fields": custom_fields,
     })))
 }
 
@@ -432,4 +477,72 @@ async fn remove_person_tag(
     Ok(Json(
         json!({ "tags": outcome.tags, "changed": outcome.changed }),
     ))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SetCustomFieldValueRequest {
+    value: custom_field::CustomFieldValue,
+}
+
+/// `PUT /api/people/{person_id}/custom-fields/{field_id}` (docs/specs/
+/// SLICE_019.md §4): any active member; the outer `{"value": …}` wrapper
+/// is `deny_unknown_fields`, and the inner externally tagged
+/// `CustomFieldValue` rejects zero, two, or an unknown key by
+/// construction (spec §4) — both fail 400 through the same
+/// `JsonRejection` path as a syntactically malformed body.
+async fn set_person_custom_field_value(
+    State(state): State<AppState>,
+    PersonCustomFieldIdsPath(person_id, field_id): PersonCustomFieldIdsPath,
+    auth: AuthContext,
+    body: Result<Json<SetCustomFieldValueRequest>, JsonRejection>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let Json(req) = body.map_err(|_| ApiError::MalformedRequest)?;
+    let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
+    let ctx = CommandContext::from_auth(&auth);
+
+    let outcome = custom_field::set_person_custom_field_value(
+        pool,
+        &state.publisher,
+        &ctx,
+        SetPersonCustomFieldValue {
+            person_id,
+            field_id,
+            value: req.value,
+        },
+    )
+    .await?;
+
+    Ok(Json(json!({
+        "custom_fields": outcome.values,
+        "changed": outcome.changed,
+    })))
+}
+
+/// `DELETE /api/people/{person_id}/custom-fields/{field_id}` (docs/specs/
+/// SLICE_019.md §4): any active member; target-state idempotent (clear
+/// on an absent value is `changed: false`).
+async fn clear_person_custom_field_value(
+    State(state): State<AppState>,
+    PersonCustomFieldIdsPath(person_id, field_id): PersonCustomFieldIdsPath,
+    auth: AuthContext,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
+    let ctx = CommandContext::from_auth(&auth);
+
+    let outcome = custom_field::clear_person_custom_field_value(
+        pool,
+        &state.publisher,
+        &ctx,
+        ClearPersonCustomFieldValue {
+            person_id,
+            field_id,
+        },
+    )
+    .await?;
+
+    Ok(Json(json!({
+        "custom_fields": outcome.values,
+        "changed": outcome.changed,
+    })))
 }

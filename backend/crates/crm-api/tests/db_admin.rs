@@ -478,6 +478,82 @@ async fn platform_admin_with_zero_memberships_has_null_organization_and_is_401_o
     .await;
     assert_eq!(task_delete_resp.status(), StatusCode::UNAUTHORIZED);
 
+    // Slice 019a (docs/specs/SLICE_019.md §9): the eight custom-field
+    // routes join this enumeration too — `AuthContext`/`OrgAdminContext`
+    // both run before anything else, so a platform-only session is 401
+    // regardless of the admin-vs-member split among these routes.
+    let fake_field_id = Uuid::new_v4();
+    let fake_option_id = Uuid::new_v4();
+    let custom_fields_get_resp = get_with_cookie(&router, "/api/custom-fields", &cookie).await;
+    assert_eq!(custom_fields_get_resp.status(), StatusCode::UNAUTHORIZED);
+    let custom_fields_post_resp = post_json_with_cookie(
+        &router,
+        "/api/custom-fields",
+        &cookie,
+        serde_json::json!({ "label": "Should be 401", "field_type": "text" }),
+    )
+    .await;
+    assert_eq!(custom_fields_post_resp.status(), StatusCode::UNAUTHORIZED);
+    let custom_fields_order_resp = put_json_with_cookie(
+        &router,
+        "/api/custom-fields/order",
+        &cookie,
+        serde_json::json!({ "field_ids": [] }),
+    )
+    .await;
+    assert_eq!(custom_fields_order_resp.status(), StatusCode::UNAUTHORIZED);
+    let custom_field_put_resp = put_json_with_cookie(
+        &router,
+        &format!("/api/custom-fields/{fake_field_id}"),
+        &cookie,
+        serde_json::json!({ "label": "Should be 401", "archived": false }),
+    )
+    .await;
+    assert_eq!(custom_field_put_resp.status(), StatusCode::UNAUTHORIZED);
+    let custom_field_option_post_resp = post_json_with_cookie(
+        &router,
+        &format!("/api/custom-fields/{fake_field_id}/options"),
+        &cookie,
+        serde_json::json!({ "label": "Should be 401" }),
+    )
+    .await;
+    assert_eq!(
+        custom_field_option_post_resp.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let custom_field_option_put_resp = put_json_with_cookie(
+        &router,
+        &format!("/api/custom-fields/{fake_field_id}/options/{fake_option_id}"),
+        &cookie,
+        serde_json::json!({ "label": "Should be 401", "archived": false }),
+    )
+    .await;
+    assert_eq!(
+        custom_field_option_put_resp.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let custom_field_value_put_resp = put_json_with_cookie(
+        &router,
+        &format!("/api/people/{fake_person_id}/custom-fields/{fake_field_id}"),
+        &cookie,
+        serde_json::json!({ "value": { "text": "Should be 401" } }),
+    )
+    .await;
+    assert_eq!(
+        custom_field_value_put_resp.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let custom_field_value_delete_resp = delete_with_cookie(
+        &router,
+        &format!("/api/people/{fake_person_id}/custom-fields/{fake_field_id}"),
+        &cookie,
+    )
+    .await;
+    assert_eq!(
+        custom_field_value_delete_resp.status(),
+        StatusCode::UNAUTHORIZED
+    );
+
     // Lists and creates Organizations.
     let list_resp = get_with_cookie(&router, "/api/platform/organizations", &cookie).await;
     assert_eq!(list_resp.status(), StatusCode::OK);

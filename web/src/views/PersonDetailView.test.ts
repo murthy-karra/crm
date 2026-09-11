@@ -34,6 +34,7 @@ import type {
   HistoryEntry,
   MeResponse,
   Member,
+  PersonCustomFieldValue,
   PersonDetailResponse,
   ReopenTaskResponse,
   RoutingStrategy,
@@ -78,6 +79,7 @@ function detail(
   history: HistoryEntry[] = [],
   tags: TagRef[] = [],
   tasks: Task[] = [],
+  customFields: PersonCustomFieldValue[] = [],
 ): PersonDetailResponse {
   return {
     person: {
@@ -98,6 +100,7 @@ function detail(
     history,
     tags,
     tasks,
+    custom_fields: customFields,
   }
 }
 

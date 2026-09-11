@@ -5,7 +5,7 @@
 // Inquiries / History cards. History renders the server's per-kind
 // `detail` shapes exactly as spec §5 documents them, in server order
 // (occurred_at, recorded_at, kind_rank, id) — never re-sorted here.
-import { computed, nextTick, onBeforeUnmount, ref, watch, type Component } from 'vue'
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch, type Component } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import Select from 'primevue/select'
 import { useQueryClient } from '@tanstack/vue-query'
@@ -41,10 +41,12 @@ import {
   useAddPersonTagMutation,
   useAssignPersonMutation,
   useChangeStageMutation,
+  useClearCustomFieldValueMutation,
   useCompleteTaskMutation,
   useCorrectCallOutcome,
   useCreateTagMutation,
   useCreateTaskMutation,
+  useCustomFieldsQuery,
   useDeleteNoteMutation,
   useDeleteTaskMutation,
   useEditNoteMutation,
@@ -53,6 +55,7 @@ import {
   usePerson,
   useReopenTaskMutation,
   useRemovePersonTagMutation,
+  useSetCustomFieldValueMutation,
   useStages,
   useTagsQuery,
   useUpdateTaskMutation,
@@ -62,7 +65,9 @@ import type {
   ActorRef,
   CallOutcomeCorrection,
   ContactAttemptedDetail,
+  CustomField,
   HistoryEntry,
+  PersonCustomFieldValue,
   RoutingStrategy,
   Task,
   TaskKind,
@@ -312,6 +317,214 @@ const HISTORY_ICON: Record<HistoryEntry['kind'], Component> = {
 // not actually guarantee.
 function historyIcon(kind: string): Component {
   return (HISTORY_ICON as Record<string, Component>)[kind] ?? Activity
+}
+
+// ---- Custom fields (Slice 019a, spec §7) -----------------------------------
+// A Details card after Contact methods: every LIVE field, server order
+// (position, id), label left, a per-type inline editor right. Text/number/
+// date are always-editable inputs (Enter or blur saves, Escape reverts,
+// the note/task precedent has no analogue since there is no separate edit
+// mode here); choice is a Select that mutates immediately, the stage/
+// assignee precedent. Each row keeps its own pending/error state; a 409
+// `field_archived` or a 404 refetches BOTH the definitions and the Person.
+const { data: customFieldsData } = useCustomFieldsQuery(orgId)
+const liveCustomFields = computed(() => (customFieldsData.value?.fields ?? []).filter((f) => f.archived_at === null))
+const customFieldValues = computed(() => detail.value?.custom_fields ?? [])
+const isOrgAdmin = computed(() => me.value?.organization?.role === 'admin')
+
+interface CustomFieldRow {
+  field: CustomField
+  value: PersonCustomFieldValue | undefined
+}
+const customFieldRows = computed<CustomFieldRow[]>(() =>
+  liveCustomFields.value.map((field) => ({
+    field,
+    value: customFieldValues.value.find((v) => v.field_id === field.id),
+  })),
+)
+
+function renderedTextValue(value: PersonCustomFieldValue | undefined): string {
+  if (!value) return ''
+  const payload = value.value
+  if ('text' in payload) return payload.text
+  if ('number' in payload) return payload.number
+  if ('date' in payload) return payload.date
+  return ''
+}
+
+interface CustomFieldEditorState {
+  draft: string
+  error: string | null
+}
+const fieldEditors = reactive<Record<string, CustomFieldEditorState>>({})
+
+// Initialize a row's draft the first time it is seen, never overwriting one
+// already in progress (typing, or a pending save); drop an editor once its
+// field is archived/removed so a later restore re-initializes from the
+// server instead of replaying a stale draft.
+watch(
+  customFieldRows,
+  (rows) => {
+    const liveIds = new Set(rows.map((row) => row.field.id))
+    for (const id of Object.keys(fieldEditors)) {
+      if (!liveIds.has(id)) delete fieldEditors[id]
+    }
+    for (const row of rows) {
+      if (!(row.field.id in fieldEditors)) {
+        fieldEditors[row.field.id] = { draft: renderedTextValue(row.value), error: null }
+      }
+    }
+  },
+  { immediate: true },
+)
+
+const setCustomFieldValue = useSetCustomFieldValueMutation(orgId, () => props.id)
+const clearCustomFieldValue = useClearCustomFieldValueMutation(orgId, () => props.id)
+
+function isCustomFieldPending(fieldId: string): boolean {
+  return (
+    (setCustomFieldValue.isPending.value && setCustomFieldValue.variables.value?.fieldId === fieldId) ||
+    (clearCustomFieldValue.isPending.value && clearCustomFieldValue.variables.value?.fieldId === fieldId)
+  )
+}
+
+// §7: a 409 `field_archived` (archived since the page loaded) or a 404
+// (the Person or field vanished) refetches definitions and the Person so
+// the next render reflects reality instead of a stale row.
+function refetchCustomFieldsOnStaleReference(err: unknown) {
+  if (err instanceof ApiError && (err.status === 409 || err.status === 404)) {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.customFields(orgId.value) })
+    void queryClient.invalidateQueries({ queryKey: queryKeys.person(orgId.value, props.id) })
+  }
+}
+
+/** An empty (post-trim) draft clears the value rather than sending an
+ * empty-string text value, which the server would reject as `invalid_value`
+ * (the CHECK's 1–500-character floor). */
+function saveTextOrDateField(row: CustomFieldRow) {
+  const editor = fieldEditors[row.field.id]
+  if (!editor || isCustomFieldPending(row.field.id)) return
+  editor.error = null
+  const draft = editor.draft.trim()
+  if (draft === '') {
+    clearCustomFieldValue.mutate(
+      { personId: props.id, fieldId: row.field.id },
+      {
+        onError: (err) => {
+          editor.error = describeApiError(err, 'Could not clear this value.')
+          refetchCustomFieldsOnStaleReference(err)
+        },
+      },
+    )
+    return
+  }
+  const value = row.field.field_type === 'text' ? { text: draft } : { date: draft }
+  setCustomFieldValue.mutate(
+    { personId: props.id, fieldId: row.field.id, body: { value } },
+    {
+      onError: (err) => {
+        editor.error = describeApiError(err, 'Could not save this value.')
+        refetchCustomFieldsOnStaleReference(err)
+      },
+    },
+  )
+}
+
+// §2: the same pattern `^-?[0-9]{1,15}(\.[0-9]{1,4})?$` the server
+// validates — checked client-side first so a malformed number never makes
+// a round trip; the server's own canonical string is what actually renders
+// back on success (trailing zeros trimmed, "12.50" -> "12.5").
+const NUMBER_PATTERN = /^-?[0-9]{1,15}(\.[0-9]{1,4})?$/
+
+function saveNumberField(row: CustomFieldRow) {
+  const editor = fieldEditors[row.field.id]
+  if (!editor || isCustomFieldPending(row.field.id)) return
+  const draft = editor.draft.trim()
+  if (draft !== '' && !NUMBER_PATTERN.test(draft)) {
+    editor.error = 'Enter a number with up to 4 decimal places.'
+    return
+  }
+  saveTextOrDateField(row)
+}
+
+function revertCustomField(row: CustomFieldRow) {
+  const editor = fieldEditors[row.field.id]
+  if (!editor) return
+  editor.draft = renderedTextValue(row.value)
+  editor.error = null
+}
+
+function onCustomFieldKeydown(row: CustomFieldRow, event: KeyboardEvent) {
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    ;(event.target as HTMLElement).blur()
+  } else if (event.key === 'Escape') {
+    event.preventDefault()
+    revertCustomField(row)
+    ;(event.target as HTMLElement).blur()
+  }
+}
+
+function onCustomFieldInput(row: CustomFieldRow, event: Event) {
+  const editor = fieldEditors[row.field.id]
+  if (editor) editor.draft = (event.target as HTMLInputElement).value
+}
+
+// ---- Choice editor: a Select, mutates immediately (the stage/assignee
+// precedent) — no draft, no Enter/blur/Escape.
+
+function heldOptionId(row: CustomFieldRow): string | null {
+  const payload = row.value?.value
+  return payload && 'option_id' in payload ? payload.option_id : null
+}
+
+interface ChoiceOptionItem {
+  id: string | null
+  label: string
+}
+
+/** Live options first (creation order, already server-sorted), then —
+ * only when the held option is itself archived — a synthetic "keep
+ * current" entry naming it, then a Clear entry (`id: null`, the
+ * assignee-Select "Unassigned" pattern). */
+function choiceOptions(row: CustomFieldRow): ChoiceOptionItem[] {
+  const live = row.field.options.filter((o) => o.archived_at === null).map((o) => ({ id: o.id, label: o.label }))
+  const held = heldOptionId(row)
+  const heldIsArchived = held !== null && !live.some((o) => o.id === held)
+  const options: ChoiceOptionItem[] = [...live]
+  if (heldIsArchived && row.value?.option_label) {
+    options.push({ id: held, label: `${row.value.option_label} (archived — keep current)` })
+  }
+  options.push({ id: null, label: 'Clear' })
+  return options
+}
+
+function onChoiceChange(row: CustomFieldRow, optionId: unknown) {
+  if (typeof optionId !== 'string' && optionId !== null) return
+  if (optionId === heldOptionId(row)) return
+  const editor = fieldEditors[row.field.id]
+  if (editor) editor.error = null
+  if (optionId === null) {
+    clearCustomFieldValue.mutate(
+      { personId: props.id, fieldId: row.field.id },
+      {
+        onError: (err) => {
+          if (editor) editor.error = describeApiError(err, 'Could not clear this value.')
+          refetchCustomFieldsOnStaleReference(err)
+        },
+      },
+    )
+    return
+  }
+  setCustomFieldValue.mutate(
+    { personId: props.id, fieldId: row.field.id, body: { value: { option_id: optionId } } },
+    {
+      onError: (err) => {
+        if (editor) editor.error = describeApiError(err, 'Could not save this value.')
+        refetchCustomFieldsOnStaleReference(err)
+      },
+    },
+  )
 }
 
 // ---- Notes (SLICE_015 §5, §9.10) -------------------------------------------
@@ -1585,6 +1798,107 @@ watch(
         >
           No contact methods.
         </p>
+      </Card>
+
+      <Card>
+        <div class="mb-4 flex items-center justify-between gap-4">
+          <h2 class="text-section font-semibold text-text">
+            Details
+          </h2>
+          <RouterLink
+            v-if="isOrgAdmin"
+            to="/manage/fields"
+            class="text-small text-text-muted underline-offset-2 hover:underline"
+          >
+            Manage → Fields
+          </RouterLink>
+        </div>
+        <p
+          v-if="customFieldRows.length === 0"
+          class="text-body text-text-muted"
+          data-testid="custom-fields-empty"
+        >
+          No custom fields yet.
+          <RouterLink
+            v-if="isOrgAdmin"
+            to="/manage/fields"
+            class="text-accent underline-offset-2 hover:underline"
+          >
+            Add one in Manage → Fields.
+          </RouterLink>
+        </p>
+        <div
+          v-else
+          class="divide-y divide-border"
+        >
+          <div
+            v-for="row in customFieldRows"
+            :key="row.field.id"
+            class="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+            data-testid="custom-field-row"
+          >
+            <span class="text-body text-text">{{ row.field.label }}</span>
+            <div class="min-w-56 max-w-xs flex-1 sm:flex-none">
+              <input
+                v-if="row.field.field_type === 'text'"
+                :value="fieldEditors[row.field.id]?.draft ?? ''"
+                :class="INPUT_CLASSES"
+                :aria-label="row.field.label"
+                :disabled="isCustomFieldPending(row.field.id)"
+                data-testid="custom-field-text-input"
+                @input="onCustomFieldInput(row, $event)"
+                @blur="saveTextOrDateField(row)"
+                @keydown="onCustomFieldKeydown(row, $event)"
+              >
+              <input
+                v-else-if="row.field.field_type === 'number'"
+                :value="fieldEditors[row.field.id]?.draft ?? ''"
+                type="text"
+                inputmode="decimal"
+                :class="INPUT_CLASSES"
+                :aria-label="row.field.label"
+                :disabled="isCustomFieldPending(row.field.id)"
+                data-testid="custom-field-number-input"
+                @input="onCustomFieldInput(row, $event)"
+                @blur="saveNumberField(row)"
+                @keydown="onCustomFieldKeydown(row, $event)"
+              >
+              <input
+                v-else-if="row.field.field_type === 'date'"
+                :value="fieldEditors[row.field.id]?.draft ?? ''"
+                type="date"
+                :class="INPUT_CLASSES"
+                :aria-label="row.field.label"
+                :disabled="isCustomFieldPending(row.field.id)"
+                data-testid="custom-field-date-input"
+                @input="onCustomFieldInput(row, $event)"
+                @blur="saveTextOrDateField(row)"
+                @keydown="onCustomFieldKeydown(row, $event)"
+              >
+              <Select
+                v-else
+                :model-value="heldOptionId(row)"
+                :options="choiceOptions(row)"
+                option-label="label"
+                option-value="id"
+                :aria-label="row.field.label"
+                :disabled="isCustomFieldPending(row.field.id)"
+                :pt="selectPt()"
+                class="w-full"
+                data-testid="custom-field-choice-select"
+                @update:model-value="onChoiceChange(row, $event)"
+              />
+              <p
+                v-if="fieldEditors[row.field.id]?.error"
+                role="alert"
+                class="mt-1.5 text-small text-danger"
+                data-testid="custom-field-error"
+              >
+                {{ fieldEditors[row.field.id]?.error }}
+              </p>
+            </div>
+          </div>
+        </div>
       </Card>
 
       <Card>

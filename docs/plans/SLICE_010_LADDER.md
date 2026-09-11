@@ -25,7 +25,8 @@ operation until later activation. Independent review is READY, and D-065 now
 approves complete 010c contracts, implementation and synthetic verification.
 Implementation and all required synthetic checks are complete;
 [evidence](../design/qa/slice-010c-2026-09-11/README.md) records the result.
-Git integration, publication and cleanup are authorized by the D-065 follow-up.
+Git integration, publication and cleanup are complete under the D-065 follow-up:
+implementation `fcd2480`, merge `c3f6ca9`, pushed to main.
 Deployment and other later rungs remain outside that approval.
 Notes, tasks, tags and custom fields now
 have destination models. API-first assessment and encrypted saved credentials

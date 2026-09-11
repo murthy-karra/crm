@@ -4,6 +4,9 @@
 verification of the [approved spec](../specs/SLICE_010c.md) and
 [brief](SLICE_010c_IMPL.md). All required implementation checks passed.
 Live FUB validation remains user-deferred. No release or real-data processing.
+The D-065 follow-up subsequently authorized Git integration and cleanup, now
+complete: implementation `fcd2480`, merge `c3f6ca9`, pushed to main. See the
+[integration record](#git-integration-and-cleanup--2026-09-11) below.
 
 Final status: both implementation reviews and their fixes are closed;
 the final backend gates, all 59 query plans/258 assertions and the single paired
@@ -690,15 +693,52 @@ obsolete SQLx cache deletions. Canonical map SHA256:
 The final Web return-event fix changes no backend, schema, query-plan or benchmark
 bytes. Historical review/source checkpoints remain available separately.
 
-Implementation is complete and remains uncommitted on the isolated 010c branch.
-Live FUB qualification, customer-data readiness, deployed-fleet compatibility
-evidence, Git publication, deployment and later activation remain separate.
+At this implementation checkpoint the changes were complete and uncommitted on
+the isolated 010c branch. Git publication and cleanup subsequently completed
+under the follow-up below. Live FUB qualification, customer-data readiness,
+deployed-fleet compatibility evidence, deployment and later activation remain separate.
 
 Final handoff checks matched all 236 source/deletion entries and 73 runtime
 artifact hashes. All 137 local document links across 12 current documents exist;
 Git whitespace validation passed. The owned browser/API/Web processes exited,
 QA ports 3012/5182 are closed, and the private environment's original fingerprint
 and 0600/0700 permissions are restored. Original `main` remains clean at `c6c5930`.
-The dedicated `crm_slice010c_qa` database and private fixtures remain available
-for local synthetic inspection; no shared-development process or database was reset.
+The dedicated `crm_slice010c_qa` database and private fixtures were retained at
+this checkpoint, then removed during the authorized cleanup below. No
+shared-development process or database was reset.
 See [final-integrity.json](../design/qa/slice-010c-2026-09-11/checks/final-integrity.json).
+
+## Git integration and cleanup — 2026-09-11
+
+The user's “commit, merge, push and cleanup” request is recorded in the D-065
+follow-up. Implementation commit `fcd24802bfd2db94697082ac430a19defa4b1753`
+was merged into main as `c3f6ca9b8f5254e649beb0964f6497a49969abbb` and pushed
+to origin/main. The remote ref was read back and matched. A subsequent
+documentation-only commit records these results and current project status.
+
+Publication checks covered 315 added/modified/deleted paths without Git rename
+collapsing. All 236 source-manifest entries (218 files and 18 explicit deletions)
+matched the staged Git blobs and both commits. Implementation and merge Git
+trees are identical. No code/config change is outside the source manifest.
+Independent publication audit found no blocker or new credential exposure;
+private environments, dependencies and build output remained ignored. The only
+binary publication artifacts are 32 synthetic screenshots. Six captured text
+logs had trailing whitespace normalized; their results are unchanged. Staged
+`git diff --check` and 215 local file links across 27 changed Markdown documents
+passed. Full application tests were not repeated because the implementation
+bytes still match the previously successful gates.
+
+After the successful push, the clean merged worktree and branch were removed,
+including its isolated build/dependency output and private environment. The
+task-owned `crm_slice010c_qa` and `crm_slice010c_test_master` databases each had
+zero connections before normal, non-forced drops; a subsequent catalog query
+confirmed both absent and `crm_dev` still present. The mode-0700 private QA
+directory `/private/tmp/crm-010c-qa-0e4vdxyr` was removed after verifying ports
+3012/5182 closed. Sanitized verification evidence remains committed. No shared
+development process was restarted, deployed data reset, or 010b recovery artifact
+removed. [Integration checks](../design/qa/slice-010c-2026-09-11/checks/integration.json)
+record the Git source and cleanup checks.
+
+010c is not deployed. A later deployment must follow the compatibility/recovery
+runbook and produce actual workload evidence. Live authorized FUB validation
+remains user-deferred; this integration performs no source operation or activation.

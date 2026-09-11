@@ -1,9 +1,9 @@
 # Slice 010c implementation evidence
 
-**Implemented and synthetically verified; uncommitted and not deployed.** Worktree
-`codex/slice-010c-people-import`, baseline
-`c6c5930ee4975706a87398e0a7e7766b05417cf5`. D-065 authorizes implementation and
-synthetic checks. Shared development continues to run the 010b release.
+**Implemented, synthetically verified, merged and pushed; not deployed.**
+Implementation `fcd2480`, merge `c3f6ca9`, baseline
+`c6c5930ee4975706a87398e0a7e7766b05417cf5`. Git publication and cleanup completed
+under the D-065 follow-up. Shared development continues to run the 010b release.
 
 ## Implemented behavior
 
@@ -78,12 +78,17 @@ seam are compile-time test support; no production route selects a fake reader.
 Disposable synthetic Organizations and a dedicated QA database are used.
 [BROWSER_ARTIFACTS_SHA256.json](BROWSER_ARTIFACTS_SHA256.json) identifies the
 example binary and 72 production Web files used for the successful walkthrough.
-Final integrity verification matched all 236 source paths and 73 runtime
-artifacts. The owned browser/API/Web processes exited, ports 3012/5182 are closed,
-the protected QA environment is restored, and original `main` is clean.
-The dedicated synthetic QA database is retained for local inspection; it contains
-no customer data. [Integrity results](checks/final-integrity.json) and
-[document-link checks](checks/document-links.json) record the final handoff checks.
+Implementation-handoff integrity verification matched all 236 source paths and
+73 runtime artifacts, restored the protected environment and stopped the owned
+browser/API/Web processes. [Integrity results](checks/final-integrity.json) and
+[document-link checks](checks/document-links.json) preserve that checkpoint.
+Subsequent Git integration matched all 236 entries against both implementation
+and merge commits, whose complete Git trees are identical. The merged worktree,
+branch, isolated builds/dependencies, both disposable synthetic databases and
+private QA directory were removed; ports 3012/5182 remain closed. Committed
+evidence is retained in this directory. See
+[integration checks](checks/integration.json) and the
+[integration record](../../../tasks/SLICE_010c_VERIFICATION.md#git-integration-and-cleanup--2026-09-11).
 
 ## Browser results and visuals
 
@@ -113,8 +118,9 @@ separate work.
 ## Deferred work
 
 Live authorized FUB validation remains user-deferred. No customer data, live
-source request, deployment, Git publication or activation is covered by this
-evidence. A later authorized release must establish actual artifact/workload
+source request, deployment or activation is covered by the synthetic checks.
+Git publication and cleanup are recorded separately above. A later authorized
+release must establish actual artifact/workload
 inventory and retire every incompatible process; synthetic preflight tests do
 not certify a deployed fleet. See the
 [release and recovery runbook](../../../tasks/SLICE_010c_RELEASE_PREPARATION.md).

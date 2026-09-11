@@ -1,0 +1,59 @@
+{
+  "date": "2026-09-11",
+  "scope": "Git integration, publication and disposable synthetic QA cleanup; no deployment",
+  "base_commit": "c6c5930ee4975706a87398e0a7e7766b05417cf5",
+  "implementation_commit": "fcd24802bfd2db94697082ac430a19defa4b1753",
+  "merge_commit": "c3f6ca9b8f5254e649beb0964f6497a49969abbb",
+  "remote_main_after_implementation_push": "c3f6ca9b8f5254e649beb0964f6497a49969abbb",
+  "verification_manifest_sha256": "45f1c940403f29e56479dd17714ca033b0a9e99a7d1b4575adb086909ee787ad",
+  "verified_source_entries": 236,
+  "verified_present_files": 218,
+  "verified_deletions": 18,
+  "staged_implementation_and_merge_blobs_match": true,
+  "implementation_and_merge_trees_identical": true,
+  "unmanifested_code_or_config_changes": 0,
+  "publication_paths_without_rename_collapsing": 315,
+  "independent_publication_audit": "No blocker or new credential exposure found",
+  "synthetic_screenshots": 32,
+  "captured_text_logs_whitespace_normalized": 6,
+  "application_test_rerun": false,
+  "application_test_rerun_reason": "Implementation bytes match previously successful gates",
+  "precommit_document_file_links": {
+    "documents": 27,
+    "links": 215,
+    "missing": []
+  },
+  "cleanup": {
+    "merged_branch_removed": true,
+    "merged_worktree_removed": true,
+    "isolated_builds_dependencies_and_environment_removed": true,
+    "private_qa_directory_removed": true,
+    "dropped_databases": [
+      "crm_slice010c_qa",
+      "crm_slice010c_test_master"
+    ],
+    "connections_before_drop": [
+      0,
+      0
+    ],
+    "forced_database_drop": false,
+    "remaining_disposable_databases": 0,
+    "crm_dev_preserved": true,
+    "closed_qa_ports": [
+      3012,
+      5182
+    ],
+    "remaining_git_worktrees": 1,
+    "committed_evidence_retained": true,
+    "shared_development_restarted": false,
+    "existing_release_recovery_artifacts_removed": false
+  },
+  "deployed_release_unchanged": "010b / 89471f0",
+  "live_fub_validation": "user-deferred",
+  "record_scope_note": "This file records source publication and cleanup before the subsequent documentation-only status commit.",
+  "final_document_file_links": {
+    "documents": 28,
+    "links": 262,
+    "missing": []
+  }
+}

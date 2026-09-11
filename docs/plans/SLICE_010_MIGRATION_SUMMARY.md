@@ -32,8 +32,9 @@ stages and an admin review workspace until later activation. D-065 approves the
 complete spec/brief after independent READY review. The implementation
 does not create Inquiry history or release imported People to normal agent use.
 All required implementation checks passed; [evidence](../design/qa/slice-010c-2026-09-11/README.md)
-records the exact source and proof. The D-065 follow-up authorizes Git integration,
-publication and cleanup. Deployment and live FUB validation remain separate.
+records the exact source and proof. Git integration, publication and cleanup are
+complete under the D-065 follow-up: implementation `fcd2480`, merge `c3f6ca9`,
+pushed to main. Deployment and live FUB validation remain separate.
 
 ## 1. Outcome and first milestone
 

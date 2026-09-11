@@ -1,6 +1,6 @@
 # Project state
 
-Last updated: 2026-09-11 (010b released; 010c implemented and synthetically verified, unreleased).
+Last updated: 2026-09-11 (010b released; verified 010c merged/pushed and cleaned up, undeployed).
 This file holds current operational status, active work and live residuals.
 [PROJECT_HISTORY.md](PROJECT_HISTORY.md) preserves earlier progress, the slice
 ledger and historical measurements; its old instructions are not current work.
@@ -28,8 +28,8 @@ No production-cluster deployment or recurring monitor is established by this wor
 
 ## Current slice
 
-- **010c implementation:** approved under D-065, implemented on
-  `codex/slice-010c-people-import` in `/Users/karrad/projects/crm-worktrees/010c`.
+- **010c implementation:** approved under D-065, committed as `fcd2480`,
+  merged as `c3f6ca9` and pushed to main under its follow-up authorization.
   The [spec](../specs/SLICE_010c.md) and [brief](../tasks/SLICE_010c_IMPL.md) cover
   People/contact/stage/assignment import from retained 010b evidence, separate
   People with contact overlap flags, explicit mappings, atomic empty-Organization
@@ -41,8 +41,7 @@ No production-cluster deployment or recurring monitor is established by this wor
   paired reader benchmark passed. Production-Web browser verification passed all 50 recorded checkpoints,
   including six states at six viewport widths. [Evidence summary](../design/qa/slice-010c-2026-09-11/README.md) and
   [verification chronology](../tasks/SLICE_010c_VERIFICATION.md) retain the exact
-  source, checks and limits. The D-065 follow-up authorizes Git integration,
-  publication and cleanup; these are now in progress. Changes remain uncommitted;
+  source, checks and limits. Git integration, publication and cleanup are complete;
   no shared-development deployment, live FUB operation or activation occurred.
 - **Foundations documentation:** user authorized the three deliverables on
   2026-09-11: refresh the system map/state, draft foundations, define readiness.
@@ -68,12 +67,14 @@ No production-cluster deployment or recurring monitor is established by this wor
 
 ## Current branch
 
-Main contains implementation `b71a854` and merge/release source `89471f0`,
-following approved planning baseline `49581a0`. Both are pushed to origin/main;
-later documentation commits record release evidence without changing the deployed
-code. The merged implementation branch/worktree and disposable synthetic QA
-database were removed. Private rollback artifacts are retained. Inspect Git and
-the release record for current source/runtime identity before further work.
+Main contains 010c implementation `fcd2480` and merge `c3f6ca9`, both published
+to origin/main. Its Git tree matches all 236 verified source/deletion entries.
+The merged branch/worktree, isolated build/dependency files, private QA fixtures
+and both disposable 010c databases were removed. The subsequent documentation
+commit records integration and cleanup without changing implementation bytes.
+Shared development still runs 010b source `89471f0`; its private rollback
+artifacts and the shared `crm_dev` database are preserved. Inspect Git and the
+release record for current source/runtime identity before further work.
 
 ## Last accepted decision
 
@@ -112,7 +113,7 @@ Foundations F-01/F-02/F-03 remain proposals except where separately accepted.
   [Current summary](SLICE_010_MIGRATION_SUMMARY.md); historical survey retained
   in [the ladder](SLICE_010_LADDER.md). New, empty Organization first and
   010a's source/credential contracts are accepted. Full inventory, mapping,
-  imports and cutover need their own specifications and approvals. 010c is the current implementation rung; the deployed 010b release remains unchanged.
+  imports and cutover need their own specifications and approvals. 010c is implemented and integrated; the deployed 010b release remains unchanged.
 - **Remote gates (gate-speedup phase 2): DEFERRED** pending local
   phase-1 results (now in: local gates are ~3 min — pressure is low).
   Survey recorded so it is not re-litigated: first choice GitHub
@@ -244,7 +245,10 @@ and now lives only in git history.
   storage resume/cancellation and six-state/six-width browser checks. Source and
   runtime manifests, 32 screenshots and logs are in the
   [evidence summary](../design/qa/slice-010c-2026-09-11/README.md).
-  Implementation remains uncommitted/unreleased; live FUB validation is deferred.
+  Follow-up Git integration and cleanup passed: implementation `fcd2480`, merge
+  `c3f6ca9`, pushed to origin/main; identical implementation/merge trees and all
+  236 source entries verified. The merged worktree/branch and disposable QA
+  resources are removed. Deployment and live FUB validation remain deferred.
 
 - 2026-09-11 010c planning: independent full review returned READY-WITH-FIXES;
   five corrections received targeted READY confirmation. Documentation paths,
@@ -309,9 +313,10 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. Complete the authorized 010c Git integration, publication and cleanup.
-   Shared-development deployment remains a later step; an authorized release
-   must use the 010c compatibility preflight and preserve review bindings.
+1. Prepare the 010c shared-development deployment when requested. Git integration,
+   publication and cleanup are complete. The release must use the 010c
+   compatibility preflight and preserve review bindings; the
+   [release runbook](../tasks/SLICE_010c_RELEASE_PREPARATION.md) defines the work.
    No deployment or activation is included in the D-065 follow-up.
 2. Resume authorized FUB qualification when the user is ready, against an agreed
    dataset and applicable readiness gates. Later data families, mapping repair,
@@ -331,7 +336,8 @@ and now lives only in git history.
 
 - D-065 approves 010c's complete workspace/session/import/history/persistence
   contracts and implementation. No repeat specification approval is needed for
-  owned implementation detail. Release, activation and source operations remain
+  owned implementation detail. Its authorized Git integration, publication and
+  cleanup are complete. Deployment, activation and source operations remain
   outside this authorization.
 - The foundations documentation assignment is authorized; its new architecture
   and policy proposals are not automatically accepted. Their owning specs must

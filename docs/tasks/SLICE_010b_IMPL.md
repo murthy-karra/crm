@@ -145,5 +145,6 @@ specification/brief under D-063. Implementation subsequently completed the
 [concrete contract](../specs/SLICE_010b_CONTRACT.md), backend checkpoint, Web,
 both bounded reviews and all required synthetic/full gates. See the
 [implementation verification](SLICE_010b_VERIFICATION.md) for the final inventory,
-evidence and release handoff. Live FUB testing remains deferred. Planning itself
-created no application code; the implementation is still unmerged and undeployed.
+evidence and release handoff. The subsequent authorized integration/deployment
+and cleanup are complete; see [the release record](SLICE_010b_RELEASE.md).
+Live FUB testing remains deferred. Planning itself created no application code.

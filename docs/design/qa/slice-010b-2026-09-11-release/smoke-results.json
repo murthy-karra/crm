@@ -1,0 +1,170 @@
+{
+  "result": "passed",
+  "checks": [
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/health",
+      "status": 200
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/internal/ready",
+      "status": 200
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/",
+      "anonymous_status": 401
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/snapshots",
+      "anonymous_status": 401
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/api/health",
+      "status": 200
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/internal/ready",
+      "status": 200
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/",
+      "anonymous_status": 401
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/snapshots",
+      "anonymous_status": 401
+    },
+    {
+      "actor_role": "admin",
+      "path": "/api/migrations/fub/",
+      "status": 200,
+      "empty": true
+    },
+    {
+      "actor_role": "admin",
+      "path": "/api/migrations/fub/snapshots",
+      "status": 200,
+      "empty": true
+    },
+    {
+      "actor_role": "admin",
+      "unknown_snapshot_status": 404
+    },
+    {
+      "path": "/api/me",
+      "status": 200
+    },
+    {
+      "path": "/api/people",
+      "status": 200
+    },
+    {
+      "path": "/api/today",
+      "status": 200
+    },
+    {
+      "path": "/api/custom-fields",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-lists",
+      "status": 200
+    },
+    {
+      "actor_role": "member",
+      "path": "/api/migrations/fub/",
+      "status": 403,
+      "empty": false
+    },
+    {
+      "actor_role": "member",
+      "path": "/api/migrations/fub/snapshots",
+      "status": 403,
+      "empty": false
+    },
+    {
+      "actor_role": "member",
+      "unknown_snapshot_status": 403
+    },
+    {
+      "actor_role": "other_org_admin",
+      "path": "/api/migrations/fub/",
+      "status": 200,
+      "empty": true
+    },
+    {
+      "actor_role": "other_org_admin",
+      "path": "/api/migrations/fub/snapshots",
+      "status": 200,
+      "empty": true
+    },
+    {
+      "actor_role": "other_org_admin",
+      "unknown_snapshot_status": 404
+    },
+    {
+      "base": "http://127.0.0.1:5173",
+      "index_matches": true
+    },
+    {
+      "base": "https://app.tarams.org",
+      "index_matches": true
+    },
+    {
+      "asset": "/assets/MigrationView-YGdeMAQh.js",
+      "sha256": "c42dd6b05044a732bbd8e8a2e1d15afbe05d26da6ffde104ae11151eec9e3cc2",
+      "matches": true
+    },
+    {
+      "asset": "/assets/controls-DSa2H-y9.js",
+      "sha256": "1fdd2937a8e2a986e57c460638f52578a58231326983f87f127dada414b917d5",
+      "matches": true
+    },
+    {
+      "asset": "/assets/createLucideIcon-BDiCIUq3.js",
+      "sha256": "798faa13ac81da8655854c68499d1c0c10da9443e92a92f3199e44db8e8483f9",
+      "matches": true
+    },
+    {
+      "asset": "/assets/index-BGP7w3TL.js",
+      "sha256": "b14ba3639fa2433af3a79d5dcb28545ac17696aa31b17693ce15906df4fc67ff",
+      "matches": true
+    },
+    {
+      "asset": "/assets/index-D7po-2tE.css",
+      "sha256": "47410f78f4a0f593f3cb5b8af44a3c458f8abc8cad625a011ca0c564c6ebf3d8",
+      "matches": true
+    }
+  ],
+  "migration": 20260917000001,
+  "business_counts_unchanged": true,
+  "business_table_count": 45,
+  "migration_counts": {
+    "migration_assessment": 0,
+    "migration_assessment_check": 0,
+    "migration_assessment_evidence": 0,
+    "migration_connection": 0,
+    "migration_request_receipt": 0,
+    "migration_snapshot": 0,
+    "migration_snapshot_capture": 0,
+    "migration_snapshot_contact_key": 0,
+    "migration_snapshot_note_detail": 0,
+    "migration_snapshot_preview": 0,
+    "migration_snapshot_preview_group": 0,
+    "migration_snapshot_preview_issue": 0,
+    "migration_snapshot_preview_record": 0,
+    "migration_snapshot_record": 0,
+    "migration_snapshot_reservation": 0,
+    "migration_snapshot_storage": 0,
+    "migration_snapshot_stream": 0
+  },
+  "live_fub_requests": false,
+  "temporary_sessions_revoked": true
+}

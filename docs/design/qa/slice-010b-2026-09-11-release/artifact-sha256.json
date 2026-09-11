@@ -1,0 +1,79 @@
+{
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 1815,
+      "sha256": "bae196bb399736b5ffd2f1ed64271a9acb2709e393984cfa8ff54956946e9889"
+    },
+    {
+      "path": "browser-results.json",
+      "bytes": 1576,
+      "sha256": "8b920605e42f9dcf730883fe3164b526f7b10e525f4b16efc76f605ef6e9f6f3"
+    },
+    {
+      "path": "build-results.json",
+      "bytes": 188,
+      "sha256": "cc890a8a0a80499328ef317f87753cb11900079e00316100325cfb1712aeb87e"
+    },
+    {
+      "path": "build-sha256.json",
+      "bytes": 12365,
+      "sha256": "cb03ca9edb74454b74a4e932058f835a1fc83f897c353ca6808b6c53b1e4e643"
+    },
+    {
+      "path": "cleanup.json",
+      "bytes": 515,
+      "sha256": "f39ce3336c06d331423a4fbe0db1051175f82952fa066b640d189127417b6e0e"
+    },
+    {
+      "path": "database-after.json",
+      "bytes": 1937,
+      "sha256": "37409a3c4c09e240c978ac713afa887e86995c278d7abf1a6371901652d6fbb6"
+    },
+    {
+      "path": "database-before.json",
+      "bytes": 1309,
+      "sha256": "f747ff41c3cb77c9eaedb0b768c6263ca150b8d7217dbf775398342d098e16d8"
+    },
+    {
+      "path": "deployed.json",
+      "bytes": 501,
+      "sha256": "92b3f415d2a2979b239a99476913c15a59d14f12e9415dd8ebd1323f1aa947bc"
+    },
+    {
+      "path": "handoff-checks.json",
+      "bytes": 330,
+      "sha256": "a122ee98fe32530217efba704ab6b035683c9d5b59ef3acb7064917fcd1079fe"
+    },
+    {
+      "path": "migration-390px.png",
+      "bytes": 101971,
+      "sha256": "550a64de0160ab0ad0f728452edd479fcd19c6e84bf4beba5268e69c54e94914"
+    },
+    {
+      "path": "migration-desktop.png",
+      "bytes": 126582,
+      "sha256": "4f1d457dd1ea2e62618c90a117b6c563ca901551237306c0ba9d577bb429d33d"
+    },
+    {
+      "path": "observation.json",
+      "bytes": 404,
+      "sha256": "262274f17d5775bbda8b66fafa5c636fd81f53bca2e8d84b9b090d70abf5a151"
+    },
+    {
+      "path": "smoke-results.json",
+      "bytes": 4132,
+      "sha256": "16f0aaff936405e27430b0045e8896d6edc5c12eb4fa57a827629a1831c2352d"
+    },
+    {
+      "path": "snapshot-empty-390px.png",
+      "bytes": 35550,
+      "sha256": "a5e86f7711bfa89b66bf0770464362a1caa7c2dea115d9b7591d8d23d0d3c64f"
+    },
+    {
+      "path": "snapshot-empty-desktop.png",
+      "bytes": 34608,
+      "sha256": "55e475428b1cc9ded78cf94e40f5f419adb882600376f9d6ad921f1dca9b963c"
+    }
+  ]
+}

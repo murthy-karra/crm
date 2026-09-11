@@ -1,7 +1,7 @@
 # Slice 010 — FUB migration planning summary
 
 **Status: 010a DEPLOYED AND VERIFIED (2026-09-11); live FUB validation deferred.
-010b core-first implementation is synthetically verified under D-063 and remains unmerged/undeployed; later import rungs remain unapproved.** The user
+010b core-first capture/preview is also deployed and verified under D-063; later import rungs remain unapproved.** The user
 selected **a new, empty CRM Organization first** (D-059), then approved 010a's
 API-first assessment and encrypted saved credentials (D-060). Other
 recommendations remain proposals. Inspected against main `b2fb368`, after 019b.
@@ -19,8 +19,9 @@ later snapshot, preservation or reconciliation requirements.
 generates retained, deterministic previews with explicit remaining coverage,
 storage allowances and recovery. Both bounded reviews, all full gates and
 synthetic API/browser verification passed. See the
-[010b verification record](../tasks/SLICE_010b_VERIFICATION.md). Runtime release
-and authorized live-source qualification remain separate.
+[010b verification record](../tasks/SLICE_010b_VERIFICATION.md). Its subsequent
+[shared-development release](../tasks/SLICE_010b_RELEASE.md) passed; authorized
+live-source qualification remains deferred.
 
 ## 1. Outcome and first milestone
 
@@ -240,5 +241,6 @@ fields, notes and tasks, with all remaining families explicitly tracked. See
 [the approved specification](../specs/SLICE_010b.md) and
 [execution brief](../tasks/SLICE_010b_IMPL.md). D-063 subsequently accepts their
 reviewed contracts, storage policy, implementation and synthetic verification.
-That implementation and its required gates are now complete in the isolated
-worktree; live source validation and deployment remain separate.
+That implementation and its required gates are complete. The user's follow-up
+authorized commit, merge/publication, shared-development deployment and cleanup,
+now completed; live source validation remains deferred.

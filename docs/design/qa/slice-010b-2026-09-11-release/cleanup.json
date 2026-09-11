@@ -1,0 +1,13 @@
+{
+  "worktree_removed": "/Users/karrad/projects/crm-worktrees/010b",
+  "merged_branch_deleted": "codex/slice-010b-core-snapshot",
+  "synthetic_database_dropped": "crm_slice010b_qa",
+  "qa_directory_removed": "/private/tmp/crm-010b-qa",
+  "qa_ports_closed": [
+    3011,
+    5181
+  ],
+  "private_implementation_evidence_preserved": "/private/tmp/crm-010b-release-g33z5awg/implementation-private",
+  "release_rollback_preserved": "/private/tmp/crm-010b-release-g33z5awg",
+  "shared_development_data_preserved": true
+}

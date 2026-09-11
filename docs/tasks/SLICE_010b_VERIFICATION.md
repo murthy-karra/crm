@@ -2,14 +2,15 @@
 
 **IMPLEMENTED AND SYNTHETICALLY VERIFIED, 2026-09-11.** User approval: D-063.
 All required gates passed on the final implementation. Both bounded review/fix
-rounds are complete. Changes remain in the implementation worktree, uncommitted
-and unmerged; no 010b runtime deployment or live-source validation is claimed.
+rounds are complete. The subsequent authorized commit, merge/publication,
+shared-development deployment and cleanup are recorded in
+[SLICE_010b_RELEASE.md](SLICE_010b_RELEASE.md). Live-source validation remains deferred.
 
 ## Baseline and ownership
 
 Approved planning commit: `49581a0`, following published documentation `a498a2c`.
-Branch: `codex/slice-010b-core-snapshot`.
-Worktree: `/Users/karrad/projects/crm-worktrees/010b`.
+Implementation branch: `codex/slice-010b-core-snapshot` (merged and removed).
+Implementation worktree: `/Users/karrad/projects/crm-worktrees/010b` (removed after release).
 Application baseline is the deployed 010a source `0735015`.
 
 One primary backend writer owns persistence, the sole additive migration,
@@ -260,15 +261,17 @@ temporary QA ports (3011/5181) were confirmed closed.
 
 All 45 business-table counts were checked again after the full walkthroughs
 and remained equal to the initial inventory. The temporary QA API and Vite
-preview were stopped after verification. The
-disposable synthetic database and private helpers remain available for reproducing
-the evidence. Shared-development 010a was not restarted or migrated. Integration
-and deployment are the next release work; the user-deferred authorized FUB check
-remains separate. Later import behavior still needs its own approved specification.
+preview were stopped after verification. During the implementation phase,
+shared-development 010a was not restarted or migrated. The later authorized
+release deployed 010b and removed the disposable synthetic database/worktree;
+helper source and gate logs were preserved with private release artifacts.
+The user-deferred authorized FUB check remains separate. Later import behavior
+still needs its own approved specification.
 
 ## Deferred external validation
 
 Live authorized FUB validation remains expressly user-deferred. Synthetic
 fixtures do not establish source-account access, full endpoint coverage or
 customer-data readiness. D-015/O-012/O-013 prerequisites remain open. No import,
-cutover, source writes or runtime deployment is part of this implementation.
+cutover or source writes were performed. Runtime deployment was separately
+authorized after implementation and is documented in the release record.

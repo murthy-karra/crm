@@ -1,0 +1,19 @@
+{
+  "observed_at_utc": "2026-09-11T14:47:16.713218+00:00",
+  "api_listener": [
+    49244
+  ],
+  "web_listener": [
+    49270
+  ],
+  "warn_error_log_counts": {
+    "api.log": 0,
+    "web.log": 0
+  },
+  "tunnel_check_passed": true,
+  "source_hashes_matched": 37,
+  "backup_bytes": 109828221,
+  "backup_catalog_read": true,
+  "backup_restore_exercised": false,
+  "merged_tree_matches_implementation": true
+}

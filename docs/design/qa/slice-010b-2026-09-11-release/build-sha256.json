@@ -1,0 +1,359 @@
+{
+  "files": [
+    {
+      "path": "backend/target/debug/crm-api",
+      "sha256": "8485c2f263373dcd719028183a4ad790237ac046c3dc8684631cc74a91a5cbd2",
+      "bytes": 74311480
+    },
+    {
+      "path": "backend/target/debug/migrate",
+      "sha256": "609b5fbc05ad771a491ebba8bd8c1ef76db37bd34c5a77d97fac5c6947750a52",
+      "bytes": 14989288
+    },
+    {
+      "path": "web/dist/apple-touch-icon.png",
+      "sha256": "b04fce98a75f764e73114beed06d77ffb8000842a78d15a6dcb28425f056dcf8",
+      "bytes": 3205
+    },
+    {
+      "path": "web/dist/assets/Card-CI_qFpYA.js",
+      "sha256": "657b5f86f6eb3448743483b985d6444f2e0fc62aa31bf91c6b0835b812d4869e",
+      "bytes": 299
+    },
+    {
+      "path": "web/dist/assets/ConfirmDialog-SKHM53Rm.js",
+      "sha256": "39b0e2c079578f475abc9b3f73de64ea26dc8a2f966153cba9e53a0dc628677e",
+      "bytes": 1399
+    },
+    {
+      "path": "web/dist/assets/DataTable-x36PY9Ri.js",
+      "sha256": "586d9c69814d97209a636cb02ddfc8ff4c6b4cacf54518630d5673186bd135c6",
+      "bytes": 52214
+    },
+    {
+      "path": "web/dist/assets/EmailCaptureView-SYzPBR7r.js",
+      "sha256": "00f7a1bc4a6a5a1efca94d34e46870b8c183d23f660c640b8ffd542c6b8ced94",
+      "bytes": 8432
+    },
+    {
+      "path": "web/dist/assets/FieldsView-UJZVBNgo.js",
+      "sha256": "e2744dcd56c8a77b07bc595d1f225901e211d4b790c4c165b395ca5f8204e5b7",
+      "bytes": 14858
+    },
+    {
+      "path": "web/dist/assets/FilterBar-CqItB9vZ.js",
+      "sha256": "ead16117c812d080aa812ddc55117de5aaf00f998cb985c0ddd2e0d3d90e66af",
+      "bytes": 44459
+    },
+    {
+      "path": "web/dist/assets/FormField-Be31qxJ9.js",
+      "sha256": "039432a16539272d4d4a5ecb3f4e3e04dffb0af5849c9e6689472ab524e4ee38",
+      "bytes": 678
+    },
+    {
+      "path": "web/dist/assets/IntakeSettingsView-DVnC5KhK.js",
+      "sha256": "e07b6e14ccdf6d48b18bce36690689e158dd7680f9d6aa5b009c7b42f1a4651b",
+      "bytes": 5934
+    },
+    {
+      "path": "web/dist/assets/InviteView-DgXp4YtE.js",
+      "sha256": "4e644f14672b2e416f09aa207148a05dfdc0cd3fb5c1c20c53d15db5816f69b6",
+      "bytes": 2991
+    },
+    {
+      "path": "web/dist/assets/ListsView-C3nwSItK.js",
+      "sha256": "f189cb887c0aa1567b6ecda60158602f1c8d71d543dc776158231a3b421dcec8",
+      "bytes": 9124
+    },
+    {
+      "path": "web/dist/assets/LogContactDialog-BTz1kdzt.js",
+      "sha256": "869032b6a209cb26d3302d7600af1e8d47bcbc8eec67748fde9f2ba22b34d281",
+      "bytes": 2563
+    },
+    {
+      "path": "web/dist/assets/LoginView-Bu0ZrLP3.css",
+      "sha256": "d276d451a8b11c4031ed18661b01c4c384448ae9405b0ccebc19b59c3cc7d352",
+      "bytes": 183
+    },
+    {
+      "path": "web/dist/assets/LoginView-Ddt60mpp.js",
+      "sha256": "1b84bf81c96e9257a3677acd86b710a9b3e0d3026347828799153f357d5478a9",
+      "bytes": 2397
+    },
+    {
+      "path": "web/dist/assets/MembersView-DGSVnxgI.js",
+      "sha256": "d42222c0c4f233ded5626f5bbdcbc8607fbda46180ab2563a7055f0bda5ddd08",
+      "bytes": 7080
+    },
+    {
+      "path": "web/dist/assets/MigrationView-YGdeMAQh.js",
+      "sha256": "c42dd6b05044a732bbd8e8a2e1d15afbe05d26da6ffde104ae11151eec9e3cc2",
+      "bytes": 60262
+    },
+    {
+      "path": "web/dist/assets/NewInquiryView-D6uc1zlR.js",
+      "sha256": "59d251418b0d0fc5ac9cc7b0756fe588b6ce02f5c4fe7735293ff92c0d102114",
+      "bytes": 4975
+    },
+    {
+      "path": "web/dist/assets/OneTimeLinkDialog-P0Py7DGn.js",
+      "sha256": "481683e5db0a181b9a001eb951044ad54db383d04ceaecef4408b1f91fa24aa0",
+      "bytes": 3919
+    },
+    {
+      "path": "web/dist/assets/PageHeader-CmmCDISc.js",
+      "sha256": "f741ff41dd9825401280cc0fa0b166a29aa471ab02ae3b6ac8ca72e3a31129c2",
+      "bytes": 846
+    },
+    {
+      "path": "web/dist/assets/PeopleView-C7dNH1M4.js",
+      "sha256": "6c81e118d379b9cd9a1f365edb57967c910cc92b5570e70f0ea0ba158660c49f",
+      "bytes": 46538
+    },
+    {
+      "path": "web/dist/assets/PersonDetailView-DN7UdV2Y.js",
+      "sha256": "6eed8e034ee9d7eca935c0bd90339153b2771efeb9a35e312bf472d9a91f5296",
+      "bytes": 46882
+    },
+    {
+      "path": "web/dist/assets/PlatformOrganizationView-BHU0RyIl.js",
+      "sha256": "e605cefe5017a6ae775da97df27fce3b3a6af0d6d0f9e24d68af161123697318",
+      "bytes": 5960
+    },
+    {
+      "path": "web/dist/assets/PlatformOrganizationsView-_o_M7lmd.js",
+      "sha256": "e39ebb921e9804550455c9829e9179c491438f7ba078e524663bd9b6b122a0a7",
+      "bytes": 3191
+    },
+    {
+      "path": "web/dist/assets/TagsView-Cf__kyFc.js",
+      "sha256": "95975c491c1f7166e3c2ac3fcc9518576cdf3165f2b753bc19526ffd0bccfe29",
+      "bytes": 4668
+    },
+    {
+      "path": "web/dist/assets/TodayFeedsView-At_yboD7.js",
+      "sha256": "ff1a9435bd4ed9cbb98e81a1261e598d3cf3d97dddc9d142c28c6fba6418cbde",
+      "bytes": 17283
+    },
+    {
+      "path": "web/dist/assets/TodayView-CMmWHG_Y.js",
+      "sha256": "a4b59393700e28f9df7e54bc3f1ad521c1f66a28d19512418e7de4026bb59539",
+      "bytes": 16727
+    },
+    {
+      "path": "web/dist/assets/UnresolvedView-DsUY9Off.js",
+      "sha256": "8c965e0fd677188767ad3f6fef0bfdea9bacc8955148639b06c8534deb97d8d6",
+      "bytes": 7423
+    },
+    {
+      "path": "web/dist/assets/controls-DSa2H-y9.js",
+      "sha256": "1fdd2937a8e2a986e57c460638f52578a58231326983f87f127dada414b917d5",
+      "bytes": 153387
+    },
+    {
+      "path": "web/dist/assets/copy-CmzB72gL.js",
+      "sha256": "075e50fbcb64cd9cf8cb3df889e13513b3df8cbbf81f02d64614f74365507041",
+      "bytes": 236
+    },
+    {
+      "path": "web/dist/assets/createLucideIcon-BDiCIUq3.js",
+      "sha256": "798faa13ac81da8655854c68499d1c0c10da9443e92a92f3199e44db8e8483f9",
+      "bytes": 1199
+    },
+    {
+      "path": "web/dist/assets/dialog-BIpF0L3p.js",
+      "sha256": "82e0fff04e34a58ec3bbfe0f6ee0cf6d7a25d9cedce56a4c316d318d13c34430",
+      "bytes": 59421
+    },
+    {
+      "path": "web/dist/assets/index-BGP7w3TL.js",
+      "sha256": "b14ba3639fa2433af3a79d5dcb28545ac17696aa31b17693ce15906df4fc67ff",
+      "bytes": 217946
+    },
+    {
+      "path": "web/dist/assets/index-D7po-2tE.css",
+      "sha256": "47410f78f4a0f593f3cb5b8af44a3c458f8abc8cad625a011ca0c564c6ebf3d8",
+      "bytes": 37421
+    },
+    {
+      "path": "web/dist/assets/inter-cyrillic-ext-wght-normal-BOeWTOD4.woff2",
+      "sha256": "ca157063339ac4ad418f214f3abfed119b0798ab4d377386ce5c9e5a7a435ebd",
+      "bytes": 25960
+    },
+    {
+      "path": "web/dist/assets/inter-cyrillic-wght-normal-DqGufNeO.woff2",
+      "sha256": "71d5ee93cc1e9f1d520a3a8b66456de18c7879d8df09d57fcd2eaff75fef0075",
+      "bytes": 18748
+    },
+    {
+      "path": "web/dist/assets/inter-greek-ext-wght-normal-DlzME5K_.woff2",
+      "sha256": "6e9e020a25f9b56d418f2c085b1d3c09725a4da23fe693a5b463064606732190",
+      "bytes": 11232
+    },
+    {
+      "path": "web/dist/assets/inter-greek-wght-normal-CkhJZR-_.woff2",
+      "sha256": "1be3448e292fbf05ffe176fe1e43f135013d50b1e7d324ad1a558f623d3bb6f6",
+      "bytes": 18996
+    },
+    {
+      "path": "web/dist/assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2",
+      "sha256": "34b9c504cab7a73e37b746343a449132e56cf7b5481af2cb81dc74dcff25c956",
+      "bytes": 85068
+    },
+    {
+      "path": "web/dist/assets/inter-latin-wght-normal-Dx4kXJAl.woff2",
+      "sha256": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62",
+      "bytes": 48256
+    },
+    {
+      "path": "web/dist/assets/inter-vietnamese-wght-normal-CBcvBZtf.woff2",
+      "sha256": "5c66f9e07e90c6d4ac4922cc68d60de26c17b1858e677fb5e603fce3952b3ff2",
+      "bytes": 10252
+    },
+    {
+      "path": "web/dist/assets/livekit-client.esm-CX-oniKy.js",
+      "sha256": "d773ee1281d58d4a4b809c84b141685d3188cb44eda69ef6a8756ae4eb75b09a",
+      "bytes": 531042
+    },
+    {
+      "path": "web/dist/assets/overlayeventbus-DEPNJ-Ok.js",
+      "sha256": "ff22b169e8811238bb10e48c7a570b8025b3d2fd777bfda2b65b505d32f16ed7",
+      "bytes": 1649
+    },
+    {
+      "path": "web/dist/assets/pencil-CZxA4rna.js",
+      "sha256": "500e111714be41d5a75cc9aec2f144c515734e3e60c5353423465f42fafbe998",
+      "bytes": 276
+    },
+    {
+      "path": "web/dist/assets/phone-BkUq5k0a.js",
+      "sha256": "2dc1e5156bb82dc6cef5ff867d0dbb776bd2b785ff8dd8b57aab128e9b468cd6",
+      "bytes": 322
+    },
+    {
+      "path": "web/dist/assets/plus-BZPMTtq9.js",
+      "sha256": "b2f12336061c5e234758956101e7a351bd3d3e719b64de929afd46e4638d850c",
+      "bytes": 153
+    },
+    {
+      "path": "web/dist/assets/refresh-cw-DRUgH5vJ.js",
+      "sha256": "2db747b5692311966361280e4af3708de35628864e0716d47b5085420bd7c8ee",
+      "bytes": 321
+    },
+    {
+      "path": "web/dist/assets/ripple-CVu4StqI.js",
+      "sha256": "a26549abcbdaf7f30847c73fd9953117b0f3d0c9af07be163f5893702d7bb25d",
+      "bytes": 38166
+    },
+    {
+      "path": "web/dist/assets/select-CSoEJ1sY.js",
+      "sha256": "9791d766aa08614ef47232220f717a86c88bb976f363a2501523eecd6505deb6",
+      "bytes": 78476
+    },
+    {
+      "path": "web/dist/assets/todayFeeds-DgGlvI7u.js",
+      "sha256": "fe02b4a45aa9c145f015d7ec551066caedd4c647b1edd338efafdc81d8492b70",
+      "bytes": 1107
+    },
+    {
+      "path": "web/dist/assets/trash-2-C8BQpKy1.js",
+      "sha256": "8e80cff54a0afe6c709a2f48257a9fa063ad350896767fa5c4c7ccc0bc05949f",
+      "bytes": 328
+    },
+    {
+      "path": "web/dist/assets/user-check-GVN4qYNJ.js",
+      "sha256": "c4e25803f0347fef4ad32cea99fad1d780dcd9c10fb7c8da4c4b35854d8023ca",
+      "bytes": 635
+    },
+    {
+      "path": "web/dist/brand/elysium-lockup-horizontal-name-black.svg",
+      "sha256": "a45f36017866dceee4f58c11c6161a0fd1dd79c308965a5177ce71efeb4e7497",
+      "bytes": 3405
+    },
+    {
+      "path": "web/dist/brand/elysium-lockup-horizontal-name-indigo.svg",
+      "sha256": "b54fd89242999310f40763e8c07544f993298f9bbca1765462aefba0c977a4c4",
+      "bytes": 3405
+    },
+    {
+      "path": "web/dist/brand/elysium-lockup-stacked-name-indigo.svg",
+      "sha256": "e520a95d687fe02ceabe58b5b6d1c3b419912710388f236d6f758ebafb46224b",
+      "bytes": 3593
+    },
+    {
+      "path": "web/dist/favicon-16x16.png",
+      "sha256": "27c19d0521e0fb6394d47e15f36ceabf018fc1fd285e10dedba20c0d622b5772",
+      "bytes": 661
+    },
+    {
+      "path": "web/dist/favicon-32x32.png",
+      "sha256": "7e87fe92961676f34c09e755348e2d308abebf0449cf2fa0eee1fad2949f4dc1",
+      "bytes": 1126
+    },
+    {
+      "path": "web/dist/favicon-48x48.png",
+      "sha256": "ac11125e478c0880ebc2f62d8dd99292176a5724ab9857d084a66a825e45bde6",
+      "bytes": 1526
+    },
+    {
+      "path": "web/dist/favicon.ico",
+      "sha256": "3dca277d15ff8f8405d387800cc729fe195cce2095f250e831f33aeccf28a986",
+      "bytes": 3604
+    },
+    {
+      "path": "web/dist/favicon.svg",
+      "sha256": "2f7558e5cb6602f7f32a8cd30b13ff38e995ee7737baf79db0104b950dea56fb",
+      "bytes": 412
+    },
+    {
+      "path": "web/dist/guides/README.md",
+      "sha256": "e4e65d84ab7ab7228e5dc005ec571c9a520d827a47e943c4a6a631042e3371d7",
+      "bytes": 795
+    },
+    {
+      "path": "web/dist/guides/create-list-poster.png",
+      "sha256": "c49074d1e4cd1a308e1fa7a8734c965af8ebe31a415e32b40d7eb00323b88867",
+      "bytes": 92981
+    },
+    {
+      "path": "web/dist/guides/create-list.mp4",
+      "sha256": "c49b151a0ad36f6c39913b659f506ef02d9497b57b86560f8f57aa212c4b565a",
+      "bytes": 480303
+    },
+    {
+      "path": "web/dist/icons/elysium-192.png",
+      "sha256": "5a85b257c838bd9358b67bb317677d6495215212f9ad9a2e467d3422d5791301",
+      "bytes": 3473
+    },
+    {
+      "path": "web/dist/icons/elysium-512.png",
+      "sha256": "b6ee9052082524cc4e326fccc1a80eb3e64f591a86e57e74f637568db96f7b90",
+      "bytes": 9377
+    },
+    {
+      "path": "web/dist/icons/elysium-maskable-192.png",
+      "sha256": "b65f65a8d82c19b296010d20d112fc82d932b67cee3d8901d1de8fda5ef048da",
+      "bytes": 2987
+    },
+    {
+      "path": "web/dist/icons/elysium-maskable-512.png",
+      "sha256": "d86cce49e8c35bc776f576f2a9d0bfe00da30f102f87bfb637176e6baba567f6",
+      "bytes": 8226
+    },
+    {
+      "path": "web/dist/index.html",
+      "sha256": "11acd864211162807386afbf893e4a35e015a0ec02ce873259c588539e359129",
+      "bytes": 1190
+    },
+    {
+      "path": "web/dist/og-image.png",
+      "sha256": "66743a058075256386717b009d542a992d8715bdcd9860d75af43a500e388845",
+      "bytes": 16752
+    },
+    {
+      "path": "web/dist/site.webmanifest",
+      "sha256": "9a6d4aca9ad79b897f50e5df784cb5880634f86f568b86cc55c947be88b12bf5",
+      "bytes": 803
+    }
+  ]
+}

@@ -10,15 +10,15 @@ contracts, retention policy or service commitments. Accepted decisions in the
 
 | Area | Verified state / remaining gap |
 |---|---|
-| Shared development | 010a deployed from `0735015a583f6207c78d0141644a0753328f85f6`; API/Web/auth/tunnel smoke checks passed. This is the Mac-hosted runtime, not a production-cluster deployment. |
+| Shared development | 010b deployed from `89471f0b7bccc3e91c5f6c94aacecf7e7bd2216d`; API/Web/auth/tunnel smoke checks passed. This is the Mac-hosted runtime, not a production-cluster deployment. |
 | Source integration | Synthetic checks passed. Live FUB validation is user-deferred; registered system identification is unset; no live connection or assessment was created by the release. |
 | Backup | A private custom-format PostgreSQL dump was created and its catalog read. **No restore exercise was performed.** Its temporary local location is not a durable backup policy. |
-| Migration | 010a assesses access only. 010b core snapshot/preview is implemented and synthetically verified under D-063; its shared-development release is in progress. Business import, remaining capture families and cutover are later work. |
+| Migration | 010a assesses access only. 010b core snapshot/preview is implemented, synthetically verified and deployed in shared development under D-063. Business import, remaining capture families and cutover are later work. |
 | Privacy | D-015 requires an erasure runbook before first real design-partner data. O-012/O-013 remain open; disconnecting FUB removes a credential, not captured evidence or backups. |
 | Production services | ZITADEL integration, OpenBao integration, CI and OpenObserve deployment remain deferred under D-014/D-016. Development uses local authentication, `.env`, local checks and console logs. |
 | Capacity | D-050 defines 25,000 People, 50 members and five concurrent Today loads per Organization. A production-shaped capacity baseline is still required; planning estimates for larger populations are not measured capacity. |
 
-Evidence: [010a release](../tasks/SLICE_010a_RELEASE.md),
+Evidence: [010b release](../tasks/SLICE_010b_RELEASE.md),
 [010a verification](../tasks/SLICE_010a_VERIFICATION.md),
 [010b verification](../tasks/SLICE_010b_VERIFICATION.md),
 [current project state](PROJECT_STATE.md). Historical release evidence does not

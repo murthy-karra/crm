@@ -96,11 +96,12 @@ Credential validation must also be considered when coordinating source calls.
 [010b](../specs/SLICE_010b.md) is implemented and synthetically verified under D-063:
 resumable capture/preview of People,
 users, stages, custom fields, notes and tasks. Other families remain explicit
-future work (D-060/061). Its unmerged implementation adds shared assessment/snapshot
+future work (D-060/061). Its deployed implementation adds shared assessment/snapshot
 source permits within one process, durable storage reservations, explicit budget
 increases and DB-only preview recovery. [Verification](../tasks/SLICE_010b_VERIFICATION.md)
-records passing full gates; runtime deployment and live FUB validation remain
-separate. Fidelity, idempotency and reconciliation stay mandatory.
+records passing full gates; the [shared-development release](../tasks/SLICE_010b_RELEASE.md)
+is verified. Live FUB validation remains deferred. Fidelity, idempotency and
+reconciliation stay mandatory.
 
 ## Network and telephony
 

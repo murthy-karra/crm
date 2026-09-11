@@ -2230,3 +2230,5 @@ API/Web and additive migration, and removing the merged worktree/branch and
 temporary synthetic QA resources. Preserve release recovery artifacts and
 customer data. Live authorized FUB validation remains deferred; no production
 cluster, import/cutover or real-source operation is implied.
+Completion and recovery evidence are recorded in
+[SLICE_010b_RELEASE.md](../tasks/SLICE_010b_RELEASE.md).

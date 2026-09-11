@@ -1,0 +1,16 @@
+{
+  "revision": "89471f0b7bccc3e91c5f6c94aacecf7e7bd2216d",
+  "implementation": "b71a854",
+  "api_listener": [
+    49244
+  ],
+  "web_listener": [
+    49270
+  ],
+  "api_launcher": 49244,
+  "web_launcher": 49245,
+  "api_sha256": "8485c2f263373dcd719028183a4ad790237ac046c3dc8684631cc74a91a5cbd2",
+  "migrate_sha256": "609b5fbc05ad771a491ebba8bd8c1ef76db37bd34c5a77d97fac5c6947750a52",
+  "index_sha256": "11acd864211162807386afbf893e4a35e015a0ec02ce873259c588539e359129",
+  "migration": 20260917000001
+}

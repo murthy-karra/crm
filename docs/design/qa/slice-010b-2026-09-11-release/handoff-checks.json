@@ -1,0 +1,10 @@
+{
+  "status": "passed",
+  "local_markdown_target_paths_checked": 152,
+  "json_files_parsed_before_final_manifests": 9,
+  "implementation_hashes_matched": 37,
+  "implementation_evidence_artifact_hashes_matched": 17,
+  "post_merge_changes_documentation_only": true,
+  "credential_pattern_matches": 0,
+  "git_diff_check": "passed"
+}

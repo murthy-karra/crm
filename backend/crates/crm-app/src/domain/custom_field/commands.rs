@@ -23,10 +23,21 @@ const MAX_LIVE_OPTIONS: i64 = 50;
 /// `tag::normalize_and_validate_name` pattern with a 60-character cap):
 /// trimmed, 1–60 code points, no control character anywhere (narrower
 /// than the CHECK's ASCII-only `btrim`, safe in the write direction — the
-/// `TaskTitle` precedent's stated reasoning).
+/// `TaskTitle` precedent's stated reasoning). Review round 1, B8: U+2028
+/// (LINE SEPARATOR) and U+2029 (PARAGRAPH SEPARATOR) are also rejected —
+/// they are line breaks like `\n`/`\r` but are not `is_control()` in Rust
+/// (Unicode category Zl/Zp, not Cc), while the DB CHECK's POSIX
+/// `[[:cntrl:]]` class (glibc) does treat them as control, so leaving them
+/// out here would accept a label the database then refuses — the exact
+/// `TaskTitle::parse` precedent (LATER batch 2026-09-10, item 2).
 pub fn normalize_and_validate_label(raw: &str) -> Result<String, CustomFieldError> {
     let label = raw.trim();
-    if label.is_empty() || label.chars().count() > 60 || label.chars().any(char::is_control) {
+    if label.is_empty()
+        || label.chars().count() > 60
+        || label
+            .chars()
+            .any(|c| c.is_control() || c == '\u{2028}' || c == '\u{2029}')
+    {
         return Err(CustomFieldError::MalformedRequest);
     }
     Ok(label.to_owned())
@@ -357,7 +368,16 @@ async fn update_custom_field_attempt(
         return Err(CustomFieldError::LabelTaken);
     }
 
-    let new_archived_at = if cmd.archived { Some(Utc::now()) } else { None };
+    // Review round 1, B2: renaming an ALREADY-archived row (a different
+    // label, so the no-op check above did not short-circuit) must not
+    // re-stamp `archived_at` to now — keep the row's own original
+    // timestamp when it already has one, and only mint a fresh one on a
+    // genuine live-to-archived transition.
+    let new_archived_at = if cmd.archived {
+        row.archived_at.or_else(|| Some(Utc::now()))
+    } else {
+        None
+    };
     // Un-archiving appends to the live order; archiving and a plain
     // rename leave the stored position untouched.
     let new_position = if !currently_live && !cmd.archived {
@@ -632,7 +652,14 @@ async fn update_custom_field_option_attempt(
         return Err(CustomFieldError::OptionLabelTaken);
     }
 
-    let new_archived_at = if cmd.archived { Some(Utc::now()) } else { None };
+    // Review round 1, B2 (the field-rename precedent above): keep the
+    // option's own original `archived_at` on a rename-while-archived,
+    // never re-stamp it to now.
+    let new_archived_at = if cmd.archived {
+        option.archived_at.or_else(|| Some(Utc::now()))
+    } else {
+        None
+    };
     queries::update_option(
         &mut tx,
         ctx.organization_id,
@@ -716,22 +743,6 @@ async fn set_person_custom_field_value_attempt(
     ctx: &CommandContext,
     cmd: SetPersonCustomFieldValue,
 ) -> Result<PersonCustomFieldOutcome, CustomFieldError> {
-    // Pure-function validation ahead of any lock (the `TaskTitle`/number
-    // pattern precedent): a malformed value never even reaches the
-    // database.
-    let (text_value, number_text, date_value) = match &cmd.value {
-        CustomFieldValue::Text(raw) => (Some(validate_text_value(raw)?), None, None),
-        CustomFieldValue::Number(raw) => {
-            validate_number_pattern(raw)?;
-            (None, Some(raw.clone()), None)
-        }
-        CustomFieldValue::Date(date) => {
-            validate_date_range(*date)?;
-            (None, None, Some(*date))
-        }
-        CustomFieldValue::Choice(_) => (None, None, None),
-    };
-
     let mut tx = pool.begin().await?;
     person_queries::lock_person(&mut tx, cmd.person_id, ctx.organization_id)
         .await?
@@ -745,6 +756,24 @@ async fn set_person_custom_field_value_attempt(
     if field.field_type != cmd.value.field_type() {
         return Err(CustomFieldError::TypeMismatch);
     }
+
+    // Pure-function validation AFTER the lock/archived/type-mismatch checks
+    // above (spec §3, §4 precedence: NotFound, then FieldArchived, then
+    // TypeMismatch, only then InvalidValue) — review round 1, B1. A
+    // malformed value on the WRONG field or an archived field must report
+    // that fact, not a content problem the field can't even hold.
+    let (text_value, number_text, date_value) = match &cmd.value {
+        CustomFieldValue::Text(raw) => (Some(validate_text_value(raw)?), None, None),
+        CustomFieldValue::Number(raw) => {
+            validate_number_pattern(raw)?;
+            (None, Some(raw.clone()), None)
+        }
+        CustomFieldValue::Date(date) => {
+            validate_date_range(*date)?;
+            (None, None, Some(*date))
+        }
+        CustomFieldValue::Choice(_) => (None, None, None),
+    };
 
     let option_id = match &cmd.value {
         CustomFieldValue::Choice(option_id) => {
@@ -872,6 +901,15 @@ mod tests {
         assert!(normalize_and_validate_label(&"a".repeat(60)).is_ok());
         assert!(normalize_and_validate_label("bad\ttab").is_err());
         assert!(normalize_and_validate_label("bad\nline").is_err());
+    }
+
+    /// Review round 1, B8: U+2028/U+2029 are not `is_control()` in Rust but
+    /// the DB CHECK's POSIX `[[:cntrl:]]` class (glibc) treats them as
+    /// control — reject both here too (the `TaskTitle` precedent).
+    #[test]
+    fn normalize_and_validate_label_rejects_line_and_paragraph_separators() {
+        assert!(normalize_and_validate_label("a\u{2028}b").is_err());
+        assert!(normalize_and_validate_label("a\u{2029}b").is_err());
     }
 
     #[test]

@@ -1,5 +1,5 @@
 use axum::extract::rejection::{JsonRejection, QueryRejection};
-use axum::extract::{FromRequestParts, Path, Query, State};
+use axum::extract::{DefaultBodyLimit, FromRequestParts, Path, Query, State};
 use axum::http::request::Parts;
 use axum::response::Json;
 use axum::routing::{delete, get, post, put};
@@ -26,6 +26,11 @@ use crate::error::ApiError;
 use crate::ids::{CustomFieldId, PersonId, StageId, TagId, UserId};
 use crate::state::AppState;
 
+// The house 128 KiB body cap (docs/specs/SLICE_019.md §4) — review round 1,
+// B3: the value PUT route carried none, unlike every other write route in
+// this file and in `routes/custom_fields.rs`.
+const MAX_CUSTOM_FIELD_VALUE_BODY_BYTES: usize = 128 * 1024;
+
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/people", get(list_people))
@@ -37,7 +42,8 @@ pub fn router() -> Router<AppState> {
         .route("/api/people/{id}/tags/{tag_id}", delete(remove_person_tag))
         .route(
             "/api/people/{id}/custom-fields/{field_id}",
-            put(set_person_custom_field_value),
+            put(set_person_custom_field_value)
+                .layer(DefaultBodyLimit::max(MAX_CUSTOM_FIELD_VALUE_BODY_BYTES)),
         )
         .route(
             "/api/people/{id}/custom-fields/{field_id}",

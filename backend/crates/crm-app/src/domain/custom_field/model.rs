@@ -220,7 +220,13 @@ pub fn validate_number_pattern(raw: &str) -> Result<(), CustomFieldError> {
 pub fn validate_text_value(raw: &str) -> Result<String, CustomFieldError> {
     let trimmed = raw.trim_matches([' ', '\t', '\r', '\n']);
     let count = trimmed.chars().count();
-    if count == 0 || count > 500 || trimmed.contains('\n') {
+    // Review round 1, B7: reject any control character (the `TaskTitle`
+    // precedent), not just newline — the CHECK's own `position(E'\n' IN
+    // text_value) = 0` only excludes `\n`, so an embedded NUL or other
+    // control byte would otherwise reach Postgres and surface as a raw
+    // 503 instead of a clean 422 (`is_control()` already covers `\n`
+    // itself, so no separate newline check is needed).
+    if count == 0 || count > 500 || trimmed.chars().any(char::is_control) {
         return Err(CustomFieldError::InvalidValue);
     }
     Ok(trimmed.to_string())
@@ -290,6 +296,17 @@ mod tests {
         assert!(validate_text_value(&"a".repeat(500)).is_ok());
         assert!(validate_text_value(&"a".repeat(501)).is_err());
         assert!(validate_text_value("a\nb").is_err());
+    }
+
+    /// Review round 1, B7: any control character is rejected, not just
+    /// `\n` — a NUL embedded in a text value must never reach Postgres
+    /// (which would surface as a raw 503, not a clean 422).
+    #[test]
+    fn text_value_rejects_any_control_character() {
+        assert!(validate_text_value("a\u{0}b").is_err());
+        assert!(validate_text_value("a\u{1b}b").is_err());
+        assert!(validate_text_value("a\tb").is_err());
+        assert!(validate_text_value("a\rb").is_err());
     }
 
     #[test]

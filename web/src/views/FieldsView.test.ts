@@ -58,6 +58,15 @@ const REFERRER_ARCHIVED: CustomField = {
   person_count: 1,
   options: [],
 }
+const SOURCE: CustomField = {
+  id: 'field-source',
+  label: 'Source',
+  field_type: 'text',
+  position: 3,
+  archived_at: null,
+  person_count: 0,
+  options: [],
+}
 
 interface StubOptions {
   fields?: () => CustomFieldsResponse
@@ -226,6 +235,15 @@ describe('FieldsView — create', () => {
     await flushPromises()
     expect(wrapper.get('[data-testid="create-field-error"]').text()).toBe('"Budget" is already in use.')
   })
+
+  it('shows a 422 custom_field_limit_reached inline', async () => {
+    stub({ create: () => new ApiError(422, 'custom_field_limit_reached') })
+    const { wrapper } = await mountView()
+    await wrapper.get('[data-testid="new-field-label"]').setValue('One field too many')
+    await wrapper.get('[data-testid="create-field"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="create-field-error"]').text()).toBe('This Organization already has 50 fields.')
+  })
 })
 
 describe('FieldsView — inline rename', () => {
@@ -279,6 +297,28 @@ describe('FieldsView — reorder', () => {
     expect(wrapper.findAll('[data-testid="move-field-up"]')[0].attributes('disabled')).toBeDefined()
     expect(wrapper.findAll('[data-testid="move-field-down"]')[1].attributes('disabled')).toBeDefined()
   })
+
+  it('moving the middle field of three sends the exact three-item order', async () => {
+    stub({ fields: () => ({ fields: [BUDGET, TEMPERATURE, SOURCE, REFERRER_ARCHIVED] }) })
+    const { wrapper } = await mountView()
+    await wrapper.findAll('[data-testid="move-field-down"]')[1].trigger('click')
+    await flushPromises()
+    const call = lastCall('PUT', '/custom-fields/order')
+    expect(JSON.parse(String(call?.[1]?.body))).toEqual({
+      field_ids: [BUDGET.id, SOURCE.id, TEMPERATURE.id],
+    })
+  })
+
+  it('a reorder failure shows an inline list error; a 422 also refetches the field list', async () => {
+    stub({ reorder: () => new ApiError(422, 'unprocessable') })
+    const { wrapper } = await mountView()
+    const definitionsBefore = apiFetchMock.mock.calls.filter(([path]) => path === '/custom-fields').length
+    await wrapper.findAll('[data-testid="move-field-up"]')[1].trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="fields-list-error"]').text()).not.toBe('')
+    const definitionsAfter = apiFetchMock.mock.calls.filter(([path]) => path === '/custom-fields').length
+    expect(definitionsAfter).toBeGreaterThan(definitionsBefore)
+  })
 })
 
 describe('FieldsView — archive / restore', () => {
@@ -308,6 +348,25 @@ describe('FieldsView — archive / restore', () => {
     const call = lastCall('PUT', `/custom-fields/${REFERRER_ARCHIVED.id}`)
     expect(JSON.parse(String(call?.[1]?.body))).toEqual({ label: 'Referrer', archived: false })
   })
+
+  it('Cancel closes the dialog and sends nothing', async () => {
+    const { wrapper } = await mountView()
+    await wrapper.findAll('[data-testid="archive-field"]')[0].trigger('click')
+    await flushPromises()
+    expect(document.querySelector('[role="dialog"]')).toBeTruthy()
+    dialogButton('Cancel')?.click()
+    await flushPromises()
+    expect(document.querySelector('[role="dialog"]')).toBeFalsy()
+    expect(apiFetchMock.mock.calls.some(([path, init]) => path === `/custom-fields/${BUDGET.id}` && init?.method === 'PUT')).toBe(false)
+  })
+
+  it('a restore failure due to a label clash shows the "already in use" copy under the live table', async () => {
+    stub({ update: () => new ApiError(409, 'custom_field_label_taken') })
+    const { wrapper } = await mountView()
+    await wrapper.get('[data-testid="restore-field"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="fields-list-error"]').text()).toBe('"Referrer" is already in use.')
+  })
 })
 
 describe('FieldsView — options editor', () => {
@@ -325,6 +384,27 @@ describe('FieldsView — options editor', () => {
     await flushPromises()
     const call = lastCall('POST', `/custom-fields/${TEMPERATURE.id}/options`)
     expect(JSON.parse(String(call?.[1]?.body))).toEqual({ label: 'Hot' })
+  })
+
+  it('shows a 422 option_limit_reached inline', async () => {
+    stub({ addOption: () => new ApiError(422, 'option_limit_reached') })
+    const { wrapper } = await mountView()
+    await wrapper.get('[data-testid="manage-field-options"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="add-option-input"]').setValue('One option too many')
+    await wrapper.get('[data-testid="add-option-submit"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="add-option-error"]').text()).toBe('This field already has 50 options.')
+  })
+
+  it('an option archive/restore failure shows inline next to the options editor', async () => {
+    stub({ updateOption: () => new ApiError(404, 'not_found') })
+    const { wrapper } = await mountView()
+    await wrapper.get('[data-testid="manage-field-options"]').trigger('click')
+    await flushPromises()
+    await wrapper.findAll('[data-testid="archive-option"]')[0].trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="option-action-error"]').text()).toBe('Could not archive this option.')
   })
 
   it('renames an option inline and archives it', async () => {
@@ -351,7 +431,12 @@ describe('FieldsView — options editor', () => {
     await wrapper.findAll('[data-testid="archive-option"]')[0].trigger('click')
     await flushPromises()
     call = lastCall('PUT', `/custom-fields/${TEMPERATURE.id}/options/${TEMPERATURE.options[0]!.id}`)
-    expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ archived: true })
+    // The stub's `/custom-fields` GET is static (not stateful across the
+    // rename PUT above), so the refetch it triggers puts the original
+    // 'Cold' label back in front of the archive click — this asserts the
+    // exact body archiveOption actually sends for whatever label is
+    // currently displayed, rather than the previous loose `toMatchObject`.
+    expect(JSON.parse(String(call?.[1]?.body))).toEqual({ label: 'Cold', archived: true })
   })
 
   it('restores an archived option', async () => {

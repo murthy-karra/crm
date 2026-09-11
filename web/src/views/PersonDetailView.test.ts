@@ -194,6 +194,10 @@ class FakeRoom implements CallRoom {
 }
 
 interface StubOptions {
+  /** `GET /api/me` response. Defaults to `me()` (an active member). Only
+   *  the custom-fields admin-empty-state test (SLICE_019.md §9.11) needs a
+   *  different role. */
+  meOverride?: MeResponse
   settledHangup?: CallView
   /** Per-attempt start responses (thrown if an Error); the last repeats. */
   starts?: Array<unknown>
@@ -253,6 +257,13 @@ interface StubOptions {
   /** `DELETE /api/people/{id}/custom-fields/{field_id}` response, or an
    *  Error. Defaults to removing the tracked value (`changed` by presence). */
   customFieldClear?: (fieldId: string) => PersonCustomFieldValueMutationResponse | Error
+  /** `PUT /api/people/{id}/custom-fields/{field_id}`, allowing a deferred
+   *  (manually-resolved) response — the concurrent-rows test (SLICE_019.md
+   *  §9.11) needs two saves in flight at once, each settling independently. */
+  customFieldSetAsync?: (
+    fieldId: string,
+    body: SetCustomFieldValueRequest,
+  ) => Promise<PersonCustomFieldValueMutationResponse | Error>
 }
 
 function taskFixture(overrides: Partial<Task> = {}): Task {
@@ -335,7 +346,7 @@ function stubApi(personDetail: PersonDetailResponse, options: StubOptions = {}) 
   ]
   apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET'
-    if (path === '/me') return me()
+    if (path === '/me') return options.meOverride ?? me()
     const personTagMatch = /^\/people\/([^/]+)\/tags\/([^/]+)$/.exec(path)
     if (personTagMatch && (method === 'PUT' || method === 'DELETE')) {
       const tagId = decodeURIComponent(personTagMatch[2])
@@ -595,7 +606,9 @@ function stubApi(personDetail: PersonDetailResponse, options: StubOptions = {}) 
     if (customFieldValueMatch && method === 'PUT') {
       const fieldId = decodeURIComponent(customFieldValueMatch[2])
       const body = JSON.parse(String(init?.body ?? '{}')) as SetCustomFieldValueRequest
-      const result = options.customFieldSet?.(fieldId, body)
+      const result = options.customFieldSetAsync
+        ? await options.customFieldSetAsync(fieldId, body)
+        : options.customFieldSet?.(fieldId, body)
       if (result instanceof Error) throw result
       if (result) {
         currentCustomFields = result.custom_fields
@@ -1791,6 +1804,15 @@ describe('PersonDetailView — Tags', () => {
   })
 })
 
+/** A manually-resolved custom-field PUT response — lets a test hold one
+ * row's save open while a sibling row's save resolves, to exercise the
+ * per-row (not shared-mutation-observer) pending/error tracking. */
+function deferredCustomFieldResult() {
+  let resolve!: (value: PersonCustomFieldValueMutationResponse | Error) => void
+  const promise = new Promise<PersonCustomFieldValueMutationResponse | Error>((yes) => { resolve = yes })
+  return { promise, resolve }
+}
+
 describe('PersonDetailView — Custom fields (SLICE_019.md §9.11)', () => {
   const BUDGET_FIELD: CustomField = {
     id: 'field-budget',
@@ -1855,6 +1877,21 @@ describe('PersonDetailView — Custom fields (SLICE_019.md §9.11)', () => {
     expect(wrapper.find('a[href="/manage/fields"]').exists()).toBe(false)
   })
 
+  it('shows both admin links to Manage → Fields for an org admin', async () => {
+    stubApi(detail([PHONE_A]), {
+      customFieldDefinitions: [],
+      meOverride: {
+        user: { id: 'u-alice', email: 'alice@acme.test', display_name: 'Alice' },
+        organization: { id: ORG_ID, name: 'Acme Realty', role: 'admin' },
+        platform_admin: false,
+      },
+    })
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    expect(wrapper.get('[data-testid="custom-fields-empty"]').text()).toContain('No custom fields yet.')
+    expect(wrapper.findAll('a[href="/manage/fields"]')).toHaveLength(2)
+  })
+
   it('text: blur saves, Enter saves, Escape reverts without saving', async () => {
     const referrerField: CustomField = { id: 'field-referrer', label: 'Referrer', field_type: 'text', position: 1, archived_at: null, person_count: 0, options: [] }
     stubApi(detail([PHONE_A]), { customFieldDefinitions: [referrerField] })
@@ -1880,6 +1917,164 @@ describe('PersonDetailView — Custom fields (SLICE_019.md §9.11)', () => {
     await flushPromises()
     expect(apiFetchMock.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(false)
     expect((wrapper.get('[data-testid="custom-field-text-input"]').element as HTMLInputElement).value).toBe('Referral')
+
+    // W1 regression: reverting clears `dirty`, so the `@blur` this Escape
+    // itself triggers (via the handler's `.blur()`) must not re-send.
+    apiFetchMock.mockClear()
+    await input.trigger('blur')
+    await flushPromises()
+    expect(apiFetchMock.mock.calls.some(([, init]) => init?.method === 'PUT' || init?.method === 'DELETE')).toBe(false)
+  })
+
+  it('blur on an untouched (pre-filled, unedited) field sends no request', async () => {
+    stubApi(
+      detail([PHONE_A], [], [], [], [
+        { field_id: 'field-referrer', label: 'Referrer', field_type: 'text', value: { text: 'Zillow' }, option_label: null, updated_at: '2026-08-22T09:00:00.000Z' },
+      ]),
+      { customFieldDefinitions: [{ id: 'field-referrer', label: 'Referrer', field_type: 'text', position: 1, archived_at: null, person_count: 1, options: [] }] },
+    )
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    apiFetchMock.mockClear()
+    const input = wrapper.get('[data-testid="custom-field-text-input"]')
+    await input.trigger('focus')
+    await input.trigger('blur')
+    await flushPromises()
+    expect(apiFetchMock.mock.calls.some(([, init]) => init?.method === 'PUT' || init?.method === 'DELETE')).toBe(false)
+  })
+
+  it('after a successful save, an immediate further blur with no new edit sends nothing', async () => {
+    const referrerField: CustomField = { id: 'field-referrer', label: 'Referrer', field_type: 'text', position: 1, archived_at: null, person_count: 0, options: [] }
+    stubApi(detail([PHONE_A]), { customFieldDefinitions: [referrerField] })
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    const input = wrapper.get('[data-testid="custom-field-text-input"]')
+    await input.setValue('Zillow')
+    await input.trigger('blur')
+    await settleTick()
+    expect(apiFetchMock.mock.calls.some(([path, init]) => path === `/people/${PERSON_ID}/custom-fields/${referrerField.id}` && init?.method === 'PUT')).toBe(true)
+
+    apiFetchMock.mockClear()
+    await input.trigger('blur')
+    await flushPromises()
+    expect(apiFetchMock.mock.calls.some(([, init]) => init?.method === 'PUT' || init?.method === 'DELETE')).toBe(false)
+  })
+
+  it('a dirty (in-progress) draft is not clobbered by a server value that changes underneath it', async () => {
+    stubApi(
+      detail([PHONE_A], [], [], [], [
+        { field_id: 'field-referrer', label: 'Referrer', field_type: 'text', value: { text: 'Zillow' }, option_label: null, updated_at: '2026-08-22T09:00:00.000Z' },
+      ]),
+      { customFieldDefinitions: [{ id: 'field-referrer', label: 'Referrer', field_type: 'text', position: 1, archived_at: null, person_count: 1, options: [] }] },
+    )
+    const { wrapper, queryClient } = await mountView()
+    activeWrapper = wrapper
+    const input = wrapper.get('[data-testid="custom-field-text-input"]')
+    await input.setValue('Typing a new value')
+    queryClient.setQueryData(queryKeys.person(ORG_ID, PERSON_ID), (old: PersonDetailResponse | undefined) =>
+      old && {
+        ...old,
+        custom_fields: old.custom_fields.map((v) =>
+          v.field_id === 'field-referrer' ? { ...v, value: { text: 'Changed elsewhere' } } : v,
+        ),
+      },
+    )
+    await nextTick()
+    expect((wrapper.get('[data-testid="custom-field-text-input"]').element as HTMLInputElement).value).toBe('Typing a new value')
+  })
+
+  it('once a field is not dirty, a server value that changes underneath it updates the displayed draft', async () => {
+    stubApi(
+      detail([PHONE_A], [], [], [], [
+        { field_id: 'field-referrer', label: 'Referrer', field_type: 'text', value: { text: 'Zillow' }, option_label: null, updated_at: '2026-08-22T09:00:00.000Z' },
+      ]),
+      { customFieldDefinitions: [{ id: 'field-referrer', label: 'Referrer', field_type: 'text', position: 1, archived_at: null, person_count: 1, options: [] }] },
+    )
+    const { wrapper, queryClient } = await mountView()
+    activeWrapper = wrapper
+    expect((wrapper.get('[data-testid="custom-field-text-input"]').element as HTMLInputElement).value).toBe('Zillow')
+    queryClient.setQueryData(queryKeys.person(ORG_ID, PERSON_ID), (old: PersonDetailResponse | undefined) =>
+      old && {
+        ...old,
+        custom_fields: old.custom_fields.map((v) =>
+          v.field_id === 'field-referrer' ? { ...v, value: { text: 'Changed elsewhere' } } : v,
+        ),
+      },
+    )
+    await nextTick()
+    expect((wrapper.get('[data-testid="custom-field-text-input"]').element as HTMLInputElement).value).toBe('Changed elsewhere')
+  })
+
+  it('two different rows saving concurrently do not interfere with each other\'s pending or error state', async () => {
+    const referrerField: CustomField = { id: 'field-referrer', label: 'Referrer', field_type: 'text', position: 1, archived_at: null, person_count: 0, options: [] }
+    const referrerDeferred = deferredCustomFieldResult()
+    const budgetDeferred = deferredCustomFieldResult()
+    stubApi(detail([PHONE_A]), {
+      customFieldDefinitions: [referrerField, BUDGET_FIELD],
+      customFieldSetAsync: (fieldId) => (fieldId === referrerField.id ? referrerDeferred.promise : budgetDeferred.promise),
+    })
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    const textInput = wrapper.get('[data-testid="custom-field-text-input"]')
+    const numberInput = wrapper.get('[data-testid="custom-field-number-input"]')
+    await textInput.setValue('Zillow')
+    await textInput.trigger('blur')
+    await numberInput.setValue('500')
+    await numberInput.trigger('blur')
+    await flushPromises()
+    expect((textInput.element as HTMLInputElement).disabled).toBe(true)
+    expect((numberInput.element as HTMLInputElement).disabled).toBe(true)
+
+    // Budget's save fails; Referrer's is still in flight — the failure must
+    // not leak onto the sibling row.
+    budgetDeferred.resolve(new ApiError(404, 'not_found'))
+    await settleTick()
+    expect((numberInput.element as HTMLInputElement).disabled).toBe(false)
+    expect(wrapper.findAll('[data-testid="custom-field-error"]')).toHaveLength(1)
+    expect((textInput.element as HTMLInputElement).disabled).toBe(true)
+
+    referrerDeferred.resolve({
+      custom_fields: [
+        { field_id: referrerField.id, label: 'Referrer', field_type: 'text', value: { text: 'Zillow' }, option_label: null, updated_at: '2026-09-10T12:00:00.000Z' },
+      ],
+      changed: true,
+    })
+    await settleTick()
+    expect((textInput.element as HTMLInputElement).disabled).toBe(false)
+  })
+
+  it('date: blur with no input sends nothing; a valid date saves with an exact payload', async () => {
+    const dateField: CustomField = { id: 'field-closing', label: 'Closing date', field_type: 'date', position: 1, archived_at: null, person_count: 0, options: [] }
+    stubApi(detail([PHONE_A]), { customFieldDefinitions: [dateField] })
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    const input = wrapper.get('[data-testid="custom-field-date-input"]')
+    await input.trigger('focus')
+    await input.trigger('blur')
+    await flushPromises()
+    expect(apiFetchMock.mock.calls.some(([, init]) => init?.method === 'PUT' || init?.method === 'DELETE')).toBe(false)
+
+    await input.setValue('2026-10-15')
+    await input.trigger('blur')
+    await flushPromises()
+    const call = apiFetchMock.mock.calls.find(([path, init]) => path === `/people/${PERSON_ID}/custom-fields/${dateField.id}` && init?.method === 'PUT')
+    expect(JSON.parse(String(call?.[1]?.body))).toEqual({ value: { date: '2026-10-15' } })
+  })
+
+  it('a partially-typed (invalid) date shows an inline error and sends nothing', async () => {
+    const dateField: CustomField = { id: 'field-closing', label: 'Closing date', field_type: 'date', position: 1, archived_at: null, person_count: 0, options: [] }
+    stubApi(detail([PHONE_A]), { customFieldDefinitions: [dateField] })
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    const input = wrapper.get('[data-testid="custom-field-date-input"]')
+    await input.setValue('2026-09')
+    // jsdom's native date input never reports `badInput`; a real browser
+    // does for a partially-typed value (an empty, otherwise-valid `.value`).
+    Object.defineProperty(input.element, 'validity', { value: { badInput: true }, configurable: true })
+    await input.trigger('blur')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="custom-field-error"]').text()).toBe('Enter a complete date.')
+    expect(apiFetchMock.mock.calls.some(([, init]) => init?.method === 'PUT' || init?.method === 'DELETE')).toBe(false)
   })
 
   it('an empty draft clears the value instead of sending an empty string', async () => {
@@ -1933,7 +2128,7 @@ describe('PersonDetailView — Custom fields (SLICE_019.md §9.11)', () => {
     expect(call).toBeTruthy()
   })
 
-  it('a held-but-archived option renders as "keep current"; re-selecting it re-sends the same (idempotent) option_id', async () => {
+  it('a held-but-archived option renders as "keep current"; re-selecting it is a no-op (no request)', async () => {
     const archivedHeldField: CustomField = {
       ...TEMPERATURE_FIELD,
       options: [{ id: 'opt-cold', label: 'Cold', position: 1, archived_at: '2026-09-01T00:00:00.000Z' }, TEMPERATURE_FIELD.options[1]!],
@@ -1948,10 +2143,10 @@ describe('PersonDetailView — Custom fields (SLICE_019.md §9.11)', () => {
     activeWrapper = wrapper
     const select = wrapper.get('[data-testid="custom-field-choice-select"]').findComponent(Select)
     expect((select.props('options') as Array<{ label: string }>).some((o) => o.label.includes('Cold') && o.label.includes('archived'))).toBe(true)
+    apiFetchMock.mockClear()
     await select.vm.$emit('update:model-value', 'opt-cold')
     await flushPromises()
-    const call = apiFetchMock.mock.calls.find(([path, init]) => path === `/people/${PERSON_ID}/custom-fields/${TEMPERATURE_FIELD.id}` && init?.method === 'PUT')
-    expect(JSON.parse(String(call?.[1]?.body))).toEqual({ value: { option_id: 'opt-cold' } })
+    expect(apiFetchMock.mock.calls.some(([, init]) => init?.method === 'PUT' || init?.method === 'DELETE')).toBe(false)
   })
 
   it('a 404 on save refetches both the definitions and the Person', async () => {
@@ -1966,6 +2161,45 @@ describe('PersonDetailView — Custom fields (SLICE_019.md §9.11)', () => {
     const input = wrapper.get('[data-testid="custom-field-number-input"]')
     await input.setValue('100')
     await input.trigger('blur')
+    await flushPromises()
+    const definitionsAfter = apiFetchMock.mock.calls.filter(([path]) => path === '/custom-fields').length
+    const personAfter = apiFetchMock.mock.calls.filter(([path]) => path === `/people/${PERSON_ID}`).length
+    expect(definitionsAfter).toBeGreaterThan(definitionsBefore)
+    expect(personAfter).toBeGreaterThan(personBefore)
+    expect(wrapper.get('[data-testid="custom-field-error"]').text()).toBe('Could not save this value.')
+  })
+
+  it('a 409 field_archived on save refetches both the definitions and the Person', async () => {
+    stubApi(detail([PHONE_A]), {
+      customFieldDefinitions: [BUDGET_FIELD],
+      customFieldSet: () => new ApiError(409, 'field_archived'),
+    })
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    const definitionsBefore = apiFetchMock.mock.calls.filter(([path]) => path === '/custom-fields').length
+    const personBefore = apiFetchMock.mock.calls.filter(([path]) => path === `/people/${PERSON_ID}`).length
+    const input = wrapper.get('[data-testid="custom-field-number-input"]')
+    await input.setValue('100')
+    await input.trigger('blur')
+    await flushPromises()
+    const definitionsAfter = apiFetchMock.mock.calls.filter(([path]) => path === '/custom-fields').length
+    const personAfter = apiFetchMock.mock.calls.filter(([path]) => path === `/people/${PERSON_ID}`).length
+    expect(definitionsAfter).toBeGreaterThan(definitionsBefore)
+    expect(personAfter).toBeGreaterThan(personBefore)
+    expect(wrapper.get('[data-testid="custom-field-error"]').text()).toBe('Could not save this value.')
+  })
+
+  it('a 422 unknown_option on a choice save refetches both the definitions and the Person', async () => {
+    stubApi(detail([PHONE_A]), {
+      customFieldDefinitions: [TEMPERATURE_FIELD],
+      customFieldSet: () => new ApiError(422, 'unknown_option'),
+    })
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    const definitionsBefore = apiFetchMock.mock.calls.filter(([path]) => path === '/custom-fields').length
+    const personBefore = apiFetchMock.mock.calls.filter(([path]) => path === `/people/${PERSON_ID}`).length
+    const select = wrapper.get('[data-testid="custom-field-choice-select"]').findComponent(Select)
+    await select.vm.$emit('update:model-value', 'opt-warm')
     await flushPromises()
     const definitionsAfter = apiFetchMock.mock.calls.filter(([path]) => path === '/custom-fields').length
     const personAfter = apiFetchMock.mock.calls.filter(([path]) => path === `/people/${PERSON_ID}`).length

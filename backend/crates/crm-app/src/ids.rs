@@ -1402,3 +1402,102 @@ mod task_id_tests {
         );
     }
 }
+
+/// A custom-field definition identity (Slice 019a). Kept distinct from
+/// every other UUID — above all `PersonId` and `CustomFieldOptionId`, its
+/// closest neighbors in every custom-field call site — so a Person or
+/// option id cannot accidentally cross a custom-field query boundary at
+/// compile time.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
+#[repr(transparent)]
+pub struct CustomFieldId(pub Uuid);
+
+impl CustomFieldId {
+    pub fn new(id: Uuid) -> Self {
+        Self(id)
+    }
+
+    pub fn as_uuid(self) -> Uuid {
+        self.0
+    }
+}
+
+impl fmt::Display for CustomFieldId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
+impl fmt::Debug for CustomFieldId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self, f)
+    }
+}
+
+#[cfg(test)]
+mod custom_field_id_tests {
+    use super::*;
+
+    #[test]
+    fn custom_field_id_is_transparent_and_readable() {
+        let raw = Uuid::new_v4();
+        let id = CustomFieldId::new(raw);
+        assert_eq!(id.as_uuid(), raw);
+        assert_eq!(id.to_string(), raw.to_string());
+        assert_eq!(format!("{id:?}"), raw.to_string());
+        assert_eq!(
+            serde_json::to_string(&id).unwrap(),
+            serde_json::to_string(&raw).unwrap()
+        );
+    }
+}
+
+/// A custom-field option identity (Slice 019a). Kept distinct from every
+/// other UUID — above all `CustomFieldId` and `PersonId` — so an option
+/// id cannot accidentally cross a custom-field-definition or Person query
+/// boundary at compile time.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
+#[repr(transparent)]
+pub struct CustomFieldOptionId(pub Uuid);
+
+impl CustomFieldOptionId {
+    pub fn new(id: Uuid) -> Self {
+        Self(id)
+    }
+
+    pub fn as_uuid(self) -> Uuid {
+        self.0
+    }
+}
+
+impl fmt::Display for CustomFieldOptionId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
+impl fmt::Debug for CustomFieldOptionId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self, f)
+    }
+}
+
+#[cfg(test)]
+mod custom_field_option_id_tests {
+    use super::*;
+
+    #[test]
+    fn custom_field_option_id_is_transparent_and_readable() {
+        let raw = Uuid::new_v4();
+        let id = CustomFieldOptionId::new(raw);
+        assert_eq!(id.as_uuid(), raw);
+        assert_eq!(id.to_string(), raw.to_string());
+        assert_eq!(format!("{id:?}"), raw.to_string());
+        assert_eq!(
+            serde_json::to_string(&id).unwrap(),
+            serde_json::to_string(&raw).unwrap()
+        );
+    }
+}

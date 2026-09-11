@@ -6,6 +6,7 @@ pub mod admin;
 pub mod capture;
 pub mod commands;
 pub mod contact;
+pub mod custom_field;
 pub mod envelope;
 pub mod facts;
 pub mod inquiry;

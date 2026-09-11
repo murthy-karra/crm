@@ -35,6 +35,20 @@ JSON fixtures. Create minimal synthetic fixtures from the published shapes;
 do not label repaired examples as captured live responses. Public schema
 `info.version` is not a verified running server version.
 
+### Interpretation for the revised draft
+
+Notes list and enriched detail are separate representations of the same source
+ID. Their expected additional fields are not evidence of a source edit; compare
+content only under a qualified representation/field profile. The draft's
+deterministic semantic HMAC is an application comparison rule, not a vendor
+version identifier; original HTTP bytes remain preserved independently.
+
+The documented restricted note-detail 404 supports an explicit item gap, not a
+deletion claim. This evidence does not qualify arbitrary collection 403/404s as
+complete enumeration or prove that credentials are still valid. The revised
+draft pauses unqualified denials and retains successful list evidence. No new
+live endpoint observation or permission was obtained during this draft revision.
+
 ## Remaining coverage
 
 Core-first was accepted as sequencing (D-061), not reduced migration fidelity.

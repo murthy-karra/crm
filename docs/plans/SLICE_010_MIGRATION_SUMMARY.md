@@ -1,7 +1,7 @@
 # Slice 010 — FUB migration planning summary
 
 **Status: 010a DEPLOYED AND VERIFIED (2026-09-11); live FUB validation deferred.
-010b core-first planning is active; later implementation remains unapproved.** The user
+010b core-first implementation is approved under D-063; later import rungs remain unapproved.** The user
 selected **a new, empty CRM Organization first** (D-059), then approved 010a's
 API-first assessment and encrypted saved credentials (D-060). Other
 recommendations remain proposals. Inspected against main `b2fb368`, after 019b.
@@ -230,6 +230,7 @@ now completed. A later same-day follow-up authorized 010a deployment, which
 is complete and verified; live FUB validation remains user-deferred. The user
 also accepted core-first 010b planning (D-061): People, users, stages, custom
 fields, notes and tasks, with all remaining families explicitly tracked. See
-[the draft specification](../specs/SLICE_010b.md) and
-[execution brief](../tasks/SLICE_010b_IMPL.md); their contracts and implementation
-are not yet approved.
+[the approved specification](../specs/SLICE_010b.md) and
+[execution brief](../tasks/SLICE_010b_IMPL.md). D-063 subsequently accepts their
+reviewed contracts, storage policy, implementation and synthetic verification;
+live source validation and deployment remain separate.

@@ -1,13 +1,13 @@
 # Project state
 
-Last updated: 2026-09-11 (foundations documentation; 010b remains a draft).
+Last updated: 2026-09-11 (010b implementation authorized under D-063).
 This file holds current operational status, active work and live residuals.
 [PROJECT_HISTORY.md](PROJECT_HISTORY.md) preserves earlier progress, the slice
 ledger and historical measurements; its old instructions are not current work.
 
 ## Current state
 
-**010a is deployed in shared development; 010b is planning only.**
+**010a is deployed in shared development; 010b implementation is authorized and starting.**
 The latest release record identifies source `0735015` (implementation `e4e0658`,
 merge `cd224fe`) at [app.tarams.org](https://app.tarams.org/manage/migration).
 It records migration `20260916000001` on `crm_dev`, API PID 9429 and Web PID 9455.
@@ -36,29 +36,32 @@ No production-cluster deployment or recurring monitor is established by this wor
   New policies are proposals, not accepted decisions or implemented capabilities.
 - **010b:** [spec](../specs/SLICE_010b.md), [brief](../tasks/SLICE_010b_IMPL.md)
   and [source qualification](../research/SLICE_010b_FUB_SOURCE_CONTRACT.md) are
-  drafted under D-061. Coordinator review found four items, recorded in
-  [foundations work sequence](FOUNDATIONS.md#work-sequence-and-proof): capture
-  representations, retained-read authorization, budget recovery and denial
-  classification. Correct the draft, then complete independent plan review and
-  contract approval. No 010b code or database migration exists.
+  approved under D-063 after independent review returned READY. Core-first
+  sequencing remains D-061. The approved contract includes representation-aware
+  capture, retained-read authorization, frozen preview inputs, bounded overlap
+  groups, durable logical-byte reservations and revisioned budget increases.
+  Backend implementation precedes the Web flow and final synthetic verification.
+  Live FUB validation and runtime deployment remain outside this assignment.
 
 ## Current branch
 
-Application baseline: `0735015a583f6207c78d0141644a0753328f85f6` on `main`,
-previously pushed and deployed. Documentation commits may follow that baseline;
-use Git for their exact revision/publication state. The user authorized committing
-and pushing the 010a release evidence, 010b drafts, D-062 and foundations records
-on 2026-09-11, then returning to 010b planning. This does not redeploy application
-source or authorize 010b implementation. Inspect Git before continuing.
+The approved planning baseline follows documentation commit `a498a2c` on main.
+Implementation uses branch `codex/slice-010b-core-snapshot` in
+`/Users/karrad/projects/crm-worktrees/010b`, with one primary writer for backend
+and its sole additive migration, followed by Web. The coordinator owns current
+state and verification evidence. Inspect Git for current implementation changes.
+Application deployment remains source `0735015`; no 010b runtime deployment is
+part of this assignment.
 
 ## Last accepted decision
 
-**D-062:** email bulk content belongs outside PostgreSQL; provider, relocation,
-body search, keys/retention and recovery design remain open. Existing encrypted
-BYTEA storage is unchanged. **D-061:** 010b captures People, users, stages, custom
-fields, notes and tasks first, explicitly tracking remaining families. This
-accepts sequencing, not implementation contracts or reduced cutover fidelity.
-The new foundations are proposals; the decision log is unchanged by this task.
+**D-063:** the reviewed 010b specification, contracts, implementation and synthetic
+verification are approved. Initial synthetic-development allowances are 2 GiB/run
+and 4 GiB retained/Organization; current admins may explicitly raise them within
+operator ceilings, with a separate resume action. These are logical payload
+allowances, not production quotas or physical disk limits. **D-062** places future
+email bulk content outside PostgreSQL; implementation/provider remain open.
+Foundations F-01/F-02/F-03 remain proposals except where separately accepted.
 
 ## Operational entry points
 
@@ -72,8 +75,8 @@ The new foundations are proposals; the decision log is unchanged by this task.
 
 ## Parked / queued tracks
 
-- **Slice 010b+ (FUB migration): PLANNING.** 010a is deployed; live validation
-  remains deferred. The 010b core-first spec/brief are drafted under D-061.
+- **Slice 010b (FUB migration): IMPLEMENTATION.** 010a is deployed; live validation
+  remains deferred. The reviewed 010b spec/brief are approved under D-063.
   [Current summary](SLICE_010_MIGRATION_SUMMARY.md); historical survey retained
   in [the ladder](SLICE_010_LADDER.md). New, empty Organization first and
   010a's source/credential contracts are accepted. Full inventory, mapping,
@@ -201,6 +204,18 @@ and now lives only in git history.
 
 ## Latest verification
 
+- 2026-09-11 revised 010b plan: independent review returned READY-WITH-FIXES;
+  two findings were corrected and targeted confirmation returned READY. All
+  47 local document paths/anchors, whitespace and documentation-only scope
+  checks passed. See the review record for dispositions. No 010b code, tests,
+  browser walkthrough, live FUB call or deployment was performed.
+
+- 2026-09-11 documentation publication: staged whitespace and scope checks
+  passed for 26 documentation/evidence paths; six JSON files parsed and the
+  bounded credential-pattern check found no matches. Commit `a498a2c` pushed
+  to origin/main successfully; local/remote-tracking revisions matched and
+  the working tree was clean before 010b revisions began.
+
 - 2026-09-11 foundations documentation: the system map, README/index, current
   state/history, foundations proposal and readiness checklist were reviewed.
   Independent review found no actionable issue. Local Markdown paths/anchors
@@ -228,9 +243,10 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. Resolve the four 010b draft review items, complete independent review and
-   obtain contract/implementation approval. Core sequencing is already accepted;
-   no new hardware, shared queue platform or email relocation belongs in 010b.
+1. Implement approved 010b in its isolated worktree: freeze concrete source/schema/
+   wire details, complete backend and its checkpoint, then Web and final synthetic
+   verification. No new hardware, shared queue platform or email relocation
+   belongs in this slice.
 2. Use readiness C gates to prepare for first real customer data; use V gates for
    the user's later authorized FUB validation. Identify dataset type and satisfy
    applicable prerequisites before connecting. No live call is scheduled here.
@@ -248,9 +264,9 @@ and now lives only in git history.
   and policy proposals are not automatically accepted. Their owning specs must
   identify contract changes and acceptance under AGENTS §11/§16.
 - 010a cleanup/integration and shared-development deployment are complete under
-  D-060. Live FUB validation remains deferred by the user. 010b planning and
-  core-first sequencing are authorized, but contracts/implementation and later
-  import/cutover are not. No repeated authorization is needed for completed work.
+  D-060. Live FUB validation remains deferred by the user. 010b contracts, implementation and synthetic verification are approved under
+  D-063. Runtime deployment, customer-data processing and later import/cutover
+  remain outside scope. No repeated implementation authorization is needed.
 - Slice 017 live sends remain the user's deferred action, not a new approval gate.
 - Recovery targets, retention/erasure policy details and support-access policy
   remain open in the readiness plan and decision log. No values were invented.

@@ -2198,3 +2198,26 @@ migration. O-012/O-013 prerequisites remain open. No runtime/schema change or
 infrastructure purchase is authorized here. Email capture stays outside 010b's
 six core families; this decision guides later email capture and migration work,
 without relocating 010b's other source evidence implicitly.
+
+### D-063 — Revised 010b specification and implementation approved (2026-09-11)
+
+The user approved the independently reviewed specification and storage policy:
+“approved...lets move on to implementation”, after the six review corrections
+and remaining allowance/delegation choice were presented.
+
+This accepts [SLICE_010b.md](../specs/SLICE_010b.md) and its
+[execution brief](../tasks/SLICE_010b_IMPL.md), including additive snapshot,
+preview, budget and overlap HTTP/persistence contracts; representation-aware
+capture; distinct source/retained-read authority; durable byte reservations;
+frozen preview inputs and bounded overlap groups. Synthetic development starts
+with 2 GiB/run and 4 GiB retained/Organization allowances. Deployment operators
+set ceilings; current Organization admins can confirm monotonic increases within
+those ceilings, followed by a separate authorized resume action. These are not
+production customer quotas, retention periods or physical PostgreSQL disk limits.
+
+Implementation, necessary specification detail within the owned contracts and
+synthetic verification are authorized. Preserve D-050, the new-Organization-first
+future import, and the existing 010a retry contract. No business import, source
+writes, actual customer-data processing or runtime deployment is included.
+The user's live FUB validation deferral remains in force; synthetic evidence
+does not close it or the D-015/O-012/O-013 customer-data prerequisites.

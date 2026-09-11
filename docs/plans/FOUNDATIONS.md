@@ -131,12 +131,13 @@ application and release owners implement the checks. Named owners are unassigned
 | Step | Outcome / trigger | Owned surface | Proof / remaining gate |
 |---|---|---|---|
 | Documentation milestone (this task) | Current entry point, preserved history, reviewable proposals/readiness | Coordinator: overview, README/index, project state/history, this plan; helper: readiness file only | Relative links/anchors and whitespace; verify history preserved and no runtime files changed |
-| 010b draft corrections | Finish the existing core-capture design review before implementation | 010b spec/brief and source-profile evidence | Resolve the four items below; contracts/budgets remain draft until accepted |
+| 010b review corrections | Completed and independently reviewed READY; implementation approved by D-063 | 010b spec/brief and source-profile evidence | Approved contracts and synthetic-development allowances; backend checkpoint then Web and final verification |
 | First customer-data readiness | Before any real customer payload/evidence enters the system | Owning privacy/data/recovery specs and runbook under readiness C gates | Settle applicable open decisions; isolated restore/erasure proof; source authorization alone does not close readiness |
 | Production-readiness slice | Before production deployment or multi-instance operation | Explicitly assigned deployment, identity/secrets, observability, runtime-role and migration surfaces | Readiness P evidence, agreed service/recovery targets; no production implementation in this milestone |
 | Later capabilities | Before native release or tenant relocation, respectively | Client compatibility or relocation spec | Accept detailed contracts and demonstrate the corresponding F-01/F-03 exercise |
 
-The coordinator's prior 010b draft review identified four unresolved issues:
+The coordinator's prior 010b draft review identified four issues, now addressed
+in the revised draft and tracked in the [review record](../tasks/SLICE_010b_REVIEW.md):
 
 1. Distinguish note list/detail representations from genuine source drift; do
    not treat normal enrichment as changed raw bytes for the same representation.
@@ -149,8 +150,9 @@ The coordinator's prior 010b draft review identified four unresolved issues:
 4. Define when item/family denial produces an explicit gap versus a paused run;
    reconcile that with credential and permission failure handling.
 
-These are coordinator review findings, not a completed independent review or
-an amended 010b contract. Core-first sequencing remains accepted under D-061;
+These coordinator findings have accepted corrections under D-063; the review record
+tracks independent readiness and remaining acceptance. They are not accepted
+010b contracts. Core-first sequencing remains accepted under D-061;
 email bulk placement under D-062 does not change its six-family scope.
 
 ## Handoff exercise and maintenance

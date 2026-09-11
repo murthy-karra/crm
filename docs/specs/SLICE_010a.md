@@ -87,6 +87,15 @@ settled by approving this assessment slice.
 
 ## 3. Source adapter and assessment profile v1
 
+**010b amendment (D-063, 2026-09-11):** [SLICE_010b](SLICE_010b.md) owns an
+additive closed pagination/representation seam and snapshot/preview contracts.
+010a's six fixed probes, one-MiB bound and response envelopes stay unchanged.
+Source pacing and Organization job exclusion cover both assessments and snapshots;
+credential replacement/disconnect also fence snapshot work. Retained snapshot
+reads use current Organization-admin authority independently of live credentials.
+010a retry continues to adopt the retrying admin; 010b source retry does not.
+This amendment applies to §§3–6 when 010b is implemented; it does not redeploy 010a.
+
 An injected, typed FUB reader lives under `crm-app::domain::migration`. The
 runtime adapter uses the existing HTTP dependency. Production requests target
 only `https://api.followupboss.com/v1/` and a closed path/query allowlist. Disable

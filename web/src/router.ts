@@ -144,6 +144,15 @@ function routes(): RouteRecordRaw[] {
       meta: { title: 'Tags' },
     },
     {
+      // SLICE_019.md §7: definitions/options are Organization-admin only
+      // (D-058 §2) — unlike Tags above, this IS `requiresOrgAdmin`, the
+      // Members/Intake pattern.
+      path: '/manage/fields',
+      name: 'manage-fields',
+      component: () => import('./views/FieldsView.vue'),
+      meta: { requiresOrgAdmin: true, title: 'Fields' },
+    },
+    {
       path: '/platform',
       name: 'platform-organizations',
       component: () => import('./views/PlatformOrganizationsView.vue'),

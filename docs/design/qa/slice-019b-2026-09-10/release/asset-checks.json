@@ -1,0 +1,38 @@
+[
+  {
+    "asset": "/assets/PeopleView-CGZunXRk.js",
+    "sha256": "cd6e6c852334bee96597d05c7e50f0cae84dae85ca0373ffcc592ab862dc328b",
+    "bytes": 46550,
+    "public_matches_build": true
+  },
+  {
+    "asset": "/assets/TodayFeedsView-D_n0lLEc.js",
+    "sha256": "3d49ecddbe61dcb4eb5690ec0ab1426eb2b576c7d335fb372b5a5e56f7f73f5f",
+    "bytes": 17285,
+    "public_matches_build": true
+  },
+  {
+    "asset": "/assets/controls-B1J8_AgY.js",
+    "sha256": "a9fc825152e26fc6407f60ddfe7c6973eb3622d4fb446ced3138faa4942425b3",
+    "bytes": 153279,
+    "public_matches_build": true
+  },
+  {
+    "asset": "/assets/createLucideIcon-DoIEor3M.js",
+    "sha256": "6f016ccf7ecd27f0cdb2ec39dc935d714f298a3c6daa80f1c039a24177c2ecf8",
+    "bytes": 1199,
+    "public_matches_build": true
+  },
+  {
+    "asset": "/assets/index-CdNCazQS.css",
+    "sha256": "0b7cc4d05eb2704223bd70a341c13bcb541c795164f4224d5983b14a9df8cc88",
+    "bytes": 36067,
+    "public_matches_build": true
+  },
+  {
+    "asset": "/assets/index-DYbNjpCR.js",
+    "sha256": "7a2c25ec609771261d7bdec771fcd0e57484b34cc69e3dc19f5053728cacaa51",
+    "bytes": 217254,
+    "public_matches_build": true
+  }
+]

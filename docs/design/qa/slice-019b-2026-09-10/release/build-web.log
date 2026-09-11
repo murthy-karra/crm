@@ -1,0 +1,67 @@
+$ vite build --outDir /private/tmp/crm-019b-release-emyyxbhd/web-dist-new
+vite v8.2.1 building client environment for production...
+transforming...
+✓ 1983 modules transformed.
+
+(!) outDir /private/tmp/crm-019b-release-emyyxbhd/web-dist-new is not inside project root and will not be emptied.
+Use --emptyOutDir to override.
+
+rendering chunks...
+computing gzip size...
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/index.html                                              1.19 kB │ gzip:   0.51 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/inter-vietnamese-wght-normal-CBcvBZtf.woff2     10.25 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/inter-greek-ext-wght-normal-DlzME5K_.woff2      11.23 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/inter-cyrillic-wght-normal-DqGufNeO.woff2       18.74 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/inter-greek-wght-normal-CkhJZR-_.woff2          18.99 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/inter-cyrillic-ext-wght-normal-BOeWTOD4.woff2   25.96 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/inter-latin-wght-normal-Dx4kXJAl.woff2          48.25 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2      85.06 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/LoginView-Bu0ZrLP3.css                           0.18 kB │ gzip:   0.15 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/index-CdNCazQS.css                              36.06 kB │ gzip:   8.14 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/plus-CmId1XtI.js                                 0.15 kB │ gzip:   0.15 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/copy-BHZ2PB6L.js                                 0.23 kB │ gzip:   0.20 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/pencil-BPbfquYm.js                               0.27 kB │ gzip:   0.22 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/Card-DCUz80Af.js                                 0.29 kB │ gzip:   0.24 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/refresh-cw-ovICjhnH.js                           0.32 kB │ gzip:   0.22 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/phone-DxNqq-s-.js                                0.32 kB │ gzip:   0.23 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/trash-2-CLTk4qZP.js                              0.32 kB │ gzip:   0.21 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/user-check-CmAgVgGm.js                           0.63 kB │ gzip:   0.37 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/FormField-CPFa1Ttv.js                            0.67 kB │ gzip:   0.41 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/PageHeader-CNWJXm5-.js                           0.84 kB │ gzip:   0.47 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/todayFeeds-DgGlvI7u.js                           1.10 kB │ gzip:   0.48 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/createLucideIcon-DoIEor3M.js                     1.19 kB │ gzip:   0.70 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/ConfirmDialog-knrBptth.js                        1.39 kB │ gzip:   0.76 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/overlayeventbus-BA-T3itb.js                      1.64 kB │ gzip:   0.70 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/LoginView-DBvU9tyD.js                            2.39 kB │ gzip:   1.34 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/LogContactDialog-C-EZ8rAr.js                     2.56 kB │ gzip:   1.14 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/InviteView-DevHGOk6.js                           2.99 kB │ gzip:   1.38 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/PlatformOrganizationsView-DjgQR5lO.js            3.18 kB │ gzip:   1.45 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/OneTimeLinkDialog-DDFUkep_.js                    3.91 kB │ gzip:   1.73 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/TagsView-C7DRPc_-.js                             4.66 kB │ gzip:   2.01 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/NewInquiryView-xh231RXv.js                       4.97 kB │ gzip:   2.23 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/IntakeSettingsView-DYcFL45X.js                   5.93 kB │ gzip:   2.34 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/PlatformOrganizationView-BfSdQv_W.js             5.96 kB │ gzip:   2.21 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/MembersView-v1NUVrBb.js                          7.08 kB │ gzip:   2.38 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/UnresolvedView-BtOzQ7Ee.js                       7.42 kB │ gzip:   2.82 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/EmailCaptureView-v5CrpDwO.js                     8.43 kB │ gzip:   3.14 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/ListsView-B8OsXZ00.js                            9.12 kB │ gzip:   3.42 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/FieldsView-u_wpi6x6.js                          14.85 kB │ gzip:   4.48 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/TodayView-Ba2cthOv.js                           16.72 kB │ gzip:   5.56 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/TodayFeedsView-D_n0lLEc.js                      17.28 kB │ gzip:   5.77 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/ripple-e-jy0xvc.js                              38.16 kB │ gzip:   9.91 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/FilterBar-ChjxZCSw.js                           44.46 kB │ gzip:  13.04 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/PeopleView-CGZunXRk.js                          46.55 kB │ gzip:  15.02 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/PersonDetailView-j9pVWpM8.js                    46.88 kB │ gzip:  13.28 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/DataTable-BDJk4skN.js                           52.21 kB │ gzip:  14.26 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/dialog-LLGNMjSf.js                              59.42 kB │ gzip:  12.05 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/select-tVf7XOvY.js                              78.47 kB │ gzip:  19.06 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/controls-B1J8_AgY.js                           153.27 kB │ gzip:  48.80 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/index-DYbNjpCR.js                              217.25 kB │ gzip:  64.24 kB
+../../../../../private/tmp/crm-019b-release-emyyxbhd/web-dist-new/assets/livekit-client.esm-CX-oniKy.js                 531.04 kB │ gzip: 137.52 kB
+
+✓ built in 566ms
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.

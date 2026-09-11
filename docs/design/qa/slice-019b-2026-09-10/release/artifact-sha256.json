@@ -1,0 +1,30 @@
+[
+  {
+    "file": "README.md",
+    "sha256": "2a168f90ddcf6994d16c9b91b9ce5cd805f4ff1d08a0aedd48477e2e0941e6e4"
+  },
+  {
+    "file": "asset-checks.json",
+    "sha256": "3d38a5b3e990d4c7edefae133a46b03910bcf2c65f1f502f517941bb634bd865"
+  },
+  {
+    "file": "build-api.log",
+    "sha256": "df058196ab2c4426f30db0cf4a72f6ca74e2057f1f51d24449bfc1065ea8f4df"
+  },
+  {
+    "file": "build-web.log",
+    "sha256": "94c7e92eb3760b050b3e6a5b3e16813e75fcdd4bf53f2d60ed437b993f3f27ea"
+  },
+  {
+    "file": "deployed-artifacts.json",
+    "sha256": "6f973b30f58233ac17145f147a0d6247a511288c6c9e44442ffc2f639e61d7be"
+  },
+  {
+    "file": "smoke-results.json",
+    "sha256": "f5984d279dcbbef2e0f5fdcaa8debf8517656aa0f20d0aa3c5b576c7aba43374"
+  },
+  {
+    "file": "tunnel.log",
+    "sha256": "38b00f8d4e29dc626a2773c1ada3d305d437fff146fd7ed466a2fa1f7372eb88"
+  }
+]

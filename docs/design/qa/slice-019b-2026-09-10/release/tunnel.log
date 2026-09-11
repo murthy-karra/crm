@@ -1,0 +1,7 @@
+==> https://app.tarams.org (should reach the web app, not a Cloudflare error page)
+    OK (200)
+==> https://api.tarams.org/api/health (should reach the Rust API directly)
+    OK (200)
+==> https://api.tarams.org/connection/websocket (should reach Centrifugo, not the API)
+    OK (101 Switching Protocols)
+==> tunnel routing OK

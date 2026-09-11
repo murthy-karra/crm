@@ -1,0 +1,101 @@
+[
+  {
+    "target": "http://127.0.0.1:3000",
+    "check": "/api/health",
+    "status": 200,
+    "body": {
+      "status": "ok"
+    }
+  },
+  {
+    "target": "http://127.0.0.1:3000",
+    "check": "/internal/ready",
+    "status": 200,
+    "body": {
+      "status": "ready"
+    }
+  },
+  {
+    "target": "https://api.tarams.org",
+    "check": "/api/health",
+    "status": 200,
+    "body": {
+      "status": "ok"
+    }
+  },
+  {
+    "target": "http://127.0.0.1:5173",
+    "check": "deployed index matches built artifact",
+    "status": 200,
+    "sha256": "18a8b4e69d47838c56687ea8e6759c397d09dd4a9ae0d8e219fc77fd53fbf8af"
+  },
+  {
+    "target": "https://app.tarams.org",
+    "check": "deployed index matches built artifact",
+    "status": 200,
+    "sha256": "18a8b4e69d47838c56687ea8e6759c397d09dd4a9ae0d8e219fc77fd53fbf8af"
+  },
+  {
+    "target": "https://api.tarams.org",
+    "check": "seeded administrator login",
+    "status": 200
+  },
+  {
+    "target": "https://api.tarams.org",
+    "check": "/api/me",
+    "status": 200
+  },
+  {
+    "target": "https://api.tarams.org",
+    "check": "/api/people",
+    "status": 200
+  },
+  {
+    "target": "https://api.tarams.org",
+    "check": "/api/custom-fields",
+    "status": 200
+  },
+  {
+    "target": "https://api.tarams.org",
+    "check": "/api/saved-lists",
+    "status": 200
+  },
+  {
+    "target": "https://api.tarams.org",
+    "check": "/api/today",
+    "status": 200
+  },
+  {
+    "target": "https://api.tarams.org",
+    "check": "custom_text parsed and failed closed for a nonexistent field",
+    "status": 422,
+    "error": "invalid_field"
+  },
+  {
+    "target": "https://api.tarams.org",
+    "check": "custom_number parsed and failed closed for a nonexistent field",
+    "status": 422,
+    "error": "invalid_field"
+  },
+  {
+    "target": "https://api.tarams.org",
+    "check": "custom_date parsed and failed closed for a nonexistent field",
+    "status": 422,
+    "error": "invalid_field"
+  },
+  {
+    "target": "https://api.tarams.org",
+    "check": "custom_choice parsed and failed closed for a nonexistent field",
+    "status": 422,
+    "error": "invalid_field"
+  },
+  {
+    "check": "valid existing custom-field smoke",
+    "result": "no active definitions; valid membership covered by retained QA and DB gates"
+  },
+  {
+    "target": "https://api.tarams.org",
+    "check": "revoke smoke session",
+    "status": 204
+  }
+]

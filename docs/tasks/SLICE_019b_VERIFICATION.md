@@ -5,7 +5,11 @@ with main and delete loose branches.” That authorization supersedes the
 implementation-only release restrictions below. The verification results
 remain the evidence for this unchanged source tree.
 
-Status: implementation and the two implementation review/fix rounds are complete.
+Status: implemented, committed, merged into local main, and deployed to the
+shared development runtime. See the [release record](SLICE_019b_RELEASE.md)
+for revision, deployment checks and branch/worktree cleanup.
+
+Implementation checkpoint: the two implementation review/fix rounds are complete.
 The browser walkthrough and all code/SQLx/database gates passed. The single
 paired performance run passed all thirteen request-p95 limits and all eighteen
 inspected plans. The user approved the
@@ -24,15 +28,16 @@ field-specific identity, accessible controls and shared metadata. Custom value
 changes refresh dependent views through local settling and realtime.
 
 - Spec: [SLICE_019b.md](../specs/SLICE_019b.md); brief: [SLICE_019b_IMPL.md](SLICE_019b_IMPL.md).
-- Checkout: `/Users/karrad/projects/crm-worktrees/019b`.
+- Verification checkout: `/Users/karrad/projects/crm-worktrees/019b` (subsequently removed after merge).
 - Branch: `codex/slice-019b-custom-field-filters`.
-- Base and current commit: `6bad52a32376001d4082ac21aad29699462e3ceb`.
+- Base/current commit at the verification checkpoint: `6bad52a32376001d4082ac21aad29699462e3ceb`.
 - Code-tree SHA-256 after final fixes and SQLx preparation:
   `a75ee70b9b3b51021ca00853109e71ff8c222ca46ad1f91c0937976fabf88e0a`.
 - [Per-file code hashes](../design/qa/slice-019b-2026-09-10/code-tree.json)
   and [tracked/untracked changes](../design/qa/slice-019b-2026-09-10/changed-files.txt).
-- All changes are uncommitted. No merge, push, deployment, migration, dependency
-  addition, Operator tool/schema expansion or shared-runtime update occurred.
+- At this verification checkpoint the changes were uncommitted and the shared
+  runtime was untouched. Subsequent release actions are in the release record.
+  No migration, dependency addition or Operator tool/schema expansion occurred.
 
 Astra high authored the plan and independent reviews. Terra high implemented
 backend and Web, with sequential primary-writer handoff and later disjoint Web
@@ -204,4 +209,5 @@ is restored. Definition changes follow the accepted no-push precedent; other
 agents receive authoritative metadata on refetch/navigation/reconnect within
 the one-active-tab envelope. Criteria remain ordinary erasable configuration,
 not Person-value history. No broader capacity claim follows from the local
-25k-person benchmark. Commit, merge, push and deployment remain unperformed.
+25k-person benchmark. The later authorized commit, merge, deployment and cleanup are recorded in
+[SLICE_019b_RELEASE.md](SLICE_019b_RELEASE.md); no push was performed.

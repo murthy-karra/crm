@@ -1,0 +1,13 @@
+{
+  "revision": "237639d2c1b5554f9ad872f7c35100f76e80ee77",
+  "api_launcher_pid": 67757,
+  "web_launcher_pid": 67769,
+  "api_listener_pid": [
+    67757
+  ],
+  "web_listener_pid": [
+    68235
+  ],
+  "api_sha256": "f97a00eabbcdb66ab8abbc7614c461ee6d4c52e0cf12ab7262073c0c85d4616e",
+  "web_index_sha256": "18a8b4e69d47838c56687ea8e6759c397d09dd4a9ae0d8e219fc77fd53fbf8af"
+}

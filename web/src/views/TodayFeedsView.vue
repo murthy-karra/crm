@@ -19,6 +19,7 @@ import PreviewTodayFeedDialog from '../components/PreviewTodayFeedDialog.vue'
 import FilterBar from '../components/FilterBar.vue'
 import { ApiError } from '../api/client'
 import {
+  useCustomFieldsQuery,
   useInquirySources,
   useMe,
   useMembers,
@@ -51,6 +52,11 @@ const stagesQuery = useStages(orgId)
 const membersQuery = useMembers(orgId)
 const sourcesQuery = useInquirySources(orgId)
 const tagsQuery = useTagsQuery(orgId)
+const customFieldsQuery = useCustomFieldsQuery(orgId)
+
+function retryCustomFields() {
+  void customFieldsQuery.refetch()
+}
 
 const updateMutation = useUpdateTodayFeedMutation(orgId, actorId)
 const revertMutation = useRevertTodayFeedMutation(orgId, actorId)
@@ -321,10 +327,14 @@ const feeds = computed(() => TODAY_FEED_ORDER.map((key) => {
               :sources-truncated="sourcesQuery.data.value?.truncated"
               :tags-pending="tagsQuery.isPending.value"
               :tags-error="tagsQuery.isError.value"
+              :custom-fields="customFieldsQuery.data.value?.fields ?? []"
+              :custom-fields-pending="customFieldsQuery.isPending.value"
+              :custom-fields-error="customFieldsQuery.isError.value"
               :locked-anchor-kind="TODAY_FEED_ANCHOR_KIND[key]"
               :require-assignee-me="requiresAssigneeMe(key)"
               @update:clauses="onEditClausesChange"
               @retry-options="() => {}"
+              @retry-custom-fields="retryCustomFields"
             />
           </div>
           <label

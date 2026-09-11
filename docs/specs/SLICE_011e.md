@@ -1,5 +1,8 @@
 # Slice 011e — Tags
 
+**Slice 019b amendment (approved 2026-09-10):**
+[Custom-field filtering](SLICE_019b.md). Amends §4: custom-field clauses add five fixed slots per predicate matrix alongside tag clauses. The same fourteen statement consumers are extended; tag semantics and permissions remain unchanged.
+
 **Status: APPROVED by the user on 2026-09-07 after independent review and
 D-051.** Approval covers the declared contracts (§7) and the §1 safe
 defaults; it authorizes implementation of rung e1 after the Phase 6 gate, not

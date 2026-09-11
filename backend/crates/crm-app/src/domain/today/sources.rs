@@ -120,6 +120,26 @@ pub async fn source_candidates(
     members_only: bool,
     limit: i64,
 ) -> Result<Vec<SourceCandidate>, sqlx::Error> {
+    #[cfg(feature = "test-support")]
+    let _frozen = crate::domain::person::filter_test_support::frozen_selected();
+    #[cfg(feature = "test-support")]
+    if let Some(adapter) = crate::domain::person::filter_test_support::frozen_adapter() {
+        return adapter
+            .source_candidates(
+                conn,
+                organization_id,
+                params,
+                now,
+                builtin_ids,
+                members_only,
+                limit,
+            )
+            .await;
+    }
+    #[cfg(feature = "test-support")]
+    crate::domain::person::filter_test_support::live_adapter_executed(
+        crate::domain::person::filter_test_support::FilterStatementFamily::SourceCandidates,
+    );
     let rows = sqlx::query_file_as!(
         SourceCandidateRow,
         "src/domain/today/source_candidates.sql",
@@ -153,6 +173,91 @@ pub async fn source_candidates(
         params.viewer_id,
         params.tag_ids_any.as_deref(),
         params.tag_ids_none.as_deref(),
+        params.custom_slot(0).map(|slot| slot.field_id),
+        params.custom_slot(0).map(|slot| slot.field_type),
+        params.custom_slot(0).map(|slot| slot.operation),
+        params
+            .custom_slot(0)
+            .and_then(|slot| slot.text_operand.as_deref()),
+        params
+            .custom_slot(0)
+            .and_then(|slot| slot.number_min.as_deref()),
+        params
+            .custom_slot(0)
+            .and_then(|slot| slot.number_max.as_deref()),
+        params.custom_slot(0).and_then(|slot| slot.date_min),
+        params.custom_slot(0).and_then(|slot| slot.date_max),
+        params
+            .custom_slot(0)
+            .and_then(|slot| slot.option_ids.as_deref()),
+        params.custom_slot(1).map(|slot| slot.field_id),
+        params.custom_slot(1).map(|slot| slot.field_type),
+        params.custom_slot(1).map(|slot| slot.operation),
+        params
+            .custom_slot(1)
+            .and_then(|slot| slot.text_operand.as_deref()),
+        params
+            .custom_slot(1)
+            .and_then(|slot| slot.number_min.as_deref()),
+        params
+            .custom_slot(1)
+            .and_then(|slot| slot.number_max.as_deref()),
+        params.custom_slot(1).and_then(|slot| slot.date_min),
+        params.custom_slot(1).and_then(|slot| slot.date_max),
+        params
+            .custom_slot(1)
+            .and_then(|slot| slot.option_ids.as_deref()),
+        params.custom_slot(2).map(|slot| slot.field_id),
+        params.custom_slot(2).map(|slot| slot.field_type),
+        params.custom_slot(2).map(|slot| slot.operation),
+        params
+            .custom_slot(2)
+            .and_then(|slot| slot.text_operand.as_deref()),
+        params
+            .custom_slot(2)
+            .and_then(|slot| slot.number_min.as_deref()),
+        params
+            .custom_slot(2)
+            .and_then(|slot| slot.number_max.as_deref()),
+        params.custom_slot(2).and_then(|slot| slot.date_min),
+        params.custom_slot(2).and_then(|slot| slot.date_max),
+        params
+            .custom_slot(2)
+            .and_then(|slot| slot.option_ids.as_deref()),
+        params.custom_slot(3).map(|slot| slot.field_id),
+        params.custom_slot(3).map(|slot| slot.field_type),
+        params.custom_slot(3).map(|slot| slot.operation),
+        params
+            .custom_slot(3)
+            .and_then(|slot| slot.text_operand.as_deref()),
+        params
+            .custom_slot(3)
+            .and_then(|slot| slot.number_min.as_deref()),
+        params
+            .custom_slot(3)
+            .and_then(|slot| slot.number_max.as_deref()),
+        params.custom_slot(3).and_then(|slot| slot.date_min),
+        params.custom_slot(3).and_then(|slot| slot.date_max),
+        params
+            .custom_slot(3)
+            .and_then(|slot| slot.option_ids.as_deref()),
+        params.custom_slot(4).map(|slot| slot.field_id),
+        params.custom_slot(4).map(|slot| slot.field_type),
+        params.custom_slot(4).map(|slot| slot.operation),
+        params
+            .custom_slot(4)
+            .and_then(|slot| slot.text_operand.as_deref()),
+        params
+            .custom_slot(4)
+            .and_then(|slot| slot.number_min.as_deref()),
+        params
+            .custom_slot(4)
+            .and_then(|slot| slot.number_max.as_deref()),
+        params.custom_slot(4).and_then(|slot| slot.date_min),
+        params.custom_slot(4).and_then(|slot| slot.date_max),
+        params
+            .custom_slot(4)
+            .and_then(|slot| slot.option_ids.as_deref()),
     )
     .fetch_all(&mut *conn)
     .await?;
@@ -239,6 +344,18 @@ pub async fn source_membership(
     now: DateTime<Utc>,
     builtin_ids: &[uuid::Uuid],
 ) -> Result<Vec<uuid::Uuid>, sqlx::Error> {
+    #[cfg(feature = "test-support")]
+    let _frozen = crate::domain::person::filter_test_support::frozen_selected();
+    #[cfg(feature = "test-support")]
+    if let Some(adapter) = crate::domain::person::filter_test_support::frozen_adapter() {
+        return adapter
+            .source_membership(conn, organization_id, params, now, builtin_ids)
+            .await;
+    }
+    #[cfg(feature = "test-support")]
+    crate::domain::person::filter_test_support::live_adapter_executed(
+        crate::domain::person::filter_test_support::FilterStatementFamily::SourceMembership,
+    );
     let rows = sqlx::query_file!(
         "src/domain/today/source_membership.sql",
         organization_id.0,
@@ -269,6 +386,91 @@ pub async fn source_membership(
         params.viewer_id,
         params.tag_ids_any.as_deref(),
         params.tag_ids_none.as_deref(),
+        params.custom_slot(0).map(|slot| slot.field_id),
+        params.custom_slot(0).map(|slot| slot.field_type),
+        params.custom_slot(0).map(|slot| slot.operation),
+        params
+            .custom_slot(0)
+            .and_then(|slot| slot.text_operand.as_deref()),
+        params
+            .custom_slot(0)
+            .and_then(|slot| slot.number_min.as_deref()),
+        params
+            .custom_slot(0)
+            .and_then(|slot| slot.number_max.as_deref()),
+        params.custom_slot(0).and_then(|slot| slot.date_min),
+        params.custom_slot(0).and_then(|slot| slot.date_max),
+        params
+            .custom_slot(0)
+            .and_then(|slot| slot.option_ids.as_deref()),
+        params.custom_slot(1).map(|slot| slot.field_id),
+        params.custom_slot(1).map(|slot| slot.field_type),
+        params.custom_slot(1).map(|slot| slot.operation),
+        params
+            .custom_slot(1)
+            .and_then(|slot| slot.text_operand.as_deref()),
+        params
+            .custom_slot(1)
+            .and_then(|slot| slot.number_min.as_deref()),
+        params
+            .custom_slot(1)
+            .and_then(|slot| slot.number_max.as_deref()),
+        params.custom_slot(1).and_then(|slot| slot.date_min),
+        params.custom_slot(1).and_then(|slot| slot.date_max),
+        params
+            .custom_slot(1)
+            .and_then(|slot| slot.option_ids.as_deref()),
+        params.custom_slot(2).map(|slot| slot.field_id),
+        params.custom_slot(2).map(|slot| slot.field_type),
+        params.custom_slot(2).map(|slot| slot.operation),
+        params
+            .custom_slot(2)
+            .and_then(|slot| slot.text_operand.as_deref()),
+        params
+            .custom_slot(2)
+            .and_then(|slot| slot.number_min.as_deref()),
+        params
+            .custom_slot(2)
+            .and_then(|slot| slot.number_max.as_deref()),
+        params.custom_slot(2).and_then(|slot| slot.date_min),
+        params.custom_slot(2).and_then(|slot| slot.date_max),
+        params
+            .custom_slot(2)
+            .and_then(|slot| slot.option_ids.as_deref()),
+        params.custom_slot(3).map(|slot| slot.field_id),
+        params.custom_slot(3).map(|slot| slot.field_type),
+        params.custom_slot(3).map(|slot| slot.operation),
+        params
+            .custom_slot(3)
+            .and_then(|slot| slot.text_operand.as_deref()),
+        params
+            .custom_slot(3)
+            .and_then(|slot| slot.number_min.as_deref()),
+        params
+            .custom_slot(3)
+            .and_then(|slot| slot.number_max.as_deref()),
+        params.custom_slot(3).and_then(|slot| slot.date_min),
+        params.custom_slot(3).and_then(|slot| slot.date_max),
+        params
+            .custom_slot(3)
+            .and_then(|slot| slot.option_ids.as_deref()),
+        params.custom_slot(4).map(|slot| slot.field_id),
+        params.custom_slot(4).map(|slot| slot.field_type),
+        params.custom_slot(4).map(|slot| slot.operation),
+        params
+            .custom_slot(4)
+            .and_then(|slot| slot.text_operand.as_deref()),
+        params
+            .custom_slot(4)
+            .and_then(|slot| slot.number_min.as_deref()),
+        params
+            .custom_slot(4)
+            .and_then(|slot| slot.number_max.as_deref()),
+        params.custom_slot(4).and_then(|slot| slot.date_min),
+        params.custom_slot(4).and_then(|slot| slot.date_max),
+        params
+            .custom_slot(4)
+            .and_then(|slot| slot.option_ids.as_deref()),
     )
     .fetch_all(&mut *conn)
     .await?;
@@ -301,6 +503,8 @@ fn filter_error(
         FilterError::InvalidStage => Ok(SavedListFilterError::InvalidStage),
         FilterError::InvalidAssignee => Ok(SavedListFilterError::InvalidAssignee),
         FilterError::InvalidTag => Ok(SavedListFilterError::InvalidTag),
+        FilterError::InvalidField => Ok(SavedListFilterError::InvalidField),
+        FilterError::InvalidOption => Ok(SavedListFilterError::InvalidOption),
         FilterError::Malformed => Ok(SavedListFilterError::UnsupportedFilter),
         FilterError::Database(error) => Err(SavedListError::Database(error)),
     }

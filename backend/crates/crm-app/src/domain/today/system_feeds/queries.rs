@@ -12,6 +12,7 @@ use serde::Serialize;
 use sqlx::PgConnection;
 
 use crate::domain::admin::queries as admin_queries;
+use crate::domain::custom_field;
 use crate::domain::person::filter::{FilterDefinition, FilterError, FilterNames};
 use crate::domain::saved_list::decode_structural_filter;
 use crate::domain::stage;
@@ -137,6 +138,8 @@ pub(crate) async fn filter_names(
             .map(|m| (m.user_id, m.display_name))
             .collect(),
         tag_names: tags.into_iter().map(|t| (t.id, t.name)).collect(),
+        custom_field_names: HashMap::new(),
+        custom_option_names: HashMap::new(),
     })
 }
 
@@ -183,14 +186,28 @@ pub(crate) async fn build_feed_view(
                 Err(FilterError::InvalidStage) => (Some(typed), Some("invalid_stage")),
                 Err(FilterError::InvalidAssignee) => (Some(typed), Some("invalid_assignee")),
                 Err(FilterError::InvalidTag) => (Some(typed), Some("invalid_tag")),
+                Err(FilterError::InvalidField) => (Some(typed), Some("invalid_field")),
+                Err(FilterError::InvalidOption) => (Some(typed), Some("invalid_option")),
                 Err(FilterError::Malformed) => (None, Some("unsupported_filter")),
                 Err(FilterError::Database(error)) => return Err(TodayFeedError::Database(error)),
             },
         },
     };
+    let mut description_names = names.clone();
+    if let Some(filter) = filter.as_ref() {
+        let (field_names, option_names) = custom_field::filter_names_for_fields(
+            conn,
+            organization_id,
+            &filter.custom_field_ids(),
+        )
+        .await
+        .map_err(TodayFeedError::Database)?;
+        description_names.custom_field_names = field_names;
+        description_names.custom_option_names = option_names;
+    }
     let description = filter
         .as_ref()
-        .map(|f| f.describe(names))
+        .map(|f| f.describe(&description_names))
         .unwrap_or_default();
     let fresh_within_hours = if is_default {
         canonical_window

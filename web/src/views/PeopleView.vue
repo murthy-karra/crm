@@ -17,6 +17,7 @@ import SavedListDialog from '../components/SavedListDialog.vue'
 import {
   useAuthSessionLifetime,
   useCreateSavedListMutation,
+  useCustomFieldsQuery,
   useDisableTodaySourceMutation,
   useEnableTodaySourceMutation,
   useDeleteSavedListMutation,
@@ -72,6 +73,8 @@ const sourcesQuery = useInquirySources(orgId)
 const sources = computed(() => sourcesQuery.data.value?.sources ?? [])
 const tagsQuery = useTagsQuery(orgId)
 const tags = computed(() => tagsQuery.data.value?.tags ?? [])
+const customFieldsQuery = useCustomFieldsQuery(orgId)
+const customFields = computed(() => customFieldsQuery.data.value?.fields ?? [])
 
 function retryOptions(kind: 'stage' | 'assigned_to' | 'source' | 'tags' | 'not_tags') {
   const query = kind === 'stage' ? stagesQuery
@@ -202,6 +205,7 @@ function hasResolvableReferences(filter: FilterDefinition) {
   const knownStages = new Set(stages.value.map((stage) => stage.id))
   const knownMembers = new Set(members.value.map((member) => member.user_id))
   const knownTags = new Set(tags.value.map((tag) => tag.id))
+  const knownFields = new Map(customFields.value.map((field) => [field.id, field]))
   for (const clause of filter.clauses) {
     if (clause.kind === 'stage' && clause.stage_ids.some((id) => !knownStages.has(id))) return false
     if (clause.kind === 'assigned_to' && clause.assignees.some((assignee) =>
@@ -209,6 +213,17 @@ function hasResolvableReferences(filter: FilterDefinition) {
     )) return false
     if ((clause.kind === 'tags' || clause.kind === 'not_tags') &&
       clause.tag_ids.some((id) => !knownTags.has(id))) return false
+    if (clause.kind === 'custom_text' || clause.kind === 'custom_number' ||
+      clause.kind === 'custom_date' || clause.kind === 'custom_choice') {
+      const expectedType = clause.kind.slice('custom_'.length)
+      const field = knownFields.get(clause.field_id)
+      // Archived fields invalidate saved criteria, while archived options stay
+      // valid because existing People can still hold their stored option ID.
+      if (!field || field.archived_at !== null || field.field_type !== expectedType) return false
+      if (clause.kind === 'custom_choice' &&
+        ('option_ids' in clause.test) &&
+        clause.test.option_ids.some((id) => !field.options.some((option) => option.id === id))) return false
+    }
   }
   return true
 }
@@ -1501,8 +1516,12 @@ const columns: ColumnDef<PersonSummary>[] = [
             :sources-truncated="sourcesQuery.data.value?.truncated ?? false"
             :tags-pending="tagsQuery.isPending.value"
             :tags-error="tagsQuery.isError.value"
+            :custom-fields="customFields"
+            :custom-fields-pending="customFieldsQuery.isPending.value"
+            :custom-fields-error="customFieldsQuery.isError.value"
             @update:clauses="onClausesUpdate"
             @retry-options="retryOptions"
+            @retry-custom-fields="() => { void customFieldsQuery.refetch() }"
           />
           <div
             v-else

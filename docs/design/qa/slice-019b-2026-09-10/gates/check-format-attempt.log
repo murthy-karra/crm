@@ -1,0 +1,60 @@
+==> cargo fmt --check
+Diff in /Users/karrad/projects/crm-worktrees/019b/backend/crates/crm-api/tests/db_custom_field_filters.rs:6:
+ 
+ use axum::http::StatusCode;
+ use chrono::{Duration, NaiveDate, Utc};
+-use serde_json::{Value, json};
++use serde_json::{json, Value};
+ use sqlx::PgPool;
+ use uuid::Uuid;
+ 
+Diff in /Users/karrad/projects/crm-worktrees/019b/backend/crates/crm-api/tests/db_custom_field_filters.rs:13:
+ use crm_api::domain::person::filter::FilterDefinition;
+ use crm_api::domain::person::sort::{PersonSort, SortDirection, SortKey};
+-use crm_api::domain::person::{PersonVisibilityScope, queries as person_queries};
++use crm_api::domain::person::{queries as person_queries, PersonVisibilityScope};
+ use crm_api::domain::saved_list::{self, SavedListError, SavedListScope, UpdateSavedList};
+ use crm_api::domain::today::sources as today_sources;
+ use crm_api::domain::today::system_feeds::evaluate as system_feed_queries;
+Diff in /Users/karrad/projects/crm-worktrees/019b/backend/crates/crm-api/tests/db_custom_field_filters.rs:19:
+ use crm_api::domain::today::system_feeds::{
+-    FeedKey, ResolvedFeed, canonical_default, canonical_fresh_within_hours,
++    canonical_default, canonical_fresh_within_hours, FeedKey, ResolvedFeed,
+ };
+ use crm_api::ids::{OrganizationId, UserId};
+ 
+Diff in /Users/karrad/projects/crm-worktrees/019b/backend/crates/crm-api/tests/db_custom_field_filters.rs:878:
+ 
+     // The defaults are deliberately inspected so this test cannot quietly
+     // remove the system-feed anchors while only checking SQL execution.
+-    assert!(
+-        !canonical_default(FeedKey::UnansweredInquiry)
+-            .clauses
+-            .is_empty()
+-    );
++    assert!(!canonical_default(FeedKey::UnansweredInquiry)
++        .clauses
++        .is_empty());
+ }
+ 
+ /// A persisted one-sided range must remain a valid definition.  This also
+Diff in /Users/karrad/projects/crm-worktrees/019b/backend/crates/crm-api/tests/db_custom_field_filters.rs:1046:
+             .count,
+         1
+     );
+-    assert!(
+-        today_sources::list_today_work_sources(&mut conn, &auth)
+-            .await
+-            .unwrap()[0]
+-            .filter_error
+-            .is_none()
+-    );
++    assert!(today_sources::list_today_work_sources(&mut conn, &auth)
++        .await
++        .unwrap()[0]
++        .filter_error
++        .is_none());
+     let feeds = crm_api::domain::today::system_feeds::queries::admin_feed_view(
+         &mut conn,
+         OrganizationId::new(f.organization_id),
+./scripts/check: line 29: 57195 Terminated: 15          ( set -euo pipefail; step_start=$SECONDS; echo "==> web lint"; ( cd "$repo_root/web" && pnpm run lint ); echo "==> [$((SECONDS - step_start))s]"; step_start=$SECONDS; echo "==> web typecheck"; ( cd "$repo_root/web" && pnpm run typecheck ); echo "==> [$((SECONDS - step_start))s]"; step_start=$SECONDS; echo "==> web test"; ( cd "$repo_root/web" && pnpm run test ); echo "==> [$((SECONDS - step_start))s]"; step_start=$SECONDS; echo "==> web build"; ( cd "$repo_root/web" && pnpm run build ); echo "==> [$((SECONDS - step_start))s]"; step_start=$SECONDS; echo "==> email-worker tests"; ( cd "$repo_root" && node --test infra/email-worker/worker.test.mjs ); echo "==> [$((SECONDS - step_start))s]" ) > "$web_log" 2>&1

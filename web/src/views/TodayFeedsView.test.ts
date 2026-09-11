@@ -12,6 +12,8 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, apiFetch } from '../api/client'
 import type {
+  CustomField,
+  CustomFieldsResponse,
   Feed,
   MeResponse,
   Member,
@@ -23,6 +25,7 @@ import type {
   TodayFeedMutationResponse,
   TodayFeedsResponse,
 } from '../api/types'
+import FilterBar from '../components/FilterBar.vue'
 import TodayFeedsView from './TodayFeedsView.vue'
 
 vi.mock('../api/client', async (importOriginal) => {
@@ -94,7 +97,13 @@ function baseFeeds(overrides: Partial<Record<Feed['feed_key'], Partial<Feed>>> =
   }
 }
 
+const CUSTOM_FIELD: CustomField = {
+  id: 'field-referrer', label: 'Referrer', field_type: 'text', position: 1,
+  archived_at: null, person_count: 0, options: [],
+}
+
 interface StubOptions {
+  customFields?: () => CustomFieldsResponse
   feeds?: () => TodayFeedsResponse
   update?: (feedKey: string, body: unknown) => TodayFeedMutationResponse | ApiError
   revert?: (feedKey: string) => TodayFeedMutationResponse | ApiError
@@ -110,6 +119,7 @@ function stub(options: StubOptions = {}) {
     if (path === '/stages') return stages()
     if (path === '/inquiry-sources') return { sources: [], truncated: false }
     if (path === '/tags') return tags()
+    if (path === '/custom-fields') return options.customFields?.() ?? { fields: [] }
     if (path === '/organization/today-feeds' && method === 'GET') return options.feeds?.() ?? baseFeeds()
     const updateMatch = /^\/organization\/today-feeds\/([a-z_]+)$/.exec(path)
     if (updateMatch && method === 'PUT') {
@@ -224,6 +234,51 @@ describe('TodayFeedsView editor locking (SLICE_011d §1 rules 3-4)', () => {
     expect(document.body.querySelector('[data-testid="filter-chip-locked-awaiting_response"]')).not.toBeNull()
     expect(document.body.querySelector('[data-testid="filter-chip-remove-assigned_to"]')).toBeNull()
     expect(document.body.querySelector('[data-testid="filter-chip-locked-assigned_to"]')).not.toBeNull()
+  })
+
+  it('forwards custom definitions to the locked editor and retries them independently', async () => {
+    stub({ customFields: () => ({ fields: [CUSTOM_FIELD] }) })
+    const wrapper = await mountView()
+    await wrapper.get('[data-testid="feed-edit-unanswered_inquiry"]').trigger('click')
+    await flushPromises()
+    const editor = wrapper.findComponent(FilterBar)
+    expect(editor.props('customFields')).toEqual([CUSTOM_FIELD])
+    expect(editor.props('customFieldsPending')).toBe(false)
+    const initialFetches = apiFetchMock.mock.calls.filter(([path]) => path === '/custom-fields').length
+    editor.vm.$emit('retry-custom-fields')
+    await flushPromises()
+    expect(apiFetchMock.mock.calls.filter(([path]) => path === '/custom-fields')).toHaveLength(initialFetches + 1)
+  })
+
+  it('keeps Today anchors beside an applied custom clause', async () => {
+    const updates: unknown[] = []
+    stub({
+      customFields: () => ({ fields: [CUSTOM_FIELD] }),
+      update: (_feedKey, body) => {
+        updates.push(body)
+        return { feed: baseFeeds().feeds[0]!, changed: true }
+      },
+    })
+    const wrapper = await mountView()
+    await wrapper.get('[data-testid="feed-edit-unanswered_inquiry"]').trigger('click')
+    await flushPromises()
+    wrapper.findComponent(FilterBar).vm.$emit('update:clauses', [
+      ...UNANSWERED_DEFAULT_FILTER.clauses,
+      { kind: 'custom_text', field_id: CUSTOM_FIELD.id, test: { op: 'contains', text: 'Harbor' } },
+    ])
+    await wrapper.get('[data-testid="feed-save-unanswered_inquiry"]').trigger('click')
+    await flushPromises()
+    expect(updates).toEqual([{
+      expected_revision: 1,
+      filter: {
+        version: 1,
+        clauses: [
+          ...UNANSWERED_DEFAULT_FILTER.clauses,
+          { kind: 'custom_text', field_id: CUSTOM_FIELD.id, test: { op: 'contains', text: 'Harbor' } },
+        ],
+      },
+      fresh_within_hours: 24,
+    }])
   })
 
   it('exposes no assigned_to lock for the viewer-relative call feed', async () => {

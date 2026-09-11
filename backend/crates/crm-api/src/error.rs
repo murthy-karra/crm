@@ -28,6 +28,8 @@ pub enum ApiError {
     InvalidStage,
     // --- Slice 011e (docs/specs/SLICE_011e.md §4b) ----------------------
     InvalidTag,
+    InvalidField,
+    InvalidOption,
     InternalError,
     /// `receive_inquiry`'s bounded retry around the per-Organization
     /// advisory lock exhausted its wall-clock budget without acquiring it
@@ -150,6 +152,8 @@ impl IntoResponse for ApiError {
             }
             ApiError::InvalidStage => (StatusCode::UNPROCESSABLE_ENTITY, "invalid_stage", None),
             ApiError::InvalidTag => (StatusCode::UNPROCESSABLE_ENTITY, "invalid_tag", None),
+            ApiError::InvalidField => (StatusCode::UNPROCESSABLE_ENTITY, "invalid_field", None),
+            ApiError::InvalidOption => (StatusCode::UNPROCESSABLE_ENTITY, "invalid_option", None),
             ApiError::InternalError => (StatusCode::INTERNAL_SERVER_ERROR, "internal_error", None),
             ApiError::IntakeBusy => (StatusCode::SERVICE_UNAVAILABLE, "intake_busy", Some(2u64)),
             ApiError::Discarded => (StatusCode::CONFLICT, "discarded", None),
@@ -370,6 +374,8 @@ impl From<FilterError> for ApiError {
             FilterError::InvalidStage => ApiError::InvalidStage,
             FilterError::InvalidAssignee => ApiError::InvalidAssignee,
             FilterError::InvalidTag => ApiError::InvalidTag,
+            FilterError::InvalidField => ApiError::InvalidField,
+            FilterError::InvalidOption => ApiError::InvalidOption,
             FilterError::Database(_) => ApiError::Unavailable,
         }
     }
@@ -394,6 +400,8 @@ impl From<SavedListError> for ApiError {
             SavedListError::InvalidStage => ApiError::InvalidStage,
             SavedListError::InvalidAssignee => ApiError::InvalidAssignee,
             SavedListError::InvalidTag => ApiError::InvalidTag,
+            SavedListError::InvalidField => ApiError::InvalidField,
+            SavedListError::InvalidOption => ApiError::InvalidOption,
             SavedListError::UnsupportedFilter => ApiError::UnsupportedFilter,
             SavedListError::RevisionExhausted
             | SavedListError::Corrupt
@@ -492,6 +500,8 @@ impl From<crate::domain::today::system_feeds::error::TodayFeedError> for ApiErro
             TodayFeedError::InvalidStage => ApiError::InvalidStage,
             TodayFeedError::InvalidAssignee => ApiError::InvalidAssignee,
             TodayFeedError::InvalidTag => ApiError::InvalidTag,
+            TodayFeedError::InvalidField => ApiError::InvalidField,
+            TodayFeedError::InvalidOption => ApiError::InvalidOption,
             TodayFeedError::InvalidFeedRule => ApiError::InvalidFeedRule,
             TodayFeedError::RevisionExhausted
             | TodayFeedError::Corrupt

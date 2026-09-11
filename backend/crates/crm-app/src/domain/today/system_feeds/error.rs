@@ -16,6 +16,8 @@ pub enum TodayFeedError {
     InvalidAssignee,
     /// docs/specs/SLICE_011e.md §4b.
     InvalidTag,
+    InvalidField,
+    InvalidOption,
     /// The anchor-clause, `assigned_to: [me]`, or `fresh_within_hours`
     /// rule (spec §4) was violated. Structural/reference filter errors get
     /// their own codes above; this one is specific to the §1 feed rules.
@@ -38,6 +40,8 @@ impl From<FilterError> for TodayFeedError {
             FilterError::InvalidStage => Self::InvalidStage,
             FilterError::InvalidAssignee => Self::InvalidAssignee,
             FilterError::InvalidTag => Self::InvalidTag,
+            FilterError::InvalidField => Self::InvalidField,
+            FilterError::InvalidOption => Self::InvalidOption,
             FilterError::Database(error) => Self::Database(error),
         }
     }
@@ -56,6 +60,8 @@ impl TodayFeedError {
             Self::InvalidStage => "invalid_stage",
             Self::InvalidAssignee => "invalid_assignee",
             Self::InvalidTag => "invalid_tag",
+            Self::InvalidField => "invalid_field",
+            Self::InvalidOption => "invalid_option",
             Self::InvalidFeedRule => "invalid_feed_rule",
             Self::RevisionExhausted => "revision_exhausted",
             Self::Corrupt => "corrupt",

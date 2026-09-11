@@ -1,0 +1,72 @@
+[
+  {
+    "file": "backend/crates/crm-api/tests/fixtures/statements_6bad52a/sql/call_membership.sql",
+    "source": "backend/crates/crm-app/src/domain/today/system_feeds/sql/call_membership.sql",
+    "sha256": "fd7560e03b3c1e81ea2f2f2912d16959bedae55cb914d1fb44c392a67420d2b1"
+  },
+  {
+    "file": "backend/crates/crm-api/tests/fixtures/statements_6bad52a/sql/call_only.sql",
+    "source": "backend/crates/crm-app/src/domain/today/system_feeds/sql/call_only.sql",
+    "sha256": "dbf1f641b196a1f5fb07570852364b14bb9bee63d4d70c69ed29a020dfe5d20c"
+  },
+  {
+    "file": "backend/crates/crm-api/tests/fixtures/statements_6bad52a/sql/filtered_summaries.sql",
+    "source": "backend/crates/crm-app/src/domain/person/sql/filtered_summaries.sql",
+    "sha256": "115d230fca041ac6ecd2fb5ed6aeb9c34b8e8c7c52cb937d94bfa5b1be63f86b"
+  },
+  {
+    "file": "backend/crates/crm-api/tests/fixtures/statements_6bad52a/sql/filtered_summaries_assignee_asc.sql",
+    "source": "backend/crates/crm-app/src/domain/person/sql/filtered_summaries_assignee_asc.sql",
+    "sha256": "4cfed920038cf42bc9a0ad24db2e70118f7c93703c111bdb1bf3a8c8b1c96bb7"
+  },
+  {
+    "file": "backend/crates/crm-api/tests/fixtures/statements_6bad52a/sql/filtered_summaries_assignee_desc.sql",
+    "source": "backend/crates/crm-app/src/domain/person/sql/filtered_summaries_assignee_desc.sql",
+    "sha256": "4072a8f64f49183da84f2432c3add956e36e53b930893875881e9066f26bfe6a"
+  },
+  {
+    "file": "backend/crates/crm-api/tests/fixtures/statements_6bad52a/sql/filtered_summaries_created_asc.sql",
+    "source": "backend/crates/crm-app/src/domain/person/sql/filtered_summaries_created_asc.sql",
+    "sha256": "00e83c0f150025fd2695dfec039f4b6069e7b5caff8bb27084935ce6a6cd8f24"
+  },
+  {
+    "file": "backend/crates/crm-api/tests/fixtures/statements_6bad52a/sql/filtered_summaries_name_asc.sql",
+    "source": "backend/crates/crm-app/src/domain/person/sql/filtered_summaries_name_asc.sql",
+    "sha256": "b855a01e4097f1060afb2d10273d37cd67a4c2bac90a47fe6807d9b2ca7df5ba"
+  },
+  {
+    "file": "backend/crates/crm-api/tests/fixtures/statements_6bad52a/sql/filtered_summaries_name_desc.sql",
+    "source": "backend/crates/crm-app/src/domain/person/sql/filtered_summaries_name_desc.sql",
+    "sha256": "d7c07f6a72bdcf4dc19ea9798d04a22b5b1cde34bbf2524abac4d21e46f79296"
+  },
+  {
+    "file": "backend/crates/crm-api/tests/fixtures/statements_6bad52a/sql/filtered_summaries_stage_asc.sql",
+    "source": "backend/crates/crm-app/src/domain/person/sql/filtered_summaries_stage_asc.sql",
+    "sha256": "ba4c7ad6c5f8d179aa60655bb02e2332ed181a20c8d55fdc9defedbf18cc4b4c"
+  },
+  {
+    "file": "backend/crates/crm-api/tests/fixtures/statements_6bad52a/sql/filtered_summaries_stage_desc.sql",
+    "source": "backend/crates/crm-app/src/domain/person/sql/filtered_summaries_stage_desc.sql",
+    "sha256": "643d093c46fa92f5fe075503fed9da3e3a87d1ae7588ffa83f22f9bd3b562e9b"
+  },
+  {
+    "file": "backend/crates/crm-api/tests/fixtures/statements_6bad52a/sql/person_state.sql",
+    "source": "backend/crates/crm-app/src/domain/today/system_feeds/sql/person_state.sql",
+    "sha256": "78d073e471f641f7f8fc3ca633dfc3945f4938a076a62330cf5c2ee7fbeb6819"
+  },
+  {
+    "file": "backend/crates/crm-api/tests/fixtures/statements_6bad52a/sql/source_candidates.sql",
+    "source": "backend/crates/crm-app/src/domain/today/source_candidates.sql",
+    "sha256": "13f7fae5eff4b435286e81997552a1790b657fdcc351259d6cbcd3af63359304"
+  },
+  {
+    "file": "backend/crates/crm-api/tests/fixtures/statements_6bad52a/sql/source_membership.sql",
+    "source": "backend/crates/crm-app/src/domain/today/source_membership.sql",
+    "sha256": "739ffd43c9e03704973769e4e186ad9d2d71c1585b0ca6be08e8dc4f8525e967"
+  },
+  {
+    "file": "backend/crates/crm-api/tests/fixtures/statements_6bad52a/sql/count_filtered_matches.sql",
+    "source": "backend/crates/crm-app/src/domain/person/queries.rs::count_filtered_matches",
+    "sha256": "ad8b5f940e8d4d67151807dcff88ddbd7035d9d3f1bbd6e019cd206686b7b70b"
+  }
+]

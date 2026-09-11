@@ -68,6 +68,13 @@ mod db_contact_attempts;
 #[path = "db_custom_fields.rs"]
 mod db_custom_fields;
 
+#[path = "db_custom_field_filters.rs"]
+mod db_custom_field_filters;
+
+#[cfg(feature = "perf-harness")]
+#[path = "db_custom_field_filter_perf.rs"]
+mod db_custom_field_filter_perf;
+
 #[path = "db_identity.rs"]
 mod db_identity;
 

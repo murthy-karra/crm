@@ -315,6 +315,18 @@ async fn filtered_summaries_with_reference_now(
     params: &PersonFilterParams,
     reference_now: Option<DateTime<Utc>>,
 ) -> Result<(Vec<PersonSummary>, bool), sqlx::Error> {
+    #[cfg(feature = "test-support")]
+    let _frozen = crate::domain::person::filter_test_support::frozen_selected();
+    #[cfg(feature = "test-support")]
+    if let Some(adapter) = crate::domain::person::filter_test_support::frozen_adapter() {
+        return adapter
+            .summaries(conn, scope, params, PersonSort::DEFAULT, reference_now)
+            .await;
+    }
+    #[cfg(feature = "test-support")]
+    crate::domain::person::filter_test_support::live_adapter_executed(
+        crate::domain::person::filter_test_support::FilterStatementFamily::SummaryCreatedDesc,
+    );
     let organization_id = scope.organization_id();
     let mut rows = sqlx::query_file_as!(
         PersonSummaryRow,
@@ -346,6 +358,91 @@ async fn filtered_summaries_with_reference_now(
         params.viewer_id,
         params.tag_ids_any.as_deref(),
         params.tag_ids_none.as_deref(),
+        params.custom_slot(0).map(|slot| slot.field_id),
+        params.custom_slot(0).map(|slot| slot.field_type),
+        params.custom_slot(0).map(|slot| slot.operation),
+        params
+            .custom_slot(0)
+            .and_then(|slot| slot.text_operand.as_deref()),
+        params
+            .custom_slot(0)
+            .and_then(|slot| slot.number_min.as_deref()),
+        params
+            .custom_slot(0)
+            .and_then(|slot| slot.number_max.as_deref()),
+        params.custom_slot(0).and_then(|slot| slot.date_min),
+        params.custom_slot(0).and_then(|slot| slot.date_max),
+        params
+            .custom_slot(0)
+            .and_then(|slot| slot.option_ids.as_deref()),
+        params.custom_slot(1).map(|slot| slot.field_id),
+        params.custom_slot(1).map(|slot| slot.field_type),
+        params.custom_slot(1).map(|slot| slot.operation),
+        params
+            .custom_slot(1)
+            .and_then(|slot| slot.text_operand.as_deref()),
+        params
+            .custom_slot(1)
+            .and_then(|slot| slot.number_min.as_deref()),
+        params
+            .custom_slot(1)
+            .and_then(|slot| slot.number_max.as_deref()),
+        params.custom_slot(1).and_then(|slot| slot.date_min),
+        params.custom_slot(1).and_then(|slot| slot.date_max),
+        params
+            .custom_slot(1)
+            .and_then(|slot| slot.option_ids.as_deref()),
+        params.custom_slot(2).map(|slot| slot.field_id),
+        params.custom_slot(2).map(|slot| slot.field_type),
+        params.custom_slot(2).map(|slot| slot.operation),
+        params
+            .custom_slot(2)
+            .and_then(|slot| slot.text_operand.as_deref()),
+        params
+            .custom_slot(2)
+            .and_then(|slot| slot.number_min.as_deref()),
+        params
+            .custom_slot(2)
+            .and_then(|slot| slot.number_max.as_deref()),
+        params.custom_slot(2).and_then(|slot| slot.date_min),
+        params.custom_slot(2).and_then(|slot| slot.date_max),
+        params
+            .custom_slot(2)
+            .and_then(|slot| slot.option_ids.as_deref()),
+        params.custom_slot(3).map(|slot| slot.field_id),
+        params.custom_slot(3).map(|slot| slot.field_type),
+        params.custom_slot(3).map(|slot| slot.operation),
+        params
+            .custom_slot(3)
+            .and_then(|slot| slot.text_operand.as_deref()),
+        params
+            .custom_slot(3)
+            .and_then(|slot| slot.number_min.as_deref()),
+        params
+            .custom_slot(3)
+            .and_then(|slot| slot.number_max.as_deref()),
+        params.custom_slot(3).and_then(|slot| slot.date_min),
+        params.custom_slot(3).and_then(|slot| slot.date_max),
+        params
+            .custom_slot(3)
+            .and_then(|slot| slot.option_ids.as_deref()),
+        params.custom_slot(4).map(|slot| slot.field_id),
+        params.custom_slot(4).map(|slot| slot.field_type),
+        params.custom_slot(4).map(|slot| slot.operation),
+        params
+            .custom_slot(4)
+            .and_then(|slot| slot.text_operand.as_deref()),
+        params
+            .custom_slot(4)
+            .and_then(|slot| slot.number_min.as_deref()),
+        params
+            .custom_slot(4)
+            .and_then(|slot| slot.number_max.as_deref()),
+        params.custom_slot(4).and_then(|slot| slot.date_min),
+        params.custom_slot(4).and_then(|slot| slot.date_max),
+        params
+            .custom_slot(4)
+            .and_then(|slot| slot.option_ids.as_deref()),
     )
     .fetch_all(conn)
     .await?;
@@ -372,9 +469,19 @@ pub async fn filtered_summaries_sorted(
     params: &PersonFilterParams,
     sort: PersonSort,
 ) -> Result<(Vec<PersonSummary>, bool), sqlx::Error> {
+    #[cfg(feature = "test-support")]
+    let _frozen = crate::domain::person::filter_test_support::frozen_selected();
+    #[cfg(feature = "test-support")]
+    if let Some(adapter) = crate::domain::person::filter_test_support::frozen_adapter() {
+        return adapter.summaries(conn, scope, params, sort, None).await;
+    }
     let Some(sort) = sort.normalized() else {
         return filtered_summaries(conn, scope, params).await;
     };
+    #[cfg(feature = "test-support")]
+    crate::domain::person::filter_test_support::live_adapter_executed(
+        crate::domain::person::filter_test_support::FilterStatementFamily::summary(sort),
+    );
     let organization_id = scope.organization_id();
 
     macro_rules! run_sorted {
@@ -409,6 +516,91 @@ pub async fn filtered_summaries_sorted(
                 params.viewer_id,
                 params.tag_ids_any.as_deref(),
                 params.tag_ids_none.as_deref(),
+                params.custom_slot(0).map(|slot| slot.field_id),
+                params.custom_slot(0).map(|slot| slot.field_type),
+                params.custom_slot(0).map(|slot| slot.operation),
+                params
+                    .custom_slot(0)
+                    .and_then(|slot| slot.text_operand.as_deref()),
+                params
+                    .custom_slot(0)
+                    .and_then(|slot| slot.number_min.as_deref()),
+                params
+                    .custom_slot(0)
+                    .and_then(|slot| slot.number_max.as_deref()),
+                params.custom_slot(0).and_then(|slot| slot.date_min),
+                params.custom_slot(0).and_then(|slot| slot.date_max),
+                params
+                    .custom_slot(0)
+                    .and_then(|slot| slot.option_ids.as_deref()),
+                params.custom_slot(1).map(|slot| slot.field_id),
+                params.custom_slot(1).map(|slot| slot.field_type),
+                params.custom_slot(1).map(|slot| slot.operation),
+                params
+                    .custom_slot(1)
+                    .and_then(|slot| slot.text_operand.as_deref()),
+                params
+                    .custom_slot(1)
+                    .and_then(|slot| slot.number_min.as_deref()),
+                params
+                    .custom_slot(1)
+                    .and_then(|slot| slot.number_max.as_deref()),
+                params.custom_slot(1).and_then(|slot| slot.date_min),
+                params.custom_slot(1).and_then(|slot| slot.date_max),
+                params
+                    .custom_slot(1)
+                    .and_then(|slot| slot.option_ids.as_deref()),
+                params.custom_slot(2).map(|slot| slot.field_id),
+                params.custom_slot(2).map(|slot| slot.field_type),
+                params.custom_slot(2).map(|slot| slot.operation),
+                params
+                    .custom_slot(2)
+                    .and_then(|slot| slot.text_operand.as_deref()),
+                params
+                    .custom_slot(2)
+                    .and_then(|slot| slot.number_min.as_deref()),
+                params
+                    .custom_slot(2)
+                    .and_then(|slot| slot.number_max.as_deref()),
+                params.custom_slot(2).and_then(|slot| slot.date_min),
+                params.custom_slot(2).and_then(|slot| slot.date_max),
+                params
+                    .custom_slot(2)
+                    .and_then(|slot| slot.option_ids.as_deref()),
+                params.custom_slot(3).map(|slot| slot.field_id),
+                params.custom_slot(3).map(|slot| slot.field_type),
+                params.custom_slot(3).map(|slot| slot.operation),
+                params
+                    .custom_slot(3)
+                    .and_then(|slot| slot.text_operand.as_deref()),
+                params
+                    .custom_slot(3)
+                    .and_then(|slot| slot.number_min.as_deref()),
+                params
+                    .custom_slot(3)
+                    .and_then(|slot| slot.number_max.as_deref()),
+                params.custom_slot(3).and_then(|slot| slot.date_min),
+                params.custom_slot(3).and_then(|slot| slot.date_max),
+                params
+                    .custom_slot(3)
+                    .and_then(|slot| slot.option_ids.as_deref()),
+                params.custom_slot(4).map(|slot| slot.field_id),
+                params.custom_slot(4).map(|slot| slot.field_type),
+                params.custom_slot(4).map(|slot| slot.operation),
+                params
+                    .custom_slot(4)
+                    .and_then(|slot| slot.text_operand.as_deref()),
+                params
+                    .custom_slot(4)
+                    .and_then(|slot| slot.number_min.as_deref()),
+                params
+                    .custom_slot(4)
+                    .and_then(|slot| slot.number_max.as_deref()),
+                params.custom_slot(4).and_then(|slot| slot.date_min),
+                params.custom_slot(4).and_then(|slot| slot.date_max),
+                params
+                    .custom_slot(4)
+                    .and_then(|slot| slot.option_ids.as_deref()),
             )
             .fetch_all(&mut *conn)
             .await?
@@ -460,6 +652,16 @@ pub async fn count_filtered_matches(
     scope: &PersonVisibilityScope,
     params: &PersonFilterParams,
 ) -> Result<(i64, bool), sqlx::Error> {
+    #[cfg(feature = "test-support")]
+    let _frozen = crate::domain::person::filter_test_support::frozen_selected();
+    #[cfg(feature = "test-support")]
+    if let Some(adapter) = crate::domain::person::filter_test_support::frozen_adapter() {
+        return adapter.count(conn, scope, params).await;
+    }
+    #[cfg(feature = "test-support")]
+    crate::domain::person::filter_test_support::live_adapter_executed(
+        crate::domain::person::filter_test_support::FilterStatementFamily::Count,
+    );
     let organization_id = scope.organization_id();
     let row = sqlx::query!(
         r#"SELECT count(*) as "count!"
@@ -548,6 +750,11 @@ pub async fn count_filtered_matches(
                      SELECT 1 FROM person_tag pt2
                      WHERE pt2.organization_id = $1
                        AND pt2.person_id = p.id AND pt2.tag_id = ANY($26)))
+               AND ($27::uuid IS NULL OR (EXISTS (SELECT 1 FROM custom_field cf WHERE cf.id = $27 AND cf.organization_id = $1 AND cf.archived_at IS NULL AND cf.field_type = $28) AND (($29 = 'is_set' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $27 AND v.field_type = $28)) OR ($29 = 'is_not_set' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $27 AND v.field_type = $28)) OR ($28 = 'text' AND $29 = 'contains' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $27 AND v.field_type = $28 AND lower(v.text_value) LIKE '%' || replace(replace(replace(lower($30), E'\\', E'\\\\'), '%', '\%'), '_', '\_') || '%' ESCAPE E'\\')) OR ($28 = 'text' AND $29 = 'not_contains' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $27 AND v.field_type = $28 AND lower(v.text_value) LIKE '%' || replace(replace(replace(lower($30), E'\\', E'\\\\'), '%', '\%'), '_', '\_') || '%' ESCAPE E'\\')) OR ($28 = 'number' AND $29 = 'range' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $27 AND v.field_type = $28 AND ($31::text IS NULL OR v.number_value >= $31::numeric) AND ($32::text IS NULL OR v.number_value <= $32::numeric))) OR ($28 = 'number' AND $29 = 'not_range' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $27 AND v.field_type = $28 AND ($31::text IS NULL OR v.number_value >= $31::numeric) AND ($32::text IS NULL OR v.number_value <= $32::numeric))) OR ($28 = 'date' AND $29 = 'range' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $27 AND v.field_type = $28 AND ($33::date IS NULL OR v.date_value >= $33) AND ($34::date IS NULL OR v.date_value <= $34))) OR ($28 = 'date' AND $29 = 'not_range' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $27 AND v.field_type = $28 AND ($33::date IS NULL OR v.date_value >= $33) AND ($34::date IS NULL OR v.date_value <= $34))) OR ($28 = 'choice' AND $29 = 'any_of' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $27 AND v.field_type = $28 AND v.option_id = ANY($35))) OR ($28 = 'choice' AND $29 = 'none_of' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $27 AND v.field_type = $28 AND v.option_id = ANY($35))))))
+               AND ($36::uuid IS NULL OR (EXISTS (SELECT 1 FROM custom_field cf WHERE cf.id = $36 AND cf.organization_id = $1 AND cf.archived_at IS NULL AND cf.field_type = $37) AND (($38 = 'is_set' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $36 AND v.field_type = $37)) OR ($38 = 'is_not_set' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $36 AND v.field_type = $37)) OR ($37 = 'text' AND $38 = 'contains' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $36 AND v.field_type = $37 AND lower(v.text_value) LIKE '%' || replace(replace(replace(lower($39), E'\\', E'\\\\'), '%', '\%'), '_', '\_') || '%' ESCAPE E'\\')) OR ($37 = 'text' AND $38 = 'not_contains' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $36 AND v.field_type = $37 AND lower(v.text_value) LIKE '%' || replace(replace(replace(lower($39), E'\\', E'\\\\'), '%', '\%'), '_', '\_') || '%' ESCAPE E'\\')) OR ($37 = 'number' AND $38 = 'range' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $36 AND v.field_type = $37 AND ($40::text IS NULL OR v.number_value >= $40::numeric) AND ($41::text IS NULL OR v.number_value <= $41::numeric))) OR ($37 = 'number' AND $38 = 'not_range' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $36 AND v.field_type = $37 AND ($40::text IS NULL OR v.number_value >= $40::numeric) AND ($41::text IS NULL OR v.number_value <= $41::numeric))) OR ($37 = 'date' AND $38 = 'range' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $36 AND v.field_type = $37 AND ($42::date IS NULL OR v.date_value >= $42) AND ($43::date IS NULL OR v.date_value <= $43))) OR ($37 = 'date' AND $38 = 'not_range' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $36 AND v.field_type = $37 AND ($42::date IS NULL OR v.date_value >= $42) AND ($43::date IS NULL OR v.date_value <= $43))) OR ($37 = 'choice' AND $38 = 'any_of' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $36 AND v.field_type = $37 AND v.option_id = ANY($44))) OR ($37 = 'choice' AND $38 = 'none_of' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $36 AND v.field_type = $37 AND v.option_id = ANY($44))))))
+               AND ($45::uuid IS NULL OR (EXISTS (SELECT 1 FROM custom_field cf WHERE cf.id = $45 AND cf.organization_id = $1 AND cf.archived_at IS NULL AND cf.field_type = $46) AND (($47 = 'is_set' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $45 AND v.field_type = $46)) OR ($47 = 'is_not_set' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $45 AND v.field_type = $46)) OR ($46 = 'text' AND $47 = 'contains' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $45 AND v.field_type = $46 AND lower(v.text_value) LIKE '%' || replace(replace(replace(lower($48), E'\\', E'\\\\'), '%', '\%'), '_', '\_') || '%' ESCAPE E'\\')) OR ($46 = 'text' AND $47 = 'not_contains' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $45 AND v.field_type = $46 AND lower(v.text_value) LIKE '%' || replace(replace(replace(lower($48), E'\\', E'\\\\'), '%', '\%'), '_', '\_') || '%' ESCAPE E'\\')) OR ($46 = 'number' AND $47 = 'range' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $45 AND v.field_type = $46 AND ($49::text IS NULL OR v.number_value >= $49::numeric) AND ($50::text IS NULL OR v.number_value <= $50::numeric))) OR ($46 = 'number' AND $47 = 'not_range' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $45 AND v.field_type = $46 AND ($49::text IS NULL OR v.number_value >= $49::numeric) AND ($50::text IS NULL OR v.number_value <= $50::numeric))) OR ($46 = 'date' AND $47 = 'range' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $45 AND v.field_type = $46 AND ($51::date IS NULL OR v.date_value >= $51) AND ($52::date IS NULL OR v.date_value <= $52))) OR ($46 = 'date' AND $47 = 'not_range' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $45 AND v.field_type = $46 AND ($51::date IS NULL OR v.date_value >= $51) AND ($52::date IS NULL OR v.date_value <= $52))) OR ($46 = 'choice' AND $47 = 'any_of' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $45 AND v.field_type = $46 AND v.option_id = ANY($53))) OR ($46 = 'choice' AND $47 = 'none_of' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $45 AND v.field_type = $46 AND v.option_id = ANY($53))))))
+               AND ($54::uuid IS NULL OR (EXISTS (SELECT 1 FROM custom_field cf WHERE cf.id = $54 AND cf.organization_id = $1 AND cf.archived_at IS NULL AND cf.field_type = $55) AND (($56 = 'is_set' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $54 AND v.field_type = $55)) OR ($56 = 'is_not_set' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $54 AND v.field_type = $55)) OR ($55 = 'text' AND $56 = 'contains' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $54 AND v.field_type = $55 AND lower(v.text_value) LIKE '%' || replace(replace(replace(lower($57), E'\\', E'\\\\'), '%', '\%'), '_', '\_') || '%' ESCAPE E'\\')) OR ($55 = 'text' AND $56 = 'not_contains' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $54 AND v.field_type = $55 AND lower(v.text_value) LIKE '%' || replace(replace(replace(lower($57), E'\\', E'\\\\'), '%', '\%'), '_', '\_') || '%' ESCAPE E'\\')) OR ($55 = 'number' AND $56 = 'range' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $54 AND v.field_type = $55 AND ($58::text IS NULL OR v.number_value >= $58::numeric) AND ($59::text IS NULL OR v.number_value <= $59::numeric))) OR ($55 = 'number' AND $56 = 'not_range' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $54 AND v.field_type = $55 AND ($58::text IS NULL OR v.number_value >= $58::numeric) AND ($59::text IS NULL OR v.number_value <= $59::numeric))) OR ($55 = 'date' AND $56 = 'range' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $54 AND v.field_type = $55 AND ($60::date IS NULL OR v.date_value >= $60) AND ($61::date IS NULL OR v.date_value <= $61))) OR ($55 = 'date' AND $56 = 'not_range' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $54 AND v.field_type = $55 AND ($60::date IS NULL OR v.date_value >= $60) AND ($61::date IS NULL OR v.date_value <= $61))) OR ($55 = 'choice' AND $56 = 'any_of' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $54 AND v.field_type = $55 AND v.option_id = ANY($62))) OR ($55 = 'choice' AND $56 = 'none_of' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $54 AND v.field_type = $55 AND v.option_id = ANY($62))))))
+               AND ($63::uuid IS NULL OR (EXISTS (SELECT 1 FROM custom_field cf WHERE cf.id = $63 AND cf.organization_id = $1 AND cf.archived_at IS NULL AND cf.field_type = $64) AND (($65 = 'is_set' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $63 AND v.field_type = $64)) OR ($65 = 'is_not_set' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $63 AND v.field_type = $64)) OR ($64 = 'text' AND $65 = 'contains' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $63 AND v.field_type = $64 AND lower(v.text_value) LIKE '%' || replace(replace(replace(lower($66), E'\\', E'\\\\'), '%', '\%'), '_', '\_') || '%' ESCAPE E'\\')) OR ($64 = 'text' AND $65 = 'not_contains' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $63 AND v.field_type = $64 AND lower(v.text_value) LIKE '%' || replace(replace(replace(lower($66), E'\\', E'\\\\'), '%', '\%'), '_', '\_') || '%' ESCAPE E'\\')) OR ($64 = 'number' AND $65 = 'range' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $63 AND v.field_type = $64 AND ($67::text IS NULL OR v.number_value >= $67::numeric) AND ($68::text IS NULL OR v.number_value <= $68::numeric))) OR ($64 = 'number' AND $65 = 'not_range' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $63 AND v.field_type = $64 AND ($67::text IS NULL OR v.number_value >= $67::numeric) AND ($68::text IS NULL OR v.number_value <= $68::numeric))) OR ($64 = 'date' AND $65 = 'range' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $63 AND v.field_type = $64 AND ($69::date IS NULL OR v.date_value >= $69) AND ($70::date IS NULL OR v.date_value <= $70))) OR ($64 = 'date' AND $65 = 'not_range' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $63 AND v.field_type = $64 AND ($69::date IS NULL OR v.date_value >= $69) AND ($70::date IS NULL OR v.date_value <= $70))) OR ($64 = 'choice' AND $65 = 'any_of' AND EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $63 AND v.field_type = $64 AND v.option_id = ANY($71))) OR ($64 = 'choice' AND $65 = 'none_of' AND NOT EXISTS (SELECT 1 FROM person_custom_field_value v WHERE v.organization_id = $1 AND v.person_id = p.id AND v.field_id = $63 AND v.field_type = $64 AND v.option_id = ANY($71))))))
              LIMIT 501
            ) capped"#,
         organization_id.0,
@@ -576,6 +783,51 @@ pub async fn count_filtered_matches(
         params.viewer_id,
         params.tag_ids_any.as_deref(),
         params.tag_ids_none.as_deref(),
+        params.custom_slot(0).map(|slot| slot.field_id),
+        params.custom_slot(0).map(|slot| slot.field_type),
+        params.custom_slot(0).map(|slot| slot.operation),
+        params.custom_slot(0).and_then(|slot| slot.text_operand.as_deref()),
+        params.custom_slot(0).and_then(|slot| slot.number_min.as_deref()),
+        params.custom_slot(0).and_then(|slot| slot.number_max.as_deref()),
+        params.custom_slot(0).and_then(|slot| slot.date_min),
+        params.custom_slot(0).and_then(|slot| slot.date_max),
+        params.custom_slot(0).and_then(|slot| slot.option_ids.as_deref()),
+        params.custom_slot(1).map(|slot| slot.field_id),
+        params.custom_slot(1).map(|slot| slot.field_type),
+        params.custom_slot(1).map(|slot| slot.operation),
+        params.custom_slot(1).and_then(|slot| slot.text_operand.as_deref()),
+        params.custom_slot(1).and_then(|slot| slot.number_min.as_deref()),
+        params.custom_slot(1).and_then(|slot| slot.number_max.as_deref()),
+        params.custom_slot(1).and_then(|slot| slot.date_min),
+        params.custom_slot(1).and_then(|slot| slot.date_max),
+        params.custom_slot(1).and_then(|slot| slot.option_ids.as_deref()),
+        params.custom_slot(2).map(|slot| slot.field_id),
+        params.custom_slot(2).map(|slot| slot.field_type),
+        params.custom_slot(2).map(|slot| slot.operation),
+        params.custom_slot(2).and_then(|slot| slot.text_operand.as_deref()),
+        params.custom_slot(2).and_then(|slot| slot.number_min.as_deref()),
+        params.custom_slot(2).and_then(|slot| slot.number_max.as_deref()),
+        params.custom_slot(2).and_then(|slot| slot.date_min),
+        params.custom_slot(2).and_then(|slot| slot.date_max),
+        params.custom_slot(2).and_then(|slot| slot.option_ids.as_deref()),
+        params.custom_slot(3).map(|slot| slot.field_id),
+        params.custom_slot(3).map(|slot| slot.field_type),
+        params.custom_slot(3).map(|slot| slot.operation),
+        params.custom_slot(3).and_then(|slot| slot.text_operand.as_deref()),
+        params.custom_slot(3).and_then(|slot| slot.number_min.as_deref()),
+        params.custom_slot(3).and_then(|slot| slot.number_max.as_deref()),
+        params.custom_slot(3).and_then(|slot| slot.date_min),
+        params.custom_slot(3).and_then(|slot| slot.date_max),
+        params.custom_slot(3).and_then(|slot| slot.option_ids.as_deref()),
+        params.custom_slot(4).map(|slot| slot.field_id),
+        params.custom_slot(4).map(|slot| slot.field_type),
+        params.custom_slot(4).map(|slot| slot.operation),
+        params.custom_slot(4).and_then(|slot| slot.text_operand.as_deref()),
+        params.custom_slot(4).and_then(|slot| slot.number_min.as_deref()),
+        params.custom_slot(4).and_then(|slot| slot.number_max.as_deref()),
+        params.custom_slot(4).and_then(|slot| slot.date_min),
+        params.custom_slot(4).and_then(|slot| slot.date_max),
+        params.custom_slot(4).and_then(|slot| slot.option_ids.as_deref()),
     )
     .fetch_one(conn)
     .await?;

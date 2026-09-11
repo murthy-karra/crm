@@ -289,7 +289,9 @@ async fn resolve_stored_filter(
         Ok(()) => Ok(Some(filter)),
         Err(FilterError::InvalidStage)
         | Err(FilterError::InvalidAssignee)
-        | Err(FilterError::InvalidTag) => Ok(None),
+        | Err(FilterError::InvalidTag)
+        | Err(FilterError::InvalidField)
+        | Err(FilterError::InvalidOption) => Ok(None),
         Err(FilterError::Malformed) => Ok(None),
         Err(FilterError::Database(error)) => Err(error),
     }

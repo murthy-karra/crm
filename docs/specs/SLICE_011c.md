@@ -1,5 +1,8 @@
 # Slice 011c — Saved lists feed Today
 
+**Slice 019b amendment (approved 2026-09-10):**
+[Custom-field filtering](SLICE_019b.md). Amends §§3–5: custom-field predicates apply to source membership and candidates; invalid_field and invalid_option flow through source settings and partial-availability issues. Existing source caps and ranking remain unchanged.
+
 **Status: APPROVED — implementation authorized by the user on 2026-09-06.** Prepared
 on 2026-09-06 against local `main` at `9d62e86`, including saved-list
 implementation `2af023c`. Branch: `codex/slice-011c-today-sources`.

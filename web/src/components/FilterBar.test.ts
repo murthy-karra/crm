@@ -2,7 +2,7 @@ import { DOMWrapper, flushPromises, mount } from '@vue/test-utils'
 import PrimeVue from 'primevue/config'
 import { afterEach, describe, expect, it } from 'vitest'
 import FilterBar from './FilterBar.vue'
-import type { FilterClause, Member, Stage, TagRef } from '../api/types'
+import type { CustomField, FilterClause, Member, Stage, TagRef } from '../api/types'
 
 const STAGES: Stage[] = [
   { id: 'stage-1', name: 'Lead', position: 1 },
@@ -16,6 +16,20 @@ const MEMBERS = [member('user-1', 'Morgan Vale'), member('user-2', 'Riley North'
 const TAGS: TagRef[] = [
   { id: 'tag-1', name: 'Investor' },
   { id: 'tag-2', name: 'Past client' },
+]
+const CUSTOM_FIELDS: CustomField[] = [
+  { id: '11111111-1111-4111-8111-111111111111', label: 'Referral note', field_type: 'text', position: 1, archived_at: null, person_count: 0, options: [] },
+  { id: '22222222-2222-4222-8222-222222222222', label: 'Budget', field_type: 'number', position: 2, archived_at: null, person_count: 0, options: [] },
+  { id: '33333333-3333-4333-8333-333333333333', label: 'Anniversary', field_type: 'date', position: 3, archived_at: null, person_count: 0, options: [] },
+  {
+    id: '44444444-4444-4444-8444-444444444444', label: 'Lead temperature', field_type: 'choice', position: 4, archived_at: null, person_count: 0,
+    options: [
+      { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', label: 'Warm', position: 1, archived_at: null },
+      { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', label: 'Former', position: 2, archived_at: '2026-01-01T00:00:00Z' },
+    ],
+  },
+  { id: '55555555-5555-4555-8555-555555555555', label: 'Second note', field_type: 'text', position: 5, archived_at: null, person_count: 0, options: [] },
+  { id: '66666666-6666-4666-8666-666666666666', label: 'Third note', field_type: 'text', position: 6, archived_at: null, person_count: 0, options: [] },
 ]
 type Props = Partial<InstanceType<typeof FilterBar>['$props']>
 const wrappers: ReturnType<typeof mountBar>[] = []
@@ -44,6 +58,10 @@ async function click(id: string) {
 async function open(kind: string) {
   if (kind === 'stage' || kind === 'assigned_to') await click(`filter-trigger-${kind}`)
   else { await click('filter-add'); await click(`filter-add-${kind}`) }
+}
+async function openCustom(field: CustomField) {
+  await click('filter-add')
+  await click(`filter-add-custom-${field.id}`)
 }
 async function check(id: string, checked: boolean) {
   await get(id).setValue(checked)
@@ -345,6 +363,110 @@ describe('FilterBar option feedback and keyboard', () => {
     await body().trigger('click')
     await flushPromises()
     expect(get('filter-trigger-assigned_to').attributes('aria-expanded')).toBe('false')
+  })
+})
+
+describe('FilterBar custom-field editors (SLICE_019b §§6–9)', () => {
+  it('keeps a text draft local until Enter applies it, and Escape/outside discard it', async () => {
+    const wrapper = setup([], { customFields: CUSTOM_FIELDS })
+    await openCustom(CUSTOM_FIELDS[0])
+    expect(document.activeElement).toBe(get('custom-filter-operator').element)
+    await get('custom-filter-operator').setValue('contains')
+    await get('custom-filter-text').setValue('private referral')
+    expect(wrapper.emitted('update:clauses')).toBeUndefined()
+    await get('custom-filter-text').trigger('keydown', { key: 'Escape', code: 'Escape' })
+    await flushPromises()
+    expect(wrapper.props('clauses')).toEqual([])
+
+    await openCustom(CUSTOM_FIELDS[0])
+    await get('custom-filter-operator').setValue('contains')
+    await get('custom-filter-text').setValue('private referral')
+    await get('custom-filter-text').trigger('keydown', { key: 'Enter', code: 'Enter' })
+    await flushPromises()
+    expect(wrapper.props('clauses')).toEqual([{ kind: 'custom_text', field_id: CUSTOM_FIELDS[0].id, test: { op: 'contains', text: 'private referral' } }])
+
+    await get(`filter-chip-custom_text-${CUSTOM_FIELDS[0].id}`).get('button').trigger('click')
+    await get('custom-filter-text').setValue('discard this')
+    await body().trigger('click')
+    await flushPromises()
+    expect(wrapper.props('clauses')).toEqual([{ kind: 'custom_text', field_id: CUSTOM_FIELDS[0].id, test: { op: 'contains', text: 'private referral' } }])
+  })
+
+  it('preserves decimal strings, validates range drafts, and restores a max-only range', async () => {
+    const wrapper = setup([], { customFields: CUSTOM_FIELDS })
+    await openCustom(CUSTOM_FIELDS[1])
+    await get('custom-filter-operator').setValue('range')
+    await get('custom-filter-min').setValue('250000.00')
+    await click('custom-filter-apply')
+    expect(wrapper.props('clauses')).toEqual([{ kind: 'custom_number', field_id: CUSTOM_FIELDS[1].id, test: { op: 'range', min: '250000.00' } }])
+
+    await wrapper.setProps({ clauses: [{ kind: 'custom_number', field_id: CUSTOM_FIELDS[1].id, test: { op: 'range', max: '500000.00' } }] })
+    await get(`filter-chip-custom_number-${CUSTOM_FIELDS[1].id}`).get('button').trigger('click')
+    expect(get('custom-filter-max').element).toHaveProperty('value', '500000.00')
+    await get('custom-filter-min').setValue('2,000')
+    expect(get('custom-filter-error').text()).toContain('without commas')
+    expect(get('custom-filter-apply').attributes('disabled')).toBeDefined()
+  })
+
+  it('renders archived choice options as selectable and validates date values locally', async () => {
+    const wrapper = setup([], { customFields: CUSTOM_FIELDS })
+    await openCustom(CUSTOM_FIELDS[3])
+    await get('custom-filter-operator').setValue('any_of')
+    expect(body().text()).toContain('Former (Archived)')
+    await body().get(`input[value="${CUSTOM_FIELDS[3].options[1].id}"]`).setValue(true)
+    await click('custom-filter-apply')
+    expect(wrapper.props('clauses')).toEqual([{ kind: 'custom_choice', field_id: CUSTOM_FIELDS[3].id, test: { op: 'any_of', option_ids: [CUSTOM_FIELDS[3].options[1].id] } }])
+
+    await openCustom(CUSTOM_FIELDS[2])
+    await get('custom-filter-operator').setValue('range')
+    await get('custom-filter-min').setValue('2026-02-30')
+    // Native date inputs reject an impossible calendar date before it enters
+    // the draft. The strict parser is covered at the helper/component level.
+    expect(get('custom-filter-error').text()).toContain('at least one bound')
+    expect(get('custom-filter-apply').attributes('disabled')).toBeDefined()
+  })
+
+  it('keeps same-kind clauses independent and disables new fields at the five-custom cap', async () => {
+    const first: FilterClause = { kind: 'custom_text', field_id: CUSTOM_FIELDS[0].id, test: { op: 'contains', text: 'one' } }
+    const second: FilterClause = { kind: 'custom_text', field_id: CUSTOM_FIELDS[4].id, test: { op: 'contains', text: 'two' } }
+    const wrapper = setup([first, second], { customFields: CUSTOM_FIELDS })
+    expect(get(`filter-chip-custom_text-${CUSTOM_FIELDS[0].id}`).text()).toContain('Referral note')
+    expect(get(`filter-chip-custom_text-${CUSTOM_FIELDS[4].id}`).text()).toContain('Second note')
+    expect(get(`filter-chip-remove-custom_text-${CUSTOM_FIELDS[0].id}`).attributes('aria-label')).toBe('Remove Referral note filter')
+    expect(get(`filter-chip-remove-custom_text-${CUSTOM_FIELDS[4].id}`).attributes('aria-label')).toBe('Remove Second note filter')
+    await click(`filter-chip-remove-custom_text-${CUSTOM_FIELDS[0].id}`)
+    expect(wrapper.props('clauses')).toEqual([second])
+
+    await wrapper.setProps({ clauses: [second, { kind: 'custom_number', field_id: CUSTOM_FIELDS[1].id, test: { op: 'is_set' } }, { kind: 'custom_date', field_id: CUSTOM_FIELDS[2].id, test: { op: 'is_set' } }, { kind: 'custom_choice', field_id: CUSTOM_FIELDS[3].id, test: { op: 'is_set' } }, { kind: 'custom_text', field_id: CUSTOM_FIELDS[0].id, test: { op: 'is_set' } }] })
+    await click('filter-add')
+    expect(get(`filter-add-custom-${CUSTOM_FIELDS[5].id}`).attributes('disabled')).toBeDefined()
+    expect(get(`filter-add-custom-${CUSTOM_FIELDS[4].id}`).attributes('disabled')).toBeUndefined()
+  })
+
+  it('keeps a missing or archived field repairable without inventing a replacement clause', async () => {
+    const archived = { ...CUSTOM_FIELDS[0], archived_at: '2026-09-10T00:00:00Z' }
+    const clause: FilterClause = { kind: 'custom_text', field_id: archived.id, test: { op: 'contains', text: 'keep private' } }
+    const wrapper = setup([clause], { customFields: [archived] })
+    await get(`filter-chip-custom_text-${archived.id}`).get('button').trigger('click')
+    expect(get('filter-editor-custom_text').text()).toContain('unavailable')
+    expect(body().find('[data-testid="custom-filter-editor"]').exists()).toBe(false)
+    await click('custom-filter-repair-remove')
+    expect(wrapper.props('clauses')).toEqual([])
+  })
+
+  it('does not show an empty-search message beside custom matches, loading, or an error', async () => {
+    const wrapper = setup([], { customFields: CUSTOM_FIELDS })
+    await click('filter-add')
+    await get('filter-search').setValue('referral')
+    expect(get(`filter-add-custom-${CUSTOM_FIELDS[0].id}`).text()).toContain('Referral note')
+    expect(body().text()).not.toContain('No matching filters.')
+
+    await wrapper.setProps({ customFields: [], customFieldsPending: true })
+    expect(body().text()).toContain('Loading custom fields')
+    expect(body().text()).not.toContain('No matching filters.')
+    await wrapper.setProps({ customFieldsPending: false, customFieldsError: true })
+    expect(body().text()).toContain("Couldn't load custom fields.")
+    expect(body().text()).not.toContain('No matching filters.')
   })
 })
 

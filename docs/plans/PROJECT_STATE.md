@@ -1,14 +1,42 @@
 # Project State
 
-Last updated: 2026-09-10 (Slice 019a, typed custom fields, merged at
-`7dc4a2f` with the user's approval, `crm_dev` migrated, runtime updated,
-worktree, branch and test database deleted, and `main` pushed together
-with the Slice 018 work; the Slice 017 live large-mail sends remain
-deferred by the user).
+Last updated: 2026-09-10 (Slice 019b implemented and verified in its isolated
+worktree; all final gates passed; changes remain uncommitted).
 
 ## Current phase
 
-**SLICE 019a (TYPED CUSTOM FIELDS) — COMPLETE, MERGED, PUSHED
+**SLICE 019b (CUSTOM-FIELD FILTERING) — IMPLEMENTED AND VERIFIED
+(2026-09-10), UNCOMMITTED.** The user approved the specification and
+implementation. Worktree `/Users/karrad/projects/crm-worktrees/019b`, branch
+`codex/slice-019b-custom-field-filters`, base/current commit `6bad52a`.
+Five custom clauses within the existing twenty now work across People,
+personal saved lists, Today sources and admin Today rules: text, inclusive
+number/date ranges, choices and presence. Archived fields have repairable
+invalidity; held archived options remain valid. Local and realtime custom-value
+changes refresh every dependent surface.
+
+Astra high planned and independently reviewed; Terra high implemented backend
+and Web, with coordinator integration and thin Web helpers/tests. Exactly two
+implementation review/fix rounds completed; all thirteen findings were fixed.
+Final `sqlx-prepare`, `check` (831 Rust, 5 doctests, 878 Web, 11 worker tests)
+and `check-db` (785/785) passed. The eight-screenshot browser walkthrough passed,
+including archive/restore, Today realtime recovery and Organization isolation.
+The single performance invocation passed all thirteen paired request-p95
+budgets with complete response parity; eighteen plans passed inspection.
+Zero-source Today serial rose 19.348 ms within its accepted 25 ms allowance.
+No production-capacity extrapolation follows from this local fixture.
+
+Final code-tree SHA-256:
+`a75ee70b9b3b51021ca00853109e71ff8c222ca46ad1f91c0937976fabf88e0a`.
+The [verification record](../tasks/SLICE_019b_VERIFICATION.md)
+contains the changed-file inventory, exact checks, raw performance artifacts,
+browser evidence and compatibility notes. API and Web must ship together.
+No commit, merge, push or deployment occurred; no schema, dependency or
+Operator-tool expansion was introduced. QA servers are stopped, its synthetic
+database is retained, and the shared runtime is unchanged. Slice 017 live
+sends remain deferred.
+
+Previously: **SLICE 019a (TYPED CUSTOM FIELDS) — COMPLETE, MERGED, PUSHED
 (2026-09-10, with the user's approval).** Merge `7dc4a2f`; source
 `slice-019-custom-fields` at `c2214f8` (fifteen lane commits, the
 [verification record](../tasks/SLICE_019_VERIFICATION.md) and seven
@@ -1102,14 +1130,11 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. **The next slice needs the user's pick.** Candidates: rung 019b,
-   custom-field filter clauses (D-058 §1; its own specification and
-   approval; amends SLICE_011a §4b to one clause per field with a slot
-   cap across the fourteen bound statements); resuming the parked FUB
-   migration ladder (`docs/plans/SLICE_010_LADDER.md`; tags, notes,
-   tasks and custom fields now exist as destinations; its three parked
-   decisions are asked at resume); or a small LATER batch from the 018
-   and 019 verification records.
+1. **Complete the approved 019b implementation in `../crm-worktrees/019b`.**
+   Terra high implements the agreed brief in
+   one lane, backend before Web, followed by independent Astra review
+   and the required checks. FUB migration and a fresh LATER batch
+   remain candidates after 019b; no resumption decisions are assumed.
 2. **Slice 017 walkthrough (spec §6), deferred by the user:** send a small
    real message and a 15–20 MB attachment to a capture address and the
    intake address; the coordinator reads the dev API log (`byte_len`,
@@ -1130,7 +1155,9 @@ and now lives only in git history.
 - **Slice 018:** pushed with 019a on 2026-09-10. Nothing pending.
 - **Slice 017:** complete apart from the deferred live sends (the user's
   action, no approval needed).
-- The next slice needs the user's pick.
+- **Slice 019b:** specification, declared contracts, implementation and
+  verification approved by the user on 2026-09-10. No further implementation
+  permission pending; commit, merge, push and deployment remain separate.
 - Deployment is not authorized.
 - R1 (auto-hangup of a live call on identity change) is a product choice for
   a later slice, not blocking.

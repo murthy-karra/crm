@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, NaiveDate, Utc};
-use sqlx::PgConnection;
+use sqlx::{PgConnection, Row};
 use uuid::Uuid;
 
 use crate::ids::{CustomFieldId, CustomFieldOptionId, OrganizationId, PersonId, UserId};
@@ -395,6 +395,107 @@ pub(crate) async fn update_option(
 }
 
 // --- reads --------------------------------------------------------------
+
+/// Lightweight filter-reference lookup. Unlike `list_definitions`, this is
+/// bounded by one ID and deliberately does not join/count Person values.
+pub async fn live_field_type_for_filter(
+    conn: &mut PgConnection,
+    organization_id: OrganizationId,
+    field_id: CustomFieldId,
+) -> Result<Option<FieldType>, sqlx::Error> {
+    let row = sqlx::query(
+        r#"SELECT field_type FROM custom_field
+           WHERE id = $1 AND organization_id = $2 AND archived_at IS NULL"#,
+    )
+    .bind(field_id.0)
+    .bind(organization_id.0)
+    .fetch_optional(&mut *conn)
+    .await?;
+    row.map(|row| {
+        let field_type: String = row.try_get("field_type")?;
+        FieldType::from_db_str(&field_type).ok_or_else(|| {
+            sqlx::Error::Decode("custom field has an unrecognized field_type".into())
+        })
+    })
+    .transpose()
+}
+
+/// Filter-option reference lookup. Archived options intentionally remain
+/// valid: People may retain a value after an admin archives that option.
+pub async fn option_ids_belong_to_field_for_filter(
+    conn: &mut PgConnection,
+    organization_id: OrganizationId,
+    field_id: CustomFieldId,
+    option_ids: &[CustomFieldOptionId],
+) -> Result<bool, sqlx::Error> {
+    let ids: Vec<Uuid> = option_ids.iter().map(|id| id.0).collect();
+    let row = sqlx::query(
+        r#"SELECT count(*) as count FROM custom_field_option
+           WHERE organization_id = $1 AND field_id = $2 AND id = ANY($3::uuid[])"#,
+    )
+    .bind(organization_id.0)
+    .bind(field_id.0)
+    .bind(&ids)
+    .fetch_one(&mut *conn)
+    .await?;
+    let count: i64 = row.try_get("count")?;
+    Ok(count == i64::try_from(ids.len()).unwrap_or(i64::MAX))
+}
+
+/// ID-bounded labels for filter descriptions. This intentionally avoids the
+/// definition-list read model and its Person-value count aggregation.
+pub async fn filter_names_for_fields(
+    conn: &mut PgConnection,
+    organization_id: OrganizationId,
+    field_ids: &[CustomFieldId],
+) -> Result<
+    (
+        HashMap<CustomFieldId, String>,
+        HashMap<(CustomFieldId, CustomFieldOptionId), String>,
+    ),
+    sqlx::Error,
+> {
+    let ids: Vec<Uuid> = field_ids.iter().map(|id| id.0).collect();
+    if ids.is_empty() {
+        return Ok((HashMap::new(), HashMap::new()));
+    }
+    let fields = sqlx::query(
+        "SELECT id, label FROM custom_field WHERE organization_id = $1 AND id = ANY($2::uuid[])",
+    )
+    .bind(organization_id.0)
+    .bind(&ids)
+    .fetch_all(&mut *conn)
+    .await?;
+    let options = sqlx::query(
+        "SELECT field_id, id, label FROM custom_field_option WHERE organization_id = $1 AND field_id = ANY($2::uuid[])",
+    )
+    .bind(organization_id.0)
+    .bind(&ids)
+    .fetch_all(&mut *conn)
+    .await?;
+    let field_names = fields
+        .into_iter()
+        .map(|row| {
+            Ok((
+                CustomFieldId::new(row.try_get("id")?),
+                row.try_get("label")?,
+            ))
+        })
+        .collect::<Result<HashMap<_, _>, sqlx::Error>>()?;
+    let option_names = options
+        .into_iter()
+        .map(|row| {
+            Ok((
+                (
+                    CustomFieldId::new(row.try_get("field_id")?),
+                    CustomFieldOptionId::new(row.try_get("id")?),
+                ),
+                row.try_get("label")?,
+            ))
+        })
+        .collect::<Result<HashMap<_, _>, sqlx::Error>>()?;
+    Ok((field_names, option_names))
+}
 
 /// One field's full response shape, any state (docs/specs/SLICE_019.md
 /// §3, §4) — used by every definition/option command's outcome so the

@@ -1,0 +1,158 @@
+ D backend/.sqlx/query-00e83c0f150025fd2695dfec039f4b6069e7b5caff8bb27084935ce6a6cd8f24.json
+ D backend/.sqlx/query-115d230fca041ac6ecd2fb5ed6aeb9c34b8e8c7c52cb937d94bfa5b1be63f86b.json
+ D backend/.sqlx/query-13f7fae5eff4b435286e81997552a1790b657fdcc351259d6cbcd3af63359304.json
+ D backend/.sqlx/query-4072a8f64f49183da84f2432c3add956e36e53b930893875881e9066f26bfe6a.json
+ D backend/.sqlx/query-4cfed920038cf42bc9a0ad24db2e70118f7c93703c111bdb1bf3a8c8b1c96bb7.json
+ D backend/.sqlx/query-643d093c46fa92f5fe075503fed9da3e3a87d1ae7588ffa83f22f9bd3b562e9b.json
+ D backend/.sqlx/query-739ffd43c9e03704973769e4e186ad9d2d71c1585b0ca6be08e8dc4f8525e967.json
+ D backend/.sqlx/query-78d073e471f641f7f8fc3ca633dfc3945f4938a076a62330cf5c2ee7fbeb6819.json
+ D backend/.sqlx/query-ad8b5f940e8d4d67151807dcff88ddbd7035d9d3f1bbd6e019cd206686b7b70b.json
+ D backend/.sqlx/query-b855a01e4097f1060afb2d10273d37cd67a4c2bac90a47fe6807d9b2ca7df5ba.json
+ D backend/.sqlx/query-ba4c7ad6c5f8d179aa60655bb02e2332ed181a20c8d55fdc9defedbf18cc4b4c.json
+ D backend/.sqlx/query-d7c07f6a72bdcf4dc19ea9798d04a22b5b1cde34bbf2524abac4d21e46f79296.json
+ D backend/.sqlx/query-dbf1f641b196a1f5fb07570852364b14bb9bee63d4d70c69ed29a020dfe5d20c.json
+ D backend/.sqlx/query-fd7560e03b3c1e81ea2f2f2912d16959bedae55cb914d1fb44c392a67420d2b1.json
+ M backend/crates/crm-api/src/error.rs
+ M backend/crates/crm-api/src/operator/backend.rs
+ M backend/crates/crm-api/tests/all.rs
+ M backend/crates/crm-api/tests/db_operator_filter.rs
+ M backend/crates/crm-api/tests/db_people_filter.rs
+ M backend/crates/crm-api/tests/db_today_system_feed_preview.rs
+ M backend/crates/crm-app/src/domain/custom_field/mod.rs
+ M backend/crates/crm-app/src/domain/custom_field/queries.rs
+ M backend/crates/crm-app/src/domain/person/filter.rs
+ M backend/crates/crm-app/src/domain/person/mod.rs
+ M backend/crates/crm-app/src/domain/person/queries.rs
+ M backend/crates/crm-app/src/domain/person/sql/filtered_summaries.sql
+ M backend/crates/crm-app/src/domain/person/sql/filtered_summaries_assignee_asc.sql
+ M backend/crates/crm-app/src/domain/person/sql/filtered_summaries_assignee_desc.sql
+ M backend/crates/crm-app/src/domain/person/sql/filtered_summaries_created_asc.sql
+ M backend/crates/crm-app/src/domain/person/sql/filtered_summaries_name_asc.sql
+ M backend/crates/crm-app/src/domain/person/sql/filtered_summaries_name_desc.sql
+ M backend/crates/crm-app/src/domain/person/sql/filtered_summaries_stage_asc.sql
+ M backend/crates/crm-app/src/domain/person/sql/filtered_summaries_stage_desc.sql
+ M backend/crates/crm-app/src/domain/saved_list/error.rs
+ M backend/crates/crm-app/src/domain/saved_list/queries.rs
+ M backend/crates/crm-app/src/domain/today/mod.rs
+ M backend/crates/crm-app/src/domain/today/model.rs
+ M backend/crates/crm-app/src/domain/today/source_candidates.sql
+ M backend/crates/crm-app/src/domain/today/source_membership.sql
+ M backend/crates/crm-app/src/domain/today/sources.rs
+ M backend/crates/crm-app/src/domain/today/system_feeds/commands.rs
+ M backend/crates/crm-app/src/domain/today/system_feeds/error.rs
+ M backend/crates/crm-app/src/domain/today/system_feeds/evaluate.rs
+ M backend/crates/crm-app/src/domain/today/system_feeds/mod.rs
+ M backend/crates/crm-app/src/domain/today/system_feeds/queries.rs
+ M backend/crates/crm-app/src/domain/today/system_feeds/sql/call_membership.sql
+ M backend/crates/crm-app/src/domain/today/system_feeds/sql/call_only.sql
+ M backend/crates/crm-app/src/domain/today/system_feeds/sql/person_state.sql
+ M docs/decisions/DECISION_LOG.md
+ M docs/plans/PROJECT_STATE.md
+ M docs/specs/SLICE_003.md
+ M docs/specs/SLICE_011a.md
+ M docs/specs/SLICE_011b.md
+ M docs/specs/SLICE_011c.md
+ M docs/specs/SLICE_011d.md
+ M docs/specs/SLICE_011e.md
+ M docs/specs/SLICE_013.md
+ M docs/specs/SLICE_019.md
+ M web/src/api/queries.test.ts
+ M web/src/api/queries.ts
+ M web/src/api/savedListCounts.test.ts
+ M web/src/api/savedListCounts.ts
+ M web/src/api/types.ts
+ M web/src/components/FilterBar.test.ts
+ M web/src/components/FilterBar.vue
+ M web/src/lib/filter.test.ts
+ M web/src/lib/filter.ts
+ M web/src/realtime/events.test.ts
+ M web/src/realtime/events.ts
+ M web/src/views/FieldsView.test.ts
+ M web/src/views/FieldsView.vue
+ M web/src/views/PeopleView.test.ts
+ M web/src/views/PeopleView.vue
+ M web/src/views/TodayFeedsView.test.ts
+ M web/src/views/TodayFeedsView.vue
+?? backend/.sqlx/query-08d88882eff99adba22eba8053f599b9c028369d3985058426d316c3d34d336d.json
+?? backend/.sqlx/query-27d0a146cab352203f545a5855f6976be7edc58bd4587bc6ec14c81ede54a178.json
+?? backend/.sqlx/query-3a686f3e1abb293ba831fe3b7427f120a4657c508d6db2ba09f7c2a46e2ace3e.json
+?? backend/.sqlx/query-41fcb1cdee6fb2e6b69d765a52f21dca4849e7479715e7e8f3aac4e6124a0e06.json
+?? backend/.sqlx/query-582305813704b72be89ec008a4cbcbb1ae6fbae2962856bd7f567b001d23d41f.json
+?? backend/.sqlx/query-651ccc7b21ef81d3b7d39a00f273018dfcd88274732e10e935725a04be6ac854.json
+?? backend/.sqlx/query-737649b460693cb8147de65ba6cfc1017139e9024fa2be44156ca29087db244b.json
+?? backend/.sqlx/query-9f301ed0828fe7a1463e53174133b4f1cedc5c3e7b20238761df4f6e9051cd1e.json
+?? backend/.sqlx/query-adb8c050821121dca973ffe69340c977c3bc54d14d439d33ab4518db2d0afef4.json
+?? backend/.sqlx/query-d42edfa7ac0efa2557c633bcff72b56b52b4d2bd1e61eaf8e75889cd3b80558f.json
+?? backend/.sqlx/query-deefe638489f357490c9c4490aa7115cf5167ce3027dac21662c4b76dfe6c756.json
+?? backend/.sqlx/query-ed5c1680476bfa6f41ebef270b53e0e5d5ac1dfd60481965c48cf96b718b5657.json
+?? backend/.sqlx/query-efa2979afc11994589ee09ef48e56a483cc007d30bed88df611c902712eb6522.json
+?? backend/.sqlx/query-fc38a85fb2124820fac12e18db7b33740ffdd4229d4f9bfde302612990611105.json
+?? backend/crates/crm-api/tests/db_custom_field_filter_perf.rs
+?? backend/crates/crm-api/tests/db_custom_field_filters.rs
+?? backend/crates/crm-api/tests/fixtures/current_count_filtered_matches.sql
+?? backend/crates/crm-api/tests/fixtures/live_statement_explain_019b.rs
+?? backend/crates/crm-api/tests/fixtures/statements_6bad52a/README.md
+?? backend/crates/crm-api/tests/fixtures/statements_6bad52a/mod.rs
+?? backend/crates/crm-api/tests/fixtures/statements_6bad52a/person_sql.rs
+?? backend/crates/crm-api/tests/fixtures/statements_6bad52a/sql/call_membership.sql
+?? backend/crates/crm-api/tests/fixtures/statements_6bad52a/sql/call_only.sql
+?? backend/crates/crm-api/tests/fixtures/statements_6bad52a/sql/count_filtered_matches.sql
+?? backend/crates/crm-api/tests/fixtures/statements_6bad52a/sql/filtered_summaries.sql
+?? backend/crates/crm-api/tests/fixtures/statements_6bad52a/sql/filtered_summaries_assignee_asc.sql
+?? backend/crates/crm-api/tests/fixtures/statements_6bad52a/sql/filtered_summaries_assignee_desc.sql
+?? backend/crates/crm-api/tests/fixtures/statements_6bad52a/sql/filtered_summaries_created_asc.sql
+?? backend/crates/crm-api/tests/fixtures/statements_6bad52a/sql/filtered_summaries_name_asc.sql
+?? backend/crates/crm-api/tests/fixtures/statements_6bad52a/sql/filtered_summaries_name_desc.sql
+?? backend/crates/crm-api/tests/fixtures/statements_6bad52a/sql/filtered_summaries_stage_asc.sql
+?? backend/crates/crm-api/tests/fixtures/statements_6bad52a/sql/filtered_summaries_stage_desc.sql
+?? backend/crates/crm-api/tests/fixtures/statements_6bad52a/sql/person_state.sql
+?? backend/crates/crm-api/tests/fixtures/statements_6bad52a/sql/source_candidates.sql
+?? backend/crates/crm-api/tests/fixtures/statements_6bad52a/sql/source_membership.sql
+?? backend/crates/crm-api/tests/fixtures/statements_6bad52a/system_feeds_sql.rs
+?? backend/crates/crm-api/tests/fixtures/statements_6bad52a/today_sql.rs
+?? backend/crates/crm-app/src/domain/person/filter_test_support.rs
+?? docs/design/perf/slice-019b-2026-09-10/README.md
+?? docs/design/perf/slice-019b-2026-09-10/artifact-sha256.json
+?? docs/design/perf/slice-019b-2026-09-10/baseline-sql-manifest.json
+?? docs/design/perf/slice-019b-2026-09-10/comparisons.json
+?? docs/design/perf/slice-019b-2026-09-10/harness-stdout.txt
+?? docs/design/perf/slice-019b-2026-09-10/measured-cross-arm.json
+?? docs/design/perf/slice-019b-2026-09-10/plan-summary.json
+?? docs/design/perf/slice-019b-2026-09-10/plans.json
+?? docs/design/perf/slice-019b-2026-09-10/protocol.json
+?? docs/design/perf/slice-019b-2026-09-10/raw-timings.json
+?? docs/design/qa/slice-019b-2026-09-10/01-invalid-range.png
+?? docs/design/qa/slice-019b-2026-09-10/02-mobile-choice.png
+?? docs/design/qa/slice-019b-2026-09-10/03-five-field-list.png
+?? docs/design/qa/slice-019b-2026-09-10/04-today-realtime.png
+?? docs/design/qa/slice-019b-2026-09-10/05-archived-field-repair.png
+?? docs/design/qa/slice-019b-2026-09-10/06-today-rule-preview.png
+?? docs/design/qa/slice-019b-2026-09-10/07-restored-list.png
+?? docs/design/qa/slice-019b-2026-09-10/08-organization-isolation.png
+?? docs/design/qa/slice-019b-2026-09-10/README.md
+?? docs/design/qa/slice-019b-2026-09-10/archived-field-list.txt
+?? docs/design/qa/slice-019b-2026-09-10/changed-files.txt
+?? docs/design/qa/slice-019b-2026-09-10/code-tree.json
+?? docs/design/qa/slice-019b-2026-09-10/gates/README.md
+?? docs/design/qa/slice-019b-2026-09-10/gates/check-format-attempt.log
+?? docs/design/qa/slice-019b-2026-09-10/gates/check-format-attempt.status
+?? docs/design/qa/slice-019b-2026-09-10/gates/check.log
+?? docs/design/qa/slice-019b-2026-09-10/gates/check.status
+?? docs/design/qa/slice-019b-2026-09-10/gates/db.log
+?? docs/design/qa/slice-019b-2026-09-10/gates/db.status
+?? docs/design/qa/slice-019b-2026-09-10/gates/perf.log
+?? docs/design/qa/slice-019b-2026-09-10/gates/perf.status
+?? docs/design/qa/slice-019b-2026-09-10/gates/sqlx.log
+?? docs/design/qa/slice-019b-2026-09-10/gates/sqlx.status
+?? docs/design/qa/slice-019b-2026-09-10/lifecycle.json
+?? docs/design/qa/slice-019b-2026-09-10/read-filter-smoke.json
+?? docs/design/qa/slice-019b-2026-09-10/second-organization.txt
+?? docs/design/qa/slice-019b-2026-09-10/today-after-local-clear.txt
+?? docs/design/qa/slice-019b-2026-09-10/today-after-realtime-restore.txt
+?? docs/design/qa/slice-019b-2026-09-10/today-archived-source.txt
+?? docs/design/qa/slice-019b-2026-09-10/today-rule-preview.txt
+?? docs/specs/SLICE_019b.md
+?? docs/tasks/SLICE_019b_IMPL.md
+?? docs/tasks/SLICE_019b_VERIFICATION.md
+?? web/src/components/CustomFilterEditor.test.ts
+?? web/src/components/CustomFilterEditor.vue

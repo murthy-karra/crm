@@ -1,0 +1,123 @@
+[
+  {
+    "case": "people_created_desc",
+    "serial_old_p95_ns": 41527125,
+    "serial_new_p95_ns": 40545333,
+    "serial_budget_ns": 66527125,
+    "serial_hashes_equal": true,
+    "concurrency_old_p95_ns": null,
+    "concurrency_new_p95_ns": null,
+    "concurrency_budget_ns": null,
+    "concurrency_hashes_equal": true
+  },
+  {
+    "case": "people_created_asc",
+    "serial_old_p95_ns": 43577125,
+    "serial_new_p95_ns": 43215000,
+    "serial_budget_ns": 68577125,
+    "serial_hashes_equal": true,
+    "concurrency_old_p95_ns": null,
+    "concurrency_new_p95_ns": null,
+    "concurrency_budget_ns": null,
+    "concurrency_hashes_equal": true
+  },
+  {
+    "case": "people_name_asc",
+    "serial_old_p95_ns": 42527708,
+    "serial_new_p95_ns": 42635375,
+    "serial_budget_ns": 67527708,
+    "serial_hashes_equal": true,
+    "concurrency_old_p95_ns": null,
+    "concurrency_new_p95_ns": null,
+    "concurrency_budget_ns": null,
+    "concurrency_hashes_equal": true
+  },
+  {
+    "case": "people_name_desc",
+    "serial_old_p95_ns": 47373416,
+    "serial_new_p95_ns": 45688208,
+    "serial_budget_ns": 72373416,
+    "serial_hashes_equal": true,
+    "concurrency_old_p95_ns": null,
+    "concurrency_new_p95_ns": null,
+    "concurrency_budget_ns": null,
+    "concurrency_hashes_equal": true
+  },
+  {
+    "case": "people_stage_asc",
+    "serial_old_p95_ns": 44242459,
+    "serial_new_p95_ns": 43142709,
+    "serial_budget_ns": 69242459,
+    "serial_hashes_equal": true,
+    "concurrency_old_p95_ns": null,
+    "concurrency_new_p95_ns": null,
+    "concurrency_budget_ns": null,
+    "concurrency_hashes_equal": true
+  },
+  {
+    "case": "people_stage_desc",
+    "serial_old_p95_ns": 43531708,
+    "serial_new_p95_ns": 42752250,
+    "serial_budget_ns": 68531708,
+    "serial_hashes_equal": true,
+    "concurrency_old_p95_ns": null,
+    "concurrency_new_p95_ns": null,
+    "concurrency_budget_ns": null,
+    "concurrency_hashes_equal": true
+  },
+  {
+    "case": "people_assignee_asc",
+    "serial_old_p95_ns": 43522542,
+    "serial_new_p95_ns": 43460542,
+    "serial_budget_ns": 68522542,
+    "serial_hashes_equal": true,
+    "concurrency_old_p95_ns": null,
+    "concurrency_new_p95_ns": null,
+    "concurrency_budget_ns": null,
+    "concurrency_hashes_equal": true
+  },
+  {
+    "case": "people_assignee_desc",
+    "serial_old_p95_ns": 44173333,
+    "serial_new_p95_ns": 42554125,
+    "serial_budget_ns": 69173333,
+    "serial_hashes_equal": true,
+    "concurrency_old_p95_ns": null,
+    "concurrency_new_p95_ns": null,
+    "concurrency_budget_ns": null,
+    "concurrency_hashes_equal": true
+  },
+  {
+    "case": "saved_list_count",
+    "serial_old_p95_ns": 5842541,
+    "serial_new_p95_ns": 5639792,
+    "serial_budget_ns": 30842541,
+    "serial_hashes_equal": true,
+    "concurrency_old_p95_ns": null,
+    "concurrency_new_p95_ns": null,
+    "concurrency_budget_ns": null,
+    "concurrency_hashes_equal": true
+  },
+  {
+    "case": "today_zero_sources",
+    "serial_old_p95_ns": 21658125,
+    "serial_new_p95_ns": 41005625,
+    "serial_budget_ns": 46658125,
+    "serial_hashes_equal": true,
+    "concurrency_old_p95_ns": 66618833,
+    "concurrency_new_p95_ns": 71196625,
+    "concurrency_budget_ns": 91618833,
+    "concurrency_hashes_equal": true
+  },
+  {
+    "case": "today_five_sources",
+    "serial_old_p95_ns": 80177916,
+    "serial_new_p95_ns": 65431167,
+    "serial_budget_ns": 105177916,
+    "serial_hashes_equal": true,
+    "concurrency_old_p95_ns": 172446042,
+    "concurrency_new_p95_ns": 157845958,
+    "concurrency_budget_ns": 197446042,
+    "concurrency_hashes_equal": true
+  }
+]

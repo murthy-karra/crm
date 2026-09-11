@@ -1,5 +1,8 @@
 # Slice 013 — Operator `filter_people` and `run_saved_list`
 
+**Slice 019b amendment (approved 2026-09-10):**
+[Custom-field filtering](SLICE_019b.md). Amends the saved-list result/error behavior: run_saved_list evaluates stored custom-field clauses through the shared application path and wraps their descriptions as untrusted text. Invalid references use invalid_field/invalid_option. filter_people inputs and the tool schema/count remain unchanged.
+
 **Status: APPROVED by the user on 2026-09-08 after independent review.**
 Approval covers the declared contracts (§7) and the §9 safe defaults; it
 authorizes implementation and tests in the Slice 013 lane, not commit, merge,

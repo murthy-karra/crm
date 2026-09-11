@@ -800,6 +800,12 @@ async fn query_inner_untraced(
                     Some(crate::domain::saved_list::SavedListFilterError::InvalidTag) => {
                         "invalid_tag"
                     }
+                    Some(crate::domain::saved_list::SavedListFilterError::InvalidField) => {
+                        "invalid_field"
+                    }
+                    Some(crate::domain::saved_list::SavedListFilterError::InvalidOption) => {
+                        "invalid_option"
+                    }
                     Some(crate::domain::saved_list::SavedListFilterError::UnsupportedFilter)
                     | None => "unsupported_filter",
                 },
@@ -817,6 +823,12 @@ async fn query_inner_untraced(
                     }
                     Some(crate::domain::saved_list::SavedListFilterError::InvalidTag) => {
                         TodaySourceIssueError::InvalidTag
+                    }
+                    Some(crate::domain::saved_list::SavedListFilterError::InvalidField) => {
+                        TodaySourceIssueError::InvalidField
+                    }
+                    Some(crate::domain::saved_list::SavedListFilterError::InvalidOption) => {
+                        TodaySourceIssueError::InvalidOption
                     }
                     Some(crate::domain::saved_list::SavedListFilterError::UnsupportedFilter)
                     | None => TodaySourceIssueError::UnsupportedFilter,
@@ -943,6 +955,35 @@ async fn query_inner_untraced(
                     name: source.name,
                     revision: source.revision,
                     error: TodaySourceIssueError::InvalidTag,
+                });
+            }
+            custom @ Ok(Ok(SourceEvaluation::InvalidField | SourceEvaluation::InvalidOption)) => {
+                let error = match custom {
+                    Ok(Ok(SourceEvaluation::InvalidField)) => TodaySourceIssueError::InvalidField,
+                    Ok(Ok(SourceEvaluation::InvalidOption)) => TodaySourceIssueError::InvalidOption,
+                    _ => unreachable!("matched custom-field source error"),
+                };
+                source_span.record(
+                    "outcome",
+                    match error {
+                        TodaySourceIssueError::InvalidField => "invalid_field",
+                        TodaySourceIssueError::InvalidOption => "invalid_option",
+                        _ => unreachable!("custom-field source error"),
+                    },
+                );
+                source_span.record("membership_count", 0usize);
+                source_span.record("prefix_candidate_count", 0usize);
+                #[cfg(feature = "test-support")]
+                test_support::record_source_evaluation(
+                    test_support::SourceEvaluationOutcome::InvalidFilter,
+                    source_started.elapsed(),
+                    source_filter_kinds,
+                );
+                issues.push(TodaySourceIssue {
+                    list_id: source.list_id,
+                    name: source.name,
+                    revision: source.revision,
+                    error,
                 });
             }
             Ok(Err(_)) => {
@@ -1269,6 +1310,8 @@ enum SourceEvaluation {
     InvalidStage,
     InvalidAssignee,
     InvalidTag,
+    InvalidField,
+    InvalidOption,
 }
 
 async fn evaluate_source(
@@ -1325,6 +1368,20 @@ async fn evaluate_source(
                 .execute(&mut *conn)
                 .await?;
             return Ok(SourceEvaluation::InvalidTag);
+        }
+        Err(crate::domain::person::filter::FilterError::InvalidField) => {
+            set_source_statement_timeout_until(conn, deadline).await?;
+            sqlx::query("RELEASE SAVEPOINT today_source")
+                .execute(&mut *conn)
+                .await?;
+            return Ok(SourceEvaluation::InvalidField);
+        }
+        Err(crate::domain::person::filter::FilterError::InvalidOption) => {
+            set_source_statement_timeout_until(conn, deadline).await?;
+            sqlx::query("RELEASE SAVEPOINT today_source")
+                .execute(&mut *conn)
+                .await?;
+            return Ok(SourceEvaluation::InvalidOption);
         }
         Err(crate::domain::person::filter::FilterError::Database(error)) => return Err(error),
         Err(crate::domain::person::filter::FilterError::Malformed) => {

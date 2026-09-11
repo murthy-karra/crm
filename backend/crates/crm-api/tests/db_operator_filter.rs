@@ -243,6 +243,19 @@ async fn router_scripted(
     (crm_api::build_app(state), provider)
 }
 
+async fn router_scripted_with_publisher(
+    migrator_pool: &PgPool,
+    steps: Vec<ScriptedStep>,
+) -> (Router, ScriptedProvider, Publisher) {
+    let provider = provider(steps);
+    let app_pool = crate::common::connect_as_app(migrator_pool).await;
+    let config = crate::common::test_config();
+    let publisher = Publisher::recording();
+    let state = AppState::for_tests(app_pool, &config, publisher.clone())
+        .with_operator(runtime(&provider, 4));
+    (crm_api::build_app(state), provider, publisher)
+}
+
 fn call(name: &str, args: Value) -> ToolCall {
     ToolCall {
         id: "c".to_string(),
@@ -1028,6 +1041,87 @@ async fn a_list_with_invalid_tag_is_list_invalid(migrator_pool: PgPool) {
     let result = tool_result(&provider, 1);
     assert_eq!(result["status"], "list_invalid");
     assert_eq!(result["error"], "invalid_tag");
+}
+
+/// Stored custom-filter descriptions are model input and must retain the
+/// `UntrustedText` wrapper.  A read-only list run still gets an auditable
+/// ledger row, but cannot publish a realtime mutation event or persist the
+/// sentinel label outside the wrapped provider result.
+#[sqlx::test]
+#[ignore]
+async fn custom_saved_list_description_is_untrusted_and_read_only(migrator_pool: PgPool) {
+    let f = fixture(migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&f.migrator_pool).await;
+    let sentinel = "SENTINEL_CUSTOM_FILTER_LABEL";
+    let field_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO custom_field (organization_id, label, field_type, position, created_by_user_id) \
+         VALUES ($1, $2, 'text', 1, $3) RETURNING id",
+    )
+    .bind(f.org)
+    .bind(sentinel)
+    .bind(f.alice_id)
+    .fetch_one(&app_pool)
+    .await
+    .unwrap();
+    let clause = serde_json::from_value(json!({
+        "kind":"custom_text", "field_id":field_id,
+        "test":{"op":"contains", "text":"needle"}
+    }))
+    .unwrap();
+    create_list(
+        &app_pool,
+        f.org,
+        f.alice_id,
+        SavedListScope::Personal,
+        "Custom Operator List",
+        vec![clause],
+        None,
+    )
+    .await;
+    let (router, provider, publisher) = router_scripted_with_publisher(
+        &f.migrator_pool,
+        vec![
+            tool_step("run_saved_list", json!({"name":"Custom Operator List"})),
+            text_step("ok"),
+        ],
+    )
+    .await;
+    let cookie = crate::common::login_cookie(&router, "alice@acme.test", PW).await;
+    let response = post_turn(&router, &cookie, "run my custom list").await;
+    assert_eq!(response.status(), axum::http::StatusCode::OK);
+    let body = crate::common::body_json(response).await;
+    let result = tool_result(&provider, 1);
+    assert_eq!(result["status"], "matched");
+    assert!(result["description"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|line| line
+            .get("untrusted_text")
+            .and_then(Value::as_str)
+            .is_some_and(|text| text.contains(sentinel))));
+    let ledger = tool_rows(
+        &app_pool,
+        Uuid::parse_str(body["turn_id"].as_str().unwrap()).unwrap(),
+    )
+    .await;
+    assert_eq!(ledger.len(), 1);
+    assert_eq!(ledger[0].1, "run_saved_list");
+    assert_eq!(ledger[0].2, "ok");
+    let Publisher::Recording(events, _) = publisher else {
+        panic!("expected recording publisher");
+    };
+    assert!(
+        events.lock().await.is_empty(),
+        "a read-only list run must not publish realtime events"
+    );
+    let ledger_text: String = sqlx::query_scalar(
+        "SELECT coalesce(string_agg(tool_name || ':' || outcome, ','), '') FROM operator_tool_call",
+    )
+    .fetch_one(&app_pool)
+    .await
+    .unwrap();
+    assert!(!ledger_text.contains(sentinel));
 }
 
 #[sqlx::test]

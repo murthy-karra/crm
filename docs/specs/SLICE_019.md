@@ -1,5 +1,8 @@
 # Slice 019 — Typed custom fields on People
 
+**Slice 019b amendment (approved 2026-09-10):**
+[Custom-field filtering](SLICE_019b.md). The 019a exclusion of custom-field filtering in §§1/10 is now followed by approved rung 019b. Amends §§5/7 for membership-cache invalidation after value changes and dependent-cache refresh after definition/option changes; the realtime wire token is unchanged. Archive-based filter validity is specified in 019b §3.
+
 **Status: APPROVED by the user on 2026-09-10 after independent review
 (READY WITH CORRECTIONS; fifteen items applied, none a human decision).
 Approval authorizes committing the planning documents and implementing in

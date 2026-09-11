@@ -37,6 +37,8 @@ const SAVED_LIST_FILTER_ERROR_CODES: Record<SavedListFilterError, true> = {
   invalid_stage: true,
   invalid_assignee: true,
   invalid_tag: true,
+  invalid_field: true,
+  invalid_option: true,
 }
 function isSavedListFilterErrorCode(code: string): code is SavedListFilterError {
   return Object.prototype.hasOwnProperty.call(SAVED_LIST_FILTER_ERROR_CODES, code)

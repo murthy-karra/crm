@@ -4,7 +4,7 @@
 // stays a THIN, separate client-side reader/writer — `describe()`-parity
 // with the backend is explicitly not required (§4d: "the web FilterBar
 // renders its own chip labels client-side from data it already has").
-import type { AgeOp, Assignee, FilterClause, FilterClauseKind, FilterDefinition } from '../api/types'
+import type { AgeOp, Assignee, CustomField, FilterClause, FilterClauseKind, FilterDefinition } from '../api/types'
 
 // SLICE_011d §2: three more derived boolean clause kinds join the vocabulary
 // (`awaiting_response`, `client_replied_unanswered`, `awaiting_call_outcome`)
@@ -29,6 +29,7 @@ export const FILTER_CLAUSE_KINDS: FilterClauseKind[] = [
   // (none-of), one clause per kind, same 20-clause cap.
   'tags',
   'not_tags',
+  'custom_text', 'custom_number', 'custom_date', 'custom_choice',
 ]
 
 export const CLAUSE_KIND_LABEL: Record<FilterClauseKind, string> = {
@@ -47,6 +48,7 @@ export const CLAUSE_KIND_LABEL: Record<FilterClauseKind, string> = {
   awaiting_call_outcome: 'A call of mine needs an outcome',
   tags: 'Tagged',
   not_tags: 'Not tagged',
+  custom_text: 'Custom text', custom_number: 'Custom number', custom_date: 'Custom date', custom_choice: 'Custom choice',
 }
 
 export const AGE_CLAUSE_KINDS: FilterClauseKind[] = ['created', 'last_inquiry', 'last_contact', 'last_inbound']
@@ -55,6 +57,85 @@ export const BOOL_CLAUSE_KINDS: FilterClauseKind[] = [
   'has_replied', 'has_phone', 'has_email',
   'awaiting_response', 'client_replied_unanswered', 'awaiting_call_outcome',
 ]
+
+export type CustomFilterClause = Extract<FilterClause, { field_id: string }>
+
+export function isCustomClause(clause: FilterClause): clause is CustomFilterClause {
+  return clause.kind === 'custom_text' || clause.kind === 'custom_number' ||
+    clause.kind === 'custom_date' || clause.kind === 'custom_choice'
+}
+
+const CANONICAL_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+const DECIMAL = /^-?[0-9]{1,15}(\.[0-9]{1,4})?$/
+
+function record(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function exactKeys(value: Record<string, unknown>, allowed: string[]): boolean {
+  return Object.keys(value).every((key) => allowed.includes(key))
+}
+
+function scaledDecimal(value: string): bigint {
+  const [whole, fraction = ''] = value.replace(/^-/, '').split('.')
+  const scaled = BigInt(whole) * 10000n + BigInt(fraction.padEnd(4, '0'))
+  return value.startsWith('-') ? -scaled : scaled
+}
+
+function validCalendarDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || value < '1900-01-01' || value > '2200-12-31') return false
+  const [year, month, day] = value.split('-').map(Number)
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+  return month >= 1 && month <= 12 && day >= 1 && day <= days[month - 1]
+}
+
+/** A local draft must be wire-valid before Apply. References remain server-owned;
+ * missing/archived metadata can still describe a saved clause for repair. */
+export function customClauseError(value: unknown): string | null {
+  if (!record(value) || !exactKeys(value, ['kind', 'field_id', 'test']) ||
+      !['custom_text', 'custom_number', 'custom_date', 'custom_choice'].includes(String(value.kind))) {
+    return 'Choose a supported custom field.'
+  }
+  if (typeof value.field_id !== 'string' || !CANONICAL_UUID.test(value.field_id)) return 'Choose a custom field.'
+  if (!record(value.test)) return 'Choose an operator.'
+  const test = value.test
+  if (test.op === 'is_set' || test.op === 'is_not_set') {
+    return exactKeys(test, ['op']) ? null : 'Presence filters do not take a value.'
+  }
+  if (value.kind === 'custom_text') {
+    if (!['contains', 'not_contains'].includes(String(test.op)) || !exactKeys(test, ['op', 'text'])) return 'Choose a text operator.'
+    if (typeof test.text !== 'string' || [...test.text].length < 1 || [...test.text].length > 500) return 'Enter 1–500 characters.'
+    if (/\p{Cc}/u.test(test.text)) return 'Remove control characters.'
+    if (/^[ \t\r\n]|[ \t\r\n]$/.test(test.text)) return 'Remove spaces at the start or end.'
+    return null
+  }
+  if (value.kind === 'custom_choice') {
+    if (!['any_of', 'none_of'].includes(String(test.op)) || !exactKeys(test, ['op', 'option_ids'])) return 'Choose a choice operator.'
+    if (!Array.isArray(test.option_ids) || test.option_ids.length < 1 || test.option_ids.length > 50) return 'Choose 1–50 options.'
+    if (!test.option_ids.every((id) => typeof id === 'string' && CANONICAL_UUID.test(id)) ||
+        new Set(test.option_ids).size !== test.option_ids.length) return 'Choose distinct valid options.'
+    return null
+  }
+  if (!['range', 'not_range'].includes(String(test.op)) || !exactKeys(test, ['op', 'min', 'max'])) return 'Choose a range operator.'
+  if (!Object.hasOwn(test, 'min') && !Object.hasOwn(test, 'max')) return 'Enter at least one bound.'
+  for (const key of ['min', 'max'] as const) {
+    if (!Object.hasOwn(test, key)) continue
+    const bound = test[key]
+    if (typeof bound !== 'string' || (value.kind === 'custom_number' ? !DECIMAL.test(bound) : !validCalendarDate(bound))) {
+      return value.kind === 'custom_number'
+        ? 'Use up to 15 digits and 4 decimal places, without commas.'
+        : 'Enter a valid date from 1900-01-01 through 2200-12-31.'
+    }
+  }
+  if (typeof test.min === 'string' && typeof test.max === 'string') {
+    const reversed = value.kind === 'custom_number'
+      ? scaledDecimal(test.min) > scaledDecimal(test.max)
+      : test.min > test.max
+    if (reversed) return value.kind === 'custom_number' ? 'From must be less than or equal to To.' : 'From must be on or before To.'
+  }
+  return null
+}
 
 export function defaultClauseFor(kind: FilterClauseKind): FilterClause {
   switch (kind) {
@@ -79,6 +160,10 @@ export function defaultClauseFor(kind: FilterClauseKind): FilterClause {
     case 'tags':
     case 'not_tags':
       return { kind, tag_ids: [] }
+    case 'custom_text': return { kind, field_id: '', test: { op: 'is_set' } }
+    case 'custom_number': return { kind, field_id: '', test: { op: 'is_set' } }
+    case 'custom_date': return { kind, field_id: '', test: { op: 'is_set' } }
+    case 'custom_choice': return { kind, field_id: '', test: { op: 'is_set' } }
   }
 }
 
@@ -96,6 +181,7 @@ export function isDraftClause(clause: FilterClause): boolean {
   if (clause.kind === 'assigned_to') return clause.assignees.length === 0
   if (clause.kind === 'source') return clause.sources.length === 0
   if (clause.kind === 'tags' || clause.kind === 'not_tags') return clause.tag_ids.length === 0
+  if (isCustomClause(clause)) return customClauseError(clause) !== null
   return false
 }
 
@@ -176,6 +262,11 @@ function isFilterClause(value: unknown): value is FilterClause {
     case 'tags':
     case 'not_tags':
       return Array.isArray(v.tag_ids) && v.tag_ids.every((x) => typeof x === 'string')
+    case 'custom_text':
+    case 'custom_number':
+    case 'custom_date':
+    case 'custom_choice':
+      return customClauseError(v) === null
     default:
       return false
   }
@@ -202,6 +293,8 @@ export function parseFilter(raw: string): FilterClause[] | null {
   const v = value as Record<string, unknown>
   if (v.version !== 1 || !Array.isArray(v.clauses)) return null
   if (!v.clauses.every(isFilterClause)) return null
+  const custom = v.clauses.filter(isCustomClause)
+  if (custom.length > 5 || v.clauses.length > 20 || new Set(custom.map((clause) => clause.field_id)).size !== custom.length) return null
   return v.clauses as FilterClause[]
 }
 
@@ -210,6 +303,7 @@ export interface FilterNames {
   memberNames: Record<string, string>
   // Slice 011e e2 (docs/specs/SLICE_011e.md §4d).
   tagNames: Record<string, string>
+  customFields?: Record<string, CustomField>
 }
 
 function joinOr(items: string[], maxValues: number): string {
@@ -283,6 +377,34 @@ export function describeClause(clause: FilterClause, names: FilterNames, maxValu
       if (clause.tag_ids.length === 0) return 'Not tagged: Choose a value'
       const labels = clause.tag_ids.map((id) => names.tagNames[id] ?? 'an unknown tag')
       return `Not tagged: ${joinComma(labels, Math.min(maxValues, 50))}`
+    }
+    case 'custom_text':
+    case 'custom_number':
+    case 'custom_date':
+    case 'custom_choice': {
+      const field = names.customFields?.[clause.field_id]
+      const label = field ? `${field.label}${field.archived_at ? ' (Archived)' : ''}` : 'an unavailable custom field'
+      const test = clause.test
+      if (test.op === 'is_set') return `${label}: Is not empty`
+      if (test.op === 'is_not_set') return `${label}: Is empty`
+      if ('text' in test) return `${label}: ${test.op === 'contains' ? 'Contains' : 'Does not contain (or empty)'} ${test.text}`
+      if ('option_ids' in test) {
+        const options = test.option_ids.map((id) => {
+          const option = field?.options.find((candidate) => candidate.id === id)
+          return option ? `${option.label}${option.archived_at ? ' (Archived)' : ''}` : 'an unavailable option'
+        })
+        return `${label}: ${test.op === 'any_of' ? 'Is one of' : 'Is not one of (or empty)'} ${joinOr(options, maxValues)}`
+      }
+      if ('min' in test || 'max' in test) {
+        const bounds = test.min !== undefined && test.max !== undefined
+          ? `between ${test.min} and ${test.max}`
+          : test.min !== undefined
+            ? `${clause.kind === 'custom_date' ? 'on or after' : 'at least'} ${test.min}`
+            : `${clause.kind === 'custom_date' ? 'on or before' : 'at most'} ${test.max}`
+        const description = test.op === 'not_range' ? `Not ${bounds} (or empty)` : bounds[0].toUpperCase() + bounds.slice(1)
+        return `${label}: ${description}`
+      }
+      return `${label}: Enter at least one bound`
     }
   }
 }

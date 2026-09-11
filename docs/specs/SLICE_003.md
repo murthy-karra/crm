@@ -1,5 +1,8 @@
 # Slice 003 — Today + Realtime
 
+**Slice 019b amendment (approved 2026-09-10):**
+[Custom-field filtering](SLICE_019b.md). Amends §6 client invalidation: custom_field_changed now invalidates Person, People, Today, saved-list counts and custom-field definitions under the active Organization. The ids-only event wire and reconnect recovery are unchanged.
+
 **Approved amendment — Slice 011c (2026-09-06):**
 [SLICE_011c §§2–6](SLICE_011c.md) extend §§2–6/10 with per-agent source
 preferences/routes, list-derived work, nullable list-only fields, explicit source

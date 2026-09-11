@@ -235,6 +235,8 @@ pub enum TodaySourceIssueError {
     /// docs/specs/SLICE_011e.md §4b: a `tags`/`not_tags` value vanished
     /// during Today's per-source evaluation.
     InvalidTag,
+    InvalidField,
+    InvalidOption,
     Unavailable,
 }
 

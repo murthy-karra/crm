@@ -1020,6 +1020,7 @@ function detail(name = 'Grace Hopper', id = PERSON_ID): PersonDetailResponse {
     history: [],
     tags: [],
     tasks: [],
+    custom_fields: [],
   }
 }
 

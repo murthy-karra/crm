@@ -24,6 +24,7 @@ const fixture: PersonDetailResponse = {
   inquiries: [], history: [],
   tags: [{ id: 'tag-sphere', name: 'Sphere' }, { id: 'tag-investor', name: 'Investor' }],
   tasks: [],
+  custom_fields: [],
 }
 const cleanups: Array<() => void> = []
 afterEach(() => { cleanups.splice(0).forEach((cleanup) => cleanup()); vi.clearAllMocks() })

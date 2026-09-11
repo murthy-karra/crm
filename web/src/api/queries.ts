@@ -39,6 +39,19 @@ import type {
   SavedListDetailResponse,
   SavedListsResponse,
   UnresolvedDetailResponse,
+  AddCustomFieldOptionRequest,
+  AddCustomFieldOptionResponse,
+  CreateCustomFieldRequest,
+  CreateCustomFieldResponse,
+  CustomFieldsResponse,
+  PersonCustomFieldValueMutationResponse,
+  ReorderCustomFieldsRequest,
+  ReorderCustomFieldsResponse,
+  SetCustomFieldValueRequest,
+  UpdateCustomFieldOptionRequest,
+  UpdateCustomFieldOptionResponse,
+  UpdateCustomFieldRequest,
+  UpdateCustomFieldResponse,
   CreateOrganizationRequest,
   CorrectOutcomeRequest,
   CorrectOutcomeResponse,
@@ -211,6 +224,11 @@ export const queryKeys = {
   // assignee changed between — the `people(orgId, filter?)` precedent.
   tasks: (orgId: string, actorId?: string) =>
     actorId ? (['org', orgId, 'tasks', actorId] as const) : (['org', orgId, 'tasks'] as const),
+  // Slice 019a §10: extend the factory, never hand-write a key. Not
+  // actor-scoped: every member reads the same definitions index (D-058 §2:
+  // any active member sets values; only an admin writes definitions, and
+  // the response carries no per-viewer field the way `Tag.can_manage` does).
+  customFields: (orgId: string) => ['org', orgId, 'custom-fields'] as const,
 }
 
 // `/me` has no public session-id field. The coordinator adds an opaque
@@ -2269,6 +2287,165 @@ export function useDeleteTaskMutation(
     onSuccess: (_result, variables) => {
       const id = toValue(orgId)
       settleTaskMutation(qc, id, variables.personId)
+    },
+  }, providedQueryClient)
+}
+
+// --- Slice 019a: Custom fields (docs/specs/SLICE_019.md §7) -----------------
+// Definitions/options are Organization-admin only (D-058 §2); any active
+// member sets/clears a value. The definitions list is fetched once per
+// navigation burst — `staleTime: 10_000` (the `useCall` precedent above) so
+// a Person page mount does not re-fetch it on every navigation. Value
+// mutations are deliberately PESSIMISTIC, the note/task precedent: `onMutate`
+// writes nothing to the cache; they key with `personMutationKey` and settle
+// through `settlePersonMutation` on `queryKeys.person(orgId, personId)` only
+// (rules 5/6 — a value touches no People row, Today, or list count).
+
+/** `GET /api/custom-fields` — any active member; live first (`position, id`),
+ * then archived (`archived_at DESC, id`). */
+export function useCustomFieldsQuery(orgId: MaybeRefOrGetter<string>, providedQueryClient?: QueryClient) {
+  return useQuery(
+    {
+      queryKey: computed(() => queryKeys.customFields(toValue(orgId))),
+      queryFn: ({ signal }) => apiFetch<CustomFieldsResponse>('/custom-fields', { signal }),
+      enabled: computed(() => toValue(orgId) !== ''),
+      staleTime: 10_000,
+    },
+    providedQueryClient,
+  )
+}
+
+/** `POST /api/custom-fields` (§4): admin only. */
+export function useCreateCustomFieldMutation(orgId: MaybeRefOrGetter<string>, providedQueryClient?: QueryClient) {
+  const qc = providedQueryClient ?? useQueryClient()
+  return useMutation({
+    mutationFn: (body: CreateCustomFieldRequest) =>
+      apiFetch<CreateCustomFieldResponse>('/custom-fields', { method: 'POST', body: JSON.stringify(body) }),
+    retry: false,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.customFields(toValue(orgId)) })
+    },
+  }, providedQueryClient)
+}
+
+/** `PUT /api/custom-fields/order` (§4): admin only; the full live order. */
+export function useReorderCustomFieldsMutation(orgId: MaybeRefOrGetter<string>, providedQueryClient?: QueryClient) {
+  const qc = providedQueryClient ?? useQueryClient()
+  return useMutation({
+    mutationFn: (body: ReorderCustomFieldsRequest) =>
+      apiFetch<ReorderCustomFieldsResponse>('/custom-fields/order', { method: 'PUT', body: JSON.stringify(body) }),
+    retry: false,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.customFields(toValue(orgId)) })
+    },
+  }, providedQueryClient)
+}
+
+/** `PUT /api/custom-fields/{field_id}` (§4): admin only; full-replace
+ * rename/archive/restore. */
+export function useUpdateCustomFieldMutation(orgId: MaybeRefOrGetter<string>, providedQueryClient?: QueryClient) {
+  const qc = providedQueryClient ?? useQueryClient()
+  return useMutation({
+    mutationFn: ({ fieldId, body }: { fieldId: string; body: UpdateCustomFieldRequest }) =>
+      apiFetch<UpdateCustomFieldResponse>(`/custom-fields/${encodeURIComponent(fieldId)}`, {
+        method: 'PUT',
+        body: JSON.stringify(body),
+      }),
+    retry: false,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.customFields(toValue(orgId)) })
+    },
+  }, providedQueryClient)
+}
+
+/** `POST /api/custom-fields/{field_id}/options` (§4): admin only; choice
+ * fields only, permitted on an archived field. */
+export function useAddCustomFieldOptionMutation(orgId: MaybeRefOrGetter<string>, providedQueryClient?: QueryClient) {
+  const qc = providedQueryClient ?? useQueryClient()
+  return useMutation({
+    mutationFn: ({ fieldId, body }: { fieldId: string; body: AddCustomFieldOptionRequest }) =>
+      apiFetch<AddCustomFieldOptionResponse>(`/custom-fields/${encodeURIComponent(fieldId)}/options`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    retry: false,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.customFields(toValue(orgId)) })
+    },
+  }, providedQueryClient)
+}
+
+/** `PUT /api/custom-fields/{field_id}/options/{option_id}` (§4): admin only;
+ * full-replace rename/archive/restore. */
+export function useUpdateCustomFieldOptionMutation(orgId: MaybeRefOrGetter<string>, providedQueryClient?: QueryClient) {
+  const qc = providedQueryClient ?? useQueryClient()
+  return useMutation({
+    mutationFn: ({ fieldId, optionId, body }: { fieldId: string; optionId: string; body: UpdateCustomFieldOptionRequest }) =>
+      apiFetch<UpdateCustomFieldOptionResponse>(
+        `/custom-fields/${encodeURIComponent(fieldId)}/options/${encodeURIComponent(optionId)}`,
+        { method: 'PUT', body: JSON.stringify(body) },
+      ),
+    retry: false,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.customFields(toValue(orgId)) })
+    },
+  }, providedQueryClient)
+}
+
+/** `PUT /api/people/{id}/custom-fields/{field_id}` (§4): any active member;
+ * pessimistic (the note/task precedent) — no optimistic write. A 409
+ * `field_archived` or a 404 is left for the caller to refetch definitions
+ * and the Person (§7); the settle below already refetches the Person once
+ * no sibling Person mutation is left pending. */
+export function useSetCustomFieldValueMutation(
+  orgId: MaybeRefOrGetter<string>,
+  personId: MaybeRefOrGetter<string>,
+  providedQueryClient?: QueryClient,
+) {
+  const qc = providedQueryClient ?? useQueryClient()
+  return useMutation({
+    mutationKey: computed(() => personMutationKey(toValue(orgId), toValue(personId))),
+    mutationFn: ({ personId, fieldId, body }: { personId: string; fieldId: string; body: SetCustomFieldValueRequest }) =>
+      apiFetch<PersonCustomFieldValueMutationResponse>(
+        `/people/${encodeURIComponent(personId)}/custom-fields/${encodeURIComponent(fieldId)}`,
+        { method: 'PUT', body: JSON.stringify(body) },
+      ),
+    retry: false,
+    onError: (_error, variables) => {
+      const id = toValue(orgId)
+      settlePersonMutation(qc, id, variables.personId, queryKeys.person(id, variables.personId))
+    },
+    onSuccess: (_result, variables) => {
+      const id = toValue(orgId)
+      settlePersonMutation(qc, id, variables.personId, queryKeys.person(id, variables.personId))
+    },
+  }, providedQueryClient)
+}
+
+/** `DELETE /api/people/{id}/custom-fields/{field_id}` (§4): any active
+ * member; target-state idempotent (clear-when-absent is `changed: false`);
+ * permitted on an archived field. Pessimistic, the same shape as set above. */
+export function useClearCustomFieldValueMutation(
+  orgId: MaybeRefOrGetter<string>,
+  personId: MaybeRefOrGetter<string>,
+  providedQueryClient?: QueryClient,
+) {
+  const qc = providedQueryClient ?? useQueryClient()
+  return useMutation({
+    mutationKey: computed(() => personMutationKey(toValue(orgId), toValue(personId))),
+    mutationFn: ({ personId, fieldId }: { personId: string; fieldId: string }) =>
+      apiFetch<PersonCustomFieldValueMutationResponse>(
+        `/people/${encodeURIComponent(personId)}/custom-fields/${encodeURIComponent(fieldId)}`,
+        { method: 'DELETE' },
+      ),
+    retry: false,
+    onError: (_error, variables) => {
+      const id = toValue(orgId)
+      settlePersonMutation(qc, id, variables.personId, queryKeys.person(id, variables.personId))
+    },
+    onSuccess: (_result, variables) => {
+      const id = toValue(orgId)
+      settlePersonMutation(qc, id, variables.personId, queryKeys.person(id, variables.personId))
     },
   }, providedQueryClient)
 }

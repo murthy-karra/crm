@@ -1,0 +1,25 @@
+{
+  "result": "passed",
+  "command": "node /private/tmp/crm-010a-qa-harness/verify-http.mjs",
+  "exit_code": 0,
+  "recorded_at": "2026-09-11T06:23:45.296288+00:00",
+  "script_sha256": "e91f5e6e4a483e0276164eaae5267c931309b76cc990c94d146ae32acc7f0c2e",
+  "backend_checkpoint": "backend-checkpoint.json",
+  "source": "injected synthetic FixtureReader; no FUB HTTP requests",
+  "api": "http://127.0.0.1:3010",
+  "database": "crm_slice010a_qa",
+  "checks": [
+    "anonymous/member/other-Organization denial",
+    "strict body and UUID precedence",
+    "immutable create/replace/start replay and changed-input conflict",
+    "six checked plus thirteen unchecked rows; decimal totals; unknown scope",
+    "prior report preserved during new active assessment",
+    "cancel rejects in-flight result",
+    "paused retry and old-revision rejection",
+    "source-account binding and replacement mismatch rejection",
+    "repeated disconnect stable",
+    "historical report preserved after disconnect",
+    "no People imported"
+  ],
+  "live_validation": "explicitly user-deferred"
+}

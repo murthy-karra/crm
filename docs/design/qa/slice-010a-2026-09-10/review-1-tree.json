@@ -1,0 +1,11 @@
+{
+  "backend/crates/crm-app/src/domain/migration/store.rs": "b2200db2c2f1fff012aa828b361694b11eb48ac3c2b794fe00094e124131b780",
+  "backend/crates/crm-app/src/domain/migration/worker.rs": "609c80c1badaccab0b79c6c4d4cd29e7a6664d6e342199fc51e2018ede943e99",
+  "backend/crates/crm-app/src/domain/migration/mod.rs": "4def2a0f6a04c591e075aae75fda83ffd3f473b6f9d8c52e16052124065e9fa1",
+  "backend/crates/crm-app/src/domain/migration/reader.rs": "13efc61644515588e2b857bae0fd60ddc91272c585fd35b6f485b583b4606c83",
+  "backend/crates/crm-app/src/domain/migration/crypto.rs": "afd22efdc8692d3c28b1cdb7dba321d10f583b7e4b03d79c36ee50efd440dce1",
+  "backend/crates/crm-api/src/routes/migrations.rs": "ac421c100aa4ab084473370291bdf4356eaa3ff0d46a28a8e44c00ce484a3c12",
+  "backend/crates/crm-api/src/state.rs": "1d23bd9c39587997dbee56f80028146ebd5d30a948be2f975d99729a2d5fdadc",
+  "backend/crates/crm-api/src/lib.rs": "cffac06f0898ab41fc4e2463ad2b45e901341339d7b01cc3d69ee75368d63fac",
+  "backend/crates/crm-api/migrations/20260916000001_fub_migration_assessment.sql": "369955a556d5a73d1a219b4bcc1ae249be9adc55a721681397cae395340dcd6c"
+}

@@ -229,6 +229,10 @@ export const queryKeys = {
   // any active member sets values; only an admin writes definitions, and
   // the response carries no per-viewer field the way `Tag.can_manage` does).
   customFields: (orgId: string) => ['org', orgId, 'custom-fields'] as const,
+  // Slice 010a: the report contains access-sensitive source account metadata,
+  // so its cache is isolated by Organization, actor, and opaque auth lifetime.
+  migration: (orgId: string, actorId: string, sessionLifetime: number) =>
+    ['org', orgId, 'migration', actorId, sessionLifetime] as const,
 }
 
 // `/me` has no public session-id field. The coordinator adds an opaque

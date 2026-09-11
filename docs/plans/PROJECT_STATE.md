@@ -1,11 +1,42 @@
-# Project State
+# Project state
 
-Last updated: 2026-09-10 (Slice 019b committed, merged into local main,
-deployed to the shared development runtime, and branch/worktree removed).
+Last updated: 2026-09-11 (010a source integration authorized;
+live FUB validation remains user-deferred).
 
-## Current phase
+## Current state
 
-**SLICE 019b (CUSTOM-FIELD FILTERING) — COMPLETE, MERGED, DEPLOYED AND
+**SLICE 010a — IMPLEMENTED, SYNTHETICALLY VERIFIED, NOT RELEASED.**
+The user approved API-first bounded assessment with encrypted saved credentials
+(D-060), targeting a new, empty Organization first (D-059).
+[Specification](../specs/SLICE_010a.md), [brief](../tasks/SLICE_010a_IMPL.md),
+[verification](../tasks/SLICE_010a_VERIFICATION.md) and the
+[migration summary](SLICE_010_MIGRATION_SUMMARY.md) are current.
+
+Delivered: admin Manage → Migration, same-account connection/key management,
+six bounded GET checks, encrypted evidence, durable 19-row report, request
+receipts, lease recovery and retry/cancel. Unchecked source families remain
+explicit; no business records are imported. Full inventory and importability
+remain 010b; later mapping, import, recovery and cutover policies remain unapproved.
+
+Changes remain uncommitted in `/Users/karrad/projects/crm-worktrees/010a`, branch
+`codex/slice-010a-fub-assessment`, base `b2fb368`. Astra coordinated source
+qualification/review and took over backend correction after the documented
+MODEL_ROUTING escalation; Terra completed Web. Two review/fix rounds closed.
+Final gates passed: 839 Rust tests, 5 doctests, 889 Web tests, 11 email-worker
+tests and 796 DB tests; SQLx preparation, new query plans and the coordinator's
+real-API and production-build browser walkthroughs also passed.
+
+The user deferred live validation because no FUB test account is available.
+No live FUB account/key or registered system credentials were supplied; public
+schema qualification and synthetic fixtures are not live-source proof.
+Private QA used API 3010 / Web preview 5180 and `crm_slice010a_qa`; the temporary
+QA servers were stopped after verification.
+019b's shared-development deployment remains unchanged. On 2026-09-11 the
+user authorized cleanup, commit, merge and push of 010a and the three local
+019b commits (D-060 follow-up). Source integration is in progress; no runtime
+deployment is part of this work.
+
+Previously: **SLICE 019b (CUSTOM-FIELD FILTERING) — COMPLETE, MERGED, DEPLOYED AND
 CLEANED UP (2026-09-10).** User authorized commit, deployment, merge with main
 and loose-branch cleanup. Implementation `a642987`, merge `237639d`, followed
 by a release-record commit. Only local main remains; no push was requested or
@@ -813,29 +844,30 @@ clear-all.
 
 ## Current slice
 
-Slice 017 — Inbound mail size cap — merged 2026-09-09 (`docs/specs/SLICE_017.md`,
-verification `docs/tasks/SLICE_017_VERIFICATION.md`); only the user's worker
-deploy and the live walkthrough remain. No implementation lane is active.
-
-Last completed before it: Slice 016 (Tasks; `docs/specs/SLICE_016.md`,
-verification `docs/tasks/SLICE_016a_VERIFICATION.md` and
-`SLICE_016b_VERIFICATION.md`, merged and pushed 2026-09-09), Slice 015 (Notes),
-the LATER batch of 2026-09-08, Slices 014, 013, 012 and the 011 ladder
-(`docs/plans/SLICE_011_LADDER.md`).
+Slice 010a — bounded FUB assessment is implemented and synthetically verified
+under D-059/D-060. Source integration is authorized and in progress; live FUB
+validation remains user-deferred. The next development rung is 010b full
+inventory/preview, requiring its own specification and approval. The shared
+development runtime remains on 019b; Slice 017 live sends remain deferred.
 
 ## Current branch
 
-`main` at the Slice 017 merge `f06eba3` plus the record commits, pushed to
-`origin/main` on 2026-09-09, clean. No worktrees, no slice branches. The
-shared development runtime: `./scripts/dev-api` on `127.0.0.1:3000` runs the
-post-017 build (pid 41716, relaunched 2026-09-09 21:34, log under
-`/private/tmp/claude-501/`); `./scripts/dev-web-prod` on 5173 runs the
-post-016b bundle (no web change since); `crm_dev` is migrated through
-`20260913000001` (017 adds no migration). The deployed Email Worker is
-still the pre-017 relay until the user runs `wrangler deploy`. Deployment
-is not authorized.
+Local `main` at `b2fb368` (019b release record), three commits ahead of
+`origin/main` at `6bad52a`. The 010a worktree is
+`/Users/karrad/projects/crm-worktrees/010a`, branch
+`codex/slice-010a-fub-assessment`, with verified uncommitted implementation.
+Duplicate documentation/evidence copies in main are being consolidated during
+authorized source integration. Unrelated `notes.txt` is untouched. The last
+shared-development release is 019b; no runtime change is included here.
 
 ## Last accepted decision
+
+D-060 (2026-09-10) — API-first bounded FUB assessment with encrypted saved
+credentials; implementation and synthetic verification complete. Its
+2026-09-11 follow-up authorizes source cleanup, commit, merge and push.
+D-059 establishes a new, empty destination Organization first; later import,
+recovery and cutover policies remain open. D-058 delivered custom fields and
+019b filtering.
 
 D-056 (2026-09-09) — the inbound mail size cap is Cloudflare's 25 MiB
 inbound ceiling (endpoint 34 MiB); the relay streams; the Workers plan is
@@ -906,13 +938,12 @@ notes).
 
 ## Parked / queued tracks
 
-- **Slice 010 (FUB migration): PARKED** (user, 2026-08-28) — too many
-  FUB entities lack destination models (notes/tasks/custom
-  fields/deals). Full resume artifact: docs/plans/SLICE_010_LADDER.md.
-  The three ladder-level decisions (rollback posture, scope,
-  credential at-rest) were NOT taken — ask at resume. Building
-  notes/tasks/deals models is itself a path back; 011e (tags)
-  re-opens the 010f tags-import portion.
+- **Slice 010b+ (FUB migration): PLANNING.** 010a is implemented and
+  synthetically verified; source integration is in progress.
+  [Current summary](SLICE_010_MIGRATION_SUMMARY.md); historical survey retained
+  in [the ladder](SLICE_010_LADDER.md). New, empty Organization first and
+  010a's source/credential contracts are accepted. Full inventory, mapping,
+  imports and cutover need their own specifications and approvals.
 - **Remote gates (gate-speedup phase 2): DEFERRED** pending local
   phase-1 results (now in: local gates are ~3 min — pressure is low).
   Survey recorded so it is not re-litigated: first choice GitHub
@@ -1127,9 +1158,12 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. **019b is complete and deployed.** FUB migration and a fresh LATER batch
-   remain candidates for the next work; no resumption decision is assumed.
-   Local main contains the merge and release record; source push remains separate.
+1. **Complete the authorized 010a source integration and cleanup.** Live FUB
+   validation remains user-deferred; runtime deployment remains separate.
+   The next migration implementation rung is 010b full inventory/preview,
+   which needs its own specification and approval; later import/cutover
+   policies are not implied. The source push also includes 019b's three
+   previously local commits.
 2. **Slice 017 walkthrough (spec §6), deferred by the user:** send a small
    real message and a 15–20 MB attachment to a capture address and the
    intake address; the coordinator reads the dev API log (`byte_len`,
@@ -1145,6 +1179,11 @@ and now lives only in git history.
 
 ## Approval currently required
 
+- **Slice 010:** 010a implementation approved (D-060), including API-first
+  access, encrypted credential persistence and additive contracts. Live
+  validation explicitly deferred. Source cleanup, commit, merge and push
+  authorized on 2026-09-11 (D-060 follow-up). No live FUB account has been
+  connected; runtime deployment and later import/cutover remain separate.
 - **Slice 019a:** merged, migrated, runtime updated, cleaned up and pushed
   with the user's approval on 2026-09-10. Nothing pending.
 - **Slice 018:** pushed with 019a on 2026-09-10. Nothing pending.
@@ -1152,6 +1191,7 @@ and now lives only in git history.
   action, no approval needed).
 - **Slice 019b:** implementation and release approved; commit, local main merge,
   shared-development deployment and branch/worktree cleanup completed on
-  2026-09-10. No push was requested or performed.
+  2026-09-10. Publication of its three local commits is now authorized as
+  part of the 2026-09-11 source push.
 - R1 (auto-hangup of a live call on identity change) is a product choice for
   a later slice, not blocking.

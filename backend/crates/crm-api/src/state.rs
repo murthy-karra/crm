@@ -6,6 +6,7 @@ use sqlx::postgres::{PgPool, PgPoolOptions};
 use crate::config::{
     Config, InboundEmailSecret, IntakeMailConfig, RawPayloadKey, RealtimeTokenSecret, SessionSecret,
 };
+use crate::domain::migration::reader::{FubReader, HttpFubReader};
 use crate::operator::OperatorRuntime;
 use crate::realtime::{CentrifugoTransport, Publisher};
 use crate::telephony::Telephony;
@@ -39,6 +40,9 @@ pub struct AppState {
     /// /inbound/email` answers 401 `unauthenticated` for every request
     /// (docs/specs/SLICE_007b.md §6).
     pub inbound_email_secret: Option<InboundEmailSecret>,
+    /// Production-only HTTP reader; tests replace this through the explicit
+    /// app-builder seam, never through a request or environment switch.
+    pub migration_reader: Arc<dyn FubReader>,
 }
 
 impl AppState {
@@ -78,6 +82,13 @@ impl AppState {
             None => tracing::info!("telephony disabled"),
         }
 
+        let migration_reader = Arc::new(
+            HttpFubReader::new(
+                config.fub_system.name.clone(),
+                config.fub_system.key.clone(),
+            )
+            .map_err(|_| sqlx::Error::Protocol("FUB reader configuration invalid".into()))?,
+        );
         Ok(Self {
             db,
             database_connect_timeout: config.database_connect_timeout,
@@ -95,6 +106,7 @@ impl AppState {
             telephony,
             intake_mail: config.intake_mail.clone(),
             inbound_email_secret: config.inbound_email_secret.clone(),
+            migration_reader,
         })
     }
 
@@ -120,10 +132,20 @@ impl AppState {
             invitation_ttl: config.invitation_ttl,
             intake_mail: config.intake_mail.clone(),
             inbound_email_secret: config.inbound_email_secret.clone(),
+            migration_reader: Arc::new(
+                HttpFubReader::new(None, None).expect("static FUB reader configuration"),
+            ),
             publisher,
             operator: None,
             telephony: None,
         }
+    }
+
+    /// Test-only injection seam for synthetic FUB fixtures. No route or
+    /// runtime configuration can select a fake reader.
+    pub fn with_migration_reader(mut self, reader: Arc<dyn FubReader>) -> Self {
+        self.migration_reader = reader;
+        self
     }
 
     /// Test-support: attach an Operator runtime (almost always one built

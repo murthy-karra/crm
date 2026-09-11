@@ -271,3 +271,6 @@ mod telephony;
 
 #[path = "today.rs"]
 mod today;
+
+#[path = "db_migration.rs"]
+mod db_migration;

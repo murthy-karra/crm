@@ -113,6 +113,7 @@ fn build_app_with_today_router_inner(state: AppState, today_router: Router<AppSt
             .merge(routes::notes::router())
             .merge(routes::tasks::router())
             .merge(routes::custom_fields::router())
+            .merge(routes::migrations::router())
             .with_state(state),
     );
 
@@ -231,6 +232,17 @@ pub async fn run(config: Config) -> Result<(), BoxError> {
         }
         _ => None,
     };
+
+    // Slice 010a's bounded assessment worker is independent of the Operator
+    // and begins only when a database is configured. It holds no connection
+    // while making a FUB request.
+    let _migration_worker = state.db.as_ref().map(|pool| {
+        domain::migration::worker::spawn(
+            pool.clone(),
+            config.raw_payload_key.clone(),
+            state.migration_reader.clone(),
+        )
+    });
 
     let app = build_app(state);
 

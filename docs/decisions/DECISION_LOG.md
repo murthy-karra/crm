@@ -2097,3 +2097,48 @@ returned READY: “approved. go ahead and implement it.” Approval includes the
 five-slot custom-field filter vocabulary, archive/absence semantics, declared
 contract changes and verification plan; Terra high implements the reviewed
 brief. Commit, merge, push and deployment are outside this authorization.
+
+### D-059 — First FUB migration targets a new, empty Organization (2026-09-10)
+
+Accepted by the user while requesting the refreshed FUB migration planning
+summary. Asked whether the first migration should target a new empty CRM
+Organization, an existing populated Organization, or both, the user selected
+“New Organization first (Recommended).”
+
+The first migration targets a new, empty Organization. Merging a FUB book into
+an independently populated Organization is outside that initial scope.
+Ordinary Organization setup and member mapping, precise emptiness checks,
+resumption of the same migration and duplicate source records must be defined
+in the relevant slice specifications.
+
+This decision resumes Slice 010 planning; it does not approve implementation,
+API-only source scope, credential storage, matching/overwrite/rollback policy,
+fidelity reductions, data erasure or a real customer's cutover. Those choices
+remain open in the [migration summary](../plans/SLICE_010_MIGRATION_SUMMARY.md).
+
+### D-060 — FUB assessment uses API-first access and encrypted saved credentials (2026-09-10)
+
+Accepted by the user: “Yes, approved” in response to approval of API-first
+assessment with encrypted saved credentials for 010a, after the specification
+and implementation brief were presented with their new shared contracts.
+
+010a implements the bounded read-only source assessment in
+[SLICE_010a](../specs/SLICE_010a.md): admin-managed Organization-bound connection,
+encrypted persistent credentials, six source checks, encrypted probe evidence,
+durable report and retry/cancel recovery. The additive HTTP/persistence/Web
+contracts are owned by that slice. This is not a full inventory or an import;
+unknown and unchecked coverage remain explicit.
+
+Implementation and verification are authorized. Source contract qualification
+and authorized live validation remain necessary. Approval does not establish
+permission from FUB, authorize reading a real customer book, decide later
+mapping/cutover/erasure policies, or authorize deployment/merge/push. D-059's
+new-Organization-first direction remains in force.
+
+**D-060 follow-up — source integration authorized (2026-09-11).**
+After being told that 010a is synthetically verified, uncommitted and not
+deployed, with live FUB validation deferred, the user requested: “do any cleanup
+and commit, merge, push”. This authorizes documentation cleanup, committing
+010a, merging into main, publishing main (including the three local 019b
+commits), and removing the merged 010a worktree/branch. It does not authorize
+a runtime deployment, real-source access or later migration rungs.

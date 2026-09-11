@@ -11,6 +11,7 @@ pub mod envelope;
 pub mod facts;
 pub mod inquiry;
 pub mod intake;
+pub mod migration;
 pub mod note;
 pub mod person;
 pub mod raw_payload;

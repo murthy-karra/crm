@@ -318,6 +318,12 @@ pub struct PersonDetail {
     /// messages already have (D-053 §4, D-054 §3). No `can_manage`: the
     /// Operator has no write tool for tasks in 016a (§7).
     pub tasks: Vec<TaskView>,
+    /// Set values on live fields only, in field position order, at most
+    /// fifty (Slice 019a, docs/specs/SLICE_019.md §6). Both the label
+    /// (admin-authored) and the rendered value (customer data) are
+    /// user-authored text sent to the model provider — the same exposure
+    /// class every other field here has. No write tool in 019a (§6).
+    pub custom_fields: Vec<CustomFieldView>,
 }
 
 /// One note in the Operator's `PersonDetail.notes` (docs/specs/
@@ -366,6 +372,32 @@ impl std::fmt::Debug for TaskView {
             .field("kind", &self.kind)
             .field("due_at", &self.due_at)
             .field("assignee_display_name", &self.assignee_display_name)
+            .finish()
+    }
+}
+
+/// One live field with a set value in the Operator's `PersonDetail.
+/// custom_fields` (docs/specs/SLICE_019.md §6): `label` is admin-authored
+/// text; `value` is rendered canonically before wrapping (text as is;
+/// number as its trimmed decimal string; date as `YYYY-MM-DD`; choice as
+/// the option label) — the same `UntrustedText` exposure class every
+/// other user-authored field on this view has (AGENTS.md §9: labels and
+/// values never appear in spans, logs, error envelopes, the ledger, or
+/// the realtime payload). `Debug` is a hand-written, redacting impl
+/// (never `#[derive(Debug)]`, the `TaskView`/`crm_app::domain::task::Task`
+/// pattern): a stray `?view`/`{:?}` must never print either string, only
+/// their lengths.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct CustomFieldView {
+    pub label: UntrustedText,
+    pub value: UntrustedText,
+}
+
+impl std::fmt::Debug for CustomFieldView {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CustomFieldView")
+            .field("label_chars", &self.label.as_str().chars().count())
+            .field("value_chars", &self.value.as_str().chars().count())
             .finish()
     }
 }

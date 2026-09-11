@@ -28,6 +28,7 @@ import type {
   ContactMethod,
   CorrectOutcomeResponse,
   CreateTaskResponse,
+  CustomField,
   DeleteNoteResponse,
   DeleteTaskResponse,
   EditNoteResponse,
@@ -35,9 +36,11 @@ import type {
   MeResponse,
   Member,
   PersonCustomFieldValue,
+  PersonCustomFieldValueMutationResponse,
   PersonDetailResponse,
   ReopenTaskResponse,
   RoutingStrategy,
+  SetCustomFieldValueRequest,
   Tag,
   TagRef,
   Task,
@@ -236,6 +239,20 @@ interface StubOptions {
   /** `DELETE .../tasks/{task_id}` response, or an Error. Defaults to removing
    *  the task from the tracked open list (tombstones are invisible). */
   taskDelete?: (taskId: string) => DeleteTaskResponse | Error
+  /** `GET /api/custom-fields` — the Organization's field index (SLICE_019.md
+   *  §9.11). Defaults to no live fields. */
+  customFieldDefinitions?: CustomField[]
+  /** `PUT /api/people/{id}/custom-fields/{field_id}` response, or an Error.
+   *  Defaults to writing the tracked value in place from the field's own
+   *  definition (label/type/option_label resolved from
+   *  `customFieldDefinitions`). */
+  customFieldSet?: (
+    fieldId: string,
+    body: SetCustomFieldValueRequest,
+  ) => PersonCustomFieldValueMutationResponse | Error
+  /** `DELETE /api/people/{id}/custom-fields/{field_id}` response, or an
+   *  Error. Defaults to removing the tracked value (`changed` by presence). */
+  customFieldClear?: (fieldId: string) => PersonCustomFieldValueMutationResponse | Error
 }
 
 function taskFixture(overrides: Partial<Task> = {}): Task {
@@ -303,6 +320,8 @@ function stubApi(personDetail: PersonDetailResponse, options: StubOptions = {}) 
   // Mutable the same way for task add/update/complete/reopen/delete (§8).
   let currentTasks = [...personDetail.tasks]
   let taskSeq = 0
+  // Mutable the same way for a custom-field value set/clear (§9.11).
+  let currentCustomFields = [...personDetail.custom_fields]
   const members: Member[] = options.members ?? [
     {
       user_id: 'u-alice',
@@ -559,14 +578,56 @@ function stubApi(personDetail: PersonDetailResponse, options: StubOptions = {}) 
       const id = path.slice('/people/'.length)
       const currentTags = [...appliedTags.values()].sort((a, b) => a.name.localeCompare(b.name))
       return id === PERSON_ID
-        ? { ...personDetail, history: currentHistory, tags: currentTags, tasks: currentTasks }
+        ? { ...personDetail, history: currentHistory, tags: currentTags, tasks: currentTasks, custom_fields: currentCustomFields }
         : {
             ...personDetail,
             person: { ...personDetail.person, id, display_name: 'Someone Else' },
             history: currentHistory,
             tags: currentTags,
             tasks: currentTasks,
+            custom_fields: currentCustomFields,
           }
+    }
+    if (path === '/custom-fields' && method === 'GET') {
+      return { fields: options.customFieldDefinitions ?? [] }
+    }
+    const customFieldValueMatch = /^\/people\/([^/]+)\/custom-fields\/([^/]+)$/.exec(path)
+    if (customFieldValueMatch && method === 'PUT') {
+      const fieldId = decodeURIComponent(customFieldValueMatch[2])
+      const body = JSON.parse(String(init?.body ?? '{}')) as SetCustomFieldValueRequest
+      const result = options.customFieldSet?.(fieldId, body)
+      if (result instanceof Error) throw result
+      if (result) {
+        currentCustomFields = result.custom_fields
+        return result
+      }
+      const definition = (options.customFieldDefinitions ?? []).find((f) => f.id === fieldId)
+      const value = body.value
+      const optionLabel = 'option_id' in value
+        ? definition?.options.find((o) => o.id === value.option_id)?.label ?? null
+        : null
+      const updated: PersonCustomFieldValue = {
+        field_id: fieldId,
+        label: definition?.label ?? 'Field',
+        field_type: definition?.field_type ?? 'text',
+        value: body.value,
+        option_label: optionLabel,
+        updated_at: '2026-09-10T12:00:00.000Z',
+      }
+      currentCustomFields = [...currentCustomFields.filter((v) => v.field_id !== fieldId), updated]
+      return { custom_fields: currentCustomFields, changed: true } satisfies PersonCustomFieldValueMutationResponse
+    }
+    if (customFieldValueMatch && method === 'DELETE') {
+      const fieldId = decodeURIComponent(customFieldValueMatch[2])
+      const result = options.customFieldClear?.(fieldId)
+      if (result instanceof Error) throw result
+      if (result) {
+        currentCustomFields = result.custom_fields
+        return result
+      }
+      const changed = currentCustomFields.some((v) => v.field_id === fieldId)
+      currentCustomFields = currentCustomFields.filter((v) => v.field_id !== fieldId)
+      return { custom_fields: currentCustomFields, changed } satisfies PersonCustomFieldValueMutationResponse
     }
     if (path === '/stages') return { stages: [{ id: 'stage-lead', name: 'Lead', position: 1 }] }
     if (path === '/organization/members') return { members }
@@ -1727,6 +1788,190 @@ describe('PersonDetailView — Tags', () => {
     document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     await flushPromises()
     expect(wrapper.find('[data-testid="add-tag-popover"]').exists()).toBe(false)
+  })
+})
+
+describe('PersonDetailView — Custom fields (SLICE_019.md §9.11)', () => {
+  const BUDGET_FIELD: CustomField = {
+    id: 'field-budget',
+    label: 'Budget',
+    field_type: 'number',
+    position: 1,
+    archived_at: null,
+    person_count: 1,
+    options: [],
+  }
+  const TEMPERATURE_FIELD: CustomField = {
+    id: 'field-temperature',
+    label: 'Lead temperature',
+    field_type: 'choice',
+    position: 2,
+    archived_at: null,
+    person_count: 0,
+    options: [
+      { id: 'opt-cold', label: 'Cold', position: 1, archived_at: null },
+      { id: 'opt-warm', label: 'Warm', position: 2, archived_at: null },
+    ],
+  }
+
+  // Same unmount-before-clear reasoning as the Tags block above: a
+  // settling mutation's refetch must not resolve against a body a later
+  // test has already wiped.
+  let activeWrapper: Awaited<ReturnType<typeof mountView>>['wrapper'] | null = null
+  afterEach(async () => {
+    activeWrapper?.unmount()
+    activeWrapper = null
+    await flushPromises()
+  })
+
+  // `settlePersonMutation` (api/queries.ts) defers its invalidate/refetch
+  // decision past a macrotask (the Notes block's own precedent below) — a
+  // genuine `setTimeout(fn, 0)` tick plus a further flush lets that
+  // deferred decision, and the Person refetch it triggers, actually land.
+  async function settleTick() {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await flushPromises()
+  }
+
+  it('renders every live field in position order with the right editor per type, pre-filled from the set value', async () => {
+    stubApi(detail([PHONE_A], [], [], [], [
+      { field_id: BUDGET_FIELD.id, label: 'Budget', field_type: 'number', value: { number: '400000' }, option_label: null, updated_at: '2026-08-22T09:00:00.000Z' },
+    ]), { customFieldDefinitions: [BUDGET_FIELD, TEMPERATURE_FIELD] })
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    const rows = wrapper.findAll('[data-testid="custom-field-row"]')
+    expect(rows).toHaveLength(2)
+    expect(rows[0].text()).toContain('Budget')
+    expect(rows[1].text()).toContain('Lead temperature')
+    expect((wrapper.get('[data-testid="custom-field-number-input"]').element as HTMLInputElement).value).toBe('400000')
+    expect(wrapper.find('[data-testid="custom-field-choice-select"]').exists()).toBe(true)
+  })
+
+  it('shows "No custom fields yet." with an admin link only for an admin', async () => {
+    stubApi(detail([PHONE_A]), { customFieldDefinitions: [] })
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    expect(wrapper.get('[data-testid="custom-fields-empty"]').text()).toContain('No custom fields yet.')
+    expect(wrapper.find('a[href="/manage/fields"]').exists()).toBe(false)
+  })
+
+  it('text: blur saves, Enter saves, Escape reverts without saving', async () => {
+    const referrerField: CustomField = { id: 'field-referrer', label: 'Referrer', field_type: 'text', position: 1, archived_at: null, person_count: 0, options: [] }
+    stubApi(detail([PHONE_A]), { customFieldDefinitions: [referrerField] })
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    const input = wrapper.get('[data-testid="custom-field-text-input"]')
+    await input.setValue('Zillow')
+    await input.trigger('blur')
+    await settleTick()
+    let call = apiFetchMock.mock.calls.find(([path, init]) => path === `/people/${PERSON_ID}/custom-fields/${referrerField.id}` && init?.method === 'PUT')
+    expect(JSON.parse(String(call?.[1]?.body))).toEqual({ value: { text: 'Zillow' } })
+
+    apiFetchMock.mockClear()
+    await input.setValue('Referral')
+    await input.trigger('keydown', { key: 'Enter' })
+    await settleTick()
+    call = apiFetchMock.mock.calls.find(([path, init]) => path === `/people/${PERSON_ID}/custom-fields/${referrerField.id}` && init?.method === 'PUT')
+    expect(JSON.parse(String(call?.[1]?.body))).toEqual({ value: { text: 'Referral' } })
+
+    apiFetchMock.mockClear()
+    await input.setValue('Not saved')
+    await input.trigger('keydown', { key: 'Escape' })
+    await flushPromises()
+    expect(apiFetchMock.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(false)
+    expect((wrapper.get('[data-testid="custom-field-text-input"]').element as HTMLInputElement).value).toBe('Referral')
+  })
+
+  it('an empty draft clears the value instead of sending an empty string', async () => {
+    stubApi(
+      detail([PHONE_A], [], [], [], [
+        { field_id: 'field-referrer', label: 'Referrer', field_type: 'text', value: { text: 'Zillow' }, option_label: null, updated_at: '2026-08-22T09:00:00.000Z' },
+      ]),
+      { customFieldDefinitions: [{ id: 'field-referrer', label: 'Referrer', field_type: 'text', position: 1, archived_at: null, person_count: 1, options: [] }] },
+    )
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    const input = wrapper.get('[data-testid="custom-field-text-input"]')
+    await input.setValue('   ')
+    await input.trigger('blur')
+    await flushPromises()
+    expect(apiFetchMock.mock.calls.some(([path, init]) => path === `/people/${PERSON_ID}/custom-fields/field-referrer` && init?.method === 'DELETE')).toBe(true)
+  })
+
+  it('number: an invalid pattern shows an inline error with no request; a valid one saves', async () => {
+    stubApi(detail([PHONE_A]), { customFieldDefinitions: [BUDGET_FIELD] })
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    const input = wrapper.get('[data-testid="custom-field-number-input"]')
+    await input.setValue('1e5')
+    await input.trigger('blur')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="custom-field-error"]').text()).toBe('Enter a number with up to 4 decimal places.')
+    expect(apiFetchMock.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(false)
+
+    await input.setValue('12.50')
+    await input.trigger('blur')
+    await flushPromises()
+    const call = apiFetchMock.mock.calls.find(([path, init]) => path === `/people/${PERSON_ID}/custom-fields/${BUDGET_FIELD.id}` && init?.method === 'PUT')
+    expect(JSON.parse(String(call?.[1]?.body))).toEqual({ value: { number: '12.50' } })
+  })
+
+  it('choice: selecting a live option saves it; selecting Clear removes it', async () => {
+    stubApi(detail([PHONE_A]), { customFieldDefinitions: [TEMPERATURE_FIELD] })
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    const select = wrapper.get('[data-testid="custom-field-choice-select"]').findComponent(Select)
+    await select.vm.$emit('update:model-value', 'opt-warm')
+    await flushPromises()
+    let call = apiFetchMock.mock.calls.find(([path, init]) => path === `/people/${PERSON_ID}/custom-fields/${TEMPERATURE_FIELD.id}` && init?.method === 'PUT')
+    expect(JSON.parse(String(call?.[1]?.body))).toEqual({ value: { option_id: 'opt-warm' } })
+
+    apiFetchMock.mockClear()
+    await select.vm.$emit('update:model-value', null)
+    await flushPromises()
+    call = apiFetchMock.mock.calls.find(([path, init]) => path === `/people/${PERSON_ID}/custom-fields/${TEMPERATURE_FIELD.id}` && init?.method === 'DELETE')
+    expect(call).toBeTruthy()
+  })
+
+  it('a held-but-archived option renders as "keep current"; re-selecting it re-sends the same (idempotent) option_id', async () => {
+    const archivedHeldField: CustomField = {
+      ...TEMPERATURE_FIELD,
+      options: [{ id: 'opt-cold', label: 'Cold', position: 1, archived_at: '2026-09-01T00:00:00.000Z' }, TEMPERATURE_FIELD.options[1]!],
+    }
+    stubApi(
+      detail([PHONE_A], [], [], [], [
+        { field_id: TEMPERATURE_FIELD.id, label: 'Lead temperature', field_type: 'choice', value: { option_id: 'opt-cold' }, option_label: 'Cold', updated_at: '2026-08-22T09:00:00.000Z' },
+      ]),
+      { customFieldDefinitions: [archivedHeldField] },
+    )
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    const select = wrapper.get('[data-testid="custom-field-choice-select"]').findComponent(Select)
+    expect((select.props('options') as Array<{ label: string }>).some((o) => o.label.includes('Cold') && o.label.includes('archived'))).toBe(true)
+    await select.vm.$emit('update:model-value', 'opt-cold')
+    await flushPromises()
+    const call = apiFetchMock.mock.calls.find(([path, init]) => path === `/people/${PERSON_ID}/custom-fields/${TEMPERATURE_FIELD.id}` && init?.method === 'PUT')
+    expect(JSON.parse(String(call?.[1]?.body))).toEqual({ value: { option_id: 'opt-cold' } })
+  })
+
+  it('a 404 on save refetches both the definitions and the Person', async () => {
+    stubApi(detail([PHONE_A]), {
+      customFieldDefinitions: [BUDGET_FIELD],
+      customFieldSet: () => new ApiError(404, 'not_found'),
+    })
+    const { wrapper } = await mountView()
+    activeWrapper = wrapper
+    const definitionsBefore = apiFetchMock.mock.calls.filter(([path]) => path === '/custom-fields').length
+    const personBefore = apiFetchMock.mock.calls.filter(([path]) => path === `/people/${PERSON_ID}`).length
+    const input = wrapper.get('[data-testid="custom-field-number-input"]')
+    await input.setValue('100')
+    await input.trigger('blur')
+    await flushPromises()
+    const definitionsAfter = apiFetchMock.mock.calls.filter(([path]) => path === '/custom-fields').length
+    const personAfter = apiFetchMock.mock.calls.filter(([path]) => path === `/people/${PERSON_ID}`).length
+    expect(definitionsAfter).toBeGreaterThan(definitionsBefore)
+    expect(personAfter).toBeGreaterThan(personBefore)
+    expect(wrapper.get('[data-testid="custom-field-error"]').text()).toBe('Could not save this value.')
   })
 })
 

@@ -66,6 +66,7 @@ import type {
   CallOutcomeCorrection,
   ContactAttemptedDetail,
   CustomField,
+  CustomFieldValuePayload,
   HistoryEntry,
   PersonCustomFieldValue,
   RoutingStrategy,
@@ -418,7 +419,8 @@ function saveTextOrDateField(row: CustomFieldRow) {
     )
     return
   }
-  const value = row.field.field_type === 'text' ? { text: draft } : { date: draft }
+  const value: CustomFieldValuePayload =
+    row.field.field_type === 'number' ? { number: draft } : row.field.field_type === 'date' ? { date: draft } : { text: draft }
   setCustomFieldValue.mutate(
     { personId: props.id, fieldId: row.field.id, body: { value } },
     {
@@ -454,10 +456,25 @@ function revertCustomField(row: CustomFieldRow) {
   editor.error = null
 }
 
-function onCustomFieldKeydown(row: CustomFieldRow, event: KeyboardEvent) {
+// Enter calls the save function directly rather than simulating a blur —
+// `HTMLElement.blur()` on an element the test/browser has not actually
+// focused is a no-op, and the two triggers ("Enter or blur saves", §7)
+// must each independently work.
+function onTextOrDateFieldKeydown(row: CustomFieldRow, event: KeyboardEvent) {
   if (event.key === 'Enter') {
     event.preventDefault()
+    saveTextOrDateField(row)
+  } else if (event.key === 'Escape') {
+    event.preventDefault()
+    revertCustomField(row)
     ;(event.target as HTMLElement).blur()
+  }
+}
+
+function onNumberFieldKeydown(row: CustomFieldRow, event: KeyboardEvent) {
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    saveNumberField(row)
   } else if (event.key === 'Escape') {
     event.preventDefault()
     revertCustomField(row)
@@ -499,9 +516,15 @@ function choiceOptions(row: CustomFieldRow): ChoiceOptionItem[] {
   return options
 }
 
+// No "same as currently held" no-op guard: values are pessimistic (no
+// optimistic write), so the cache can still show the pre-mutation value
+// while a prior selection is in flight — comparing against it could skip
+// a genuine, later change (e.g. selecting "Warm" then immediately Clear).
+// The server's own upsert is already idempotent (`changed: false` when
+// nothing actually differs), so re-sending the same option_id (the
+// "keep current" archived entry re-selected) is always safe.
 function onChoiceChange(row: CustomFieldRow, optionId: unknown) {
   if (typeof optionId !== 'string' && optionId !== null) return
-  if (optionId === heldOptionId(row)) return
   const editor = fieldEditors[row.field.id]
   if (editor) editor.error = null
   if (optionId === null) {
@@ -1848,7 +1871,7 @@ watch(
                 data-testid="custom-field-text-input"
                 @input="onCustomFieldInput(row, $event)"
                 @blur="saveTextOrDateField(row)"
-                @keydown="onCustomFieldKeydown(row, $event)"
+                @keydown="onTextOrDateFieldKeydown(row, $event)"
               >
               <input
                 v-else-if="row.field.field_type === 'number'"
@@ -1861,7 +1884,7 @@ watch(
                 data-testid="custom-field-number-input"
                 @input="onCustomFieldInput(row, $event)"
                 @blur="saveNumberField(row)"
-                @keydown="onCustomFieldKeydown(row, $event)"
+                @keydown="onNumberFieldKeydown(row, $event)"
               >
               <input
                 v-else-if="row.field.field_type === 'date'"
@@ -1873,7 +1896,7 @@ watch(
                 data-testid="custom-field-date-input"
                 @input="onCustomFieldInput(row, $event)"
                 @blur="saveTextOrDateField(row)"
-                @keydown="onCustomFieldKeydown(row, $event)"
+                @keydown="onTextOrDateFieldKeydown(row, $event)"
               >
               <Select
                 v-else

@@ -1,10 +1,11 @@
 # Slice 010a — Implementation verification
 
-**IMPLEMENTED AND SYNTHETICALLY VERIFIED. Live FUB validation is explicitly
-user-deferred.** Work remains uncommitted in
-`/Users/karrad/projects/crm-worktrees/010a`, branch
-`codex/slice-010a-fub-assessment`, base `b2fb368`. No release, merge or push was
-performed. The shared development runtime remains on released 019b.
+**IMPLEMENTED, SYNTHETICALLY VERIFIED, MERGED AND PUSHED. Live FUB validation
+is explicitly user-deferred; 010a is not deployed.** Implementation `e4e0658`,
+merge `cd224fe`, base `b2fb368`. Source published on 2026-09-11; the original
+`codex/slice-010a-fub-assessment` branch and
+`/Users/karrad/projects/crm-worktrees/010a` checkout were removed after merge.
+The shared development runtime remains on released 019b.
 
 ## Delivered scope
 
@@ -114,3 +115,38 @@ fixture success is not live-source qualification.
 Final documentation check passed: 81 local links, balanced fences, eight synced
 documents, unchanged historical ladder survey and all 25 final code hashes.
 `git diff --check` passed in both checkouts.
+
+## Source integration and cleanup — 2026-09-11
+
+The user authorized “do any cleanup and commit, merge, push” after reviewing
+the synthetic-only verification and deferred live-source status (D-060
+follow-up). No application behavior or shared contract changed during integration.
+
+- Committed the 25 code/config files and 21 documentation/QA files as
+  `e4e0658842dab019c41e4180bf125da078d1cd42`.
+- Merged with `git merge --no-ff` as
+  `cd224fea353d88f4cd18c4398bdd2c75f677bf7f`; no conflict and no tree difference
+  from the implementation commit.
+- Pushed main from `6bad52a` through `cd224fe`, including 019b's three local
+  commits. `git ls-remote origin refs/heads/main` matched the merge hash.
+  Documentation closure follows in the integration-record commit.
+- All 25 final-code-tree hashes and all 17 backend-checkpoint hashes matched.
+  The changed code/config set exactly matched the manifest. Existing test
+  evidence therefore applies; no full test suite or benchmark was rerun.
+- `git diff --cached --check` and `git diff --check` passed; relative links in
+  the changed documentation resolved (82 checked before the implementation
+  commit). Scoped source/artifact scans and five screenshot inspections found
+  no accidental secrets, customer data or generated/private files to publish.
+- Backed up duplicate main documentation/evidence before consolidating it into
+  the branch. Preserved the worktree's `.env` in a private directory with mode
+  0600, then removed the clean, fully merged worktree and its generated target,
+  node_modules and dist folders. Verified no process had that checkout as cwd.
+  Deleted the merged branch with `git branch -d`; only main remains.
+- Reconciled current status, approval, next-action and verification sections;
+  labelled older checkpoints as historical. The synthetic QA database and
+  unrelated empty `notes.txt` were retained. Runtime processes, shared database,
+  configuration and services were not changed.
+
+The private backup location is recorded locally in
+`/private/tmp/crm-010a-integration-backup-path`; private contents are not in Git.
+Live FUB validation, 010a deployment and later migration rungs remain pending.

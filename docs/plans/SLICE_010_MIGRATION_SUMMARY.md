@@ -1,7 +1,7 @@
 # Slice 010 — FUB migration planning summary
 
-**Status: 010a IMPLEMENTED AND SYNTHETICALLY VERIFIED; source integration
-authorized 2026-09-11. Later rungs remain planning.** The user
+**Status: 010a MERGED AND PUSHED (2026-09-11), synthetically verified;
+not deployed. Later rungs remain planning.** The user
 selected **a new, empty CRM Organization first** (D-059), then approved 010a's
 API-first assessment and encrypted saved credentials (D-060). Other
 recommendations remain proposals. Inspected against main `b2fb368`, after 019b.
@@ -225,5 +225,5 @@ Today behavior. Use `./scripts/check`, `./scripts/sqlx-prepare` when SQL changes
 and D-050's single relevant performance run when applicable. No implementation
 or release action was authorized by the initial planning request. The user's
 subsequent D-060 approval authorized 010a implementation and verification;
-the 2026-09-11 follow-up additionally authorizes source cleanup, commit, merge
-and push. Runtime deployment and live FUB validation remain pending.
+the 2026-09-11 follow-up authorized source cleanup, commit, merge and push,
+now completed. Runtime deployment and live FUB validation remain pending.

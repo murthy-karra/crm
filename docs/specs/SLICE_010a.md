@@ -1,7 +1,8 @@
 # Slice 010a — FUB connection and migration assessment
 
-**Delivery: implemented and synthetically verified; live FUB validation remains
-user-deferred.** See [verification](../tasks/SLICE_010a_VERIFICATION.md).
+**Delivery: implemented, synthetically verified, merged and pushed (2026-09-11);
+not deployed. Live FUB validation remains user-deferred.** See
+[verification](../tasks/SLICE_010a_VERIFICATION.md).
 
 **Status: APPROVED for implementation, 2026-09-10.** The user explicitly
 approved API-first assessment with encrypted saved credentials after reviewing

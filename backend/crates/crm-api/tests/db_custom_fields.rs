@@ -258,7 +258,7 @@ async fn create_custom_field_enforces_case_insensitive_label_uniqueness_and_the_
     let app_pool = crate::common::connect_as_app(&migrator_pool).await;
     let ctx = command_context(f.org_id, f.admin_id);
 
-    custom_field::create_custom_field(
+    let budget_field_id = custom_field::create_custom_field(
         &app_pool,
         &ctx,
         CreateCustomField {
@@ -268,7 +268,9 @@ async fn create_custom_field_enforces_case_insensitive_label_uniqueness_and_the_
         },
     )
     .await
-    .unwrap();
+    .unwrap()
+    .field
+    .id;
 
     let collision = custom_field::create_custom_field(
         &app_pool,
@@ -307,6 +309,33 @@ async fn create_custom_field_enforces_case_insensitive_label_uniqueness_and_the_
     )
     .await;
     assert!(matches!(over_limit, Err(CustomFieldError::LimitReached)));
+
+    // Review round 1, B10: archiving ONE of the 50 live fields frees the
+    // quota — a create right after succeeds, and (since archiving never
+    // touches position) takes the NEXT position, 51.
+    custom_field::update_custom_field(
+        &app_pool,
+        &ctx,
+        UpdateCustomField {
+            field_id: budget_field_id,
+            label: "Budget".to_string(),
+            archived: true,
+        },
+    )
+    .await
+    .unwrap();
+    let after_archiving_one = custom_field::create_custom_field(
+        &app_pool,
+        &ctx,
+        CreateCustomField {
+            label: "Room to grow".to_string(),
+            field_type: FieldType::Text,
+            options: vec![],
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(after_archiving_one.field.position, 51);
 }
 
 // --- Authorization -----------------------------------------------------------
@@ -567,6 +596,96 @@ async fn cross_organization_field_option_and_person_are_404(migrator_pool: PgPoo
         cross_org_option_add,
         Err(CustomFieldError::NotFound)
     ));
+
+    // Review round 1, B4: clear_person_custom_field_value joins the same
+    // cross-Organization enumeration — a foreign Person, and this
+    // Organization's own Person with a foreign field.
+    let cross_org_clear_person = custom_field::clear_person_custom_field_value(
+        &app_pool,
+        &Publisher::recording(),
+        &command_context(f.org_id, f.admin_id),
+        ClearPersonCustomFieldValue {
+            person_id: PersonId::new(other_person_id),
+            field_id: field.id,
+        },
+    )
+    .await;
+    assert!(matches!(
+        cross_org_clear_person,
+        Err(CustomFieldError::NotFound)
+    ));
+    let cross_org_clear_field = custom_field::clear_person_custom_field_value(
+        &app_pool,
+        &Publisher::recording(),
+        &command_context(other_org_id, other_admin_id),
+        ClearPersonCustomFieldValue {
+            person_id: PersonId::new(other_person_id),
+            field_id: field.id,
+        },
+    )
+    .await;
+    assert!(matches!(
+        cross_org_clear_field,
+        Err(CustomFieldError::NotFound)
+    ));
+
+    // update_custom_field_option: a foreign field id, and this
+    // Organization's own field with an option id that belongs to a
+    // DIFFERENT field (never even reaching the cross-org boundary, but
+    // pinned here alongside it since it is the same "wrong composite key"
+    // shape of 404).
+    let own_choice_field = custom_field::create_custom_field(
+        &app_pool,
+        &command_context(f.org_id, f.admin_id),
+        CreateCustomField {
+            label: "Temperature".to_string(),
+            field_type: FieldType::Choice,
+            options: vec!["Cold".to_string()],
+        },
+    )
+    .await
+    .unwrap()
+    .field;
+    let cross_org_option_update = custom_field::update_custom_field_option(
+        &app_pool,
+        &command_context(other_org_id, other_admin_id),
+        UpdateCustomFieldOption {
+            field_id: own_choice_field.id,
+            option_id: own_choice_field.options[0].id,
+            label: "Hijacked".to_string(),
+            archived: false,
+        },
+    )
+    .await;
+    assert!(matches!(
+        cross_org_option_update,
+        Err(CustomFieldError::NotFound)
+    ));
+    let foreign_option_on_own_field = custom_field::update_custom_field_option(
+        &app_pool,
+        &command_context(f.org_id, f.admin_id),
+        UpdateCustomFieldOption {
+            field_id: field.id,
+            option_id: own_choice_field.options[0].id,
+            label: "Wrong field".to_string(),
+            archived: false,
+        },
+    )
+    .await;
+    assert!(matches!(
+        foreign_option_on_own_field,
+        Err(CustomFieldError::NotFound)
+    ));
+
+    // GET /api/custom-fields (the query the route is built on) as the
+    // OTHER Organization's member: no leakage of this Organization's
+    // fields.
+    let mut other_conn = app_pool.acquire().await.unwrap();
+    let other_org_fields =
+        custom_field::list_definitions(&mut other_conn, OrganizationId::new(other_org_id))
+            .await
+            .unwrap();
+    assert!(other_org_fields.is_empty());
 }
 
 #[sqlx::test]
@@ -627,6 +746,124 @@ async fn cross_organization_field_id_is_404_byte_identical_to_a_nonexistent_fiel
 }
 
 // --- Archive / restore --------------------------------------------------------
+
+/// Review round 1, B2: a rename-while-archived (a genuinely different
+/// label, so the command's own no-op short-circuit does not apply) must
+/// keep the row's ORIGINAL `archived_at`, never re-stamp it to now — for
+/// both a field and an option. A short real sleep between the archive and
+/// the rename makes a re-stamp bug observable (two `Utc::now()` calls
+/// close enough in time could otherwise coincidentally match even with
+/// the bug present).
+#[sqlx::test]
+#[ignore]
+async fn renaming_an_already_archived_field_or_option_does_not_re_stamp_archived_at(
+    migrator_pool: PgPool,
+) {
+    let f = fixture(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let ctx = command_context(f.org_id, f.admin_id);
+
+    let field = custom_field::create_custom_field(
+        &app_pool,
+        &ctx,
+        CreateCustomField {
+            label: "Referrer".to_string(),
+            field_type: FieldType::Text,
+            options: vec![],
+        },
+    )
+    .await
+    .unwrap()
+    .field;
+    let archived = custom_field::update_custom_field(
+        &app_pool,
+        &ctx,
+        UpdateCustomField {
+            field_id: field.id,
+            label: "Referrer".to_string(),
+            archived: true,
+        },
+    )
+    .await
+    .unwrap();
+    let original_field_archived_at = archived.field.archived_at.unwrap();
+
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+
+    let renamed = custom_field::update_custom_field(
+        &app_pool,
+        &ctx,
+        UpdateCustomField {
+            field_id: field.id,
+            label: "Referral source".to_string(),
+            archived: true,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(renamed.changed);
+    assert_eq!(renamed.field.archived_at, Some(original_field_archived_at));
+
+    let choice_field = custom_field::create_custom_field(
+        &app_pool,
+        &ctx,
+        CreateCustomField {
+            label: "Temperature".to_string(),
+            field_type: FieldType::Choice,
+            options: vec!["Cold".to_string()],
+        },
+    )
+    .await
+    .unwrap()
+    .field;
+    let cold_id = choice_field.options[0].id;
+    let archived_option = custom_field::update_custom_field_option(
+        &app_pool,
+        &ctx,
+        UpdateCustomFieldOption {
+            field_id: choice_field.id,
+            option_id: cold_id,
+            label: "Cold".to_string(),
+            archived: true,
+        },
+    )
+    .await
+    .unwrap();
+    let original_option_archived_at = archived_option
+        .field
+        .options
+        .iter()
+        .find(|o| o.id == cold_id)
+        .unwrap()
+        .archived_at
+        .unwrap();
+
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+
+    let renamed_option = custom_field::update_custom_field_option(
+        &app_pool,
+        &ctx,
+        UpdateCustomFieldOption {
+            field_id: choice_field.id,
+            option_id: cold_id,
+            label: "Chilly".to_string(),
+            archived: true,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(renamed_option.changed);
+    let renamed_option_row = renamed_option
+        .field
+        .options
+        .iter()
+        .find(|o| o.id == cold_id)
+        .unwrap();
+    assert_eq!(
+        renamed_option_row.archived_at,
+        Some(original_option_archived_at)
+    );
+}
 
 #[sqlx::test]
 #[ignore]
@@ -933,6 +1170,23 @@ async fn setting_a_value_on_an_archived_field_is_409(migrator_pool: PgPool) {
     .await
     .unwrap()
     .field;
+
+    // Review round 1, B13: set a REAL value while the field is still live,
+    // so the clear below actually proves something (the original test
+    // cleared a value that was never set — vacuous).
+    custom_field::set_person_custom_field_value(
+        &app_pool,
+        &Publisher::recording(),
+        &command_context(f.org_id, f.member_id),
+        SetPersonCustomFieldValue {
+            person_id: PersonId::new(f.person_id),
+            field_id: field.id,
+            value: CustomFieldValue::Text("Zillow".to_string()),
+        },
+    )
+    .await
+    .unwrap();
+
     custom_field::update_custom_field(
         &app_pool,
         &ctx,
@@ -952,13 +1206,14 @@ async fn setting_a_value_on_an_archived_field_is_409(migrator_pool: PgPool) {
         SetPersonCustomFieldValue {
             person_id: PersonId::new(f.person_id),
             field_id: field.id,
-            value: CustomFieldValue::Text("Zillow".to_string()),
+            value: CustomFieldValue::Text("Redfin".to_string()),
         },
     )
     .await;
     assert!(matches!(result, Err(CustomFieldError::FieldArchived)));
 
-    // Clearing a value on an archived field is still permitted (spec §3).
+    // Clearing the EXISTING value on an archived field is still permitted
+    // (spec §3) and actually removes the row.
     let clear = custom_field::clear_person_custom_field_value(
         &app_pool,
         &Publisher::recording(),
@@ -968,8 +1223,22 @@ async fn setting_a_value_on_an_archived_field_is_409(migrator_pool: PgPool) {
             field_id: field.id,
         },
     )
-    .await;
-    assert!(clear.is_ok());
+    .await
+    .unwrap();
+    assert!(
+        clear.changed,
+        "clearing a real value must report changed: true"
+    );
+
+    let mut conn = app_pool.acquire().await.unwrap();
+    let all_fields = custom_field::list_definitions(&mut conn, OrganizationId::new(f.org_id))
+        .await
+        .unwrap();
+    let archived_row = all_fields.iter().find(|c| c.id == field.id).unwrap();
+    assert_eq!(
+        archived_row.person_count, 0,
+        "the cleared value must actually be gone"
+    );
 }
 
 #[sqlx::test]
@@ -1018,6 +1287,40 @@ async fn option_limit_is_50_live_per_field(migrator_pool: PgPool) {
         over_limit,
         Err(CustomFieldError::OptionLimitReached)
     ));
+
+    // Review round 1, B10: the option-limit analogue of the field-limit
+    // test above — archiving one of the 50 live options frees the quota,
+    // and the next add takes position 51.
+    let seed_option_id = field.options[0].id;
+    custom_field::update_custom_field_option(
+        &app_pool,
+        &ctx,
+        UpdateCustomFieldOption {
+            field_id: field.id,
+            option_id: seed_option_id,
+            label: "Seed".to_string(),
+            archived: true,
+        },
+    )
+    .await
+    .unwrap();
+    let after_archiving_one = custom_field::add_custom_field_option(
+        &app_pool,
+        &ctx,
+        AddCustomFieldOption {
+            field_id: field.id,
+            label: "Room to grow".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+    let new_option = after_archiving_one
+        .field
+        .options
+        .iter()
+        .find(|o| o.label == "Room to grow")
+        .unwrap();
+    assert_eq!(new_option.position, 51);
 }
 
 #[sqlx::test]
@@ -1099,6 +1402,97 @@ async fn option_label_uniqueness_is_case_insensitive_and_an_unarchive_clash_is_4
         unarchive_clash,
         Err(CustomFieldError::OptionLabelTaken)
     ));
+}
+
+/// Review round 1, B6: the field-level analogue of the option-level
+/// unarchive-clash test above — `custom_field_org_live_label_key` is a
+/// PARTIAL unique index (`WHERE archived_at IS NULL`), so a live "budget"
+/// coexisting with an ARCHIVED "Budget" is not just permitted but proves
+/// the index is genuinely partial; restoring the archived one then
+/// collides case-insensitively. A full-replace rename of the still-
+/// archived row to the SAME colliding label (with `archived: true`) is
+/// unaffected by the live-only uniqueness check and succeeds.
+#[sqlx::test]
+#[ignore]
+async fn field_label_uniqueness_is_case_insensitive_and_an_unarchive_clash_is_409(
+    migrator_pool: PgPool,
+) {
+    let f = fixture(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let ctx = command_context(f.org_id, f.admin_id);
+
+    let budget = custom_field::create_custom_field(
+        &app_pool,
+        &ctx,
+        CreateCustomField {
+            label: "Budget".to_string(),
+            field_type: FieldType::Number,
+            options: vec![],
+        },
+    )
+    .await
+    .unwrap()
+    .field;
+
+    // Archive "Budget", then create a brand-new LIVE "budget" — allowed:
+    // proves the live-label index is partial (`WHERE archived_at IS
+    // NULL`), not a whole-table uniqueness constraint.
+    custom_field::update_custom_field(
+        &app_pool,
+        &ctx,
+        UpdateCustomField {
+            field_id: budget.id,
+            label: "Budget".to_string(),
+            archived: true,
+        },
+    )
+    .await
+    .unwrap();
+    let new_budget = custom_field::create_custom_field(
+        &app_pool,
+        &ctx,
+        CreateCustomField {
+            label: "budget".to_string(),
+            field_type: FieldType::Text,
+            options: vec![],
+        },
+    )
+    .await
+    .unwrap();
+    assert!(new_budget.field.archived_at.is_none());
+
+    // Restoring the original, now colliding case-insensitively with the
+    // new live one: 409.
+    let unarchive_clash = custom_field::update_custom_field(
+        &app_pool,
+        &ctx,
+        UpdateCustomField {
+            field_id: budget.id,
+            label: "Budget".to_string(),
+            archived: false,
+        },
+    )
+    .await;
+    assert!(matches!(unarchive_clash, Err(CustomFieldError::LabelTaken)));
+
+    // A full-replace rename of the STILL-archived row to the exact same
+    // colliding label, staying archived: the live-only uniqueness check
+    // never runs (spec §3: "runs only when the row is, or becomes,
+    // live"), so this succeeds.
+    let rename_while_archived = custom_field::update_custom_field(
+        &app_pool,
+        &ctx,
+        UpdateCustomField {
+            field_id: budget.id,
+            label: "budget".to_string(),
+            archived: true,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(rename_while_archived.changed);
+    assert_eq!(rename_while_archived.field.label, "budget");
+    assert!(rename_while_archived.field.archived_at.is_some());
 }
 
 // --- Value type mismatch and validation --------------------------------------
@@ -1190,6 +1584,138 @@ async fn value_type_mismatch_is_rejected_for_every_field_type(migrator_pool: PgP
             "field {field_id} should reject a mismatched value"
         );
     }
+
+    // Review round 1, B11: the definition-level TypeMismatch (adding an
+    // option to a non-choice field) joins this same per-type-mismatch
+    // test rather than a separate one.
+    let add_option_result = custom_field::add_custom_field_option(
+        &app_pool,
+        &ctx,
+        AddCustomFieldOption {
+            field_id: text_field.id,
+            label: "Nope".to_string(),
+        },
+    )
+    .await;
+    assert!(matches!(
+        add_option_result,
+        Err(CustomFieldError::TypeMismatch)
+    ));
+}
+
+/// Review round 1, B1: `SetPersonCustomFieldValue`'s pure-function value
+/// validation now runs AFTER `lock_person`, the field load, `FieldArchived`
+/// and `TypeMismatch` (spec §3, §4 precedence) — so a value that is BOTH
+/// content-invalid (an unparseable number) AND wrong for an earlier-checked
+/// reason surfaces that earlier reason, never `InvalidValue`.
+#[sqlx::test]
+#[ignore]
+async fn value_validation_runs_after_not_found_field_archived_and_type_mismatch(
+    migrator_pool: PgPool,
+) {
+    let f = fixture(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let ctx = command_context(f.org_id, f.admin_id);
+    let member_ctx = command_context(f.org_id, f.member_id);
+    let publisher = Publisher::recording();
+    const INVALID_NUMBER: &str = "1e5";
+
+    // An invalid number on a TEXT field: TypeMismatch, not InvalidValue.
+    let text_field = custom_field::create_custom_field(
+        &app_pool,
+        &ctx,
+        CreateCustomField {
+            label: "Referrer".to_string(),
+            field_type: FieldType::Text,
+            options: vec![],
+        },
+    )
+    .await
+    .unwrap()
+    .field;
+    let type_mismatch_result = custom_field::set_person_custom_field_value(
+        &app_pool,
+        &publisher,
+        &member_ctx,
+        SetPersonCustomFieldValue {
+            person_id: PersonId::new(f.person_id),
+            field_id: text_field.id,
+            value: CustomFieldValue::Number(INVALID_NUMBER.to_string()),
+        },
+    )
+    .await;
+    assert!(matches!(
+        type_mismatch_result,
+        Err(CustomFieldError::TypeMismatch)
+    ));
+
+    // An invalid number on an ARCHIVED number field: FieldArchived, not
+    // InvalidValue.
+    let number_field = custom_field::create_custom_field(
+        &app_pool,
+        &ctx,
+        CreateCustomField {
+            label: "Budget".to_string(),
+            field_type: FieldType::Number,
+            options: vec![],
+        },
+    )
+    .await
+    .unwrap()
+    .field;
+    custom_field::update_custom_field(
+        &app_pool,
+        &ctx,
+        UpdateCustomField {
+            field_id: number_field.id,
+            label: "Budget".to_string(),
+            archived: true,
+        },
+    )
+    .await
+    .unwrap();
+    let field_archived_result = custom_field::set_person_custom_field_value(
+        &app_pool,
+        &publisher,
+        &member_ctx,
+        SetPersonCustomFieldValue {
+            person_id: PersonId::new(f.person_id),
+            field_id: number_field.id,
+            value: CustomFieldValue::Number(INVALID_NUMBER.to_string()),
+        },
+    )
+    .await;
+    assert!(matches!(
+        field_archived_result,
+        Err(CustomFieldError::FieldArchived)
+    ));
+
+    // An invalid number on a RANDOM (nonexistent) Person id: NotFound, not
+    // InvalidValue.
+    let live_number_field = custom_field::create_custom_field(
+        &app_pool,
+        &ctx,
+        CreateCustomField {
+            label: "Commission".to_string(),
+            field_type: FieldType::Number,
+            options: vec![],
+        },
+    )
+    .await
+    .unwrap()
+    .field;
+    let not_found_result = custom_field::set_person_custom_field_value(
+        &app_pool,
+        &publisher,
+        &member_ctx,
+        SetPersonCustomFieldValue {
+            person_id: PersonId::new(Uuid::new_v4()),
+            field_id: live_number_field.id,
+            value: CustomFieldValue::Number(INVALID_NUMBER.to_string()),
+        },
+    )
+    .await;
+    assert!(matches!(not_found_result, Err(CustomFieldError::NotFound)));
 }
 
 #[sqlx::test]
@@ -1249,6 +1775,43 @@ async fn number_canonical_form_and_pattern_rejections(migrator_pool: PgPool) {
             "{bad:?} should be rejected"
         );
     }
+}
+
+/// Review round 1, B7: a control character (a NUL here) embedded in a
+/// text value is rejected by the pure-function validator before it ever
+/// reaches Postgres — `InvalidValue`, never a raw database error (which
+/// would otherwise surface as a 503).
+#[sqlx::test]
+#[ignore]
+async fn text_value_rejects_a_control_character_before_reaching_postgres(migrator_pool: PgPool) {
+    let f = fixture(&migrator_pool).await;
+    let app_pool = crate::common::connect_as_app(&migrator_pool).await;
+    let ctx = command_context(f.org_id, f.admin_id);
+    let field = custom_field::create_custom_field(
+        &app_pool,
+        &ctx,
+        CreateCustomField {
+            label: "Referrer".to_string(),
+            field_type: FieldType::Text,
+            options: vec![],
+        },
+    )
+    .await
+    .unwrap()
+    .field;
+
+    let result = custom_field::set_person_custom_field_value(
+        &app_pool,
+        &Publisher::recording(),
+        &command_context(f.org_id, f.member_id),
+        SetPersonCustomFieldValue {
+            person_id: PersonId::new(f.person_id),
+            field_id: field.id,
+            value: CustomFieldValue::Text("a\u{0}b".to_string()),
+        },
+    )
+    .await;
+    assert!(matches!(result, Err(CustomFieldError::InvalidValue)));
 }
 
 #[sqlx::test]
@@ -1351,11 +1914,28 @@ async fn set_and_clear_are_idempotent_with_no_publish_on_unchanged(migrator_pool
     .unwrap();
     assert!(first_set.changed);
     assert_eq!(recorded(&publisher).await.len(), 1);
+    let updated_at_after_first_set = first_set.values[0].updated_at;
+
+    // Review round 1, B12: set-to-same performed by a DIFFERENT member must
+    // still be a true no-op — `updated_at` unchanged, and the stored
+    // `updated_by_user_id` stays the FIRST setter's, never overwritten by
+    // the second member's attempt.
+    let other_member_id =
+        crate::common::create_user(&migrator_pool, "carol-cf@acme.test", "Carol", PW).await;
+    crate::common::add_membership_with(
+        &migrator_pool,
+        f.org_id,
+        other_member_id,
+        Role::Member,
+        MembershipStatus::Active,
+    )
+    .await;
+    let other_member_ctx = command_context(f.org_id, other_member_id);
 
     let set_to_same = custom_field::set_person_custom_field_value(
         &app_pool,
         &publisher,
-        &member_ctx,
+        &other_member_ctx,
         SetPersonCustomFieldValue {
             person_id: PersonId::new(f.person_id),
             field_id: field.id,
@@ -1369,6 +1949,24 @@ async fn set_and_clear_are_idempotent_with_no_publish_on_unchanged(migrator_pool
         recorded(&publisher).await.len(),
         1,
         "set-to-same publishes nothing"
+    );
+    assert_eq!(
+        set_to_same.values[0].updated_at, updated_at_after_first_set,
+        "set-to-same must not bump updated_at"
+    );
+    let updated_by: Uuid = sqlx::query_scalar(
+        "SELECT updated_by_user_id FROM person_custom_field_value
+         WHERE organization_id = $1 AND person_id = $2 AND field_id = $3",
+    )
+    .bind(f.org_id)
+    .bind(f.person_id)
+    .bind(field.id.as_uuid())
+    .fetch_one(&migrator_pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        updated_by, f.member_id,
+        "updated_by_user_id must still be the FIRST setter, not the second member's no-op attempt"
     );
 
     let cleared = custom_field::clear_person_custom_field_value(

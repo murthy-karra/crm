@@ -3506,15 +3506,21 @@ async fn custom_field_activity_never_leaks_a_value_into_traces_or_the_ledger(
     // command — `custom_field::update_custom_field` (and its
     // `custom_field.update` span) is never even called for carol's
     // attempt. The admin's OWN rename, right after, is the positive
-    // control that the span is captured when the command actually runs.
+    // control that the span is captured when the command actually runs —
+    // review round 1, B5: carries LABEL_SENTINEL itself (a write that
+    // actually reaches the domain layer and the database, unlike carol's
+    // extractor-blocked attempt), so the trace/ledger negatives below
+    // prove something about a real write, not just a rejected one.
     let admin_rename_resp = crate::common::put_json_with_cookie(
         &router,
         &format!("/api/custom-fields/{}", field.id),
         &alice,
-        json!({ "label": "Referrer", "archived": false }),
+        json!({ "label": LABEL_SENTINEL, "archived": false }),
     )
     .await;
     assert_eq!(admin_rename_resp.status(), StatusCode::OK);
+    let admin_rename_body = crate::common::body_json(admin_rename_resp).await;
+    assert_eq!(admin_rename_body["changed"], true);
 
     // The Operator's own tool call over the live value sentinel.
     crate::common::put_json_with_cookie(
@@ -3542,6 +3548,17 @@ async fn custom_field_activity_never_leaks_a_value_into_traces_or_the_ledger(
     .await;
     assert_eq!(turn_resp.status(), StatusCode::OK);
     let turn_body = crate::common::body_json(turn_resp).await;
+    // Review round 1, B5: positive controls BEFORE the trace/ledger
+    // negatives below — the tool call actually succeeded, and the model
+    // provider actually received the sentinel wrapped as untrusted text
+    // (the shape test elsewhere in this file already pins the exact
+    // wrapping); otherwise the later "never leaked" assertions could be
+    // vacuously true because nothing ever carried the sentinel anywhere.
+    assert_eq!(turn_body["tool_calls"][0]["outcome"], "ok");
+    assert!(
+        requests_json(&provider).contains(OPERATOR_SENTINEL),
+        "the prompt sent to the model provider must actually carry the sentinel"
+    );
     assert!(
         !turn_body.to_string().contains(OPERATOR_SENTINEL),
         "the turn's own HTTP response must never echo the value: {turn_body}"
@@ -3599,9 +3616,9 @@ async fn custom_field_activity_never_leaks_a_value_into_traces_or_the_ledger(
 
     // The prompt sent to the model provider IS allowed to carry the
     // sentinel (the whole point of the Operator's untrusted-text view,
-    // confirmed separately by the shape test above); here the constraint
-    // is only the trace output and the HTTP response bodies.
-    let _ = requests_json(&provider);
+    // confirmed as a positive control above, and confirmed separately by
+    // the shape test elsewhere in this file); here the constraint is only
+    // the trace output and the HTTP response bodies.
 
     // The operator_tool_call ledger holds no sentinel either.
     let turns = turn_rows(&app_pool).await;

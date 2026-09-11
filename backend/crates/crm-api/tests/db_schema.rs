@@ -2394,7 +2394,6 @@ async fn custom_field_composite_fk_rejections(migrator_pool: PgPool) {
     let stage_a = first_stage_id_for_schema_test(&app_pool, org_a).await;
     let stage_b = first_stage_id_for_schema_test(&app_pool, org_b).await;
     let person_a = insert_bare_person_for_schema_test(&app_pool, org_a, stage_a).await;
-    let _ = actor_b;
     let _ = stage_b;
 
     let text_field_a =
@@ -2478,6 +2477,31 @@ async fn custom_field_composite_fk_rejections(migrator_pool: PgPool) {
         None,
         Some(option_a),
         Some(actor_a),
+        "web_session",
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(
+        err.as_database_error()
+            .and_then(|d| d.code().map(|c| c.into_owned())),
+        Some("23503".to_string())
+    );
+
+    // Review round 1, B9: a value row correctly scoped to org_a (its own
+    // Person and field) but whose `updated_by_user_id` names org_b's
+    // actor — that actor is not an `organization_membership` row for
+    // org_a, so the (organization_id, updated_by_user_id) FK rejects it.
+    let err = insert_value_row_for_schema_test(
+        &app_pool,
+        org_a,
+        person_a,
+        text_field_a,
+        "text",
+        Some("hi"),
+        None,
+        None,
+        None,
+        Some(actor_b),
         "web_session",
     )
     .await

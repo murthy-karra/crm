@@ -1,6 +1,6 @@
 # Slice 010 — Follow Up Boss migration ladder
 
-**Current status: 010a AND 010b DEPLOYED; 010c IMPLEMENTED, UNRELEASED (2026-09-11).** The user requested
+**Current status: 010a AND 010b DEPLOYED; 010c DEPLOYED AND VERIFIED (2026-09-11).** The user requested
 a refreshed migration summary and chose a new, empty destination Organization
 first (D-059). The current migration plan is
 [SLICE_010_MIGRATION_SUMMARY.md](SLICE_010_MIGRATION_SUMMARY.md).
@@ -27,7 +27,18 @@ Implementation and all required synthetic checks are complete;
 [evidence](../design/qa/slice-010c-2026-09-11/README.md) records the result.
 Git integration, publication and cleanup are complete under the D-065 follow-up:
 implementation `fcd2480`, merge `c3f6ca9`, pushed to main.
-Deployment and other later rungs remain outside that approval.
+The subsequent [shared-development deployment](../tasks/SLICE_010c_RELEASE.md)
+is verified under its own follow-up. Next-import planning is authorized; later
+implementation and activation require their own approved scope.
+The [approved 010f1 specification](../specs/SLICE_010f1.md) and
+[brief](../tasks/SLICE_010f1_IMPL.md) cover retained tags/custom-field metadata
+on already imported People. Notes/tasks remain the following core-import work;
+standalone tags and other uncaptured families remain explicit gaps.
+[Independent plan review](../tasks/SLICE_010f1_REVIEW.md) returned READY;
+D-066 approves its specification/contracts and implementation. The implementation
+and synthetic verification are complete, including full gates, measured query
+plans and real-API/production-Web checks. The worktree remains uncommitted and
+undeployed; [verification](../tasks/SLICE_010f1_VERIFICATION.md) records the handoff.
 Notes, tasks, tags and custom fields now
 have destination models. API-first assessment and encrypted saved credentials
 are settled for 010a; live-source qualification and later fidelity, mapping,

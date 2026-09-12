@@ -298,3 +298,16 @@ mod db_import_gate;
 
 #[cfg(feature = "perf-harness")]
 mod db_import_plans;
+
+mod db_metadata_import_http;
+mod db_metadata_import_source;
+
+mod db_metadata_import_gate;
+
+#[cfg(feature = "perf-harness")]
+mod db_metadata_import_plans;
+
+mod db_metadata_import_r1;
+
+mod db_metadata_import_acceptance;
+mod db_metadata_import_concurrency;

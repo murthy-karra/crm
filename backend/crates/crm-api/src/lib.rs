@@ -115,6 +115,7 @@ fn build_app_with_today_router_inner(state: AppState, today_router: Router<AppSt
             .merge(routes::custom_fields::router())
             .merge(routes::migrations::router())
             .merge(routes::migration_imports::router())
+            .merge(routes::metadata_imports::router())
             .layer(axum::middleware::from_fn_with_state(
                 state.clone(),
                 auth::workspace_http::guard,
@@ -266,6 +267,13 @@ pub async fn run(config: Config) -> Result<(), BoxError> {
     });
     let _people_import_worker = state.db.as_ref().map(|pool| {
         domain::migration::import_worker::spawn(
+            pool.clone(),
+            config.raw_payload_key.clone(),
+            config.snapshot_policy.clone(),
+        )
+    });
+    let _metadata_import_worker = state.db.as_ref().map(|pool| {
+        domain::migration::metadata_worker::spawn(
             pool.clone(),
             config.raw_payload_key.clone(),
             config.snapshot_policy.clone(),

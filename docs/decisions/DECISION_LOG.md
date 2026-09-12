@@ -2288,3 +2288,45 @@ deployment is not included in this follow-up; shared development remains on
 010b. Live authorized FUB validation remains user-deferred, and activation and
 customer-data readiness retain their existing gates. Integration results belong
 to [SLICE_010c_VERIFICATION.md](../tasks/SLICE_010c_VERIFICATION.md).
+
+**D-065 follow-up — shared-development deployment and next-import planning authorized (2026-09-11).**
+The user requested “lets deploy 010c and then start planning the next import
+slice”. This authorizes the existing shared-development API/Web refresh,
+additive 010c migration, compatibility inventory/preflight and release checks,
+followed by a reviewed draft for the next core import. The proposed next bounded
+scope is tags and custom-field definitions/options/values; notes/tasks remain
+explicit following work. Planning does not approve that future specification,
+shared contracts or implementation. Live authorized FUB validation remains
+user-deferred; no customer-data import, activation or production-cluster work
+is implied. Release evidence belongs to
+[SLICE_010c_RELEASE.md](../tasks/SLICE_010c_RELEASE.md).
+
+### D-066 — Reviewed 010f1 specification and implementation approved (2026-09-11)
+
+After the independently reviewed specification and its remaining approval gate
+were presented, the user said **“ok proceed with 010f1.”** This accepts the
+reviewed [specification](../specs/SLICE_010f1.md),
+[execution brief](../tasks/SLICE_010f1_IMPL.md) and their declared shared contracts.
+The accepted defaults include completed-parent-only and one-child lifetime,
+independent held-item subset execution with explicit acknowledgement, matching
+catalog creation or approved mapping, unchanged native limits, no replacement
+of differing local values and the conservative type/recurrence/collision rules.
+
+Implementation, concrete contract detail within this scope, the additive child
+migration and isolated synthetic verification/review gates are authorized. Keep
+the original People import and workspace binding immutable and preserve the
+admin review hold. Notes/tasks, repair/deltas and activation remain later work.
+Live FUB validation remains user-deferred; actual customer-data processing,
+commit/merge/push and a further runtime deployment are not included in this
+implementation request. Existing D-015/O-012/O-013 prerequisites remain open.
+
+**D-066 follow-up — integration, deployment and cleanup authorized (2026-09-11).**
+After implementation and synthetic verification completed, the user requested
+“commit, merge, push, cleanup and deploy 010f1”. This authorizes committing the
+verified work, merging/publishing main, removing the merged worktree/branch and
+disposable QA artifacts, and refreshing the existing shared-development API/Web
+with the additive metadata migration and fresh compatibility inventory/preflight.
+Preserve customer data, review bindings, verification evidence and release
+recovery artifacts. Live FUB validation remains deferred; no real-source import,
+activation or production-cluster deployment is implied. Results belong to
+[SLICE_010f1_RELEASE.md](../tasks/SLICE_010f1_RELEASE.md).

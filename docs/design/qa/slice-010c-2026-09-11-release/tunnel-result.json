@@ -1,0 +1,4 @@
+{
+  "exit_code": 0,
+  "wrapper_retry": "First shell wrapper used a read-only zsh variable; command repeated with Python to capture exit status."
+}

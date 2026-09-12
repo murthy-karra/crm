@@ -1,6 +1,6 @@
 # Slice 010c — Execution brief
 
-**IMPLEMENTED, VERIFIED AND MERGED; NOT DEPLOYED (D-065 and follow-up).**
+**IMPLEMENTED, VERIFIED, MERGED AND DEPLOYED (D-065 and follow-ups).**
 2026-09-11, main baseline `c6c5930`, deployed 010b source `89471f0`.
 The user approved the reviewed specification, brief and shared contracts after
 accepting three policy choices in D-064. [Spec](../specs/SLICE_010c.md),
@@ -10,7 +10,8 @@ The complete review returned READY-WITH-FIXES; all five corrections received
 targeted READY confirmation. Planning and documentation checks are complete.
 Implementation `fcd2480` and merge `c3f6ca9` are published to main; the merged
 worktree/branch and disposable QA resources are removed. See
-[verification and integration](SLICE_010c_VERIFICATION.md). The brief below
+[verification and integration](SLICE_010c_VERIFICATION.md) and
+[shared-development release](SLICE_010c_RELEASE.md). The brief below
 preserves the approved scope and required checks.
 
 ## 1. Outcome and boundaries

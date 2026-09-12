@@ -1,0 +1,20 @@
+{
+  "migration": 20260918000001,
+  "workspaces": 0,
+  "admissions": 0,
+  "person_imported": 0,
+  "organization_modes": [
+    {
+      "mode": "operational",
+      "revision": 1
+    },
+    {
+      "mode": "operational",
+      "revision": 1
+    },
+    {
+      "mode": "operational",
+      "revision": 1
+    }
+  ]
+}

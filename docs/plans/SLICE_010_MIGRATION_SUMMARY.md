@@ -2,7 +2,7 @@
 
 **Status: 010a DEPLOYED AND VERIFIED (2026-09-11); live FUB validation deferred.
 010b core-first capture/preview is also deployed and verified under D-063;
-010c is implemented and synthetically verified under D-065; it is not released.** The user
+010c is implemented and deployed under D-065 and follow-ups.** The user
 selected **a new, empty CRM Organization first** (D-059), then approved 010a's
 API-first assessment and encrypted saved credentials (D-060). Other
 recommendations remain proposals. Initial survey used main `b2fb368`, after 019b;
@@ -34,7 +34,25 @@ does not create Inquiry history or release imported People to normal agent use.
 All required implementation checks passed; [evidence](../design/qa/slice-010c-2026-09-11/README.md)
 records the exact source and proof. Git integration, publication and cleanup are
 complete under the D-065 follow-up: implementation `fcd2480`, merge `c3f6ca9`,
-pushed to main. Deployment and live FUB validation remain separate.
+pushed to main. Its subsequent
+[shared-development deployment](../tasks/SLICE_010c_RELEASE.md) is verified.
+Next-import planning is now authorized; live FUB validation remains deferred.
+
+**Current approved slice:** [010f1](../specs/SLICE_010f1.md), with its
+[execution brief](../tasks/SLICE_010f1_IMPL.md), imports tags and custom-field
+definitions/options/values for People from a completed 010c import. It reuses
+the same retained snapshot and review workspace through an additive child
+workflow; it does not reopen the People plan. Embedded tag membership can be
+restored, while a complete standalone tag catalog remains future capture work.
+Current limits, explicit mappings/creation, held incompatible data and no
+replacement of differing values are accepted under D-066.
+Notes and tasks follow in separately specified core-import work.
+[Independent plan review](../tasks/SLICE_010f1_REVIEW.md) returned READY;
+D-066 now approves the full specification, policies and shared contracts.
+[Implementation and synthetic verification](../tasks/SLICE_010f1_VERIFICATION.md)
+are complete: final gates, 90 measured plans / 246 checks, 51 browser checkpoints
+and exact native reconciliation passed. The worktree remains uncommitted and
+undeployed; live FUB work stays separate.
 
 ## 1. Outcome and first milestone
 
@@ -171,7 +189,7 @@ the cutover rung.
 | 1 — 010a | Secure API connection and honest bounded access report, implemented and synthetically verified. Live authorized FUB validation is user-deferred; no export upload or imported CRM business records. |
 | 2 — 010b | Core-first encrypted resumable snapshot and preview (D-061): People/users/stages/custom fields/notes/tasks; mappings, overlap candidates, unsupported values and explicit remaining coverage. Raw captures carry source IDs, API/schema/profile versions, capture times and keyed hashes. Further snapshot work must address history, communications, media and other uncovered families before cutover. |
 | 3 — 010c | People/contact/stage/assignment import into the new empty Organization is implemented and synthetically verified under D-065. Separate People, explicitly approved matching stages and admin review-only use remain D-064. Frozen-plan recovery/provenance avoids duplicates and synthetic Inquiry history; release/activation remain separate. |
-| 4 — 010f+ core rungs | Tags, custom definitions/options/values, notes and tasks through small typed import commands. Preserve authorship/timestamps and protect locally edited or tombstoned records on rerun. Exact rung splits follow the snapshot. |
+| 4 — 010f1, then further core rungs | Approved 010f1 imports embedded tag membership and custom definitions/options/values onto completed 010c People, preserving the review hold. Notes/tasks follow separately with authorship/timestamps, identity and local-edit/tombstone protection. Full standalone tag capture is still outstanding. |
 | 5 — 010d | Supported historical inquiry/call/text/correspondence facts, each with verified meaning. Inaccessible content stays a disclosed gap. Resolve Today behavior before enabling imported backlog for agents. |
 | 6 — 010e | Per-entity delta capture, final reconciliation and explicit cutover/activation. Resolve source privacy, enforce communication restrictions and review Today before releasing the D-064 hold; validate changes/deletions and agree a source-write cutoff/final delta. No source cancellation, phone transfer or ongoing two-way sync is implied. |
 
@@ -262,7 +280,9 @@ That implementation and its required gates are complete. The user's follow-up
 authorized commit, merge/publication, shared-development deployment and cleanup,
 now completed; live source validation remains deferred.
 
-The next authorized deliverable is the implementation and synthetic verification
-of the reviewed 010c specification/brief, grounded in the
-[current code record](../research/SLICE_010c_CODE_CONTRACTS.md). D-065 accepts the
-full implementation contract in addition to D-064's earlier three policies.
+The reviewed 010c implementation, synthetic verification and shared-development
+deployment are complete under D-065 and its follow-ups. D-066 now authorizes
+implementation and synthetic verification of the reviewed
+[010f1 specification](../specs/SLICE_010f1.md) and
+[brief](../tasks/SLICE_010f1_IMPL.md). Later families and activation require
+their own approved scope.

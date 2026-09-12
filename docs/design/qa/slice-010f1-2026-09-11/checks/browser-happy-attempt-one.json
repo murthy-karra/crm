@@ -1,0 +1,75 @@
+{
+  "phase": "happy",
+  "result": "failed",
+  "source_reader_calls_before": 51,
+  "source_reader_calls_after": 51,
+  "assertions": [
+    {
+      "name": "same completed parent and retained capture binding"
+    },
+    {
+      "name": "screenshot desktop-held-plan"
+    },
+    {
+      "name": "screenshot mobile-128-digit-tag-occurrence"
+    },
+    {
+      "name": "screenshot mobile-long-tag-occurrence"
+    },
+    {
+      "name": "exact long source IDs and tag-label occurrences stay inspectable at390px"
+    },
+    {
+      "name": "screenshot desktop-existing-field"
+    },
+    {
+      "name": "explicit existing field choice"
+    },
+    {
+      "name": "explicit existing option North"
+    },
+    {
+      "name": "explicit existing option South"
+    },
+    {
+      "name": "explicit existing option None"
+    },
+    {
+      "name": "explicit tag, field and option mappings; no source requests"
+    },
+    {
+      "name": "screenshot desktop-mappings"
+    },
+    {
+      "name": "screenshot mobile-plan"
+    },
+    {
+      "name": "screenshot desktop-large-field"
+    },
+    {
+      "name": "screenshot mobile-large-field"
+    },
+    {
+      "name": "source disconnected before metadata execution"
+    },
+    {
+      "name": "screenshot desktop-confirmation"
+    },
+    {
+      "name": "lost response replay used identical frozen request bytes"
+    },
+    {
+      "name": "screenshot desktop-completed"
+    },
+    {
+      "name": "parent People and original review hold unchanged"
+    },
+    {
+      "name": "screenshot desktop-person-provenance"
+    },
+    {
+      "name": "screenshot mobile-person-provenance"
+    }
+  ],
+  "page_errors": []
+}

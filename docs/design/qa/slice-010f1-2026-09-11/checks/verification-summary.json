@@ -1,0 +1,43 @@
+{
+  "result": "passed",
+  "baseline_commit": "f01c2e3b4d672ad388716916326e499c6eab4332",
+  "branch": "codex/slice-010f1-metadata-import",
+  "uncommitted": true,
+  "deployed": false,
+  "counts": {
+    "rust": 900,
+    "doctests": 5,
+    "web": 1054,
+    "database": 881,
+    "metadata_database": 36,
+    "preflight": 19,
+    "email_worker": 11,
+    "measured_query_plans": 90,
+    "query_plan_checks": 246,
+    "browser_checkpoints": 51,
+    "inspected_screenshots": 18
+  },
+  "commands": [
+    "./scripts/sqlx-prepare",
+    "./scripts/check",
+    "./scripts/check-db",
+    "SQLX_OFFLINE=true DATABASE_URL=\"$MIGRATION_DATABASE_URL\" cargo test -p crm-api --test all --features perf-harness --locked db_metadata_import_plans:: -- --ignored --nocapture --test-threads=1",
+    "SQLX_OFFLINE=true cargo build -p crm-api --example metadata_import_qa --features test-support --locked"
+  ],
+  "verified_source_files": 975,
+  "verified_source_manifest_sha256": "eb36727b7fc95221df4c36eb0ef1f2a04b9028dcda86a6c0ede3110e82e844ba",
+  "changed_since_integrated_review": [
+    "backend/crates/crm-api/tests/all.rs",
+    "backend/crates/crm-api/tests/db_metadata_import_plans.rs",
+    "docs/specs/SLICE_010f1.md",
+    "docs/tasks/SLICE_010f1_IMPL.md"
+  ],
+  "production_source_changed_since_review": false,
+  "checked_logs": 20,
+  "source_and_log_hashes_match": true,
+  "documentation_links_checked": 7,
+  "broken_documentation_links": [],
+  "live_fub_validation": false,
+  "activation": false,
+  "disposable_services_removed": true
+}

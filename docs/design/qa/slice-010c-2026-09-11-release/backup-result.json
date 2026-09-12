@@ -1,0 +1,9 @@
+{
+  "business_tables": 45,
+  "migration": 20260917000001,
+  "migration_tables_empty": 17,
+  "backup_bytes": 109875666,
+  "backup_catalog_readable": true,
+  "restore_exercised": false,
+  "elapsed_seconds": 7.37
+}

@@ -1,0 +1,9 @@
+parent People and original review hold unchanged
+screenshot desktop-person-provenance
+screenshot mobile-person-provenance
+screenshot mobile-128-digit-provenance
+128-digit source ID stays exact and wraps at390px
+distinct overlapping People, applied values, explicit holds and Person provenance
+locator.evaluate: Timeout 15000ms exceeded.
+Call log:
+[2m  - waiting for locator('main')[22m

@@ -1,0 +1,15 @@
+{
+  "observed_crm_processes": [
+    {
+      "pid": 60714,
+      "path": "backend/target/debug/crm-api"
+    }
+  ],
+  "containers": [
+    "development-postgres-1",
+    "development-centrifugo-1"
+  ],
+  "crm_launch_configuration_files": [],
+  "git_worktrees": 1,
+  "legacy_executable_paths_remaining": 0
+}

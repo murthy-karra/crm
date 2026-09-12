@@ -1,0 +1,231 @@
+{
+  "result": "passed",
+  "checks": [
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/health",
+      "status": 200
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/internal/ready",
+      "status": 200
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/",
+      "anonymous_status": 401
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/snapshots",
+      "anonymous_status": 401
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/imports",
+      "anonymous_status": 401
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/api/health",
+      "status": 200
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/internal/ready",
+      "status": 200
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/",
+      "anonymous_status": 401
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/snapshots",
+      "anonymous_status": 401
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/imports",
+      "anonymous_status": 401
+    },
+    {
+      "actor_role": "admin",
+      "path": "/api/migrations/fub/",
+      "status": 200,
+      "empty": true
+    },
+    {
+      "actor_role": "admin",
+      "path": "/api/migrations/fub/snapshots",
+      "status": 200,
+      "empty": true
+    },
+    {
+      "actor_role": "admin",
+      "path": "/api/migrations/fub/imports",
+      "status": 200,
+      "empty": true
+    },
+    {
+      "actor_role": "admin",
+      "unknown_import_status": 404
+    },
+    {
+      "actor_role": "admin",
+      "workspace_mode": "operational",
+      "workspace_revision": "1"
+    },
+    {
+      "path": "/api/me",
+      "status": 200
+    },
+    {
+      "path": "/api/people",
+      "status": 200
+    },
+    {
+      "path": "/api/today",
+      "status": 200
+    },
+    {
+      "path": "/api/custom-fields",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-lists",
+      "status": 200
+    },
+    {
+      "actor_role": "member",
+      "path": "/api/migrations/fub/",
+      "status": 403,
+      "empty": false
+    },
+    {
+      "actor_role": "member",
+      "path": "/api/migrations/fub/snapshots",
+      "status": 403,
+      "empty": false
+    },
+    {
+      "actor_role": "member",
+      "path": "/api/migrations/fub/imports",
+      "status": 403,
+      "empty": false
+    },
+    {
+      "actor_role": "member",
+      "unknown_import_status": 403
+    },
+    {
+      "actor_role": "member",
+      "workspace_mode": "operational",
+      "workspace_revision": "1"
+    },
+    {
+      "actor_role": "other_org_admin",
+      "path": "/api/migrations/fub/",
+      "status": 200,
+      "empty": true
+    },
+    {
+      "actor_role": "other_org_admin",
+      "path": "/api/migrations/fub/snapshots",
+      "status": 200,
+      "empty": true
+    },
+    {
+      "actor_role": "other_org_admin",
+      "path": "/api/migrations/fub/imports",
+      "status": 200,
+      "empty": true
+    },
+    {
+      "actor_role": "other_org_admin",
+      "unknown_import_status": 404
+    },
+    {
+      "actor_role": "other_org_admin",
+      "workspace_mode": "operational",
+      "workspace_revision": "1"
+    },
+    {
+      "base": "http://127.0.0.1:5173",
+      "index_matches": true
+    },
+    {
+      "base": "https://app.tarams.org",
+      "index_matches": true
+    },
+    {
+      "asset": "/assets/MigrationView-DUPEN38Q.js",
+      "sha256": "0239c938651150ec51b981187a9112e5e2bb5bee7fa2c5481cc3b2378b7333e1",
+      "matches": true
+    },
+    {
+      "asset": "/assets/controls-BsIvlwcv.js",
+      "sha256": "f589c3d081f1cc2e2c41e60bbc4bc724ec90eef0264e0b2e05e552a9dbd265b1",
+      "matches": true
+    },
+    {
+      "asset": "/assets/createLucideIcon-Dqbor38u.js",
+      "sha256": "24b69bab0335069ef550bb2d0d440be38878f53dac8e880899dd0a7ea326fd8a",
+      "matches": true
+    },
+    {
+      "asset": "/assets/index-Bc-zeRPN.js",
+      "sha256": "e3c1248d3f037700cb2a5e14b74b7206f7e0adc772edfcc20eb1c3353d7205c7",
+      "matches": true
+    },
+    {
+      "asset": "/assets/index-C9V_mudp.css",
+      "sha256": "1004b0600e18d434244913f9cf4cc328dcbfa3eb6731596fd96d2838a3680ef5",
+      "matches": true
+    },
+    {
+      "asset": "/assets/queries-D312wHES.js",
+      "sha256": "e7006a0a77d63b32ef38465519e2374149eb2d947e20ec7ed7167e012c8530d2",
+      "matches": true
+    }
+  ],
+  "migration": 20260918000001,
+  "business_counts_unchanged": true,
+  "business_table_count": 45,
+  "migration_counts": {
+    "migration_assessment": 0,
+    "migration_assessment_check": 0,
+    "migration_assessment_evidence": 0,
+    "migration_connection": 0,
+    "migration_import": 0,
+    "migration_import_choice": 0,
+    "migration_import_contact": 0,
+    "migration_import_identity": 0,
+    "migration_import_issue": 0,
+    "migration_import_manifest": 0,
+    "migration_import_mapping": 0,
+    "migration_import_plan": 0,
+    "migration_import_receipt": 0,
+    "migration_import_reservation": 0,
+    "migration_import_result": 0,
+    "migration_import_source": 0,
+    "migration_request_receipt": 0,
+    "migration_snapshot": 0,
+    "migration_snapshot_capture": 0,
+    "migration_snapshot_contact_key": 0,
+    "migration_snapshot_note_detail": 0,
+    "migration_snapshot_preview": 0,
+    "migration_snapshot_preview_group": 0,
+    "migration_snapshot_preview_issue": 0,
+    "migration_snapshot_preview_record": 0,
+    "migration_snapshot_record": 0,
+    "migration_snapshot_reservation": 0,
+    "migration_snapshot_storage": 0,
+    "migration_snapshot_stream": 0,
+    "migration_workspace": 0
+  },
+  "live_fub_requests": false,
+  "temporary_sessions_revoked": true
+}

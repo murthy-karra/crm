@@ -1,0 +1,46 @@
+{
+  "artifact_manifest_sha256": "20c9dce9a49de374a04ae811742ce36571ad345b1e55feff6ed18bd073751ac1",
+  "binding_count": "0",
+  "candidate_manifest_sha256": "676248ee7e98c3f950a435af15975a975ffca2d173f0d5928af59a2d1b602039",
+  "candidates": [
+    {
+      "gate_version": "crm-workspace-v1",
+      "revision": "f01c2e3b4d672ad388716916326e499c6eab4332",
+      "role": "api",
+      "sha256": "b0955e919aa8a21a1dfab3501ae2b94e6e78eb27328378f74dc170388ec6f43a"
+    },
+    {
+      "gate_version": "crm-workspace-v1",
+      "revision": "f01c2e3b4d672ad388716916326e499c6eab4332",
+      "role": "worker",
+      "sha256": "b0955e919aa8a21a1dfab3501ae2b94e6e78eb27328378f74dc170388ec6f43a"
+    },
+    {
+      "gate_version": "crm-workspace-v1",
+      "revision": "f01c2e3b4d672ad388716916326e499c6eab4332",
+      "role": "cli",
+      "sha256": "826a4998d0ba0d083c294e75d58f901c8002759b76fafcc39eda8e6d531807db"
+    },
+    {
+      "gate_version": "crm-workspace-v1",
+      "revision": "f01c2e3b4d672ad388716916326e499c6eab4332",
+      "role": "migrator",
+      "sha256": "7314ad0429c7be85f01ba907744756cb81494df9d325f4ca191eadf9ddccd6da"
+    }
+  ],
+  "checked_at": "2026-09-11T20:48:40Z",
+  "confirmation_ready": true,
+  "confirmation_reasons": [],
+  "database_name": "crm_dev",
+  "evidence_expires_at": "2026-09-11T20:53:40Z",
+  "gate_version": "crm-workspace-v1",
+  "inventory_sha256": "b48feba20db927a9ddf172648bd96b455e2378f2b37363da26425fb1845c9e6c",
+  "launch_allowed": true,
+  "launch_reasons": [],
+  "pre_010c_retired": true,
+  "process_count": "6",
+  "purpose": "confirm",
+  "required_gate_versions": [],
+  "target": "shared-development.crm_dev",
+  "version": 1
+}

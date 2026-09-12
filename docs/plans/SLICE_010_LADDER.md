@@ -1,6 +1,6 @@
 # Slice 010 — Follow Up Boss migration ladder
 
-**Current status: 010a, 010b, 010c AND 010f1 DEPLOYED AND VERIFIED (2026-09-11).** The user requested
+**Current status: 010a, 010b, 010c, 010f1 AND 010f2 DEPLOYED AND VERIFIED (2026-09-11).** The user requested
 a refreshed migration summary and chose a new, empty destination Organization
 first (D-059). The current migration plan is
 [SLICE_010_MIGRATION_SUMMARY.md](SLICE_010_MIGRATION_SUMMARY.md).
@@ -32,7 +32,7 @@ is verified under its own follow-up. Next-import planning is authorized; later
 implementation and activation require their own approved scope.
 The [approved 010f1 specification](../specs/SLICE_010f1.md) and
 [brief](../tasks/SLICE_010f1_IMPL.md) cover retained tags/custom-field metadata
-on already imported People. Notes/tasks remain the following core-import work;
+on already imported People. Notes/tasks are delivered by the subsequent 010f2;
 standalone tags and other uncaptured families remain explicit gaps.
 [Independent plan review](../tasks/SLICE_010f1_REVIEW.md) returned READY;
 D-066 approves its specification/contracts and implementation. The implementation
@@ -48,13 +48,18 @@ the [release record](../tasks/SLICE_010f1_RELEASE.md) and
 screenshots and tunnel 200/200/101. Existing business counts/workspaces are
 unchanged and migration tables remain empty. Later confirmation/recovery requires
 fresh metadata-capable compatibility evidence; the release report is not renewed
-automatically. The next core-import scope is drafted as
+automatically. The subsequent core-import scope is implemented as
 [010f2](../specs/SLICE_010f2.md), with its [brief](../tasks/SLICE_010f2_IMPL.md)
-and [independent review](../tasks/SLICE_010f2_REVIEW.md). It proposes retained
+and [independent review](../tasks/SLICE_010f2_REVIEW.md). It imports retained
 notes/open/completed tasks, explicit mappings, original-source preservation and
 paged admin review onto completed 010c People. D-067 accepts readable plain-text
 notes with originals retained and confirmed-zone date-only deadlines; complete
-contracts and implementation are approved under D-068. The implementation now passes synthetic runtime reconciliation and remains uncommitted/unreleased; see [verification](../tasks/SLICE_010f2_VERIFICATION.md). Live FUB, customer-data work and
+contracts and implementation are approved under D-068. Implementation and
+synthetic verification passed; the D-068 follow-up completed
+commit/merge/push, cleanup and shared-development deployment from `fc5a875`.
+See [verification](../tasks/SLICE_010f2_VERIFICATION.md) and the
+[release record](../tasks/SLICE_010f2_RELEASE.md). Activity confirmation and recovery
+require fresh activity-capable workload evidence. Live FUB, customer-data work and
 activation remain deferred.
 Notes, tasks, tags and custom fields now
 have destination models. API-first assessment and encrypted saved credentials

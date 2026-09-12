@@ -1,0 +1,11 @@
+{
+  "reason": "Over-broad harness check applied new activity error no-store contract to existing metadata error. Unknown metadata status404 was correct; header was not no-store. Restore status-only baseline check for metadata while keeping no-store required for activity.",
+  "session_cleanup": [
+    {
+      "actor_role": "admin",
+      "status": 204
+    }
+  ],
+  "product_source_changed": false,
+  "source_or_business_mutations": 0
+}

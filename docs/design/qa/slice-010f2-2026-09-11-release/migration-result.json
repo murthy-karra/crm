@@ -1,0 +1,22 @@
+{
+  "command": "./scripts/db-migrate",
+  "exit_code": 0,
+  "elapsed_seconds": 6.75,
+  "migration": 20260920000001,
+  "new_tables": [
+    "migration_activity_choice",
+    "migration_activity_identity",
+    "migration_activity_import",
+    "migration_activity_issue",
+    "migration_activity_manifest",
+    "migration_activity_manifest_issue",
+    "migration_activity_mapping",
+    "migration_activity_plan",
+    "migration_activity_receipt",
+    "migration_activity_reservation",
+    "migration_activity_result",
+    "migration_activity_result_issue",
+    "migration_activity_source"
+  ],
+  "business_and_workspaces_unchanged": true
+}

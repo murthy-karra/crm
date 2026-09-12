@@ -1,0 +1,20 @@
+{
+  "command": [
+    "cargo",
+    "build",
+    "--manifest-path",
+    "backend/Cargo.toml",
+    "-p",
+    "crm-api",
+    "--bin",
+    "crm-api",
+    "--bin",
+    "migrate",
+    "--bin",
+    "crm-admin",
+    "--locked"
+  ],
+  "exit_code": 0,
+  "elapsed_seconds": 36.89,
+  "revision": "fc5a8757bcb2591a43976544e282722b3616039f"
+}

@@ -1,0 +1,11 @@
+{
+  "result": "passed",
+  "database": "crm_dev",
+  "format": "custom",
+  "bytes": 110063438,
+  "sha256": "75438909afc6fde9e08810fe89003ebca34856e5e9a07be439fe48077d44a301",
+  "catalog_entries": 932,
+  "catalog_verified": true,
+  "restore_exercised": false,
+  "elapsed_seconds": 6.85
+}

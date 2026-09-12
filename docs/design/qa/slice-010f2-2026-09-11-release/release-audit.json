@@ -1,0 +1,339 @@
+{
+  "result": "passed",
+  "audit_kind": "One bounded independent read-only release audit; not an implementation review",
+  "audited_at": "2026-09-12T05:21:16.576377+00:00",
+  "revision": "fc5a8757bcb2591a43976544e282722b3616039f",
+  "material_release_gaps": [],
+  "actual_processes": [
+    {
+      "pid": 25757,
+      "port": 3000,
+      "listener_pids": [
+        25757
+      ],
+      "cwd": "/Users/karrad/projects/crm",
+      "executable": "/Users/karrad/projects/crm/backend/target/debug/crm-api",
+      "executable_sha256": "445ab8532c2bc6f4bc8ec235d74d5ea8ffe314d2f92c34d753b9f6e1c1f51922"
+    },
+    {
+      "pid": 25780,
+      "port": 5173,
+      "listener_pids": [
+        25780
+      ],
+      "cwd": "/Users/karrad/projects/crm/web",
+      "executable": "/Users/karrad/.nvm/versions/node/v24.16.0/bin/node",
+      "executable_sha256": "1ee75375e33b94fc34b3b19aede049e11dae90efb63b374dc96d6bdace70c4b8"
+    }
+  ],
+  "actual_crm_process_scan": [
+    {
+      "pid": 25757,
+      "path": "backend/target/debug/crm-api"
+    }
+  ],
+  "hash_verification": {
+    "backend": {
+      "checked": 3,
+      "mismatches": []
+    },
+    "web": {
+      "checked": 73,
+      "mismatches": []
+    },
+    "source": {
+      "checked": 1016,
+      "mismatches": []
+    }
+  },
+  "source_manifest_sha256": "e0649d8e40cbaac17d09f0de8f2027cde61f0cb9d604cdd181a243084bdc40be",
+  "retired_artifacts": {
+    "checked": 32,
+    "all_hashes_and_non_executable_modes_verified": true,
+    "records": [
+      {
+        "path": "/Users/karrad/projects/crm/backend/target/debug/deps/crm_admin-0ab63fad7c134ee0",
+        "manifest": "/private/tmp/crm-010c-release-q50bgih3/retired-artifacts.json",
+        "hash_matches": true,
+        "non_executable": true
+      },
+      {
+        "path": "/Users/karrad/projects/crm/backend/target/debug/deps/crm_admin-a1a56dbf3b137fd5",
+        "manifest": "/private/tmp/crm-010c-release-q50bgih3/retired-artifacts.json",
+        "hash_matches": true,
+        "non_executable": true
+      },
+      {
+        "path": "/Users/karrad/projects/crm/backend/target/debug/deps/crm_api-69f4290b0f911bad",
+        "manifest": "/private/tmp/crm-010c-release-q50bgih3/retired-artifacts.json",
+        "hash_matches": true,
+        "non_executable": true
+      },
+      {
+        "path": "/Users/karrad/projects/crm/backend/target/debug/deps/crm_api-b8ea435ed8347506",
+        "manifest": "/private/tmp/crm-010c-release-q50bgih3/retired-artifacts.json",
+        "hash_matches": true,
+        "non_executable": true
+      },
+      {
+        "path": "/Users/karrad/projects/crm/backend/target/debug/deps/crm_api-e5b99162e9224c19",
+        "manifest": "/private/tmp/crm-010c-release-q50bgih3/retired-artifacts.json",
+        "hash_matches": true,
+        "non_executable": true
+      },
+      {
+        "path": "/Users/karrad/projects/crm/backend/target/debug/deps/migrate-48dcdd6f1c02fe41",
+        "manifest": "/private/tmp/crm-010c-release-q50bgih3/retired-artifacts.json",
+        "hash_matches": true,
+        "non_executable": true
+      },
+      {
+        "path": "/Users/karrad/projects/crm/backend/target/debug/deps/migrate-7ca1f836553ca207",
+        "manifest": "/private/tmp/crm-010c-release-q50bgih3/retired-artifacts.json",
+        "hash_matches": true,
+        "non_executable": true
+      },
+      {
+        "path": "/Users/karrad/projects/crm/backend/target/release/crm-admin",
+        "manifest": "/private/tmp/crm-010c-release-q50bgih3/retired-artifacts.json",
+        "hash_matches": true,
+        "non_executable": true
+      },
+      {
+        "path": "/Users/karrad/projects/crm/backend/target/release/crm-api",
+        "manifest": "/private/tmp/crm-010c-release-q50bgih3/retired-artifacts.json",
+        "hash_matches": true,
+        "non_executable": true
+      },
+      {
+        "path": "/Users/karrad/projects/crm/backend/target/release/deps/crm_admin-73e6f14efa72a78b",
+        "manifest": "/private/tmp/crm-010c-release-q50bgih3/retired-artifacts.json",
+        "hash_matches": true,
+        "non_executable": true
+      },
+      {
+        "path": "/Users/karrad/projects/crm/backend/target/release/deps/crm_admin-a731cffce3871a9b",
+        "manifest": "/private/tmp/crm-010c-release-q50bgih3/retired-artifacts.json",
+        "hash_matches": true,
+        "non_executable": true
+      },
+      {
+        "path": "/Users/karrad/projects/crm/backend/target/release/deps/crm_admin-e8281601661ab0f6",
+        "manifest": "/private/tmp/crm-010c-release-q50bgih3/retired-artifacts.json",
+        "hash_matches": true,
+        "non_executable": true
+      },
+      {
+        "path": "/Users/karrad/projects/crm/backend/target/release/deps/crm_api-022bc1503847be1f",
+        "manifest": "/private/tmp/crm-010c-release-q50bgih3/retired-artifacts.json",
+        "hash_matches": true,
+        "non_executable": true
+      },
+      {
+        "path": "/Users/karrad/projects/crm/backend/target/release/deps/crm_api-41ac8c6ff60555e0",
+        "manifest": "/private/tmp/crm-010c-release-q50bgih3/retired-artifacts.json",
+        "hash_matches": true,
+        "non_executable": true
+      },
+      {
+        "path": "/Users/karrad/projects/crm/backend/target/release/deps/crm_api-4ab2de5b440c1029",
+        "manifest": "/private/tmp/crm-010c-release-q50bgih3/retired-artifacts.json",
+        "hash_matches": true,
+        "non_executable": true
+      },
+      {
+        "path": "/Users/karrad/projects/crm/backend/target/release/deps/crm_api-7a3a2294a630a4c0",
+        "manifest": "/private/tmp/crm-010c-release-q50bgih3/retired-artifacts.json",
+        "hash_matches": true,
+        "non_executable": true
+      },
+      {
+        "path": "/Users/karrad/projects/crm/backend/target/release/deps/migrate-2b74294fb00fcb4d",
+        "manifest": "/private/tmp/crm-010c-release-q50bgih3/retired-artifacts.json",
+        "hash_matches": true,
+        "non_executable": true
+      },
+      {
+        "path": "/Users/karrad/projects/crm/backend/target/release/deps/migrate-587069696938d177",
+        "manifest": "/private/tmp/crm-010c-release-q50bgih3/retired-artifacts.json",
+        "hash_matches": true,
+        "non_executable": true
+      },
+      {
+        "path": "/Users/karrad/projects/crm/backend/target/release/deps/migrate-594ed46249e42cd5",
+        "manifest": "/private/tmp/crm-010c-release-q50bgih3/retired-artifacts.json",
+        "hash_matches": true,
+        "non_executable": true
+      },
+      {
+        "path": "/Users/karrad/projects/crm/backend/target/release/migrate",
+        "manifest": "/private/tmp/crm-010c-release-q50bgih3/retired-artifacts.json",
+        "hash_matches": true,
+        "non_executable": true
+      },
+      {
+        "path": "/private/tmp/crm-010a-release-_nhabszq/crm-api-before",
+        "manifest": "/private/tmp/crm-010c-release-q50bgih3/retired-artifacts.json",
+        "hash_matches": true,
+        "non_executable": true
+      },
+      {
+        "path": "/private/tmp/crm-010b-release-g33z5awg/crm-api-before",
+        "manifest": "/private/tmp/crm-010c-release-q50bgih3/retired-artifacts.json",
+        "hash_matches": true,
+        "non_executable": true
+      },
+      {
+        "path": "/private/tmp/crm-019b-release-emyyxbhd/crm-api-before",
+        "manifest": "/private/tmp/crm-010c-release-q50bgih3/retired-artifacts.json",
+        "hash_matches": true,
+        "non_executable": true
+      },
+      {
+        "path": "/private/tmp/crm-010f1-release-ozyr7lke/crm-admin-before",
+        "manifest": "/private/tmp/crm-010f1-release-ozyr7lke/retired-artifacts.json",
+        "hash_matches": true,
+        "non_executable": true
+      },
+      {
+        "path": "/private/tmp/crm-010f1-release-ozyr7lke/crm-api-before",
+        "manifest": "/private/tmp/crm-010f1-release-ozyr7lke/retired-artifacts.json",
+        "hash_matches": true,
+        "non_executable": true
+      },
+      {
+        "path": "/private/tmp/crm-010f1-release-ozyr7lke/migrate-before",
+        "manifest": "/private/tmp/crm-010f1-release-ozyr7lke/retired-artifacts.json",
+        "hash_matches": true,
+        "non_executable": true
+      },
+      {
+        "path": "/Users/karrad/projects/crm/backend/target/debug/deps/crm_admin-38c31949cd6bcaf1",
+        "manifest": "/private/tmp/crm-010f2-release-guor74mb/retired-artifacts.json",
+        "hash_matches": true,
+        "non_executable": true
+      },
+      {
+        "path": "/Users/karrad/projects/crm/backend/target/debug/deps/crm_api-9b3bfde980088d3f",
+        "manifest": "/private/tmp/crm-010f2-release-guor74mb/retired-artifacts.json",
+        "hash_matches": true,
+        "non_executable": true
+      },
+      {
+        "path": "/Users/karrad/projects/crm/backend/target/debug/deps/migrate-a5f10cb60ed47be5",
+        "manifest": "/private/tmp/crm-010f2-release-guor74mb/retired-artifacts.json",
+        "hash_matches": true,
+        "non_executable": true
+      },
+      {
+        "path": "/private/tmp/crm-010f2-release-guor74mb/crm-admin-before",
+        "manifest": "/private/tmp/crm-010f2-release-guor74mb/retired-artifacts.json",
+        "hash_matches": true,
+        "non_executable": true
+      },
+      {
+        "path": "/private/tmp/crm-010f2-release-guor74mb/crm-api-before",
+        "manifest": "/private/tmp/crm-010f2-release-guor74mb/retired-artifacts.json",
+        "hash_matches": true,
+        "non_executable": true
+      },
+      {
+        "path": "/private/tmp/crm-010f2-release-guor74mb/migrate-before",
+        "manifest": "/private/tmp/crm-010f2-release-guor74mb/retired-artifacts.json",
+        "hash_matches": true,
+        "non_executable": true
+      }
+    ]
+  },
+  "backup": {
+    "bytes": 110063438,
+    "sha256": "75438909afc6fde9e08810fe89003ebca34856e5e9a07be439fe48077d44a301",
+    "catalog_entries_verified_from_recorded_catalog": 932,
+    "restore_exercised": false
+  },
+  "preflight": {
+    "input_manifests": {
+      "known-builds.json": {
+        "sha256": "6cb27de689f0923036fa958fbe070a95f4c82fedb855b39161f87fb158210c7f",
+        "matches_report": true,
+        "protected": true
+      },
+      "candidates.json": {
+        "sha256": "676248ee7e98c3f950a435af15975a975ffca2d173f0d5928af59a2d1b602039",
+        "matches_report": true,
+        "protected": true
+      },
+      "process-inventory.json": {
+        "sha256": "9fec3f74d4bc63f13fe3e026a5c3db0ac8f56cf09047930cb78bed3cc46cadd1",
+        "matches_report": true,
+        "protected": true
+      }
+    },
+    "installed_report_sha256": "07683db2f011b82ff2a4c7db28366a6d990b5f53df8bc306702f0213a4775c4f",
+    "installed_report_mode": "0o600",
+    "matches_passed_confirm": true,
+    "recorded_activity_metadata_and_workspace_readiness": true,
+    "expiry": "2026-09-12T05:18:49Z",
+    "expired_at_audit": true,
+    "expiry_is_expected_fail_closed_confirmation_state": true,
+    "configuration_path_binding_source": "Existing recorded configuration-check.json; no environment-value read in this audit"
+  },
+  "recorded_verification": {
+    "http_checks": 50,
+    "browser_functional_checks": 8,
+    "browser_screenshots_hash_verified": 10,
+    "browser_raw_terminal_failure": "Four intentionally blocked Cloudflare Insights GET requests; offline qualification supported by preserved helper/result hashes; no replay",
+    "http_initial_attempt": "Incorrect no-store assertion on existing metadata errors, followed by actual corrected 50-check pass; activity no-store checks retained",
+    "browser_page_errors": 0,
+    "business_tables_reconciled": 45,
+    "workspaces_reconciled": 3,
+    "empty_migration_tables_after_each_recorded_phase": 56,
+    "recorded_tunnel_statuses": [
+      200,
+      200,
+      101
+    ],
+    "observation_seconds": 214.61,
+    "observation_clock_qualification": "214.61 seconds from original start-file UTC mtime to final UTC, not comparable process-local monotonic values",
+    "api_web_warn_error_lines": 0,
+    "new_database_queries_in_audit": 0
+  },
+  "cleanup": {
+    "sole_worktree": "/Users/karrad/projects/crm",
+    "implementation_worktree_branch_and_private_qa_absent": true,
+    "temporary_port_listeners": {
+      "3017": [],
+      "5187": [],
+      "55432": [],
+      "18082": []
+    }
+  },
+  "scope_limits": [
+    "No new tests, HTTP/UI execution, database queries, customer/source actions or deployment mutations.",
+    "No environment/configuration values read; report-path installation is supported by the retained configuration-check record.",
+    "Backup catalog and digest verified; restoration not exercised.",
+    "Recorded empty-source shared-development smoke is not live FUB or foreign-resource import proof.",
+    "No compatibility report renewal; expired confirmation readiness is expected."
+  ],
+  "evidence_file_sha256": {
+    "deployed.json": "030a4ab23fdc989d25df7d99fc52ce3f080145ab528d21aaf0619baf43e7e7ae",
+    "build-api-result.json": "e1baea0d1d2762c93780c1b5f63d4b7c628229ef9d1d7a2f87d6a4a6e2a8a168",
+    "build-web-result.json": "7ec303929f72044c45b8d192292f6543adf23b6fc5c7cc28e2a4b944b69aeab3",
+    "backup-result.json": "6cba150d66a2bd93d4e07b2cdee3d7bbc5d914d2f65f3180ac05d09c8b915cd0",
+    "migration-result.json": "603be7d25fe388f9200b294724d6f168c3122a0fe1e10b8650b59ec976491148",
+    "database-before.json": "ca91412020b40c3a9eff44680f69744eb021c40e7f7321471dd1122ee109ebf6",
+    "database-after-migration.json": "cf1fc02718378a54c7f8f75972c3f267b207d6e3dddb86704ea36257cf15a0f9",
+    "database-after-http.json": "cf1fc02718378a54c7f8f75972c3f267b207d6e3dddb86704ea36257cf15a0f9",
+    "database-after-browser.json": "cf1fc02718378a54c7f8f75972c3f267b207d6e3dddb86704ea36257cf15a0f9",
+    "smoke-results.json": "0b63820f8a8d1de52356b59182cb3f0a6d8304d8765f58b7fb9b3e84e578d63f",
+    "browser-results.json": "593d45d52235b560ec4926e75bb19cf14e815c8e05cae6d76773f082c19d0cb2",
+    "browser-release-audit.json": "f7dbf149ce0e9dcf56067defe9db25c9d6eaa04cd88b72cdb865a2011cfd3221",
+    "visual-inspection.json": "b8c63e4f286630272e6eee9f5ead3c3003277c2f59f9501a15c3621b95d40a51",
+    "tunnel-result.json": "67734b33ffa2ee5f660cd33b97e1979568cad73710d6e604941082a8431e679a",
+    "tunnel.log": "38b00f8d4e29dc626a2773c1ada3d305d437fff146fd7ed466a2fa1f7372eb88",
+    "observation.json": "3950c06a86f0e78d6413aeb75607eecbdf6c6c49589d17bc57c0e8485c4e48bd",
+    "observation-timing-qualification.json": "65ca6055537584f30a001b2493451ab06a485ca5ae4f3b0f8b47e086b8fed4dd",
+    "configuration-check.json": "c680033274c522d0a91289fd1e5ea589ac790580e8eee33827bfeaeaa4de5411",
+    "implementation-cleanup.json": "88b7013656f571ce5cbccbea274bdef5c85f12814bbe2f6841dd1629ae9a577d"
+  }
+}

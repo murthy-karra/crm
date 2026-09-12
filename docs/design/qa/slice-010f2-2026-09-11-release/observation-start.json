@@ -1,0 +1,14 @@
+{
+  "monotonic": 0.189787041,
+  "api_listener": [
+    25757
+  ],
+  "web_listener": [
+    25780
+  ],
+  "backend_hashes_match": 3,
+  "web_hashes_match": 73,
+  "source_hashes_match": 1016,
+  "observed_at": "2026-09-12T05:14:55.031483+00:00",
+  "timestamp_source": "Original start-record filesystem modification time; UTC captured at start. Process-local monotonic is not comparable across these shell executions."
+}

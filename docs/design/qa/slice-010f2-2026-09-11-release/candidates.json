@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "artifacts": [
+    {
+      "role": "api",
+      "path": "/Users/karrad/projects/crm/backend/target/debug/crm-api"
+    },
+    {
+      "role": "worker",
+      "path": "/Users/karrad/projects/crm/backend/target/debug/crm-api"
+    },
+    {
+      "role": "cli",
+      "path": "/Users/karrad/projects/crm/backend/target/debug/crm-admin"
+    },
+    {
+      "role": "migrator",
+      "path": "/Users/karrad/projects/crm/backend/target/debug/migrate"
+    }
+  ]
+}

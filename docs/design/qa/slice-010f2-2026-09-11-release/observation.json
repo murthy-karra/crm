@@ -1,0 +1,31 @@
+{
+  "finished_at": "2026-09-12T05:18:29.645857+00:00",
+  "started_at": "2026-09-12T05:14:55.031483+00:00",
+  "elapsed_seconds": 214.61,
+  "clock": "UTC; see observation-timing-qualification.json",
+  "api_listener": [
+    25757
+  ],
+  "web_listener": [
+    25780
+  ],
+  "backend_hashes_verified": 3,
+  "web_hashes_verified": 73,
+  "source_hashes_verified": 1016,
+  "logs": {
+    "api.log": {
+      "warn_or_error_lines": 0,
+      "sha256": "25916c149f8506e993be886a6cfff4e5475634ae48f8ca2680e4e7779e6f044f"
+    },
+    "web.log": {
+      "warn_or_error_lines": 0,
+      "sha256": "bd8dbfcb51bb080233543196528006cdfd7b1571bfe995d605a3c3bf02ba543e"
+    }
+  },
+  "admission_counts": {
+    "workspace_operation_admission": 0
+  },
+  "business_counts_and_workspace_states_unchanged": true,
+  "empty_migration_tables": 56,
+  "recurring_monitor_created": false
+}

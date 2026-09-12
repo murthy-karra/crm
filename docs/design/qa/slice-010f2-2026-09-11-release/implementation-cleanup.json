@@ -1,0 +1,17 @@
+{
+  "merged_worktree_removed": true,
+  "merged_branch_removed": true,
+  "planning_stash_dropped_after_preservation": "6e92ee0437e988b6955b4d0597b3c6b500de563d",
+  "private_qa_directory_removed": "/private/tmp/crm-010f2-qa-694szdwe",
+  "external_logs_removed_after_hash_preservation": 48,
+  "original_evidence_files_retained": 249,
+  "temporary_ports_absent": [
+    3017,
+    5187,
+    55432,
+    18082
+  ],
+  "remaining_worktrees": [
+    "/Users/karrad/projects/crm  fc5a875 [main]"
+  ]
+}

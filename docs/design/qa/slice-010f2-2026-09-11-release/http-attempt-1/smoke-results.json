@@ -1,0 +1,113 @@
+{
+  "result": "failed",
+  "phase": "admin_reads",
+  "reason": "unknown_import_error_cacheable",
+  "checks": [
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/health",
+      "status": 200
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/internal/ready",
+      "status": 200
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/",
+      "anonymous_status": 401
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/snapshots",
+      "anonymous_status": 401
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/imports",
+      "anonymous_status": 401
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/metadata-imports",
+      "anonymous_status": 401
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/activity-imports",
+      "anonymous_status": 401
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/api/health",
+      "status": 200
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/internal/ready",
+      "status": 200
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/",
+      "anonymous_status": 401
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/snapshots",
+      "anonymous_status": 401
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/imports",
+      "anonymous_status": 401
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/metadata-imports",
+      "anonymous_status": 401
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/activity-imports",
+      "anonymous_status": 401
+    },
+    {
+      "actor_role": "admin",
+      "path": "/api/migrations/fub/",
+      "status": 200,
+      "empty": true
+    },
+    {
+      "actor_role": "admin",
+      "path": "/api/migrations/fub/snapshots",
+      "status": 200,
+      "empty": true
+    },
+    {
+      "actor_role": "admin",
+      "path": "/api/migrations/fub/imports",
+      "status": 200,
+      "empty": true
+    },
+    {
+      "actor_role": "admin",
+      "path": "/api/migrations/fub/metadata-imports",
+      "status": 200,
+      "empty": true
+    },
+    {
+      "actor_role": "admin",
+      "path": "/api/migrations/fub/activity-imports",
+      "status": 200,
+      "empty": true
+    }
+  ],
+  "session_cleanup": [
+    {
+      "actor_role": "admin",
+      "status": 204
+    }
+  ]
+}

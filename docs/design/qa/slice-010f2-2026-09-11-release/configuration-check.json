@@ -1,0 +1,9 @@
+{
+  "changed_environment_keys": [
+    "CRM_MIGRATION_RELEASE_REPORT"
+  ],
+  "private_environment_mode": "0o600",
+  "report_mode": "0o600",
+  "installed_report_matches_passed_confirm": true,
+  "registered_fub_system_configuration_present": false
+}

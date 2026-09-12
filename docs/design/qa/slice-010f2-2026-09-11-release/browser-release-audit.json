@@ -1,0 +1,122 @@
+{
+  "result": "passed",
+  "verification_kind": "Offline qualification of the completed browser smoke; no second browser execution",
+  "raw_attempt_result": "failed at final_assertions only",
+  "raw_attempt_directory": "browser-attempt-1",
+  "raw_result_sha256": "593d45d52235b560ec4926e75bb19cf14e815c8e05cae6d76773f082c19d0cb2",
+  "raw_helper_sha256": "549be28f46f4f048945ea68591170cb5126e536f2add376c3b18fd350d274b64",
+  "corrected_helper_sha256": "37122412550d7ba616f9db3eadd7732d2aadcd85aaadf05d81a623172d7f6fab",
+  "qualification": "All actual functional, refresh/reload, member-denial, screenshot and layout checks completed successfully. The last harness assertion rejected four GET requests to the known Cloudflare Insights telemetry origin, which the harness had deliberately blocked. These are classified as intentionally blocked telemetry, not source or business activity. Corrected private helper records this exact origin separately. It was syntax-checked but not rerun.",
+  "functional_checks": [
+    "Alice admin navigation; empty connection, credential and core snapshot; disabled preparation; existing assessment section",
+    "Explicit Refresh snapshots returned 200 with an empty list",
+    "People import panel loaded; planning disabled without evidence; explicit refresh returns empty imports",
+    "010f1 metadata panel has no completed People parent, disabled preparation and no errors; explicit metadata refresh returned an empty People imports page",
+    "010f2 activity panel has no completed People parent, disabled preparation and no errors; explicit activity refresh returned an empty People imports page",
+    "Reload fetched empty People imports and restored the metadata and activity empty states with preparation disabled and no errors",
+    "Desktop and 390px pages have no horizontal overflow; ten full-page, snapshot, People, metadata and activity screenshots saved",
+    "Carol member has no Migration navigation, direct route redirects to Today and no snapshot, People, metadata or activity import panel is exposed"
+  ],
+  "activity_refresh_status": 200,
+  "activity_reload_parent_status": 200,
+  "runtime_errors": 0,
+  "blocked_mutations": [],
+  "intentionally_blocked_telemetry": [
+    {
+      "origin": "https://static.cloudflareinsights.com",
+      "method": "GET"
+    },
+    {
+      "origin": "https://static.cloudflareinsights.com",
+      "method": "GET"
+    },
+    {
+      "origin": "https://static.cloudflareinsights.com",
+      "method": "GET"
+    },
+    {
+      "origin": "https://static.cloudflareinsights.com",
+      "method": "GET"
+    }
+  ],
+  "unexpected_external_origins": [],
+  "viewports": [
+    {
+      "label": "desktop",
+      "width": 1360,
+      "height": 950,
+      "horizontal_overflow": false,
+      "viewport": 1360,
+      "document": 1360,
+      "body": 1360
+    },
+    {
+      "label": "390px",
+      "width": 390,
+      "height": 844,
+      "horizontal_overflow": false,
+      "viewport": 390,
+      "document": 390,
+      "body": 390
+    }
+  ],
+  "screenshots": [
+    {
+      "name": "migration-desktop.png",
+      "sha256": "0579fe327ff859a91a74b286dba0ff975a2171ac5ddedf450f50ede78e6c4fb1"
+    },
+    {
+      "name": "snapshot-empty-desktop.png",
+      "sha256": "0f489d426f7c6783e4dd878e2988d5eb0e211001f78ddbd27da3de4f0ed523c3"
+    },
+    {
+      "name": "people-import-empty-desktop.png",
+      "sha256": "641dc2851e3295ae3905c6d3365659d32dc04e1ef27f6f6ac337c57a3fe4214c"
+    },
+    {
+      "name": "metadata-import-empty-desktop.png",
+      "sha256": "123894df3021ec1486df7a76d7e6c1d6eff4c5e1a026b27ac957ca714a654834"
+    },
+    {
+      "name": "activity-import-empty-desktop.png",
+      "sha256": "6b3fa6aec7762a6cd06e6fcbbab0c31d76330062cc55931ec99c44e81e049fa9"
+    },
+    {
+      "name": "migration-390px.png",
+      "sha256": "c4a5b829e24763dd75e4623eb0d6ea480223da9bfb120eff6a5c29c6e9bce6e9"
+    },
+    {
+      "name": "snapshot-empty-390px.png",
+      "sha256": "66af9f1b0e54361a5b49931952c206fd65ddbdc0767c55d06f17015f9a009211"
+    },
+    {
+      "name": "people-import-empty-390px.png",
+      "sha256": "1f70a490d10400a3efaf9def91635db79914cecbbfdcb34e0b25aad87308830e"
+    },
+    {
+      "name": "metadata-import-empty-390px.png",
+      "sha256": "aa612a2efc7d374542fd9cb28ea9723a02910343ac6137f8ffa74007a885fc30"
+    },
+    {
+      "name": "activity-import-empty-390px.png",
+      "sha256": "4e5a920b6b7a45fac803cffc8e4952bb2f4eeeae9eb6cd301a758403cb47a089"
+    }
+  ],
+  "session_cleanup": [
+    {
+      "session": "alice",
+      "status": 204
+    },
+    {
+      "session": "final_active_session",
+      "status": 204
+    }
+  ],
+  "browser_context_closed": true,
+  "browser_closed": true,
+  "source_or_business_mutations": 0,
+  "source_connection_created": false,
+  "activity_import_proposal_created": false,
+  "seed_or_reset_performed": false,
+  "browser_rerun_performed": false
+}

@@ -1,0 +1,9 @@
+{
+  "implementation": "9f457bc8db8707fa4ce361aac485fd6bf928bf34",
+  "merge": "fc5a8757bcb2591a43976544e282722b3616039f",
+  "preserved_planning_stash": "6e92ee0437e988b6955b4d0597b3c6b500de563d",
+  "verified_source_files": 1016,
+  "source_hashes_match": true,
+  "main_planning_backup_verified": true,
+  "main_matches_committed_implementation": true
+}

@@ -1,0 +1,5 @@
+{
+  "initial_check": "Stopped before final runtime/database checks because process-local monotonic was not comparable across separate shell executions",
+  "resolution": "Use original start-record UTC modification time and current UTC; no business mutation or runtime restart",
+  "start_utc": "2026-09-12T05:14:55.031483+00:00"
+}

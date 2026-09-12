@@ -1,5 +1,9 @@
 # Slice 010f2 synthetic verification
 
+This is the preserved implementation checkpoint. The subsequent authorized
+[shared-development release](../slice-010f2-2026-09-11-release/README.md) committed,
+merged and pushed the work, deployed it and removed the merged worktree.
+
 010f2 is implemented under D-068 in the uncommitted
 `codex/slice-010f2-activity-import` worktree, based on main `cd3b010`.
 The two bounded implementation reviews, query measurements, one actual paired

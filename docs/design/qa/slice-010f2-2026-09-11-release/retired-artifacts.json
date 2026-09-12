@@ -1,0 +1,38 @@
+[
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/debug/deps/crm_admin-38c31949cd6bcaf1",
+    "sha256": "cfc20d7f54139df890ec35f2a1c70081a2947b71efcfa3f76fe11ab1b691245a",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/debug/deps/crm_api-9b3bfde980088d3f",
+    "sha256": "58e01b385d50c6eede5a05ca4bdeea88ed070eabba19b14276966287fcc595c0",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/debug/deps/migrate-a5f10cb60ed47be5",
+    "sha256": "85b506ae34152cd1b4664d58184e8e25dc5f4340a707b768a7bce975b4eda667",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/private/tmp/crm-010f2-release-guor74mb/crm-admin-before",
+    "sha256": "cfc20d7f54139df890ec35f2a1c70081a2947b71efcfa3f76fe11ab1b691245a",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/private/tmp/crm-010f2-release-guor74mb/crm-api-before",
+    "sha256": "58e01b385d50c6eede5a05ca4bdeea88ed070eabba19b14276966287fcc595c0",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/private/tmp/crm-010f2-release-guor74mb/migrate-before",
+    "sha256": "85b506ae34152cd1b4664d58184e8e25dc5f4340a707b768a7bce975b4eda667",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  }
+]

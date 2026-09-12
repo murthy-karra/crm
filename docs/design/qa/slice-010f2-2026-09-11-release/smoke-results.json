@@ -1,0 +1,354 @@
+{
+  "result": "passed",
+  "checks": [
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/health",
+      "status": 200
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/internal/ready",
+      "status": 200
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/",
+      "anonymous_status": 401
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/snapshots",
+      "anonymous_status": 401
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/imports",
+      "anonymous_status": 401
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/metadata-imports",
+      "anonymous_status": 401
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/activity-imports",
+      "anonymous_status": 401
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/api/health",
+      "status": 200
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/internal/ready",
+      "status": 200
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/",
+      "anonymous_status": 401
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/snapshots",
+      "anonymous_status": 401
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/imports",
+      "anonymous_status": 401
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/metadata-imports",
+      "anonymous_status": 401
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/activity-imports",
+      "anonymous_status": 401
+    },
+    {
+      "actor_role": "admin",
+      "path": "/api/migrations/fub/",
+      "status": 200,
+      "empty": true
+    },
+    {
+      "actor_role": "admin",
+      "path": "/api/migrations/fub/snapshots",
+      "status": 200,
+      "empty": true
+    },
+    {
+      "actor_role": "admin",
+      "path": "/api/migrations/fub/imports",
+      "status": 200,
+      "empty": true
+    },
+    {
+      "actor_role": "admin",
+      "path": "/api/migrations/fub/metadata-imports",
+      "status": 200,
+      "empty": true
+    },
+    {
+      "actor_role": "admin",
+      "path": "/api/migrations/fub/activity-imports",
+      "status": 200,
+      "empty": true
+    },
+    {
+      "actor_role": "admin",
+      "unknown_import_kind": "metadata-imports",
+      "status": 404,
+      "no_store": false
+    },
+    {
+      "actor_role": "admin",
+      "unknown_import_kind": "activity-imports",
+      "status": 404,
+      "no_store": true
+    },
+    {
+      "actor_role": "admin",
+      "workspace_mode": "operational",
+      "workspace_revision": "1"
+    },
+    {
+      "path": "/api/people",
+      "status": 200
+    },
+    {
+      "path": "/api/today",
+      "status": 200
+    },
+    {
+      "path": "/api/custom-fields",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-lists",
+      "status": 200
+    },
+    {
+      "actor_role": "member",
+      "path": "/api/migrations/fub/",
+      "status": 403,
+      "empty": false
+    },
+    {
+      "actor_role": "member",
+      "path": "/api/migrations/fub/snapshots",
+      "status": 403,
+      "empty": false
+    },
+    {
+      "actor_role": "member",
+      "path": "/api/migrations/fub/imports",
+      "status": 403,
+      "empty": false
+    },
+    {
+      "actor_role": "member",
+      "path": "/api/migrations/fub/metadata-imports",
+      "status": 403,
+      "empty": false
+    },
+    {
+      "actor_role": "member",
+      "path": "/api/migrations/fub/activity-imports",
+      "status": 403,
+      "empty": false
+    },
+    {
+      "actor_role": "member",
+      "unknown_import_kind": "metadata-imports",
+      "status": 403,
+      "no_store": false
+    },
+    {
+      "actor_role": "member",
+      "unknown_import_kind": "activity-imports",
+      "status": 403,
+      "no_store": true
+    },
+    {
+      "actor_role": "member",
+      "workspace_mode": "operational",
+      "workspace_revision": "1"
+    },
+    {
+      "actor_role": "other_org_admin",
+      "path": "/api/migrations/fub/",
+      "status": 200,
+      "empty": true
+    },
+    {
+      "actor_role": "other_org_admin",
+      "path": "/api/migrations/fub/snapshots",
+      "status": 200,
+      "empty": true
+    },
+    {
+      "actor_role": "other_org_admin",
+      "path": "/api/migrations/fub/imports",
+      "status": 200,
+      "empty": true
+    },
+    {
+      "actor_role": "other_org_admin",
+      "path": "/api/migrations/fub/metadata-imports",
+      "status": 200,
+      "empty": true
+    },
+    {
+      "actor_role": "other_org_admin",
+      "path": "/api/migrations/fub/activity-imports",
+      "status": 200,
+      "empty": true
+    },
+    {
+      "actor_role": "other_org_admin",
+      "unknown_import_kind": "metadata-imports",
+      "status": 404,
+      "no_store": false
+    },
+    {
+      "actor_role": "other_org_admin",
+      "unknown_import_kind": "activity-imports",
+      "status": 404,
+      "no_store": true
+    },
+    {
+      "actor_role": "other_org_admin",
+      "workspace_mode": "operational",
+      "workspace_revision": "1"
+    },
+    {
+      "base": "http://127.0.0.1:5173",
+      "index_matches": true,
+      "sha256": "87efc8c7826d6858affe96f946635f30b7589be112221822ebb77beb4caf1110"
+    },
+    {
+      "base": "https://app.tarams.org",
+      "index_matches": true,
+      "sha256": "87efc8c7826d6858affe96f946635f30b7589be112221822ebb77beb4caf1110"
+    },
+    {
+      "asset": "/assets/MigrationView-CrwaaxqQ.js",
+      "sha256": "e0c433bbd6cf2c5e8e2a76b08d32bbbcacdabfddb175c49dde2b429935031cc5",
+      "matches": true
+    },
+    {
+      "asset": "/assets/controls-BsIvlwcv.js",
+      "sha256": "f589c3d081f1cc2e2c41e60bbc4bc724ec90eef0264e0b2e05e552a9dbd265b1",
+      "matches": true
+    },
+    {
+      "asset": "/assets/createLucideIcon-Dqbor38u.js",
+      "sha256": "24b69bab0335069ef550bb2d0d440be38878f53dac8e880899dd0a7ea326fd8a",
+      "matches": true
+    },
+    {
+      "asset": "/assets/index-CvkKU237.css",
+      "sha256": "1c21a642ca268bde9d04a6222ab6110cb9e9236d0ea9ea5682b24330e80737d7",
+      "matches": true
+    },
+    {
+      "asset": "/assets/index-DdOzqhW8.js",
+      "sha256": "5cdc6ded93bef3a0ae761659604871e642aff3e06765d3f617017d6bf730fa12",
+      "matches": true
+    },
+    {
+      "asset": "/assets/queries-Dkojhk7m.js",
+      "sha256": "f0fc3eebca0a64fdf9fa88510b172324fcb81ddbdd8f3ef90befe84ef221c9c5",
+      "matches": true
+    }
+  ],
+  "migration": 20260920000001,
+  "business_counts_unchanged": true,
+  "business_table_count": 45,
+  "workspaces_unchanged": true,
+  "migration_counts": {
+    "migration_activity_choice": 0,
+    "migration_activity_identity": 0,
+    "migration_activity_import": 0,
+    "migration_activity_issue": 0,
+    "migration_activity_manifest": 0,
+    "migration_activity_manifest_issue": 0,
+    "migration_activity_mapping": 0,
+    "migration_activity_plan": 0,
+    "migration_activity_receipt": 0,
+    "migration_activity_reservation": 0,
+    "migration_activity_result": 0,
+    "migration_activity_result_issue": 0,
+    "migration_activity_source": 0,
+    "migration_assessment": 0,
+    "migration_assessment_check": 0,
+    "migration_assessment_evidence": 0,
+    "migration_connection": 0,
+    "migration_import": 0,
+    "migration_import_choice": 0,
+    "migration_import_contact": 0,
+    "migration_import_identity": 0,
+    "migration_import_issue": 0,
+    "migration_import_manifest": 0,
+    "migration_import_mapping": 0,
+    "migration_import_plan": 0,
+    "migration_import_receipt": 0,
+    "migration_import_reservation": 0,
+    "migration_import_result": 0,
+    "migration_import_source": 0,
+    "migration_metadata_alias": 0,
+    "migration_metadata_choice": 0,
+    "migration_metadata_identity": 0,
+    "migration_metadata_import": 0,
+    "migration_metadata_issue": 0,
+    "migration_metadata_manifest": 0,
+    "migration_metadata_mapping": 0,
+    "migration_metadata_operation": 0,
+    "migration_metadata_plan": 0,
+    "migration_metadata_receipt": 0,
+    "migration_metadata_reservation": 0,
+    "migration_metadata_result": 0,
+    "migration_metadata_source": 0,
+    "migration_request_receipt": 0,
+    "migration_snapshot": 0,
+    "migration_snapshot_capture": 0,
+    "migration_snapshot_contact_key": 0,
+    "migration_snapshot_note_detail": 0,
+    "migration_snapshot_preview": 0,
+    "migration_snapshot_preview_group": 0,
+    "migration_snapshot_preview_issue": 0,
+    "migration_snapshot_preview_record": 0,
+    "migration_snapshot_record": 0,
+    "migration_snapshot_reservation": 0,
+    "migration_snapshot_storage": 0,
+    "migration_snapshot_stream": 0,
+    "migration_workspace": 0
+  },
+  "session_cleanup": [
+    {
+      "actor_role": "admin",
+      "status": 204
+    },
+    {
+      "actor_role": "member",
+      "status": 204
+    },
+    {
+      "actor_role": "other_org_admin",
+      "status": 204
+    }
+  ],
+  "temporary_sessions_revoked": true,
+  "source_connection_created": false,
+  "activity_import_proposal_created": false,
+  "source_or_business_mutations": 0,
+  "seed_or_reset_performed": false,
+  "live_fub_processing_performed": false
+}

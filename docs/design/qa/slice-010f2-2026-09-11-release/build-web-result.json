@@ -1,0 +1,12 @@
+{
+  "command": [
+    "pnpm",
+    "run",
+    "build",
+    "--outDir",
+    "/private/tmp/crm-010f2-release-guor74mb/web-dist-staged"
+  ],
+  "exit_code": 0,
+  "elapsed_seconds": 1.42,
+  "revision": "fc5a8757bcb2591a43976544e282722b3616039f"
+}

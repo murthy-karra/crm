@@ -26,6 +26,82 @@ use crate::{
 
 const ROOT: &str = "/api/migrations/fub/history-captures";
 
+#[sqlx::test]
+#[ignore]
+async fn history_full_app_no_store_covers_workspace_denials_and_malformed_requests(
+    migrator: PgPool,
+) {
+    let f =
+        crate::import_support::fixture(&migrator, crate::import_support::default_people()).await;
+    let unknown = Uuid::new_v4();
+    let reads = [
+        (ROOT.to_owned(), StatusCode::OK),
+        (format!("{ROOT}/{unknown}"), StatusCode::NOT_FOUND),
+        (format!("{ROOT}/{unknown}/records"), StatusCode::NOT_FOUND),
+        (
+            format!("{ROOT}/{unknown}/records/{}", Uuid::new_v4()),
+            StatusCode::NOT_FOUND,
+        ),
+        (format!("{ROOT}/not-a-uuid"), StatusCode::BAD_REQUEST),
+        (format!("{ROOT}?limit=0"), StatusCode::BAD_REQUEST),
+        (
+            format!("{ROOT}?limit=not-an-integer"),
+            StatusCode::BAD_REQUEST,
+        ),
+    ];
+    // Fixture.app is build_app, including the outer workspace middleware. Test
+    // ordinary and imported workspaces; the member 403 can bypass route layers.
+    for workspace_mode in ["operational", "migration_review"] {
+        if workspace_mode == "migration_review" {
+            parent_source::completed_parent(&f).await;
+        }
+        let source_calls = f.reader.calls();
+        let actual_mode: String =
+            sqlx::query_scalar("SELECT workspace_mode FROM organization WHERE id=$1")
+                .bind(f.org)
+                .fetch_one(&f.pool)
+                .await
+                .unwrap();
+        assert_eq!(actual_mode, workspace_mode);
+        for (cookie, forbidden) in [
+            (f.cookie.as_str(), None),
+            (f.member_cookie.as_str(), Some(StatusCode::FORBIDDEN)),
+            ("", Some(StatusCode::UNAUTHORIZED)),
+        ] {
+            for (path, admin_status) in &reads {
+                let response = get_with_cookie(&f.app, path, cookie).await;
+                assert_eq!(response.status(), forbidden.unwrap_or(*admin_status));
+                assert_eq!(
+                    response.headers().get("cache-control"),
+                    Some(&axum::http::HeaderValue::from_static("no-store")),
+                    "{workspace_mode} GET {path} status {}",
+                    response.status()
+                );
+            }
+            let response = post_json_with_cookie(&f.app, ROOT, cookie, json!({})).await;
+            assert_eq!(
+                response.status(),
+                forbidden.unwrap_or(StatusCode::BAD_REQUEST)
+            );
+            assert_eq!(
+                response.headers().get("cache-control"),
+                Some(&axum::http::HeaderValue::from_static("no-store"))
+            );
+        }
+        assert_eq!(
+            f.reader.calls(),
+            source_calls,
+            "HTTP checks are source-free"
+        );
+    }
+    let history_runs: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM migration_history_capture_run")
+            .fetch_one(&f.pool)
+            .await
+            .unwrap();
+    assert_eq!(history_runs, 0, "malformed proposals create no captures");
+}
+
 async fn connection(f: &Fixture) -> (Uuid, i32) {
     let row = sqlx::query("SELECT id,revision FROM migration_connection WHERE organization_id=$1")
         .bind(f.org)

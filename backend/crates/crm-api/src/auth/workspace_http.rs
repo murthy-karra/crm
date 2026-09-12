@@ -14,6 +14,10 @@ pub async fn guard(State(state): State<AppState>, request: Request, next: Next) 
         .uri()
         .path()
         .starts_with("/api/migrations/fub/activity-imports")
+        || request
+            .uri()
+            .path()
+            .starts_with("/api/migrations/fub/history-captures")
         || request.uri().path().starts_with("/api/people/")
             && request.uri().path().contains("/migration-review");
     let mut response = guard_inner(State(state), request, next).await;

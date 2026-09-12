@@ -1,0 +1,9 @@
+{
+  "changed_keys": [
+    "CRM_MIGRATION_RELEASE_REPORT"
+  ],
+  "all_other_configuration_values_preserved": true,
+  "fub_system_name_and_key_unset": true,
+  "configuration_mode": "0600",
+  "secret_values_emitted": false
+}

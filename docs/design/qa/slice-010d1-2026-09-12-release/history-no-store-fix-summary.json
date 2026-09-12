@@ -1,0 +1,118 @@
+{
+  "result": "fixed_and_verified",
+  "scope": "Restore the accepted history no-store error contract at the outer workspace middleware; no authorization/state/schema changes.",
+  "repository_files": {
+    "backend/crates/crm-api/src/auth/workspace_http.rs": "79cdc32841f5de85b56828d85161be98c4a36331bd76f43f0cd9802e1b3b1fc8",
+    "backend/crates/crm-api/tests/db_history_capture_authority.rs": "7385640ad157c9dcbd8209ba47ab2e2a58d47bf244bcfceb70dbdd89c0bfdc8e"
+  },
+  "regression": "48 full-app responses across operational/migration_review and admin/member/anonymous: collection positive control, unknown IDs, invalid UUID/query and malformed proposal; no history rows or HTTP-triggered source calls.",
+  "red_proof": "Operational collection member403 lacked Cache-Control; original nextest assertion retained. Runner metadata NameError occurred afterward and is qualified in before.json.",
+  "checks": {
+    "nextest_passed": 28,
+    "nextest_failed": 0,
+    "nextest_test_seconds": 90.325,
+    "nextest_total_seconds": 112.556,
+    "narrow_rustfmt": "passed",
+    "clippy": "passed",
+    "clippy_seconds": 58.336
+  },
+  "sqlx_cleanup": {
+    "result": "passed",
+    "owned_red_test_path": "all::db_history_capture_authority::history_full_app_no_store_covers_workspace_denials_and_malformed_requests",
+    "owned_failed_database_records": [
+      {
+        "name": "_sqlx_test_RUK5XjgiF55UV0BSz3Z9GAfXL88xRmtqeQ91K_R0Z2AV1nO8F1_U",
+        "test_path": "all::db_history_capture_authority::history_full_app_no_store_covers_workspace_denials_and_malformed_requests",
+        "owner": "crm_migrator",
+        "created_at": "2026-09-12T18:55:02.792077+00:00"
+      }
+    ],
+    "owned_registry_entries_after": 0,
+    "owned_databases_remaining": 0,
+    "other_databases_preserved": [
+      {
+        "name": "_sqlx_test_IyV7flWtFO7slN_NM_O5OGN6X_0XhmoaEXZlfvevqg0_Z9z4IupH",
+        "owner": "crm_migrator"
+      }
+    ],
+    "all_other_before_preserved": true,
+    "database_count_after": 1,
+    "cleanup_action": "SQLx test_context automatically dropped/recreated this exact test-path database before the green run; successful completion dropped the database and registry entry. No manual DROP or cleanup of unknown databases was executed.",
+    "scope_qualification": "The earlier databases-before inventory was taken after the red run and before the green run. SQLx uses crm_dev only for its _sqlx_test master registry under the explicitly authorized check-db exception; public business/migration tables remain outside test connections."
+  },
+  "ordinary_binaries_at_handoff": {
+    "crm-api": "5ea03ec8dd5ec1f7707a0acefdbb7d494eda6395091923dc33bb9b542ed74743",
+    "crm-admin": "759a62a7a9f7187feb78e27ac10362d8310134635b53a0b6f07376f0dbbf5d6e",
+    "migrate": "93ed52be364bba974d9214b75e28a4685a9bd070ecae32d6e275af881a911a26"
+  },
+  "ordinary_binary_note": "Tests rebuilt ordinary executables. These are handoff hashes; coordinator owns committed rebuild/redeployment and may replace them afterward.",
+  "protected_evidence_files": [
+    {
+      "name": "history-no-store-clippy.json",
+      "sha256": "80f4dc8ce7a342a2b7be1d081d09c0955efc3c49ef41035c66b5d55bb2b2b327",
+      "bytes": 1013
+    },
+    {
+      "name": "history-no-store-clippy.log",
+      "sha256": "d693a0c2cf5138d80b4395b62f77ca7c3e4cb02ffb14716d138400f36ee65e38",
+      "bytes": 841
+    },
+    {
+      "name": "history-no-store-databases-before.json",
+      "sha256": "9ec4ceef1eb01005a1cf273372063693ee89b02ef8a65b969b5d596cb8c23921",
+      "bytes": 235
+    },
+    {
+      "name": "history-no-store-fmt.json",
+      "sha256": "b0f3a4d52812093115f8dd35ac21c4cc5c8d976b33950976317ed0edd4990a8f",
+      "bytes": 308
+    },
+    {
+      "name": "history-no-store-fmt.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "name": "history-no-store-owned-registry-before-green.json",
+      "sha256": "0597b44b5198147576a6d56657e78376b9c23ca2dda4c0e033e99f5de1335895",
+      "bytes": 302
+    },
+    {
+      "name": "history-no-store-regression-after.json",
+      "sha256": "6a57bb760f4f729c1c02717ff319eca5b4edf6bb45dfcce966aa29b96c166b7b",
+      "bytes": 1310
+    },
+    {
+      "name": "history-no-store-regression-after.log",
+      "sha256": "f20a7d64f0142c770dac85df8fa283bbe99a25f893130c4bc53cb4fe8c6d0b73",
+      "bytes": 4626
+    },
+    {
+      "name": "history-no-store-regression-before.json",
+      "sha256": "ab1bcddf77d9bc714a6a5ca80a0b251d0b297c45b9fb976c360bdb9f628b7da5",
+      "bytes": 929
+    },
+    {
+      "name": "history-no-store-regression-before.log",
+      "sha256": "ad5062a1beec1e1c0bc1cdfd91715a27bb4250e87560664721939b60b73e4619",
+      "bytes": 1835
+    },
+    {
+      "name": "history-no-store-sqlx-cleanup.json",
+      "sha256": "d31328205d4f617c6737680cf9fc4188c8b4700b6a23281f038ad996eb234418",
+      "bytes": 1359
+    }
+  ],
+  "private_value_scan": {
+    "distinct_private_values": 16,
+    "forms": [
+      "exact",
+      "URL-encoded",
+      "JSON-escaped",
+      "base64"
+    ],
+    "matches": 0,
+    "values_disclosed": false
+  },
+  "execution_scope": "Only owned code/test files changed. Test fixtures used SQLx ephemeral databases; its master _sqlx_test registry followed the explicitly approved check-db exception. No normal db-migrate/sqlx-prepare/full suite or runtime restart was executed."
+}

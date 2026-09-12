@@ -1,0 +1,8 @@
+[
+  {
+    "name": "_sqlx_test_RUK5XjgiF55UV0BSz3Z9GAfXL88xRmtqeQ91K_R0Z2AV1nO8F1_U",
+    "test_path": "all::db_history_capture_authority::history_full_app_no_store_covers_workspace_denials_and_malformed_requests",
+    "owner": "crm_migrator",
+    "created_at": "2026-09-12T18:55:02.792077+00:00"
+  }
+]

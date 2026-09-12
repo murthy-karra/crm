@@ -1,0 +1,7 @@
+{
+  "command": "./scripts/db-migrate",
+  "exit_code": 0,
+  "elapsed_seconds": 0.495,
+  "revision": "77287a01599097b79cb9e5d99237820a852a8c81",
+  "log_sha256": "5654c6fdd9cfaa4c1e1a503651d2b913d840fce3b84104e6a6138188d24c2c2c"
+}

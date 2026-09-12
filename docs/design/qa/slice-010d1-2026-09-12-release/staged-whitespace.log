@@ -1,0 +1,25 @@
+docs/design/qa/slice-010-completion-audit-2026-09-12/checks/call-history-followup.log:26: trailing whitespace.
++  Cancelling due to test failure: 
+docs/design/qa/slice-010-completion-audit-2026-09-12/checks/check.log:1098: trailing whitespace.
++[plugin builtin:vite-reporter] 
+docs/design/qa/slice-010d1-2026-09-12/backend/final/history-additive-upgrade.log:8: new blank line at EOF.
+docs/design/qa/slice-010d1-2026-09-12/backend/final/history-db-final-with-plans.log:34: new blank line at EOF.
+docs/design/qa/slice-010d1-2026-09-12/backend/final/history-incomplete-parent.log:9: new blank line at EOF.
+docs/design/qa/slice-010d1-2026-09-12/backend/final/history-source-tests.log:19: new blank line at EOF.
+docs/design/qa/slice-010d1-2026-09-12/backend/interim/history-additive-upgrade-attempt1.log:6: trailing whitespace.
++test db_activity_upgrade::populated_010f1_upgrade_preserves_native_and_import_state ... 
+docs/design/qa/slice-010d1-2026-09-12/backend/interim/history-budget-race.log:9: new blank line at EOF.
+docs/design/qa/slice-010d1-2026-09-12/backend/interim/history-db-final-focused.log:30: new blank line at EOF.
+docs/design/qa/slice-010d1-2026-09-12/backend/interim/history-db-focused.log:24: new blank line at EOF.
+docs/design/qa/slice-010d1-2026-09-12/backend/interim/history-db-r2-concurrency.log:33: new blank line at EOF.
+docs/design/qa/slice-010d1-2026-09-12/backend/interim/history-db-read-boundaries.log:10: new blank line at EOF.
+docs/design/qa/slice-010d1-2026-09-12/backend/interim/history-plans-before-r2.log:10: new blank line at EOF.
+docs/design/qa/slice-010d1-2026-09-12/backend/interim/history-plans.log:10: new blank line at EOF.
+docs/design/qa/slice-010d1-2026-09-12/backend/interim/history-r1-credential.log:10: new blank line at EOF.
+docs/design/qa/slice-010d1-2026-09-12/backend/interim/history-r2-session-readiness.log:10: new blank line at EOF.
+docs/design/qa/slice-010d1-2026-09-12/backend/interim/history-sibling-ledger.log:10: new blank line at EOF.
+docs/design/qa/slice-010d1-2026-09-12/gates/final-check-1.log:1091: trailing whitespace.
++[plugin builtin:vite-reporter] 
+docs/design/qa/slice-010d1-2026-09-12/gates/final-check-post-visual.log:1086: trailing whitespace.
++[plugin builtin:vite-reporter] 
+docs/design/qa/slice-010d1-2026-09-12/runtime/reproduction/browser_driver.mjs:694: new blank line at EOF.

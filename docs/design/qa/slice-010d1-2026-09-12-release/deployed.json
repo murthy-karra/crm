@@ -1,0 +1,25 @@
+{
+  "revision": "eb1aa35307852e3746f7140318bab1790d680a64",
+  "implementation": "45260403caf8cd76fb94e1bd940e3cfdeb42f093",
+  "merge": "77287a01599097b79cb9e5d99237820a852a8c81",
+  "api_listener": [
+    27920
+  ],
+  "web_listener": [
+    24129
+  ],
+  "api_launcher": 27920,
+  "web_launcher": 24106,
+  "artifacts": {
+    "crm-api": "7890b6d978c1025cfa7243a1332a5e3718c9ba15a1edb4ea461f8ea664f49b62",
+    "crm-admin": "2a95fb4a62e170b7e60cb14a686d2e100d767f6294926779675aa9216f2dcbf6",
+    "migrate": "eab83a4b2e12c179a1d959b322b591bce09b3d226961a4b0a955b438a7b15998"
+  },
+  "index_sha256": "c4ab20372e05de25212830edbc2c4e1fb9b34a1dc5aa9febfae2058c1ea604a6",
+  "migration": 20260921000001,
+  "retired_artifact_paths": 3,
+  "confirmation_evidence_expires_at": "2026-09-12T19:07:57Z",
+  "web_revision": "77287a01599097b79cb9e5d99237820a852a8c81",
+  "source_manifest_sha256": "9c6673e9925530520bed13eea4a4df48e0414c6008bf28074b024984d5d3d08a",
+  "replacement_reason": "History no-store header on outer authorization denials"
+}

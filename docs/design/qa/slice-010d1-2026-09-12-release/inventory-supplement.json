@@ -1,0 +1,22 @@
+{
+  "observed_before_rollout": "2026-09-12T18:45:10.264826+00:00",
+  "observer": "check_latest_delivery independent read-only inventory",
+  "scope": "Adjacent local CRM-named projects and legacy010a QA harness; current-user process cwd, readable launch plists, current-user cron and Codex automation references",
+  "additional_active_or_configured_shared_database_launch_paths": 0,
+  "matching_process_working_directories": 0,
+  "readable_launch_plists_inspected": 7,
+  "matching_scheduled_references": 0,
+  "classifications": {
+    "crm-ovh": "No standard Rust CRM executable; configured loopback5433 and other database",
+    "crm-old": "Source-only; no standard CRM executable or configured shared-database URL",
+    "crm-ai-old": "Source-only; no standard CRM executable or actual dotenv; requires manual build and injected database configuration",
+    "crm-voiceagent": "Separate voice-inbound/voice-worker binaries; no active process or DATABASE_URL",
+    "crm-010a-qa-harness": "No executable or environment; missing010a dependencies; source explicitly refuses databases other than crm_slice010a_qa"
+  },
+  "additional_retirement_required": false,
+  "mutations_performed": false,
+  "limitations": [
+    "Does not address arbitrary future manual credential injection",
+    "Remote hosts and other-user/system cron outside this local release target"
+  ]
+}

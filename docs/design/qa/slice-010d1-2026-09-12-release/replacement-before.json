@@ -1,0 +1,8 @@
+{
+  "api_pid": 24105,
+  "api_command": "backend/target/debug/crm-api",
+  "web_listener": [
+    24129
+  ],
+  "revision": "77287a01599097b79cb9e5d99237820a852a8c81"
+}

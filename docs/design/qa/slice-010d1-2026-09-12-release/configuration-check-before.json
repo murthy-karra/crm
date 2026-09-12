@@ -1,0 +1,8 @@
+{
+  "fub_registered_system_keys": [
+    "CRM_FUB_SYSTEM_NAME",
+    "CRM_FUB_SYSTEM_KEY"
+  ],
+  "all_absent_or_empty_in_file_and_launcher_environment": true,
+  "protected_configuration_preserved": true
+}

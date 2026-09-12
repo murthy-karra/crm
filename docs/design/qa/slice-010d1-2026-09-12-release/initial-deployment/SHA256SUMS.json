@@ -1,0 +1,18 @@
+{
+  "smoke.py": "cec36633cdce60c38d64c0fd85586a66fb3d8a4eac17128df6a314131c474832",
+  "smoke-results.json": "05a5d5d8d87395c98f627fdae0583b480784ec491f023626a6f2baaaf2e80abf",
+  "build-api.log": "9e86721ac821467d4be64d49e40f71e584d07c3d4c2150ffc3eef9af164d8a33",
+  "build-api-result.json": "d3006deef509262222c8171543de5a70ce6af3b99cff2b7925a2a8ab14277560",
+  "build-sha256.json": "c7dd60d15f8e533719656be758ca37d0743caf58fedb0899490dcc5b7977a94c",
+  "known-builds.json": "83c9bbdf64b4385eb12f64bee8d63c2c5c30b0f4a6c374490c2e392c1702818a",
+  "candidates.json": "676248ee7e98c3f950a435af15975a975ffca2d173f0d5928af59a2d1b602039",
+  "preflight-launch.json": "1f47c4cc66bab28d27d960ef683a295f5ed72c98cb7692af2220336aebb62259",
+  "preflight-confirm.json": "b4f3fe64dc9189eae0ae151340ac33af962a3bfd9bf5346d9cf0ac09c0e44dda",
+  "process-inventory.json": "23ee4d33591272154f12bac01117184f3a47478ae09793075ee70f74f4163e2d",
+  "inventory-observation.json": "1cd09efd8f2006f0e7afc695a5db268f1ed6c03d8e801bc75d78d37f5477e9b6",
+  "release-report.json": "b4f3fe64dc9189eae0ae151340ac33af962a3bfd9bf5346d9cf0ac09c0e44dda",
+  "deployed.json": "bb5933b3a32cad289626f4bdd3b808e6ad85819340876857df1c7d68b1e51aa9",
+  "launchers.json": "9aa28a4ffcc02ae48ddc0679146420562377b77635af75351892fa65693962f9",
+  "observation-start.json": "7531f6645d0c7169206c8cd72f4de977060359ec133e54b17e7c8e3f699b97ea",
+  "retired-artifacts.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+}

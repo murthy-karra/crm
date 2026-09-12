@@ -1,0 +1,8 @@
+{
+  "files_copied": 99,
+  "known_credential_values_checked": 16,
+  "encoded_forms_checked": 32,
+  "findings": 0,
+  "recovery_dump_configuration_cookie_and_live_logs_published": false,
+  "method": "Explicit allowlist and in-memory exact/URL/base64/base64url credential-value checks; source review excludes response bodies and customer rows."
+}

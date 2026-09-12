@@ -1,0 +1,20 @@
+[
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/debug/deps/crm_admin-9b5a2d37bc727cdd",
+    "sha256": "759a62a7a9f7187feb78e27ac10362d8310134635b53a0b6f07376f0dbbf5d6e",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/debug/deps/crm_api-c49cd8ef3798f316",
+    "sha256": "5ea03ec8dd5ec1f7707a0acefdbb7d494eda6395091923dc33bb9b542ed74743",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/debug/deps/migrate-e7b306517f094c20",
+    "sha256": "93ed52be364bba974d9214b75e28a4685a9bd070ecae32d6e275af881a911a26",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  }
+]

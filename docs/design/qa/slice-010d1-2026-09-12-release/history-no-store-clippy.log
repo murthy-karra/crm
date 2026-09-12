@@ -1,0 +1,20 @@
+    Checking siphasher v1.0.3
+    Checking new_debug_unreachable v1.0.6
+    Checking precomputed-hash v0.1.1
+    Checking crm-operator v0.1.0 (/Users/karrad/projects/crm/backend/crates/crm-operator)
+    Checking tendril v0.5.1
+    Checking phf_shared v0.13.1
+    Checking phf_shared v0.12.1
+    Checking phf v0.12.1
+    Checking string_cache v0.9.0
+    Checking phf v0.13.1
+   Compiling phf_generator v0.13.1
+    Checking chrono-tz v0.10.4
+   Compiling string_cache_codegen v0.6.1
+   Compiling phf_codegen v0.13.1
+   Compiling web_atoms v0.2.6
+    Checking markup5ever v0.39.0
+    Checking html5ever v0.39.0
+    Checking crm-app v0.1.0 (/Users/karrad/projects/crm/backend/crates/crm-app)
+    Checking crm-api v0.1.0 (/Users/karrad/projects/crm/backend/crates/crm-api)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 58.24s

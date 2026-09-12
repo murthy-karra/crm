@@ -1,0 +1,33 @@
+{
+  "command": [
+    "cargo",
+    "nextest",
+    "run",
+    "-p",
+    "crm-api",
+    "--test",
+    "all",
+    "--locked",
+    "--run-ignored",
+    "only",
+    "--test-threads",
+    "1",
+    "-E",
+    "test(db_history_capture) | test(activity_http_scope_strict_inputs_receipt_replay_and_all_held_replanning)"
+  ],
+  "exit_code": 0,
+  "elapsed_seconds": 112.556,
+  "database_isolation": "Existing scripts/check-db SQLx exception: master URL supplied only as process environment; #[sqlx::test] owns ephemeral database, fixtures reconnect only to that database. No db-migrate/sqlx-prepare/full gate run.",
+  "ordinary_binaries_before": {
+    "crm-api": "fafbc05d3335ea1d8aa47a28b6aa3d59cf478b29c639482970dd139ae5ca3194",
+    "crm-admin": "a35f0c6953e88161748bf12f4bca56da9ef4a497fcc068c964a75048d281d0bc",
+    "migrate": "e03ac87b362300ac8b82ed2487559ecd8d809b2233e7380e4838e778799d4e42"
+  },
+  "ordinary_binaries_after": {
+    "crm-api": "5ea03ec8dd5ec1f7707a0acefdbb7d494eda6395091923dc33bb9b542ed74743",
+    "crm-admin": "759a62a7a9f7187feb78e27ac10362d8310134635b53a0b6f07376f0dbbf5d6e",
+    "migrate": "93ed52be364bba974d9214b75e28a4685a9bd070ecae32d6e275af881a911a26"
+  },
+  "log": "history-no-store-regression-after.log",
+  "log_sha256": "f20a7d64f0142c770dac85df8fa283bbe99a25f893130c4bc53cb4fe8c6d0b73"
+}

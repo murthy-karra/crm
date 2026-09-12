@@ -1,0 +1,45 @@
+{
+  "candidate_paths": [
+    {
+      "path": "/Users/karrad/projects/crm/backend/target/debug/crm-admin",
+      "sha256": "3c99e7911f026bec7c3e4b11470ad80447a4964a8b67412c68335238ccc54274",
+      "current_release": true
+    },
+    {
+      "path": "/Users/karrad/projects/crm/backend/target/debug/crm-api",
+      "sha256": "3facb7bcabce09a3571277d506206ae77010010505ff9dba102f89d468b56be3",
+      "current_release": true
+    },
+    {
+      "path": "/Users/karrad/projects/crm/backend/target/debug/deps/crm_admin-f22ed118d72071ab",
+      "sha256": "3c99e7911f026bec7c3e4b11470ad80447a4964a8b67412c68335238ccc54274",
+      "current_release": true
+    },
+    {
+      "path": "/Users/karrad/projects/crm/backend/target/debug/deps/crm_api-c01c645a6b2e38b7",
+      "sha256": "3facb7bcabce09a3571277d506206ae77010010505ff9dba102f89d468b56be3",
+      "current_release": true
+    },
+    {
+      "path": "/Users/karrad/projects/crm/backend/target/debug/deps/migrate-8026df789c83bcbf",
+      "sha256": "bff21a7cb92499eb3c91bf3afa79ffa72a189a708e7032eb730b7231926e9122",
+      "current_release": true
+    },
+    {
+      "path": "/Users/karrad/projects/crm/backend/target/debug/migrate",
+      "sha256": "bff21a7cb92499eb3c91bf3afa79ffa72a189a708e7032eb730b7231926e9122",
+      "current_release": true
+    }
+  ],
+  "project_siblings": [
+    "/Users/karrad/projects/crm-worktrees",
+    "/Users/karrad/projects/crm",
+    "/Users/karrad/projects/crm-ovh",
+    "/Users/karrad/projects/crm-old",
+    "/Users/karrad/projects/crm-ai-old",
+    "/Users/karrad/projects/crm-voiceagent"
+  ],
+  "private_qa_directories": [
+    "/private/tmp/crm-010a-qa-harness"
+  ]
+}

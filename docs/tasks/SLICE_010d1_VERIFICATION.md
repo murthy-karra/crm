@@ -6,7 +6,7 @@ below retain their historical scope; current release status is recorded in
 [SLICE_010d1_RELEASE.md](SLICE_010d1_RELEASE.md).
 
 **IMPLEMENTED AND VERIFIED within the approved synthetic scope — 2026-09-12.**
-The approved historical capture/coverage contract is implemented in the isolated
+The approved historical capture/coverage contract was implemented in the isolated
 worktree. Both bounded implementation reviews, repository gates, populated SQL
 collector and production-Web/synthetic-API walkthrough are complete. This is
 capture evidence, not native timeline import or live FUB qualification.
@@ -15,11 +15,13 @@ capture evidence, not native timeline import or live FUB qualification.
 
 D-070 accepts the complete [specification](../specs/SLICE_010d1.md),
 [execution brief](SLICE_010d1_IMPL.md) and declared shared contracts. Implementation
-is on `codex/slice-010d1-history-capture` in
+was on `codex/slice-010d1-history-capture` in
 `/Users/karrad/projects/crm-worktrees/slice-010d1`, based on main
-`028d6133e1b7c3f81642275e030f63e98b2cca49`. Changes remain uncommitted. No commit,
+`028d6133e1b7c3f81642275e030f63e98b2cca49`. At this implementation-verification checkpoint, changes were uncommitted. No commit,
 merge, push, deployment, activation, real FUB access or customer-data operation
-was performed. Shared development remains the existing 010f2 release.
+was performed at that checkpoint. Shared development then remained the existing
+010f2 release; the subsequent [release record](SLICE_010d1_RELEASE.md) supersedes
+that operational status.
 
 Backend/database ownership was assigned to `audit_backend_completion`, source
 parser/manifest and Web to `audit_web_completion`, and the synthetic API example
@@ -185,8 +187,9 @@ Shared container IDs/ports and shared listener PIDs are unchanged. Private
 credentials, browser profiles, scratch files and the worktree `.env` were removed
 at 18:12:22 UTC after archive verification. The [cleanup receipt](../design/qa/slice-010d1-2026-09-12/runtime/cleanup-receipt.json)
 and root [checksums](../design/qa/slice-010d1-2026-09-12/SHA256SUMS) record closeout.
-The worktree and its uncommitted source/build caches are retained for review and
-integration. Three main-checkout status documents now point to this worktree;
+At the implementation checkpoint, the worktree and its uncommitted source/build
+caches were retained for review and integration. Three main-checkout status
+documents then pointed to this worktree;
 2,107 other tracked/pending files were unchanged during that scoped status sync.
 
 Live FUB pagination/account visibility, native timeline import (010d2),

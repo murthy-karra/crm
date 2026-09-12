@@ -1,0 +1,100 @@
+{
+  "review_type": "Saved-image presentation inspection during Slice010d1 initial shared-development release smoke",
+  "reviewer": "check_latest_delivery",
+  "recorded_at": "2026-09-12T18:58:31.538307+00:00",
+  "attempt_directory": "/private/tmp/crm-010d1-release-6kg5mx3s/browser-smoke-2026-09-12T18-45-58.150Z",
+  "attempt_started_at": "2026-09-12T18:45:58.150Z",
+  "attempt_finished_at": "2026-09-12T18:46:03.718Z",
+  "attempt_status": "failed",
+  "attempt_failure": {
+    "phase": "final_assertions",
+    "code": "public_smoke_evidence_incomplete_or_unexpected_activity"
+  },
+  "result": "No actionable layout finding in the four actually inspected empty-seed images. This is a visual observation, not a completed browser/API release pass.",
+  "images": [
+    {
+      "path": "/private/tmp/crm-010d1-release-6kg5mx3s/browser-smoke-2026-09-12T18-45-58.150Z/migration-desktop.png",
+      "sha256": "83e425a141c5c3bd03f48e5fea2c9107b2298997da884b5b9044eabc4316f76d",
+      "actual_image_viewed": true,
+      "capture_kind": "full-page screenshot",
+      "browser_viewport": {
+        "width": 1360,
+        "height": 950
+      },
+      "image_pixels": {
+        "width": 1360,
+        "height": 2218
+      },
+      "observation": "The migration page presents the disconnected source, empty retained/import selectors and disabled preparation actions. The historical-capture card clearly describes retained API-visible events/calls/texts and the completed People prerequisite. No actionable visible control clipping or misleading successful-capture state was identified.",
+      "actionable_layout_findings": []
+    },
+    {
+      "path": "/private/tmp/crm-010d1-release-6kg5mx3s/browser-smoke-2026-09-12T18-45-58.150Z/migration-390px.png",
+      "sha256": "f3334eebaf7cc19065df0a5a6c65767de4d1b27a7d765a30a6c4b951a0f1a4b8",
+      "actual_image_viewed": true,
+      "capture_kind": "full-page screenshot",
+      "browser_viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "image_pixels": {
+        "width": 390,
+        "height": 3664
+      },
+      "observation": "The migration cards stack within the narrow content column. Historical refresh and disabled preparation controls fit, and the no-source/no-parent state is disclosed. The tall full-page image is downscaled by the image viewer; lower sections and the fixed rail/Operator position reflect screenshot framing rather than a fresh scrolling interaction.",
+      "actionable_layout_findings": []
+    },
+    {
+      "path": "/private/tmp/crm-010d1-release-6kg5mx3s/browser-smoke-2026-09-12T18-45-58.150Z/history-empty-desktop.png",
+      "sha256": "e44ee036c823f44ff1c5b76b605b3a1a888973c840a40641b8296795b9b2a8e2",
+      "actual_image_viewed": true,
+      "capture_kind": "historical-panel element screenshot",
+      "browser_viewport": {
+        "width": 1360,
+        "height": 950
+      },
+      "image_pixels": {
+        "width": 1076,
+        "height": 323
+      },
+      "observation": "The complete historical-capture card is readable: the parent selector is empty, Refresh is available, previous/more parents and Prepare are disabled, and source-connection and separate-confirmation guidance is visible. No capture run or false completion state appears.",
+      "actionable_layout_findings": []
+    },
+    {
+      "path": "/private/tmp/crm-010d1-release-6kg5mx3s/browser-smoke-2026-09-12T18-45-58.150Z/history-empty-390px.png",
+      "sha256": "5a699af820b8bf4b53288a70aef5278302ba91c3a72998a616595378ed5d2b5d",
+      "actual_image_viewed": true,
+      "capture_kind": "historical-panel element screenshot",
+      "browser_viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "image_pixels": {
+        "width": 294,
+        "height": 567
+      },
+      "observation": "The historical card fits the 390px viewport content area. Refresh, previous/more parents and disabled Prepare are fully visible, and guidance wraps without clipping. The native closed selector truncates its placeholder while its full field label remains readable; this is not a clipped action control.",
+      "actionable_layout_findings": []
+    }
+  ],
+  "actionable_layout_findings": [],
+  "qualification": {
+    "initial_attempt_failed": true,
+    "failure_context": "Final assertion classified two logout DELETE /api/session net::ERR_ABORTED requests as unexpected. The attempt remains failed; screenshots are not relabeled as a passed browser run.",
+    "session_revocation_proved_in_attempt": true,
+    "observed_public_assets_match_in_attempt": true,
+    "source_or_business_mutations_in_attempt": 0,
+    "does_not_establish": [
+      "Final API/header-smoke success",
+      "The later no-store guard correction or final runtime source identity",
+      "Live FUB qualification or customer-data processing",
+      "Interaction or reachability beyond the saved image framing"
+    ]
+  },
+  "limitations": [
+    "Only saved images and bounded attempt metadata were read; no browser/runtime/DB/repository mutation occurred.",
+    "Full-page screenshots capture fixed navigation/Operator elements at the capture viewport position. Those positions are not evidence of a persistent scrolling defect.",
+    "The tall 390px full-page image was downscaled by the image viewer; the native-size panel crop supplies the specific historical-control presentation evidence.",
+    "Screen appearance cannot verify HTTP cache headers or authorization enforcement."
+  ]
+}

@@ -1,0 +1,33 @@
+   Compiling crm-operator v0.1.0 (/Users/karrad/projects/crm/backend/crates/crm-operator)
+   Compiling crm-app v0.1.0 (/Users/karrad/projects/crm/backend/crates/crm-app)
+   Compiling crm-api v0.1.0 (/Users/karrad/projects/crm/backend/crates/crm-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 33s
+────────────
+ Nextest run ID a1b34bc2-5e4f-423a-a9e6-be953de9d61c with nextest profile: default
+    Starting 1 test across 1 binary (1043 tests skipped)
+        FAIL [   2.438s] (1/1) crm-api::all db_history_capture_authority::history_full_app_no_store_covers_workspace_denials_and_malformed_requests
+  stdout ───
+
+    running 1 test
+    test db_history_capture_authority::history_full_app_no_store_covers_workspace_denials_and_malformed_requests ... FAILED
+
+    failures:
+
+    failures:
+        db_history_capture_authority::history_full_app_no_store_covers_workspace_denials_and_malformed_requests
+
+    test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1043 filtered out; finished in 2.42s
+
+  stderr ───
+
+    thread 'db_history_capture_authority::history_full_app_no_store_covers_workspace_denials_and_malformed_requests' (13945392) panicked at crates/crm-api/tests/db_history_capture_authority.rs:74:17:
+    assertion `left == right` failed: operational GET /api/migrations/fub/history-captures status 403 Forbidden
+      left: None
+     right: Some("no-store")
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+  Cancelling due to test failure: 
+────────────
+     Summary [   2.442s] 1 test run: 0 passed, 1 failed, 1043 skipped
+        FAIL [   2.438s] (1/1) crm-api::all db_history_capture_authority::history_full_app_no_store_covers_workspace_denials_and_malformed_requests
+error: test run failed

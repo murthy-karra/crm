@@ -1,0 +1,72 @@
+$ vite build --outDir /private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged
+vite v8.2.1 building client environment for production...
+transforming...
+✓ 2048 modules transformed.
+
+(!) outDir /private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged is not inside project root and will not be emptied.
+Use --emptyOutDir to override.
+
+rendering chunks...
+computing gzip size...
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/index.html                                              1.26 kB │ gzip:   0.53 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/inter-vietnamese-wght-normal-CBcvBZtf.woff2     10.25 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/inter-greek-ext-wght-normal-DlzME5K_.woff2      11.23 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/inter-cyrillic-wght-normal-DqGufNeO.woff2       18.74 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/inter-greek-wght-normal-CkhJZR-_.woff2          18.99 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/inter-cyrillic-ext-wght-normal-BOeWTOD4.woff2   25.96 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/inter-latin-wght-normal-Dx4kXJAl.woff2          48.25 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2      85.06 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/LoginView-Bu0ZrLP3.css                           0.18 kB │ gzip:   0.15 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/index-BjDTZVZE.css                              38.53 kB │ gzip:   8.50 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/plus-Bch9nAXL.js                                 0.15 kB │ gzip:   0.15 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/copy-OUIz_4rP.js                                 0.23 kB │ gzip:   0.20 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/pencil-Bp0kZJ-K.js                               0.27 kB │ gzip:   0.22 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/Card-Cbf4Z50Z.js                                 0.29 kB │ gzip:   0.24 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/refresh-cw-J6CC8njb.js                           0.32 kB │ gzip:   0.22 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/phone-BMm72Wvc.js                                0.32 kB │ gzip:   0.23 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/trash-2-BwbYop1H.js                              0.32 kB │ gzip:   0.21 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/FormField-C-tVpKBL.js                            0.67 kB │ gzip:   0.41 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/PageHeader-BA7SIxCH.js                           0.84 kB │ gzip:   0.47 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/todayFeeds-DgGlvI7u.js                           1.10 kB │ gzip:   0.48 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/createLucideIcon-Dqbor38u.js                     1.19 kB │ gzip:   0.70 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/WorkspaceReviewView-C1H3f7vj.js                  1.23 kB │ gzip:   0.75 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/ConfirmDialog-DZgE9NMf.js                        1.46 kB │ gzip:   0.79 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/overlayeventbus-Bsi8sl6q.js                      1.64 kB │ gzip:   0.70 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/LoginView-CMulYhHU.js                            2.42 kB │ gzip:   1.36 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/LogContactDialog-DsOOOTpK.js                     2.59 kB │ gzip:   1.16 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/InviteView-B0ddRKUf.js                           3.01 kB │ gzip:   1.40 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/activityReview-D5uP8rE_.js                       3.07 kB │ gzip:   1.41 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/PlatformOrganizationsView-B0X00lxX.js            3.21 kB │ gzip:   1.47 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/imports-BfbV6K4x.js                              3.26 kB │ gzip:   1.45 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/OneTimeLinkDialog-DHnciP55.js                    3.94 kB │ gzip:   1.75 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/TagsView-DRWEjpMG.js                             4.69 kB │ gzip:   2.02 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/NewInquiryView-B9COiSis.js                       5.00 kB │ gzip:   2.24 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/IntakeSettingsView-lApsbe8D.js                   5.95 kB │ gzip:   2.35 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/PlatformOrganizationView-R9S4UKEG.js             5.98 kB │ gzip:   2.22 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/MembersView-pB3YcDBI.js                          7.10 kB │ gzip:   2.40 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/UnresolvedView-b2qjCdIM.js                       7.44 kB │ gzip:   2.84 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/EmailCaptureView-D4snzRgq.js                     8.45 kB │ gzip:   3.16 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/ListsView-Di9l1O81.js                            9.14 kB │ gzip:   3.44 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/ActivityFieldViewer-D-JR247q.js                 14.33 kB │ gzip:   4.10 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/FieldsView-DmE7rLVI.js                          14.87 kB │ gzip:   4.45 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/TodayView-BhiVqGvV.js                           16.74 kB │ gzip:   5.55 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/TodayFeedsView-CFl4ieI0.js                      17.29 kB │ gzip:   5.78 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/ripple-ByNgrhXF.js                              38.15 kB │ gzip:   9.91 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/FilterBar-DHK_Jgzc.js                           44.47 kB │ gzip:  13.05 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/PeopleView-BsLoCnjT.js                          51.67 kB │ gzip:  16.03 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/DataTable-Ck_-R3Z6.js                           52.23 kB │ gzip:  14.28 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/dialog-BXA4FwYW.js                              59.44 kB │ gzip:  12.07 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/PersonDetailView-RexlyErL.js                    68.03 kB │ gzip:  18.38 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/controls-BsIvlwcv.js                            68.04 kB │ gzip:  26.69 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/select-CQ4VVT8T.js                              78.49 kB │ gzip:  19.06 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/queries-Dkojhk7m.js                             88.62 kB │ gzip:  24.09 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/MigrationView-ldbFz51k.js                      212.44 kB │ gzip:  54.70 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/index-sAxSxJLS.js                              221.42 kB │ gzip:  65.29 kB
+../../../../../private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged/assets/livekit-client.esm-CX-oniKy.js                 531.04 kB │ gzip: 137.52 kB
+
+✓ built in 631ms
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.

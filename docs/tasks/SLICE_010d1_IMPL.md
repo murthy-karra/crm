@@ -9,7 +9,7 @@ below retain their historical scope; current release status is recorded in
 after the full plan and READY review were presented. Complete policy/shared
 contracts, implementation and required isolated synthetic verification are
 authorized. Baseline main `028d6133e1b7c3f81642275e030f63e98b2cca49`;
-shared development remains the verified 010f2 release.
+at that approval checkpoint, shared development remained the verified 010f2 release.
 
 ## Outcome and inputs
 

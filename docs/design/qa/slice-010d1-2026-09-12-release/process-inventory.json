@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "target": "shared-development.crm_dev",
+  "observed_at": "2026-09-12T19:09:35Z",
+  "complete": true,
+  "pre_010c_retired": true,
+  "processes": [
+    {
+      "id": "launch.dev-api",
+      "role": "api",
+      "sha256": "7890b6d978c1025cfa7243a1332a5e3718c9ba15a1edb4ea461f8ea664f49b62"
+    },
+    {
+      "id": "launch.in-process-workers",
+      "role": "worker",
+      "sha256": "7890b6d978c1025cfa7243a1332a5e3718c9ba15a1edb4ea461f8ea664f49b62"
+    },
+    {
+      "id": "launch.crm-admin",
+      "role": "cli",
+      "sha256": "2a95fb4a62e170b7e60cb14a686d2e100d767f6294926779675aa9216f2dcbf6"
+    },
+    {
+      "id": "launch.db-migrate",
+      "role": "migrator",
+      "sha256": "eab83a4b2e12c179a1d959b322b591bce09b3d226961a4b0a955b438a7b15998"
+    },
+    {
+      "id": "pid.27920",
+      "role": "api",
+      "sha256": "7890b6d978c1025cfa7243a1332a5e3718c9ba15a1edb4ea461f8ea664f49b62"
+    },
+    {
+      "id": "pid.27920.workers",
+      "role": "worker",
+      "sha256": "7890b6d978c1025cfa7243a1332a5e3718c9ba15a1edb4ea461f8ea664f49b62"
+    }
+  ]
+}

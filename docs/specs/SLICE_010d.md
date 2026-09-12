@@ -1,10 +1,13 @@
 # Slice 010d — Historical migration ladder
 
-**010d1 APPROVED / IMPLEMENTATION IN PROGRESS — 2026-09-12.** D-069 accepts
-splitting capture from timeline import. D-070 approves the complete 010d1
-contracts, implementation and isolated synthetic checks. Later 010d2 semantics
-and implementation require their own specification and approval. Baseline main:
-`028d6133e1b7c3f81642275e030f63e98b2cca49`.
+**010d1 DEPLOYED / VERIFIED IN SHARED DEVELOPMENT — 2026-09-12.** D-069 accepts
+splitting capture from timeline import. D-070's complete 010d1 contracts,
+implementation and isolated synthetic checks are complete; its follow-up
+completed Git integration, cleanup and [shared-development release](../tasks/SLICE_010d1_RELEASE.md).
+Later 010d2 semantics and implementation require their own specification and
+approval. The original planning baseline was main
+`028d6133e1b7c3f81642275e030f63e98b2cca49`; original verification remains in
+[the implementation evidence](../tasks/SLICE_010d1_VERIFICATION.md).
 
 ## Outcome
 

@@ -1,0 +1,12 @@
+{
+  "merge": "77287a01599097b79cb9e5d99237820a852a8c81",
+  "implementation": "45260403caf8cd76fb94e1bd940e3cfdeb42f093",
+  "base": "028d6133e1b7c3f81642275e030f63e98b2cca49",
+  "verified_source_files": 1037,
+  "source_manifest_sha256": "2af03113b4e654ba4490c2b0bf40c46b1d3e883e005fb26e1b31048911a8f590",
+  "merge_tree_equals_implementation": true,
+  "pending_documents_preserved": 43,
+  "preserved_stash": "cb5c1eb1c25c308e3c680c28512b1bb62707bee0",
+  "raw_evidence_whitespace_retained": true,
+  "non_artifact_staged_whitespace_check": "passed"
+}

@@ -1,0 +1,11 @@
+{
+  "removed_at": "2026-09-12T18:33:25.867790+00:00",
+  "worktree": "/Users/karrad/projects/crm-worktrees/slice-010d1",
+  "worktree_removed": true,
+  "branch_removed": true,
+  "ignored_build_and_dependency_caches_removed": true,
+  "source_files_preserved_and_verified": 1037,
+  "qa_checksums_preserved": 166,
+  "main_pending_documents_privately_preserved": 43,
+  "prior_release_recovery_directories_preserved": true
+}

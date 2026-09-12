@@ -1,0 +1,13 @@
+{
+  "result": "passed",
+  "database": "crm_dev",
+  "format": "custom",
+  "bytes": 110141898,
+  "sha256": "ec721dedcca14f9938ab93077b75f7963a0fdce9c12747429ca8cc9a7c91bc4e",
+  "catalog_entries": 1070,
+  "catalog_verified": true,
+  "restore_exercised": false,
+  "elapsed_seconds": 6.55,
+  "observed_at": "2026-09-12T18:41:15.936153+00:00",
+  "consistency": "pg_dump owns a separate consistent backup snapshot; it is not the earlier audit transaction snapshot."
+}

@@ -1,0 +1,16 @@
+{
+  "command": [
+    "pnpm",
+    "run",
+    "build",
+    "--outDir",
+    "/private/tmp/crm-010d1-release-6kg5mx3s/web-dist-staged"
+  ],
+  "exit_code": 0,
+  "elapsed_seconds": 1.187,
+  "started_at": "2026-09-12T18:34:36.826950+00:00",
+  "revision": "77287a01599097b79cb9e5d99237820a852a8c81",
+  "log_sha256": "483447e3d718afe684fc6416e1ba775b6c7ffc67caba348da92b0266df90c6d3",
+  "node": "24.16.0",
+  "pnpm": "11.22.0"
+}

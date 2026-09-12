@@ -1,0 +1,163 @@
+{
+  "review_type": "Final saved-image identity comparison and release browser evidence qualification",
+  "reviewer": "check_latest_delivery",
+  "recorded_at": "2026-09-12T19:10:48.068331+00:00",
+  "result": "All four final screenshots are byte-identical to the originally inspected images. No actionable layout finding. The final browser attempt is passed, with both created sessions revoked using explicit original-cookie replay evidence.",
+  "result_file": "/private/tmp/crm-010d1-release-6kg5mx3s/browser-smoke-2026-09-12T19-07-57.531Z/browser-results.json",
+  "result_sha256": "e178d748086d6a862fd93ed570aa85a9397ccadb85a73c23e0f3768863860e0e",
+  "attempt_status": "passed",
+  "attempt_started_at": "2026-09-12T19:07:57.531Z",
+  "attempt_finished_at": "2026-09-12T19:08:03.479Z",
+  "initial_inspection_file": "/private/tmp/crm-010d1-release-6kg5mx3s/visual-inspection-initial.json",
+  "initial_inspection_sha256": "5016d6203274a954fcc10e8642992ed79efbf00eda43149e94002c71408d6a0f",
+  "helper_file": "/private/tmp/crm-010d1-release-6kg5mx3s/browser_smoke.mjs",
+  "helper_sha256": "fed265eac0ab5c2dfbd0a242af4ed561cce659a316b2a143d24b7e329d74e02f",
+  "helper_hash_matches_recorded_attempt": true,
+  "images": [
+    {
+      "path": "/private/tmp/crm-010d1-release-6kg5mx3s/browser-smoke-2026-09-12T19-07-57.531Z/migration-desktop.png",
+      "sha256": "83e425a141c5c3bd03f48e5fea2c9107b2298997da884b5b9044eabc4316f76d",
+      "original_actually_viewed_path": "/private/tmp/crm-010d1-release-6kg5mx3s/browser-smoke-2026-09-12T18-45-58.150Z/migration-desktop.png",
+      "original_sha256": "83e425a141c5c3bd03f48e5fea2c9107b2298997da884b5b9044eabc4316f76d",
+      "exact_bytes_equal": true,
+      "inspection_method": "Reuse of the original actual-image visual inspection is confirmed by exact byte comparison and matching SHA-256. Final image was not independently rerendered or re-viewed.",
+      "capture_kind": "full-page screenshot",
+      "browser_viewport": {
+        "width": 1360,
+        "height": 950
+      },
+      "image_pixels": {
+        "width": 1360,
+        "height": 2218
+      },
+      "observation": "The migration page presents the disconnected source, empty retained/import selectors and disabled preparation actions. The historical-capture card clearly describes retained API-visible events/calls/texts and the completed People prerequisite. No actionable visible control clipping or misleading successful-capture state was identified.",
+      "actionable_layout_findings": []
+    },
+    {
+      "path": "/private/tmp/crm-010d1-release-6kg5mx3s/browser-smoke-2026-09-12T19-07-57.531Z/migration-390px.png",
+      "sha256": "f3334eebaf7cc19065df0a5a6c65767de4d1b27a7d765a30a6c4b951a0f1a4b8",
+      "original_actually_viewed_path": "/private/tmp/crm-010d1-release-6kg5mx3s/browser-smoke-2026-09-12T18-45-58.150Z/migration-390px.png",
+      "original_sha256": "f3334eebaf7cc19065df0a5a6c65767de4d1b27a7d765a30a6c4b951a0f1a4b8",
+      "exact_bytes_equal": true,
+      "inspection_method": "Reuse of the original actual-image visual inspection is confirmed by exact byte comparison and matching SHA-256. Final image was not independently rerendered or re-viewed.",
+      "capture_kind": "full-page screenshot",
+      "browser_viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "image_pixels": {
+        "width": 390,
+        "height": 3664
+      },
+      "observation": "The migration cards stack within the narrow content column. Historical refresh and disabled preparation controls fit, and the no-source/no-parent state is disclosed. The tall full-page image is downscaled by the image viewer; lower sections and the fixed rail/Operator position reflect screenshot framing rather than a fresh scrolling interaction.",
+      "actionable_layout_findings": []
+    },
+    {
+      "path": "/private/tmp/crm-010d1-release-6kg5mx3s/browser-smoke-2026-09-12T19-07-57.531Z/history-empty-desktop.png",
+      "sha256": "e44ee036c823f44ff1c5b76b605b3a1a888973c840a40641b8296795b9b2a8e2",
+      "original_actually_viewed_path": "/private/tmp/crm-010d1-release-6kg5mx3s/browser-smoke-2026-09-12T18-45-58.150Z/history-empty-desktop.png",
+      "original_sha256": "e44ee036c823f44ff1c5b76b605b3a1a888973c840a40641b8296795b9b2a8e2",
+      "exact_bytes_equal": true,
+      "inspection_method": "Reuse of the original actual-image visual inspection is confirmed by exact byte comparison and matching SHA-256. Final image was not independently rerendered or re-viewed.",
+      "capture_kind": "historical-panel element screenshot",
+      "browser_viewport": {
+        "width": 1360,
+        "height": 950
+      },
+      "image_pixels": {
+        "width": 1076,
+        "height": 323
+      },
+      "observation": "The complete historical-capture card is readable: the parent selector is empty, Refresh is available, previous/more parents and Prepare are disabled, and source-connection and separate-confirmation guidance is visible. No capture run or false completion state appears.",
+      "actionable_layout_findings": []
+    },
+    {
+      "path": "/private/tmp/crm-010d1-release-6kg5mx3s/browser-smoke-2026-09-12T19-07-57.531Z/history-empty-390px.png",
+      "sha256": "5a699af820b8bf4b53288a70aef5278302ba91c3a72998a616595378ed5d2b5d",
+      "original_actually_viewed_path": "/private/tmp/crm-010d1-release-6kg5mx3s/browser-smoke-2026-09-12T18-45-58.150Z/history-empty-390px.png",
+      "original_sha256": "5a699af820b8bf4b53288a70aef5278302ba91c3a72998a616595378ed5d2b5d",
+      "exact_bytes_equal": true,
+      "inspection_method": "Reuse of the original actual-image visual inspection is confirmed by exact byte comparison and matching SHA-256. Final image was not independently rerendered or re-viewed.",
+      "capture_kind": "historical-panel element screenshot",
+      "browser_viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "image_pixels": {
+        "width": 294,
+        "height": 567
+      },
+      "observation": "The historical card fits the 390px viewport content area. Refresh, previous/more parents and disabled Prepare are fully visible, and guidance wraps without clipping. The native closed selector truncates its placeholder while its full field label remains readable; this is not a clipped action control.",
+      "actionable_layout_findings": []
+    }
+  ],
+  "actionable_layout_findings": [],
+  "session_revocation": {
+    "created_session_count": 2,
+    "session_count": 2,
+    "all_created_sessions_revoked": true,
+    "both_actors_completed": true,
+    "session_revocation_proved": true,
+    "sessions": [
+      {
+        "actor": "alice",
+        "login_response_status": 200,
+        "cookie_captured": true,
+        "ui_logout_status": 204,
+        "ui_logout_destination": "/login",
+        "delete_status": 204,
+        "original_cookie_me_status": 401,
+        "revoked": true,
+        "owned_profile_removed": true
+      },
+      {
+        "actor": "carol",
+        "login_response_status": 200,
+        "cookie_captured": true,
+        "ui_logout_status": 204,
+        "ui_logout_destination": "/login",
+        "delete_status": 204,
+        "original_cookie_me_status": 401,
+        "revoked": true,
+        "owned_profile_removed": true
+      }
+    ],
+    "exact_original_cookie_proof": "The helper retains the single crm_session Cookie header in memory before logout. For each actor, UI logout returned 204 and navigated to /login. Cleanup then sent DELETE /api/session with that exact original Cookie and got 204, followed by GET /api/me with the same original Cookie and got 401. These are explicit HTTP replays, not requests depending on a cleared browser cookie jar. No cookie value is stored in this inspection.",
+    "helper_references": [
+      {
+        "path": "/private/tmp/crm-010d1-release-6kg5mx3s/browser_smoke.mjs",
+        "line": 101,
+        "meaning": "Explicit Cookie header supplied to bounded cleanup HTTP requests"
+      },
+      {
+        "path": "/private/tmp/crm-010d1-release-6kg5mx3s/browser_smoke.mjs",
+        "line": 107,
+        "meaning": "Original crm_session Cookie retained in memory"
+      },
+      {
+        "path": "/private/tmp/crm-010d1-release-6kg5mx3s/browser_smoke.mjs",
+        "line": 120,
+        "meaning": "DELETE then GET replay the retained original Cookie"
+      },
+      {
+        "path": "/private/tmp/crm-010d1-release-6kg5mx3s/browser_smoke.mjs",
+        "line": 422,
+        "meaning": "Final session-count and revocation aggregation"
+      }
+    ],
+    "proof_scope": "This proves both sessions were invalid at the end after the explicit cleanup DELETE. It does not separately isolate revocation by the preceding UI DELETE before cleanup replay."
+  },
+  "final_attempt_summary": {
+    "source_or_business_mutations": 0,
+    "observed_public_assets_match": true,
+    "unexpected_http_count": 0,
+    "unexpected_console_error_count": 0,
+    "unexpected_request_failure_count": 0
+  },
+  "limitations": [
+    "No new browser, API, DB, code or runtime operation was performed by this reviewer. Only saved files and helper source were read.",
+    "This visual artifact does not substitute for the coordinator's final API/header smoke, process/binary inventory or observation window.",
+    "The initial failed browser attempt remains failed and is preserved separately; exact image reuse does not relabel its API result.",
+    "The original full-page framing/downscaling limitations remain applicable. Static appearance does not prove HTTP cache headers, source coverage or live FUB qualification."
+  ]
+}

@@ -1,0 +1,67 @@
+{
+  "finished_at": "2026-09-12T19:09:00.385743+00:00",
+  "started_at": "2026-09-12T19:02:58.528511+00:00",
+  "elapsed_seconds": 354.42,
+  "clock": "UTC",
+  "api_listener": [
+    27920
+  ],
+  "web_listener": [
+    24129
+  ],
+  "source_hashes_verified": 1037,
+  "backend_hashes_verified": 3,
+  "web_hashes_verified": 73,
+  "logs": {
+    "api.log": {
+      "sha256": "5fcf5f8fab9bf821a6f0dcb844d5cd3789c01b84fea1e09043bce70e5a60a65a",
+      "warnings": 0,
+      "known_transaction_notice_lines": [],
+      "other_warning_lines": [],
+      "error_lines": []
+    },
+    "web.log": {
+      "sha256": "bd8dbfcb51bb080233543196528006cdfd7b1571bfe995d605a3c3bf02ba543e",
+      "warnings": 0,
+      "known_transaction_notice_lines": [],
+      "other_warning_lines": [],
+      "error_lines": []
+    }
+  },
+  "prior_tenant_rowsets_unchanged": 99,
+  "business_counts_unchanged": 45,
+  "migration_tables_empty": 65,
+  "history_tables_empty": 9,
+  "operational_workspaces_unchanged": 3,
+  "admission_counts": {
+    "count": 0,
+    "active_count": 0
+  },
+  "browser_runs": [
+    {
+      "path": "browser-smoke-2026-09-12T18-45-58.150Z/browser-results.json",
+      "status": "failed",
+      "sha256": "fa41d5b8e0392f176d5e3c64b61259e986b1dcc50e55bff9c55588f69a73885d",
+      "both_actor_sessions_revoked": true,
+      "sessions_created": 2,
+      "all_created_sessions_revoked": true
+    },
+    {
+      "path": "browser-smoke-2026-09-12T19-03-12.357Z/browser-results.json",
+      "status": "failed",
+      "sha256": "ede91eb9749e8084a7d93b92af0db8b935059ef83f021734d9366bdc54b8d200",
+      "both_actor_sessions_revoked": false,
+      "sessions_created": 1,
+      "all_created_sessions_revoked": true
+    },
+    {
+      "path": "browser-smoke-2026-09-12T19-07-57.531Z/browser-results.json",
+      "status": "passed",
+      "sha256": "e178d748086d6a862fd93ed570aa85a9397ccadb85a73c23e0f3768863860e0e",
+      "both_actor_sessions_revoked": true,
+      "sessions_created": 2,
+      "all_created_sessions_revoked": true
+    }
+  ],
+  "recurring_monitor_created": false
+}

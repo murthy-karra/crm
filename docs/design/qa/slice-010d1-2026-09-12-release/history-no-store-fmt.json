@@ -1,0 +1,12 @@
+{
+  "command": [
+    "rustfmt",
+    "--edition",
+    "2021",
+    "--check",
+    "backend/crates/crm-api/src/auth/workspace_http.rs",
+    "backend/crates/crm-api/tests/db_history_capture_authority.rs"
+  ],
+  "exit_code": 0,
+  "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

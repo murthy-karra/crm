@@ -1,0 +1,24 @@
+{
+  "command": [
+    "cargo",
+    "nextest",
+    "run",
+    "-p",
+    "crm-api",
+    "--test",
+    "all",
+    "--locked",
+    "--run-ignored",
+    "only",
+    "-E",
+    "test(history_full_app_no_store_covers_workspace_denials_and_malformed_requests)"
+  ],
+  "expected_red_result": "reproduced_missing_no_store_on_operational_member_403",
+  "actual_nextest_exit_code": null,
+  "nextest_summary": "1 test run: 0 passed, 1 failed, 1043 skipped",
+  "test_elapsed_seconds": 2.438,
+  "compile_duration_as_logged": "1m 33s",
+  "log": "history-no-store-regression-before.log",
+  "log_sha256": "ad5062a1beec1e1c0bc1cdfd91715a27bb4250e87560664721939b60b73e4619",
+  "qualification": "The original nextest log is intact. After nextest exited, the runner metadata write raised NameError for LOGNAME; its actual nextest exit code was not persisted. This JSON records observed log results, not a reconstructed successful wrapper invocation."
+}

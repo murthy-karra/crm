@@ -1,0 +1,17 @@
+{
+  "revision": "eb1aa35307852e3746f7140318bab1790d680a64",
+  "original_merge": "77287a01599097b79cb9e5d99237820a852a8c81",
+  "source_manifest_sha256": "9c6673e9925530520bed13eea4a4df48e0414c6008bf28074b024984d5d3d08a",
+  "changed_files": [
+    {
+      "path": "backend/crates/crm-api/src/auth/workspace_http.rs",
+      "before": "8795cca64872099b620def1e8474b75c271042da94894652a5bca6ac494c5a50",
+      "after": "79cdc32841f5de85b56828d85161be98c4a36331bd76f43f0cd9802e1b3b1fc8"
+    },
+    {
+      "path": "backend/crates/crm-api/tests/db_history_capture_authority.rs",
+      "before": "486166bcbba630a1f78ccef1632ecf50af4680e77d2318dc70a59dd8bc4c4198",
+      "after": "7385640ad157c9dcbd8209ba47ab2e2a58d47bf244bcfceb70dbdd89c0bfdc8e"
+    }
+  ]
+}

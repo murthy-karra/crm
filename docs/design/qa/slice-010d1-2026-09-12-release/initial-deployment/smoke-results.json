@@ -1,0 +1,220 @@
+{
+  "result": "failed",
+  "phase": "member_reads",
+  "reason": "unknown_activity_error_cacheable",
+  "checks": [
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/health",
+      "status": 200
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/internal/ready",
+      "status": 200
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/",
+      "anonymous_status": 401
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/snapshots",
+      "anonymous_status": 401
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/imports",
+      "anonymous_status": 401
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/metadata-imports",
+      "anonymous_status": 401
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/activity-imports",
+      "anonymous_status": 401
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/history-captures",
+      "anonymous_status": 401
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/api/health",
+      "status": 200
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/internal/ready",
+      "status": 200
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/",
+      "anonymous_status": 401
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/snapshots",
+      "anonymous_status": 401
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/imports",
+      "anonymous_status": 401
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/metadata-imports",
+      "anonymous_status": 401
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/activity-imports",
+      "anonymous_status": 401
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/history-captures",
+      "anonymous_status": 401
+    },
+    {
+      "actor_role": "admin",
+      "path": "/api/migrations/fub/",
+      "status": 200,
+      "empty": true
+    },
+    {
+      "actor_role": "admin",
+      "path": "/api/migrations/fub/snapshots",
+      "status": 200,
+      "empty": true
+    },
+    {
+      "actor_role": "admin",
+      "path": "/api/migrations/fub/imports",
+      "status": 200,
+      "empty": true
+    },
+    {
+      "actor_role": "admin",
+      "path": "/api/migrations/fub/metadata-imports",
+      "status": 200,
+      "empty": true
+    },
+    {
+      "actor_role": "admin",
+      "path": "/api/migrations/fub/activity-imports",
+      "status": 200,
+      "empty": true
+    },
+    {
+      "actor_role": "admin",
+      "path": "/api/migrations/fub/history-captures",
+      "status": 200,
+      "empty": true
+    },
+    {
+      "actor_role": "admin",
+      "unknown_import_kind": "metadata-imports",
+      "status": 404,
+      "no_store": false
+    },
+    {
+      "actor_role": "admin",
+      "unknown_import_kind": "activity-imports",
+      "status": 404,
+      "no_store": true
+    },
+    {
+      "actor_role": "admin",
+      "unknown_import_kind": "history-captures",
+      "status": 404,
+      "no_store": true
+    },
+    {
+      "actor_role": "admin",
+      "workspace_mode": "operational",
+      "workspace_revision": "1"
+    },
+    {
+      "path": "/api/people",
+      "status": 200
+    },
+    {
+      "path": "/api/today",
+      "status": 200
+    },
+    {
+      "path": "/api/custom-fields",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-lists",
+      "status": 200
+    },
+    {
+      "actor_role": "member",
+      "path": "/api/migrations/fub/",
+      "status": 403,
+      "empty": false
+    },
+    {
+      "actor_role": "member",
+      "path": "/api/migrations/fub/snapshots",
+      "status": 403,
+      "empty": false
+    },
+    {
+      "actor_role": "member",
+      "path": "/api/migrations/fub/imports",
+      "status": 403,
+      "empty": false
+    },
+    {
+      "actor_role": "member",
+      "path": "/api/migrations/fub/metadata-imports",
+      "status": 403,
+      "empty": false
+    },
+    {
+      "actor_role": "member",
+      "path": "/api/migrations/fub/activity-imports",
+      "status": 403,
+      "empty": false
+    },
+    {
+      "actor_role": "member",
+      "path": "/api/migrations/fub/history-captures",
+      "status": 403,
+      "empty": false
+    },
+    {
+      "actor_role": "member",
+      "unknown_import_kind": "metadata-imports",
+      "status": 403,
+      "no_store": false
+    },
+    {
+      "actor_role": "member",
+      "unknown_import_kind": "activity-imports",
+      "status": 403,
+      "no_store": true
+    }
+  ],
+  "session_cleanup": [
+    {
+      "actor_role": "admin",
+      "status": 204
+    },
+    {
+      "actor_role": "member",
+      "status": 204
+    }
+  ]
+}

@@ -1,7 +1,8 @@
 # Architecture Baseline
 
 Reviewed 2026-09-11 against accepted decisions through D-068; migration status
-and approved 010d1 capture pointers updated 2026-09-12 under D-069/D-070.
+and 010d1 capture/release pointers updated 2026-09-12 under D-069/D-070 and its
+release follow-up.
 This is a derived system map, not another decision log. The
 [decision log](../decisions/DECISION_LOG.md) and [AGENTS.md](../../AGENTS.md)
 win on conflict. Observed runtime state and release evidence belong in
@@ -161,8 +162,10 @@ cancelled import with no native writes.
 D-069 accepts splitting the [010d history ladder](../specs/SLICE_010d.md):
 010d1 separately captures events/calls/texts and reports coverage; 010d2 later
 defines historical facts and bounded timeline readers. D-070 approves complete
-010d1 contracts and isolated implementation verification, now in progress. The
-current core snapshot and completed import boundaries remain immutable; no
+010d1 contracts and isolated implementation verification, now complete. Its
+follow-up completed Git integration, cleanup and the
+[shared-development release](../tasks/SLICE_010d1_RELEASE.md). The current core
+snapshot and completed import boundaries remain immutable; no
 native history or Today change is part of 010d1. Its independent release
 capability is `fub-history-capture-v1`, including durable confirmed/cancelled runs.
 

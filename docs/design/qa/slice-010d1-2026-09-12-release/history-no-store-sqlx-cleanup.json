@@ -1,0 +1,24 @@
+{
+  "result": "passed",
+  "owned_red_test_path": "all::db_history_capture_authority::history_full_app_no_store_covers_workspace_denials_and_malformed_requests",
+  "owned_failed_database_records": [
+    {
+      "name": "_sqlx_test_RUK5XjgiF55UV0BSz3Z9GAfXL88xRmtqeQ91K_R0Z2AV1nO8F1_U",
+      "test_path": "all::db_history_capture_authority::history_full_app_no_store_covers_workspace_denials_and_malformed_requests",
+      "owner": "crm_migrator",
+      "created_at": "2026-09-12T18:55:02.792077+00:00"
+    }
+  ],
+  "owned_registry_entries_after": 0,
+  "owned_databases_remaining": 0,
+  "other_databases_preserved": [
+    {
+      "name": "_sqlx_test_IyV7flWtFO7slN_NM_O5OGN6X_0XhmoaEXZlfvevqg0_Z9z4IupH",
+      "owner": "crm_migrator"
+    }
+  ],
+  "all_other_before_preserved": true,
+  "database_count_after": 1,
+  "cleanup_action": "SQLx test_context automatically dropped/recreated this exact test-path database before the green run; successful completion dropped the database and registry entry. No manual DROP or cleanup of unknown databases was executed.",
+  "scope_qualification": "The earlier databases-before inventory was taken after the red run and before the green run. SQLx uses crm_dev only for its _sqlx_test master registry under the explicitly authorized check-db exception; public business/migration tables remain outside test connections."
+}

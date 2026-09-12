@@ -1,14 +1,30 @@
 # Project state
 
-Last updated: 2026-09-12 (010d1 implemented and synthetically verified in uncommitted worktree; bounded completion audit and 010f2 release qualifications retained).
+Last updated: 2026-09-12 (010d1 committed, merged, pushed and deployed in shared development; completion-audit and prior release qualifications retained).
 This file holds current operational status, active work and live residuals.
 [PROJECT_HISTORY.md](PROJECT_HISTORY.md) preserves earlier progress, the slice
 ledger and historical measurements; its old instructions are not current work.
 
 ## Current state
 
-The [2026-09-12 completion audit](../tasks/SLICE_010_COMPLETION_AUDIT_2026-09-12.md)
-independently matched GitHub/main, all 1,016 source hashes, the running release
+**010d1 is deployed and verified in shared development.** The current runtime
+source is `eb1aa35307852e3746f7140318bab1790d680a64`, following implementation integration `77287a0`,
+at [app.tarams.org](https://app.tarams.org/manage/migration). The additive history
+migration `20260921000001` is applied to `crm_dev`. Actual API/admin/migrator and
+Web artifacts, fresh compatibility preflight, database preservation and final
+HTTP/browser checks are recorded in the
+[010d1 release](../tasks/SLICE_010d1_RELEASE.md). That record also preserves the
+initial missing-`no-store` denial finding, its correction and focused regression,
+failed attempts and successful final checks. Original implementation gates keep
+their original source manifests. The implementation branch/worktree was removed;
+main is the sole current worktree. No live source/customer processing or
+activation occurred. Confirmation still requires a fresh five-minute
+`CRM_MIGRATION_RELEASE_REPORT`; consult the current release record for its
+observed expiry and actual running artifact identity before an operational step.
+
+Before 010d1 integration, the
+[2026-09-12 completion audit](../tasks/SLICE_010_COMPLETION_AUDIT_2026-09-12.md)
+independently matched then-current GitHub/main, all 1,016 source hashes, the running release
 artifacts and all 35 applied migration checksums. Shared business counts/workspace
 states remain unchanged. Fresh service-free checks and a complete 908-test DB
 rerun passed; two earlier runs reproduced the pre-existing call-history ordering
@@ -17,11 +33,14 @@ A6 audit tests passed note/task local-state preservation cases absent from the
 original focused coverage. An overnight database-warning episode strongly
 correlates with host sleep/background wake and stopped on full wake; its exact
 mechanism is unconfirmed. No product source/runtime change or live FUB operation
-was made. Audit documentation/evidence remains uncommitted.
+was made during that audit. Its documentation/evidence was preserved and
+committed with the 010d1 integration.
 
-**010f2 is deployed and verified in shared development**, including assessment,
+The following 010f2 measurements describe the superseded release baseline;
+current operational identity is recorded above and in the 010d1 release record.
+**010f2 was deployed and verified in shared development**, including assessment,
 core snapshot/preview, People, tags/custom fields and retained notes/tasks.
-The deployed source is `fc5a8757bcb2591a43976544e282722b3616039f`
+Its source was `fc5a8757bcb2591a43976544e282722b3616039f`
 (implementation `9f457bc8db8707fa4ce361aac485fd6bf928bf34`) at
 [app.tarams.org](https://app.tarams.org/manage/migration).
 Migration `20260920000001` is applied on `crm_dev`; API PID 25757 on port 3000
@@ -51,8 +70,9 @@ The merged worktree/branch and disposable QA files were removed after preserving
 
 Import confirmation requires a fresh operator compatibility report at
 `CRM_MIGRATION_RELEASE_REPORT`. Actual-DB launch and confirmation checks passed
-with workspace, metadata and activity readiness. The recorded five-minute report
-expires at **2026-09-12 05:18:49 UTC** (2026-09-11 22:18:49 PDT).
+with workspace, metadata and activity readiness at that release. Its recorded
+five-minute report expired at **2026-09-12 05:18:49 UTC**
+(2026-09-11 22:18:49 PDT).
 Renew from an actual workload inventory before a later confirmation. Expiry
 leaves ordinary CRM access available and import confirmation unavailable.
 No automatic renewal or recurring monitor was established.
@@ -66,20 +86,21 @@ follow-up remains open in production readiness.
 
 ## Current slice
 
-- **010d1 implementation:** implemented and synthetically verified under D-070 in
-  `/Users/karrad/projects/crm-worktrees/slice-010d1` on
-  `codex/slice-010d1-history-capture`; source remains uncommitted and shared
-  development remains 010f2. Both bounded reviews are READY. SQLx preparation,
-  full checks (949 Rust/1,131 Web plus supporting suites), 934 DB tests, the
-  75,000-observation collector and desktop/390px production-Web walkthrough
-  passed. See [verification](../tasks/SLICE_010d1_VERIFICATION.md) for exact hashes,
-  failure/recovery evidence, query-work limits and owned cleanup. D-069's
+- **010d1 implementation and release:** complete under D-070 and its follow-up;
+  source is committed, merged, pushed and deployed in shared development, with
+  the implementation worktree/branch removed. Both bounded reviews are READY.
+  Original implementation evidence includes SQLx preparation, full checks
+  (949 Rust/1,131 Web plus supporting suites), 934 DB tests, the
+  75,000-observation collector and desktop/390px production-Web walkthrough.
+  See [verification](../tasks/SLICE_010d1_VERIFICATION.md) for the original hashes,
+  failure/recovery evidence, query-work limits and owned cleanup, and
+  [release](../tasks/SLICE_010d1_RELEASE.md) for final runtime identity and the
+  separately verified release-time denial-header correction. D-069's
   [split](../specs/SLICE_010d.md) is preserved: capture stores encrypted source
   evidence and bounded admin coverage without native timeline/Today changes.
   Public text pagination remains provisional and live-unqualified. 010d2 native
   semantics/timeline, email/media, deltas, activation and customer-data readiness
-  remain separate work. Git integration/publication and deployment were not
-  performed or authorized by this implementation approval.
+  remain separate work.
 - **010f2 implementation:** implemented under D-068; both bounded reviews,
   measured SQL/paired-reader checks, all 18 production-Web phases and exact
   native/business/storage reconciliation have passed. All final gates and owned
@@ -492,10 +513,10 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. Review the completed, uncommitted [010d1 implementation and evidence](../tasks/SLICE_010d1_VERIFICATION.md)
-   for an explicitly authorized integration/release step. Then plan 010d2's
-   verified historical fact semantics and bounded timeline reader separately;
-   010d1 completion does not approve that contract. The SQLx cancellation,
+1. Plan 010d2's verified historical fact semantics and bounded timeline reader
+   separately, using the completed [010d1 capture evidence](../tasks/SLICE_010d1_VERIFICATION.md)
+   and [release](../tasks/SLICE_010d1_RELEASE.md). 010d1 release does not approve
+   the 010d2 contract or implementation. The SQLx cancellation,
    audited call-history ordering and inherited core worker handoff concerns
    remain bounded follow-ups with their existing evidence qualifications.
 2. Resume authorized FUB qualification when the user is ready, against an agreed
@@ -515,9 +536,11 @@ and now lives only in git history.
 ## Approval currently required
 
 - D-070 approves full 010d1 source, lifetime, storage, HTTP and capability
-  contracts, implementation and isolated synthetic checks. No repeat approval
-  is needed for those owned changes. Live source/customer work, publication,
-  deployment and activation remain separate scopes.
+  contracts, implementation and isolated synthetic checks; its follow-up
+  authorized the completed commit, merge, push, cleanup and shared-development
+  deployment. No repeat authorization is needed for that completed release.
+  Live source/customer work, 010d2 contracts/implementation, activation and
+  production-cluster deployment remain separate scopes.
 - D-068 approves the complete 010f2 specification, shared contracts, implementation
   and isolated synthetic checks; its follow-up authorized the now-completed
   Git integration, cleanup and shared-development deployment. Live validation,

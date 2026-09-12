@@ -1,0 +1,35 @@
+   Compiling crm-api v0.1.0 (/Users/karrad/projects/crm/backend/crates/crm-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 21.82s
+────────────
+ Nextest run ID 7faf0db6-b72e-4658-8328-c0b82133fe5e with nextest profile: default
+    Starting 28 tests across 1 binary (1016 tests skipped)
+        PASS [   5.759s] ( 1/28) crm-api::all db_activity_lifecycle::activity_http_scope_strict_inputs_receipt_replay_and_all_held_replanning
+        PASS [   3.944s] ( 2/28) crm-api::all db_history_capture::history_alternating_worker_sessions_advance_and_restart_revalidates_once
+        PASS [   2.643s] ( 3/28) crm-api::all db_history_capture::history_and_older_children_cancel_only_their_own_shared_ledger_reservations
+        PASS [   2.608s] ( 4/28) crm-api::all db_history_capture::history_budget_admission_and_revision_races_fail_closed_then_cancel_below_ceiling
+        PASS [   2.841s] ( 5/28) crm-api::all db_history_capture::history_capture_exact_evidence_paging_linkage_and_shared_bytes
+        PASS [   2.529s] ( 6/28) crm-api::all db_history_capture::history_capture_invalid_ids_do_not_fill_terminal_identity_total_and_cancellation_works_at_ceiling
+        PASS [   2.968s] ( 7/28) crm-api::all db_history_capture::history_capture_overlapping_terminal_pages_are_retained_never_exhausted_or_refetched
+        PASS [   3.321s] ( 8/28) crm-api::all db_history_capture::history_capture_oversize_failure_is_encrypted_accounted_and_logs_have_safe_positive_control
+        PASS [   2.792s] ( 9/28) crm-api::all db_history_capture::history_corrupt_credential_with_valid_identity_pauses_without_hot_loop_or_source
+        PASS [   2.756s] (10/28) crm-api::all db_history_capture::history_duplicate_decoded_identity_keys_are_diagnostic_not_authority
+        PASS [   2.883s] (11/28) crm-api::all db_history_capture::history_erased_parent_person_is_unavailable_and_never_resurrected
+        PASS [   3.010s] (12/28) crm-api::all db_history_capture::history_expired_lease_reclaims_only_owned_reservation_and_bad_checkpoint_pauses_without_source
+        PASS [   2.592s] (13/28) crm-api::all db_history_capture::history_proposal_rejects_real_proposed_and_queued_parent_until_completed
+        PASS [   2.629s] (14/28) crm-api::all db_history_capture::history_retry_cycle_exhausts_requires_explicit_resume_and_preserves_checkpoint
+        PASS [   2.938s] (15/28) crm-api::all db_history_capture::history_shared_identity_never_bypasses_a_worker_sessions_own_release_admission
+        PASS [   5.059s] (16/28) crm-api::all db_history_capture_authority::history_actual_tenant_admin_boundaries_and_native_parent_preservation
+        PASS [   2.671s] (17/28) crm-api::all db_history_capture_authority::history_cancellation_fences_inflight_source_and_preserves_other_run_reservations
+        PASS [   2.691s] (18/28) crm-api::all db_history_capture_authority::history_changed_parent_binding_and_live_source_account_pause_before_collection_work
+        PASS [   2.645s] (19/28) crm-api::all db_history_capture_authority::history_credential_replacement_requires_new_proposal_and_live_identity_matches_acknowledged_pair
+        PASS [   4.479s] (20/28) crm-api::all db_history_capture_authority::history_disconnect_and_demotion_during_source_fence_commit_without_admin_takeover
+        PASS [   2.535s] (21/28) crm-api::all db_history_capture_authority::history_full_app_no_store_covers_workspace_denials_and_malformed_requests
+        PASS [   2.536s] (22/28) crm-api::all db_history_capture_authority::history_lost_response_receipts_bind_actor_exact_body_operation_and_current_authority
+        PASS [   2.558s] (23/28) crm-api::all db_history_capture_authority::history_source_admission_is_symmetric_and_concurrent_with_assessment_and_core
+        PASS [   4.608s] (24/28) crm-api::all db_history_capture_read_boundaries::history_read_invalid_filters_current_authority_and_foreign_evidence_fail_closed
+        PASS [   2.586s] (25/28) crm-api::all db_history_capture_read_boundaries::history_read_real_cursors_bind_run_endpoint_filters_and_page_size
+        PASS [   3.798s] (26/28) crm-api::all db_history_capture_release::history_release_cancelled_confirmation_remains_a_durable_startup_requirement
+        PASS [   4.272s] (27/28) crm-api::all db_history_capture_release::history_release_real_report_gates_confirmation_resume_and_worker_recovery
+        PASS [   3.671s] (28/28) crm-api::all db_history_capture_release::history_release_wrong_key_pauses_intact_capture_before_any_source_request
+────────────
+     Summary [  90.325s] 28 tests run: 28 passed, 1016 skipped

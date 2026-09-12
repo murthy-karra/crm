@@ -1,0 +1,29 @@
+{
+  "command": [
+    "cargo",
+    "clippy",
+    "-p",
+    "crm-api",
+    "--test",
+    "all",
+    "--locked",
+    "--",
+    "-D",
+    "warnings"
+  ],
+  "exit_code": 0,
+  "elapsed_seconds": 58.336,
+  "database_isolation": "SQLX_OFFLINE=true; this command only compiled/linted. It ran no tests or database queries.",
+  "ordinary_binaries_before": {
+    "crm-api": "5ea03ec8dd5ec1f7707a0acefdbb7d494eda6395091923dc33bb9b542ed74743",
+    "crm-admin": "759a62a7a9f7187feb78e27ac10362d8310134635b53a0b6f07376f0dbbf5d6e",
+    "migrate": "93ed52be364bba974d9214b75e28a4685a9bd070ecae32d6e275af881a911a26"
+  },
+  "ordinary_binaries_after": {
+    "crm-api": "5ea03ec8dd5ec1f7707a0acefdbb7d494eda6395091923dc33bb9b542ed74743",
+    "crm-admin": "759a62a7a9f7187feb78e27ac10362d8310134635b53a0b6f07376f0dbbf5d6e",
+    "migrate": "93ed52be364bba974d9214b75e28a4685a9bd070ecae32d6e275af881a911a26"
+  },
+  "log": "history-no-store-clippy.log",
+  "log_sha256": "d693a0c2cf5138d80b4395b62f77ca7c3e4cb02ffb14716d138400f36ee65e38"
+}

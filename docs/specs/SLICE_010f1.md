@@ -1,11 +1,13 @@
 # Slice 010f1 — Tags and custom fields in the migration review workspace
 
 **APPROVED FOR IMPLEMENTATION — D-066, 2026-09-11.**
-Implementation and synthetic verification are complete in the uncommitted
-worktree; [executed evidence](../tasks/SLICE_010f1_VERIFICATION.md). No 010f1 deployment is claimed.
+Implementation and synthetic verification are complete;
+[executed evidence](../tasks/SLICE_010f1_VERIFICATION.md). The D-066 follow-up
+authorized integration and shared-development deployment: implementation
+`f37ddd1`, merged/pushed and [deployed as `e36ce360`](../tasks/SLICE_010f1_RELEASE.md).
 The user approved the reviewed specification and brief with “ok proceed with
 010f1.” The proposal wording below records the reviewed contract; its policies
-are now accepted within this slice. Live FUB validation and deployment stay separate.
+are now accepted within this slice. Live FUB validation and activation remain deferred.
 
 Historical planning context:
 2026-09-11, inspected main `f01c2e3` after the verified 010c deployment.

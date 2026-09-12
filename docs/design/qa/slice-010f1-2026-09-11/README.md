@@ -1,8 +1,13 @@
 # Slice 010f1 synthetic verification
 
-**Implemented and verified, 2026-09-11; uncommitted and undeployed.** Branch
-`codex/slice-010f1-metadata-import` is based on main `f01c2e3`. D-066 authorizes
-the retained-source tag/custom-field child. The deployed 010c runtime is unchanged.
+**Implemented and synthetically verified, 2026-09-11.** This directory preserves
+the implementation checkpoint from `codex/slice-010f1-metadata-import`, based on
+main `f01c2e3`. The D-066 follow-up subsequently authorized integration and
+deployment: implementation `f37ddd1`, merged/pushed and
+[deployed as `e36ce360`](../../../tasks/SLICE_010f1_RELEASE.md).
+The worktree/branch are removed; [release evidence](../slice-010f1-2026-09-11-release/README.md)
+records the committed artifacts and actual fleet. Historical checkpoint flags
+below and in JSON are unchanged.
 
 All A1–A12 criteria pass within the synthetic scope. See the
 [acceptance map](ACCEPTANCE_MAP.md), [complete chronology](../../../tasks/SLICE_010f1_VERIFICATION.md),
@@ -72,8 +77,10 @@ changed after the integrated review checkpoint.
   [20 checked log copies](checks/log-inventory.json). Private environment-value
   and database-URL checks required no redaction in these selected logs.
 
-These identify an uncommitted worktree, not a release commit. The API example is
-compile-fenced test support and is not a production deployment artifact.
+These identify the then-uncommitted implementation checkpoint. All 975 source
+hashes also match merged release `e36ce360`. The API example is compile-fenced
+test support and is not a production deployment artifact; release evidence
+catalogues the separately rebuilt ordinary API/admin/migrator and Web artifacts.
 
 ## Isolation and evidence boundaries
 

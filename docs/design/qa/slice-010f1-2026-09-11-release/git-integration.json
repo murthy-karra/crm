@@ -1,0 +1,10 @@
+{
+  "implementation": "f37ddd1426189ff7c3c4a85c0f204b2b86605792",
+  "merge": "e36ce360a4956b76b6f8dc537a051e6cb8cbc7b7",
+  "source_files_match": 975,
+  "pending_main_files_preserved": 45,
+  "preserved_stash_object": "5829ad1fbf33cd4e8809324a9e09d39fccd40094",
+  "merged_worktree_removed": true,
+  "branch_removed": true,
+  "origin_main_verified": true
+}

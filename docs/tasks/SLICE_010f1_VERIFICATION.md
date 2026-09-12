@@ -3,8 +3,11 @@
 **IMPLEMENTED AND SYNTHETICALLY VERIFIED — 2026-09-11.** D-066 accepts the reviewed
 [specification](../specs/SLICE_010f1.md), [brief](SLICE_010f1_IMPL.md), policies and
 owned shared contracts. This record distinguishes implementation progress from
-executed proof. All A1–A12 criteria pass within the synthetic scope. The worktree
-is uncommitted and undeployed; shared development remains on 010c.
+executed proof. All A1–A12 criteria pass within the synthetic scope. A subsequent
+D-066 follow-up authorized integration and deployment: implementation `f37ddd1`,
+merge/deployed source `e36ce360`, pushed to main. The merged worktree and branch
+are removed. [Release verification](SLICE_010f1_RELEASE.md) records the actual
+shared-development fleet separately from the historical synthetic checks below.
 
 ## Source, ownership and isolation
 
@@ -283,10 +286,18 @@ customer data was modified. [Cleanup proof](../design/qa/slice-010f1-2026-09-11/
 
 ## Publication and remaining boundaries
 
-Implementation approval does not authorize commit/merge/push or another deployment.
-Sanitized evidence is prepared in the uncommitted worktree for the later
-integration step. Notes/tasks, repair/delta imports, activation,
-live FUB validation and customer-data readiness remain separate work.
+At the implementation checkpoint, integration and deployment still required their
+own request. The user subsequently authorized both under D-066's follow-up;
+commit `f37ddd1` and merge `e36ce360` are pushed, and shared development is
+[deployed and verified](SLICE_010f1_RELEASE.md). All 975 verified source files
+match. All 45 pending main documentation files were preserved, the clean merged
+worktree/branch and temporary integration stash were removed, and 96 original
+private logs/JSON/drivers were retained by hash under
+`/private/tmp/crm-010f1-release-ozyr7lke/implementation-verification` before the
+old private QA directory and its environment files were removed. Earlier
+machine-readable checkpoint flags remain historical, not current release status.
+Notes/tasks, repair/delta imports, activation, live FUB validation and
+customer-data readiness remain separate work.
 
 Publication cleanup normalized trailing whitespace in six checked log copies.
 Their original private hashes remain recorded alongside the published hashes;

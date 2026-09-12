@@ -1,10 +1,13 @@
 # Slice 010f1 — Execution brief
 
 **APPROVED FOR IMPLEMENTATION — D-066, 2026-09-11.**
-Implementation and synthetic verification are complete in the uncommitted
-worktree; [executed evidence](SLICE_010f1_VERIFICATION.md). No 010f1 deployment is claimed.
+Implementation and synthetic verification are complete;
+[executed evidence](SLICE_010f1_VERIFICATION.md). The D-066 follow-up authorized
+integration and shared-development deployment: implementation `f37ddd1`, merged/
+pushed and [deployed as `e36ce360`](SLICE_010f1_RELEASE.md). The worktree and branch
+were removed after verification; the ownership notes below are historical.
 The user approved the reviewed specification, brief and owned shared contracts.
-Primary implementation worktree: `/Users/karrad/projects/crm-010f1`, branch
+Former primary implementation worktree: `/Users/karrad/projects/crm-010f1`, branch
 `codex/slice-010f1-metadata-import`, baseline main `f01c2e3`.
 `snapshot_impl` is the primary backend writer and sole database migration owner;
 `root` owns Web integration, shared documentation and final verification.

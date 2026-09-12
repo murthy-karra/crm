@@ -1,0 +1,296 @@
+{
+  "source_revision": "e36ce360a4956b76b6f8dc537a051e6cb8cbc7b7",
+  "files": [
+    {
+      "path": "build-api-result.json",
+      "private_sha256": "8aac0ec57132ea18c047008fee74eb46c2f9c57c3e38276d1116fd206dc73e9a",
+      "published_sha256": "8aac0ec57132ea18c047008fee74eb46c2f9c57c3e38276d1116fd206dc73e9a",
+      "bytes": 270,
+      "normalization": "JSON formatting"
+    },
+    {
+      "path": "build-web-result.json",
+      "private_sha256": "72421b99013a76ecbff19981600aa807ef4ab2c125b113e3ce0b0053aa99e6f0",
+      "published_sha256": "72421b99013a76ecbff19981600aa807ef4ab2c125b113e3ce0b0053aa99e6f0",
+      "bytes": 181,
+      "normalization": "JSON formatting"
+    },
+    {
+      "path": "build-sha256.json",
+      "private_sha256": "eaea77faad49c68be690cc9025dbe7eadd5ce92bf7f61967311186826bf033a9",
+      "published_sha256": "eaea77faad49c68be690cc9025dbe7eadd5ce92bf7f61967311186826bf033a9",
+      "bytes": 248,
+      "normalization": "JSON formatting"
+    },
+    {
+      "path": "web-build-sha256.json",
+      "private_sha256": "a21122361aee9f2448f0df41ddd2d15461886c33e7a4135bc3d417673e6f214f",
+      "published_sha256": "a21122361aee9f2448f0df41ddd2d15461886c33e7a4135bc3d417673e6f214f",
+      "bytes": 7491,
+      "normalization": "JSON formatting"
+    },
+    {
+      "path": "backup-result.json",
+      "private_sha256": "7662a6034ebf55d162a565f872ce1677302f6acffef59b8cdce3005786b75e17",
+      "published_sha256": "7662a6034ebf55d162a565f872ce1677302f6acffef59b8cdce3005786b75e17",
+      "bytes": 285,
+      "normalization": "JSON formatting"
+    },
+    {
+      "path": "migration-result.json",
+      "private_sha256": "c29ee7e5500f885d59af6d50e5b9ab16cd8c3450eefaa9ce1f2f3356d449e2ee",
+      "published_sha256": "c29ee7e5500f885d59af6d50e5b9ab16cd8c3450eefaa9ce1f2f3356d449e2ee",
+      "bytes": 95,
+      "normalization": "JSON formatting"
+    },
+    {
+      "path": "deployed.json",
+      "private_sha256": "8c0639332e0f92e6a854003e5e4c133409eb3552b0538b44423b3d5585afd98a",
+      "published_sha256": "8c0639332e0f92e6a854003e5e4c133409eb3552b0538b44423b3d5585afd98a",
+      "bytes": 782,
+      "normalization": "JSON formatting"
+    },
+    {
+      "path": "known-builds.json",
+      "private_sha256": "72d8e258a71d10d6c5fff18d8415bdfed4eee4b050f678622dc036c03afa02e2",
+      "published_sha256": "72d8e258a71d10d6c5fff18d8415bdfed4eee4b050f678622dc036c03afa02e2",
+      "bytes": 1116,
+      "normalization": "JSON formatting"
+    },
+    {
+      "path": "candidates.json",
+      "private_sha256": "676248ee7e98c3f950a435af15975a975ffca2d173f0d5928af59a2d1b602039",
+      "published_sha256": "676248ee7e98c3f950a435af15975a975ffca2d173f0d5928af59a2d1b602039",
+      "bytes": 474,
+      "normalization": "JSON formatting"
+    },
+    {
+      "path": "process-inventory.json",
+      "private_sha256": "2e72adc71a6e496fb4c9cda88b5f24f87f148f03ea90f16e8a4f568cae6368db",
+      "published_sha256": "2e72adc71a6e496fb4c9cda88b5f24f87f148f03ea90f16e8a4f568cae6368db",
+      "bytes": 1078,
+      "normalization": "JSON formatting"
+    },
+    {
+      "path": "inventory-observation.json",
+      "private_sha256": "563ef435e03f1f9e502f934e9f970f1bf8e12314c36a97c4b921e29236b0a8db",
+      "published_sha256": "563ef435e03f1f9e502f934e9f970f1bf8e12314c36a97c4b921e29236b0a8db",
+      "bytes": 303,
+      "normalization": "JSON formatting"
+    },
+    {
+      "path": "preflight-launch.json",
+      "private_sha256": "a63febbc74faca8baebdaa27dfb37968d4fb70d6a5e03591e0268f8a7ce28acb",
+      "published_sha256": "a63febbc74faca8baebdaa27dfb37968d4fb70d6a5e03591e0268f8a7ce28acb",
+      "bytes": 3155,
+      "normalization": "JSON formatting"
+    },
+    {
+      "path": "preflight-confirm.json",
+      "private_sha256": "13526ff6f6a3bb94edeb6e6f6ab9d1fc324c0d60e715f50d7f1a41ceddb52cec",
+      "published_sha256": "13526ff6f6a3bb94edeb6e6f6ab9d1fc324c0d60e715f50d7f1a41ceddb52cec",
+      "bytes": 3791,
+      "normalization": "JSON formatting"
+    },
+    {
+      "path": "retired-artifacts.json",
+      "private_sha256": "0dccb70f8862481038f0f588a94f7032711e5367b95c0c92f6a25c1f0964ffa7",
+      "published_sha256": "0dccb70f8862481038f0f588a94f7032711e5367b95c0c92f6a25c1f0964ffa7",
+      "bytes": 650,
+      "normalization": "JSON formatting"
+    },
+    {
+      "path": "database-before.json",
+      "private_sha256": "b027ef1801bbe54ec4c697b3e1314e6e67c1735e16dfefcc45c31959e4c7b655",
+      "published_sha256": "d439d89630cfb47e8ec64d62c2ef8eba7e2a925215a7952d4e544fb70114eb3f",
+      "bytes": 2585,
+      "normalization": "JSON formatting; omit Organization IDs from database snapshots"
+    },
+    {
+      "path": "database-after-migration.json",
+      "private_sha256": "ca91412020b40c3a9eff44680f69744eb021c40e7f7321471dd1122ee109ebf6",
+      "published_sha256": "4f59dad8187d4c8ca7188895211e1c122e53548d8160e674cebf200f55bee09d",
+      "bytes": 3063,
+      "normalization": "JSON formatting; omit Organization IDs from database snapshots"
+    },
+    {
+      "path": "database-after.json",
+      "private_sha256": "376b7625678036a8fe67513e812d1e0a83cd95bad8932415a1faf4b553670fc6",
+      "published_sha256": "376b7625678036a8fe67513e812d1e0a83cd95bad8932415a1faf4b553670fc6",
+      "bytes": 2855,
+      "normalization": "JSON formatting"
+    },
+    {
+      "path": "database-after-browser.json",
+      "private_sha256": "ca91412020b40c3a9eff44680f69744eb021c40e7f7321471dd1122ee109ebf6",
+      "published_sha256": "4f59dad8187d4c8ca7188895211e1c122e53548d8160e674cebf200f55bee09d",
+      "bytes": 3063,
+      "normalization": "JSON formatting; omit Organization IDs from database snapshots"
+    },
+    {
+      "path": "workspace-schema-check.json",
+      "private_sha256": "78d23571894ef61479b5ec67837e45d96977f9924bb2fa4e5660262f507dddc6",
+      "published_sha256": "78d23571894ef61479b5ec67837e45d96977f9924bb2fa4e5660262f507dddc6",
+      "bytes": 361,
+      "normalization": "JSON formatting"
+    },
+    {
+      "path": "smoke-results.json",
+      "private_sha256": "607478cd833c9fbdf2fb157ecbdd38355ba76ab6d233f8a76af5408884c47486",
+      "published_sha256": "607478cd833c9fbdf2fb157ecbdd38355ba76ab6d233f8a76af5408884c47486",
+      "bytes": 6933,
+      "normalization": "JSON formatting"
+    },
+    {
+      "path": "browser-results.json",
+      "private_sha256": "759bebb8898de2d5f8a42f3bb3d0a9b2788719c259b907cae7093cbf80cba399",
+      "published_sha256": "759bebb8898de2d5f8a42f3bb3d0a9b2788719c259b907cae7093cbf80cba399",
+      "bytes": 2269,
+      "normalization": "JSON formatting"
+    },
+    {
+      "path": "tunnel-result.json",
+      "private_sha256": "631c0b68323802652b981acf874b310721b6ad1025675e31be6597a8dbb9e078",
+      "published_sha256": "631c0b68323802652b981acf874b310721b6ad1025675e31be6597a8dbb9e078",
+      "bytes": 97,
+      "normalization": "JSON formatting"
+    },
+    {
+      "path": "observation.json",
+      "private_sha256": "36e4b5f106bd2ce270bc9dea5df9c062d55404dccd7f1e87231992ee05a71f90",
+      "published_sha256": "36e4b5f106bd2ce270bc9dea5df9c062d55404dccd7f1e87231992ee05a71f90",
+      "bytes": 610,
+      "normalization": "JSON formatting"
+    },
+    {
+      "path": "visual-inspection.json",
+      "private_sha256": "eee38af4bd59a140ecc6743d48bd673ab9faea7dc90b08c6bedee6ede73b43b6",
+      "published_sha256": "eee38af4bd59a140ecc6743d48bd673ab9faea7dc90b08c6bedee6ede73b43b6",
+      "bytes": 647,
+      "normalization": "JSON formatting"
+    },
+    {
+      "path": "git-integration.json",
+      "private_sha256": "d986084df5c2d8b8b53e20b50cb8b5b3b069f106005ca1a1d949719332d049a7",
+      "published_sha256": "d986084df5c2d8b8b53e20b50cb8b5b3b069f106005ca1a1d949719332d049a7",
+      "bytes": 354,
+      "normalization": "JSON formatting"
+    },
+    {
+      "path": "implementation-cleanup.json",
+      "private_sha256": "8d475f495d003eca330b968e0c2aa41f25824349e6c32d45f400161743ce4886",
+      "published_sha256": "8d475f495d003eca330b968e0c2aa41f25824349e6c32d45f400161743ce4886",
+      "bytes": 260,
+      "normalization": "JSON formatting"
+    },
+    {
+      "path": "release-audit.json",
+      "private_sha256": "fb9c35823c06255827ac566f4f00065d3d21bdfbc7014256e836efe8bf13f6a8",
+      "published_sha256": "fb9c35823c06255827ac566f4f00065d3d21bdfbc7014256e836efe8bf13f6a8",
+      "bytes": 1536,
+      "normalization": "JSON formatting"
+    },
+    {
+      "path": "build-api.log",
+      "private_sha256": "5a20967244c501db070c55ed158e12018eb801bf8c6a323c862e347a06456bc3",
+      "published_sha256": "5a20967244c501db070c55ed158e12018eb801bf8c6a323c862e347a06456bc3",
+      "bytes": 233,
+      "normalization": "Trailing whitespace and EOF blank lines normalized"
+    },
+    {
+      "path": "build-web.log",
+      "private_sha256": "d5df6677011930ef18d659d1b7fb76229c00d5859fb9533e6be7be236ed1c305",
+      "published_sha256": "831e2f365c4f6c8b2aa60337142a2afde277baa860ff0ce488b43926a1998ac0",
+      "bytes": 8932,
+      "normalization": "Trailing whitespace and EOF blank lines normalized"
+    },
+    {
+      "path": "migration.log",
+      "private_sha256": "9e3adde7daffb0e3d2a7743d025bb88c37486d0dbd84cd321ec9b6ecc27a98d8",
+      "published_sha256": "9e3adde7daffb0e3d2a7743d025bb88c37486d0dbd84cd321ec9b6ecc27a98d8",
+      "bytes": 135,
+      "normalization": "Trailing whitespace and EOF blank lines normalized"
+    },
+    {
+      "path": "tunnel.log",
+      "private_sha256": "38b00f8d4e29dc626a2773c1ada3d305d437fff146fd7ed466a2fa1f7372eb88",
+      "published_sha256": "38b00f8d4e29dc626a2773c1ada3d305d437fff146fd7ed466a2fa1f7372eb88",
+      "bytes": 326,
+      "normalization": "Trailing whitespace and EOF blank lines normalized"
+    },
+    {
+      "path": "browser.log",
+      "private_sha256": "f9132b13109ee668f9bda2cd76483f481daf69134b11d7bc6183515b14397a07",
+      "published_sha256": "f9132b13109ee668f9bda2cd76483f481daf69134b11d7bc6183515b14397a07",
+      "bytes": 102,
+      "normalization": "Trailing whitespace and EOF blank lines normalized"
+    },
+    {
+      "path": "smoke.log",
+      "private_sha256": "1324ecab619c31bcb7b23c020f378f63d4de742e91b642bff77c0a337f930fdb",
+      "published_sha256": "1324ecab619c31bcb7b23c020f378f63d4de742e91b642bff77c0a337f930fdb",
+      "bytes": 125,
+      "normalization": "Trailing whitespace and EOF blank lines normalized"
+    },
+    {
+      "path": "migration-desktop.png",
+      "private_sha256": "194133a7fa22eec9bbf19c984a20d8c45771e309f6454858718b0f166f648777",
+      "published_sha256": "194133a7fa22eec9bbf19c984a20d8c45771e309f6454858718b0f166f648777",
+      "bytes": 224187,
+      "normalization": "None"
+    },
+    {
+      "path": "snapshot-empty-desktop.png",
+      "private_sha256": "ca4fbdfbd90b978f28261ece5ac00f8b2d1b6eba6d204bc4bf0fa34158425dd2",
+      "published_sha256": "ca4fbdfbd90b978f28261ece5ac00f8b2d1b6eba6d204bc4bf0fa34158425dd2",
+      "bytes": 34642,
+      "normalization": "None"
+    },
+    {
+      "path": "people-import-empty-desktop.png",
+      "private_sha256": "641dc2851e3295ae3905c6d3365659d32dc04e1ef27f6f6ac337c57a3fe4214c",
+      "published_sha256": "641dc2851e3295ae3905c6d3365659d32dc04e1ef27f6f6ac337c57a3fe4214c",
+      "bytes": 51293,
+      "normalization": "None"
+    },
+    {
+      "path": "metadata-import-empty-desktop.png",
+      "private_sha256": "e946f54c8780299635b07cdce289d9b1b1cf7ab93807ee266d4f92f04d1abcc2",
+      "published_sha256": "e946f54c8780299635b07cdce289d9b1b1cf7ab93807ee266d4f92f04d1abcc2",
+      "bytes": 44040,
+      "normalization": "None"
+    },
+    {
+      "path": "migration-390px.png",
+      "private_sha256": "ba3651d8e55e932617ab23e451bca80b7713ee2534adb199e24364f509e71074",
+      "published_sha256": "ba3651d8e55e932617ab23e451bca80b7713ee2534adb199e24364f509e71074",
+      "bytes": 202582,
+      "normalization": "None"
+    },
+    {
+      "path": "snapshot-empty-390px.png",
+      "private_sha256": "250a3ca1941942c7175a29d6e10de6bcada5f62779fdbc87d4026335d40c9a8f",
+      "published_sha256": "250a3ca1941942c7175a29d6e10de6bcada5f62779fdbc87d4026335d40c9a8f",
+      "bytes": 32724,
+      "normalization": "None"
+    },
+    {
+      "path": "people-import-empty-390px.png",
+      "private_sha256": "1f70a490d10400a3efaf9def91635db79914cecbbfdcb34e0b25aad87308830e",
+      "published_sha256": "1f70a490d10400a3efaf9def91635db79914cecbbfdcb34e0b25aad87308830e",
+      "bytes": 52779,
+      "normalization": "None"
+    },
+    {
+      "path": "metadata-import-empty-390px.png",
+      "private_sha256": "aa612a2efc7d374542fd9cb28ea9723a02910343ac6137f8ffa74007a885fc30",
+      "published_sha256": "aa612a2efc7d374542fd9cb28ea9723a02910343ac6137f8ffa74007a885fc30",
+      "bytes": 45754,
+      "normalization": "None"
+    }
+  ],
+  "exact_configured_credential_scan": "passed; no matches",
+  "database_snapshot_organization_ids": "omitted",
+  "backup_dump_config_and_cookies": "not published",
+  "private_original_directory": "/private/tmp/crm-010f1-release-ozyr7lke"
+}

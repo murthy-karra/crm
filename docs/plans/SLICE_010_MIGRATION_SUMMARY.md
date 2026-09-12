@@ -2,10 +2,10 @@
 
 **Status: 010a DEPLOYED AND VERIFIED (2026-09-11); live FUB validation deferred.
 010b core-first capture/preview is also deployed and verified under D-063;
-010c is implemented and deployed under D-065 and follow-ups.** The user
+010c and 010f1 are also deployed and verified under D-065/D-066 and follow-ups.** The user
 selected **a new, empty CRM Organization first** (D-059), then approved 010a's
-API-first assessment and encrypted saved credentials (D-060). Other
-recommendations remain proposals. Initial survey used main `b2fb368`, after 019b;
+API-first assessment and encrypted saved credentials (D-060). Unaccepted
+later-rung recommendations remain proposals. Initial survey used main `b2fb368`, after 019b;
 010c code findings use main `c6c5930`, after 010b's release.
 No FUB account was connected or customer data fetched.
 
@@ -38,7 +38,7 @@ pushed to main. Its subsequent
 [shared-development deployment](../tasks/SLICE_010c_RELEASE.md) is verified.
 Next-import planning is now authorized; live FUB validation remains deferred.
 
-**Current approved slice:** [010f1](../specs/SLICE_010f1.md), with its
+**Latest deployed slice:** [010f1](../specs/SLICE_010f1.md), with its
 [execution brief](../tasks/SLICE_010f1_IMPL.md), imports tags and custom-field
 definitions/options/values for People from a completed 010c import. It reuses
 the same retained snapshot and review workspace through an additive child
@@ -51,8 +51,20 @@ Notes and tasks follow in separately specified core-import work.
 D-066 now approves the full specification, policies and shared contracts.
 [Implementation and synthetic verification](../tasks/SLICE_010f1_VERIFICATION.md)
 are complete: final gates, 90 measured plans / 246 checks, 51 browser checkpoints
-and exact native reconciliation passed. The worktree remains uncommitted and
-undeployed; live FUB work stays separate.
+and exact native reconciliation passed. The explicit D-066 follow-up authorized
+commit, merge, push, cleanup and shared-development deployment. Implementation
+`f37ddd1` and merge/runtime source `e36ce36` are published, all 975 source hashes
+match, and the merged worktree/branch is removed with the 45 pending main docs
+preserved. The [release record](../tasks/SLICE_010f1_RELEASE.md) and
+[public evidence](../design/qa/slice-010f1-2026-09-11-release/README.md) record
+43 HTTP/auth/asset checks, eight browser workflows, eight inspected desktop/390px
+screenshots and tunnel 200/200/101. All 45 business counts and three operational
+workspace revisions are unchanged; all 43 migration tables remain empty.
+Actual-DB launch/confirmation preflight passed with metadata capability; its
+five-minute report is not automatically renewed, so a later confirmation or
+recovery needs fresh actual workload evidence. Backup catalog validation was
+performed, not a restore exercise. Live FUB/customer-data work and activation
+stay deferred; notes/tasks are the next core-import planning scope.
 
 ## 1. Outcome and first milestone
 
@@ -79,7 +91,8 @@ household contacts: distinct source People stay separate with flagged overlaps.
 Tags, notes, tasks and typed custom fields now have destination models.
 Notes and tasks include source-ID uniqueness and tombstones; custom-field
 definitions include `source`/`external_key`, with value origin/correlation
-metadata. These are useful foundations, not completed import commands.
+metadata. The notes/task models remain foundations for later import commands;
+010f1 now implements the retained tags/custom-field import.
 See [015](../specs/SLICE_015.md), [016](../specs/SLICE_016.md),
 [019](../specs/SLICE_019.md), and [019b](../specs/SLICE_019b.md).
 
@@ -87,7 +100,7 @@ See [015](../specs/SLICE_015.md), [016](../specs/SLICE_016.md),
 |---|---|
 | People, emails, phones | Core tables exist. Preserve every source identifier and contact method. Flag missing/invalid contacts and ambiguous identity matches; names alone must not merge People. |
 | Stages, users, responsibility | Map source stages and users to Organization stages/members in preview. FUB users are not automatically authenticated CRM accounts. Unmatched users and pond/collaborator roles need visible dispositions. |
-| Tags and custom fields | Include in the proposed first usable migration. Keep source keys and option identity. Current text/label/number limits and recurring-date semantics can prevent exact representation; preserve and report exceptions instead of truncating/coercing. |
+| Tags and custom fields | Deployed 010f1 restores embedded tags and custom definitions/options/values from the completed parent's retained source, preserving source keys and option identity. Current text/label/number limits and recurring-date semantics can prevent exact representation; preserve and report exceptions instead of truncating/coercing. Full standalone tag capture remains future work. |
 | Notes | Plain-text destination exists, with a 10,000-character limit. Authorship, historical timestamps, formatting, attachments and restricted notes need explicit treatment. |
 | Tasks | Destination supports call/email/text/follow-up/other. Source task types, date-only deadlines, timezones, completion history and unmatched assignees need a mapping policy. |
 | Inquiry and communication history | Import only facts supported by source evidence. Preserve source attribution and original timestamps separately from import time. A Person creation date is not necessarily an Inquiry; `lastCommunication` alone is not a call or text. |
@@ -188,8 +201,8 @@ the cutover rung.
 |---|---|
 | 1 — 010a | Secure API connection and honest bounded access report, implemented and synthetically verified. Live authorized FUB validation is user-deferred; no export upload or imported CRM business records. |
 | 2 — 010b | Core-first encrypted resumable snapshot and preview (D-061): People/users/stages/custom fields/notes/tasks; mappings, overlap candidates, unsupported values and explicit remaining coverage. Raw captures carry source IDs, API/schema/profile versions, capture times and keyed hashes. Further snapshot work must address history, communications, media and other uncovered families before cutover. |
-| 3 — 010c | People/contact/stage/assignment import into the new empty Organization is implemented and synthetically verified under D-065. Separate People, explicitly approved matching stages and admin review-only use remain D-064. Frozen-plan recovery/provenance avoids duplicates and synthetic Inquiry history; release/activation remain separate. |
-| 4 — 010f1, then further core rungs | Approved 010f1 imports embedded tag membership and custom definitions/options/values onto completed 010c People, preserving the review hold. Notes/tasks follow separately with authorship/timestamps, identity and local-edit/tombstone protection. Full standalone tag capture is still outstanding. |
+| 3 — 010c | People/contact/stage/assignment import into the new empty Organization is implemented, synthetically verified and deployed under D-065/follow-ups. Separate People, explicitly approved matching stages and admin review-only use remain D-064. Frozen-plan recovery/provenance avoids duplicates and synthetic Inquiry history; activation remains separate. |
+| 4 — 010f1, then further core rungs | Deployed/verified 010f1 imports embedded tag membership and custom definitions/options/values onto completed 010c People, preserving the review hold. Notes/tasks are next for separate planning with authorship/timestamps, identity and local-edit/tombstone protection. Full standalone tag capture is still outstanding. |
 | 5 — 010d | Supported historical inquiry/call/text/correspondence facts, each with verified meaning. Inaccessible content stays a disclosed gap. Resolve Today behavior before enabling imported backlog for agents. |
 | 6 — 010e | Per-entity delta capture, final reconciliation and explicit cutover/activation. Resolve source privacy, enforce communication restrictions and review Today before releasing the D-064 hold; validate changes/deletions and agree a source-write cutoff/final delta. No source cancellation, phone transfer or ongoing two-way sync is implied. |
 
@@ -220,7 +233,8 @@ alter the ranking silently to hide that backlog.
 
 FUB source access and CRM visibility are different: operational Organizations
 give active members Organization-wide Person visibility. D-064 explicitly accepts
-an admin-only migration review hold; the proposed 010c gate enforces it. The
+an admin-only migration review hold; the implemented 010c gate enforces it and
+010f1 preserves it. The
 preview must still expose audience changes and restricted/private source data;
 later activation requires those policies to be resolved before wider access.
 
@@ -246,7 +260,8 @@ This summary does not silently expand current Person, note, task or field APIs.
 
 The **010a specification and bounded brief** are implemented and synthetically
 verified (D-060), with API-first access, encrypted persistent credentials and a
-bounded probe profile. The proposed policies for later rungs remain unapproved.
+bounded probe profile. Proposed policies beyond the approved 010b/010c/010f1
+scope remain unapproved.
 010a owns encrypted evidence for its bounded probes; 010b owns core snapshot
 storage and pagination checkpoints. Recorded 010a synthetic acceptance proves:
 
@@ -281,8 +296,11 @@ authorized commit, merge/publication, shared-development deployment and cleanup,
 now completed; live source validation remains deferred.
 
 The reviewed 010c implementation, synthetic verification and shared-development
-deployment are complete under D-065 and its follow-ups. D-066 now authorizes
+deployment are complete under D-065 and its follow-ups. D-066 approved
 implementation and synthetic verification of the reviewed
 [010f1 specification](../specs/SLICE_010f1.md) and
-[brief](../tasks/SLICE_010f1_IMPL.md). Later families and activation require
-their own approved scope.
+[brief](../tasks/SLICE_010f1_IMPL.md). Its explicit follow-up authorized Git
+integration, cleanup and deployment, now completed and
+[verified](../tasks/SLICE_010f1_RELEASE.md). Notes/tasks, later families,
+customer-data/live-source work and activation retain their own approved scope
+and readiness gates.

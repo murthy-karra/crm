@@ -1,6 +1,6 @@
 # Architecture Baseline
 
-Reviewed 2026-09-11 against accepted decisions through D-065 and current source.
+Reviewed 2026-09-11 against accepted decisions through D-066 and its release follow-up.
 This is a derived system map, not another decision log. The
 [decision log](../decisions/DECISION_LOG.md) and [AGENTS.md](../../AGENTS.md)
 win on conflict. Observed runtime state and release evidence belong in
@@ -27,7 +27,8 @@ Web layouts are still the Web application.
 
 Current domains include People, inquiries/history, stages and assignment, tags,
 notes, tasks, typed custom fields, saved filters/Today rules, administration,
-intake/correspondence, calling and FUB assessment/capture/review-only People import. The Operator has both read
+intake/correspondence, calling and FUB assessment/capture/review-only People and
+retained metadata import. The Operator has both read
 tools and scoped mutation tools; it is no longer read-only.
 
 ## Trust boundaries
@@ -113,16 +114,23 @@ contact overlaps. Admin confirmation establishes a persistent review binding
 before business writes; cancellation retains committed rows and the hold.
 010c does not apply tags, custom fields, notes or tasks to business rows.
 
-[010f1](../specs/SLICE_010f1.md) is implemented in its isolated D-066 worktree;
-[synthetic verification](../tasks/SLICE_010f1_VERIFICATION.md) passed its full gates,
-query measurements and actual browser/native API checks. It is uncommitted and
-undeployed.
+[010f1](../specs/SLICE_010f1.md) is committed, merged, pushed and
+[deployed in shared development](../tasks/SLICE_010f1_RELEASE.md) under D-066 and
+its follow-up. Deployed source is `e36ce36` (implementation `f37ddd1`);
+the merged branch/worktree and disposable QA resources are removed.
+[Synthetic verification](../tasks/SLICE_010f1_VERIFICATION.md) passed its full gates,
+query measurements and actual browser/native API checks. The
+[release evidence](../design/qa/slice-010f1-2026-09-11-release/README.md) separately
+records 43 HTTP/auth/asset checks, eight public browser workflows, eight inspected
+desktop/390px screenshots and tunnel 200/200/101.
 It adds a retained-source metadata child and worker for explicit tag/custom-field
 mapping and creation, absent-or-equal values, item reconciliation and provenance.
 The child reuses the original parent/snapshot/review binding, with its own claims,
 atomic units, private insert permit and reservations in the shared retained-byte
 ledger. It makes no source requests. Notes/tasks and activation remain later work.
-The deployed shared runtime still contains 010c only.
+Migration `20260919000001` is applied. Existing business counts and all three
+operational workspace revisions are unchanged; the 43 migration tables remain
+empty. Live FUB/customer-data validation and activation remain deferred.
 
 Every API/worker/admin launch against review bindings must enforce the compatible
 workspace gate. The [release preflight](../../scripts/migration-release-preflight)
@@ -134,6 +142,11 @@ compatible artifacts; the [runbook](../tasks/SLICE_010c_RELEASE_PREPARATION.md)
 prohibits resetting the hold to permit older software. The 010f1 preflight also
 requires metadata-child capability from every candidate API/worker; an old 010c
 report does not qualify a metadata release.
+The 010f1 actual-DB launch and confirmation checks passed with
+`metadata_confirmation_ready=true`; the recorded report expiry is
+2026-09-12 00:30:47 UTC (2026-09-11 17:30:47 PDT). A later confirmation or recovery
+requires renewed evidence from a fresh actual workload inventory. The release
+backup's archive catalog was validated; restoration was not exercised.
 
 ## Network and telephony
 

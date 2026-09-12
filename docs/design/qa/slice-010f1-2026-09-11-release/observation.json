@@ -1,0 +1,27 @@
+{
+  "result": "passed",
+  "observed_at": "2026-09-12T00:28:08.971148+00:00",
+  "observation_started_at": "2026-09-12T00:26:56.934988+00:00",
+  "elapsed_seconds": 72.04,
+  "api_listener": [
+    35303
+  ],
+  "web_listener": [
+    35323
+  ],
+  "crm_processes_broad_scan": [
+    {
+      "pid": 35303,
+      "command": "backend/target/debug/crm-api"
+    }
+  ],
+  "backend_artifacts_match": 3,
+  "web_files_match": 72,
+  "verified_source_files_match": 975,
+  "new_retired_artifacts_preserved_non_executable": 3,
+  "warn_error_counts": {
+    "api.log": 0,
+    "web.log": 0
+  },
+  "recurring_monitor_created": false
+}

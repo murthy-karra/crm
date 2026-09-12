@@ -1,6 +1,6 @@
 # Slice 010 — Follow Up Boss migration ladder
 
-**Current status: 010a AND 010b DEPLOYED; 010c DEPLOYED AND VERIFIED (2026-09-11).** The user requested
+**Current status: 010a, 010b, 010c AND 010f1 DEPLOYED AND VERIFIED (2026-09-11).** The user requested
 a refreshed migration summary and chose a new, empty destination Organization
 first (D-059). The current migration plan is
 [SLICE_010_MIGRATION_SUMMARY.md](SLICE_010_MIGRATION_SUMMARY.md).
@@ -37,8 +37,19 @@ standalone tags and other uncaptured families remain explicit gaps.
 [Independent plan review](../tasks/SLICE_010f1_REVIEW.md) returned READY;
 D-066 approves its specification/contracts and implementation. The implementation
 and synthetic verification are complete, including full gates, measured query
-plans and real-API/production-Web checks. The worktree remains uncommitted and
-undeployed; [verification](../tasks/SLICE_010f1_VERIFICATION.md) records the handoff.
+plans and real-API/production-Web checks. Its follow-up explicitly authorized
+integration, cleanup and shared-development deployment: implementation `f37ddd1`
+and merge `e36ce36` are published, all 975 source hashes match, and the merged
+branch/worktree is removed with all 45 pending main docs preserved.
+[Verification](../tasks/SLICE_010f1_VERIFICATION.md) records synthetic proof;
+the [release record](../tasks/SLICE_010f1_RELEASE.md) and
+[public evidence](../design/qa/slice-010f1-2026-09-11-release/README.md) record
+43 HTTP/auth/asset checks, eight browser workflows, eight inspected desktop/390px
+screenshots and tunnel 200/200/101. Existing business counts/workspaces are
+unchanged and migration tables remain empty. Later confirmation/recovery requires
+fresh metadata-capable compatibility evidence; the release report is not renewed
+automatically. Notes/tasks are the next core-import planning scope; live FUB,
+customer-data work and activation remain deferred.
 Notes, tasks, tags and custom fields now
 have destination models. API-first assessment and encrypted saved credentials
 are settled for 010a; live-source qualification and later fidelity, mapping,

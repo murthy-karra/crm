@@ -1,0 +1,94 @@
+{
+  "artifact_manifest_sha256": "72d8e258a71d10d6c5fff18d8415bdfed4eee4b050f678622dc036c03afa02e2",
+  "binding_count": "0",
+  "candidate_manifest_sha256": "676248ee7e98c3f950a435af15975a975ffca2d173f0d5928af59a2d1b602039",
+  "candidates": [
+    {
+      "capabilities": [
+        "fub-metadata-import-v1"
+      ],
+      "gate_version": "crm-workspace-v1",
+      "revision": "e36ce360a4956b76b6f8dc537a051e6cb8cbc7b7",
+      "role": "api",
+      "sha256": "58e01b385d50c6eede5a05ca4bdeea88ed070eabba19b14276966287fcc595c0"
+    },
+    {
+      "capabilities": [
+        "fub-metadata-import-v1"
+      ],
+      "gate_version": "crm-workspace-v1",
+      "revision": "e36ce360a4956b76b6f8dc537a051e6cb8cbc7b7",
+      "role": "worker",
+      "sha256": "58e01b385d50c6eede5a05ca4bdeea88ed070eabba19b14276966287fcc595c0"
+    },
+    {
+      "capabilities": [],
+      "gate_version": "crm-workspace-v1",
+      "revision": "e36ce360a4956b76b6f8dc537a051e6cb8cbc7b7",
+      "role": "cli",
+      "sha256": "cfc20d7f54139df890ec35f2a1c70081a2947b71efcfa3f76fe11ab1b691245a"
+    },
+    {
+      "capabilities": [],
+      "gate_version": "crm-workspace-v1",
+      "revision": "e36ce360a4956b76b6f8dc537a051e6cb8cbc7b7",
+      "role": "migrator",
+      "sha256": "85b506ae34152cd1b4664d58184e8e25dc5f4340a707b768a7bce975b4eda667"
+    }
+  ],
+  "checked_at": "2026-09-12T00:25:44Z",
+  "confirmation_ready": true,
+  "confirmation_reasons": [],
+  "database_name": "crm_dev",
+  "evidence_expires_at": "2026-09-12T00:30:44Z",
+  "gate_version": "crm-workspace-v1",
+  "inventory_sha256": "cbfb36c0a3ff4d8a05c468a83c65e5191e75156a9a8653c8d2f9c60186d36040",
+  "launch_allowed": true,
+  "launch_reasons": [],
+  "metadata_confirmation_ready": true,
+  "metadata_confirmation_reasons": [],
+  "pre_010c_retired": true,
+  "process_count": "4",
+  "processes": [
+    {
+      "capabilities": [
+        "fub-metadata-import-v1"
+      ],
+      "gate_version": "crm-workspace-v1",
+      "id": "launch.dev-api",
+      "revision": "e36ce360a4956b76b6f8dc537a051e6cb8cbc7b7",
+      "role": "api",
+      "sha256": "58e01b385d50c6eede5a05ca4bdeea88ed070eabba19b14276966287fcc595c0"
+    },
+    {
+      "capabilities": [
+        "fub-metadata-import-v1"
+      ],
+      "gate_version": "crm-workspace-v1",
+      "id": "launch.in-process-workers",
+      "revision": "e36ce360a4956b76b6f8dc537a051e6cb8cbc7b7",
+      "role": "worker",
+      "sha256": "58e01b385d50c6eede5a05ca4bdeea88ed070eabba19b14276966287fcc595c0"
+    },
+    {
+      "capabilities": [],
+      "gate_version": "crm-workspace-v1",
+      "id": "launch.crm-admin",
+      "revision": "e36ce360a4956b76b6f8dc537a051e6cb8cbc7b7",
+      "role": "cli",
+      "sha256": "cfc20d7f54139df890ec35f2a1c70081a2947b71efcfa3f76fe11ab1b691245a"
+    },
+    {
+      "capabilities": [],
+      "gate_version": "crm-workspace-v1",
+      "id": "launch.db-migrate",
+      "revision": "e36ce360a4956b76b6f8dc537a051e6cb8cbc7b7",
+      "role": "migrator",
+      "sha256": "85b506ae34152cd1b4664d58184e8e25dc5f4340a707b768a7bce975b4eda667"
+    }
+  ],
+  "purpose": "launch",
+  "required_gate_versions": [],
+  "target": "shared-development.crm_dev",
+  "version": 1
+}

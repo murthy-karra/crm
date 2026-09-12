@@ -1,0 +1,46 @@
+{
+  "result": "passed",
+  "reviewer": "release_audit",
+  "observed_at": "2026-09-12T00:29:27Z",
+  "scope": "Independent read-only release evidence audit, not an implementation review",
+  "direct_checks": {
+    "api_pid": 35303,
+    "web_pid": 35323,
+    "cwd_and_executable_mapping_match": true,
+    "source_hashes_match": 975,
+    "backend_hashes_match": 3,
+    "web_hashes_match": 72,
+    "new_retired_hashes_and_non_executable_modes_match": 3,
+    "historical_retired_hashes_and_non_executable_modes_match": 23,
+    "additional_crm_hashed_or_qa_runtimes": 0,
+    "backup_hash_and_size_match": true,
+    "preflight_input_hashes_match": true,
+    "installed_report_matches_confirm_and_mode_0600": true,
+    "report_metadata_and_ordinary_ready_at_observation": true,
+    "report_expires_at": "2026-09-12T00:30:47Z",
+    "api_web_warn_error_entries": 0,
+    "temporary_cookie_files_remaining": 0
+  },
+  "inspected_result_files": {
+    "http_auth_asset_checks_passed": 43,
+    "browser_checks_passed": 8,
+    "browser_errors": 0,
+    "browser_source_business_mutations": 0,
+    "browser_sessions_revoked": true,
+    "tunnel_status": [
+      200,
+      200,
+      101
+    ],
+    "business_table_counts_unchanged": 45,
+    "migration_tables_empty": 43,
+    "operational_organizations_revision_1": 3,
+    "bounded_observation_seconds": 72.04
+  },
+  "mutations_performed": false,
+  "new_db_queries_or_test_gates": false,
+  "env_read": false,
+  "restore_exercised": false,
+  "live_fub_validation_performed": false,
+  "material_findings": []
+}

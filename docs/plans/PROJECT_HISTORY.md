@@ -851,7 +851,7 @@ relative-only performance gates), D-049–D-043 (the 011 ladder), D-045/D-044
 
 ## Slice ledger
 
-Source through 010c is merged to main and pushed. Live/deployment residuals
+Source through 010f1 is merged to main and pushed. Live/deployment residuals
 remain in Current state and the per-slice verification records; source
 publication does not close them.
 
@@ -900,7 +900,7 @@ publication does not close them.
 | 010a | Bounded FUB assessment, encrypted credentials/evidence and recovery (D-060); live validation deferred | `cd224fe` (implementation `e4e0658`), pushed and deployed 2026-09-11 |
 | 010b | Encrypted core FUB capture, deterministic preview, budget controls and recovery (D-063); live validation deferred | `89471f0` (implementation `b71a854`), pushed and [deployed](../tasks/SLICE_010b_RELEASE.md) 2026-09-11; worktree/QA cleanup complete |
 | 010c | Retained People/contact/stage/assignment import, provenance/reconciliation and admin review hold (D-064/065); activation and live validation deferred | `c3f6ca9` (implementation `fcd2480`), pushed 2026-09-11; [verification and integration](../tasks/SLICE_010c_VERIFICATION.md) complete, merged worktree/QA resources removed; [deployed and verified](../tasks/SLICE_010c_RELEASE.md) as source `f01c2e3` |
-| 010f1 | Retained tags/custom-field child for completed 010c People, explicit mappings and immutable review hold (D-066) | Implemented and synthetically verified 2026-09-11 in uncommitted `codex/slice-010f1-metadata-import`; 900 Rust / 1,054 Web / 881 DB, 90 plans / 246 checks, 51 browser checkpoints; [evidence](../design/qa/slice-010f1-2026-09-11/README.md). Undeployed; live validation/activation remain separate. |
+| 010f1 | Retained tags/custom-field child for completed 010c People, explicit mappings and immutable review hold (D-066) | `e36ce36` (implementation `f37ddd1`), pushed and [deployed/verified](../tasks/SLICE_010f1_RELEASE.md) 2026-09-11 under the explicit follow-up; all 975 source hashes match, merged worktree/branch removed and 45 pending main docs preserved. Synthetic [evidence](../design/qa/slice-010f1-2026-09-11/README.md): 900 Rust / 1,054 Web / 881 DB, 90 plans / 246 checks, 51 browser checkpoints. Public [release evidence](../design/qa/slice-010f1-2026-09-11-release/README.md): 43 HTTP/auth/asset checks, eight browser workflows and eight inspected screenshots; unchanged business counts/workspaces, no source import. Live validation/customer data/activation remain deferred. |
 | — | Gate-speedup chunk (check 35m→79s, check-db 37m→~2m) | 2026-08-28 |
 | — | Test-binary consolidation (40 files → 1 binary) | `6427ee8` |
 

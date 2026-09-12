@@ -1,0 +1,65 @@
+{
+  "result": "passed",
+  "checks": [
+    "Alice admin navigation; empty connection, credential and core snapshot; disabled preparation; existing assessment section",
+    "Explicit Refresh snapshots returned 200 with an empty list",
+    "People import panel loaded; planning disabled without evidence; explicit refresh returns empty imports",
+    "010f1 metadata panel has no completed People parent, disabled preparation and no errors; explicit metadata refresh returned an empty People imports page",
+    "Reload fetched empty People imports and restored the metadata empty state with preparation disabled and no errors",
+    "Desktop and 390px pages have no horizontal overflow; eight full-page, snapshot, People and metadata screenshots saved",
+    "Carol member has no Migration navigation, direct route redirects to Today and no snapshot, People or metadata import panel is exposed",
+    "No browser page errors or source/business mutation requests; read-only realtime token allowed and telemetry blocked"
+  ],
+  "failure": null,
+  "snapshot_refresh_status": 200,
+  "metadata_refresh_status": 200,
+  "metadata_reload_parent_status": 200,
+  "runtime_errors": 0,
+  "blocked_mutations": [],
+  "blocked_telemetry_requests": 10,
+  "viewports": [
+    {
+      "label": "desktop",
+      "width": 1360,
+      "height": 950,
+      "horizontal_overflow": false,
+      "viewport": 1360,
+      "document": 1360,
+      "body": 1360
+    },
+    {
+      "label": "390px",
+      "width": 390,
+      "height": 844,
+      "horizontal_overflow": false,
+      "viewport": 390,
+      "document": 390,
+      "body": 390
+    }
+  ],
+  "screenshots": [
+    "migration-desktop.png",
+    "snapshot-empty-desktop.png",
+    "people-import-empty-desktop.png",
+    "metadata-import-empty-desktop.png",
+    "migration-390px.png",
+    "snapshot-empty-390px.png",
+    "people-import-empty-390px.png",
+    "metadata-import-empty-390px.png"
+  ],
+  "session_cleanup": [
+    {
+      "session": "alice",
+      "status": 204
+    },
+    {
+      "session": "final_active_session",
+      "status": 204
+    }
+  ],
+  "source_connection_created": false,
+  "snapshot_proposal_created": false,
+  "metadata_import_proposal_created": false,
+  "source_or_business_mutations": 0,
+  "seed_or_reset_performed": false
+}

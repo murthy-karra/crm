@@ -1,0 +1,107 @@
+{
+  "observed_at": "2026-09-12T14:18:54.620355+00:00",
+  "head": "028d6133e1b7c3f81642275e030f63e98b2cca49",
+  "remote_main": "028d6133e1b7c3f81642275e030f63e98b2cca49",
+  "listeners": "COMMAND   PID   USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME\ncrm-api 25757 karrad   13u  IPv4 0xdec35099d8f6f6c6      0t0  TCP 127.0.0.1:3000 (LISTEN)\nnode    25780 karrad   14u  IPv4 0xc5a1e74b49588e84      0t0  TCP 127.0.0.1:5173 (LISTEN)\n",
+  "runtime_paths": "p25757\nfcwd\nn/Users/karrad/projects/crm\nftxt\nn/Users/karrad/projects/crm/backend/target/debug/crm-api\nftxt\nn/usr/lib/dyld\np25780\nfcwd\nn/Users/karrad/projects/crm/web\nftxt\nn/Users/karrad/.nvm/versions/node/v24.16.0/bin/node\nftxt\nn/usr/lib/dyld\nftxt\nn/Users/karrad/projects/crm/web/node_modules/.pnpm/fsevents@2.3.3/node_modules/fsevents/fsevents.node\nftxt\nn/Users/karrad/projects/crm/web/node_modules/.pnpm/@tailwindcss+oxide-darwin-arm64@4.3.3/node_modules/@tailwindcss/oxide-darwin-arm64/tailwindcss-oxide.darwin-arm64.node\nftxt\nn/Users/karrad/projects/crm/web/node_modules/.pnpm/@rolldown+binding-darwin-arm64@1.2.5/node_modules/@rolldown/binding-darwin-arm64/rolldown-binding.darwin-arm64.node\nftxt\nn/Users/karrad/projects/crm/web/node_modules/.pnpm/lightningcss-darwin-arm64@1.32.0/node_modules/lightningcss-darwin-arm64/lightningcss.darwin-arm64.node\n",
+  "build-sha256.json": {
+    "checked": 3,
+    "mismatches": []
+  },
+  "web-build-sha256.json": {
+    "checked": 73,
+    "mismatches": []
+  },
+  "http": [
+    {
+      "url": "http://127.0.0.1:3000/api/health",
+      "status": 200,
+      "sha256": "a29ee2b15c494311c52521766e44af56a3ad2248e7a8ab465e5206463c13d288",
+      "bytes": 15
+    },
+    {
+      "url": "http://127.0.0.1:3000/internal/ready",
+      "status": 200,
+      "sha256": "31bf75f4c0a97cc1f7b60df824fa390b3be9ba014f29b63c87c698ba63d9a9fd",
+      "bytes": 18
+    },
+    {
+      "url": "https://api.tarams.org/api/health",
+      "status": 200,
+      "sha256": "a29ee2b15c494311c52521766e44af56a3ad2248e7a8ab465e5206463c13d288",
+      "bytes": 15
+    },
+    {
+      "url": "https://app.tarams.org/",
+      "status": 200,
+      "sha256": "87efc8c7826d6858affe96f946635f30b7589be112221822ebb77beb4caf1110",
+      "bytes": 1268,
+      "matches_release": true
+    },
+    {
+      "url": "https://app.tarams.org/assets/MigrationView-CrwaaxqQ.js",
+      "status": 200,
+      "sha256": "e0c433bbd6cf2c5e8e2a76b08d32bbbcacdabfddb175c49dde2b429935031cc5",
+      "bytes": 173612,
+      "matches_release": true
+    },
+    {
+      "url": "https://app.tarams.org/assets/index-DdOzqhW8.js",
+      "status": 200,
+      "sha256": "5cdc6ded93bef3a0ae761659604871e642aff3e06765d3f617017d6bf730fa12",
+      "bytes": 221423,
+      "matches_release": true
+    },
+    {
+      "url": "http://127.0.0.1:3000/api/migrations/fub/activity-imports",
+      "status": 401,
+      "sha256": "ab4fd90076db1102a7ec6ff9212732f51c7ba6cb43e63eb94d9c5d6f26d8270a",
+      "bytes": 27
+    },
+    {
+      "url": "https://api.tarams.org/api/migrations/fub/activity-imports",
+      "status": 401,
+      "sha256": "ab4fd90076db1102a7ec6ff9212732f51c7ba6cb43e63eb94d9c5d6f26d8270a",
+      "bytes": 27
+    }
+  ],
+  "database": {
+    "read_only": true,
+    "business_tables_checked": 45,
+    "migration_tables_checked": 56,
+    "count_changes": {},
+    "workspace_states_match_release": true,
+    "operation_admissions": 0,
+    "applied_migrations": 35,
+    "latest_migration": 20260920000001,
+    "migration_checksum_or_success_mismatches": []
+  },
+  "backup": {
+    "exists": true,
+    "restore_exercised": false,
+    "bytes": 110063438,
+    "sha256_matches_release": true,
+    "catalog_entries": 932
+  },
+  "compatibility": {
+    "installed_report_matches_release": true,
+    "evidence_expires_at": "2026-09-12T05:18:49Z",
+    "expired_now": true,
+    "renewed_by_audit": false
+  },
+  "fub_configuration": {},
+  "runtime_log_counts": {
+    "api.log": {
+      "bytes": 613922,
+      "warn_lines": 4925,
+      "error_lines": 0,
+      "transaction_state_notice_lines": 0
+    },
+    "web.log": {
+      "bytes": 39,
+      "warn_lines": 0,
+      "error_lines": 0,
+      "transaction_state_notice_lines": 0
+    }
+  }
+}

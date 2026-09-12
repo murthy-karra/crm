@@ -236,6 +236,7 @@ pub async fn cancel_connection_jobs(
     for run in runs {
         super::snapshot::release_source(conn, org, run).await?;
     }
+    super::history_capture_store::invalidate_connection(conn, org, id).await?;
     Ok(())
 }
 

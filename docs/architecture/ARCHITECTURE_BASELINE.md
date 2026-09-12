@@ -1,6 +1,7 @@
 # Architecture Baseline
 
-Reviewed 2026-09-11 against accepted decisions through D-068.
+Reviewed 2026-09-11 against accepted decisions through D-068; migration status
+and approved 010d1 capture pointers updated 2026-09-12 under D-069/D-070.
 This is a derived system map, not another decision log. The
 [decision log](../decisions/DECISION_LOG.md) and [AGENTS.md](../../AGENTS.md)
 win on conflict. Observed runtime state and release evidence belong in
@@ -127,14 +128,16 @@ It adds a retained-source metadata child and worker for explicit tag/custom-fiel
 mapping and creation, absent-or-equal values, item reconciliation and provenance.
 The child reuses the original parent/snapshot/review binding, with its own claims,
 atomic units, private insert permit and reservations in the shared retained-byte
-ledger. It makes no source requests. Its notes/tasks successor is the approved
+ledger. It makes no source requests. Its notes/tasks successor is the deployed
 010f2 implementation described below; activation remains later work.
-Migration `20260919000001` is applied. Existing business counts and all three
-operational workspace revisions are unchanged; the 43 migration tables remain
-empty. Live FUB/customer-data validation and activation remain deferred.
+Migration `20260919000001` is applied; the counts above describe that dated
+release. [Current state](../plans/PROJECT_STATE.md) holds the later audited
+runtime inventory. Live FUB/customer-data validation and activation remain deferred.
 
-[010f2](../specs/SLICE_010f2.md) is approved under D-068 and being implemented in
-an isolated worktree; it is not deployed. It adds an independent retained-source
+[010f2](../specs/SLICE_010f2.md) is implemented and deployed in shared development
+under D-068 and its follow-up; see [release](../tasks/SLICE_010f2_RELEASE.md) and
+[current completion audit](../tasks/SLICE_010_COMPLETION_AUDIT_2026-09-12.md).
+It adds an independent retained-source
 notes/tasks child of the completed People import, with explicit actor/type/timezone
 choices, exact source evidence, readable plain-text note conversion and atomic
 insert-or-equality results. Native identities include the source account and
@@ -142,7 +145,7 @@ survive local edits/erasure without permitting overwrite or resurrection.
 Cancellation preserves committed rows, original parent/sibling state and the
 review hold. Child evidence uses the shared retention ledger; native rows/indexes
 are measured separately. The [verification record](../tasks/SLICE_010f2_VERIFICATION.md)
-tracks the remaining implementation gates.
+records completed implementation gates and their later audit qualifications.
 
 010f2's first confirmation establishes a durable read boundary under the exclusive
 workspace barrier. Legacy complete Person/history/task reads then fail closed;
@@ -154,6 +157,14 @@ Operator and communications remain blocked pending a later activation capability
 The new `fub-activity-import-v1` release capability covers both the activity worker
 and bounded readers; compatible recovery must retain this boundary even after a
 cancelled import with no native writes.
+
+D-069 accepts splitting the [010d history ladder](../specs/SLICE_010d.md):
+010d1 separately captures events/calls/texts and reports coverage; 010d2 later
+defines historical facts and bounded timeline readers. D-070 approves complete
+010d1 contracts and isolated implementation verification, now in progress. The
+current core snapshot and completed import boundaries remain immutable; no
+native history or Today change is part of 010d1. Its independent release
+capability is `fub-history-capture-v1`, including durable confirmed/cancelled runs.
 
 Every API/worker/admin launch against review bindings must enforce the compatible
 workspace gate. The [release preflight](../../scripts/migration-release-preflight)

@@ -1,0 +1,915 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.13s
+────────────
+ Nextest run ID 962112ae-d221-43db-a723-08faed2a558c with nextest profile: default
+    Starting 908 tests across 7 binaries (935 tests skipped)
+        PASS [   7.057s] (  1/908) crm-api::all centrifugo_realtime::centrifugo_delivers_scoped_events_denies_cross_org_and_never_replays
+        PASS [   7.385s] (  2/908) crm-api::all db_activity_lifecycle::activity_logs_have_positive_phase_controls_without_source_content
+        PASS [   7.385s] (  3/908) crm-api::all db_activity_lifecycle::actual_activity_confirmation_waits_for_reader_and_overlapping_workers_settle_once
+        PASS [   7.387s] (  4/908) crm-api::all db_activity_lifecycle::confirmed_activity_can_complete_with_zero_inserts_after_revalidation
+        PASS [   7.400s] (  5/908) crm-api::all db_activity_lifecycle::activity_authority_loss_retry_adoption_and_partial_cancel_preserve_boundary
+        PASS [   7.404s] (  6/908) crm-api::all db_activity_lifecycle::activity_private_db_permit_rejects_origin_token_and_wrong_target
+        PASS [   7.422s] (  7/908) crm-api::all db_activity_lifecycle::activity_atomic_result_failure_rolls_back_native_identity_and_ledgers
+        PASS [   7.424s] (  8/908) crm-api::all db_activity_lifecycle::activity_native_equal_local_edits_tombstone_legacy_and_identity_missing
+        PASS [   7.427s] (  9/908) crm-api::all db_activity_lifecycle::activity_storage_pause_and_sibling_cancel_keep_independent_reservations
+        PASS [  11.385s] ( 10/908) crm-api::all db_activity_lifecycle::activity_http_scope_strict_inputs_receipt_replay_and_all_held_replanning
+        PASS [   9.279s] ( 11/908) crm-api::all db_activity_r1_source::activity_r1_completed_capture_rejects_only_open_request_fingerprint_change
+        PASS [   9.503s] ( 12/908) crm-api::all db_activity_races::activity_race_cancel_waits_for_inflight_unit_then_fences_all_later_units
+        PASS [   9.548s] ( 13/908) crm-api::all db_activity_r1_source::activity_r1_real_source_retry_preserves_invalid_and_rejected_variants
+        PASS [   9.564s] ( 14/908) crm-api::all db_activity_r1_source::activity_r1_complementary_note_exclusions_count_without_native_list_fallback
+        PASS [   9.914s] ( 15/908) crm-api::all db_activity_lifecycle::expired_plan_and_real_release_report_reject_new_confirmation
+        PASS [   9.568s] ( 16/908) crm-api::all db_activity_r1_source::activity_r1_users_next_request_reconstructs_exact_local_position_and_token
+        PASS [   9.549s] ( 17/908) crm-api::all db_activity_races::activity_race_expired_inflight_unit_rolls_back_and_real_workers_reclaim_once
+        PASS [   9.588s] ( 18/908) crm-api::all db_activity_r1_control::activity_rejects_changed_account_capture_and_exact_preview
+        PASS [   5.592s] ( 19/908) crm-api::all db_activity_review::exclusive_boundary_serializes_legacy_read_and_survives_zero_write_cancel
+        PASS [  10.747s] ( 20/908) crm-api::all db_activity_races::activity_race_sibling_commands_cannot_oversubscribe_run_or_org_and_settle_owned_bytes
+        PASS [   9.012s] ( 21/908) crm-api::all db_admin::a_request_log_captured_during_the_invitation_lifecycle_never_contains_the_token
+        PASS [   9.672s] ( 22/908) crm-api::all db_activity_upgrade::populated_010f1_upgrade_preserves_native_and_import_state
+        PASS [  10.026s] ( 23/908) crm-api::all db_activity_review::native_page_cursor_requires_refresh_after_activity_revision_changes
+        PASS [   9.726s] ( 24/908) crm-api::all db_activity_source::activity_source_requires_both_exhausted_families_without_a_metadata_child
+        PASS [   9.754s] ( 25/908) crm-api::all db_activity_review::review_requires_current_admin_real_binding_and_exact_person_scope
+        PASS [   8.533s] ( 26/908) crm-api::all db_admin::a_user_who_is_both_admin_and_platform_admin_reaches_both
+        PASS [   9.785s] ( 27/908) crm-api::all db_activity_review::native_review_pages_traverse_large_notes_and_timed_undated_tasks
+        LEAK [   9.905s] ( 28/908) crm-api::all db_activity_source::activity_source_holds_missing_details_and_all_task_variants_without_list_fallback
+        PASS [  12.836s] ( 29/908) crm-api::all db_activity_source::activity_source_imports_exact_notes_tasks_roles_and_confirmed_date_policy
+        PASS [   3.171s] ( 30/908) crm-api::all db_admin::every_org_admin_route_is_403_for_a_member
+        PASS [   3.410s] ( 31/908) crm-api::all db_admin::admin_facts_are_pii_free_and_carry_correct_origin
+        PASS [   4.084s] ( 32/908) crm-api::all db_admin::admin_fact_tables_are_append_only_via_grant_and_trigger
+        PASS [   3.402s] ( 33/908) crm-api::all db_admin::concurrent_double_accept_of_the_same_token_exactly_one_succeeds
+        PASS [   3.392s] ( 34/908) crm-api::all db_admin::cross_organization_admin_routes_are_byte_identical_404s
+        PASS [   3.412s] ( 35/908) crm-api::all db_admin::concurrent_issue_and_accept_never_leaves_a_dangling_invitation_or_bare_db_error
+        PASS [   3.413s] ( 36/908) crm-api::all db_admin::crm_app_cannot_mint_platform_admin_or_mutate_invitation_token_hash
+        PASS [   3.405s] ( 37/908) crm-api::all db_admin::deactivation_revokes_sessions_blocks_login_and_disconnects_realtime
+        PASS [   3.311s] ( 38/908) crm-api::all db_admin::every_platform_route_is_403_for_an_organization_admin
+        PASS [   3.046s] ( 39/908) crm-api::all db_admin::organization_state_covers_all_three_and_recovers_on_acceptance
+        PASS [   3.056s] ( 40/908) crm-api::all db_admin::platform_role_route_rejects_member_with_400
+        PASS [   3.139s] ( 41/908) crm-api::all db_admin::expired_invitation_returns_410_and_org_state_flips_to_needs_attention
+        PASS [   3.143s] ( 42/908) crm-api::all db_admin::invitation_lifecycle_issue_preview_accept_reject_second_accept
+        PASS [  16.269s] ( 43/908) crm-api::all db_activity_source::activity_source_corrupt_evidence_pauses_before_native_writes
+        PASS [   3.147s] ( 44/908) crm-api::all db_admin::issuing_to_an_existing_member_is_already_member_and_to_an_outside_account_is_generic
+        PASS [   3.114s] ( 45/908) crm-api::all db_admin::platform_admin_with_zero_memberships_has_null_organization_and_is_401_on_tenant_routes
+        PASS [   3.118s] ( 46/908) crm-api::all db_admin::platform_promote_on_admin_less_organization_succeeds
+        PASS [   3.148s] ( 47/908) crm-api::all db_admin::members_list_reports_role_status_and_assigned_people_count
+        PASS [   4.469s] ( 48/908) crm-api::all db_admin::read_committed_per_statement_snapshot_observes_a_commit_made_after_the_transaction_began
+        PASS [   4.429s] ( 49/908) crm-api::all db_calls::a_real_concurrent_second_call_is_409_from_the_unique_index
+        PASS [   4.510s] ( 50/908) crm-api::all db_admin::revoked_invitation_preview_is_404_and_reissue_supersedes
+        PASS [   4.423s] ( 51/908) crm-api::all db_calls::answered_call_advances_a_non_caller_members_today
+        PASS [   4.495s] ( 52/908) crm-api::all db_admin::revoking_an_accepted_invitation_is_invitation_used
+        PASS [   4.445s] ( 53/908) crm-api::all db_calls::answer_then_immediate_remote_leave_is_absorbed_by_the_presence_recheck
+        PASS [   4.460s] ( 54/908) crm-api::all db_calls::alice_cannot_see_dial_or_hang_up_bobs_call
+        PASS [   4.503s] ( 55/908) crm-api::all db_admin::sole_admin_cannot_self_demote_or_self_deactivate
+        PASS [   4.492s] ( 56/908) crm-api::all db_calls::agent_not_joined_and_provider_error_write_no_attempt
+        PASS [   4.516s] ( 57/908) crm-api::all db_admin::two_admins_concurrently_demoting_each_other_leaves_at_least_one_active_admin
+        PASS [   4.583s] ( 58/908) crm-api::all db_calls::crm_app_call_grants_are_exactly_section_2
+        PASS [   4.605s] ( 59/908) crm-api::all db_calls::hangup_while_the_dial_is_in_flight_is_cancelled_with_one_attempt_and_the_late_result_is_a_noop
+        PASS [   4.624s] ( 60/908) crm-api::all db_calls::provider_create_room_failure_settles_provider_error_and_is_503
+        PASS [   4.664s] ( 61/908) crm-api::all db_calls::hangup_on_an_answered_call_ends_it_with_agent_hangup_and_talk_seconds
+        PASS [   4.755s] ( 62/908) crm-api::all db_calls::answered_call_writes_exactly_one_reached_attempt_and_advances_today
+        PASS [   4.630s] ( 63/908) crm-api::all db_calls::out_of_order_sip_participant_left_in_ringing_is_a_noop_and_the_dial_failure_still_yields_one_attempt
+        PASS [   4.660s] ( 64/908) crm-api::all db_calls::history_call_completed_sorts_after_a_same_instant_contact_attempted
+        PASS [   4.691s] ( 65/908) crm-api::all db_calls::hangup_and_dial_are_caller_only_and_foreign_is_404
+        PASS [   4.694s] ( 66/908) crm-api::all db_calls::hangup_before_ringing_is_cancelled_without_an_attempt
+        PASS [   4.716s] ( 67/908) crm-api::all db_calls::busy_declined_and_ring_timeout_each_write_one_no_answer_attempt
+        PASS [   4.521s] ( 68/908) crm-api::all db_calls::start_on_a_foreign_or_nonexistent_person_is_a_byte_identical_404
+        PASS [   4.507s] ( 69/908) crm-api::all db_calls::sweep_expires_a_backdated_placing_call_without_an_attempt
+        PASS [   4.525s] ( 70/908) crm-api::all db_calls::webhook_agent_left_in_answered_is_agent_disconnected_and_in_ringing_is_cancelled
+        PASS [   4.541s] ( 71/908) crm-api::all db_calls::sweep_reconciles_a_backdated_answered_call_and_records_hangup_best_effort
+        PASS [   4.658s] ( 72/908) crm-api::all db_calls::reads_work_and_writes_are_503_with_telephony_disabled
+        PASS [   4.540s] ( 73/908) crm-api::all db_calls::the_fixture_number_never_appears_in_spans_or_log_lines
+        PASS [   4.557s] ( 74/908) crm-api::all db_calls::start_with_an_invalid_contact_method_is_an_identical_422
+        PASS [   4.545s] ( 75/908) crm-api::all db_calls::two_concurrent_dials_yield_one_202_and_one_recorded_dial
+        PASS [   4.582s] ( 76/908) crm-api::all db_calls::start_returns_201_with_a_join_grant_whose_claims_are_exactly_section_3
+        PASS [   4.585s] ( 77/908) crm-api::all db_calls::sweep_expires_a_backdated_ringing_call_without_an_attempt
+        PASS [   4.669s] ( 78/908) crm-api::all db_calls::webhook_with_a_valid_signature_but_non_json_body_is_200_and_writes_nothing
+        PASS [   4.674s] ( 79/908) crm-api::all db_calls_corrections::a_manual_attempt_has_no_call_id_and_is_never_a_correction_head
+        PASS [   4.762s] ( 80/908) crm-api::all db_calls::webhook_for_a_foreign_participant_identity_is_ignored
+        PASS [   4.690s] ( 81/908) crm-api::all db_calls::webhook_unknown_room_is_200_and_writes_nothing
+        PASS [   4.690s] ( 82/908) crm-api::all db_calls::webhook_with_a_tampered_body_wrong_secret_or_expired_token_is_401
+        PASS [   4.735s] ( 83/908) crm-api::all db_calls::webhook_remote_hangup_ends_an_answered_call_and_duplicates_are_noops
+        PASS [   4.706s] ( 84/908) crm-api::all db_calls_corrections::a_correction_row_is_append_only_for_crm_app_and_the_owner
+        PASS [   4.703s] ( 85/908) crm-api::all db_calls_corrections::a_non_caller_on_an_active_call_is_403_not_409
+        PASS [   4.687s] ( 86/908) crm-api::all db_calls_corrections::busy_call_correction_chains_onto_the_no_answer_row_and_cancelled_has_nothing_to_correct
+        PASS [  10.318s] ( 87/908) crm-api::all db_calls_corrections::a_second_correction_chains_onto_the_first_with_strictly_increasing_recorded_at
+        PASS [   5.738s] ( 88/908) crm-api::all db_calls_corrections::choosing_the_observed_outcome_still_writes_the_agents_row_and_clears_the_nag
+        PASS [   5.743s] ( 89/908) crm-api::all db_calls_corrections::same_outcome_is_unchanged_and_writes_and_publishes_nothing
+        PASS [   5.717s] ( 90/908) crm-api::all db_calls_outcome_today::a_call_with_no_attempt_creates_no_outcome_item
+        PASS [   5.764s] ( 91/908) crm-api::all db_calls_corrections::concurrent_hangup_and_correction_yield_at_most_one_correction_of_the_reached_row
+        PASS [   5.770s] ( 92/908) crm-api::all db_calls_corrections::the_outcome_route_works_with_telephony_disabled
+        PASS [   5.757s] ( 93/908) crm-api::all db_calls_corrections::today_shows_the_effective_outcome_for_a_member_who_has_the_person_by_assignment
+        PASS [   5.757s] ( 94/908) crm-api::all db_calls_corrections::two_concurrent_corrections_serialize_on_the_call_lock_into_a_chain
+        PASS [   5.791s] ( 95/908) crm-api::all db_calls_corrections::correcting_an_answered_call_writes_one_correction_row_with_the_call_envelope
+        PASS [   5.794s] ( 96/908) crm-api::all db_calls_corrections::correction_is_caller_only_foreign_404_active_409_and_no_attempt_422
+        PASS [   5.187s] ( 97/908) crm-api::all db_capture_address::backfill_mints_distinct_addresses_for_every_active_member_on_a_populated_fixture
+        PASS [   5.460s] ( 98/908) crm-api::all db_calls_outcome_today::a_low_item_is_the_first_to_fall_off_the_cap
+        PASS [   5.417s] ( 99/908) crm-api::all db_calls_outcome_today::an_ended_call_without_an_outcome_is_a_low_item_for_the_caller_only
+        PASS [   5.383s] (100/908) crm-api::all db_capture_address::get_self_heals_and_rotate_flips_live
+        PASS [   5.414s] (101/908) crm-api::all db_calls_outcome_today::two_callers_on_one_person_each_carry_their_own_outcome_nag
+        PASS [   5.427s] (102/908) crm-api::all db_calls_outcome_today::low_items_sort_under_every_inquiry_item_by_ended_at
+        PASS [   5.397s] (103/908) crm-api::all db_capture_receive::capture_spans_and_logs_carry_no_content_or_tokens
+        PASS [   5.408s] (104/908) crm-api::all db_capture_address::deactivated_member_token_stops_resolving_reactivation_restores_the_same_address
+        PASS [   5.464s] (105/908) crm-api::all db_calls_outcome_today::a_person_qualifying_both_ways_keeps_the_inquiry_tier_with_the_reason_appended
+        PASS [   2.932s] (106/908) crm-api::all db_capture_receive::forged_token_is_rejected_and_nothing_stored
+        PASS [   2.950s] (107/908) crm-api::all db_capture_receive::future_header_date_is_clamped_on_the_cc_path
+        PASS [   3.000s] (108/908) crm-api::all db_capture_receive::concurrent_identical_deliveries_produce_exactly_one_of_everything
+        PASS [   2.987s] (109/908) crm-api::all db_capture_receive::multi_recipient_outbound_creates_one_row_and_attempt_per_matched_person
+        PASS [   2.998s] (110/908) crm-api::all db_capture_receive::held_queue_flood_cap_admits_no_new_row_past_500
+        PASS [   3.228s] (111/908) crm-api::all db_capture_receive::cc_from_agent_login_creates_outbound_row_clears_today_and_shape_pins_history
+        PASS [   3.078s] (112/908) crm-api::all db_capture_receive::client_reply_all_creates_inbound_row_and_arms_client_replied
+        PASS [   3.027s] (113/908) crm-api::all db_capture_receive::concurrent_identical_unmatched_deliveries_produce_exactly_one_held_row
+        PASS [   3.025s] (114/908) crm-api::all db_capture_receive::future_inner_date_is_clamped_on_the_forward_path_but_backdated_stays_true
+        PASS [  11.468s] (115/908) crm-api::all db_capture_receive::a_20_mib_cc_delivery_stores_one_correspondence_raw_row_and_appears_in_history
+        PASS [   3.073s] (116/908) crm-api::all db_capture_unmatched::link_optionally_adds_the_counterparty_as_a_contact_method
+        PASS [   3.203s] (117/908) crm-api::all db_capture_receive::org_a_token_never_matches_an_org_b_person_with_the_same_email
+        PASS [   3.137s] (118/908) crm-api::all db_capture_unmatched::cross_org_link_and_dismiss_are_404_and_write_nothing
+        PASS [   3.171s] (119/908) crm-api::all db_capture_unmatched::concurrent_link_and_dismiss_on_the_same_row_exactly_one_wins
+        PASS [   3.225s] (120/908) crm-api::all db_capture_receive::retroactive_forward_backdates_and_dedups_both_layers
+        PASS [   3.165s] (121/908) crm-api::all db_capture_unmatched::held_row_is_visible_only_to_the_attributed_agent
+        PASS [   3.189s] (122/908) crm-api::all db_capture_unmatched::counterparty_email_is_nulled_on_dismiss
+        PASS [   3.182s] (123/908) crm-api::all db_capture_unmatched::link_and_dismiss_are_404_for_non_attributed_agents_admins_included
+        PASS [   3.190s] (124/908) crm-api::all db_capture_unmatched::dismiss_is_idempotent_and_cross_terminal_transitions_conflict
+        PASS [   3.523s] (125/908) crm-api::all db_capture_unmatched::relink_same_person_is_a_noop_different_person_is_409
+        PASS [   3.555s] (126/908) crm-api::all db_contact_attempts::any_organization_member_may_log_a_contact_attempt
+        PASS [   3.514s] (127/908) crm-api::all db_contact_attempts::other_organization_person_returns_404_identical_to_nonexistent
+        PASS [   3.567s] (128/908) crm-api::all db_contact_attempts::history_sorts_contact_attempted_last_on_identical_timestamps
+        PASS [   3.531s] (129/908) crm-api::all db_custom_field_filters::custom_field_filter_reference_errors_are_non_leaking
+        PASS [   3.557s] (130/908) crm-api::all db_contact_attempts::log_contact_attempt_writes_exactly_one_fact_with_full_envelope
+        PASS [   3.554s] (131/908) crm-api::all db_contact_attempts::manual_route_accepts_busy_and_wrong_number
+        PASS [   3.581s] (132/908) crm-api::all db_contact_attempts::invalid_channel_or_non_json_body_returns_400_and_writes_no_fact
+        PASS [   3.638s] (133/908) crm-api::all db_capture_unmatched::unmatched_list_caps_at_200_with_truncated_flag
+        PASS [   3.695s] (134/908) crm-api::all db_capture_unmatched::link_writes_direction_from_the_stored_hint_and_outbound_writes_the_auto_attempt
+        PASS [   2.720s] (135/908) crm-api::all db_custom_field_filters::custom_filter_reaches_every_statement_family_with_five_slots
+        PASS [   2.723s] (136/908) crm-api::all db_custom_fields::archived_option_still_carries_its_label_on_the_detail_read
+        PASS [   2.714s] (137/908) crm-api::all db_custom_fields::create_custom_field_creates_every_type_choice_options_in_order
+        PASS [   2.771s] (138/908) crm-api::all db_custom_field_filters::custom_presence_tests_cover_all_types_and_zero
+        PASS [   2.865s] (139/908) crm-api::all db_custom_field_filters::custom_field_filters_preserve_literals_bounds_absence_and_field_identity
+        PASS [   2.786s] (140/908) crm-api::all db_custom_fields::admin_demoted_inside_the_transaction_gets_403_and_writes_nothing
+        PASS [   2.803s] (141/908) crm-api::all db_custom_field_filters::custom_ranges_survive_saved_lifecycle_and_field_archive_restore
+        PASS [   2.763s] (142/908) crm-api::all db_custom_fields::create_custom_field_enforces_case_insensitive_label_uniqueness_and_the_50_live_limit
+        PASS [   2.765s] (143/908) crm-api::all db_custom_fields::create_custom_field_rejects_options_on_non_choice_and_requires_them_for_choice
+        PASS [   2.799s] (144/908) crm-api::all db_custom_fields::archive_hides_the_field_from_the_detail_read_while_row_and_values_survive_and_unarchive_reverses
+        PASS [   3.222s] (145/908) crm-api::all db_custom_fields::date_range_rejections
+        PASS [   3.259s] (146/908) crm-api::all db_custom_fields::custom_field_route_error_precedence_and_wire_shapes
+        PASS [   3.231s] (147/908) crm-api::all db_custom_fields::field_label_uniqueness_is_case_insensitive_and_an_unarchive_clash_is_409
+        PASS [   3.255s] (148/908) crm-api::all db_custom_fields::get_person_detail_includes_custom_fields_and_people_rows_are_byte_identical
+        PASS [   3.281s] (149/908) crm-api::all db_custom_fields::deleting_the_person_cascades_the_value
+        PASS [   3.268s] (150/908) crm-api::all db_custom_fields::non_admin_gets_403_on_every_definition_write_admin_succeeds
+        PASS [   3.392s] (151/908) crm-api::all db_custom_fields::cross_organization_field_id_is_404_byte_identical_to_a_nonexistent_field_id
+        PASS [   3.284s] (152/908) crm-api::all db_custom_fields::number_canonical_form_and_pattern_rejections
+        PASS [   3.366s] (153/908) crm-api::all db_custom_fields::custom_field_changed_publishes_once_per_change_definition_writes_publish_nothing
+        PASS [   3.389s] (154/908) crm-api::all db_custom_fields::cross_organization_field_option_and_person_are_404
+        PASS [   2.731s] (155/908) crm-api::all db_custom_fields::text_value_rejects_a_control_character_before_reaching_postgres
+        PASS [   2.851s] (156/908) crm-api::all db_custom_fields::order_route_reaches_the_reorder_handler_and_not_a_uuid_is_400
+        PASS [   2.869s] (157/908) crm-api::all db_custom_fields::option_limit_is_50_live_per_field
+        PASS [   2.813s] (158/908) crm-api::all db_custom_fields::setting_a_value_on_an_archived_field_is_409
+        PASS [   2.861s] (159/908) crm-api::all db_custom_fields::renaming_an_already_archived_field_or_option_does_not_re_stamp_archived_at
+        PASS [   2.854s] (160/908) crm-api::all db_custom_fields::set_and_clear_are_idempotent_with_no_publish_on_unchanged
+        PASS [   2.940s] (161/908) crm-api::all db_custom_fields::option_label_uniqueness_is_case_insensitive_and_an_unarchive_clash_is_409
+        PASS [   2.879s] (162/908) crm-api::all db_custom_fields::reorder_requires_exactly_the_live_set_no_more_no_fewer
+        PASS [   2.859s] (163/908) crm-api::all db_custom_fields::setting_an_archived_or_foreign_option_is_the_same_unknown_option
+        PASS [   2.829s] (164/908) crm-api::all db_custom_fields::value_body_rejects_two_zero_and_unknown_keys_with_400
+        PASS [   2.850s] (165/908) crm-api::all db_identity::current_user_matches_each_role
+        PASS [   2.847s] (166/908) crm-api::all db_identity::multi_membership_picks_earliest_and_scopes_members_to_it
+        PASS [   2.920s] (167/908) crm-api::all db_identity::crm_app_has_exactly_the_specified_grants
+        PASS [   2.887s] (168/908) crm-api::all db_identity::logout_is_idempotent_against_an_already_revoked_session
+        PASS [   3.010s] (169/908) crm-api::all db_custom_fields::value_type_mismatch_is_rejected_for_every_field_type
+        PASS [   2.966s] (170/908) crm-api::all db_identity::client_supplied_organization_id_is_ignored
+        PASS [   2.986s] (171/908) crm-api::all db_custom_fields::value_validation_runs_after_not_found_field_archived_and_type_mismatch
+        PASS [   2.940s] (172/908) crm-api::all db_identity::full_lifecycle_login_me_members_logout_replay
+        PASS [   2.955s] (173/908) crm-api::all db_identity::expired_session_returns_401
+        PASS [   2.933s] (174/908) crm-api::all db_identity::membership_revoked_returns_401_on_next_request
+        PASS [   7.330s] (175/908) crm-api::all db_identity::user_without_local_credential_gets_same_invalid_credentials_error
+        PASS [   7.496s] (176/908) crm-api::all db_identity::platform_bootstrap_flow_rejects_repeat_creation
+        PASS [   7.401s] (177/908) crm-api::all db_identity::zero_membership_login_returns_403_and_creates_no_session
+        PASS [   7.378s] (178/908) crm-api::all db_import_gate::import_gate_current_deployment_ceilings_clamp_stored_allowances_and_require_retry
+        PASS [   7.419s] (179/908) crm-api::all db_identity::wrong_password_and_unknown_user_return_identical_401
+        PASS [   7.402s] (180/908) crm-api::all db_import_gate::import_gate_cancel_fences_persisted_lease_and_preserves_committed_subset
+        PASS [   7.487s] (181/908) crm-api::all db_identity::relogin_mints_new_token_and_revokes_previous
+        PASS [   7.430s] (182/908) crm-api::all db_import_gate::import_gate_active_admission_and_claimed_proposals_block_but_expired_metadata_does_not
+        PASS [   7.477s] (183/908) crm-api::all db_identity::two_organizations_are_isolated_in_both_directions
+        PASS [   7.498s] (184/908) crm-api::all db_identity::tampered_token_returns_401
+        PASS [   6.470s] (185/908) crm-api::all db_import_http::import_http_creation_is_strict_scoped_idempotent_and_source_free
+        PASS [   6.769s] (186/908) crm-api::all db_import_gate::import_gate_direct_reads_commands_and_forged_tokens_respect_review
+        PASS [   6.690s] (187/908) crm-api::all db_import_gate::import_gate_expired_lease_revalidates_executor_and_explicit_retry_adopts_current_admin
+        PASS [   6.673s] (188/908) crm-api::all db_import_gate::import_gate_shared_read_finishes_before_actual_exclusive_confirmation
+        PASS [   6.704s] (189/908) crm-api::all db_import_gate::import_gate_large_item_admission_pauses_before_writes_and_requires_explicit_retry
+        PASS [   6.667s] (190/908) crm-api::all db_import_http::import_http_cancel_is_durable_and_does_not_release_review_or_replan
+        PASS [   6.711s] (191/908) crm-api::all db_import_gate::import_gate_exact_inventory_matches_revisions_execution_and_receipt_replay
+        PASS [   6.707s] (192/908) crm-api::all db_import_gate::import_gate_ordinary_insert_commits_before_entry_and_emptiness_rejects
+        PASS [  13.310s] (193/908) crm-api::all db_import_http::import_http_confirmation_replays_after_release_report_expires_or_disappears
+        PASS [   7.224s] (194/908) crm-api::all db_import_http::import_http_foreign_resources_and_invalid_mapping_choices_fail_closed
+        PASS [   7.064s] (195/908) crm-api::all db_import_http::import_http_partial_patches_are_frozen_and_confirmation_replays_without_duplicate_people
+        PASS [  13.744s] (196/908) crm-api::all db_import_gate::import_gate_shared_commands_and_initial_claim_bound_row_lock_waits
+        PASS [   7.067s] (197/908) crm-api::all db_import_source::import_source_accepted_semantic_duplicates_collapse_and_unknown_variants_hold
+        PASS [   7.065s] (198/908) crm-api::all db_import_source::import_source_exact_ids_and_unknown_numeric_metadata_come_from_raw
+        PASS [   7.092s] (199/908) crm-api::all db_import_readers::imported_contact_order_is_consistent_for_direct_readers_and_task_only
+        PASS [   7.084s] (200/908) crm-api::all db_import_source::import_source_large_provenance_and_oversized_stage_remain_exact_and_mappable
+        PASS [   8.297s] (201/908) crm-api::all db_import_source::import_source_capture_and_observation_qualification_cannot_be_fixed_by_mappings
+        PASS [   6.543s] (202/908) crm-api::all db_inbound_email::bad_or_missing_or_disabled_bearer_is_401_and_stores_nothing
+        PASS [   6.839s] (203/908) crm-api::all db_import_source::import_source_nul_supporting_fields_skip_suggestions_and_allow_explicit_mapping
+        PASS [   5.609s] (204/908) crm-api::all db_inbound_email::byte_identical_redelivery_is_a_noop
+        PASS [   6.858s] (205/908) crm-api::all db_import_source::import_source_native_holds_primary_order_and_cross_person_overlap_survive_manifest
+        PASS [   6.859s] (206/908) crm-api::all db_import_source::import_source_supporting_stage_and_user_variants_hold_only_dependents
+        PASS [   7.283s] (207/908) crm-api::all db_import_source::import_source_mapping_fields_are_exact_bounded_and_http_scoped
+        PASS [   6.901s] (208/908) crm-api::all db_import_source::import_source_missing_observation_identity_is_counted_without_fabricating_person
+        PASS [   2.152s] (209/908) crm-api::all db_inbound_email::concurrent_identical_posts_yield_one_row_and_one_publish
+        PASS [   1.962s] (210/908) crm-api::all db_inbound_email::malformed_json_base64_and_empty_raw_are_400
+        PASS [   1.998s] (211/908) crm-api::all db_inbound_email::every_rejection_shape_is_byte_identical_and_stores_nothing
+        PASS [   1.967s] (212/908) crm-api::all db_inbound_email::same_bytes_to_two_orgs_store_one_row_each
+        PASS [   1.979s] (213/908) crm-api::all db_inbound_email::no_span_or_log_line_ever_carries_secret_or_content
+        PASS [   2.016s] (214/908) crm-api::all db_inbound_email::first_storage_publishes_exactly_one_event
+        PASS [   2.017s] (215/908) crm-api::all db_inbound_email::legacy_hex_token_org_accepts_mail
+        PASS [  11.642s] (216/908) crm-api::all db_inbound_email::a_20_mib_multipart_message_stores_once_and_decrypts_to_the_exact_bytes
+        PASS [   2.922s] (217/908) crm-api::all db_inbound_email::valid_delivery_creates_nothing_beyond_the_raw_payload_row
+        PASS [   2.933s] (218/908) crm-api::all db_inbound_email_intake::byte_identical_redelivery_of_a_resolved_row_is_a_noop
+        PASS [   2.977s] (219/908) crm-api::all db_inbound_email::stuck_pending_row_is_rescued_and_published_once
+        PASS [   3.092s] (220/908) crm-api::all db_inbound_email::stored_row_appears_in_unresolved_for_its_own_org_only
+        PASS [   2.989s] (221/908) crm-api::all db_inbound_email::valid_delivery_stores_one_row_that_decrypts_to_the_exact_bytes
+        PASS [   2.979s] (222/908) crm-api::all db_inbound_email_intake::completed_path_leaks_no_content_into_spans_or_logs
+        PASS [   2.986s] (223/908) crm-api::all db_inbound_email_intake::byte_identical_redelivery_of_a_forwarded_mail_is_a_noop
+        PASS [   3.028s] (224/908) crm-api::all db_inbound_email_intake::fake_fwd_subject_is_a_noop_and_lands_unrecognized
+        PASS [   3.177s] (225/908) crm-api::all db_inbound_email_intake::direct_mail_with_a_quoted_banner_keeps_its_deterministic_parse
+        PASS [   3.143s] (226/908) crm-api::all db_inbound_email_intake::forged_inner_forward_creates_the_d040_accepted_lead
+        PASS [   3.334s] (227/908) crm-api::all db_inbound_email_intake::concurrent_different_emails_sharing_a_contact_yield_one_person_two_inquiries
+        PASS [   3.213s] (228/908) crm-api::all db_inbound_email_intake::cypress_fixture_completes_intake_end_to_end
+        PASS [   3.203s] (229/908) crm-api::all db_inbound_email_intake::email_intake_without_a_default_creates_an_unassigned_person
+        PASS [  15.017s] (230/908) crm-api::all db_import_source::import_source_rejected_equal_observation_never_wins_but_disagreement_holds
+        PASS [   3.266s] (231/908) crm-api::all db_inbound_email_intake::concurrent_identical_in_format_posts_yield_one_person_one_publish
+        PASS [   3.191s] (232/908) crm-api::all db_inbound_email_intake::forged_sender_lands_unrecognized_and_creates_no_person
+        PASS [   3.578s] (233/908) crm-api::all db_inbound_email_intake::forward_banner_with_empty_inner_body_falls_back_whole_message
+        PASS [   3.540s] (234/908) crm-api::all db_inbound_email_intake::inbound_email_in_a_round_robin_org_routes_via_rotation
+        PASS [   3.579s] (235/908) crm-api::all db_inbound_email_intake::garbage_bytes_land_email_unparsed
+        PASS [   3.559s] (236/908) crm-api::all db_inbound_email_intake::html_only_fixture_completes
+        PASS [   3.593s] (237/908) crm-api::all db_inbound_email_intake::forwarded_unknown_lead_lands_unrecognized_for_extraction
+        PASS [   3.553s] (238/908) crm-api::all db_inbound_email_intake::in_format_email_without_contact_method_lands_no_contact_method
+        PASS [  25.661s] (239/908) crm-api::all db_import_http::import_http_large_fields_are_bounded_exact_and_cursor_scoped
+        PASS [   3.571s] (240/908) crm-api::all db_inbound_email_intake::gmail_forward_of_pinned_format_mail_completes_deterministically
+        PASS [   3.557s] (241/908) crm-api::all db_inbound_email_intake::html_only_forward_unwraps_and_completes
+        PASS [   3.601s] (242/908) crm-api::all db_inbound_email_intake::forwarded_mail_writes_nothing_in_another_org
+        PASS [   4.673s] (243/908) crm-api::all db_inquiry_append_only::a_backdated_insert_still_works_and_last_inquiry_at_is_trigger_maintained
+        PASS [   4.801s] (244/908) crm-api::all db_inbound_email_intake::stuck_pending_in_format_row_resolves_end_to_end_on_redelivery
+        PASS [   4.808s] (245/908) crm-api::all db_inbound_email_intake::nul_bytes_in_an_in_format_email_complete_without_error_or_poison_row
+        PASS [   4.812s] (246/908) crm-api::all db_inbound_email_intake::two_forwarders_of_the_same_inner_lead_converge_on_one_person
+        PASS [   4.828s] (247/908) crm-api::all db_inbound_email_intake::nested_forward_unwraps_to_the_innermost_form_mail
+        PASS [   4.829s] (248/908) crm-api::all db_inbound_email_intake::valid_format_mail_writes_nothing_in_another_org
+        PASS [   4.834s] (249/908) crm-api::all db_inbound_email_intake::unknown_format_mail_completes_even_while_the_lock_is_held
+        PASS [   4.838s] (250/908) crm-api::all db_inbound_email_intake::terminal_unresolved_row_is_never_reprocessed_by_redelivery
+        PASS [   4.838s] (251/908) crm-api::all db_inbound_email_intake::second_in_format_email_dedups_onto_the_same_person
+        PASS [   2.796s] (252/908) crm-api::all db_inquiry_append_only::deleting_a_person_still_cascades_its_inquiries
+        PASS [   2.709s] (253/908) crm-api::all db_intake::concurrent_new_intakes_for_the_same_email_create_one_person
+        PASS [   2.715s] (254/908) crm-api::all db_intake::concurrent_identical_deliveries_yield_one_201_and_one_200
+        PASS [   2.748s] (255/908) crm-api::all db_inquiry_append_only::direct_update_of_inquiry_is_rejected
+        PASS [   2.756s] (256/908) crm-api::all db_inquiry_append_only::person_delete_cascades_inquiry_and_person_tag_together
+        PASS [   2.740s] (257/908) crm-api::all db_intake::bad_source_returns_400_and_writes_no_raw_payload_row
+        PASS [   2.779s] (258/908) crm-api::all db_inquiry_append_only::direct_delete_of_inquiry_is_rejected
+        PASS [   2.744s] (259/908) crm-api::all db_intake::email_wins_when_email_and_phone_match_different_persons
+        PASS [   2.034s] (260/908) crm-api::all db_intake::invalid_assignee_returns_422_and_writes_no_raw_payload_row
+        PASS [   9.775s] (261/908) crm-api::all db_inbound_email_intake::lock_held_past_budget_defers_the_row_pending_then_redelivery_completes
+        PASS [   2.071s] (262/908) crm-api::all db_intake::non_json_content_type_returns_400
+        PASS [   2.086s] (263/908) crm-api::all db_intake::new_lead_intake_creates_person_and_four_linked_facts
+        PASS [   2.115s] (264/908) crm-api::all db_intake::identical_payload_delivered_twice_is_idempotent
+        PASS [   2.099s] (265/908) crm-api::all db_intake::malformed_json_body_returns_400
+        PASS [   2.090s] (266/908) crm-api::all db_intake::no_contact_method_payload_is_unresolved_and_ciphertext_hides_plaintext
+        PASS [   2.132s] (267/908) crm-api::all db_intake::fixture_pending_row_resolves_on_repost_with_duplicate_false
+        PASS [   2.211s] (268/908) crm-api::all db_intake::explicit_assignee_on_already_assigned_person_is_ignored
+        PASS [   3.095s] (269/908) crm-api::all db_intake_address::creation_mints_a_slug_from_the_name_and_an_eight_char_token
+        PASS [   3.179s] (270/908) crm-api::all db_intake::tampered_ciphertext_returns_500_and_leaves_row_pending_and_queued
+        PASS [   3.226s] (271/908) crm-api::all db_intake::repeat_inquiry_matching_assigned_person_by_email_keeps_existing
+        PASS [   8.045s] (272/908) crm-api::all db_intake::advisory_lock_contention_fails_fast_without_starving_other_organizations
+        PASS [   3.284s] (273/908) crm-api::all db_intake::oversized_body_returns_400
+        PASS [   3.219s] (274/908) crm-api::all db_intake::repeat_inquiry_matching_unassigned_person_writes_one_assignment_fact
+        PASS [   3.211s] (275/908) crm-api::all db_intake_address::intake_columns_have_their_checks_index_and_no_update_grant
+        PASS [   3.254s] (276/908) crm-api::all db_intake::repeat_inquiry_matching_assigned_person_by_phone_keeps_existing
+        PASS [   3.249s] (277/908) crm-api::all db_intake_address::a_platform_only_session_is_401_on_the_intake_address
+        PASS [   6.435s] (278/908) crm-api::all db_intake_address::admins_read_their_own_address_members_are_403_and_orgs_never_cross
+        PASS [   3.367s] (279/908) crm-api::all db_intake_address::the_backfill_expressions_satisfy_the_checks
+        PASS [   3.369s] (280/908) crm-api::all db_intake_address::the_create_span_carries_the_slug_and_never_the_token
+        PASS [   3.404s] (281/908) crm-api::all db_intake_address::platform_detail_carries_the_address_top_level_and_members_cannot_use_it
+        PASS [   3.498s] (282/908) crm-api::all db_intake_address::names_that_slugify_identically_get_a_suffix_and_never_a_name_clash
+        PASS [   3.402s] (283/908) crm-api::all db_intake_extraction::concurrent_passes_claim_disjoint_rows
+        PASS [   3.379s] (284/908) crm-api::all db_intake_extraction::confident_spam_lands_not_a_lead
+        PASS [   3.363s] (285/908) crm-api::all db_intake_extraction::discard_mid_extraction_supersedes
+        PASS [   3.373s] (286/908) crm-api::all db_intake_extraction::deterministic_internal_errors_are_bounded_not_infinite
+        PASS [   7.286s] (287/908) crm-api::all db_intake_address::ten_orgs_whose_names_all_slugify_to_org_are_all_created
+        PASS [   3.956s] (288/908) crm-api::all db_intake_extraction::unparsed_and_discarded_rows_are_never_claimed
+        PASS [   4.003s] (289/908) crm-api::all db_intake_extraction::forwarded_unknown_lead_extracts_from_the_inner_view
+        PASS [   4.023s] (290/908) crm-api::all db_intake_extraction::extraction_pass_leaks_no_content
+        PASS [   4.185s] (291/908) crm-api::all db_intake_extraction::duplicate_replay_of_not_a_lead_decodes_faithfully
+        PASS [   4.064s] (292/908) crm-api::all db_intake_extraction::extraction_is_tenant_isolated
+        PASS [   4.025s] (293/908) crm-api::all db_intake_extraction::transport_failures_wait_forever_then_recover
+        PASS [   4.029s] (294/908) crm-api::all db_intake_extraction::only_eligible_rows_are_claimed
+        PASS [   4.030s] (295/908) crm-api::all db_intake_extraction::quality_failures_back_off_then_terminal
+        PASS [   3.686s] (296/908) crm-api::all db_intake_extraction::valid_lead_reply_resolves_end_to_end
+        PASS [   3.554s] (297/908) crm-api::all db_intake_round_robin::a_newcomer_joins_at_the_end_of_the_cycle
+        PASS [   3.622s] (298/908) crm-api::all db_intake_rotation::rotate_mints_audits_and_returns_the_new_address
+        PASS [   3.665s] (299/908) crm-api::all db_intake_extraction::workbench_retry_rearms_extraction
+        PASS [   3.654s] (300/908) crm-api::all db_intake_rotation::old_address_dies_and_new_address_flows_after_rotation
+        PASS [   3.619s] (301/908) crm-api::all db_intake_rotation::rotation_spans_and_logs_carry_no_token_material
+        PASS [   3.619s] (302/908) crm-api::all db_intake_round_robin::deactivating_the_mid_order_pointer_member_continues_to_the_next_slot
+        PASS [   3.624s] (303/908) crm-api::all db_intake_round_robin::dual_org_member_rotates_independently_and_org_b_gets_zero_rotation_rows
+        PASS [   3.649s] (304/908) crm-api::all db_intake_rotation::rotation_is_admin_only_and_tenant_isolated
+        PASS [   3.945s] (305/908) crm-api::all db_intake_round_robin::empty_pool_routes_unassigned_with_no_pointer_write
+        PASS [  11.665s] (306/908) crm-api::all db_intake_extraction::intake_busy_unresets_and_recovers
+        PASS [   4.140s] (307/908) crm-api::all db_intake_round_robin::duplicate_repost_of_a_round_robin_routed_payload_reports_its_strategy
+        PASS [   4.060s] (308/908) crm-api::all db_intake_round_robin::mid_rotation_deactivation_continues_without_resetting_pointer_or_non_pointer
+        PASS [   4.051s] (309/908) crm-api::all db_intake_settings::admins_manage_the_setting_members_are_403_and_orgs_never_cross
+        PASS [   4.065s] (310/908) crm-api::all db_intake_round_robin::migration_backfill_maps_assignee_set_orgs_to_default_assignee_mode
+        PASS [   4.062s] (311/908) crm-api::all db_intake_round_robin::non_round_robin_strategies_never_advance_the_pointer
+        PASS [   4.099s] (312/908) crm-api::all db_intake_round_robin::fairness_rotates_a_b_c_a_b_c_with_full_fact_and_today_assertions
+        PASS [   4.142s] (313/908) crm-api::all db_intake_round_robin::eight_way_concurrency_distributes_fairly_under_the_advisory_budget
+        PASS [   3.139s] (314/908) crm-api::all db_intake_settings::crm_app_update_grant_is_scoped_to_the_new_column_and_updated_at
+        PASS [   3.154s] (315/908) crm-api::all db_intake_system_routing::default_set_and_active_routes_organization_default_and_lands_on_their_today
+        PASS [   3.177s] (316/908) crm-api::all db_intake_settings::put_requires_both_keys_rejects_the_old_007c_body_and_get_survives_deactivation
+        PASS [   3.343s] (317/908) crm-api::all db_intake_settings::crm_app_can_write_intake_routing_mode_and_the_rotation_table
+        PASS [   3.178s] (318/908) crm-api::all db_intake_system_routing::default_member_deactivated_routes_unassigned_and_setting_is_retained
+        PASS [   7.273s] (319/908) crm-api::all db_intake_round_robin::intake_busy_leaves_the_rotation_pointer_untouched
+        PASS [   3.223s] (320/908) crm-api::all db_intake_settings::routing_decision_strategy_check_accepts_new_values_and_rejects_unknown
+        PASS [   3.240s] (321/908) crm-api::all db_intake_settings::put_default_assignee_mode_rejects_nonexistent_foreign_inactive_and_null_identically
+        PASS [   3.240s] (322/908) crm-api::all db_intake_settings::put_non_default_modes_accept_null_active_or_stale_echo_reject_anything_else
+        PASS [   3.234s] (323/908) crm-api::all db_intake_settings::routing_decision_strategy_check_accepts_round_robin
+        PASS [   5.008s] (324/908) crm-api::all db_intake_system_routing::matching_already_assigned_person_keeps_existing
+        PASS [   5.025s] (325/908) crm-api::all db_intake_workbench::discard_attributes_removes_and_is_idempotent
+        PASS [   5.083s] (326/908) crm-api::all db_intake_system_routing::no_default_set_routes_unassigned_with_no_assignment_fact
+        PASS [   5.081s] (327/908) crm-api::all db_intake_workbench::api_inquiries_replay_of_a_discarded_row_gets_the_duplicate_envelope
+        PASS [   5.224s] (328/908) crm-api::all db_intake_system_routing::duplicate_repost_of_a_system_routed_payload_reports_its_strategy
+        PASS [   5.097s] (329/908) crm-api::all db_intake_workbench::concurrent_retries_yield_one_person_and_a_duplicate_loser
+        PASS [   5.133s] (330/908) crm-api::all db_intake_system_routing::system_actor_intake_into_org_a_writes_zero_rows_in_org_b
+        PASS [   5.152s] (331/908) crm-api::all db_intake_system_routing::matching_existing_unassigned_person_applies_the_default
+        PASS [   5.103s] (332/908) crm-api::all db_intake_workbench::corrupted_row_retry_500s_and_stays_discardable
+        PASS [   9.141s] (333/908) crm-api::all db_intake_workbench::detail_content_authorization_and_404s
+        PASS [   4.218s] (334/908) crm-api::all db_intake_workbench::migration_check_and_grants_hold
+        PASS [   4.186s] (335/908) crm-api::all db_intake_workbench::retry_on_still_unparseable_bytes_rerecords_the_reason
+        PASS [   4.351s] (336/908) crm-api::all db_intake_workbench::discarded_bytes_never_resurrect_on_redelivery_or_replay
+        PASS [   4.204s] (337/908) crm-api::all db_intake_workbench::retry_in_a_round_robin_org_routes_via_rotation_and_consumes_a_turn
+        PASS [   4.219s] (338/908) crm-api::all db_intake_workbench::queue_lists_pending_and_unresolved_never_discarded
+        PASS [   4.277s] (339/908) crm-api::all db_intake_workbench::generic_v1_retry_reruns_with_the_stored_source
+        PASS [   4.216s] (340/908) crm-api::all db_intake_workbench::retry_on_a_resolved_row_returns_the_stored_outcome_as_duplicate
+        PASS [   4.241s] (341/908) crm-api::all db_intake_workbench::pending_rows_are_viewable_and_large_bodies_truncate
+        PASS [   6.496s] (342/908) crm-api::all db_intake_workbench::retry_racing_redelivery_yields_one_person
+        PASS [   6.389s] (343/908) crm-api::all db_intake_workbench::unretryable_format_fails_closed_without_destroying_the_reason
+        PASS [   6.410s] (344/908) crm-api::all db_intake_workbench::retry_resolves_a_pre_existing_forwarded_row_through_the_unwrapper
+        PASS [   6.462s] (345/908) crm-api::all db_intake_workbench::retry_rescues_stuck_pending_row_with_system_actor_on_behalf_of_admin
+        PASS [   6.410s] (346/908) crm-api::all db_metadata_import_acceptance::metadata_acceptance_cancelled_and_running_parents_are_ineligible
+        PASS [   6.411s] (347/908) crm-api::all db_metadata_import_acceptance::metadata_acceptance_expired_ten_minute_plan_requires_explicit_replan
+        PASS [  10.711s] (348/908) crm-api::all db_intake_workbench::failed_retry_publishes_a_queue_invalidation_for_the_reset
+        PASS [   6.446s] (349/908) crm-api::all db_metadata_import_acceptance::metadata_acceptance_existing_different_fub_binding_cannot_be_reassigned
+        PASS [   6.455s] (350/908) crm-api::all db_intake_workbench::workbench_spans_and_logs_carry_no_content
+        PASS [  16.582s] (351/908) crm-api::all db_intake_workbench::retry_surfaces_intake_busy_when_lock_held
+        PASS [  11.142s] (352/908) crm-api::all db_metadata_import_gate::metadata_gate_expired_lease_reclaim_and_partial_cancel_preserve_units
+        PASS [  11.214s] (353/908) crm-api::all db_metadata_import_concurrency::metadata_concurrency_confirm_cancel_race_has_one_terminal_receipt_outcome
+        PASS [  11.209s] (354/908) crm-api::all db_metadata_import_concurrency::metadata_concurrency_person_failure_rolls_back_all_cells_result_cursor_and_bytes
+        PASS [  11.239s] (355/908) crm-api::all db_metadata_import_concurrency::metadata_concurrency_cancel_waits_for_complete_inflight_person_unit
+        PASS [  11.313s] (356/908) crm-api::all db_metadata_import_acceptance::metadata_acceptance_tombstoned_parent_person_cannot_regain_metadata_or_history
+        PASS [  11.266s] (357/908) crm-api::all db_metadata_import_acceptance::metadata_acceptance_two_valid_fields_cannot_merge_into_one_native_target
+        PASS [  13.140s] (358/908) crm-api::all db_metadata_import_gate::metadata_gate_exact_inventory_concurrent_workers_and_duplicate_recovery
+        PASS [  13.164s] (359/908) crm-api::all db_metadata_import_gate::metadata_gate_current_ceiling_pause_explicit_retry_and_cancel_at_exhaustion
+        PASS [  11.076s] (360/908) crm-api::all db_metadata_import_gate::metadata_gate_private_permit_has_no_unrelated_insert_update_delete_or_parent_bypass
+        PASS [  10.691s] (361/908) crm-api::all db_metadata_import_http::metadata_http_frozen_choices_enforce_patch_bounds_and_cursor_scope
+        PASS [  10.736s] (362/908) crm-api::all db_metadata_import_gate::metadata_gate_result_failure_rolls_back_native_identity_cursor_and_bytes
+        PASS [  10.714s] (363/908) crm-api::all db_metadata_import_http::metadata_http_confirmation_replays_and_preserves_parent_and_review_hold
+        PASS [  10.723s] (364/908) crm-api::all db_metadata_import_http::metadata_http_cancel_is_terminal_replayable_and_does_not_release_workspace
+        PASS [   8.751s] (365/908) crm-api::all db_metadata_import_http::metadata_http_rejects_uncompleted_parent_and_incomplete_custom_fields
+        PASS [  10.715s] (366/908) crm-api::all db_metadata_import_http::metadata_http_creation_is_admin_scoped_strict_and_exactly_idempotent
+        PASS [  16.480s] (367/908) crm-api::all db_metadata_import_http::metadata_http_committed_receipt_survives_expired_and_missing_readiness
+        PASS [   5.867s] (368/908) crm-api::all db_metadata_import_r1::metadata_r1_undeclared_custom_value_is_held_with_exact_source_evidence
+        PASS [   6.600s] (369/908) crm-api::all db_metadata_import_r1::metadata_r1_executor_demotion_requires_explicit_current_admin_adoption
+        PASS [   5.923s] (370/908) crm-api::all db_metadata_import_r1::metadata_r1_qualified_oversized_machine_key_does_not_offer_creation
+        PASS [   5.917s] (371/908) crm-api::all db_metadata_import_r1::metadata_r1_result_counts_match_operations_including_held_null_and_absent
+        PASS [   5.937s] (372/908) crm-api::all db_metadata_import_r1::metadata_r1_malformed_tags_hold_person_without_fabricating_counted_operations
+        PASS [   5.943s] (373/908) crm-api::all db_metadata_import_r1::metadata_r1_native_choice_case_collision_holds_dependencies_before_ready
+        PASS [   5.931s] (374/908) crm-api::all db_metadata_import_r1::metadata_r1_rapid_replans_preserve_unprepared_approval
+        PASS [   9.369s] (375/908) crm-api::all db_metadata_import_source::metadata_source_large_and_nul_keys_can_map_without_native_key_coercion
+        PASS [   9.657s] (376/908) crm-api::all db_metadata_import_source::metadata_source_shared_tags_do_not_merge_people_and_overflow_holds_the_whole_link_set
+        PASS [   9.739s] (377/908) crm-api::all db_metadata_import_source::metadata_source_capacity_archival_and_local_conflicts_preserve_native_rows
+        PASS [   9.860s] (378/908) crm-api::all db_metadata_import_source::metadata_source_all_variants_and_exact_raw_identity_override_preview
+        PASS [   9.704s] (379/908) crm-api::all db_metadata_import_source::metadata_source_machine_key_collisions_hold_while_equal_labels_map_explicitly
+        PASS [  37.548s] (380/908) crm-api::all db_metadata_import_gate::metadata_gate_catalog_continues_in_fifty_descriptor_units
+        PASS [   9.706s] (381/908) crm-api::all db_metadata_import_source::metadata_source_native_values_preserve_precision_absence_literals_and_recurrence_holds
+        PASS [  12.284s] (382/908) crm-api::all db_metadata_import_source::metadata_source_full_multimegabyte_evidence_survives_execution_without_truncation
+        PASS [   2.761s] (383/908) crm-api::all db_migration::expired_lease_reclaims_and_db_failure_does_not_commit_partial_result
+        PASS [   2.755s] (384/908) crm-api::all db_migration::malformed_bytes_encrypted_and_paused_disconnect_reconnect_retains_identity
+        PASS [   2.764s] (385/908) crm-api::all db_migration::http_admin_body_precedence_contract_and_no_store
+        PASS [   2.815s] (386/908) crm-api::all db_migration::domain_authority_and_cross_tenant_locators_are_enforced
+        PASS [   3.136s] (387/908) crm-api::all db_migration::concurrent_distinct_starts_and_in_flight_disconnect_are_atomic
+        PASS [   2.798s] (388/908) crm-api::all db_migration::migration_claim_and_report_plans_use_bounded_indexes
+        PASS [   2.802s] (389/908) crm-api::all db_migration::in_flight_revocation_and_cancel_fence_all_evidence
+        PASS [   3.746s] (390/908) crm-api::all db_migration::receipts_concurrent_replay_conflict_and_immutable_after_progress
+        PASS [   3.531s] (391/908) crm-api::all db_notes::delete_note_deactivated_author_and_pure_demoted_admin_are_forbidden
+        PASS [   3.619s] (392/908) crm-api::all db_migration::retry_budget_due_time_explicit_cycle_and_completed_checks_skip
+        PASS [   3.616s] (393/908) crm-api::all db_migration::six_checks_report_honest_counts_and_preserve_last_report_without_business_writes
+        PASS [  30.783s] (394/908) crm-api::all db_metadata_import_http::metadata_http_full_evidence_segments_bind_person_field_and_revision
+        PASS [  16.106s] (395/908) crm-api::all db_metadata_import_source::metadata_source_requalifies_people_and_definitions_after_completed_parent
+        PASS [   3.617s] (396/908) crm-api::all db_notes::delete_note_author_and_admin_succeed_third_member_forbidden_and_tombstone_shape
+        PASS [   3.648s] (397/908) crm-api::all db_notes::add_note_over_128kib_is_400_not_413
+        PASS [   3.683s] (398/908) crm-api::all db_migration::tracing_contains_safe_context_and_outcomes_without_credentials_or_raw_content
+        PASS [   3.648s] (399/908) crm-api::all db_notes::add_note_shape_history_entry_and_foreign_person_404
+        PASS [   3.111s] (400/908) crm-api::all db_notes::edit_note_pure_demotion_is_forbidden_with_no_write_or_publish
+        PASS [   3.084s] (401/908) crm-api::all db_notes::note_changed_publishes_exactly_once_per_changing_write
+        PASS [   3.148s] (402/908) crm-api::all db_notes::edit_note_validation_precedes_the_not_found_lookup
+        PASS [   3.260s] (403/908) crm-api::all db_notes::edit_note_author_and_admin_succeed_third_member_forbidden
+        PASS [   3.196s] (404/908) crm-api::all db_notes::edit_note_for_share_reread_observes_a_committing_deactivation
+        PASS [   3.155s] (405/908) crm-api::all db_notes::edit_racing_delete_never_503s_and_tombstone_wins
+        PASS [   3.245s] (406/908) crm-api::all db_notes::edit_note_deactivated_author_and_demoted_deactivated_admin_are_forbidden
+        PASS [   3.147s] (407/908) crm-api::all db_notes::note_accepts_10_000_four_byte_code_points_and_cascades_with_person
+        PASS [   3.169s] (408/908) crm-api::all db_notes::imported_note_renders_with_null_actor_admin_only_can_manage_and_member_edit_forbidden
+        PASS [   3.197s] (409/908) crm-api::all db_notes::edit_note_tombstone_cross_organization_and_cross_person_are_404
+        PASS [   4.632s] (410/908) crm-api::all db_notes::note_check_constraints_matrix
+        PASS [   4.641s] (411/908) crm-api::all db_notes::note_composite_fk_rejections
+        PASS [   4.639s] (412/908) crm-api::all db_notes::note_route_error_precedence_wire_shapes_and_can_manage
+        PASS [   4.613s] (413/908) crm-api::all db_operator::custom_field_activity_never_leaks_a_value_into_traces_or_the_ledger
+        PASS [   4.626s] (414/908) crm-api::all db_operator::completed_turn_has_the_documented_shape_and_ledger_rows
+        PASS [   4.661s] (415/908) crm-api::all db_notes::note_source_external_id_partial_unique_index_and_resurrection_guard
+        PASS [   4.659s] (416/908) crm-api::all db_operator::client_abort_mid_turn_releases_the_slot_and_still_writes_the_ledger
+        PASS [   4.642s] (417/908) crm-api::all db_operator::context_person_id_is_untrusted_and_revalidated
+        PASS [   4.698s] (418/908) crm-api::all db_notes::note_history_position_ties_with_correspondence_by_kind_rank_and_survives_an_edit
+        PASS [   4.688s] (419/908) crm-api::all db_operator::capture_across_today_tasks_and_operator_tools_finds_a_task_title_only_in_untrusted_sites
+        PASS [   4.807s] (420/908) crm-api::all db_operator::ledger_insert_failure_still_returns_the_reply
+        PASS [   4.955s] (421/908) crm-api::all db_operator::get_person_and_explain_with_a_foreign_id_are_not_found_without_leaking
+        PASS [   4.913s] (422/908) crm-api::all db_operator::get_person_returns_custom_fields_as_untrusted_text_and_a_foreign_person_is_still_refused
+        PASS [   4.902s] (423/908) crm-api::all db_operator::get_today_is_viewer_specific_within_one_organization
+        PASS [   4.935s] (424/908) crm-api::all db_operator::get_person_notes_are_latest_five_untrusted_and_excluded_from_history
+        PASS [   4.935s] (425/908) crm-api::all db_operator::get_person_returns_tags_as_untrusted_text_and_a_foreign_person_is_still_refused
+        PASS [   5.047s] (426/908) crm-api::all db_operator::explain_priority_position_matches_today_query_and_get_api_today
+        PASS [   4.970s] (427/908) crm-api::all db_operator::get_person_history_marks_superseded_and_corrected_attempts
+        PASS [   4.941s] (428/908) crm-api::all db_operator::get_person_tasks_are_open_capped_at_ten_by_due_at_order
+        PASS [   4.929s] (429/908) crm-api::all db_operator::injected_inquiry_message_cannot_reach_a_foreign_person
+        PASS [   5.181s] (430/908) crm-api::all db_operator::operator_disabled_without_a_provider
+        PASS [   5.220s] (431/908) crm-api::all db_operator::platform_only_session_is_401
+        PASS [   5.276s] (432/908) crm-api::all db_operator::ledger_tables_are_append_only_for_crm_app
+        PASS [   5.274s] (433/908) crm-api::all db_operator::ledger_triggers_reject_the_owner_too
+        PASS [   5.274s] (434/908) crm-api::all db_operator::note_activity_and_operator_call_never_leak_a_body_into_traces_or_wrong_responses
+        PASS [   5.261s] (435/908) crm-api::all db_operator::operator_today_tools_agree_with_http_on_a_task_item_and_the_fixed_line_has_no_title
+        PASS [   5.249s] (436/908) crm-api::all db_operator::search_escapes_wildcards_matches_contacts_and_stays_in_organization
+        PASS [   5.283s] (437/908) crm-api::all db_operator::operator_get_today_json_agrees_with_http_on_raised_and_task_only_items
+        PASS [   5.267s] (438/908) crm-api::all db_operator::same_user_second_concurrent_turn_is_429
+        PASS [  10.269s] (439/908) crm-api::all db_operator::ledger_records_every_outcome
+        PASS [   5.074s] (440/908) crm-api::all db_operator::search_people_returns_only_the_callers_organization
+        PASS [   4.989s] (441/908) crm-api::all db_operator::tool_backend_failure_is_tool_error_with_a_ledger_row
+        PASS [   4.964s] (442/908) crm-api::all db_operator_call::a_real_but_foreign_persons_phone_id_is_not_found_and_two_phones_need_a_choice
+        PASS [   4.991s] (443/908) crm-api::all db_operator::validation_rejects_bad_bodies_with_400
+        PASS [   5.039s] (444/908) crm-api::all db_operator::search_with_no_match_records_ok_with_zero_ids
+        PASS [   5.027s] (445/908) crm-api::all db_operator::task_activity_and_operator_call_never_leak_a_title_into_traces_or_wrong_responses
+        PASS [   5.062s] (446/908) crm-api::all db_operator::semaphore_full_is_429_for_a_different_user
+        PASS [   5.038s] (447/908) crm-api::all db_operator::validation_accepts_the_exact_boundaries
+        PASS [   5.022s] (448/908) crm-api::all db_operator_call::app_role_cannot_delete_proposals_or_rewrite_their_identity
+        PASS [   4.782s] (449/908) crm-api::all db_operator_call::email_only_person_yields_no_phone_and_no_row
+        PASS [   4.830s] (450/908) crm-api::all db_operator_call::confirm_with_telephony_disabled_is_503_and_fails_the_proposal
+        PASS [   4.878s] (451/908) crm-api::all db_operator_call::contact_method_deleted_between_propose_and_confirm_is_422_and_fails_the_proposal
+        PASS [   4.828s] (452/908) crm-api::all db_operator_call::propose_then_confirm_places_the_call_with_operator_origin_and_turn_correlation
+        PASS [   4.910s] (453/908) crm-api::all db_operator_call::consumed_beats_expired_and_stuck_claimed_reads_as_consumed
+        PASS [   4.857s] (454/908) crm-api::all db_operator_call::invented_contact_method_id_is_not_found_and_inserts_no_row
+        PASS [   4.899s] (455/908) crm-api::all db_operator_call::expired_confirm_is_409_and_executes_nothing
+        PASS [   4.909s] (456/908) crm-api::all db_operator_call::double_confirm_yields_one_call_and_one_consumed
+        PASS [   4.892s] (457/908) crm-api::all db_operator_call::foreign_org_other_user_and_nonexistent_confirms_are_byte_identical_404
+        PASS [   5.023s] (458/908) crm-api::all db_operator_call::confirm_while_already_on_a_call_fails_the_proposal_with_call_in_progress
+        PASS [   4.071s] (459/908) crm-api::all db_operator_filter::composed_filter_matches_stage_tag_and_assignee_and_ledger_reflects_it
+        PASS [   4.118s] (460/908) crm-api::all db_operator_filter::custom_saved_list_description_is_untrusted_and_read_only
+        PASS [   4.255s] (461/908) crm-api::all db_operator_call::the_configured_ttl_reaches_the_row_and_the_wire
+        PASS [   4.217s] (462/908) crm-api::all db_operator_call::two_proposals_from_two_turns_yield_exactly_one_call
+        PASS [   4.206s] (463/908) crm-api::all db_operator_filter::a_list_with_invalid_tag_is_list_invalid
+        PASS [   4.193s] (464/908) crm-api::all db_operator_filter::caps_thirty_matches_with_limit_ten_and_five_hundred_one_matches
+        PASS [   4.327s] (465/908) crm-api::all db_operator_call::room_failure_finalizes_failed_with_the_settled_call_id
+        PASS [   4.230s] (466/908) crm-api::all db_operator_filter::ambiguous_assignee_reports_candidates_and_me_resolves_per_actor
+        PASS [   4.271s] (467/908) crm-api::all db_operator_call::the_phone_number_never_appears_in_spans_or_logs_on_the_proposal_paths
+        PASS [   4.236s] (468/908) crm-api::all db_operator_filter::another_members_personal_list_is_not_found_including_for_admin
+        PASS [   4.234s] (469/908) crm-api::all db_operator_filter::last_contact_not_within_days_includes_never_contacted
+        PASS [   4.269s] (470/908) crm-api::all db_operator_filter::span_capture_contains_filter_kinds_and_no_names_ids_or_day_counts
+        PASS [   4.262s] (471/908) crm-api::all db_operator_filter::unknown_tag_name_is_needs_clarification_and_two_in_a_row_does_not_end_the_turn
+        PASS [   4.395s] (472/908) crm-api::all db_operator_filter::duplicate_named_lists_report_candidates_then_list_id_resolves
+        PASS [   4.266s] (473/908) crm-api::all db_operator_task::complete_task_already_completed_is_idempotent_and_does_not_republish
+        PASS [   4.295s] (474/908) crm-api::all db_operator_filter::same_name_vocabulary_across_two_organizations_stays_isolated
+        PASS [   4.354s] (475/908) crm-api::all db_operator_filter::full_turn_returns_200_with_references_and_no_proposal_row
+        PASS [   4.382s] (476/908) crm-api::all db_operator_filter::own_personal_list_and_shared_list_are_visible_to_member_and_admin
+        PASS [   4.393s] (477/908) crm-api::all db_operator_filter::run_saved_list_honours_the_stored_sort
+        PASS [   4.443s] (478/908) crm-api::all db_operator_filter::foreign_list_id_and_foreign_tag_name_are_byte_identical_to_nonexistent
+        PASS [   5.655s] (479/908) crm-api::all db_operator_task::create_task_check_matrix
+        PASS [   5.617s] (480/908) crm-api::all db_operator_task::create_task_confirm_by_another_member_and_by_the_same_user_elsewhere_is_404
+        PASS [   5.637s] (481/908) crm-api::all db_operator_task::create_task_confirm_after_person_deleted_is_404
+        PASS [   5.639s] (482/908) crm-api::all db_operator_task::create_task_confirm_without_operator_runtime_sets_origin_and_correlation
+        PASS [   5.747s] (483/908) crm-api::all db_operator_task::complete_task_leaves_origin_unchanged_and_the_ledger_carries_no_title
+        PASS [   5.758s] (484/908) crm-api::all db_operator_task::create_task_assignee_resolution_matrix
+        PASS [   5.764s] (485/908) crm-api::all db_operator_task::create_task_actor_deactivated_401_at_the_door_forbidden_at_the_command
+        PASS [   5.862s] (486/908) crm-api::all db_operator_task::complete_task_forbidden_for_a_third_member_with_a_positive_control
+        PASS [   5.790s] (487/908) crm-api::all db_operator_task::complete_task_permits_creator_and_admin
+        PASS [   5.799s] (488/908) crm-api::all db_operator_task::complete_task_not_found_is_byte_identical_across_causes
+        PASS [   4.677s] (489/908) crm-api::all db_operator_task::operator_task_proposal_grants_admit_no_update_or_delete
+        PASS [   4.731s] (490/908) crm-api::all db_operator_task::turn_rejects_invalid_utc_offset_minutes
+        PASS [   4.741s] (491/908) crm-api::all db_operator_task::start_call_confirm_with_a_null_contact_method_id_is_503
+        PASS [   4.831s] (492/908) crm-api::all db_operator_task::create_task_expired_consumed_and_stuck_claimed
+        PASS [   4.806s] (493/908) crm-api::all db_operator_task::create_task_with_due_date_and_named_assignee_composes_and_confirms
+        PASS [   4.882s] (494/908) crm-api::all db_operator_task::create_task_double_confirm_race_yields_one_201
+        PASS [   4.793s] (495/908) crm-api::all db_operator_task::operator_versus_panel_completion_gives_one_changed_true
+        PASS [   4.786s] (496/908) crm-api::all db_operator_task::undo_through_reopen_changed_true_then_false_then_404_and_403
+        PASS [   4.846s] (497/908) crm-api::all db_operator_task::create_task_race_assignee_deactivated_is_422
+        PASS [   4.874s] (498/908) crm-api::all db_operator_task::create_task_proposal_inserts_parent_and_sidecar_rows
+        PASS [   3.689s] (499/908) crm-api::all db_people::set_assignment_with_malformed_json_returns_400
+        PASS [   3.710s] (500/908) crm-api::all db_people::tasks_never_change_person_row_or_people_list_rows
+        PASS [   3.794s] (501/908) crm-api::all db_people::cross_organization_people_stages_and_unresolved_are_isolated
+        PASS [   3.795s] (502/908) crm-api::all db_people::notes_never_change_person_row_or_people_list_rows
+        PASS [   3.788s] (503/908) crm-api::all db_people::people_list_reports_not_truncated_under_500_rows
+        PASS [   3.760s] (504/908) crm-api::all db_people::set_stage_with_malformed_json_returns_400
+        PASS [   3.799s] (505/908) crm-api::all db_people::people_list_reports_truncated_past_500_rows
+        PASS [   3.920s] (506/908) crm-api::all db_people::assign_and_stage_commands_are_fact_precise_and_history_orders_stably
+        PASS [   3.828s] (507/908) crm-api::all db_people::organization_creation_seeds_nine_ordered_stages_and_two_members
+        PASS [   3.788s] (508/908) crm-api::all db_people::unresolved_queue_reports_not_truncated_under_500_rows
+        PASS [   3.788s] (509/908) crm-api::all db_people_filter::all_ten_clause_kinds_at_once_and_a_fifty_value_array_are_both_accepted
+        PASS [   3.784s] (510/908) crm-api::all db_people_filter::cross_org_and_nonexistent_assignee_ids_produce_byte_identical_422s
+        PASS [   3.812s] (511/908) crm-api::all db_people_filter::created_age_axis_within_not_within_are_exact_complements
+        PASS [   3.790s] (512/908) crm-api::all db_people_filter::custom_field_filter_text_negative_includes_absent_and_archived_field_is_invalid
+        PASS [   3.893s] (513/908) crm-api::all db_people_filter::a_filter_never_returns_another_organizations_rows
+        PASS [   3.858s] (514/908) crm-api::all db_people_filter::assigned_to_clause_users_unassigned_mixed_and_me_are_viewer_relative
+        PASS [   3.862s] (515/908) crm-api::all db_people_filter::cap_truncates_to_500_with_created_at_desc_id_asc_ordering_under_a_filter
+        PASS [   3.897s] (516/908) crm-api::all db_people_filter::and_composition_intersects_two_clauses
+        PASS [   3.848s] (517/908) crm-api::all db_people_filter::cross_org_and_nonexistent_stage_ids_produce_byte_identical_422s
+        PASS [   3.972s] (518/908) crm-api::all db_people::unresolved_queue_reports_truncated_past_500_rows
+        PASS [   2.804s] (519/908) crm-api::all db_people_filter::derived_axis_full_matrix_parity::client_replied_unanswered_present_true_false_and_absent
+        PASS [   2.846s] (520/908) crm-api::all db_people_filter::derived_axis_full_matrix_parity::awaiting_response_present_true_false_and_absent
+        PASS [   2.890s] (521/908) crm-api::all db_people_filter::derived_axis_full_matrix_parity::awaiting_call_outcome_present_true_false_and_absent
+        PASS [   2.833s] (522/908) crm-api::all db_people_filter::has_replied_matches_a_person_whose_reply_was_already_answered
+        PASS [   2.851s] (523/908) crm-api::all db_people_filter::has_phone_and_has_email_axes
+        PASS [   2.872s] (524/908) crm-api::all db_people_filter::empty_clauses_is_the_full_list_through_the_filtered_path
+        PASS [   2.853s] (525/908) crm-api::all db_people_filter::inquiry_sources_endpoint_is_distinct_ascending_org_scoped_and_member_allowed
+        PASS [   2.882s] (526/908) crm-api::all db_people_filter::first_failure_wins_by_clause_order
+        PASS [   2.857s] (527/908) crm-api::all db_people_filter::inquiry_sources_endpoint_reports_truncated_past_500
+        PASS [   2.994s] (528/908) crm-api::all db_people_filter::deactivated_member_is_a_valid_assignee_d027
+        PASS [   2.474s] (529/908) crm-api::all db_people_filter::inquiry_sources_endpoint_requires_auth
+        PASS [   2.460s] (530/908) crm-api::all db_people_filter::last_inbound_age_axis_and_a_backdated_capture_filters_by_its_own_inner_date
+        PASS [   2.478s] (531/908) crm-api::all db_people_filter::invalid_percent_encoding_in_filter_param_is_400
+        PASS [   2.428s] (532/908) crm-api::all db_people_filter::repeated_filter_param_is_400
+        PASS [   2.474s] (533/908) crm-api::all db_people_filter::last_contact_age_axis_and_a_correction_fixture_prove_plain_max_equals_effective_attempt
+        PASS [   2.477s] (534/908) crm-api::all db_people_filter::last_inquiry_age_axis_within_not_within_and_never
+        PASS [   2.470s] (535/908) crm-api::all db_people_filter::ordering_ties_break_by_id_asc_under_a_filter
+        PASS [   2.538s] (536/908) crm-api::all db_people_filter::invalid_percent_encoding_in_an_unrelated_param_is_ignored
+        PASS [   2.477s] (537/908) crm-api::all db_people_filter::people_filter_request_span_records_path_only_with_the_query_string_stripped
+        PASS [   2.479s] (538/908) crm-api::all db_people_filter::present_but_empty_filter_param_is_400
+        PASS [   2.807s] (539/908) crm-api::all db_people_filter::tags_and_not_tags::not_tags_none_of_matches_an_untagged_person
+        PASS [   2.818s] (540/908) crm-api::all db_people_filter::unauthenticated_request_is_401_even_with_a_garbage_filter
+        PASS [   2.943s] (541/908) crm-api::all db_people_filter::source_clause_matches_the_latest_inquiry_with_a_tie_break_and_never_a_zero_inquiry_person
+        PASS [   2.872s] (542/908) crm-api::all db_people_filter::tags_and_not_tags::tags_and_not_tags_together_intersect
+        PASS [   2.925s] (543/908) crm-api::all db_people_filter::stage_clause_matches_only_the_named_stages
+        PASS [   2.888s] (544/908) crm-api::all db_people_filter::tags_and_not_tags::tags_any_of_one_and_several_ids_positive_and_negative
+        PASS [   2.919s] (545/908) crm-api::all db_people_filter::tags_and_not_tags::identically_named_tag_in_another_organization_never_matches
+        PASS [   2.938s] (546/908) crm-api::all db_people_filter::tags_and_not_tags::cross_org_and_nonexistent_tag_ids_produce_byte_identical_422s
+        PASS [   2.922s] (547/908) crm-api::all db_people_filter::tags_and_not_tags::tag_reference_probe_database_failure_is_503
+        PASS [   2.981s] (548/908) crm-api::all db_people_filter::structural_violation_beats_a_422_triggering_clause_in_the_same_filter
+        PASS [   3.099s] (549/908) crm-api::all db_people_filter::unknown_extra_query_param_is_ignored_exactly_as_today
+        PASS [   3.040s] (550/908) crm-api::all db_people_sort::empty_sort_param_is_400
+        PASS [   3.050s] (551/908) crm-api::all db_people_sort::name_asc_collation_orders_amy_before_bob_not_by_byte_order
+        PASS [   3.044s] (552/908) crm-api::all db_people_sort::name_asc_never_returns_another_organizations_alphabetically_first_person
+        PASS [   3.105s] (553/908) crm-api::all db_people_sort::default_order_is_byte_identical_with_and_without_explicit_created_desc
+        PASS [   3.128s] (554/908) crm-api::all db_people_sort::created_key_orders_both_directions
+        PASS [   3.230s] (555/908) crm-api::all db_people_filter::undecodable_json_filter_is_400_in_the_envelope_shape
+        PASS [   3.184s] (556/908) crm-api::all db_people_sort::assignee_key_orders_both_directions_with_unassigned_last
+        PASS [   3.146s] (557/908) crm-api::all db_people_sort::malformed_sort_tokens_are_400_before_pool_acquisition
+        PASS [   3.168s] (558/908) crm-api::all db_people_sort::foreign_organization_stage_with_a_malformed_sort_is_400_not_422
+        PASS [   2.512s] (559/908) crm-api::all db_people_sort::repeated_sort_param_is_400
+        PASS [   2.508s] (560/908) crm-api::all db_people_sort::sort_without_filter_records_no_filter_kinds_on_the_span
+        PASS [   2.556s] (561/908) crm-api::all db_people_sort::sort_composes_with_a_positive_clause_me_and_empty_clauses
+        PASS [   2.563s] (562/908) crm-api::all db_people_sort::sort_applies_before_truncation_so_the_alphabetical_500_differs_from_the_newest_500
+        PASS [   2.598s] (563/908) crm-api::all db_people_sort::null_heavy_tail_respects_nulls_last_and_truncates_the_oldest_null_row
+        PASS [   2.627s] (564/908) crm-api::all db_people_sort::non_created_keys_apply_created_at_desc_before_id_asc_for_name_and_stage
+        PASS [   2.561s] (565/908) crm-api::all db_people_sort::sort_composes_with_a_source_clause_binding_the_latest_source_probe
+        PASS [   2.692s] (566/908) crm-api::all db_people_sort::name_key_orders_by_first_name_as_the_secondary_key_with_missing_first_name_last
+        PASS [   2.701s] (567/908) crm-api::all db_people_sort::name_key_orders_both_directions_with_missing_last_and_empty_string_pin
+        PASS [   2.646s] (568/908) crm-api::all db_people_sort::non_created_keys_tie_break_by_created_at_desc_then_id_asc
+        PASS [   2.936s] (569/908) crm-api::all db_person_last_activity::deduplicated_outbound_capture_advances_nothing
+        PASS [   2.977s] (570/908) crm-api::all db_person_last_activity::first_and_repeat_inquiry_including_out_of_order_earlier_received_at
+        PASS [   2.964s] (571/908) crm-api::all db_person_last_activity::inbound_capture_advances_last_inbound_at_only
+        PASS [   3.106s] (572/908) crm-api::all db_people_sort::stage_key_orders_by_pipeline_position_both_directions
+        PASS [   3.049s] (573/908) crm-api::all db_person_last_activity::call_settle_answered_advances_last_contact_at
+        PASS [   3.069s] (574/908) crm-api::all db_person_last_activity::backdated_forward_earlier_is_noop_later_advances
+        PASS [   3.074s] (575/908) crm-api::all db_people_sort::unknown_extra_query_param_with_a_valid_sort_is_still_200
+        PASS [   3.072s] (576/908) crm-api::all db_person_last_activity::concurrent_attempts_in_either_commit_order_leave_the_greater
+        PASS [   3.102s] (577/908) crm-api::all db_people_sort::ties_at_the_500_boundary_drop_the_expected_single_row
+        PASS [   3.043s] (578/908) crm-api::all db_person_last_activity::history_row_with_mismatched_organization_id_updates_nothing
+        PASS [   3.819s] (579/908) crm-api::all db_person_last_activity::outbound_capture_advances_contact_and_outbound_not_inbound
+        PASS [   3.876s] (580/908) crm-api::all db_person_last_activity::outcome_correction_does_not_change_last_contact_at
+        PASS [   3.834s] (581/908) crm-api::all db_realtime::intake_matched_person_publishes_exactly_one_event_despite_two_facts
+        PASS [   3.968s] (582/908) crm-api::all db_person_last_activity::log_contact_attempt_advances_last_contact_at
+        PASS [   3.850s] (583/908) crm-api::all db_realtime::intake_unresolved_publishes_with_raw_payload_received_at
+        PASS [   3.887s] (584/908) crm-api::all db_realtime::assign_stage_and_contact_commands_publish_only_when_changed
+        PASS [   3.871s] (585/908) crm-api::all db_realtime::intake_new_person_publishes_exactly_one_event
+        PASS [   3.895s] (586/908) crm-api::all db_realtime::duplicate_intake_publishes_nothing_additional
+        PASS [   3.950s] (587/908) crm-api::all db_person_last_activity::migration_backfill_block_recomputes_every_column_as_max_of_history
+        PASS [   3.331s] (588/908) crm-api::all db_realtime::note_changed_payload_carries_no_body_key
+        PASS [   3.363s] (589/908) crm-api::all db_realtime::task_changed_payload_carries_no_title_key_and_none_on_changed_false
+        PASS [   3.353s] (590/908) crm-api::all db_saved_lists::concurrent_create_and_revision_races_preserve_one_winner
+        PASS [   3.399s] (591/908) crm-api::all db_realtime::publish_failure_does_not_fail_the_command
+        PASS [   3.377s] (592/908) crm-api::all db_realtime::two_concurrent_log_contact_attempts_on_same_person_both_write_and_publish
+        PASS [   3.385s] (593/908) crm-api::all db_saved_lists::create_replay_edit_delete_and_direct_version_validation
+        PASS [   3.515s] (594/908) crm-api::all db_realtime::log_contact_attempt_racing_assign_person_on_same_person_both_write_and_publish
+        PASS [   3.388s] (595/908) crm-api::all db_saved_lists::create_retry_identity_is_scoped_to_actor_and_organization
+        PASS [   7.287s] (596/908) crm-api::all db_realtime::intake_busy_publishes_nothing
+        PASS [   3.424s] (597/908) crm-api::all db_realtime::rejected_commands_publish_nothing
+        PASS [   4.088s] (598/908) crm-api::all db_saved_lists::membership_for_share_lock_rechecks_role_and_status_after_a_privilege_race
+        PASS [   4.127s] (599/908) crm-api::all db_saved_lists::saved_count_matches_people_for_every_filter_axis_mixed_and_exact_caps
+        PASS [   4.120s] (600/908) crm-api::all db_saved_lists::saved_count_uses_same_capped_semantics_and_resolves_me_per_viewer
+        PASS [   4.077s] (601/908) crm-api::all db_saved_lists::saved_list_spans_record_static_kinds_without_names_filters_or_retry_tokens
+        PASS [   4.082s] (602/908) crm-api::all db_saved_lists::stored_unknown_and_stale_filters_fail_closed_but_typed_stale_rows_can_repair
+        PASS [   4.124s] (603/908) crm-api::all db_saved_lists::saved_list_http_is_strict_and_preserves_error_precedence
+        PASS [   4.165s] (604/908) crm-api::all db_saved_lists::saved_list_http_index_is_metadata_only_and_actor_visible
+        PASS [   4.135s] (605/908) crm-api::all db_saved_lists::saved_list_scope_quotas_are_separate_and_deletion_frees_a_slot
+        PASS [   4.139s] (606/908) crm-api::all db_saved_lists::saved_list_schema_enforces_live_tombstone_shape_and_app_grants
+        PASS [   7.197s] (607/908) crm-api::all db_saved_lists::saved_list_http_hides_foreign_and_private_ids_with_the_same_404
+        PASS [   3.306s] (608/908) crm-api::all db_saved_lists::visibility_and_current_membership_permissions_do_not_leak_personal_lists
+        PASS [   3.410s] (609/908) crm-api::all db_saved_lists::stored_v1_unknown_fields_and_bad_shapes_are_independently_unsupported
+        PASS [   3.257s] (610/908) crm-api::all db_saved_lists_sort::saved_list_delete_clears_sort_columns
+        PASS [   3.269s] (611/908) crm-api::all db_saved_lists_sort::saved_list_http_create_replay_with_absent_sort_matches_created_desc
+        PASS [   3.302s] (612/908) crm-api::all db_saved_lists_sort::saved_list_create_retry_replays_identically_with_the_same_explicit_sort
+        PASS [   3.373s] (613/908) crm-api::all db_saved_lists::unsupported_deep_stored_jsonb_keeps_metadata_retry_and_delete_safe
+        PASS [   3.368s] (614/908) crm-api::all db_saved_lists_sort::owner_put_repairs_an_unreadable_stored_sort_with_a_valid_sort_or_null
+        PASS [   3.363s] (615/908) crm-api::all db_saved_lists_sort::saved_list_create_retry_replays_identically_whether_sort_is_absent_or_created_desc
+        PASS [   4.097s] (616/908) crm-api::all db_saved_lists_sort::saved_list_http_hides_a_foreign_sorted_list_with_the_same_404_as_hidden_personal
+        PASS [   3.059s] (617/908) crm-api::all db_saved_lists_sort::saved_list_http_sort_rejects_non_string_json_shapes_on_create_and_update
+        PASS [   2.835s] (618/908) crm-api::all db_saved_lists_tags::saved_list_detail_and_count_report_invalid_tag_and_writer_repairs
+        PASS [   2.902s] (619/908) crm-api::all db_saved_lists_sort::saved_list_member_put_with_bad_sort_on_shared_list_is_400_not_403
+        PASS [   2.910s] (620/908) crm-api::all db_saved_lists_sort::saved_list_http_sort_round_trips_rejects_malformed_and_precedes_404
+        PASS [   2.857s] (621/908) crm-api::all db_saved_lists_sort::update_saved_list_with_absent_sort_normalizes_to_the_default_null_pair
+        PASS [   2.863s] (622/908) crm-api::all db_saved_lists_tags::saved_list_detail_description_resolves_tag_names
+        PASS [   2.917s] (623/908) crm-api::all db_saved_lists_sort::saved_list_sort_is_part_of_the_definition_and_bumps_revision_only_when_it_changes
+        PASS [   2.935s] (624/908) crm-api::all db_saved_lists_sort::saved_list_member_sort_only_update_on_shared_list_is_forbidden
+        PASS [   2.103s] (625/908) crm-api::all db_saved_lists_tags::saved_list_write_time_foreign_or_deleted_tag_id_is_422_invalid_tag
+        PASS [   2.918s] (626/908) crm-api::all db_saved_lists_sort::unrecognized_stored_sort_pair_fails_closed_on_detail_and_count
+        PASS [   2.452s] (627/908) crm-api::all db_schema::custom_field_indexes_exist
+        PASS [   2.487s] (628/908) crm-api::all db_schema::custom_field_type_change_is_refused_while_a_value_exists
+        PASS [   2.482s] (629/908) crm-api::all db_schema::note_grants_are_exactly_slice_015_section_2_with_no_delete
+        PASS [   2.554s] (630/908) crm-api::all db_schema::crm_app_can_actually_write_the_granted_tables
+        PASS [   2.535s] (631/908) crm-api::all db_schema::fact_tables_are_append_only_via_grant_and_trigger
+        PASS [   2.573s] (632/908) crm-api::all db_schema::crm_app_has_exactly_the_slice_002_grants
+        PASS [   2.567s] (633/908) crm-api::all db_schema::custom_field_composite_fk_rejections
+        PASS [   2.661s] (634/908) crm-api::all db_schema::contact_attempted_outcome_check_and_corrects_once_index_are_section_2
+        PASS [   2.586s] (635/908) crm-api::all db_schema::custom_field_and_related_grants_are_exactly_slice_019_section_2_with_no_delete_on_definitions
+        PASS [   2.549s] (636/908) crm-api::all db_schema::fact_tables_reject_truncate_via_grant_and_trigger
+        PASS [   2.480s] (637/908) crm-api::all db_schema::note_indexes_exist
+        PASS [   2.438s] (638/908) crm-api::all db_schema::tag_and_person_tag_grants_are_exactly_slice_011e_section_2
+        PASS [   2.431s] (639/908) crm-api::all db_schema::task_accepts_500_four_byte_code_points_and_cascades_with_person
+        PASS [   2.483s] (640/908) crm-api::all db_schema::person_last_activity_triggers_exist_as_after_insert_row_triggers
+        PASS [   2.459s] (641/908) crm-api::all db_schema::saved_list_sort_columns_check_constraints_reject_bad_values_and_half_pairs
+        PASS [   2.472s] (642/908) crm-api::all db_schema::person_org_last_contact_idx_exists_with_the_declared_column_order
+        PASS [   2.455s] (643/908) crm-api::all db_schema::tag_name_is_unique_case_insensitively_per_organization_and_person_tag_is_tenant_isolated
+        PASS [   2.547s] (644/908) crm-api::all db_schema::person_grant_is_unchanged_by_slice_012
+        PASS [   2.566s] (645/908) crm-api::all db_schema::person_custom_field_value_check_constraints_matrix
+        PASS [   2.496s] (646/908) crm-api::all db_schema::tag_and_person_tag_indexes_exist
+        PASS [   4.167s] (647/908) crm-api::all db_schema::task_indexes_exist
+        PASS [   4.271s] (648/908) crm-api::all db_snapshot_http::budget_revision_receipts_preserve_original_limits_and_never_resume_work
+        PASS [   4.380s] (649/908) crm-api::all db_schema::task_check_constraints_matrix
+        PASS [   4.262s] (650/908) crm-api::all db_snapshot_http::proposal_and_concurrent_confirmation_replay_without_source_or_business_writes
+        PASS [   4.320s] (651/908) crm-api::all db_schema::task_source_external_id_partial_unique_index_and_resurrection_guard
+        PASS [   4.348s] (652/908) crm-api::all db_schema::task_grants_are_exactly_slice_016_section_2_with_no_delete
+        PASS [   4.328s] (653/908) crm-api::all db_snapshot_http::current_admin_keeps_retained_access_after_initiator_revocation_and_disconnect
+        PASS [   4.363s] (654/908) crm-api::all db_schema::task_composite_fk_rejections
+        PASS [   4.310s] (655/908) crm-api::all db_snapshot_http::http_rejects_forged_scope_unknown_fields_and_invalid_page_inputs
+        PASS [   4.524s] (656/908) crm-api::all db_snapshot_worker::budget_receipt_records_previous_policy_and_actual_approver
+        PASS [   4.424s] (657/908) crm-api::all db_snapshot_worker::revoked_inflight_source_cannot_commit_and_another_admin_cannot_takeover
+        PASS [   4.447s] (658/908) crm-api::all db_statement_equivalence::all_fourteen_statements_agree_between_frozen_and_live_text
+        PASS [   4.523s] (659/908) crm-api::all db_snapshot_worker::core_capture_preserves_encrypted_bytes_gaps_variants_and_frozen_preview
+        PASS [   4.502s] (660/908) crm-api::all db_snapshot_worker::preview_resume_uses_frozen_source_destination_and_gap_coverage
+        PASS [   4.519s] (661/908) crm-api::all db_snapshot_worker::failed_preview_batch_rolls_back_issue_counts_and_fenced_admin_retry_adopts_work
+        PASS [   4.526s] (662/908) crm-api::all db_snapshot_worker::failed_gap_capture_commit_reclaims_lease_without_advancing_checkpoint
+        PASS [   4.500s] (663/908) crm-api::all db_snapshot_worker::retained_ledger_matches_all_counted_payloads_after_capture_preview_and_cancel
+        PASS [   4.510s] (664/908) crm-api::all db_snapshot_worker::reservations_pause_without_advancing_and_preview_survives_disconnection
+        PASS [   3.178s] (665/908) crm-api::all db_statement_equivalence::person_state_pins_the_waiting_gate_tie_zero_inquiry_exclusion_and_repeat_reply_members
+        PASS [   3.152s] (666/908) crm-api::all db_tags::admin_delete_removes_and_counts_person_tag_rows
+        PASS [   3.139s] (667/908) crm-api::all db_tags::create_tag_the_201st_tag_is_409_tag_limit_reached
+        PASS [   3.171s] (668/908) crm-api::all db_tags::admin_can_rename_any_tag_member_only_their_own_unused
+        PASS [   3.191s] (669/908) crm-api::all db_tags::add_person_tag_racing_an_admin_delete_never_503s
+        PASS [   3.170s] (670/908) crm-api::all db_tags::admin_demoted_inside_the_transaction_gets_403_and_writes_nothing
+        PASS [   3.159s] (671/908) crm-api::all db_tags::create_tag_is_create_or_get_by_case_insensitive_name
+        PASS [   3.207s] (672/908) crm-api::all db_tags::add_and_remove_person_tag_is_target_state_idempotent
+        PASS [   3.241s] (673/908) crm-api::all db_tags::add_and_remove_on_a_foreign_or_nonexistent_person_or_tag_are_identical_404s
+        PASS [   3.876s] (674/908) crm-api::all db_tags::create_tag_validates_trim_length_and_control_characters
+        PASS [   3.837s] (675/908) crm-api::all db_tags::deactivated_admin_gets_403_and_rename_of_another_organizations_tag_is_404
+        PASS [   3.849s] (676/908) crm-api::all db_tags::creator_loses_rename_permission_once_a_person_carries_the_tag
+        PASS [   3.836s] (677/908) crm-api::all db_tags::non_creator_member_cannot_rename_an_unused_tag
+        PASS [   3.871s] (678/908) crm-api::all db_tags::creator_deletes_own_unused_tag_but_not_once_in_use_or_someone_elses
+        PASS [   3.863s] (679/908) crm-api::all db_tags::delete_does_not_touch_another_organizations_people_or_tags
+        PASS [   3.883s] (680/908) crm-api::all db_tags::get_person_detail_includes_ordered_tags_and_people_rows_are_unchanged
+        PASS [   3.872s] (681/908) crm-api::all db_tags::person_tag_limit_is_20_and_reapplying_at_the_cap_still_succeeds
+        PASS [   6.856s] (682/908) crm-api::all db_tags::get_tags_lists_only_the_organizations_tags_with_correct_can_manage
+        PASS [   3.113s] (683/908) crm-api::all db_tags::tag_route_error_precedence_and_wire_shapes
+        PASS [   3.112s] (684/908) crm-api::all db_tasks::complete_task_blocked_by_in_flight_delete_then_join_race_never_503
+        PASS [   3.123s] (685/908) crm-api::all db_tags::two_concurrent_identical_creates_yield_exactly_one_row_and_two_successes
+        PASS [   3.145s] (686/908) crm-api::all db_tags::tags_changed_publishes_exactly_once_per_changing_add_or_remove
+        PASS [   3.102s] (687/908) crm-api::all db_tasks::create_task_actor_deactivated_is_forbidden_out_of_band_and_in_flight
+        PASS [   3.106s] (688/908) crm-api::all db_tasks::create_task_assignee_deactivated_in_flight_is_422_after_commit_with_no_row
+        PASS [   3.145s] (689/908) crm-api::all db_tasks::complete_task_changed_false_and_true_with_positive_control
+        PASS [   3.263s] (690/908) crm-api::all db_tags::rename_same_name_is_unchanged_case_only_rename_is_changed_and_collision_is_409
+        PASS [   3.617s] (691/908) crm-api::all db_tasks::delete_task_tombstone_byte_identical_except_three_columns
+        PASS [   3.656s] (692/908) crm-api::all db_tasks::http_precedence_malformed_uuid_json_and_unknown_fields
+        PASS [   3.696s] (693/908) crm-api::all db_tasks::create_task_vs_deactivate_join_race_never_503
+        PASS [   3.664s] (694/908) crm-api::all db_tasks::list_my_tasks_exactly_200_is_not_truncated
+        PASS [   3.825s] (695/908) crm-api::all db_tasks::create_task_foreign_or_nonexistent_person_is_byte_identical_404
+        PASS [   3.730s] (696/908) crm-api::all db_tasks::create_task_shape_default_assignee_and_explicit_active_member
+        PASS [   3.711s] (697/908) crm-api::all db_tasks::detail_tasks_can_manage_per_viewer
+        PASS [   3.759s] (698/908) crm-api::all db_tasks::create_task_invalid_assignee_variants_are_byte_identical_with_no_row
+        PASS [   3.711s] (699/908) crm-api::all db_tasks::list_my_tasks_201_is_truncated_to_200
+        PASS [   3.532s] (700/908) crm-api::all db_tasks::snooze_task_rule_3_completed_and_same_instant_are_changed_false
+        PASS [   3.593s] (701/908) crm-api::all db_tasks::reopen_task_changed_false_and_true_with_positive_control
+        PASS [   3.616s] (702/908) crm-api::all db_tasks::mutations_404_for_wrong_paths_other_organization_and_multi_membership
+        PASS [   3.647s] (703/908) crm-api::all db_tasks::list_my_tasks_query_shape_fails_closed
+        PASS [   3.672s] (704/908) crm-api::all db_tasks::list_my_tasks_membership_boundary_and_order
+        PASS [   3.638s] (705/908) crm-api::all db_tasks::mutations_forbidden_for_actor_deactivated_or_admin_demoted_in_transaction
+        PASS [   3.675s] (706/908) crm-api::all db_tasks::list_my_tasks_same_assignee_id_in_two_organizations_never_leaks
+        PASS [   3.753s] (707/908) crm-api::all db_tasks::list_my_tasks_excludes_another_members_and_another_organizations_tasks
+        PASS [   3.688s] (708/908) crm-api::all db_tasks::list_my_tasks_set_based_parity_with_the_today_axis
+        PASS [   4.283s] (709/908) crm-api::all db_tasks::task_completed_history_rank8_tie_break_and_reopen_readd
+        PASS [   4.322s] (710/908) crm-api::all db_tasks::update_task_changed_false_and_true_with_positive_control
+        PASS [   4.310s] (711/908) crm-api::all db_tasks::update_task_on_completed_task_leaves_completion_columns_and_updates_history
+        PASS [   4.378s] (712/908) crm-api::all db_tasks::third_member_forbidden_on_complete_reopen_snooze_delete
+        PASS [   4.347s] (713/908) crm-api::all db_tasks::update_task_assignee_revalidated_only_when_it_changes
+        PASS [   4.410s] (714/908) crm-api::all db_tasks::task_completed_history_can_manage_with_plain_member_assignee
+        PASS [   4.373s] (715/908) crm-api::all db_tasks::update_task_assignee_creator_admin_succeed_third_member_forbidden
+        PASS [   4.487s] (716/908) crm-api::all db_tasks::task_completed_history_can_manage_overwrite_and_imported_shape
+        PASS [   4.417s] (717/908) crm-api::all db_tasks::update_task_403_precedes_422_over_http
+        PASS [   3.822s] (718/908) crm-api::all db_today::stale_inquiry_has_normal_priority_and_sorts_after_fresh
+        PASS [   3.967s] (719/908) crm-api::all db_tasks::wire_cases_due_at_offset_and_kind_validation
+        PASS [   3.948s] (720/908) crm-api::all db_today::repeat_inquiry_after_an_answered_one_resets_waiting_since_to_the_repeat
+        PASS [   3.974s] (721/908) crm-api::all db_today::last_contact_attempt_is_the_effective_row_never_a_superseded_one
+        PASS [   3.985s] (722/908) crm-api::all db_today::fresh_person_survives_the_cap_behind_many_stale_candidates
+        PASS [   4.102s] (723/908) crm-api::all db_tasks::update_task_reassign_away_loses_can_manage_and_next_put_is_forbidden
+        PASS [   4.023s] (724/908) crm-api::all db_tasks::update_task_reassign_to_inactive_or_other_organization_member_is_422
+        PASS [   4.034s] (725/908) crm-api::all db_today::client_supplied_viewer_or_organization_is_ignored
+        PASS [   4.033s] (726/908) crm-api::all db_today::contact_attempt_by_anyone_removes_the_row
+        PASS [   4.820s] (727/908) crm-api::all db_today_builtin_parity::today_zero_sources_preserves_frozen_full_builtin_payload_and_order
+        PASS [   5.028s] (728/908) crm-api::all db_today::unassigned_person_is_on_nobodys_today
+        PASS [   5.029s] (729/908) crm-api::all db_today::waiting_since_is_the_earliest_unanswered_inquiry_not_the_latest
+        PASS [   4.997s] (730/908) crm-api::all db_today_client_replied::a_later_outbound_correspondence_clears_client_replied_without_a_contact_attempt
+        PASS [   5.038s] (731/908) crm-api::all db_today_builtin_parity::today_zero_sources_preserves_frozen_builtin_cap_and_retained_ids
+        PASS [   5.016s] (732/908) crm-api::all db_today_builtin_parity::today_zero_sources_preserves_frozen_reply_inquiry_outcome_precedence_across_viewers_and_tenants
+        PASS [   5.181s] (733/908) crm-api::all db_today::tie_breaks_are_person_id_then_inquiry_id
+        PASS [   5.097s] (734/908) crm-api::all db_today::today_is_scoped_to_viewer_and_organization
+        PASS [   2.827s] (735/908) crm-api::all db_today_client_replied::a_person_with_no_inquiry_never_qualifies_even_with_a_reply
+        PASS [   2.720s] (736/908) crm-api::all db_today_client_replied::client_replied_wins_precedence_over_the_unanswered_inquiry_arm
+        PASS [   2.749s] (737/908) crm-api::all db_today_client_replied::an_old_backdated_inbound_row_still_arms_today_if_genuinely_unanswered
+        PASS [   2.725s] (738/908) crm-api::all db_today_client_replied::inbound_correspondence_arms_client_replied_and_a_later_attempt_clears_it
+        PASS [   2.735s] (739/908) crm-api::all db_today_feed_equivalence::a_stored_feed_referencing_a_deleted_tag_reports_invalid_definition_fallback
+        PASS [   7.808s] (740/908) crm-api::all db_today_builtin_parity::today_zero_sources_preserves_frozen_199_200_201_boundary_and_low_cutoff
+        PASS [   2.767s] (741/908) crm-api::all db_today_feed_equivalence::call_feed_with_a_tags_clause_admits_and_excludes
+        PASS [   2.806s] (742/908) crm-api::all db_today_client_replied::client_replied_requires_assignment_to_the_viewer
+        PASS [   2.780s] (743/908) crm-api::all db_today_feed_equivalence::a_disabled_feed_with_an_invalid_stored_definition_reports_no_issue
+        PASS [   4.657s] (744/908) crm-api::all db_today_feed_equivalence::feeds_equals_legacy_with_a_list_source_enabled
+        PASS [   4.747s] (745/908) crm-api::all db_today_feed_equivalence::fresh_boundary_at_exactly_24_hours_is_normal_one_second_later_is_high
+        PASS [   4.835s] (746/908) crm-api::all db_today_feed_equivalence::feeds_call_feed_disabled_omits_call_items_and_reasons_re_enabling_restores_them
+        PASS [   4.794s] (747/908) crm-api::all db_today_feed_equivalence::feeds_equals_legacy_with_a_deactivated_caller
+        PASS [   4.845s] (748/908) crm-api::all db_today_feed_equivalence::feeds_equals_legacy_across_two_tenants
+        PASS [   4.839s] (749/908) crm-api::all db_today_feed_equivalence::feeds_equals_legacy_for_a_rich_mixed_fixture_with_zero_sources
+        PASS [   4.884s] (750/908) crm-api::all db_today_feed_equivalence::dual_qualifying_people_beyond_the_201_cap_truncate_identically
+        PASS [   4.833s] (751/908) crm-api::all db_today_feed_equivalence::feeds_equals_legacy_for_the_call_feed_matrix_statements_with_no_extra_clauses
+        PASS [   4.987s] (752/908) crm-api::all db_today_feed_equivalence::caller_not_equal_to_assignee_across_two_viewers
+        PASS [   4.344s] (753/908) crm-api::all db_today_feed_equivalence::fresh_boundary_at_exactly_a_customized_1_hour_window_is_normal_one_second_later_is_high
+        PASS [   4.383s] (754/908) crm-api::all db_today_feed_equivalence::preview_of_the_call_feed_caps_at_200_with_truncated
+        PASS [   4.368s] (755/908) crm-api::all db_today_feeds_http::admin_get_returns_all_feed_keys_in_fixed_order
+        PASS [   4.404s] (756/908) crm-api::all db_today_feed_equivalence::person_state_feed_with_a_tags_clause_admits_and_excludes
+        PASS [   4.376s] (757/908) crm-api::all db_today_feeds_http::expected_revision_wire_type_and_range_violations_are_400
+        PASS [   4.400s] (758/908) crm-api::all db_today_feed_equivalence::reply_equal_to_the_latest_outbound_is_excluded
+        PASS [   4.429s] (759/908) crm-api::all db_today_feed_equivalence::person_state_feed_client_replied_with_a_tags_clause_admits_and_excludes
+        PASS [   4.394s] (760/908) crm-api::all db_today_feeds_http::a_body_over_128_kib_matches_the_existing_payload_too_large_mapping
+        PASS [   2.831s] (761/908) crm-api::all db_today_feeds_http::put_with_an_unknown_body_field_is_400
+        PASS [   3.152s] (762/908) crm-api::all db_today_feeds_http::feed_rule_violations_are_422_invalid_feed_rule
+        PASS [   2.953s] (763/908) crm-api::all db_today_feeds_http::put_on_an_unknown_feed_key_with_a_valid_body_is_404
+        PASS [   2.973s] (764/908) crm-api::all db_today_feeds_http::invalid_tag_reference_is_422_on_write_and_falls_back_on_read
+        PASS [   3.003s] (765/908) crm-api::all db_today_feeds_http::filter_version_2_is_400
+        PASS [   2.983s] (766/908) crm-api::all db_today_feeds_http::member_get_returns_member_feed_shape
+        PASS [   2.977s] (767/908) crm-api::all db_today_feeds_http::preview_with_an_unknown_subject_is_404
+        PASS [   3.004s] (768/908) crm-api::all db_today_feeds_http::invalid_stage_reference_is_422_invalid_stage
+        PASS [   2.791s] (769/908) crm-api::all db_today_source_acceptance::today_source_evaluates_a_match_beyond_the_people_500_display_cap
+        PASS [   2.966s] (770/908) crm-api::all db_today_feeds_http::twenty_one_clauses_is_400
+        PASS [   3.124s] (771/908) crm-api::all db_today_feeds_http::stale_revision_is_409_today_feed_conflict
+        PASS [   3.001s] (772/908) crm-api::all db_today_feeds_http::the_preview_envelope_is_subject_items_truncated_description
+        PASS [   3.011s] (773/908) crm-api::all db_today_feeds_http::stale_revision_plus_invalid_stage_is_409_not_422
+        PASS [   3.010s] (774/908) crm-api::all db_today_feeds_http::unknown_clause_kind_is_400
+        PASS [   3.029s] (775/908) crm-api::all db_today_feeds_http::the_mutation_envelope_is_feed_and_changed
+        PASS [   3.014s] (776/908) crm-api::all db_today_source_acceptance::today_source_deduplicates_overlap_and_keeps_builtin_reasons_beyond_prefix
+        SLOW [> 60.000s] (───────) crm-api::all db_snapshot_scale::shared_phone_25000_people_has_bounded_frozen_groups_and_indexed_queries
+        PASS [   3.582s] (777/908) crm-api::all db_today_source_acceptance::today_source_orders_list_only_people_by_never_contacted_last_contact_and_uuid
+        PASS [   3.557s] (778/908) crm-api::all db_today_source_contracts::five_rollback_tombstones_are_invisible_and_leave_all_five_source_slots_available
+        PASS [   3.569s] (779/908) crm-api::all db_today_source_acceptance::today_source_resolves_me_per_viewer_and_matches_other_and_unassigned_people
+        PASS [   3.572s] (780/908) crm-api::all db_today_source_contracts::today_source_enable_http_rejects_a_foreign_tag_id_with_422_invalid_tag
+        PASS [   3.581s] (781/908) crm-api::all db_today_source_contracts::today_source_membership_deactivation_retains_preferences_and_reactivation_restores_them
+        PASS [   3.630s] (782/908) crm-api::all db_today_source_contracts::today_source_enable_http_rejects_a_deleted_tag_with_422_invalid_tag
+        PASS [   3.665s] (783/908) crm-api::all db_today_source_acceptance::today_source_reserves_builtin_capacity_at_199_200_and_201
+        PASS [   3.618s] (784/908) crm-api::all db_today_source_contracts::today_source_enable_http_rejects_noncanonical_or_non_strict_bodies_before_mutation
+        PASS [   4.126s] (785/908) crm-api::all db_today_source_contracts::today_source_path_precedence_is_malformed_before_authentication
+        PASS [   4.078s] (786/908) crm-api::all db_today_source_filter_parity::derived_axis_parity_awaiting_response_client_replied_and_call_outcome
+        PASS [   4.134s] (787/908) crm-api::all db_today_source_deadlines::today_source_recovery_deadline_survives_a_malformed_tail_until_final_commit
+        PASS [   4.131s] (788/908) crm-api::all db_today_source_deadlines::today_source_uses_one_absolute_deadline_through_savepoint_membership_and_release
+        PASS [   4.179s] (789/908) crm-api::all db_today_source_contracts::today_source_schema_enforces_composite_tenants_and_app_role_grants
+        PASS [   4.103s] (790/908) crm-api::all db_today_source_failures::today_source_metadata_permission_failure_is_unavailable_and_owned_pool_recovers
+        PASS [   4.124s] (791/908) crm-api::all db_today_source_failures::today_source_membership_lock_timeout_keeps_completed_source_and_reuses_owned_connection
+        PASS [   6.244s] (792/908) crm-api::all db_today_source_contracts::today_source_private_foreign_and_missing_ids_are_indistinguishable_to_members_and_admins
+        PASS [   3.716s] (793/908) crm-api::all db_today_source_filter_parity::tags_and_not_tags_source_parity
+        PASS [   3.520s] (794/908) crm-api::all db_today_source_filter_parity::tags_source_admits_and_drops_on_tag_removal
+        PASS [   3.887s] (795/908) crm-api::all db_today_source_filter_parity::today_source_parity_covers_null_ages_corrections_and_captured_facts
+        PASS [   3.886s] (796/908) crm-api::all db_today_source_filter_parity::today_source_parity_uses_latest_source_ties_and_excludes_stale_or_absent_sources
+        PASS [   3.941s] (797/908) crm-api::all db_today_source_filter_parity::today_source_parity_resolves_shared_me_and_unassigned_for_each_viewer
+        PASS [   3.961s] (798/908) crm-api::all db_today_source_filter_parity::today_source_fixed_clock_age_boundaries_are_strict_and_not_within_is_inclusive
+        PASS [   3.956s] (799/908) crm-api::all db_today_source_filter_parity::today_source_parity_covers_every_v1_clause_kind_and_built_in_and_prefix_paths
+        PASS [   4.338s] (800/908) crm-api::all db_today_source_hooks::today_source_after_builtins_gate_keeps_one_snapshot_across_list_and_contact_mutations
+        PASS [  24.561s] (801/908) crm-api::all db_today_feed_equivalence::person_state_and_call_only_counts_near_the_boundary_match_legacy
+        PASS [   2.745s] (802/908) crm-api::all db_today_source_hooks::today_source_tag_deleted_before_enumeration_is_invalid_tag_issue
+        PASS [   2.797s] (803/908) crm-api::all db_today_source_hooks::today_source_recovery_checkpoint_exhaustion_uses_cleanup_grace_and_discards_connection
+        PASS [   2.747s] (804/908) crm-api::all db_today_source_hooks::today_source_tag_deleted_concurrently_is_invisible_under_repeatable_read
+        PASS [   2.745s] (805/908) crm-api::all db_today_source_operator::operator_parity_under_a_disabled_feed
+        PASS [   3.209s] (806/908) crm-api::all db_today_source_hooks::today_source_membership_checkpoint_sql_failure_discards_only_that_source
+        PASS [   3.209s] (807/908) crm-api::all db_today_source_hooks::today_source_backend_termination_marks_current_and_remaining_sources_unavailable
+        PASS [   5.190s] (808/908) crm-api::all db_today_source_operator::operator_parity_under_a_customized_feed_a
+        PASS [   3.774s] (809/908) crm-api::all db_today_source_races::today_source_http_mutations_and_list_delete_publish_no_organization_event
+        PASS [   4.082s] (810/908) crm-api::all db_today_source_operator::operator_parity_under_a_fallback_feed
+        PASS [   3.776s] (811/908) crm-api::all db_today_source_races::today_source_opposing_enable_disable_race_has_a_serialized_final_state
+        PASS [   3.794s] (812/908) crm-api::all db_today_source_races::today_source_enable_delete_race_leaves_no_preference_or_discoverable_configuration
+        PASS [   5.126s] (813/908) crm-api::all db_today_source_operator::today_source_operator_reports_bounded_absence_after_source_cap
+        PASS [   5.411s] (814/908) crm-api::all db_today_source_operator::today_source_operator_and_http_share_order_positions_and_list_only_card
+        PASS [   5.136s] (815/908) crm-api::all db_today_source_races::today_source_enable_checks_revision_before_idempotence_and_cap
+        PASS [   5.199s] (816/908) crm-api::all db_today_source_operator::today_source_operator_exposes_partial_empty_metadata_and_wraps_issue_name
+        PASS [   4.873s] (817/908) crm-api::all db_today_source_settings::operator_turn_timeout_cancels_owned_today_query_and_replaces_its_connection
+        PASS [   3.654s] (818/908) crm-api::all db_today_source_telemetry::today_source_spans_record_safe_structured_fields_without_private_content
+        PASS [   3.675s] (819/908) crm-api::all db_today_source_settings::today_owned_query_restores_pool_settings_after_normal_partial_and_recovered_source_error
+        PASS [   2.343s] (820/908) crm-api::all db_today_sources::today_source_cap_excludes_stale_tombstones
+        PASS [   2.342s] (821/908) crm-api::all db_today_sources::today_source_commands_are_idempotent_and_disable_stored_invalid_source
+        PASS [   2.345s] (822/908) crm-api::all db_today_sources::today_source_five_live_source_cap_holds_under_concurrent_enables
+        PASS [   2.338s] (823/908) crm-api::all db_today_sources::today_source_only_person_keeps_nullable_fields_and_review_action
+        PASS [   3.698s] (824/908) crm-api::all db_today_sources::sorted_list_and_its_unsorted_duplicate_produce_identical_today_bodies
+        PASS [   3.712s] (825/908) crm-api::all db_today_sources::deleting_saved_list_removes_all_today_source_preferences
+        PASS [   3.265s] (826/908) crm-api::all db_today_sources::today_source_reports_invalid_tag_for_a_deleted_tag
+        PASS [   3.239s] (827/908) crm-api::all db_today_system_feed_call_failures::call_feed_unrecoverable_failure_marks_the_response_unavailable_and_discards_the_connection
+        PASS [   3.267s] (828/908) crm-api::all db_today_sources::today_sources_are_private_and_organization_scoped
+        PASS [   3.211s] (829/908) crm-api::all db_today_system_feed_call_failures::set_local_settings_restore_after_a_preview_timeout
+        PASS [   3.245s] (830/908) crm-api::all db_today_system_feed_call_failures::call_only_failure_is_partial_with_intact_person_state_and_list_sources
+        PASS [   3.237s] (831/908) crm-api::all db_today_system_feed_call_failures::preview_statement_timeout_is_unavailable_and_never_partial
+        PASS [   3.244s] (832/908) crm-api::all db_today_system_feed_call_failures::set_local_settings_are_default_on_the_replacement_after_an_unrecoverable_failure
+        PASS [   3.277s] (833/908) crm-api::all db_today_system_feed_call_failures::call_membership_failure_is_partial_with_intact_person_state_and_list_sources
+        PASS [   3.287s] (834/908) crm-api::all db_today_system_feed_call_failures::call_feed_failure_and_list_source_enumeration_failure_yields_unavailable_with_the_system_feed_issue_present
+        PASS [   2.496s] (835/908) crm-api::all db_today_system_feed_call_failures::set_local_settings_restore_after_a_successful_preview
+        PASS [   2.490s] (836/908) crm-api::all db_today_system_feed_commands::admin_of_organization_b_cannot_read_edit_preview_or_affect_organization_a
+        PASS [   2.466s] (837/908) crm-api::all db_today_system_feed_commands::member_is_forbidden_on_every_direct_command
+        PASS [   2.481s] (838/908) crm-api::all db_today_system_feed_commands::feed_rule_violations_are_rejected_before_any_write
+        PASS [   2.514s] (839/908) crm-api::all db_today_system_feed_call_failures::set_local_settings_restore_after_call_only_failure
+        PASS [   2.475s] (840/908) crm-api::all db_today_system_feed_commands::preview_subject_inactive_is_not_found
+        PASS [   2.492s] (841/908) crm-api::all db_today_system_feed_commands::preview_returns_not_found_before_invalid_stage_on_an_inactive_subject
+        PASS [   2.532s] (842/908) crm-api::all db_today_system_feed_commands::a_deterministic_update_revert_disable_sequence_writes_exactly_three_ordered_facts
+        PASS [   2.523s] (843/908) crm-api::all db_today_system_feed_commands::demoted_admin_loses_access_inside_the_command_transaction
+        PASS [   2.066s] (844/908) crm-api::all db_today_system_feed_commands::update_returns_conflict_before_invalid_feed_rule_on_a_stale_revision
+        PASS [   2.188s] (845/908) crm-api::all db_today_system_feed_commands::update_and_revert_racing_the_same_expected_revision_exactly_one_wins
+        PASS [   2.152s] (846/908) crm-api::all db_today_system_feed_evaluation::an_unassigned_person_matching_only_the_customized_feed_does_not_503_feed_a
+        PASS [   2.172s] (847/908) crm-api::all db_today_system_feed_evaluation::a_stored_feed_referencing_a_deleted_stage_falls_back_to_canonical_in_evaluation
+        PASS [   2.193s] (848/908) crm-api::all db_today_system_feed_evaluation::a_person_in_both_feeds_shifts_to_inquiry_reasons_when_feed_b_is_disabled
+        PASS [   2.338s] (849/908) crm-api::all db_today_system_feed_commands::revert_and_enabled_no_op_detection_and_facts
+        PASS [   2.176s] (850/908) crm-api::all db_today_system_feed_evaluation::an_unassigned_person_matching_only_the_customized_feed_does_not_503_feed_b
+        PASS [   2.223s] (851/908) crm-api::all db_today_system_feed_commands::update_no_op_detection_canonical_collapse_and_one_fact_per_real_change
+        PASS [   2.200s] (852/908) crm-api::all db_today_system_feed_evaluation::a_stored_feed_with_unsupported_json_falls_back_to_canonical_in_evaluation
+        PASS [   2.380s] (853/908) crm-api::all db_today_system_feed_evaluation::call_feed_customized_last_contact_window_honors_the_bound_clock_not_real_now
+        PASS [   2.346s] (854/908) crm-api::all db_today_system_feed_evaluation::revoking_select_on_today_system_feed_is_a_query_error_and_a_503
+        PASS [   2.383s] (855/908) crm-api::all db_today_system_feed_evaluation::call_feed_customized_with_assigned_to_me_narrows_evaluation_to_assigned_persons
+        PASS [   2.347s] (856/908) crm-api::all db_today_system_feed_preview::preview_caps_at_200_with_truncated
+        PASS [   2.403s] (857/908) crm-api::all db_today_system_feed_evaluation::customized_feed_a_with_a_stage_clause_and_extra_assignee_matches_the_narrower_set
+        PASS [   2.377s] (858/908) crm-api::all db_today_system_feed_preview::dual_membership_admin_of_b_cannot_reach_organization_a_through_preview
+        PASS [   2.373s] (859/908) crm-api::all db_today_system_feed_preview::feed_b_narrowed_by_a_stage_clause_shifts_a_dual_person_to_inquiry_reasons
+        PASS [   2.402s] (860/908) crm-api::all db_today_system_feed_evaluation::customized_freshness_windows_1_hour_and_8760_hours_change_the_fresh_boundary
+        PASS [   2.422s] (861/908) crm-api::all db_today_system_feed_evaluation::call_feed_customized_with_a_stage_clause_narrows_evaluation_to_that_stage
+        PASS [   2.312s] (862/908) crm-api::all db_today_system_feeds::backfill_statement_inserts_three_null_rows_per_organization_and_is_idempotent
+        PASS [   2.450s] (863/908) crm-api::all db_today_system_feed_preview::stale_resend_is_conflict_and_deleted_feed_rows_resolve_as_defaults
+        PASS [   2.497s] (864/908) crm-api::all db_today_system_feed_preview::preview_of_a_call_feed_customized_with_a_stage_clause_narrows_the_candidates
+        PASS [   2.503s] (865/908) crm-api::all db_today_system_feed_preview::preview_of_a_call_feed_customized_with_assigned_to_me_narrows_the_candidates
+        PASS [   2.472s] (866/908) crm-api::all db_today_system_feeds::invalid_stage_reference_falls_back_to_canonical
+        PASS [   2.530s] (867/908) crm-api::all db_today_system_feed_preview::preview_missing_subject_precedes_invalid_custom_reference
+        PASS [   2.500s] (868/908) crm-api::all db_today_system_feed_preview::today_feed_command_and_preview_spans_never_carry_the_definition_or_subject_items
+        PASS [   2.503s] (869/908) crm-api::all db_today_system_feed_preview::preview_resolves_custom_field_labels
+        PASS [   2.648s] (870/908) crm-api::all db_today_system_feed_preview::preview_equals_todays_contribution_for_the_subject_with_the_other_feed_disabled
+        PASS [   3.310s] (871/908) crm-api::all db_today_system_feeds::is_default_true_for_seeded_rows_false_for_a_valid_custom_definition
+        PASS [   3.170s] (872/908) crm-api::all db_today_task_axis::low_outcome_needed_item_is_never_raised_by_an_overdue_task
+        PASS [   3.220s] (873/908) crm-api::all db_today_system_feeds::seed_on_create_inserts_exactly_three_default_enabled_rows
+        PASS [  95.599s] (874/908) crm-api::all db_snapshot_scale::shared_phone_25000_people_has_bounded_frozen_groups_and_indexed_queries
+        PASS [   3.233s] (875/908) crm-api::all db_today_task_axis::exactly_200_builtins_admits_no_task_only_row_but_reports_truncated
+        PASS [   3.235s] (876/908) crm-api::all db_today_task_axis::earliest_task_is_chosen_per_viewer_among_their_own_tasks_only
+        PASS [   3.255s] (877/908) crm-api::all db_today_task_axis::boundary_instants_classify_due_overdue_and_admit_within_24h_window
+        PASS [   3.263s] (878/908) crm-api::all db_today_system_feeds::today_system_feed_check_constraints
+        PASS [   3.254s] (879/908) crm-api::all db_today_task_axis::completed_tombstoned_other_member_and_other_org_tasks_are_excluded_with_positive_controls
+        PASS [   3.296s] (880/908) crm-api::all db_today_system_feeds::missing_row_resolves_as_canonical_enabled
+        PASS [   3.409s] (881/908) crm-api::all db_today_task_axis::task_only_items_sharing_due_at_are_ordered_by_ascending_person_id
+        PASS [   3.557s] (882/908) crm-api::all db_today_task_axis::retained_normal_item_with_overdue_task_is_raised_and_ordered_after_fresh_high_before_task_only
+        PASS [   3.472s] (883/908) crm-api::all db_today_task_axis::truncated_person_state_statement_skips_the_task_only_prefix_entirely
+        PASS [   3.550s] (884/908) crm-api::all db_today_task_axis::same_user_assignee_in_two_organizations_never_leaks_across_the_boundary
+        PASS [   3.491s] (885/908) crm-api::all db_today_task_axis::task_only_item_has_null_latest_inquiry_and_waiting_since_and_action_follows_kind
+        PASS [   3.479s] (886/908) crm-api::all db_today_task_axis::task_only_prefix_admits_up_to_k_and_sets_truncated_on_the_extra_row
+        PASS [   3.505s] (887/908) crm-api::all db_today_task_axis::task_only_item_matching_a_list_source_reads_list_member_then_task_reason
+        PASS [   3.506s] (888/908) crm-api::all db_today_task_axis::zero_task_organization_today_is_unaffected_for_admin_and_member
+        PASS [   3.558s] (889/908) crm-api::all db_today_task_axis::task_only_item_exactly_fills_the_cap_without_truncation
+        PASS [   3.525s] (890/908) crm-api::all db_today_task_axis::task_only_item_on_a_person_with_an_answered_inquiry_carries_the_real_inquiry_ref
+        PASS [   2.997s] (891/908) crm-api::all db_today_task_axis_failures::call_feed_and_axis_both_failing_yield_two_issues_and_recover
+        PASS [   3.007s] (892/908) crm-api::all db_today_task_axis_failures::set_local_settings_restore_after_a_recovered_task_axis_failure
+        PASS [   3.129s] (893/908) crm-api::all db_today_task_axis_failures::axis_completes_within_its_own_budget_after_a_slow_call_feed
+        PASS [   3.058s] (894/908) crm-api::all db_today_task_axis_failures::failure_after_savepoint_is_all_or_nothing_partial
+        PASS [   3.039s] (895/908) crm-api::all db_today_task_axis_failures::unrecoverable_call_feed_returns_before_the_axis_runs
+        PASS [   3.069s] (896/908) crm-api::all db_today_task_axis_failures::failure_after_membership_is_all_or_nothing_partial
+        PASS [   3.044s] (897/908) crm-api::all db_today_task_axis_failures::task_axis_real_statement_timeout_cancellation_is_partial_and_recovers
+        PASS [   3.077s] (898/908) crm-api::all db_today_task_axis_failures::failure_before_release_is_all_or_nothing_partial
+        PASS [   3.088s] (899/908) crm-api::all db_today_task_axis_failures::exhausted_recovery_budget_marks_the_whole_response_unavailable
+        PASS [   6.822s] (900/908) crm-api::all db_workspace_background::workspace_held_calls_allow_signed_terminal_and_owned_hangup_but_not_dial_or_correction
+        PASS [   3.871s] (901/908) crm-api::all db_workspace_background::workspace_operator_admission_wait_consumes_absolute_deadline_before_provider_start
+        PASS [   3.852s] (902/908) crm-api::all db_workspace_http::workspace_http_settings_provisioning_and_governance_remain_distinct
+        PASS [   3.858s] (903/908) crm-api::all db_workspace_http::workspace_http_holds_existing_intake_retry_discard_and_today_configuration
+        PASS [   3.872s] (904/908) crm-api::all db_workspace_http::workspace_http_blocks_alternate_person_note_task_and_tag_mutations
+        PASS [   3.977s] (905/908) crm-api::all db_workspace_background::workspace_inbound_retries_before_raw_storage_and_extraction_skips_held_without_attempts
+        PASS [   3.866s] (906/908) crm-api::all db_workspace_http::workspace_http_today_operator_realtime_cannot_escape_review
+        PASS [   3.881s] (907/908) crm-api::all db_workspace_http::workspace_http_review_reads_require_current_admin_and_clear_session_status
+        PASS [   3.905s] (908/908) crm-api::all db_workspace_background::workspace_operator_disconnect_keeps_admission_until_deadline_and_blocks_held_inference
+────────────
+     Summary [ 415.336s] 908 tests run: 908 passed (1 slow, 1 leaky), 935 skipped

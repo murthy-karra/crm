@@ -1,0 +1,115 @@
+2026-09-12T17:42:55.082769Z  INFO crm_api::telemetry: telemetry initialized service.name=crm-api
+Synthetic-only QA API listening on 127.0.0.1:13010; database crm_010d1_qa
+2026-09-12T17:43:02.778479Z  INFO request{method=GET uri=/api/me version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:02.791859Z  INFO request{method=GET uri=/api/me version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:02.793777Z  INFO request{method=GET uri=/api/me version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=15 ms status=200
+2026-09-12T17:43:02.805027Z  INFO request{method=GET uri=/api/me version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=13 ms status=200
+2026-09-12T17:43:02.827126Z  INFO request{method=GET uri=/api/migrations/fub/ version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:02.827525Z  INFO request{method=GET uri=/api/migrations/fub/imports version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:02.827992Z  INFO request{method=GET uri=/api/migrations/fub/imports version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:02.828473Z  INFO request{method=GET uri=/api/migrations/fub/snapshots version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:02.828900Z  INFO request{method=GET uri=/api/migrations/fub/imports version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:02.829353Z  INFO request{method=GET uri=/api/migrations/fub/imports version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:02.901023Z  INFO request{method=GET uri=/api/migrations/fub/ version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=73 ms status=200
+2026-09-12T17:43:02.905827Z  INFO request{method=GET uri=/api/migrations/fub/imports version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=77 ms status=200
+2026-09-12T17:43:02.906405Z  INFO request{method=GET uri=/api/migrations/fub/snapshots version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=77 ms status=200
+2026-09-12T17:43:02.908756Z  INFO request{method=GET uri=/api/migrations/fub/snapshots version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:02.913132Z  INFO request{method=GET uri=/api/migrations/fub/imports version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=84 ms status=200
+2026-09-12T17:43:02.944124Z  INFO request{method=GET uri=/api/me version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:02.946394Z  INFO request{method=GET uri=/api/me version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=2 ms status=200
+2026-09-12T17:43:02.984632Z  INFO request{method=GET uri=/api/migrations/fub/ version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:02.984939Z  INFO request{method=GET uri=/api/migrations/fub/imports version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:02.985375Z  INFO request{method=GET uri=/api/migrations/fub/snapshots version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:02.985844Z  INFO request{method=GET uri=/api/migrations/fub/imports version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:02.986351Z  INFO request{method=GET uri=/api/migrations/fub/snapshots version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:02.986844Z  INFO request{method=GET uri=/api/migrations/fub/imports version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:03.004981Z  INFO request{method=GET uri=/api/migrations/fub/ version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=20 ms status=200
+2026-09-12T17:43:03.007822Z  INFO request{method=GET uri=/api/migrations/fub/snapshots version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=21 ms status=200
+2026-09-12T17:43:03.007774Z  INFO request{method=GET uri=/api/migrations/fub/imports version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:03.010554Z  INFO request{method=GET uri=/api/migrations/fub/snapshots version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=25 ms status=200
+2026-09-12T17:43:03.010670Z  INFO request{method=GET uri=/api/me version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:03.012544Z  INFO request{method=GET uri=/api/me version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=1 ms status=200
+2026-09-12T17:43:03.014050Z  INFO request{method=GET uri=/api/migrations/fub/imports version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=27 ms status=200
+2026-09-12T17:43:03.015357Z  INFO request{method=GET uri=/api/migrations/fub/snapshots/b8eba334-9411-45a1-a983-3ca663b6651e version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:03.017218Z  INFO request{method=GET uri=/api/migrations/fub/snapshots/b8eba334-9411-45a1-a983-3ca663b6651e version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:03.022062Z  INFO request{method=GET uri=/api/migrations/fub/imports version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=37 ms status=200
+2026-09-12T17:43:03.027021Z  INFO request{method=GET uri=/api/migrations/fub/imports/9d4a6a4e-28ec-4ccd-9ed0-393a297284dd version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:03.027008Z  INFO request{method=GET uri=/api/migrations/fub/imports version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=41 ms status=200
+2026-09-12T17:43:03.029465Z  INFO request{method=GET uri=/api/migrations/fub/activity-imports version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:03.033777Z  WARN sqlx::postgres::notice: there is no transaction in progress
+2026-09-12T17:43:03.060739Z  INFO request{method=GET uri=/api/me version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:03.062665Z  INFO request{method=GET uri=/api/me version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=1 ms status=200
+2026-09-12T17:43:03.087990Z  INFO request{method=GET uri=/api/migrations/fub/ version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:03.088467Z  INFO request{method=GET uri=/api/migrations/fub/imports version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:03.092864Z  INFO request{method=GET uri=/api/migrations/fub/snapshots version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:03.093284Z  INFO request{method=GET uri=/api/migrations/fub/imports version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:03.093799Z  INFO request{method=GET uri=/api/migrations/fub/imports version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:03.094385Z  INFO request{method=GET uri=/api/migrations/fub/snapshots version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:03.101380Z  INFO request{method=GET uri=/api/migrations/fub/imports version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=12 ms status=200
+2026-09-12T17:43:03.101640Z  INFO request{method=GET uri=/api/migrations/fub/ version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=13 ms status=200
+2026-09-12T17:43:03.104446Z  INFO request{method=GET uri=/api/migrations/fub/imports version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:03.110115Z  INFO request{method=GET uri=/api/migrations/fub/imports/9d4a6a4e-28ec-4ccd-9ed0-393a297284dd version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:03.111442Z  INFO request{method=GET uri=/api/migrations/fub/imports version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=17 ms status=200
+2026-09-12T17:43:03.117635Z  INFO request{method=GET uri=/api/migrations/fub/imports version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=13 ms status=200
+2026-09-12T17:43:03.118729Z  INFO request{method=GET uri=/api/migrations/fub/snapshots version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=24 ms status=200
+2026-09-12T17:43:03.121502Z  INFO request{method=GET uri=/api/migrations/fub/imports/9d4a6a4e-28ec-4ccd-9ed0-393a297284dd version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:03.121896Z  INFO request{method=GET uri=/api/migrations/fub/activity-imports version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:03.125114Z  INFO request{method=GET uri=/api/migrations/fub/imports/9d4a6a4e-28ec-4ccd-9ed0-393a297284dd version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:03.129934Z  INFO request{method=GET uri=/api/migrations/fub/imports/9d4a6a4e-28ec-4ccd-9ed0-393a297284dd version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=19 ms status=200
+2026-09-12T17:43:03.132630Z  INFO request{method=GET uri=/api/migrations/fub/history-captures version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:03.134643Z  INFO request{method=GET uri=/api/migrations/fub/imports/9d4a6a4e-28ec-4ccd-9ed0-393a297284dd version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=13 ms status=200
+2026-09-12T17:43:03.143925Z  INFO request{method=GET uri=/api/migrations/fub/activity-imports version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=22 ms status=200
+2026-09-12T17:43:03.144115Z  INFO request{method=GET uri=/api/migrations/fub/snapshots/b8eba334-9411-45a1-a983-3ca663b6651e version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:03.148233Z  INFO request{method=GET uri=/api/migrations/fub/imports version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=54 ms status=200
+2026-09-12T17:43:03.148522Z  INFO request{method=GET uri=/api/migrations/fub/snapshots/b8eba334-9411-45a1-a983-3ca663b6651e version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:03.150991Z  INFO request{method=GET uri=/api/migrations/fub/snapshots/b8eba334-9411-45a1-a983-3ca663b6651e version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:03.151173Z  INFO request{method=GET uri=/api/migrations/fub/snapshots version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=58 ms status=200
+2026-09-12T17:43:03.151393Z  INFO request{method=GET uri=/api/migrations/fub/imports/9d4a6a4e-28ec-4ccd-9ed0-393a297284dd version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=26 ms status=200
+2026-09-12T17:43:03.153945Z  INFO request{method=GET uri=/api/migrations/fub/imports/9d4a6a4e-28ec-4ccd-9ed0-393a297284dd/plans/3fab4439-5389-4366-bf9c-c83283e05967/mappings version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:03.154303Z  INFO request{method=GET uri=/api/migrations/fub/imports/9d4a6a4e-28ec-4ccd-9ed0-393a297284dd/results version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:03.157957Z  INFO request{method=GET uri=/api/migrations/fub/snapshots/b8eba334-9411-45a1-a983-3ca663b6651e version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=13 ms status=200
+2026-09-12T17:43:03.160340Z  INFO request{method=GET uri=/api/migrations/fub/imports/9d4a6a4e-28ec-4ccd-9ed0-393a297284dd version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:03.162015Z  INFO request{method=GET uri=/api/migrations/fub/history-captures version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=29 ms status=200
+2026-09-12T17:43:03.164845Z  INFO request{method=GET uri=/api/migrations/fub/metadata-imports version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:03.165497Z  INFO request{method=GET uri=/api/migrations/fub/snapshots/b8eba334-9411-45a1-a983-3ca663b6651e version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=16 ms status=200
+2026-09-12T17:43:03.167241Z  INFO request{method=GET uri=/api/migrations/fub/snapshots/b8eba334-9411-45a1-a983-3ca663b6651e version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=16 ms status=200
+2026-09-12T17:43:03.167817Z  INFO request{method=GET uri=/api/migrations/fub/imports/9d4a6a4e-28ec-4ccd-9ed0-393a297284dd/plans/3fab4439-5389-4366-bf9c-c83283e05967/mappings version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=13 ms status=200
+2026-09-12T17:43:03.169625Z  INFO request{method=GET uri=/api/migrations/fub/snapshots/b8eba334-9411-45a1-a983-3ca663b6651e version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:03.170501Z  INFO request{method=GET uri=/api/migrations/fub/snapshots/b8eba334-9411-45a1-a983-3ca663b6651e/previews/d881beef-bcf5-4fe4-a5bd-946d7778b035 version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:03.172563Z  INFO request{method=GET uri=/api/migrations/fub/history-captures/a57f6d08-7e4d-4088-adae-ab9b7b11076c version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:03.175336Z  INFO request{method=GET uri=/api/migrations/fub/imports/9d4a6a4e-28ec-4ccd-9ed0-393a297284dd/results version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=21 ms status=200
+2026-09-12T17:43:03.181999Z  INFO request{method=GET uri=/api/migrations/fub/snapshots/b8eba334-9411-45a1-a983-3ca663b6651e version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=12 ms status=200
+2026-09-12T17:43:03.184675Z  INFO request{method=GET uri=/api/migrations/fub/metadata-imports version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=19 ms status=200
+2026-09-12T17:43:03.184961Z  INFO request{method=GET uri=/api/migrations/fub/imports/9d4a6a4e-28ec-4ccd-9ed0-393a297284dd version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=24 ms status=200
+2026-09-12T17:43:03.188020Z  INFO request{method=GET uri=/api/migrations/fub/snapshots/b8eba334-9411-45a1-a983-3ca663b6651e/previews/d881beef-bcf5-4fe4-a5bd-946d7778b035 version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=17 ms status=200
+2026-09-12T17:43:03.188158Z  INFO request{method=GET uri=/api/migrations/fub/snapshots/b8eba334-9411-45a1-a983-3ca663b6651e/previews/d881beef-bcf5-4fe4-a5bd-946d7778b035 version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:03.191398Z  INFO request{method=GET uri=/api/migrations/fub/snapshots/b8eba334-9411-45a1-a983-3ca663b6651e version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:03.193268Z  INFO request{method=GET uri=/api/migrations/fub/history-captures/a57f6d08-7e4d-4088-adae-ab9b7b11076c version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=20 ms status=200
+2026-09-12T17:43:03.198018Z  INFO request{method=GET uri=/api/migrations/fub/snapshots/b8eba334-9411-45a1-a983-3ca663b6651e/previews/d881beef-bcf5-4fe4-a5bd-946d7778b035/records version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:03.201698Z  INFO request{method=GET uri=/api/migrations/fub/snapshots/b8eba334-9411-45a1-a983-3ca663b6651e/previews/d881beef-bcf5-4fe4-a5bd-946d7778b035 version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=13 ms status=200
+2026-09-12T17:43:03.203944Z  INFO request{method=GET uri=/api/migrations/fub/snapshots/b8eba334-9411-45a1-a983-3ca663b6651e version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=12 ms status=200
+2026-09-12T17:43:03.206099Z  INFO request{method=GET uri=/api/migrations/fub/history-captures/a57f6d08-7e4d-4088-adae-ab9b7b11076c/records version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:03.209934Z  INFO request{method=GET uri=/api/migrations/fub/snapshots/b8eba334-9411-45a1-a983-3ca663b6651e/previews/d881beef-bcf5-4fe4-a5bd-946d7778b035/records version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=11 ms status=200
+2026-09-12T17:43:03.217029Z  INFO request{method=GET uri=/api/migrations/fub/history-captures/a57f6d08-7e4d-4088-adae-ab9b7b11076c/records version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=10 ms status=200
+2026-09-12T17:43:03.591532Z  INFO request{method=GET uri=/api/migrations/fub/history-captures/a57f6d08-7e4d-4088-adae-ab9b7b11076c version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:03.603479Z  INFO request{method=GET uri=/api/migrations/fub/history-captures/a57f6d08-7e4d-4088-adae-ab9b7b11076c version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=11 ms status=200
+2026-09-12T17:43:04.064986Z  INFO request{method=GET uri=/api/migrations/fub/history-captures/a57f6d08-7e4d-4088-adae-ab9b7b11076c version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:04.099734Z  INFO request{method=GET uri=/api/migrations/fub/history-captures/a57f6d08-7e4d-4088-adae-ab9b7b11076c version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=34 ms status=200
+2026-09-12T17:43:04.558353Z  INFO request{method=GET uri=/api/migrations/fub/history-captures/a57f6d08-7e4d-4088-adae-ab9b7b11076c version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:04.572566Z  INFO request{method=GET uri=/api/migrations/fub/history-captures/a57f6d08-7e4d-4088-adae-ab9b7b11076c version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=14 ms status=200
+2026-09-12T17:43:05.030667Z  INFO request{method=GET uri=/api/migrations/fub/history-captures/a57f6d08-7e4d-4088-adae-ab9b7b11076c version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:05.064717Z  INFO request{method=GET uri=/api/migrations/fub/history-captures/a57f6d08-7e4d-4088-adae-ab9b7b11076c version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=34 ms status=200
+2026-09-12T17:43:05.174701Z  INFO request{method=GET uri=/api/migrations/fub/history-captures version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:05.204262Z  INFO request{method=GET uri=/api/migrations/fub/history-captures/a57f6d08-7e4d-4088-adae-ab9b7b11076c version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:05.211789Z  INFO request{method=GET uri=/api/migrations/fub/history-captures version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=37 ms status=200
+2026-09-12T17:43:05.229313Z  INFO request{method=GET uri=/api/migrations/fub/history-captures/a57f6d08-7e4d-4088-adae-ab9b7b11076c version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=25 ms status=200
+2026-09-12T17:43:05.523568Z  INFO request{method=GET uri=/api/migrations/fub/history-captures/a57f6d08-7e4d-4088-adae-ab9b7b11076c version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:05.537728Z  INFO request{method=GET uri=/api/migrations/fub/history-captures/a57f6d08-7e4d-4088-adae-ab9b7b11076c version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=14 ms status=200
+2026-09-12T17:43:05.568413Z  INFO request{method=GET uri=/api/migrations/fub/imports version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:05.568937Z  INFO request{method=GET uri=/api/migrations/fub/imports/9d4a6a4e-28ec-4ccd-9ed0-393a297284dd version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:05.569594Z  INFO request{method=GET uri=/api/migrations/fub/history-captures version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:05.570326Z  INFO request{method=GET uri=/api/migrations/fub/history-captures/a57f6d08-7e4d-4088-adae-ab9b7b11076c version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-09-12T17:43:05.580483Z  INFO request{method=GET uri=/api/migrations/fub/imports version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=12 ms status=200
+2026-09-12T17:43:05.587725Z  INFO request{method=GET uri=/api/migrations/fub/history-captures/a57f6d08-7e4d-4088-adae-ab9b7b11076c version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=17 ms status=200
+2026-09-12T17:43:05.595454Z  INFO request{method=GET uri=/api/migrations/fub/history-captures version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=25 ms status=200
+2026-09-12T17:43:05.601270Z  INFO request{method=GET uri=/api/migrations/fub/imports/9d4a6a4e-28ec-4ccd-9ed0-393a297284dd version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=32 ms status=200

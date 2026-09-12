@@ -1,0 +1,9 @@
+   Compiling crm-api v0.1.0 (/private/tmp/crm-010f2-completion-audit-ekukz8ob/worktree/backend/crates/crm-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 28.80s
+     Running tests/all.rs (target/debug/deps/all-07593333edaca6c2)
+
+running 2 tests
+test db_activity_lifecycle::activity_a6_audit_note_equality_edits_and_tombstones_preserve_exact_rows ... ok
+test db_activity_lifecycle::activity_a6_audit_task_local_state_changes_preserve_exact_rows ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 1017 filtered out; finished in 15.34s

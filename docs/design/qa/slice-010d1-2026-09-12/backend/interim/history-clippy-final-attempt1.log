@@ -1,0 +1,45 @@
+    Checking crm-app v0.1.0 (<WORKTREE>/backend/crates/crm-app)
+    Checking crm-api v0.1.0 (<WORKTREE>/backend/crates/crm-api)
+error: deref which would be done by auto-deref
+   --> crates/crm-api/tests/db_history_capture_release.rs:190:34
+    |
+190 |         .require_history_capture(&mut *f.pool.acquire().await.unwrap())
+    |                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: try: `&mut f.pool.acquire().await.unwrap()`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.98.0/index.html#explicit_auto_deref
+    = note: `-D clippy::explicit-auto-deref` implied by `-D clippy::all`
+    = help: to override `-D clippy::all` add `#[allow(clippy::explicit_auto_deref)]`
+
+error: deref which would be done by auto-deref
+   --> crates/crm-api/tests/db_history_capture_release.rs:379:39
+    |
+379 |         workspace::startup_compatible(&mut *f.pool.acquire().await.unwrap())
+    |                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: try: `&mut f.pool.acquire().await.unwrap()`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.98.0/index.html#explicit_auto_deref
+
+error: deref which would be done by auto-deref
+   --> crates/crm-api/tests/db_history_capture_release.rs:450:39
+    |
+450 |         workspace::startup_compatible(&mut *f.pool.acquire().await.unwrap())
+    |                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: try: `&mut f.pool.acquire().await.unwrap()`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.98.0/index.html#explicit_auto_deref
+
+error: deref which would be done by auto-deref
+   --> crates/crm-api/tests/db_history_capture_release.rs:461:52
+    |
+461 |         let result = workspace::startup_compatible(&mut *f.pool.acquire().await.unwrap()).await;
+    |                                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: try: `&mut f.pool.acquire().await.unwrap()`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.98.0/index.html#explicit_auto_deref
+
+error: deref which would be done by auto-deref
+   --> crates/crm-api/tests/db_history_capture_release.rs:468:39
+    |
+468 |         workspace::startup_compatible(&mut *f.pool.acquire().await.unwrap())
+    |                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: try: `&mut f.pool.acquire().await.unwrap()`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.98.0/index.html#explicit_auto_deref
+
+error: could not compile `crm-api` (test "all") due to 5 previous errors

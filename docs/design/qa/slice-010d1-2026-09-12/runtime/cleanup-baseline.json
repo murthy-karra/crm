@@ -1,0 +1,29 @@
+{
+  "recorded_at": "2026-09-12T18:02:43.446108+00:00",
+  "shared_containers": [
+    {
+      "id": "45bce26cee00",
+      "name": "development-centrifugo-1",
+      "ports": "127.0.0.1:8000->8000/tcp"
+    },
+    {
+      "id": "985e68127a73",
+      "name": "development-postgres-1",
+      "ports": "127.0.0.1:5432->5432/tcp"
+    }
+  ],
+  "shared_listeners": {
+    "3000": [
+      "25757"
+    ],
+    "5173": [
+      "25780"
+    ],
+    "5432": [
+      "80901"
+    ],
+    "8000": [
+      "80901"
+    ]
+  }
+}

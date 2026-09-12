@@ -1,0 +1,68 @@
+{
+  "fixture": "constructed-010d1",
+  "tenant_tables_checked": 108,
+  "capture_only_unchanged_tables": 98,
+  "final_unchanged_tables": 94,
+  "history_tables": [
+    "migration_history_capture",
+    "migration_history_capture_run",
+    "migration_history_identity",
+    "migration_history_observation",
+    "migration_history_person_link",
+    "migration_history_receipt",
+    "migration_history_reservation",
+    "migration_history_seen",
+    "migration_history_stream"
+  ],
+  "intentional_authority_tables": [
+    "membership_changed",
+    "migration_connection",
+    "migration_request_receipt",
+    "organization_membership"
+  ],
+  "intentional_controls": {
+    "role_events": 4,
+    "credential_replacement_receipts": 2,
+    "all_12_members_restored": true,
+    "connection_states_exact": true
+  },
+  "original_six_history_run_counters_unchanged": true,
+  "native_people_relationship_history_today_parent_sibling_workspace_unchanged": true,
+  "ledger": [
+    {
+      "organization_id": "1171938e-8da2-435c-8465-88d0b523df38",
+      "history_retained_bytes": 719063,
+      "history_reserved_bytes": 24576,
+      "retained_delta_exact": true,
+      "reserved_delta_exact": true
+    },
+    {
+      "organization_id": "818e5fe2-1c72-4ee7-8cd4-2ba8b3ded90f",
+      "history_retained_bytes": 417866,
+      "history_reserved_bytes": 0,
+      "retained_delta_exact": true,
+      "reserved_delta_exact": true
+    },
+    {
+      "organization_id": "be9b2fbe-9c14-41b9-a87b-256eb2ef7210",
+      "history_retained_bytes": 418633,
+      "history_reserved_bytes": 0,
+      "retained_delta_exact": true,
+      "reserved_delta_exact": true
+    }
+  ],
+  "history_runs": 9,
+  "history_observations": 1509,
+  "history_identities": 1508,
+  "retained_captures": 38,
+  "paused_control_reservations": {
+    "count": 3,
+    "bytes_each": 8192
+  },
+  "completed_cancelled_reserved_bytes": 0,
+  "audit_sha256": {
+    "baseline": "ec3de45c345cae4cd3ea1125efefc1e7d19b309c124f3157a40a801214b64fe8",
+    "before-authority": "16c8b5cea82de65c025e3cc8aa30cd0c785574a7a1ead2dffa7f52db3b96f642",
+    "final": "dc8832d48786d8f0304c5d55f96a4dc8f7d3829331eec6ee8825e82c3d360e9f"
+  }
+}

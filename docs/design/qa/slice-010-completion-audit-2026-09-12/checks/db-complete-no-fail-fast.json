@@ -1,0 +1,14 @@
+{
+  "command": [
+    "cargo",
+    "nextest",
+    "run",
+    "--workspace",
+    "--locked",
+    "--run-ignored",
+    "only",
+    "--no-fail-fast"
+  ],
+  "exit_code": 0,
+  "elapsed_seconds": 415.74
+}

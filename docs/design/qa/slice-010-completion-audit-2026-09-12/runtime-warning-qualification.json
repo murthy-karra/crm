@@ -1,0 +1,21 @@
+{
+  "warning_count": 4925,
+  "first_warning_utc": "2026-09-12T06:44:02.045606Z",
+  "last_warning_utc": "2026-09-12T13:09:43.717280Z",
+  "explicit_pool_timeout_warnings": 295,
+  "generic_database_warnings": 4630,
+  "error_lines": 0,
+  "transaction_state_notices": 0,
+  "first_sleep_utc": "2026-09-12T06:42:13Z",
+  "final_full_wake_utc": "2026-09-12T13:09:42Z",
+  "darkwake_cycles": 39,
+  "warnings_during_darkwake": 4722,
+  "warnings_within_2_565_seconds_after_sleep": 198,
+  "warnings_after_full_wake": 5,
+  "database_container_restart_count": 0,
+  "database_container_oom_killed": false,
+  "database_container_scoped_log_findings": "05:00\u201314:30 UTC: ten normal checkpoint entries, no WARNING/ERROR/FATAL.",
+  "most_supported_inference": "Shared database/pool availability loss associated with host sleep/background wake, recovered after full wake.",
+  "attribution_limits": "Power-state correlation does not prove Docker suspension or the precise network/pool failure. Generic migration errors do not retain SQLx error subtype. No restart, mutation, customer-data query or source call was performed.",
+  "release_observation_remains_valid": "Recorded bounded observation ended 05:18:29 UTC, before the warning episode."
+}

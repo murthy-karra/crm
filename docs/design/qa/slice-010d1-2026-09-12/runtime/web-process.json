@@ -1,0 +1,9 @@
+{
+  "pid": 2329,
+  "command": "__USER_HOME__/.nvm/versions/node/v24.16.0/bin/node node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port 15173 --strictPort",
+  "cwd": "__CRM_WORKTREE__/web",
+  "port": 15173,
+  "tool_session_id": 6258,
+  "recorded_at": "2026-09-12T17:25:00.798971+00:00",
+  "stopped_at": "2026-09-12T18:02:44.405703+00:00"
+}

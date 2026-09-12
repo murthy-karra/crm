@@ -1,0 +1,7 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.14s
+────────────
+ Nextest run ID aea2c9d6-7b9f-4841-ae96-c6005b0c3e99 with nextest profile: default
+    Starting 1 test across 1 binary (1042 tests skipped)
+        PASS [   0.021s] (1/1) crm-api::all session::login_with_non_json_content_type_returns_400
+────────────
+     Summary [   0.021s] 1 test run: 1 passed, 1042 skipped

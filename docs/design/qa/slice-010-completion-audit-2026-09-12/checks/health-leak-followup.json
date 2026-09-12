@@ -1,0 +1,16 @@
+{
+  "command": [
+    "cargo",
+    "nextest",
+    "run",
+    "-p",
+    "crm-api",
+    "--test",
+    "all",
+    "--locked",
+    "-E",
+    "test(=health::ready_returns_503_without_database_url)"
+  ],
+  "exit_code": 0,
+  "elapsed_seconds": 0.47
+}

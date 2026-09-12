@@ -1,0 +1,19 @@
+   Compiling crm-api v0.1.0 (<WORKTREE>/backend/crates/crm-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 54.26s
+     Running tests/all.rs (target/debug/deps/all-4f54aadf6519a0de)
+
+running 1 test
+test db_activity_upgrade::populated_010f1_upgrade_preserves_native_and_import_state ... 
+thread 'db_activity_upgrade::populated_010f1_upgrade_preserves_native_and_import_state' (13737599) panicked at crates/crm-api/tests/fixtures/import_support.rs:261:6:
+called `Result::unwrap()` on an `Err` value: Database(Database(PgDatabaseError { severity: Error, code: "42P01", message: "relation \"migration_history_capture_run\" does not exist", detail: None, hint: None, position: Some(Original(264)), where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("parse_relation.c"), line: Some(1498), routine: Some("parserOpenTable") }))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    db_activity_upgrade::populated_010f1_upgrade_preserves_native_and_import_state
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1048 filtered out; finished in 3.04s
+
+error: test failed, to rerun pass `-p crm-api --test all`

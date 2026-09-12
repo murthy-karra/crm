@@ -1,0 +1,24 @@
+{
+  "verified_at": "2026-09-12T18:03:25.951325+00:00",
+  "owned_api_web_stopped": true,
+  "owned_ports_closed": [
+    13010,
+    15173,
+    55432,
+    18082
+  ],
+  "owned_docker_project_removed": true,
+  "owned_volume_removed": true,
+  "owned_network_removed": true,
+  "owned_chrome_profiles_no_processes": true,
+  "shared_container_ids_and_ports_unchanged": true,
+  "shared_listener_pids_unchanged": true,
+  "shared_container_count": 2,
+  "private_credentials_and_scratch_removed": true,
+  "worktree_retained": true,
+  "commit_merge_push_deploy_performed": false,
+  "private_removed_at": "2026-09-12T18:12:22.196759+00:00",
+  "worktree_env_removed": true,
+  "private_path_removed": "<PRIVATE_QA>",
+  "worktree_build_caches_retained": true
+}

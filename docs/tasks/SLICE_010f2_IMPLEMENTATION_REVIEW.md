@@ -1,5 +1,11 @@
 # Slice 010f2 — Bounded implementation reviews
 
+**Historical review checkpoints; both rounds are closed.** Final implementation
+verification and subsequent deployment are recorded in
+[verification](SLICE_010f2_VERIFICATION.md) and [release](SLICE_010f2_RELEASE.md).
+The “in progress” and remaining-check statements below retain their original
+checkpoint context. See also the [2026-09-12 completion audit](SLICE_010_COMPLETION_AUDIT_2026-09-12.md).
+
 D-068 authorizes implementation. D-050 and the execution brief allow two bounded
 implementation review/fix rounds. Planning review is separate and does not count
 as implementation evidence. Implementation is still in progress.

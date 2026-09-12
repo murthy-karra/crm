@@ -325,3 +325,11 @@ it and apply D-050's one paired benchmark. At most two review/fix rounds.
 
 Record exact files, commands and evidence in `SLICE_010a_VERIFICATION.md` during
 implementation; the verification record distinguishes completed checks from deferred live validation.
+
+## D-070 amendment — independent historical capture
+
+D-070 adds independently confirmed history capture under [010d1](SLICE_010d1.md).
+Assessment/core/history source admission and connection invalidation now share
+the same Org exclusion and fencing boundary. The original assessment endpoints,
+probe scope and source authority remain unchanged; retained history reads do
+not authorize new source work.

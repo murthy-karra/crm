@@ -1,0 +1,9 @@
+{
+  "pid": 5775,
+  "executable": "__CRM_WORKTREE__/backend/target/debug/examples/history_capture_qa",
+  "epoch": "low-budget",
+  "log": "__PRIVATE_QA_ROOT__/api-low-budget.log",
+  "sha256": "d859036fe9417e130c19fdd26b75fea3687f475cd061e1887d923b81215cb4dc",
+  "started_at": "2026-09-12T17:42:55.111481+00:00",
+  "stopped_at": "2026-09-12T17:45:26.137775+00:00"
+}

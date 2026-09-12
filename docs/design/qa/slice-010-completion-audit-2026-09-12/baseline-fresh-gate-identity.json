@@ -1,0 +1,8 @@
+{
+  "source_files_checked": 1016,
+  "mismatches": [],
+  "git_status_clean_before_supplement": true,
+  "complete_db_gate_tests": 908,
+  "complete_db_gate_exit": 0,
+  "note": "Schema/cache prepare --check passed in check-db-attempt-2; the DB test phase initially hit the documented chronology issue. The later complete --no-fail-fast run passed all 908 with one LEAK annotation; retain both results."
+}

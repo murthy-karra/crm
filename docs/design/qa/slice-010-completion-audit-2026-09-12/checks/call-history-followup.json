@@ -1,0 +1,15 @@
+{
+  "command": [
+    "cargo",
+    "nextest",
+    "run",
+    "--workspace",
+    "--locked",
+    "--run-ignored",
+    "only",
+    "-E",
+    "test(=db_calls_corrections::a_second_correction_chains_onto_the_first_with_strictly_increasing_recorded_at)"
+  ],
+  "exit_code": 100,
+  "elapsed_seconds": 3.77
+}

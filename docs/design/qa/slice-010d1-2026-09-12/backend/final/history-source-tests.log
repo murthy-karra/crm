@@ -1,0 +1,19 @@
+   Compiling crm-app v0.1.0 (<WORKTREE>/backend/crates/crm-app)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.33s
+     Running unittests src/lib.rs (target/debug/deps/crm_app-18c9111509aea1c8)
+
+running 11 tests
+test domain::migration::history_capture_source::tests::fixed_requests_have_only_profile_parameters_and_encode_opaque_tokens ... ok
+test domain::migration::history_capture_source::tests::lossless_canonical_records_keep_unknown_data_and_ignore_object_order ... ok
+test domain::migration::history_capture_source::tests::group_and_unknown_relationships_keep_all_valid_references_without_contact_matching ... ok
+test domain::migration::history_capture_source::tests::invalid_ids_and_same_page_variants_remain_observations_for_store_reconciliation ... ok
+test domain::migration::history_capture_source::tests::labels_are_unicode_safe_and_worst_case_projection_keeps_envelope_headroom ... ok
+test domain::migration::history_capture_source::tests::projections_exclude_content_urls_markup_and_unqualified_timestamps ... ok
+test domain::migration::history_capture_source::tests::metadata_short_pages_changed_totals_and_no_fallback_fail_closed ... ok
+test domain::migration::history_capture_source::tests::offset_and_token_modes_have_explicit_terminal_evidence ... ok
+test domain::migration::history_capture_source::tests::relationship_derivation_caps_count_duplicates_invalid_ids_and_whole_page ... ok
+test domain::migration::history_capture_source::tests::identity_validates_all_json_before_using_the_positive_identity_shape ... ok
+test domain::migration::history_capture_source::tests::duplicate_decoded_keys_input_depth_nodes_and_record_count_are_bounded ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 602 filtered out; finished in 0.06s
+

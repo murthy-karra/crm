@@ -1,0 +1,860 @@
+{
+  "audit": "Slice 010d1 final constructed runtime source and API log evidence",
+  "observed_at": "2026-09-12T18:05:23.390757+00:00",
+  "scope": "Read-only evidence audit, including final browser access/disconnect/dialog attempts; coordinator owns retained database/native/byte-ledger audit.",
+  "inputs": [
+    {
+      "file": "source-initial.json",
+      "sha256": "10d1a7e0b062591cb16aac3e47f5c7cffa27218bbcadf6bf70576de18c443962",
+      "bytes": 24051
+    },
+    {
+      "file": "source-low-budget.json",
+      "sha256": "e3ac791a2d4ca3ee2029c400b3ddfeff1894fc5fda0ffd07d6d2beb979cb150d",
+      "bytes": 194
+    },
+    {
+      "file": "source-restored-budget.json",
+      "sha256": "55dc1f79d1895f03bc34e87625c3bf04970745944aa73603b0ccd9acf27ba716",
+      "bytes": 4423
+    },
+    {
+      "file": "browser-checkpoints.json",
+      "sha256": "da2d483b78884d9ee5e0f34dd25cbb10e4bb2eaeb81a827a1a04d6cf009eb99b",
+      "bytes": 718038
+    },
+    {
+      "file": "control.json",
+      "sha256": "9fb13cbc36fd33f02089847b3b1206c66a0d95a41a2178ec911d58a873cf3695",
+      "bytes": 250
+    },
+    {
+      "file": "runtime.py",
+      "sha256": "3dc561736185f852733dbebd2011cfd4ecca9b9fdcaf407b685f67642eb5b117",
+      "bytes": 4442
+    },
+    {
+      "file": "browser_driver.mjs",
+      "sha256": "f9d48ed1db89af9d309d3412e634eadc62c5405f4cf5f44146fa0d39e4242d48",
+      "bytes": 45508
+    }
+  ],
+  "example_source": {
+    "file": "backend/crates/crm-api/examples/history_capture_qa.rs",
+    "sha256": "7d8ad770141381c7984c5aef1bc31580988afc927727d0c470984caa5e2cc75d",
+    "recorder_lines": [
+      258,
+      293,
+      306,
+      332
+    ]
+  },
+  "totals": {
+    "synthetic_source_gets": 74,
+    "identity_gets": 15,
+    "core_fixture_gets": 27,
+    "history_gets": 32,
+    "history_collections": {
+      "events": 20,
+      "calls": 6,
+      "textMessages": 6
+    },
+    "response_status_counts": {
+      "200": 64,
+      "404": 3,
+      "403": 1,
+      "429": 6
+    },
+    "response_bytes": 717461,
+    "real_fub_http_requests_reported": 0,
+    "source_non_gets": 0,
+    "history_detail_email_media_external_url_reads": 0,
+    "core_fixture_note_detail_reads": 6,
+    "post_replacement_source_gets": 0
+  },
+  "epochs": [
+    {
+      "epoch": "initial",
+      "all_gets": 63,
+      "identity_gets": 11,
+      "core_gets": 27,
+      "history_gets": 25,
+      "response_bytes": 538073,
+      "counters_and_sequences_reconciled": true,
+      "real_source_http_requests_reported": 0
+    },
+    {
+      "epoch": "low-budget",
+      "all_gets": 0,
+      "identity_gets": 0,
+      "core_gets": 0,
+      "history_gets": 0,
+      "response_bytes": 0,
+      "counters_and_sequences_reconciled": true,
+      "real_source_http_requests_reported": 0
+    },
+    {
+      "epoch": "restored-budget",
+      "all_gets": 11,
+      "identity_gets": 4,
+      "core_gets": 0,
+      "history_gets": 7,
+      "response_bytes": 179388,
+      "counters_and_sequences_reconciled": true,
+      "real_source_http_requests_reported": 0
+    }
+  ],
+  "history_worker_vs_retention": {
+    "post_fixture_source_reader_calls": 41,
+    "credential_command_identity_calls": [
+      {
+        "source_epoch": "restored-budget",
+        "source_sequence": 9,
+        "api_log_file": "api-restored-budget.log",
+        "api_request_line": 436,
+        "api_response_line": 437,
+        "api_started_at": "2026-09-12T17:48:41.161027Z",
+        "api_200_completed_at": "2026-09-12T17:48:41.178392Z",
+        "interpretation": "Credential replacement/restoration identity validation, not a history-worker retained capture."
+      },
+      {
+        "source_epoch": "restored-budget",
+        "source_sequence": 11,
+        "api_log_file": "api-restored-budget.log",
+        "api_request_line": 527,
+        "api_response_line": 528,
+        "api_started_at": "2026-09-12T17:48:43.434784Z",
+        "api_200_completed_at": "2026-09-12T17:48:43.469841Z",
+        "interpretation": "Credential replacement/restoration identity validation, not a history-worker retained capture."
+      }
+    ],
+    "history_worker_identity_calls": 7,
+    "history_worker_collection_attempts": 32,
+    "history_worker_reader_calls": 39,
+    "late_cancelled_response_discarded": 1,
+    "expected_committed_history_capture_rows": 38,
+    "interpretation": "41 post-setup reader calls include two credential PUT identity validations. The remaining 39 are history-worker calls; excluding the delayed cancelled response yields 38 expected committed capture rows. This source-side derivation matches the coordinator-reported retained audit but does not itself query the database."
+  },
+  "fixture_setup": {
+    "all_gets": 33,
+    "identity_gets": 6,
+    "core_gets": 27,
+    "note_detail_gets": 6,
+    "note_detail_status_counts": {
+      "200": 3,
+      "404": 3
+    },
+    "interpretation": "Three prepared parent fixtures use the existing core snapshot note-detail path; zero history-detail scope excludes these setup reads."
+  },
+  "browser_attempt_counts": {
+    "passed": 16,
+    "failed": 3
+  },
+  "browser_phase_accounting": [
+    {
+      "id": "1789233914201-complete-prepare",
+      "case": "complete",
+      "phase": "prepare",
+      "started_at": "2026-09-12T17:25:14.201Z",
+      "finished_at": "2026-09-12T17:25:16.383Z",
+      "outcome": "passed",
+      "all_gets": 0,
+      "identity_gets": 0,
+      "core_gets": 0,
+      "history_gets": 0,
+      "external_browser_requests": 0,
+      "checks": [
+        "database-only-proposal"
+      ]
+    },
+    {
+      "id": "1789233963128-complete-confirm-lost",
+      "case": "complete",
+      "phase": "confirm-lost",
+      "started_at": "2026-09-12T17:26:03.128Z",
+      "finished_at": "2026-09-12T17:26:05.832Z",
+      "outcome": "passed",
+      "all_gets": 0,
+      "identity_gets": 0,
+      "core_gets": 0,
+      "history_gets": 0,
+      "external_browser_requests": 0,
+      "checks": [
+        "lost-confirmation-exact-replay",
+        "confirmed-before-source"
+      ]
+    },
+    {
+      "id": "1789234040818-complete-progress",
+      "case": "complete",
+      "phase": "progress",
+      "started_at": "2026-09-12T17:27:20.818Z",
+      "finished_at": "2026-09-12T17:27:28.168Z",
+      "outcome": "passed",
+      "all_gets": 3,
+      "identity_gets": 1,
+      "core_gets": 0,
+      "history_gets": 2,
+      "external_browser_requests": 0,
+      "checks": [
+        "cursor-series-survives-later-capture"
+      ]
+    },
+    {
+      "id": "1789234079916-complete-complete",
+      "case": "complete",
+      "phase": "complete",
+      "started_at": "2026-09-12T17:27:59.916Z",
+      "finished_at": "2026-09-12T17:31:37.919Z",
+      "outcome": "passed",
+      "all_gets": 5,
+      "identity_gets": 0,
+      "core_gets": 0,
+      "history_gets": 5,
+      "external_browser_requests": 0,
+      "checks": [
+        "all-streams-enumerated-with-disclosed-gaps"
+      ]
+    },
+    {
+      "id": "1789234398379-complete-complete",
+      "case": "complete",
+      "phase": "complete",
+      "started_at": "2026-09-12T17:33:18.379Z",
+      "finished_at": "2026-09-12T17:33:22.972Z",
+      "outcome": "passed",
+      "all_gets": 0,
+      "identity_gets": 0,
+      "core_gets": 0,
+      "history_gets": 0,
+      "external_browser_requests": 0,
+      "checks": [
+        "all-streams-enumerated-with-disclosed-gaps"
+      ]
+    },
+    {
+      "id": "1789234462188-cancel-cancel",
+      "case": "cancel",
+      "phase": "cancel",
+      "started_at": "2026-09-12T17:34:22.188Z",
+      "finished_at": "2026-09-12T17:34:35.726Z",
+      "outcome": "passed",
+      "all_gets": 3,
+      "identity_gets": 1,
+      "core_gets": 0,
+      "history_gets": 2,
+      "external_browser_requests": 0,
+      "checks": [
+        "database-only-proposal",
+        "confirmed-before-source",
+        "inflight-cancellation-fences-commit"
+      ],
+      "checkpoint_source_delta": 3,
+      "checkpoint_history_delta": 2,
+      "business_publication_delta": 0
+    },
+    {
+      "id": "1789234561656-cancel-overlap",
+      "case": "cancel",
+      "phase": "overlap",
+      "started_at": "2026-09-12T17:36:01.656Z",
+      "finished_at": "2026-09-12T17:36:08.289Z",
+      "outcome": "passed",
+      "all_gets": 3,
+      "identity_gets": 1,
+      "core_gets": 0,
+      "history_gets": 2,
+      "external_browser_requests": 0,
+      "checks": [
+        "database-only-proposal",
+        "confirmed-before-source",
+        "ui-conflicting-variants-and-metadata-are-source-free",
+        "overlap-honest-coverage"
+      ],
+      "checkpoint_source_delta": 3,
+      "checkpoint_history_delta": 2,
+      "business_publication_delta": 0
+    },
+    {
+      "id": "1789234633160-cancel-denied",
+      "case": "cancel",
+      "phase": "denied",
+      "started_at": "2026-09-12T17:37:13.160Z",
+      "finished_at": "2026-09-12T17:37:17.970Z",
+      "outcome": "passed",
+      "all_gets": 2,
+      "identity_gets": 1,
+      "core_gets": 0,
+      "history_gets": 1,
+      "external_browser_requests": 0,
+      "checks": [
+        "database-only-proposal",
+        "confirmed-before-source",
+        "denied-honest-coverage"
+      ],
+      "checkpoint_source_delta": 2,
+      "checkpoint_history_delta": 1,
+      "business_publication_delta": 0
+    },
+    {
+      "id": "1789234692395-cancel-retry",
+      "case": "cancel",
+      "phase": "retry",
+      "started_at": "2026-09-12T17:38:12.395Z",
+      "finished_at": "2026-09-12T17:38:42.593Z",
+      "outcome": "passed",
+      "all_gets": 14,
+      "identity_gets": 1,
+      "core_gets": 0,
+      "history_gets": 13,
+      "external_browser_requests": 0,
+      "checks": [
+        "database-only-proposal",
+        "confirmed-before-source",
+        "retry-backoff-is-visible",
+        "retry-honest-coverage"
+      ],
+      "checkpoint_source_delta": 14,
+      "checkpoint_history_delta": 13,
+      "business_publication_delta": 0
+    },
+    {
+      "id": "1789234814088-budget-budget-queue",
+      "case": "budget",
+      "phase": "budget-queue",
+      "started_at": "2026-09-12T17:40:14.088Z",
+      "finished_at": "2026-09-12T17:40:17.137Z",
+      "outcome": "passed",
+      "all_gets": 0,
+      "identity_gets": 0,
+      "core_gets": 0,
+      "history_gets": 0,
+      "external_browser_requests": 0,
+      "checks": [
+        "database-only-proposal",
+        "confirmed-before-source",
+        "budget-run-queued-for-lowered-policy"
+      ],
+      "checkpoint_source_delta": 0,
+      "checkpoint_history_delta": 0,
+      "business_publication_delta": 0
+    },
+    {
+      "id": "1789234982140-budget-budget-pause",
+      "case": "budget",
+      "phase": "budget-pause",
+      "started_at": "2026-09-12T17:43:02.140Z",
+      "finished_at": "2026-09-12T17:43:06.280Z",
+      "outcome": "passed",
+      "all_gets": 0,
+      "identity_gets": 0,
+      "core_gets": 0,
+      "history_gets": 0,
+      "external_browser_requests": 0,
+      "checks": [
+        "lowered-policy-pauses-before-source"
+      ],
+      "checkpoint_source_delta": 0,
+      "checkpoint_history_delta": 0,
+      "business_publication_delta": 0
+    },
+    {
+      "id": "1789235134045-budget-budget-resume",
+      "case": "budget",
+      "phase": "budget-resume",
+      "started_at": "2026-09-12T17:45:34.045Z",
+      "finished_at": "2026-09-12T17:45:41.803Z",
+      "outcome": "passed",
+      "all_gets": 8,
+      "identity_gets": 1,
+      "core_gets": 0,
+      "history_gets": 7,
+      "external_browser_requests": 0,
+      "checks": [
+        "allowance-increase-requires-explicit-resume",
+        "all-streams-enumerated-with-disclosed-gaps"
+      ],
+      "checkpoint_source_delta": 8,
+      "checkpoint_history_delta": 7,
+      "business_publication_delta": 0
+    },
+    {
+      "id": "1789235318692-cancel-replacement",
+      "case": "cancel",
+      "phase": "replacement",
+      "started_at": "2026-09-12T17:48:38.692Z",
+      "finished_at": "2026-09-12T17:48:43.670Z",
+      "outcome": "passed",
+      "all_gets": 3,
+      "identity_gets": 3,
+      "core_gets": 0,
+      "history_gets": 0,
+      "external_browser_requests": 0,
+      "checks": [
+        "database-only-proposal",
+        "confirmed-before-source",
+        "database-only-proposal",
+        "confirmed-before-source",
+        "credential-replacement-requires-new-named-capture"
+      ],
+      "checkpoint_source_delta": 3,
+      "checkpoint_history_delta": 0,
+      "business_publication_delta": 0
+    },
+    {
+      "id": "1789235619122-complete-access",
+      "case": "complete",
+      "phase": "access",
+      "started_at": "2026-09-12T17:53:39.122Z",
+      "finished_at": "2026-09-12T17:53:42.258Z",
+      "outcome": "failed",
+      "all_gets": 0,
+      "identity_gets": 0,
+      "core_gets": 0,
+      "history_gets": 0,
+      "external_browser_requests": 0,
+      "checks": [
+        "current-role-revocation-clears-retained-view"
+      ],
+      "checkpoint_source_delta": 0,
+      "checkpoint_history_delta": 0,
+      "business_publication_delta": 0,
+      "failure": {
+        "name": "AssertionError",
+        "message": "Unexpected API status 401 for GET scoped route"
+      }
+    },
+    {
+      "id": "1789235732667-complete-access",
+      "case": "complete",
+      "phase": "access",
+      "started_at": "2026-09-12T17:55:32.667Z",
+      "finished_at": "2026-09-12T17:56:03.928Z",
+      "outcome": "failed",
+      "all_gets": 0,
+      "identity_gets": 0,
+      "core_gets": 0,
+      "history_gets": 0,
+      "external_browser_requests": 0,
+      "checks": [],
+      "checkpoint_source_delta": 0,
+      "checkpoint_history_delta": 0,
+      "business_publication_delta": 0,
+      "failure": {
+        "name": "TimeoutError",
+        "message": "locator.waitFor: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByTestId('history-capture-panel') to be visible\u001b[22m\n"
+      }
+    },
+    {
+      "id": "1789235810131-complete-access",
+      "case": "complete",
+      "phase": "access",
+      "started_at": "2026-09-12T17:56:50.131Z",
+      "finished_at": "2026-09-12T17:56:55.394Z",
+      "outcome": "passed",
+      "all_gets": 0,
+      "identity_gets": 0,
+      "core_gets": 0,
+      "history_gets": 0,
+      "external_browser_requests": 0,
+      "checks": [
+        "current-role-revocation-clears-retained-view",
+        "other-organization-cannot-read-or-select-capture"
+      ],
+      "checkpoint_source_delta": 0,
+      "checkpoint_history_delta": 0,
+      "business_publication_delta": 0
+    },
+    {
+      "id": "1789235893764-budget-budget-layout",
+      "case": "budget",
+      "phase": "budget-layout",
+      "started_at": "2026-09-12T17:58:13.764Z",
+      "finished_at": "2026-09-12T17:58:45.713Z",
+      "outcome": "failed",
+      "all_gets": 0,
+      "identity_gets": 0,
+      "core_gets": 0,
+      "history_gets": 0,
+      "external_browser_requests": 0,
+      "checks": [],
+      "checkpoint_source_delta": 0,
+      "checkpoint_history_delta": 0,
+      "business_publication_delta": 0,
+      "failure": {
+        "name": "TimeoutError",
+        "message": "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByTestId('history-capture-panel').getByRole('button', { name: 'Review historical storage allowances', exact: true })\u001b[22m\n",
+        "page_path": "/manage/migration"
+      }
+    },
+    {
+      "id": "1789235967633-budget-budget-layout",
+      "case": "budget",
+      "phase": "budget-layout",
+      "started_at": "2026-09-12T17:59:27.633Z",
+      "finished_at": "2026-09-12T17:59:30.879Z",
+      "outcome": "passed",
+      "all_gets": 0,
+      "identity_gets": 0,
+      "core_gets": 0,
+      "history_gets": 0,
+      "external_browser_requests": 0,
+      "checks": [
+        "database-only-proposal",
+        "allowance-dialog-actions-fit-390-and-cancel-preserves-state"
+      ],
+      "checkpoint_source_delta": 0,
+      "checkpoint_history_delta": 0,
+      "business_publication_delta": 0
+    },
+    {
+      "id": "1789235990574-complete-disconnect",
+      "case": "complete",
+      "phase": "disconnect",
+      "started_at": "2026-09-12T17:59:50.574Z",
+      "finished_at": "2026-09-12T17:59:54.021Z",
+      "outcome": "passed",
+      "all_gets": 0,
+      "identity_gets": 0,
+      "core_gets": 0,
+      "history_gets": 0,
+      "external_browser_requests": 0,
+      "checks": [
+        "disconnect-preserves-admin-read-only-evidence"
+      ],
+      "checkpoint_source_delta": 0,
+      "checkpoint_history_delta": 0,
+      "business_publication_delta": 0
+    }
+  ],
+  "retry": {
+    "history_attempts": 13,
+    "successful_history_pages": 7,
+    "captured_429_responses": 6,
+    "diagnostic_response_bytes": 216,
+    "configured_retry_after_seconds": 2,
+    "control_limitation": "The recorder does not save Retry-After or full control values per request. Two seconds is corroborated by current saved control and runtime defaults; exact measured delays are independent timestamp evidence.",
+    "intervals": [
+      {
+        "path_sha256": "9bfcc0a6e4f6b9254a134128af067dee9ca9bb995ef2321eae95f99a9ebd5755",
+        "source_sequence": 51,
+        "next_source_sequence": 52,
+        "response_completed_at": "2026-09-12T17:38:16.845788+00:00",
+        "next_started_at": "2026-09-12T17:38:20.806217+00:00",
+        "seconds_after_response": 3.960429,
+        "next_status": 429,
+        "same_exact_path": true
+      },
+      {
+        "path_sha256": "9bfcc0a6e4f6b9254a134128af067dee9ca9bb995ef2321eae95f99a9ebd5755",
+        "source_sequence": 52,
+        "next_source_sequence": 53,
+        "response_completed_at": "2026-09-12T17:38:20.811660+00:00",
+        "next_started_at": "2026-09-12T17:38:24.797709+00:00",
+        "seconds_after_response": 3.986049,
+        "next_status": 200,
+        "same_exact_path": true
+      },
+      {
+        "path_sha256": "110c79f4da033f060156be55480993c07a9cd214edd311a5dc244e7a5549c0c7",
+        "source_sequence": 54,
+        "next_source_sequence": 55,
+        "response_completed_at": "2026-09-12T17:38:25.091643+00:00",
+        "next_started_at": "2026-09-12T17:38:28.810231+00:00",
+        "seconds_after_response": 3.718588,
+        "next_status": 429,
+        "same_exact_path": true
+      },
+      {
+        "path_sha256": "110c79f4da033f060156be55480993c07a9cd214edd311a5dc244e7a5549c0c7",
+        "source_sequence": 55,
+        "next_source_sequence": 56,
+        "response_completed_at": "2026-09-12T17:38:28.814656+00:00",
+        "next_started_at": "2026-09-12T17:38:32.806981+00:00",
+        "seconds_after_response": 3.992325,
+        "next_status": 200,
+        "same_exact_path": true
+      },
+      {
+        "path_sha256": "d99606bce57bad381382491869a5d446f184444a205c8104bf3bfa3668661c0f",
+        "source_sequence": 57,
+        "next_source_sequence": 58,
+        "response_completed_at": "2026-09-12T17:38:33.118463+00:00",
+        "next_started_at": "2026-09-12T17:38:36.806146+00:00",
+        "seconds_after_response": 3.687683,
+        "next_status": 429,
+        "same_exact_path": true
+      },
+      {
+        "path_sha256": "d99606bce57bad381382491869a5d446f184444a205c8104bf3bfa3668661c0f",
+        "source_sequence": 58,
+        "next_source_sequence": 59,
+        "response_completed_at": "2026-09-12T17:38:36.810615+00:00",
+        "next_started_at": "2026-09-12T17:38:40.808457+00:00",
+        "seconds_after_response": 3.997842,
+        "next_status": 200,
+        "same_exact_path": true
+      }
+    ],
+    "minimum_seconds_after_response": 3.687683,
+    "maximum_seconds_after_response": 3.997842,
+    "browser_waiting_retry_check_passed": true
+  },
+  "cancellation": {
+    "identity_gets": 1,
+    "history_gets": 2,
+    "delayed_request_sequence": 44,
+    "request_started_at": "2026-09-12T17:34:30.742293+00:00",
+    "cancel_api_200_completed_at": "2026-09-12T17:34:31.185258Z",
+    "delayed_response_completed_at": "2026-09-12T17:34:34.749+00:00",
+    "delayed_response_bytes": 40987,
+    "seconds_response_completed_after_cancel_200": 3.563742,
+    "completed_but_discarded_history_pages": 1,
+    "browser_verified_rows": 100,
+    "browser_verified_sequence": "2",
+    "browser_verified_reserved_bytes": "0",
+    "accounting_basis": "The passed browser checkpoint verifies cancelled state, unchanged sequence/occurrences and exactly 100 rows after the delayed response finished. Recorder completion alone does not prove settlement. Coordinator owns DB/byte-ledger proof."
+  },
+  "api_log_scan": {
+    "private_positive_values_examined": 10,
+    "forms": [
+      "exact",
+      "URL-encoded",
+      "JSON-escaped",
+      "base64"
+    ],
+    "synthetic_content_positive_strings_examined": 60,
+    "entries": [
+      {
+        "file": "api-initial.log",
+        "sha256": "f5649dc1ed4d0208aa2e61b2401d30cf4a161cba3bfcb074c9c32403c769e5c1",
+        "bytes": 424172,
+        "line_count": 2087,
+        "warnings_and_errors": [
+          {
+            "line": 468,
+            "level": "WARN",
+            "message": "there is no transaction in progress",
+            "through_replacement": true
+          },
+          {
+            "line": 598,
+            "level": "WARN",
+            "message": "there is no transaction in progress",
+            "through_replacement": true
+          },
+          {
+            "line": 712,
+            "level": "WARN",
+            "message": "there is no transaction in progress",
+            "through_replacement": true
+          },
+          {
+            "line": 740,
+            "level": "WARN",
+            "message": "there is no transaction in progress",
+            "through_replacement": true
+          },
+          {
+            "line": 996,
+            "level": "WARN",
+            "message": "there is no transaction in progress",
+            "through_replacement": true
+          },
+          {
+            "line": 1005,
+            "level": "WARN",
+            "message": "there is already a transaction in progress",
+            "through_replacement": true
+          },
+          {
+            "line": 1020,
+            "level": "WARN",
+            "message": "there is no transaction in progress",
+            "through_replacement": true
+          },
+          {
+            "line": 1393,
+            "level": "WARN",
+            "message": "there is no transaction in progress",
+            "through_replacement": true
+          },
+          {
+            "line": 1426,
+            "level": "WARN",
+            "message": "there is already a transaction in progress",
+            "through_replacement": true
+          },
+          {
+            "line": 1558,
+            "level": "WARN",
+            "message": "there is no transaction in progress",
+            "through_replacement": true
+          },
+          {
+            "line": 1585,
+            "level": "WARN",
+            "message": "there is no transaction in progress",
+            "through_replacement": true
+          },
+          {
+            "line": 1709,
+            "level": "WARN",
+            "message": "there is already a transaction in progress",
+            "through_replacement": true
+          }
+        ],
+        "http_status_counts": {
+          "200": 917,
+          "201": 30,
+          "202": 19,
+          "401": 12
+        },
+        "http_5xx_count": 0,
+        "credential_positive_matches": 0,
+        "synthetic_content_positive_matches": [
+          {
+            "positive_string_sha256": "4a85827ad80e8635fb4a2b41a3fce1d0f23ba1eb27db0aa84113a7b0ca415d42",
+            "matches": 1,
+            "line_numbers": [
+              2
+            ],
+            "classification": "startup_banner_common_word"
+          }
+        ],
+        "authorization_cookie_private_key_marker_matches": 0
+      },
+      {
+        "file": "api-low-budget.log",
+        "sha256": "babe676ad310d3757954884a36851713ba1b08f4f5fe5ed00d44f79ae5a12546",
+        "bytes": 22202,
+        "line_count": 115,
+        "warnings_and_errors": [
+          {
+            "line": 39,
+            "level": "WARN",
+            "message": "there is no transaction in progress",
+            "through_replacement": true
+          }
+        ],
+        "http_status_counts": {
+          "200": 52
+        },
+        "http_5xx_count": 0,
+        "credential_positive_matches": 0,
+        "synthetic_content_positive_matches": [
+          {
+            "positive_string_sha256": "4a85827ad80e8635fb4a2b41a3fce1d0f23ba1eb27db0aa84113a7b0ca415d42",
+            "matches": 1,
+            "line_numbers": [
+              2
+            ],
+            "classification": "startup_banner_common_word"
+          }
+        ],
+        "authorization_cookie_private_key_marker_matches": 0
+      },
+      {
+        "file": "api-restored-budget.log",
+        "sha256": "dbbdb9eb3a56d5ddc92e8c717ac7fb56e6d2213426bf52b4aabf09ac684a49d7",
+        "bytes": 269670,
+        "line_count": 1365,
+        "warnings_and_errors": [
+          {
+            "line": 24,
+            "level": "WARN",
+            "message": "there is already a transaction in progress",
+            "through_replacement": true
+          },
+          {
+            "line": 322,
+            "level": "WARN",
+            "message": "there is no transaction in progress",
+            "through_replacement": true
+          },
+          {
+            "line": 349,
+            "level": "WARN",
+            "message": "there is no transaction in progress",
+            "through_replacement": true
+          },
+          {
+            "line": 350,
+            "level": "WARN",
+            "message": "there is no transaction in progress",
+            "through_replacement": true
+          },
+          {
+            "line": 357,
+            "level": "WARN",
+            "message": "there is already a transaction in progress",
+            "through_replacement": true
+          },
+          {
+            "line": 545,
+            "level": "WARN",
+            "message": "there is no transaction in progress",
+            "through_replacement": false
+          },
+          {
+            "line": 571,
+            "level": "WARN",
+            "message": "there is no transaction in progress",
+            "through_replacement": false
+          },
+          {
+            "line": 928,
+            "level": "WARN",
+            "message": "there is no transaction in progress",
+            "through_replacement": false
+          },
+          {
+            "line": 1228,
+            "level": "WARN",
+            "message": "there is no transaction in progress",
+            "through_replacement": false
+          },
+          {
+            "line": 1229,
+            "level": "WARN",
+            "message": "there is no transaction in progress",
+            "through_replacement": false
+          }
+        ],
+        "http_status_counts": {
+          "200": 598,
+          "202": 3,
+          "201": 3,
+          "403": 2,
+          "204": 5,
+          "401": 36,
+          "404": 1
+        },
+        "http_5xx_count": 0,
+        "credential_positive_matches": 0,
+        "synthetic_content_positive_matches": [
+          {
+            "positive_string_sha256": "4a85827ad80e8635fb4a2b41a3fce1d0f23ba1eb27db0aa84113a7b0ca415d42",
+            "matches": 1,
+            "line_numbers": [
+              2
+            ],
+            "classification": "startup_banner_common_word"
+          }
+        ],
+        "authorization_cookie_private_key_marker_matches": 0
+      }
+    ],
+    "interpretation": "No ERROR, HTTP 5xx, credential matches, source-payload matches or auth/cookie/key markers. One common fixture word matches the explicit synthetic startup banner in each API log; those three classified matches are retained. All WARN entries are PostgreSQL transaction-state notices. Their cause/baseline provenance was not established here; this is not a warning-free run."
+  },
+  "limits": [
+    "FixtureReader injection is a constructed source seam, not live FUB qualification or a network packet trace. Zero real_source_http_requests is a recorder field corroborated by example wiring, not a network sensor.",
+    "Recorder GET labels represent read-only synthetic operations. Identity is one abstract operation and does not establish underlying production HTTP endpoint counts.",
+    "Recorder response completion precedes domain commit/discard and cannot alone prove retained rows, byte settlement, erasure or native invariants.",
+    "All epoch sequences/counters reconcile below the 2048-record cap. Counters reset by explicit process epoch, not scenario. No incomplete requests occur in these snapshots.",
+    "History requests use only Events, Calls and Text Messages collections, with no detail/email/media/external URL requests. Core fixture setup legitimately includes six note-detail requests.",
+    "Browser external-request counters and zero business-publication deltas are scoped instrumentation, not a host-wide outbound audit.",
+    "Positive-string scanning covers configured credentials and selected synthetic content only; zero matches cannot establish detection of every possible content/secret form.",
+    "No raw response bodies, credentials, cookies, or environment files are copied. Retained database/native/ledger auditing remains coordinator-owned."
+  ]
+}

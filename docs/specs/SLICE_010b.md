@@ -574,3 +574,12 @@ this reviewed specification/brief with its allowance/delegation policy (D-063).
 Planning does not await the user's live test to remain useful. Implementation
 must be fixture-driven until source validation is resumed explicitly; no fixture
 result closes the separate live-validation criterion or customer-data prerequisites.
+
+## D-070 amendment — independent historical capture
+
+D-070 approves [010d1](SLICE_010d1.md)'s separate `fub-history-v1` capture profile,
+run tables, typed reader and retained metadata review. `fub-core-v1` and completed
+core capture sequences remain frozen. History owns its run/control reservations
+and adds its exact retained/reserved bytes to the existing Org ledger; cancellation
+releases only the owner's reservations. Source admission/disconnect checks are
+symmetric across assessment/core/history. See the [concrete history contract](../tasks/SLICE_010d1_CONTRACT.md).

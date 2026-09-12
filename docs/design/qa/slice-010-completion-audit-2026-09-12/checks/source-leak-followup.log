@@ -1,0 +1,7 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.24s
+────────────
+ Nextest run ID 55c54b04-b253-40a0-8f20-fe7be61105c0 with nextest profile: default
+    Starting 1 test across 7 binaries (1842 tests skipped)
+        PASS [   5.522s] (1/1) crm-api::all db_activity_source::activity_source_holds_missing_details_and_all_task_variants_without_list_fallback
+────────────
+     Summary [   5.523s] 1 test run: 1 passed, 1842 skipped

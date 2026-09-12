@@ -1,0 +1,31 @@
+{
+  "at": "2026-09-12T14:40:55.861230+00:00",
+  "audit_containers_removed": true,
+  "audit_volume_removed": true,
+  "audit_worktree_removed": true,
+  "audit_branch_removed": true,
+  "supplement_patch_preserved": true,
+  "temporary_credentials_removed": true,
+  "temporary_audit_directory_removed": true,
+  "remaining_worktrees": [
+    "/Users/karrad/projects/crm  028d613 [main]"
+  ],
+  "source_hashes_checked": 1016,
+  "source_mismatches": [],
+  "deployed_artifact_mismatches": [],
+  "shared_listener_pids": [
+    25757,
+    25780
+  ],
+  "final_http": {
+    "http://127.0.0.1:3000/api/health": 200,
+    "http://127.0.0.1:3000/internal/ready": 200,
+    "https://api.tarams.org/api/health": 200,
+    "https://app.tarams.org/": 200
+  },
+  "shared_containers": [
+    "development-postgres-1",
+    "development-centrifugo-1"
+  ],
+  "product_source_changed": false
+}

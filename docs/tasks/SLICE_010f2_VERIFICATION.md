@@ -1,5 +1,11 @@
 # Slice 010f2 — Implementation and verification
 
+**Historical implementation checkpoint.** The subsequent
+[release record](SLICE_010f2_RELEASE.md) records completed integration/deployment;
+the [2026-09-12 audit](SLICE_010_COMPLETION_AUDIT_2026-09-12.md) independently
+checks the completion claims. Statements below about an uncommitted worktree or
+010f1 runtime describe the earlier checkpoint, not current operational status.
+
 **IMPLEMENTED AND VERIFIED — 2026-09-11.** D-068 authorizes
 this [specification](../specs/SLICE_010f2.md), [brief](SLICE_010f2_IMPL.md), owned
 contracts and isolated synthetic verification. Runtime reconciliation has passed.

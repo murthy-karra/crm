@@ -1,0 +1,11 @@
+{
+  "scenario": "replacement-cancel-1789235320074",
+  "mode": "normal",
+  "delay_ms": 0,
+  "note_detail_gap": true,
+  "failure_stream": "events",
+  "retry_failures": 2,
+  "retry_after_seconds": 2,
+  "epoch": "restored-budget",
+  "history_units": 0
+}

@@ -19,7 +19,11 @@ Roles: api, worker, cli, migrator. Known gate versions: crm-workspace-v1,
 pre-010c. Revisions are full Git hashes. Inventory timestamps are UTC RFC3339;
 the complete inventory must be no older than five minutes. It covers active
 processes/workloads AND launch/admin paths, including in-process workers.
-Known optional capabilities: fub-metadata-import-v1, fub-activity-import-v1.
+Known optional capabilities: fub-metadata-import-v1, fub-activity-import-v1,
+fub-history-capture-v1. Confirmed history captures require history-capable API/
+worker launch and recovery, including completed/cancelled runs. Unconfirmed
+proposals do not impose this requirement. Unsupported confirmed source/parser
+profiles fail closed. History confirmation readiness is reported separately.
 Omission means none. Confirmed activity bindings require activity-capable API/
 worker launch and recovery even when cancelled without native writes.
 Metadata confirmation additionally requires that capability on every selected
@@ -50,7 +54,8 @@ LEGACY = "pre-010c"
 ROLES = frozenset({"api", "worker", "cli", "migrator"})
 METADATA_CAPABILITY = "fub-metadata-import-v1"
 ACTIVITY_CAPABILITY = "fub-activity-import-v1"
-CAPABILITIES = frozenset({METADATA_CAPABILITY, ACTIVITY_CAPABILITY})
+HISTORY_CAPABILITY = "fub-history-capture-v1"
+CAPABILITIES = frozenset({METADATA_CAPABILITY, ACTIVITY_CAPABILITY, HISTORY_CAPABILITY})
 MAX_JSON_BYTES = 1024 * 1024
 MAX_ENTRIES = 4096
 MAX_AGE_SECONDS = 300
@@ -138,11 +143,24 @@ def validate_state(state):
     fields = {"schema_present", "binding_count", "gate_versions", "database_name"}
     if "activity_binding_count" in state:
         fields |= {"activity_binding_count", "activity_schema_present"}
+    history_fields = {"history_capture_binding_count", "history_capture_schema_present",
+                      "history_capture_unsupported_count"}
+    if history_fields.intersection(state):
+        fields |= history_fields
     object_fields(state, fields)
     if (type(state.get("activity_schema_present", False)) is not bool
             or not isinstance(state.get("activity_binding_count", "0"), str)
             or re.fullmatch(r"0|[1-9][0-9]{0,19}", state.get("activity_binding_count", "0")) is None
             or (not state.get("activity_schema_present", False) and int(state.get("activity_binding_count", "0")) != 0)):
+        fail("database_evidence_invalid")
+    history_count = state.get("history_capture_binding_count", "0")
+    history_unsupported = state.get("history_capture_unsupported_count", "0")
+    if (type(state.get("history_capture_schema_present", False)) is not bool
+            or any(not isinstance(value, str)
+                   or re.fullmatch(r"0|[1-9][0-9]{0,19}", value) is None
+                   for value in [history_count, history_unsupported])
+            or int(history_unsupported) > int(history_count)
+            or (not state.get("history_capture_schema_present", False) and int(history_count) != 0)):
         fail("database_evidence_invalid")
     count = state["binding_count"]
     if (type(state["schema_present"]) is not bool
@@ -251,6 +269,13 @@ def evaluate(artifacts, candidates, inventory, state, target, now):
                            for item in selected + processes)
     if int(state.get("activity_binding_count", "0")) > 0 and activity_missing:
         reasons.add("activity_binding_requires_compatible_artifacts")
+    history_missing = any(item["role"] in {"api", "worker"}
+                          and HISTORY_CAPABILITY not in item["capabilities"]
+                          for item in selected + processes)
+    if int(state.get("history_capture_binding_count", "0")) > 0 and history_missing:
+        reasons.add("history_capture_binding_requires_compatible_artifacts")
+    if int(state.get("history_capture_unsupported_count", "0")) > 0:
+        reasons.add("history_capture_profile_unsupported")
     launch_allowed = not reasons
     confirmation_reasons = set(reasons)
     if not state["schema_present"]:
@@ -271,6 +296,13 @@ def evaluate(artifacts, candidates, inventory, state, target, now):
         activity_reasons.add("activity_capability_missing")
     if not state.get("activity_schema_present", False):
         activity_reasons.add("activity_schema_missing")
+    history_reasons = set(confirmation_reasons)
+    if history_missing:
+        history_reasons.add("history_capture_capability_missing")
+    if not any(item["role"] in {"api", "worker"} for item in selected):
+        history_reasons.add("history_capture_candidate_missing")
+    if not state.get("history_capture_schema_present", False):
+        history_reasons.add("history_capture_schema_missing")
     return {
         "version": 1,
         "gate_version": GATE,
@@ -289,10 +321,15 @@ def evaluate(artifacts, candidates, inventory, state, target, now):
         "metadata_confirmation_ready": not metadata_reasons,
         "activity_confirmation_ready": not activity_reasons,
         "activity_binding_count": state.get("activity_binding_count", "0"),
+        "history_capture_confirmation_ready": not history_reasons,
+        "history_capture_schema_present": state.get("history_capture_schema_present", False),
+        "history_capture_binding_count": state.get("history_capture_binding_count", "0"),
+        "history_capture_unsupported_count": state.get("history_capture_unsupported_count", "0"),
         "launch_reasons": sorted(reasons),
         "confirmation_reasons": sorted(confirmation_reasons),
         "metadata_confirmation_reasons": sorted(metadata_reasons),
         "activity_confirmation_reasons": sorted(activity_reasons),
+        "history_capture_confirmation_reasons": sorted(history_reasons),
     }
 
 
@@ -392,6 +429,18 @@ def database_state():
         observed = sql_json("SELECT json_build_object('count',count(*)::text) FROM public.migration_activity_import WHERE confirmed_plan_id IS NOT NULL")
         object_fields(observed, {"count"})
         state["activity_binding_count"] = observed["count"]
+    history = sql_json("SELECT json_build_object('present',to_regclass('public.migration_history_capture_run') IS NOT NULL)")
+    object_fields(history, {"present"})
+    if type(history["present"]) is not bool:
+        fail("database_evidence_invalid")
+    state["history_capture_schema_present"] = history["present"]
+    state["history_capture_binding_count"] = "0"
+    state["history_capture_unsupported_count"] = "0"
+    if history["present"]:
+        observed = sql_json("SELECT json_build_object('count',count(*)::text,'unsupported_count',count(*) FILTER (WHERE profile_version<>'fub-history-v1' OR parser_version<>'1')::text) FROM public.migration_history_capture_run WHERE confirmed_at IS NOT NULL")
+        object_fields(observed, {"count", "unsupported_count"})
+        state["history_capture_binding_count"] = observed["count"]
+        state["history_capture_unsupported_count"] = observed["unsupported_count"]
     return state
 
 
@@ -417,6 +466,7 @@ def main(argv=None):
         print(json.dumps({"version": 1, "gate_version": GATE, "launch_allowed": False,
                           "confirmation_ready": False, "metadata_confirmation_ready": False,
                           "activity_confirmation_ready": False,
+                          "history_capture_confirmation_ready": False,
                           "error": str(error)}, sort_keys=True))
         return 2
 

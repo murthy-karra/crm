@@ -1,0 +1,9 @@
+{
+  "pid": 6030,
+  "executable": "__CRM_WORKTREE__/backend/target/debug/examples/history_capture_qa",
+  "epoch": "restored-budget",
+  "log": "__PRIVATE_QA_ROOT__/api-restored-budget.log",
+  "sha256": "d859036fe9417e130c19fdd26b75fea3687f475cd061e1887d923b81215cb4dc",
+  "started_at": "2026-09-12T17:45:26.810262+00:00",
+  "stopped_at": "2026-09-12T18:02:44.095834+00:00"
+}

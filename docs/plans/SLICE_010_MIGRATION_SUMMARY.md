@@ -207,7 +207,7 @@ and separately report missing/unknown coverage. Every transformation has a
 reason and provenance; a total must not double-count one item across statuses.
 The report stays understandable without showing SQL, internal IDs or secrets.
 
-## 5. Proposed delivery sequence
+## 5. Delivery sequence
 
 Keep the ladder's existing identifiers; detailed specs are written one rung
 at a time. The order below deliberately puts required supporting data before
@@ -219,7 +219,8 @@ the cutover rung.
 | 2 — 010b | Core-first encrypted resumable snapshot and preview (D-061): People/users/stages/custom fields/notes/tasks; mappings, overlap candidates, unsupported values and explicit remaining coverage. Raw captures carry source IDs, API/schema/profile versions, capture times and keyed hashes. Further snapshot work must address history, communications, media and other uncovered families before cutover. |
 | 3 — 010c | People/contact/stage/assignment import into the new empty Organization is implemented, synthetically verified and deployed under D-065/follow-ups. Separate People, explicitly approved matching stages and admin review-only use remain D-064. Frozen-plan recovery/provenance avoids duplicates and synthetic Inquiry history; activation remains separate. |
 | 4 — 010f1, then 010f2 | Deployed/verified 010f1 imports embedded tag membership and custom definitions/options/values onto completed 010c People, preserving the review hold. [010f2](../specs/SLICE_010f2.md) adds notes/tasks with authorship/timestamps, source-qualified identity, local-edit/tombstone protection and bounded admin review; D-068 and its follow-up completed implementation, verification and [shared-development release](../tasks/SLICE_010f2_RELEASE.md). Full standalone tag capture is still outstanding. |
-| 5 — 010d | Supported historical inquiry/call/text/correspondence facts, each with verified meaning. Inaccessible content stays a disclosed gap. Resolve Today behavior before enabling imported backlog for agents. |
+| 5a — 010d1 | Implemented and synthetically verified in the uncommitted `codex/slice-010d1-history-capture` worktree under D-070. Both bounded reviews, full gates (including 934 DB tests), 75,000-observation collector and desktop/390px walkthrough passed; see [verification](../tasks/SLICE_010d1_VERIFICATION.md). Separate confirmed historical events/calls/texts capture provides encrypted evidence and bounded coverage review. Public restrictions, provisional text pagination and uncaptured detail/media remain explicit. No native history writes, live qualification, Git integration or deployment. |
+| 5b — 010d2 | Later reviewed historical interpretation and bounded timeline import from a separately frozen history capture. Inquiry/actor/time/outcome, native projection/Today and body-read policies must be explicit. Ordinary email/media require separate qualified source/storage work; inaccessible content remains a disclosed gap. |
 | 6 — 010e | Per-entity delta capture, final reconciliation and explicit cutover/activation. Resolve source privacy, enforce communication restrictions and review Today before releasing the D-064 hold; validate changes/deletions and agree a source-write cutoff/final delta. No source cancellation, phone transfer or ongoing two-way sync is implied. |
 
 No calendar estimate is credible before source access, volume and fidelity
@@ -322,3 +323,11 @@ planning and accepts its two source-interpretation choices; full shared contract
 and implementation are subsequently approved by D-068; its follow-up completed
 Git integration, cleanup and shared-development deployment. Later families, customer-data/live-source
 work and activation retain their own scope and readiness gates.
+
+D-069 accepts separate historical capture and timeline rungs. D-070 approves
+[010d1](../specs/SLICE_010d1.md) implementation and synthetic verification, now
+completed in an uncommitted isolated worktree ([evidence](../tasks/SLICE_010d1_VERIFICATION.md)). It does not reduce remaining migration fidelity or approve live
+source/customer access.
+The [public source report](../research/SLICE_010d_FUB_SOURCE_CONTRACT.md) and
+[code contracts](../research/SLICE_010d_CODE_CONTRACTS.md) distinguish documented
+availability, live-unqualified behavior and later native history dependencies.

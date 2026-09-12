@@ -1,0 +1,7 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.15s
+────────────
+ Nextest run ID 8bf63aff-c3c1-4871-be33-dd3441dc7029 with nextest profile: default
+    Starting 1 test across 1 binary (1016 tests skipped)
+        PASS [   0.023s] (1/1) crm-api::all health::ready_returns_503_without_database_url
+────────────
+     Summary [   0.024s] 1 test run: 1 passed, 1016 skipped

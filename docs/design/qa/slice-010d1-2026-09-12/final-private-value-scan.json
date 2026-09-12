@@ -1,0 +1,10 @@
+{
+  "checked_at": "2026-09-12T18:12:21.930773+00:00",
+  "scope": "complete 010d1 artifact tree and modified/untracked non-document source",
+  "files_checked": 201,
+  "private_values_checked": 10,
+  "exact_encoded_decoded_forms": 30,
+  "matches": 0,
+  "runtime_manifest_entries_verified": 111,
+  "coverage_limit": "Known private fixture values only; not a general secret-detection guarantee"
+}

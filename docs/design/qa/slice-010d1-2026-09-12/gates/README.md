@@ -1,0 +1,25 @@
+# Slice 010d1 final gate evidence — 2026-09-12
+
+This directory preserves the final gate logs, command-result JSON and source manifests from the isolated local verification workspace. It records automated gate evidence only; browser verification is separate and is not marked complete here. No tests or services were run while packaging these files.
+
+| Command | Result | Evidence |
+| --- | --- | --- |
+| `./scripts/sqlx-prepare` | Exit 0; migrations applied and SQLx offline query data generated | [log](final-sqlx-prepare-1.log), [result](final-sqlx-prepare-1.json), [source manifest](final-sqlx-prepare-1-source.json) |
+| `./scripts/check` (original) | Exit 0; 949 Rust tests, 1,131 Web tests in 80 files, 5 doctests, 25 migration-release-preflight tests and 11 email-worker tests passed | [log](final-check-1.log), [result](final-check-1.json), [source manifest](final-check-1-source.json) |
+| `./scripts/check` (post-visual label correction) | Exit 0 in 39.179s; 949 Rust tests, 1,131 Web tests in 80 files, 5 doctests, 25 migration-release-preflight tests and 11 email-worker tests passed; no LEAK annotation | [log](final-check-post-visual.log), [result](final-check-post-visual.json), [source manifest](final-check-post-visual-source.json) |
+| `./scripts/check-db` | Exit 0; 934 database tests passed, including one annotated slow | [log](final-check-db-1.log), [result](final-check-db-1.json), [source manifest](final-check-db-1-source.json) |
+| `cargo nextest run -p crm-api --test all --locked session::login_with_non_json_content_type_returns_400` | Exit 0; one test passed, without a LEAK annotation | [follow-up log](session-leak-followup.log), [follow-up result](session-leak-followup.json) |
+
+Each normal Rust Nextest run selected 949 tests and skipped 934 ignored tests. The database gate uses `--run-ignored only`, selecting those 934 tests and skipping the complementary 949. These are deliberate suite selections, not failed tests or additional test executions. The focused session follow-up selected one test and skipped 1,042 others in that binary.
+
+The original normal gate recorded `session::login_with_non_json_content_type_returns_400` as passing with a Nextest `LEAK` annotation: its summary is 949 passed (1 leaky). The isolated one-test follow-up and the later full post-visual gate passed without a LEAK annotation. These later results do not erase the original annotation, establish its cause or prove that it cannot recur.
+
+The database gate emitted SQLx's advisory that potentially unused queries were present in `.sqlx`; its SQLx check and the gate still exited successfully. Both Web builds emitted the existing advisory about a minified chunk above 500 kB, including the LiveKit client chunk. Neither advisory was a gate failure, and this evidence does not claim either was removed.
+
+All four gate results record Node 24.16.0 and pnpm 11.22.0. The original three source manifests contain the same 1,037 path/hash entries and are byte-identical. Their result JSON's `source_manifest_sha256` (`f559c6588beedae4b291390822d4100bf5080a1708cfa55fce5eb78f05351f75`) hashes the compact JSON serialization. The preserved manifest file bytes instead hash to `08af0308a2ba213ec6bd1957be13d98f7239ba8703538fa99fcc2cab8b1af060`; the different serialization explains the different digest. Each result's log digest matches its preserved log. The session follow-up result contains no source manifest or timestamp; none has been inferred for it.
+
+The post-visual gate has compact manifest digest `2af03113b4e654ba4490c2b0bf40c46b1d3e883e005fb26e1b31048911a8f590` and exact manifest-file digest `598b0a355ac375004a2a153e33e1fa8a39845e78bff82d0186191b0df659b9db`. Comparing all 1,037 entries shows exactly two changes: `web/src/components/migration/HistoryCapturePanel.vue` and `web/src/components/migration/HistoryCapturePanel.test.ts`. Replacing the new `Increase allowances` label with the original `Confirm historical allowance increase` text reconstructs each original file hash, confirming the label-only delta. All other entries, including backend and SQLx files, are unchanged. The earlier database gate remains evidence for the original `f559c658…` manifest; it was not rerun or relabeled as a run against the post-visual manifest.
+
+The 14 original files were copied byte-for-byte from `/private/tmp/crm-010d1-qa-5hqgjwkd/checks/`. Before publication, candidates were scanned for all 8 distinct credential values extracted from private `qa.env` credential fields and database URL passwords, using 52 distinct raw, URL-encoded, JSON-escaped, HTML-escaped, standard/URL-safe Base64 and Basic-auth-fragment variants. There were no matches. Environment and key files are excluded. The scan is a bounded check against those configured values, not a general secret-detection guarantee.
+
+[SHA256SUMS](SHA256SUMS) lists the exact bytes' SHA-256 for every original file and this README; it excludes itself. Copied bytes were compared with their originals, and the complete published directory was checked against the same credential variants. Local workspace paths in the original evidence are retained.

@@ -1,6 +1,6 @@
 # First-customer and production readiness
 
-Updated: 2026-09-11. **Planning checklist; no production release authorized.**
+Updated: 2026-09-12. **Planning checklist; no production release authorized.**
 This records existing gates and proposes the evidence needed to close the
 remaining work. It does not approve implementation, customer access, new
 contracts, retention policy or service commitments. Accepted decisions in the
@@ -23,6 +23,14 @@ Evidence: [010b release](../tasks/SLICE_010b_RELEASE.md),
 [010b verification](../tasks/SLICE_010b_VERIFICATION.md),
 [current project state](PROJECT_STATE.md). Historical release evidence does not
 prove that a service is healthy at a later date.
+
+The [2026-09-12 completion audit](../tasks/SLICE_010_COMPLETION_AUDIT_2026-09-12.md)
+rechecked live source/artifact/schema identity and recorded fresh tests. It also
+reproduced the existing call-history chronology failure twice before a complete
+908-test pass, and identified a later database-warning episode correlated with
+Mac sleep/background wake. Current health/readiness and tracked DB counts pass;
+neither observation closes production uptime or causal-chronology work. These
+findings are distinct from the earlier SQLx transaction-cancellation notices.
 
 ## Separate readiness gates
 
@@ -79,6 +87,29 @@ and must not resurrect deleted content. The owning
 inventory addition does not complete C1/C2, select a retention period or claim
 per-Person crypto-shredding with the development key.
 
+D-070 history capture also expands C1/C2: the nine `migration_history_*` stores
+listed in the [010d1 concrete contract](../tasks/SLICE_010d1_CONTRACT.md), encrypted
+raw pages/projections/checkpoints/receipts, HMAC indexes and multi-Person linkage
+inventory, reserved/retained accounting, client cursors/caches and backups.
+A page may contain several People and some source-only references; link presence
+does not implement selective erasure or prove permission to retain all copies.
+The existing development encryption key is shared, and retention/backup/key
+recovery policies remain open. No customer-data readiness gate closes here.
+
+## Core snapshot worker handoff
+
+**OPEN — source inspection, reproduction pending.** During 010d1's bounded
+implementation review, its UUID-based worker handoff was corrected and tested
+with alternating independent worker sessions. The inherited core snapshot worker
+still compares `source_session` with the current process UUID and marks identity
+pending on a mismatch (`snapshot_worker.rs:142`), then stamps the claimant UUID
+on each unit (`snapshot_worker.rs:230`). Alternating live workers may repeatedly
+revalidate identity without advancing a collection. The older path is unchanged
+and no multi-process reproduction or fix is claimed here. Reproduce that exact
+handoff before relying on multiple core source workers in production, then scope
+a separate correction. This does not invalidate the recorded single-process
+synthetic core runs.
+
 ## Observed transaction-cancellation notices
 
 **OPEN — bounded platform follow-up before relying on cancellation behavior for
@@ -96,6 +127,11 @@ fix before changing the pinned dependency or shared transaction helper. This is
 an observed dependency/runtime concern, not a demonstrated data-loss finding or
 an authorization to redesign persistence. See [010f2 verification](../tasks/SLICE_010f2_VERIFICATION.md)
 and the [bounded dependency investigation](../design/qa/slice-010f2-2026-09-11/runtime/sqlx-cancellation-dependency-report.md).
+The 010d1 isolated synthetic runtime later recorded 23 notices with those same
+two messages, no ERROR/HTTP 5xx, and passing final native/parent/sibling/ledger
+reconciliation. Its [source/log audit](../design/qa/slice-010d1-2026-09-12/runtime/runtime-source-audit.md)
+preserves exact lines. This adds an observation; it does not prove common cause,
+clear the follow-up or reclassify the notices as harmless.
 No new retention, service or customer
 policy is selected here.
 
@@ -167,8 +203,12 @@ implementation or commitments. This checklist intentionally chooses no values.
    coverage required by C1/C2; surface policy decisions without inventing them.
 2. Review the production slice scope and assign the proposed roles before
    scheduling implementation. Keep infrastructure integration in that slice.
-3. Resume live FUB validation only when the user resumes it. Continue 010b
-   planning independently; its approved core-first scope does not close V/C/M/P.
+3. Resume live FUB validation only when the user resumes it. D-069 accepts
+   historical capture/coverage in [010d1](../specs/SLICE_010d1.md), followed by
+   separately specified timeline import in 010d2. D-070 approves complete 010d1
+   contracts, implementation and isolated synthetic checks. Inventory its new encrypted raw pages,
+   multi-Person links, projections/receipts and keys under C1/C2; synthetic
+   migration delivery does not close V/C/M/P or qualify live text pagination.
 
 Maintain this checklist when evidence lands. For every closed item, link the
 actual result; for each remaining gap, retain its trigger and accountable role.

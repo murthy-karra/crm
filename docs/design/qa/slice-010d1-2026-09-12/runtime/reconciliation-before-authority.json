@@ -1,0 +1,45 @@
+{
+  "boundary": "before intentional credential, role and disconnect changes",
+  "tenant_tables_checked": 108,
+  "unchanged_non_history_tables": 98,
+  "changed_tables": [
+    "migration_history_capture",
+    "migration_history_capture_run",
+    "migration_history_identity",
+    "migration_history_observation",
+    "migration_history_person_link",
+    "migration_history_receipt",
+    "migration_history_reservation",
+    "migration_history_seen",
+    "migration_history_stream",
+    "migration_snapshot_storage"
+  ],
+  "native_parent_sibling_workspace_unchanged": true,
+  "ledger": [
+    {
+      "organization_id": "1171938e-8da2-435c-8465-88d0b523df38",
+      "history_retained_bytes": 717822,
+      "history_reserved_bytes": 16384,
+      "retained_delta_exact": true,
+      "reserved_delta_exact": true
+    },
+    {
+      "organization_id": "818e5fe2-1c72-4ee7-8cd4-2ba8b3ded90f",
+      "history_retained_bytes": 417866,
+      "history_reserved_bytes": 0,
+      "retained_delta_exact": true,
+      "reserved_delta_exact": true
+    },
+    {
+      "organization_id": "be9b2fbe-9c14-41b9-a87b-256eb2ef7210",
+      "history_retained_bytes": 418191,
+      "history_reserved_bytes": 0,
+      "retained_delta_exact": true,
+      "reserved_delta_exact": true
+    }
+  ],
+  "history_observations": 1509,
+  "history_identities": 1508,
+  "retained_captures": 37,
+  "history_runs": 6
+}

@@ -1,0 +1,5 @@
+{
+  "command": "cargo nextest run -p crm-api --test all --locked session::login_with_non_json_content_type_returns_400",
+  "exit_code": 0,
+  "elapsed_seconds": 0.471
+}

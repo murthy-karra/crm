@@ -1,0 +1,15 @@
+{
+  "command": [
+    "cargo",
+    "nextest",
+    "run",
+    "--workspace",
+    "--locked",
+    "--run-ignored",
+    "only",
+    "-E",
+    "test(=db_activity_source::activity_source_holds_missing_details_and_all_task_variants_without_list_fallback)"
+  ],
+  "exit_code": 0,
+  "elapsed_seconds": 6.19
+}

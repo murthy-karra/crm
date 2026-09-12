@@ -1,0 +1,12 @@
+{
+  "command": "./scripts/check",
+  "cwd": "/Users/karrad/projects/crm-worktrees/slice-010d1",
+  "started_at": "2026-09-12T17:12:07.290786+00:00",
+  "node": "24.16.0",
+  "pnpm": "11.22.0",
+  "source_manifest_sha256": "f559c6588beedae4b291390822d4100bf5080a1708cfa55fce5eb78f05351f75",
+  "exit_code": 0,
+  "elapsed_seconds": 98.553,
+  "finished_at": "2026-09-12T17:13:45.844179+00:00",
+  "log_sha256": "b46dc2aea24db732a1aa0becee72841b175691c851f14b5ce319e491a6b77c72"
+}

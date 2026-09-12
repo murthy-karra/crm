@@ -1,0 +1,5 @@
+{
+  "cause": "Audit fixture setup omitted CRM_DB_APP_PASSWORD and CRM_DB_MIGRATOR_PASSWORD from the private test environment; provisioning itself had these values. Ten tests failed before exercising application behavior.",
+  "product_source_changed": false,
+  "correction": "Export the existing synthetic role passwords in the isolated .env, then rerun the full DB gate."
+}

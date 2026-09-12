@@ -109,7 +109,7 @@ pub(crate) async fn exclusive(
     org: OrganizationId,
     except: Uuid,
 ) -> Result<(), MigrationError> {
-    let found=sqlx::query("SELECT 1 FROM migration_assessment WHERE organization_id=$1 AND state IN ('queued','running','waiting_retry') UNION ALL SELECT 1 FROM migration_snapshot WHERE organization_id=$1 AND id<>$2 AND state IN ('queued','running','waiting_retry') LIMIT 1").bind(org.0).bind(except).fetch_optional(conn).await?;
+    let found=sqlx::query("SELECT 1 FROM migration_assessment WHERE organization_id=$1 AND state IN ('queued','running','waiting_retry') UNION ALL SELECT 1 FROM migration_snapshot WHERE organization_id=$1 AND id<>$2 AND state IN ('queued','running','waiting_retry') UNION ALL SELECT 1 FROM migration_history_capture_run WHERE organization_id=$1 AND state IN ('queued','running','waiting_retry') LIMIT 1").bind(org.0).bind(except).fetch_optional(conn).await?;
     if found.is_some() {
         Err(MigrationError::Conflict)
     } else {

@@ -1,0 +1,346 @@
+// A6 completion-assurance supplement. Append inside db_activity_lifecycle.rs.
+// Synthetic existing rows are deliberately seeded with the migrator: ordinary
+// mutations must remain forbidden in a migration-review workspace.
+
+#[sqlx::test]
+#[ignore]
+async fn activity_a6_audit_note_equality_edits_and_tombstones_preserve_exact_rows(
+    migrator: PgPool,
+) {
+    use crm_api::domain::migration::snapshot_source::Stream;
+
+    for scenario in [
+        "equal",
+        "body_edit",
+        "tombstone",
+        "author_edit",
+        "timestamp_edit",
+    ] {
+        // Book has one note-detail response per stream/offset; independent small
+        // Organizations keep each note source and local-state variant explicit.
+        let book = source::book();
+        book.set_records(Stream::Notes, vec![json!({"id":11,"personId":101})]);
+        book.set_raw(
+            Stream::NoteDetail,
+            0,
+            200,
+            serde_json::to_vec(&json!({
+                "id":11,"personId":101,"createdById":3,
+                "body":"Retained main note 界","isHtml":false,
+                "created":"2026-09-01T12:00:00.123456Z","updated":null
+            }))
+            .unwrap(),
+            false,
+        );
+        // A genuine eligible native unit allows confirmation even when the
+        // note is held; all-held rejection must not masquerade as protection.
+        book.set_records(Stream::TasksOpen, vec![source::task(901)]);
+        let f = support::fixture_with_book(&migrator, book).await;
+        let parent = source::completed_parent(&f).await;
+        let person: Uuid = sqlx::query_scalar(
+            "SELECT target_id FROM migration_import_identity WHERE organization_id=$1 AND import_id=$2 AND family='people' AND source_id='101'",
+        )
+        .bind(f.org)
+        .bind(parent)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap();
+        let native_id = Uuid::new_v4();
+        let body = match scenario {
+            "body_edit" => "Locally edited note 界",
+            "tombstone" => "",
+            _ => "Retained main note 界",
+        };
+        let author = if scenario == "author_edit" {
+            f.member
+        } else {
+            f.actor
+        };
+        let updated = if scenario == "timestamp_edit" {
+            "2026-09-01T12:00:01.123456Z"
+        } else {
+            "2026-09-01T12:00:00.123456Z"
+        };
+        sqlx::query(
+            "INSERT INTO note(id,organization_id,person_id,author_user_id,body,origin,correlation_id,source,source_external_id,created_at,updated_at,deleted_at,deleted_by_user_id) VALUES($1,$2,$3,$4,$5,'migration',gen_random_uuid(),'fub','v1:17:11','2026-09-01T12:00:00.123456Z',$6::text::timestamptz,CASE WHEN $7 THEN '2026-09-02T12:00:00Z'::timestamptz ELSE NULL END,CASE WHEN $7 THEN $8 ELSE NULL END)",
+        )
+        .bind(native_id)
+        .bind(f.org)
+        .bind(person)
+        .bind(author)
+        .bind(body)
+        .bind(updated)
+        .bind(scenario == "tombstone")
+        .bind(f.actor)
+        .execute(&migrator)
+        .await
+        .unwrap();
+        let before: Value = sqlx::query_scalar(
+            "SELECT jsonb_agg(to_jsonb(n) ORDER BY n.id) FROM note n WHERE n.organization_id=$1",
+        )
+        .bind(f.org)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap();
+        let calls = f.reader.calls();
+        let (child, initial) = source::prepare(&f, parent).await;
+        let plan =
+            source::replan(&f, child, &initial, source::choices(&f, child).await, None).await;
+        let records = activity::records(&f.pool, &f.key, &f.ctx, child, ActivityPage::default())
+            .await
+            .unwrap();
+        assert!(records["next_cursor"].is_null());
+        let note = records["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["kind"] == "note")
+            .unwrap();
+        let expected = if scenario == "equal" {
+            "already_present"
+        } else {
+            "held"
+        };
+        let reason = if scenario == "tombstone" {
+            "native_tombstone"
+        } else {
+            "native_local_changes"
+        };
+        assert_eq!(note["disposition"], expected, "note plan: {scenario}");
+        if scenario == "equal" {
+            assert_eq!(note["target_id"], json!(native_id));
+            assert_eq!(note["preview"]["reasons"], json!([]));
+        } else {
+            assert_eq!(
+                note["preview"]["reasons"],
+                json!([reason]),
+                "note reason: {scenario}"
+            );
+        }
+        let done = source::confirm(&f, child, &plan).await;
+        assert_eq!(
+            done["counts"]["tasks"]["applied"], "1",
+            "eligible control: {scenario}"
+        );
+        assert_eq!(done["counts"]["notes"]["applied"], "0");
+        let results = activity::results(&f.pool, &f.key, &f.ctx, child, ActivityPage::default())
+            .await
+            .unwrap();
+        assert!(results["next_cursor"].is_null());
+        assert_eq!(results["items"].as_array().unwrap().len(), 2);
+        let result = results["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["kind"] == "note")
+            .unwrap();
+        assert_eq!(result["disposition"], expected, "note result: {scenario}");
+        if scenario == "equal" {
+            assert_eq!(result["target_id"], json!(native_id));
+            assert_eq!(result["reasons"], json!([]));
+        } else {
+            assert!(result["target_id"].is_null());
+            assert_eq!(result["reasons"], json!([reason]));
+        }
+        let after: Value = sqlx::query_scalar(
+            "SELECT jsonb_agg(to_jsonb(n) ORDER BY n.id) FROM note n WHERE n.organization_id=$1",
+        )
+        .bind(f.org)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            after, before,
+            "every native note column and row count must survive: {scenario}"
+        );
+        let identities: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM migration_activity_identity WHERE organization_id=$1 AND import_id=$2 AND kind='note'",
+        )
+        .bind(f.org)
+        .bind(child)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap();
+        assert_eq!(identities, i64::from(scenario == "equal"));
+        assert!(!activity_worker::run_once(&f.pool, &f.key, &f.policy)
+            .await
+            .unwrap());
+        assert_eq!(f.reader.calls(), calls);
+        assert_bytes(&f, child).await;
+    }
+}
+
+#[sqlx::test]
+#[ignore]
+async fn activity_a6_audit_task_local_state_changes_preserve_exact_rows(migrator: PgPool) {
+    use crm_api::domain::migration::snapshot_source::Stream;
+
+    let book = source::book();
+    let mut open = Vec::new();
+    for id in [21, 23, 24, 25, 26, 27, 28] {
+        let mut task = source::task(id);
+        if id == 21 {
+            task["dueDateTime"] = json!("2026-09-04T12:00:00Z");
+        }
+        open.push(task);
+    }
+    let completed = [22, 29, 30]
+        .into_iter()
+        .map(|id| {
+            let mut task = source::task(id);
+            task["isCompleted"] = json!(true);
+            task["completed"] = json!("2026-09-03T12:00:00Z");
+            task
+        })
+        .collect();
+    book.set_records(Stream::TasksOpen, open);
+    book.set_records(Stream::TasksCompleted, completed);
+    let f = support::fixture_with_book(&migrator, book).await;
+    let parent = source::completed_parent(&f).await;
+    let person: Uuid = sqlx::query_scalar(
+        "SELECT target_id FROM migration_import_identity WHERE organization_id=$1 AND import_id=$2 AND family='people' AND source_id='101'",
+    )
+    .bind(f.org)
+    .bind(parent)
+    .fetch_one(&f.pool)
+    .await
+    .unwrap();
+    let mut native_ids = Vec::new();
+    let mut native_by_source = std::collections::BTreeMap::new();
+    // 21 snoozed; 22 source-completed/local-reopened; 23 source-open/local-
+    // completed; 24 creator changed; 25 time changed; 28 assignee changed;
+    // 30 completion actor changed. 26/29 are equal open/completed controls.
+    // 27 remains absent for the fresh eligible INSERT positive control.
+    for id in [21, 22, 23, 24, 25, 26, 28, 29, 30] {
+        let native_id = Uuid::new_v4();
+        native_ids.push(native_id);
+        native_by_source.insert(id.to_string(), native_id);
+        let due = (id == 21).then_some("2026-09-05T12:00:00Z");
+        let completed = matches!(id, 23 | 29 | 30).then_some("2026-09-03T12:00:00Z");
+        let completed_by = matches!(id, 23 | 30).then_some(f.member);
+        let creator = if id == 24 { f.member } else { f.actor };
+        let assignee = if id == 28 { f.actor } else { f.member };
+        let updated = if id == 25 {
+            "2026-09-01T12:00:01Z"
+        } else {
+            "2026-09-01T12:00:00Z"
+        };
+        sqlx::query(
+            "INSERT INTO task(id,organization_id,person_id,title,kind,due_at,assignee_user_id,created_by_user_id,completed_at,completed_by_user_id,origin,correlation_id,source,source_external_id,created_at,updated_at) VALUES($1,$2,$3,'Call the client','call',$4::text::timestamptz,$5,$6,$7::text::timestamptz,$8,'migration',gen_random_uuid(),'fub',$9,'2026-09-01T12:00:00Z',$10::text::timestamptz)",
+        )
+        .bind(native_id)
+        .bind(f.org)
+        .bind(person)
+        .bind(due)
+        .bind(assignee)
+        .bind(creator)
+        .bind(completed)
+        .bind(completed_by)
+        .bind(format!("v1:17:{id}"))
+        .bind(updated)
+        .execute(&migrator)
+        .await
+        .unwrap();
+    }
+    let before: Value = sqlx::query_scalar(
+        "SELECT jsonb_agg(to_jsonb(t) ORDER BY t.id) FROM task t WHERE t.organization_id=$1 AND t.id=ANY($2)",
+    )
+    .bind(f.org)
+    .bind(&native_ids)
+    .fetch_one(&f.pool)
+    .await
+    .unwrap();
+    let calls = f.reader.calls();
+    let (child, initial) = source::prepare(&f, parent).await;
+    let plan = source::replan(&f, child, &initial, source::choices(&f, child).await, None).await;
+    let records = activity::records(&f.pool, &f.key, &f.ctx, child, ActivityPage::default())
+        .await
+        .unwrap();
+    assert!(records["next_cursor"].is_null());
+    assert_eq!(records["items"].as_array().unwrap().len(), 10);
+    for row in records["items"].as_array().unwrap() {
+        let sid = row["source_id"].as_str().unwrap();
+        let expected = match sid {
+            "26" | "29" => "already_present",
+            "27" => "eligible",
+            _ => "held",
+        };
+        assert_eq!(row["disposition"], expected, "task plan: {sid}");
+        assert_eq!(
+            row["preview"]["reasons"],
+            if expected == "held" {
+                json!(["native_local_changes"])
+            } else {
+                json!([])
+            },
+            "task reason: {sid}"
+        );
+    }
+    let done = source::confirm(&f, child, &plan).await;
+    assert_eq!(done["counts"]["tasks"]["applied"], "1");
+    assert_eq!(done["counts"]["tasks"]["already_present"], "2");
+    assert_eq!(done["counts"]["tasks"]["held"], "7");
+    assert_eq!(done["counts"]["tasks"]["pending"], "0");
+    let results = activity::results(&f.pool, &f.key, &f.ctx, child, ActivityPage::default())
+        .await
+        .unwrap();
+    assert!(results["next_cursor"].is_null());
+    assert_eq!(results["items"].as_array().unwrap().len(), 10);
+    for row in results["items"].as_array().unwrap() {
+        let sid = row["source_id"].as_str().unwrap();
+        let expected = match sid {
+            "26" | "29" => "already_present",
+            "27" => "applied",
+            _ => "held",
+        };
+        assert_eq!(row["disposition"], expected, "task result: {sid}");
+        assert_eq!(
+            row["reasons"],
+            if expected == "held" {
+                json!(["native_local_changes"])
+            } else {
+                json!([])
+            }
+        );
+        if expected == "held" {
+            assert!(row["target_id"].is_null());
+        } else if expected == "already_present" {
+            assert_eq!(row["target_id"], json!(native_by_source[sid]));
+        }
+    }
+    let after: Value = sqlx::query_scalar(
+        "SELECT jsonb_agg(to_jsonb(t) ORDER BY t.id) FROM task t WHERE t.organization_id=$1 AND t.id=ANY($2)",
+    )
+    .bind(f.org)
+    .bind(&native_ids)
+    .fetch_one(&f.pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        after, before,
+        "all preexisting native columns must remain unchanged"
+    );
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM task WHERE organization_id=$1")
+        .bind(f.org)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        count, 10,
+        "nine existing tasks plus exactly one new control"
+    );
+    let identities: Vec<String> = sqlx::query_scalar(
+        "SELECT source_id FROM migration_activity_identity WHERE organization_id=$1 AND import_id=$2 AND kind='task' ORDER BY source_id",
+    )
+    .bind(f.org)
+    .bind(child)
+    .fetch_all(&f.pool)
+    .await
+    .unwrap();
+    assert_eq!(identities, vec!["26", "27", "29"]);
+    assert!(!activity_worker::run_once(&f.pool, &f.key, &f.policy)
+        .await
+        .unwrap());
+    assert_eq!(f.reader.calls(), calls);
+    assert_bytes(&f, child).await;
+}

@@ -1,0 +1,82 @@
+{
+  "collector_status": "passed on final production artifact including HC-R2-01/02",
+  "combined_26_test_batch_seconds": 326.32,
+  "source_scope": "constructed in-process source only; no provider qualification",
+  "records": 75000,
+  "families": 3,
+  "records_per_family": 25000,
+  "pages_traversed": 1500,
+  "advancing_collection_pages": 750,
+  "source_identity_requests": 1,
+  "max_response_bytes": 51965,
+  "max_record_bytes": 1001,
+  "physical_scan_limit": "Rare excluded scans 25000 family entries; empty conflicts scans 75000 entries. Fetched/decrypted rows remain bounded. No constant physical-scan claim.",
+  "explain_cases": 14,
+  "checks": {
+    "failures": [],
+    "no_temp_spills": true,
+    "returned_row_bounds": true
+  },
+  "accounting": [
+    {
+      "raw_bytes": "22296275",
+      "reserved_bytes": 0,
+      "retained_bytes": 66891890,
+      "run": "4a2b9b1d-54c8-4b69-9a78-3039cff3505c",
+      "state": "completed_with_gaps"
+    },
+    {
+      "raw_bytes": "34750",
+      "reserved_bytes": 0,
+      "retained_bytes": 152153,
+      "run": "b27bfdc0-3696-4b05-8cc3-e72f47180dbc",
+      "state": "cancelled"
+    },
+    {
+      "raw_bytes": "0",
+      "reserved_bytes": 0,
+      "retained_bytes": 606,
+      "run": "1c418ac6-6233-4963-8d9d-699ac0ffa624",
+      "state": "cancelled"
+    }
+  ],
+  "parent_native_sibling_unchanged": true,
+  "hashes": [
+    {
+      "path": "backend/crates/crm-app/src/domain/migration/history_capture.rs",
+      "collector_sha256": "b50f56bdc5e959c7c3584e07c8bdd210a49864fe5094331189fd5ff02c238094",
+      "current_sha256": "b50f56bdc5e959c7c3584e07c8bdd210a49864fe5094331189fd5ff02c238094",
+      "unchanged": true
+    },
+    {
+      "path": "backend/crates/crm-app/src/domain/migration/history_capture_source.rs",
+      "collector_sha256": "f5c94b07447bd91d596bef75ea0bc3d6a7628777f8164e83e6cea66bc9429b2b",
+      "current_sha256": "f5c94b07447bd91d596bef75ea0bc3d6a7628777f8164e83e6cea66bc9429b2b",
+      "unchanged": true
+    },
+    {
+      "path": "backend/crates/crm-app/src/domain/migration/history_capture_store.rs",
+      "collector_sha256": "38a4c68c91098f2881a50f483d651d77c4c9742ff1f8587f896809b737adaf14",
+      "current_sha256": "38a4c68c91098f2881a50f483d651d77c4c9742ff1f8587f896809b737adaf14",
+      "unchanged": true
+    },
+    {
+      "path": "backend/crates/crm-app/src/domain/migration/history_capture_worker.rs",
+      "collector_sha256": "de64788e641c7283f3b29d59f17209fd2436fbc57f4251ac935c641f867fd0e8",
+      "current_sha256": "de64788e641c7283f3b29d59f17209fd2436fbc57f4251ac935c641f867fd0e8",
+      "unchanged": true
+    },
+    {
+      "path": "backend/crates/crm-app/src/domain/migration/history_capture_queries.rs",
+      "collector_sha256": "12fb907a67f519fc4c9871c4b803e1522a199f55ef8537bca1b01b67a612c9c5",
+      "current_sha256": "12fb907a67f519fc4c9871c4b803e1522a199f55ef8537bca1b01b67a612c9c5",
+      "unchanged": true
+    },
+    {
+      "path": "backend/crates/crm-api/migrations/20260921000001_fub_history_capture.sql",
+      "collector_sha256": "f2df99e211cf174271939ef2045fc5c226035c3bb233f517d19da58cfd3f0cb8",
+      "current_sha256": "f2df99e211cf174271939ef2045fc5c226035c3bb233f517d19da58cfd3f0cb8",
+      "unchanged": true
+    }
+  ]
+}

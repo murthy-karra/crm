@@ -1,0 +1,30 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.15s
+────────────
+ Nextest run ID 84b420ec-133d-434d-9b8f-4d65eab44699 with nextest profile: default
+    Starting 1 test across 7 binaries (1842 tests skipped)
+        FAIL [   3.334s] (1/1) crm-api::all db_calls_corrections::a_second_correction_chains_onto_the_first_with_strictly_increasing_recorded_at
+  stdout ───
+
+    running 1 test
+    test db_calls_corrections::a_second_correction_chains_onto_the_first_with_strictly_increasing_recorded_at ... FAILED
+
+    failures:
+
+    failures:
+        db_calls_corrections::a_second_correction_chains_onto_the_first_with_strictly_increasing_recorded_at
+
+    test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1016 filtered out; finished in 3.32s
+
+  stderr ───
+
+    thread 'db_calls_corrections::a_second_correction_chains_onto_the_first_with_strictly_increasing_recorded_at' (13487916) panicked at crates/crm-api/tests/db_calls_corrections.rs:371:5:
+    assertion `left == right` failed
+      left: ["contact_attempted"]
+     right: ["contact_attempted", "contact_attempted"]
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+  Cancelling due to test failure: 
+────────────
+     Summary [   3.336s] 1 test run: 0 passed, 1 failed, 1842 skipped
+        FAIL [   3.334s] (1/1) crm-api::all db_calls_corrections::a_second_correction_chains_onto_the_first_with_strictly_increasing_recorded_at
+error: test run failed

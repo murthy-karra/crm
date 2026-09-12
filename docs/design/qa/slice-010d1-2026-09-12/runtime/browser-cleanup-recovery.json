@@ -1,0 +1,7 @@
+{
+  "cause": "driver waited for response body tasks before closing its browser context",
+  "action": "SIGTERM exact owned Chrome parent to release pending browser response tasks",
+  "pid": 3476,
+  "phase": "complete",
+  "product_assertions_already_passed": true
+}

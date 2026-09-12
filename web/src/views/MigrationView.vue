@@ -11,6 +11,7 @@ import PeopleImportPanel from '../components/migration/PeopleImportPanel.vue'
 import MetadataImportPanel from '../components/migration/MetadataImportPanel.vue'
 import ActivityImportPanel from '../components/migration/ActivityImportPanel.vue'
 import HistoryCapturePanel from '../components/migration/HistoryCapturePanel.vue'
+import HistoryImportPanel from '../components/migration/HistoryImportPanel.vue'
 import { refreshWorkspace, useWorkspacePending, useWorkspaceEpoch } from '../workspaceLifecycle'
 import FormField from '../components/FormField.vue'
 import { queryKeys, useAuthSessionLifetime, useMe } from '../api/queries'
@@ -475,6 +476,8 @@ function checkStatusLabel(check: FubAssessmentCheck) {
       :source-busy="isPollingState(currentAssessment?.state) || snapshotSourceBusy"
       @source-busy="historySourceBusy = $event"
     />
+
+    <HistoryImportPanel :refresh-workspace="refreshWorkspace" />
 
     <CoreSnapshotPanel
       v-if="canRead"

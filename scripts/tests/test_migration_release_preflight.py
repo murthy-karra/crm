@@ -21,6 +21,7 @@ CURRENT = "a" * 64
 LEGACY = "b" * 64
 METADATA = "fub-metadata-import-v1"
 HISTORY = "fub-history-capture-v1"
+TIMELINE = "fub-history-timeline-v1"
 
 
 def fixtures(bindings="0", retired=True):
@@ -244,12 +245,13 @@ class PreflightTests(unittest.TestCase):
             calls.append((command, kwargs))
             value = [{"present": True, "database_name": "synthetic_only"}, fixtures("1")[3],
                      {"present": True}, {"count": "2"}, {"present": True},
-                     {"count": "3", "unsupported_count": "0"}][len(calls)-1]
+                     {"count": "3", "unsupported_count": "0"}, {"present": True},
+                     {"count": "4", "unsupported_count": "0"}][len(calls)-1]
             return mock.Mock(returncode=0, stdout=json.dumps(value).encode())
         with mock.patch.object(MODULE["subprocess"], "run", side_effect=fake_run):
             result = MODULE["database_state"]()
         self.assertEqual(result["binding_count"], "1")
-        self.assertEqual(len(calls), 6)
+        self.assertEqual(len(calls), 8)
         self.assertEqual(result["activity_binding_count"], "2")
         self.assertIn("confirmed_plan_id IS NOT NULL", calls[3][0][-1])
         self.assertNotIn("state=", calls[3][0][-1])
@@ -258,6 +260,9 @@ class PreflightTests(unittest.TestCase):
         self.assertIn("confirmed_at IS NOT NULL", calls[5][0][-1])
         self.assertNotIn("state", calls[5][0][-1])
         self.assertIn("profile_version<>'fub-history-v1'", calls[5][0][-1])
+        self.assertEqual(result["history_timeline_binding_count"], "4")
+        self.assertIn("FROM public.migration_history_import_anchor", calls[7][0][-1])
+        self.assertNotIn("state=", calls[7][0][-1])
         sql = calls[1][0][-1]
         self.assertIn("FROM public.migration_workspace", sql)
         self.assertNotIn("WHERE", sql)
@@ -379,6 +384,116 @@ class PreflightTests(unittest.TestCase):
         self.assertTrue(report["launch_allowed"])
         self.assertFalse(report["history_capture_confirmation_ready"])
         self.assertIn("history_capture_candidate_missing", report["history_capture_confirmation_reasons"])
+
+    def test_timeline_capability_is_independent_before_and_after_anchor(self):
+        for count in ["0", "1"]:
+            for capabilities in [[], [HISTORY], [TIMELINE], [HISTORY, TIMELINE]]:
+                values = fixtures("1")
+                values[3].update(history_capture_schema_present=True,
+                                 history_capture_binding_count="0", history_capture_unsupported_count="0",
+                                 history_timeline_schema_present=True,
+                                 history_timeline_binding_count=count, history_timeline_unsupported_count="0")
+                values[0]["artifacts"][0]["capabilities"] = capabilities
+                report = check(values)
+                self.assertEqual(report["history_timeline_confirmation_ready"], TIMELINE in capabilities)
+                self.assertEqual(report["launch_allowed"], count == "0" or TIMELINE in capabilities)
+                if TIMELINE in capabilities:
+                    self.assertEqual(report["history_capture_confirmation_ready"], HISTORY in capabilities)
+
+    def test_timeline_retained_anchor_rejects_unsupported_current_and_recovery_workers(self):
+        # Anchor existence is independent of attempt state/fact count, including
+        # cancelled/erased/zero-row outcomes. Both launch and recovery use it.
+        for location in ["candidate", "current"]:
+            values = fixtures("1")
+            values[3].update(history_timeline_schema_present=True,
+                             history_timeline_binding_count="1", history_timeline_unsupported_count="0")
+            values[0]["artifacts"][0]["capabilities"] = [TIMELINE]
+            values[0]["artifacts"].append({"sha256": "e" * 64, "role": "worker",
+                                         "gate_version": "crm-workspace-v1", "revision": "d" * 40,
+                                         "capabilities": [HISTORY]})
+            if location == "candidate":
+                values[1]["artifacts"].append({"role": "worker", "sha256": "e" * 64})
+            else:
+                values[2]["processes"].append({"id": "old-worker", "role": "worker", "sha256": "e" * 64})
+            report = check(values)
+            self.assertFalse(report["launch_allowed"])
+            self.assertIn("history_timeline_binding_requires_compatible_artifacts", report["launch_reasons"])
+            values[0]["artifacts"][-1]["capabilities"] = [TIMELINE]
+            self.assertTrue(check(values)["history_timeline_confirmation_ready"])
+
+    def test_timeline_readiness_cannot_override_inventory_schema_profile_or_freshness(self):
+        for change in ["profile", "schema", "stale", "incomplete", "retirement", "unknown"]:
+            values = fixtures("1")
+            values[3].update(history_timeline_schema_present=True,
+                             history_timeline_binding_count="1", history_timeline_unsupported_count="0")
+            values[0]["artifacts"][0]["capabilities"] = [TIMELINE]
+            if change == "profile":
+                values[3]["history_timeline_unsupported_count"] = "1"
+            elif change == "schema":
+                values[3].update(history_timeline_schema_present=False, history_timeline_binding_count="0")
+            elif change == "stale":
+                values[2]["observed_at"] = "2026-09-11T11:54:59Z"
+            elif change == "incomplete":
+                values[2]["complete"] = False
+            elif change == "retirement":
+                values[2]["pre_010c_retired"] = False
+            else:
+                values[1]["artifacts"][0]["sha256"] = "f" * 64
+            self.assertFalse(check(values)["history_timeline_confirmation_ready"], change)
+
+    def test_timeline_evidence_requires_complete_coherent_typed_counts(self):
+        for extra in [
+            {"history_timeline_binding_count": "1"},
+            {"history_timeline_schema_present": False, "history_timeline_binding_count": "1",
+             "history_timeline_unsupported_count": "0"},
+            {"history_timeline_schema_present": True, "history_timeline_binding_count": True,
+             "history_timeline_unsupported_count": "0"},
+            {"history_timeline_schema_present": True, "history_timeline_binding_count": "01",
+             "history_timeline_unsupported_count": "0"},
+            {"history_timeline_schema_present": True, "history_timeline_binding_count": "1",
+             "history_timeline_unsupported_count": "2"},
+        ]:
+            values = fixtures("1")
+            values[3].update(extra)
+            with self.subTest(extra=extra), self.assertRaises(EvidenceError):
+                check(values)
+
+    def test_timeline_old_report_and_cli_only_cannot_admit_import(self):
+        self.assertFalse(check(fixtures("1"))["history_timeline_confirmation_ready"])
+        values = fixtures("1")
+        values[3].update(history_timeline_schema_present=True,
+                         history_timeline_binding_count="0", history_timeline_unsupported_count="0")
+        values[0]["artifacts"][0].update(role="cli", capabilities=[TIMELINE])
+        values[1]["artifacts"][0]["role"] = "cli"
+        values[2]["processes"] = []
+        report = check(values)
+        self.assertTrue(report["launch_allowed"])
+        self.assertFalse(report["history_timeline_confirmation_ready"])
+        self.assertIn("history_timeline_candidate_missing", report["history_timeline_confirmation_reasons"])
+
+    def test_database_timeline_inventory_counts_every_anchor_and_checks_versions(self):
+        sql = []
+        def answer(query):
+            sql.append(query)
+            if "'database_name'" in query and "to_regclass" in query:
+                return {"present": True, "database_name": "synthetic_only"}
+            if "FROM public.migration_workspace" in query:
+                return {"schema_present": True, "binding_count": "1",
+                        "gate_versions": ["crm-workspace-v1"], "database_name": "synthetic_only"}
+            if "to_regclass" in query:
+                return {"present": "migration_history_import_anchor" in query}
+            if "FROM public.migration_history_import_anchor" in query:
+                return {"count": "2", "unsupported_count": "1"}
+            self.fail("unexpected query")
+        with mock.patch.dict(MODULE["database_state"].__globals__, {"sql_json": answer}):
+            state = MODULE["database_state"]()
+        MODULE["validate_state"](state)
+        self.assertEqual(state["history_timeline_binding_count"], "2")
+        query = next(q for q in sql if "FROM public.migration_history_import_anchor" in q)
+        self.assertIn("interpretation_version", query)
+        self.assertIn("reader_version", query)
+        self.assertNotIn("state=", query)
+        self.assertTrue(query.endswith("FROM public.migration_history_import_anchor"))
 
     def test_cli_outputs_distinct_launch_and_confirmation_results(self):
         with tempfile.TemporaryDirectory() as folder:

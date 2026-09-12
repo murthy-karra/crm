@@ -1,6 +1,6 @@
 # Project state
 
-Last updated: 2026-09-12 (010d1 committed, merged, pushed and deployed in shared development; completion-audit and prior release qualifications retained).
+Last updated: 2026-09-12 (010d1 deployed; 010d2 implemented and verified with isolated synthetic data under D-072).
 This file holds current operational status, active work and live residuals.
 [PROJECT_HISTORY.md](PROJECT_HISTORY.md) preserves earlier progress, the slice
 ledger and historical measurements; its old instructions are not current work.
@@ -17,7 +17,7 @@ HTTP/browser checks are recorded in the
 initial missing-`no-store` denial finding, its correction and focused regression,
 failed attempts and successful final checks. Original implementation gates keep
 their original source manifests. The implementation branch/worktree was removed;
-main is the sole current worktree. No live source/customer processing or
+010d2 now uses a separate implementation worktree. No live source/customer processing or
 activation occurred. Confirmation still requires a fresh five-minute
 `CRM_MIGRATION_RELEASE_REPORT`; consult the current release record for its
 observed expiry and actual running artifact identity before an operational step.
@@ -86,6 +86,14 @@ follow-up remains open in production readiness.
 
 ## Current slice
 
+- **010d2 implementation:** [Implemented and verified](../tasks/SLICE_010d2_VERIFICATION.md)
+  under D-072 with user-selected metadata-first exposure. Separate external facts,
+  resumable retained-capture import and paged review preserve native truth/Today;
+  both complete-reader fences and the confirmation race are verified. One bounded
+  implementation review's four findings were corrected. Full gates passed:
+  963 Rust, 1,164 Web and 953 DB tests, plus supporting suites, paired/query-plan
+  checks and a real-API desktop/390px walkthrough. Source remains uncommitted in
+  `codex/slice-010d2-history-timeline`; Git integration and deployment are separate.
 - **010d1 implementation and release:** complete under D-070 and its follow-up;
   source is committed, merged, pushed and deployed in shared development, with
   the implementation worktree/branch removed. Both bounded reviews are READY.
@@ -98,8 +106,8 @@ follow-up remains open in production readiness.
   separately verified release-time denial-header correction. D-069's
   [split](../specs/SLICE_010d.md) is preserved: capture stores encrypted source
   evidence and bounded admin coverage without native timeline/Today changes.
-  Public text pagination remains provisional and live-unqualified. 010d2 native
-  semantics/timeline, email/media, deltas, activation and customer-data readiness
+  Public text pagination remains provisional and live-unqualified. Native fact
+  promotion, email/media, deltas, activation and customer-data readiness
   remain separate work.
 - **010f2 implementation:** implemented under D-068; both bounded reviews,
   measured SQL/paired-reader checks, all 18 production-Web phases and exact
@@ -389,6 +397,14 @@ and now lives only in git history.
 
 ## Latest verification
 
+- 2026-09-12 010d2: isolated implementation verification passed SQLx preparation,
+  `check` (963 Rust, five doctests, 1,164 Web, 31 preflight, 11 email-worker),
+  and `check-db` (953 DB tests). Targeted import/reader/authority/race/old-artifact
+  cases, corrected query plans and the 112-record production-Web walkthrough
+  passed. [Evidence](../tasks/SLICE_010d2_VERIFICATION.md) preserves original
+  failures, runner annotations, source hashes and measurement limits. No release
+  or live-source/customer processing occurred.
+
 - 2026-09-11 010f2 planning: complete specification, implementation brief and
   source/code evidence received independent review. The all-held confirmation
   finding is corrected with a minimum eligible-unit check and explicit tests;
@@ -513,10 +529,12 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. Plan 010d2's verified historical fact semantics and bounded timeline reader
-   separately, using the completed [010d1 capture evidence](../tasks/SLICE_010d1_VERIFICATION.md)
-   and [release](../tasks/SLICE_010d1_RELEASE.md). 010d1 release does not approve
-   the 010d2 contract or implementation. The SQLx cancellation,
+1. 010d2 is [implemented and verified](../tasks/SLICE_010d2_VERIFICATION.md), ready
+   for the separate Git integration and shared-development release task under
+   D-072's authorization boundary. The [release handoff](../tasks/SLICE_010d2_IMPL.md#release-handoff)
+   requires actual artifact inventory and independent timeline readiness.
+   The completed [010d1 capture evidence](../tasks/SLICE_010d1_VERIFICATION.md)
+   and [release](../tasks/SLICE_010d1_RELEASE.md) remain its inputs. The SQLx cancellation,
    audited call-history ordering and inherited core worker handoff concerns
    remain bounded follow-ups with their existing evidence qualifications.
 2. Resume authorized FUB qualification when the user is ready, against an agreed
@@ -535,11 +553,13 @@ and now lives only in git history.
 
 ## Approval currently required
 
+- D-072 approves 010d2 contracts, implementation and isolated synthetic checks.
+  Commit/merge/push and deployment remain separate scopes.
 - D-070 approves full 010d1 source, lifetime, storage, HTTP and capability
   contracts, implementation and isolated synthetic checks; its follow-up
   authorized the completed commit, merge, push, cleanup and shared-development
   deployment. No repeat authorization is needed for that completed release.
-  Live source/customer work, 010d2 contracts/implementation, activation and
+  Live source/customer work, activation and
   production-cluster deployment remain separate scopes.
 - D-068 approves the complete 010f2 specification, shared contracts, implementation
   and isolated synthetic checks; its follow-up authorized the now-completed

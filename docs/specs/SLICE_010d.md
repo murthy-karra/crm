@@ -4,8 +4,11 @@
 splitting capture from timeline import. D-070's complete 010d1 contracts,
 implementation and isolated synthetic checks are complete; its follow-up
 completed Git integration, cleanup and [shared-development release](../tasks/SLICE_010d1_RELEASE.md).
-Later 010d2 semantics and implementation require their own specification and
-approval. The original planning baseline was main
+D-072 approves the reviewed [010d2 specification](SLICE_010d2.md), declared
+contracts and isolated synthetic implementation, with user-selected metadata-first
+exposure. 010d2 is [implemented and verified with isolated synthetic data](../tasks/SLICE_010d2_VERIFICATION.md)
+in its uncommitted worktree; Git integration and deployment remain separate.
+The original 010d1 planning baseline was main
 `028d6133e1b7c3f81642275e030f63e98b2cca49`; original verification remains in
 [the implementation evidence](../tasks/SLICE_010d1_VERIFICATION.md).
 
@@ -26,28 +29,24 @@ they cannot be imported from summaries such as `lastCommunication`.
 | Rung | Deliverable | Exit condition |
 |---|---|---|
 | **010d1 — capture and coverage** | [Detailed specification](SLICE_010d1.md), [execution brief](../tasks/SLICE_010d1_IMPL.md): separately confirmed, encrypted, resumable capture of API-visible events/calls/text messages; bounded admin evidence and coverage report | Approved contracts, implemented synthetic source/DB/Web verification and independent review. Report collection enumeration, API restrictions and uncaptured content separately. No native history writes. |
-| **010d2 — qualified historical timeline** | A later detailed specification based on 010d1 evidence: explicit external-history types, source identity/actor/time rules, content placement/exposure, parent mapping, idempotent import and bounded timeline reads | Reviewed semantics and contracts before implementation; faithful facts without fabricated live calls, inquiries or communication attempts. Both legacy Person and 010f2 core readers must be bounded/fenced before adding history volume. |
+| **010d2 — qualified historical timeline** | [Approved specification](SLICE_010d2.md) based on 010d1 evidence: explicit external-history types, source identity/actor/time rules, content placement/exposure, parent mapping, idempotent import and bounded timeline reads | [Implemented and verified](../tasks/SLICE_010d2_VERIFICATION.md) under D-072 with isolated synthetic data. Both complete readers are fenced and new review pages are bounded. Source is uncommitted and undeployed; native fact promotion, live qualification and activation remain separate. |
 | **Further source/content work, when qualified** | Ordinary email/correspondence, recordings/media and any still-uncovered families | Prove supported source retrieval and satisfy their storage/privacy/consent prerequisites. Split further only where the evidence requires it. No claim that 010d1/2 silently completes these families. |
 | **010e — deltas and activation** | Per-entity changes/deletions, repair, final reconciliation, source cutoff and explicit activation | Resolve Today/backlog/response semantics, communication restrictions and customer readiness before releasing the admin review hold. |
 
-010d2 is deliberately not an implementation-ready contract. It must decide:
+The [approved 010d2 specification](SLICE_010d2.md) and D-072 establish:
 
-- Which FUB event types actually establish an Inquiry, and which source times
-  establish occurrence rather than vendor record creation. Source labels and
-  source actors stay distinct from the import executor.
-- Whether qualified history remains separate external facts or populates native
-  Inquiry/contact/correspondence truth, which changes counts, filters and D-052
-  maxima. Existing operational commands have side effects and cannot be used as
-  historical persistence adapters.
-- Readable text/body policy and erasure linkage; source-only and held records;
-  stable identity, variants, tombstones and independently frozen capture input.
-- Bounded cross-family history/order/cursors, compatibility with existing paged
-  notes/tasks, and the separate history-reader release boundary.
+- Separate external FUB event, call and text record facts. They do not create
+  native Inquiries, calls, contact attempts, correspondence or Today effects.
+- Source record-created chronology with explicit unknown dates; source actor
+  roles remain separate from the local import executor.
+- Metadata-only display, deletable encrypted metadata, stable identities,
+  conflicting-variant holds and permanent tombstones.
+- An immutable parent/capture/interpretation anchor, bounded cross-family pages,
+  existing paged notes/tasks and an independent reader compatibility boundary.
 
-The recommendation is separate typed external historical facts first; it remains
-a proposal for 010d2. Do not implement a generic unrestricted JSON event store,
-invent a provider call lifecycle, map unknown outcomes to success/failure, or
-assign deleted source users to the importing admin.
+Readable bodies, live-source qualification, repair/deltas and activation remain
+separate work. Do not invent a provider call lifecycle, map unknown outcomes to
+success/failure, or assign deleted source users to the importing admin.
 
 ## Evidence and unresolved coverage
 

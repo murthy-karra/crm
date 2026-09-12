@@ -9,16 +9,18 @@ import PersonMetadataProvenance from './migration/PersonMetadataProvenance.vue'
 import ActivityFieldViewer from './migration/ActivityFieldViewer.vue'
 import { ApiError } from '../api/client'
 import {
-  fetchReviewNote, fetchReviewNotes, fetchReviewTasks, reviewHistoryTitle, reviewHistoryDetail, useActivityReviewCore,
+  fetchReviewNote, fetchReviewNotes, fetchReviewTasks,
   type ReviewFullNote, type ReviewNote, type ReviewPage, type ReviewProvenance, type ReviewTask,
 } from '../api/activityReview'
+import { useHistoryReviewCore } from '../api/historyReview'
+import PersonHistoryReview from './PersonHistoryReview.vue'
 import type { PersonCustomFieldValue } from '../api/types'
 import { buttonClasses, dialogPt } from '../lib/controls'
 import { describeApiError } from '../lib/errors'
 import { formatAbsoluteTime } from '../lib/format'
 
 const props = defineProps<{ personId: string }>()
-const { access, reading, data: core } = useActivityReviewCore(() => props.personId)
+const { access, reading, data: core } = useHistoryReviewCore(() => props.personId)
 type Section = 'notes' | 'open' | 'completed'
 interface PageState<T> { page: ReviewPage<T> | null; cursor: string; loading: boolean; error: unknown }
 const notes = reactive<PageState<ReviewNote>>({ page: null, cursor: '', loading: false, error: null })
@@ -407,45 +409,11 @@ const sourceRequest = computed(() => selectedSource.value ? { kind: 'results' as
           </button>
         </div>
       </Card>
-      <Card>
-        <h2 class="text-section font-medium">
-          Inquiries
-        </h2><ul class="mt-3 space-y-3">
-          <li
-            v-for="inquiry in core.inquiries"
-            :key="inquiry.id"
-            class="text-body"
-          >
-            <p class="break-words">
-              {{ inquiry.source }} · {{ formatAbsoluteTime(inquiry.received_at) }}
-            </p><p class="whitespace-pre-wrap break-words text-text-muted">
-              {{ inquiry.message }}
-            </p>
-          </li>
-        </ul><p
-          v-if="!core.inquiries.length"
-          class="mt-2 text-small text-text-muted"
-        >
-          No inquiries.
-        </p>
-      </Card>
-      <Card>
-        <h2 class="text-section font-medium">
-          Core history
-        </h2><ul class="mt-3 space-y-3">
-          <li
-            v-for="entry in core.core_history"
-            :key="entry.id"
-            class="text-small"
-          >
-            <p>{{ reviewHistoryTitle(entry.kind) }} · {{ formatAbsoluteTime(entry.occurred_at) }}</p><p class="text-text-muted">
-              {{ entry.actor?.display_name ?? 'System' }}
-            </p><p class="break-words">
-              {{ reviewHistoryDetail(entry) }}
-            </p>
-          </li>
-        </ul>
-      </Card>
+      <PersonHistoryReview
+        :person-id="personId"
+        :core="core"
+        :refresh-core="() => reading.refetch({ throwOnError: true })"
+      />
       <Card><PersonImportProvenance :person-id="personId" /><PersonMetadataProvenance :person-id="personId" /></Card>
     </template>
     <Dialog

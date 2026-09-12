@@ -1,0 +1,123 @@
+{
+  "corrected_actual_detail_sql_sha256": "912edc3ac674a57ca4e419541d3c4cfc921111a36a3fb2fde76e5e6046d6e688",
+  "dense_contact_facts": "504",
+  "execution_ms": 0.065,
+  "limits": {
+    "relation_loops": 1,
+    "relation_rows": 1,
+    "root_shared_blocks": 128
+  },
+  "native_contact_facts": "75501",
+  "no_source_reads": true,
+  "nodes": [
+    {
+      "index": null,
+      "loops": 1,
+      "node": "Limit",
+      "relation": null,
+      "rows": 1.0,
+      "rows_removed_by_filter": null,
+      "shared_hit_blocks": 8,
+      "shared_read_blocks": 0
+    },
+    {
+      "index": null,
+      "loops": 1,
+      "node": "Nested Loop",
+      "relation": null,
+      "rows": 1.0,
+      "rows_removed_by_filter": null,
+      "shared_hit_blocks": 8,
+      "shared_read_blocks": 0
+    },
+    {
+      "index": null,
+      "loops": 1,
+      "node": "Nested Loop",
+      "relation": null,
+      "rows": 1.0,
+      "rows_removed_by_filter": null,
+      "shared_hit_blocks": 6,
+      "shared_read_blocks": 0
+    },
+    {
+      "index": null,
+      "loops": 1,
+      "node": "Nested Loop",
+      "relation": null,
+      "rows": 1.0,
+      "rows_removed_by_filter": null,
+      "shared_hit_blocks": 4,
+      "shared_read_blocks": 0
+    },
+    {
+      "index": "contact_attempted_pkey",
+      "loops": 1,
+      "node": "Index Scan",
+      "relation": "contact_attempted",
+      "rows": 1.0,
+      "rows_removed_by_filter": 0,
+      "shared_hit_blocks": 4,
+      "shared_read_blocks": 0
+    },
+    {
+      "index": "app_user_pkey",
+      "loops": 1,
+      "node": "Index Scan",
+      "relation": "app_user",
+      "rows": 0.0,
+      "rows_removed_by_filter": null,
+      "shared_hit_blocks": 0,
+      "shared_read_blocks": 0
+    },
+    {
+      "index": "call_org_person_placed_idx",
+      "loops": 1,
+      "node": "Index Scan",
+      "relation": "call",
+      "rows": 0.0,
+      "rows_removed_by_filter": null,
+      "shared_hit_blocks": 2,
+      "shared_read_blocks": 0
+    },
+    {
+      "index": null,
+      "loops": 1,
+      "node": "Limit",
+      "relation": null,
+      "rows": 1.0,
+      "rows_removed_by_filter": null,
+      "shared_hit_blocks": 2,
+      "shared_read_blocks": 0
+    },
+    {
+      "index": "contact_attempted_corrects_once",
+      "loops": 1,
+      "node": "Index Scan",
+      "relation": "contact_attempted",
+      "rows": 1.0,
+      "rows_removed_by_filter": 0,
+      "shared_hit_blocks": 2,
+      "shared_read_blocks": 0
+    }
+  ],
+  "people": "25000",
+  "root_loops": 1,
+  "root_rows": 1.0,
+  "root_shared_blocks": 8,
+  "same_read_revision": true,
+  "scope": "One post-fix contact-detail plan on the synthetic scale fixture; no repeated paired benchmark or production-capacity claim",
+  "superseded_positive_and_negative_controls": true,
+  "temp_read_blocks": 0,
+  "temp_written_blocks": 0,
+  "status": "passed",
+  "test": "db_history_review::corrected_contact_detail_plan_on_25000_people",
+  "result": "1 passed; 0 failed; 1074 filtered; 12.90s",
+  "log": "/private/tmp/crm-010d2-history-review-detail-plan-1.log",
+  "log_sha256": "aaa0f4e31332c8211441e3787fc47b472b737ba5e8f3a63367b6fa7bad41c55c",
+  "command": "From backend/: source ../.env with export enabled; DATABASE_URL=\"$MIGRATION_DATABASE_URL\" SQLX_OFFLINE=true cargo test -p crm-api --test all --locked --features perf-harness db_history_review::corrected_contact_detail_plan_on_25000_people -- --ignored --exact --nocapture",
+  "source_files": {
+    "backend/crates/crm-app/src/domain/migration/history_review.rs": "b1aed87e59fdd00fb7e1bf08f864211eefca7028285fe9a82fcb95e286afa677",
+    "backend/crates/crm-api/tests/db_history_review.rs": "3ffdf506ae57c1e9f177f7a19851ef933c88e2f9cd76a8865b498a7c82d76563"
+  }
+}

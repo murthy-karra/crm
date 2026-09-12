@@ -129,6 +129,8 @@ fn build_app_with_routers_inner(
             .merge(routes::metadata_imports::router())
             .merge(routes::activity_imports::router())
             .merge(routes::history_captures::router())
+            .merge(routes::history_imports::router())
+            .merge(routes::history_review::router())
             .merge(routes::migration_activity_review::router())
             .layer(axum::middleware::from_fn_with_state(
                 state.clone(),
@@ -298,6 +300,39 @@ pub async fn run(config: Config) -> Result<(), BoxError> {
                 .await
                 {
                     tracing::warn!(outcome=%error,"history capture sweep failed");
+                }
+            }
+        })
+    });
+    let _history_import_worker = state.db.as_ref().map(|pool| {
+        let pool = pool.clone();
+        let state = state.clone();
+        tokio::spawn(async move {
+            let session = domain::migration::history_import_worker::WorkerSession::default();
+            let mut tick = tokio::time::interval(std::time::Duration::from_millis(200));
+            tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            loop {
+                tick.tick().await;
+                let release = state.current_import_release().await;
+                // Each unit has a separate bounded, fenced transaction. Drain
+                // available work without paying an idle delay for every 50 rows.
+                for _ in 0..32 {
+                    match domain::migration::history_import_worker::run_once_with_session(
+                        &pool,
+                        &state.raw_payload_key,
+                        &state.snapshot_policy,
+                        release.as_deref(),
+                        &session,
+                    )
+                    .await
+                    {
+                        Ok(true) => tokio::task::yield_now().await,
+                        Ok(false) => break,
+                        Err(error) => {
+                            tracing::warn!(outcome=%error,"history import sweep failed");
+                            break;
+                        }
+                    }
                 }
             }
         })

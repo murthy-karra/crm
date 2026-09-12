@@ -338,3 +338,8 @@ mod db_history_capture_plans;
 mod db_history_capture_read_boundaries;
 mod db_history_capture_release;
 mod db_history_capture_support;
+mod db_history_import;
+mod db_history_import_authority;
+mod db_history_import_support;
+mod db_history_review;
+mod db_history_timeline_compat;

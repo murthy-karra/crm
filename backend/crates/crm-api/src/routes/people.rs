@@ -251,14 +251,31 @@ async fn get_person(
     let scope = PersonVisibilityScope::from_auth(&auth);
     let organization_id = scope.organization_id();
 
+    // Preserve scoped 404 without running the legacy inquiry aggregate before
+    // the complete-reader gates. Imported volume belongs to the paged reader.
+    let exists = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM person WHERE organization_id=$1 AND id=$2)",
+    )
+    .bind(organization_id.0)
+    .bind(person_id.0)
+    .fetch_one(&mut *conn)
+    .await
+    .map_err(ApiError::database)?;
+    if !exists {
+        return Err(ApiError::NotFound);
+    }
+
+    crate::auth::workspace::history_complete_read(&mut conn, organization_id)
+        .await
+        .map_err(ApiError::database)?;
+    crate::auth::workspace::activity_complete_read(&mut conn, organization_id)
+        .await
+        .map_err(ApiError::database)?;
+
     let person = person_queries::summary_by_id(&mut conn, organization_id, person_id)
         .await
         .map_err(ApiError::database)?
         .ok_or(ApiError::NotFound)?;
-
-    crate::auth::workspace::activity_complete_read(&mut conn, organization_id)
-        .await
-        .map_err(ApiError::database)?;
 
     let contact_methods =
         person_queries::contact_methods_for_person(&mut conn, organization_id, person_id)

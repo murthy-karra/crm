@@ -18,6 +18,10 @@ pub async fn guard(State(state): State<AppState>, request: Request, next: Next) 
             .uri()
             .path()
             .starts_with("/api/migrations/fub/history-captures")
+        || request
+            .uri()
+            .path()
+            .starts_with("/api/migrations/fub/history-imports")
         || request.uri().path().starts_with("/api/people/")
             && request.uri().path().contains("/migration-review");
     let mut response = guard_inner(State(state), request, next).await;
@@ -55,6 +59,10 @@ async fn guard_inner(State(state): State<AppState>, request: Request, next: Next
                     || matches!(
                         route,
                         "/api/people/{id}/migration-review"
+                            | "/api/people/{id}/migration-review/v2"
+                            | "/api/people/{id}/migration-review/inquiries"
+                            | "/api/people/{id}/migration-review/timeline"
+                            | "/api/people/{id}/migration-review/timeline/{kind}/{entry_id}"
                             | "/api/people/{id}/migration-review/notes"
                             | "/api/people/{id}/migration-review/notes/{note_id}"
                             | "/api/people/{id}/migration-review/tasks"

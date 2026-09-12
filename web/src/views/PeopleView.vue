@@ -9,7 +9,7 @@ import type { ColumnDef } from '@tanstack/vue-table'
 import PageHeader from '../components/PageHeader.vue'
 import DataTable from '../components/DataTable.vue'
 import PersonPreview from '../components/PersonPreview.vue'
-import { activityReviewCoreKey, fetchActivityReviewCore, useActivityReviewAccess } from '../api/activityReview'
+import { historyReviewCoreKey, fetchHistoryReviewCore, useHistoryReviewAccess } from '../api/historyReview'
 import { workspaceOperational } from '../workspaceLifecycle'
 import StageLabel from '../components/StageLabel.vue'
 import FilterBar from '../components/FilterBar.vue'
@@ -58,7 +58,7 @@ const props = withDefaults(defineProps<{ savedListId?: string }>(), { savedListI
 
 const { data: me } = useMe()
 const canOperate = computed(() => workspaceOperational(me.value))
-const reviewAccess = useActivityReviewAccess()
+const reviewAccess = useHistoryReviewAccess()
 const queryClient = useQueryClient()
 const orgId = computed(() => me.value?.organization?.id ?? '')
 const actorId = computed(() => me.value?.user.id ?? '')
@@ -1077,10 +1077,10 @@ function onRowIntent(person: PersonSummary) {
     if (id !== orgId.value || expectedScope !== reviewAccess.scope.value) return
     if (!canOperate.value) {
       if (!reviewAccess.enabled.value) return
-      const key = activityReviewCoreKey(reviewAccess.prefix.value, person.id)
+      const key = historyReviewCoreKey(reviewAccess.prefix.value, person.id)
       void queryClient.prefetchQuery({
         queryKey: key,
-        queryFn: ({ signal }) => reviewAccess.read(key, () => activityReviewCoreKey(reviewAccess.prefix.value, person.id), () => fetchActivityReviewCore(person.id, signal)),
+        queryFn: ({ signal }) => reviewAccess.read(key, () => historyReviewCoreKey(reviewAccess.prefix.value, person.id), () => fetchHistoryReviewCore(person.id, signal)),
         retry: false, gcTime: 30_000,
       })
       return

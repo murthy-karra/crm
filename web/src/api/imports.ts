@@ -121,7 +121,7 @@ export function importAccessError(error: unknown) { return error instanceof ApiE
 
 // Local lifecycle shared only by these new import screens. The application-wide
 // authority transition remains owned by the existing client/session coordinator.
-export function useImportAccess(namespace: 'people-imports' | 'metadata-imports' | 'activity-imports' | 'activity-review' | 'history-captures' = 'people-imports') {
+export function useImportAccess(namespace: 'people-imports' | 'metadata-imports' | 'activity-imports' | 'activity-review' | 'history-captures' | 'history-imports' | 'history-review' = 'people-imports') {
   const { data: me } = useMe()
   const lifetime = useAuthSessionLifetime()
   const verifying = useSessionVerificationPending()

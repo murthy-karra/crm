@@ -2436,3 +2436,53 @@ Preserve existing data, review bindings, verification evidence, backup and recov
 artifacts. Live FUB/customer processing, native timeline import, activation and
 production-cluster deployment remain outside this release. Actual results belong
 to [SLICE_010d1_RELEASE.md](../tasks/SLICE_010d1_RELEASE.md).
+
+
+### D-071 — 010d2 planning and metadata-first scope (2026-09-12)
+
+After 010d1 release, the assistant recommended a focused specification for
+separate imported historical facts, accurate source labels and paginated Person
+review. The user replied **“Yes go for it.”** This authorizes drafting and
+independent review of [SLICE_010d2.md](../specs/SLICE_010d2.md) and its
+[execution brief](../tasks/SLICE_010d2_IMPL.md).
+
+During planning, the user chose **“Metadata first (Recommended)”** when asked
+whether the first timeline should expose event/call/text metadata only or also
+readable captured message/note content. Metadata-only timeline/detail exposure
+is accepted for 010d2. Existing 010f2 notes/tasks retain their approved readers;
+this choice does not remove retained raw evidence or approve new body access.
+
+The remaining proposed fact/time/identity/import/lifecycle, reader/fencing and
+release contracts require completed review and implementation approval. Planning
+does not authorize source/customer processing, implementation, commit/merge/push,
+deployment, native-history promotion or activation. D-012/D-015 fidelity and
+erasure, D-052 native maxima, D-064 review-only use and live FUB deferral remain
+unchanged. The current release stays 010d1.
+
+### D-072 — Reviewed 010d2 contracts and implementation approved (2026-09-12)
+
+After the metadata-first specification, execution brief, READY independent
+review and API/database contract approval boundary were presented, the user said
+**“go ahead and do it.”** This accepts [SLICE_010d2.md](../specs/SLICE_010d2.md),
+its [execution brief](../tasks/SLICE_010d2_IMPL.md), the reviewed policy and declared
+shared contracts, including both planning corrections. Implementation, concrete
+contract detail within this scope, isolated synthetic verification and bounded
+implementation reviews are authorized.
+
+Accepted scope includes three separate imported external fact types, metadata-only
+exposure, retained-capture interpretation, stable identities and held variants,
+one immutable parent history plan with resumable attempts, bounded paged review,
+consistent page revisions, old-reader fencing and independent timeline readiness.
+Native business facts, Today behavior and the admin review hold remain unchanged.
+
+This approval does not authorize live FUB/customer processing, body/media access,
+activation, commit/merge/push or shared-development/production deployment. Those
+remain separate scopes; existing runtime and release evidence stay intact.
+
+**Release follow-up — 2026-09-12:** After isolated implementation verification,
+the user explicitly requested **“commit, merge, push, cleanup and deploy.”**
+This authorizes Git integration, publication, owned worktree/branch cleanup and
+deployment of 010d2 to the existing Mac-hosted shared-development API/Web using
+the compatibility runbook, additive migration, preserved recovery artifacts and
+release verification. It does not authorize live FUB/customer processing,
+body/media access, workspace activation or a production-cluster deployment.

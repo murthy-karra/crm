@@ -1,0 +1,387 @@
+{
+  "status": "passed",
+  "test": "db_history_review::corrected_contact_plans_and_previous_guard_pair_on_25000_people",
+  "result": "1 passed;0 failed;1073 filtered;19.64s",
+  "command": "From backend/: set -e; set -a; source ../.env; set +a; export DATABASE_URL=\"$MIGRATION_DATABASE_URL\" SQLX_OFFLINE=true; cargo test -p crm-api --test all --locked --features perf-harness db_history_review::corrected_contact_plans_and_previous_guard_pair_on_25000_people -- --ignored --exact --nocapture",
+  "original_log": "/private/tmp/crm-010d2-history-review-perf-affected-2.log",
+  "original_log_sha256": "f33f635073560bc3aa38caaa1a3e1185d6d38ac17c5f7fd290e9c84472203636",
+  "prior_compile_failure": {
+    "log": "/private/tmp/crm-010d2-history-review-perf-affected-1.log",
+    "sha256": "590cc8a6256b7a4ef02512ba9d33873eb0044a4822304f331f574d2819657f98",
+    "cause": "test wrapper ApiError lacks Debug and SHA output lacks LowerHex; corrected in harness before any measured run"
+  },
+  "fixture": {
+    "dense_contact_rows": "504",
+    "members_per_org": "50",
+    "native_contact_rows": "75501",
+    "ordinary_people": "25000",
+    "retained_external_facts": "3",
+    "review_people": "25000"
+  },
+  "plans": {
+    "contact_after": {
+      "root_rows": 51.0,
+      "root_loops": 1,
+      "execution_ms": 0.299,
+      "shared_hit_blocks": 154,
+      "shared_read_blocks": 0,
+      "temp_read_blocks": 0,
+      "temp_written_blocks": 0,
+      "max_node_loops": 51,
+      "relation_nodes": [
+        {
+          "relation": "contact_attempted",
+          "node": "Index Scan",
+          "index": "contact_attempted_history_review_page",
+          "rows": 51.0,
+          "loops": 1,
+          "removed_filter": 0,
+          "shared_hit_blocks": 50,
+          "shared_read_blocks": 0
+        },
+        {
+          "relation": "app_user",
+          "node": "Index Scan",
+          "index": "app_user_pkey",
+          "rows": 0.0,
+          "loops": 51,
+          "removed_filter": 0,
+          "shared_hit_blocks": 0,
+          "shared_read_blocks": 0
+        },
+        {
+          "relation": "call",
+          "node": "Index Scan",
+          "index": "call_org_person_placed_idx",
+          "rows": 0.0,
+          "loops": 1,
+          "removed_filter": 0,
+          "shared_hit_blocks": 2,
+          "shared_read_blocks": 0
+        },
+        {
+          "relation": "contact_attempted",
+          "node": "Index Scan",
+          "index": "contact_attempted_corrects_once",
+          "rows": 0.0,
+          "loops": 51,
+          "removed_filter": 0,
+          "shared_hit_blocks": 102,
+          "shared_read_blocks": 0
+        }
+      ]
+    },
+    "contact_first": {
+      "root_rows": 51.0,
+      "root_loops": 1,
+      "execution_ms": 0.289,
+      "shared_hit_blocks": 154,
+      "shared_read_blocks": 0,
+      "temp_read_blocks": 0,
+      "temp_written_blocks": 0,
+      "max_node_loops": 51,
+      "relation_nodes": [
+        {
+          "relation": "contact_attempted",
+          "node": "Index Scan",
+          "index": "contact_attempted_history_review_page",
+          "rows": 51.0,
+          "loops": 1,
+          "removed_filter": 0,
+          "shared_hit_blocks": 50,
+          "shared_read_blocks": 0
+        },
+        {
+          "relation": "app_user",
+          "node": "Index Scan",
+          "index": "app_user_pkey",
+          "rows": 0.0,
+          "loops": 51,
+          "removed_filter": 0,
+          "shared_hit_blocks": 0,
+          "shared_read_blocks": 0
+        },
+        {
+          "relation": "call",
+          "node": "Index Scan",
+          "index": "call_org_person_placed_idx",
+          "rows": 0.0,
+          "loops": 1,
+          "removed_filter": 0,
+          "shared_hit_blocks": 2,
+          "shared_read_blocks": 0
+        },
+        {
+          "relation": "contact_attempted",
+          "node": "Index Scan",
+          "index": "contact_attempted_corrects_once",
+          "rows": 0.0,
+          "loops": 51,
+          "removed_filter": 0,
+          "shared_hit_blocks": 102,
+          "shared_read_blocks": 0
+        }
+      ]
+    },
+    "inquiries": {
+      "root_rows": 51.0,
+      "root_loops": 1,
+      "execution_ms": 0.04,
+      "shared_hit_blocks": 52,
+      "shared_read_blocks": 0,
+      "temp_read_blocks": 0,
+      "temp_written_blocks": 0,
+      "max_node_loops": 1,
+      "relation_nodes": [
+        {
+          "relation": "inquiry",
+          "node": "Index Scan",
+          "index": "inquiry_history_review_page",
+          "rows": 51.0,
+          "loops": 1,
+          "removed_filter": 0,
+          "shared_hit_blocks": 52,
+          "shared_read_blocks": 0
+        }
+      ]
+    }
+  },
+  "previous_guard_pair": {
+    "all_created_sessions_revoked": true,
+    "baseline_commit": "27f3fe4654ace5840412e1364ea36974a1266ad8",
+    "baseline_scope": "prior read_check SELECT and exact prior crm_workspace_read body; unchanged Today router/evaluator in both arms",
+    "component": "actual AuthContext/session verification, matched workspace wrapper, unchanged fixed-clock Today HTTP route; full body drained before timer ends; excludes network and unrelated production middleware",
+    "concurrent_loads": 5,
+    "current_guard_sql_sha256": "fdb17462bf65d95de639bd4fb81db7bfbf300860220a59bc8498692a24d74620",
+    "measured_per_arm": 20,
+    "new_guard_hits": 25,
+    "new_p95_limit_us": "145431",
+    "new_p95_us": "124057",
+    "new_us": [
+      "108456",
+      "82175",
+      "115779",
+      "101301",
+      "91452",
+      "112414",
+      "103540",
+      "125283",
+      "92497",
+      "94113",
+      "79760",
+      "102854",
+      "109659",
+      "88558",
+      "124057",
+      "104703",
+      "84010",
+      "104623",
+      "83892",
+      "117392"
+    ],
+    "old_guard_hits": 25,
+    "old_p95_us": "120431",
+    "old_us": [
+      "102597",
+      "103004",
+      "119599",
+      "119853",
+      "80494",
+      "100211",
+      "87165",
+      "117027",
+      "106788",
+      "106477",
+      "94487",
+      "94410",
+      "117421",
+      "94621",
+      "109115",
+      "91130",
+      "91087",
+      "99087",
+      "120531",
+      "120431"
+    ],
+    "original_guard_sql_sha256": "645a5ca52ed05b2c81687881c13c618c9c70f22dc648a4ddfa76d1ea5b6373c3",
+    "p95_within_budget": true,
+    "payloads_equal": true,
+    "rows_per_response": 200,
+    "warmup_per_arm": 5,
+    "wave_order": "AB BA AB BA",
+    "old_median_us": "102800.5",
+    "new_median_us": "103197.0"
+  },
+  "incremental_native_writers": {
+    "baseline_disabled_inventory": [
+      [
+        "app_user",
+        "history_review_user_label"
+      ],
+      [
+        "assignment_changed",
+        "history_review_rows"
+      ],
+      [
+        "call",
+        "history_review_call_link"
+      ],
+      [
+        "call_completed",
+        "history_review_rows"
+      ],
+      [
+        "contact_attempted",
+        "history_review_rows"
+      ],
+      [
+        "contact_method",
+        "history_review_core_rows"
+      ],
+      [
+        "correspondence_captured",
+        "history_review_rows"
+      ],
+      [
+        "custom_field",
+        "history_review_label"
+      ],
+      [
+        "custom_field_option",
+        "history_review_label"
+      ],
+      [
+        "inquiry",
+        "history_review_rows"
+      ],
+      [
+        "inquiry_received",
+        "history_review_rows"
+      ],
+      [
+        "note",
+        "history_review_rows"
+      ],
+      [
+        "person",
+        "history_review_person"
+      ],
+      [
+        "person_custom_field_value",
+        "history_review_core_rows"
+      ],
+      [
+        "person_imported",
+        "history_review_rows"
+      ],
+      [
+        "person_tag",
+        "history_review_core_rows"
+      ],
+      [
+        "routing_decision",
+        "history_review_rows"
+      ],
+      [
+        "stage",
+        "history_review_label"
+      ],
+      [
+        "stage_changed",
+        "history_review_rows"
+      ],
+      [
+        "tag",
+        "history_review_label"
+      ],
+      [
+        "task",
+        "history_review_rows"
+      ]
+    ],
+    "all_revision_triggers_restored": true,
+    "families": {
+      "assignment_changed": {
+        "previous_execution_ms": 0.363,
+        "current_execution_ms": 0.492,
+        "incremental_execution_ms": 0.129,
+        "baseline_derived_state_changed": false,
+        "current_derived_state_changed": true,
+        "both_rolled_back": true
+      },
+      "call_completed": {
+        "previous_execution_ms": 0.543,
+        "current_execution_ms": 0.523,
+        "incremental_execution_ms": -0.02,
+        "baseline_derived_state_changed": false,
+        "current_derived_state_changed": true,
+        "both_rolled_back": true
+      },
+      "contact_attempted": {
+        "previous_execution_ms": 0.444,
+        "current_execution_ms": 0.411,
+        "incremental_execution_ms": -0.033,
+        "baseline_derived_state_changed": false,
+        "current_derived_state_changed": true,
+        "both_rolled_back": true
+      },
+      "correspondence": {
+        "previous_execution_ms": 0.731,
+        "current_execution_ms": 1.057,
+        "incremental_execution_ms": 0.326,
+        "baseline_derived_state_changed": false,
+        "current_derived_state_changed": true,
+        "both_rolled_back": true
+      },
+      "inquiry_received": {
+        "previous_execution_ms": 0.374,
+        "current_execution_ms": 0.503,
+        "incremental_execution_ms": 0.129,
+        "baseline_derived_state_changed": false,
+        "current_derived_state_changed": true,
+        "both_rolled_back": true
+      },
+      "person_imported": {
+        "previous_execution_ms": 0.676,
+        "current_execution_ms": 0.627,
+        "incremental_execution_ms": -0.049,
+        "baseline_derived_state_changed": false,
+        "current_derived_state_changed": true,
+        "both_rolled_back": true
+      },
+      "routing_decision": {
+        "previous_execution_ms": 0.491,
+        "current_execution_ms": 0.636,
+        "incremental_execution_ms": 0.145,
+        "baseline_derived_state_changed": false,
+        "current_derived_state_changed": true,
+        "both_rolled_back": true
+      },
+      "stage_changed": {
+        "previous_execution_ms": 0.531,
+        "current_execution_ms": 0.716,
+        "incremental_execution_ms": 0.185,
+        "baseline_derived_state_changed": false,
+        "current_derived_state_changed": true,
+        "both_rolled_back": true
+      }
+    }
+  },
+  "source_files": {
+    "backend/crates/crm-app/src/domain/migration/history_review.rs": "b1aed87e59fdd00fb7e1bf08f864211eefca7028285fe9a82fcb95e286afa677",
+    "backend/crates/crm-api/src/routes/history_review.rs": "81609555cac4e07f7a59d95ff0365e5b24217db431d941c37561537f67cdbbca",
+    "backend/crates/crm-api/tests/db_history_review.rs": "568eea5424429307c068b8ee52022be560e2d4542c6ebd556e1cd7b4d61d3172"
+  },
+  "limitations": [
+    "Matched HTTP component, not full production-router/network latency; unchanged Today evaluator plus frozen previous workspace guard on the same upgraded schema. Original unaffected plans remain separate. Trigger controls remove only new history review revision triggers inside rolled-back migrator transactions, never a deployed database.",
+    "The original one-case collector passed output assertions but failed actual plan inspection: contact metadata caused three 75,501-row scans; inquiry read501 rows due stale fixture estimates. Its original log is retained, not relabeled as a plan-shape pass.",
+    "The original collector contains 32 hot-query plans. This affected rerun replaces contact first/continuation and inquiry plans. Contact detail was not re-EXPLAINed in this paired run; its subsequent measured result is separately recorded in detail-plan.json. Remaining original SQL plans are unchanged.",
+    "Old/new request p95 is qualified for the changed workspace guard HTTP component in the same build/machine/upgraded schema/fixture/clock, using actual session extraction and Today route. It is not a full production router/network benchmark or old-schema capacity comparison.",
+    "Native incremental costs are single paired EXPLAIN insert probes on inert native rows, with21 new revision triggers disabled only in baseline transactions and rollback restoring all. DDL is outside the measured statement; timings are trends, not production capacity or statistical overhead estimates.",
+    "Current test source has an additional affected-only opt-in case; only that case ran in this log. Raw/body/source/customer/deployment work was not performed."
+  ],
+  "follow_up": {
+    "post_fix_contact_detail_plan": "detail-plan.json",
+    "status": "passed separately; original collector and paired-result attribution above remains unchanged"
+  }
+}

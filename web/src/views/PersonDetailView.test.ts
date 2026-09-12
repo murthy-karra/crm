@@ -3516,8 +3516,9 @@ describe('Person review-only workspace', () => {
     const base = apiFetchMock.getMockImplementation()!
     const legacy = detail([PHONE_A, EMAIL], [imported], [{ id: 'tag', name: 'Imported' }])
     apiFetchMock.mockImplementation((path, init) => {
-      if (path === `/people/${PERSON_ID}/migration-review`) return Promise.resolve({ person: legacy.person, contact_methods: legacy.contact_methods, inquiries: legacy.inquiries, core_history: [imported], tags: legacy.tags, custom_fields: legacy.custom_fields, activity: { notes_count: '0', open_tasks_count: '0', completed_tasks_count: '0', activity_revision: '0', notes_url: '/unused', tasks_url: '/unused' } })
-      if (path.startsWith(`/people/${PERSON_ID}/migration-review/`)) return Promise.resolve({ items: [], next_cursor: null, activity_revision: '0' })
+      if (path === `/people/${PERSON_ID}/migration-review/v2`) return Promise.resolve({ person: { ...legacy.person, inquiry_count: String(legacy.person.inquiry_count) }, contact_methods: legacy.contact_methods, inquiries: { count: '0', url: '/unused' }, history: { read_revision: '0', known_count: '1', unknown_count: '0', counts: {}, timeline_url: '/unused' }, tags: legacy.tags, custom_fields: legacy.custom_fields, activity: { notes_count: '0', open_tasks_count: '0', completed_tasks_count: '0', activity_revision: '0', notes_url: '/unused', tasks_url: '/unused' } })
+      if (path.startsWith(`/people/${PERSON_ID}/migration-review/timeline?`)) return Promise.resolve({ items: [{ ...imported, metadata: imported.detail, display_at: imported.occurred_at, detail_url: '/unused' }], next_cursor: null, read_revision: '0' })
+      if (path.startsWith(`/people/${PERSON_ID}/migration-review/`)) return Promise.resolve({ items: [], next_cursor: null, activity_revision: '0', read_revision: '0' })
       return base(path, init)
     })
     const { wrapper } = await mountView()
@@ -3528,7 +3529,7 @@ describe('Person review-only workspace', () => {
     for (const select of wrapper.findAllComponents(Select)) expect(select.props('disabled')).toBe(true)
     expect(requests().filter(request => !request.startsWith('GET '))).toEqual([])
     expect(requests()).toContain(`GET /people/${PERSON_ID}/import-provenance`)
-    expect(requests()).toContain(`GET /people/${PERSON_ID}/migration-review`)
+    expect(requests()).toContain(`GET /people/${PERSON_ID}/migration-review/v2`)
     expect(requests()).not.toContain(`GET /people/${PERSON_ID}`)
     expect(wrapper.find('[data-testid="person-activity-review"]').exists()).toBe(true)
     wrapper.unmount()

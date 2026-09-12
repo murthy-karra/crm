@@ -139,6 +139,7 @@ pub enum ApiError {
     UnknownOption,
     WorkspaceInMigrationReview,
     ActivityReviewRequired,
+    HistoryReviewRequired,
     WorkspaceIngressDeferred,
     MigrationConflict,
     ImportError(&'static str),
@@ -147,7 +148,9 @@ pub enum ApiError {
 
 impl ApiError {
     pub(crate) fn database(error: sqlx::Error) -> Self {
-        if crate::auth::workspace::is_activity_review_error(&error) {
+        if crate::auth::workspace::is_history_review_error(&error) {
+            Self::HistoryReviewRequired
+        } else if crate::auth::workspace::is_activity_review_error(&error) {
             Self::ActivityReviewRequired
         } else if crate::auth::workspace::is_review_error(&error) {
             Self::WorkspaceInMigrationReview
@@ -162,6 +165,9 @@ impl ApiError {
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let (status, code, retry_after_secs) = match self {
+            ApiError::HistoryReviewRequired => {
+                (StatusCode::CONFLICT, "history_review_required", None)
+            }
             ApiError::ActivityReviewRequired => {
                 (StatusCode::CONFLICT, "activity_review_required", None)
             }
@@ -304,6 +310,14 @@ impl IntoResponse for ApiError {
         };
 
         let body = Json(json!({ "error": code }));
+        if code == "history_review_required" {
+            return (
+                status,
+                [(axum::http::header::CACHE_CONTROL, "no-store")],
+                body,
+            )
+                .into_response();
+        }
         match retry_after_secs {
             Some(secs) => (
                 status,

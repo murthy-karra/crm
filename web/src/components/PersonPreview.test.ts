@@ -32,10 +32,10 @@ afterEach(() => { cleanups.splice(0).forEach((cleanup) => cleanup()); vi.clearAl
 
 const reviewIdentity: MeResponse = { user: { id: 'admin', email: 'admin@example.invalid', display_name: 'Admin' }, organization: { id: 'org-1', name: 'Review Org', role: 'admin', workspace_mode: 'migration_review', workspace_revision: '2' }, platform_admin: false }
 function reviewCore(response = fixture) {
-  return { person: response.person, contact_methods: response.contact_methods, inquiries: response.inquiries, tags: response.tags, custom_fields: response.custom_fields, core_history: response.history.filter(row => row.kind !== 'note' && row.kind !== 'task_completed'), activity: { notes_count: '501', open_tasks_count: '502', completed_tasks_count: '503', activity_revision: '0', notes_url: '/unused', tasks_url: '/unused' } }
+  return { person: response.person, contact_methods: response.contact_methods, inquiries: { count: String(response.inquiries.length), url: '/unused' }, tags: response.tags, custom_fields: response.custom_fields, history: { read_revision: '0', known_count: '0', unknown_count: '0', counts: {}, timeline_url: '/unused' }, activity: { notes_count: '501', open_tasks_count: '502', completed_tasks_count: '503', activity_revision: '0', notes_url: '/unused', tasks_url: '/unused' } }
 }
 async function mountPreview(response: PersonDetailResponse = fixture, readOnly = false) {
-  vi.mocked(apiFetch).mockImplementation(async url => url === '/me' ? reviewIdentity as never : url.endsWith('/migration-review') ? reviewCore(response) as never : response as never)
+  vi.mocked(apiFetch).mockImplementation(async url => url === '/me' ? reviewIdentity as never : url.endsWith('/migration-review/v2') ? reviewCore(response) as never : response as never)
   const active = ref(false)
   const outcome = ref(false)
   const start = vi.fn()
@@ -48,6 +48,7 @@ async function mountPreview(response: PersonDetailResponse = fixture, readOnly =
     props: { orgId: 'org-1', summary: fixture.person, readOnly },
     global: {
       plugins: [router, [VueQueryPlugin, { queryClient: client }]],
+      stubs: { PersonHistoryReview: true },
       provide: { [CALL_HOST_KEY as symbol]: host, [OPERATOR_LAUNCHER as symbol]: launch },
     },
   })
@@ -151,7 +152,7 @@ describe('review-only Person preview', () => {
     expect(wrapper.find('a[href^="mailto:"]').exists()).toBe(false)
     expect(wrapper.find('[aria-label="Open full profile"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('501 notes · 502 open tasks · 503 completed tasks')
-    expect(vi.mocked(apiFetch).mock.calls.map(([url]) => url)).toEqual(['/me', '/people/person-1/migration-review'])
+    expect(vi.mocked(apiFetch).mock.calls.map(([url]) => url)).toEqual(['/me', '/people/person-1/migration-review/v2'])
     await wrapper.findAll('button').find(button => button.text() === 'Contact')!.trigger('click')
     expect(wrapper.text()).toContain('grace@example.com')
     expect(wrapper.text()).not.toContain('Ask Operator')

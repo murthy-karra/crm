@@ -20,6 +20,7 @@ const props = defineProps<{
   isPending: boolean
   error?: unknown
   errorFallback?: string
+  scrollable?: boolean
 }>()
 
 const emit = defineEmits<{ 'update:visible': [value: boolean]; confirm: [] }>()
@@ -39,7 +40,7 @@ function close() {
     :closable="false"
     :close-on-escape="!isPending"
     :dismissable-mask="!isPending"
-    :pt="dialogPt()"
+    :pt="scrollable ? { ...dialogPt(), root: { class: 'glass-panel w-full max-w-md max-h-[calc(100dvh-2rem)] flex flex-col' }, content: { class: 'min-h-0 overflow-y-auto px-5 py-4' }, footer: { class: 'flex shrink-0 flex-wrap items-center justify-end gap-3 px-5 pb-5 pt-2' } } : dialogPt()"
     @update:visible="(value: boolean) => !value && close()"
   >
     <template #header>
@@ -51,7 +52,10 @@ function close() {
       </h2>
     </template>
 
-    <p class="text-body text-text">
+    <p
+      class="text-body text-text"
+      :class="scrollable ? 'break-words' : ''"
+    >
       {{ message }}
     </p>
     <p

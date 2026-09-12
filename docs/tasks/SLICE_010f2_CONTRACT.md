@@ -78,7 +78,12 @@ Native review routes are `/api/people/{id}/migration-review`, its `/notes`,
 `{person,contact_methods,inquiries,core_history,tags,custom_fields,activity}`;
 `activity` has decimal `notes_count,open_tasks_count,completed_tasks_count,activity_revision`
 and `notes_url,tasks_url`. Core contains no note bodies or task arrays;
-core_history contains only the existing assignment/stage/inquiry facts. Review
+core_history contains the existing `person_imported`, `inquiry_received`,
+`routing_decision`, `assignment_changed`, `stage_changed`, `contact_attempted`,
+`call_completed` and `correspondence` facts. This inventory correction under
+D-072 documents existing wire behavior; it adds no 010f2 fact family. The new
+010d2 v2 representation pages these families; a confirmed history anchor fences
+this complete core route. Review
 eligibility requires a valid same-Org original review binding, including a
 partially completed/cancelled People parent; preparing a new activity child
 requires the stricter completed-parent gate.

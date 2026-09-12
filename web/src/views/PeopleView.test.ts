@@ -1682,7 +1682,7 @@ describe('People workspace review', () => {
   }
   function boundedCore() {
     const person = detail()
-    return { person: person.person, contact_methods: person.contact_methods, inquiries: person.inquiries, tags: person.tags, custom_fields: person.custom_fields, core_history: person.history, activity: { notes_count: '501', open_tasks_count: '502', completed_tasks_count: '503', activity_revision: '0', notes_url: '/unused', tasks_url: '/unused' } }
+    return { person: { ...person.person, inquiry_count: String(person.person.inquiry_count) }, contact_methods: person.contact_methods, inquiries: { count: '0', url: '/unused' }, tags: person.tags, custom_fields: person.custom_fields, history: { read_revision: '0', known_count: '0', unknown_count: '0', counts: {}, timeline_url: '/unused' }, activity: { notes_count: '501', open_tasks_count: '502', completed_tasks_count: '503', activity_revision: '0', notes_url: '/unused', tasks_url: '/unused' } }
   }
   it.each(['pointerenter', 'focusin'])('prefetches only the bounded review core on %s and shares it with the preview', async event => {
     vi.useFakeTimers()
@@ -1690,14 +1690,14 @@ describe('People workspace review', () => {
       stub()
       const identity = reviewIdentity()
       const base = apiFetchMock.getMockImplementation()!
-      apiFetchMock.mockImplementation((path, init) => path === '/me' ? Promise.resolve(identity) : path === `/people/${PERSON_ID}/migration-review` ? Promise.resolve(boundedCore()) : base(path, init))
+      apiFetchMock.mockImplementation((path, init) => path === '/me' ? Promise.resolve(identity) : path === `/people/${PERSON_ID}/migration-review/v2` ? Promise.resolve(boundedCore()) : path.startsWith(`/people/${PERSON_ID}/migration-review/`) ? Promise.resolve({ items: [], next_cursor: null, read_revision: '0' }) : base(path, init))
       const { wrapper } = await mountView('/people', identity)
       await wrapper.findAll('tbody tr')[0]!.trigger(event)
       await vi.advanceTimersByTimeAsync(150); await flushPromises()
-      expect(peoplePaths().filter(path => path.startsWith('/people/'))).toEqual([`/people/${PERSON_ID}/migration-review`])
+      expect(peoplePaths().filter(path => path.startsWith('/people/'))).toEqual([`/people/${PERSON_ID}/migration-review/v2`])
       await wrapper.get(`a[href="/people/${PERSON_ID}"]`).trigger('click'); await flushPromises()
       expect(wrapper.get('[data-testid="person-preview"]').text()).toContain('501 notes · 502 open tasks · 503 completed tasks')
-      expect(peoplePaths().filter(path => path.startsWith('/people/'))).toEqual([`/people/${PERSON_ID}/migration-review`])
+      expect(peoplePaths().filter(path => path.startsWith('/people/'))).toEqual([`/people/${PERSON_ID}/migration-review/v2`, `/people/${PERSON_ID}/migration-review/timeline?family=all&dated=known&limit=3`, `/people/${PERSON_ID}/migration-review/inquiries?limit=1`])
       expect(wrapper.find('[data-testid="person-preview"] a[href^="mailto:"]').exists()).toBe(false)
     } finally { vi.useRealTimers() }
   })
@@ -1720,13 +1720,13 @@ describe('People workspace review', () => {
       const identity = reviewIdentity()
       const pending = deferred<ReturnType<typeof boundedCore>>()
       const base = apiFetchMock.getMockImplementation()!
-      apiFetchMock.mockImplementation((path, init) => path.endsWith('/migration-review') ? pending.promise : base(path, init))
+      apiFetchMock.mockImplementation((path, init) => path.endsWith('/migration-review/v2') ? pending.promise : base(path, init))
       const { wrapper, queryClient } = await mountView('/people', identity)
       await wrapper.findAll('tbody tr')[0]!.trigger('pointerenter')
       await vi.advanceTimersByTimeAsync(150); await flushPromises()
       queryClient.setQueryData(queryKeys.me, { ...identity, user: { ...identity.user, id: 'another-actor' } })
       await flushPromises(); pending.resolve(boundedCore()); await flushPromises()
-      const oldQueries = queryClient.getQueryCache().findAll({ queryKey: ['org', ORG_ID, 'activity-review', ALICE_ID] })
+      const oldQueries = queryClient.getQueryCache().findAll({ queryKey: ['org', ORG_ID, 'history-review', ALICE_ID] })
       expect(oldQueries.every(query => query.state.data === undefined)).toBe(true)
       expect(peoplePaths()).not.toContain(`/people/${PERSON_ID}`)
     } finally { vi.useRealTimers() }

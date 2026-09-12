@@ -156,6 +156,7 @@ pub async fn detail(
     person_id: PersonId,
 ) -> Result<Value, ReviewError> {
     let (mut tx, scope) = begin(pool, auth, person_id).await?;
+    workspace::history_complete_read(&mut tx, scope.org).await?;
     workspace::with_reader(auth, async {
         let p = person::queries::summary_by_id(&mut tx, scope.org, person_id).await?.ok_or(ReviewError::NotFound)?;
         let contacts = person::queries::contact_methods_for_person(&mut tx, scope.org, person_id).await?;

@@ -11,6 +11,7 @@ use crate::auth::AuthContext;
 use crate::ids::{OrganizationId, UserId};
 
 pub const GATE_VERSION: &str = "crm-workspace-v1";
+pub const HISTORY_TIMELINE_CAPABILITY: &str = "fub-history-timeline-v1";
 pub const WAIT: Duration = Duration::from_secs(2);
 
 tokio::task_local! {
@@ -42,6 +43,26 @@ pub fn is_activity_review_error(error: &sqlx::Error) -> bool {
         .as_database_error()
         .and_then(|e| e.code())
         .is_some_and(|c| c == "P010F")
+}
+
+pub fn is_history_review_error(error: &sqlx::Error) -> bool {
+    error
+        .as_database_error()
+        .and_then(|e| e.code())
+        .is_some_and(|c| c == "P010H")
+}
+
+/// Reject complete history representations under the caller's shared workspace
+/// transaction before querying any arrays. A confirmed anchor is permanent.
+pub async fn history_complete_read(
+    conn: &mut PgConnection,
+    org: OrganizationId,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("SELECT crm_history_complete_read($1)")
+        .bind(org.0)
+        .execute(conn)
+        .await?;
+    Ok(())
 }
 
 /// Call inside the existing shared workspace transaction, before any complete
@@ -101,6 +122,13 @@ pub async fn read_check(
     actor: UserId,
     operational_only: bool,
 ) -> Result<(), sqlx::Error> {
+    // Every caller holds an explicit read transaction. Set on this actual
+    // connection, including nested SQLx readers; middleware and handlers do not
+    // share a pooled connection. Transaction-local state cannot survive reuse.
+    sqlx::query("SELECT set_config('crm.history_reader',$1,true)")
+        .bind(HISTORY_TIMELINE_CAPABILITY)
+        .execute(&mut *conn)
+        .await?;
     sqlx::query("SELECT crm_workspace_read($1,$2,$3)")
         .bind(org.0)
         .bind(actor.0)
@@ -201,6 +229,7 @@ pub struct ReleaseReadiness {
     metadata: bool,
     activity: bool,
     history_capture: bool,
+    history_timeline: bool,
 }
 impl ReleaseReadiness {
     pub async fn load_report(pool: &PgPool, path: &std::path::Path) -> Result<Self, sqlx::Error> {
@@ -236,6 +265,7 @@ impl ReleaseReadiness {
             expires_at,
             synthetic: false,
             history_capture: history_capture_report_ready(&report, &hash),
+            history_timeline: history_timeline_report_ready(&report, &hash),
             activity: report["activity_confirmation_ready"] == true
                 && report["candidates"].as_array().is_some_and(|items| {
                     items.iter().any(|v| {
@@ -301,6 +331,7 @@ impl ReleaseReadiness {
             metadata: true,
             activity: true,
             history_capture: true,
+            history_timeline: true,
         }
     }
 
@@ -340,6 +371,43 @@ impl ReleaseReadiness {
         }
         Ok(())
     }
+
+    pub fn history_timeline_ready(&self) -> bool {
+        self.history_timeline
+            && (self.synthetic
+                || (self.expires_at > Utc::now()
+                    && self.checked_at <= Utc::now()
+                    && Utc::now() - self.checked_at <= chrono::Duration::minutes(5)))
+    }
+
+    pub async fn require_history_timeline(
+        &self,
+        conn: &mut PgConnection,
+    ) -> Result<(), sqlx::Error> {
+        self.require_current(conn).await?;
+        if !self.history_timeline_ready() {
+            return Err(sqlx::Error::Protocol(
+                "history timeline release not ready".into(),
+            ));
+        }
+        Ok(())
+    }
+}
+
+fn history_timeline_report_ready(report: &serde_json::Value, hash: &str) -> bool {
+    report["history_timeline_confirmation_ready"] == true
+        && report["candidates"].as_array().is_some_and(|items| {
+            items.iter().any(|item| {
+                item["sha256"] == hash
+                    && item["gate_version"] == GATE_VERSION
+                    && matches!(item["role"].as_str(), Some("api" | "worker"))
+                    && item["capabilities"].as_array().is_some_and(|capabilities| {
+                        capabilities
+                            .iter()
+                            .any(|v| v == HISTORY_TIMELINE_CAPABILITY)
+                    })
+            })
+        })
 }
 
 fn history_capture_report_ready(report: &serde_json::Value, hash: &str) -> bool {
@@ -359,7 +427,7 @@ fn history_capture_report_ready(report: &serde_json::Value, hash: &str) -> bool 
 /// cannot acquire this capability; deployment additionally retires them using
 /// the operator release preflight's complete workload inventory.
 pub async fn startup_compatible(conn: &mut PgConnection) -> Result<(), sqlx::Error> {
-    let exists: bool = sqlx::query_scalar("SELECT to_regclass('migration_workspace') IS NOT NULL AND to_regclass('migration_activity_import') IS NOT NULL AND to_regclass('migration_history_capture_run') IS NOT NULL")
+    let exists: bool = sqlx::query_scalar("SELECT to_regclass('migration_workspace') IS NOT NULL AND to_regclass('migration_activity_import') IS NOT NULL AND to_regclass('migration_history_capture_run') IS NOT NULL AND to_regclass('migration_history_import_anchor') IS NOT NULL")
         .fetch_one(&mut *conn)
         .await?;
     if !exists {
@@ -381,11 +449,22 @@ pub async fn startup_compatible(conn: &mut PgConnection) -> Result<(), sqlx::Err
     let history_unsupported: bool = sqlx::query_scalar(
         "SELECT EXISTS(SELECT 1 FROM migration_history_capture_run WHERE confirmed_at IS NOT NULL AND (profile_version<>'fub-history-v1' OR parser_version<>'1'))",
     )
-    .fetch_one(conn)
+    .fetch_one(&mut *conn)
     .await?;
     if history_unsupported {
         return Err(sqlx::Error::Protocol(
             "history capture artifact incompatible".into(),
+        ));
+    }
+    let timeline_unsupported: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM migration_history_import_anchor WHERE interpretation_version<>'fub-history-interpretation-v1' OR reader_version<>$1)",
+    )
+    .bind(HISTORY_TIMELINE_CAPABILITY)
+    .fetch_one(conn)
+    .await?;
+    if timeline_unsupported {
+        return Err(sqlx::Error::Protocol(
+            "history timeline artifact incompatible".into(),
         ));
     }
     Ok(())
@@ -435,6 +514,33 @@ mod history_capture_readiness_tests {
     use serde_json::json;
 
     #[test]
+    fn timeline_cannot_borrow_capture_readiness_or_another_artifact_role() {
+        let mut report = json!({
+            "history_capture_confirmation_ready":true,
+            "history_timeline_confirmation_ready":true,
+            "candidates":[{"sha256":"verified","gate_version":GATE_VERSION,
+                "role":"api","capabilities":[HISTORY_TIMELINE_CAPABILITY]}]
+        });
+        assert!(history_timeline_report_ready(&report, "verified"));
+        assert!(!history_capture_report_ready(&report, "verified"));
+        assert!(!history_timeline_report_ready(&report, "other"));
+        for (field, value) in [
+            ("role", json!("cli")),
+            ("gate_version", json!("pre-010c")),
+            ("capabilities", json!(["fub-history-capture-v1"])),
+        ] {
+            let mut changed = report.clone();
+            changed["candidates"][0][field] = value;
+            assert!(!history_timeline_report_ready(&changed, "verified"));
+        }
+        report
+            .as_object_mut()
+            .unwrap()
+            .remove("history_timeline_confirmation_ready");
+        assert!(!history_timeline_report_ready(&report, "verified"));
+    }
+
+    #[test]
     fn capability_requires_matching_artifact_role_and_explicit_history_readiness() {
         let report = json!({
             "history_capture_confirmation_ready": true,
@@ -469,17 +575,22 @@ mod history_capture_readiness_tests {
             metadata: true,
             activity: true,
             history_capture: true,
+            history_timeline: true,
         };
         assert!(ready.history_capture_ready());
+        assert!(ready.history_timeline_ready());
         ready.history_capture = false;
         assert!(!ready.history_capture_ready());
         ready.history_capture = true;
         ready.expires_at = Utc::now() - chrono::Duration::seconds(1);
         assert!(!ready.history_capture_ready());
+        assert!(!ready.history_timeline_ready());
         ready.expires_at = Utc::now() + chrono::Duration::minutes(5);
         ready.checked_at = Utc::now() + chrono::Duration::seconds(60);
         assert!(!ready.history_capture_ready());
+        assert!(!ready.history_timeline_ready());
         ready.checked_at = Utc::now() - chrono::Duration::minutes(6);
         assert!(!ready.history_capture_ready());
+        assert!(!ready.history_timeline_ready());
     }
 }

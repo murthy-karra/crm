@@ -1,0 +1,68 @@
+$ vite build
+vite v8.2.1 building client environment for production...
+transforming...
+✓ 2041 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                              1.26 kB │ gzip:   0.53 kB
+dist/assets/inter-vietnamese-wght-normal-CBcvBZtf.woff2     10.25 kB
+dist/assets/inter-greek-ext-wght-normal-DlzME5K_.woff2      11.23 kB
+dist/assets/inter-cyrillic-wght-normal-DqGufNeO.woff2       18.74 kB
+dist/assets/inter-greek-wght-normal-CkhJZR-_.woff2          18.99 kB
+dist/assets/inter-cyrillic-ext-wght-normal-BOeWTOD4.woff2   25.96 kB
+dist/assets/inter-latin-wght-normal-Dx4kXJAl.woff2          48.25 kB
+dist/assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2      85.06 kB
+dist/assets/LoginView-Bu0ZrLP3.css                           0.18 kB │ gzip:   0.15 kB
+dist/assets/index-CvkKU237.css                              38.30 kB │ gzip:   8.46 kB
+dist/assets/plus-Bch9nAXL.js                                 0.15 kB │ gzip:   0.15 kB
+dist/assets/copy-OUIz_4rP.js                                 0.23 kB │ gzip:   0.20 kB
+dist/assets/pencil-Bp0kZJ-K.js                               0.27 kB │ gzip:   0.22 kB
+dist/assets/Card-Cbf4Z50Z.js                                 0.29 kB │ gzip:   0.24 kB
+dist/assets/refresh-cw-J6CC8njb.js                           0.32 kB │ gzip:   0.22 kB
+dist/assets/phone-BMm72Wvc.js                                0.32 kB │ gzip:   0.23 kB
+dist/assets/trash-2-BwbYop1H.js                              0.32 kB │ gzip:   0.21 kB
+dist/assets/FormField-C-tVpKBL.js                            0.67 kB │ gzip:   0.41 kB
+dist/assets/PageHeader-BA7SIxCH.js                           0.84 kB │ gzip:   0.47 kB
+dist/assets/todayFeeds-DgGlvI7u.js                           1.10 kB │ gzip:   0.48 kB
+dist/assets/createLucideIcon-Dqbor38u.js                     1.19 kB │ gzip:   0.70 kB
+dist/assets/WorkspaceReviewView-C1H3f7vj.js                  1.23 kB │ gzip:   0.75 kB
+dist/assets/ConfirmDialog--1W8Yhzn.js                        1.46 kB │ gzip:   0.79 kB
+dist/assets/overlayeventbus-C4DUR1Ym.js                      1.64 kB │ gzip:   0.70 kB
+dist/assets/LoginView-vOM_sqRL.js                            2.42 kB │ gzip:   1.35 kB
+dist/assets/LogContactDialog-Cwu3J7VH.js                     2.59 kB │ gzip:   1.15 kB
+dist/assets/InviteView-Bcjedn84.js                           3.01 kB │ gzip:   1.40 kB
+dist/assets/activityReview-D5uP8rE_.js                       3.07 kB │ gzip:   1.41 kB
+dist/assets/PlatformOrganizationsView-DksbmzkJ.js            3.21 kB │ gzip:   1.46 kB
+dist/assets/imports-BfbV6K4x.js                              3.26 kB │ gzip:   1.45 kB
+dist/assets/OneTimeLinkDialog-BVTDkCUP.js                    3.94 kB │ gzip:   1.74 kB
+dist/assets/TagsView-W9xAlTu2.js                             4.69 kB │ gzip:   2.02 kB
+dist/assets/NewInquiryView-B8MiAOMm.js                       5.00 kB │ gzip:   2.24 kB
+dist/assets/IntakeSettingsView-Cu1b-4Jv.js                   5.95 kB │ gzip:   2.35 kB
+dist/assets/PlatformOrganizationView-65R0TJcr.js             5.98 kB │ gzip:   2.22 kB
+dist/assets/MembersView-XmPBUDVp.js                          7.10 kB │ gzip:   2.40 kB
+dist/assets/UnresolvedView-Bz9hCkcs.js                       7.44 kB │ gzip:   2.83 kB
+dist/assets/EmailCaptureView-Ce72G73R.js                     8.45 kB │ gzip:   3.15 kB
+dist/assets/ListsView-C7MISL2C.js                            9.14 kB │ gzip:   3.44 kB
+dist/assets/ActivityFieldViewer-41sRj90T.js                 14.33 kB │ gzip:   4.10 kB
+dist/assets/FieldsView-QIKeFkRU.js                          14.87 kB │ gzip:   4.45 kB
+dist/assets/TodayView-ssNQZzcc.js                           16.74 kB │ gzip:   5.55 kB
+dist/assets/TodayFeedsView-rN3KsCEZ.js                      17.29 kB │ gzip:   5.78 kB
+dist/assets/ripple-7pAhdB4Z.js                              38.15 kB │ gzip:   9.91 kB
+dist/assets/FilterBar-Cw2nRLQJ.js                           44.47 kB │ gzip:  13.05 kB
+dist/assets/PeopleView-CZcsHMkA.js                          51.67 kB │ gzip:  16.02 kB
+dist/assets/DataTable-DFQ-aJOP.js                           52.23 kB │ gzip:  14.28 kB
+dist/assets/dialog-oRrb-i-6.js                              59.44 kB │ gzip:  12.07 kB
+dist/assets/PersonDetailView-Cl1Gf8EW.js                    68.03 kB │ gzip:  18.38 kB
+dist/assets/controls-BsIvlwcv.js                            68.04 kB │ gzip:  26.69 kB
+dist/assets/select-DRdInLKP.js                              78.49 kB │ gzip:  19.07 kB
+dist/assets/queries-Dkojhk7m.js                             88.62 kB │ gzip:  24.09 kB
+dist/assets/MigrationView-CrwaaxqQ.js                      173.61 kB │ gzip:  45.03 kB
+dist/assets/index-DdOzqhW8.js                              221.42 kB │ gzip:  65.29 kB
+dist/assets/livekit-client.esm-CX-oniKy.js                 531.04 kB │ gzip: 137.52 kB
+
+✓ built in 633ms
+[plugin builtin:vite-reporter]
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.

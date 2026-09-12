@@ -1,0 +1,101 @@
+{
+  "scope": "Publication whitespace only; no source or result change",
+  "files": {
+    "docs/design/qa/slice-010f2-2026-09-11/checks/r1-control.log": {
+      "original_published_sha256": "86f2d42cde241f33fa4e2667a031c39aa4c0dff0dc830acb7fd06870340a3e56",
+      "published_sha256": "7ba8a3f99214129755dea71b0e4909a4d8e8f34fdd6d0e7d00feb88ac5241f4e",
+      "bytes": 522,
+      "normalization": "Removed extra blank lines at EOF only; original private log retained."
+    },
+    "docs/design/qa/slice-010f2-2026-09-11/checks/web-focused-final.log": {
+      "original_published_sha256": "ba8f5c8041b843a67d6d914d568cb8cd393ffa15ab758c879424753d006949c2",
+      "published_sha256": "d194f9b8bafccff14605ae2b91117e9e1a78325d485762ebbdee82012ec06be2",
+      "bytes": 702,
+      "normalization": "Removed extra blank lines at EOF only; original private log retained."
+    },
+    "docs/design/qa/slice-010f2-2026-09-11/checks/query-plans-second.log": {
+      "original_published_sha256": "0e4d56de8b9ce2d0470f58329277006d84e9324638a14143897e2473ebeecac8",
+      "published_sha256": "0ce8dceff952f0c652cc9f09266f67a35dba98ebd27ec7504e2c7f04325417a8",
+      "bytes": 526,
+      "normalization": "Removed extra blank lines at EOF only; original private log retained."
+    },
+    "docs/design/qa/slice-010f2-2026-09-11/checks/r1-source-db.log": {
+      "original_published_sha256": "cc825fa22f87dce015a61bac59ae3036e2d36a7a57a62d3c47daf133bc3725ea",
+      "published_sha256": "68d2caca5d5ff16c4acb84585a1444826969c5c000fe13222bfb49e3bbd210c8",
+      "bytes": 780,
+      "normalization": "Removed extra blank lines at EOF only; original private log retained."
+    },
+    "docs/design/qa/slice-010f2-2026-09-11/checks/development-crm-010f2-grants-db.log": {
+      "original_published_sha256": "4c6cb8431174b5c0e7d4740192379c264459771d430374ea1a027debabce316c",
+      "published_sha256": "f60d41db204b0a5b56d9d9409b134d50d1a6420b4393a518bcb07f8a92437aa0",
+      "bytes": 441,
+      "normalization": "Removed extra blank lines at EOF only; original private log retained."
+    },
+    "docs/design/qa/slice-010f2-2026-09-11/checks/person-paired-final.log": {
+      "original_published_sha256": "2bb2a99c039a83e038167234ae2121047a4b61333b91322dd5b930b5ef064511",
+      "published_sha256": "39663fabff576c2e54abea88a69727ab57290d7bf27e0ca20d139208a6b344b7",
+      "bytes": 428,
+      "normalization": "Removed extra blank lines at EOF only; original private log retained."
+    },
+    "docs/design/qa/slice-010f2-2026-09-11/checks/gate-result-assertion.log": {
+      "original_published_sha256": "7461a69abfdefd1ea46967b81fe41712da1dfa27adfaa9290f8db5d9c88ae94d",
+      "published_sha256": "b3f024df62a387bdfccb57575ff83fd24fd5dd2ecf323c42d042a5f588154040",
+      "bytes": 458,
+      "normalization": "Removed extra blank lines at EOF only; original private log retained."
+    },
+    "docs/design/qa/slice-010f2-2026-09-11/checks/development-crm-010f2-logs-db.log": {
+      "original_published_sha256": "d139e56fce24a4ae966e32b2ed3738ee952fc1bb6a60408d9ad67f86cb4e122e",
+      "published_sha256": "a664f9919355847ca17e933af4a2ac18ada908aa7766e6e6a107b4fdf13ff2d7",
+      "bytes": 355,
+      "normalization": "Removed extra blank lines at EOF only; original private log retained."
+    },
+    "docs/design/qa/slice-010f2-2026-09-11/checks/development-crm-010f2-review-tests.log": {
+      "original_published_sha256": "74a896c327df9aa034f753d779ce41327d28f42e157d165822c72fc40205aaf4",
+      "published_sha256": "00cd11ce327063684831d35ad0617b31451e2f99f072ab2726978cec1c111bfd",
+      "bytes": 828,
+      "normalization": "Removed extra blank lines at EOF only; original private log retained."
+    },
+    "docs/design/qa/slice-010f2-2026-09-11/checks/development-crm-010f2-source-db.log": {
+      "original_published_sha256": "a8e1106f2ea2c7177581420484b47ef4aecaa18ab35a1aa5c5a89a31bea12726",
+      "published_sha256": "161af4ddad9eadffcb5a42446905d5ff2caa0ce0604f65c0839d37631a633c0d",
+      "bytes": 761,
+      "normalization": "Removed extra blank lines at EOF only; original private log retained."
+    },
+    "docs/design/qa/slice-010f2-2026-09-11/checks/r1-result-filter.log": {
+      "original_published_sha256": "1a5ac9775b844b6f832b20d2a3e2e268ff91bea96306f71f7055de9884c0bd4b",
+      "published_sha256": "29e5487c689cb26a7105315e2dfb9c0db888817fcae6c111d2f306f3bf83f5f6",
+      "bytes": 358,
+      "normalization": "Removed extra blank lines at EOF only; original private log retained."
+    },
+    "docs/design/qa/slice-010f2-2026-09-11/checks/development-crm-010f2-races-db.log": {
+      "original_published_sha256": "a64a4b0f7a95beb9a02f91e4a4e5798b4bf04c645e6e042de7bd8237cfc2fe0c",
+      "published_sha256": "cbce94858dee064fcb532886f7d075a89fed68833eba0cf682d81aeaac946202",
+      "bytes": 758,
+      "normalization": "Removed extra blank lines at EOF only; original private log retained."
+    },
+    "docs/design/qa/slice-010f2-2026-09-11/checks/upgrade-final.log": {
+      "original_published_sha256": "1b3afe2dbb8b5312e4d0eb7ac19c78b631807146b80049586e89a5d53eef4985",
+      "published_sha256": "4bc88b0565fdc6f8824f29259d1af894e3fc3a255edd104eba870a084270b4a4",
+      "bytes": 432,
+      "normalization": "Removed extra blank lines at EOF only; original private log retained."
+    },
+    "docs/design/qa/slice-010f2-2026-09-11/checks/development-crm-010f2-source-tests.log": {
+      "original_published_sha256": "0f13d79b712ac463ed9dbfcfc910fd9318d58402c72e37bd538b85696480d4fd",
+      "published_sha256": "64bdac862a2799d092ba65ed77f2d844253b50b7eac0a7f8d1b492b19c74f5b1",
+      "bytes": 5412,
+      "normalization": "Removed extra blank lines at EOF only; original private log retained."
+    },
+    "docs/design/qa/slice-010f2-2026-09-11/checks/query-plans-final.log": {
+      "original_published_sha256": "aec8598952a115a550bb741726302b84d9497d54287e198886896e9044ee20eb",
+      "published_sha256": "18834970c83278622af3d0416d44ee920e514b6e760f2ebf417a44738af3dbf1",
+      "bytes": 445,
+      "normalization": "Removed extra blank lines at EOF only; original private log retained."
+    },
+    "docs/design/qa/slice-010f2-2026-09-11/checks/measured-filter-regression.log": {
+      "original_published_sha256": "be73a754d51d6e0cc616db6d7a47dd154b9776a21374b6b6e0b02603358de0d7",
+      "published_sha256": "66b625c7f061200fcc2f5055b3133937deb45be5109073d3f1b3ce838fa64698",
+      "bytes": 531,
+      "normalization": "Removed extra blank lines at EOF only; original private log retained."
+    }
+  }
+}

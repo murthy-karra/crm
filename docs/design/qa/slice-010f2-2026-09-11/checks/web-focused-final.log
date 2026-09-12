@@ -1,0 +1,9 @@
+$ vitest run src/api/activityImports.test.ts src/api/activityReview.test.ts src/components/migration/ActivityImportPanel.test.ts src/components/migration/ActivityEvidence.test.ts src/components/PersonActivityReview.test.ts src/views/MigrationView.test.ts src/views/PersonDetailView.test.ts src/views/PeopleView.test.ts src/components/PersonPreview.test.ts src/api/metadataImports.test.ts src/components/migration/MetadataImportPanel.test.ts src/workspaceLifecycle.test.ts
+
+ RUN  v4.1.11 /Users/karrad/projects/crm-010f2/web
+
+
+ Test Files  12 passed (12)
+      Tests  325 passed (325)
+   Start at  20:20:35
+   Duration  4.79s (transform 5.50s, setup 219ms, import 8.66s, tests 7.97s, environment 2.54s)

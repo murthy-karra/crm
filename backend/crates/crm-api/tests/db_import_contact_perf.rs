@@ -11,8 +11,10 @@
 //! db_import_contact_perf::slice_010c_contact_order_performance
 //! -- --ignored --exact --nocapture --test-threads=1
 
+// These paired readers use only the serial subset of the shared Today driver.
+#[allow(dead_code)]
 #[path = "fixtures/today_http_perf_driver.rs"]
-mod driver;
+pub(crate) mod driver;
 #[path = "fixtures/import_contact_c6c5930/mod.rs"]
 mod frozen;
 

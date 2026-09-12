@@ -1,0 +1,4163 @@
+{
+  "baseline_commit": "cd3b0107392d4b40230bdd8996c12ec41be3d588",
+  "clock": {
+    "fixture_utc": "2026-09-01T12:00:00Z",
+    "response_clock": "All returned timestamps are fixed fixture values; this endpoint computes no wall-clock-relative fields. Both arms share the ordinary session clock."
+  },
+  "common_executable_sha256": "766f56246c916fb01f8fc78fa7fcf7be1f47117134c2943ac1407600d2c02221",
+  "comparison": {
+    "all_responses_equal_and_entrypoints_verified": true,
+    "baseline": {
+      "exact_observations": 40,
+      "join_upper_bound_observations": 0,
+      "max": {
+        "nanos": 16765459,
+        "secs": 0
+      },
+      "observations": 40,
+      "p50": {
+        "nanos": 9949000,
+        "secs": 0
+      },
+      "p95": {
+        "nanos": 14145333,
+        "secs": 0
+      },
+      "unavailable_observations": 0
+    },
+    "current": {
+      "exact_observations": 40,
+      "join_upper_bound_observations": 0,
+      "max": {
+        "nanos": 17269250,
+        "secs": 0
+      },
+      "observations": 40,
+      "p50": {
+        "nanos": 10524167,
+        "secs": 0
+      },
+      "p95": {
+        "nanos": 15906000,
+        "secs": 0
+      },
+      "unavailable_observations": 0
+    },
+    "current_p95_limit": {
+      "nanos": 39145333,
+      "secs": 0
+    },
+    "latency_passed": true
+  },
+  "fixture": {
+    "after_counts": {
+      "contact_method": 50000,
+      "custom_field": 4,
+      "custom_field_option": 1,
+      "inquiry": 25000,
+      "inquiry_received": 25000,
+      "migration_activity_import": 0,
+      "note": 75018,
+      "organization_membership": 50,
+      "person": 25000,
+      "person_custom_field_value": 100000,
+      "person_tag": 75000,
+      "tag": 3,
+      "task": 100017
+    },
+    "before_counts": {
+      "contact_method": 50000,
+      "custom_field": 4,
+      "custom_field_option": 1,
+      "inquiry": 25000,
+      "inquiry_received": 25000,
+      "migration_activity_import": 0,
+      "note": 75018,
+      "organization_membership": 50,
+      "person": 25000,
+      "person_custom_field_value": 100000,
+      "person_tag": 75000,
+      "tag": 3,
+      "task": 100017
+    },
+    "counts_unchanged": true,
+    "kind": "synthetic moderate native activity book; not import qualification or maximum capacity",
+    "selected_completed_tasks": 10,
+    "selected_core_history": 1,
+    "selected_live_notes": 20,
+    "selected_note_tombstones": 1,
+    "selected_open_tasks": 10,
+    "selected_task_tombstones": 1,
+    "workspace_mode": "operational"
+  },
+  "protocol": "slice-010f2-one-paired-operational-person-detail-v1",
+  "raw_waves": [
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 1,
+            "phase": "warmup",
+            "slot": 0,
+            "wave": 0
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 20130583,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "warmup",
+      "wave": 0
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 2,
+            "phase": "warmup",
+            "slot": 0,
+            "wave": 1
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 23470791,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "warmup",
+      "wave": 1
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 3,
+            "phase": "warmup",
+            "slot": 0,
+            "wave": 2
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 15540667,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "warmup",
+      "wave": 2
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 4,
+            "phase": "warmup",
+            "slot": 0,
+            "wave": 3
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 13412583,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "warmup",
+      "wave": 3
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 5,
+            "phase": "warmup",
+            "slot": 0,
+            "wave": 4
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 14467583,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "warmup",
+      "wave": 4
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 6,
+            "phase": "warmup",
+            "slot": 0,
+            "wave": 5
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 16904208,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "warmup",
+      "wave": 5
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 7,
+            "phase": "warmup",
+            "slot": 0,
+            "wave": 6
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 14440500,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "warmup",
+      "wave": 6
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 8,
+            "phase": "warmup",
+            "slot": 0,
+            "wave": 7
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 12992792,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "warmup",
+      "wave": 7
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 9,
+            "phase": "warmup",
+            "slot": 0,
+            "wave": 8
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 16283459,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "warmup",
+      "wave": 8
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 10,
+            "phase": "warmup",
+            "slot": 0,
+            "wave": 9
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 14607167,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "warmup",
+      "wave": 9
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 11,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 10
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 14910167,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 10
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 12,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 11
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 15906000,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 11
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 13,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 12
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 13298625,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 12
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 14,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 13
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 14145333,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 13
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 15,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 14
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 13373666,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 14
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 16,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 15
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 13270291,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 15
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 17,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 16
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 16380875,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 16
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 18,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 17
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 11813916,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 17
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 19,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 18
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 11283375,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 18
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 20,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 19
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 17269250,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 19
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 21,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 20
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 13379833,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 20
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 22,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 21
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 11666458,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 21
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 23,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 22
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 11724417,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 22
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 24,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 23
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 12240541,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 23
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 25,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 24
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 9976833,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 24
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 26,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 25
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 11040292,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 25
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 27,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 26
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 10214458,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 26
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 28,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 27
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 9180000,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 27
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 29,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 28
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 10181584,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 28
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 30,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 29
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 11826750,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 29
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 31,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 30
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 9949000,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 30
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 32,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 31
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 10686875,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 31
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 33,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 32
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 10524167,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 32
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 34,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 33
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 11311500,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 33
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 35,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 34
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 9712042,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 34
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 36,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 35
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 10382917,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 35
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 37,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 36
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 9892750,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 36
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 38,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 37
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 11291333,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 37
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 39,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 38
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 9564000,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 38
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 40,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 39
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 9448125,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 39
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 41,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 40
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 12418292,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 40
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 42,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 41
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 9645666,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 41
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 43,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 42
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 9051125,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 42
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 44,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 43
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 10276834,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 43
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 45,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 44
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 13290375,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 44
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 46,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 45
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 9411292,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 45
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 47,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 46
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 9446167,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 46
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 48,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 47
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 11217916,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 47
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 49,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 48
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 12491333,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 48
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 50,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 49
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 9735250,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 49
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 51,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 50
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 9440459,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 50
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 52,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 51
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 12646625,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 51
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 53,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 52
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 11043667,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 52
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 54,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 53
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 9735458,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 53
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 55,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 54
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 10309916,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 54
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 56,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 55
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 11125000,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 55
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 57,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 56
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 10657542,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 56
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 58,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 57
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 9011833,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 57
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 59,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 58
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 10231000,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 58
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 60,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 59
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 11680042,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 59
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 61,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 60
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 10018625,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 60
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 62,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 61
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 9967750,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 61
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 63,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 62
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 11475625,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 62
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 64,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 63
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 10130375,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 63
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 65,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 64
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 9828583,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 64
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 66,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 65
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 9061625,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 65
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 67,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 66
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 11803584,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 66
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 68,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 67
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 9969833,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 67
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 69,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 68
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 9685125,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 68
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 70,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 69
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 9475125,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 69
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 71,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 70
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 11339917,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 70
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 72,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 71
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 9717750,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 71
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 73,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 72
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 9394166,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 72
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 74,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 73
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 9058958,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 73
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 75,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 74
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 12754917,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 74
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 76,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 75
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 9929458,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 75
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 77,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 76
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 9501125,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 76
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 78,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 77
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 16765459,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 77
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 79,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 78
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 9514916,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 78
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 80,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 79
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 9871375,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 79
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 81,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 80
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 14769875,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 80
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 82,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 81
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 9645792,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 81
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 83,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 82
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 8811875,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 82
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 84,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 83
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 10134209,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 83
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 85,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 84
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 11175166,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 84
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 86,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 85
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 9863083,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 85
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 87,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 86
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 9637875,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 86
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 88,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 87
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 10107958,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 87
+    },
+    {
+      "arm": "final",
+      "attempts": [
+        {
+          "context": {
+            "arm": "final",
+            "id": 89,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 88
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  0,
+                  0,
+                  0
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 11752334,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 88
+    },
+    {
+      "arm": "frozen_original",
+      "attempts": [
+        {
+          "context": {
+            "arm": "frozen_original",
+            "id": 90,
+            "phase": "measured",
+            "slot": 0,
+            "wave": 89
+          },
+          "outcome": {
+            "detail": {
+              "metadata": {
+                "body_bytes": 33955,
+                "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+                "bytes_equal": true,
+                "entry_hits": [
+                  1,
+                  1,
+                  1
+                ],
+                "json_equal": true
+              },
+              "result": "complete",
+              "status": 200,
+              "whole_source_evaluations": 0
+            },
+            "kind": "response"
+          },
+          "timing": {
+            "duration": {
+              "nanos": 9786625,
+              "secs": 0
+            },
+            "kind": "exact"
+          }
+        }
+      ],
+      "concurrency": 1,
+      "phase": "measured",
+      "wave": 89
+    }
+  ],
+  "reference": {
+    "body_bytes": 33955,
+    "body_sha256": "6c3e37d399a9d56bcd2d21020f4ae8f9f06fb3b82477e9f8fa097622bcf8758b",
+    "complete_shape": true,
+    "entry_hits": [
+      1,
+      1,
+      1
+    ],
+    "failure": null,
+    "status": 200
+  },
+  "request_protocol": {
+    "budget": "baseline p95 + max(25ms, 10% of baseline p95)",
+    "comparison": "complete JSON and byte equality",
+    "concurrency": 1,
+    "measured_per_arm": 40,
+    "pair_order": "alternating AB/BA",
+    "percentile": "nearest rank ceil(0.95*n)",
+    "timing": "dispatch through complete HTTP body, before parse/hash/compare",
+    "warmups_per_arm": 5
+  },
+  "source_manifest": {
+    "adaptation": "Exact top-level function bytes between markers. Namespace aliases and counted wrappers are outside the frozen body. Test-support cfg excludes these modules from normal builds. No request-selectable baseline or workspace guard bypass.",
+    "baseline_commit": "cd3b0107392d4b40230bdd8996c12ec41be3d588",
+    "frozen": [
+      {
+        "byte_length": 1289,
+        "fragment_path": "backend/crates/crm-app/src/domain/person/perf_cd3b010_history.rs",
+        "function": "history_for_person",
+        "original_file_sha256": "b4ec0adbb337d926f7ca9055d07a64fb3ce0d88fd41d11461e623b8651bad438",
+        "original_path": "backend/crates/crm-app/src/domain/person/queries.rs",
+        "sha256": "aeb24bb82c124b37740e511e73c33bd76d40b64246f1214cda1d9b024cf8f32b",
+        "start_line": 1565
+      },
+      {
+        "byte_length": 1357,
+        "fragment_path": "backend/crates/crm-app/src/domain/task/perf_cd3b010_open.rs",
+        "function": "open_for_person",
+        "original_file_sha256": "b294c8682733e15f423c059cd17c3e3e4e426b08a0a2a64fe703c8df37c58c4f",
+        "original_path": "backend/crates/crm-app/src/domain/task/queries.rs",
+        "sha256": "acc2284c602dd45d4d4bef1eabce808bb99ef798e5d081683a881c6f9dd36c09",
+        "start_line": 378
+      },
+      {
+        "byte_length": 4103,
+        "fragment_path": "backend/crates/crm-api/src/routes/perf_cd3b010_person.rs",
+        "function": "get_person",
+        "original_file_sha256": "3b92c6b79fa09c27f22886c9e36db59e5e2eb132cb116d1ec6b8dae05e95cfc0",
+        "original_path": "backend/crates/crm-api/src/routes/people.rs",
+        "sha256": "f18f24e1a29d627a20ed3c822835a7e7d1955cbbe47f29fb7567117d10c24cd5",
+        "start_line": 241
+      }
+    ],
+    "scope": "Three frozen affected reader bodies; shared current HTTP/authentication stack and unchanged helpers. This is not a full historical binary.",
+    "unchanged_helpers": [
+      {
+        "function": "summary_by_id",
+        "path": "backend/crates/crm-app/src/domain/person/queries.rs",
+        "sha256": "bc1022b827fa30895d04bb087f3a0176b52ae7170aaf4585f73ca1d4b07c25b6",
+        "start_line": 935
+      },
+      {
+        "function": "contact_methods_for_person",
+        "path": "backend/crates/crm-app/src/domain/person/queries.rs",
+        "sha256": "876f77f67fc0457a04e4ed968508ba331e3e2be2fccc7380f1bb86dc64039592",
+        "start_line": 977
+      },
+      {
+        "function": "actor_ref",
+        "path": "backend/crates/crm-app/src/domain/person/queries.rs",
+        "sha256": "e5fd8df82eb7501a3eb7d3f5f85edaa63075adc1ab5c6a3b66353ce1b90a0c00",
+        "start_line": 1015
+      },
+      {
+        "function": "imported_history",
+        "path": "backend/crates/crm-app/src/domain/person/queries.rs",
+        "sha256": "4cd62e3ffa08f55eef63220d974e55a6ce2df004e445ac5009eeab90709fa198",
+        "start_line": 1709
+      },
+      {
+        "function": "inquiry_received_history",
+        "path": "backend/crates/crm-app/src/domain/person/queries.rs",
+        "sha256": "22ded7eb468a177d7ca2a39a7b599cc64df98425e7f1ef728bf90347786b5253",
+        "start_line": 1039
+      },
+      {
+        "function": "routing_decision_history",
+        "path": "backend/crates/crm-app/src/domain/person/queries.rs",
+        "sha256": "4ccac176bc67b5522c4dd93465520d2ab9cfa12af24097fe67f026b116c2d720",
+        "start_line": 1093
+      },
+      {
+        "function": "assignment_changed_history",
+        "path": "backend/crates/crm-app/src/domain/person/queries.rs",
+        "sha256": "a6a20ac2e28e8b9726983154b7c19067e840e491af7b7975a813c855c94d405e",
+        "start_line": 1152
+      },
+      {
+        "function": "stage_changed_history",
+        "path": "backend/crates/crm-app/src/domain/person/queries.rs",
+        "sha256": "5c66eb8c238c20e5ac90cd98ebb9b032a9cd2a2d0537257213a892b814bbc192",
+        "start_line": 1214
+      },
+      {
+        "function": "contact_attempted_history",
+        "path": "backend/crates/crm-app/src/domain/person/queries.rs",
+        "sha256": "05b1bfb74638d42e7b32c3c0e78594351f94ee7dbae6b200f8a52574b27725bd",
+        "start_line": 1296
+      },
+      {
+        "function": "call_completed_history",
+        "path": "backend/crates/crm-app/src/domain/person/queries.rs",
+        "sha256": "3a1d3a194b0c60532f31a451eb150a7ab32306a1579d813c254c727436a96786",
+        "start_line": 1364
+      },
+      {
+        "function": "correspondence_history",
+        "path": "backend/crates/crm-app/src/domain/person/queries.rs",
+        "sha256": "e6c73e7a8cd3d42416f3ff0837d31494b5ec5a41e2d1397e3c7d138aec0e4ec8",
+        "start_line": 1435
+      },
+      {
+        "function": "note_history_entries",
+        "path": "backend/crates/crm-app/src/domain/person/queries.rs",
+        "sha256": "b0d4dc1b1aa719e5a29e250b182ad29c58befaa4daa2e3eb0468080a60e4a523",
+        "start_line": 1492
+      },
+      {
+        "function": "task_completed_history_entries",
+        "path": "backend/crates/crm-app/src/domain/person/queries.rs",
+        "sha256": "b52bc1aa439ca56558be555056df190754e32ef41a224920eeced6f322ca778d",
+        "start_line": 1532
+      },
+      {
+        "function": "task_from_row",
+        "path": "backend/crates/crm-app/src/domain/task/queries.rs",
+        "sha256": "a99c0f9057c1249701d60439034c892bb895821c54a64034674761f63f2d2453",
+        "start_line": 347
+      },
+      {
+        "function": "task_completed_history",
+        "path": "backend/crates/crm-app/src/domain/task/queries.rs",
+        "sha256": "ac841e88c92fb8bdbfde8b99afc699883722f52918fc02732e56a01f53ac50ba",
+        "start_line": 449
+      },
+      {
+        "function": "note_history",
+        "path": "backend/crates/crm-app/src/domain/note/queries.rs",
+        "sha256": "9e4f9e2f5081d5d8629901711df93bc77c65fd825d72b4dd75837b46da27557c",
+        "start_line": 208
+      },
+      {
+        "function": "list_for_person",
+        "path": "backend/crates/crm-app/src/domain/inquiry/queries.rs",
+        "sha256": "d1812855fef5c8654465590b74a6c5541896db0585b151238dc49ad7d254b540",
+        "start_line": 78
+      },
+      {
+        "function": "list_for_person",
+        "path": "backend/crates/crm-app/src/domain/tag/queries.rs",
+        "sha256": "5d307f4f8b72bb5b517282641e3dc6db6813a5b6d4f98d0cd7f56f4a08772ace",
+        "start_line": 72
+      },
+      {
+        "function": "values_for_person",
+        "path": "backend/crates/crm-app/src/domain/custom_field/queries.rs",
+        "sha256": "605e41d7c8a8e35abf95a6d5540b68b64924d7a0becdf6914836ba6d18fae420",
+        "start_line": 675
+      },
+      {
+        "function": "read",
+        "path": "backend/crates/crm-app/src/auth/workspace.rs",
+        "sha256": "460000c6e97fce424fa9240d51feee83e57427fb758edca22b526370847a6102",
+        "start_line": 67
+      },
+      {
+        "function": "read_check",
+        "path": "backend/crates/crm-app/src/auth/workspace.rs",
+        "sha256": "a19e949cd11547fcf566c01149bc7a3e7267e97f3f0a1db8e2ddef99d243a09c",
+        "start_line": 78
+      },
+      {
+        "function": "ordinary",
+        "path": "backend/crates/crm-app/src/auth/workspace.rs",
+        "sha256": "e00335dce8953bd3245988af436fde70f9c6936cd774ea2ae13c530251364f35",
+        "start_line": 47
+      },
+      {
+        "function": "with_reader",
+        "path": "backend/crates/crm-app/src/auth/workspace.rs",
+        "sha256": "d917ced204a7bb1b00605c6dce6b18ed0a28a73954fbc25cca26df7418dca04e",
+        "start_line": 21
+      }
+    ]
+  },
+  "source_manifest_sha256": "81c8aa5d6504c6e4a058b56a39241e52d80e00968201386c08c8a504117a3527"
+}

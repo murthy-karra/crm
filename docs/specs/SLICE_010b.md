@@ -1,5 +1,14 @@
 # Slice 010b — Core FUB snapshot and migration preview
 
+**Approved consumer amendment — 010f2 (D-068, 2026-09-11):**
+[010f2](SLICE_010f2.md) requalifies retained raw notes/detail and open/completed
+task captures for native activity import onto completed 010c People. It preserves
+this source schema and final snapshot boundary, distinguishing stream from family
+and list from detail; clipped preview data is never execution input. Its child
+reservations share the existing snapshot/Organization logical-byte ledgers and
+operator ceilings with 010c/010f1. Cancellation releases only its own reservations.
+Native note/task row/index storage is separately measured, not a retained quota.
+
 **APPROVED FOR IMPLEMENTATION, 2026-09-11 (D-063).** The user accepted this
 reviewed specification/brief, including storage allowances and delegated
 increases, and requested implementation. The six review findings are resolved.

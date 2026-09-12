@@ -1,5 +1,16 @@
 # Slice 002 — Lead Intake
 
+**Approved read amendment — 010f2 (D-068, 2026-09-11):**
+[010f2 §7](SLICE_010f2.md#7-bounded-administrator-review-and-http) owns the
+distinct admin `MigrationReviewPerson` representation and paged notes/tasks.
+After the first activity-child confirmation, legacy complete Person/history/task
+reads return `409 activity_review_required` under the shared workspace guard,
+before loading activity. The boundary survives cancellation/completion. Core
+review reads explicitly exclude note/completed-task history, require the genuine
+review binding and scoped Person, and are available while a People parent is
+partially settled as well as completed. Ordinary operational reads retain their
+payload and authorization. Activation must first own bounded operational reads.
+
 **Approved amendment — 010c (D-065, 2026-09-11):**
 [010c](SLICE_010c.md) owns a separate retained-evidence Person/contact import,
 explicit import-stage creation, import facts/provenance and deterministic

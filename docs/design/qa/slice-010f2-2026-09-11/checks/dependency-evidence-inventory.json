@@ -1,0 +1,10 @@
+{
+  "private_credential_scan": "passed",
+  "files": [
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/sqlx-cancellation-dependency-report.md",
+      "bytes": 8557,
+      "sha256": "b2e67fdb8700bed0d5ee64795cdcaf8e0d6e40fa2aaf3f39729bd397a8d89597"
+    }
+  ]
+}

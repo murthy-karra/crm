@@ -1,0 +1,55 @@
+{
+  "exit_code": 0,
+  "candidate_never_launched": true,
+  "scope": "quiesced disposable QA only",
+  "report": {
+    "activity_binding_count": "0",
+    "activity_confirmation_ready": false,
+    "activity_confirmation_reasons": [
+      "activity_capability_missing"
+    ],
+    "artifact_manifest_sha256": "72575b4c37e76a959a97544929d50a1abd27f926f38a88ac999dcf64ef311b52",
+    "binding_count": "3",
+    "candidate_manifest_sha256": "7e83a4fa685b9780f60ad0fb81e882da2695cdc5eadbbd3f49c0ca3ff125a0cb",
+    "candidates": [
+      {
+        "capabilities": [
+          "fub-metadata-import-v1"
+        ],
+        "gate_version": "crm-workspace-v1",
+        "revision": "e36ce360a4956b76b6f8dc537a051e6cb8cbc7b7",
+        "role": "api",
+        "sha256": "58e01b385d50c6eede5a05ca4bdeea88ed070eabba19b14276966287fcc595c0"
+      },
+      {
+        "capabilities": [
+          "fub-metadata-import-v1"
+        ],
+        "gate_version": "crm-workspace-v1",
+        "revision": "e36ce360a4956b76b6f8dc537a051e6cb8cbc7b7",
+        "role": "worker",
+        "sha256": "58e01b385d50c6eede5a05ca4bdeea88ed070eabba19b14276966287fcc595c0"
+      }
+    ],
+    "checked_at": "2026-09-12T04:18:11Z",
+    "confirmation_ready": true,
+    "confirmation_reasons": [],
+    "database_name": "crm_010f2_qa",
+    "evidence_expires_at": "2026-09-12T04:23:10Z",
+    "gate_version": "crm-workspace-v1",
+    "inventory_sha256": "781d013527a68fde2e0433580e9eeffe900f796b033aa1ed6a2e3a0eac334224",
+    "launch_allowed": true,
+    "launch_reasons": [],
+    "metadata_confirmation_ready": true,
+    "metadata_confirmation_reasons": [],
+    "pre_010c_retired": true,
+    "process_count": "0",
+    "processes": [],
+    "purpose": "launch",
+    "required_gate_versions": [
+      "crm-workspace-v1"
+    ],
+    "target": "crm-010f2-quiesced-candidate-probe",
+    "version": 1
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "private_credential_scan": "passed",
+  "files": [
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/checks/final-sqlx-prepare.log",
+      "bytes": 2753,
+      "sha256": "672e9b70d1bad8c811671b93b810542fc910d87ff54ab429a4c6ac8fd8dc4dbb"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/checks/final-check.log",
+      "bytes": 120401,
+      "sha256": "bceeff44535484471403cbddcfcebd0e07e31aa6eae46a3ea4423eae061129cb"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/checks/final-check-db.log",
+      "bytes": 12951,
+      "sha256": "d5a1b2e11eb5624508f7244e3f2eb32e8eda4caf045404074363cc466f9ff564"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/checks/final2-sqlx-prepare.log",
+      "bytes": 2659,
+      "sha256": "1f88a4913c786633595efb676fad9bf5779edee8c7c68166ef4d49526a81bb7b"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/checks/final2-check.log",
+      "bytes": 120214,
+      "sha256": "191965240890a143025c096907a8bcd14618420e4a29dac46c6eb9c54741851c"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/checks/final2-check-db.log",
+      "bytes": 119816,
+      "sha256": "4540d21c4c500bd7621c6c341bf4f20700d3ea7aef223b7a9a2b9fc85d4461f3"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/checks/gate-result-assertion.log",
+      "bytes": 458,
+      "sha256": "b3f024df62a387bdfccb57575ff83fd24fd5dd2ecf323c42d042a5f588154040",
+      "original_published_sha256": "7461a69abfdefd1ea46967b81fe41712da1dfa27adfaa9290f8db5d9c88ae94d",
+      "normalization": "Removed extra blank lines at EOF only; original private log retained."
+    }
+  ]
+}

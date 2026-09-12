@@ -1,0 +1,8 @@
+   Compiling crm-api v0.1.0 (/Users/karrad/projects/crm-010f2/backend/crates/crm-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 19.62s
+     Running tests/all.rs (target/debug/deps/all-07593333edaca6c2)
+
+running 1 test
+test db_activity_lifecycle::activity_private_db_permit_rejects_origin_token_and_wrong_target ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1010 filtered out; finished in 3.69s

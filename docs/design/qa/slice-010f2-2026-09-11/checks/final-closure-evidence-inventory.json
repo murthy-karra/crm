@@ -1,0 +1,40 @@
+{
+  "private_credential_scan": "passed",
+  "files": [
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/checks/final4-sqlx-prepare.log",
+      "bytes": 2643,
+      "sha256": "6547d4ad9cf8cd6a75b4b6323c284a01d6f88acdff9c47abdb8f6f970e5c6160"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/checks/final4-check.log",
+      "bytes": 120209,
+      "sha256": "deb6383e7b02c0b6949d37eaffaf8a31c1a517762c3ed181bd2714f3710141f7"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/checks/final4-check-db.log",
+      "bytes": 119811,
+      "sha256": "44ff595f0c82c882b12243510ac44e442c35b9b31aed310e104a83bbc9abc228"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/checks/paired-fixture-clippy.log",
+      "bytes": 245,
+      "sha256": "99d874726394c67e78294689c4d386aca7f6c7ee7c9d3ac100138f60240d08f9"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/runtime-log-audit.json",
+      "bytes": 1120,
+      "sha256": "ca440d8d8f017b3dd4e8c9e74624304d02aa467137194519b31bc6a64ca83332"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/cleanup-reconciliation.json",
+      "bytes": 4939,
+      "sha256": "fece8811c625f623306667712bc6f9350751bd00868683a7f077a4bea3fc5fcf"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/reproduction/cleanup_owned.py",
+      "bytes": 3464,
+      "sha256": "02578a3741b576ba18af0d24c7ec90cac7f3244c39fe44d936199e94b08c8f71"
+    }
+  ]
+}

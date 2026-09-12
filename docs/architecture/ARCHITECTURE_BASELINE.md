@@ -1,6 +1,6 @@
 # Architecture Baseline
 
-Reviewed 2026-09-11 against accepted decisions through D-066 and its release follow-up.
+Reviewed 2026-09-11 against accepted decisions through D-068.
 This is a derived system map, not another decision log. The
 [decision log](../decisions/DECISION_LOG.md) and [AGENTS.md](../../AGENTS.md)
 win on conflict. Observed runtime state and release evidence belong in
@@ -127,10 +127,33 @@ It adds a retained-source metadata child and worker for explicit tag/custom-fiel
 mapping and creation, absent-or-equal values, item reconciliation and provenance.
 The child reuses the original parent/snapshot/review binding, with its own claims,
 atomic units, private insert permit and reservations in the shared retained-byte
-ledger. It makes no source requests. Notes/tasks and activation remain later work.
+ledger. It makes no source requests. Its notes/tasks successor is the approved
+010f2 implementation described below; activation remains later work.
 Migration `20260919000001` is applied. Existing business counts and all three
 operational workspace revisions are unchanged; the 43 migration tables remain
 empty. Live FUB/customer-data validation and activation remain deferred.
+
+[010f2](../specs/SLICE_010f2.md) is approved under D-068 and being implemented in
+an isolated worktree; it is not deployed. It adds an independent retained-source
+notes/tasks child of the completed People import, with explicit actor/type/timezone
+choices, exact source evidence, readable plain-text note conversion and atomic
+insert-or-equality results. Native identities include the source account and
+survive local edits/erasure without permitting overwrite or resurrection.
+Cancellation preserves committed rows, original parent/sibling state and the
+review hold. Child evidence uses the shared retention ledger; native rows/indexes
+are measured separately. The [verification record](../tasks/SLICE_010f2_VERIFICATION.md)
+tracks the remaining implementation gates.
+
+010f2's first confirmation establishes a durable read boundary under the exclusive
+workspace barrier. Legacy complete Person/history/task reads then fail closed;
+administrators use a distinct bounded review-core response and paged notes/tasks,
+with exact note content available through a scoped read. Cursor revisions prevent
+mixing pages across activity commits. The review route also supports real People
+bindings from partial 010c execution. Ordinary member use, mutations, Today,
+Operator and communications remain blocked pending a later activation capability.
+The new `fub-activity-import-v1` release capability covers both the activity worker
+and bounded readers; compatible recovery must retain this boundary even after a
+cancelled import with no native writes.
 
 Every API/worker/admin launch against review bindings must enforce the compatible
 workspace gate. The [release preflight](../../scripts/migration-release-preflight)

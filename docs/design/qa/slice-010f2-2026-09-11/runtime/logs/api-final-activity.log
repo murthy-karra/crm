@@ -1,0 +1,12 @@
+Synthetic-only QA API listening on 127.0.0.1:3017; database crm_010f2_qa
+2026-09-12T04:20:34.393187Z  WARN sqlx::postgres::notice: there is no transaction in progress
+2026-09-12T04:20:34.463263Z  WARN sqlx::postgres::notice: there is already a transaction in progress
+2026-09-12T04:20:36.274921Z  WARN sqlx::postgres::notice: there is no transaction in progress
+2026-09-12T04:20:36.334982Z  WARN sqlx::postgres::notice: there is already a transaction in progress
+2026-09-12T04:20:39.495861Z  WARN sqlx::postgres::notice: there is already a transaction in progress
+2026-09-12T04:21:19.163302Z  WARN sqlx::postgres::notice: there is no transaction in progress
+2026-09-12T04:21:27.050045Z  WARN sqlx::postgres::notice: there is no transaction in progress
+2026-09-12T04:33:48.246508Z ERROR tower_http::trace::on_failure: response failed classification=Status code: 503 Service Unavailable latency=1 ms
+2026-09-12T04:37:57.923249Z  WARN sqlx::postgres::notice: there is no transaction in progress
+2026-09-12T04:37:57.924166Z  WARN sqlx::postgres::notice: there is no transaction in progress
+2026-09-12T04:38:01.156430Z  WARN sqlx::postgres::notice: there is no transaction in progress

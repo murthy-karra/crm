@@ -138,6 +138,7 @@ pub enum ApiError {
     /// different field, or does not exist — byte-identical for all three.
     UnknownOption,
     WorkspaceInMigrationReview,
+    ActivityReviewRequired,
     WorkspaceIngressDeferred,
     MigrationConflict,
     ImportError(&'static str),
@@ -146,7 +147,9 @@ pub enum ApiError {
 
 impl ApiError {
     pub(crate) fn database(error: sqlx::Error) -> Self {
-        if crate::auth::workspace::is_review_error(&error) {
+        if crate::auth::workspace::is_activity_review_error(&error) {
+            Self::ActivityReviewRequired
+        } else if crate::auth::workspace::is_review_error(&error) {
             Self::WorkspaceInMigrationReview
         } else if crate::auth::workspace::is_forbidden_error(&error) {
             Self::Forbidden
@@ -159,6 +162,9 @@ impl ApiError {
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let (status, code, retry_after_secs) = match self {
+            ApiError::ActivityReviewRequired => {
+                (StatusCode::CONFLICT, "activity_review_required", None)
+            }
             ApiError::WorkspaceInMigrationReview => {
                 (StatusCode::CONFLICT, "workspace_in_migration_review", None)
             }
@@ -529,6 +535,9 @@ impl From<TagError> for ApiError {
 impl From<NoteError> for ApiError {
     fn from(err: NoteError) -> Self {
         match err {
+            NoteError::Database(ref e) if crate::auth::workspace::is_activity_review_error(e) => {
+                Self::ActivityReviewRequired
+            }
             NoteError::Database(ref e) if crate::auth::workspace::is_review_error(e) => {
                 Self::WorkspaceInMigrationReview
             }
@@ -549,6 +558,9 @@ impl From<NoteError> for ApiError {
 impl From<TaskError> for ApiError {
     fn from(err: TaskError) -> Self {
         match err {
+            TaskError::Database(ref e) if crate::auth::workspace::is_activity_review_error(e) => {
+                Self::ActivityReviewRequired
+            }
             TaskError::Database(ref e) if crate::auth::workspace::is_review_error(e) => {
                 Self::WorkspaceInMigrationReview
             }

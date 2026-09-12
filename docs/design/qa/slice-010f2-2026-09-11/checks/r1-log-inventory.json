@@ -1,0 +1,23 @@
+{
+  "credential_scan": "passed",
+  "files": [
+    {
+      "file": "r1-control.log",
+      "sha256": "7ba8a3f99214129755dea71b0e4909a4d8e8f34fdd6d0e7d00feb88ac5241f4e",
+      "original_published_sha256": "86f2d42cde241f33fa4e2667a031c39aa4c0dff0dc830acb7fd06870340a3e56",
+      "normalization": "Removed extra blank lines at EOF only; original private log retained."
+    },
+    {
+      "file": "r1-result-filter.log",
+      "sha256": "29e5487c689cb26a7105315e2dfb9c0db888817fcae6c111d2f306f3bf83f5f6",
+      "original_published_sha256": "1a5ac9775b844b6f832b20d2a3e2e268ff91bea96306f71f7055de9884c0bd4b",
+      "normalization": "Removed extra blank lines at EOF only; original private log retained."
+    },
+    {
+      "file": "r1-source-db.log",
+      "sha256": "68d2caca5d5ff16c4acb84585a1444826969c5c000fe13222bfb49e3bbd210c8",
+      "original_published_sha256": "cc825fa22f87dce015a61bac59ae3036e2d36a7a57a62d3c47daf133bc3725ea",
+      "normalization": "Removed extra blank lines at EOF only; original private log retained."
+    }
+  ]
+}

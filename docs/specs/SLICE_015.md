@@ -1,5 +1,17 @@
 # Slice 015 — Notes
 
+**Approved import/read amendment — 010f2 (D-068, 2026-09-11):**
+[010f2](SLICE_010f2.md) owns retained main-note import and paged admin review.
+Its account-qualified `source_external_id = v1:<account-id>:<note-id>` supersedes
+§2's schema-only bare-ID example; ambiguous legacy keys are held. Native notes
+remain erasable plain text, limited to 10,000 characters, with explicit historical
+author/time mapping. Readable HTML conversion retains exact originals and holds
+unsupported content. Replies/reactions remain source-only. D-068 amends D-053's
+body-read inventory with admin-only native note summaries and full-note review;
+no new audience or body-bearing immutable history is added. After activity
+confirmation, the complete legacy timeline requires the separate bounded review
+routes. Ordinary operational CRUD/Operator contracts remain unchanged.
+
 **Status: APPROVED by the user on 2026-09-09 ("yes, proceed") after
 independent review and D-053.** Approval covers the declared contracts (§7)
 and the §1 safe defaults; it authorizes implementation after the Phase 6

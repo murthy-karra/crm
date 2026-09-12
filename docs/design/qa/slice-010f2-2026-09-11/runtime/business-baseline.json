@@ -1,0 +1,308 @@
+{
+  "complete": {
+    "tag": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "call": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "stage": {
+      "rows": 9,
+      "rows_hash": "c470d9aa3b9f72e87cf3a3e097063cd5"
+    },
+    "person": {
+      "rows": 2,
+      "rows_hash": "91e2ca1e326c59e69d326f5227336888"
+    },
+    "inquiry": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "person_tag": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "saved_list": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "custom_field": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "operator_turn": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "stage_changed": {
+      "rows": 2,
+      "rows_hash": "da0069255c9eb9c6e017bb1dacc06f96"
+    },
+    "call_completed": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "contact_method": {
+      "rows": 4,
+      "rows_hash": "71512382ae46da62b7a470f007efdb41"
+    },
+    "capture_message": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "person_imported": {
+      "rows": 2,
+      "rows_hash": "8c14e501a82d80641d68e4eb40af2e69"
+    },
+    "contact_attempted": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "operator_proposal": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "today_system_feed": {
+      "rows": 3,
+      "rows_hash": "e0ffbb38f43f903323e4b05f379bf5cb"
+    },
+    "today_work_source": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "assignment_changed": {
+      "rows": 2,
+      "rows_hash": "447bbab1bb1a4bd431a46a0f6e5defa6"
+    },
+    "correspondence_raw": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "today_feed_changed": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "custom_field_option": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "operator_task_proposal": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "correspondence_captured": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "person_custom_field_value": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    }
+  },
+  "cancel": {
+    "tag": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "call": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "stage": {
+      "rows": 9,
+      "rows_hash": "54d787ee654511e774b770dce7035520"
+    },
+    "person": {
+      "rows": 2,
+      "rows_hash": "159c013d8f67a29aa5998730ec1b684c"
+    },
+    "inquiry": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "person_tag": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "saved_list": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "custom_field": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "operator_turn": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "stage_changed": {
+      "rows": 2,
+      "rows_hash": "1492e6c4ca12ec53889ee16c1e2a7fda"
+    },
+    "call_completed": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "contact_method": {
+      "rows": 4,
+      "rows_hash": "469f3f0a9b7c128bec2575595aaec831"
+    },
+    "capture_message": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "person_imported": {
+      "rows": 2,
+      "rows_hash": "b972178b4de1f70ef609238bbc6254c8"
+    },
+    "contact_attempted": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "operator_proposal": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "today_system_feed": {
+      "rows": 3,
+      "rows_hash": "95b0bc8d8fc47ca8cc32a029a486b315"
+    },
+    "today_work_source": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "assignment_changed": {
+      "rows": 2,
+      "rows_hash": "960ee685732cdaad62ad93f4cd6b718a"
+    },
+    "correspondence_raw": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "today_feed_changed": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "custom_field_option": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "operator_task_proposal": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "correspondence_captured": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "person_custom_field_value": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    }
+  },
+  "budget": {
+    "tag": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "call": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "stage": {
+      "rows": 9,
+      "rows_hash": "2f19adb1e44c8063d17e77ff2bf314a9"
+    },
+    "person": {
+      "rows": 2,
+      "rows_hash": "efa414f196b3c8fa4c50fbbfa1a691a5"
+    },
+    "inquiry": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "person_tag": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "saved_list": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "custom_field": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "operator_turn": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "stage_changed": {
+      "rows": 2,
+      "rows_hash": "245e302e44da1fab65dcc94113dc6855"
+    },
+    "call_completed": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "contact_method": {
+      "rows": 4,
+      "rows_hash": "70937b68c71c7629fbd47ea286aaa5c8"
+    },
+    "capture_message": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "person_imported": {
+      "rows": 2,
+      "rows_hash": "2139a11dac994b4c267ba9b4fb1d8d92"
+    },
+    "contact_attempted": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "operator_proposal": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "today_system_feed": {
+      "rows": 3,
+      "rows_hash": "f05279c7507b304dba500cf884b2dd0c"
+    },
+    "today_work_source": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "assignment_changed": {
+      "rows": 2,
+      "rows_hash": "7a336263b2728975944fa3dd1f892c6f"
+    },
+    "correspondence_raw": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "today_feed_changed": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "custom_field_option": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "operator_task_proposal": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "correspondence_captured": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "person_custom_field_value": {
+      "rows": 0,
+      "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    }
+  }
+}

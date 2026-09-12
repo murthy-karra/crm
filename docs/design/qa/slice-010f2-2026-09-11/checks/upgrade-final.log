@@ -1,0 +1,8 @@
+   Compiling crm-api v0.1.0 (/Users/karrad/projects/crm-010f2/backend/crates/crm-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 21.30s
+     Running tests/all.rs (target/debug/deps/all-07593333edaca6c2)
+
+running 1 test
+test db_activity_upgrade::populated_010f1_upgrade_preserves_native_and_import_state ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1016 filtered out; finished in 3.85s

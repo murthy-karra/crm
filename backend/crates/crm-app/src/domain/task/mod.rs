@@ -25,3 +25,6 @@ pub use queries::{open_for_assignee, open_for_person};
 /// Internal wiring surface for `domain::person::queries::history_for_person`
 /// (not part of this module's cross-crate public API — `pub(crate)`).
 pub(crate) use queries::task_completed_history;
+
+#[cfg(feature = "test-support")]
+pub use queries::perf_cd3b010_open;

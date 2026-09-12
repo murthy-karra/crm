@@ -1,0 +1,36 @@
+[
+  {
+    "mode": "lower",
+    "time": "2026-09-12T04:40:29.753629+00:00",
+    "old_ceiling_bytes": 268435456,
+    "new_ceiling_bytes": 19262579,
+    "snapshot_before": {
+      "child_id": "9241cc4b-f1de-4928-8282-e77253f39771",
+      "reserved": 65536,
+      "retained": 19197043,
+      "child_state": "queued",
+      "snapshot_id": "122ab8dc-9b56-4ac2-aad5-0de2b0d2228d",
+      "native_bytes": 0,
+      "pause_reason": null,
+      "run_byte_limit": 268435456
+    },
+    "cause": "Synthetic lowered deployment headroom, not exhaustion of the original retained-data allowance. No DB ledger or budget edited."
+  },
+  {
+    "mode": "restore",
+    "time": "2026-09-12T04:41:35.257817+00:00",
+    "old_ceiling_bytes": 19262579,
+    "new_ceiling_bytes": 536870912,
+    "snapshot_before": {
+      "child_id": "9241cc4b-f1de-4928-8282-e77253f39771",
+      "reserved": 65523,
+      "retained": 19197056,
+      "child_state": "paused",
+      "snapshot_id": "122ab8dc-9b56-4ac2-aad5-0de2b0d2228d",
+      "native_bytes": 0,
+      "pause_reason": "storage_limit",
+      "run_byte_limit": 268435456
+    },
+    "cause": "Synthetic lowered deployment headroom, not exhaustion of the original retained-data allowance. No DB ledger or budget edited."
+  }
+]

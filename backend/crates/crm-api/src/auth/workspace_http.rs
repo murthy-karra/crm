@@ -10,6 +10,22 @@ use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 
 pub async fn guard(State(state): State<AppState>, request: Request, next: Next) -> Response {
+    let no_store = request
+        .uri()
+        .path()
+        .starts_with("/api/migrations/fub/activity-imports")
+        || request.uri().path().starts_with("/api/people/")
+            && request.uri().path().contains("/migration-review");
+    let mut response = guard_inner(State(state), request, next).await;
+    if no_store {
+        response.headers_mut().insert(
+            axum::http::header::CACHE_CONTROL,
+            axum::http::HeaderValue::from_static("no-store"),
+        );
+    }
+    response
+}
+async fn guard_inner(State(state): State<AppState>, request: Request, next: Next) -> Response {
     let path = request.uri().path();
     let protects = path.starts_with("/api/")
         && !matches!(path, "/api/me" | "/api/login" | "/api/logout")
@@ -34,7 +50,11 @@ pub async fn guard(State(state): State<AppState>, request: Request, next: Next) 
                 route.starts_with("/api/migrations/fub/")
                     || matches!(
                         route,
-                        "/api/people/{id}/import-provenance"
+                        "/api/people/{id}/migration-review"
+                            | "/api/people/{id}/migration-review/notes"
+                            | "/api/people/{id}/migration-review/notes/{note_id}"
+                            | "/api/people/{id}/migration-review/tasks"
+                            | "/api/people/{id}/import-provenance"
                             | "/api/people/{id}/import-provenance/fields/{field}"
                             | "/api/people/{id}/metadata-import-provenance"
                             | "/api/people/{id}/metadata-import-provenance/{result}/fields/{field}"

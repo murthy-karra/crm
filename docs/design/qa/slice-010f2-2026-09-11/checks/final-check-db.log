@@ -1,0 +1,316 @@
+==> centrifugo: health endpoint (http://127.0.0.1:18082/health)
+==> [0s]
+==> cargo sqlx prepare --check --workspace
+Applied 20260820000001/migrate initial identity schema (14.182584ms)
+Applied 20260821000001/migrate stage (4.513083ms)
+Applied 20260821000002/migrate person contact method (5.954ms)
+Applied 20260821000003/migrate raw payload (4.80525ms)
+Applied 20260821000004/migrate inquiry and facts (13.724834ms)
+Applied 20260822000001/migrate contact attempted (6.765542ms)
+Applied 20260823000001/migrate administration (14.358958ms)
+Applied 20260824000001/migrate operator ledger (5.426333ms)
+Applied 20260825000001/migrate calls (6.548334ms)
+Applied 20260826000001/migrate contact outcome correction (2.547541ms)
+Applied 20260826000002/migrate call outcome indexes (2.765292ms)
+Applied 20260827000001/migrate operator proposal (4.226041ms)
+Applied 20260828000001/migrate organization intake address (3.718625ms)
+Applied 20260829000001/migrate intake settings (2.9825ms)
+Applied 20260830000001/migrate raw payload discard (2.824958ms)
+Applied 20260901000001/migrate intake extraction (4.945083ms)
+Applied 20260902000001/migrate intake token rotation (4.321583ms)
+Applied 20260903000001/migrate intake routing mode (5.186625ms)
+Applied 20260904000001/migrate correspondence capture (11.44425ms)
+Applied 20260906000001/migrate saved list (4.674666ms)
+Applied 20260906000002/migrate today work source (3.328084ms)
+Applied 20260907000001/migrate saved list sort (2.73025ms)
+Applied 20260908000001/migrate today system feed (5.952084ms)
+Applied 20260909000001/migrate tag (5.697625ms)
+Applied 20260910000001/migrate person last activity (3.751875ms)
+Applied 20260911000001/migrate inquiry append only (2.725291ms)
+Applied 20260912000001/migrate note (4.633458ms)
+Applied 20260913000001/migrate task (5.796042ms)
+Applied 20260914000001/migrate operator task proposal (4.349875ms)
+Applied 20260915000001/migrate custom field (8.06875ms)
+Applied 20260916000001/migrate fub migration assessment (10.423917ms)
+Applied 20260917000001/migrate fub core snapshot (18.539584ms)
+Applied 20260918000001/migrate fub people import (27.597709ms)
+Applied 20260919000001/migrate fub metadata import (27.580542ms)
+Applied 20260920000001/migrate fub activity import (30.3905ms)
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.47
+   Compiling libc v0.2.189
+    Checking cfg-if v1.0.4
+   Compiling serde v1.0.229
+   Compiling version_check v0.9.5
+   Compiling serde_core v1.0.229
+    Checking typenum v1.20.1
+   Compiling icu_normalizer_data v2.3.0
+   Compiling icu_properties_data v2.3.0
+   Compiling shlex v2.0.1
+    Checking pin-project-lite v0.2.17
+   Compiling find-msvc-tools v0.1.11
+    Checking futures-core v0.3.34
+    Checking subtle v2.6.1
+    Checking stable_deref_trait v1.2.1
+    Checking bytes v1.12.1
+    Checking itoa v1.0.18
+   Compiling parking_lot_core v0.9.12
+   Compiling generic-array v0.14.7
+   Compiling cc v1.4.3
+    Checking once_cell v1.21.4
+    Checking log v0.4.33
+   Compiling autocfg v1.5.1
+   Compiling zmij v1.0.23
+    Checking getrandom v0.2.17
+    Checking errno v0.3.14
+    Checking signal-hook-registry v1.4.8
+    Checking rand_core v0.6.4
+    Checking mio v1.2.2
+   Compiling syn v3.0.3
+   Compiling syn v2.0.119
+   Compiling num-traits v0.2.19
+    Checking socket2 v0.6.5
+    Checking tracing-core v0.1.36
+    Checking zeroize v1.9.0
+   Compiling serde_json v1.0.151
+   Compiling rustls v0.23.43
+   Compiling zerocopy v0.8.56
+    Checking crypto-common v0.1.7
+    Checking futures-sink v0.3.34
+    Checking percent-encoding v2.3.2
+    Checking memchr v2.8.3
+    Checking litemap v0.8.3
+    Checking writeable v0.6.4
+    Checking utf8_iter v1.0.4
+    Checking futures-task v0.3.34
+    Checking slab v0.4.12
+    Checking futures-io v0.3.34
+   Compiling ring v0.17.14
+   Compiling crossbeam-utils v0.8.22
+    Checking rustls-pki-types v1.15.1
+    Checking futures-util v0.3.34
+    Checking http v1.5.0
+   Compiling thiserror v2.0.20
+    Checking form_urlencoded v1.2.2
+    Checking block-buffer v0.10.4
+    Checking rand_core v0.10.1
+    Checking untrusted v0.9.0
+   Compiling getrandom v0.4.3
+   Compiling equivalent v1.0.2
+    Checking scopeguard v1.2.0
+    Checking http-body v1.1.0
+    Checking lock_api v0.4.14
+   Compiling digest v0.10.7
+    Checking futures-channel v0.3.34
+    Checking tower-service v0.3.3
+   Compiling siphasher v1.0.3
+   Compiling httparse v1.10.1
+    Checking base64 v0.22.1
+   Compiling phf_shared v0.13.1
+   Compiling fastrand v2.5.0
+   Compiling hashbrown v0.17.1
+    Checking try-lock v0.2.5
+   Compiling phf_generator v0.13.1
+    Checking want v0.3.1
+    Checking webpki-roots v1.0.9
+   Compiling indexmap v2.14.0
+   Compiling synstructure v0.13.2
+    Checking sync_wrapper v1.0.2
+   Compiling foldhash v0.1.5
+   Compiling tinyvec_macros v0.1.1
+   Compiling allocator-api2 v0.2.21
+    Checking httpdate v1.0.3
+   Compiling core-foundation-sys v0.8.7
+    Checking tower-layer v0.3.3
+    Checking atomic-waker v1.1.2
+   Compiling iana-time-zone v0.1.65
+   Compiling hashbrown v0.15.5
+   Compiling tinyvec v1.12.0
+    Checking uuid v1.24.1
+   Compiling tokio v1.53.1
+   Compiling cpufeatures v0.2.17
+   Compiling crc-catalog v2.5.0
+   Compiling parking v2.2.1
+    Checking ipnet v2.12.1
+   Compiling zerofrom-derive v0.1.7
+   Compiling serde_derive v1.0.229
+   Compiling yoke-derive v0.8.2
+   Compiling zerovec-derive v0.11.6
+   Compiling displaydoc v0.2.7
+   Compiling tracing-attributes v0.1.31
+   Compiling tokio-macros v2.7.2
+   Compiling thiserror-impl v2.0.20
+    Checking zerofrom v0.1.8
+    Checking yoke v0.8.3
+    Checking zerovec v0.11.8
+    Checking tracing v0.1.44
+    Checking zerotrie v0.2.5
+    Checking tinystr v0.8.4
+    Checking potential_utf v0.1.6
+    Checking rustls-webpki v0.103.14
+    Checking icu_collections v2.3.0
+    Checking icu_locale_core v2.3.0
+   Compiling ppv-lite86 v0.2.21
+    Checking icu_provider v2.3.1
+   Compiling rand_chacha v0.3.1
+    Checking icu_properties v2.3.0
+   Compiling tokio-stream v0.1.19
+    Checking smallvec v1.15.2
+   Compiling either v1.18.0
+    Checking icu_normalizer v2.3.0
+    Checking parking_lot v0.12.5
+    Checking chrono v0.4.45
+    Checking hyper v1.11.0
+    Checking tower v0.5.3
+    Checking idna_adapter v1.2.2
+    Checking idna v1.1.0
+   Compiling futures-intrusive v0.5.0
+   Compiling event-listener v5.4.2
+   Compiling crc v3.4.0
+    Checking url v2.5.8
+   Compiling crossbeam-queue v0.3.13
+   Compiling sha2 v0.10.9
+    Checking hyper-util v0.1.20
+   Compiling hashlink v0.10.0
+   Compiling unicode-normalization v0.1.25
+   Compiling webpki-roots v0.26.11
+   Compiling phf_codegen v0.13.1
+   Compiling string_cache_codegen v0.6.1
+   Compiling hmac v0.12.1
+    Checking http-body-util v0.1.5
+    Checking hybrid-array v0.4.14
+   Compiling unicode-properties v0.1.4
+    Checking new_debug_unreachable v1.0.6
+    Checking ryu v1.0.23
+    Checking bitflags v2.13.1
+   Compiling unicode-bidi v0.3.18
+    Checking serde_urlencoded v0.7.1
+   Compiling web_atoms v0.2.6
+   Compiling hkdf v0.12.4
+   Compiling rand v0.8.7
+   Compiling sqlx-core v0.8.6
+   Compiling stringprep v0.1.5
+   Compiling atoi v2.0.0
+   Compiling md-5 v0.10.6
+   Compiling home v0.5.12
+   Compiling dotenvy v0.15.7
+    Checking precomputed-hash v0.1.1
+   Compiling whoami v1.6.1
+    Checking cmov v0.5.4
+   Compiling byteorder v1.5.0
+   Compiling hex v0.4.3
+    Checking string_cache v0.9.0
+    Checking ctutils v0.4.2
+    Checking block-buffer v0.12.1
+    Checking crypto-common v0.2.2
+    Checking phf v0.13.1
+    Checking tokio-rustls v0.26.4
+    Checking inout v0.1.4
+   Compiling heck v0.5.0
+   Compiling time-core v0.1.9
+   Compiling num-conv v0.2.2
+    Checking const-oid v0.10.2
+    Checking cipher v0.4.4
+    Checking digest v0.11.3
+   Compiling time-macros v0.2.32
+    Checking hyper-rustls v0.27.9
+    Checking tower-http v0.6.11
+    Checking tendril v0.5.1
+    Checking phf_shared v0.12.1
+    Checking universal-hash v0.5.1
+   Compiling cookie v0.18.2
+    Checking mime v0.3.17
+    Checking deranged v0.5.8
+    Checking base64ct v1.8.3
+   Compiling chrono-tz v0.10.4
+    Checking regex-syntax v0.8.11
+    Checking powerfmt v0.2.0
+    Checking opaque-debug v0.3.1
+    Checking reqwest v0.12.28
+   Compiling sqlx-postgres v0.8.6
+    Checking poly1305 v0.8.0
+    Checking markup5ever v0.39.0
+    Checking password-hash v0.5.0
+    Checking axum-core v0.5.6
+    Checking phf v0.12.1
+    Checking chacha20 v0.9.1
+    Checking time v0.3.55
+   Compiling async-trait v0.1.92
+   Compiling hashify v0.2.9
+    Checking blake2 v0.10.6
+    Checking chacha20 v0.10.1
+    Checking serde_path_to_error v0.1.20
+    Checking regex-automata v0.4.18
+    Checking aead v0.5.2
+    Checking cpufeatures v0.3.0
+    Checking matchit v0.8.4
+    Checking lazy_static v1.5.0
+    Checking sharded-slab v0.1.7
+    Checking chacha20poly1305 v0.10.1
+    Checking sha2 v0.11.0
+    Checking rand v0.10.2
+    Checking argon2 v0.5.3
+    Checking mail-parser v0.11.8
+    Checking html5ever v0.39.0
+    Checking hmac v0.13.0
+    Checking axum v0.8.9
+    Checking tracing-log v0.2.0
+    Checking thread_local v1.1.10
+    Checking base64 v0.23.1
+    Checking nu-ansi-term v0.50.3
+    Checking crm-operator v0.1.0 (/Users/karrad/projects/crm-010f2/backend/crates/crm-operator)
+    Checking matchers v0.2.0
+    Checking tracing-subscriber v0.3.23
+   Compiling sqlx-macros-core v0.8.6
+    Checking axum-extra v0.12.6
+   Compiling sqlx-macros v0.8.6
+    Checking sqlx v0.8.6
+    Checking crm-app v0.1.0 (/Users/karrad/projects/crm-010f2/backend/crates/crm-app)
+    Checking crm-api v0.1.0 (/Users/karrad/projects/crm-010f2/backend/crates/crm-api)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 36.30s
+warning: potentially unused queries found in .sqlx; you may want to re-run sqlx prepare
+==> [37s]
+==> cargo nextest run --run-ignored only
+   Compiling crm-app v0.1.0 (/Users/karrad/projects/crm-010f2/backend/crates/crm-app)
+   Compiling crm-api v0.1.0 (/Users/karrad/projects/crm-010f2/backend/crates/crm-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 20.37s
+────────────
+ Nextest run ID ee05ce17-7ae4-4665-be72-0ae3c5974dca with nextest profile: default
+    Starting 908 tests across 7 binaries (935 tests skipped)
+        FAIL [   5.222s] (  1/908) crm-api::all db_activity_lifecycle::actual_activity_confirmation_waits_for_reader_and_overlapping_workers_settle_once
+  stdout ───
+
+    running 1 test
+    test db_activity_lifecycle::actual_activity_confirmation_waits_for_reader_and_overlapping_workers_settle_once ... FAILED
+
+    failures:
+
+    failures:
+        db_activity_lifecycle::actual_activity_confirmation_waits_for_reader_and_overlapping_workers_settle_once
+
+    test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1016 filtered out; finished in 5.20s
+
+  stderr ───
+
+    thread 'db_activity_lifecycle::actual_activity_confirmation_waits_for_reader_and_overlapping_workers_settle_once' (13048931) panicked at crates/crm-api/tests/db_activity_lifecycle.rs:635:9:
+    assertion `left == right` failed
+      left: 0
+     right: 2
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+  Cancelling due to test failure: 9 tests still running
+        PASS [   7.751s] (  2/908) crm-api::all centrifugo_realtime::centrifugo_delivers_scoped_events_denies_cross_org_and_never_replays
+        PASS [   8.006s] (  3/908) crm-api::all db_activity_lifecycle::confirmed_activity_can_complete_with_zero_inserts_after_revalidation
+        PASS [   8.014s] (  4/908) crm-api::all db_activity_lifecycle::activity_private_db_permit_rejects_origin_token_and_wrong_target
+        PASS [   8.019s] (  5/908) crm-api::all db_activity_lifecycle::activity_native_equal_local_edits_tombstone_legacy_and_identity_missing
+        PASS [   8.024s] (  6/908) crm-api::all db_activity_lifecycle::activity_storage_pause_and_sibling_cancel_keep_independent_reservations
+        PASS [   8.037s] (  7/908) crm-api::all db_activity_lifecycle::activity_authority_loss_retry_adoption_and_partial_cancel_preserve_boundary
+        PASS [   8.040s] (  8/908) crm-api::all db_activity_lifecycle::activity_atomic_result_failure_rolls_back_native_identity_and_ledgers
+        PASS [   8.041s] (  9/908) crm-api::all db_activity_lifecycle::activity_logs_have_positive_phase_controls_without_source_content
+        PASS [   8.051s] ( 10/908) crm-api::all db_activity_lifecycle::activity_http_scope_strict_inputs_receipt_replay_and_all_held_replanning
+────────────
+     Summary [   8.051s] 10/908 tests run: 9 passed, 1 failed, 935 skipped
+        FAIL [   5.222s] (  1/908) crm-api::all db_activity_lifecycle::actual_activity_confirmation_waits_for_reader_and_overlapping_workers_settle_once
+warning: 898/908 tests were not run due to test failure (run with --no-fail-fast to run all tests, or run with --max-fail)
+error: test run failed

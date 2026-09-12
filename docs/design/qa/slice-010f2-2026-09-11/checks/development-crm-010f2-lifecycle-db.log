@@ -1,0 +1,31 @@
+   Compiling crm-app v0.1.0 (/Users/karrad/projects/crm-010f2/backend/crates/crm-app)
+   Compiling crm-api v0.1.0 (/Users/karrad/projects/crm-010f2/backend/crates/crm-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 39.11s
+     Running tests/all.rs (target/debug/deps/all-07593333edaca6c2)
+
+running 9 tests
+test db_activity_lifecycle::activity_atomic_result_failure_rolls_back_native_identity_and_ledgers ... ok
+test db_activity_lifecycle::activity_authority_loss_retry_adoption_and_partial_cancel_preserve_boundary ... ok
+test db_activity_lifecycle::activity_http_scope_strict_inputs_receipt_replay_and_all_held_replanning ... ok
+test db_activity_lifecycle::activity_logs_have_positive_phase_controls_without_source_content ... FAILED
+test db_activity_lifecycle::activity_native_equal_local_edits_tombstone_legacy_and_identity_missing ... ok
+test db_activity_lifecycle::activity_private_db_permit_rejects_origin_token_and_wrong_target ... ok
+test db_activity_lifecycle::activity_storage_pause_and_sibling_cancel_keep_independent_reservations ... ok
+test db_activity_lifecycle::actual_activity_confirmation_waits_for_reader_and_overlapping_workers_settle_once ... ok
+test db_activity_lifecycle::expired_plan_and_real_release_report_reject_new_confirmation ... ok
+
+failures:
+
+---- db_activity_lifecycle::activity_logs_have_positive_phase_controls_without_source_content stdout ----
+
+thread 'db_activity_lifecycle::activity_logs_have_positive_phase_controls_without_source_content' (12877638) panicked at crates/crm-api/tests/db_activity_source.rs:169:30:
+fixture requires an explicit type policy
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    db_activity_lifecycle::activity_logs_have_positive_phase_controls_without_source_content
+
+test result: FAILED. 8 passed; 1 failed; 0 ignored; 0 measured; 998 filtered out; finished in 31.81s
+
+error: test failed, to rerun pass `-p crm-api --test all`

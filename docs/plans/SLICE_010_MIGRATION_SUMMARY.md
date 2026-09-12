@@ -66,6 +66,16 @@ recovery needs fresh actual workload evidence. Backup catalog validation was
 performed, not a restore exercise. Live FUB/customer-data work and activation
 stay deferred; notes/tasks are the next core-import planning scope.
 
+**010f2 implemented, release pending:** [010f2](../specs/SLICE_010f2.md) and its
+[execution brief](../tasks/SLICE_010f2_IMPL.md) propose notes/open/completed tasks
+from the same retained snapshot onto completed 010c People, independently of the
+metadata child. D-067 accepts readable plain-text notes with exact originals
+retained, and date-only tasks due at day's end in an admin-confirmed source
+timezone. Explicit mappings, timestamp/unsupported-content holds, source-only
+replies/settings, no overwrite/resurrection and paged admin review are specified
+for approval. See the [independent review](../tasks/SLICE_010f2_REVIEW.md).
+D-068 approved the full implementation. Both bounded reviews and synthetic runtime reconciliation are complete; source remains uncommitted and unreleased. See [verification](../tasks/SLICE_010f2_VERIFICATION.md).
+
 ## 1. Outcome and first milestone
 
 An Organization admin should understand what their FUB account contains,
@@ -101,8 +111,8 @@ See [015](../specs/SLICE_015.md), [016](../specs/SLICE_016.md),
 | People, emails, phones | Core tables exist. Preserve every source identifier and contact method. Flag missing/invalid contacts and ambiguous identity matches; names alone must not merge People. |
 | Stages, users, responsibility | Map source stages and users to Organization stages/members in preview. FUB users are not automatically authenticated CRM accounts. Unmatched users and pond/collaborator roles need visible dispositions. |
 | Tags and custom fields | Deployed 010f1 restores embedded tags and custom definitions/options/values from the completed parent's retained source, preserving source keys and option identity. Current text/label/number limits and recurring-date semantics can prevent exact representation; preserve and report exceptions instead of truncating/coercing. Full standalone tag capture remains future work. |
-| Notes | Plain-text destination exists, with a 10,000-character limit. Authorship, historical timestamps, formatting, attachments and restricted notes need explicit treatment. |
-| Tasks | Destination supports call/email/text/follow-up/other. Source task types, date-only deadlines, timezones, completion history and unmatched assignees need a mapping policy. |
+| Notes | Plain-text destination exists, with a 10,000-character limit. 010f2 implements source authors/timestamps, readable HTML conversion with exact originals, and explicit holds/source-only replies and attachments. D-067 accepts the conversion choice; D-068 now approves full implementation. |
+| Tasks | Destination supports call/email/text/follow-up/other. 010f2 implements explicit type/user mappings, qualified completion times, and undated/timed/date-only policies. D-067 accepts confirmed-zone end-of-day conversion; D-068 now approves full implementation. |
 | Inquiry and communication history | Import only facts supported by source evidence. Preserve source attribution and original timestamps separately from import time. A Person creation date is not necessarily an Inquiry; `lastCommunication` alone is not a call or text. |
 | Addresses, relationships, appointments, deals | No complete corresponding destination was found in the current model. Inventory separately and retain retrievable source material; do not claim full usable import. A gap may require its own model slice before a customer's cutover. |
 | Email bodies, recordings, automation/settings | Assess retrieval and representation independently. D-062 places email bulk content outside PostgreSQL, with scoped metadata and storage references in PostgreSQL; backend selection and relocation are future work. Mailbox reconstruction, recording handling, action plans and full Smart List conversion are separate work, not implied by a contact migration. |
@@ -202,7 +212,7 @@ the cutover rung.
 | 1 — 010a | Secure API connection and honest bounded access report, implemented and synthetically verified. Live authorized FUB validation is user-deferred; no export upload or imported CRM business records. |
 | 2 — 010b | Core-first encrypted resumable snapshot and preview (D-061): People/users/stages/custom fields/notes/tasks; mappings, overlap candidates, unsupported values and explicit remaining coverage. Raw captures carry source IDs, API/schema/profile versions, capture times and keyed hashes. Further snapshot work must address history, communications, media and other uncovered families before cutover. |
 | 3 — 010c | People/contact/stage/assignment import into the new empty Organization is implemented, synthetically verified and deployed under D-065/follow-ups. Separate People, explicitly approved matching stages and admin review-only use remain D-064. Frozen-plan recovery/provenance avoids duplicates and synthetic Inquiry history; activation remains separate. |
-| 4 — 010f1, then further core rungs | Deployed/verified 010f1 imports embedded tag membership and custom definitions/options/values onto completed 010c People, preserving the review hold. Notes/tasks are next for separate planning with authorship/timestamps, identity and local-edit/tombstone protection. Full standalone tag capture is still outstanding. |
+| 4 — 010f1, then 010f2 | Deployed/verified 010f1 imports embedded tag membership and custom definitions/options/values onto completed 010c People, preserving the review hold. [010f2](../specs/SLICE_010f2.md) adds notes/tasks with authorship/timestamps, source-qualified identity, local-edit/tombstone protection and bounded admin review; D-068 approves implementation; synthetic runtime reconciliation now passes, with final closure tracked in [verification](../tasks/SLICE_010f2_VERIFICATION.md). Full standalone tag capture is still outstanding. |
 | 5 — 010d | Supported historical inquiry/call/text/correspondence facts, each with verified meaning. Inaccessible content stays a disclosed gap. Resolve Today behavior before enabling imported backlog for agents. |
 | 6 — 010e | Per-entity delta capture, final reconciliation and explicit cutover/activation. Resolve source privacy, enforce communication restrictions and review Today before releasing the D-064 hold; validate changes/deletions and agree a source-write cutoff/final delta. No source cancellation, phone transfer or ongoing two-way sync is implied. |
 
@@ -301,6 +311,7 @@ implementation and synthetic verification of the reviewed
 [010f1 specification](../specs/SLICE_010f1.md) and
 [brief](../tasks/SLICE_010f1_IMPL.md). Its explicit follow-up authorized Git
 integration, cleanup and deployment, now completed and
-[verified](../tasks/SLICE_010f1_RELEASE.md). Notes/tasks, later families,
-customer-data/live-source work and activation retain their own approved scope
-and readiness gates.
+[verified](../tasks/SLICE_010f1_RELEASE.md). D-067 authorizes 010f2 notes/tasks
+planning and accepts its two source-interpretation choices; full shared contracts
+and implementation are subsequently approved by D-068. Later families, customer-data/live-source
+work and activation retain their own scope and readiness gates.

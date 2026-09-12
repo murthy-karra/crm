@@ -1,5 +1,16 @@
 # Slice 016 — Tasks
 
+**Approved import/read amendment — 010f2 (D-068, 2026-09-11):**
+[010f2](SLICE_010f2.md) owns retained open/completed task import and paged admin
+review. Account-qualified `source_external_id = v1:<account-id>:<task-id>`
+supersedes §2's schema-only bare-ID example; ambiguous legacy keys are held.
+Explicit type/actor mapping, qualified source completion times and confirmed-zone
+date-only deadlines preserve the native title/kind/nullable-time model. No
+completion actor, description, calendar/reminder/recurrence behavior or history
+fact is invented. After activity confirmation, legacy complete task/history reads
+require the bounded review routes. Ordinary operational mutation/Today/Operator
+contracts are unchanged; the existing review hold prevents task execution.
+
 **Status: APPROVED by the user on 2026-09-09 ("commit and then Go for
 016a") after independent review and D-054.** Approval covers the declared
 contracts (§10) and the §1 safe defaults; it authorizes implementation of

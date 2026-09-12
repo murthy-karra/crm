@@ -12,15 +12,17 @@ import { CONTACT_CHANNEL_LABEL, CONTACT_OUTCOME_LABEL } from '../lib/labels'
 import { OPERATOR_LAUNCHER } from '../lib/operatorLauncher'
 import { CALL_HOST_KEY } from '../telephony/callHost'
 import StageLabel from './StageLabel.vue'
+import PersonReviewPreview from './PersonReviewPreview.vue'
 
 const props = defineProps<{ orgId: string; summary: PersonSummary; readOnly?: boolean }>()
 const emit = defineEmits<{ close: [] }>()
-const { data, isPending, isError, error, refetch } = usePerson(() => props.orgId, () => props.summary.id)
+const { data, isPending, isError, error, refetch } = usePerson(() => props.orgId, () => props.summary.id, () => !props.readOnly)
 const person = computed(() => data.value?.person ?? props.summary)
 const notFound = computed(() => error.value instanceof ApiError && [403, 404].includes(error.value.status))
 const host = inject(CALL_HOST_KEY, null)
 const launchOperator = inject(OPERATOR_LAUNCHER, null)
 const root = ref<HTMLElement | null>(null)
+const reviewPreview = ref<InstanceType<typeof PersonReviewPreview> | null>(null)
 const tab = ref<'activity' | 'contact'>('activity')
 const phonePicker = ref(false)
 const phones = computed(() => data.value?.contact_methods.filter((method) => method.kind === 'phone') ?? [])
@@ -50,7 +52,7 @@ function onKeydown(event: KeyboardEvent) {
 }
 onMounted(() => document.addEventListener('keydown', onKeydown))
 onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
-defineExpose({ focus: () => root.value?.focus() })
+defineExpose({ focus: () => props.readOnly ? reviewPreview.value?.focus() : root.value?.focus() })
 
 const icons = { person_imported: Inbox, inquiry_received: Inbox, routing_decision: Route, assignment_changed: UserCheck, stage_changed: Flag, contact_attempted: Phone, call_completed: Phone, correspondence: Mail }
 // SLICE_015 §1 / SLICE_016.md §8: notes and completed tasks are out of
@@ -86,7 +88,14 @@ const recent = computed(() => {
 </script>
 
 <template>
+  <PersonReviewPreview
+    v-if="readOnly"
+    ref="reviewPreview"
+    :person-id="summary.id"
+    @close="emit('close')"
+  />
   <section
+    v-else
     ref="root"
     role="dialog"
     aria-label="Person preview"

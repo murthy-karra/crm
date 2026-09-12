@@ -1,0 +1,51 @@
+{
+  "private_credential_scan": "passed",
+  "files": [
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/measurements/activity-query-plans-before.json",
+      "bytes": 658642,
+      "sha256": "b361f97652cdcb37547dc6aef1f484fdac6ec274cdd373425b40a0a8de5c9908"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/measurements/activity-query-plans-final.json",
+      "bytes": 666101,
+      "sha256": "2ee7aa065d40c816bc1f15cbff96fb7dd570560d67b5e255d0de3d766f84a687"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/measurements/final-source-sha256.json",
+      "bytes": 135731,
+      "sha256": "3ae5ece3f64c2ba7afa0bff3e8979667e25991dc858aa57c39121ec3428e8bba"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/checks/query-plans.log",
+      "bytes": 1766,
+      "sha256": "18cd3eb938f523a81124520594b77a86cc77bd8b958a77a797222a71eef43f1e"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/checks/query-plans-second.log",
+      "bytes": 526,
+      "sha256": "0ce8dceff952f0c652cc9f09266f67a35dba98ebd27ec7504e2c7f04325417a8",
+      "original_published_sha256": "0e4d56de8b9ce2d0470f58329277006d84e9324638a14143897e2473ebeecac8",
+      "normalization": "Removed extra blank lines at EOF only; original private log retained."
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/checks/query-plans-final.log",
+      "bytes": 445,
+      "sha256": "18834970c83278622af3d0416d44ee920e514b6e760f2ebf417a44738af3dbf1",
+      "original_published_sha256": "aec8598952a115a550bb741726302b84d9497d54287e198886896e9044ee20eb",
+      "normalization": "Removed extra blank lines at EOF only; original private log retained."
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/checks/measured-filter-regression.log",
+      "bytes": 531,
+      "sha256": "66b625c7f061200fcc2f5055b3133937deb45be5109073d3f1b3ce838fa64698",
+      "original_published_sha256": "be73a754d51d6e0cc616db6d7a47dd154b9776a21374b6b6e0b02603358de0d7",
+      "normalization": "Removed extra blank lines at EOF only; original private log retained."
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/checks/final-perf-clippy.log",
+      "bytes": 245,
+      "sha256": "04cb8aea87bce42ffb00d306e7a6532d92025ce4129bb6dd87c48002c0acc9b4"
+    }
+  ]
+}

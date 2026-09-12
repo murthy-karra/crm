@@ -1,0 +1,73 @@
+   Compiling log v0.4.33
+   Compiling tracing-core v0.1.36
+   Compiling siphasher v1.0.3
+   Compiling new_debug_unreachable v1.0.6
+   Compiling precomputed-hash v0.1.1
+   Compiling tendril v0.5.1
+   Compiling phf_shared v0.13.1
+   Compiling phf_shared v0.12.1
+   Compiling phf v0.12.1
+   Compiling tracing v0.1.44
+   Compiling phf_generator v0.13.1
+   Compiling string_cache v0.9.0
+   Compiling phf v0.13.1
+   Compiling chrono-tz v0.10.4
+   Compiling phf_codegen v0.13.1
+   Compiling string_cache_codegen v0.6.1
+   Compiling sqlx-core v0.8.6
+   Compiling hyper-util v0.1.20
+   Compiling tower v0.5.3
+   Compiling axum-core v0.5.6
+   Compiling web_atoms v0.2.6
+   Compiling tower-http v0.6.11
+   Compiling hyper-rustls v0.27.9
+   Compiling axum v0.8.9
+   Compiling markup5ever v0.39.0
+   Compiling reqwest v0.12.28
+   Compiling html5ever v0.39.0
+   Compiling sqlx-postgres v0.8.6
+   Compiling sqlx-macros-core v0.8.6
+   Compiling sqlx-macros v0.8.6
+   Compiling sqlx v0.8.6
+   Compiling crm-app v0.1.0 (/Users/karrad/projects/crm-010f2/backend/crates/crm-app)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 29.08s
+     Running unittests src/lib.rs (target/debug/deps/crm_app-18c9111509aea1c8)
+
+running 35 tests
+test domain::migration::activity_html::tests::comments_remain_separately_countable ... ok
+test domain::migration::activity_html::tests::lists_keep_order_nesting_and_number_overrides ... ok
+test domain::migration::activity_html::tests::unsupported_content_or_attributes_hold_instead_of_being_dropped ... ok
+test domain::migration::activity_html::tests::pre_spacing_and_literal_anchor_destination_are_not_executed ... ok
+test domain::migration::activity_html::tests::malformed_html_and_duplicate_attributes_are_held ... ok
+test domain::migration::activity_html::tests::paragraphs_headings_entities_emphasis_and_breaks_keep_text ... ok
+test domain::migration::activity_source::tests::duplicate_decoded_keys_depth_shape_and_page_budgets_fail_closed ... ok
+test domain::migration::activity_source::tests::empty_body_can_be_subject_only_but_absent_or_unqualified_body_cannot ... ok
+test domain::migration::activity_source::tests::canonical_records_preserve_unknown_exact_numbers_and_never_project ... ok
+test domain::migration::activity_source::tests::due_absence_is_deliberately_undated_but_empty_or_malformed_is_held ... ok
+test domain::migration::activity_source::tests::date_only_requires_confirmed_zone_and_preserves_utc_end_of_day ... ok
+test domain::migration::activity_source::tests::html_conversion_keeps_original_and_separate_reply_reaction_attachment_counts ... ok
+test domain::migration::activity_review::tests::native_cursor_binds_tenant_person_parent_endpoint_and_revision ... ok
+test domain::migration::activity_source::tests::completion_requires_actual_instant_without_inventing_completer_from_editor ... ok
+test domain::migration::activity_source::tests::inaccessible_or_contradictory_visibility_holds_even_a_present_body ... ok
+test domain::migration::activity_source::tests::invalid_ids_and_nonobjects_remain_individually_countable ... ok
+test domain::migration::activity_source::tests::literal_plain_text_and_subject_normalization_do_not_detect_html ... ok
+test domain::migration::activity_source::tests::list_detail_and_task_partition_observations_are_never_merged_or_selected ... ok
+test domain::migration::activity_source::tests::source_users_are_lossless_evidence_without_native_person_or_mapping ... ok
+test domain::migration::activity_source::tests::source_ids_make_role_groups_names_never_become_user_ids ... ok
+test domain::migration::activity_source::tests::missing_null_or_nonboolean_format_never_falls_back_to_plain_text ... ok
+test domain::migration::activity_source::tests::booleans_and_exact_zero_one_complete_only_in_matching_partition ... ok
+test domain::migration::activity_time::tests::microsecond_and_non_hour_offsets_survive_exactly ... ok
+test domain::migration::activity_source::tests::task_settings_and_unknown_properties_are_counted_without_native_behavior ... ok
+test domain::migration::activity_time::tests::end_of_day_uses_the_source_date_across_both_dst_transitions ... ok
+test domain::migration::activity_time::tests::requires_an_explicit_known_offset_without_rounding_or_leap_seconds ... ok
+test domain::migration::activity_source::tests::timed_due_is_exact_and_both_due_fields_must_agree_in_the_confirmed_zone ... ok
+test domain::migration::activity_time::tests::midnight_gap_and_repetition_resolve_only_with_verified_date_boundary ... ok
+test domain::migration::activity_source::tests::only_exact_documented_task_types_suggest_a_kind_without_losing_original ... ok
+test domain::migration::activity_time::tests::skipped_date_and_missing_next_date_are_held ... ok
+test domain::migration::activity_source::tests::timestamp_initialization_and_precision_are_disclosed_without_import_time_defaults ... ok
+test domain::migration::activity_source::tests::task_titles_use_native_validator_without_description_flattening ... ok
+test domain::migration::activity_review::tests::page_bounds_and_undated_cursor_are_explicit ... ok
+test domain::migration::activity_source::tests::native_note_cap_is_unicode_characters_and_never_truncates ... ok
+test domain::migration::activity_html::tests::parser_budgets_hold_without_returning_truncated_output ... ok
+
+test result: ok. 35 passed; 0 failed; 0 ignored; 0 measured; 564 filtered out; finished in 0.15s

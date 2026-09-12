@@ -602,14 +602,14 @@ export function fetchPerson(personId: string, signal?: AbortSignal): Promise<Per
   return apiFetch<PersonDetailResponse>(`/people/${personId}`, { signal })
 }
 
-export function usePerson(orgId: MaybeRefOrGetter<string>, personId: MaybeRefOrGetter<string>) {
+export function usePerson(orgId: MaybeRefOrGetter<string>, personId: MaybeRefOrGetter<string>, enabled: MaybeRefOrGetter<boolean> = true) {
   return useQuery({
     queryKey: computed(() => queryKeys.person(toValue(orgId), toValue(personId))),
     // SLICE_014 §3: the signal is forwarded so a cancelQueries (an
     // optimistic mutation's onMutate, or a route/identity change) actually
     // aborts the in-flight request instead of leaving it to resolve unused.
     queryFn: ({ signal }) => fetchPerson(toValue(personId), signal),
-    enabled: computed(() => toValue(orgId) !== '' && toValue(personId) !== ''),
+    enabled: computed(() => toValue(enabled) && toValue(orgId) !== '' && toValue(personId) !== ''),
   })
 }
 

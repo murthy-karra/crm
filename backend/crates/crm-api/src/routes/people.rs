@@ -244,7 +244,10 @@ async fn get_person(
     auth: AuthContext,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
-    let mut conn = pool.acquire().await.map_err(ApiError::database)?;
+    let mut connection = pool.acquire().await.map_err(ApiError::database)?;
+    let mut conn = crate::auth::workspace::read(&mut connection, auth.active_organization_id)
+        .await
+        .map_err(ApiError::database)?;
     let scope = PersonVisibilityScope::from_auth(&auth);
     let organization_id = scope.organization_id();
 
@@ -252,6 +255,10 @@ async fn get_person(
         .await
         .map_err(ApiError::database)?
         .ok_or(ApiError::NotFound)?;
+
+    crate::auth::workspace::activity_complete_read(&mut conn, organization_id)
+        .await
+        .map_err(ApiError::database)?;
 
     let contact_methods =
         person_queries::contact_methods_for_person(&mut conn, organization_id, person_id)
@@ -546,3 +553,8 @@ async fn clear_person_custom_field_value(
         "changed": outcome.changed,
     })))
 }
+
+// Paired operational Person-detail baseline; absent from normal builds.
+#[cfg(feature = "test-support")]
+#[path = "perf_cd3b010_person.rs"]
+pub mod perf_cd3b010_person;

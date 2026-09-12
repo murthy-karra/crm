@@ -1,0 +1,115 @@
+{
+  "private_value_scan": "passed; values never published",
+  "logs": [
+    {
+      "file": "development-crm-010f2-backend-clippy.log",
+      "original_path": "/private/tmp/crm-010f2-backend-clippy.log",
+      "original_sha256": "4e41f97980a6714d2dada197f5f84bfd02f89b120c56f3097aac33b05fc4db42",
+      "published_sha256": "4e41f97980a6714d2dada197f5f84bfd02f89b120c56f3097aac33b05fc4db42",
+      "normalization": "trailing whitespace only",
+      "scope": "development attempt; individual log result determines success, not a final gate"
+    },
+    {
+      "file": "development-crm-010f2-focused-db.log",
+      "original_path": "/private/tmp/crm-010f2-focused-db.log",
+      "original_sha256": "046479c4f16f13fb2b7c598aa48ad94cf1e282764652703de3e8ef5e6b946d95",
+      "published_sha256": "046479c4f16f13fb2b7c598aa48ad94cf1e282764652703de3e8ef5e6b946d95",
+      "normalization": "trailing whitespace only",
+      "scope": "development attempt; individual log result determines success, not a final gate"
+    },
+    {
+      "file": "development-crm-010f2-grants-db.log",
+      "original_path": "/private/tmp/crm-010f2-grants-db.log",
+      "original_sha256": "4c6cb8431174b5c0e7d4740192379c264459771d430374ea1a027debabce316c",
+      "published_sha256": "f60d41db204b0a5b56d9d9409b134d50d1a6420b4393a518bcb07f8a92437aa0",
+      "normalization": "trailing whitespace only; extra EOF blank lines removed during release",
+      "scope": "development attempt; individual log result determines success, not a final gate",
+      "before_release_normalization_sha256": "4c6cb8431174b5c0e7d4740192379c264459771d430374ea1a027debabce316c"
+    },
+    {
+      "file": "development-crm-010f2-lifecycle-db.log",
+      "original_path": "/private/tmp/crm-010f2-lifecycle-db.log",
+      "original_sha256": "ab3492396592c80c5d2feea179179cf0bfb0eb8adfca2f1460853128ba1c4de6",
+      "published_sha256": "ab3492396592c80c5d2feea179179cf0bfb0eb8adfca2f1460853128ba1c4de6",
+      "normalization": "trailing whitespace only",
+      "scope": "development attempt; individual log result determines success, not a final gate"
+    },
+    {
+      "file": "development-crm-010f2-logs-db.log",
+      "original_path": "/private/tmp/crm-010f2-logs-db.log",
+      "original_sha256": "d139e56fce24a4ae966e32b2ed3738ee952fc1bb6a60408d9ad67f86cb4e122e",
+      "published_sha256": "a664f9919355847ca17e933af4a2ac18ada908aa7766e6e6a107b4fdf13ff2d7",
+      "normalization": "trailing whitespace only; extra EOF blank lines removed during release",
+      "scope": "development attempt; individual log result determines success, not a final gate",
+      "before_release_normalization_sha256": "d139e56fce24a4ae966e32b2ed3738ee952fc1bb6a60408d9ad67f86cb4e122e"
+    },
+    {
+      "file": "development-crm-010f2-perf-clippy-final.log",
+      "original_path": "/private/tmp/crm-010f2-perf-clippy-final.log",
+      "original_sha256": "89ab1454f909ba119b0ef4ed017f8b031cb6390a8e5a61ed71d6f39a7b3246d9",
+      "published_sha256": "89ab1454f909ba119b0ef4ed017f8b031cb6390a8e5a61ed71d6f39a7b3246d9",
+      "normalization": "trailing whitespace only",
+      "scope": "development attempt; individual log result determines success, not a final gate"
+    },
+    {
+      "file": "development-crm-010f2-perf-compile.log",
+      "original_path": "/private/tmp/crm-010f2-perf-compile.log",
+      "original_sha256": "ccff72ebf435190b37e7b324b38f5fd654b48ed5abcf3e19ed8d0f48eac3a8a6",
+      "published_sha256": "ccff72ebf435190b37e7b324b38f5fd654b48ed5abcf3e19ed8d0f48eac3a8a6",
+      "normalization": "trailing whitespace only",
+      "scope": "development attempt; individual log result determines success, not a final gate"
+    },
+    {
+      "file": "development-crm-010f2-qa-compile.log",
+      "original_path": "/private/tmp/crm-010f2-qa-compile.log",
+      "original_sha256": "b2f2fc52c0ec627e7de704b55626ee1e9be0175e798f4e2e68ae48679fea083c",
+      "published_sha256": "b2f2fc52c0ec627e7de704b55626ee1e9be0175e798f4e2e68ae48679fea083c",
+      "normalization": "trailing whitespace only",
+      "scope": "development attempt; individual log result determines success, not a final gate"
+    },
+    {
+      "file": "development-crm-010f2-races-db.log",
+      "original_path": "/private/tmp/crm-010f2-races-db.log",
+      "original_sha256": "a64a4b0f7a95beb9a02f91e4a4e5798b4bf04c645e6e042de7bd8237cfc2fe0c",
+      "published_sha256": "cbce94858dee064fcb532886f7d075a89fed68833eba0cf682d81aeaac946202",
+      "normalization": "trailing whitespace only; extra EOF blank lines removed during release",
+      "scope": "development attempt; individual log result determines success, not a final gate",
+      "before_release_normalization_sha256": "a64a4b0f7a95beb9a02f91e4a4e5798b4bf04c645e6e042de7bd8237cfc2fe0c"
+    },
+    {
+      "file": "development-crm-010f2-review-tests.log",
+      "original_path": "/private/tmp/crm-010f2-review-tests.log",
+      "original_sha256": "74a896c327df9aa034f753d779ce41327d28f42e157d165822c72fc40205aaf4",
+      "published_sha256": "00cd11ce327063684831d35ad0617b31451e2f99f072ab2726978cec1c111bfd",
+      "normalization": "trailing whitespace only; extra EOF blank lines removed during release",
+      "scope": "development attempt; individual log result determines success, not a final gate",
+      "before_release_normalization_sha256": "74a896c327df9aa034f753d779ce41327d28f42e157d165822c72fc40205aaf4"
+    },
+    {
+      "file": "development-crm-010f2-source-db.log",
+      "original_path": "/private/tmp/crm-010f2-source-db.log",
+      "original_sha256": "a8e1106f2ea2c7177581420484b47ef4aecaa18ab35a1aa5c5a89a31bea12726",
+      "published_sha256": "161af4ddad9eadffcb5a42446905d5ff2caa0ce0604f65c0839d37631a633c0d",
+      "normalization": "trailing whitespace only; extra EOF blank lines removed during release",
+      "scope": "development attempt; individual log result determines success, not a final gate",
+      "before_release_normalization_sha256": "a8e1106f2ea2c7177581420484b47ef4aecaa18ab35a1aa5c5a89a31bea12726"
+    },
+    {
+      "file": "development-crm-010f2-source-tests.log",
+      "original_path": "/private/tmp/crm-010f2-source-tests.log",
+      "original_sha256": "0f13d79b712ac463ed9dbfcfc910fd9318d58402c72e37bd538b85696480d4fd",
+      "published_sha256": "64bdac862a2799d092ba65ed77f2d844253b50b7eac0a7f8d1b492b19c74f5b1",
+      "normalization": "trailing whitespace only; extra EOF blank lines removed during release",
+      "scope": "development attempt; individual log result determines success, not a final gate",
+      "before_release_normalization_sha256": "0f13d79b712ac463ed9dbfcfc910fd9318d58402c72e37bd538b85696480d4fd"
+    },
+    {
+      "file": "development-qa-build-initial.log",
+      "original_path": "/private/tmp/crm-010f2-qa-694szdwe/qa-build-initial.log",
+      "original_sha256": "8763a6067a3312254da0500d3610437da5d910526cb5649ce5e7f85756a216d7",
+      "published_sha256": "8763a6067a3312254da0500d3610437da5d910526cb5649ce5e7f85756a216d7",
+      "normalization": "trailing whitespace only",
+      "scope": "development attempt; individual log result determines success, not a final gate"
+    }
+  ]
+}

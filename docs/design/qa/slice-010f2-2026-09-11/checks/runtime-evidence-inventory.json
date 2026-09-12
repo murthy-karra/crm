@@ -1,0 +1,740 @@
+{
+  "private_credential_scan": "passed",
+  "files": [
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/browser-safe-summary.json",
+      "bytes": 56221,
+      "sha256": "d515006dc44c548b33e42ba089e164e873e92977d7dde8dcbab2304d9a5c242a"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/browser-checkpoints.json",
+      "bytes": 925851,
+      "sha256": "5775c9fd70f2a02227f9611a3456906343279d40e01f5f997b753565c50605ef"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/browser-cleanup.json",
+      "bytes": 270,
+      "sha256": "46243c17eac5bf6f0f5ffbc1a0e1c96f1cd367937733e067dbc9e9bf139e809b"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/native-reconciliation.json",
+      "bytes": 105778,
+      "sha256": "2bbcee3281de2820e172e38a797b126a0a42646d197cc0fcdeee461e4643695b"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/business-reconciliation.json",
+      "bytes": 8398,
+      "sha256": "5d62e3913a1e63184253e723dcd42f67df98dc5b7b9888da792a01d18ba363c3"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/storage-reconciliation.json",
+      "bytes": 8239,
+      "sha256": "798880d08744c50f9ce7026c4c89431c9f4d6edcd9936548ece716a0612ccc81"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/lost-response-reconciliation.json",
+      "bytes": 1265,
+      "sha256": "1ffdc788f09ed0f8a13ea08815dc394bb2d5b99968ae7bde955e259d0495b490"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/budget-deployment-events.json",
+      "bytes": 1240,
+      "sha256": "f7cf2f9550b89f5f43fb5cbace230a46454590ade9dbcdf56129b049a8587940"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/historical-before_activity.json",
+      "bytes": 1840,
+      "sha256": "3e9df2d519b8f429e9d8f1fae34c559371273abf23555ad0963d60406f7ab7e9"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/historical-after_activity.json",
+      "bytes": 2079,
+      "sha256": "da2e9ee06efcddfc32562b02eb0ba30d905e9271f927e1d9d226a8c99adf90ca"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/native-baseline.json",
+      "bytes": 1711,
+      "sha256": "74674f67d9429a380bd0bb98fee6618b8e27779e3029f3aef1cb0f76d8e1f48f"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/business-baseline.json",
+      "bytes": 7715,
+      "sha256": "95dca550db4571eb545a78073d870a541f2795f11166f225e1cd4276cbe9b00c"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/complete-reviewed-confirm.json",
+      "bytes": 378,
+      "sha256": "79085099c602f19407da1737ef486a1a520330bee3c051b78dcff4596a9307a5"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/qa-transaction-state-observation.json",
+      "bytes": 283,
+      "sha256": "49e48e9735d993f923441af1bca5919d836fd78ce3e9921fa52a1e65e5aa4b3b"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/reproduction/browser_driver.mjs",
+      "bytes": 50745,
+      "sha256": "f0362c8dfb92bbcfb10683de219f81fd0e50be9b90f9491ef2f23bb256a992dc"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/reproduction/prepare_people.py",
+      "bytes": 7415,
+      "sha256": "fb73aeab3c66276f23c48b1662b1175e48271349f61f238c43c4d38a71ae45c5"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/reproduction/audit_native.py",
+      "bytes": 11291,
+      "sha256": "f027ab023f6424811dd872b509d4a60335bb828bfaf2e71253c94ede67b77560"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/reproduction/audit_business.py",
+      "bytes": 2698,
+      "sha256": "17144a7610dd49dab2f6322d42fab3c308f068e19917d8c5c145865410dd5cd9"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/reproduction/audit_storage.py",
+      "bytes": 3127,
+      "sha256": "4825e97695832e5acef037b726a355dd6730665233cc1b4c2282f3750e0459ff"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/reproduction/preflight_historical.py",
+      "bytes": 2684,
+      "sha256": "131aae0d6a550b564871fc5f1620137d429438b71524e979c865709572b52d0e"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/reproduction/manage_api.py",
+      "bytes": 2083,
+      "sha256": "2f3f7de9267c74965a4b996efaecdec758f6f21dc6092c1b9dd9c5aac1e83ac1"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/reproduction/set_budget_ceiling.py",
+      "bytes": 2826,
+      "sha256": "a13acd3309f14e779d127459ab91b3d38cb8a8e273a39943e8e397d7e1e78863"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/reproduction/start-preview.sh",
+      "bytes": 603,
+      "sha256": "d948447e84151aeed64e288b2e1af6154207495d715e64f88d2c8ff288de57c1"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/reproduction/run-through-budget-queue.sh",
+      "bytes": 1226,
+      "sha256": "da4853f534e80cbc384df2323dec1744ed6d65eededfec3c972c794b5051a68b"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/logs/api-final-before-activity.log",
+      "bytes": 73,
+      "sha256": "9be7dd36965ab5427cbdcb9592d2344edd77115e70c94bc6d929e03d811e0dc7"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/logs/api-final-activity.log",
+      "bytes": 1180,
+      "sha256": "32a49b7ace7d90a06071975e7fcdc011b1b07473a565c12cb05474f679a3bb35"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/logs/api-budget-lowered.log",
+      "bytes": 73,
+      "sha256": "9be7dd36965ab5427cbdcb9592d2344edd77115e70c94bc6d929e03d811e0dc7"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/logs/api-budget-restored.log",
+      "bytes": 167,
+      "sha256": "d5f74b10b4b9f4e1125077b1da26d978e8869f2be17988f6c48ce604386b5d69"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/logs/prepare-people-final.log",
+      "bytes": 568,
+      "sha256": "a14e11aaaf5860eabca3ddb2887fe64cec938daf0087778065310986f3995d49"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/logs/qa-build-final.log",
+      "bytes": 72,
+      "sha256": "732186322402325172940531d8d6d7cfac85dc902585b2bef6715ad6839dacfd"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/logs/preview.log",
+      "bytes": 39,
+      "sha256": "34b75842cc290eaa417c8640b87dde73d59e9f1e5ff477e4af372d3d154a8045"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/logs/budget-budget-probe-lowered.log",
+      "bytes": 196,
+      "sha256": "a0eaad4d379c1a4f8eeed95afabc24852561dc12b1d9e1c2d5113a1106f904cd"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/logs/budget-budget-queue.log",
+      "bytes": 261,
+      "sha256": "edaddd595630f06998aed89d1b0362aea0cac8237e868c935e4e47897666065a"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/logs/budget-budget-restore-and-resume.log",
+      "bytes": 286,
+      "sha256": "fb8afdb3d7e863108c8f3d89696f355dd4a53a6773251968092776c31c4bd831"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/logs/budget-native.log",
+      "bytes": 619,
+      "sha256": "c6c0d00b0dfcb2cb73aee2e778893c5b41908dbd68ecea2a47b69ea3cbcc8ed3"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/logs/budget-plan.log",
+      "bytes": 301,
+      "sha256": "6fdda5a0344b0789a1acc0a3949738e799414285677600727a75b595b63b7226"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/logs/budget-pre-child.log",
+      "bytes": 114,
+      "sha256": "27c40b4f7812934408de36f6b7a0fbdd3ac0cd75c41a1f42080745ff692b29d3"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/logs/cancel-cancel-partial.log",
+      "bytes": 162,
+      "sha256": "791cf0a90c24e5bc7a84db1e142e8088ca9cfef0c90e66e694e687db22dc5083"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/logs/cancel-cancel-revision-and-stop.log",
+      "bytes": 411,
+      "sha256": "8c58731c5b6ab19b4864f8fc9c800ae8e56c4d0bff05a962b4f890856e01ede4"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/logs/cancel-native.log",
+      "bytes": 619,
+      "sha256": "857207a02112c4cf194e89fb78caec996c0bdb3a57b47e6975d00d1aa4effe1b"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/logs/cancel-plan.log",
+      "bytes": 104,
+      "sha256": "36e029fa1c3947e5fdce8107338878367f41eab73c194e18b9de133e5518785f"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/logs/cancel-pre-child.log",
+      "bytes": 114,
+      "sha256": "c143dad0165c2819495c722c1e424bc3d6d0ad56981f12a54d36b5c0b539426f"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/logs/complete-access-recovery.log",
+      "bytes": 112,
+      "sha256": "ccd034d828081ba9f422885ee66042d008f522f43c7d6f3f8534415aa52b831b"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/logs/complete-access.log",
+      "bytes": 112,
+      "sha256": "ccd034d828081ba9f422885ee66042d008f522f43c7d6f3f8534415aa52b831b"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/logs/complete-complete-confirm-lost.log",
+      "bytes": 142,
+      "sha256": "c75f7c66776cf5ceb576b80c3f824f9548ebe75f488b313afffe935040afc167"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/logs/complete-complete-drain.log",
+      "bytes": 128,
+      "sha256": "c74815d8318474b194d6afd3c40a8a4e954222df1d3d37160f0e8c4a6f168cd7"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/logs/complete-confirm-recovery.log",
+      "bytes": 203,
+      "sha256": "bef432046ef1100af0093c15a4c994b2354c1dce433f47bbc41f5cea79706e57"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/logs/complete-disconnect.log",
+      "bytes": 120,
+      "sha256": "14a3c5f244c246b035ddfb64058b3b69e15e15b78880a150bdfa1438a1a4d1c0"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/logs/complete-native.log",
+      "bytes": 112,
+      "sha256": "d4c1f9fbdd51b1697ded9d63b4b38c0f36ebe9c8d194525ade754209ca3da92f"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/logs/complete-plan.log",
+      "bytes": 108,
+      "sha256": "b22be92cf27c717e2706798b885def979b19ca2ac78eea821ed5371d787d2a3b"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/logs/complete-pre-child.log",
+      "bytes": 118,
+      "sha256": "ab89f962ebc3c0b33a1b8f17912ebd0028acd0ff5f1d25b8431780a9f520c078"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/logs/1789186784915-complete-pre-child-failure.txt",
+      "bytes": 511,
+      "sha256": "7a57c55a40ae18c927e8c708a9626ff502cfc125a59858a12bb2615b37663a8a"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/logs/1789186880539-complete-complete-confirm-lost-failure.txt",
+      "bytes": 241,
+      "sha256": "40635c9e1674b1356156747ed245ae88f9d5c45dd4e38959b23692d71ada901c"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/logs/1789187621675-cancel-cancel-partial-failure.txt",
+      "bytes": 693,
+      "sha256": "c0bf96a70185071ccf4ace1c9ee1bc870a9aac8c5766f2397b7c27fcff9d6b03"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789186784915-complete-pre-child-failure.png",
+      "bytes": 21878,
+      "sha256": "8f1c0af8b1e837fe71b27456f3d16feec9ada3422ecb3320e2e681ac4017627d"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789186833142-complete-pre-child-complete-pre-child-core-390.png",
+      "bytes": 57708,
+      "sha256": "54e1abf80d6eb50bffaef2ddea9a8a14c67cb1e62d885a041ec41ec8d6b6f631"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789186833142-complete-pre-child-complete-pre-child-core.png",
+      "bytes": 95387,
+      "sha256": "31129bb249ef3beb18c16f21de298da9c795fca20286bf3d17ea683d0d52ae32"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789186835230-cancel-pre-child-cancel-pre-child-core-390.png",
+      "bytes": 57504,
+      "sha256": "d59ac6a2b38dd839c55056f11fe0eb41182af89f4758dd38626c25aa014b6910"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789186835230-cancel-pre-child-cancel-pre-child-core.png",
+      "bytes": 95383,
+      "sha256": "a54fb58a340e78a173becc1e4cd361a039174d65e0e434972d14fff72ffe7f3b"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789186836957-budget-pre-child-budget-pre-child-core-390.png",
+      "bytes": 56911,
+      "sha256": "48390f7d225f44e8a7ded28bacde632a2a676d376b7479a6f234de2223e8cee1"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789186836957-budget-pre-child-budget-pre-child-core.png",
+      "bytes": 94816,
+      "sha256": "b25b144bdb6e34a8f5f5cd512358093d5dd9f5f686b2dc2b554a6c4978722d6f"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789186838773-complete-plan-complete-dst-501.png",
+      "bytes": 108613,
+      "sha256": "b189f22dd3222fac6b2a6f9466ba12a4f9d08b6a652b1bb0efa34851d9de98f1"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789186838773-complete-plan-complete-dst-504.png",
+      "bytes": 107277,
+      "sha256": "879ffce98968e7079bdaa873331170ccd38ea4a3749a91ab7f3ada21008e62cc"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789186838773-complete-plan-complete-exact-capture-observation.png",
+      "bytes": 188926,
+      "sha256": "627d34847e61b0ae38d4cff809b304cb0cd09465503d0ac5361155df2b57fc9b"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789186838773-complete-plan-complete-explicit-mappings-zone-390.png",
+      "bytes": 51608,
+      "sha256": "627702e1ad26e7101040833b640ca513e8be2a3cf85c48b23f2cedb4961ee104"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789186838773-complete-plan-complete-explicit-mappings-zone.png",
+      "bytes": 122358,
+      "sha256": "d94b5b45c7ce1bf4ae0b5cce88a3432d9dc9540978653527e82903048ff7e4bd"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789186838773-complete-plan-complete-inactive-historical-author.png",
+      "bytes": 175282,
+      "sha256": "16bb0f4feb55b500cfddf202266f4827c276bc770886eee34d9e44bd981ba894"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789186838773-complete-plan-complete-mapping-draft.png",
+      "bytes": 152477,
+      "sha256": "a2cca202dace4ea0168e2ba59c7fd999dfd550cbe5eb108208242d8d23116370"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789186838773-complete-plan-complete-readable-html-native-preview.png",
+      "bytes": 148720,
+      "sha256": "47fa42a45402e230f6c747311953740199637efc12fb277b8f066125d5f83af7"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789186838773-complete-plan-complete-source-html-replies-390.png",
+      "bytes": 76709,
+      "sha256": "b4a7ba8020e0fe4dfe5f06eacc6d8cb2cd96016d0a2837c219e991a41f2d2a1c"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789186838773-complete-plan-complete-source-html-replies.png",
+      "bytes": 151653,
+      "sha256": "3884b2b3ef302da45ebf7bd764d175b9ead4072d0f641176804e69260d153fd2"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789186838773-complete-plan-complete-unknown-author-source.png",
+      "bytes": 149748,
+      "sha256": "ebb8bf521cd644e16550c0bf3864f825aeb31538a4f8f8271bb0eafeaa89ffcc"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789186880539-complete-complete-confirm-lost-complete-named-confirmation-390.png",
+      "bytes": 81181,
+      "sha256": "9cef792119853e13e6e9bf8b61cee2a6eeccfb0e2b151266133ffbf12f7fca95"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789186880539-complete-complete-confirm-lost-complete-named-confirmation.png",
+      "bytes": 202527,
+      "sha256": "952d9eba0f1755d7ee15dcb95c650ae29f9ece15611215d0900ee45ff7945564"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789186880539-complete-complete-confirm-lost-complete-uncertain-confirmation-retry.png",
+      "bytes": 184435,
+      "sha256": "d8f8e99801a94da65d2ff6ec2a85aae29b6194ddca8398faf256c1bfda4170b4"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789186880539-complete-complete-confirm-lost-failure.png",
+      "bytes": 148223,
+      "sha256": "6ccacc991ed8aeff21eec97907d9d8993b6127dd5b4fba08b588ca5e0df11b8b"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187059779-complete-complete-drain-complete-completed-activity-summary.png",
+      "bytes": 160269,
+      "sha256": "45de2d8837a5c599029577f1bc29a30f52b1b991187dcd86179edfcdd90db08e"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187072544-complete-native-complete-full-native-note-390.png",
+      "bytes": 57443,
+      "sha256": "2178e78bbde79da62d43db9e9b8d1fc2ecd8831b0cee2d67cb7c6d4d9f5b639e"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187072544-complete-native-complete-full-native-note.png",
+      "bytes": 149253,
+      "sha256": "ec80be85c179069d458815aff9408c0829afab10dacda10ea2ee2b61b330779f"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187072544-complete-native-complete-native-source-provenance-390.png",
+      "bytes": 61701,
+      "sha256": "44153cc38bd859ec930c7f760bd73baa98f4fe6f281c5a8e916d1652df892099"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187072544-complete-native-complete-native-source-provenance.png",
+      "bytes": 163998,
+      "sha256": "239e65f4c4f4cfef90cb901c460f5e161a799b9ab1817ad78a81c6abd5690331"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187072544-complete-native-complete-person-101-native-core-390.png",
+      "bytes": 21266,
+      "sha256": "f15c4bfbd37a9bd158b92fb8dd07beaa9e1efc120f8201afffcb8d06ae5a7054"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187072544-complete-native-complete-person-101-native-core.png",
+      "bytes": 94502,
+      "sha256": "2e6637870691ab86d11d39426291a241e3e46aaea631c80eb4b1a6ba136a6a4f"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187072544-complete-native-complete-person-102-native-core-390.png",
+      "bytes": 56965,
+      "sha256": "1b5010d8aea021a6270e7420e0375eee5eae8569171a88fc730e2264b930e32c"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187072544-complete-native-complete-person-102-native-core.png",
+      "bytes": 105354,
+      "sha256": "c49e8532464c1103b7e9ea81aa76dbdb734053bfb400c09ee2e92317c9707651"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187075614-complete-access-complete-demoted-admin-hold-390.png",
+      "bytes": 29976,
+      "sha256": "84647c68350176a59e10868f7d6d4190fec61a57d89898339025460425cf8d1a"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187075614-complete-access-complete-demoted-admin-hold.png",
+      "bytes": 44092,
+      "sha256": "6bf514ffbf27ccb0d42d888094f866d5b5a3c2baa60889f921d282f55a828be8"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187075614-complete-access-complete-ordinary-member-hold-390.png",
+      "bytes": 30102,
+      "sha256": "a0998b14581c9bc7e9f63e4104d881791261e60bf293382f3b7742bb12fcfa5e"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187315541-cancel-plan-cancel-dst-normalized-501.png",
+      "bytes": 114218,
+      "sha256": "d9e001708f328627ad3dd003620a019ec632691808f53257896d04a0677592d5"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187315541-cancel-plan-cancel-dst-normalized-504.png",
+      "bytes": 111731,
+      "sha256": "4b55bd464d26d4e8fa830325b9b30d0ad22985e51f3881e31082d33b77f253ea"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187315541-cancel-plan-cancel-exact-capture-observation.png",
+      "bytes": 316192,
+      "sha256": "ec2306e89bc7ffc418d5c68ac1a313e4778e3859139f73c481c9214090e40ae2"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187315541-cancel-plan-cancel-explicit-mappings-zone-390.png",
+      "bytes": 51938,
+      "sha256": "ba65fc814bcd62a96eeb1caa475e03cbf922df5836b43fac72181e3975647552"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187315541-cancel-plan-cancel-explicit-mappings-zone.png",
+      "bytes": 122323,
+      "sha256": "8d513542977d9876f4290e39409b58d7029601d2f05546482f0560de3ae2d4a5"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187315541-cancel-plan-cancel-inactive-historical-author.png",
+      "bytes": 176113,
+      "sha256": "4a14451091c88954a2ee0d936329040978a0f73759ca8e4e5858ce97d08a5d45"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187315541-cancel-plan-cancel-mapping-draft.png",
+      "bytes": 152366,
+      "sha256": "45c49ba5017040f845b160e8a14a9e8e6f1db0ecd28d5ae58818716abb3cb899"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187315541-cancel-plan-cancel-readable-html-native-preview.png",
+      "bytes": 148999,
+      "sha256": "1d004d8948898c1a05762259b5b148a9316c3d11109ebeff7752f717250b5953"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187315541-cancel-plan-cancel-source-html-replies-390.png",
+      "bytes": 76101,
+      "sha256": "45fdb83afc0d080c4f48948d5594ff69b882b53b0c511706b6de6e29bb82d134"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187315541-cancel-plan-cancel-source-html-replies.png",
+      "bytes": 151877,
+      "sha256": "2766f50d422ec7197dc83d874dbc7c38aabe8786dda4bca890a519077d1c807f"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187315541-cancel-plan-cancel-unknown-author-source.png",
+      "bytes": 162319,
+      "sha256": "f33acb2b452568d1bd89188fbaa6d4a1084e2676451df12ee125e58c44c3395e"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187621675-cancel-cancel-partial-cancel-named-confirmation-390.png",
+      "bytes": 79645,
+      "sha256": "05f2e02ae923dd15f8a8f6cd176e3323400d173ae8296df20a9f0629b485b4a8"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187621675-cancel-cancel-partial-cancel-named-confirmation.png",
+      "bytes": 204983,
+      "sha256": "f6b64867fdc8ba15be971f53309b8db4bcf6b1e7f7100c0e624272246f0c1ab0"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187621675-cancel-cancel-partial-failure.png",
+      "bytes": 201847,
+      "sha256": "84e57931849f03c9aae626f0b26127c16ee3c8d7da32f216d4a2ab531c8d0dc9"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187863643-cancel-cancel-revision-and-stop-cancel-cancelled-retained-subset.png",
+      "bytes": 163247,
+      "sha256": "d4593bc6e9bee577e687c618f8d20983f54f9783d549b53d4ecf26e5b4e82bfd"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187863643-cancel-cancel-revision-and-stop-cancel-partial-open-note-before-revision.png",
+      "bytes": 148973,
+      "sha256": "863259a2d45d8d2e8a0853b29ac8e319e10e7f5034e96cfc1802498120cecc8a"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187863643-cancel-cancel-revision-and-stop-cancel-permanent-cancel-dialog-390.png",
+      "bytes": 70733,
+      "sha256": "de5e8131e5ec57439dc79f347fd023d9953f8ffca2adb2e5ba642b8c9b6b7926"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187863643-cancel-cancel-revision-and-stop-cancel-permanent-cancel-dialog.png",
+      "bytes": 195101,
+      "sha256": "c961f4412cdb417ac9ecea683d011e6dee1c517e604f7ccc5df2bbd93e7076ef"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187877221-cancel-native-cancel-full-native-note-390.png",
+      "bytes": 55882,
+      "sha256": "56426d3618c07e305dedb8bfa8588d32aa085a45dbdda88586bd98e4b865a43e"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187877221-cancel-native-cancel-full-native-note.png",
+      "bytes": 148807,
+      "sha256": "c99146d1be227f3fb561d0293e8d76dc74230233f91a343288d27fe182e4341e"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187877221-cancel-native-cancel-native-source-provenance-390.png",
+      "bytes": 61454,
+      "sha256": "b9905d08ff30ec78e03b6eca9368974bfa30c546ea2dc75d49638a37b2401b35"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187877221-cancel-native-cancel-native-source-provenance.png",
+      "bytes": 164344,
+      "sha256": "3469fc5a79dbf70815aed06a1d52c377a00eef5709b0501988cb2c1ca75ec2ac"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187877221-cancel-native-cancel-person-101-native-core-loaded-390.png",
+      "bytes": 58428,
+      "sha256": "0503575be6ac6f033bd7e1960b8a94cf1701ab7ee727c5ca738d72d86ac90a4e"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187877221-cancel-native-cancel-person-101-native-core.png",
+      "bytes": 93931,
+      "sha256": "71d349e17302d4eb1f8de73ef079087ab5c0c13397038f17a56a8318264aad06"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187877221-cancel-native-cancel-person-101-notes-loaded-390.png",
+      "bytes": 58428,
+      "sha256": "0503575be6ac6f033bd7e1960b8a94cf1701ab7ee727c5ca738d72d86ac90a4e"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187877221-cancel-native-cancel-person-101-notes-paging-controls-390.png",
+      "bytes": 50116,
+      "sha256": "747554d2af6fdb870edc644f7871b706bc8685773fe34c9ee3d15b0f85e1b4f3"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187877221-cancel-native-cancel-person-102-native-core-loaded-390.png",
+      "bytes": 57699,
+      "sha256": "db69a894d1c24d673ce98dc82a87dc96cd4ef2e3eade4a0ae949026f22eb2582"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187877221-cancel-native-cancel-person-102-native-core.png",
+      "bytes": 99603,
+      "sha256": "58d45d1c1732bde9991408db5dcf861e6588fca5c5823375c088ea20a668c5b7"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187877221-cancel-native-cancel-person-102-notes-loaded-390.png",
+      "bytes": 57699,
+      "sha256": "db69a894d1c24d673ce98dc82a87dc96cd4ef2e3eade4a0ae949026f22eb2582"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187877221-cancel-native-cancel-person-102-notes-paging-controls-390.png",
+      "bytes": 62580,
+      "sha256": "7e7a23841ae0bf11a5e158c643c538f056e5d488375952c70872f682f9bc0c60"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187880504-budget-plan-budget-dst-normalized-501.png",
+      "bytes": 112718,
+      "sha256": "91fc8394676c42e4686edc2056f550cad253fcd36f0c9ea9ecfb7219ea539ebc"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187880504-budget-plan-budget-dst-normalized-504.png",
+      "bytes": 112340,
+      "sha256": "b9cbc60a493464c9a0a3773ef90e59280213d09801f48992d2c7f905d359b5b6"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187880504-budget-plan-budget-exact-capture-observation.png",
+      "bytes": 187463,
+      "sha256": "906a3416453ba319f8c00d1099cc12ef2db056d1bb4a3ef1237b0db574c41860"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187880504-budget-plan-budget-explicit-mappings-zone-390.png",
+      "bytes": 51453,
+      "sha256": "1011a4abffb97e9ee96a1c81a45a8ac409fe25769388437f10602b6eeaa7a678"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187880504-budget-plan-budget-explicit-mappings-zone.png",
+      "bytes": 122690,
+      "sha256": "059ecf9e5f05e8e4ff99b60db665c68a58759292a247dfd68fb45c500ee43494"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187880504-budget-plan-budget-inactive-historical-author.png",
+      "bytes": 175139,
+      "sha256": "6b8f91a855d8baa4077ff83155101c70728f914649f8d77a2ddc75d699d42267"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187880504-budget-plan-budget-mapping-draft.png",
+      "bytes": 152810,
+      "sha256": "39130009ca9fde6650a3bbec321aa71db1414f81b98d665af738550c068b842b"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187880504-budget-plan-budget-readable-html-native-preview.png",
+      "bytes": 149447,
+      "sha256": "5f83c8448e315bed21aa340e378c7898b1d128a4dce0767fb60e37b44baa3dc8"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187880504-budget-plan-budget-source-html-replies-390.png",
+      "bytes": 76522,
+      "sha256": "783aea32c4ff9406775f9d3845ce0c773f96e036f7a7e8a16f40536b7177c1f8"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187880504-budget-plan-budget-source-html-replies.png",
+      "bytes": 152249,
+      "sha256": "c21cd430320c41b6f6c58b43b1a3024ca9ec62fc4db69ef9008d48ad98f4715d"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187880504-budget-plan-budget-unknown-author-source.png",
+      "bytes": 161834,
+      "sha256": "564c7712867bb5ed09a43835ab6e7bd0c1a9c2d2a1beb3e522ae343d268a65cf"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187930849-budget-budget-queue-budget-named-confirmation-390.png",
+      "bytes": 86452,
+      "sha256": "77af9d4244bf109ed46f09957c4f114eae0adbbc3f14f89b98eb4e5f610ed9a8"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789187930849-budget-budget-queue-budget-named-confirmation.png",
+      "bytes": 199794,
+      "sha256": "fedcfdab767b1f477623504fc7f17fa9fc5f473ec3c2f4c959200ecef4ec535e"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789188049949-budget-budget-probe-lowered-budget-deployment-headroom-storage-pause.png",
+      "bytes": 154653,
+      "sha256": "8309c2b982151633fb272b16a201ea93311380af4039a34c196cd2da477e750d"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789188111483-budget-budget-restore-and-resume-budget-completed-activity-summary.png",
+      "bytes": 160560,
+      "sha256": "200ab657891b6836de37f755e67ae7de464374ff3f4458c69df46f62ee150615"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789188111483-budget-budget-restore-and-resume-budget-explicit-allowance-increase.png",
+      "bytes": 217549,
+      "sha256": "4774da837f1bf2f46ead6edac9fcfcf73c182a2db207dcf4f562fa69eb34e046"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789188143157-budget-native-budget-full-native-note-390.png",
+      "bytes": 55590,
+      "sha256": "04b285aca797c8a4505330474c562c83d4cdb3e2ff64a3d0c8fde54e237a1f19"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789188143157-budget-native-budget-full-native-note.png",
+      "bytes": 147855,
+      "sha256": "a8bce92c08f817c1dd5486829c6c35479a8f494952555d63ee8c22a3a5dfc738"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789188143157-budget-native-budget-native-source-provenance-390.png",
+      "bytes": 61128,
+      "sha256": "a89423a43a23f3de00f4c9901a2e286362232d3ea0547f073efdc1e1d693bc73"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789188143157-budget-native-budget-native-source-provenance.png",
+      "bytes": 163505,
+      "sha256": "22a7e980397ef6e8763b449b03290f882eb8a26e8ad62f62b65001234d455b1b"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789188143157-budget-native-budget-person-101-native-core-loaded-390.png",
+      "bytes": 57271,
+      "sha256": "7b07b89e40446c32e1c6c08ac38940ed809c5006fb556bb59f9d2521f861e802"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789188143157-budget-native-budget-person-101-native-core.png",
+      "bytes": 93250,
+      "sha256": "47183b60b5e782505e04b03d857b37035fcee7e07c517ba5baacf6992135a476"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789188143157-budget-native-budget-person-101-notes-loaded-390.png",
+      "bytes": 57271,
+      "sha256": "7b07b89e40446c32e1c6c08ac38940ed809c5006fb556bb59f9d2521f861e802"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789188143157-budget-native-budget-person-101-notes-paging-controls-390.png",
+      "bytes": 49414,
+      "sha256": "87fea1695b47bd8f11c2e5c84c65f8868e4d71e1061efa9b3de0b3c4ef4a5159"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789188143157-budget-native-budget-person-102-native-core-loaded-390.png",
+      "bytes": 59307,
+      "sha256": "f584f03d7647d5174116848a5992eb562c9740ea99e41ef32cc2167cbbd9083b"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789188143157-budget-native-budget-person-102-native-core.png",
+      "bytes": 104814,
+      "sha256": "f16a0c4de28c9a0fa00ee68ebe4cb8b77cd54b8db860f194da9de687de5a4146"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789188143157-budget-native-budget-person-102-notes-loaded-390.png",
+      "bytes": 59307,
+      "sha256": "f584f03d7647d5174116848a5992eb562c9740ea99e41ef32cc2167cbbd9083b"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/runtime/screenshots/1789188143157-budget-native-budget-person-102-notes-paging-controls-390.png",
+      "bytes": 64324,
+      "sha256": "7a0bfbc11ab501a806b5084d4160221a2c1fe75e7fb0983d5d9d637929932535"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/checks/final4-source-sha256.json",
+      "bytes": 135731,
+      "sha256": "e0649d8e40cbaac17d09f0de8f2027cde61f0cb9d604cdd181a243084bdc40be"
+    }
+  ]
+}

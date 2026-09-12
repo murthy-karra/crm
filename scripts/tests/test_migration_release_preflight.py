@@ -241,12 +241,15 @@ class PreflightTests(unittest.TestCase):
         calls = []
         def fake_run(command, **kwargs):
             calls.append((command, kwargs))
-            value = {"present": True, "database_name": "synthetic_only"} if len(calls) == 1 else fixtures("1")[3]
+            value = [{"present": True, "database_name": "synthetic_only"}, fixtures("1")[3], {"present": True}, {"count": "2"}][len(calls)-1]
             return mock.Mock(returncode=0, stdout=json.dumps(value).encode())
         with mock.patch.object(MODULE["subprocess"], "run", side_effect=fake_run):
             result = MODULE["database_state"]()
         self.assertEqual(result["binding_count"], "1")
-        self.assertEqual(len(calls), 2)
+        self.assertEqual(len(calls), 4)
+        self.assertEqual(result["activity_binding_count"], "2")
+        self.assertIn("confirmed_plan_id IS NOT NULL", calls[3][0][-1])
+        self.assertNotIn("state=", calls[3][0][-1])
         sql = calls[1][0][-1]
         self.assertIn("FROM public.migration_workspace", sql)
         self.assertNotIn("WHERE", sql)
@@ -255,6 +258,20 @@ class PreflightTests(unittest.TestCase):
             self.assertIn("default_transaction_read_only=on", kwargs["env"]["PGOPTIONS"])
             self.assertIn("--no-password", command)
             self.assertEqual(kwargs["timeout"], 15)
+
+    def test_activity_confirmation_and_recovery_require_api_worker_capability(self):
+        for bound in ["0", "1"]:
+            values = fixtures("1")
+            values[3].update(activity_schema_present=True, activity_binding_count=bound)
+            values[0]["artifacts"][0]["capabilities"] = [METADATA]
+            report = check(values)
+            self.assertFalse(report["activity_confirmation_ready"])
+            self.assertEqual(report["launch_allowed"], bound == "0")
+            values[0]["artifacts"][0]["capabilities"].append("fub-activity-import-v1")
+            report = check(values)
+            self.assertTrue(report["activity_confirmation_ready"])
+            self.assertTrue(report["launch_allowed"])
+            self.assertTrue(report["metadata_confirmation_ready"])
 
     def test_database_error_does_not_echo_secret_stderr(self):
         with mock.patch.object(MODULE["subprocess"], "run", return_value=mock.Mock(returncode=1, stdout=b"", stderr=b"password=private")):

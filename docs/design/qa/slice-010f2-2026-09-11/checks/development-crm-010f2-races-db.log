@@ -1,0 +1,11 @@
+   Compiling crm-app v0.1.0 (/Users/karrad/projects/crm-010f2/backend/crates/crm-app)
+   Compiling crm-api v0.1.0 (/Users/karrad/projects/crm-010f2/backend/crates/crm-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 34.00s
+     Running tests/all.rs (target/debug/deps/all-07593333edaca6c2)
+
+running 3 tests
+test db_activity_races::activity_race_cancel_waits_for_inflight_unit_then_fences_all_later_units ... ok
+test db_activity_races::activity_race_expired_inflight_unit_rolls_back_and_real_workers_reclaim_once ... ok
+test db_activity_races::activity_race_sibling_commands_cannot_oversubscribe_run_or_org_and_settle_owned_bytes ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 1008 filtered out; finished in 13.24s

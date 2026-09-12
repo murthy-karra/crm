@@ -1,0 +1,2 @@
+Synthetic-only QA API listening on 127.0.0.1:3017; database crm_010f2_qa
+2026-09-12T04:42:23.873033Z  WARN sqlx::postgres::notice: there is no transaction in progress

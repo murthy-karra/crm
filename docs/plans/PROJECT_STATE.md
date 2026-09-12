@@ -1,6 +1,6 @@
 # Project state
 
-Last updated: 2026-09-11 (010f1 merged, published, cleaned up and deployed/verified).
+Last updated: 2026-09-11 (010f1 deployed/verified; 010f2 implemented and verified under D-068; uncommitted and unreleased).
 This file holds current operational status, active work and live residuals.
 [PROJECT_HISTORY.md](PROJECT_HISTORY.md) preserves earlier progress, the slice
 ledger and historical measurements; its old instructions are not current work.
@@ -48,6 +48,16 @@ or production-cluster deployment occurred.
 
 ## Current slice
 
+- **010f2 implementation:** implemented under D-068; both bounded reviews,
+  measured SQL/paired-reader checks, all 18 production-Web phases and exact
+  native/business/storage reconciliation have passed. All final gates and owned
+  cleanup passed; see [verification](../tasks/SLICE_010f2_VERIFICATION.md).
+  Retained notes/open/completed tasks use explicit mappings, preserved originals,
+  confirmed timezone and bounded admin review under the unchanged hold. Source
+  remains uncommitted in `/Users/karrad/projects/crm-010f2` on
+  `codex/slice-010f2-activity-import`; 010f1 remains deployed. SQLx cancellation
+  notices are tracked with attribution limits in production readiness. Live
+  FUB/customer-data work, release and activation remain separate scopes.
 - **010f1 implementation and release:** complete under D-066 and its follow-up. The
   [specification](../specs/SLICE_010f1.md),
   [brief](../tasks/SLICE_010f1_IMPL.md) and
@@ -116,8 +126,12 @@ that merge. Only the main worktree remains; `codex/slice-010f1-metadata-import`
 and its merged worktree are removed. The release's own temporary stash was
 dropped after preserving original copies and verifying their integrated versions
 (36 identical, nine expected updates).
-A subsequent documentation-only commit records the release/current-state evidence
-without changing the deployed implementation.
+The subsequent documentation-only commit `cd3b010` records the release/current-state
+evidence without changing the deployed implementation. HEAD remains there during
+010f2 planning; the new plan and its decision/status pointers are uncommitted
+documentation changes. The approved implementation now has the isolated worktree
+`/Users/karrad/projects/crm-010f2` and branch `codex/slice-010f2-activity-import`,
+with those documents copied and new source work still uncommitted.
 Shared `crm_dev` data and historical recovery material are preserved. Three
 additional 010c recovery binary copies are retired as non-executable, and the
 23 older retired paths remain non-executable. Recovery requires the compatibility
@@ -125,6 +139,18 @@ runbook and fresh metadata-capable workload evidence before launch/confirmation.
 Inspect Git and the release record for current source/runtime identity.
 
 ## Last accepted decision
+
+**D-068:** the user approved the complete reviewed 010f2 specification, policies,
+shared contracts and implementation with isolated synthetic verification. This
+includes the bounded native review/body-read amendment and activity-capable
+recovery contract. Git integration, deployment, live FUB/customer processing and
+activation remain separate scope.
+
+**D-067:** next notes/tasks import planning and independent review are authorized.
+The user accepts readable plain-text HTML notes with preserved originals and
+date-only deadlines at the end of the day in an explicitly confirmed source
+timezone. D-068 subsequently accepts the complete reviewed 010f2 specification and
+implementation; source access and release actions remain separate scope.
 
 **D-066:** the complete independently reviewed 010f1 specification, execution
 brief, policies and declared shared contracts are approved for implementation
@@ -173,8 +199,9 @@ Foundations F-01/F-02/F-03 remain proposals except where separately accepted.
   in [the ladder](SLICE_010_LADDER.md). New, empty Organization first and
   010a's source/credential contracts are accepted. Full inventory, mapping,
   later imports and cutover need their own specifications and approvals. 010c and
-  010f1 are implemented, integrated and deployed. Notes/tasks are the next
-  core-import planning scope; live FUB/customer-data work and activation stay deferred.
+  010f1 are implemented, integrated and deployed. The next notes/tasks scope is
+  implemented in [010f2](../specs/SLICE_010f2.md), with synthetic verification recorded separately from release.
+  Live FUB/customer-data work and activation stay deferred.
 - **Remote gates (gate-speedup phase 2): DEFERRED** pending local
   phase-1 results (now in: local gates are ~3 min — pressure is low).
   Survey recorded so it is not re-litigated: first choice GitHub
@@ -298,6 +325,13 @@ and now lives only in git history.
 
 ## Latest verification
 
+- 2026-09-11 010f2 planning: complete specification, implementation brief and
+  source/code evidence received independent review. The all-held confirmation
+  finding is corrected with a minimum eligible-unit check and explicit tests;
+  [the review record](../tasks/SLICE_010f2_REVIEW.md) retains the disposition and
+  reviewed hashes. Planning uses public documentation and local code only; no
+  application tests/builds, DB operations, runtime changes or live FUB calls.
+
 - 2026-09-11 010f1 release: implementation `f37ddd1`, merge `e36ce36`, published
   and all 975 source hashes verified. Locked backend/Web builds and additive
   migration `20260919000001` passed; the 109,990,155-byte backup catalog was
@@ -415,11 +449,10 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. Plan the next core-import scope for notes/tasks, with their own specification,
-   authorship/timestamp fidelity and local-edit/tombstone protections. The 010f1
-   integration, cleanup and deployment are complete; current People/tag/custom-field
-   imports preserve the review hold. Renew the actual workload inventory and
-   compatibility report before any later import confirmation or recovery.
+1. Obtain the separate Git/release instruction for the verified 010f2 worktree.
+   [Implementation verification](../tasks/SLICE_010f2_VERIFICATION.md) and owned
+   cleanup are complete; 010f1
+   remains deployed and the import workspace remains held for review.
 2. Resume authorized FUB qualification when the user is ready, against an agreed
    dataset and applicable readiness gates. Later data families, mapping repair,
    deltas and activation need their own approved specification.
@@ -436,6 +469,9 @@ and now lives only in git history.
 
 ## Approval currently required
 
+- D-068 approves the complete 010f2 specification, shared contracts, implementation
+  and isolated synthetic checks. No repeat implementation approval is needed.
+  Commit/merge/push, deployment, live validation and activation remain separate scopes.
 - D-066's complete 010f1 implementation and synthetic verification, followed by
   explicitly authorized Git integration, cleanup and shared-development deployment,
   are finished; no repeat release approval is needed. Notes/tasks implementation,

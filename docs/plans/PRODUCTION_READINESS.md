@@ -10,10 +10,10 @@ contracts, retention policy or service commitments. Accepted decisions in the
 
 | Area | Verified state / remaining gap |
 |---|---|
-| Shared development | 010b deployed from `89471f0b7bccc3e91c5f6c94aacecf7e7bd2216d`; API/Web/auth/tunnel smoke checks passed. This is the Mac-hosted runtime, not a production-cluster deployment. |
+| Shared development | 010f1 deployed from `e36ce360a4956b76b6f8dc537a051e6cb8cbc7b7`; see its dated release evidence and current project state. This is the Mac-hosted runtime, not a production-cluster deployment. |
 | Source integration | Synthetic checks passed. Live FUB validation is user-deferred; registered system identification is unset; no live connection or assessment was created by the release. |
 | Backup | A private custom-format PostgreSQL dump was created and its catalog read. **No restore exercise was performed.** Its temporary local location is not a durable backup policy. |
-| Migration | 010a assesses access only. 010b core snapshot/preview is implemented, synthetically verified and deployed in shared development under D-063. Business import, remaining capture families and cutover are later work. |
+| Migration | 010a assessment, 010b snapshot/preview, 010c People and 010f1 metadata are implemented. 010f2 retained notes/tasks passes synthetic runtime reconciliation and remains uncommitted/unreleased. Imports remain in administrator review; remaining families, customer-data qualification, deltas and activation are separate work. |
 | Privacy | D-015 requires an erasure runbook before first real design-partner data. O-012/O-013 remain open; disconnecting FUB removes a credential, not captured evidence or backups. |
 | Production services | ZITADEL integration, OpenBao integration, CI and OpenObserve deployment remain deferred under D-014/D-016. Development uses local authentication, `.env`, local checks and console logs. |
 | Capacity | D-050 defines 25,000 People, 50 members and five concurrent Today loads per Organization. A production-shaped capacity baseline is still required; planning estimates for larger populations are not measured capacity. |
@@ -67,6 +67,37 @@ items describe proposed work to scope in the relevant slice.
 | C4 — Before C; proposed restore proof | Restore a synthetic database backup into an isolated disposable environment using the procedure below. Retain sanitized results; do not restore over shared development or production to demonstrate recovery. | Database/platform owner |
 | C5 — Before M; required D-012/D-059 | Approve and verify the relevant import contracts: transactional destination eligibility, source-to-destination identity, mappings, idempotency, rerun/recovery, reconciliation and explicit unsupported/inaccessible data. Approval of a snapshot is not approval to import it. | Migration/backend owner with product owner |
 | C6 — Before cutover; required D-012 | Approve delta/reconciliation, final coverage, cutover steps and recovery/rollback policy for that customer. Record unresolved gaps and their accepted disposition; a completed core snapshot is not complete migration fidelity. | Migration owner with customer onboarding owner |
+
+The D-068 activity addition expands C1's future erasure inventory: native
+`note`/`task` plaintext and their read projections; encrypted activity plan patches
+and destination snapshots, choices, derived source observations, mappings,
+manifests, results/provenance and receipts; shared retained raw captures and
+backups; content-free activity identities that must survive target deletion.
+Paged note/task caches and source inspectors must clear with identity changes
+and must not resurrect deleted content. The owning
+[010f2 contract](../tasks/SLICE_010f2_CONTRACT.md) lists the new stores. This
+inventory addition does not complete C1/C2, select a retention period or claim
+per-Person crypto-shredding with the development key.
+
+## Observed transaction-cancellation notices
+
+**OPEN — bounded platform follow-up before relying on cancellation behavior for
+production cutover.** The 010f2 synthetic browser run emitted PostgreSQL
+`already a transaction in progress` and `no transaction in progress` notices
+during aborted/cancelled requests. The pinned SQLx 0.8.6 begin/drop and pool-return
+code has source-plausible cancellation paths, but the captured notices do not
+have sufficient request/backend correlation to establish their historical cause.
+
+The final native, parent/sibling, business and storage audits all passed; one live
+transaction observation had no transaction older than 0.102s. Those observations
+do not prove every notice benign. Reproduce a controlled cancellation with backend
+PID/request correlation, verify transaction and pool state, and scope any required
+fix before changing the pinned dependency or shared transaction helper. This is
+an observed dependency/runtime concern, not a demonstrated data-loss finding or
+an authorization to redesign persistence. See [010f2 verification](../tasks/SLICE_010f2_VERIFICATION.md)
+and the [bounded dependency investigation](../design/qa/slice-010f2-2026-09-11/runtime/sqlx-cancellation-dependency-report.md).
+No new retention, service or customer
+policy is selected here.
 
 ## First restore exercise
 

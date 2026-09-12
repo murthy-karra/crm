@@ -1,5 +1,15 @@
 # Slice 010c — People import into a migration-review workspace
 
+**Approved activity/read amendment — 010f2 (D-068, 2026-09-11):**
+[010f2](SLICE_010f2.md) owns one independent activity child for a completed
+People parent. Parent plans/results/identities and the original review binding
+remain immutable. First activity confirmation takes the exclusive workspace
+barrier and permanently switches complete activity reads to a distinct bounded
+admin representation, including after cancellation. The new core-review routes
+also support already settled People before activity confirmation and while a
+People parent is running/paused/cancelled. Ordinary mutations, Today, Operator
+and outbound actions remain held; no activation is added.
+
 **APPROVED FOR IMPLEMENTATION, 2026-09-11 (D-065).** The user approved the
 reviewed specification and execution brief. D-064 accepts separate source People,
 explicitly approved stage creation and review-only operation until later activation.

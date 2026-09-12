@@ -1,0 +1,11 @@
+{
+  "at": "2026-09-12T14:28:41.945365+00:00",
+  "manifest_sha256": "e0649d8e40cbaac17d09f0de8f2027cde61f0cb9d604cdd181a243084bdc40be",
+  "source_files_checked": 1016,
+  "source_mismatches": [],
+  "manifest_files_changed_from_revision": {
+    "9f457bc": [],
+    "fc5a875": []
+  },
+  "head": "028d6133e1b7c3f81642275e030f63e98b2cca49"
+}

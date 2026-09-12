@@ -1,0 +1,35 @@
+    Checking crm-operator v0.1.0 (<WORKTREE>/backend/crates/crm-operator)
+    Checking crm-app v0.1.0 (<WORKTREE>/backend/crates/crm-app)
+error: this function has too many arguments (9/7)
+   --> crates/crm-app/src/domain/migration/history_capture_store.rs:269:1
+    |
+269 | / pub async fn save(
+270 | |     conn: &mut PgConnection,
+271 | |     key: &RawPayloadKey,
+272 | |     ctx: &CommandContext,
+...   |
+278 | |     cancel: bool,
+279 | | ) -> Result<Value, MigrationError> {
+    | |__________________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.98.0/index.html#too_many_arguments
+    = note: `-D clippy::too-many-arguments` implied by `-D clippy::all`
+    = help: to override `-D clippy::all` add `#[allow(clippy::too_many_arguments)]`
+
+error: this function has too many arguments (8/7)
+   --> crates/crm-app/src/domain/migration/history_capture_worker.rs:481:1
+    |
+481 | / async fn observation(
+482 | |     conn: &mut PgConnection,
+483 | |     key: &RawPayloadKey,
+484 | |     c: &Claim,
+...   |
+489 | |     record: &source::SourceRecord,
+490 | | ) -> Result<i64, MigrationError> {
+    | |________________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.98.0/index.html#too_many_arguments
+
+error: could not compile `crm-app` (lib) due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `crm-app` (lib test) due to 2 previous errors

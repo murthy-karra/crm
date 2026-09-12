@@ -335,6 +335,53 @@ pub fn snapshot_hmac(
     request_digest(key, &format!("snapshot:{org:?}:{purpose}"), bytes)
 }
 
+/// Independent history purposes never decrypt core snapshots or other runs.
+pub fn seal_history(
+    key: &RawPayloadKey,
+    org: OrganizationId,
+    run: uuid::Uuid,
+    row: uuid::Uuid,
+    purpose: &str,
+    bytes: &[u8],
+) -> Result<Sealed, CryptoError> {
+    seal_purpose(
+        key,
+        format!("crm-fub-history-v1:{run}:{purpose}").as_bytes(),
+        org,
+        row,
+        1,
+        bytes,
+    )
+}
+pub fn open_history(
+    key: &RawPayloadKey,
+    org: OrganizationId,
+    run: uuid::Uuid,
+    row: uuid::Uuid,
+    purpose: &str,
+    nonce: &[u8],
+    bytes: &[u8],
+) -> Result<Vec<u8>, CryptoError> {
+    open_purpose(
+        key,
+        format!("crm-fub-history-v1:{run}:{purpose}").as_bytes(),
+        org,
+        row,
+        1,
+        nonce,
+        bytes,
+    )
+}
+pub fn history_hmac(
+    key: &RawPayloadKey,
+    org: OrganizationId,
+    run: uuid::Uuid,
+    purpose: &str,
+    bytes: &[u8],
+) -> [u8; 32] {
+    request_digest(key, &format!("history:{org:?}:{run}:{purpose}"), bytes)
+}
+
 #[cfg(test)]
 mod snapshot_tests {
     use super::*;

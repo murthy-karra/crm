@@ -484,3 +484,12 @@ notes/tasks, thread models, per-user date policies, completion-with-unknown-time
 support and repair/delta imports; each requires its own concrete contract rather
 than guessed behavior during coding. Implementation and isolated synthetic
 verification are authorized. Live FUB validation stays user-deferred.
+
+## D-070 amendment — independent historical capture
+
+D-070's [010d1](SLICE_010d1.md) captures historical source evidence separately.
+It does not alter this notes/tasks child's lifetime, original source/People
+binding, native rows or paged review-reader contract. History has independently
+owned reservations in the shared Org ledger. `fub-history-capture-v1` proves only
+capture compatibility and does not replace `fub-activity-import-v1` or qualify
+future timeline readers.

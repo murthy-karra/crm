@@ -146,6 +146,12 @@ async fn populated_010f1_upgrade_preserves_native_and_import_state(migrator: PgP
             .unwrap();
         }
     }
+    // Fixture construction reuses today's core command helpers, whose new
+    // exclusive-source lookup also names the history relation. Supply only an
+    // empty read view while building this old-schema fixture; no history job or
+    // capability exists. Remove it before freezing rows or applying migrations.
+    sqlx::raw_sql("CREATE VIEW migration_history_capture_run AS SELECT NULL::uuid AS id,NULL::uuid AS organization_id,NULL::uuid AS connection_id,NULL::text AS state WHERE false; GRANT SELECT ON migration_history_capture_run TO crm_app")
+        .execute(&migrator).await.unwrap();
     let book = source::book();
     book.set_records(crm_api::domain::migration::snapshot_source::Stream::People,vec![json!({"id":101,"firstName":"Preserved imported Person","stage":"Lead","assignedUserId":3,"tags":["Preserved source tag"],"phones":[{"value":"4155550100"}]})]);
     let f = import_support::fixture_with_book(&migrator, book).await;
@@ -161,6 +167,17 @@ async fn populated_010f1_upgrade_preserves_native_and_import_state(migrator: PgP
     let sibling_id = Uuid::new_v4();
     sqlx::query("INSERT INTO migration_metadata_import(id,organization_id,parent_import_id,parent_plan_id,snapshot_id,preview_id,source_account_id,capture_sequence,workspace_revision,executor_user_id,state) SELECT $1,organization_id,id,latest_plan_id,snapshot_id,preview_id,source_account_id,capture_sequence,1,$3,'cancelled' FROM migration_import WHERE id=$2")
         .bind(sibling_id).bind(parent).bind(f.actor).execute(&migrator).await.unwrap();
+    sqlx::query("DROP VIEW migration_history_capture_run")
+        .execute(&migrator)
+        .await
+        .unwrap();
+    assert!(sqlx::query_scalar::<_, Option<String>>(
+        "SELECT to_regclass('migration_history_capture_run')::text"
+    )
+    .fetch_one(&migrator)
+    .await
+    .unwrap()
+    .is_none());
     let frozen = existing_rows(&migrator).await;
     assert_eq!(frozen["note"].as_array().unwrap().len(), 1);
     assert_eq!(frozen["task"].as_array().unwrap().len(), 2);
@@ -197,6 +214,22 @@ async fn populated_010f1_upgrade_preserves_native_and_import_state(migrator: PgP
     );
     assert_eq!(
         sqlx::query_scalar::<_, i64>("SELECT count(*) FROM migration_activity_import")
+            .fetch_one(&app)
+            .await
+            .unwrap(),
+        0
+    );
+    // The preservation check above targets the original activity migration.
+    // The current executable additionally requires its later additive schema
+    // before startup; applying it must preserve the same populated rows too.
+    all.run(&migrator).await.unwrap();
+    assert_eq!(
+        existing_rows(&migrator).await,
+        frozen,
+        "later additive schema rewrote the populated upgrade fixture"
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT count(*) FROM migration_history_capture_run")
             .fetch_one(&app)
             .await
             .unwrap(),

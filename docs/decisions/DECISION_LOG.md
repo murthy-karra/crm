@@ -2384,3 +2384,55 @@ inventory/preflight. Preserve retained data, review bindings, verification
 evidence and recovery artifacts. Live FUB/customer-data processing, activation
 and production-cluster deployment remain separate, deferred scope. Results belong
 to [SLICE_010f2_RELEASE.md](../tasks/SLICE_010f2_RELEASE.md).
+
+### D-069 — Historical migration planning split (2026-09-12)
+
+The user requested **“Ok lets plan it out”** for 010d and then selected
+**“Split capture and timeline (Recommended)”**: 010d1 captures historical
+events/calls/texts and reports coverage; 010d2 imports verified facts into a
+bounded timeline. Planning and independent review of the
+[010d ladder](../specs/SLICE_010d.md), detailed
+[010d1 specification](../specs/SLICE_010d1.md) and
+[execution brief](../tasks/SLICE_010d1_IMPL.md) are authorized.
+
+This accepts sequencing, not the full proposed source, storage, lifecycle,
+HTTP, release or timeline contracts. Those remain subject to completed review
+and approval before implementation. No reduced migration fidelity, native
+history/Today policy, email/media access or customer-data readiness is inferred.
+Live FUB validation remains user-deferred. No source/customer processing,
+activation, commit/merge/push, runtime change or deployment is authorized here.
+
+### D-070 — Reviewed 010d1 specification and implementation approved (2026-09-12)
+
+After the complete historical capture plan, independent READY review and
+implementation approval boundary were presented, the user said **“Ok go for it.”**
+This accepts the reviewed [010d1 specification](../specs/SLICE_010d1.md),
+[execution brief](../tasks/SLICE_010d1_IMPL.md), proposed policies and declared
+shared contracts. Implementation and required isolated synthetic verification
+and bounded reviews are authorized.
+
+Accepted scope includes the separate same-account history capture/profile,
+immutable completed People parent, multiple independently confirmed attempts,
+provisional fail-closed events/calls/text pagination with terminal distinct-ID
+reconciliation, encrypted raw retention and metadata-only bounded review,
+owned run/control reservations in the shared Org ledger, symmetric source
+fencing, actor-bound receipts and independent capture release capability.
+
+010d2 historical interpretation/timeline import and Today policy remain later
+work. Live FUB validation remains user-deferred. This approval does not include
+source/customer processing, email/media access, activation, commit/merge/push,
+shared-development refresh or production deployment. Existing runtime and prior
+completion-audit evidence must remain intact.
+
+**D-070 follow-up — integration, deployment and cleanup authorized (2026-09-12).**
+After the completed implementation, synthetic verification and two READY review
+rounds were reported, the user requested **“commit, merge, push, cleanup and
+deploy.”** This authorizes committing the verified 010d1 source and its audit/
+planning/verification evidence, merging and publishing main, removing the merged
+implementation worktree/branch, and refreshing the existing shared-development
+API/Web with the additive history migration and freshly observed compatibility
+inventory/preflight, including `fub-history-capture-v1` readiness.
+Preserve existing data, review bindings, verification evidence, backup and recovery
+artifacts. Live FUB/customer processing, native timeline import, activation and
+production-cluster deployment remain outside this release. Actual results belong
+to [SLICE_010d1_RELEASE.md](../tasks/SLICE_010d1_RELEASE.md).

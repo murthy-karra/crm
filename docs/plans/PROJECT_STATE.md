@@ -1,11 +1,23 @@
 # Project state
 
-Last updated: 2026-09-11 (010f2 committed, merged, pushed, cleaned up and deployed/verified under the D-068 follow-up).
+Last updated: 2026-09-12 (010d1 implemented and synthetically verified in uncommitted worktree; bounded completion audit and 010f2 release qualifications retained).
 This file holds current operational status, active work and live residuals.
 [PROJECT_HISTORY.md](PROJECT_HISTORY.md) preserves earlier progress, the slice
 ledger and historical measurements; its old instructions are not current work.
 
 ## Current state
+
+The [2026-09-12 completion audit](../tasks/SLICE_010_COMPLETION_AUDIT_2026-09-12.md)
+independently matched GitHub/main, all 1,016 source hashes, the running release
+artifacts and all 35 applied migration checksums. Shared business counts/workspace
+states remain unchanged. Fresh service-free checks and a complete 908-test DB
+rerun passed; two earlier runs reproduced the pre-existing call-history ordering
+failure, and nextest LEAK annotations have passing isolated follow-ups. Two extra
+A6 audit tests passed note/task local-state preservation cases absent from the
+original focused coverage. An overnight database-warning episode strongly
+correlates with host sleep/background wake and stopped on full wake; its exact
+mechanism is unconfirmed. No product source/runtime change or live FUB operation
+was made. Audit documentation/evidence remains uncommitted.
 
 **010f2 is deployed and verified in shared development**, including assessment,
 core snapshot/preview, People, tags/custom fields and retained notes/tasks.
@@ -54,6 +66,20 @@ follow-up remains open in production readiness.
 
 ## Current slice
 
+- **010d1 implementation:** implemented and synthetically verified under D-070 in
+  `/Users/karrad/projects/crm-worktrees/slice-010d1` on
+  `codex/slice-010d1-history-capture`; source remains uncommitted and shared
+  development remains 010f2. Both bounded reviews are READY. SQLx preparation,
+  full checks (949 Rust/1,131 Web plus supporting suites), 934 DB tests, the
+  75,000-observation collector and desktop/390px production-Web walkthrough
+  passed. See [verification](../tasks/SLICE_010d1_VERIFICATION.md) for exact hashes,
+  failure/recovery evidence, query-work limits and owned cleanup. D-069's
+  [split](../specs/SLICE_010d.md) is preserved: capture stores encrypted source
+  evidence and bounded admin coverage without native timeline/Today changes.
+  Public text pagination remains provisional and live-unqualified. 010d2 native
+  semantics/timeline, email/media, deltas, activation and customer-data readiness
+  remain separate work. Git integration/publication and deployment were not
+  performed or authorized by this implementation approval.
 - **010f2 implementation:** implemented under D-068; both bounded reviews,
   measured SQL/paired-reader checks, all 18 production-Web phases and exact
   native/business/storage reconciliation have passed. All final gates and owned
@@ -141,6 +167,16 @@ evidence. Inspect Git and [the release record](../tasks/SLICE_010f2_RELEASE.md)
 for current source/runtime identity.
 
 ## Last accepted decision
+
+**D-070:** the user said “Ok go for it” after the complete 010d1 plan and READY
+review were presented. The full spec/contracts, implementation and isolated
+synthetic verification are approved. Native history/timeline, live FUB/customer
+work, activation, Git publication and deployment remain separate scope.
+
+**D-069:** the user authorizes 010d planning and selects capture/coverage in
+010d1 followed by verified historical timeline import in 010d2. This accepts
+the sequence only; complete proposed contracts and implementation still require
+review/approval. Live FUB validation remains deferred.
 
 **D-068:** the user approved the complete reviewed 010f2 specification, policies,
 shared contracts and implementation with isolated synthetic verification. This
@@ -267,9 +303,12 @@ and now lives only in git history.
   vs slow mic prompts; orphaned "outcome needed" calls when a caller
   is deactivated (O-004 territory). LiveKit hostname:
   `livekit1.tarams.org`.
-- Known flake: `db_calls::a_second_correction_chains_onto_the_first_
-  with_strictly_increasing_recorded_at` can misorder under full-suite
-  load (microsecond timestamp ties in the history sort).
+- Known ordering issue: `db_calls_corrections::a_second_correction_chains_onto_the_first_
+  with_strictly_increasing_recorded_at` failed twice in the 2026-09-12 audit,
+  including in isolation, before passing in the complete rerun. The actual
+  failure was timeline placement around `call_completed`; strict timestamp,
+  chain and complete-row assertions passed. Host/DB clock comparison is the
+  supported mechanism, not proven timestamp ties. See the completion audit.
 
 **Known accepted edges / small gaps:**
 - 007h1: a forwarder's trailing signature is part of the inner body
@@ -302,8 +341,8 @@ and now lives only in git history.
   process start time vs binary mtime; kill by exact PID only. Bit us
   again 2026-08-29 (011a filters). Run ./scripts/db-migrate after
   checking out a branch with a new migration.
-- The current shared-development release is 010f1 from `e36ce36`, deployed
-  2026-09-11; see [the release record](../tasks/SLICE_010f1_RELEASE.md). Source
+- The current shared-development release is 010f2 from `fc5a875`, deployed
+  2026-09-11; see [the release record](../tasks/SLICE_010f2_RELEASE.md). Source
   validation remains deferred; registered FUB system configuration is unset.
 
 ## Backlog (deferred product tracks — full notes in the decision log)
@@ -453,10 +492,12 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. Select the next bounded migration scope after the verified 010f2 release.
-   Retained People, tags/custom fields and notes/tasks are implemented; remaining
-   source families, repair/deltas and activation require their own specification.
-   The SQLx cancellation follow-up remains open before production cutover.
+1. Review the completed, uncommitted [010d1 implementation and evidence](../tasks/SLICE_010d1_VERIFICATION.md)
+   for an explicitly authorized integration/release step. Then plan 010d2's
+   verified historical fact semantics and bounded timeline reader separately;
+   010d1 completion does not approve that contract. The SQLx cancellation,
+   audited call-history ordering and inherited core worker handoff concerns
+   remain bounded follow-ups with their existing evidence qualifications.
 2. Resume authorized FUB qualification when the user is ready, against an agreed
    dataset and applicable readiness gates. Later data families, mapping repair,
    deltas and activation need their own approved specification.
@@ -473,6 +514,10 @@ and now lives only in git history.
 
 ## Approval currently required
 
+- D-070 approves full 010d1 source, lifetime, storage, HTTP and capability
+  contracts, implementation and isolated synthetic checks. No repeat approval
+  is needed for those owned changes. Live source/customer work, publication,
+  deployment and activation remain separate scopes.
 - D-068 approves the complete 010f2 specification, shared contracts, implementation
   and isolated synthetic checks; its follow-up authorized the now-completed
   Git integration, cleanup and shared-development deployment. Live validation,

@@ -1,0 +1,9 @@
+{
+  "scratch": "__PRIVATE_QA_ROOT__",
+  "worktree": "__CRM_WORKTREE__",
+  "project": "crm-010d1-qa",
+  "postgres_port": 55432,
+  "centrifugo_port": 18082,
+  "api_port": 13010,
+  "web_port": 15173
+}

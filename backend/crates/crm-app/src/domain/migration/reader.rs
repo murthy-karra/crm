@@ -140,6 +140,13 @@ impl ReaderError {
 }
 #[async_trait]
 pub trait FubReader: Send + Sync {
+    async fn history(
+        &self,
+        _api_key: &str,
+        _request: &super::history_capture_source::Request,
+    ) -> Result<Capture, ReaderError> {
+        Err(ReaderError::Unavailable)
+    }
     async fn snapshot(
         &self,
         _api_key: &str,
@@ -348,6 +355,14 @@ pub fn parse_identity(body: &[u8]) -> Result<Identity, ReaderError> {
 }
 #[async_trait]
 impl FubReader for HttpFubReader {
+    async fn history(
+        &self,
+        api_key: &str,
+        request: &super::history_capture_source::Request,
+    ) -> Result<Capture, ReaderError> {
+        self.get_bounded(api_key, &request.path()?, 4 * 1024 * 1024)
+            .await
+    }
     async fn snapshot(
         &self,
         api_key: &str,
@@ -572,6 +587,48 @@ mod tests {
             .await
             .unwrap()
             .starts_with("GET /v1/people?limit=1&fields=id&includeTrash=true HTTP/1.1"));
+    }
+    #[tokio::test]
+    async fn history_transport_preserves_exact_bytes_bounds_and_never_follows_source_urls() {
+        use super::super::history_capture_source::{Cursor, Request, Stream};
+        let raw = br#"{"body":"HISTORY_SENTINEL","url":"http://127.0.0.1:1/never"}"#.to_vec();
+        for stream in [Stream::Events, Stream::Calls, Stream::TextMessages] {
+            let (reader, task) = http_fixture("200 OK", "", raw.clone()).await;
+            let request = Request {
+                stream,
+                cursor: Cursor::default(),
+            };
+            let capture = reader.history("synthetic-key", &request).await.unwrap();
+            assert_eq!(capture.body, raw);
+            assert!(!format!("{capture:?}").contains("HISTORY_SENTINEL"));
+            assert!(task
+                .await
+                .unwrap()
+                .starts_with(&format!("GET /v1/{} HTTP/1.1", request.path().unwrap())));
+        }
+        let (reader, task) = http_fixture(
+            "302 Found",
+            "Location: http://127.0.0.1:1/never\r\n",
+            vec![],
+        )
+        .await;
+        let request = Request {
+            stream: Stream::Events,
+            cursor: Cursor::default(),
+        };
+        assert!(reader.history("synthetic-key", &request).await.is_err());
+        task.await.unwrap();
+        let (reader, task) = http_fixture("200 OK", "", vec![b'x'; 4 * 1024 * 1024 + 100]).await;
+        let (error, capture) = reader
+            .history("synthetic-key", &request)
+            .await
+            .unwrap_err()
+            .split();
+        assert_eq!(error, ReaderError::ResponseTooLarge);
+        let capture = capture.unwrap();
+        assert_eq!(capture.body.len(), 4 * 1024 * 1024);
+        assert!(capture.truncated);
+        task.await.unwrap();
     }
     #[tokio::test]
     async fn http_bounds_and_preserves_oversized_prefix_and_disabled_reader_fails_closed() {

@@ -1,0 +1,12 @@
+{
+  "command": "./scripts/sqlx-prepare",
+  "cwd": "/Users/karrad/projects/crm-worktrees/slice-010d1",
+  "started_at": "2026-09-12T17:10:41.146590+00:00",
+  "node": "24.16.0",
+  "pnpm": "11.22.0",
+  "source_manifest_sha256": "f559c6588beedae4b291390822d4100bf5080a1708cfa55fce5eb78f05351f75",
+  "exit_code": 0,
+  "elapsed_seconds": 52.627,
+  "finished_at": "2026-09-12T17:11:33.773494+00:00",
+  "log_sha256": "e652ab2398a9ea6b3407522177e5994c1833f9dfadee8bba0f6ccb83d5bfcca1"
+}

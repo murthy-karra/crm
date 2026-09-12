@@ -158,3 +158,11 @@ approval. Policy strings/actor IDs are bounded audit metadata, not source payloa
 An expired running source lease starts a fresh identity check even when the
 replacement worker runs in the same process. Existing durable checkpoints and
 source-attempt limits remain intact.
+
+## D-070 amendment — independent historical capture
+
+D-070's [010d1 contract](../tasks/SLICE_010d1_CONTRACT.md) owns a separate history
+profile/worker and tables. Its retained bytes and reservations join the existing
+Org ledger without resetting balances or changing core stream/HTTP representations.
+Source admission and credential invalidation include history symmetrically.
+Historical captures never append to this core run or inherit its completion claim.

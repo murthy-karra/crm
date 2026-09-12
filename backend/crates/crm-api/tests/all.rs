@@ -330,3 +330,11 @@ mod db_activity_r1_control;
 mod db_activity_r1_source;
 
 mod db_activity_upgrade;
+
+mod db_history_capture;
+mod db_history_capture_authority;
+#[cfg(feature = "perf-harness")]
+mod db_history_capture_plans;
+mod db_history_capture_read_boundaries;
+mod db_history_capture_release;
+mod db_history_capture_support;

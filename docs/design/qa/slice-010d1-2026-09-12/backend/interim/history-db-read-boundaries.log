@@ -1,0 +1,10 @@
+   Compiling crm-api v0.1.0 (<WORKTREE>/backend/crates/crm-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 25.91s
+     Running tests/all.rs (target/debug/deps/all-07593333edaca6c2)
+
+running 2 tests
+test db_history_capture_read_boundaries::history_read_invalid_filters_current_authority_and_foreign_evidence_fail_closed ... ok
+test db_history_capture_read_boundaries::history_read_real_cursors_bind_run_endpoint_filters_and_page_size ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 1038 filtered out; finished in 8.15s
+

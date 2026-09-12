@@ -1,0 +1,166 @@
+{
+  "manifest_version": 1,
+  "profile_version": "fub-history-v1",
+  "parser_version": 1,
+  "retrieved_on": "2026-09-12",
+  "qualification": "public_documentation_and_constructed_fixtures_only",
+  "live_source_qualified": false,
+  "fixed_api_origin": "https://api.followupboss.com/v1/",
+  "schema_serialization": "Python json.dumps(oasDefinition, indent=2) + newline; UTF-8; default ASCII escaping",
+  "source_report": "docs/research/SLICE_010d_FUB_SOURCE_CONTRACT.md",
+  "request_contract": "docs/specs/SLICE_010d1.md#3-frozen-source-profile",
+  "streams": [
+    {
+      "stream": "events",
+      "collection": "events",
+      "initial_request": "GET /events?limit=100&offset=0",
+      "continuation": "offset until explicit valid next; thereafter token only",
+      "representation": "fub-history-v1/events/default"
+    },
+    {
+      "stream": "calls",
+      "collection": "calls",
+      "initial_request": "GET /calls?limit=100&offset=0",
+      "continuation": "offset only; nonempty next pauses",
+      "representation": "fub-history-v1/calls/default"
+    },
+    {
+      "stream": "text_messages",
+      "collection": "textmessages",
+      "initial_request": "GET /textMessages?limit=100&offset=0",
+      "continuation": "offset until explicit valid next; thereafter token only",
+      "representation": "fub-history-v1/textMessages/default",
+      "provisional_account_scope_and_pagination": true
+    }
+  ],
+  "request_restrictions": [
+    "No explicit sort, fields, person/user/time filter or detail GET.",
+    "Opaque next tokens are percent-encoded at the fixed endpoint; never follow nextLink.",
+    "Supporting schemas do not authorize calls to their endpoints.",
+    "No source writes, email, marketing, recording or media fetch."
+  ],
+  "schemas": [
+    {
+      "reference_slug": "events-get",
+      "official_url": "https://docs.followupboss.com/reference/events-get",
+      "schema_file": "events-get-oas.json",
+      "schema_bytes": 16377,
+      "sha256": "9fc1cb73f55c0c5c43dcbfa6374fec69d91f7b7283594f8d2a40106182ec80c7",
+      "openapi_version": "3.1.0",
+      "documentation_version": "1.0",
+      "capture_collection": true
+    },
+    {
+      "reference_slug": "events-id-get",
+      "official_url": "https://docs.followupboss.com/reference/events-id-get",
+      "schema_file": "events-id-get-oas.json",
+      "schema_bytes": 10771,
+      "sha256": "500c120de1591238e416145491cc4790802d08af07b07f3071b8764c0be8c4e2",
+      "openapi_version": "3.1.0",
+      "documentation_version": "1.0",
+      "capture_collection": false
+    },
+    {
+      "reference_slug": "events-post",
+      "official_url": "https://docs.followupboss.com/reference/events-post",
+      "schema_file": "events-post-oas.json",
+      "schema_bytes": 22510,
+      "sha256": "cb98aae734ab5df4de0c3d16d050c2e52a252701003145d0022047e8016b3e99",
+      "openapi_version": "3.1.0",
+      "documentation_version": "1.0",
+      "capture_collection": false
+    },
+    {
+      "reference_slug": "calls-get",
+      "official_url": "https://docs.followupboss.com/reference/calls-get",
+      "schema_file": "calls-get-oas.json",
+      "schema_bytes": 3830,
+      "sha256": "f117894a97f12c23cf3fda1e4227ff5441ddd0b5dfe14436c66716195a12017c",
+      "openapi_version": "3.1.0",
+      "documentation_version": "1.0",
+      "capture_collection": true
+    },
+    {
+      "reference_slug": "calls-id-get",
+      "official_url": "https://docs.followupboss.com/reference/calls-id-get",
+      "schema_file": "calls-id-get-oas.json",
+      "schema_bytes": 4800,
+      "sha256": "9cc64a61b1bdfce66915c75fd551d7118c4b4489ad9bfc4be35ccd08eb4c20fb",
+      "openapi_version": "3.1.0",
+      "documentation_version": "1.0",
+      "capture_collection": false
+    },
+    {
+      "reference_slug": "calls-post",
+      "official_url": "https://docs.followupboss.com/reference/calls-post",
+      "schema_file": "calls-post-oas.json",
+      "schema_bytes": 4381,
+      "sha256": "0b4131b0e73da183901c1fc4950bec218ba9e605e4ede97b4b66feaa09b84a01",
+      "openapi_version": "3.1.0",
+      "documentation_version": "1.0",
+      "capture_collection": false
+    },
+    {
+      "reference_slug": "textmessages-get",
+      "official_url": "https://docs.followupboss.com/reference/textmessages-get",
+      "schema_file": "textmessages-get-oas.json",
+      "schema_bytes": 12749,
+      "sha256": "3f0c8562c98b3b649a27c714dabf83d41f24b9ba76e3b4bc02b280850274502b",
+      "openapi_version": "3.1.0",
+      "documentation_version": "1.0",
+      "capture_collection": true
+    },
+    {
+      "reference_slug": "textmessages-id-get",
+      "official_url": "https://docs.followupboss.com/reference/textmessages-id-get",
+      "schema_file": "textmessages-id-get-oas.json",
+      "schema_bytes": 6785,
+      "sha256": "af526bbc0dccca7119e4029d17baa6bc1c86c195aa49e2156ac4d88151b8c7b5",
+      "openapi_version": "3.1.0",
+      "documentation_version": "1.0",
+      "capture_collection": false
+    },
+    {
+      "reference_slug": "textmessages-post",
+      "official_url": "https://docs.followupboss.com/reference/textmessages-post",
+      "schema_file": "textmessages-post-oas.json",
+      "schema_bytes": 8930,
+      "sha256": "5e70b54e648e571e642856b4c6d1fd5033696f98ac79c1105b6b7eafec8d7e01",
+      "openapi_version": "3.1.0",
+      "documentation_version": "1.0",
+      "capture_collection": false
+    },
+    {
+      "reference_slug": "emevents-get",
+      "official_url": "https://docs.followupboss.com/reference/emevents-get",
+      "schema_file": "emevents-get-oas.json",
+      "schema_bytes": 3039,
+      "sha256": "b8ba143ca4eb46f1bb029d519892ebef5386323e7e07db2cfb78b75fee1e1daf",
+      "openapi_version": "3.1.0",
+      "documentation_version": "1.0",
+      "capture_collection": false
+    },
+    {
+      "reference_slug": "emcampaigns-get",
+      "official_url": "https://docs.followupboss.com/reference/emcampaigns-get",
+      "schema_file": "emcampaigns-get-oas.json",
+      "schema_bytes": 2415,
+      "sha256": "d8cb75070cae79e9661b4fd7d9f99790f9561fd1056f58b947cf6ca1c6bdba05",
+      "openapi_version": "3.1.0",
+      "documentation_version": "1.0",
+      "capture_collection": false
+    }
+  ],
+  "bounds": {
+    "response_bytes": 4194304,
+    "page_records": 100,
+    "token_bytes": 2048,
+    "source_id_digits": 128,
+    "reported_total_max": "9223372036854775807",
+    "json_depth": 64,
+    "json_nodes": 100000,
+    "projection_bytes": 6144,
+    "person_reference_occurrences_per_record": 64,
+    "person_reference_occurrences_per_page": 4096
+  }
+}

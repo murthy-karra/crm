@@ -10,6 +10,7 @@ import CoreSnapshotPanel from '../components/migration/CoreSnapshotPanel.vue'
 import PeopleImportPanel from '../components/migration/PeopleImportPanel.vue'
 import MetadataImportPanel from '../components/migration/MetadataImportPanel.vue'
 import ActivityImportPanel from '../components/migration/ActivityImportPanel.vue'
+import HistoryCapturePanel from '../components/migration/HistoryCapturePanel.vue'
 import { refreshWorkspace, useWorkspacePending, useWorkspaceEpoch } from '../workspaceLifecycle'
 import FormField from '../components/FormField.vue'
 import { queryKeys, useAuthSessionLifetime, useMe } from '../api/queries'
@@ -63,6 +64,7 @@ const actionPending = ref<'assess' | 'retry' | 'cancel' | 'disconnect' | null>(n
 const actionError = ref<string | null>(null)
 const selectedReport = ref<'current' | 'previous'>('current')
 const snapshotSourceBusy = ref(false)
+const historySourceBusy = ref(false)
 let operationGeneration = 0
 let disposed = false
 
@@ -467,12 +469,18 @@ function checkStatusLabel(check: FubAssessmentCheck) {
     <PeopleImportPanel :refresh-workspace="refreshWorkspace" />
     <MetadataImportPanel :refresh-workspace="refreshWorkspace" />
     <ActivityImportPanel :refresh-workspace="refreshWorkspace" />
+    <HistoryCapturePanel
+      :connection="connection"
+      :refresh-workspace="refreshWorkspace"
+      :source-busy="isPollingState(currentAssessment?.state) || snapshotSourceBusy"
+      @source-busy="historySourceBusy = $event"
+    />
 
     <CoreSnapshotPanel
       v-if="canRead"
       :key="`${scope.join(':')}:${workspaceEpoch}`"
       :connection="connection"
-      :assessment-busy="isPollingState(currentAssessment?.state)"
+      :assessment-busy="isPollingState(currentAssessment?.state) || historySourceBusy"
       @source-busy="snapshotSourceBusy = $event"
     />
 
@@ -489,7 +497,7 @@ function checkStatusLabel(check: FubAssessmentCheck) {
         <button
           type="button"
           :class="buttonClasses('primary')"
-          :disabled="!connection || connection.status !== 'connected' || currentAssessment !== null || actionPending !== null || snapshotSourceBusy"
+          :disabled="!connection || connection.status !== 'connected' || currentAssessment !== null || actionPending !== null || snapshotSourceBusy || historySourceBusy"
           data-testid="assess-fub"
           @click="assess"
         >

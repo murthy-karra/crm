@@ -103,3 +103,7 @@ required-features = ["test-support"]
 [[example]]
 name = "activity_import_qa"
 required-features = ["test-support"]
+
+[[example]]
+name = "history_capture_qa"
+required-features = ["test-support"]

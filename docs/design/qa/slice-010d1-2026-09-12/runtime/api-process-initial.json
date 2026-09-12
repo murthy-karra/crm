@@ -1,0 +1,9 @@
+{
+  "pid": 2243,
+  "executable": "__CRM_WORKTREE__/backend/target/debug/examples/history_capture_qa",
+  "epoch": "initial",
+  "log": "__PRIVATE_QA_ROOT__/api-initial.log",
+  "sha256": "d859036fe9417e130c19fdd26b75fea3687f475cd061e1887d923b81215cb4dc",
+  "started_at": "2026-09-12T17:23:27.827341+00:00",
+  "stopped_at": "2026-09-12T17:42:42.859894+00:00"
+}

@@ -1,0 +1,34 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.14s
+     Running tests/all.rs (target/debug/deps/all-4f54aadf6519a0de)
+
+running 26 tests
+test db_history_capture::history_alternating_worker_sessions_advance_and_restart_revalidates_once ... ok
+test db_history_capture::history_and_older_children_cancel_only_their_own_shared_ledger_reservations ... ok
+test db_history_capture::history_budget_admission_and_revision_races_fail_closed_then_cancel_below_ceiling ... ok
+test db_history_capture::history_capture_exact_evidence_paging_linkage_and_shared_bytes ... ok
+test db_history_capture::history_capture_invalid_ids_do_not_fill_terminal_identity_total_and_cancellation_works_at_ceiling ... ok
+test db_history_capture::history_capture_overlapping_terminal_pages_are_retained_never_exhausted_or_refetched ... ok
+test db_history_capture::history_capture_oversize_failure_is_encrypted_accounted_and_logs_have_safe_positive_control ... ok
+test db_history_capture::history_corrupt_credential_with_valid_identity_pauses_without_hot_loop_or_source ... ok
+test db_history_capture::history_duplicate_decoded_identity_keys_are_diagnostic_not_authority ... ok
+test db_history_capture::history_erased_parent_person_is_unavailable_and_never_resurrected ... ok
+test db_history_capture::history_expired_lease_reclaims_only_owned_reservation_and_bad_checkpoint_pauses_without_source ... ok
+test db_history_capture::history_retry_cycle_exhausts_requires_explicit_resume_and_preserves_checkpoint ... ok
+test db_history_capture::history_shared_identity_never_bypasses_a_worker_sessions_own_release_admission ... ok
+test db_history_capture_authority::history_actual_tenant_admin_boundaries_and_native_parent_preservation ... ok
+test db_history_capture_authority::history_cancellation_fences_inflight_source_and_preserves_other_run_reservations ... ok
+test db_history_capture_authority::history_changed_parent_binding_and_live_source_account_pause_before_collection_work ... ok
+test db_history_capture_authority::history_credential_replacement_requires_new_proposal_and_live_identity_matches_acknowledged_pair ... ok
+test db_history_capture_authority::history_disconnect_and_demotion_during_source_fence_commit_without_admin_takeover ... ok
+test db_history_capture_authority::history_lost_response_receipts_bind_actor_exact_body_operation_and_current_authority ... ok
+test db_history_capture_authority::history_source_admission_is_symmetric_and_concurrent_with_assessment_and_core ... ok
+test db_history_capture_plans::history_capture_query_plans_and_complete_bounded_reads ... CRM_010D1_PLAN_OUTPUT <PRIVATE_QA>/checks/history-plans.json
+ok
+test db_history_capture_read_boundaries::history_read_invalid_filters_current_authority_and_foreign_evidence_fail_closed ... ok
+test db_history_capture_read_boundaries::history_read_real_cursors_bind_run_endpoint_filters_and_page_size ... ok
+test db_history_capture_release::history_release_cancelled_confirmation_remains_a_durable_startup_requirement ... ok
+test db_history_capture_release::history_release_real_report_gates_confirmation_resume_and_worker_recovery ... ok
+test db_history_capture_release::history_release_wrong_key_pauses_intact_capture_before_any_source_request ... ok
+
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 1024 filtered out; finished in 326.32s
+

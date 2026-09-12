@@ -1,0 +1,6 @@
+__USER_HOME__/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+complete: completed retained snapshot and People parent through ordinary API
+cancel: completed retained snapshot and People parent through ordinary API
+budget: completed retained snapshot and People parent through ordinary API
+Synthetic history prerequisites ready; no history capture prepared.

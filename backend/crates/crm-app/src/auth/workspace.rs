@@ -200,6 +200,7 @@ pub struct ReleaseReadiness {
     synthetic: bool,
     metadata: bool,
     activity: bool,
+    history_capture: bool,
 }
 impl ReleaseReadiness {
     pub async fn load_report(pool: &PgPool, path: &std::path::Path) -> Result<Self, sqlx::Error> {
@@ -234,6 +235,7 @@ impl ReleaseReadiness {
             checked_at,
             expires_at,
             synthetic: false,
+            history_capture: history_capture_report_ready(&report, &hash),
             activity: report["activity_confirmation_ready"] == true
                 && report["candidates"].as_array().is_some_and(|items| {
                     items.iter().any(|v| {
@@ -298,6 +300,7 @@ impl ReleaseReadiness {
             synthetic: true,
             metadata: true,
             activity: true,
+            history_capture: true,
         }
     }
 
@@ -316,12 +319,47 @@ impl ReleaseReadiness {
         }
         Ok(())
     }
+
+    pub fn history_capture_ready(&self) -> bool {
+        self.history_capture
+            && (self.synthetic
+                || (self.expires_at > Utc::now()
+                    && self.checked_at <= Utc::now()
+                    && Utc::now() - self.checked_at <= chrono::Duration::minutes(5)))
+    }
+
+    pub async fn require_history_capture(
+        &self,
+        conn: &mut PgConnection,
+    ) -> Result<(), sqlx::Error> {
+        self.require_current(conn).await?;
+        if !self.history_capture_ready() {
+            return Err(sqlx::Error::Protocol(
+                "history capture release not ready".into(),
+            ));
+        }
+        Ok(())
+    }
+}
+
+fn history_capture_report_ready(report: &serde_json::Value, hash: &str) -> bool {
+    report["history_capture_confirmation_ready"] == true
+        && report["candidates"].as_array().is_some_and(|items| {
+            items.iter().any(|item| {
+                item["sha256"] == hash
+                    && item["gate_version"] == GATE_VERSION
+                    && matches!(item["role"].as_str(), Some("api" | "worker"))
+                    && item["capabilities"].as_array().is_some_and(|capabilities| {
+                        capabilities.iter().any(|v| v == "fub-history-capture-v1")
+                    })
+            })
+        })
 }
 /// Every new API/worker/CLI invokes this before accepting work. Old binaries
 /// cannot acquire this capability; deployment additionally retires them using
 /// the operator release preflight's complete workload inventory.
 pub async fn startup_compatible(conn: &mut PgConnection) -> Result<(), sqlx::Error> {
-    let exists: bool = sqlx::query_scalar("SELECT to_regclass('migration_workspace') IS NOT NULL AND to_regclass('migration_activity_import') IS NOT NULL")
+    let exists: bool = sqlx::query_scalar("SELECT to_regclass('migration_workspace') IS NOT NULL AND to_regclass('migration_activity_import') IS NOT NULL AND to_regclass('migration_history_capture_run') IS NOT NULL")
         .fetch_one(&mut *conn)
         .await?;
     if !exists {
@@ -333,11 +371,21 @@ pub async fn startup_compatible(conn: &mut PgConnection) -> Result<(), sqlx::Err
         "SELECT EXISTS(SELECT 1 FROM migration_workspace WHERE gate_version<>$1)",
     )
     .bind(GATE_VERSION)
-    .fetch_one(conn)
+    .fetch_one(&mut *conn)
     .await?;
     if unsupported {
         return Err(sqlx::Error::Protocol(
             "workspace artifact incompatible".into(),
+        ));
+    }
+    let history_unsupported: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM migration_history_capture_run WHERE confirmed_at IS NOT NULL AND (profile_version<>'fub-history-v1' OR parser_version<>'1'))",
+    )
+    .fetch_one(conn)
+    .await?;
+    if history_unsupported {
+        return Err(sqlx::Error::Protocol(
+            "history capture artifact incompatible".into(),
         ));
     }
     Ok(())
@@ -379,4 +427,59 @@ pub async fn artifact_fingerprint() -> Result<String, sqlx::Error> {
     .map_err(|_| sqlx::Error::Protocol("artifact unavailable".into()))??;
     let _ = ARTIFACT.set(hash.clone());
     Ok(hash)
+}
+
+#[cfg(test)]
+mod history_capture_readiness_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn capability_requires_matching_artifact_role_and_explicit_history_readiness() {
+        let report = json!({
+            "history_capture_confirmation_ready": true,
+            "candidates": [{"sha256":"verified", "gate_version":GATE_VERSION,
+                "role":"api", "capabilities":["fub-history-capture-v1"]}]
+        });
+        assert!(history_capture_report_ready(&report, "verified"));
+        assert!(!history_capture_report_ready(&report, "other"));
+        for field in ["history_capture_confirmation_ready", "candidates"] {
+            let mut changed = report.clone();
+            changed.as_object_mut().unwrap().remove(field);
+            assert!(!history_capture_report_ready(&changed, "verified"));
+        }
+        for (field, value) in [
+            ("role", json!("cli")),
+            ("gate_version", json!("pre-010c")),
+            ("capabilities", json!(["fub-activity-import-v1"])),
+        ] {
+            let mut changed = report.clone();
+            changed["candidates"][0][field] = value;
+            assert!(!history_capture_report_ready(&changed, "verified"));
+        }
+    }
+
+    #[test]
+    fn history_readiness_expires_and_rejects_future_evidence() {
+        let mut ready = ReleaseReadiness {
+            database: "synthetic".into(),
+            checked_at: Utc::now(),
+            expires_at: Utc::now() + chrono::Duration::minutes(5),
+            synthetic: false,
+            metadata: true,
+            activity: true,
+            history_capture: true,
+        };
+        assert!(ready.history_capture_ready());
+        ready.history_capture = false;
+        assert!(!ready.history_capture_ready());
+        ready.history_capture = true;
+        ready.expires_at = Utc::now() - chrono::Duration::seconds(1);
+        assert!(!ready.history_capture_ready());
+        ready.expires_at = Utc::now() + chrono::Duration::minutes(5);
+        ready.checked_at = Utc::now() + chrono::Duration::seconds(60);
+        assert!(!ready.history_capture_ready());
+        ready.checked_at = Utc::now() - chrono::Duration::minutes(6);
+        assert!(!ready.history_capture_ready());
+    }
 }

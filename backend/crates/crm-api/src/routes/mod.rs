@@ -28,3 +28,5 @@ pub mod activity_imports;
 pub mod metadata_imports;
 pub mod migration_activity_review;
 pub mod migration_imports;
+
+pub mod history_captures;

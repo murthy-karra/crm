@@ -1,0 +1,17 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "-p",
+    "crm-api",
+    "--test",
+    "all",
+    "--locked",
+    "activity_a6_audit_",
+    "--",
+    "--ignored",
+    "--test-threads=1"
+  ],
+  "exit_code": 0,
+  "elapsed_seconds": 44.19
+}

@@ -513,3 +513,11 @@ results now belong to the [verification record](../tasks/SLICE_010c_VERIFICATION
 the brief defines execution ownership. Live FUB validation, customer privacy
 readiness, deployed recovery proof and later activation are separate gates; an
 admin-only review workspace does not by itself make real customer data permissible.
+
+## D-070 amendment — independent historical capture
+
+D-070 permits [010d1](SLICE_010d1.md) history capture bound to this completed
+People parent, original account and immutable review workspace. It creates no
+native history, Person change or new parent import result. Its own confirmed
+run determines the independent history-capture release requirement; it does not
+replace this workspace gate or authorize activation.

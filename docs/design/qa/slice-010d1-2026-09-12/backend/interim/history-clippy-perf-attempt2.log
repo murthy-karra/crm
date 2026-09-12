@@ -1,0 +1,282 @@
+    Checking crm-app v0.1.0 (<WORKTREE>/backend/crates/crm-app)
+    Checking crm-api v0.1.0 (<WORKTREE>/backend/crates/crm-api)
+error: multiple variants are never constructed
+  --> crates/crm-api/tests/fixtures/statements_b45b04f/person_sql.rs:77:5
+   |
+74 | pub enum SortedStatement {
+   |          --------------- variants in this enum
+...
+77 |     CreatedAsc,
+   |     ^^^^^^^^^^
+78 |     NameAsc,
+   |     ^^^^^^^
+79 |     NameDesc,
+   |     ^^^^^^^^
+80 |     StageAsc,
+   |     ^^^^^^^^
+81 |     StageDesc,
+   |     ^^^^^^^^^
+82 |     AssigneeAsc,
+   |     ^^^^^^^^^^^
+83 |     AssigneeDesc,
+   |     ^^^^^^^^^^^^
+   |
+   = note: `SortedStatement` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+   = note: `-D dead-code` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[expect(dead_code)]` or `#[allow(dead_code)]`
+
+error: function `filtered_summaries_sorted` is never used
+   --> crates/crm-api/tests/fixtures/statements_b45b04f/person_sql.rs:193:14
+    |
+193 | pub async fn filtered_summaries_sorted(
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: struct `CallMembershipRow` is never constructed
+   --> crates/crm-api/tests/fixtures/statements_b45b04f/system_feeds_sql.rs:247:8
+    |
+247 | struct CallMembershipRow {
+    |        ^^^^^^^^^^^^^^^^^
+
+error: function `call_membership` is never used
+   --> crates/crm-api/tests/fixtures/statements_b45b04f/system_feeds_sql.rs:253:14
+    |
+253 | pub async fn call_membership(
+    |              ^^^^^^^^^^^^^^^
+
+error: function `call_only_candidates` is never used
+   --> crates/crm-api/tests/fixtures/statements_b45b04f/system_feeds_sql.rs:391:14
+    |
+391 | pub async fn call_only_candidates(
+    |              ^^^^^^^^^^^^^^^^^^^^
+
+error: fields `latest_inquiry`, `last_contact_attempt`, and `last_contact_at` are never read
+  --> crates/crm-api/tests/fixtures/statements_b45b04f/today_sql.rs:25:9
+   |
+23 | pub struct FrozenSourceCandidate {
+   |            --------------------- fields in this struct
+24 |     pub person: PersonSummary,
+25 |     pub latest_inquiry: Option<InquiryRef>,
+   |         ^^^^^^^^^^^^^^
+26 |     pub last_contact_attempt: Option<ContactAttemptRef>,
+   |         ^^^^^^^^^^^^^^^^^^^^
+27 |     pub last_contact_at: Option<DateTime<Utc>>,
+   |         ^^^^^^^^^^^^^^^
+   |
+   = note: `FrozenSourceCandidate` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+error: function `source_membership` is never used
+   --> crates/crm-api/tests/fixtures/statements_b45b04f/today_sql.rs:195:14
+    |
+195 | pub async fn source_membership(
+    |              ^^^^^^^^^^^^^^^^^
+
+error: constant `WARMUP_ATTEMPTS_PER_CASE` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:28:11
+   |
+28 | pub const WARMUP_ATTEMPTS_PER_CASE: usize = WARMUP_WAVES * WARMUP_CONCURRENCY;
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: constant `CRITICAL_CASES` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:33:11
+   |
+33 | pub const CRITICAL_CASES: usize = 4;
+   |           ^^^^^^^^^^^^^^
+
+error: constant `CRITICAL_MEASURED_ATTEMPTS` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:35:11
+   |
+35 | pub const CRITICAL_MEASURED_ATTEMPTS: usize = CRITICAL_CASES * CRITICAL_SAMPLE_SHAPE.attempts();
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: constant `SUPPLEMENTAL_CASES` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:40:11
+   |
+40 | pub const SUPPLEMENTAL_CASES: usize = 6;
+   |           ^^^^^^^^^^^^^^^^^^
+
+error: constant `SUPPLEMENTAL_MEASURED_ATTEMPTS` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:42:11
+   |
+42 | pub const SUPPLEMENTAL_MEASURED_ATTEMPTS: usize =
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: constant `INDEPENDENT_REPEAT_ATTEMPTS` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:49:11
+   |
+49 | pub const INDEPENDENT_REPEAT_ATTEMPTS: usize =
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: constant `FINAL_ARM_MEASURED_ATTEMPTS` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:55:11
+   |
+55 | pub const FINAL_ARM_MEASURED_ATTEMPTS: usize =
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: constant `PAIRED_ORIGINAL_MEASURED_ATTEMPTS` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:62:11
+   |
+62 | pub const PAIRED_ORIGINAL_MEASURED_ATTEMPTS: usize =
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: constant `HTTP_OK` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:66:11
+   |
+66 | pub const HTTP_OK: u16 = 200;
+   |           ^^^^^^^
+
+error: constant `SOURCE_ENUMERATION_BUDGET` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:71:11
+   |
+71 | pub const SOURCE_ENUMERATION_BUDGET: Duration = Duration::from_millis(250);
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: constant `WHOLE_SOURCE_BUDGET` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:72:11
+   |
+72 | pub const WHOLE_SOURCE_BUDGET: Duration = Duration::from_millis(500);
+   |           ^^^^^^^^^^^^^^^^^^^
+
+error: constant `ACQUISITION_BUDGET` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:73:11
+   |
+73 | pub const ACQUISITION_BUDGET: Duration = Duration::from_secs(2);
+   |           ^^^^^^^^^^^^^^^^^^
+
+error: method `attempts` is never used
+  --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:94:18
+   |
+85 | impl SampleShape {
+   | ---------------- method in this implementation
+...
+94 |     pub const fn attempts(self) -> usize {
+   |                  ^^^^^^^^
+
+error: enum `FinalMatrixCase` is never used
+   --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:104:10
+    |
+104 | pub enum FinalMatrixCase {
+    |          ^^^^^^^^^^^^^^^
+
+error: associated items `CRITICAL`, `SUPPLEMENTAL`, `sample_shape`, and `expected_sources_per_attempt` are never used
+   --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:118:15
+    |
+117 | impl FinalMatrixCase {
+    | -------------------- associated items in this implementation
+118 |     pub const CRITICAL: [Self; CRITICAL_CASES] = [
+    |               ^^^^^^^^
+...
+125 |     pub const SUPPLEMENTAL: [Self; SUPPLEMENTAL_CASES] = [
+    |               ^^^^^^^^^^^^
+...
+134 |     pub const fn sample_shape(self) -> SampleShape {
+    |                  ^^^^^^^^^^^^
+...
+149 |     pub const fn expected_sources_per_attempt(self) -> usize {
+    |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: variant `FrozenOriginal` is never constructed
+   --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:169:5
+    |
+168 | pub enum QueryArm {
+    |          -------- variant in this enum
+169 |     FrozenOriginal,
+    |     ^^^^^^^^^^^^^^
+    |
+    = note: `QueryArm` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+error: struct `TimingSummary` is never constructed
+   --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:501:12
+    |
+501 | pub struct TimingSummary {
+    |            ^^^^^^^^^^^^^
+
+error: function `summarize_timings` is never used
+   --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:511:8
+    |
+511 | pub fn summarize_timings<I>(timings: I) -> TimingSummary
+    |        ^^^^^^^^^^^^^^^^^
+
+error: struct `AttemptAggregate` is never constructed
+   --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:553:12
+    |
+553 | pub struct AttemptAggregate {
+    |            ^^^^^^^^^^^^^^^^
+
+error: function `aggregate_attempts` is never used
+   --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:567:8
+    |
+567 | pub fn aggregate_attempts<M, F, I>(
+    |        ^^^^^^^^^^^^^^^^^^
+
+error: struct `NormalCompletionGate` is never constructed
+   --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:628:12
+    |
+628 | pub struct NormalCompletionGate {
+    |            ^^^^^^^^^^^^^^^^^^^^
+
+error: struct `NormalCompletionReport` is never constructed
+   --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:637:12
+    |
+637 | pub struct NormalCompletionReport {
+    |            ^^^^^^^^^^^^^^^^^^^^^^
+
+error: enum `NormalCompletionViolation` is never used
+   --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:648:10
+    |
+648 | pub enum NormalCompletionViolation {
+    |          ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: function `check_normal_completion` is never used
+   --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:659:8
+    |
+659 | pub fn check_normal_completion<M>(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^
+
+error: function `request_p95_limit` is never used
+   --> crates/crm-api/tests/fixtures/today_http_perf_driver.rs:715:14
+    |
+715 | pub const fn request_p95_limit(concurrency: usize) -> Option<Duration> {
+    |              ^^^^^^^^^^^^^^^^^
+
+error: fields `source_hash` and `build_hash` are never read
+   --> crates/crm-api/tests/fixtures/today_http_perf_fixture.rs:101:5
+    |
+ 93 | pub struct TodayHttpPerfFixture {
+    |            -------------------- fields in this struct
+...
+101 |     source_hash: String,
+    |     ^^^^^^^^^^^
+102 |     build_hash: String,
+    |     ^^^^^^^^^^
+
+error: methods `source_hash` and `build_hash` are never used
+   --> crates/crm-api/tests/fixtures/today_http_perf_fixture.rs:251:12
+    |
+105 | impl TodayHttpPerfFixture {
+    | ------------------------- methods in this implementation
+...
+251 |     pub fn source_hash(&self) -> &str {
+    |            ^^^^^^^^^^^
+...
+255 |     pub fn build_hash(&self) -> &str {
+    |            ^^^^^^^^^^
+
+error: could not compile `crm-api` (test "db_today_feeds_http_perf") due to 34 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: this function has too many arguments (8/7)
+   --> crates/crm-api/tests/db_history_capture_plans.rs:485:1
+    |
+485 | / fn page_args(
+486 | |     run: Uuid,
+487 | |     org: Uuid,
+488 | |     sequence: i64,
+...   |
+493 | |     anchor: Option<(i64, i32, Uuid)>,
+494 | | ) -> Vec<Arg> {
+    | |_____________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.98.0/index.html#too_many_arguments
+    = note: `-D clippy::too-many-arguments` implied by `-D clippy::all`
+    = help: to override `-D clippy::all` add `#[allow(clippy::too_many_arguments)]`
+
+error: could not compile `crm-api` (test "all") due to 1 previous error

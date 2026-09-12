@@ -1,0 +1,58 @@
+{
+  "at": "2026-09-12T14:34:52.598846+00:00",
+  "database": "owned audit PostgreSQL only",
+  "samples": [
+    {
+      "host_before_unix": 1789223692.591392,
+      "database_unix": 1789223692.591487,
+      "host_after_unix": 1789223692.59282,
+      "round_trip_ms": 1.428,
+      "host_minus_database_interval_ms": [
+        -0.095,
+        1.333
+      ]
+    },
+    {
+      "host_before_unix": 1789223692.592834,
+      "database_unix": 1789223692.592444,
+      "host_after_unix": 1789223692.59316,
+      "round_trip_ms": 0.326,
+      "host_minus_database_interval_ms": [
+        0.39,
+        0.716
+      ]
+    },
+    {
+      "host_before_unix": 1789223692.5931652,
+      "database_unix": 1789223692.592772,
+      "host_after_unix": 1789223692.593455,
+      "round_trip_ms": 0.29,
+      "host_minus_database_interval_ms": [
+        0.393,
+        0.683
+      ]
+    },
+    {
+      "host_before_unix": 1789223692.593463,
+      "database_unix": 1789223692.593038,
+      "host_after_unix": 1789223692.5937028,
+      "round_trip_ms": 0.24,
+      "host_minus_database_interval_ms": [
+        0.425,
+        0.665
+      ]
+    },
+    {
+      "host_before_unix": 1789223692.593708,
+      "database_unix": 1789223692.593218,
+      "host_after_unix": 1789223692.593853,
+      "round_trip_ms": 0.145,
+      "host_minus_database_interval_ms": [
+        0.49,
+        0.635
+      ]
+    }
+  ],
+  "failed_test_database_names_remaining": [],
+  "limits": "Current bracketed samples are not measurements from the two failed tests. Passing full rerun and SQLx cleanup can remove prior failed fixtures; no historical timestamps are invented."
+}

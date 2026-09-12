@@ -1,0 +1,168 @@
+==> centrifugo: health endpoint (http://127.0.0.1:18089/health)
+==> [0s]
+==> cargo sqlx prepare --check --workspace
+Applied 20260820000001/migrate initial identity schema (8.896541ms)
+Applied 20260821000001/migrate stage (4.96225ms)
+Applied 20260821000002/migrate person contact method (6.233791ms)
+Applied 20260821000003/migrate raw payload (4.391708ms)
+Applied 20260821000004/migrate inquiry and facts (12.4285ms)
+Applied 20260822000001/migrate contact attempted (5.485541ms)
+Applied 20260823000001/migrate administration (16.703084ms)
+Applied 20260824000001/migrate operator ledger (6.675708ms)
+Applied 20260825000001/migrate calls (11.668167ms)
+Applied 20260826000001/migrate contact outcome correction (3.7985ms)
+Applied 20260826000002/migrate call outcome indexes (3.907709ms)
+Applied 20260827000001/migrate operator proposal (4.992792ms)
+Applied 20260828000001/migrate organization intake address (4.629917ms)
+Applied 20260829000001/migrate intake settings (4.42625ms)
+Applied 20260830000001/migrate raw payload discard (3.535666ms)
+Applied 20260901000001/migrate intake extraction (6.265625ms)
+Applied 20260902000001/migrate intake token rotation (5.1625ms)
+Applied 20260903000001/migrate intake routing mode (4.857917ms)
+Applied 20260904000001/migrate correspondence capture (12.107084ms)
+Applied 20260906000001/migrate saved list (6.114083ms)
+Applied 20260906000002/migrate today work source (4.833292ms)
+Applied 20260907000001/migrate saved list sort (4.11775ms)
+Applied 20260908000001/migrate today system feed (8.011917ms)
+Applied 20260909000001/migrate tag (7.131542ms)
+Applied 20260910000001/migrate person last activity (5.868125ms)
+Applied 20260911000001/migrate inquiry append only (5.127792ms)
+Applied 20260912000001/migrate note (7.03725ms)
+Applied 20260913000001/migrate task (7.486917ms)
+Applied 20260914000001/migrate operator task proposal (5.963041ms)
+Applied 20260915000001/migrate custom field (9.643416ms)
+Applied 20260916000001/migrate fub migration assessment (11.097541ms)
+Applied 20260917000001/migrate fub core snapshot (53.938417ms)
+Applied 20260918000001/migrate fub people import (31.417959ms)
+Applied 20260919000001/migrate fub metadata import (28.885958ms)
+Applied 20260920000001/migrate fub activity import (27.851584ms)
+    Checking crm-app v0.1.0 (/private/tmp/crm-010f2-completion-audit-ekukz8ob/worktree/backend/crates/crm-app)
+    Checking crm-api v0.1.0 (/private/tmp/crm-010f2-completion-audit-ekukz8ob/worktree/backend/crates/crm-api)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.58s
+warning: potentially unused queries found in .sqlx; you may want to re-run sqlx prepare
+==> [8s]
+==> cargo nextest run --run-ignored only
+   Compiling crm-app v0.1.0 (/private/tmp/crm-010f2-completion-audit-ekukz8ob/worktree/backend/crates/crm-app)
+   Compiling crm-api v0.1.0 (/private/tmp/crm-010f2-completion-audit-ekukz8ob/worktree/backend/crates/crm-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 24.08s
+────────────
+ Nextest run ID 88748b9f-c11c-41c7-a546-76c47ec23199 with nextest profile: default
+    Starting 908 tests across 7 binaries (935 tests skipped)
+        PASS [   6.666s] (  1/908) crm-api::all centrifugo_realtime::centrifugo_delivers_scoped_events_denies_cross_org_and_never_replays
+        PASS [   6.947s] (  2/908) crm-api::all db_activity_lifecycle::confirmed_activity_can_complete_with_zero_inserts_after_revalidation
+        PASS [   6.970s] (  3/908) crm-api::all db_activity_lifecycle::activity_logs_have_positive_phase_controls_without_source_content
+        PASS [   6.980s] (  4/908) crm-api::all db_activity_lifecycle::activity_authority_loss_retry_adoption_and_partial_cancel_preserve_boundary
+        PASS [   6.986s] (  5/908) crm-api::all db_activity_lifecycle::activity_private_db_permit_rejects_origin_token_and_wrong_target
+        PASS [   6.988s] (  6/908) crm-api::all db_activity_lifecycle::activity_native_equal_local_edits_tombstone_legacy_and_identity_missing
+        PASS [   6.988s] (  7/908) crm-api::all db_activity_lifecycle::activity_storage_pause_and_sibling_cancel_keep_independent_reservations
+        PASS [   6.988s] (  8/908) crm-api::all db_activity_lifecycle::activity_atomic_result_failure_rolls_back_native_identity_and_ledgers
+        PASS [   6.995s] (  9/908) crm-api::all db_activity_lifecycle::actual_activity_confirmation_waits_for_reader_and_overlapping_workers_settle_once
+        PASS [  15.383s] ( 10/908) crm-api::all db_activity_lifecycle::activity_http_scope_strict_inputs_receipt_replay_and_all_held_replanning
+        PASS [   9.011s] ( 11/908) crm-api::all db_activity_r1_source::activity_r1_complementary_note_exclusions_count_without_native_list_fallback
+        PASS [   9.315s] ( 12/908) crm-api::all db_activity_lifecycle::expired_plan_and_real_release_report_reject_new_confirmation
+        PASS [   8.994s] ( 13/908) crm-api::all db_activity_races::activity_race_cancel_waits_for_inflight_unit_then_fences_all_later_units
+        PASS [   9.014s] ( 14/908) crm-api::all db_activity_races::activity_race_expired_inflight_unit_rolls_back_and_real_workers_reclaim_once
+        PASS [   9.066s] ( 15/908) crm-api::all db_activity_r1_control::activity_rejects_changed_account_capture_and_exact_preview
+        PASS [   9.035s] ( 16/908) crm-api::all db_activity_r1_source::activity_r1_completed_capture_rejects_only_open_request_fingerprint_change
+        PASS [   9.028s] ( 17/908) crm-api::all db_activity_r1_source::activity_r1_users_next_request_reconstructs_exact_local_position_and_token
+        PASS [  10.591s] ( 18/908) crm-api::all db_activity_r1_source::activity_r1_real_source_retry_preserves_invalid_and_rejected_variants
+        PASS [  16.589s] ( 19/908) crm-api::all db_activity_races::activity_race_sibling_commands_cannot_oversubscribe_run_or_org_and_settle_owned_bytes
+        PASS [   8.913s] ( 20/908) crm-api::all db_activity_review::exclusive_boundary_serializes_legacy_read_and_survives_zero_write_cancel
+        PASS [   8.319s] ( 21/908) crm-api::all db_activity_review::native_review_pages_traverse_large_notes_and_timed_undated_tasks
+        PASS [   6.728s] ( 22/908) crm-api::all db_activity_upgrade::populated_010f1_upgrade_preserves_native_and_import_state
+        PASS [   8.326s] ( 23/908) crm-api::all db_activity_review::native_page_cursor_requires_refresh_after_activity_revision_changes
+        PASS [   8.313s] ( 24/908) crm-api::all db_activity_source::activity_source_requires_both_exhausted_families_without_a_metadata_child
+        PASS [   8.352s] ( 25/908) crm-api::all db_activity_review::review_requires_current_admin_real_binding_and_exact_person_scope
+        PASS [   9.700s] ( 26/908) crm-api::all db_activity_source::activity_source_holds_missing_details_and_all_task_variants_without_list_fallback
+        PASS [   5.507s] ( 27/908) crm-api::all db_admin::a_request_log_captured_during_the_invitation_lifecycle_never_contains_the_token
+        PASS [   4.790s] ( 28/908) crm-api::all db_admin::admin_facts_are_pii_free_and_carry_correct_origin
+        PASS [  13.081s] ( 29/908) crm-api::all db_activity_source::activity_source_imports_exact_notes_tasks_roles_and_confirmed_date_policy
+        PASS [   5.372s] ( 30/908) crm-api::all db_admin::admin_fact_tables_are_append_only_via_grant_and_trigger
+        PASS [   5.392s] ( 31/908) crm-api::all db_admin::a_user_who_is_both_admin_and_platform_admin_reaches_both
+        PASS [   5.355s] ( 32/908) crm-api::all db_admin::crm_app_cannot_mint_platform_admin_or_mutate_invitation_token_hash
+        PASS [   5.383s] ( 33/908) crm-api::all db_admin::concurrent_double_accept_of_the_same_token_exactly_one_succeeds
+        PASS [   5.381s] ( 34/908) crm-api::all db_admin::concurrent_issue_and_accept_never_leaves_a_dangling_invitation_or_bare_db_error
+        PASS [   6.540s] ( 35/908) crm-api::all db_admin::cross_organization_admin_routes_are_byte_identical_404s
+        PASS [   2.772s] ( 36/908) crm-api::all db_admin::organization_state_covers_all_three_and_recovers_on_acceptance
+        PASS [   3.407s] ( 37/908) crm-api::all db_admin::every_org_admin_route_is_403_for_a_member
+        PASS [   2.849s] ( 38/908) crm-api::all db_admin::invitation_lifecycle_issue_preview_accept_reject_second_accept
+        PASS [  16.551s] ( 39/908) crm-api::all db_activity_source::activity_source_corrupt_evidence_pauses_before_native_writes
+        PASS [   2.900s] ( 40/908) crm-api::all db_admin::expired_invitation_returns_410_and_org_state_flips_to_needs_attention
+        PASS [   3.477s] ( 41/908) crm-api::all db_admin::every_platform_route_is_403_for_an_organization_admin
+        PASS [   3.497s] ( 42/908) crm-api::all db_admin::deactivation_revokes_sessions_blocks_login_and_disconnects_realtime
+        PASS [   2.898s] ( 43/908) crm-api::all db_admin::members_list_reports_role_status_and_assigned_people_count
+        PASS [   5.091s] ( 44/908) crm-api::all db_admin::issuing_to_an_existing_member_is_already_member_and_to_an_outside_account_is_generic
+        PASS [   3.605s] ( 45/908) crm-api::all db_admin::platform_admin_with_zero_memberships_has_null_organization_and_is_401_on_tenant_routes
+        PASS [   3.294s] ( 46/908) crm-api::all db_admin::revoking_an_accepted_invitation_is_invitation_used
+        PASS [   3.282s] ( 47/908) crm-api::all db_admin::two_admins_concurrently_demoting_each_other_leaves_at_least_one_active_admin
+        PASS [   3.320s] ( 48/908) crm-api::all db_admin::revoked_invitation_preview_is_404_and_reissue_supersedes
+        PASS [   3.376s] ( 49/908) crm-api::all db_admin::platform_role_route_rejects_member_with_400
+        PASS [   3.308s] ( 50/908) crm-api::all db_admin::sole_admin_cannot_self_demote_or_self_deactivate
+        PASS [   3.405s] ( 51/908) crm-api::all db_admin::platform_promote_on_admin_less_organization_succeeds
+        PASS [   3.359s] ( 52/908) crm-api::all db_admin::read_committed_per_statement_snapshot_observes_a_commit_made_after_the_transaction_began
+        PASS [   7.373s] ( 53/908) crm-api::all db_calls::a_real_concurrent_second_call_is_409_from_the_unique_index
+        PASS [   5.251s] ( 54/908) crm-api::all db_calls::agent_not_joined_and_provider_error_write_no_attempt
+        PASS [   4.170s] ( 55/908) crm-api::all db_calls::answer_then_immediate_remote_leave_is_absorbed_by_the_presence_recheck
+        PASS [   4.165s] ( 56/908) crm-api::all db_calls::hangup_and_dial_are_caller_only_and_foreign_is_404
+        PASS [   4.189s] ( 57/908) crm-api::all db_calls::answered_call_writes_exactly_one_reached_attempt_and_advances_today
+        PASS [   4.186s] ( 58/908) crm-api::all db_calls::busy_declined_and_ring_timeout_each_write_one_no_answer_attempt
+        PASS [   4.171s] ( 59/908) crm-api::all db_calls::hangup_before_ringing_is_cancelled_without_an_attempt
+        PASS [   4.207s] ( 60/908) crm-api::all db_calls::answered_call_advances_a_non_caller_members_today
+        PASS [   4.238s] ( 61/908) crm-api::all db_calls::alice_cannot_see_dial_or_hang_up_bobs_call
+        PASS [   4.214s] ( 62/908) crm-api::all db_calls::crm_app_call_grants_are_exactly_section_2
+        PASS [   4.573s] ( 63/908) crm-api::all db_calls::start_returns_201_with_a_join_grant_whose_claims_are_exactly_section_3
+        PASS [   4.654s] ( 64/908) crm-api::all db_calls::hangup_while_the_dial_is_in_flight_is_cancelled_with_one_attempt_and_the_late_result_is_a_noop
+        PASS [   4.629s] ( 65/908) crm-api::all db_calls::provider_create_room_failure_settles_provider_error_and_is_503
+        PASS [   4.761s] ( 66/908) crm-api::all db_calls::hangup_on_an_answered_call_ends_it_with_agent_hangup_and_talk_seconds
+        PASS [   4.691s] ( 67/908) crm-api::all db_calls::history_call_completed_sorts_after_a_same_instant_contact_attempted
+        PASS [   4.672s] ( 68/908) crm-api::all db_calls::reads_work_and_writes_are_503_with_telephony_disabled
+        PASS [   4.647s] ( 69/908) crm-api::all db_calls::sweep_expires_a_backdated_placing_call_without_an_attempt
+        PASS [   4.716s] ( 70/908) crm-api::all db_calls::out_of_order_sip_participant_left_in_ringing_is_a_noop_and_the_dial_failure_still_yields_one_attempt
+        PASS [   4.675s] ( 71/908) crm-api::all db_calls::start_with_an_invalid_contact_method_is_an_identical_422
+        PASS [   4.707s] ( 72/908) crm-api::all db_calls::start_on_a_foreign_or_nonexistent_person_is_a_byte_identical_404
+        PASS [   4.482s] ( 73/908) crm-api::all db_calls::webhook_unknown_room_is_200_and_writes_nothing
+        PASS [   4.610s] ( 74/908) crm-api::all db_calls::the_fixture_number_never_appears_in_spans_or_log_lines
+        PASS [   4.565s] ( 75/908) crm-api::all db_calls::webhook_remote_hangup_ends_an_answered_call_and_duplicates_are_noops
+        PASS [   4.659s] ( 76/908) crm-api::all db_calls::sweep_expires_a_backdated_ringing_call_without_an_attempt
+        PASS [   4.562s] ( 77/908) crm-api::all db_calls::webhook_with_a_valid_signature_but_non_json_body_is_200_and_writes_nothing
+        PASS [   4.617s] ( 78/908) crm-api::all db_calls::two_concurrent_dials_yield_one_202_and_one_recorded_dial
+        PASS [   4.610s] ( 79/908) crm-api::all db_calls::webhook_for_a_foreign_participant_identity_is_ignored
+        PASS [   4.593s] ( 80/908) crm-api::all db_calls::webhook_with_a_tampered_body_wrong_secret_or_expired_token_is_401
+        PASS [   4.638s] ( 81/908) crm-api::all db_calls::webhook_agent_left_in_answered_is_agent_disconnected_and_in_ringing_is_cancelled
+        PASS [   4.684s] ( 82/908) crm-api::all db_calls::sweep_reconciles_a_backdated_answered_call_and_records_hangup_best_effort
+        FAIL [   4.106s] ( 83/908) crm-api::all db_calls_corrections::a_second_correction_chains_onto_the_first_with_strictly_increasing_recorded_at
+  stdout ───
+
+    running 1 test
+    test db_calls_corrections::a_second_correction_chains_onto_the_first_with_strictly_increasing_recorded_at ... FAILED
+
+    failures:
+
+    failures:
+        db_calls_corrections::a_second_correction_chains_onto_the_first_with_strictly_increasing_recorded_at
+
+    test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1016 filtered out; finished in 4.09s
+
+  stderr ───
+
+    thread 'db_calls_corrections::a_second_correction_chains_onto_the_first_with_strictly_increasing_recorded_at' (13485794) panicked at crates/crm-api/tests/db_calls_corrections.rs:371:5:
+    assertion `left == right` failed
+      left: ["contact_attempted"]
+     right: ["contact_attempted", "contact_attempted"]
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+  Cancelling due to test failure: 9 tests still running
+        PASS [   5.233s] ( 84/908) crm-api::all db_calls_corrections::a_manual_attempt_has_no_call_id_and_is_never_a_correction_head
+        PASS [   5.205s] ( 85/908) crm-api::all db_calls_corrections::same_outcome_is_unchanged_and_writes_and_publishes_nothing
+        PASS [   5.251s] ( 86/908) crm-api::all db_calls_corrections::concurrent_hangup_and_correction_yield_at_most_one_correction_of_the_reached_row
+        PASS [   5.297s] ( 87/908) crm-api::all db_calls_corrections::a_non_caller_on_an_active_call_is_403_not_409
+        PASS [   5.273s] ( 88/908) crm-api::all db_calls_corrections::busy_call_correction_chains_onto_the_no_answer_row_and_cancelled_has_nothing_to_correct
+        PASS [   5.255s] ( 89/908) crm-api::all db_calls_corrections::correcting_an_answered_call_writes_one_correction_row_with_the_call_envelope
+        PASS [   5.371s] ( 90/908) crm-api::all db_calls_corrections::a_correction_row_is_append_only_for_crm_app_and_the_owner
+        PASS [   5.257s] ( 91/908) crm-api::all db_calls_corrections::correction_is_caller_only_foreign_404_active_409_and_no_attempt_422
+        PASS [   5.284s] ( 92/908) crm-api::all db_calls_corrections::choosing_the_observed_outcome_still_writes_the_agents_row_and_clears_the_nag
+────────────
+     Summary [  54.624s] 92/908 tests run: 91 passed, 1 failed, 935 skipped
+        FAIL [   4.106s] ( 83/908) crm-api::all db_calls_corrections::a_second_correction_chains_onto_the_first_with_strictly_increasing_recorded_at
+warning: 816/908 tests were not run due to test failure (run with --no-fail-fast to run all tests, or run with --max-fail)
+error: test run failed

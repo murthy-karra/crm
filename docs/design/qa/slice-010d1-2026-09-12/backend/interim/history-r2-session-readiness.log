@@ -1,0 +1,10 @@
+   Compiling crm-app v0.1.0 (<WORKTREE>/backend/crates/crm-app)
+   Compiling crm-api v0.1.0 (<WORKTREE>/backend/crates/crm-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 45.18s
+     Running tests/all.rs (target/debug/deps/all-4f54aadf6519a0de)
+
+running 1 test
+test db_history_capture::history_shared_identity_never_bypasses_a_worker_sessions_own_release_admission ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1049 filtered out; finished in 3.33s
+

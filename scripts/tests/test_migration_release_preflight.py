@@ -20,6 +20,7 @@ NOW = dt.datetime(2026, 9, 11, 12, tzinfo=dt.timezone.utc)
 CURRENT = "a" * 64
 LEGACY = "b" * 64
 METADATA = "fub-metadata-import-v1"
+HISTORY = "fub-history-capture-v1"
 
 
 def fixtures(bindings="0", retired=True):
@@ -241,15 +242,22 @@ class PreflightTests(unittest.TestCase):
         calls = []
         def fake_run(command, **kwargs):
             calls.append((command, kwargs))
-            value = [{"present": True, "database_name": "synthetic_only"}, fixtures("1")[3], {"present": True}, {"count": "2"}][len(calls)-1]
+            value = [{"present": True, "database_name": "synthetic_only"}, fixtures("1")[3],
+                     {"present": True}, {"count": "2"}, {"present": True},
+                     {"count": "3", "unsupported_count": "0"}][len(calls)-1]
             return mock.Mock(returncode=0, stdout=json.dumps(value).encode())
         with mock.patch.object(MODULE["subprocess"], "run", side_effect=fake_run):
             result = MODULE["database_state"]()
         self.assertEqual(result["binding_count"], "1")
-        self.assertEqual(len(calls), 4)
+        self.assertEqual(len(calls), 6)
         self.assertEqual(result["activity_binding_count"], "2")
         self.assertIn("confirmed_plan_id IS NOT NULL", calls[3][0][-1])
         self.assertNotIn("state=", calls[3][0][-1])
+        self.assertEqual(result["history_capture_binding_count"], "3")
+        self.assertEqual(result["history_capture_unsupported_count"], "0")
+        self.assertIn("confirmed_at IS NOT NULL", calls[5][0][-1])
+        self.assertNotIn("state", calls[5][0][-1])
+        self.assertIn("profile_version<>'fub-history-v1'", calls[5][0][-1])
         sql = calls[1][0][-1]
         self.assertIn("FROM public.migration_workspace", sql)
         self.assertNotIn("WHERE", sql)
@@ -277,6 +285,100 @@ class PreflightTests(unittest.TestCase):
         with mock.patch.object(MODULE["subprocess"], "run", return_value=mock.Mock(returncode=1, stdout=b"", stderr=b"password=private")):
             with self.assertRaisesRegex(EvidenceError, "^database_unavailable$"):
                 MODULE["database_state"]()
+
+    def test_history_requires_distinct_capability_before_confirmation_and_after_cancel(self):
+        # A confirmed run continues to count after completion/cancellation.
+        for bound in ["0", "1", "20"]:
+            values = fixtures("1")
+            values[3].update(history_capture_schema_present=True,
+                             history_capture_binding_count=bound,
+                             history_capture_unsupported_count="0")
+            values[0]["artifacts"][0]["capabilities"] = [METADATA, "fub-activity-import-v1"]
+            report = check(values)
+            self.assertEqual(report["launch_allowed"], bound == "0")
+            self.assertFalse(report["history_capture_confirmation_ready"])
+            self.assertIn("history_capture_capability_missing", report["history_capture_confirmation_reasons"])
+            values[0]["artifacts"][0]["capabilities"].append(HISTORY)
+            report = check(values)
+            self.assertTrue(report["launch_allowed"])
+            self.assertTrue(report["history_capture_confirmation_ready"])
+            self.assertEqual(report["history_capture_binding_count"], bound)
+
+    def test_history_checks_both_candidate_and_running_worker_capability(self):
+        for location in ["candidate", "running"]:
+            values = fixtures("1")
+            values[3].update(history_capture_schema_present=True,
+                             history_capture_binding_count="1",
+                             history_capture_unsupported_count="0")
+            values[0]["artifacts"][0]["capabilities"] = [HISTORY]
+            values[0]["artifacts"].append({"role": "worker", "sha256": "e" * 64,
+                                         "gate_version": "crm-workspace-v1", "revision": "e" * 40})
+            if location == "candidate":
+                values[1]["artifacts"].append({"role": "worker", "sha256": "e" * 64})
+            else:
+                values[2]["processes"].append({"id": "old-worker", "role": "worker", "sha256": "e" * 64})
+            report = check(values)
+            self.assertFalse(report["launch_allowed"])
+            self.assertFalse(report["history_capture_confirmation_ready"])
+            self.assertIn("history_capture_binding_requires_compatible_artifacts", report["launch_reasons"])
+            values[0]["artifacts"][-1]["capabilities"] = [HISTORY]
+            self.assertTrue(check(values)["history_capture_confirmation_ready"])
+
+    def test_history_profile_or_incomplete_evidence_cannot_be_overridden_by_capability(self):
+        for change in ["profile", "schema", "stale", "incomplete", "unknown_artifact"]:
+            values = fixtures("1")
+            values[3].update(history_capture_schema_present=True,
+                             history_capture_binding_count="1",
+                             history_capture_unsupported_count="0")
+            values[0]["artifacts"][0]["capabilities"] = [HISTORY]
+            if change == "profile":
+                values[3]["history_capture_unsupported_count"] = "1"
+            elif change == "schema":
+                values[3].update(history_capture_schema_present=False, history_capture_binding_count="0")
+            elif change == "stale":
+                values[2]["observed_at"] = "2026-09-11T11:54:59Z"
+            elif change == "incomplete":
+                values[2]["complete"] = False
+            else:
+                values[1]["artifacts"][0]["sha256"] = "f" * 64
+            self.assertFalse(check(values)["history_capture_confirmation_ready"], change)
+            if change == "profile":
+                self.assertFalse(check(values)["launch_allowed"])
+
+    def test_history_counts_and_schema_are_closed_and_coherent(self):
+        invalid = [
+            {"history_capture_binding_count": "1"},
+            {"history_capture_schema_present": False, "history_capture_binding_count": "1",
+             "history_capture_unsupported_count": "0"},
+            {"history_capture_schema_present": True, "history_capture_binding_count": True,
+             "history_capture_unsupported_count": "0"},
+            {"history_capture_schema_present": True, "history_capture_binding_count": "01",
+             "history_capture_unsupported_count": "0"},
+            {"history_capture_schema_present": True, "history_capture_binding_count": "1",
+             "history_capture_unsupported_count": "2"},
+        ]
+        for extra in invalid:
+            values = fixtures("1")
+            values[3].update(extra)
+            with self.subTest(extra=extra), self.assertRaises(EvidenceError):
+                check(values)
+
+    def test_history_old_reports_and_cli_only_candidates_do_not_grant_capture_readiness(self):
+        report = check(fixtures("1"))
+        self.assertTrue(report["confirmation_ready"])
+        self.assertFalse(report["history_capture_confirmation_ready"])
+        self.assertFalse(report["history_capture_schema_present"])
+        values = fixtures("1")
+        values[3].update(history_capture_schema_present=True,
+                         history_capture_binding_count="0", history_capture_unsupported_count="0")
+        values[0]["artifacts"][0]["role"] = "cli"
+        values[0]["artifacts"][0]["capabilities"] = [HISTORY]
+        values[1]["artifacts"][0]["role"] = "cli"
+        values[2]["processes"] = []
+        report = check(values)
+        self.assertTrue(report["launch_allowed"])
+        self.assertFalse(report["history_capture_confirmation_ready"])
+        self.assertIn("history_capture_candidate_missing", report["history_capture_confirmation_reasons"])
 
     def test_cli_outputs_distinct_launch_and_confirmation_results(self):
         with tempfile.TemporaryDirectory() as folder:

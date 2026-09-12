@@ -1,0 +1,4033 @@
+{
+  "accounting": [
+    {
+      "raw_bytes": "22296275",
+      "reserved_bytes": 0,
+      "retained_bytes": 66891890,
+      "run": "13626b3f-9dd6-4c13-883f-0fa7d96b22a2",
+      "state": "completed_with_gaps"
+    },
+    {
+      "raw_bytes": "34750",
+      "reserved_bytes": 0,
+      "retained_bytes": 152153,
+      "run": "5f30ad95-a6fa-4590-8066-27a30cacc45b",
+      "state": "cancelled"
+    },
+    {
+      "raw_bytes": "0",
+      "reserved_bytes": 0,
+      "retained_bytes": 606,
+      "run": "4a03fe43-fa09-4cbd-8412-94085b8d6576",
+      "state": "cancelled"
+    }
+  ],
+  "checks": {
+    "failures": [],
+    "no_temp_spills": true,
+    "returned_row_bounds": true
+  },
+  "explain_plans": [
+    {
+      "bindings": [
+        {
+          "type": "Uuid",
+          "value": "13626b3f-9dd6-4c13-883f-0fa7d96b22a2"
+        },
+        {
+          "type": "Uuid",
+          "value": "6054da4e-fc4a-4a41-9bc7-da84ea6e6d09"
+        },
+        {
+          "type": "I64",
+          "value": 751
+        },
+        {
+          "type": "Uuid",
+          "value": "6f8e9058-5b78-4fa2-8401-f6733338bdc9"
+        }
+      ],
+      "maximum_returned_rows": 1,
+      "name": "history_record_detail",
+      "plan": [
+        {
+          "Execution Time": 0.054,
+          "Plan": {
+            "Actual Loops": 1,
+            "Actual Rows": 1.0,
+            "Actual Startup Time": 0.036,
+            "Actual Total Time": 0.037,
+            "Async Capable": false,
+            "Disabled": false,
+            "Inner Unique": true,
+            "Join Type": "Inner",
+            "Local Dirtied Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Written Blocks": 0,
+            "Node Type": "Nested Loop",
+            "Parallel Aware": false,
+            "Plan Rows": 1,
+            "Plan Width": 694,
+            "Plans": [
+              {
+                "Actual Loops": 1,
+                "Actual Rows": 1.0,
+                "Actual Startup Time": 0.021,
+                "Actual Total Time": 0.021,
+                "Alias": "o",
+                "Async Capable": false,
+                "Disabled": false,
+                "Index Cond": "((id = '6f8e9058-5b78-4fa2-8401-f6733338bdc9'::uuid) AND (run_id = '13626b3f-9dd6-4c13-883f-0fa7d96b22a2'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid))",
+                "Index Name": "migration_history_observation_id_run_id_organization_id_key",
+                "Index Searches": 1,
+                "Local Dirtied Blocks": 0,
+                "Local Hit Blocks": 0,
+                "Local Read Blocks": 0,
+                "Local Written Blocks": 0,
+                "Node Type": "Index Scan",
+                "Parallel Aware": false,
+                "Parent Relationship": "Outer",
+                "Plan Rows": 1,
+                "Plan Width": 623,
+                "Relation Name": "migration_history_observation",
+                "Rows Removed by Index Recheck": 0,
+                "Scan Direction": "Forward",
+                "Shared Dirtied Blocks": 0,
+                "Shared Hit Blocks": 3,
+                "Shared Read Blocks": 1,
+                "Shared Written Blocks": 0,
+                "Startup Cost": 0.42,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "Total Cost": 8.44
+              },
+              {
+                "Actual Loops": 1,
+                "Actual Rows": 1.0,
+                "Actual Startup Time": 0.001,
+                "Actual Total Time": 0.001,
+                "Alias": "c",
+                "Async Capable": false,
+                "Disabled": false,
+                "Index Cond": "((id = o.capture_id) AND (run_id = '13626b3f-9dd6-4c13-883f-0fa7d96b22a2'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid))",
+                "Index Name": "migration_history_capture_id_run_id_organization_id_key",
+                "Index Searches": 1,
+                "Local Dirtied Blocks": 0,
+                "Local Hit Blocks": 0,
+                "Local Read Blocks": 0,
+                "Local Written Blocks": 0,
+                "Node Type": "Index Scan",
+                "Parallel Aware": false,
+                "Parent Relationship": "Inner",
+                "Plan Rows": 1,
+                "Plan Width": 87,
+                "Relation Name": "migration_history_capture",
+                "Rows Removed by Index Recheck": 0,
+                "Scan Direction": "Forward",
+                "Shared Dirtied Blocks": 0,
+                "Shared Hit Blocks": 3,
+                "Shared Read Blocks": 0,
+                "Shared Written Blocks": 0,
+                "Startup Cost": 0.28,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "Total Cost": 8.3
+              },
+              {
+                "Actual Loops": 1,
+                "Actual Rows": 0.0,
+                "Actual Startup Time": 0.01,
+                "Actual Total Time": 0.01,
+                "Alias": "x",
+                "Async Capable": false,
+                "Disabled": false,
+                "Filter": "(primary_person_hmac IS DISTINCT FROM o.primary_person_hmac)",
+                "Index Cond": "((run_id = o.run_id) AND (organization_id = o.organization_id) AND (family = o.family) AND (identity_hmac = o.identity_hmac) AND (capture_sequence <= '751'::bigint))",
+                "Index Name": "migration_history_identity_page",
+                "Index Searches": 1,
+                "Local Dirtied Blocks": 0,
+                "Local Hit Blocks": 0,
+                "Local Read Blocks": 0,
+                "Local Written Blocks": 0,
+                "Node Type": "Index Scan",
+                "Parallel Aware": false,
+                "Parent Relationship": "SubPlan",
+                "Plan Rows": 1,
+                "Plan Width": 0,
+                "Relation Name": "migration_history_observation",
+                "Rows Removed by Filter": 1,
+                "Rows Removed by Index Recheck": 0,
+                "Scan Direction": "Forward",
+                "Shared Dirtied Blocks": 0,
+                "Shared Hit Blocks": 4,
+                "Shared Read Blocks": 0,
+                "Shared Written Blocks": 0,
+                "Startup Cost": 0.42,
+                "Subplan Name": "SubPlan 1",
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "Total Cost": 8.45
+              }
+            ],
+            "Shared Dirtied Blocks": 0,
+            "Shared Hit Blocks": 10,
+            "Shared Read Blocks": 1,
+            "Shared Written Blocks": 0,
+            "Startup Cost": 0.69,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "Total Cost": 25.21
+          },
+          "Planning": {
+            "Local Dirtied Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Written Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Hit Blocks": 106,
+            "Shared Read Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "Planning Time": 0.346,
+          "Triggers": []
+        }
+      ],
+      "scans": [
+        {
+          "actual_rows_per_loop": 1.0,
+          "filter": null,
+          "index": "migration_history_observation_id_run_id_organization_id_key",
+          "index_condition": "((id = '6f8e9058-5b78-4fa2-8401-f6733338bdc9'::uuid) AND (run_id = '13626b3f-9dd6-4c13-883f-0fa7d96b22a2'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid))",
+          "loops": 1,
+          "node": "Index Scan",
+          "relation": "migration_history_observation",
+          "removed_per_loop": null,
+          "shared_hit_blocks": 3,
+          "shared_read_blocks": 1
+        },
+        {
+          "actual_rows_per_loop": 1.0,
+          "filter": null,
+          "index": "migration_history_capture_id_run_id_organization_id_key",
+          "index_condition": "((id = o.capture_id) AND (run_id = '13626b3f-9dd6-4c13-883f-0fa7d96b22a2'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid))",
+          "loops": 1,
+          "node": "Index Scan",
+          "relation": "migration_history_capture",
+          "removed_per_loop": null,
+          "shared_hit_blocks": 3,
+          "shared_read_blocks": 0
+        },
+        {
+          "actual_rows_per_loop": 0.0,
+          "filter": "(primary_person_hmac IS DISTINCT FROM o.primary_person_hmac)",
+          "index": "migration_history_identity_page",
+          "index_condition": "((run_id = o.run_id) AND (organization_id = o.organization_id) AND (family = o.family) AND (identity_hmac = o.identity_hmac) AND (capture_sequence <= '751'::bigint))",
+          "loops": 1,
+          "node": "Index Scan",
+          "relation": "migration_history_observation",
+          "removed_per_loop": 1,
+          "shared_hit_blocks": 4,
+          "shared_read_blocks": 0
+        }
+      ],
+      "sql": "SELECT o.*,c.captured_at,c.representation,CASE WHEN o.identity_hmac IS NOT NULL AND EXISTS(SELECT 1 FROM migration_history_observation x WHERE x.run_id=o.run_id AND x.organization_id=o.organization_id AND x.family=o.family AND x.identity_hmac=o.identity_hmac AND x.capture_sequence<=$3 AND x.primary_person_hmac IS DISTINCT FROM o.primary_person_hmac) THEN 'conflicting_reference' ELSE o.disposition END AS effective_link FROM migration_history_observation o JOIN migration_history_capture c ON c.id=o.capture_id AND c.run_id=o.run_id AND c.organization_id=o.organization_id WHERE o.run_id=$1 AND o.organization_id=$2 AND o.id=$4",
+      "sql_sha256": "ab8480496b5a5c46bf93d25ba84ca6dbd588d6cbf5b695303371c05c89e1b05a"
+    },
+    {
+      "bindings": [
+        {
+          "type": "Uuid",
+          "value": "13626b3f-9dd6-4c13-883f-0fa7d96b22a2"
+        },
+        {
+          "type": "Uuid",
+          "value": "6054da4e-fc4a-4a41-9bc7-da84ea6e6d09"
+        },
+        {
+          "type": "I64",
+          "value": 751
+        },
+        {
+          "type": "OptionalText",
+          "value": null
+        },
+        {
+          "type": "OptionalText",
+          "value": null
+        },
+        {
+          "type": "OptionalBytes",
+          "value": null
+        },
+        {
+          "type": "OptionalText",
+          "value": null
+        },
+        {
+          "type": "OptionalUuid",
+          "value": null
+        },
+        {
+          "type": "I64",
+          "value": 0
+        },
+        {
+          "type": "I32",
+          "value": -1
+        },
+        {
+          "type": "Uuid",
+          "value": "00000000-0000-0000-0000-000000000000"
+        },
+        {
+          "type": "I64",
+          "value": 51
+        }
+      ],
+      "maximum_returned_rows": 51,
+      "name": "records_first",
+      "plan": [
+        {
+          "Execution Time": 0.242,
+          "Plan": {
+            "Actual Loops": 1,
+            "Actual Rows": 51.0,
+            "Actual Startup Time": 0.06,
+            "Actual Total Time": 0.226,
+            "Async Capable": false,
+            "Disabled": false,
+            "Local Dirtied Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Written Blocks": 0,
+            "Node Type": "Limit",
+            "Parallel Aware": false,
+            "Plan Rows": 51,
+            "Plan Width": 694,
+            "Plans": [
+              {
+                "Actual Loops": 1,
+                "Actual Rows": 51.0,
+                "Actual Startup Time": 0.06,
+                "Actual Total Time": 0.222,
+                "Async Capable": false,
+                "Disabled": false,
+                "Inner Unique": true,
+                "Join Type": "Inner",
+                "Local Dirtied Blocks": 0,
+                "Local Hit Blocks": 0,
+                "Local Read Blocks": 0,
+                "Local Written Blocks": 0,
+                "Node Type": "Nested Loop",
+                "Parallel Aware": false,
+                "Parent Relationship": "Outer",
+                "Plan Rows": 75002,
+                "Plan Width": 694,
+                "Plans": [
+                  {
+                    "Actual Loops": 1,
+                    "Actual Rows": 51.0,
+                    "Actual Startup Time": 0.045,
+                    "Actual Total Time": 0.05,
+                    "Alias": "o",
+                    "Async Capable": false,
+                    "Disabled": false,
+                    "Index Cond": "((run_id = '13626b3f-9dd6-4c13-883f-0fa7d96b22a2'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid) AND (capture_sequence <= '751'::bigint) AND (ROW(capture_sequence, ordinal, id) > ROW('0'::bigint, '-1'::integer, '00000000-0000-0000-0000-000000000000'::uuid)))",
+                    "Index Name": "migration_history_observation_page",
+                    "Index Searches": 1,
+                    "Local Dirtied Blocks": 0,
+                    "Local Hit Blocks": 0,
+                    "Local Read Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Node Type": "Index Scan",
+                    "Parallel Aware": false,
+                    "Parent Relationship": "Outer",
+                    "Plan Rows": 75002,
+                    "Plan Width": 623,
+                    "Relation Name": "migration_history_observation",
+                    "Rows Removed by Index Recheck": 0,
+                    "Scan Direction": "Forward",
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Hit Blocks": 6,
+                    "Shared Read Blocks": 1,
+                    "Shared Written Blocks": 1,
+                    "Startup Cost": 0.42,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Total Cost": 19245.51
+                  },
+                  {
+                    "Actual Loops": 51,
+                    "Actual Rows": 1.0,
+                    "Actual Startup Time": 0.0,
+                    "Actual Total Time": 0.0,
+                    "Async Capable": false,
+                    "Cache Evictions": 0,
+                    "Cache Hits": 50,
+                    "Cache Key": "o.capture_id",
+                    "Cache Misses": 1,
+                    "Cache Mode": "logical",
+                    "Cache Overflows": 0,
+                    "Disabled": false,
+                    "Local Dirtied Blocks": 0,
+                    "Local Hit Blocks": 0,
+                    "Local Read Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Node Type": "Memoize",
+                    "Parallel Aware": false,
+                    "Parent Relationship": "Inner",
+                    "Peak Memory Usage": 1,
+                    "Plan Rows": 1,
+                    "Plan Width": 87,
+                    "Plans": [
+                      {
+                        "Actual Loops": 1,
+                        "Actual Rows": 1.0,
+                        "Actual Startup Time": 0.005,
+                        "Actual Total Time": 0.005,
+                        "Alias": "c",
+                        "Async Capable": false,
+                        "Disabled": false,
+                        "Filter": "((run_id = '13626b3f-9dd6-4c13-883f-0fa7d96b22a2'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid))",
+                        "Index Cond": "(id = o.capture_id)",
+                        "Index Name": "migration_history_capture_pkey",
+                        "Index Searches": 1,
+                        "Local Dirtied Blocks": 0,
+                        "Local Hit Blocks": 0,
+                        "Local Read Blocks": 0,
+                        "Local Written Blocks": 0,
+                        "Node Type": "Index Scan",
+                        "Parallel Aware": false,
+                        "Parent Relationship": "Outer",
+                        "Plan Rows": 1,
+                        "Plan Width": 87,
+                        "Relation Name": "migration_history_capture",
+                        "Rows Removed by Filter": 0,
+                        "Rows Removed by Index Recheck": 0,
+                        "Scan Direction": "Forward",
+                        "Shared Dirtied Blocks": 0,
+                        "Shared Hit Blocks": 3,
+                        "Shared Read Blocks": 0,
+                        "Shared Written Blocks": 0,
+                        "Startup Cost": 0.28,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Total Cost": 0.3
+                      }
+                    ],
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Hit Blocks": 3,
+                    "Shared Read Blocks": 0,
+                    "Shared Written Blocks": 0,
+                    "Startup Cost": 0.29,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Total Cost": 0.31
+                  },
+                  {
+                    "Actual Loops": 51,
+                    "Actual Rows": 0.0,
+                    "Actual Startup Time": 0.003,
+                    "Actual Total Time": 0.003,
+                    "Alias": "x",
+                    "Async Capable": false,
+                    "Disabled": false,
+                    "Filter": "(primary_person_hmac IS DISTINCT FROM o.primary_person_hmac)",
+                    "Index Cond": "((run_id = o.run_id) AND (organization_id = o.organization_id) AND (family = o.family) AND (identity_hmac = o.identity_hmac) AND (capture_sequence <= '751'::bigint))",
+                    "Index Name": "migration_history_identity_page",
+                    "Index Searches": 51,
+                    "Local Dirtied Blocks": 0,
+                    "Local Hit Blocks": 0,
+                    "Local Read Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Node Type": "Index Scan",
+                    "Parallel Aware": false,
+                    "Parent Relationship": "SubPlan",
+                    "Plan Rows": 1,
+                    "Plan Width": 0,
+                    "Relation Name": "migration_history_observation",
+                    "Rows Removed by Filter": 1,
+                    "Rows Removed by Index Recheck": 0,
+                    "Scan Direction": "Forward",
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Hit Blocks": 204,
+                    "Shared Read Blocks": 0,
+                    "Shared Written Blocks": 0,
+                    "Startup Cost": 0.42,
+                    "Subplan Name": "SubPlan 1",
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Total Cost": 8.45
+                  }
+                ],
+                "Shared Dirtied Blocks": 0,
+                "Shared Hit Blocks": 213,
+                "Shared Read Blocks": 1,
+                "Shared Written Blocks": 1,
+                "Startup Cost": 0.7,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "Total Cost": 654923.83
+              }
+            ],
+            "Shared Dirtied Blocks": 0,
+            "Shared Hit Blocks": 213,
+            "Shared Read Blocks": 1,
+            "Shared Written Blocks": 1,
+            "Startup Cost": 0.7,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "Total Cost": 446.04
+          },
+          "Planning": {
+            "Local Dirtied Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Written Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Hit Blocks": 14,
+            "Shared Read Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "Planning Time": 0.155,
+          "Triggers": []
+        }
+      ],
+      "scans": [
+        {
+          "actual_rows_per_loop": 51.0,
+          "filter": null,
+          "index": "migration_history_observation_page",
+          "index_condition": "((run_id = '13626b3f-9dd6-4c13-883f-0fa7d96b22a2'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid) AND (capture_sequence <= '751'::bigint) AND (ROW(capture_sequence, ordinal, id) > ROW('0'::bigint, '-1'::integer, '00000000-0000-0000-0000-000000000000'::uuid)))",
+          "loops": 1,
+          "node": "Index Scan",
+          "relation": "migration_history_observation",
+          "removed_per_loop": null,
+          "shared_hit_blocks": 6,
+          "shared_read_blocks": 1
+        },
+        {
+          "actual_rows_per_loop": 1.0,
+          "filter": "((run_id = '13626b3f-9dd6-4c13-883f-0fa7d96b22a2'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid))",
+          "index": "migration_history_capture_pkey",
+          "index_condition": "(id = o.capture_id)",
+          "loops": 1,
+          "node": "Index Scan",
+          "relation": "migration_history_capture",
+          "removed_per_loop": 0,
+          "shared_hit_blocks": 3,
+          "shared_read_blocks": 0
+        },
+        {
+          "actual_rows_per_loop": 0.0,
+          "filter": "(primary_person_hmac IS DISTINCT FROM o.primary_person_hmac)",
+          "index": "migration_history_identity_page",
+          "index_condition": "((run_id = o.run_id) AND (organization_id = o.organization_id) AND (family = o.family) AND (identity_hmac = o.identity_hmac) AND (capture_sequence <= '751'::bigint))",
+          "loops": 51,
+          "node": "Index Scan",
+          "relation": "migration_history_observation",
+          "removed_per_loop": 1,
+          "shared_hit_blocks": 204,
+          "shared_read_blocks": 0
+        }
+      ],
+      "sql": "SELECT o.*,c.captured_at,c.representation,CASE WHEN o.identity_hmac IS NOT NULL AND EXISTS(SELECT 1 FROM migration_history_observation x WHERE x.run_id=o.run_id AND x.organization_id=o.organization_id AND x.family=o.family AND x.identity_hmac=o.identity_hmac AND x.capture_sequence<=$3 AND x.primary_person_hmac IS DISTINCT FROM o.primary_person_hmac) THEN 'conflicting_reference' ELSE o.disposition END AS effective_link FROM migration_history_observation o JOIN migration_history_capture c ON c.id=o.capture_id AND c.run_id=o.run_id AND c.organization_id=o.organization_id WHERE o.run_id=$1 AND o.organization_id=$2 AND o.capture_sequence<=$3 AND ($4::text IS NULL OR o.family=$4) AND ($5::text IS NULL OR (CASE WHEN o.identity_hmac IS NOT NULL AND EXISTS(SELECT 1 FROM migration_history_observation x WHERE x.run_id=o.run_id AND x.organization_id=o.organization_id AND x.family=o.family AND x.identity_hmac=o.identity_hmac AND x.capture_sequence<=$3 AND x.primary_person_hmac IS DISTINCT FROM o.primary_person_hmac) THEN 'conflicting_reference' ELSE o.disposition END)=$5) AND ($6::bytea IS NULL OR (o.identity_hmac=$6 AND o.family=$7)) AND ($8::uuid IS NULL OR o.id=$8) AND (o.capture_sequence,o.ordinal,o.id)>($9,$10,$11) ORDER BY o.capture_sequence,o.ordinal,o.id LIMIT $12",
+      "sql_sha256": "85f308cd09bf66eee8ff9b6ac930070ad02727e70116a18a00b1d7beb1747402"
+    },
+    {
+      "bindings": [
+        {
+          "type": "Uuid",
+          "value": "13626b3f-9dd6-4c13-883f-0fa7d96b22a2"
+        },
+        {
+          "type": "Uuid",
+          "value": "6054da4e-fc4a-4a41-9bc7-da84ea6e6d09"
+        },
+        {
+          "type": "I64",
+          "value": 751
+        },
+        {
+          "type": "OptionalText",
+          "value": "events"
+        },
+        {
+          "type": "OptionalText",
+          "value": null
+        },
+        {
+          "type": "OptionalBytes",
+          "value": null
+        },
+        {
+          "type": "OptionalText",
+          "value": null
+        },
+        {
+          "type": "OptionalUuid",
+          "value": null
+        },
+        {
+          "type": "I64",
+          "value": 241
+        },
+        {
+          "type": "I32",
+          "value": 99
+        },
+        {
+          "type": "Uuid",
+          "value": "6f8e9058-5b78-4fa2-8401-f6733338bdc9"
+        },
+        {
+          "type": "I64",
+          "value": 51
+        }
+      ],
+      "maximum_returned_rows": 51,
+      "name": "records_late_events",
+      "plan": [
+        {
+          "Execution Time": 0.224,
+          "Plan": {
+            "Actual Loops": 1,
+            "Actual Rows": 51.0,
+            "Actual Startup Time": 0.039,
+            "Actual Total Time": 0.211,
+            "Async Capable": false,
+            "Disabled": false,
+            "Local Dirtied Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Written Blocks": 0,
+            "Node Type": "Limit",
+            "Parallel Aware": false,
+            "Plan Rows": 51,
+            "Plan Width": 694,
+            "Plans": [
+              {
+                "Actual Loops": 1,
+                "Actual Rows": 51.0,
+                "Actual Startup Time": 0.038,
+                "Actual Total Time": 0.208,
+                "Async Capable": false,
+                "Disabled": false,
+                "Inner Unique": true,
+                "Join Type": "Inner",
+                "Local Dirtied Blocks": 0,
+                "Local Hit Blocks": 0,
+                "Local Read Blocks": 0,
+                "Local Written Blocks": 0,
+                "Node Type": "Nested Loop",
+                "Parallel Aware": false,
+                "Parent Relationship": "Outer",
+                "Plan Rows": 17066,
+                "Plan Width": 694,
+                "Plans": [
+                  {
+                    "Actual Loops": 1,
+                    "Actual Rows": 51.0,
+                    "Actual Startup Time": 0.029,
+                    "Actual Total Time": 0.036,
+                    "Alias": "o",
+                    "Async Capable": false,
+                    "Disabled": false,
+                    "Index Cond": "((run_id = '13626b3f-9dd6-4c13-883f-0fa7d96b22a2'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid) AND (family = 'events'::text) AND (capture_sequence <= '751'::bigint) AND (ROW(capture_sequence, ordinal, id) > ROW('241'::bigint, 99, '6f8e9058-5b78-4fa2-8401-f6733338bdc9'::uuid)))",
+                    "Index Name": "migration_history_family_page",
+                    "Index Searches": 1,
+                    "Local Dirtied Blocks": 0,
+                    "Local Hit Blocks": 0,
+                    "Local Read Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Node Type": "Index Scan",
+                    "Parallel Aware": false,
+                    "Parent Relationship": "Outer",
+                    "Plan Rows": 17066,
+                    "Plan Width": 623,
+                    "Relation Name": "migration_history_observation",
+                    "Rows Removed by Index Recheck": 0,
+                    "Scan Direction": "Forward",
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Hit Blocks": 6,
+                    "Shared Read Blocks": 3,
+                    "Shared Written Blocks": 1,
+                    "Startup Cost": 0.42,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Total Cost": 13146.27
+                  },
+                  {
+                    "Actual Loops": 51,
+                    "Actual Rows": 1.0,
+                    "Actual Startup Time": 0.0,
+                    "Actual Total Time": 0.0,
+                    "Async Capable": false,
+                    "Cache Evictions": 0,
+                    "Cache Hits": 50,
+                    "Cache Key": "o.capture_id",
+                    "Cache Misses": 1,
+                    "Cache Mode": "logical",
+                    "Cache Overflows": 0,
+                    "Disabled": false,
+                    "Local Dirtied Blocks": 0,
+                    "Local Hit Blocks": 0,
+                    "Local Read Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Node Type": "Memoize",
+                    "Parallel Aware": false,
+                    "Parent Relationship": "Inner",
+                    "Peak Memory Usage": 1,
+                    "Plan Rows": 1,
+                    "Plan Width": 87,
+                    "Plans": [
+                      {
+                        "Actual Loops": 1,
+                        "Actual Rows": 1.0,
+                        "Actual Startup Time": 0.003,
+                        "Actual Total Time": 0.003,
+                        "Alias": "c",
+                        "Async Capable": false,
+                        "Disabled": false,
+                        "Filter": "((run_id = '13626b3f-9dd6-4c13-883f-0fa7d96b22a2'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid))",
+                        "Index Cond": "(id = o.capture_id)",
+                        "Index Name": "migration_history_capture_pkey",
+                        "Index Searches": 1,
+                        "Local Dirtied Blocks": 0,
+                        "Local Hit Blocks": 0,
+                        "Local Read Blocks": 0,
+                        "Local Written Blocks": 0,
+                        "Node Type": "Index Scan",
+                        "Parallel Aware": false,
+                        "Parent Relationship": "Outer",
+                        "Plan Rows": 1,
+                        "Plan Width": 87,
+                        "Relation Name": "migration_history_capture",
+                        "Rows Removed by Filter": 0,
+                        "Rows Removed by Index Recheck": 0,
+                        "Scan Direction": "Forward",
+                        "Shared Dirtied Blocks": 0,
+                        "Shared Hit Blocks": 3,
+                        "Shared Read Blocks": 0,
+                        "Shared Written Blocks": 0,
+                        "Startup Cost": 0.28,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Total Cost": 0.31
+                      }
+                    ],
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Hit Blocks": 3,
+                    "Shared Read Blocks": 0,
+                    "Shared Written Blocks": 0,
+                    "Startup Cost": 0.29,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Total Cost": 0.32
+                  },
+                  {
+                    "Actual Loops": 51,
+                    "Actual Rows": 0.0,
+                    "Actual Startup Time": 0.003,
+                    "Actual Total Time": 0.003,
+                    "Alias": "x",
+                    "Async Capable": false,
+                    "Disabled": false,
+                    "Filter": "(primary_person_hmac IS DISTINCT FROM o.primary_person_hmac)",
+                    "Index Cond": "((run_id = o.run_id) AND (organization_id = o.organization_id) AND (family = o.family) AND (identity_hmac = o.identity_hmac) AND (capture_sequence <= '751'::bigint))",
+                    "Index Name": "migration_history_identity_page",
+                    "Index Searches": 51,
+                    "Local Dirtied Blocks": 0,
+                    "Local Hit Blocks": 0,
+                    "Local Read Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Node Type": "Index Scan",
+                    "Parallel Aware": false,
+                    "Parent Relationship": "SubPlan",
+                    "Plan Rows": 1,
+                    "Plan Width": 0,
+                    "Relation Name": "migration_history_observation",
+                    "Rows Removed by Filter": 1,
+                    "Rows Removed by Index Recheck": 0,
+                    "Scan Direction": "Forward",
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Hit Blocks": 204,
+                    "Shared Read Blocks": 0,
+                    "Shared Written Blocks": 0,
+                    "Startup Cost": 0.42,
+                    "Subplan Name": "SubPlan 1",
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Total Cost": 8.45
+                  }
+                ],
+                "Shared Dirtied Blocks": 0,
+                "Shared Hit Blocks": 213,
+                "Shared Read Blocks": 3,
+                "Shared Written Blocks": 1,
+                "Startup Cost": 0.7,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "Total Cost": 157967.58
+              }
+            ],
+            "Shared Dirtied Blocks": 0,
+            "Shared Hit Blocks": 213,
+            "Shared Read Blocks": 3,
+            "Shared Written Blocks": 1,
+            "Startup Cost": 0.7,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "Total Cost": 472.77
+          },
+          "Planning": {
+            "Local Dirtied Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Written Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Hit Blocks": 14,
+            "Shared Read Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "Planning Time": 0.143,
+          "Triggers": []
+        }
+      ],
+      "scans": [
+        {
+          "actual_rows_per_loop": 51.0,
+          "filter": null,
+          "index": "migration_history_family_page",
+          "index_condition": "((run_id = '13626b3f-9dd6-4c13-883f-0fa7d96b22a2'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid) AND (family = 'events'::text) AND (capture_sequence <= '751'::bigint) AND (ROW(capture_sequence, ordinal, id) > ROW('241'::bigint, 99, '6f8e9058-5b78-4fa2-8401-f6733338bdc9'::uuid)))",
+          "loops": 1,
+          "node": "Index Scan",
+          "relation": "migration_history_observation",
+          "removed_per_loop": null,
+          "shared_hit_blocks": 6,
+          "shared_read_blocks": 3
+        },
+        {
+          "actual_rows_per_loop": 1.0,
+          "filter": "((run_id = '13626b3f-9dd6-4c13-883f-0fa7d96b22a2'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid))",
+          "index": "migration_history_capture_pkey",
+          "index_condition": "(id = o.capture_id)",
+          "loops": 1,
+          "node": "Index Scan",
+          "relation": "migration_history_capture",
+          "removed_per_loop": 0,
+          "shared_hit_blocks": 3,
+          "shared_read_blocks": 0
+        },
+        {
+          "actual_rows_per_loop": 0.0,
+          "filter": "(primary_person_hmac IS DISTINCT FROM o.primary_person_hmac)",
+          "index": "migration_history_identity_page",
+          "index_condition": "((run_id = o.run_id) AND (organization_id = o.organization_id) AND (family = o.family) AND (identity_hmac = o.identity_hmac) AND (capture_sequence <= '751'::bigint))",
+          "loops": 51,
+          "node": "Index Scan",
+          "relation": "migration_history_observation",
+          "removed_per_loop": 1,
+          "shared_hit_blocks": 204,
+          "shared_read_blocks": 0
+        }
+      ],
+      "sql": "SELECT o.*,c.captured_at,c.representation,CASE WHEN o.identity_hmac IS NOT NULL AND EXISTS(SELECT 1 FROM migration_history_observation x WHERE x.run_id=o.run_id AND x.organization_id=o.organization_id AND x.family=o.family AND x.identity_hmac=o.identity_hmac AND x.capture_sequence<=$3 AND x.primary_person_hmac IS DISTINCT FROM o.primary_person_hmac) THEN 'conflicting_reference' ELSE o.disposition END AS effective_link FROM migration_history_observation o JOIN migration_history_capture c ON c.id=o.capture_id AND c.run_id=o.run_id AND c.organization_id=o.organization_id WHERE o.run_id=$1 AND o.organization_id=$2 AND o.capture_sequence<=$3 AND ($4::text IS NULL OR o.family=$4) AND ($5::text IS NULL OR (CASE WHEN o.identity_hmac IS NOT NULL AND EXISTS(SELECT 1 FROM migration_history_observation x WHERE x.run_id=o.run_id AND x.organization_id=o.organization_id AND x.family=o.family AND x.identity_hmac=o.identity_hmac AND x.capture_sequence<=$3 AND x.primary_person_hmac IS DISTINCT FROM o.primary_person_hmac) THEN 'conflicting_reference' ELSE o.disposition END)=$5) AND ($6::bytea IS NULL OR (o.identity_hmac=$6 AND o.family=$7)) AND ($8::uuid IS NULL OR o.id=$8) AND (o.capture_sequence,o.ordinal,o.id)>($9,$10,$11) ORDER BY o.capture_sequence,o.ordinal,o.id LIMIT $12",
+      "sql_sha256": "85f308cd09bf66eee8ff9b6ac930070ad02727e70116a18a00b1d7beb1747402"
+    },
+    {
+      "bindings": [
+        {
+          "type": "Uuid",
+          "value": "13626b3f-9dd6-4c13-883f-0fa7d96b22a2"
+        },
+        {
+          "type": "Uuid",
+          "value": "6054da4e-fc4a-4a41-9bc7-da84ea6e6d09"
+        },
+        {
+          "type": "I64",
+          "value": 751
+        },
+        {
+          "type": "OptionalText",
+          "value": "events"
+        },
+        {
+          "type": "OptionalText",
+          "value": "parent_excluded"
+        },
+        {
+          "type": "OptionalBytes",
+          "value": null
+        },
+        {
+          "type": "OptionalText",
+          "value": null
+        },
+        {
+          "type": "OptionalUuid",
+          "value": null
+        },
+        {
+          "type": "I64",
+          "value": 0
+        },
+        {
+          "type": "I32",
+          "value": -1
+        },
+        {
+          "type": "Uuid",
+          "value": "00000000-0000-0000-0000-000000000000"
+        },
+        {
+          "type": "I64",
+          "value": 51
+        }
+      ],
+      "maximum_returned_rows": 51,
+      "name": "records_rare_excluded",
+      "plan": [
+        {
+          "Execution Time": 55.158,
+          "Plan": {
+            "Actual Loops": 1,
+            "Actual Rows": 1.0,
+            "Actual Startup Time": 1.283,
+            "Actual Total Time": 55.137,
+            "Async Capable": false,
+            "Disabled": false,
+            "Local Dirtied Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Written Blocks": 0,
+            "Node Type": "Limit",
+            "Parallel Aware": false,
+            "Plan Rows": 51,
+            "Plan Width": 694,
+            "Plans": [
+              {
+                "Actual Loops": 1,
+                "Actual Rows": 1.0,
+                "Actual Startup Time": 1.282,
+                "Actual Total Time": 55.136,
+                "Async Capable": false,
+                "Disabled": false,
+                "Inner Unique": true,
+                "Join Filter": "(o.capture_id = c.id)",
+                "Join Type": "Inner",
+                "Local Dirtied Blocks": 0,
+                "Local Hit Blocks": 0,
+                "Local Read Blocks": 0,
+                "Local Written Blocks": 0,
+                "Node Type": "Nested Loop",
+                "Parallel Aware": false,
+                "Parent Relationship": "Outer",
+                "Plan Rows": 126,
+                "Plan Width": 694,
+                "Plans": [
+                  {
+                    "Actual Loops": 1,
+                    "Actual Rows": 1.0,
+                    "Actual Startup Time": 1.258,
+                    "Actual Total Time": 55.109,
+                    "Alias": "o",
+                    "Async Capable": false,
+                    "Disabled": false,
+                    "Filter": "(CASE WHEN ((identity_hmac IS NOT NULL) AND EXISTS(SubPlan 2)) THEN 'conflicting_reference'::text ELSE disposition END = 'parent_excluded'::text)",
+                    "Index Cond": "((run_id = '13626b3f-9dd6-4c13-883f-0fa7d96b22a2'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid) AND (family = 'events'::text) AND (capture_sequence <= '751'::bigint) AND (ROW(capture_sequence, ordinal, id) > ROW('0'::bigint, '-1'::integer, '00000000-0000-0000-0000-000000000000'::uuid)))",
+                    "Index Name": "migration_history_family_page",
+                    "Index Searches": 1,
+                    "Local Dirtied Blocks": 0,
+                    "Local Hit Blocks": 0,
+                    "Local Read Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Node Type": "Index Scan",
+                    "Parallel Aware": false,
+                    "Parent Relationship": "Outer",
+                    "Plan Rows": 126,
+                    "Plan Width": 623,
+                    "Plans": [
+                      {
+                        "Actual Loops": 25000,
+                        "Actual Rows": 0.0,
+                        "Actual Startup Time": 0.002,
+                        "Actual Total Time": 0.002,
+                        "Alias": "x_1",
+                        "Async Capable": false,
+                        "Disabled": false,
+                        "Filter": "(primary_person_hmac IS DISTINCT FROM o.primary_person_hmac)",
+                        "Index Cond": "((run_id = o.run_id) AND (organization_id = o.organization_id) AND (family = o.family) AND (identity_hmac = o.identity_hmac) AND (capture_sequence <= '751'::bigint))",
+                        "Index Name": "migration_history_identity_page",
+                        "Index Searches": 25000,
+                        "Local Dirtied Blocks": 0,
+                        "Local Hit Blocks": 0,
+                        "Local Read Blocks": 0,
+                        "Local Written Blocks": 0,
+                        "Node Type": "Index Scan",
+                        "Parallel Aware": false,
+                        "Parent Relationship": "SubPlan",
+                        "Plan Rows": 1,
+                        "Plan Width": 0,
+                        "Relation Name": "migration_history_observation",
+                        "Rows Removed by Filter": 1,
+                        "Rows Removed by Index Recheck": 0,
+                        "Scan Direction": "Forward",
+                        "Shared Dirtied Blocks": 0,
+                        "Shared Hit Blocks": 100000,
+                        "Shared Read Blocks": 0,
+                        "Shared Written Blocks": 0,
+                        "Startup Cost": 0.42,
+                        "Subplan Name": "SubPlan 2",
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Total Cost": 8.45
+                      }
+                    ],
+                    "Relation Name": "migration_history_observation",
+                    "Rows Removed by Filter": 24999,
+                    "Rows Removed by Index Recheck": 0,
+                    "Scan Direction": "Forward",
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Hit Blocks": 102261,
+                    "Shared Read Blocks": 291,
+                    "Shared Written Blocks": 134,
+                    "Startup Cost": 0.42,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Total Cost": 226454.64
+                  },
+                  {
+                    "Actual Loops": 1,
+                    "Actual Rows": 7.0,
+                    "Actual Startup Time": 0.017,
+                    "Actual Total Time": 0.019,
+                    "Async Capable": false,
+                    "Disabled": false,
+                    "Local Dirtied Blocks": 0,
+                    "Local Hit Blocks": 0,
+                    "Local Read Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Maximum Storage": 17,
+                    "Node Type": "Materialize",
+                    "Parallel Aware": false,
+                    "Parent Relationship": "Inner",
+                    "Plan Rows": 751,
+                    "Plan Width": 87,
+                    "Plans": [
+                      {
+                        "Actual Loops": 1,
+                        "Actual Rows": 7.0,
+                        "Actual Startup Time": 0.016,
+                        "Actual Total Time": 0.017,
+                        "Alias": "c",
+                        "Async Capable": false,
+                        "Disabled": false,
+                        "Filter": "((run_id = '13626b3f-9dd6-4c13-883f-0fa7d96b22a2'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid))",
+                        "Local Dirtied Blocks": 0,
+                        "Local Hit Blocks": 0,
+                        "Local Read Blocks": 0,
+                        "Local Written Blocks": 0,
+                        "Node Type": "Seq Scan",
+                        "Parallel Aware": false,
+                        "Parent Relationship": "Outer",
+                        "Plan Rows": 751,
+                        "Plan Width": 87,
+                        "Relation Name": "migration_history_capture",
+                        "Rows Removed by Filter": 0,
+                        "Shared Dirtied Blocks": 0,
+                        "Shared Hit Blocks": 2,
+                        "Shared Read Blocks": 0,
+                        "Shared Written Blocks": 0,
+                        "Startup Cost": 0.0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Total Cost": 38.31
+                      }
+                    ],
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Hit Blocks": 2,
+                    "Shared Read Blocks": 0,
+                    "Shared Written Blocks": 0,
+                    "Startup Cost": 0.0,
+                    "Storage": "Memory",
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Total Cost": 42.07
+                  },
+                  {
+                    "Actual Loops": 1,
+                    "Actual Rows": 0.0,
+                    "Actual Startup Time": 0.004,
+                    "Actual Total Time": 0.004,
+                    "Alias": "x",
+                    "Async Capable": false,
+                    "Disabled": false,
+                    "Filter": "(primary_person_hmac IS DISTINCT FROM o.primary_person_hmac)",
+                    "Index Cond": "((run_id = o.run_id) AND (organization_id = o.organization_id) AND (family = o.family) AND (identity_hmac = o.identity_hmac) AND (capture_sequence <= '751'::bigint))",
+                    "Index Name": "migration_history_identity_page",
+                    "Index Searches": 1,
+                    "Local Dirtied Blocks": 0,
+                    "Local Hit Blocks": 0,
+                    "Local Read Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Node Type": "Index Scan",
+                    "Parallel Aware": false,
+                    "Parent Relationship": "SubPlan",
+                    "Plan Rows": 1,
+                    "Plan Width": 0,
+                    "Relation Name": "migration_history_observation",
+                    "Rows Removed by Filter": 1,
+                    "Rows Removed by Index Recheck": 0,
+                    "Scan Direction": "Forward",
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Hit Blocks": 4,
+                    "Shared Read Blocks": 0,
+                    "Shared Written Blocks": 0,
+                    "Startup Cost": 0.42,
+                    "Subplan Name": "SubPlan 1",
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Total Cost": 8.45
+                  }
+                ],
+                "Rows Removed by Join Filter": 6,
+                "Shared Dirtied Blocks": 0,
+                "Shared Hit Blocks": 102267,
+                "Shared Read Blocks": 291,
+                "Shared Written Blocks": 134,
+                "Startup Cost": 0.42,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "Total Cost": 228978.6
+              }
+            ],
+            "Shared Dirtied Blocks": 0,
+            "Shared Hit Blocks": 102267,
+            "Shared Read Blocks": 291,
+            "Shared Written Blocks": 134,
+            "Startup Cost": 0.42,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "Total Cost": 92682.06
+          },
+          "Planning": {
+            "Local Dirtied Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Written Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Hit Blocks": 14,
+            "Shared Read Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "Planning Time": 0.161,
+          "Triggers": []
+        }
+      ],
+      "scans": [
+        {
+          "actual_rows_per_loop": 1.0,
+          "filter": "(CASE WHEN ((identity_hmac IS NOT NULL) AND EXISTS(SubPlan 2)) THEN 'conflicting_reference'::text ELSE disposition END = 'parent_excluded'::text)",
+          "index": "migration_history_family_page",
+          "index_condition": "((run_id = '13626b3f-9dd6-4c13-883f-0fa7d96b22a2'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid) AND (family = 'events'::text) AND (capture_sequence <= '751'::bigint) AND (ROW(capture_sequence, ordinal, id) > ROW('0'::bigint, '-1'::integer, '00000000-0000-0000-0000-000000000000'::uuid)))",
+          "loops": 1,
+          "node": "Index Scan",
+          "relation": "migration_history_observation",
+          "removed_per_loop": 24999,
+          "shared_hit_blocks": 102261,
+          "shared_read_blocks": 291
+        },
+        {
+          "actual_rows_per_loop": 0.0,
+          "filter": "(primary_person_hmac IS DISTINCT FROM o.primary_person_hmac)",
+          "index": "migration_history_identity_page",
+          "index_condition": "((run_id = o.run_id) AND (organization_id = o.organization_id) AND (family = o.family) AND (identity_hmac = o.identity_hmac) AND (capture_sequence <= '751'::bigint))",
+          "loops": 25000,
+          "node": "Index Scan",
+          "relation": "migration_history_observation",
+          "removed_per_loop": 1,
+          "shared_hit_blocks": 100000,
+          "shared_read_blocks": 0
+        },
+        {
+          "actual_rows_per_loop": 7.0,
+          "filter": "((run_id = '13626b3f-9dd6-4c13-883f-0fa7d96b22a2'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid))",
+          "index": null,
+          "index_condition": null,
+          "loops": 1,
+          "node": "Seq Scan",
+          "relation": "migration_history_capture",
+          "removed_per_loop": 0,
+          "shared_hit_blocks": 2,
+          "shared_read_blocks": 0
+        },
+        {
+          "actual_rows_per_loop": 0.0,
+          "filter": "(primary_person_hmac IS DISTINCT FROM o.primary_person_hmac)",
+          "index": "migration_history_identity_page",
+          "index_condition": "((run_id = o.run_id) AND (organization_id = o.organization_id) AND (family = o.family) AND (identity_hmac = o.identity_hmac) AND (capture_sequence <= '751'::bigint))",
+          "loops": 1,
+          "node": "Index Scan",
+          "relation": "migration_history_observation",
+          "removed_per_loop": 1,
+          "shared_hit_blocks": 4,
+          "shared_read_blocks": 0
+        }
+      ],
+      "sql": "SELECT o.*,c.captured_at,c.representation,CASE WHEN o.identity_hmac IS NOT NULL AND EXISTS(SELECT 1 FROM migration_history_observation x WHERE x.run_id=o.run_id AND x.organization_id=o.organization_id AND x.family=o.family AND x.identity_hmac=o.identity_hmac AND x.capture_sequence<=$3 AND x.primary_person_hmac IS DISTINCT FROM o.primary_person_hmac) THEN 'conflicting_reference' ELSE o.disposition END AS effective_link FROM migration_history_observation o JOIN migration_history_capture c ON c.id=o.capture_id AND c.run_id=o.run_id AND c.organization_id=o.organization_id WHERE o.run_id=$1 AND o.organization_id=$2 AND o.capture_sequence<=$3 AND ($4::text IS NULL OR o.family=$4) AND ($5::text IS NULL OR (CASE WHEN o.identity_hmac IS NOT NULL AND EXISTS(SELECT 1 FROM migration_history_observation x WHERE x.run_id=o.run_id AND x.organization_id=o.organization_id AND x.family=o.family AND x.identity_hmac=o.identity_hmac AND x.capture_sequence<=$3 AND x.primary_person_hmac IS DISTINCT FROM o.primary_person_hmac) THEN 'conflicting_reference' ELSE o.disposition END)=$5) AND ($6::bytea IS NULL OR (o.identity_hmac=$6 AND o.family=$7)) AND ($8::uuid IS NULL OR o.id=$8) AND (o.capture_sequence,o.ordinal,o.id)>($9,$10,$11) ORDER BY o.capture_sequence,o.ordinal,o.id LIMIT $12",
+      "sql_sha256": "85f308cd09bf66eee8ff9b6ac930070ad02727e70116a18a00b1d7beb1747402"
+    },
+    {
+      "bindings": [
+        {
+          "type": "Uuid",
+          "value": "13626b3f-9dd6-4c13-883f-0fa7d96b22a2"
+        },
+        {
+          "type": "Uuid",
+          "value": "6054da4e-fc4a-4a41-9bc7-da84ea6e6d09"
+        },
+        {
+          "type": "I64",
+          "value": 751
+        },
+        {
+          "type": "OptionalText",
+          "value": null
+        },
+        {
+          "type": "OptionalText",
+          "value": "conflicting_reference"
+        },
+        {
+          "type": "OptionalBytes",
+          "value": null
+        },
+        {
+          "type": "OptionalText",
+          "value": null
+        },
+        {
+          "type": "OptionalUuid",
+          "value": null
+        },
+        {
+          "type": "I64",
+          "value": 0
+        },
+        {
+          "type": "I32",
+          "value": -1
+        },
+        {
+          "type": "Uuid",
+          "value": "00000000-0000-0000-0000-000000000000"
+        },
+        {
+          "type": "I64",
+          "value": 51
+        }
+      ],
+      "maximum_returned_rows": 51,
+      "name": "records_empty_conflicts",
+      "plan": [
+        {
+          "Execution Time": 157.602,
+          "Plan": {
+            "Actual Loops": 1,
+            "Actual Rows": 0.0,
+            "Actual Startup Time": 157.571,
+            "Actual Total Time": 157.573,
+            "Async Capable": false,
+            "Disabled": false,
+            "Local Dirtied Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Written Blocks": 0,
+            "Node Type": "Limit",
+            "Parallel Aware": false,
+            "Plan Rows": 51,
+            "Plan Width": 694,
+            "Plans": [
+              {
+                "Actual Loops": 1,
+                "Actual Rows": 0.0,
+                "Actual Startup Time": 157.57,
+                "Actual Total Time": 157.571,
+                "Async Capable": false,
+                "Disabled": false,
+                "Inner Unique": true,
+                "Join Filter": "(o.capture_id = c.id)",
+                "Join Type": "Inner",
+                "Local Dirtied Blocks": 0,
+                "Local Hit Blocks": 0,
+                "Local Read Blocks": 0,
+                "Local Written Blocks": 0,
+                "Node Type": "Nested Loop",
+                "Parallel Aware": false,
+                "Parent Relationship": "Outer",
+                "Plan Rows": 375,
+                "Plan Width": 694,
+                "Plans": [
+                  {
+                    "Actual Loops": 1,
+                    "Actual Rows": 0.0,
+                    "Actual Startup Time": 157.569,
+                    "Actual Total Time": 157.569,
+                    "Alias": "o",
+                    "Async Capable": false,
+                    "Disabled": false,
+                    "Filter": "(CASE WHEN ((identity_hmac IS NOT NULL) AND EXISTS(SubPlan 2)) THEN 'conflicting_reference'::text ELSE disposition END = 'conflicting_reference'::text)",
+                    "Index Cond": "((run_id = '13626b3f-9dd6-4c13-883f-0fa7d96b22a2'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid) AND (capture_sequence <= '751'::bigint) AND (ROW(capture_sequence, ordinal, id) > ROW('0'::bigint, '-1'::integer, '00000000-0000-0000-0000-000000000000'::uuid)))",
+                    "Index Name": "migration_history_observation_page",
+                    "Index Searches": 1,
+                    "Local Dirtied Blocks": 0,
+                    "Local Hit Blocks": 0,
+                    "Local Read Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Node Type": "Index Scan",
+                    "Parallel Aware": false,
+                    "Parent Relationship": "Outer",
+                    "Plan Rows": 375,
+                    "Plan Width": 623,
+                    "Plans": [
+                      {
+                        "Actual Loops": 75000,
+                        "Actual Rows": 0.0,
+                        "Actual Startup Time": 0.002,
+                        "Actual Total Time": 0.002,
+                        "Alias": "x_1",
+                        "Async Capable": false,
+                        "Disabled": false,
+                        "Filter": "(primary_person_hmac IS DISTINCT FROM o.primary_person_hmac)",
+                        "Index Cond": "((run_id = o.run_id) AND (organization_id = o.organization_id) AND (family = o.family) AND (identity_hmac = o.identity_hmac) AND (capture_sequence <= '751'::bigint))",
+                        "Index Name": "migration_history_identity_page",
+                        "Index Searches": 75000,
+                        "Local Dirtied Blocks": 0,
+                        "Local Hit Blocks": 0,
+                        "Local Read Blocks": 0,
+                        "Local Written Blocks": 0,
+                        "Node Type": "Index Scan",
+                        "Parallel Aware": false,
+                        "Parent Relationship": "SubPlan",
+                        "Plan Rows": 1,
+                        "Plan Width": 0,
+                        "Relation Name": "migration_history_observation",
+                        "Rows Removed by Filter": 1,
+                        "Rows Removed by Index Recheck": 0,
+                        "Scan Direction": "Forward",
+                        "Shared Dirtied Blocks": 0,
+                        "Shared Hit Blocks": 300000,
+                        "Shared Read Blocks": 0,
+                        "Shared Written Blocks": 0,
+                        "Startup Cost": 0.42,
+                        "Subplan Name": "SubPlan 2",
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Total Cost": 8.45
+                      }
+                    ],
+                    "Relation Name": "migration_history_observation",
+                    "Rows Removed by Filter": 75000,
+                    "Rows Removed by Index Recheck": 0,
+                    "Scan Direction": "Forward",
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Hit Blocks": 309611,
+                    "Shared Read Blocks": 169,
+                    "Shared Written Blocks": 58,
+                    "Startup Cost": 0.42,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Total Cost": 653012.41
+                  },
+                  {
+                    "Actual Loops": 0,
+                    "Actual Rows": 0,
+                    "Actual Startup Time": 0.0,
+                    "Actual Total Time": 0.0,
+                    "Async Capable": false,
+                    "Disabled": false,
+                    "Local Dirtied Blocks": 0,
+                    "Local Hit Blocks": 0,
+                    "Local Read Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Node Type": "Materialize",
+                    "Parallel Aware": false,
+                    "Parent Relationship": "Inner",
+                    "Plan Rows": 751,
+                    "Plan Width": 87,
+                    "Plans": [
+                      {
+                        "Actual Loops": 0,
+                        "Actual Rows": 0,
+                        "Actual Startup Time": 0.0,
+                        "Actual Total Time": 0.0,
+                        "Alias": "c",
+                        "Async Capable": false,
+                        "Disabled": false,
+                        "Filter": "((run_id = '13626b3f-9dd6-4c13-883f-0fa7d96b22a2'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid))",
+                        "Local Dirtied Blocks": 0,
+                        "Local Hit Blocks": 0,
+                        "Local Read Blocks": 0,
+                        "Local Written Blocks": 0,
+                        "Node Type": "Seq Scan",
+                        "Parallel Aware": false,
+                        "Parent Relationship": "Outer",
+                        "Plan Rows": 751,
+                        "Plan Width": 87,
+                        "Relation Name": "migration_history_capture",
+                        "Rows Removed by Filter": 0,
+                        "Shared Dirtied Blocks": 0,
+                        "Shared Hit Blocks": 0,
+                        "Shared Read Blocks": 0,
+                        "Shared Written Blocks": 0,
+                        "Startup Cost": 0.0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Total Cost": 38.31
+                      }
+                    ],
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Hit Blocks": 0,
+                    "Shared Read Blocks": 0,
+                    "Shared Written Blocks": 0,
+                    "Startup Cost": 0.0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Total Cost": 42.07
+                  },
+                  {
+                    "Actual Loops": 0,
+                    "Actual Rows": 0,
+                    "Actual Startup Time": 0.0,
+                    "Actual Total Time": 0.0,
+                    "Alias": "x",
+                    "Async Capable": false,
+                    "Disabled": false,
+                    "Filter": "(primary_person_hmac IS DISTINCT FROM o.primary_person_hmac)",
+                    "Index Cond": "((run_id = o.run_id) AND (organization_id = o.organization_id) AND (family = o.family) AND (identity_hmac = o.identity_hmac) AND (capture_sequence <= '751'::bigint))",
+                    "Index Name": "migration_history_identity_page",
+                    "Index Searches": 0,
+                    "Local Dirtied Blocks": 0,
+                    "Local Hit Blocks": 0,
+                    "Local Read Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Node Type": "Index Scan",
+                    "Parallel Aware": false,
+                    "Parent Relationship": "SubPlan",
+                    "Plan Rows": 1,
+                    "Plan Width": 0,
+                    "Relation Name": "migration_history_observation",
+                    "Rows Removed by Filter": 0,
+                    "Rows Removed by Index Recheck": 0,
+                    "Scan Direction": "Forward",
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Hit Blocks": 0,
+                    "Shared Read Blocks": 0,
+                    "Shared Written Blocks": 0,
+                    "Startup Cost": 0.42,
+                    "Subplan Name": "SubPlan 1",
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Total Cost": 8.45
+                  }
+                ],
+                "Rows Removed by Join Filter": 0,
+                "Shared Dirtied Blocks": 0,
+                "Shared Hit Blocks": 309611,
+                "Shared Read Blocks": 169,
+                "Shared Written Blocks": 58,
+                "Startup Cost": 0.42,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "Total Cost": 660444.79
+              }
+            ],
+            "Shared Dirtied Blocks": 0,
+            "Shared Hit Blocks": 309611,
+            "Shared Read Blocks": 169,
+            "Shared Written Blocks": 58,
+            "Startup Cost": 0.42,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "Total Cost": 89820.85
+          },
+          "Planning": {
+            "Local Dirtied Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Written Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Hit Blocks": 14,
+            "Shared Read Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "Planning Time": 0.273,
+          "Triggers": []
+        }
+      ],
+      "scans": [
+        {
+          "actual_rows_per_loop": 0.0,
+          "filter": "(CASE WHEN ((identity_hmac IS NOT NULL) AND EXISTS(SubPlan 2)) THEN 'conflicting_reference'::text ELSE disposition END = 'conflicting_reference'::text)",
+          "index": "migration_history_observation_page",
+          "index_condition": "((run_id = '13626b3f-9dd6-4c13-883f-0fa7d96b22a2'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid) AND (capture_sequence <= '751'::bigint) AND (ROW(capture_sequence, ordinal, id) > ROW('0'::bigint, '-1'::integer, '00000000-0000-0000-0000-000000000000'::uuid)))",
+          "loops": 1,
+          "node": "Index Scan",
+          "relation": "migration_history_observation",
+          "removed_per_loop": 75000,
+          "shared_hit_blocks": 309611,
+          "shared_read_blocks": 169
+        },
+        {
+          "actual_rows_per_loop": 0.0,
+          "filter": "(primary_person_hmac IS DISTINCT FROM o.primary_person_hmac)",
+          "index": "migration_history_identity_page",
+          "index_condition": "((run_id = o.run_id) AND (organization_id = o.organization_id) AND (family = o.family) AND (identity_hmac = o.identity_hmac) AND (capture_sequence <= '751'::bigint))",
+          "loops": 75000,
+          "node": "Index Scan",
+          "relation": "migration_history_observation",
+          "removed_per_loop": 1,
+          "shared_hit_blocks": 300000,
+          "shared_read_blocks": 0
+        },
+        {
+          "actual_rows_per_loop": 0,
+          "filter": "((run_id = '13626b3f-9dd6-4c13-883f-0fa7d96b22a2'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid))",
+          "index": null,
+          "index_condition": null,
+          "loops": 0,
+          "node": "Seq Scan",
+          "relation": "migration_history_capture",
+          "removed_per_loop": 0,
+          "shared_hit_blocks": 0,
+          "shared_read_blocks": 0
+        },
+        {
+          "actual_rows_per_loop": 0,
+          "filter": "(primary_person_hmac IS DISTINCT FROM o.primary_person_hmac)",
+          "index": "migration_history_identity_page",
+          "index_condition": "((run_id = o.run_id) AND (organization_id = o.organization_id) AND (family = o.family) AND (identity_hmac = o.identity_hmac) AND (capture_sequence <= '751'::bigint))",
+          "loops": 0,
+          "node": "Index Scan",
+          "relation": "migration_history_observation",
+          "removed_per_loop": 0,
+          "shared_hit_blocks": 0,
+          "shared_read_blocks": 0
+        }
+      ],
+      "sql": "SELECT o.*,c.captured_at,c.representation,CASE WHEN o.identity_hmac IS NOT NULL AND EXISTS(SELECT 1 FROM migration_history_observation x WHERE x.run_id=o.run_id AND x.organization_id=o.organization_id AND x.family=o.family AND x.identity_hmac=o.identity_hmac AND x.capture_sequence<=$3 AND x.primary_person_hmac IS DISTINCT FROM o.primary_person_hmac) THEN 'conflicting_reference' ELSE o.disposition END AS effective_link FROM migration_history_observation o JOIN migration_history_capture c ON c.id=o.capture_id AND c.run_id=o.run_id AND c.organization_id=o.organization_id WHERE o.run_id=$1 AND o.organization_id=$2 AND o.capture_sequence<=$3 AND ($4::text IS NULL OR o.family=$4) AND ($5::text IS NULL OR (CASE WHEN o.identity_hmac IS NOT NULL AND EXISTS(SELECT 1 FROM migration_history_observation x WHERE x.run_id=o.run_id AND x.organization_id=o.organization_id AND x.family=o.family AND x.identity_hmac=o.identity_hmac AND x.capture_sequence<=$3 AND x.primary_person_hmac IS DISTINCT FROM o.primary_person_hmac) THEN 'conflicting_reference' ELSE o.disposition END)=$5) AND ($6::bytea IS NULL OR (o.identity_hmac=$6 AND o.family=$7)) AND ($8::uuid IS NULL OR o.id=$8) AND (o.capture_sequence,o.ordinal,o.id)>($9,$10,$11) ORDER BY o.capture_sequence,o.ordinal,o.id LIMIT $12",
+      "sql_sha256": "85f308cd09bf66eee8ff9b6ac930070ad02727e70116a18a00b1d7beb1747402"
+    },
+    {
+      "bindings": [
+        {
+          "type": "Uuid",
+          "value": "13626b3f-9dd6-4c13-883f-0fa7d96b22a2"
+        },
+        {
+          "type": "Uuid",
+          "value": "6054da4e-fc4a-4a41-9bc7-da84ea6e6d09"
+        },
+        {
+          "type": "I64",
+          "value": 751
+        },
+        {
+          "type": "OptionalText",
+          "value": null
+        },
+        {
+          "type": "OptionalText",
+          "value": null
+        },
+        {
+          "type": "OptionalBytes",
+          "value": [
+            81,
+            49,
+            68,
+            203,
+            189,
+            178,
+            143,
+            13,
+            120,
+            4,
+            74,
+            87,
+            235,
+            250,
+            181,
+            172,
+            226,
+            138,
+            240,
+            21,
+            226,
+            225,
+            164,
+            184,
+            151,
+            6,
+            55,
+            182,
+            183,
+            151,
+            118,
+            115
+          ]
+        },
+        {
+          "type": "OptionalText",
+          "value": "events"
+        },
+        {
+          "type": "OptionalUuid",
+          "value": null
+        },
+        {
+          "type": "I64",
+          "value": 0
+        },
+        {
+          "type": "I32",
+          "value": -1
+        },
+        {
+          "type": "Uuid",
+          "value": "00000000-0000-0000-0000-000000000000"
+        },
+        {
+          "type": "I64",
+          "value": 51
+        }
+      ],
+      "maximum_returned_rows": 51,
+      "name": "records_one_identity",
+      "plan": [
+        {
+          "Execution Time": 0.039,
+          "Plan": {
+            "Actual Loops": 1,
+            "Actual Rows": 1.0,
+            "Actual Startup Time": 0.018,
+            "Actual Total Time": 0.019,
+            "Async Capable": false,
+            "Disabled": false,
+            "Local Dirtied Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Written Blocks": 0,
+            "Node Type": "Limit",
+            "Parallel Aware": false,
+            "Plan Rows": 1,
+            "Plan Width": 694,
+            "Plans": [
+              {
+                "Actual Loops": 1,
+                "Actual Rows": 1.0,
+                "Actual Startup Time": 0.017,
+                "Actual Total Time": 0.017,
+                "Async Capable": false,
+                "Disabled": false,
+                "Inner Unique": true,
+                "Join Type": "Inner",
+                "Local Dirtied Blocks": 0,
+                "Local Hit Blocks": 0,
+                "Local Read Blocks": 0,
+                "Local Written Blocks": 0,
+                "Node Type": "Nested Loop",
+                "Parallel Aware": false,
+                "Parent Relationship": "Outer",
+                "Plan Rows": 1,
+                "Plan Width": 694,
+                "Plans": [
+                  {
+                    "Actual Loops": 1,
+                    "Actual Rows": 1.0,
+                    "Actual Startup Time": 0.009,
+                    "Actual Total Time": 0.009,
+                    "Alias": "o",
+                    "Async Capable": false,
+                    "Disabled": false,
+                    "Index Cond": "((run_id = '13626b3f-9dd6-4c13-883f-0fa7d96b22a2'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid) AND (family = 'events'::text) AND (identity_hmac = '\\x513144cbbdb28f0d78044a57ebfab5ace28af015e2e1a4b8970637b6b7977673'::bytea) AND (capture_sequence <= '751'::bigint) AND (ROW(capture_sequence, ordinal, id) > ROW('0'::bigint, '-1'::integer, '00000000-0000-0000-0000-000000000000'::uuid)))",
+                    "Index Name": "migration_history_identity_page",
+                    "Index Searches": 1,
+                    "Local Dirtied Blocks": 0,
+                    "Local Hit Blocks": 0,
+                    "Local Read Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Node Type": "Index Scan",
+                    "Parallel Aware": false,
+                    "Parent Relationship": "Outer",
+                    "Plan Rows": 1,
+                    "Plan Width": 623,
+                    "Relation Name": "migration_history_observation",
+                    "Rows Removed by Index Recheck": 0,
+                    "Scan Direction": "Forward",
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Hit Blocks": 4,
+                    "Shared Read Blocks": 0,
+                    "Shared Written Blocks": 0,
+                    "Startup Cost": 0.42,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Total Cost": 8.45
+                  },
+                  {
+                    "Actual Loops": 1,
+                    "Actual Rows": 1.0,
+                    "Actual Startup Time": 0.001,
+                    "Actual Total Time": 0.002,
+                    "Alias": "c",
+                    "Async Capable": false,
+                    "Disabled": false,
+                    "Index Cond": "((id = o.capture_id) AND (run_id = '13626b3f-9dd6-4c13-883f-0fa7d96b22a2'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid))",
+                    "Index Name": "migration_history_capture_id_run_id_organization_id_key",
+                    "Index Searches": 1,
+                    "Local Dirtied Blocks": 0,
+                    "Local Hit Blocks": 0,
+                    "Local Read Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Node Type": "Index Scan",
+                    "Parallel Aware": false,
+                    "Parent Relationship": "Inner",
+                    "Plan Rows": 1,
+                    "Plan Width": 87,
+                    "Relation Name": "migration_history_capture",
+                    "Rows Removed by Index Recheck": 0,
+                    "Scan Direction": "Forward",
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Hit Blocks": 3,
+                    "Shared Read Blocks": 0,
+                    "Shared Written Blocks": 0,
+                    "Startup Cost": 0.28,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Total Cost": 8.3
+                  },
+                  {
+                    "Actual Loops": 1,
+                    "Actual Rows": 0.0,
+                    "Actual Startup Time": 0.003,
+                    "Actual Total Time": 0.003,
+                    "Alias": "x",
+                    "Async Capable": false,
+                    "Disabled": false,
+                    "Filter": "(primary_person_hmac IS DISTINCT FROM o.primary_person_hmac)",
+                    "Index Cond": "((run_id = o.run_id) AND (organization_id = o.organization_id) AND (family = o.family) AND (identity_hmac = o.identity_hmac) AND (capture_sequence <= '751'::bigint))",
+                    "Index Name": "migration_history_identity_page",
+                    "Index Searches": 1,
+                    "Local Dirtied Blocks": 0,
+                    "Local Hit Blocks": 0,
+                    "Local Read Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Node Type": "Index Scan",
+                    "Parallel Aware": false,
+                    "Parent Relationship": "SubPlan",
+                    "Plan Rows": 1,
+                    "Plan Width": 0,
+                    "Relation Name": "migration_history_observation",
+                    "Rows Removed by Filter": 1,
+                    "Rows Removed by Index Recheck": 0,
+                    "Scan Direction": "Forward",
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Hit Blocks": 4,
+                    "Shared Read Blocks": 0,
+                    "Shared Written Blocks": 0,
+                    "Startup Cost": 0.42,
+                    "Subplan Name": "SubPlan 1",
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Total Cost": 8.45
+                  }
+                ],
+                "Shared Dirtied Blocks": 0,
+                "Shared Hit Blocks": 11,
+                "Shared Read Blocks": 0,
+                "Shared Written Blocks": 0,
+                "Startup Cost": 0.69,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "Total Cost": 25.21
+              }
+            ],
+            "Shared Dirtied Blocks": 0,
+            "Shared Hit Blocks": 11,
+            "Shared Read Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Startup Cost": 0.69,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "Total Cost": 25.21
+          },
+          "Planning": {
+            "Local Dirtied Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Written Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Hit Blocks": 14,
+            "Shared Read Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "Planning Time": 0.251,
+          "Triggers": []
+        }
+      ],
+      "scans": [
+        {
+          "actual_rows_per_loop": 1.0,
+          "filter": null,
+          "index": "migration_history_identity_page",
+          "index_condition": "((run_id = '13626b3f-9dd6-4c13-883f-0fa7d96b22a2'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid) AND (family = 'events'::text) AND (identity_hmac = '\\x513144cbbdb28f0d78044a57ebfab5ace28af015e2e1a4b8970637b6b7977673'::bytea) AND (capture_sequence <= '751'::bigint) AND (ROW(capture_sequence, ordinal, id) > ROW('0'::bigint, '-1'::integer, '00000000-0000-0000-0000-000000000000'::uuid)))",
+          "loops": 1,
+          "node": "Index Scan",
+          "relation": "migration_history_observation",
+          "removed_per_loop": null,
+          "shared_hit_blocks": 4,
+          "shared_read_blocks": 0
+        },
+        {
+          "actual_rows_per_loop": 1.0,
+          "filter": null,
+          "index": "migration_history_capture_id_run_id_organization_id_key",
+          "index_condition": "((id = o.capture_id) AND (run_id = '13626b3f-9dd6-4c13-883f-0fa7d96b22a2'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid))",
+          "loops": 1,
+          "node": "Index Scan",
+          "relation": "migration_history_capture",
+          "removed_per_loop": null,
+          "shared_hit_blocks": 3,
+          "shared_read_blocks": 0
+        },
+        {
+          "actual_rows_per_loop": 0.0,
+          "filter": "(primary_person_hmac IS DISTINCT FROM o.primary_person_hmac)",
+          "index": "migration_history_identity_page",
+          "index_condition": "((run_id = o.run_id) AND (organization_id = o.organization_id) AND (family = o.family) AND (identity_hmac = o.identity_hmac) AND (capture_sequence <= '751'::bigint))",
+          "loops": 1,
+          "node": "Index Scan",
+          "relation": "migration_history_observation",
+          "removed_per_loop": 1,
+          "shared_hit_blocks": 4,
+          "shared_read_blocks": 0
+        }
+      ],
+      "sql": "SELECT o.*,c.captured_at,c.representation,CASE WHEN o.identity_hmac IS NOT NULL AND EXISTS(SELECT 1 FROM migration_history_observation x WHERE x.run_id=o.run_id AND x.organization_id=o.organization_id AND x.family=o.family AND x.identity_hmac=o.identity_hmac AND x.capture_sequence<=$3 AND x.primary_person_hmac IS DISTINCT FROM o.primary_person_hmac) THEN 'conflicting_reference' ELSE o.disposition END AS effective_link FROM migration_history_observation o JOIN migration_history_capture c ON c.id=o.capture_id AND c.run_id=o.run_id AND c.organization_id=o.organization_id WHERE o.run_id=$1 AND o.organization_id=$2 AND o.capture_sequence<=$3 AND ($4::text IS NULL OR o.family=$4) AND ($5::text IS NULL OR (CASE WHEN o.identity_hmac IS NOT NULL AND EXISTS(SELECT 1 FROM migration_history_observation x WHERE x.run_id=o.run_id AND x.organization_id=o.organization_id AND x.family=o.family AND x.identity_hmac=o.identity_hmac AND x.capture_sequence<=$3 AND x.primary_person_hmac IS DISTINCT FROM o.primary_person_hmac) THEN 'conflicting_reference' ELSE o.disposition END)=$5) AND ($6::bytea IS NULL OR (o.identity_hmac=$6 AND o.family=$7)) AND ($8::uuid IS NULL OR o.id=$8) AND (o.capture_sequence,o.ordinal,o.id)>($9,$10,$11) ORDER BY o.capture_sequence,o.ordinal,o.id LIMIT $12",
+      "sql_sha256": "85f308cd09bf66eee8ff9b6ac930070ad02727e70116a18a00b1d7beb1747402"
+    },
+    {
+      "bindings": [
+        {
+          "type": "Uuid",
+          "value": "13626b3f-9dd6-4c13-883f-0fa7d96b22a2"
+        },
+        {
+          "type": "Uuid",
+          "value": "6054da4e-fc4a-4a41-9bc7-da84ea6e6d09"
+        },
+        {
+          "type": "Text",
+          "value": "events"
+        },
+        {
+          "type": "Bytes",
+          "value": [
+            81,
+            49,
+            68,
+            203,
+            189,
+            178,
+            143,
+            13,
+            120,
+            4,
+            74,
+            87,
+            235,
+            250,
+            181,
+            172,
+            226,
+            138,
+            240,
+            21,
+            226,
+            225,
+            164,
+            184,
+            151,
+            6,
+            55,
+            182,
+            183,
+            151,
+            118,
+            115
+          ]
+        }
+      ],
+      "maximum_returned_rows": 1,
+      "name": "history_identity_lookup",
+      "plan": [
+        {
+          "Execution Time": 0.107,
+          "Plan": {
+            "Actual Loops": 1,
+            "Actual Rows": 1.0,
+            "Actual Startup Time": 0.1,
+            "Actual Total Time": 0.103,
+            "Alias": "migration_history_identity",
+            "Async Capable": false,
+            "Disabled": false,
+            "Index Cond": "((run_id = '13626b3f-9dd6-4c13-883f-0fa7d96b22a2'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid) AND (family = 'events'::text) AND (identity_hmac = '\\x513144cbbdb28f0d78044a57ebfab5ace28af015e2e1a4b8970637b6b7977673'::bytea))",
+            "Index Name": "migration_history_identity_pkey",
+            "Index Searches": 1,
+            "Local Dirtied Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Written Blocks": 0,
+            "Node Type": "Index Scan",
+            "Parallel Aware": false,
+            "Plan Rows": 1,
+            "Plan Width": 51,
+            "Relation Name": "migration_history_identity",
+            "Rows Removed by Index Recheck": 0,
+            "Scan Direction": "Forward",
+            "Shared Dirtied Blocks": 0,
+            "Shared Hit Blocks": 2,
+            "Shared Read Blocks": 2,
+            "Shared Written Blocks": 1,
+            "Startup Cost": 0.42,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "Total Cost": 8.44
+          },
+          "Planning": {
+            "Local Dirtied Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Written Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Hit Blocks": 35,
+            "Shared Read Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "Planning Time": 0.078,
+          "Triggers": []
+        }
+      ],
+      "scans": [
+        {
+          "actual_rows_per_loop": 1.0,
+          "filter": null,
+          "index": "migration_history_identity_pkey",
+          "index_condition": "((run_id = '13626b3f-9dd6-4c13-883f-0fa7d96b22a2'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid) AND (family = 'events'::text) AND (identity_hmac = '\\x513144cbbdb28f0d78044a57ebfab5ace28af015e2e1a4b8970637b6b7977673'::bytea))",
+          "loops": 1,
+          "node": "Index Scan",
+          "relation": "migration_history_identity",
+          "removed_per_loop": null,
+          "shared_hit_blocks": 2,
+          "shared_read_blocks": 2
+        }
+      ],
+      "sql": "SELECT disposition,primary_person_hmac FROM migration_history_identity WHERE run_id=$1 AND organization_id=$2 AND family=$3 AND identity_hmac=$4",
+      "sql_sha256": "9236093a1f0c1ba41896a5a7f094f8bbf5a943e06c3c74f4af3825cab44d7a7c"
+    },
+    {
+      "bindings": [
+        {
+          "type": "Uuid",
+          "value": "13626b3f-9dd6-4c13-883f-0fa7d96b22a2"
+        },
+        {
+          "type": "Uuid",
+          "value": "6054da4e-fc4a-4a41-9bc7-da84ea6e6d09"
+        },
+        {
+          "type": "Text",
+          "value": "events"
+        },
+        {
+          "type": "Bytes",
+          "value": [
+            81,
+            49,
+            68,
+            203,
+            189,
+            178,
+            143,
+            13,
+            120,
+            4,
+            74,
+            87,
+            235,
+            250,
+            181,
+            172,
+            226,
+            138,
+            240,
+            21,
+            226,
+            225,
+            164,
+            184,
+            151,
+            6,
+            55,
+            182,
+            183,
+            151,
+            118,
+            115
+          ]
+        },
+        {
+          "type": "Bytes",
+          "value": [
+            235,
+            235,
+            79,
+            249,
+            48,
+            176,
+            176,
+            36,
+            81,
+            221,
+            181,
+            109,
+            213,
+            248,
+            223,
+            224,
+            231,
+            182,
+            210,
+            215,
+            106,
+            122,
+            141,
+            160,
+            131,
+            159,
+            62,
+            74,
+            215,
+            0,
+            23,
+            85
+          ]
+        }
+      ],
+      "maximum_returned_rows": 1,
+      "name": "history_semantic_replay",
+      "plan": [
+        {
+          "Execution Time": 0.016,
+          "Plan": {
+            "Actual Loops": 1,
+            "Actual Rows": 1.0,
+            "Actual Startup Time": 0.01,
+            "Actual Total Time": 0.011,
+            "Async Capable": false,
+            "Disabled": false,
+            "Local Dirtied Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Written Blocks": 0,
+            "Node Type": "Limit",
+            "Parallel Aware": false,
+            "Plan Rows": 1,
+            "Plan Width": 4,
+            "Plans": [
+              {
+                "Actual Loops": 1,
+                "Actual Rows": 1.0,
+                "Actual Startup Time": 0.01,
+                "Actual Total Time": 0.01,
+                "Alias": "migration_history_observation",
+                "Async Capable": false,
+                "Disabled": false,
+                "Filter": "(semantic_hmac = '\\xebeb4ff930b0b02451ddb56dd5f8dfe0e7b6d2d76a7a8da0839f3e4ad7001755'::bytea)",
+                "Index Cond": "((run_id = '13626b3f-9dd6-4c13-883f-0fa7d96b22a2'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid) AND (family = 'events'::text) AND (identity_hmac = '\\x513144cbbdb28f0d78044a57ebfab5ace28af015e2e1a4b8970637b6b7977673'::bytea))",
+                "Index Name": "migration_history_identity_page",
+                "Index Searches": 1,
+                "Local Dirtied Blocks": 0,
+                "Local Hit Blocks": 0,
+                "Local Read Blocks": 0,
+                "Local Written Blocks": 0,
+                "Node Type": "Index Scan",
+                "Parallel Aware": false,
+                "Parent Relationship": "Outer",
+                "Plan Rows": 1,
+                "Plan Width": 4,
+                "Relation Name": "migration_history_observation",
+                "Rows Removed by Filter": 0,
+                "Rows Removed by Index Recheck": 0,
+                "Scan Direction": "Forward",
+                "Shared Dirtied Blocks": 0,
+                "Shared Hit Blocks": 4,
+                "Shared Read Blocks": 0,
+                "Shared Written Blocks": 0,
+                "Startup Cost": 0.42,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "Total Cost": 8.45
+              }
+            ],
+            "Shared Dirtied Blocks": 0,
+            "Shared Hit Blocks": 4,
+            "Shared Read Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Startup Cost": 0.42,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "Total Cost": 8.45
+          },
+          "Planning": {
+            "Local Dirtied Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Written Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Hit Blocks": 0,
+            "Shared Read Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "Planning Time": 0.052,
+          "Triggers": []
+        }
+      ],
+      "scans": [
+        {
+          "actual_rows_per_loop": 1.0,
+          "filter": "(semantic_hmac = '\\xebeb4ff930b0b02451ddb56dd5f8dfe0e7b6d2d76a7a8da0839f3e4ad7001755'::bytea)",
+          "index": "migration_history_identity_page",
+          "index_condition": "((run_id = '13626b3f-9dd6-4c13-883f-0fa7d96b22a2'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid) AND (family = 'events'::text) AND (identity_hmac = '\\x513144cbbdb28f0d78044a57ebfab5ace28af015e2e1a4b8970637b6b7977673'::bytea))",
+          "loops": 1,
+          "node": "Index Scan",
+          "relation": "migration_history_observation",
+          "removed_per_loop": 0,
+          "shared_hit_blocks": 4,
+          "shared_read_blocks": 0
+        }
+      ],
+      "sql": "SELECT 1 FROM migration_history_observation WHERE run_id=$1 AND organization_id=$2 AND family=$3 AND identity_hmac=$4 AND semantic_hmac=$5 LIMIT 1",
+      "sql_sha256": "9e3cfa551062555a86660382ac6bed8c968d9f020aa734023e44759b141473cf"
+    },
+    {
+      "bindings": [
+        {
+          "type": "Uuid",
+          "value": "13626b3f-9dd6-4c13-883f-0fa7d96b22a2"
+        },
+        {
+          "type": "Uuid",
+          "value": "6054da4e-fc4a-4a41-9bc7-da84ea6e6d09"
+        },
+        {
+          "type": "Text",
+          "value": "events"
+        },
+        {
+          "type": "Bytes",
+          "value": [
+            81,
+            49,
+            68,
+            203,
+            189,
+            178,
+            143,
+            13,
+            120,
+            4,
+            74,
+            87,
+            235,
+            250,
+            181,
+            172,
+            226,
+            138,
+            240,
+            21,
+            226,
+            225,
+            164,
+            184,
+            151,
+            6,
+            55,
+            182,
+            183,
+            151,
+            118,
+            115
+          ]
+        },
+        {
+          "type": "I64",
+          "value": 751
+        }
+      ],
+      "maximum_returned_rows": 1,
+      "name": "history_variant_count",
+      "plan": [
+        {
+          "Execution Time": 0.027,
+          "Plan": {
+            "Actual Loops": 1,
+            "Actual Rows": 1.0,
+            "Actual Startup Time": 0.017,
+            "Actual Total Time": 0.017,
+            "Async Capable": false,
+            "Disabled": false,
+            "Local Dirtied Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Written Blocks": 0,
+            "Node Type": "Aggregate",
+            "Parallel Aware": false,
+            "Partial Mode": "Simple",
+            "Plan Rows": 1,
+            "Plan Width": 16,
+            "Plans": [
+              {
+                "Actual Loops": 1,
+                "Actual Rows": 1.0,
+                "Actual Startup Time": 0.014,
+                "Actual Total Time": 0.014,
+                "Async Capable": false,
+                "Disabled": false,
+                "Local Dirtied Blocks": 0,
+                "Local Hit Blocks": 0,
+                "Local Read Blocks": 0,
+                "Local Written Blocks": 0,
+                "Node Type": "Sort",
+                "Parallel Aware": false,
+                "Parent Relationship": "Outer",
+                "Plan Rows": 1,
+                "Plan Width": 33,
+                "Plans": [
+                  {
+                    "Actual Loops": 1,
+                    "Actual Rows": 1.0,
+                    "Actual Startup Time": 0.009,
+                    "Actual Total Time": 0.009,
+                    "Alias": "migration_history_observation",
+                    "Async Capable": false,
+                    "Disabled": false,
+                    "Index Cond": "((run_id = '13626b3f-9dd6-4c13-883f-0fa7d96b22a2'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid) AND (family = 'events'::text) AND (identity_hmac = '\\x513144cbbdb28f0d78044a57ebfab5ace28af015e2e1a4b8970637b6b7977673'::bytea) AND (capture_sequence <= '751'::bigint))",
+                    "Index Name": "migration_history_identity_page",
+                    "Index Searches": 1,
+                    "Local Dirtied Blocks": 0,
+                    "Local Hit Blocks": 0,
+                    "Local Read Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Node Type": "Index Scan",
+                    "Parallel Aware": false,
+                    "Parent Relationship": "Outer",
+                    "Plan Rows": 1,
+                    "Plan Width": 33,
+                    "Relation Name": "migration_history_observation",
+                    "Rows Removed by Index Recheck": 0,
+                    "Scan Direction": "Forward",
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Hit Blocks": 4,
+                    "Shared Read Blocks": 0,
+                    "Shared Written Blocks": 0,
+                    "Startup Cost": 0.42,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Total Cost": 8.45
+                  }
+                ],
+                "Shared Dirtied Blocks": 0,
+                "Shared Hit Blocks": 4,
+                "Shared Read Blocks": 0,
+                "Shared Written Blocks": 0,
+                "Sort Key": [
+                  "semantic_hmac"
+                ],
+                "Sort Method": "quicksort",
+                "Sort Space Type": "Memory",
+                "Sort Space Used": 25,
+                "Startup Cost": 8.46,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "Total Cost": 8.46
+              }
+            ],
+            "Shared Dirtied Blocks": 0,
+            "Shared Hit Blocks": 4,
+            "Shared Read Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Startup Cost": 8.47,
+            "Strategy": "Plain",
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "Total Cost": 8.48
+          },
+          "Planning": {
+            "Local Dirtied Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Written Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Hit Blocks": 0,
+            "Shared Read Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "Planning Time": 0.057,
+          "Triggers": []
+        }
+      ],
+      "scans": [
+        {
+          "actual_rows_per_loop": 1.0,
+          "filter": null,
+          "index": "migration_history_identity_page",
+          "index_condition": "((run_id = '13626b3f-9dd6-4c13-883f-0fa7d96b22a2'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid) AND (family = 'events'::text) AND (identity_hmac = '\\x513144cbbdb28f0d78044a57ebfab5ace28af015e2e1a4b8970637b6b7977673'::bytea) AND (capture_sequence <= '751'::bigint))",
+          "loops": 1,
+          "node": "Index Scan",
+          "relation": "migration_history_observation",
+          "removed_per_loop": null,
+          "shared_hit_blocks": 4,
+          "shared_read_blocks": 0
+        }
+      ],
+      "sql": "SELECT count(*) AS observations,count(DISTINCT semantic_hmac) AS variants FROM migration_history_observation WHERE run_id=$1 AND organization_id=$2 AND family=$3 AND identity_hmac=$4 AND capture_sequence<=$5",
+      "sql_sha256": "e082413b8c04256b59d640ea4c253648c1738ef0b1196ecb0c7dcdc9bc399e52"
+    },
+    {
+      "bindings": [
+        {
+          "type": "Uuid",
+          "value": "13626b3f-9dd6-4c13-883f-0fa7d96b22a2"
+        },
+        {
+          "type": "Uuid",
+          "value": "6054da4e-fc4a-4a41-9bc7-da84ea6e6d09"
+        },
+        {
+          "type": "Text",
+          "value": "events"
+        },
+        {
+          "type": "Text",
+          "value": "page"
+        },
+        {
+          "type": "Bytes",
+          "value": [
+            214,
+            108,
+            113,
+            94,
+            171,
+            190,
+            99,
+            49,
+            23,
+            139,
+            2,
+            60,
+            46,
+            148,
+            87,
+            141,
+            110,
+            239,
+            12,
+            206,
+            159,
+            198,
+            251,
+            97,
+            131,
+            212,
+            214,
+            191,
+            180,
+            157,
+            14,
+            154
+          ]
+        }
+      ],
+      "maximum_returned_rows": 1,
+      "name": "history_page_seen",
+      "plan": [
+        {
+          "Execution Time": 0.059,
+          "Plan": {
+            "Actual Loops": 1,
+            "Actual Rows": 1.0,
+            "Actual Startup Time": 0.054,
+            "Actual Total Time": 0.054,
+            "Alias": "migration_history_seen",
+            "Async Capable": false,
+            "Disabled": false,
+            "Heap Fetches": 1,
+            "Index Cond": "((run_id = '13626b3f-9dd6-4c13-883f-0fa7d96b22a2'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid) AND (family = 'events'::text) AND (kind = 'page'::text) AND (digest = '\\xd66c715eabbe6331178b023c2e94578d6eef0cce9fc6fb6183d4d6bfb49d0e9a'::bytea))",
+            "Index Name": "migration_history_seen_pkey",
+            "Index Searches": 1,
+            "Local Dirtied Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Written Blocks": 0,
+            "Node Type": "Index Only Scan",
+            "Parallel Aware": false,
+            "Plan Rows": 1,
+            "Plan Width": 4,
+            "Relation Name": "migration_history_seen",
+            "Rows Removed by Index Recheck": 0,
+            "Scan Direction": "Forward",
+            "Shared Dirtied Blocks": 0,
+            "Shared Hit Blocks": 2,
+            "Shared Read Blocks": 1,
+            "Shared Written Blocks": 1,
+            "Startup Cost": 0.28,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "Total Cost": 8.3
+          },
+          "Planning": {
+            "Local Dirtied Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Written Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Hit Blocks": 0,
+            "Shared Read Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "Planning Time": 0.019,
+          "Triggers": []
+        }
+      ],
+      "scans": [
+        {
+          "actual_rows_per_loop": 1.0,
+          "filter": null,
+          "index": "migration_history_seen_pkey",
+          "index_condition": "((run_id = '13626b3f-9dd6-4c13-883f-0fa7d96b22a2'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid) AND (family = 'events'::text) AND (kind = 'page'::text) AND (digest = '\\xd66c715eabbe6331178b023c2e94578d6eef0cce9fc6fb6183d4d6bfb49d0e9a'::bytea))",
+          "loops": 1,
+          "node": "Index Only Scan",
+          "relation": "migration_history_seen",
+          "removed_per_loop": null,
+          "shared_hit_blocks": 2,
+          "shared_read_blocks": 1
+        }
+      ],
+      "sql": "SELECT 1 FROM migration_history_seen WHERE run_id=$1 AND organization_id=$2 AND family=$3 AND kind=$4 AND digest=$5",
+      "sql_sha256": "a39b2073a87c74380c6a60f77d85063c148ed2db812df2aa6205e42dd3f9f454"
+    },
+    {
+      "bindings": [],
+      "maximum_returned_rows": 1,
+      "name": "history_queue_candidate",
+      "plan": [
+        {
+          "Execution Time": 0.013,
+          "Plan": {
+            "Actual Loops": 1,
+            "Actual Rows": 1.0,
+            "Actual Startup Time": 0.008,
+            "Actual Total Time": 0.008,
+            "Async Capable": false,
+            "Disabled": false,
+            "Local Dirtied Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Written Blocks": 0,
+            "Node Type": "Limit",
+            "Parallel Aware": false,
+            "Plan Rows": 1,
+            "Plan Width": 40,
+            "Plans": [
+              {
+                "Actual Loops": 1,
+                "Actual Rows": 1.0,
+                "Actual Startup Time": 0.008,
+                "Actual Total Time": 0.008,
+                "Async Capable": false,
+                "Disabled": false,
+                "Local Dirtied Blocks": 0,
+                "Local Hit Blocks": 0,
+                "Local Read Blocks": 0,
+                "Local Written Blocks": 0,
+                "Node Type": "Sort",
+                "Parallel Aware": false,
+                "Parent Relationship": "Outer",
+                "Plan Rows": 2,
+                "Plan Width": 40,
+                "Plans": [
+                  {
+                    "Actual Loops": 1,
+                    "Actual Rows": 1.0,
+                    "Actual Startup Time": 0.005,
+                    "Actual Total Time": 0.006,
+                    "Alias": "migration_history_capture_run",
+                    "Async Capable": false,
+                    "Disabled": false,
+                    "Filter": "(((state = ANY ('{queued,waiting_retry}'::text[])) AND ((next_attempt_at IS NULL) OR (next_attempt_at <= now()))) OR ((state = 'running'::text) AND (lease_expires_at <= now())))",
+                    "Local Dirtied Blocks": 0,
+                    "Local Hit Blocks": 0,
+                    "Local Read Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Node Type": "Seq Scan",
+                    "Parallel Aware": false,
+                    "Parent Relationship": "Outer",
+                    "Plan Rows": 2,
+                    "Plan Width": 40,
+                    "Relation Name": "migration_history_capture_run",
+                    "Rows Removed by Filter": 2,
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Hit Blocks": 1,
+                    "Shared Read Blocks": 0,
+                    "Shared Written Blocks": 0,
+                    "Startup Cost": 0.0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Total Cost": 1.07
+                  }
+                ],
+                "Shared Dirtied Blocks": 0,
+                "Shared Hit Blocks": 1,
+                "Shared Read Blocks": 0,
+                "Shared Written Blocks": 0,
+                "Sort Key": [
+                  "created_at",
+                  "id"
+                ],
+                "Sort Method": "quicksort",
+                "Sort Space Type": "Memory",
+                "Sort Space Used": 25,
+                "Startup Cost": 1.08,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "Total Cost": 1.09
+              }
+            ],
+            "Shared Dirtied Blocks": 0,
+            "Shared Hit Blocks": 1,
+            "Shared Read Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Startup Cost": 1.08,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "Total Cost": 1.09
+          },
+          "Planning": {
+            "Local Dirtied Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Written Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Hit Blocks": 9,
+            "Shared Read Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "Planning Time": 0.096,
+          "Triggers": []
+        }
+      ],
+      "scans": [
+        {
+          "actual_rows_per_loop": 1.0,
+          "filter": "(((state = ANY ('{queued,waiting_retry}'::text[])) AND ((next_attempt_at IS NULL) OR (next_attempt_at <= now()))) OR ((state = 'running'::text) AND (lease_expires_at <= now())))",
+          "index": null,
+          "index_condition": null,
+          "loops": 1,
+          "node": "Seq Scan",
+          "relation": "migration_history_capture_run",
+          "removed_per_loop": 2,
+          "shared_hit_blocks": 1,
+          "shared_read_blocks": 0
+        }
+      ],
+      "sql": "SELECT id,organization_id FROM migration_history_capture_run WHERE (state IN ('queued','waiting_retry') AND (next_attempt_at IS NULL OR next_attempt_at<=now())) OR (state='running' AND lease_expires_at<=now()) ORDER BY created_at,id LIMIT 1",
+      "sql_sha256": "a5623cd934b224929a4feaff875ee17cd5b45d578aeb3bb1f1d6c2f6cddbfc99"
+    },
+    {
+      "bindings": [
+        {
+          "type": "Uuid",
+          "value": "6054da4e-fc4a-4a41-9bc7-da84ea6e6d09"
+        },
+        {
+          "type": "I64",
+          "value": 17
+        },
+        {
+          "type": "Text",
+          "value": "101"
+        },
+        {
+          "type": "Uuid",
+          "value": "e4b509a4-5d90-49f8-9d75-a5078947797c"
+        },
+        {
+          "type": "Uuid",
+          "value": "1ff4b11f-0c07-4023-b946-7cc0d508d2e4"
+        }
+      ],
+      "maximum_returned_rows": 1,
+      "name": "history_parent_identity",
+      "plan": [
+        {
+          "Execution Time": 0.023,
+          "Plan": {
+            "Actual Loops": 1,
+            "Actual Rows": 1.0,
+            "Actual Startup Time": 0.013,
+            "Actual Total Time": 0.014,
+            "Async Capable": false,
+            "Disabled": false,
+            "Inner Unique": true,
+            "Join Type": "Left",
+            "Local Dirtied Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Written Blocks": 0,
+            "Node Type": "Nested Loop",
+            "Parallel Aware": false,
+            "Plan Rows": 1,
+            "Plan Width": 32,
+            "Plans": [
+              {
+                "Actual Loops": 1,
+                "Actual Rows": 1.0,
+                "Actual Startup Time": 0.007,
+                "Actual Total Time": 0.007,
+                "Async Capable": false,
+                "Disabled": false,
+                "Inner Unique": true,
+                "Join Filter": "(i.target_id = r.person_id)",
+                "Join Type": "Inner",
+                "Local Dirtied Blocks": 0,
+                "Local Hit Blocks": 0,
+                "Local Read Blocks": 0,
+                "Local Written Blocks": 0,
+                "Node Type": "Nested Loop",
+                "Parallel Aware": false,
+                "Parent Relationship": "Outer",
+                "Plan Rows": 1,
+                "Plan Width": 32,
+                "Plans": [
+                  {
+                    "Actual Loops": 1,
+                    "Actual Rows": 1.0,
+                    "Actual Startup Time": 0.003,
+                    "Actual Total Time": 0.004,
+                    "Alias": "i",
+                    "Async Capable": false,
+                    "Disabled": false,
+                    "Filter": "((import_id = 'e4b509a4-5d90-49f8-9d75-a5078947797c'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid) AND (source_id = '101'::text) AND (source_account_id = '17'::bigint) AND (family = 'people'::text) AND (plan_id = '1ff4b11f-0c07-4023-b946-7cc0d508d2e4'::uuid))",
+                    "Local Dirtied Blocks": 0,
+                    "Local Hit Blocks": 0,
+                    "Local Read Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Node Type": "Seq Scan",
+                    "Parallel Aware": false,
+                    "Parent Relationship": "Outer",
+                    "Plan Rows": 1,
+                    "Plan Width": 52,
+                    "Relation Name": "migration_import_identity",
+                    "Rows Removed by Filter": 1,
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Hit Blocks": 1,
+                    "Shared Read Blocks": 0,
+                    "Shared Written Blocks": 0,
+                    "Startup Cost": 0.0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Total Cost": 1.05
+                  },
+                  {
+                    "Actual Loops": 1,
+                    "Actual Rows": 1.0,
+                    "Actual Startup Time": 0.003,
+                    "Actual Total Time": 0.003,
+                    "Alias": "r",
+                    "Async Capable": false,
+                    "Disabled": false,
+                    "Filter": "((disposition = ANY ('{imported,already_imported}'::text[])) AND (import_id = 'e4b509a4-5d90-49f8-9d75-a5078947797c'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid) AND (source_id = '101'::text))",
+                    "Local Dirtied Blocks": 0,
+                    "Local Hit Blocks": 0,
+                    "Local Read Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Node Type": "Seq Scan",
+                    "Parallel Aware": false,
+                    "Parent Relationship": "Inner",
+                    "Plan Rows": 1,
+                    "Plan Width": 52,
+                    "Relation Name": "migration_import_result",
+                    "Rows Removed by Filter": 0,
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Hit Blocks": 1,
+                    "Shared Read Blocks": 0,
+                    "Shared Written Blocks": 0,
+                    "Startup Cost": 0.0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Total Cost": 1.06
+                  }
+                ],
+                "Rows Removed by Join Filter": 0,
+                "Shared Dirtied Blocks": 0,
+                "Shared Hit Blocks": 2,
+                "Shared Read Blocks": 0,
+                "Shared Written Blocks": 0,
+                "Startup Cost": 0.0,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "Total Cost": 2.12
+              },
+              {
+                "Actual Loops": 1,
+                "Actual Rows": 1.0,
+                "Actual Startup Time": 0.006,
+                "Actual Total Time": 0.006,
+                "Alias": "p",
+                "Async Capable": false,
+                "Disabled": false,
+                "Heap Fetches": 0,
+                "Index Cond": "((id = i.target_id) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid))",
+                "Index Name": "person_id_organization_id_key",
+                "Index Searches": 1,
+                "Local Dirtied Blocks": 0,
+                "Local Hit Blocks": 0,
+                "Local Read Blocks": 0,
+                "Local Written Blocks": 0,
+                "Node Type": "Index Only Scan",
+                "Parallel Aware": false,
+                "Parent Relationship": "Inner",
+                "Plan Rows": 1,
+                "Plan Width": 32,
+                "Relation Name": "person",
+                "Rows Removed by Index Recheck": 0,
+                "Scan Direction": "Forward",
+                "Shared Dirtied Blocks": 0,
+                "Shared Hit Blocks": 3,
+                "Shared Read Blocks": 0,
+                "Shared Written Blocks": 0,
+                "Startup Cost": 0.29,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "Total Cost": 4.31
+              }
+            ],
+            "Shared Dirtied Blocks": 0,
+            "Shared Hit Blocks": 5,
+            "Shared Read Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Startup Cost": 0.29,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "Total Cost": 6.44
+          },
+          "Planning": {
+            "Local Dirtied Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Written Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Hit Blocks": 123,
+            "Shared Read Blocks": 8,
+            "Shared Written Blocks": 7,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "Planning Time": 0.323,
+          "Triggers": []
+        }
+      ],
+      "scans": [
+        {
+          "actual_rows_per_loop": 1.0,
+          "filter": "((import_id = 'e4b509a4-5d90-49f8-9d75-a5078947797c'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid) AND (source_id = '101'::text) AND (source_account_id = '17'::bigint) AND (family = 'people'::text) AND (plan_id = '1ff4b11f-0c07-4023-b946-7cc0d508d2e4'::uuid))",
+          "index": null,
+          "index_condition": null,
+          "loops": 1,
+          "node": "Seq Scan",
+          "relation": "migration_import_identity",
+          "removed_per_loop": 1,
+          "shared_hit_blocks": 1,
+          "shared_read_blocks": 0
+        },
+        {
+          "actual_rows_per_loop": 1.0,
+          "filter": "((disposition = ANY ('{imported,already_imported}'::text[])) AND (import_id = 'e4b509a4-5d90-49f8-9d75-a5078947797c'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid) AND (source_id = '101'::text))",
+          "index": null,
+          "index_condition": null,
+          "loops": 1,
+          "node": "Seq Scan",
+          "relation": "migration_import_result",
+          "removed_per_loop": 0,
+          "shared_hit_blocks": 1,
+          "shared_read_blocks": 0
+        },
+        {
+          "actual_rows_per_loop": 1.0,
+          "filter": null,
+          "index": "person_id_organization_id_key",
+          "index_condition": "((id = i.target_id) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid))",
+          "loops": 1,
+          "node": "Index Only Scan",
+          "relation": "person",
+          "removed_per_loop": null,
+          "shared_hit_blocks": 3,
+          "shared_read_blocks": 0
+        }
+      ],
+      "sql": "SELECT i.target_id,p.id AS live_id FROM migration_import_identity i JOIN migration_import_result r ON r.import_id=i.import_id AND r.organization_id=i.organization_id AND r.source_id=i.source_id AND r.person_id=i.target_id AND r.disposition IN ('imported','already_imported') LEFT JOIN person p ON p.id=i.target_id AND p.organization_id=i.organization_id WHERE i.organization_id=$1 AND i.source_account_id=$2 AND i.family='people' AND i.source_id=$3 AND i.import_id=$4 AND i.plan_id=$5",
+      "sql_sha256": "addf6e8235e521726ca97709aabd071825b5b39ff5d81912b5cba493448ac700"
+    },
+    {
+      "bindings": [
+        {
+          "type": "Uuid",
+          "value": "6054da4e-fc4a-4a41-9bc7-da84ea6e6d09"
+        },
+        {
+          "type": "OptionalUuid",
+          "value": "e4b509a4-5d90-49f8-9d75-a5078947797c"
+        },
+        {
+          "type": "Time",
+          "value": "2026-09-12T16:38:20.761335Z"
+        },
+        {
+          "type": "Time",
+          "value": "2026-09-12T16:38:20.761335Z"
+        },
+        {
+          "type": "Uuid",
+          "value": "ffffffff-ffff-ffff-ffff-ffffffffffff"
+        },
+        {
+          "type": "I64",
+          "value": 51
+        }
+      ],
+      "maximum_returned_rows": 51,
+      "name": "history_run_page",
+      "plan": [
+        {
+          "Execution Time": 0.018,
+          "Plan": {
+            "Actual Loops": 1,
+            "Actual Rows": 3.0,
+            "Actual Startup Time": 0.006,
+            "Actual Total Time": 0.007,
+            "Async Capable": false,
+            "Disabled": false,
+            "Local Dirtied Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Written Blocks": 0,
+            "Node Type": "Limit",
+            "Parallel Aware": false,
+            "Plan Rows": 3,
+            "Plan Width": 24,
+            "Plans": [
+              {
+                "Actual Loops": 1,
+                "Actual Rows": 3.0,
+                "Actual Startup Time": 0.006,
+                "Actual Total Time": 0.006,
+                "Async Capable": false,
+                "Disabled": false,
+                "Local Dirtied Blocks": 0,
+                "Local Hit Blocks": 0,
+                "Local Read Blocks": 0,
+                "Local Written Blocks": 0,
+                "Node Type": "Sort",
+                "Parallel Aware": false,
+                "Parent Relationship": "Outer",
+                "Plan Rows": 3,
+                "Plan Width": 24,
+                "Plans": [
+                  {
+                    "Actual Loops": 1,
+                    "Actual Rows": 3.0,
+                    "Actual Startup Time": 0.003,
+                    "Actual Total Time": 0.003,
+                    "Alias": "migration_history_capture_run",
+                    "Async Capable": false,
+                    "Disabled": false,
+                    "Filter": "((created_at <= '2026-09-12 16:38:20.761335+00'::timestamp with time zone) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid) AND (parent_import_id = 'e4b509a4-5d90-49f8-9d75-a5078947797c'::uuid) AND (ROW(created_at, id) < ROW('2026-09-12 16:38:20.761335+00'::timestamp with time zone, 'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid)))",
+                    "Local Dirtied Blocks": 0,
+                    "Local Hit Blocks": 0,
+                    "Local Read Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Node Type": "Seq Scan",
+                    "Parallel Aware": false,
+                    "Parent Relationship": "Outer",
+                    "Plan Rows": 3,
+                    "Plan Width": 24,
+                    "Relation Name": "migration_history_capture_run",
+                    "Rows Removed by Filter": 0,
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Hit Blocks": 1,
+                    "Shared Read Blocks": 0,
+                    "Shared Written Blocks": 0,
+                    "Startup Cost": 0.0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Total Cost": 1.07
+                  }
+                ],
+                "Shared Dirtied Blocks": 0,
+                "Shared Hit Blocks": 1,
+                "Shared Read Blocks": 0,
+                "Shared Written Blocks": 0,
+                "Sort Key": [
+                  "created_at DESC",
+                  "id DESC"
+                ],
+                "Sort Method": "quicksort",
+                "Sort Space Type": "Memory",
+                "Sort Space Used": 25,
+                "Startup Cost": 1.09,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "Total Cost": 1.1
+              }
+            ],
+            "Shared Dirtied Blocks": 0,
+            "Shared Hit Blocks": 1,
+            "Shared Read Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Startup Cost": 1.09,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "Total Cost": 1.1
+          },
+          "Planning": {
+            "Local Dirtied Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Written Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Hit Blocks": 0,
+            "Shared Read Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "Planning Time": 0.04,
+          "Triggers": []
+        }
+      ],
+      "scans": [
+        {
+          "actual_rows_per_loop": 3.0,
+          "filter": "((created_at <= '2026-09-12 16:38:20.761335+00'::timestamp with time zone) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid) AND (parent_import_id = 'e4b509a4-5d90-49f8-9d75-a5078947797c'::uuid) AND (ROW(created_at, id) < ROW('2026-09-12 16:38:20.761335+00'::timestamp with time zone, 'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid)))",
+          "index": null,
+          "index_condition": null,
+          "loops": 1,
+          "node": "Seq Scan",
+          "relation": "migration_history_capture_run",
+          "removed_per_loop": 0,
+          "shared_hit_blocks": 1,
+          "shared_read_blocks": 0
+        }
+      ],
+      "sql": "SELECT id,created_at FROM migration_history_capture_run WHERE organization_id=$1 AND ($2::uuid IS NULL OR parent_import_id=$2) AND created_at<=$3 AND (created_at,id)<($4,$5) ORDER BY created_at DESC,id DESC LIMIT $6",
+      "sql_sha256": "3735dfc1c1f1743735ec30af992a9111d130fd6e0440b28dc0abda2e87a06a7a"
+    },
+    {
+      "bindings": [
+        {
+          "type": "Uuid",
+          "value": "5f30ad95-a6fa-4590-8066-27a30cacc45b"
+        },
+        {
+          "type": "Uuid",
+          "value": "6054da4e-fc4a-4a41-9bc7-da84ea6e6d09"
+        },
+        {
+          "type": "I64",
+          "value": 3
+        },
+        {
+          "type": "OptionalText",
+          "value": null
+        },
+        {
+          "type": "OptionalText",
+          "value": "conflicting_reference"
+        },
+        {
+          "type": "OptionalBytes",
+          "value": [
+            58,
+            23,
+            173,
+            237,
+            238,
+            138,
+            47,
+            30,
+            69,
+            24,
+            240,
+            219,
+            197,
+            73,
+            65,
+            178,
+            203,
+            38,
+            30,
+            23,
+            180,
+            191,
+            227,
+            173,
+            101,
+            120,
+            11,
+            173,
+            159,
+            220,
+            243,
+            146
+          ]
+        },
+        {
+          "type": "OptionalText",
+          "value": "events"
+        },
+        {
+          "type": "OptionalUuid",
+          "value": null
+        },
+        {
+          "type": "I64",
+          "value": 0
+        },
+        {
+          "type": "I32",
+          "value": -1
+        },
+        {
+          "type": "Uuid",
+          "value": "00000000-0000-0000-0000-000000000000"
+        },
+        {
+          "type": "I64",
+          "value": 51
+        }
+      ],
+      "maximum_returned_rows": 51,
+      "name": "records_conflicting_identity",
+      "plan": [
+        {
+          "Execution Time": 0.045,
+          "Plan": {
+            "Actual Loops": 1,
+            "Actual Rows": 2.0,
+            "Actual Startup Time": 0.023,
+            "Actual Total Time": 0.028,
+            "Async Capable": false,
+            "Disabled": false,
+            "Local Dirtied Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Written Blocks": 0,
+            "Node Type": "Limit",
+            "Parallel Aware": false,
+            "Plan Rows": 1,
+            "Plan Width": 694,
+            "Plans": [
+              {
+                "Actual Loops": 1,
+                "Actual Rows": 2.0,
+                "Actual Startup Time": 0.022,
+                "Actual Total Time": 0.028,
+                "Async Capable": false,
+                "Disabled": false,
+                "Inner Unique": true,
+                "Join Filter": "(o.capture_id = c.id)",
+                "Join Type": "Inner",
+                "Local Dirtied Blocks": 0,
+                "Local Hit Blocks": 0,
+                "Local Read Blocks": 0,
+                "Local Written Blocks": 0,
+                "Node Type": "Nested Loop",
+                "Parallel Aware": false,
+                "Parent Relationship": "Outer",
+                "Plan Rows": 1,
+                "Plan Width": 694,
+                "Plans": [
+                  {
+                    "Actual Loops": 1,
+                    "Actual Rows": 2.0,
+                    "Actual Startup Time": 0.013,
+                    "Actual Total Time": 0.015,
+                    "Alias": "o",
+                    "Async Capable": false,
+                    "Disabled": false,
+                    "Filter": "(CASE WHEN ((identity_hmac IS NOT NULL) AND EXISTS(SubPlan 2)) THEN 'conflicting_reference'::text ELSE disposition END = 'conflicting_reference'::text)",
+                    "Index Cond": "((run_id = '5f30ad95-a6fa-4590-8066-27a30cacc45b'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid) AND (family = 'events'::text) AND (identity_hmac = '\\x3a17adedee8a2f1e4518f0dbc54941b2cb261e17b4bfe3ad65780bad9fdcf392'::bytea) AND (capture_sequence <= '3'::bigint) AND (ROW(capture_sequence, ordinal, id) > ROW('0'::bigint, '-1'::integer, '00000000-0000-0000-0000-000000000000'::uuid)))",
+                    "Index Name": "migration_history_identity_page",
+                    "Index Searches": 1,
+                    "Local Dirtied Blocks": 0,
+                    "Local Hit Blocks": 0,
+                    "Local Read Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Node Type": "Index Scan",
+                    "Parallel Aware": false,
+                    "Parent Relationship": "Outer",
+                    "Plan Rows": 1,
+                    "Plan Width": 623,
+                    "Plans": [
+                      {
+                        "Actual Loops": 2,
+                        "Actual Rows": 1.0,
+                        "Actual Startup Time": 0.002,
+                        "Actual Total Time": 0.002,
+                        "Alias": "x_1",
+                        "Async Capable": false,
+                        "Disabled": false,
+                        "Filter": "(primary_person_hmac IS DISTINCT FROM o.primary_person_hmac)",
+                        "Index Cond": "((run_id = o.run_id) AND (organization_id = o.organization_id) AND (family = o.family) AND (identity_hmac = o.identity_hmac) AND (capture_sequence <= '3'::bigint))",
+                        "Index Name": "migration_history_identity_page",
+                        "Index Searches": 2,
+                        "Local Dirtied Blocks": 0,
+                        "Local Hit Blocks": 0,
+                        "Local Read Blocks": 0,
+                        "Local Written Blocks": 0,
+                        "Node Type": "Index Scan",
+                        "Parallel Aware": false,
+                        "Parent Relationship": "SubPlan",
+                        "Plan Rows": 1,
+                        "Plan Width": 0,
+                        "Relation Name": "migration_history_observation",
+                        "Rows Removed by Filter": 0,
+                        "Rows Removed by Index Recheck": 0,
+                        "Scan Direction": "Forward",
+                        "Shared Dirtied Blocks": 0,
+                        "Shared Hit Blocks": 8,
+                        "Shared Read Blocks": 0,
+                        "Shared Written Blocks": 0,
+                        "Startup Cost": 0.42,
+                        "Subplan Name": "SubPlan 2",
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Total Cost": 8.45
+                      }
+                    ],
+                    "Relation Name": "migration_history_observation",
+                    "Rows Removed by Filter": 0,
+                    "Rows Removed by Index Recheck": 0,
+                    "Scan Direction": "Forward",
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Hit Blocks": 12,
+                    "Shared Read Blocks": 0,
+                    "Shared Written Blocks": 0,
+                    "Startup Cost": 0.42,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Total Cost": 16.9
+                  },
+                  {
+                    "Actual Loops": 2,
+                    "Actual Rows": 2.5,
+                    "Actual Startup Time": 0.003,
+                    "Actual Total Time": 0.003,
+                    "Alias": "c",
+                    "Async Capable": false,
+                    "Disabled": false,
+                    "Index Cond": "((run_id = '5f30ad95-a6fa-4590-8066-27a30cacc45b'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid))",
+                    "Index Name": "migration_history_capture_run_id_organization_id_sequence_key",
+                    "Index Searches": 2,
+                    "Local Dirtied Blocks": 0,
+                    "Local Hit Blocks": 0,
+                    "Local Read Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Node Type": "Index Scan",
+                    "Parallel Aware": false,
+                    "Parent Relationship": "Inner",
+                    "Plan Rows": 3,
+                    "Plan Width": 87,
+                    "Relation Name": "migration_history_capture",
+                    "Rows Removed by Index Recheck": 0,
+                    "Scan Direction": "Forward",
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Hit Blocks": 6,
+                    "Shared Read Blocks": 0,
+                    "Shared Written Blocks": 0,
+                    "Startup Cost": 0.28,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Total Cost": 11.84
+                  },
+                  {
+                    "Actual Loops": 2,
+                    "Actual Rows": 1.0,
+                    "Actual Startup Time": 0.002,
+                    "Actual Total Time": 0.002,
+                    "Alias": "x",
+                    "Async Capable": false,
+                    "Disabled": false,
+                    "Filter": "(primary_person_hmac IS DISTINCT FROM o.primary_person_hmac)",
+                    "Index Cond": "((run_id = o.run_id) AND (organization_id = o.organization_id) AND (family = o.family) AND (identity_hmac = o.identity_hmac) AND (capture_sequence <= '3'::bigint))",
+                    "Index Name": "migration_history_identity_page",
+                    "Index Searches": 2,
+                    "Local Dirtied Blocks": 0,
+                    "Local Hit Blocks": 0,
+                    "Local Read Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Node Type": "Index Scan",
+                    "Parallel Aware": false,
+                    "Parent Relationship": "SubPlan",
+                    "Plan Rows": 1,
+                    "Plan Width": 0,
+                    "Relation Name": "migration_history_observation",
+                    "Rows Removed by Filter": 0,
+                    "Rows Removed by Index Recheck": 0,
+                    "Scan Direction": "Forward",
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Hit Blocks": 8,
+                    "Shared Read Blocks": 0,
+                    "Shared Written Blocks": 0,
+                    "Startup Cost": 0.42,
+                    "Subplan Name": "SubPlan 1",
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Total Cost": 8.45
+                  }
+                ],
+                "Rows Removed by Join Filter": 3,
+                "Shared Dirtied Blocks": 0,
+                "Shared Hit Blocks": 26,
+                "Shared Read Blocks": 0,
+                "Shared Written Blocks": 0,
+                "Startup Cost": 0.69,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "Total Cost": 37.22
+              }
+            ],
+            "Shared Dirtied Blocks": 0,
+            "Shared Hit Blocks": 26,
+            "Shared Read Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Startup Cost": 0.69,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "Total Cost": 37.22
+          },
+          "Planning": {
+            "Local Dirtied Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Written Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Hit Blocks": 14,
+            "Shared Read Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "Planning Time": 0.208,
+          "Triggers": []
+        }
+      ],
+      "scans": [
+        {
+          "actual_rows_per_loop": 2.0,
+          "filter": "(CASE WHEN ((identity_hmac IS NOT NULL) AND EXISTS(SubPlan 2)) THEN 'conflicting_reference'::text ELSE disposition END = 'conflicting_reference'::text)",
+          "index": "migration_history_identity_page",
+          "index_condition": "((run_id = '5f30ad95-a6fa-4590-8066-27a30cacc45b'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid) AND (family = 'events'::text) AND (identity_hmac = '\\x3a17adedee8a2f1e4518f0dbc54941b2cb261e17b4bfe3ad65780bad9fdcf392'::bytea) AND (capture_sequence <= '3'::bigint) AND (ROW(capture_sequence, ordinal, id) > ROW('0'::bigint, '-1'::integer, '00000000-0000-0000-0000-000000000000'::uuid)))",
+          "loops": 1,
+          "node": "Index Scan",
+          "relation": "migration_history_observation",
+          "removed_per_loop": 0,
+          "shared_hit_blocks": 12,
+          "shared_read_blocks": 0
+        },
+        {
+          "actual_rows_per_loop": 1.0,
+          "filter": "(primary_person_hmac IS DISTINCT FROM o.primary_person_hmac)",
+          "index": "migration_history_identity_page",
+          "index_condition": "((run_id = o.run_id) AND (organization_id = o.organization_id) AND (family = o.family) AND (identity_hmac = o.identity_hmac) AND (capture_sequence <= '3'::bigint))",
+          "loops": 2,
+          "node": "Index Scan",
+          "relation": "migration_history_observation",
+          "removed_per_loop": 0,
+          "shared_hit_blocks": 8,
+          "shared_read_blocks": 0
+        },
+        {
+          "actual_rows_per_loop": 2.5,
+          "filter": null,
+          "index": "migration_history_capture_run_id_organization_id_sequence_key",
+          "index_condition": "((run_id = '5f30ad95-a6fa-4590-8066-27a30cacc45b'::uuid) AND (organization_id = '6054da4e-fc4a-4a41-9bc7-da84ea6e6d09'::uuid))",
+          "loops": 2,
+          "node": "Index Scan",
+          "relation": "migration_history_capture",
+          "removed_per_loop": null,
+          "shared_hit_blocks": 6,
+          "shared_read_blocks": 0
+        },
+        {
+          "actual_rows_per_loop": 1.0,
+          "filter": "(primary_person_hmac IS DISTINCT FROM o.primary_person_hmac)",
+          "index": "migration_history_identity_page",
+          "index_condition": "((run_id = o.run_id) AND (organization_id = o.organization_id) AND (family = o.family) AND (identity_hmac = o.identity_hmac) AND (capture_sequence <= '3'::bigint))",
+          "loops": 2,
+          "node": "Index Scan",
+          "relation": "migration_history_observation",
+          "removed_per_loop": 0,
+          "shared_hit_blocks": 8,
+          "shared_read_blocks": 0
+        }
+      ],
+      "sql": "SELECT o.*,c.captured_at,c.representation,CASE WHEN o.identity_hmac IS NOT NULL AND EXISTS(SELECT 1 FROM migration_history_observation x WHERE x.run_id=o.run_id AND x.organization_id=o.organization_id AND x.family=o.family AND x.identity_hmac=o.identity_hmac AND x.capture_sequence<=$3 AND x.primary_person_hmac IS DISTINCT FROM o.primary_person_hmac) THEN 'conflicting_reference' ELSE o.disposition END AS effective_link FROM migration_history_observation o JOIN migration_history_capture c ON c.id=o.capture_id AND c.run_id=o.run_id AND c.organization_id=o.organization_id WHERE o.run_id=$1 AND o.organization_id=$2 AND o.capture_sequence<=$3 AND ($4::text IS NULL OR o.family=$4) AND ($5::text IS NULL OR (CASE WHEN o.identity_hmac IS NOT NULL AND EXISTS(SELECT 1 FROM migration_history_observation x WHERE x.run_id=o.run_id AND x.organization_id=o.organization_id AND x.family=o.family AND x.identity_hmac=o.identity_hmac AND x.capture_sequence<=$3 AND x.primary_person_hmac IS DISTINCT FROM o.primary_person_hmac) THEN 'conflicting_reference' ELSE o.disposition END)=$5) AND ($6::bytea IS NULL OR (o.identity_hmac=$6 AND o.family=$7)) AND ($8::uuid IS NULL OR o.id=$8) AND (o.capture_sequence,o.ordinal,o.id)>($9,$10,$11) ORDER BY o.capture_sequence,o.ordinal,o.id LIMIT $12",
+      "sql_sha256": "85f308cd09bf66eee8ff9b6ac930070ad02727e70116a18a00b1d7beb1747402"
+    }
+  ],
+  "fixture": {
+    "advancing_history_pages": 750,
+    "dense_per_family": 501,
+    "envelope": {
+      "application_role": "crm_app",
+      "counts": {
+        "members": 50,
+        "people": 25000
+      },
+      "native_write_guard_denied": true,
+      "seed_scope": "migrator native cardinality only; two genuinely imported People",
+      "workspace_unchanged": true
+    },
+    "fake_source_calls_final": 754,
+    "fake_source_calls_main": 751,
+    "kind": "constructed source through real worker; valid AAD",
+    "main_terminal": {
+      "actions": {
+        "cancel": false,
+        "confirm": false,
+        "increase_budget": false,
+        "retry": false
+      },
+      "capture_sequence": "751",
+      "completed_at": "2026-09-12T16:37:48.823364Z",
+      "confirmed_at": "2026-09-12T16:35:07.393770Z",
+      "connection_id": "9cc6664b-a67d-44bb-bedc-9e75ff8bd689",
+      "connection_revision": "1",
+      "coverage_reasons": [
+        "api_restricted_records_unknown",
+        "detail_content_not_fetched",
+        "not_atomic_snapshot",
+        "retained_not_imported"
+      ],
+      "created_at": "2026-09-12T16:35:07.355198Z",
+      "id": "13626b3f-9dd6-4c13-883f-0fa7d96b22a2",
+      "initiated_by_user_id": "b4672801-3294-460c-8acd-c45a313373cf",
+      "org_budget_revision": "1",
+      "org_byte_limit": "4294967296",
+      "org_ceiling_bytes": "4294967296",
+      "org_reserved_bytes": "0",
+      "org_retained_bytes": "66917149",
+      "parent_capture_sequence": "8",
+      "parent_import_id": "e4b509a4-5d90-49f8-9d75-a5078947797c",
+      "parent_plan_id": "1ff4b11f-0c07-4023-b946-7cc0d508d2e4",
+      "parent_source_completed_at": "2026-09-12T16:35:05.267727Z",
+      "parent_source_started_at": "2026-09-12T16:35:05.159920Z",
+      "parent_source_user_id": "3",
+      "parser_version": "1",
+      "pause_reason": null,
+      "policy_revision": "v1-2147483648-4294967296",
+      "profile_version": "fub-history-v1",
+      "proposal_expires_at": "2026-09-12T16:45:07.355198Z",
+      "raw_bytes": "22296275",
+      "release_ready": false,
+      "required_reservation_bytes": "16777216",
+      "reserved_bytes": "0",
+      "retained_bytes": "66891890",
+      "revision": "1505",
+      "run_budget_revision": "1",
+      "run_byte_limit": "2147483648",
+      "run_ceiling_bytes": "2147483648",
+      "schema_version": "sha256:d20b212ecf0db3e6fbbf467b272501dd0796d9dc4af7e58fd50a075ae4a8841b",
+      "snapshot_id": "5d9796a9-2149-4103-918f-c092b2ecf03d",
+      "source_account_id": "17",
+      "source_user_difference": false,
+      "source_user_evidence_revision": "1",
+      "source_user_id": "3",
+      "started_at": "2026-09-12T16:35:07.408765Z",
+      "state": "completed_with_gaps",
+      "streams": [
+        {
+          "api_inaccessible_count": null,
+          "attempts": "250",
+          "checkpoint": "250",
+          "conflicting_reference": "0",
+          "conflicting_variants": "0",
+          "content_scope": "exact_returned_json_only",
+          "count_basis": "advancing_pages",
+          "enumeration_is_complete_account_history": false,
+          "equal_repeats": "0",
+          "family": "events",
+          "invalid_occurrences": "0",
+          "invalid_person_reference": "2",
+          "linked": "502",
+          "no_parent_identity": "24495",
+          "occurrences": "25000",
+          "parent_excluded": "1",
+          "reported_total": "25000",
+          "state": "enumerated",
+          "unique_ids": "25000",
+          "valid_occurrences": "25000"
+        },
+        {
+          "api_inaccessible_count": null,
+          "attempts": "250",
+          "checkpoint": "250",
+          "conflicting_reference": "0",
+          "conflicting_variants": "0",
+          "content_scope": "exact_returned_json_only",
+          "count_basis": "advancing_pages",
+          "enumeration_is_complete_account_history": false,
+          "equal_repeats": "0",
+          "family": "calls",
+          "invalid_occurrences": "0",
+          "invalid_person_reference": "2",
+          "linked": "502",
+          "no_parent_identity": "24495",
+          "occurrences": "25000",
+          "parent_excluded": "1",
+          "reported_total": "25000",
+          "state": "enumerated",
+          "unique_ids": "25000",
+          "valid_occurrences": "25000"
+        },
+        {
+          "api_inaccessible_count": null,
+          "attempts": "250",
+          "checkpoint": "250",
+          "conflicting_reference": "0",
+          "conflicting_variants": "0",
+          "content_scope": "exact_returned_json_only",
+          "count_basis": "advancing_pages",
+          "enumeration_is_complete_account_history": false,
+          "equal_repeats": "0",
+          "family": "text_messages",
+          "invalid_occurrences": "0",
+          "invalid_person_reference": "2",
+          "linked": "502",
+          "no_parent_identity": "24495",
+          "occurrences": "25000",
+          "parent_excluded": "1",
+          "reported_total": "25000",
+          "state": "enumerated",
+          "unique_ids": "25000",
+          "valid_occurrences": "25000"
+        }
+      ]
+    },
+    "overlap_pause": {
+      "actions": {
+        "cancel": true,
+        "confirm": false,
+        "increase_budget": true,
+        "retry": true
+      },
+      "capture_sequence": "3",
+      "completed_at": null,
+      "confirmed_at": "2026-09-12T16:38:19.598937Z",
+      "connection_id": "9cc6664b-a67d-44bb-bedc-9e75ff8bd689",
+      "connection_revision": "1",
+      "coverage_reasons": [
+        "api_restricted_records_unknown",
+        "detail_content_not_fetched",
+        "not_atomic_snapshot",
+        "retained_not_imported"
+      ],
+      "created_at": "2026-09-12T16:38:19.580665Z",
+      "id": "5f30ad95-a6fa-4590-8066-27a30cacc45b",
+      "initiated_by_user_id": "b4672801-3294-460c-8acd-c45a313373cf",
+      "org_budget_revision": "1",
+      "org_byte_limit": "4294967296",
+      "org_ceiling_bytes": "4294967296",
+      "org_reserved_bytes": "8192",
+      "org_retained_bytes": "67069136",
+      "parent_capture_sequence": "8",
+      "parent_import_id": "e4b509a4-5d90-49f8-9d75-a5078947797c",
+      "parent_plan_id": "1ff4b11f-0c07-4023-b946-7cc0d508d2e4",
+      "parent_source_completed_at": "2026-09-12T16:35:05.267727Z",
+      "parent_source_started_at": "2026-09-12T16:35:05.159920Z",
+      "parent_source_user_id": "3",
+      "parser_version": "1",
+      "pause_reason": "enumeration_identity_uncertain",
+      "policy_revision": "v1-2147483648-4294967296",
+      "profile_version": "fub-history-v1",
+      "proposal_expires_at": "2026-09-12T16:48:19.580665Z",
+      "raw_bytes": "34750",
+      "release_ready": false,
+      "required_reservation_bytes": "16777216",
+      "reserved_bytes": "8192",
+      "retained_bytes": "151987",
+      "revision": "8",
+      "run_budget_revision": "1",
+      "run_byte_limit": "2147483648",
+      "run_ceiling_bytes": "2147483648",
+      "schema_version": "sha256:d20b212ecf0db3e6fbbf467b272501dd0796d9dc4af7e58fd50a075ae4a8841b",
+      "snapshot_id": "5d9796a9-2149-4103-918f-c092b2ecf03d",
+      "source_account_id": "17",
+      "source_user_difference": false,
+      "source_user_evidence_revision": "1",
+      "source_user_id": "3",
+      "started_at": "2026-09-12T16:38:19.606031Z",
+      "state": "paused",
+      "streams": [
+        {
+          "api_inaccessible_count": null,
+          "attempts": "2",
+          "checkpoint": "2",
+          "conflicting_reference": "1",
+          "conflicting_variants": "1",
+          "content_scope": "exact_returned_json_only",
+          "count_basis": "advancing_pages",
+          "enumeration_is_complete_account_history": false,
+          "equal_repeats": "0",
+          "family": "events",
+          "invalid_occurrences": "0",
+          "invalid_person_reference": "0",
+          "linked": "198",
+          "no_parent_identity": "0",
+          "occurrences": "200",
+          "parent_excluded": "0",
+          "reported_total": "200",
+          "state": "terminal_uncertain",
+          "unique_ids": "199",
+          "valid_occurrences": "200"
+        },
+        {
+          "api_inaccessible_count": null,
+          "attempts": "0",
+          "checkpoint": "0",
+          "conflicting_reference": "0",
+          "conflicting_variants": "0",
+          "content_scope": "exact_returned_json_only",
+          "count_basis": "advancing_pages",
+          "enumeration_is_complete_account_history": false,
+          "equal_repeats": "0",
+          "family": "calls",
+          "invalid_occurrences": "0",
+          "invalid_person_reference": "0",
+          "linked": "0",
+          "no_parent_identity": "0",
+          "occurrences": "0",
+          "parent_excluded": "0",
+          "reported_total": null,
+          "state": "pending",
+          "unique_ids": "0",
+          "valid_occurrences": "0"
+        },
+        {
+          "api_inaccessible_count": null,
+          "attempts": "0",
+          "checkpoint": "0",
+          "conflicting_reference": "0",
+          "conflicting_variants": "0",
+          "content_scope": "exact_returned_json_only",
+          "count_basis": "advancing_pages",
+          "enumeration_is_complete_account_history": false,
+          "equal_repeats": "0",
+          "family": "text_messages",
+          "invalid_occurrences": "0",
+          "invalid_person_reference": "0",
+          "linked": "0",
+          "no_parent_identity": "0",
+          "occurrences": "0",
+          "parent_excluded": "0",
+          "reported_total": null,
+          "state": "pending",
+          "unique_ids": "0",
+          "valid_occurrences": "0"
+        }
+      ]
+    },
+    "parent_native_sibling_baseline": {
+      "assignment_changed": {
+        "rows": 2,
+        "rows_hash": "89c59a40aefea1d69b3cddc177b5a659"
+      },
+      "call": {
+        "rows": 0,
+        "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+      },
+      "call_completed": {
+        "rows": 0,
+        "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+      },
+      "contact_attempted": {
+        "rows": 0,
+        "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+      },
+      "contact_method": {
+        "rows": 2,
+        "rows_hash": "b84a9275a80efaa948ed23b529fcfc6a"
+      },
+      "correspondence_captured": {
+        "rows": 0,
+        "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+      },
+      "correspondence_raw": {
+        "rows": 0,
+        "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+      },
+      "inquiry": {
+        "rows": 0,
+        "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+      },
+      "inquiry_received": {
+        "rows": 0,
+        "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+      },
+      "migration_activity_import": {
+        "rows": 0,
+        "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+      },
+      "migration_activity_result": {
+        "rows": 0,
+        "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+      },
+      "migration_import": {
+        "rows": 1,
+        "rows_hash": "769d225eb19785c482032158c5e9e1c7"
+      },
+      "migration_import_identity": {
+        "rows": 2,
+        "rows_hash": "367c6c6f87de17971b677585bdcd0611"
+      },
+      "migration_import_plan": {
+        "rows": 2,
+        "rows_hash": "8bf747fe312c5a2dfe9d6ed2e2ecfa79"
+      },
+      "migration_import_result": {
+        "rows": 3,
+        "rows_hash": "ead2b3d0b05b4f9a518453a2edb13571"
+      },
+      "migration_metadata_import": {
+        "rows": 0,
+        "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+      },
+      "migration_metadata_result": {
+        "rows": 0,
+        "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+      },
+      "migration_snapshot": {
+        "rows": 1,
+        "rows_hash": "7312daf2b343315163daca1b156cde4b"
+      },
+      "migration_snapshot_capture": {
+        "rows": 8,
+        "rows_hash": "6bf92701253ebb1c011e874a501c8bc9"
+      },
+      "migration_snapshot_record": {
+        "rows": 5,
+        "rows_hash": "ad63a926d9ddbae013bca405b3bbdeb1"
+      },
+      "migration_workspace": {
+        "rows": 1,
+        "rows_hash": "2a79937851c708942c4a19bae6ffdf8f"
+      },
+      "note": {
+        "rows": 0,
+        "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+      },
+      "person": {
+        "rows": 25000,
+        "rows_hash": "86a98ffd88e8079ff0cb624e87e6ccbe"
+      },
+      "person_imported": {
+        "rows": 2,
+        "rows_hash": "7527b944f859eea732980851a838beaa"
+      },
+      "stage_changed": {
+        "rows": 2,
+        "rows_hash": "11c9b5a474d6a04b59c1970f019e03aa"
+      },
+      "task": {
+        "rows": 0,
+        "rows_hash": "d41d8cd98f00b204e9800998ecf8427e"
+      }
+    },
+    "parent_native_sibling_unchanged": true,
+    "real_source_requests": 0,
+    "relations": [
+      {
+        "sizes": {
+          "index_bytes": 5259264,
+          "row_bytes": 3599949,
+          "rows": 25000,
+          "table_bytes": 3768320
+        },
+        "table": "person"
+      },
+      {
+        "sizes": {
+          "index_bytes": 16384,
+          "row_bytes": 4397,
+          "rows": 50,
+          "table_bytes": 16384
+        },
+        "table": "organization_membership"
+      },
+      {
+        "sizes": {
+          "index_bytes": 32768,
+          "row_bytes": 288,
+          "rows": 2,
+          "table_bytes": 16384
+        },
+        "table": "migration_import_identity"
+      },
+      {
+        "sizes": {
+          "index_bytes": 98304,
+          "row_bytes": 1472,
+          "rows": 3,
+          "table_bytes": 16384
+        },
+        "table": "migration_import_result"
+      },
+      {
+        "sizes": {
+          "index_bytes": 98304,
+          "row_bytes": 1400,
+          "rows": 3,
+          "table_bytes": 49152
+        },
+        "table": "migration_history_capture_run"
+      },
+      {
+        "sizes": {
+          "index_bytes": 16384,
+          "row_bytes": 1824,
+          "rows": 9,
+          "table_bytes": 10854400
+        },
+        "table": "migration_history_stream"
+      },
+      {
+        "sizes": {
+          "index_bytes": 303104,
+          "row_bytes": 22532336,
+          "rows": 754,
+          "table_bytes": 23961600
+        },
+        "table": "migration_history_capture"
+      },
+      {
+        "sizes": {
+          "index_bytes": 54640640,
+          "row_bytes": 48398297,
+          "rows": 75200,
+          "table_bytes": 50839552
+        },
+        "table": "migration_history_observation"
+      },
+      {
+        "sizes": {
+          "index_bytes": 9781248,
+          "row_bytes": 11258836,
+          "rows": 75199,
+          "table_bytes": 12107776
+        },
+        "table": "migration_history_identity"
+      },
+      {
+        "sizes": {
+          "index_bytes": 7798784,
+          "row_bytes": 7946863,
+          "rows": 75394,
+          "table_bytes": 8904704
+        },
+        "table": "migration_history_person_link"
+      },
+      {
+        "sizes": {
+          "index_bytes": 131072,
+          "row_bytes": 77449,
+          "rows": 752,
+          "table_bytes": 139264
+        },
+        "table": "migration_history_seen"
+      },
+      {
+        "sizes": {
+          "index_bytes": 49152,
+          "row_bytes": 173,
+          "rows": 2,
+          "table_bytes": 32768
+        },
+        "table": "migration_history_reservation"
+      },
+      {
+        "sizes": {
+          "index_bytes": 16384,
+          "row_bytes": 1542,
+          "rows": 6,
+          "table_bytes": 16384
+        },
+        "table": "migration_history_receipt"
+      }
+    ],
+    "rows_per_family": 25000
+  },
+  "limits": "No absolute latency/capacity claim. Scan work is reported separately from bounded fetched/decrypted rows. Public source behavior remains unqualified.",
+  "readers": [
+    {
+      "aad_projections_verified": true,
+      "dispositions": {
+        "linked": 200
+      },
+      "distinct_source_ids": {
+        "events": 200
+      },
+      "families": {
+        "events": 200
+      },
+      "fixed_capture_sequence": "3",
+      "label": "frozen_200_during_300_committed",
+      "maximum_observations_per_identity": 1,
+      "maximum_page_bytes": 49175,
+      "maximum_record_bytes": 947,
+      "maximum_variants": 1,
+      "pages": 4,
+      "rows": 200,
+      "source_body_absent": true,
+      "source_person_101": 200,
+      "unique_ordered_observations": true
+    },
+    {
+      "aad_projections_verified": true,
+      "dispositions": {
+        "invalid_person_reference": 6,
+        "linked": 1506,
+        "no_parent_identity": 73485,
+        "parent_excluded": 3
+      },
+      "distinct_source_ids": {
+        "calls": 25000,
+        "events": 25000,
+        "text_messages": 25000
+      },
+      "families": {
+        "calls": 25000,
+        "events": 25000,
+        "text_messages": 25000
+      },
+      "fixed_capture_sequence": "751",
+      "label": "all_75000_authorized_projection_reads",
+      "maximum_observations_per_identity": 1,
+      "maximum_page_bytes": 51965,
+      "maximum_record_bytes": 1001,
+      "maximum_variants": 1,
+      "pages": 1500,
+      "rows": 75000,
+      "source_body_absent": true,
+      "source_person_101": 1503,
+      "unique_ordered_observations": true
+    },
+    {
+      "aad_projections_verified": true,
+      "dispositions": {
+        "parent_excluded": 1
+      },
+      "distinct_source_ids": {
+        "events": 1
+      },
+      "families": {
+        "events": 1
+      },
+      "fixed_capture_sequence": "751",
+      "label": "rare_events_excluded",
+      "maximum_observations_per_identity": 1,
+      "maximum_page_bytes": 2601,
+      "maximum_record_bytes": 924,
+      "maximum_variants": 1,
+      "pages": 1,
+      "rows": 1,
+      "source_body_absent": true,
+      "source_person_101": 0,
+      "unique_ordered_observations": true
+    },
+    {
+      "aad_projections_verified": true,
+      "dispositions": {
+        "parent_excluded": 1
+      },
+      "distinct_source_ids": {
+        "calls": 1
+      },
+      "families": {
+        "calls": 1
+      },
+      "fixed_capture_sequence": "751",
+      "label": "rare_calls_excluded",
+      "maximum_observations_per_identity": 1,
+      "maximum_page_bytes": 2653,
+      "maximum_record_bytes": 976,
+      "maximum_variants": 1,
+      "pages": 1,
+      "rows": 1,
+      "source_body_absent": true,
+      "source_person_101": 0,
+      "unique_ordered_observations": true
+    },
+    {
+      "aad_projections_verified": true,
+      "dispositions": {
+        "parent_excluded": 1
+      },
+      "distinct_source_ids": {
+        "text_messages": 1
+      },
+      "families": {
+        "text_messages": 1
+      },
+      "fixed_capture_sequence": "751",
+      "label": "rare_text_messages_excluded",
+      "maximum_observations_per_identity": 1,
+      "maximum_page_bytes": 2614,
+      "maximum_record_bytes": 937,
+      "maximum_variants": 1,
+      "pages": 1,
+      "rows": 1,
+      "source_body_absent": true,
+      "source_person_101": 0,
+      "unique_ordered_observations": true
+    },
+    {
+      "aad_projections_verified": true,
+      "dispositions": {},
+      "distinct_source_ids": {},
+      "families": {},
+      "fixed_capture_sequence": "751",
+      "label": "empty_conflict_filter",
+      "maximum_observations_per_identity": 0,
+      "maximum_page_bytes": 1677,
+      "maximum_record_bytes": 0,
+      "maximum_variants": 0,
+      "pages": 1,
+      "rows": 0,
+      "source_body_absent": true,
+      "source_person_101": 0,
+      "unique_ordered_observations": true
+    },
+    {
+      "aad_projections_verified": true,
+      "dispositions": {
+        "no_parent_identity": 1
+      },
+      "distinct_source_ids": {
+        "events": 1
+      },
+      "families": {
+        "events": 1
+      },
+      "fixed_capture_sequence": "751",
+      "label": "same_identity_filter",
+      "maximum_observations_per_identity": 1,
+      "maximum_page_bytes": 2611,
+      "maximum_record_bytes": 934,
+      "maximum_variants": 1,
+      "pages": 1,
+      "rows": 1,
+      "source_body_absent": true,
+      "source_person_101": 0,
+      "unique_ordered_observations": true
+    },
+    {
+      "aad_projections_verified": true,
+      "dispositions": {
+        "conflicting_reference": 2
+      },
+      "distinct_source_ids": {
+        "events": 1
+      },
+      "families": {
+        "events": 2
+      },
+      "fixed_capture_sequence": "3",
+      "label": "two_conflicting_observations_from_actual_worker",
+      "maximum_observations_per_identity": 2,
+      "maximum_page_bytes": 3495,
+      "maximum_record_bytes": 942,
+      "maximum_variants": 2,
+      "pages": 1,
+      "rows": 2,
+      "source_body_absent": true,
+      "source_person_101": 1,
+      "unique_ordered_observations": true
+    }
+  ],
+  "source_sha256": [
+    {
+      "file": "history_capture.rs",
+      "sha256": "28e6e98010e9f56dc9763e7836c6f8dde74d7184429eb67fc726af1929911b60"
+    },
+    {
+      "file": "history_capture_source.rs",
+      "sha256": "f5c94b07447bd91d596bef75ea0bc3d6a7628777f8164e83e6cea66bc9429b2b"
+    },
+    {
+      "file": "history_capture_store.rs",
+      "sha256": "4babdb3de6deeddf202d0db566c70135098cf402a2965b39d3c1947febaa0488"
+    },
+    {
+      "file": "history_capture_worker.rs",
+      "sha256": "faf2002a8e7838baa9729adef377599755a0c8d52d84b19019663de8549d368b"
+    },
+    {
+      "file": "history_capture_queries.rs",
+      "sha256": "d9d25b8f0af5e0a9faa24936855a0ac3da5024e7cac3ff74b360e1a3b9b76a49"
+    },
+    {
+      "file": "history_schema.sql",
+      "sha256": "ce9c962c3d8452bcfe25ad7adc87a24da2aef08734ab26f4abc8622d92cb4472"
+    }
+  ]
+}

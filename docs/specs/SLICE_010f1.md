@@ -373,3 +373,11 @@ field kinds; each changes fidelity/customer behavior and is outside this draft.
 No source-account access, new research, production architecture or activation
 decision is needed to review this bounded proposal. Stop at the reviewed draft
 until the user approves its specification, brief and shared contracts.
+
+## D-070 amendment — independent historical capture
+
+D-070's [010d1](SLICE_010d1.md) adds an independent history source capture bound
+to the completed People parent. It does not change this child's lifetime,
+confirmed source boundary, mappings or results. Shared Org byte accounting and
+reservation ownership include history; metadata cancellation cannot release
+history reservations.

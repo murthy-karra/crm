@@ -1,0 +1,8 @@
+{
+  "binary": "<WORKTREE>/backend/target/debug/examples/history_capture_qa",
+  "sha256": "fc82cf60568a2f1f1b39f9db30406ede4c3a39b02e36ec584ff5ac3c76b075b2",
+  "bytes": 92626384,
+  "production_manifest": "<PRIVATE_QA>/checks/history-plans-summary.json",
+  "compiled_only": true,
+  "runtime_started": false
+}

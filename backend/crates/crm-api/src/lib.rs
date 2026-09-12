@@ -128,6 +128,7 @@ fn build_app_with_routers_inner(
             .merge(routes::migration_imports::router())
             .merge(routes::metadata_imports::router())
             .merge(routes::activity_imports::router())
+            .merge(routes::history_captures::router())
             .merge(routes::migration_activity_review::router())
             .layer(axum::middleware::from_fn_with_state(
                 state.clone(),
@@ -277,6 +278,29 @@ pub async fn run(config: Config) -> Result<(), BoxError> {
             state.migration_reader.clone(),
             state.snapshot_policy.clone(),
         )
+    });
+    let _history_capture_worker = state.db.as_ref().map(|pool| {
+        let pool = pool.clone();
+        let state = state.clone();
+        tokio::spawn(async move {
+            let mut tick = tokio::time::interval(std::time::Duration::from_secs(2));
+            tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            loop {
+                tick.tick().await;
+                let release = state.current_import_release().await;
+                if let Err(error) = domain::migration::history_capture_worker::run_once(
+                    &pool,
+                    &state.raw_payload_key,
+                    state.migration_reader.as_ref(),
+                    &state.snapshot_policy,
+                    release.as_deref(),
+                )
+                .await
+                {
+                    tracing::warn!(outcome=%error,"history capture sweep failed");
+                }
+            }
+        })
     });
     let _people_import_worker = state.db.as_ref().map(|pool| {
         domain::migration::import_worker::spawn(

@@ -1,0 +1,27 @@
+{
+  "phase": "budget-queue",
+  "result": "failed",
+  "source_reader_calls_before": 68,
+  "source_reader_calls_after": 68,
+  "assertions": [
+    {
+      "name": "same completed parent and retained capture binding"
+    },
+    {
+      "name": "explicit existing field choice"
+    },
+    {
+      "name": "explicit existing option South"
+    },
+    {
+      "name": "explicit existing option North"
+    },
+    {
+      "name": "explicit existing option None"
+    },
+    {
+      "name": "explicit tag, field and option mappings; no source requests"
+    }
+  ],
+  "page_errors": []
+}

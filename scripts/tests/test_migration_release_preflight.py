@@ -19,6 +19,7 @@ EvidenceError = MODULE["EvidenceError"]
 NOW = dt.datetime(2026, 9, 11, 12, tzinfo=dt.timezone.utc)
 CURRENT = "a" * 64
 LEGACY = "b" * 64
+METADATA = "fub-metadata-import-v1"
 
 
 def fixtures(bindings="0", retired=True):
@@ -48,6 +49,90 @@ class PreflightTests(unittest.TestCase):
             self.assertTrue(report["confirmation_ready"])
             self.assertEqual(report["binding_count"], count)
             self.assertEqual(report["process_count"], "1")
+
+    def test_legacy_manifest_and_empty_capabilities_preserve_people_confirmation(self):
+        for capabilities in [None, []]:
+            values = fixtures("1")
+            if capabilities is not None:
+                values[0]["artifacts"][0]["capabilities"] = capabilities
+            original = copy.deepcopy(values)
+            report = check(values)
+            self.assertTrue(report["launch_allowed"])
+            self.assertTrue(report["confirmation_ready"])
+            self.assertFalse(report["metadata_confirmation_ready"])
+            self.assertEqual(report["confirmation_reasons"], [])
+            self.assertEqual(report["metadata_confirmation_reasons"], ["metadata_capability_missing"])
+            self.assertEqual(report["candidates"][0]["capabilities"], [])
+            self.assertEqual(report["processes"][0]["capabilities"], [])
+            self.assertEqual(values, original, "evaluation must not rewrite operator inputs")
+
+    def test_capable_api_workers_allow_mixed_roles_without_requiring_cli_capabilities(self):
+        values = fixtures("1")
+        values[0]["artifacts"][0]["capabilities"] = [METADATA]
+        for role, digit in [("worker", "1"), ("cli", "2"), ("migrator", "3")]:
+            artifact = {"sha256": digit * 64, "role": role,
+                        "gate_version": "crm-workspace-v1", "revision": "c" * 40}
+            if role == "worker":
+                artifact["capabilities"] = [METADATA]
+            values[0]["artifacts"].append(artifact)
+            values[1]["artifacts"].append({"role": role, "sha256": digit * 64})
+            values[2]["processes"].append({"id": "synthetic-" + role, "role": role, "sha256": digit * 64})
+        report = check(values)
+        self.assertTrue(report["confirmation_ready"])
+        self.assertTrue(report["metadata_confirmation_ready"])
+        self.assertEqual(report["metadata_confirmation_reasons"], [])
+        self.assertEqual(report["process_count"], "4")
+        self.assertEqual(report["gate_version"], "crm-workspace-v1")
+        self.assertEqual(report["evidence_expires_at"], "2026-09-11T12:05:00Z")
+        for key in ["candidates", "processes"]:
+            for entry in report[key]:
+                expected = [METADATA] if entry["role"] in {"api", "worker"} else []
+                self.assertEqual(entry["capabilities"], expected)
+                self.assertEqual(entry["revision"], "c" * 40)
+        self.assertEqual(report["processes"][0]["id"], "synthetic-api")
+
+    def test_older_current_or_candidate_worker_blocks_only_metadata_confirmation(self):
+        for location in ["candidate", "current"]:
+            values = fixtures("1")
+            values[0]["artifacts"][0]["capabilities"] = [METADATA]
+            values[0]["artifacts"].append({"sha256": "1" * 64, "role": "worker",
+                                         "gate_version": "crm-workspace-v1", "revision": "d" * 40})
+            if location == "candidate":
+                values[1]["artifacts"].append({"role": "worker", "sha256": "1" * 64})
+            else:
+                values[2]["processes"].append({"id": "older-worker", "role": "worker", "sha256": "1" * 64})
+            report = check(values)
+            self.assertTrue(report["launch_allowed"])
+            self.assertTrue(report["confirmation_ready"])
+            self.assertFalse(report["metadata_confirmation_ready"])
+            self.assertEqual(report["confirmation_reasons"], [])
+            self.assertEqual(report["metadata_confirmation_reasons"], ["metadata_capability_missing"])
+
+    def test_capabilities_are_closed_bounded_and_only_declared_in_known_artifacts(self):
+        for capabilities in [None, METADATA, True, {}, [True], [{}], ["unknown"],
+                             [METADATA, METADATA], ["x" * 4096]]:
+            with self.subTest(capabilities=capabilities):
+                values = fixtures()
+                values[0]["artifacts"][0]["capabilities"] = capabilities
+                with self.assertRaises(EvidenceError):
+                    check(values)
+        for index, key in [(1, "artifacts"), (2, "processes")]:
+            values = fixtures()
+            values[index][key][0]["capabilities"] = [METADATA]
+            with self.assertRaises(EvidenceError):
+                check(values)
+
+    def test_metadata_capability_never_overrides_ordinary_confirmation_requirements(self):
+        changes = [(2, "complete", False), (2, "pre_010c_retired", False),
+                   (2, "observed_at", "2026-09-11T11:54:59Z"), (3, "schema_present", False)]
+        for index, key, value in changes:
+            values = fixtures()
+            values[0]["artifacts"][0]["capabilities"] = [METADATA]
+            values[index][key] = value
+            report = check(values)
+            self.assertFalse(report["confirmation_ready"])
+            self.assertFalse(report["metadata_confirmation_ready"])
+            self.assertEqual(report["metadata_confirmation_reasons"], report["confirmation_reasons"])
 
     def test_first_confirmation_requires_explicit_retirement(self):
         report = check(fixtures(retired=False))
@@ -201,6 +286,7 @@ class PreflightTests(unittest.TestCase):
                     report = json.loads(output.getvalue())
                     self.assertTrue(report["launch_allowed"])
                     self.assertFalse(report["confirmation_ready"])
+                    self.assertFalse(report["metadata_confirmation_ready"])
                     self.assertEqual(report["purpose"], purpose)
                     self.assertEqual(report["candidates"][0]["sha256"], digest)
                     self.assertNotIn(str(candidate), output.getvalue())

@@ -84,6 +84,7 @@ import { callCompletedSummary, formatTalkSeconds } from '../telephony/format'
 import { useCallHost } from '../telephony/callHost'
 import { workspaceOperational } from '../workspaceLifecycle'
 import PersonImportProvenance from '../components/migration/PersonImportProvenance.vue'
+import PersonMetadataProvenance from '../components/migration/PersonMetadataProvenance.vue'
 
 const props = defineProps<{
   id: string
@@ -2047,6 +2048,10 @@ watch(
       </div>
 
       <PersonImportProvenance
+        v-if="isOrgAdmin"
+        :person-id="props.id"
+      />
+      <PersonMetadataProvenance
         v-if="isOrgAdmin"
         :person-id="props.id"
       />

@@ -1,0 +1,10 @@
+same completed parent and retained capture binding
+explicit existing field choice
+explicit existing option South
+explicit existing option North
+explicit existing option None
+explicit tag, field and option mappings; no source requests
+screenshot desktop-partial-cancellation
+parent People and original review hold unchanged
+partial work retained, child reservations released, cancellation terminal
+zero post-capture source-reader calls

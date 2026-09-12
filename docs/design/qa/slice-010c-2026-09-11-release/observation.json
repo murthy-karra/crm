@@ -1,0 +1,23 @@
+{
+  "observed_at": "2026-09-11T20:51:32.155966+00:00",
+  "api_listener": [
+    60714
+  ],
+  "web_listener": [
+    60731
+  ],
+  "warning_error_counts": {
+    "api.log": 0,
+    "web.log": 0
+  },
+  "source_system_identification_unset": true,
+  "environment_changes": [
+    "CRM_MIGRATION_RELEASE_REPORT"
+  ],
+  "temporary_sessions_revoked": true,
+  "screenshots_visually_checked": 6,
+  "application_code_changes": 0,
+  "restore_exercised": false,
+  "runtime_review_workspace_created": false,
+  "review_hold_evidence": "Prior isolated synthetic implementation tests; release checks preserve operational shared Organizations."
+}

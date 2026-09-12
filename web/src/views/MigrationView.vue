@@ -8,6 +8,7 @@ import PageHeader from '../components/PageHeader.vue'
 import Card from '../components/Card.vue'
 import CoreSnapshotPanel from '../components/migration/CoreSnapshotPanel.vue'
 import PeopleImportPanel from '../components/migration/PeopleImportPanel.vue'
+import MetadataImportPanel from '../components/migration/MetadataImportPanel.vue'
 import { refreshWorkspace, useWorkspacePending, useWorkspaceEpoch } from '../workspaceLifecycle'
 import FormField from '../components/FormField.vue'
 import { queryKeys, useAuthSessionLifetime, useMe } from '../api/queries'
@@ -463,6 +464,7 @@ function checkStatusLabel(check: FubAssessmentCheck) {
     </Card>
 
     <PeopleImportPanel :refresh-workspace="refreshWorkspace" />
+    <MetadataImportPanel :refresh-workspace="refreshWorkspace" />
 
     <CoreSnapshotPanel
       v-if="canRead"

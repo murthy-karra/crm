@@ -1,0 +1,27 @@
+{
+  "phase": "happy-tail",
+  "result": "failed",
+  "source_reader_calls_before": 51,
+  "source_reader_calls_after": 51,
+  "assertions": [
+    {
+      "name": "parent People and original review hold unchanged"
+    },
+    {
+      "name": "screenshot desktop-person-provenance"
+    },
+    {
+      "name": "screenshot mobile-person-provenance"
+    },
+    {
+      "name": "screenshot mobile-128-digit-provenance"
+    },
+    {
+      "name": "128-digit source ID stays exact and wraps at390px"
+    },
+    {
+      "name": "distinct overlapping People, applied values, explicit holds and Person provenance"
+    }
+  ],
+  "page_errors": []
+}

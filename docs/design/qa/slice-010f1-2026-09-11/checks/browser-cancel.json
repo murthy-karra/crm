@@ -1,0 +1,39 @@
+{
+  "phase": "cancel",
+  "result": "passed",
+  "source_reader_calls_before": 68,
+  "source_reader_calls_after": 68,
+  "assertions": [
+    {
+      "name": "same completed parent and retained capture binding"
+    },
+    {
+      "name": "explicit existing field choice"
+    },
+    {
+      "name": "explicit existing option South"
+    },
+    {
+      "name": "explicit existing option North"
+    },
+    {
+      "name": "explicit existing option None"
+    },
+    {
+      "name": "explicit tag, field and option mappings; no source requests"
+    },
+    {
+      "name": "screenshot desktop-partial-cancellation"
+    },
+    {
+      "name": "parent People and original review hold unchanged"
+    },
+    {
+      "name": "partial work retained, child reservations released, cancellation terminal"
+    },
+    {
+      "name": "zero post-capture source-reader calls"
+    }
+  ],
+  "page_errors": []
+}

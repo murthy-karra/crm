@@ -1,0 +1,18 @@
+{
+  "phase": "budget-queue",
+  "result": "passed",
+  "source_reader_calls_before": 68,
+  "source_reader_calls_after": 68,
+  "assertions": [
+    {
+      "name": "parent People and original review hold unchanged"
+    },
+    {
+      "name": "confirmed child queued for lower-ceiling recovery test"
+    },
+    {
+      "name": "zero post-capture source-reader calls"
+    }
+  ],
+  "page_errors": []
+}

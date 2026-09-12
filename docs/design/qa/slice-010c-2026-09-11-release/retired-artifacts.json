@@ -1,0 +1,140 @@
+[
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/debug/deps/crm_admin-0ab63fad7c134ee0",
+    "sha256": "86b8e91478a4828c17ea8bd9987a5a29657648a95fc7cd0ee9ad048ed92cfac3",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/debug/deps/crm_admin-a1a56dbf3b137fd5",
+    "sha256": "a61ee386647dbd48f7edb467907a3e33c20d56e23fb11b278a942626880ac4a6",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/debug/deps/crm_api-69f4290b0f911bad",
+    "sha256": "325f179c4ed3ca14bf383c0e0b0d772898dbdb8f83e209023412564f15b6e985",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/debug/deps/crm_api-b8ea435ed8347506",
+    "sha256": "5c00d1221107876aba4231d4c144a4ce4403956238f08ee502bf697554355e8a",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/debug/deps/crm_api-e5b99162e9224c19",
+    "sha256": "02093ebd8bd1bac90090601abab04e9d873414be19846f86de01b247ac7b7a0a",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/debug/deps/migrate-48dcdd6f1c02fe41",
+    "sha256": "fb400d2ca9e7525cd2b4b87dbefa1af28cd0673aa147c201afed236ef3adc088",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/debug/deps/migrate-7ca1f836553ca207",
+    "sha256": "a002a0a117758a936915dafc2e5ef3d5c06a55fc617d9603dfba9d46854bb5aa",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/release/crm-admin",
+    "sha256": "2c0f2c844bc54b18d145d8c911fcbf707bfffc9fba0da1ef147a01a7168b2eff",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/release/crm-api",
+    "sha256": "c5746cd7e75fc01b34e6be565b362466b1e86bec7390c668ed6d49f4d63c1fa2",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/release/deps/crm_admin-73e6f14efa72a78b",
+    "sha256": "0c016fc1990cdabbd7198becee4e5344e2c25b536d5e2bfe16998e53aa9b5c37",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/release/deps/crm_admin-a731cffce3871a9b",
+    "sha256": "2c0f2c844bc54b18d145d8c911fcbf707bfffc9fba0da1ef147a01a7168b2eff",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/release/deps/crm_admin-e8281601661ab0f6",
+    "sha256": "ab7ce62a5a4a7c0498b907708551e442162f1177ba414287413fa34cb22ddd09",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/release/deps/crm_api-022bc1503847be1f",
+    "sha256": "9f8a7c8e6b916f72db044910c90e0709258a1f72404b50dfdd7761c20bd5f82e",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/release/deps/crm_api-41ac8c6ff60555e0",
+    "sha256": "c5746cd7e75fc01b34e6be565b362466b1e86bec7390c668ed6d49f4d63c1fa2",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/release/deps/crm_api-4ab2de5b440c1029",
+    "sha256": "fe047d17f011db5fe25532d92a28606b57be574afb1406aa1429935ec8bf49a9",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/release/deps/crm_api-7a3a2294a630a4c0",
+    "sha256": "96010196da94437911c9216a4969859b6cc272f1e3495f5d735523d63e9c1d0a",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/release/deps/migrate-2b74294fb00fcb4d",
+    "sha256": "9777ab8a96ee643b302246b7d128895b68e44305bdfa75c0eafac4e2c94462a8",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/release/deps/migrate-587069696938d177",
+    "sha256": "2fcde9a57a0d7289c9426f5b33d28496d055caaf15a955234e0ab16029a71674",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/release/deps/migrate-594ed46249e42cd5",
+    "sha256": "e910ff1581320cd2b84779e4ff4878ae40c35100408bf8f318845e74c315163d",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/release/migrate",
+    "sha256": "e910ff1581320cd2b84779e4ff4878ae40c35100408bf8f318845e74c315163d",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/private/tmp/crm-010a-release-_nhabszq/crm-api-before",
+    "sha256": "f97a00eabbcdb66ab8abbc7614c461ee6d4c52e0cf12ab7262073c0c85d4616e",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/private/tmp/crm-010b-release-g33z5awg/crm-api-before",
+    "sha256": "e5840032ed5a5a2138349477224b70bbda8ce498482b2a28528c0faedbaf6bb0",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/private/tmp/crm-019b-release-emyyxbhd/crm-api-before",
+    "sha256": "75b728df4a58e771708950877e663c1518715a16dd5e8c355633d3900f14e70e",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  }
+]

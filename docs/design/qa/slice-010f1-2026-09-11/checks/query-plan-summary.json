@@ -1,0 +1,277 @@
+{
+  "classification": "synthetic_inert_query_plan_only",
+  "plan_count": 90,
+  "distinct_sql_count": 59,
+  "checks": {
+    "checks": 246,
+    "failures": []
+  },
+  "fixture": {
+    "classification": "synthetic_inert_query_plan_only",
+    "counts": {
+      "aliases": 250001,
+      "child_history": 257,
+      "manifests": 25001,
+      "mappings": 72,
+      "members": 50,
+      "operations": 350002,
+      "people": 25000,
+      "results": 25035,
+      "sources": 25012,
+      "tag_links": 250000,
+      "values": 100000
+    },
+    "elapsed_ms": 87851
+  },
+  "native_widths": [
+    {
+      "classification": "deterministic_moderate_dense_ascii_width_spread_not_maximum_capacity",
+      "metrics": {
+        "exact_probe_rows": 1,
+        "pg_column_size_text_bytes": {
+          "max": 504,
+          "mean": 329.01,
+          "min": 16,
+          "sum": 32901262
+        },
+        "row_count": 100000,
+        "spread": {
+          "max_characters": 500,
+          "mean_characters": 325.02,
+          "min_characters": 150,
+          "row_count": 99999
+        },
+        "text_characters": {
+          "max": 500,
+          "mean": 325.01,
+          "min": 15
+        },
+        "text_octets": {
+          "max": 500,
+          "mean": 325.01,
+          "min": 15,
+          "sum": 32501265
+        }
+      }
+    }
+  ],
+  "real_ready_child_before_inert_seed": [
+    {
+      "child_id": "2c6122fc-8cbe-4256-8724-78d48145643d",
+      "classification": "real_ready_child_before_inert_seed",
+      "latest_plan_counts": {
+        "fields": {
+          "already_present": "0",
+          "applied": "0",
+          "created": "0",
+          "eligible": "1",
+          "held": "0",
+          "not_supplied": "0",
+          "pending": "1",
+          "planned": "1",
+          "source_null": "0"
+        },
+        "held_count": "0",
+        "invalid_source_ids": "0",
+        "issues": [],
+        "options": {
+          "already_present": "0",
+          "applied": "0",
+          "created": "0",
+          "eligible": "0",
+          "held": "0",
+          "not_supplied": "0",
+          "pending": "0",
+          "planned": "0",
+          "source_null": "0"
+        },
+        "people": {
+          "eligible": "1",
+          "excluded": "0",
+          "settled": "0",
+          "source": "1"
+        },
+        "tag_links": {
+          "already_present": "0",
+          "applied": "0",
+          "created": "0",
+          "eligible": "1",
+          "held": "0",
+          "not_supplied": "0",
+          "pending": "1",
+          "planned": "1",
+          "source_null": "0"
+        },
+        "tags": {
+          "already_present": "0",
+          "applied": "0",
+          "created": "0",
+          "eligible": "1",
+          "held": "0",
+          "not_supplied": "0",
+          "pending": "1",
+          "planned": "1",
+          "source_null": "0"
+        },
+        "values": {
+          "already_present": "0",
+          "applied": "0",
+          "created": "0",
+          "eligible": "1",
+          "held": "0",
+          "not_supplied": "0",
+          "pending": "1",
+          "planned": "1",
+          "source_null": "0"
+        }
+      },
+      "plan_id": "2a33103b-dd5d-4833-81a6-17412400baed",
+      "reserved_bytes": 65536,
+      "retained_bytes": 13327,
+      "state": "proposed"
+    }
+  ],
+  "measured_relations": 27,
+  "relation_size_bytes": 676823040,
+  "table_size_bytes": 336257024,
+  "index_size_bytes": 340566016,
+  "largest_relations": [
+    {
+      "table": "migration_metadata_operation",
+      "pg_column_size_row_bytes": {
+        "max": 187,
+        "mean": 186.14,
+        "min": 172,
+        "sum": 65149318
+      },
+      "pg_indexes_size_bytes": 104914944,
+      "pg_table_size_bytes": 68321280,
+      "pg_total_relation_size_bytes": 173236224,
+      "row_count": 350004
+    },
+    {
+      "table": "migration_metadata_alias",
+      "pg_column_size_row_bytes": {
+        "max": 157,
+        "mean": 157,
+        "min": 157,
+        "sum": 39250314
+      },
+      "pg_indexes_size_bytes": 95985664,
+      "pg_table_size_bytes": 41844736,
+      "pg_total_relation_size_bytes": 137830400,
+      "row_count": 250002
+    },
+    {
+      "table": "person_tag",
+      "pg_column_size_row_bytes": {
+        "max": 96,
+        "mean": 96,
+        "min": 93,
+        "sum": 23999991
+      },
+      "pg_indexes_size_bytes": 46612480,
+      "pg_table_size_bytes": 25321472,
+      "pg_total_relation_size_bytes": 71933952,
+      "row_count": 250000
+    },
+    {
+      "table": "person_custom_field_value",
+      "pg_column_size_row_bytes": {
+        "max": 640,
+        "mean": 462.51,
+        "min": 144,
+        "sum": 46250824
+      },
+      "pg_indexes_size_bytes": 7569408,
+      "pg_table_size_bytes": 47603712,
+      "pg_total_relation_size_bytes": 55173120,
+      "row_count": 100000
+    },
+    {
+      "table": "migration_metadata_manifest",
+      "pg_column_size_row_bytes": {
+        "max": 1044,
+        "mean": 1043.91,
+        "min": 1009,
+        "sum": 26367061
+      },
+      "pg_indexes_size_bytes": 12443648,
+      "pg_table_size_bytes": 29597696,
+      "pg_total_relation_size_bytes": 42041344,
+      "row_count": 25258
+    },
+    {
+      "table": "migration_metadata_result",
+      "pg_column_size_row_bytes": {
+        "max": 1120,
+        "mean": 1118.99,
+        "min": 800,
+        "sum": 28300384
+      },
+      "pg_indexes_size_bytes": 11845632,
+      "pg_table_size_bytes": 29622272,
+      "pg_total_relation_size_bytes": 41467904,
+      "row_count": 25291
+    },
+    {
+      "table": "migration_metadata_mapping",
+      "pg_column_size_row_bytes": {
+        "max": 968,
+        "mean": 650.98,
+        "min": 487,
+        "sum": 12047085
+      },
+      "pg_indexes_size_bytes": 16203776,
+      "pg_table_size_bytes": 12771328,
+      "pg_total_relation_size_bytes": 28975104,
+      "row_count": 18506
+    },
+    {
+      "table": "migration_metadata_source",
+      "pg_column_size_row_bytes": {
+        "max": 650,
+        "mean": 649.99,
+        "min": 635,
+        "sum": 16425320
+      },
+      "pg_indexes_size_bytes": 8200192,
+      "pg_table_size_bytes": 17293312,
+      "pg_total_relation_size_bytes": 25493504,
+      "row_count": 25270
+    },
+    {
+      "table": "migration_import_result",
+      "pg_column_size_row_bytes": {
+        "max": 576,
+        "mean": 576,
+        "min": 568,
+        "sum": 14400568
+      },
+      "pg_indexes_size_bytes": 8019968,
+      "pg_table_size_bytes": 14671872,
+      "pg_total_relation_size_bytes": 22691840,
+      "row_count": 25001
+    },
+    {
+      "table": "migration_import_source",
+      "pg_column_size_row_bytes": {
+        "max": 648,
+        "mean": 647.98,
+        "min": 453,
+        "sum": 16203324
+      },
+      "pg_indexes_size_bytes": 4685824,
+      "pg_table_size_bytes": 17113088,
+      "pg_total_relation_size_bytes": 21798912,
+      "row_count": 25006
+    }
+  ],
+  "limitations": [
+    "Inert bulk rows test actual SQL plans and storage shape, not executable fidelity or logical retention accounting.",
+    "Text fixture contains 99,999 distinct deterministic ASCII values of 150–500 characters plus one exact probe.",
+    "Whole-relation physical sizes include synthetic history; they do not estimate an Organization quota or a maximum dataset.",
+    "No WAL, replica, backup, churn, bloat or future-family storage estimate is included.",
+    "No planner forcing, absolute laptop latency gate or unchanged CRM-reader benchmark is used."
+  ]
+}

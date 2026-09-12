@@ -1,0 +1,16 @@
+{
+  "result": "passed",
+  "removed_containers": [
+    "crm-010f1-postgres",
+    "crm-010f1-centrifugo"
+  ],
+  "anonymous_postgres_volume_removed": true,
+  "qa_listeners_absent": [
+    3016,
+    5186,
+    55431,
+    18081
+  ],
+  "main_runtime_mutated": false,
+  "worktree_preserved_uncommitted": true
+}

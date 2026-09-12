@@ -1,6 +1,6 @@
 # Architecture Baseline
 
-Reviewed 2026-09-11 against accepted decisions through D-063 and current source.
+Reviewed 2026-09-11 against accepted decisions through D-065 and current source.
 This is a derived system map, not another decision log. The
 [decision log](../decisions/DECISION_LOG.md) and [AGENTS.md](../../AGENTS.md)
 win on conflict. Observed runtime state and release evidence belong in
@@ -27,7 +27,7 @@ Web layouts are still the Web application.
 
 Current domains include People, inquiries/history, stages and assignment, tags,
 notes, tasks, typed custom fields, saved filters/Today rules, administration,
-intake/correspondence, calling and FUB assessment. The Operator has both read
+intake/correspondence, calling and FUB assessment/capture/review-only People import. The Operator has both read
 tools and scoped mutation tools; it is no longer read-only.
 
 ## Trust boundaries
@@ -38,6 +38,9 @@ tools and scoped mutation tools; it is no longer read-only.
 - Organization scopes every tenant query/mutation, including cross-Organization
   denial tests. Person visibility is Organization-wide behind
   PersonVisibilityScope; assignment controls responsibility (D-004/005).
+  D-064/065 add a separate durable migration-review workspace gate: current
+  admins may inspect imported People, while ordinary mutations, member access,
+  Today, Operator and outbound work remain blocked until later activation.
 - Global identities/memberships and platform administration are distinct from
   tenant CRM data. Platform admins are not tenant-data superusers; support and
   impersonation access remain open designs (D-021, D-026/027).
@@ -84,7 +87,7 @@ handling remain part of future native-client work.
 ## Integration and background work
 
 [API composition](../../backend/crates/crm-api/src/lib.rs) starts intake
-extraction, telephony sweeping and FUB assessment workers when their configured
+extraction, telephony sweeping and FUB assessment/snapshot/import workers when their configured
 dependencies are present. Each domain owns its behavior; no general worker
 platform is implemented. FUB assessment already has durable claims, fenced
 settlement and bounded retries. Its
@@ -102,6 +105,35 @@ increases and DB-only preview recovery. [Verification](../tasks/SLICE_010b_VERIF
 records passing full gates; the [shared-development release](../tasks/SLICE_010b_RELEASE.md)
 is verified. Live FUB validation remains deferred. Fidelity, idempotency and
 reconciliation stay mandatory.
+
+010c is implemented and [deployed](../tasks/SLICE_010c_RELEASE.md): a retained-only
+People/contact/stage/assignment import with frozen plans, durable identities,
+provenance, logical-byte admission and reconciliation. Separate People survive
+contact overlaps. Admin confirmation establishes a persistent review binding
+before business writes; cancellation retains committed rows and the hold.
+010c does not apply tags, custom fields, notes or tasks to business rows.
+
+[010f1](../specs/SLICE_010f1.md) is implemented in its isolated D-066 worktree;
+[synthetic verification](../tasks/SLICE_010f1_VERIFICATION.md) passed its full gates,
+query measurements and actual browser/native API checks. It is uncommitted and
+undeployed.
+It adds a retained-source metadata child and worker for explicit tag/custom-field
+mapping and creation, absent-or-equal values, item reconciliation and provenance.
+The child reuses the original parent/snapshot/review binding, with its own claims,
+atomic units, private insert permit and reservations in the shared retained-byte
+ledger. It makes no source requests. Notes/tasks and activation remain later work.
+The deployed shared runtime still contains 010c only.
+
+Every API/worker/admin launch against review bindings must enforce the compatible
+workspace gate. The [release preflight](../../scripts/migration-release-preflight)
+checks candidate hashes, an operator-owned workload inventory and live database
+bindings; old binaries must be retired. Import confirmation needs fresh
+five-minute evidence at `CRM_MIGRATION_RELEASE_REPORT`. It expires closed and
+is not automatically renewed. Recovery must preserve review bindings and use
+compatible artifacts; the [runbook](../tasks/SLICE_010c_RELEASE_PREPARATION.md)
+prohibits resetting the hold to permit older software. The 010f1 preflight also
+requires metadata-child capability from every candidate API/worker; an old 010c
+report does not qualify a metadata release.
 
 ## Network and telephony
 

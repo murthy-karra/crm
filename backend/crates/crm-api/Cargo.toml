@@ -94,3 +94,8 @@ required-features = ["test-support"]
 name = "import_qa"
 path = "examples/import_qa.rs"
 required-features = ["test-support"]
+
+[[example]]
+name = "metadata_import_qa"
+path = "examples/metadata_import_qa.rs"
+required-features = ["test-support"]

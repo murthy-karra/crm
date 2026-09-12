@@ -36,6 +36,8 @@ pub async fn guard(State(state): State<AppState>, request: Request, next: Next) 
                         route,
                         "/api/people/{id}/import-provenance"
                             | "/api/people/{id}/import-provenance/fields/{field}"
+                            | "/api/people/{id}/metadata-import-provenance"
+                            | "/api/people/{id}/metadata-import-provenance/{result}/fields/{field}"
                     )
             });
     let (mut parts, body) = request.into_parts();

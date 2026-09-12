@@ -121,7 +121,7 @@ export function importAccessError(error: unknown) { return error instanceof ApiE
 
 // Local lifecycle shared only by these new import screens. The application-wide
 // authority transition remains owned by the existing client/session coordinator.
-export function useImportAccess() {
+export function useImportAccess(namespace: 'people-imports' | 'metadata-imports' = 'people-imports') {
   const { data: me } = useMe()
   const lifetime = useAuthSessionLifetime()
   const verifying = useSessionVerificationPending()
@@ -130,7 +130,7 @@ export function useImportAccess() {
   const denied = ref(false)
   const org = computed(() => me.value?.organization)
   const identity = computed(() => JSON.stringify([org.value?.id, me.value?.user.id, lifetime.value, org.value?.role]))
-  const prefix = computed(() => importQueryKeys(org.value?.id ?? '', me.value?.user.id ?? '', lifetime.value, org.value?.workspace_revision ?? ''))
+  const prefix = computed(() => ['org', org.value?.id ?? '', namespace, me.value?.user.id ?? '', lifetime.value, org.value?.workspace_revision ?? ''] as const)
   const scope = computed(() => JSON.stringify([identity.value, org.value?.workspace_mode, org.value?.workspace_revision, verifying.value, workspacePending.value]))
   const enabled = computed(() => !denied.value && !verifying.value && !workspacePending.value && !!org.value?.id && org.value.role === 'admin' && !!org.value.workspace_revision)
   let disposed = false

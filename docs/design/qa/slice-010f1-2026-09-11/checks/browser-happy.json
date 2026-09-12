@@ -1,0 +1,99 @@
+{
+  "phase": "happy",
+  "result": "passed",
+  "source_reader_calls_before": 68,
+  "source_reader_calls_after": 68,
+  "assertions": [
+    {
+      "name": "same completed parent and retained capture binding"
+    },
+    {
+      "name": "screenshot desktop-held-plan"
+    },
+    {
+      "name": "screenshot mobile-128-digit-tag-occurrence"
+    },
+    {
+      "name": "screenshot mobile-long-tag-occurrence"
+    },
+    {
+      "name": "exact long source IDs and tag-label occurrences stay inspectable at390px"
+    },
+    {
+      "name": "screenshot desktop-existing-field"
+    },
+    {
+      "name": "explicit existing field choice"
+    },
+    {
+      "name": "explicit existing option South"
+    },
+    {
+      "name": "explicit existing option North"
+    },
+    {
+      "name": "explicit existing option None"
+    },
+    {
+      "name": "explicit tag, field and option mappings; no source requests"
+    },
+    {
+      "name": "screenshot desktop-mappings"
+    },
+    {
+      "name": "screenshot mobile-plan"
+    },
+    {
+      "name": "screenshot desktop-large-field"
+    },
+    {
+      "name": "screenshot mobile-large-field"
+    },
+    {
+      "name": "source disconnected before metadata execution"
+    },
+    {
+      "name": "screenshot desktop-confirmation"
+    },
+    {
+      "name": "lost response replay used identical frozen request bytes"
+    },
+    {
+      "name": "screenshot desktop-completed"
+    },
+    {
+      "name": "parent People and original review hold unchanged"
+    },
+    {
+      "name": "screenshot desktop-person-provenance"
+    },
+    {
+      "name": "screenshot mobile-person-provenance"
+    },
+    {
+      "name": "screenshot mobile-128-digit-provenance"
+    },
+    {
+      "name": "128-digit source ID stays exact and wraps at390px"
+    },
+    {
+      "name": "distinct overlapping People, applied values, explicit holds and Person provenance"
+    },
+    {
+      "name": "screenshot mobile-admin-demotion"
+    },
+    {
+      "name": "demoted administrator loses import evidence and cached admin interface on refresh"
+    },
+    {
+      "name": "screenshot mobile-member-hold"
+    },
+    {
+      "name": "ordinary member sees hold screen and cannot read metadata import evidence"
+    },
+    {
+      "name": "zero post-capture source-reader calls"
+    }
+  ],
+  "page_errors": []
+}

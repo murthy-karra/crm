@@ -1,33 +1,61 @@
 # Project state
 
-Last updated: 2026-09-11 (010b released; verified 010c merged/pushed and cleaned up, undeployed).
+Last updated: 2026-09-11 (010c deployed; 010f1 implemented and synthetically verified).
 This file holds current operational status, active work and live residuals.
 [PROJECT_HISTORY.md](PROJECT_HISTORY.md) preserves earlier progress, the slice
 ledger and historical measurements; its old instructions are not current work.
 
 ## Current state
 
-**010b is deployed and verified in shared development, including the existing 010a assessment.**
-The latest release identifies source/merge `89471f0` (implementation `b71a854`)
-at [app.tarams.org](https://app.tarams.org/manage/migration).
-It records migration `20260917000001` on `crm_dev`, API PID 49244 and Web PID 49270.
-Those listeners and bounded logs were checked at 07:47 PDT on 2026-09-11.
-Verify live process identity again before a later operational action.
+**010c is deployed and verified in shared development, including 010a assessment
+and 010b core snapshot/preview.** The deployed source is `f01c2e3`
+(implementation `fcd2480`, merge `c3f6ca9`) at
+[app.tarams.org](https://app.tarams.org/manage/migration).
+Migration `20260918000001` is applied on `crm_dev`; API PID 60714 and Web PID 60731
+were observed at 13:51 PDT on 2026-09-11. Verify live identity again before a
+later operational action.
 
-The [release record](../tasks/SLICE_010b_RELEASE.md) and
-[sanitized evidence](../design/qa/slice-010b-2026-09-11-release/README.md) cover
-builds, backup catalog, migration and HTTP/browser checks. Backup restoration
-was not exercised. Source hashes matched the prior synthetic verification;
-full gates were not repeated for release.
+The [release record](../tasks/SLICE_010c_RELEASE.md) and
+[sanitized evidence](../design/qa/slice-010c-2026-09-11-release/README.md) cover
+builds, database backup catalog, compatibility inventory/preflight, 38 HTTP/auth/
+asset checks, seven browser workflows, six inspected screenshots and tunnel
+200/200/101. All 45 business counts are unchanged, all 30 migration tables remain
+empty, and existing Organizations remain operational. Backup restoration was
+not exercised. Full implementation gates were reused against identical source.
 
-No live FUB connection/assessment/snapshot was created. Registered system configuration
-remains unset in the last release evidence, so upstream reads fail closed.
-Live authorized validation remains user-deferred. Source authorization does not
-replace customer-data prerequisites, including D-015's erasure runbook.
-No production-cluster deployment or recurring monitor is established by this work.
+Import confirmation requires a fresh operator compatibility report at
+`CRM_MIGRATION_RELEASE_REPORT`; the release report records a five-minute expiry.
+Renew from an actual workload inventory before a later confirmation. Expiry
+leaves ordinary CRM access available and import confirmation unavailable.
+No automatic renewal or recurring monitor was established.
+
+No live FUB connection, assessment, snapshot or import was created. Registered
+system configuration remains unset, so upstream reads fail closed. Live
+validation remains user-deferred. Source authorization does not replace
+customer-data prerequisites, including D-015's erasure runbook. No activation
+or production-cluster deployment occurred.
 
 ## Current slice
 
+- **010f1 implementation:** complete and synthetically verified under D-066. The
+  [specification](../specs/SLICE_010f1.md),
+  [brief](../tasks/SLICE_010f1_IMPL.md) and
+  [code evidence](../research/SLICE_010f1_CODE_CONTRACTS.md) cover tags and
+  custom-field definitions/options/values for the already imported People in
+  the existing review workspace. Notes/tasks, full standalone-tag capture,
+  deltas and activation remain following work. [Independent plan review](../tasks/SLICE_010f1_REVIEW.md)
+  returned READY with its one finding resolved. The accepted scope preserves current limits,
+  including 20 tags per Person, 200 tags per Organization and 50 live custom
+  fields; incompatible/ambiguous data and differing destination values are held.
+  Implementation runs in the isolated `codex/slice-010f1-metadata-import`
+  worktree with one backend/database owner, Web authoring after the frozen contract and two
+  bounded review/fix rounds. [Verification record](../tasks/SLICE_010f1_VERIFICATION.md)
+  records 900 Rust, 1,054 Web and 881 DB test passes, 90 query plans / 246 checks,
+  51 real-API/production-Web browser checkpoints and 18 inspected screenshots.
+  Both bounded implementation reviews are READY. Exact native values, unchanged
+  review bindings, storage pause/resume and partial cancellation are verified.
+  Disposable QA services/databases are removed. Code and evidence remain
+  uncommitted in the worktree; no 010f1 deployment or live FUB validation occurred.
 - **010c implementation:** approved under D-065, committed as `fcd2480`,
   merged as `c3f6ca9` and pushed to main under its follow-up authorization.
   The [spec](../specs/SLICE_010c.md) and [brief](../tasks/SLICE_010c_IMPL.md) cover
@@ -42,7 +70,8 @@ No production-cluster deployment or recurring monitor is established by this wor
   including six states at six viewport widths. [Evidence summary](../design/qa/slice-010c-2026-09-11/README.md) and
   [verification chronology](../tasks/SLICE_010c_VERIFICATION.md) retain the exact
   source, checks and limits. Git integration, publication and cleanup are complete;
-  no shared-development deployment, live FUB operation or activation occurred.
+  the subsequent [shared-development deployment](../tasks/SLICE_010c_RELEASE.md)
+  is verified. No live FUB operation or activation occurred.
 - **Foundations documentation:** user authorized the three deliverables on
   2026-09-11: refresh the system map/state, draft foundations, define readiness.
   [System map](../architecture/ARCHITECTURE_BASELINE.md),
@@ -72,16 +101,31 @@ to origin/main. Its Git tree matches all 236 verified source/deletion entries.
 The merged branch/worktree, isolated build/dependency files, private QA fixtures
 and both disposable 010c databases were removed. The subsequent documentation
 commit records integration and cleanup without changing implementation bytes.
-Shared development still runs 010b source `89471f0`; its private rollback
-artifacts and the shared `crm_dev` database are preserved. Inspect Git and the
-release record for current source/runtime identity before further work.
+Shared development now runs 010c source `f01c2e3`. Release evidence and next-import
+planning are uncommitted documentation work on main and were copied intact into
+`/Users/karrad/projects/crm-010f1` for the approved implementation. That worktree
+uses branch `codex/slice-010f1-metadata-import`; source changes and isolated
+verification occur there. Commit/merge/push and deployment remain later steps.
+The shared `crm_dev` data
+and historical recovery artifacts are preserved; pre-010c artifact copies are
+non-executable and require the compatibility runbook before any recovery use.
+Inspect Git and the release record for current source/runtime identity.
 
 ## Last accepted decision
 
+**D-066:** the complete independently reviewed 010f1 specification, execution
+brief, policies and declared shared contracts are approved for implementation
+and isolated synthetic verification. Completed-parent-only, one metadata child,
+explicit creation/mapping, held-item subset acknowledgement, unchanged limits
+and no replacement of local values are accepted. Live FUB/customer-data work,
+activation and a further deployment remain outside this authorization.
+
 **D-065:** the complete reviewed 010c specification, shared contracts and synthetic
 implementation/check work are approved. Its follow-up authorizes commit, merge,
-push and cleanup. Deployment, activation, real-data processing and live-source
-validation are not included.
+push and cleanup; the subsequent follow-up authorizes shared-development
+deployment and next-import planning. Deployment is verified. The future import
+specification/implementation, activation, real-data processing and live-source
+validation are not approved by this planning request.
 
 **D-064:** 010c preserves distinct source People despite shared contacts, allows
 explicitly approved matching stages, and keeps imported records in an admin
@@ -102,7 +146,7 @@ Foundations F-01/F-02/F-03 remain proposals except where separately accepted.
 |---|---|
 | Start or inspect development | [README](../../README.md#development); local processes differ from Docker services; dev-bootstrap wipes data |
 | Understand boundaries | [Architecture map](../architecture/ARCHITECTURE_BASELINE.md); actual state here, policy in the decision log |
-| Release or recover a release | [010b evidence](../tasks/SLICE_010b_RELEASE.md), [release procedure](../prompts/07-deploy.md); private temporary backups are not a production backup system |
+| Release or recover a release | [010c evidence](../tasks/SLICE_010c_RELEASE.md), [compatibility runbook](../tasks/SLICE_010c_RELEASE_PREPARATION.md), [release procedure](../prompts/07-deploy.md); private temporary backups are not a production backup system |
 | Prepare real data or production | [Readiness](PRODUCTION_READINESS.md); decisions, accountable roles and required proof remain visible |
 | Find a previous merge/checkpoint | [History and slice ledger](PROJECT_HISTORY.md#slice-ledger); detailed evidence in per-slice records |
 
@@ -113,7 +157,7 @@ Foundations F-01/F-02/F-03 remain proposals except where separately accepted.
   [Current summary](SLICE_010_MIGRATION_SUMMARY.md); historical survey retained
   in [the ladder](SLICE_010_LADDER.md). New, empty Organization first and
   010a's source/credential contracts are accepted. Full inventory, mapping,
-  imports and cutover need their own specifications and approvals. 010c is implemented and integrated; the deployed 010b release remains unchanged.
+  imports and cutover need their own specifications and approvals. 010c is implemented, integrated and deployed; 010f1 implementation and synthetic verification are complete, uncommitted and undeployed.
 - **Remote gates (gate-speedup phase 2): DEFERRED** pending local
   phase-1 results (now in: local gates are ~3 min — pressure is low).
   Survey recorded so it is not re-litigated: first choice GitHub
@@ -210,8 +254,8 @@ and now lives only in git history.
   process start time vs binary mtime; kill by exact PID only. Bit us
   again 2026-08-29 (011a filters). Run ./scripts/db-migrate after
   checking out a branch with a new migration.
-- The current shared-development release is 010b from `89471f0`, deployed
-  2026-09-11; see [the release record](../tasks/SLICE_010b_RELEASE.md). Source
+- The current shared-development release is 010c from `f01c2e3`, deployed
+  2026-09-11; see [the release record](../tasks/SLICE_010c_RELEASE.md). Source
   validation remains deferred; registered FUB system configuration is unset.
 
 ## Backlog (deferred product tracks — full notes in the decision log)
@@ -237,6 +281,23 @@ and now lives only in git history.
 
 ## Latest verification
 
+- 2026-09-11 010f1 planning: the complete specification, execution brief and code
+  evidence received independent READY review after the declared-choice correction.
+  [Review record](../tasks/SLICE_010f1_REVIEW.md) preserves the finding, disposition,
+  reviewed hashes and remaining human decisions. No 010f1 implementation or
+  application/DB/browser test was performed.
+
+- 2026-09-11 010c release: locked API/admin/migrator and staged Web builds passed;
+  database backup catalog read, migration applied, actual-DB compatibility
+  launch/confirmation preflights passed. Retired 23 old executable paths and
+  observed the new runtime/workers/admin launch inventory. All 38 HTTP/auth/asset
+  checks, seven public browser workflows and tunnel 200/200/101 passed. All 45
+  business counts unchanged; 30 migration tables remain empty; zero runtime
+  WARN/ERROR entries in bounded observation. Six screenshots visually inspected.
+  [Release evidence](../tasks/SLICE_010c_RELEASE.md) distinguishes operational
+  release checks from prior isolated synthetic review-hold proof. No restore,
+  live source operation or activation.
+
 - 2026-09-11 010c implementation: both bounded reviews and targeted corrections
   are complete. Final gates passed: 877 Rust, 5 doctests, 1,002 Web, 845 DB,
   14 preflight and 11 email-worker tests. All 59 plans/258 assertions and the
@@ -248,7 +309,8 @@ and now lives only in git history.
   Follow-up Git integration and cleanup passed: implementation `fcd2480`, merge
   `c3f6ca9`, pushed to origin/main; identical implementation/merge trees and all
   236 source entries verified. The merged worktree/branch and disposable QA
-  resources are removed. Deployment and live FUB validation remain deferred.
+  resources are removed. The later release is verified separately above; live
+  FUB validation remains deferred.
 
 - 2026-09-11 010c planning: independent full review returned READY-WITH-FIXES;
   five corrections received targeted READY confirmation. Documentation paths,
@@ -313,11 +375,10 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. Prepare the 010c shared-development deployment when requested. Git integration,
-   publication and cleanup are complete. The release must use the 010c
-   compatibility preflight and preserve review bindings; the
-   [release runbook](../tasks/SLICE_010c_RELEASE_PREPARATION.md) defines the work.
-   No deployment or activation is included in the D-065 follow-up.
+1. Integrate the verified 010f1 worktree when commit/merge/push is requested, then
+   prepare its separately authorized deployment using a fresh compatibility
+   inventory with metadata capability. Notes/tasks are the next core-import
+   planning scope; current People/tag/custom-field imports preserve the review hold.
 2. Resume authorized FUB qualification when the user is ready, against an agreed
    dataset and applicable readiness gates. Later data families, mapping repair,
    deltas and activation need their own approved specification.
@@ -334,11 +395,16 @@ and now lives only in git history.
 
 ## Approval currently required
 
+- D-066's complete 010f1 implementation and synthetic verification are finished;
+  no repeat specification approval is needed. Git integration and deployment
+  await their own request. Notes/tasks, activation and live source operations
+  remain separate scopes.
 - D-065 approves 010c's complete workspace/session/import/history/persistence
   contracts and implementation. No repeat specification approval is needed for
   owned implementation detail. Its authorized Git integration, publication and
-  cleanup are complete. Deployment, activation and source operations remain
-  outside this authorization.
+  cleanup and subsequently authorized deployment are complete. Next-import
+  planning is authorized; its specification/implementation, activation and
+  source operations retain their own approval boundaries.
 - The foundations documentation assignment is authorized; its new architecture
   and policy proposals are not automatically accepted. Their owning specs must
   identify contract changes and acceptance under AGENTS §11/§16.

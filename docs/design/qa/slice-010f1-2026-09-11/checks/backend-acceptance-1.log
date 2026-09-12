@@ -1,0 +1,21 @@
+   Compiling crm-api v0.1.0 (/Users/karrad/projects/crm-010f1/backend/crates/crm-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 30.63s
+     Running tests/all.rs (target/debug/deps/all-4e623d3156c60e50)
+
+running 14 tests
+test db_import_gate::import_gate_active_admission_and_claimed_proposals_block_but_expired_metadata_does_not ... ok
+test db_import_source::import_source_exact_ids_and_unknown_numeric_metadata_come_from_raw ... ok
+test db_metadata_import_acceptance::metadata_acceptance_cancelled_and_running_parents_are_ineligible ... ok
+test db_metadata_import_acceptance::metadata_acceptance_existing_different_fub_binding_cannot_be_reassigned ... ok
+test db_metadata_import_acceptance::metadata_acceptance_expired_ten_minute_plan_requires_explicit_replan ... ok
+test db_metadata_import_acceptance::metadata_acceptance_tombstoned_parent_person_cannot_regain_metadata_or_history ... ok
+test db_metadata_import_acceptance::metadata_acceptance_two_valid_fields_cannot_merge_into_one_native_target ... ok
+test db_metadata_import_concurrency::metadata_concurrency_cancel_waits_for_complete_inflight_person_unit ... ok
+test db_metadata_import_concurrency::metadata_concurrency_confirm_cancel_race_has_one_terminal_receipt_outcome ... ok
+test db_metadata_import_concurrency::metadata_concurrency_person_failure_rolls_back_all_cells_result_cursor_and_bytes ... ok
+test db_saved_lists::saved_list_http_index_is_metadata_only_and_actor_visible ... ok
+test db_saved_lists::unsupported_deep_stored_jsonb_keeps_metadata_retry_and_delete_safe ... ok
+test db_today_source_failures::today_source_metadata_permission_failure_is_unavailable_and_owned_pool_recovers ... ok
+test db_today_source_operator::today_source_operator_exposes_partial_empty_metadata_and_wraps_issue_name ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 976 filtered out; finished in 40.24s

@@ -11,7 +11,7 @@ All three files must be owned by this OS user/root and not group/world writable.
 They describe verified deployment facts, never tenant-supplied authorization.
 
 JSON inputs (version is numeric 1; counts in the report are decimal strings):
-  artifacts: {version, artifacts:[{sha256,role,gate_version,revision}]}
+  artifacts: {version, artifacts:[{sha256,role,gate_version,revision,capabilities?}]}
   candidates: {version, artifacts:[{role,path}]}
   inventory: {version,target,observed_at,complete,pre_010c_retired,
               processes:[{id,role,sha256}]}
@@ -19,6 +19,11 @@ Roles: api, worker, cli, migrator. Known gate versions: crm-workspace-v1,
 pre-010c. Revisions are full Git hashes. Inventory timestamps are UTC RFC3339;
 the complete inventory must be no older than five minutes. It covers active
 processes/workloads AND launch/admin paths, including in-process workers.
+Known optional capabilities: fub-metadata-import-v1. Omission means none.
+Metadata confirmation additionally requires that capability on every selected
+candidate and inventoried process with role api or worker. CLI/migrator paths
+still need only the ordinary workspace gate. This does not change --purpose
+launch|confirm: the report separately exposes metadata_confirmation_ready.
 
 Exit 0 means the requested purpose passes; 1 means policy blocked; 2 means
 invalid/unavailable evidence. JSON stdout contains no source/customer content.
@@ -41,6 +46,8 @@ import sys
 GATE = "crm-workspace-v1"
 LEGACY = "pre-010c"
 ROLES = frozenset({"api", "worker", "cli", "migrator"})
+METADATA_CAPABILITY = "fub-metadata-import-v1"
+CAPABILITIES = frozenset({METADATA_CAPABILITY})
 MAX_JSON_BYTES = 1024 * 1024
 MAX_ENTRIES = 4096
 MAX_AGE_SECONDS = 300
@@ -101,17 +108,26 @@ def valid_role(value):
 def known_artifacts(document):
     known = {}
     for item in versioned(document, "artifacts"):
-        object_fields(item, {"sha256", "role", "gate_version", "revision"})
+        fields = {"sha256", "role", "gate_version", "revision"}
+        if isinstance(item, dict) and "capabilities" in item:
+            fields.add("capabilities")
+        object_fields(item, fields)
         if (not matches(HEX64, item["sha256"])
                 or not valid_role(item["role"])
                 or not isinstance(item["gate_version"], str)
                 or item["gate_version"] not in {GATE, LEGACY}
                 or not matches(REVISION, item["revision"])):
             fail()
+        capabilities = item.get("capabilities", [])
+        if (not isinstance(capabilities, list) or len(capabilities) > len(CAPABILITIES)
+                or any(not isinstance(value, str) or value not in CAPABILITIES
+                       for value in capabilities)
+                or len(set(capabilities)) != len(capabilities)):
+            fail()
         key = (item["role"], item["sha256"])
         if key in known:
             fail()
-        known[key] = item
+        known[key] = {**item, "capabilities": sorted(capabilities)}
     return known
 
 
@@ -177,12 +193,14 @@ def evaluate(artifacts, candidates, inventory, state, target, now):
             "role": item["role"], "sha256": item["sha256"],
             "gate_version": match["gate_version"] if match else None,
             "revision": match["revision"] if match else None,
+            "capabilities": match["capabilities"] if match else [],
         })
     if not selected:
         reasons.add("candidate_missing")
 
     process_ids = set()
     active_gates = set()
+    processes = []
     for process in inventory["processes"]:
         object_fields(process, {"id", "role", "sha256"})
         if (not matches(LABEL, process["id"]) or not valid_role(process["role"])
@@ -196,6 +214,12 @@ def evaluate(artifacts, candidates, inventory, state, target, now):
             reasons.add("process_unknown")
         else:
             active_gates.add(match["gate_version"])
+        processes.append({
+            "id": process["id"], "role": process["role"], "sha256": process["sha256"],
+            "gate_version": match["gate_version"] if match else None,
+            "revision": match["revision"] if match else None,
+            "capabilities": match["capabilities"] if match else [],
+        })
 
     candidate_gates = {item["gate_version"] for item in selected if item["gate_version"]}
     all_gates = candidate_gates | active_gates
@@ -220,6 +244,12 @@ def evaluate(artifacts, candidates, inventory, state, target, now):
     if candidate_gates != {GATE} or LEGACY in active_gates:
         confirmation_reasons.add("confirmation_requires_compatible_artifacts")
 
+    metadata_reasons = set(confirmation_reasons)
+    if any(item["role"] in {"api", "worker"}
+           and METADATA_CAPABILITY not in item["capabilities"]
+           for item in selected + processes):
+        metadata_reasons.add("metadata_capability_missing")
+
     return {
         "version": 1,
         "gate_version": GATE,
@@ -232,10 +262,13 @@ def evaluate(artifacts, candidates, inventory, state, target, now):
         "process_count": str(len(process_ids)),
         "pre_010c_retired": inventory["pre_010c_retired"],
         "candidates": selected,
+        "processes": processes,
         "launch_allowed": launch_allowed,
         "confirmation_ready": not confirmation_reasons,
+        "metadata_confirmation_ready": not metadata_reasons,
         "launch_reasons": sorted(reasons),
         "confirmation_reasons": sorted(confirmation_reasons),
+        "metadata_confirmation_reasons": sorted(metadata_reasons),
     }
 
 
@@ -347,7 +380,8 @@ def main(argv=None):
         return 0 if allowed else 1
     except EvidenceError as error:
         print(json.dumps({"version": 1, "gate_version": GATE, "launch_allowed": False,
-                          "confirmation_ready": False, "error": str(error)}, sort_keys=True))
+                          "confirmation_ready": False, "metadata_confirmation_ready": False,
+                          "error": str(error)}, sort_keys=True))
         return 2
 
 

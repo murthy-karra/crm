@@ -1,0 +1,9 @@
+same completed parent and retained capture binding
+explicit existing field choice
+explicit existing option South
+explicit existing option North
+explicit existing option None
+explicit tag, field and option mappings; no source requests
+The expression evaluated to a falsy value:
+
+  assert(['queued', 'running'].includes(child.state))

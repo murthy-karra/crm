@@ -348,6 +348,7 @@ function stubApi(personDetail: PersonDetailResponse, options: StubOptions = {}) 
     const method = init?.method ?? 'GET'
     if (path === '/me') return options.meOverride ?? me()
     if (path.endsWith('/import-provenance')) throw new ApiError(404, 'not_found')
+    if (path.includes('/metadata-import-provenance')) return { items: [], next_cursor: null }
     const personTagMatch = /^\/people\/([^/]+)\/tags\/([^/]+)$/.exec(path)
     if (personTagMatch && (method === 'PUT' || method === 'DELETE')) {
       const tagId = decodeURIComponent(personTagMatch[2])

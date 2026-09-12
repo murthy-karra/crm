@@ -899,7 +899,8 @@ publication does not close them.
 | 019b | Custom-field filtering across People, lists and Today | `237639d`, deployed 2026-09-10; pushed 2026-09-11 |
 | 010a | Bounded FUB assessment, encrypted credentials/evidence and recovery (D-060); live validation deferred | `cd224fe` (implementation `e4e0658`), pushed and deployed 2026-09-11 |
 | 010b | Encrypted core FUB capture, deterministic preview, budget controls and recovery (D-063); live validation deferred | `89471f0` (implementation `b71a854`), pushed and [deployed](../tasks/SLICE_010b_RELEASE.md) 2026-09-11; worktree/QA cleanup complete |
-| 010c | Retained People/contact/stage/assignment import, provenance/reconciliation and admin review hold (D-064/065); activation and live validation deferred | `c3f6ca9` (implementation `fcd2480`), pushed 2026-09-11; [verification and integration](../tasks/SLICE_010c_VERIFICATION.md) complete, merged worktree/QA resources removed; not deployed |
+| 010c | Retained People/contact/stage/assignment import, provenance/reconciliation and admin review hold (D-064/065); activation and live validation deferred | `c3f6ca9` (implementation `fcd2480`), pushed 2026-09-11; [verification and integration](../tasks/SLICE_010c_VERIFICATION.md) complete, merged worktree/QA resources removed; [deployed and verified](../tasks/SLICE_010c_RELEASE.md) as source `f01c2e3` |
+| 010f1 | Retained tags/custom-field child for completed 010c People, explicit mappings and immutable review hold (D-066) | Implemented and synthetically verified 2026-09-11 in uncommitted `codex/slice-010f1-metadata-import`; 900 Rust / 1,054 Web / 881 DB, 90 plans / 246 checks, 51 browser checkpoints; [evidence](../design/qa/slice-010f1-2026-09-11/README.md). Undeployed; live validation/activation remain separate. |
 | — | Gate-speedup chunk (check 35m→79s, check-db 37m→~2m) | 2026-08-28 |
 | — | Test-binary consolidation (40 files → 1 binary) | `6427ee8` |
 

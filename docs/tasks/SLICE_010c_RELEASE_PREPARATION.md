@@ -1,10 +1,11 @@
 # Slice 010c — Release compatibility and recovery
 
-**Implementation runbook; no release performed.** D-065 authorizes implementation
-and synthetic verification; its follow-up authorizes commit, merge, push and
-cleanup. Runtime deployment and live FUB operations remain separate. Use this
-record when a later release is authorized;
-the final implementation evidence belongs to [the verification record](SLICE_010c_VERIFICATION.md).
+**Compatibility and recovery runbook.** The authorized shared-development
+release completed on 2026-09-11; actual results are in
+[SLICE_010c_RELEASE.md](SLICE_010c_RELEASE.md). Reuse this procedure for subsequent
+authorized launches and before import confirmation. Live FUB operations remain
+user-deferred. Implementation evidence belongs to
+[the verification record](SLICE_010c_VERIFICATION.md).
 
 ## Durable compatibility boundary
 

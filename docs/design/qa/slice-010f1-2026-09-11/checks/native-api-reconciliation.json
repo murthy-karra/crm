@@ -1,0 +1,535 @@
+{
+  "result": "passed",
+  "source_reader_calls_before": 0,
+  "source_reader_calls_after": 0,
+  "proofs": [
+    {
+      "scenario": "main-final",
+      "state": "completed",
+      "workspace_mode": "migration_review",
+      "parent_unchanged": true,
+      "reservations_released": true,
+      "counts": {
+        "fields": {
+          "already_present": "1",
+          "applied": "0",
+          "created": "5",
+          "eligible": "0",
+          "held": "4",
+          "not_supplied": "0",
+          "pending": "0",
+          "planned": "10",
+          "source_null": "0"
+        },
+        "held_count": "43",
+        "invalid_source_ids": "0",
+        "issues": [
+          {
+            "code": "colliding_source_choices",
+            "count": "4"
+          },
+          {
+            "code": "field_mapping_held",
+            "count": "3"
+          },
+          {
+            "code": "mapping_held",
+            "count": "9"
+          },
+          {
+            "code": "parent_person_unavailable",
+            "count": "1"
+          },
+          {
+            "code": "person_tag_capacity",
+            "count": "21"
+          },
+          {
+            "code": "recurring_date_unsupported",
+            "count": "2"
+          },
+          {
+            "code": "source_definition_unavailable",
+            "count": "1"
+          },
+          {
+            "code": "source_integrity",
+            "count": "5"
+          },
+          {
+            "code": "unsupported_choice_value",
+            "count": "1"
+          },
+          {
+            "code": "unsupported_date_value",
+            "count": "2"
+          },
+          {
+            "code": "unsupported_field_kind",
+            "count": "1"
+          },
+          {
+            "code": "unsupported_number_precision",
+            "count": "1"
+          },
+          {
+            "code": "unsupported_tag_shape",
+            "count": "2"
+          },
+          {
+            "code": "unsupported_text_value",
+            "count": "2"
+          },
+          {
+            "code": "unsupported_value_shape",
+            "count": "2"
+          }
+        ],
+        "options": {
+          "already_present": "3",
+          "applied": "0",
+          "created": "2",
+          "eligible": "0",
+          "held": "2",
+          "not_supplied": "0",
+          "pending": "0",
+          "planned": "7",
+          "source_null": "0"
+        },
+        "people": {
+          "eligible": "5",
+          "excluded": "1",
+          "settled": "5",
+          "source": "6"
+        },
+        "tag_links": {
+          "already_present": "0",
+          "applied": "8",
+          "created": "0",
+          "eligible": "0",
+          "held": "24",
+          "not_supplied": "0",
+          "pending": "0",
+          "planned": "32",
+          "source_null": "0"
+        },
+        "tags": {
+          "already_present": "0",
+          "applied": "0",
+          "created": "25",
+          "eligible": "0",
+          "held": "1",
+          "not_supplied": "0",
+          "pending": "0",
+          "planned": "26",
+          "source_null": "0"
+        },
+        "values": {
+          "already_present": "0",
+          "applied": "8",
+          "created": "0",
+          "eligible": "0",
+          "held": "12",
+          "not_supplied": "28",
+          "pending": "0",
+          "planned": "51",
+          "source_null": "3"
+        }
+      },
+      "retained_bytes": "12609909",
+      "people": [
+        {
+          "source_id": "105",
+          "tags": [
+            "Buyer",
+            "Shared Household"
+          ],
+          "values": {},
+          "inquiries": 0,
+          "tasks": 0
+        },
+        {
+          "source_id": "99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999",
+          "tags": [
+            "Buyer"
+          ],
+          "values": {
+            "Synthetic Buyer Note": "Independent valid value",
+            "Synthetic Move Date": "2200-12-31"
+          },
+          "inquiries": 0,
+          "tasks": 0
+        },
+        {
+          "source_id": "101",
+          "tags": [
+            "Buyer",
+            "Shared Household",
+            "Synthetic embedded tag"
+          ],
+          "values": {
+            "Existing Preferred Area": "None",
+            "Synthetic Buyer Note": "Synthetic buyer note",
+            "Synthetic Budget": "500000",
+            "Synthetic Move Date": "2026-10-15"
+          },
+          "inquiries": 0,
+          "tasks": 0
+        },
+        {
+          "source_id": "102",
+          "tags": [
+            "Investor",
+            "Shared Household"
+          ],
+          "values": {
+            "Existing Preferred Area": "N/A"
+          },
+          "inquiries": 0,
+          "tasks": 0
+        },
+        {
+          "source_id": "104",
+          "tags": [],
+          "values": {
+            "Existing Preferred Area": "null"
+          },
+          "inquiries": 0,
+          "tasks": 0
+        }
+      ]
+    },
+    {
+      "scenario": "cancel",
+      "state": "cancelled",
+      "workspace_mode": "migration_review",
+      "parent_unchanged": true,
+      "reservations_released": true,
+      "counts": {
+        "fields": {
+          "already_present": "1",
+          "applied": "0",
+          "created": "5",
+          "eligible": "0",
+          "held": "4",
+          "not_supplied": "0",
+          "pending": "0",
+          "planned": "10",
+          "source_null": "0"
+        },
+        "held_count": "43",
+        "invalid_source_ids": "0",
+        "issues": [
+          {
+            "code": "colliding_source_choices",
+            "count": "4"
+          },
+          {
+            "code": "field_mapping_held",
+            "count": "3"
+          },
+          {
+            "code": "mapping_held",
+            "count": "9"
+          },
+          {
+            "code": "parent_person_unavailable",
+            "count": "1"
+          },
+          {
+            "code": "person_tag_capacity",
+            "count": "21"
+          },
+          {
+            "code": "recurring_date_unsupported",
+            "count": "2"
+          },
+          {
+            "code": "source_definition_unavailable",
+            "count": "1"
+          },
+          {
+            "code": "source_integrity",
+            "count": "5"
+          },
+          {
+            "code": "unsupported_choice_value",
+            "count": "1"
+          },
+          {
+            "code": "unsupported_date_value",
+            "count": "2"
+          },
+          {
+            "code": "unsupported_field_kind",
+            "count": "1"
+          },
+          {
+            "code": "unsupported_number_precision",
+            "count": "1"
+          },
+          {
+            "code": "unsupported_tag_shape",
+            "count": "2"
+          },
+          {
+            "code": "unsupported_text_value",
+            "count": "2"
+          },
+          {
+            "code": "unsupported_value_shape",
+            "count": "2"
+          }
+        ],
+        "options": {
+          "already_present": "3",
+          "applied": "0",
+          "created": "2",
+          "eligible": "0",
+          "held": "2",
+          "not_supplied": "0",
+          "pending": "0",
+          "planned": "7",
+          "source_null": "0"
+        },
+        "people": {
+          "eligible": "5",
+          "excluded": "1",
+          "settled": "1",
+          "source": "6"
+        },
+        "tag_links": {
+          "already_present": "0",
+          "applied": "2",
+          "created": "0",
+          "eligible": "6",
+          "held": "24",
+          "not_supplied": "0",
+          "pending": "30",
+          "planned": "32",
+          "source_null": "0"
+        },
+        "tags": {
+          "already_present": "0",
+          "applied": "0",
+          "created": "25",
+          "eligible": "0",
+          "held": "1",
+          "not_supplied": "0",
+          "pending": "0",
+          "planned": "26",
+          "source_null": "0"
+        },
+        "values": {
+          "already_present": "0",
+          "applied": "0",
+          "created": "0",
+          "eligible": "8",
+          "held": "12",
+          "not_supplied": "28",
+          "pending": "40",
+          "planned": "51",
+          "source_null": "3"
+        }
+      },
+      "retained_bytes": "12569602",
+      "people": []
+    },
+    {
+      "scenario": "replay",
+      "state": "completed",
+      "workspace_mode": "migration_review",
+      "parent_unchanged": true,
+      "reservations_released": true,
+      "counts": {
+        "fields": {
+          "already_present": "1",
+          "applied": "0",
+          "created": "5",
+          "eligible": "0",
+          "held": "4",
+          "not_supplied": "0",
+          "pending": "0",
+          "planned": "10",
+          "source_null": "0"
+        },
+        "held_count": "43",
+        "invalid_source_ids": "0",
+        "issues": [
+          {
+            "code": "colliding_source_choices",
+            "count": "4"
+          },
+          {
+            "code": "field_mapping_held",
+            "count": "3"
+          },
+          {
+            "code": "mapping_held",
+            "count": "9"
+          },
+          {
+            "code": "parent_person_unavailable",
+            "count": "1"
+          },
+          {
+            "code": "person_tag_capacity",
+            "count": "21"
+          },
+          {
+            "code": "recurring_date_unsupported",
+            "count": "2"
+          },
+          {
+            "code": "source_definition_unavailable",
+            "count": "1"
+          },
+          {
+            "code": "source_integrity",
+            "count": "5"
+          },
+          {
+            "code": "unsupported_choice_value",
+            "count": "1"
+          },
+          {
+            "code": "unsupported_date_value",
+            "count": "2"
+          },
+          {
+            "code": "unsupported_field_kind",
+            "count": "1"
+          },
+          {
+            "code": "unsupported_number_precision",
+            "count": "1"
+          },
+          {
+            "code": "unsupported_tag_shape",
+            "count": "2"
+          },
+          {
+            "code": "unsupported_text_value",
+            "count": "2"
+          },
+          {
+            "code": "unsupported_value_shape",
+            "count": "2"
+          }
+        ],
+        "options": {
+          "already_present": "3",
+          "applied": "0",
+          "created": "2",
+          "eligible": "0",
+          "held": "2",
+          "not_supplied": "0",
+          "pending": "0",
+          "planned": "7",
+          "source_null": "0"
+        },
+        "people": {
+          "eligible": "5",
+          "excluded": "1",
+          "settled": "5",
+          "source": "6"
+        },
+        "tag_links": {
+          "already_present": "0",
+          "applied": "8",
+          "created": "0",
+          "eligible": "0",
+          "held": "24",
+          "not_supplied": "0",
+          "pending": "0",
+          "planned": "32",
+          "source_null": "0"
+        },
+        "tags": {
+          "already_present": "0",
+          "applied": "0",
+          "created": "25",
+          "eligible": "0",
+          "held": "1",
+          "not_supplied": "0",
+          "pending": "0",
+          "planned": "26",
+          "source_null": "0"
+        },
+        "values": {
+          "already_present": "0",
+          "applied": "8",
+          "created": "0",
+          "eligible": "0",
+          "held": "12",
+          "not_supplied": "28",
+          "pending": "0",
+          "planned": "51",
+          "source_null": "3"
+        }
+      },
+      "retained_bytes": "12614674",
+      "people": [
+        {
+          "source_id": "105",
+          "tags": [
+            "Buyer",
+            "Shared Household"
+          ],
+          "values": {},
+          "inquiries": 0,
+          "tasks": 0
+        },
+        {
+          "source_id": "104",
+          "tags": [],
+          "values": {
+            "Existing Preferred Area": "null"
+          },
+          "inquiries": 0,
+          "tasks": 0
+        },
+        {
+          "source_id": "102",
+          "tags": [
+            "Investor",
+            "Shared Household"
+          ],
+          "values": {
+            "Existing Preferred Area": "N/A"
+          },
+          "inquiries": 0,
+          "tasks": 0
+        },
+        {
+          "source_id": "99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999",
+          "tags": [
+            "Buyer"
+          ],
+          "values": {
+            "Synthetic Buyer Note": "Independent valid value",
+            "Synthetic Move Date": "2200-12-31"
+          },
+          "inquiries": 0,
+          "tasks": 0
+        },
+        {
+          "source_id": "101",
+          "tags": [
+            "Buyer",
+            "Shared Household",
+            "Synthetic embedded tag"
+          ],
+          "values": {
+            "Existing Preferred Area": "None",
+            "Synthetic Buyer Note": "Synthetic buyer note",
+            "Synthetic Budget": "500000",
+            "Synthetic Move Date": "2026-10-15"
+          },
+          "inquiries": 0,
+          "tasks": 0
+        }
+      ]
+    }
+  ]
+}

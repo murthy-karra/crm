@@ -1,0 +1,21 @@
+{
+  "phase": "budget-resume",
+  "result": "passed",
+  "source_reader_calls_before": 0,
+  "source_reader_calls_after": 0,
+  "assertions": [
+    {
+      "name": "screenshot desktop-budget-recovered"
+    },
+    {
+      "name": "parent People and original review hold unchanged"
+    },
+    {
+      "name": "restoring capacity does not auto-resume; explicit resume completes"
+    },
+    {
+      "name": "zero post-capture source-reader calls"
+    }
+  ],
+  "page_errors": []
+}

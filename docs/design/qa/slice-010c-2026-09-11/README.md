@@ -1,9 +1,11 @@
 # Slice 010c implementation evidence
 
-**Implemented, synthetically verified, merged and pushed; not deployed.**
+**Implemented, synthetically verified, merged, pushed and deployed.**
 Implementation `fcd2480`, merge `c3f6ca9`, baseline
 `c6c5930ee4975706a87398e0a7e7766b05417cf5`. Git publication and cleanup completed
-under the D-065 follow-up. Shared development continues to run the 010b release.
+under the D-065 follow-up. A subsequent authorized
+[shared-development release](../slice-010c-2026-09-11-release/README.md) is verified.
+The implementation evidence below preserves its pre-release scope.
 
 ## Implemented behavior
 
@@ -119,8 +121,9 @@ separate work.
 
 Live authorized FUB validation remains user-deferred. No customer data, live
 source request, deployment or activation is covered by the synthetic checks.
-Git publication and cleanup are recorded separately above. A later authorized
-release must establish actual artifact/workload
-inventory and retire every incompatible process; synthetic preflight tests do
-not certify a deployed fleet. See the
+Git publication and cleanup are recorded separately above. The subsequent
+[shared-development release](../slice-010c-2026-09-11-release/README.md) establishes
+actual artifact/workload inventory and retired incompatible launch paths;
+synthetic preflight tests alone do not certify a deployed fleet. Future launch
+or import-confirmation work must renew the current evidence. See the
 [release and recovery runbook](../../../tasks/SLICE_010c_RELEASE_PREPARATION.md).

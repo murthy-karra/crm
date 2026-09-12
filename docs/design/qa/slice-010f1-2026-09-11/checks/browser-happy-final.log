@@ -1,0 +1,30 @@
+same completed parent and retained capture binding
+screenshot desktop-held-plan
+screenshot mobile-128-digit-tag-occurrence
+screenshot mobile-long-tag-occurrence
+exact long source IDs and tag-label occurrences stay inspectable at390px
+screenshot desktop-existing-field
+explicit existing field choice
+explicit existing option South
+explicit existing option North
+explicit existing option None
+explicit tag, field and option mappings; no source requests
+screenshot desktop-mappings
+screenshot mobile-plan
+screenshot desktop-large-field
+screenshot mobile-large-field
+source disconnected before metadata execution
+screenshot desktop-confirmation
+lost response replay used identical frozen request bytes
+screenshot desktop-completed
+parent People and original review hold unchanged
+screenshot desktop-person-provenance
+screenshot mobile-person-provenance
+screenshot mobile-128-digit-provenance
+128-digit source ID stays exact and wraps at390px
+distinct overlapping People, applied values, explicit holds and Person provenance
+screenshot mobile-admin-demotion
+demoted administrator loses import evidence and cached admin interface on refresh
+screenshot mobile-member-hold
+ordinary member sees hold screen and cannot read metadata import evidence
+zero post-capture source-reader calls

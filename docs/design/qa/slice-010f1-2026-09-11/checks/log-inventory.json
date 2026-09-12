@@ -1,0 +1,162 @@
+[
+  {
+    "file": "sqlx-prepare-acceptance.log",
+    "private_sha256": "8d12d4601e75b32e6b579c1fae5c89052cc8d3645c966ad360ebdaaefcaa0325",
+    "published_sha256": "8d12d4601e75b32e6b579c1fae5c89052cc8d3645c966ad360ebdaaefcaa0325",
+    "published_bytes": 2583,
+    "redacted": false,
+    "formatting_normalized": false
+  },
+  {
+    "file": "check-acceptance.log",
+    "private_sha256": "196aa3431bc5adec6784d76ad67c631c708f26e2195aca1707b82ff7d15d57e8",
+    "published_sha256": "acf7a8b30d9e6c67a899d1f0c911423e5f600640ca8da0a1d293e9bca9e3032e",
+    "published_bytes": 114955,
+    "redacted": false,
+    "formatting_normalized": true
+  },
+  {
+    "file": "check-db-acceptance.log",
+    "private_sha256": "d779141181616bca9c669d7c711660397d082daddb57b8716199dfbcbca89f35",
+    "published_sha256": "d779141181616bca9c669d7c711660397d082daddb57b8716199dfbcbca89f35",
+    "published_bytes": 115938,
+    "redacted": false,
+    "formatting_normalized": false
+  },
+  {
+    "file": "backend-acceptance-1.log",
+    "private_sha256": "e56b47afed13b0b2911bf20b2fa0707609bf7d0abbd204c0ce92de779467bbb8",
+    "published_sha256": "6573ba32401fb2e4d1dcbb1e57b2a159924e49678523d51f45e2b350510894ed",
+    "published_bytes": 1894,
+    "redacted": false,
+    "formatting_normalized": true
+  },
+  {
+    "file": "backend-acceptance-clippy-1.log",
+    "private_sha256": "91950844eb66a382f1601bff5870c10b3abb7ba7eca244120d4f9ab702eba850",
+    "published_sha256": "91950844eb66a382f1601bff5870c10b3abb7ba7eca244120d4f9ab702eba850",
+    "published_bytes": 245,
+    "redacted": false,
+    "formatting_normalized": false
+  },
+  {
+    "file": "metadata-plans-1.log",
+    "private_sha256": "120a926d27b3c48bbeee24e15dba22b0db640581dd6e85d86f3941609924b98e",
+    "published_sha256": "120a926d27b3c48bbeee24e15dba22b0db640581dd6e85d86f3941609924b98e",
+    "published_bytes": 303676,
+    "redacted": false,
+    "formatting_normalized": false
+  },
+  {
+    "file": "metadata-plans-2.log",
+    "private_sha256": "310569fc4ffef6a357794fb399a1c4aa5551bb83900908dc8519c3aedf35b2fe",
+    "published_sha256": "a9392c024612cd5d1bf4fbddd9651ad6059a6255dc453ffaee5537e84fffc117",
+    "published_bytes": 281242,
+    "redacted": false,
+    "formatting_normalized": true
+  },
+  {
+    "file": "qa-build.log",
+    "private_sha256": "f0788aa36d1c86b6ccdfb7f4042a5574102d82061c046422a2d42e008a1e4710",
+    "published_sha256": "f0788aa36d1c86b6ccdfb7f4042a5574102d82061c046422a2d42e008a1e4710",
+    "published_bytes": 72,
+    "redacted": false,
+    "formatting_normalized": false
+  },
+  {
+    "file": "qa-setup-1.log",
+    "private_sha256": "3a5c57b10f524beac64ea9b92d9be9617856e5388ed3942afb02113a8cf9a9bb",
+    "published_sha256": "3a5c57b10f524beac64ea9b92d9be9617856e5388ed3942afb02113a8cf9a9bb",
+    "published_bytes": 176,
+    "redacted": false,
+    "formatting_normalized": false
+  },
+  {
+    "file": "qa-setup-final.log",
+    "private_sha256": "6baf87c705b9e30bb6970037b96f6f0c3741dff399185eef1ab7488cb1741142",
+    "published_sha256": "6baf87c705b9e30bb6970037b96f6f0c3741dff399185eef1ab7488cb1741142",
+    "published_bytes": 108,
+    "redacted": false,
+    "formatting_normalized": false
+  },
+  {
+    "file": "qa-preflight.log",
+    "private_sha256": "89d4bff068410f95cfdf2243123df743b72cfabc4703a7fde58c1a02d78268d3",
+    "published_sha256": "89d4bff068410f95cfdf2243123df743b72cfabc4703a7fde58c1a02d78268d3",
+    "published_bytes": 103,
+    "redacted": false,
+    "formatting_normalized": false
+  },
+  {
+    "file": "browser-happy-1.log",
+    "private_sha256": "7c1632867ad575f638659c8de7b12eff55a72212cd96a813218a2f30aa803e37",
+    "published_sha256": "528c7d36525ed48833092b31a76d3a611bc4a342104943a456980d9cf942e63c",
+    "published_bytes": 1169,
+    "redacted": false,
+    "formatting_normalized": true
+  },
+  {
+    "file": "browser-happy-tail-1.log",
+    "private_sha256": "094160f4dc94b19cac5c1a903c2c26891203522f628487af8fbcfcd2496fd79e",
+    "published_sha256": "dbaf95d2368e9c8109be70b34cccf004061b6f8fe3f53a1a5a435da926250016",
+    "published_bytes": 388,
+    "redacted": false,
+    "formatting_normalized": true
+  },
+  {
+    "file": "browser-happy-final.log",
+    "private_sha256": "c53f8d92a2e7fccf57c2469eaf2c801ff7fcdca915b832aa46bc53d83f65fb1f",
+    "published_sha256": "c53f8d92a2e7fccf57c2469eaf2c801ff7fcdca915b832aa46bc53d83f65fb1f",
+    "published_bytes": 1277,
+    "redacted": false,
+    "formatting_normalized": false
+  },
+  {
+    "file": "browser-cancel.log",
+    "private_sha256": "59cee9a52cf667a00005d9f11961d524e4bff7132fc305c95facad0c4cda4a16",
+    "published_sha256": "59cee9a52cf667a00005d9f11961d524e4bff7132fc305c95facad0c4cda4a16",
+    "published_bytes": 435,
+    "redacted": false,
+    "formatting_normalized": false
+  },
+  {
+    "file": "browser-budget-queue.log",
+    "private_sha256": "ff427d5ebce5c6114bec9de61d20f3c8dc6c3f6c3af87ea7c6e7cee6e6877abb",
+    "published_sha256": "98dd5559a11a1faece2a6bf332cbdf195c9436af3ca36c3b592467de7929e711",
+    "published_bytes": 332,
+    "redacted": false,
+    "formatting_normalized": true
+  },
+  {
+    "file": "browser-budget-queue-final.log",
+    "private_sha256": "0216c73e52a40f962d6f4c1aa4345ed38a1789059d2e1d1088438977db6ff0d6",
+    "published_sha256": "0216c73e52a40f962d6f4c1aa4345ed38a1789059d2e1d1088438977db6ff0d6",
+    "published_bytes": 142,
+    "redacted": false,
+    "formatting_normalized": false
+  },
+  {
+    "file": "browser-budget-paused.log",
+    "private_sha256": "0f95b96e2fccd94efb12be85dfa3d0a52d89a6a78e2ac37d77b7eb40f0364c2f",
+    "published_sha256": "0f95b96e2fccd94efb12be85dfa3d0a52d89a6a78e2ac37d77b7eb40f0364c2f",
+    "published_bytes": 184,
+    "redacted": false,
+    "formatting_normalized": false
+  },
+  {
+    "file": "browser-budget-resume.log",
+    "private_sha256": "5667b43632d0e5913e0bdedd929a2224bb0169bbf15992d8f795fdbb46a83d71",
+    "published_sha256": "5667b43632d0e5913e0bdedd929a2224bb0169bbf15992d8f795fdbb46a83d71",
+    "published_bytes": 190,
+    "redacted": false,
+    "formatting_normalized": false
+  },
+  {
+    "file": "native-api-reconciliation.log",
+    "private_sha256": "3c5c1741f886457b456d282f8ee6f6289aef466a51907e6efb6be7ff1a7509b4",
+    "published_sha256": "3c5c1741f886457b456d282f8ee6f6289aef466a51907e6efb6be7ff1a7509b4",
+    "published_bytes": 109,
+    "redacted": false,
+    "formatting_normalized": false
+  }
+]

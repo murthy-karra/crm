@@ -3,7 +3,9 @@
 **IMPLEMENTED AND SYNTHETICALLY VERIFIED, 2026-09-11.** D-065 authorizes implementation and synthetic
 verification of the [approved spec](../specs/SLICE_010c.md) and
 [brief](SLICE_010c_IMPL.md). All required implementation checks passed.
-Live FUB validation remains user-deferred. No release or real-data processing.
+Live FUB validation remains user-deferred. This implementation chronology covers
+no real-data processing. A subsequent authorized
+[shared-development release](SLICE_010c_RELEASE.md) is deployed and verified.
 The D-065 follow-up subsequently authorized Git integration and cleanup, now
 complete: implementation `fcd2480`, merge `c3f6ca9`, pushed to main. See the
 [integration record](#git-integration-and-cleanup--2026-09-11) below.
@@ -739,6 +741,7 @@ development process was restarted, deployed data reset, or 010b recovery artifac
 removed. [Integration checks](../design/qa/slice-010c-2026-09-11/checks/integration.json)
 record the Git source and cleanup checks.
 
-010c is not deployed. A later deployment must follow the compatibility/recovery
-runbook and produce actual workload evidence. Live authorized FUB validation
-remains user-deferred; this integration performs no source operation or activation.
+At this integration checkpoint 010c was not deployed. The subsequent authorized
+[release](SLICE_010c_RELEASE.md) followed the compatibility/recovery runbook and
+produced actual workload evidence. Live authorized FUB validation remains
+user-deferred; neither integration nor release performs a source operation or activation.

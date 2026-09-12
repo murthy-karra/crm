@@ -178,6 +178,7 @@ pub struct ReleaseReadiness {
     checked_at: DateTime<Utc>,
     expires_at: DateTime<Utc>,
     synthetic: bool,
+    metadata: bool,
 }
 impl ReleaseReadiness {
     pub async fn load_report(pool: &PgPool, path: &std::path::Path) -> Result<Self, sqlx::Error> {
@@ -212,6 +213,16 @@ impl ReleaseReadiness {
             checked_at,
             expires_at,
             synthetic: false,
+            metadata: report["metadata_confirmation_ready"] == true
+                && report["candidates"].as_array().is_some_and(|items| {
+                    items.iter().any(|v| {
+                        v["sha256"] == hash
+                            && v["gate_version"] == GATE_VERSION
+                            && v["capabilities"]
+                                .as_array()
+                                .is_some_and(|c| c.iter().any(|v| v == "fub-metadata-import-v1"))
+                    })
+                }),
         };
         ready.require_current(&mut *pool.acquire().await?).await?;
         Ok(ready)
@@ -233,6 +244,20 @@ impl ReleaseReadiness {
         }
         Ok(())
     }
+    pub fn metadata_ready(&self) -> bool {
+        self.metadata
+            && (self.synthetic
+                || (self.expires_at > Utc::now()
+                    && self.checked_at <= Utc::now()
+                    && Utc::now() - self.checked_at <= chrono::Duration::minutes(5)))
+    }
+    pub async fn require_metadata(&self, conn: &mut PgConnection) -> Result<(), sqlx::Error> {
+        self.require_current(conn).await?;
+        if !self.metadata_ready() {
+            return Err(sqlx::Error::Protocol("metadata release not ready".into()));
+        }
+        Ok(())
+    }
     #[cfg(feature = "test-support")]
     pub fn for_tests() -> Self {
         Self {
@@ -240,6 +265,7 @@ impl ReleaseReadiness {
             checked_at: Utc::now(),
             expires_at: Utc::now() + chrono::Duration::minutes(5),
             synthetic: true,
+            metadata: true,
         }
     }
 }

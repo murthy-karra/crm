@@ -1,0 +1,19 @@
+   Compiling crm-api v0.1.0 (/Users/karrad/projects/crm-010f2/backend/crates/crm-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 14s
+     Running tests/all.rs (target/debug/deps/all-4f54aadf6519a0de)
+
+running 1 test
+test db_activity_import_plans::activity_import_query_plans_and_complete_bounded_native_reads ...
+thread 'db_activity_import_plans::activity_import_query_plans_and_complete_bounded_native_reads' (13080104) panicked at crates/crm-api/tests/db_activity_import_plans.rs:287:520:
+called `Result::unwrap()` on an `Err` value: Database(PgDatabaseError { severity: Error, code: "23514", message: "new row for relation \"task\" violates check constraint \"task_check5\"", detail: Some("Failing row contains (9ea3724f-cf50-4cf8-a42a-11a95a7520ba, 5bfddccd-ba97-4978-9947-0515ac5ee099, 63fe6bc7-69d5-44b0-9186-45e583b891f6, Synthetic source task 1Synthetic source task 1Synthetic source t..., call, 2026-09-01 00:01:00+00, 5b78bea9-aa65-480b-858c-39b4a5e8309f, c69bcc49-5dbf-4bf5-a99e-60279ac8e48f, null, null, migration, cc9fc07c-c33f-40c3-bfba-8fc4fb4152be, fub, v1:17:1000001, 2026-01-01 00:00:00+00, 2026-01-01 00:00:00+00, null, null)."), hint: None, position: None, where: None, schema: Some("public"), table: Some("task"), column: None, data_type: None, constraint: Some("task_check5"), file: Some("execMain.c"), line: Some(2076), routine: Some("ExecConstraints") })
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    db_activity_import_plans::activity_import_query_plans_and_complete_bounded_native_reads
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1023 filtered out; finished in 3.99s
+
+error: test failed, to rerun pass `-p crm-api --test all`

@@ -1,0 +1,20 @@
+{
+  "private_credential_scan": "passed",
+  "files": [
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/checks/final3-sqlx-prepare.log",
+      "bytes": 2648,
+      "sha256": "6f404c7ed24c685eb6f800dbaef709c774d858bb8ef98f51f93decb83537409f"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/checks/final3-check.log",
+      "bytes": 120212,
+      "sha256": "5cb54ff8c66129db820417787508bf8dc6328ddaa48f6cedd55ecd94ef5015c4"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/checks/final3-check-db.log",
+      "bytes": 119801,
+      "sha256": "6538f86bf48578a8eb6d3b118826eca8d94b50288f471807385b418d5c01801e"
+    }
+  ]
+}

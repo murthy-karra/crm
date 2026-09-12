@@ -1,0 +1,8 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.32s
+     Running tests/all.rs (target/debug/deps/all-4f54aadf6519a0de)
+
+running 1 test
+test db_activity_import_plans::activity_import_query_plans_and_complete_bounded_native_reads ... CRM_010F2_PLAN_OUTPUT /private/tmp/crm-010f2-qa-694szdwe/activity-query-plans-final.json
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1023 filtered out; finished in 154.88s

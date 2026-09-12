@@ -1,0 +1,35 @@
+{
+  "scope": "Final guarded API epochs; synthetic payload markers, not arbitrary production logging certification",
+  "positive_startup_controls": 4,
+  "checked_content_markers": [
+    "SYNTHETIC_ACTIVITY_BODY_SENTINEL",
+    "SYNTHETIC_ACTIVITY_REJECTED_SENTINEL",
+    "SYNTHETIC_HIDDEN_BODY_SENTINEL",
+    "SYNTHETIC_LIST_MUST_NOT_EXECUTE",
+    "SYNTHETIC_SOURCE_ONLY_REPLY"
+  ],
+  "content_marker_occurrences": 0,
+  "transaction_notice_counts": {
+    "no_transaction": 8,
+    "already_in_transaction": 3
+  },
+  "expected_workspace_barrier_503": 1,
+  "files": [
+    {
+      "file": "api-final-before-activity.log",
+      "sha256": "9be7dd36965ab5427cbdcb9592d2344edd77115e70c94bc6d929e03d811e0dc7"
+    },
+    {
+      "file": "api-final-activity.log",
+      "sha256": "32a49b7ace7d90a06071975e7fcdc011b1b07473a565c12cb05474f679a3bb35"
+    },
+    {
+      "file": "api-budget-lowered.log",
+      "sha256": "9be7dd36965ab5427cbdcb9592d2344edd77115e70c94bc6d929e03d811e0dc7"
+    },
+    {
+      "file": "api-budget-restored.log",
+      "sha256": "d5f74b10b4b9f4e1125077b1da26d978e8869f2be17988f6c48ce604386b5d69"
+    }
+  ]
+}

@@ -37,6 +37,26 @@ pub fn is_forbidden_error(error: &sqlx::Error) -> bool {
         .is_some_and(|c| c == "P010A")
 }
 
+pub fn is_activity_review_error(error: &sqlx::Error) -> bool {
+    error
+        .as_database_error()
+        .and_then(|e| e.code())
+        .is_some_and(|c| c == "P010F")
+}
+
+/// Call inside the existing shared workspace transaction, before any complete
+/// activity fetch. First activity confirmation takes the exclusive barrier.
+pub async fn activity_complete_read(
+    conn: &mut PgConnection,
+    org: OrganizationId,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("SELECT crm_activity_complete_read($1)")
+        .bind(org.0)
+        .execute(conn)
+        .await?;
+    Ok(())
+}
+
 pub async fn shared(conn: &mut PgConnection, org: OrganizationId) -> Result<(), sqlx::Error> {
     sqlx::query("SELECT crm_workspace_shared($1)")
         .bind(org.0)
@@ -179,6 +199,7 @@ pub struct ReleaseReadiness {
     expires_at: DateTime<Utc>,
     synthetic: bool,
     metadata: bool,
+    activity: bool,
 }
 impl ReleaseReadiness {
     pub async fn load_report(pool: &PgPool, path: &std::path::Path) -> Result<Self, sqlx::Error> {
@@ -213,6 +234,16 @@ impl ReleaseReadiness {
             checked_at,
             expires_at,
             synthetic: false,
+            activity: report["activity_confirmation_ready"] == true
+                && report["candidates"].as_array().is_some_and(|items| {
+                    items.iter().any(|v| {
+                        v["sha256"] == hash
+                            && v["gate_version"] == GATE_VERSION
+                            && v["capabilities"]
+                                .as_array()
+                                .is_some_and(|c| c.iter().any(|v| v == "fub-activity-import-v1"))
+                    })
+                }),
             metadata: report["metadata_confirmation_ready"] == true
                 && report["candidates"].as_array().is_some_and(|items| {
                     items.iter().any(|v| {
@@ -266,14 +297,31 @@ impl ReleaseReadiness {
             expires_at: Utc::now() + chrono::Duration::minutes(5),
             synthetic: true,
             metadata: true,
+            activity: true,
         }
+    }
+
+    pub fn activity_ready(&self) -> bool {
+        self.activity
+            && (self.synthetic
+                || (self.expires_at > Utc::now()
+                    && self.checked_at <= Utc::now()
+                    && Utc::now() - self.checked_at <= chrono::Duration::minutes(5)))
+    }
+
+    pub async fn require_activity(&self, conn: &mut PgConnection) -> Result<(), sqlx::Error> {
+        self.require_current(conn).await?;
+        if !self.activity_ready() {
+            return Err(sqlx::Error::Protocol("activity release not ready".into()));
+        }
+        Ok(())
     }
 }
 /// Every new API/worker/CLI invokes this before accepting work. Old binaries
 /// cannot acquire this capability; deployment additionally retires them using
 /// the operator release preflight's complete workload inventory.
 pub async fn startup_compatible(conn: &mut PgConnection) -> Result<(), sqlx::Error> {
-    let exists: bool = sqlx::query_scalar("SELECT to_regclass('migration_workspace') IS NOT NULL")
+    let exists: bool = sqlx::query_scalar("SELECT to_regclass('migration_workspace') IS NOT NULL AND to_regclass('migration_activity_import') IS NOT NULL")
         .fetch_one(&mut *conn)
         .await?;
     if !exists {

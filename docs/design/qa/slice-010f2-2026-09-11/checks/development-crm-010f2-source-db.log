@@ -1,0 +1,11 @@
+   Compiling crm-api v0.1.0 (/Users/karrad/projects/crm-010f2/backend/crates/crm-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 26.40s
+     Running tests/all.rs (target/debug/deps/all-07593333edaca6c2)
+
+running 4 tests
+test db_activity_source::activity_source_corrupt_evidence_pauses_before_native_writes ... ok
+test db_activity_source::activity_source_holds_missing_details_and_all_task_variants_without_list_fallback ... ok
+test db_activity_source::activity_source_imports_exact_notes_tasks_roles_and_confirmed_date_policy ... ok
+test db_activity_source::activity_source_requires_both_exhausted_families_without_a_metadata_child ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 994 filtered out; finished in 27.78s

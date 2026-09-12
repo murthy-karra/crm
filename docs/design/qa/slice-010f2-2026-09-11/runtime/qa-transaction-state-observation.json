@@ -1,0 +1,17 @@
+[
+  {
+    "count": 1,
+    "state": "active",
+    "oldest_transaction_seconds": 0.084722
+  },
+  {
+    "count": 6,
+    "state": "idle",
+    "oldest_transaction_seconds": null
+  },
+  {
+    "count": 3,
+    "state": "idle in transaction",
+    "oldest_transaction_seconds": 0.101931
+  }
+]

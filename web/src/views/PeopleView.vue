@@ -9,6 +9,7 @@ import type { ColumnDef } from '@tanstack/vue-table'
 import PageHeader from '../components/PageHeader.vue'
 import DataTable from '../components/DataTable.vue'
 import PersonPreview from '../components/PersonPreview.vue'
+import { activityReviewCoreKey, fetchActivityReviewCore, useActivityReviewAccess } from '../api/activityReview'
 import { workspaceOperational } from '../workspaceLifecycle'
 import StageLabel from '../components/StageLabel.vue'
 import FilterBar from '../components/FilterBar.vue'
@@ -57,6 +58,7 @@ const props = withDefaults(defineProps<{ savedListId?: string }>(), { savedListI
 
 const { data: me } = useMe()
 const canOperate = computed(() => workspaceOperational(me.value))
+const reviewAccess = useActivityReviewAccess()
 const queryClient = useQueryClient()
 const orgId = computed(() => me.value?.organization?.id ?? '')
 const actorId = computed(() => me.value?.user.id ?? '')
@@ -1046,7 +1048,7 @@ function closePreview() {
     if (previewTrigger?.isConnected) previewTrigger.focus()
   })
 }
-watch([orgId, serializedFilter, () => props.savedListId], () => { selectedId.value = '' }, { flush: 'sync' })
+watch([orgId, serializedFilter, () => props.savedListId, reviewAccess.scope], () => { selectedId.value = '' }, { flush: 'sync' })
 watch(selectedPerson, (person) => { if (!person) selectedId.value = '' })
 
 // ---- Hover/focus prefetch of the Person detail (SLICE_014 §4) -------------
@@ -1069,8 +1071,20 @@ function onRowIntent(person: PersonSummary) {
   clearRowIntentTimer()
   const id = orgId.value
   if (id === '') return
+  const expectedScope = reviewAccess.scope.value
   rowIntentTimer = setTimeout(() => {
     rowIntentTimer = null
+    if (id !== orgId.value || expectedScope !== reviewAccess.scope.value) return
+    if (!canOperate.value) {
+      if (!reviewAccess.enabled.value) return
+      const key = activityReviewCoreKey(reviewAccess.prefix.value, person.id)
+      void queryClient.prefetchQuery({
+        queryKey: key,
+        queryFn: ({ signal }) => reviewAccess.read(key, () => activityReviewCoreKey(reviewAccess.prefix.value, person.id), () => fetchActivityReviewCore(person.id, signal)),
+        retry: false, gcTime: 30_000,
+      })
+      return
+    }
     void queryClient.prefetchQuery({
       queryKey: queryKeys.person(id, person.id),
       queryFn: ({ signal }) => fetchPerson(person.id, signal),
@@ -1078,6 +1092,7 @@ function onRowIntent(person: PersonSummary) {
   }, ROW_INTENT_DWELL_MS)
 }
 onBeforeUnmount(clearRowIntentTimer)
+watch(reviewAccess.scope, clearRowIntentTimer, { flush: 'sync' })
 
 const myPeople = computed(() => clauses.value.length === 1 &&
   clauses.value[0]?.kind === 'assigned_to' && clauses.value[0].assignees.length === 1 &&

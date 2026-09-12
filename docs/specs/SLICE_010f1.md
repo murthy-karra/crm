@@ -1,5 +1,13 @@
 # Slice 010f1 — Tags and custom fields in the migration review workspace
 
+**Approved sibling amendment — 010f2 (D-068, 2026-09-11):**
+[010f2](SLICE_010f2.md) adds an independent retained notes/tasks child, without
+requiring metadata-child completion or rewriting this child's state/results.
+Both use the same Organization/snapshot retention admission locks, with separately
+owned reservations and cancellation. First activity confirmation also establishes
+a durable bounded-reader requirement; future launch/recovery must preserve it
+and verify `fub-activity-import-v1` in addition to existing capabilities.
+
 **APPROVED FOR IMPLEMENTATION — D-066, 2026-09-11.**
 Implementation and synthetic verification are complete;
 [executed evidence](../tasks/SLICE_010f1_VERIFICATION.md). The D-066 follow-up

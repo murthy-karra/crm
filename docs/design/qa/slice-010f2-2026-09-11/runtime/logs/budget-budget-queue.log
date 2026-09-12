@@ -1,0 +1,3 @@
+{"phase":"budget-queue","case":"budget","checkpoint":"queued_without_native_work"}
+{"phase":"budget-queue","case":"budget","checkpoint":"ROOT_HANDOFF_lower_deployment_ceiling_then_restart"}
+{"phase":"budget-queue","case":"budget","checkpoint":"phase_complete"}

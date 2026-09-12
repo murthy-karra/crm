@@ -1569,6 +1569,21 @@ pub async fn history_for_person(
 ) -> Result<Vec<HistoryEntry>, sqlx::Error> {
     let mut workspace_read = crate::auth::workspace::read(conn, organization_id).await?;
     let conn = &mut *workspace_read;
+    crate::auth::workspace::activity_complete_read(conn, organization_id).await?;
+    let mut entries = core_history_for_migration_review(conn, organization_id, person_id).await?;
+    entries.extend(note_history_entries(conn, organization_id, person_id).await?);
+    entries.extend(task_completed_history_entries(conn, organization_id, person_id).await?);
+    entries.sort_by_key(|e| (e.occurred_at, e.recorded_at, e.kind_rank, e.id));
+    Ok(entries)
+}
+
+/// Explicit core-history scope. Only the scoped admin review query exposes this
+/// representation; it never loads note bodies or completed task activity.
+pub(crate) async fn core_history_for_migration_review(
+    conn: &mut PgConnection,
+    organization_id: OrganizationId,
+    person_id: PersonId,
+) -> Result<Vec<HistoryEntry>, sqlx::Error> {
     let mut entries = Vec::new();
     entries.extend(imported_history(conn, organization_id, person_id).await?);
     entries.extend(inquiry_received_history(conn, organization_id, person_id).await?);
@@ -1578,9 +1593,6 @@ pub async fn history_for_person(
     entries.extend(contact_attempted_history(conn, organization_id, person_id).await?);
     entries.extend(call_completed_history(conn, organization_id, person_id).await?);
     entries.extend(correspondence_history(conn, organization_id, person_id).await?);
-    entries.extend(note_history_entries(conn, organization_id, person_id).await?);
-    entries.extend(task_completed_history_entries(conn, organization_id, person_id).await?);
-
     entries.sort_by_key(|e| (e.occurred_at, e.recorded_at, e.kind_rank, e.id));
     Ok(entries)
 }
@@ -1715,3 +1727,8 @@ async fn imported_history(
     let rows=sqlx::query("SELECT id,occurred_at,recorded_at,correlation_id,on_behalf_of_user_id,import_id,plan_id,source_record_id,capture_id FROM person_imported WHERE organization_id=$1 AND person_id=$2").bind(org.0).bind(person.0).fetch_all(conn).await?;
     Ok(rows.into_iter().map(|r|HistoryEntry{kind:"person_imported",kind_rank:0,id:r.get("id"),occurred_at:r.get("occurred_at"),recorded_at:r.get("recorded_at"),actor:None,origin:"migration".into(),correlation_id:CorrelationId::new(r.get("correlation_id")),detail:serde_json::json!({"import_id":r.get::<Uuid,_>("import_id"),"plan_id":r.get::<Uuid,_>("plan_id"),"source_record_id":r.get::<Uuid,_>("source_record_id"),"capture_id":r.get::<Uuid,_>("capture_id"),"on_behalf_of_user_id":r.get::<Uuid,_>("on_behalf_of_user_id")})}).collect())
 }
+
+// Paired operational Person-detail baseline; absent from normal builds.
+#[cfg(feature = "test-support")]
+#[path = "perf_cd3b010_history.rs"]
+pub mod perf_cd3b010_history;

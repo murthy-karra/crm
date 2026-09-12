@@ -2330,3 +2330,57 @@ Preserve customer data, review bindings, verification evidence and release
 recovery artifacts. Live FUB validation remains deferred; no real-source import,
 activation or production-cluster deployment is implied. Results belong to
 [SLICE_010f1_RELEASE.md](../tasks/SLICE_010f1_RELEASE.md).
+
+### D-067 — Notes/tasks import planning: readable notes and explicit date-only timezone (2026-09-11)
+
+After deploying 010f1, the user requested the next notes/tasks import plan:
+**“yes, plan it.”** Planning and independent review of
+[010f2](../specs/SLICE_010f2.md) and its [brief](../tasks/SLICE_010f2_IMPL.md)
+are authorized. During planning the user accepted:
+
+1. **“Use end of day in a confirmed timezone.”** A source task with a due date
+   but no exact time may become due at the end of that day in a source timezone
+   explicitly confirmed by the admin. No browser/server-zone or UTC default is
+   implied. Freeze the zone and conversion in the preview/confirmed plan.
+2. **“Readable text plus preserved original.”** FUB HTML notes may be imported
+   as readable plain text while retaining the exact original for review and
+   explicitly flagging unsupported content. This does not add native rich text,
+   permit executing HTML or authorize silent truncation/content loss.
+
+The concrete conversion profile, subject/reply policies, user/kind mappings,
+identity/lifecycle/recovery, bounded read contracts and complete implementation
+remain reviewable proposals in the draft. These two choices do not approve the
+complete shared-contract changes or implementation. Live FUB validation remains
+user-deferred; no source/customer processing, activation, commit/merge/push,
+runtime change or production deployment is authorized by this planning request.
+
+### D-068 — Reviewed 010f2 specification and implementation approved (2026-09-11)
+
+After the complete notes/tasks plan and independent READY review were presented,
+the user said **“Ok go ahead and implement 010f2.”** This accepts the reviewed
+[specification](../specs/SLICE_010f2.md), [execution brief](../tasks/SLICE_010f2_IMPL.md),
+their proposed policies and declared shared contracts. Implementation and the
+required isolated synthetic verification are authorized.
+
+Accepted scope includes the completed-parent activity child and its lifetime,
+both-family source exhaustion, acknowledged subsets with at least one eligible
+native unit at fresh confirmation, explicit user/type/time policies, readable
+note conversion with original-source preservation, source-only replies/settings,
+native limits, account-qualified identity and no overwrite/resurrection. The
+bounded administrator review API, legacy-reader confirmation barrier, D-053
+body-read amendment and activity-capable recovery contract are owned by 010f2.
+
+Ordinary agent activation, live FUB validation/customer-data processing, and
+commit/merge/push/deployment remain outside this implementation request. The
+existing 010f1 shared-development release remains in service during implementation.
+
+**D-068 follow-up — integration, cleanup and deployment authorized (2026-09-11).**
+After implementation and synthetic verification completed, the user requested
+“commit, merge, cleanup and push. also deploy.” This authorizes committing the
+verified 010f2 work, merging/publishing main, removing the merged worktree/branch
+and disposable QA resources, and refreshing the existing shared-development
+API/Web with the additive activity migration and fresh observed compatibility
+inventory/preflight. Preserve retained data, review bindings, verification
+evidence and recovery artifacts. Live FUB/customer-data processing, activation
+and production-cluster deployment remain separate, deferred scope. Results belong
+to [SLICE_010f2_RELEASE.md](../tasks/SLICE_010f2_RELEASE.md).

@@ -1,0 +1,12 @@
+   Compiling crm-app v0.1.0 (/Users/karrad/projects/crm-010f2/backend/crates/crm-app)
+   Compiling crm-api v0.1.0 (/Users/karrad/projects/crm-010f2/backend/crates/crm-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 29.39s
+     Running tests/all.rs (target/debug/deps/all-07593333edaca6c2)
+
+running 4 tests
+test db_activity_review::exclusive_boundary_serializes_legacy_read_and_survives_zero_write_cancel ... ok
+test db_activity_review::native_page_cursor_requires_refresh_after_activity_revision_changes ... ok
+test db_activity_review::native_review_pages_traverse_large_notes_and_timed_undated_tasks ... ok
+test db_activity_review::review_requires_current_admin_real_binding_and_exact_person_scope ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 990 filtered out; finished in 13.84s

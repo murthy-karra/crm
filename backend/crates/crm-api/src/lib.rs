@@ -78,7 +78,18 @@ async fn perf_capture_middleware(
     }
 }
 
+#[cfg(feature = "test-support")]
+pub fn build_app_with_people_router(state: AppState, people_router: Router<AppState>) -> Router {
+    build_app_with_routers_inner(state, routes::today::router(), people_router)
+}
 fn build_app_with_today_router_inner(state: AppState, today_router: Router<AppState>) -> Router {
+    build_app_with_routers_inner(state, today_router, routes::people::router())
+}
+fn build_app_with_routers_inner(
+    state: AppState,
+    today_router: Router<AppState>,
+    people_router: Router<AppState>,
+) -> Router {
     // Read before `state` moves into `.with_state` below.
     let cors_allowed_origin = state.cors_allowed_origin.clone();
 
@@ -96,7 +107,7 @@ fn build_app_with_today_router_inner(state: AppState, today_router: Router<AppSt
             .merge(routes::health::router())
             .merge(routes::session::router())
             .merge(routes::organization::router())
-            .merge(routes::people::router())
+            .merge(people_router)
             .merge(routes::saved_lists::router())
             .merge(routes::today_feeds::router())
             .merge(routes::inquiry_sources::router())
@@ -116,6 +127,8 @@ fn build_app_with_today_router_inner(state: AppState, today_router: Router<AppSt
             .merge(routes::migrations::router())
             .merge(routes::migration_imports::router())
             .merge(routes::metadata_imports::router())
+            .merge(routes::activity_imports::router())
+            .merge(routes::migration_activity_review::router())
             .layer(axum::middleware::from_fn_with_state(
                 state.clone(),
                 auth::workspace_http::guard,
@@ -270,6 +283,13 @@ pub async fn run(config: Config) -> Result<(), BoxError> {
             pool.clone(),
             config.raw_payload_key.clone(),
             config.snapshot_policy.clone(),
+        )
+    });
+    let _activity_import_worker = state.db.as_ref().map(|pool| {
+        domain::migration::activity_worker::spawn(
+            pool.clone(),
+            state.raw_payload_key.clone(),
+            state.snapshot_policy.clone(),
         )
     });
     let _metadata_import_worker = state.db.as_ref().map(|pool| {

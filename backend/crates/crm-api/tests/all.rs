@@ -311,3 +311,22 @@ mod db_metadata_import_r1;
 
 mod db_metadata_import_acceptance;
 mod db_metadata_import_concurrency;
+
+mod db_activity_review;
+
+mod db_activity_source;
+
+mod db_activity_lifecycle;
+
+#[cfg(feature = "perf-harness")]
+mod db_activity_import_plans;
+
+#[cfg(feature = "perf-harness")]
+mod db_activity_person_detail_perf;
+
+mod db_activity_races;
+
+mod db_activity_r1_control;
+mod db_activity_r1_source;
+
+mod db_activity_upgrade;

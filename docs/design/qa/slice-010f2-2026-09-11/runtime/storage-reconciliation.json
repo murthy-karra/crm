@@ -1,0 +1,332 @@
+{
+  "fixture": "synthetic010f2",
+  "scope": "Three disposable Organizations. Logical retention policy costs are separate from physical PostgreSQL relation sizes; these are not disk capacity estimates.",
+  "cases": [
+    {
+      "case": "complete",
+      "inventory": [
+        {
+          "rows": 1,
+          "table": "migration_activity_import",
+          "logical_bytes": 571
+        },
+        {
+          "rows": 2,
+          "table": "migration_activity_plan",
+          "logical_bytes": 5088
+        },
+        {
+          "rows": 11,
+          "table": "migration_activity_choice",
+          "logical_bytes": 4325
+        },
+        {
+          "rows": 260,
+          "table": "migration_activity_source",
+          "logical_bytes": 4288798
+        },
+        {
+          "rows": 22,
+          "table": "migration_activity_mapping",
+          "logical_bytes": 11099
+        },
+        {
+          "rows": 140,
+          "table": "migration_activity_manifest",
+          "logical_bytes": 12243882
+        },
+        {
+          "rows": 104,
+          "table": "migration_activity_manifest_issue",
+          "logical_bytes": 28974
+        },
+        {
+          "rows": 61,
+          "table": "migration_activity_identity",
+          "logical_bytes": 16093
+        },
+        {
+          "rows": 70,
+          "table": "migration_activity_result",
+          "logical_bytes": 4093106
+        },
+        {
+          "rows": 10,
+          "table": "migration_activity_result_issue",
+          "logical_bytes": 2793
+        },
+        {
+          "rows": 3,
+          "table": "migration_activity_receipt",
+          "logical_bytes": 8027
+        },
+        {
+          "rows": 20,
+          "table": "migration_activity_issue",
+          "logical_bytes": 5605
+        }
+      ],
+      "ledger": {
+        "state": "completed",
+        "native": 34144,
+        "measured": 20708361,
+        "reserved": 0,
+        "retained": 20708361,
+        "reservations": 0,
+        "result_native_sum": 34144,
+        "snapshot_reserved": 0,
+        "snapshot_retained": 23307614,
+        "organization_reserved": 0,
+        "organization_retained": 23307614
+      }
+    },
+    {
+      "case": "cancel",
+      "inventory": [
+        {
+          "rows": 1,
+          "table": "migration_activity_import",
+          "logical_bytes": 572
+        },
+        {
+          "rows": 2,
+          "table": "migration_activity_plan",
+          "logical_bytes": 5070
+        },
+        {
+          "rows": 11,
+          "table": "migration_activity_choice",
+          "logical_bytes": 4325
+        },
+        {
+          "rows": 260,
+          "table": "migration_activity_source",
+          "logical_bytes": 4288798
+        },
+        {
+          "rows": 22,
+          "table": "migration_activity_mapping",
+          "logical_bytes": 11099
+        },
+        {
+          "rows": 140,
+          "table": "migration_activity_manifest",
+          "logical_bytes": 12243882
+        },
+        {
+          "rows": 104,
+          "table": "migration_activity_manifest_issue",
+          "logical_bytes": 28974
+        },
+        {
+          "rows": 34,
+          "table": "migration_activity_identity",
+          "logical_bytes": 8969
+        },
+        {
+          "rows": 42,
+          "table": "migration_activity_result",
+          "logical_bytes": 2227712
+        },
+        {
+          "rows": 8,
+          "table": "migration_activity_result_issue",
+          "logical_bytes": 2237
+        },
+        {
+          "rows": 4,
+          "table": "migration_activity_receipt",
+          "logical_bytes": 10800
+        },
+        {
+          "rows": 20,
+          "table": "migration_activity_issue",
+          "logical_bytes": 5605
+        }
+      ],
+      "ledger": {
+        "state": "cancelled",
+        "native": 18576,
+        "measured": 18838043,
+        "reserved": 0,
+        "retained": 18838043,
+        "reservations": 0,
+        "result_native_sum": 18576,
+        "snapshot_reserved": 0,
+        "snapshot_retained": 21438712,
+        "organization_reserved": 0,
+        "organization_retained": 21438712
+      }
+    },
+    {
+      "case": "budget",
+      "inventory": [
+        {
+          "rows": 1,
+          "table": "migration_activity_import",
+          "logical_bytes": 571
+        },
+        {
+          "rows": 2,
+          "table": "migration_activity_plan",
+          "logical_bytes": 5083
+        },
+        {
+          "rows": 11,
+          "table": "migration_activity_choice",
+          "logical_bytes": 4325
+        },
+        {
+          "rows": 260,
+          "table": "migration_activity_source",
+          "logical_bytes": 4288798
+        },
+        {
+          "rows": 22,
+          "table": "migration_activity_mapping",
+          "logical_bytes": 11099
+        },
+        {
+          "rows": 140,
+          "table": "migration_activity_manifest",
+          "logical_bytes": 12243882
+        },
+        {
+          "rows": 104,
+          "table": "migration_activity_manifest_issue",
+          "logical_bytes": 28974
+        },
+        {
+          "rows": 61,
+          "table": "migration_activity_identity",
+          "logical_bytes": 16093
+        },
+        {
+          "rows": 70,
+          "table": "migration_activity_result",
+          "logical_bytes": 4093106
+        },
+        {
+          "rows": 10,
+          "table": "migration_activity_result_issue",
+          "logical_bytes": 2793
+        },
+        {
+          "rows": 4,
+          "table": "migration_activity_receipt",
+          "logical_bytes": 10805
+        },
+        {
+          "rows": 20,
+          "table": "migration_activity_issue",
+          "logical_bytes": 5605
+        }
+      ],
+      "ledger": {
+        "state": "completed",
+        "native": 34144,
+        "measured": 20711134,
+        "reserved": 0,
+        "retained": 20711134,
+        "reservations": 0,
+        "result_native_sum": 34144,
+        "snapshot_reserved": 0,
+        "snapshot_retained": 23311815,
+        "organization_reserved": 0,
+        "organization_retained": 23311815
+      }
+    }
+  ],
+  "physical_relations": [
+    {
+      "relation": "migration_activity_choice",
+      "heap_bytes": 16384,
+      "index_bytes": 32768,
+      "total_bytes": 49152
+    },
+    {
+      "relation": "migration_activity_identity",
+      "heap_bytes": 147456,
+      "index_bytes": 32768,
+      "total_bytes": 180224
+    },
+    {
+      "relation": "migration_activity_import",
+      "heap_bytes": 172032,
+      "index_bytes": 114688,
+      "total_bytes": 286720
+    },
+    {
+      "relation": "migration_activity_issue",
+      "heap_bytes": 16384,
+      "index_bytes": 16384,
+      "total_bytes": 32768
+    },
+    {
+      "relation": "migration_activity_manifest",
+      "heap_bytes": 38518784,
+      "index_bytes": 434176,
+      "total_bytes": 38952960
+    },
+    {
+      "relation": "migration_activity_manifest_issue",
+      "heap_bytes": 278528,
+      "index_bytes": 122880,
+      "total_bytes": 401408
+    },
+    {
+      "relation": "migration_activity_mapping",
+      "heap_bytes": 81920,
+      "index_bytes": 65536,
+      "total_bytes": 147456
+    },
+    {
+      "relation": "migration_activity_plan",
+      "heap_bytes": 163840,
+      "index_bytes": 49152,
+      "total_bytes": 212992
+    },
+    {
+      "relation": "migration_activity_receipt",
+      "heap_bytes": 81920,
+      "index_bytes": 16384,
+      "total_bytes": 98304
+    },
+    {
+      "relation": "migration_activity_reservation",
+      "heap_bytes": 24576,
+      "index_bytes": 32768,
+      "total_bytes": 57344
+    },
+    {
+      "relation": "migration_activity_result",
+      "heap_bytes": 11108352,
+      "index_bytes": 253952,
+      "total_bytes": 11362304
+    },
+    {
+      "relation": "migration_activity_result_issue",
+      "heap_bytes": 16384,
+      "index_bytes": 32768,
+      "total_bytes": 49152
+    },
+    {
+      "relation": "migration_activity_source",
+      "heap_bytes": 13623296,
+      "index_bytes": 524288,
+      "total_bytes": 14147584
+    },
+    {
+      "relation": "note",
+      "heap_bytes": 229376,
+      "index_bytes": 90112,
+      "total_bytes": 319488
+    },
+    {
+      "relation": "task",
+      "heap_bytes": 16384,
+      "index_bytes": 98304,
+      "total_bytes": 114688
+    }
+  ]
+}

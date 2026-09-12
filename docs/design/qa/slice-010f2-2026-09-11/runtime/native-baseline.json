@@ -1,0 +1,81 @@
+{
+  "cases": {
+    "complete": "e5115ee00c5feb0287f91450cd2f76a925b1710e76adf2983094eaf307374a4e",
+    "cancel": "a2a8b99dc9757bf53e7f9cda366ed26c9e17c412dfc118b874fdaa04559107e6",
+    "budget": "b22b66fb7c5fa31126c5e00b33fa91af81ec3ba0342bd45e191ff825a304de54"
+  },
+  "source": {
+    "source_reader_calls": 0
+  },
+  "delivery": {
+    "disconnects": 0,
+    "publications": 0
+  },
+  "epochs": [
+    {
+      "source_before": {
+        "source_reader_calls": 201
+      },
+      "source_after": {
+        "source_reader_calls": 201
+      },
+      "delivery_before": {
+        "disconnects": 3,
+        "publications": 0
+      },
+      "delivery_after": {
+        "disconnects": 3,
+        "publications": 0
+      }
+    },
+    {
+      "source_before": {
+        "source_reader_calls": 0
+      },
+      "source_after": {
+        "source_reader_calls": 0
+      },
+      "delivery_before": {
+        "disconnects": 0,
+        "publications": 0
+      },
+      "delivery_after": {
+        "disconnects": 0,
+        "publications": 0
+      }
+    },
+    {
+      "source_before": {
+        "source_reader_calls": 0
+      },
+      "source_after": {
+        "source_reader_calls": 0
+      },
+      "delivery_before": {
+        "disconnects": 0,
+        "publications": 0
+      },
+      "delivery_after": {
+        "disconnects": 0,
+        "publications": 0
+      }
+    },
+    {
+      "source_before": {
+        "source_reader_calls": 0
+      },
+      "source_after": {
+        "source_reader_calls": 0
+      },
+      "delivery_before": {
+        "disconnects": 0,
+        "publications": 0
+      },
+      "delivery_after": {
+        "disconnects": 0,
+        "publications": 0
+      }
+    }
+  ],
+  "awaiting_restart": true
+}

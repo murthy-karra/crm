@@ -1,0 +1,32 @@
+{
+  "scope": "Read-only check after already executed lost-response UI retry, before worker grant",
+  "reviewed_request_body_sha256": "1ce6f506d1fb923e8c10c9c6686f42d3e97196e043f030bf603598fb663c2232",
+  "reviewed_request_bytes": 180,
+  "database": {
+    "child": {
+      "id": "2e5b79b0-6e30-4323-bc7a-e5084943c458",
+      "state": "queued",
+      "native_bytes": 0,
+      "confirmed_plan_id": "f40e0c2a-ccf3-4760-a4f5-42b0236eb21e"
+    },
+    "notes": 0,
+    "tasks": 0,
+    "results": 0,
+    "children": 1,
+    "exact_receipts": 1,
+    "all_confirm_receipts": 1
+  },
+  "retry_network_response": {
+    "method": "POST",
+    "status": 202,
+    "origin": "http://127.0.0.1:5187",
+    "route_sha256": "8363d550a645859acf48623826c26e53bf24b2f27c3e0ca626c96bcd2338ef12",
+    "query_keys": [],
+    "bytes": 2445
+  },
+  "first_fetch_response": {
+    "status": 202,
+    "body_sha256": "1ce6f506d1fb923e8c10c9c6686f42d3e97196e043f030bf603598fb663c2232"
+  },
+  "qualifications": "First response intentionally aborted after route.fetch accepted202. UI retry body equality asserted before route.continue; actual202 observed. Harness incorrectly awaited200 afterward. No new confirmation request issued by this audit; transition screenshot is not settled retry-state proof."
+}

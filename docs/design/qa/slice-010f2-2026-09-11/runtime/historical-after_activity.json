@@ -1,0 +1,62 @@
+{
+  "exit_code": 1,
+  "candidate_never_launched": true,
+  "scope": "quiesced disposable QA only",
+  "report": {
+    "activity_binding_count": "3",
+    "activity_confirmation_ready": false,
+    "activity_confirmation_reasons": [
+      "activity_binding_requires_compatible_artifacts",
+      "activity_capability_missing"
+    ],
+    "artifact_manifest_sha256": "72575b4c37e76a959a97544929d50a1abd27f926f38a88ac999dcf64ef311b52",
+    "binding_count": "3",
+    "candidate_manifest_sha256": "7e83a4fa685b9780f60ad0fb81e882da2695cdc5eadbbd3f49c0ca3ff125a0cb",
+    "candidates": [
+      {
+        "capabilities": [
+          "fub-metadata-import-v1"
+        ],
+        "gate_version": "crm-workspace-v1",
+        "revision": "e36ce360a4956b76b6f8dc537a051e6cb8cbc7b7",
+        "role": "api",
+        "sha256": "58e01b385d50c6eede5a05ca4bdeea88ed070eabba19b14276966287fcc595c0"
+      },
+      {
+        "capabilities": [
+          "fub-metadata-import-v1"
+        ],
+        "gate_version": "crm-workspace-v1",
+        "revision": "e36ce360a4956b76b6f8dc537a051e6cb8cbc7b7",
+        "role": "worker",
+        "sha256": "58e01b385d50c6eede5a05ca4bdeea88ed070eabba19b14276966287fcc595c0"
+      }
+    ],
+    "checked_at": "2026-09-12T04:44:30Z",
+    "confirmation_ready": false,
+    "confirmation_reasons": [
+      "activity_binding_requires_compatible_artifacts"
+    ],
+    "database_name": "crm_010f2_qa",
+    "evidence_expires_at": "2026-09-12T04:49:29Z",
+    "gate_version": "crm-workspace-v1",
+    "inventory_sha256": "a87b566cb36c69ff99c2e617f3747a6fa4558a480c6721a3b60241dc3b91e397",
+    "launch_allowed": false,
+    "launch_reasons": [
+      "activity_binding_requires_compatible_artifacts"
+    ],
+    "metadata_confirmation_ready": false,
+    "metadata_confirmation_reasons": [
+      "activity_binding_requires_compatible_artifacts"
+    ],
+    "pre_010c_retired": true,
+    "process_count": "0",
+    "processes": [],
+    "purpose": "launch",
+    "required_gate_versions": [
+      "crm-workspace-v1"
+    ],
+    "target": "crm-010f2-quiesced-candidate-probe",
+    "version": 1
+  }
+}

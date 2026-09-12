@@ -85,6 +85,7 @@ import { useCallHost } from '../telephony/callHost'
 import { workspaceOperational } from '../workspaceLifecycle'
 import PersonImportProvenance from '../components/migration/PersonImportProvenance.vue'
 import PersonMetadataProvenance from '../components/migration/PersonMetadataProvenance.vue'
+import PersonActivityReview from '../components/PersonActivityReview.vue'
 
 const props = defineProps<{
   id: string
@@ -92,10 +93,11 @@ const props = defineProps<{
 
 const { data: me } = useMe()
 const canOperate = computed(() => workspaceOperational(me.value))
+const reviewMode = computed(() => me.value?.organization?.workspace_mode === 'migration_review')
 const orgId = computed(() => me.value?.organization?.id ?? '')
 const queryClient = useQueryClient()
 
-const { data: detail, isPending, isFetching, isError, error } = usePerson(orgId, () => props.id)
+const { data: detail, isPending, isFetching, isError, error } = usePerson(orgId, () => props.id, canOperate)
 const person = computed(() => detail.value?.person)
 const contactMethods = computed(() => detail.value?.contact_methods ?? [])
 const inquiries = computed(() => detail.value?.inquiries ?? [])
@@ -1577,7 +1579,12 @@ watch(
 </script>
 
 <template>
-  <div>
+  <PersonActivityReview
+    v-if="reviewMode"
+    :key="`${orgId}:${props.id}`"
+    :person-id="props.id"
+  />
+  <div v-else>
     <nav class="mb-2 text-small text-text-muted">
       <RouterLink
         to="/people"

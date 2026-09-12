@@ -1,0 +1,6 @@
+AssertionError [ERR_ASSERTION]: Unexpected API status 401 for GET scoped route
+    at api (file:///private/tmp/crm-010f2-qa-694szdwe/browser_driver.mjs:107:10)
+    at async read (file:///private/tmp/crm-010f2-qa-694szdwe/browser_driver.mjs:110:28)
+    at async eventually (file:///private/tmp/crm-010f2-qa-694szdwe/browser_driver.mjs:57:44)
+    at async login (file:///private/tmp/crm-010f2-qa-694szdwe/browser_driver.mjs:120:14)
+    at async file:///private/tmp/crm-010f2-qa-694szdwe/browser_driver.mjs:559:18

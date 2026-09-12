@@ -1,0 +1,11 @@
+   Compiling crm-api v0.1.0 (/Users/karrad/projects/crm-010f2/backend/crates/crm-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 26.45s
+     Running tests/all.rs (target/debug/deps/all-07593333edaca6c2)
+
+running 4 tests
+test db_activity_r1_source::activity_r1_complementary_note_exclusions_count_without_native_list_fallback ... ok
+test db_activity_r1_source::activity_r1_completed_capture_rejects_only_open_request_fingerprint_change ... ok
+test db_activity_r1_source::activity_r1_real_source_retry_preserves_invalid_and_rejected_variants ... ok
+test db_activity_r1_source::activity_r1_users_next_request_reconstructs_exact_local_position_and_token ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 1012 filtered out; finished in 19.82s

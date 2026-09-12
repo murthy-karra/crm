@@ -1,0 +1,22 @@
+{
+  "private_credential_scan": "passed",
+  "files": [
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/measurements/person-detail-paired.json",
+      "bytes": 106824,
+      "sha256": "01ebb69e8f1cd26d54f26a9d35beea1f6d7e58564b5b4337af02641e86d41974"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/checks/person-paired.log",
+      "bytes": 1723,
+      "sha256": "d69f355b28467a0c7f6eec6ba43b5b2854aec26132ebaabc91bb41bce833365d"
+    },
+    {
+      "path": "docs/design/qa/slice-010f2-2026-09-11/checks/person-paired-final.log",
+      "bytes": 428,
+      "sha256": "39663fabff576c2e54abea88a69727ab57290d7bf27e0ca20d139208a6b344b7",
+      "original_published_sha256": "2bb2a99c039a83e038167234ae2121047a4b61333b91322dd5b930b5ef064511",
+      "normalization": "Removed extra blank lines at EOF only; original private log retained."
+    }
+  ]
+}

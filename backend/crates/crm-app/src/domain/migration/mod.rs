@@ -2,6 +2,15 @@
 //! no import commands and the reader trait deliberately exposes only GET
 //! probes from the fixed profile.
 
+pub mod activity;
+pub(crate) mod activity_html;
+pub(crate) mod activity_model;
+pub(crate) mod activity_queries;
+pub mod activity_review;
+pub(crate) mod activity_source;
+pub(crate) mod activity_store;
+pub(crate) mod activity_time;
+pub mod activity_worker;
 pub mod commands;
 pub mod crypto;
 pub(crate) mod import_display;

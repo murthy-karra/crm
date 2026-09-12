@@ -4,7 +4,8 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { computed, ref } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { apiFetch } from '../api/client'
-import type { PersonDetailResponse } from '../api/types'
+import type { MeResponse, PersonDetailResponse } from '../api/types'
+import { queryKeys } from '../api/queries'
 import { CALL_HOST_KEY, type CallHost } from '../telephony/callHost'
 import { OPERATOR_LAUNCHER } from '../lib/operatorLauncher'
 import PersonPreview from './PersonPreview.vue'
@@ -29,8 +30,12 @@ const fixture: PersonDetailResponse = {
 const cleanups: Array<() => void> = []
 afterEach(() => { cleanups.splice(0).forEach((cleanup) => cleanup()); vi.clearAllMocks() })
 
-async function mountPreview(response: PersonDetailResponse = fixture) {
-  vi.mocked(apiFetch).mockResolvedValue(response)
+const reviewIdentity: MeResponse = { user: { id: 'admin', email: 'admin@example.invalid', display_name: 'Admin' }, organization: { id: 'org-1', name: 'Review Org', role: 'admin', workspace_mode: 'migration_review', workspace_revision: '2' }, platform_admin: false }
+function reviewCore(response = fixture) {
+  return { person: response.person, contact_methods: response.contact_methods, inquiries: response.inquiries, tags: response.tags, custom_fields: response.custom_fields, core_history: response.history.filter(row => row.kind !== 'note' && row.kind !== 'task_completed'), activity: { notes_count: '501', open_tasks_count: '502', completed_tasks_count: '503', activity_revision: '0', notes_url: '/unused', tasks_url: '/unused' } }
+}
+async function mountPreview(response: PersonDetailResponse = fixture, readOnly = false) {
+  vi.mocked(apiFetch).mockImplementation(async url => url === '/me' ? reviewIdentity as never : url.endsWith('/migration-review') ? reviewCore(response) as never : response as never)
   const active = ref(false)
   const outcome = ref(false)
   const start = vi.fn()
@@ -40,7 +45,7 @@ async function mountPreview(response: PersonDetailResponse = fixture) {
   await router.push('/people')
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const wrapper = mount(PersonPreview, {
-    props: { orgId: 'org-1', summary: fixture.person },
+    props: { orgId: 'org-1', summary: fixture.person, readOnly },
     global: {
       plugins: [router, [VueQueryPlugin, { queryClient: client }]],
       provide: { [CALL_HOST_KEY as symbol]: host, [OPERATOR_LAUNCHER as symbol]: launch },
@@ -48,7 +53,7 @@ async function mountPreview(response: PersonDetailResponse = fixture) {
   })
   cleanups.push(() => { wrapper.unmount(); client.clear() })
   await flushPromises()
-  return { wrapper, active, outcome, start, launch }
+  return { wrapper, active, outcome, start, launch, client }
 }
 
 describe('Person preview actions', () => {
@@ -141,13 +146,26 @@ describe('Person preview actions', () => {
 
 describe('review-only Person preview', () => {
   it('retains contacts and profile inspection but removes every outbound and Operator action', async () => {
-    const { wrapper, start, launch } = await mountPreview()
-    await wrapper.setProps({ readOnly: true })
+    const { wrapper, start, launch } = await mountPreview(fixture, true)
     expect(wrapper.find('[aria-label="Call person"]').exists()).toBe(false)
     expect(wrapper.find('a[href^="mailto:"]').exists()).toBe(false)
-    expect(wrapper.find('[aria-label="View full profile"]').exists()).toBe(true)
+    expect(wrapper.find('[aria-label="Open full profile"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('501 notes · 502 open tasks · 503 completed tasks')
+    expect(vi.mocked(apiFetch).mock.calls.map(([url]) => url)).toEqual(['/me', '/people/person-1/migration-review'])
+    await wrapper.findAll('button').find(button => button.text() === 'Contact')!.trigger('click')
+    expect(wrapper.text()).toContain('grace@example.com')
     expect(wrapper.text()).not.toContain('Ask Operator')
     expect(start).not.toHaveBeenCalled(); expect(launch).not.toHaveBeenCalled()
+  })
+  it('clears the review preview on current-role loss without exposing the operational cache', async () => {
+    const { wrapper, client } = await mountPreview(fixture, true)
+    client.setQueryData(queryKeys.person('org-1', 'person-1'), { ...fixture, person: { ...fixture.person, display_name: 'OLD OPERATIONAL CACHE' } })
+    client.setQueryData(queryKeys.me, { ...reviewIdentity, organization: { ...reviewIdentity.organization!, role: 'member' } })
+    await flushPromises()
+    expect(wrapper.text()).toContain('requires a current administrator')
+    expect(wrapper.text()).not.toContain('Grace Hopper')
+    expect(wrapper.text()).not.toContain('OLD OPERATIONAL CACHE')
+    expect(vi.mocked(apiFetch).mock.calls.map(([url]) => url)).not.toContain('/people/person-1')
   })
   it('labels import history without creating an Inquiry or source attribution', async () => {
     const response = structuredClone(fixture)

@@ -3,8 +3,7 @@
 //! Both applications use the current request/auth/router stack. The frozen
 //! arm differs only through a server-scoped task-local static-SQL adapter.
 
-#[path = "fixtures/today_http_perf_driver.rs"]
-mod driver;
+use crate::db_import_contact_perf::driver;
 #[path = "fixtures/statements_6bad52a/mod.rs"]
 mod frozen;
 #[path = "fixtures/live_statement_explain_019b.rs"]

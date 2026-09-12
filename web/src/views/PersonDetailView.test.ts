@@ -3513,6 +3513,13 @@ describe('Person review-only workspace', () => {
     const identity = me(); identity.organization = { ...identity.organization!, role: 'admin', workspace_mode: 'migration_review', workspace_revision: '2' }
     const imported: HistoryEntry = { id: 'import-fact', kind: 'person_imported', occurred_at: '2026-09-11T12:00:00Z', recorded_at: '2026-09-11T12:00:00Z', actor: null, origin: 'migration', correlation_id: 'import', detail: { import_id: 'import', plan_id: 'plan', source_record_id: 'record', capture_id: 'capture', on_behalf_of_user_id: 'actor' } }
     stubApi(detail([PHONE_A, EMAIL], [imported], [{ id: 'tag', name: 'Imported' }]), { meOverride: identity })
+    const base = apiFetchMock.getMockImplementation()!
+    const legacy = detail([PHONE_A, EMAIL], [imported], [{ id: 'tag', name: 'Imported' }])
+    apiFetchMock.mockImplementation((path, init) => {
+      if (path === `/people/${PERSON_ID}/migration-review`) return Promise.resolve({ person: legacy.person, contact_methods: legacy.contact_methods, inquiries: legacy.inquiries, core_history: [imported], tags: legacy.tags, custom_fields: legacy.custom_fields, activity: { notes_count: '0', open_tasks_count: '0', completed_tasks_count: '0', activity_revision: '0', notes_url: '/unused', tasks_url: '/unused' } })
+      if (path.startsWith(`/people/${PERSON_ID}/migration-review/`)) return Promise.resolve({ items: [], next_cursor: null, activity_revision: '0' })
+      return base(path, init)
+    })
     const { wrapper } = await mountView()
     expect(wrapper.text()).toContain('Person imported from Follow Up Boss')
     expect(wrapper.text()).toContain(EMAIL.value)
@@ -3521,6 +3528,9 @@ describe('Person review-only workspace', () => {
     for (const select of wrapper.findAllComponents(Select)) expect(select.props('disabled')).toBe(true)
     expect(requests().filter(request => !request.startsWith('GET '))).toEqual([])
     expect(requests()).toContain(`GET /people/${PERSON_ID}/import-provenance`)
+    expect(requests()).toContain(`GET /people/${PERSON_ID}/migration-review`)
+    expect(requests()).not.toContain(`GET /people/${PERSON_ID}`)
+    expect(wrapper.find('[data-testid="person-activity-review"]').exists()).toBe(true)
     wrapper.unmount()
   })
 })

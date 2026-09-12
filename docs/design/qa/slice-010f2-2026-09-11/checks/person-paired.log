@@ -1,0 +1,19 @@
+   Compiling crm-api v0.1.0 (/Users/karrad/projects/crm-010f2/backend/crates/crm-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 19.23s
+     Running tests/all.rs (target/debug/deps/all-4f54aadf6519a0de)
+
+running 1 test
+test db_activity_person_detail_perf::operational_person_detail_matches_cd3b010 ...
+thread 'db_activity_person_detail_perf::operational_person_detail_matches_cd3b010' (13128150) panicked at crates/crm-api/tests/db_activity_person_detail_perf.rs:306:126:
+called `Result::unwrap()` on an `Err` value: Database(PgDatabaseError { severity: Error, code: "23514", message: "new row for relation \"task\" violates check constraint \"task_check5\"", detail: Some("Failing row contains (7e323ff1-4c94-4eb4-9d14-4417cd70e8ab, 385f1d8d-b902-449b-8260-972608013298, 1f3832ea-bdba-4f51-bc21-27db7abd7444, Synthetic task 1: Relationship follow-up. Relationship follow-up..., email, 2026-09-02 12:00:00+00, 5c48b2a9-dd4c-4bec-bd6c-a9267a786314, 5c48b2a9-dd4c-4bec-bd6c-a9267a786314, null, null, migration, 760ea7a2-ae83-4c36-98d8-edfc4c6941c7, null, null, 2026-09-01 12:00:00+00, 2026-09-01 12:00:00+00, null, null)."), hint: None, position: None, where: None, schema: Some("public"), table: Some("task"), column: None, data_type: None, constraint: Some("task_check5"), file: Some("execMain.c"), line: Some(2076), routine: Some("ExecConstraints") })
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    db_activity_person_detail_perf::operational_person_detail_matches_cd3b010
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1023 filtered out; finished in 9.38s
+
+error: test failed, to rerun pass `-p crm-api --test all`

@@ -1,0 +1,174 @@
+{
+  "baseline_commit": "cd3b0107392d4b40230bdd8996c12ec41be3d588",
+  "scope": "Three frozen affected reader bodies; shared current HTTP/authentication stack and unchanged helpers. This is not a full historical binary.",
+  "adaptation": "Exact top-level function bytes between markers. Namespace aliases and counted wrappers are outside the frozen body. Test-support cfg excludes these modules from normal builds. No request-selectable baseline or workspace guard bypass.",
+  "frozen": [
+    {
+      "original_path": "backend/crates/crm-app/src/domain/person/queries.rs",
+      "original_file_sha256": "b4ec0adbb337d926f7ca9055d07a64fb3ce0d88fd41d11461e623b8651bad438",
+      "function": "history_for_person",
+      "start_line": 1565,
+      "byte_length": 1289,
+      "sha256": "aeb24bb82c124b37740e511e73c33bd76d40b64246f1214cda1d9b024cf8f32b",
+      "fragment_path": "backend/crates/crm-app/src/domain/person/perf_cd3b010_history.rs"
+    },
+    {
+      "original_path": "backend/crates/crm-app/src/domain/task/queries.rs",
+      "original_file_sha256": "b294c8682733e15f423c059cd17c3e3e4e426b08a0a2a64fe703c8df37c58c4f",
+      "function": "open_for_person",
+      "start_line": 378,
+      "byte_length": 1357,
+      "sha256": "acc2284c602dd45d4d4bef1eabce808bb99ef798e5d081683a881c6f9dd36c09",
+      "fragment_path": "backend/crates/crm-app/src/domain/task/perf_cd3b010_open.rs"
+    },
+    {
+      "original_path": "backend/crates/crm-api/src/routes/people.rs",
+      "original_file_sha256": "3b92c6b79fa09c27f22886c9e36db59e5e2eb132cb116d1ec6b8dae05e95cfc0",
+      "function": "get_person",
+      "start_line": 241,
+      "byte_length": 4103,
+      "sha256": "f18f24e1a29d627a20ed3c822835a7e7d1955cbbe47f29fb7567117d10c24cd5",
+      "fragment_path": "backend/crates/crm-api/src/routes/perf_cd3b010_person.rs"
+    }
+  ],
+  "unchanged_helpers": [
+    {
+      "path": "backend/crates/crm-app/src/domain/person/queries.rs",
+      "function": "summary_by_id",
+      "start_line": 935,
+      "sha256": "bc1022b827fa30895d04bb087f3a0176b52ae7170aaf4585f73ca1d4b07c25b6"
+    },
+    {
+      "path": "backend/crates/crm-app/src/domain/person/queries.rs",
+      "function": "contact_methods_for_person",
+      "start_line": 977,
+      "sha256": "876f77f67fc0457a04e4ed968508ba331e3e2be2fccc7380f1bb86dc64039592"
+    },
+    {
+      "path": "backend/crates/crm-app/src/domain/person/queries.rs",
+      "function": "actor_ref",
+      "start_line": 1015,
+      "sha256": "e5fd8df82eb7501a3eb7d3f5f85edaa63075adc1ab5c6a3b66353ce1b90a0c00"
+    },
+    {
+      "path": "backend/crates/crm-app/src/domain/person/queries.rs",
+      "function": "imported_history",
+      "start_line": 1709,
+      "sha256": "4cd62e3ffa08f55eef63220d974e55a6ce2df004e445ac5009eeab90709fa198"
+    },
+    {
+      "path": "backend/crates/crm-app/src/domain/person/queries.rs",
+      "function": "inquiry_received_history",
+      "start_line": 1039,
+      "sha256": "22ded7eb468a177d7ca2a39a7b599cc64df98425e7f1ef728bf90347786b5253"
+    },
+    {
+      "path": "backend/crates/crm-app/src/domain/person/queries.rs",
+      "function": "routing_decision_history",
+      "start_line": 1093,
+      "sha256": "4ccac176bc67b5522c4dd93465520d2ab9cfa12af24097fe67f026b116c2d720"
+    },
+    {
+      "path": "backend/crates/crm-app/src/domain/person/queries.rs",
+      "function": "assignment_changed_history",
+      "start_line": 1152,
+      "sha256": "a6a20ac2e28e8b9726983154b7c19067e840e491af7b7975a813c855c94d405e"
+    },
+    {
+      "path": "backend/crates/crm-app/src/domain/person/queries.rs",
+      "function": "stage_changed_history",
+      "start_line": 1214,
+      "sha256": "5c66eb8c238c20e5ac90cd98ebb9b032a9cd2a2d0537257213a892b814bbc192"
+    },
+    {
+      "path": "backend/crates/crm-app/src/domain/person/queries.rs",
+      "function": "contact_attempted_history",
+      "start_line": 1296,
+      "sha256": "05b1bfb74638d42e7b32c3c0e78594351f94ee7dbae6b200f8a52574b27725bd"
+    },
+    {
+      "path": "backend/crates/crm-app/src/domain/person/queries.rs",
+      "function": "call_completed_history",
+      "start_line": 1364,
+      "sha256": "3a1d3a194b0c60532f31a451eb150a7ab32306a1579d813c254c727436a96786"
+    },
+    {
+      "path": "backend/crates/crm-app/src/domain/person/queries.rs",
+      "function": "correspondence_history",
+      "start_line": 1435,
+      "sha256": "e6c73e7a8cd3d42416f3ff0837d31494b5ec5a41e2d1397e3c7d138aec0e4ec8"
+    },
+    {
+      "path": "backend/crates/crm-app/src/domain/person/queries.rs",
+      "function": "note_history_entries",
+      "start_line": 1492,
+      "sha256": "b0d4dc1b1aa719e5a29e250b182ad29c58befaa4daa2e3eb0468080a60e4a523"
+    },
+    {
+      "path": "backend/crates/crm-app/src/domain/person/queries.rs",
+      "function": "task_completed_history_entries",
+      "start_line": 1532,
+      "sha256": "b52bc1aa439ca56558be555056df190754e32ef41a224920eeced6f322ca778d"
+    },
+    {
+      "path": "backend/crates/crm-app/src/domain/task/queries.rs",
+      "function": "task_from_row",
+      "start_line": 347,
+      "sha256": "a99c0f9057c1249701d60439034c892bb895821c54a64034674761f63f2d2453"
+    },
+    {
+      "path": "backend/crates/crm-app/src/domain/task/queries.rs",
+      "function": "task_completed_history",
+      "start_line": 449,
+      "sha256": "ac841e88c92fb8bdbfde8b99afc699883722f52918fc02732e56a01f53ac50ba"
+    },
+    {
+      "path": "backend/crates/crm-app/src/domain/note/queries.rs",
+      "function": "note_history",
+      "start_line": 208,
+      "sha256": "9e4f9e2f5081d5d8629901711df93bc77c65fd825d72b4dd75837b46da27557c"
+    },
+    {
+      "path": "backend/crates/crm-app/src/domain/inquiry/queries.rs",
+      "function": "list_for_person",
+      "start_line": 78,
+      "sha256": "d1812855fef5c8654465590b74a6c5541896db0585b151238dc49ad7d254b540"
+    },
+    {
+      "path": "backend/crates/crm-app/src/domain/tag/queries.rs",
+      "function": "list_for_person",
+      "start_line": 72,
+      "sha256": "5d307f4f8b72bb5b517282641e3dc6db6813a5b6d4f98d0cd7f56f4a08772ace"
+    },
+    {
+      "path": "backend/crates/crm-app/src/domain/custom_field/queries.rs",
+      "function": "values_for_person",
+      "start_line": 675,
+      "sha256": "605e41d7c8a8e35abf95a6d5540b68b64924d7a0becdf6914836ba6d18fae420"
+    },
+    {
+      "path": "backend/crates/crm-app/src/auth/workspace.rs",
+      "function": "read",
+      "start_line": 67,
+      "sha256": "460000c6e97fce424fa9240d51feee83e57427fb758edca22b526370847a6102"
+    },
+    {
+      "path": "backend/crates/crm-app/src/auth/workspace.rs",
+      "function": "read_check",
+      "start_line": 78,
+      "sha256": "a19e949cd11547fcf566c01149bc7a3e7267e97f3f0a1db8e2ddef99d243a09c"
+    },
+    {
+      "path": "backend/crates/crm-app/src/auth/workspace.rs",
+      "function": "ordinary",
+      "start_line": 47,
+      "sha256": "e00335dce8953bd3245988af436fde70f9c6936cd774ea2ae13c530251364f35"
+    },
+    {
+      "path": "backend/crates/crm-app/src/auth/workspace.rs",
+      "function": "with_reader",
+      "start_line": 21,
+      "sha256": "d917ced204a7bb1b00605c6dce6b18ed0a28a73954fbc25cca26df7418dca04e"
+    }
+  ]
+}

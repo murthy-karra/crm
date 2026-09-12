@@ -48,8 +48,14 @@ the [release record](../tasks/SLICE_010f1_RELEASE.md) and
 screenshots and tunnel 200/200/101. Existing business counts/workspaces are
 unchanged and migration tables remain empty. Later confirmation/recovery requires
 fresh metadata-capable compatibility evidence; the release report is not renewed
-automatically. Notes/tasks are the next core-import planning scope; live FUB,
-customer-data work and activation remain deferred.
+automatically. The next core-import scope is drafted as
+[010f2](../specs/SLICE_010f2.md), with its [brief](../tasks/SLICE_010f2_IMPL.md)
+and [independent review](../tasks/SLICE_010f2_REVIEW.md). It proposes retained
+notes/open/completed tasks, explicit mappings, original-source preservation and
+paged admin review onto completed 010c People. D-067 accepts readable plain-text
+notes with originals retained and confirmed-zone date-only deadlines; complete
+contracts and implementation are approved under D-068. The implementation now passes synthetic runtime reconciliation and remains uncommitted/unreleased; see [verification](../tasks/SLICE_010f2_VERIFICATION.md). Live FUB, customer-data work and
+activation remain deferred.
 Notes, tasks, tags and custom fields now
 have destination models. API-first assessment and encrypted saved credentials
 are settled for 010a; live-source qualification and later fidelity, mapping,

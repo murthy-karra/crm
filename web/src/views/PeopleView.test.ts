@@ -1675,6 +1675,62 @@ describe('People row hover/focus prefetch (SLICE_014 §4)', () => {
 
 
 describe('People workspace review', () => {
+  function reviewIdentity() {
+    const identity = me(ORG_ID, 'admin')
+    identity.organization = { ...identity.organization!, workspace_mode: 'migration_review', workspace_revision: '2' }
+    return identity
+  }
+  function boundedCore() {
+    const person = detail()
+    return { person: person.person, contact_methods: person.contact_methods, inquiries: person.inquiries, tags: person.tags, custom_fields: person.custom_fields, core_history: person.history, activity: { notes_count: '501', open_tasks_count: '502', completed_tasks_count: '503', activity_revision: '0', notes_url: '/unused', tasks_url: '/unused' } }
+  }
+  it.each(['pointerenter', 'focusin'])('prefetches only the bounded review core on %s and shares it with the preview', async event => {
+    vi.useFakeTimers()
+    try {
+      stub()
+      const identity = reviewIdentity()
+      const base = apiFetchMock.getMockImplementation()!
+      apiFetchMock.mockImplementation((path, init) => path === '/me' ? Promise.resolve(identity) : path === `/people/${PERSON_ID}/migration-review` ? Promise.resolve(boundedCore()) : base(path, init))
+      const { wrapper } = await mountView('/people', identity)
+      await wrapper.findAll('tbody tr')[0]!.trigger(event)
+      await vi.advanceTimersByTimeAsync(150); await flushPromises()
+      expect(peoplePaths().filter(path => path.startsWith('/people/'))).toEqual([`/people/${PERSON_ID}/migration-review`])
+      await wrapper.get(`a[href="/people/${PERSON_ID}"]`).trigger('click'); await flushPromises()
+      expect(wrapper.get('[data-testid="person-preview"]').text()).toContain('501 notes · 502 open tasks · 503 completed tasks')
+      expect(peoplePaths().filter(path => path.startsWith('/people/'))).toEqual([`/people/${PERSON_ID}/migration-review`])
+      expect(wrapper.find('[data-testid="person-preview"] a[href^="mailto:"]').exists()).toBe(false)
+    } finally { vi.useRealTimers() }
+  })
+  it('cancels a pending review-prefetch dwell on current authority change', async () => {
+    vi.useFakeTimers()
+    try {
+      stub()
+      const identity = reviewIdentity()
+      const { wrapper, queryClient } = await mountView('/people', identity)
+      await wrapper.findAll('tbody tr')[0]!.trigger('focusin')
+      queryClient.setQueryData(queryKeys.me, { ...identity, organization: { ...identity.organization!, role: 'member' } })
+      await vi.advanceTimersByTimeAsync(150); await flushPromises()
+      expect(peoplePaths().filter(path => path.startsWith('/people/'))).toEqual([])
+    } finally { vi.useRealTimers() }
+  })
+  it('rejects a late prefetched core when the actor changes', async () => {
+    vi.useFakeTimers()
+    try {
+      stub()
+      const identity = reviewIdentity()
+      const pending = deferred<ReturnType<typeof boundedCore>>()
+      const base = apiFetchMock.getMockImplementation()!
+      apiFetchMock.mockImplementation((path, init) => path.endsWith('/migration-review') ? pending.promise : base(path, init))
+      const { wrapper, queryClient } = await mountView('/people', identity)
+      await wrapper.findAll('tbody tr')[0]!.trigger('pointerenter')
+      await vi.advanceTimersByTimeAsync(150); await flushPromises()
+      queryClient.setQueryData(queryKeys.me, { ...identity, user: { ...identity.user, id: 'another-actor' } })
+      await flushPromises(); pending.resolve(boundedCore()); await flushPromises()
+      const oldQueries = queryClient.getQueryCache().findAll({ queryKey: ['org', ORG_ID, 'activity-review', ALICE_ID] })
+      expect(oldQueries.every(query => query.state.data === undefined)).toBe(true)
+      expect(peoplePaths()).not.toContain(`/people/${PERSON_ID}`)
+    } finally { vi.useRealTimers() }
+  })
   it('keeps search and People inspection while hiding creation, saved-list writes and Today configuration', async () => {
     stub()
     const identity = me(ORG_ID, 'admin'); identity.organization = { ...identity.organization!, workspace_mode: 'migration_review', workspace_revision: '2' }

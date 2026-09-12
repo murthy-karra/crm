@@ -1,0 +1,167 @@
+{
+  "finished_at": "2026-09-12T04:56:05.728252+00:00",
+  "owned_removed": [
+    {
+      "name": "crm-010f2-postgres",
+      "id": "02789c30e5c5d6fc508725599bb40fe147fa32379c2a44a0cb9c01a00b019a15",
+      "image": "postgres:18.6",
+      "started_at": "2026-09-12T01:19:37.764706407Z",
+      "status": "running",
+      "ports": {
+        "5432/tcp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": "55432"
+          }
+        ]
+      },
+      "mounts": [
+        {
+          "type": "volume",
+          "name": "crm-010f2-postgres-data",
+          "destination": "/var/lib/postgresql"
+        }
+      ]
+    },
+    {
+      "name": "crm-010f2-centrifugo",
+      "id": "3821e7b31ab85a4fe7c929ac19f50cbd6343ccf64027b3945ff8c17a5bf8f724",
+      "image": "centrifugo/centrifugo:v6.9.2",
+      "started_at": "2026-09-12T01:19:37.933431148Z",
+      "status": "running",
+      "ports": {
+        "8000/tcp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": "18082"
+          }
+        ]
+      },
+      "mounts": [
+        {
+          "type": "bind",
+          "name": null,
+          "destination": "/centrifugo/config.json"
+        }
+      ]
+    }
+  ],
+  "owned_volume_removed": "crm-010f2-postgres-data",
+  "application_ports_absent": [
+    3017,
+    5187
+  ],
+  "owned_browser_profiles_removed": [
+    "browser-profile-complete",
+    "browser-profile-complete-member",
+    "browser-profile-cancel",
+    "browser-profile-budget"
+  ],
+  "shared_before": [
+    {
+      "name": "development-postgres-1",
+      "id": "985e68127a73009a022076b3521d5ac0802d53694265c44638aa165a4c5cf002",
+      "image": "postgres:18.6",
+      "started_at": "2026-09-07T13:09:48.635690916Z",
+      "status": "running",
+      "ports": {
+        "5432/tcp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": "5432"
+          }
+        ]
+      },
+      "mounts": [
+        {
+          "type": "volume",
+          "name": "development_crm_postgres_data",
+          "destination": "/var/lib/postgresql"
+        }
+      ]
+    },
+    {
+      "name": "development-centrifugo-1",
+      "id": "45bce26cee00ba38129457fc2b38b7afcbbaf021944dfcfa2bc7fd007a23cc93",
+      "image": "centrifugo/centrifugo:v6.9.2",
+      "started_at": "2026-09-07T13:09:48.639153916Z",
+      "status": "running",
+      "ports": {
+        "8000/tcp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": "8000"
+          }
+        ]
+      },
+      "mounts": [
+        {
+          "type": "bind",
+          "name": null,
+          "destination": "/centrifugo/config.json"
+        }
+      ]
+    }
+  ],
+  "shared_after": [
+    {
+      "name": "development-postgres-1",
+      "id": "985e68127a73009a022076b3521d5ac0802d53694265c44638aa165a4c5cf002",
+      "image": "postgres:18.6",
+      "started_at": "2026-09-07T13:09:48.635690916Z",
+      "status": "running",
+      "ports": {
+        "5432/tcp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": "5432"
+          }
+        ]
+      },
+      "mounts": [
+        {
+          "type": "volume",
+          "name": "development_crm_postgres_data",
+          "destination": "/var/lib/postgresql"
+        }
+      ]
+    },
+    {
+      "name": "development-centrifugo-1",
+      "id": "45bce26cee00ba38129457fc2b38b7afcbbaf021944dfcfa2bc7fd007a23cc93",
+      "image": "centrifugo/centrifugo:v6.9.2",
+      "started_at": "2026-09-07T13:09:48.639153916Z",
+      "status": "running",
+      "ports": {
+        "8000/tcp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": "8000"
+          }
+        ]
+      },
+      "mounts": [
+        {
+          "type": "bind",
+          "name": null,
+          "destination": "/centrifugo/config.json"
+        }
+      ]
+    }
+  ],
+  "shared_unchanged": true,
+  "main_head": "cd3b0107392d4b40230bdd8996c12ec41be3d588",
+  "main_pending_files_unchanged": {
+    "docs/decisions/DECISION_LOG.md": "fc9b668d040cee9fc0e980f33e425b7de04d5041b524f73c7deab538132b36ff",
+    "docs/plans/PROJECT_STATE.md": "9047467fb2f77488ddfbb2697e69e65a5ed5f5985280ea4f845711a341d29ca1",
+    "docs/plans/SLICE_010_LADDER.md": "cee539cbe1b7aaba8d70d62d1808a8ce0084ab88c28849f9eeaf94e8bc2b0c77",
+    "docs/plans/SLICE_010_MIGRATION_SUMMARY.md": "104d7cca91c9f401a5fdf88cfb4dfeb1236551f182f8ecdee504de73bef4ee29",
+    "docs/research/SLICE_010f2_CODE_CONTRACTS.md": "4e4552a5940f66b40e70d5f296ce65a201855af28c31416c9e59c23ee2556720",
+    "docs/specs/SLICE_010f2.md": "13997aad252e41db288bf8ffb0f87899dfaf759a07ba67244baf49c8eeabf955",
+    "docs/tasks/SLICE_010f2_IMPL.md": "d9566a677f7766b57a3a4b47708ac869b43d6c3cb5248bd6cc5e65a2c051dbb0",
+    "docs/tasks/SLICE_010f2_REVIEW.md": "032d6073151cf6845a312f49e9661a46626791b95a23a620a7ed3e0f86678070"
+  },
+  "worktree_preserved": "/Users/karrad/projects/crm-010f2",
+  "committed_merged_pushed_deployed": false,
+  "private_evidence_retained": "/private/tmp/crm-010f2-qa-694szdwe"
+}

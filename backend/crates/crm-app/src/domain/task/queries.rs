@@ -382,6 +382,7 @@ pub async fn open_for_person(
 ) -> Result<Vec<Task>, TaskError> {
     let mut workspace_read = crate::auth::workspace::read(conn, organization_id).await?;
     let conn = &mut *workspace_read;
+    crate::auth::workspace::activity_complete_read(conn, organization_id).await?;
     let rows = sqlx::query_as!(
         TaskRowFullDb,
         r#"SELECT t.id, t.title, t.kind, t.due_at,
@@ -599,3 +600,8 @@ pub async fn open_for_assignee(
         })
         .collect()
 }
+
+// Paired operational Person-detail baseline; absent from normal builds.
+#[cfg(feature = "test-support")]
+#[path = "perf_cd3b010_open.rs"]
+pub mod perf_cd3b010_open;

@@ -1,0 +1,4 @@
+    Checking crm-operator v0.1.0 (/Users/karrad/projects/crm-010f2/backend/crates/crm-operator)
+    Checking crm-app v0.1.0 (/Users/karrad/projects/crm-010f2/backend/crates/crm-app)
+    Checking crm-api v0.1.0 (/Users/karrad/projects/crm-010f2/backend/crates/crm-api)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 20.32s

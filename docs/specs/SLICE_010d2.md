@@ -1,8 +1,9 @@
 # Slice 010d2 — Imported historical timeline
 
-**IMPLEMENTED / VERIFIED WITH ISOLATED SYNTHETIC DATA — 2026-09-12, D-072.**
+**DEPLOYED / VERIFIED IN SHARED DEVELOPMENT — 2026-09-12, D-072 FOLLOW-UP.**
 See [implementation verification](../tasks/SLICE_010d2_VERIFICATION.md).
-Source remains uncommitted and undeployed. The
+Git integration, cleanup and actual deployment are recorded in the
+[release](../tasks/SLICE_010d2_RELEASE.md). The
 [focused review](../tasks/SLICE_010d2_REVIEW.md) is READY after one correction pass.
 The user approved the specification, execution brief and declared shared contracts.
 Baseline: `27f3fe4654ace5840412e1364ea36974a1266ad8`.

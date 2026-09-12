@@ -1,0 +1,30 @@
+{
+  "started_at": "2026-09-12T22:24:42.441579+00:00",
+  "completed_at": "2026-09-12T22:29:31.097397+00:00",
+  "elapsed_seconds": 288.656,
+  "api_listener": [
+    95513
+  ],
+  "web_listener": [
+    95531
+  ],
+  "source_files_verified": 1036,
+  "backend_artifacts_verified": 3,
+  "web_assets_verified": 73,
+  "logs": {
+    "api": {
+      "sha256": "5fcf5f8fab9bf821a6f0dcb844d5cd3789c01b84fea1e09043bce70e5a60a65a",
+      "bytes": 116,
+      "warning_or_error_lines": 0
+    },
+    "web": {
+      "sha256": "bd8dbfcb51bb080233543196528006cdfd7b1571bfe995d605a3c3bf02ba543e",
+      "bytes": 39,
+      "warning_or_error_lines": 0
+    }
+  },
+  "database_preservation": true,
+  "timeline_confirmation_ready": true,
+  "confirmation_evidence_expires_at": "2026-09-12T22:34:30Z",
+  "scope": "Bounded release verification; no unattended monitor or automatic report renewal"
+}

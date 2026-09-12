@@ -1,0 +1,213 @@
+{
+  "kind": "read-only 010d2 release HTTP smoke",
+  "status": "failed",
+  "started_at": "2026-09-12T22:25:11.973107+00:00",
+  "checks": [
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/health",
+      "status": 200,
+      "request_id_present": true
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/internal/ready",
+      "status": 200,
+      "request_id_present": true
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/",
+      "anonymous_status": 401,
+      "no_store": false
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/snapshots",
+      "anonymous_status": 401,
+      "no_store": false
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/imports",
+      "anonymous_status": 401,
+      "no_store": false
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/metadata-imports",
+      "anonymous_status": 401,
+      "no_store": false
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/activity-imports",
+      "anonymous_status": 401,
+      "no_store": true
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/history-captures",
+      "anonymous_status": 401,
+      "no_store": true
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/history-imports",
+      "anonymous_status": 401,
+      "no_store": true
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/history-imports/d705d6b5-0de8-4ae3-b4c4-1ee727654c2d",
+      "anonymous_status": 401,
+      "no_store": true
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/history-imports/d705d6b5-0de8-4ae3-b4c4-1ee727654c2d/records",
+      "anonymous_status": 401,
+      "no_store": true
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/history-imports/d705d6b5-0de8-4ae3-b4c4-1ee727654c2d/results",
+      "anonymous_status": 401,
+      "no_store": true
+    }
+  ],
+  "requests": [
+    {
+      "actor": "anonymous",
+      "phase": "health_and_anonymous",
+      "method": "GET",
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/health",
+      "status": 200
+    },
+    {
+      "actor": "anonymous",
+      "phase": "health_and_anonymous",
+      "method": "GET",
+      "base": "http://127.0.0.1:3000",
+      "path": "/internal/ready",
+      "status": 200
+    },
+    {
+      "actor": "anonymous",
+      "phase": "health_and_anonymous",
+      "method": "GET",
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/",
+      "status": 401
+    },
+    {
+      "actor": "anonymous",
+      "phase": "health_and_anonymous",
+      "method": "GET",
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/snapshots",
+      "status": 401
+    },
+    {
+      "actor": "anonymous",
+      "phase": "health_and_anonymous",
+      "method": "GET",
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/imports",
+      "status": 401
+    },
+    {
+      "actor": "anonymous",
+      "phase": "health_and_anonymous",
+      "method": "GET",
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/metadata-imports",
+      "status": 401
+    },
+    {
+      "actor": "anonymous",
+      "phase": "health_and_anonymous",
+      "method": "GET",
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/activity-imports",
+      "status": 401
+    },
+    {
+      "actor": "anonymous",
+      "phase": "health_and_anonymous",
+      "method": "GET",
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/history-captures",
+      "status": 401
+    },
+    {
+      "actor": "anonymous",
+      "phase": "health_and_anonymous",
+      "method": "GET",
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/history-imports",
+      "status": 401
+    },
+    {
+      "actor": "anonymous",
+      "phase": "health_and_anonymous",
+      "method": "GET",
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/history-imports/d705d6b5-0de8-4ae3-b4c4-1ee727654c2d",
+      "status": 401
+    },
+    {
+      "actor": "anonymous",
+      "phase": "health_and_anonymous",
+      "method": "GET",
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/history-imports/d705d6b5-0de8-4ae3-b4c4-1ee727654c2d/records",
+      "status": 401
+    },
+    {
+      "actor": "anonymous",
+      "phase": "health_and_anonymous",
+      "method": "GET",
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/history-imports/d705d6b5-0de8-4ae3-b4c4-1ee727654c2d/results",
+      "status": 401
+    }
+  ],
+  "sessions": [],
+  "source_or_business_mutations": 0,
+  "database_reconciliation": "owned separately by release coordinator",
+  "scope": "Empty shared development only; populated synthetic walkthrough is separate evidence.",
+  "release": {
+    "deployed_revision": "5924f097a7d7475e7e9742bb08e102d7c7ca98d2",
+    "metadata": [
+      {
+        "file": "deployed.json",
+        "sha256": "6bf1a2011c46d75a9f3f1473f177b2b795998769a81674a99297aef5a1cd85af"
+      },
+      {
+        "file": "web-build-sha256.json",
+        "sha256": "7ef75de1c6a323cbb7b0f9a13f2cbd79a6b179ddb52f7a6a4382adf17f015318"
+      },
+      {
+        "file": "build-sha256.json",
+        "sha256": "d368e5fe1eb5679b9d9fbbc29a4b42de488aa87d8b17115b6507a8e96d4a1bd9"
+      }
+    ],
+    "binary_sha256": {
+      "crm-api": "ffeee8cb408e0df716892bc7cf3a1981b7e09a280f36566fcab9e59d6989690a",
+      "crm-admin": "64e85ba5c2eb33709a5f0fe491aeffd11ce31ca4eeb1d333a81c03d12b8b69e1",
+      "migrate": "cdfc28d856326833782b763358f17c7431abd32dbbbc9bbb99187fa42bca687b"
+    },
+    "binary_provenance": "Coordinator-owned deployment record; this smoke does not inspect running processes.",
+    "local_web_asset_count": 73,
+    "local_web_assets_match_manifest": true
+  },
+  "helper_sha256": "298ae931b64f9338f42273a45b2634df77b39c6bdf149e3370e9f46e3fc6f2c8",
+  "failure": {
+    "phase": "health_and_anonymous",
+    "code": "release_smoke_operation_failed"
+  },
+  "all_created_sessions_revoked": false,
+  "finished_at": "2026-09-12T22:25:12.089482+00:00"
+}

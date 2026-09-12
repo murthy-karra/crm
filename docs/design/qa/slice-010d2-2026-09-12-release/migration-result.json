@@ -1,0 +1,10 @@
+{
+  "command": [
+    "./scripts/db-migrate"
+  ],
+  "exit_code": 0,
+  "elapsed_seconds": 5.021,
+  "log_sha256": "f8c6342c7d0a22693525978cae9ed776062049f5f3f7c50beb9eb8f133968d66",
+  "expected_migration": 20260922000001,
+  "initial_wrapper_rejected_before_migration": "Expected nonexistent exit_code in backup result; corrected to result=passed and catalog_verified before executing any migration"
+}

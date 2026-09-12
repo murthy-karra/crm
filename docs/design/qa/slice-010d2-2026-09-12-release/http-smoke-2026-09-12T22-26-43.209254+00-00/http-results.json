@@ -1,0 +1,982 @@
+{
+  "kind": "read-only 010d2 release HTTP smoke",
+  "status": "failed",
+  "started_at": "2026-09-12T22:26:43.209494+00:00",
+  "checks": [
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/health",
+      "status": 200,
+      "request_id_present": true
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/internal/ready",
+      "status": 200,
+      "request_id_present": true
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/",
+      "anonymous_status": 401,
+      "no_store": false
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/snapshots",
+      "anonymous_status": 401,
+      "no_store": false
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/imports",
+      "anonymous_status": 401,
+      "no_store": false
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/metadata-imports",
+      "anonymous_status": 401,
+      "no_store": false
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/activity-imports",
+      "anonymous_status": 401,
+      "no_store": true
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/history-captures",
+      "anonymous_status": 401,
+      "no_store": true
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/history-imports",
+      "anonymous_status": 401,
+      "no_store": true
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/history-imports/e2e9af17-fcc2-48f3-8d29-64b156f40d8e",
+      "anonymous_status": 401,
+      "no_store": true
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/history-imports/e2e9af17-fcc2-48f3-8d29-64b156f40d8e/records",
+      "anonymous_status": 401,
+      "no_store": true
+    },
+    {
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/history-imports/e2e9af17-fcc2-48f3-8d29-64b156f40d8e/results",
+      "anonymous_status": 401,
+      "no_store": true
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/api/health",
+      "status": 200,
+      "request_id_present": true
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/internal/ready",
+      "status": 200,
+      "request_id_present": true
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/",
+      "anonymous_status": 401,
+      "no_store": false
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/snapshots",
+      "anonymous_status": 401,
+      "no_store": false
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/imports",
+      "anonymous_status": 401,
+      "no_store": false
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/metadata-imports",
+      "anonymous_status": 401,
+      "no_store": false
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/activity-imports",
+      "anonymous_status": 401,
+      "no_store": true
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/history-captures",
+      "anonymous_status": 401,
+      "no_store": true
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/history-imports",
+      "anonymous_status": 401,
+      "no_store": true
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/history-imports/e2e9af17-fcc2-48f3-8d29-64b156f40d8e",
+      "anonymous_status": 401,
+      "no_store": true
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/history-imports/e2e9af17-fcc2-48f3-8d29-64b156f40d8e/records",
+      "anonymous_status": 401,
+      "no_store": true
+    },
+    {
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/history-imports/e2e9af17-fcc2-48f3-8d29-64b156f40d8e/results",
+      "anonymous_status": 401,
+      "no_store": true
+    },
+    {
+      "actor": "admin",
+      "path": "/api/migrations/fub/",
+      "status": 200,
+      "no_store": true,
+      "empty": true
+    },
+    {
+      "actor": "admin",
+      "path": "/api/migrations/fub/snapshots",
+      "status": 200,
+      "no_store": true,
+      "empty": true
+    },
+    {
+      "actor": "admin",
+      "path": "/api/migrations/fub/imports",
+      "status": 200,
+      "no_store": true,
+      "empty": true
+    },
+    {
+      "actor": "admin",
+      "path": "/api/migrations/fub/metadata-imports",
+      "status": 200,
+      "no_store": true,
+      "empty": true
+    },
+    {
+      "actor": "admin",
+      "path": "/api/migrations/fub/activity-imports",
+      "status": 200,
+      "no_store": true,
+      "empty": true
+    },
+    {
+      "actor": "admin",
+      "path": "/api/migrations/fub/history-captures",
+      "status": 200,
+      "no_store": true,
+      "empty": true
+    },
+    {
+      "actor": "admin",
+      "path": "/api/migrations/fub/history-imports",
+      "status": 200,
+      "no_store": true,
+      "empty": true
+    },
+    {
+      "actor": "admin",
+      "path": "/api/migrations/fub/history-imports/e2e9af17-fcc2-48f3-8d29-64b156f40d8e",
+      "status": 404,
+      "no_store": true,
+      "closed_error": true
+    },
+    {
+      "actor": "admin",
+      "path": "/api/migrations/fub/history-imports/e2e9af17-fcc2-48f3-8d29-64b156f40d8e/records",
+      "status": 404,
+      "no_store": true,
+      "closed_error": true
+    },
+    {
+      "actor": "admin",
+      "path": "/api/migrations/fub/history-imports/e2e9af17-fcc2-48f3-8d29-64b156f40d8e/results",
+      "status": 404,
+      "no_store": true,
+      "closed_error": true
+    },
+    {
+      "actor": "admin",
+      "workspace_mode": "operational",
+      "workspace_revision": "1"
+    },
+    {
+      "actor": "member",
+      "path": "/api/migrations/fub/",
+      "status": 403,
+      "no_store": false,
+      "empty": false
+    },
+    {
+      "actor": "member",
+      "path": "/api/migrations/fub/snapshots",
+      "status": 403,
+      "no_store": false,
+      "empty": false
+    },
+    {
+      "actor": "member",
+      "path": "/api/migrations/fub/imports",
+      "status": 403,
+      "no_store": false,
+      "empty": false
+    },
+    {
+      "actor": "member",
+      "path": "/api/migrations/fub/metadata-imports",
+      "status": 403,
+      "no_store": false,
+      "empty": false
+    },
+    {
+      "actor": "member",
+      "path": "/api/migrations/fub/activity-imports",
+      "status": 403,
+      "no_store": true,
+      "empty": false
+    },
+    {
+      "actor": "member",
+      "path": "/api/migrations/fub/history-captures",
+      "status": 403,
+      "no_store": true,
+      "empty": false
+    },
+    {
+      "actor": "member",
+      "path": "/api/migrations/fub/history-imports",
+      "status": 403,
+      "no_store": true,
+      "empty": false
+    },
+    {
+      "actor": "member",
+      "path": "/api/migrations/fub/history-imports/e2e9af17-fcc2-48f3-8d29-64b156f40d8e",
+      "status": 403,
+      "no_store": true,
+      "closed_error": true
+    },
+    {
+      "actor": "member",
+      "path": "/api/migrations/fub/history-imports/e2e9af17-fcc2-48f3-8d29-64b156f40d8e/records",
+      "status": 403,
+      "no_store": true,
+      "closed_error": true
+    },
+    {
+      "actor": "member",
+      "path": "/api/migrations/fub/history-imports/e2e9af17-fcc2-48f3-8d29-64b156f40d8e/results",
+      "status": 403,
+      "no_store": true,
+      "closed_error": true
+    },
+    {
+      "actor": "member",
+      "workspace_mode": "operational",
+      "workspace_revision": "1"
+    },
+    {
+      "actor": "other_org_admin",
+      "path": "/api/migrations/fub/",
+      "status": 200,
+      "no_store": true,
+      "empty": true
+    },
+    {
+      "actor": "other_org_admin",
+      "path": "/api/migrations/fub/snapshots",
+      "status": 200,
+      "no_store": true,
+      "empty": true
+    },
+    {
+      "actor": "other_org_admin",
+      "path": "/api/migrations/fub/imports",
+      "status": 200,
+      "no_store": true,
+      "empty": true
+    },
+    {
+      "actor": "other_org_admin",
+      "path": "/api/migrations/fub/metadata-imports",
+      "status": 200,
+      "no_store": true,
+      "empty": true
+    },
+    {
+      "actor": "other_org_admin",
+      "path": "/api/migrations/fub/activity-imports",
+      "status": 200,
+      "no_store": true,
+      "empty": true
+    },
+    {
+      "actor": "other_org_admin",
+      "path": "/api/migrations/fub/history-captures",
+      "status": 200,
+      "no_store": true,
+      "empty": true
+    },
+    {
+      "actor": "other_org_admin",
+      "path": "/api/migrations/fub/history-imports",
+      "status": 200,
+      "no_store": true,
+      "empty": true
+    },
+    {
+      "actor": "other_org_admin",
+      "path": "/api/migrations/fub/history-imports/e2e9af17-fcc2-48f3-8d29-64b156f40d8e",
+      "status": 404,
+      "no_store": true,
+      "closed_error": true
+    },
+    {
+      "actor": "other_org_admin",
+      "path": "/api/migrations/fub/history-imports/e2e9af17-fcc2-48f3-8d29-64b156f40d8e/records",
+      "status": 404,
+      "no_store": true,
+      "closed_error": true
+    },
+    {
+      "actor": "other_org_admin",
+      "path": "/api/migrations/fub/history-imports/e2e9af17-fcc2-48f3-8d29-64b156f40d8e/results",
+      "status": 404,
+      "no_store": true,
+      "closed_error": true
+    },
+    {
+      "actor": "other_org_admin",
+      "workspace_mode": "operational",
+      "workspace_revision": "1"
+    }
+  ],
+  "requests": [
+    {
+      "actor": "anonymous",
+      "phase": "health_and_anonymous",
+      "method": "GET",
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/health",
+      "status": 200
+    },
+    {
+      "actor": "anonymous",
+      "phase": "health_and_anonymous",
+      "method": "GET",
+      "base": "http://127.0.0.1:3000",
+      "path": "/internal/ready",
+      "status": 200
+    },
+    {
+      "actor": "anonymous",
+      "phase": "health_and_anonymous",
+      "method": "GET",
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/",
+      "status": 401
+    },
+    {
+      "actor": "anonymous",
+      "phase": "health_and_anonymous",
+      "method": "GET",
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/snapshots",
+      "status": 401
+    },
+    {
+      "actor": "anonymous",
+      "phase": "health_and_anonymous",
+      "method": "GET",
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/imports",
+      "status": 401
+    },
+    {
+      "actor": "anonymous",
+      "phase": "health_and_anonymous",
+      "method": "GET",
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/metadata-imports",
+      "status": 401
+    },
+    {
+      "actor": "anonymous",
+      "phase": "health_and_anonymous",
+      "method": "GET",
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/activity-imports",
+      "status": 401
+    },
+    {
+      "actor": "anonymous",
+      "phase": "health_and_anonymous",
+      "method": "GET",
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/history-captures",
+      "status": 401
+    },
+    {
+      "actor": "anonymous",
+      "phase": "health_and_anonymous",
+      "method": "GET",
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/history-imports",
+      "status": 401
+    },
+    {
+      "actor": "anonymous",
+      "phase": "health_and_anonymous",
+      "method": "GET",
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/history-imports/e2e9af17-fcc2-48f3-8d29-64b156f40d8e",
+      "status": 401
+    },
+    {
+      "actor": "anonymous",
+      "phase": "health_and_anonymous",
+      "method": "GET",
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/history-imports/e2e9af17-fcc2-48f3-8d29-64b156f40d8e/records",
+      "status": 401
+    },
+    {
+      "actor": "anonymous",
+      "phase": "health_and_anonymous",
+      "method": "GET",
+      "base": "http://127.0.0.1:3000",
+      "path": "/api/migrations/fub/history-imports/e2e9af17-fcc2-48f3-8d29-64b156f40d8e/results",
+      "status": 401
+    },
+    {
+      "actor": "anonymous",
+      "phase": "health_and_anonymous",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/health",
+      "status": 200
+    },
+    {
+      "actor": "anonymous",
+      "phase": "health_and_anonymous",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/internal/ready",
+      "status": 200
+    },
+    {
+      "actor": "anonymous",
+      "phase": "health_and_anonymous",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/",
+      "status": 401
+    },
+    {
+      "actor": "anonymous",
+      "phase": "health_and_anonymous",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/snapshots",
+      "status": 401
+    },
+    {
+      "actor": "anonymous",
+      "phase": "health_and_anonymous",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/imports",
+      "status": 401
+    },
+    {
+      "actor": "anonymous",
+      "phase": "health_and_anonymous",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/metadata-imports",
+      "status": 401
+    },
+    {
+      "actor": "anonymous",
+      "phase": "health_and_anonymous",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/activity-imports",
+      "status": 401
+    },
+    {
+      "actor": "anonymous",
+      "phase": "health_and_anonymous",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/history-captures",
+      "status": 401
+    },
+    {
+      "actor": "anonymous",
+      "phase": "health_and_anonymous",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/history-imports",
+      "status": 401
+    },
+    {
+      "actor": "anonymous",
+      "phase": "health_and_anonymous",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/history-imports/e2e9af17-fcc2-48f3-8d29-64b156f40d8e",
+      "status": 401
+    },
+    {
+      "actor": "anonymous",
+      "phase": "health_and_anonymous",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/history-imports/e2e9af17-fcc2-48f3-8d29-64b156f40d8e/records",
+      "status": 401
+    },
+    {
+      "actor": "anonymous",
+      "phase": "health_and_anonymous",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/history-imports/e2e9af17-fcc2-48f3-8d29-64b156f40d8e/results",
+      "status": 401
+    },
+    {
+      "actor": "admin",
+      "phase": "admin_login",
+      "method": "POST",
+      "base": "https://api.tarams.org",
+      "path": "/api/session",
+      "status": 200
+    },
+    {
+      "actor": "admin",
+      "phase": "admin_reads",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/",
+      "status": 200
+    },
+    {
+      "actor": "admin",
+      "phase": "admin_reads",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/snapshots",
+      "status": 200
+    },
+    {
+      "actor": "admin",
+      "phase": "admin_reads",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/imports",
+      "status": 200
+    },
+    {
+      "actor": "admin",
+      "phase": "admin_reads",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/metadata-imports",
+      "status": 200
+    },
+    {
+      "actor": "admin",
+      "phase": "admin_reads",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/activity-imports",
+      "status": 200
+    },
+    {
+      "actor": "admin",
+      "phase": "admin_reads",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/history-captures",
+      "status": 200
+    },
+    {
+      "actor": "admin",
+      "phase": "admin_reads",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/history-imports",
+      "status": 200
+    },
+    {
+      "actor": "admin",
+      "phase": "admin_reads",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/history-imports/e2e9af17-fcc2-48f3-8d29-64b156f40d8e",
+      "status": 404
+    },
+    {
+      "actor": "admin",
+      "phase": "admin_reads",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/history-imports/e2e9af17-fcc2-48f3-8d29-64b156f40d8e/records",
+      "status": 404
+    },
+    {
+      "actor": "admin",
+      "phase": "admin_reads",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/history-imports/e2e9af17-fcc2-48f3-8d29-64b156f40d8e/results",
+      "status": 404
+    },
+    {
+      "actor": "admin",
+      "phase": "admin_reads",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/me",
+      "status": 200
+    },
+    {
+      "actor": "admin",
+      "phase": "admin_session_cleanup",
+      "method": "DELETE",
+      "base": "https://api.tarams.org",
+      "path": "/api/session",
+      "status": 204
+    },
+    {
+      "actor": "admin",
+      "phase": "admin_session_cleanup",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/me",
+      "status": 401
+    },
+    {
+      "actor": "member",
+      "phase": "member_login",
+      "method": "POST",
+      "base": "https://api.tarams.org",
+      "path": "/api/session",
+      "status": 200
+    },
+    {
+      "actor": "member",
+      "phase": "member_reads",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/",
+      "status": 403
+    },
+    {
+      "actor": "member",
+      "phase": "member_reads",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/snapshots",
+      "status": 403
+    },
+    {
+      "actor": "member",
+      "phase": "member_reads",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/imports",
+      "status": 403
+    },
+    {
+      "actor": "member",
+      "phase": "member_reads",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/metadata-imports",
+      "status": 403
+    },
+    {
+      "actor": "member",
+      "phase": "member_reads",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/activity-imports",
+      "status": 403
+    },
+    {
+      "actor": "member",
+      "phase": "member_reads",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/history-captures",
+      "status": 403
+    },
+    {
+      "actor": "member",
+      "phase": "member_reads",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/history-imports",
+      "status": 403
+    },
+    {
+      "actor": "member",
+      "phase": "member_reads",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/history-imports/e2e9af17-fcc2-48f3-8d29-64b156f40d8e",
+      "status": 403
+    },
+    {
+      "actor": "member",
+      "phase": "member_reads",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/history-imports/e2e9af17-fcc2-48f3-8d29-64b156f40d8e/records",
+      "status": 403
+    },
+    {
+      "actor": "member",
+      "phase": "member_reads",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/history-imports/e2e9af17-fcc2-48f3-8d29-64b156f40d8e/results",
+      "status": 403
+    },
+    {
+      "actor": "member",
+      "phase": "member_reads",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/me",
+      "status": 200
+    },
+    {
+      "actor": "member",
+      "phase": "member_session_cleanup",
+      "method": "DELETE",
+      "base": "https://api.tarams.org",
+      "path": "/api/session",
+      "status": 204
+    },
+    {
+      "actor": "member",
+      "phase": "member_session_cleanup",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/me",
+      "status": 401
+    },
+    {
+      "actor": "other_org_admin",
+      "phase": "other_org_admin_login",
+      "method": "POST",
+      "base": "https://api.tarams.org",
+      "path": "/api/session",
+      "status": 200
+    },
+    {
+      "actor": "other_org_admin",
+      "phase": "other_org_admin_reads",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/",
+      "status": 200
+    },
+    {
+      "actor": "other_org_admin",
+      "phase": "other_org_admin_reads",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/snapshots",
+      "status": 200
+    },
+    {
+      "actor": "other_org_admin",
+      "phase": "other_org_admin_reads",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/imports",
+      "status": 200
+    },
+    {
+      "actor": "other_org_admin",
+      "phase": "other_org_admin_reads",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/metadata-imports",
+      "status": 200
+    },
+    {
+      "actor": "other_org_admin",
+      "phase": "other_org_admin_reads",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/activity-imports",
+      "status": 200
+    },
+    {
+      "actor": "other_org_admin",
+      "phase": "other_org_admin_reads",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/history-captures",
+      "status": 200
+    },
+    {
+      "actor": "other_org_admin",
+      "phase": "other_org_admin_reads",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/history-imports",
+      "status": 200
+    },
+    {
+      "actor": "other_org_admin",
+      "phase": "other_org_admin_reads",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/history-imports/e2e9af17-fcc2-48f3-8d29-64b156f40d8e",
+      "status": 404
+    },
+    {
+      "actor": "other_org_admin",
+      "phase": "other_org_admin_reads",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/history-imports/e2e9af17-fcc2-48f3-8d29-64b156f40d8e/records",
+      "status": 404
+    },
+    {
+      "actor": "other_org_admin",
+      "phase": "other_org_admin_reads",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/migrations/fub/history-imports/e2e9af17-fcc2-48f3-8d29-64b156f40d8e/results",
+      "status": 404
+    },
+    {
+      "actor": "other_org_admin",
+      "phase": "other_org_admin_reads",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/me",
+      "status": 200
+    },
+    {
+      "actor": "other_org_admin",
+      "phase": "other_org_admin_session_cleanup",
+      "method": "DELETE",
+      "base": "https://api.tarams.org",
+      "path": "/api/session",
+      "status": 204
+    },
+    {
+      "actor": "other_org_admin",
+      "phase": "other_org_admin_session_cleanup",
+      "method": "GET",
+      "base": "https://api.tarams.org",
+      "path": "/api/me",
+      "status": 401
+    },
+    {
+      "actor": "anonymous",
+      "phase": "published_assets",
+      "method": "GET",
+      "base": "http://127.0.0.1:5173",
+      "path": "/",
+      "status": 404
+    }
+  ],
+  "sessions": [
+    {
+      "actor": "admin",
+      "login_started": true,
+      "login_status": 200,
+      "cookie_captured": true,
+      "delete_status": 204,
+      "original_cookie_me_status": 401,
+      "revoked": true,
+      "original_cookie_denial_closed": true
+    },
+    {
+      "actor": "member",
+      "login_started": true,
+      "login_status": 200,
+      "cookie_captured": true,
+      "delete_status": 204,
+      "original_cookie_me_status": 401,
+      "revoked": true,
+      "original_cookie_denial_closed": true
+    },
+    {
+      "actor": "other_org_admin",
+      "login_started": true,
+      "login_status": 200,
+      "cookie_captured": true,
+      "delete_status": 204,
+      "original_cookie_me_status": 401,
+      "revoked": true,
+      "original_cookie_denial_closed": true
+    }
+  ],
+  "source_or_business_mutations": 0,
+  "database_reconciliation": "owned separately by release coordinator",
+  "scope": "Empty shared development only; populated synthetic walkthrough is separate evidence.",
+  "release": {
+    "deployed_revision": "5924f097a7d7475e7e9742bb08e102d7c7ca98d2",
+    "metadata": [
+      {
+        "file": "deployed.json",
+        "sha256": "6bf1a2011c46d75a9f3f1473f177b2b795998769a81674a99297aef5a1cd85af"
+      },
+      {
+        "file": "web-build-sha256.json",
+        "sha256": "7ef75de1c6a323cbb7b0f9a13f2cbd79a6b179ddb52f7a6a4382adf17f015318"
+      },
+      {
+        "file": "build-sha256.json",
+        "sha256": "d368e5fe1eb5679b9d9fbbc29a4b42de488aa87d8b17115b6507a8e96d4a1bd9"
+      }
+    ],
+    "binary_sha256": {
+      "crm-api": "ffeee8cb408e0df716892bc7cf3a1981b7e09a280f36566fcab9e59d6989690a",
+      "crm-admin": "64e85ba5c2eb33709a5f0fe491aeffd11ce31ca4eeb1d333a81c03d12b8b69e1",
+      "migrate": "cdfc28d856326833782b763358f17c7431abd32dbbbc9bbb99187fa42bca687b"
+    },
+    "binary_provenance": "Coordinator-owned deployment record; this smoke does not inspect running processes.",
+    "local_web_asset_count": 73,
+    "local_web_assets_match_manifest": true
+  },
+  "transport": "curl with verified host TLS; config, credentials and bodies stay in captured stdin/memory",
+  "helper_sha256": "e4e2cd40ea86e07addb50d958eda44fa97d6076693d6dd44b15ec2dd4ebbefc4",
+  "failure": {
+    "phase": "published_assets",
+    "code": "published_index_status"
+  },
+  "all_created_sessions_revoked": true,
+  "finished_at": "2026-09-12T22:26:49.299413+00:00"
+}

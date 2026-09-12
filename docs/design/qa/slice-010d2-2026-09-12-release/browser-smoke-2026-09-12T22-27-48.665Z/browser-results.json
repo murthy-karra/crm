@@ -1,0 +1,5400 @@
+{
+  "kind": "public read-only 010d2 deployment smoke",
+  "started_at": "2026-09-12T22:27:48.665Z",
+  "status": "passed",
+  "app_origin": "https://app.tarams.org",
+  "api_origin": "https://api.tarams.org",
+  "checks": [
+    {
+      "label": "alice_signin",
+      "response_status": 200,
+      "actual_role": "admin",
+      "workspace_mode": "operational",
+      "destination": {
+        "origin": "https://app.tarams.org",
+        "path": "/today"
+      }
+    },
+    {
+      "label": "initial_parent_read",
+      "status": 200,
+      "request_id": 44,
+      "document_generation": 8,
+      "request_started_phase": "alice_migration_navigation",
+      "imports": 0,
+      "next_cursor": null
+    },
+    {
+      "label": "initial",
+      "no_completed_parent": true,
+      "prepare_unavailable_without_parent": true,
+      "no_import_attempt": true,
+      "capture_selector_unavailable_without_parent": true,
+      "panel_alerts": 0
+    },
+    {
+      "label": "admin_history_imports_empty_no_store",
+      "status": 200,
+      "no_store": true,
+      "empty_exact": true
+    },
+    {
+      "label": "explicit_history_refresh",
+      "status": 200,
+      "request_id": 54,
+      "document_generation": 8,
+      "request_started_phase": "alice_explicit_refresh",
+      "imports": 0,
+      "next_cursor": null
+    },
+    {
+      "label": "after_refresh",
+      "no_completed_parent": true,
+      "prepare_unavailable_without_parent": true,
+      "no_import_attempt": true,
+      "capture_selector_unavailable_without_parent": true,
+      "panel_alerts": 0
+    },
+    {
+      "label": "history_reload",
+      "status": 200,
+      "request_id": 86,
+      "document_generation": 11,
+      "request_started_phase": "alice_reload",
+      "imports": 0,
+      "next_cursor": null
+    },
+    {
+      "label": "reload_document_boundary",
+      "previous_generation": 8,
+      "required_generation": 9,
+      "committed_generation": 11,
+      "document_request_id": 55
+    },
+    {
+      "label": "after_reload",
+      "no_completed_parent": true,
+      "prepare_unavailable_without_parent": true,
+      "no_import_attempt": true,
+      "capture_selector_unavailable_without_parent": true,
+      "panel_alerts": 0
+    },
+    {
+      "label": "desktop",
+      "no_completed_parent": true,
+      "prepare_unavailable_without_parent": true,
+      "no_import_attempt": true,
+      "capture_selector_unavailable_without_parent": true,
+      "panel_alerts": 0
+    },
+    {
+      "label": "desktop_layout",
+      "width": 1360,
+      "height": 950,
+      "viewport": 1360,
+      "document": 1360,
+      "body": 1360,
+      "buttons": [
+        {
+          "label": "Refresh import status",
+          "left": 1129.25,
+          "right": 1307,
+          "width": 177.75,
+          "height": 40,
+          "client_width": 176,
+          "scroll_width": 176,
+          "disabled": false
+        },
+        {
+          "label": "Previous parents",
+          "left": 273,
+          "right": 417.53125,
+          "width": 144.53125,
+          "height": 40,
+          "client_width": 145,
+          "scroll_width": 145,
+          "disabled": true
+        },
+        {
+          "label": "More parents",
+          "left": 425.53125,
+          "right": 546.578125,
+          "width": 121.046875,
+          "height": 40,
+          "client_width": 121,
+          "scroll_width": 121,
+          "disabled": true
+        }
+      ],
+      "horizontal_overflow": false
+    },
+    {
+      "label": "390px",
+      "no_completed_parent": true,
+      "prepare_unavailable_without_parent": true,
+      "no_import_attempt": true,
+      "capture_selector_unavailable_without_parent": true,
+      "panel_alerts": 0
+    },
+    {
+      "label": "390px_layout",
+      "width": 390,
+      "height": 844,
+      "viewport": 390,
+      "document": 390,
+      "body": 390,
+      "buttons": [
+        {
+          "label": "Refresh import status",
+          "left": 101,
+          "right": 278.75,
+          "width": 177.75,
+          "height": 40,
+          "client_width": 176,
+          "scroll_width": 176,
+          "disabled": false
+        },
+        {
+          "label": "Previous parents",
+          "left": 101,
+          "right": 245.53125,
+          "width": 144.53125,
+          "height": 40,
+          "client_width": 145,
+          "scroll_width": 145,
+          "disabled": true
+        },
+        {
+          "label": "More parents",
+          "left": 101,
+          "right": 222.046875,
+          "width": 121.046875,
+          "height": 40,
+          "client_width": 121,
+          "scroll_width": 121,
+          "disabled": true
+        }
+      ],
+      "horizontal_overflow": false
+    },
+    {
+      "label": "carol_signin",
+      "response_status": 200,
+      "actual_role": "member",
+      "workspace_mode": "operational",
+      "destination": {
+        "origin": "https://app.tarams.org",
+        "path": "/today"
+      }
+    },
+    {
+      "label": "member_route_denial",
+      "migration_nav_visible": false,
+      "history_panel_visible": false,
+      "destination": {
+        "origin": "https://app.tarams.org",
+        "path": "/today"
+      }
+    },
+    {
+      "label": "member_history_import_api_denial",
+      "status": 403,
+      "no_store": true,
+      "closed_error": true
+    }
+  ],
+  "screenshots": [
+    {
+      "name": "history-import-empty-desktop.png",
+      "sha256": "4e99280f73177e3c77f4448fb3054678cb419aa6562ce3792cf5ba13f6c7e49f"
+    },
+    {
+      "name": "migration-desktop.png",
+      "sha256": "6e56efee323073bdb4d79cde7d0eb63fb391eb108b29018607c21596e859deab"
+    },
+    {
+      "name": "history-import-empty-390px.png",
+      "sha256": "d2774875f28922d40ebf3a65261db4441fc213b73f219a596eeecad9cb7de754"
+    },
+    {
+      "name": "migration-390px.png",
+      "sha256": "59a85a78dc3f911c9dd9139d0ba551140e4dd9eda48f0659951481c96103e3a5"
+    }
+  ],
+  "frames": [
+    {
+      "actor": "alice",
+      "origin": "https://app.tarams.org",
+      "path": "/login",
+      "status": 200,
+      "response_html_sha256": "3cadedf51c8c587ba90eeecb52b93319826b3e904aa5a1d27f4fc8417c1cf602"
+    },
+    {
+      "actor": "alice",
+      "origin": "https://app.tarams.org",
+      "path": "/manage/migration",
+      "status": 200,
+      "response_html_sha256": "3cadedf51c8c587ba90eeecb52b93319826b3e904aa5a1d27f4fc8417c1cf602"
+    },
+    {
+      "actor": "alice",
+      "stage": "desktop",
+      "origin": "https://app.tarams.org",
+      "path": "/manage/migration",
+      "dom_html_sha256": "bcb44cad7c60fa2f2fbab5831792da19f61d5bbdbc409593c099722a02bd72c3",
+      "child_frames": [
+        {
+          "origin": "https://app.tarams.org",
+          "path": "/manage/migration"
+        }
+      ]
+    },
+    {
+      "actor": "alice",
+      "stage": "390px",
+      "origin": "https://app.tarams.org",
+      "path": "/manage/migration",
+      "dom_html_sha256": "2d4f2238b85acac465cb396740def37c1df750625294386060094ee53b0161f4",
+      "child_frames": [
+        {
+          "origin": "https://app.tarams.org",
+          "path": "/manage/migration"
+        }
+      ]
+    },
+    {
+      "actor": "carol",
+      "origin": "https://app.tarams.org",
+      "path": "/login",
+      "status": 200,
+      "response_html_sha256": "3cadedf51c8c587ba90eeecb52b93319826b3e904aa5a1d27f4fc8417c1cf602"
+    },
+    {
+      "actor": "carol",
+      "origin": "https://app.tarams.org",
+      "path": "/manage/migration",
+      "status": 200,
+      "response_html_sha256": "3cadedf51c8c587ba90eeecb52b93319826b3e904aa5a1d27f4fc8417c1cf602"
+    }
+  ],
+  "requests": [
+    {
+      "request_id": 1,
+      "document_generation": 0,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/login",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 3,
+      "document_generation": 1,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/index-C37Cee8B.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 4,
+      "document_generation": 1,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/site.webmanifest",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 5,
+      "document_generation": 1,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/controls-BsIvlwcv.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 6,
+      "document_generation": 1,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/queries-Dkojhk7m.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 7,
+      "document_generation": 1,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/createLucideIcon-Dqbor38u.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 8,
+      "document_generation": 1,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/index-BV593Ild.css",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 9,
+      "document_generation": 2,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://api.tarams.org",
+      "path": "/api/me",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 11,
+      "document_generation": 2,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/favicon.svg",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 12,
+      "document_generation": 2,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/icons/elysium-192.png",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 13,
+      "document_generation": 2,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/LoginView-fwc9qQY9.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 14,
+      "document_generation": 2,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/FormField-C-tVpKBL.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 15,
+      "document_generation": 2,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/Card-Cbf4Z50Z.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 16,
+      "document_generation": 2,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/LoginView-Bu0ZrLP3.css",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 17,
+      "document_generation": 3,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/TodayView-CuzjcRA5.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 18,
+      "document_generation": 3,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/DataTable-j5CqQtpQ.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 19,
+      "document_generation": 3,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/phone-BMm72Wvc.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 20,
+      "document_generation": 3,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/PageHeader-BA7SIxCH.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 21,
+      "document_generation": 3,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/LogContactDialog-BYiKHtYZ.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 22,
+      "document_generation": 3,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/select-DmpDjUEV.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 23,
+      "document_generation": 3,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/ripple-DB_34Pa_.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 24,
+      "document_generation": 3,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/overlayeventbus-BJGaubYS.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 25,
+      "document_generation": 3,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/dialog-XNA6DLBF.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 26,
+      "document_generation": 3,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/todayFeeds-DgGlvI7u.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 27,
+      "document_generation": 3,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/brand/elysium-lockup-horizontal-name-black.svg",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 28,
+      "document_generation": 3,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 29,
+      "document_generation": 3,
+      "request_started_phase": "alice_login",
+      "actor": "alice",
+      "phase": "alice_login",
+      "origin": "https://api.tarams.org",
+      "path": "/api/session",
+      "method": "POST",
+      "classification": "session"
+    },
+    {
+      "request_id": 30,
+      "document_generation": 3,
+      "request_started_phase": "alice_login",
+      "actor": "alice",
+      "phase": "alice_login",
+      "origin": "https://api.tarams.org",
+      "path": "/api/me",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 31,
+      "document_generation": 5,
+      "request_started_phase": "alice_migration_navigation",
+      "actor": "alice",
+      "phase": "alice_migration_navigation",
+      "origin": "https://api.tarams.org",
+      "path": "/api/realtime/token",
+      "method": "POST",
+      "classification": "read_only_realtime_token_issuance"
+    },
+    {
+      "request_id": 32,
+      "document_generation": 5,
+      "request_started_phase": "alice_migration_navigation",
+      "actor": "alice",
+      "phase": "alice_migration_navigation",
+      "origin": "https://api.tarams.org",
+      "path": "/api/today",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 33,
+      "document_generation": 5,
+      "request_started_phase": "alice_migration_navigation",
+      "actor": "alice",
+      "phase": "alice_migration_navigation",
+      "origin": "https://api.tarams.org",
+      "path": "/api/today/sources",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 34,
+      "document_generation": 5,
+      "request_started_phase": "alice_migration_navigation",
+      "actor": "alice",
+      "phase": "alice_migration_navigation",
+      "origin": "https://api.tarams.org",
+      "path": "/api/today/feeds",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 35,
+      "document_generation": 6,
+      "request_started_phase": "alice_migration_navigation",
+      "actor": "alice",
+      "phase": "alice_migration_navigation",
+      "origin": "https://api.tarams.org",
+      "path": "/api/tasks",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 38,
+      "document_generation": 6,
+      "request_started_phase": "alice_migration_navigation",
+      "actor": "alice",
+      "phase": "alice_migration_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/MigrationView-B1hF8BiH.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 39,
+      "document_generation": 6,
+      "request_started_phase": "alice_migration_navigation",
+      "actor": "alice",
+      "phase": "alice_migration_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/refresh-cw-J6CC8njb.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 40,
+      "document_generation": 6,
+      "request_started_phase": "alice_migration_navigation",
+      "actor": "alice",
+      "phase": "alice_migration_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/ConfirmDialog-BM3nzD_2.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 41,
+      "document_generation": 6,
+      "request_started_phase": "alice_migration_navigation",
+      "actor": "alice",
+      "phase": "alice_migration_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/ActivityFieldViewer-DvVixKOK.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 42,
+      "document_generation": 6,
+      "request_started_phase": "alice_migration_navigation",
+      "actor": "alice",
+      "phase": "alice_migration_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/ImportedHistoryMetadata-C_hLe-hI.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 43,
+      "document_generation": 8,
+      "request_started_phase": "alice_migration_navigation",
+      "actor": "alice",
+      "phase": "alice_migration_navigation",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 44,
+      "document_generation": 8,
+      "request_started_phase": "alice_migration_navigation",
+      "actor": "alice",
+      "phase": "alice_migration_navigation",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/imports",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 45,
+      "document_generation": 8,
+      "request_started_phase": "alice_migration_navigation",
+      "actor": "alice",
+      "phase": "alice_migration_navigation",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/snapshots",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 46,
+      "document_generation": 8,
+      "request_started_phase": "alice_migration_navigation",
+      "actor": "alice",
+      "phase": "alice_migration_navigation",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/imports",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 47,
+      "document_generation": 8,
+      "request_started_phase": "alice_migration_navigation",
+      "actor": "alice",
+      "phase": "alice_migration_navigation",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/imports",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 48,
+      "document_generation": 8,
+      "request_started_phase": "alice_migration_navigation",
+      "actor": "alice",
+      "phase": "alice_migration_navigation",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/imports",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 49,
+      "document_generation": 8,
+      "request_started_phase": "alice_migration_navigation",
+      "actor": "alice",
+      "phase": "alice_migration_navigation",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/imports",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 50,
+      "document_generation": 8,
+      "request_started_phase": "alice_migration_navigation",
+      "actor": "alice",
+      "phase": "alice_migration_navigation",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/snapshots",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 53,
+      "document_generation": 8,
+      "request_started_phase": "alice_direct_history_import_read",
+      "actor": "alice",
+      "phase": "alice_direct_history_import_read",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/history-imports",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 54,
+      "document_generation": 8,
+      "request_started_phase": "alice_explicit_refresh",
+      "actor": "alice",
+      "phase": "alice_explicit_refresh",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/imports",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 55,
+      "document_generation": 8,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/manage/migration",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 57,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/index-C37Cee8B.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 58,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/site.webmanifest",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 59,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/controls-BsIvlwcv.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 60,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/queries-Dkojhk7m.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 61,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/createLucideIcon-Dqbor38u.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 62,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/index-BV593Ild.css",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 63,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://api.tarams.org",
+      "path": "/api/me",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 64,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/MigrationView-B1hF8BiH.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 65,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/refresh-cw-J6CC8njb.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 66,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/select-DmpDjUEV.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 67,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/ripple-DB_34Pa_.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 68,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/overlayeventbus-BJGaubYS.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 69,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/dialog-XNA6DLBF.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 70,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/ConfirmDialog-BM3nzD_2.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 71,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/Card-Cbf4Z50Z.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 72,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/PageHeader-BA7SIxCH.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 73,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/FormField-C-tVpKBL.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 74,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/ActivityFieldViewer-DvVixKOK.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 75,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/ImportedHistoryMetadata-C_hLe-hI.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 77,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/icons/elysium-192.png",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 78,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/favicon.svg",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 79,
+      "document_generation": 11,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://api.tarams.org",
+      "path": "/api/realtime/token",
+      "method": "POST",
+      "classification": "read_only_realtime_token_issuance"
+    },
+    {
+      "request_id": 80,
+      "document_generation": 11,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/brand/elysium-lockup-horizontal-name-black.svg",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 81,
+      "document_generation": 11,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 82,
+      "document_generation": 11,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/imports",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 83,
+      "document_generation": 11,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/snapshots",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 84,
+      "document_generation": 11,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/imports",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 85,
+      "document_generation": 11,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/imports",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 86,
+      "document_generation": 11,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/imports",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 87,
+      "document_generation": 11,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/imports",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 88,
+      "document_generation": 11,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/snapshots",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 89,
+      "document_generation": 11,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 90,
+      "document_generation": 11,
+      "request_started_phase": "alice_logout",
+      "actor": "alice",
+      "phase": "alice_logout",
+      "origin": "https://api.tarams.org",
+      "path": "/api/session",
+      "method": "DELETE",
+      "classification": "session"
+    },
+    {
+      "request_id": 91,
+      "document_generation": 11,
+      "request_started_phase": "alice_logout",
+      "actor": "alice",
+      "phase": "alice_logout",
+      "origin": "https://api.tarams.org",
+      "path": "/api/me",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 92,
+      "document_generation": 11,
+      "request_started_phase": "alice_logout",
+      "actor": "alice",
+      "phase": "alice_logout",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/LoginView-fwc9qQY9.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 93,
+      "document_generation": 11,
+      "request_started_phase": "alice_logout",
+      "actor": "alice",
+      "phase": "alice_logout",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/LoginView-Bu0ZrLP3.css",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 94,
+      "document_generation": 11,
+      "request_started_phase": "alice_logout",
+      "actor": "alice",
+      "phase": "alice_logout",
+      "origin": "https://api.tarams.org",
+      "path": "/api/me",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 95,
+      "document_generation": 11,
+      "request_started_phase": "alice_logout",
+      "actor": "alice",
+      "phase": "alice_logout",
+      "origin": "https://api.tarams.org",
+      "path": "/api/me",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 96,
+      "document_generation": 12,
+      "request_started_phase": "alice_logout_cleanup",
+      "actor": "alice",
+      "phase": "alice_logout_cleanup",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/TodayView-CuzjcRA5.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 97,
+      "document_generation": 12,
+      "request_started_phase": "alice_logout_cleanup",
+      "actor": "alice",
+      "phase": "alice_logout_cleanup",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/DataTable-j5CqQtpQ.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 98,
+      "document_generation": 12,
+      "request_started_phase": "alice_logout_cleanup",
+      "actor": "alice",
+      "phase": "alice_logout_cleanup",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/phone-BMm72Wvc.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 99,
+      "document_generation": 12,
+      "request_started_phase": "alice_logout_cleanup",
+      "actor": "alice",
+      "phase": "alice_logout_cleanup",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/LogContactDialog-BYiKHtYZ.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 100,
+      "document_generation": 12,
+      "request_started_phase": "alice_logout_cleanup",
+      "actor": "alice",
+      "phase": "alice_logout_cleanup",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/todayFeeds-DgGlvI7u.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "actor": "alice",
+      "phase": "session_cleanup",
+      "method": "DELETE",
+      "origin": "https://api.tarams.org",
+      "path": "/api/session",
+      "classification": "owned_session_revocation",
+      "status": 204
+    },
+    {
+      "actor": "alice",
+      "phase": "session_cleanup",
+      "method": "GET",
+      "origin": "https://api.tarams.org",
+      "path": "/api/me",
+      "classification": "owned_session_revocation",
+      "status": 401
+    },
+    {
+      "request_id": 103,
+      "document_generation": 0,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/login",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 105,
+      "document_generation": 1,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/index-C37Cee8B.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 106,
+      "document_generation": 1,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/site.webmanifest",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 107,
+      "document_generation": 1,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/controls-BsIvlwcv.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 108,
+      "document_generation": 1,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/queries-Dkojhk7m.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 109,
+      "document_generation": 1,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/createLucideIcon-Dqbor38u.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 110,
+      "document_generation": 1,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/index-BV593Ild.css",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 111,
+      "document_generation": 2,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://api.tarams.org",
+      "path": "/api/me",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 113,
+      "document_generation": 2,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/icons/elysium-192.png",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 114,
+      "document_generation": 2,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/favicon.svg",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 115,
+      "document_generation": 2,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/LoginView-fwc9qQY9.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 116,
+      "document_generation": 2,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/FormField-C-tVpKBL.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 117,
+      "document_generation": 2,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/Card-Cbf4Z50Z.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 118,
+      "document_generation": 2,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/LoginView-Bu0ZrLP3.css",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 119,
+      "document_generation": 3,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/TodayView-CuzjcRA5.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 120,
+      "document_generation": 3,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/DataTable-j5CqQtpQ.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 121,
+      "document_generation": 3,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/phone-BMm72Wvc.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 122,
+      "document_generation": 3,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/PageHeader-BA7SIxCH.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 123,
+      "document_generation": 3,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/LogContactDialog-BYiKHtYZ.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 124,
+      "document_generation": 3,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/select-DmpDjUEV.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 125,
+      "document_generation": 3,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/ripple-DB_34Pa_.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 126,
+      "document_generation": 3,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/overlayeventbus-BJGaubYS.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 127,
+      "document_generation": 3,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/dialog-XNA6DLBF.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 128,
+      "document_generation": 3,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/todayFeeds-DgGlvI7u.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 129,
+      "document_generation": 3,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/brand/elysium-lockup-horizontal-name-black.svg",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 130,
+      "document_generation": 3,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 131,
+      "document_generation": 3,
+      "request_started_phase": "carol_login",
+      "actor": "carol",
+      "phase": "carol_login",
+      "origin": "https://api.tarams.org",
+      "path": "/api/session",
+      "method": "POST",
+      "classification": "session"
+    },
+    {
+      "request_id": 132,
+      "document_generation": 3,
+      "request_started_phase": "carol_login",
+      "actor": "carol",
+      "phase": "carol_login",
+      "origin": "https://api.tarams.org",
+      "path": "/api/me",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 135,
+      "document_generation": 5,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/manage/migration",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 136,
+      "document_generation": 5,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://api.tarams.org",
+      "path": "/api/realtime/token",
+      "method": "POST",
+      "classification": "read_only_realtime_token_issuance"
+    },
+    {
+      "request_id": 137,
+      "document_generation": 5,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://api.tarams.org",
+      "path": "/api/today",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 138,
+      "document_generation": 5,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://api.tarams.org",
+      "path": "/api/today/sources",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 139,
+      "document_generation": 5,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://api.tarams.org",
+      "path": "/api/today/feeds",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 140,
+      "document_generation": 6,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://api.tarams.org",
+      "path": "/api/tasks",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 142,
+      "document_generation": 7,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/index-C37Cee8B.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 143,
+      "document_generation": 7,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/site.webmanifest",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 144,
+      "document_generation": 7,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/controls-BsIvlwcv.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 145,
+      "document_generation": 7,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/queries-Dkojhk7m.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 146,
+      "document_generation": 7,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/createLucideIcon-Dqbor38u.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 147,
+      "document_generation": 7,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/index-BV593Ild.css",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 148,
+      "document_generation": 7,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://api.tarams.org",
+      "path": "/api/me",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 149,
+      "document_generation": 8,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/MigrationView-B1hF8BiH.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 150,
+      "document_generation": 8,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/refresh-cw-J6CC8njb.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 151,
+      "document_generation": 8,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/select-DmpDjUEV.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 152,
+      "document_generation": 8,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/ripple-DB_34Pa_.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 153,
+      "document_generation": 8,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/overlayeventbus-BJGaubYS.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 154,
+      "document_generation": 8,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/dialog-XNA6DLBF.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 155,
+      "document_generation": 8,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/ConfirmDialog-BM3nzD_2.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 156,
+      "document_generation": 8,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/Card-Cbf4Z50Z.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 157,
+      "document_generation": 8,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/PageHeader-BA7SIxCH.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 158,
+      "document_generation": 8,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/FormField-C-tVpKBL.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 159,
+      "document_generation": 8,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/ActivityFieldViewer-DvVixKOK.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 160,
+      "document_generation": 8,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/ImportedHistoryMetadata-C_hLe-hI.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 162,
+      "document_generation": 8,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/icons/elysium-192.png",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 163,
+      "document_generation": 9,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://api.tarams.org",
+      "path": "/api/realtime/token",
+      "method": "POST",
+      "classification": "read_only_realtime_token_issuance"
+    },
+    {
+      "request_id": 164,
+      "document_generation": 9,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/brand/elysium-lockup-horizontal-name-black.svg",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 165,
+      "document_generation": 9,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://api.tarams.org",
+      "path": "/api/today",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 166,
+      "document_generation": 9,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://api.tarams.org",
+      "path": "/api/today/sources",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 167,
+      "document_generation": 9,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://api.tarams.org",
+      "path": "/api/today/feeds",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 168,
+      "document_generation": 9,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/TodayView-CuzjcRA5.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 169,
+      "document_generation": 9,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/DataTable-j5CqQtpQ.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 170,
+      "document_generation": 9,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/phone-BMm72Wvc.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 171,
+      "document_generation": 9,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/LogContactDialog-BYiKHtYZ.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 172,
+      "document_generation": 9,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/todayFeeds-DgGlvI7u.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 173,
+      "document_generation": 9,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 174,
+      "document_generation": 10,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://api.tarams.org",
+      "path": "/api/tasks",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 175,
+      "document_generation": 10,
+      "request_started_phase": "carol_direct_api_denial",
+      "actor": "carol",
+      "phase": "carol_direct_api_denial",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/history-imports",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 176,
+      "document_generation": 10,
+      "request_started_phase": "carol_logout",
+      "actor": "carol",
+      "phase": "carol_logout",
+      "origin": "https://api.tarams.org",
+      "path": "/api/session",
+      "method": "DELETE",
+      "classification": "session"
+    },
+    {
+      "request_id": 177,
+      "document_generation": 10,
+      "request_started_phase": "carol_logout",
+      "actor": "carol",
+      "phase": "carol_logout",
+      "origin": "https://api.tarams.org",
+      "path": "/api/me",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 178,
+      "document_generation": 10,
+      "request_started_phase": "carol_logout",
+      "actor": "carol",
+      "phase": "carol_logout",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/LoginView-fwc9qQY9.js",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 179,
+      "document_generation": 10,
+      "request_started_phase": "carol_logout",
+      "actor": "carol",
+      "phase": "carol_logout",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/LoginView-Bu0ZrLP3.css",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 180,
+      "document_generation": 10,
+      "request_started_phase": "carol_logout",
+      "actor": "carol",
+      "phase": "carol_logout",
+      "origin": "https://api.tarams.org",
+      "path": "/api/me",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "request_id": 181,
+      "document_generation": 10,
+      "request_started_phase": "carol_logout",
+      "actor": "carol",
+      "phase": "carol_logout",
+      "origin": "https://api.tarams.org",
+      "path": "/api/me",
+      "method": "GET",
+      "classification": "read_only"
+    },
+    {
+      "actor": "carol",
+      "phase": "session_cleanup",
+      "method": "DELETE",
+      "origin": "https://api.tarams.org",
+      "path": "/api/session",
+      "classification": "owned_session_revocation",
+      "status": 204
+    },
+    {
+      "actor": "carol",
+      "phase": "session_cleanup",
+      "method": "GET",
+      "origin": "https://api.tarams.org",
+      "path": "/api/me",
+      "classification": "owned_session_revocation",
+      "status": 401
+    }
+  ],
+  "responses": [
+    {
+      "request_id": 1,
+      "document_generation": 0,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/login",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 5,
+      "document_generation": 1,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/controls-BsIvlwcv.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 6,
+      "document_generation": 1,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/queries-Dkojhk7m.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 8,
+      "document_generation": 1,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/index-BV593Ild.css",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 7,
+      "document_generation": 1,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/createLucideIcon-Dqbor38u.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 3,
+      "document_generation": 1,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/index-C37Cee8B.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 4,
+      "document_generation": 1,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/site.webmanifest",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 9,
+      "document_generation": 2,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://api.tarams.org",
+      "path": "/api/me",
+      "method": "GET",
+      "status": 401,
+      "expected_authorization_denial": true
+    },
+    {
+      "request_id": 12,
+      "document_generation": 2,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/icons/elysium-192.png",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 11,
+      "document_generation": 2,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/favicon.svg",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 15,
+      "document_generation": 2,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/Card-Cbf4Z50Z.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 14,
+      "document_generation": 2,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/FormField-C-tVpKBL.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 16,
+      "document_generation": 2,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/LoginView-Bu0ZrLP3.css",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 13,
+      "document_generation": 2,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/LoginView-fwc9qQY9.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 17,
+      "document_generation": 3,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/TodayView-CuzjcRA5.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 18,
+      "document_generation": 3,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/DataTable-j5CqQtpQ.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 26,
+      "document_generation": 3,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/todayFeeds-DgGlvI7u.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 21,
+      "document_generation": 3,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/LogContactDialog-BYiKHtYZ.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 20,
+      "document_generation": 3,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/PageHeader-BA7SIxCH.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 19,
+      "document_generation": 3,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/phone-BMm72Wvc.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 23,
+      "document_generation": 3,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/ripple-DB_34Pa_.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 28,
+      "document_generation": 3,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 27,
+      "document_generation": 3,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/brand/elysium-lockup-horizontal-name-black.svg",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 24,
+      "document_generation": 3,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/overlayeventbus-BJGaubYS.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 25,
+      "document_generation": 3,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/dialog-XNA6DLBF.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 22,
+      "document_generation": 3,
+      "request_started_phase": "alice_login_navigation",
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/select-DmpDjUEV.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 29,
+      "document_generation": 3,
+      "request_started_phase": "alice_login",
+      "actor": "alice",
+      "phase": "alice_login",
+      "origin": "https://api.tarams.org",
+      "path": "/api/session",
+      "method": "POST",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 30,
+      "document_generation": 3,
+      "request_started_phase": "alice_login",
+      "actor": "alice",
+      "phase": "alice_migration_navigation",
+      "origin": "https://api.tarams.org",
+      "path": "/api/me",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 31,
+      "document_generation": 5,
+      "request_started_phase": "alice_migration_navigation",
+      "actor": "alice",
+      "phase": "alice_migration_navigation",
+      "origin": "https://api.tarams.org",
+      "path": "/api/realtime/token",
+      "method": "POST",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 35,
+      "document_generation": 6,
+      "request_started_phase": "alice_migration_navigation",
+      "actor": "alice",
+      "phase": "alice_migration_navigation",
+      "origin": "https://api.tarams.org",
+      "path": "/api/tasks",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 34,
+      "document_generation": 5,
+      "request_started_phase": "alice_migration_navigation",
+      "actor": "alice",
+      "phase": "alice_migration_navigation",
+      "origin": "https://api.tarams.org",
+      "path": "/api/today/feeds",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 33,
+      "document_generation": 5,
+      "request_started_phase": "alice_migration_navigation",
+      "actor": "alice",
+      "phase": "alice_migration_navigation",
+      "origin": "https://api.tarams.org",
+      "path": "/api/today/sources",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 32,
+      "document_generation": 5,
+      "request_started_phase": "alice_migration_navigation",
+      "actor": "alice",
+      "phase": "alice_migration_navigation",
+      "origin": "https://api.tarams.org",
+      "path": "/api/today",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 38,
+      "document_generation": 6,
+      "request_started_phase": "alice_migration_navigation",
+      "actor": "alice",
+      "phase": "alice_migration_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/MigrationView-B1hF8BiH.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 39,
+      "document_generation": 6,
+      "request_started_phase": "alice_migration_navigation",
+      "actor": "alice",
+      "phase": "alice_migration_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/refresh-cw-J6CC8njb.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 40,
+      "document_generation": 6,
+      "request_started_phase": "alice_migration_navigation",
+      "actor": "alice",
+      "phase": "alice_migration_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/ConfirmDialog-BM3nzD_2.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 42,
+      "document_generation": 6,
+      "request_started_phase": "alice_migration_navigation",
+      "actor": "alice",
+      "phase": "alice_migration_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/ImportedHistoryMetadata-C_hLe-hI.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 41,
+      "document_generation": 6,
+      "request_started_phase": "alice_migration_navigation",
+      "actor": "alice",
+      "phase": "alice_migration_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/ActivityFieldViewer-DvVixKOK.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 50,
+      "document_generation": 8,
+      "request_started_phase": "alice_migration_navigation",
+      "actor": "alice",
+      "phase": "alice_migration_navigation",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/snapshots",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 44,
+      "document_generation": 8,
+      "request_started_phase": "alice_migration_navigation",
+      "actor": "alice",
+      "phase": "alice_migration_navigation",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/imports",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 49,
+      "document_generation": 8,
+      "request_started_phase": "alice_migration_navigation",
+      "actor": "alice",
+      "phase": "alice_migration_navigation",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/imports",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 46,
+      "document_generation": 8,
+      "request_started_phase": "alice_migration_navigation",
+      "actor": "alice",
+      "phase": "alice_migration_navigation",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/imports",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 48,
+      "document_generation": 8,
+      "request_started_phase": "alice_migration_navigation",
+      "actor": "alice",
+      "phase": "alice_migration_navigation",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/imports",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 45,
+      "document_generation": 8,
+      "request_started_phase": "alice_migration_navigation",
+      "actor": "alice",
+      "phase": "alice_migration_navigation",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/snapshots",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 43,
+      "document_generation": 8,
+      "request_started_phase": "alice_migration_navigation",
+      "actor": "alice",
+      "phase": "alice_migration_navigation",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 47,
+      "document_generation": 8,
+      "request_started_phase": "alice_migration_navigation",
+      "actor": "alice",
+      "phase": "alice_direct_history_import_read",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/imports",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 53,
+      "document_generation": 8,
+      "request_started_phase": "alice_direct_history_import_read",
+      "actor": "alice",
+      "phase": "alice_direct_history_import_read",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/history-imports",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 54,
+      "document_generation": 8,
+      "request_started_phase": "alice_explicit_refresh",
+      "actor": "alice",
+      "phase": "alice_explicit_refresh",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/imports",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 55,
+      "document_generation": 8,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/manage/migration",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 62,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/index-BV593Ild.css",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 61,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/createLucideIcon-Dqbor38u.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 59,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/controls-BsIvlwcv.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 60,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/queries-Dkojhk7m.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 57,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/index-C37Cee8B.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 58,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/site.webmanifest",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 63,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://api.tarams.org",
+      "path": "/api/me",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 68,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/overlayeventbus-BJGaubYS.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 65,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/refresh-cw-J6CC8njb.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 70,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/ConfirmDialog-BM3nzD_2.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 75,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/ImportedHistoryMetadata-C_hLe-hI.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 69,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/dialog-XNA6DLBF.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 67,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/ripple-DB_34Pa_.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 71,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/Card-Cbf4Z50Z.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 64,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/MigrationView-B1hF8BiH.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 73,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/FormField-C-tVpKBL.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 72,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/PageHeader-BA7SIxCH.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 74,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/ActivityFieldViewer-DvVixKOK.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 77,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/icons/elysium-192.png",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 78,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/favicon.svg",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 66,
+      "document_generation": 9,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/select-DmpDjUEV.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 80,
+      "document_generation": 11,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/brand/elysium-lockup-horizontal-name-black.svg",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 89,
+      "document_generation": 11,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 88,
+      "document_generation": 11,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/snapshots",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 86,
+      "document_generation": 11,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/imports",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 85,
+      "document_generation": 11,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/imports",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 87,
+      "document_generation": 11,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/imports",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 82,
+      "document_generation": 11,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/imports",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 84,
+      "document_generation": 11,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/imports",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 81,
+      "document_generation": 11,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 83,
+      "document_generation": 11,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/snapshots",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 79,
+      "document_generation": 11,
+      "request_started_phase": "alice_reload",
+      "actor": "alice",
+      "phase": "alice_reload",
+      "origin": "https://api.tarams.org",
+      "path": "/api/realtime/token",
+      "method": "POST",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 90,
+      "document_generation": 11,
+      "request_started_phase": "alice_logout",
+      "actor": "alice",
+      "phase": "alice_logout",
+      "origin": "https://api.tarams.org",
+      "path": "/api/session",
+      "method": "DELETE",
+      "status": 204,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 91,
+      "document_generation": 11,
+      "request_started_phase": "alice_logout",
+      "actor": "alice",
+      "phase": "alice_logout",
+      "origin": "https://api.tarams.org",
+      "path": "/api/me",
+      "method": "GET",
+      "status": 401,
+      "expected_authorization_denial": true
+    },
+    {
+      "request_id": 92,
+      "document_generation": 11,
+      "request_started_phase": "alice_logout",
+      "actor": "alice",
+      "phase": "alice_logout",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/LoginView-fwc9qQY9.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 93,
+      "document_generation": 11,
+      "request_started_phase": "alice_logout",
+      "actor": "alice",
+      "phase": "alice_logout",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/LoginView-Bu0ZrLP3.css",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 94,
+      "document_generation": 11,
+      "request_started_phase": "alice_logout",
+      "actor": "alice",
+      "phase": "alice_logout",
+      "origin": "https://api.tarams.org",
+      "path": "/api/me",
+      "method": "GET",
+      "status": 401,
+      "expected_authorization_denial": true
+    },
+    {
+      "request_id": 95,
+      "document_generation": 11,
+      "request_started_phase": "alice_logout",
+      "actor": "alice",
+      "phase": "alice_logout",
+      "origin": "https://api.tarams.org",
+      "path": "/api/me",
+      "method": "GET",
+      "status": 401,
+      "expected_authorization_denial": true
+    },
+    {
+      "request_id": 98,
+      "document_generation": 12,
+      "request_started_phase": "alice_logout_cleanup",
+      "actor": "alice",
+      "phase": "alice_logout_cleanup",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/phone-BMm72Wvc.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 100,
+      "document_generation": 12,
+      "request_started_phase": "alice_logout_cleanup",
+      "actor": "alice",
+      "phase": "alice_logout_cleanup",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/todayFeeds-DgGlvI7u.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 96,
+      "document_generation": 12,
+      "request_started_phase": "alice_logout_cleanup",
+      "actor": "alice",
+      "phase": "alice_logout_cleanup",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/TodayView-CuzjcRA5.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 99,
+      "document_generation": 12,
+      "request_started_phase": "alice_logout_cleanup",
+      "actor": "alice",
+      "phase": "alice_logout_cleanup",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/LogContactDialog-BYiKHtYZ.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 97,
+      "document_generation": 12,
+      "request_started_phase": "alice_logout_cleanup",
+      "actor": "alice",
+      "phase": "alice_logout_cleanup",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/DataTable-j5CqQtpQ.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 103,
+      "document_generation": 0,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/login",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 110,
+      "document_generation": 1,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/index-BV593Ild.css",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 108,
+      "document_generation": 1,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/queries-Dkojhk7m.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 109,
+      "document_generation": 1,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/createLucideIcon-Dqbor38u.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 105,
+      "document_generation": 1,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/index-C37Cee8B.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 107,
+      "document_generation": 1,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/controls-BsIvlwcv.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 106,
+      "document_generation": 1,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/site.webmanifest",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 113,
+      "document_generation": 2,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/icons/elysium-192.png",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 114,
+      "document_generation": 2,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/favicon.svg",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 111,
+      "document_generation": 2,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://api.tarams.org",
+      "path": "/api/me",
+      "method": "GET",
+      "status": 401,
+      "expected_authorization_denial": true
+    },
+    {
+      "request_id": 118,
+      "document_generation": 2,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/LoginView-Bu0ZrLP3.css",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 117,
+      "document_generation": 2,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/Card-Cbf4Z50Z.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 116,
+      "document_generation": 2,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/FormField-C-tVpKBL.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 115,
+      "document_generation": 2,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/LoginView-fwc9qQY9.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 119,
+      "document_generation": 3,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/TodayView-CuzjcRA5.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 122,
+      "document_generation": 3,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/PageHeader-BA7SIxCH.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 123,
+      "document_generation": 3,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/LogContactDialog-BYiKHtYZ.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 126,
+      "document_generation": 3,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/overlayeventbus-BJGaubYS.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 120,
+      "document_generation": 3,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/DataTable-j5CqQtpQ.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 128,
+      "document_generation": 3,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/todayFeeds-DgGlvI7u.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 127,
+      "document_generation": 3,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/dialog-XNA6DLBF.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 124,
+      "document_generation": 3,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/select-DmpDjUEV.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 129,
+      "document_generation": 3,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/brand/elysium-lockup-horizontal-name-black.svg",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 121,
+      "document_generation": 3,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/phone-BMm72Wvc.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 125,
+      "document_generation": 3,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/ripple-DB_34Pa_.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 130,
+      "document_generation": 3,
+      "request_started_phase": "carol_login_navigation",
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 131,
+      "document_generation": 3,
+      "request_started_phase": "carol_login",
+      "actor": "carol",
+      "phase": "carol_login",
+      "origin": "https://api.tarams.org",
+      "path": "/api/session",
+      "method": "POST",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 132,
+      "document_generation": 3,
+      "request_started_phase": "carol_login",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://api.tarams.org",
+      "path": "/api/me",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 135,
+      "document_generation": 5,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/manage/migration",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 143,
+      "document_generation": 7,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/site.webmanifest",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 147,
+      "document_generation": 7,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/index-BV593Ild.css",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 144,
+      "document_generation": 7,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/controls-BsIvlwcv.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 145,
+      "document_generation": 7,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/queries-Dkojhk7m.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 146,
+      "document_generation": 7,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/createLucideIcon-Dqbor38u.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 142,
+      "document_generation": 7,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/index-C37Cee8B.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 158,
+      "document_generation": 8,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/FormField-C-tVpKBL.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 156,
+      "document_generation": 8,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/Card-Cbf4Z50Z.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 150,
+      "document_generation": 8,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/refresh-cw-J6CC8njb.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 148,
+      "document_generation": 7,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://api.tarams.org",
+      "path": "/api/me",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 159,
+      "document_generation": 8,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/ActivityFieldViewer-DvVixKOK.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 157,
+      "document_generation": 8,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/PageHeader-BA7SIxCH.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 154,
+      "document_generation": 8,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/dialog-XNA6DLBF.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 153,
+      "document_generation": 8,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/overlayeventbus-BJGaubYS.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 160,
+      "document_generation": 8,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/ImportedHistoryMetadata-C_hLe-hI.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 151,
+      "document_generation": 8,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/select-DmpDjUEV.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 152,
+      "document_generation": 8,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/ripple-DB_34Pa_.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 149,
+      "document_generation": 8,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/MigrationView-B1hF8BiH.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 162,
+      "document_generation": 8,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/icons/elysium-192.png",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 155,
+      "document_generation": 8,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/ConfirmDialog-BM3nzD_2.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 171,
+      "document_generation": 9,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/LogContactDialog-BYiKHtYZ.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 169,
+      "document_generation": 9,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/DataTable-j5CqQtpQ.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 168,
+      "document_generation": 9,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/TodayView-CuzjcRA5.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 164,
+      "document_generation": 9,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/brand/elysium-lockup-horizontal-name-black.svg",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 170,
+      "document_generation": 9,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/phone-BMm72Wvc.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 172,
+      "document_generation": 9,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/todayFeeds-DgGlvI7u.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 173,
+      "document_generation": 9,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 163,
+      "document_generation": 9,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://api.tarams.org",
+      "path": "/api/realtime/token",
+      "method": "POST",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 166,
+      "document_generation": 9,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://api.tarams.org",
+      "path": "/api/today/sources",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 167,
+      "document_generation": 9,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_navigation_denial",
+      "origin": "https://api.tarams.org",
+      "path": "/api/today/feeds",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 165,
+      "document_generation": 9,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_direct_api_denial",
+      "origin": "https://api.tarams.org",
+      "path": "/api/today",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 174,
+      "document_generation": 10,
+      "request_started_phase": "carol_navigation_denial",
+      "actor": "carol",
+      "phase": "carol_direct_api_denial",
+      "origin": "https://api.tarams.org",
+      "path": "/api/tasks",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 175,
+      "document_generation": 10,
+      "request_started_phase": "carol_direct_api_denial",
+      "actor": "carol",
+      "phase": "carol_direct_api_denial",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/history-imports",
+      "method": "GET",
+      "status": 403,
+      "expected_authorization_denial": true
+    },
+    {
+      "request_id": 176,
+      "document_generation": 10,
+      "request_started_phase": "carol_logout",
+      "actor": "carol",
+      "phase": "carol_logout",
+      "origin": "https://api.tarams.org",
+      "path": "/api/session",
+      "method": "DELETE",
+      "status": 204,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 177,
+      "document_generation": 10,
+      "request_started_phase": "carol_logout",
+      "actor": "carol",
+      "phase": "carol_logout",
+      "origin": "https://api.tarams.org",
+      "path": "/api/me",
+      "method": "GET",
+      "status": 401,
+      "expected_authorization_denial": true
+    },
+    {
+      "request_id": 179,
+      "document_generation": 10,
+      "request_started_phase": "carol_logout",
+      "actor": "carol",
+      "phase": "carol_logout",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/LoginView-Bu0ZrLP3.css",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 178,
+      "document_generation": 10,
+      "request_started_phase": "carol_logout",
+      "actor": "carol",
+      "phase": "carol_logout",
+      "origin": "https://app.tarams.org",
+      "path": "/assets/LoginView-fwc9qQY9.js",
+      "method": "GET",
+      "status": 200,
+      "expected_authorization_denial": false
+    },
+    {
+      "request_id": 180,
+      "document_generation": 10,
+      "request_started_phase": "carol_logout",
+      "actor": "carol",
+      "phase": "carol_logout",
+      "origin": "https://api.tarams.org",
+      "path": "/api/me",
+      "method": "GET",
+      "status": 401,
+      "expected_authorization_denial": true
+    },
+    {
+      "request_id": 181,
+      "document_generation": 10,
+      "request_started_phase": "carol_logout",
+      "actor": "carol",
+      "phase": "carol_logout",
+      "origin": "https://api.tarams.org",
+      "path": "/api/me",
+      "method": "GET",
+      "status": 401,
+      "expected_authorization_denial": true
+    }
+  ],
+  "telemetry": [
+    {
+      "actor": "alice",
+      "origin": "https://static.cloudflareinsights.com",
+      "path": "/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495",
+      "method": "GET",
+      "classification": "known_cloudflare_insights"
+    },
+    {
+      "actor": "alice",
+      "origin": "https://static.cloudflareinsights.com",
+      "path": "/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "actor": "alice",
+      "origin": "https://app.tarams.org",
+      "path": "/cdn-cgi/rum",
+      "method": "POST",
+      "classification": "known_cloudflare_insights"
+    },
+    {
+      "actor": "alice",
+      "origin": "https://app.tarams.org",
+      "path": "/cdn-cgi/rum",
+      "method": "POST",
+      "status": 204
+    },
+    {
+      "actor": "alice",
+      "origin": "https://app.tarams.org",
+      "path": "/cdn-cgi/rum",
+      "method": "POST",
+      "classification": "known_cloudflare_insights"
+    },
+    {
+      "actor": "alice",
+      "origin": "https://app.tarams.org",
+      "path": "/cdn-cgi/rum",
+      "method": "POST",
+      "classification": "known_cloudflare_insights"
+    },
+    {
+      "actor": "alice",
+      "origin": "https://app.tarams.org",
+      "path": "/cdn-cgi/rum",
+      "method": "POST",
+      "status": 204
+    },
+    {
+      "actor": "alice",
+      "origin": "https://app.tarams.org",
+      "path": "/cdn-cgi/rum",
+      "method": "POST",
+      "status": 204
+    },
+    {
+      "actor": "alice",
+      "origin": "https://app.tarams.org",
+      "path": "/cdn-cgi/rum",
+      "method": "POST",
+      "classification": "known_cloudflare_insights"
+    },
+    {
+      "actor": "alice",
+      "origin": "https://app.tarams.org",
+      "path": "/cdn-cgi/rum",
+      "method": "POST",
+      "classification": "known_cloudflare_insights"
+    },
+    {
+      "actor": "alice",
+      "origin": "https://app.tarams.org",
+      "path": "/cdn-cgi/rum",
+      "method": "POST",
+      "status": 204
+    },
+    {
+      "actor": "alice",
+      "origin": "https://app.tarams.org",
+      "path": "/cdn-cgi/rum",
+      "method": "POST",
+      "status": 204
+    },
+    {
+      "actor": "alice",
+      "origin": "https://static.cloudflareinsights.com",
+      "path": "/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495",
+      "method": "GET",
+      "classification": "known_cloudflare_insights"
+    },
+    {
+      "actor": "alice",
+      "origin": "https://static.cloudflareinsights.com",
+      "path": "/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "actor": "alice",
+      "origin": "https://app.tarams.org",
+      "path": "/cdn-cgi/rum",
+      "method": "POST",
+      "classification": "known_cloudflare_insights"
+    },
+    {
+      "actor": "alice",
+      "origin": "https://app.tarams.org",
+      "path": "/cdn-cgi/rum",
+      "method": "POST",
+      "status": 204
+    },
+    {
+      "actor": "alice",
+      "origin": "https://app.tarams.org",
+      "path": "/cdn-cgi/rum",
+      "method": "POST",
+      "classification": "known_cloudflare_insights"
+    },
+    {
+      "actor": "alice",
+      "origin": "https://app.tarams.org",
+      "path": "/cdn-cgi/rum",
+      "method": "POST",
+      "classification": "known_cloudflare_insights"
+    },
+    {
+      "actor": "alice",
+      "origin": "https://app.tarams.org",
+      "path": "/cdn-cgi/rum",
+      "method": "POST",
+      "status": 204
+    },
+    {
+      "actor": "alice",
+      "origin": "https://app.tarams.org",
+      "path": "/cdn-cgi/rum",
+      "method": "POST",
+      "status": 204
+    },
+    {
+      "actor": "carol",
+      "origin": "https://static.cloudflareinsights.com",
+      "path": "/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495",
+      "method": "GET",
+      "classification": "known_cloudflare_insights"
+    },
+    {
+      "actor": "carol",
+      "origin": "https://static.cloudflareinsights.com",
+      "path": "/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "actor": "carol",
+      "origin": "https://app.tarams.org",
+      "path": "/cdn-cgi/rum",
+      "method": "POST",
+      "classification": "known_cloudflare_insights"
+    },
+    {
+      "actor": "carol",
+      "origin": "https://app.tarams.org",
+      "path": "/cdn-cgi/rum",
+      "method": "POST",
+      "status": 204
+    },
+    {
+      "actor": "carol",
+      "origin": "https://app.tarams.org",
+      "path": "/cdn-cgi/rum",
+      "method": "POST",
+      "classification": "known_cloudflare_insights"
+    },
+    {
+      "actor": "carol",
+      "origin": "https://app.tarams.org",
+      "path": "/cdn-cgi/rum",
+      "method": "POST",
+      "classification": "known_cloudflare_insights"
+    },
+    {
+      "actor": "carol",
+      "origin": "https://app.tarams.org",
+      "path": "/cdn-cgi/rum",
+      "method": "POST",
+      "status": 204
+    },
+    {
+      "actor": "carol",
+      "origin": "https://app.tarams.org",
+      "path": "/cdn-cgi/rum",
+      "method": "POST",
+      "status": 204
+    },
+    {
+      "actor": "carol",
+      "origin": "https://static.cloudflareinsights.com",
+      "path": "/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495",
+      "method": "GET",
+      "classification": "known_cloudflare_insights"
+    },
+    {
+      "actor": "carol",
+      "origin": "https://static.cloudflareinsights.com",
+      "path": "/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "actor": "carol",
+      "origin": "https://app.tarams.org",
+      "path": "/cdn-cgi/rum",
+      "method": "POST",
+      "classification": "known_cloudflare_insights"
+    },
+    {
+      "actor": "carol",
+      "origin": "https://app.tarams.org",
+      "path": "/cdn-cgi/rum",
+      "method": "POST",
+      "status": 204
+    },
+    {
+      "actor": "carol",
+      "origin": "https://app.tarams.org",
+      "path": "/cdn-cgi/rum",
+      "method": "POST",
+      "classification": "known_cloudflare_insights"
+    },
+    {
+      "actor": "carol",
+      "origin": "https://app.tarams.org",
+      "path": "/cdn-cgi/rum",
+      "method": "POST",
+      "classification": "known_cloudflare_insights"
+    },
+    {
+      "actor": "carol",
+      "origin": "https://app.tarams.org",
+      "path": "/cdn-cgi/rum",
+      "method": "POST",
+      "status": 204
+    },
+    {
+      "actor": "carol",
+      "origin": "https://app.tarams.org",
+      "path": "/cdn-cgi/rum",
+      "method": "POST",
+      "status": 204
+    }
+  ],
+  "blocked": [],
+  "request_failures": [
+    {
+      "request_id": 90,
+      "document_generation": 11,
+      "request_started_phase": "alice_logout",
+      "actor": "alice",
+      "phase": "alice_logout",
+      "origin": "https://api.tarams.org",
+      "path": "/api/session",
+      "method": "DELETE",
+      "reason": "net::ERR_ABORTED",
+      "expected_navigation_cancellation": false,
+      "expected_completed_logout_cancellation": true
+    },
+    {
+      "request_id": 176,
+      "document_generation": 10,
+      "request_started_phase": "carol_logout",
+      "actor": "carol",
+      "phase": "carol_logout",
+      "origin": "https://api.tarams.org",
+      "path": "/api/session",
+      "method": "DELETE",
+      "reason": "net::ERR_ABORTED",
+      "expected_navigation_cancellation": false,
+      "expected_completed_logout_cancellation": true
+    }
+  ],
+  "console_errors": [
+    {
+      "actor": "alice",
+      "phase": "alice_login_navigation",
+      "origin": "https://api.tarams.org",
+      "path": "/api/me",
+      "message_sha256": "d3896fd78f62c1f3b92c314d96ecff21047bb08ac1f2ef540bd40086fb840c44",
+      "known_telemetry": false,
+      "expected_status": 401,
+      "classified_expected": true
+    },
+    {
+      "actor": "alice",
+      "phase": "alice_logout",
+      "origin": "https://api.tarams.org",
+      "path": "/api/me",
+      "message_sha256": "d3896fd78f62c1f3b92c314d96ecff21047bb08ac1f2ef540bd40086fb840c44",
+      "known_telemetry": false,
+      "expected_status": 401,
+      "classified_expected": true
+    },
+    {
+      "actor": "alice",
+      "phase": "alice_logout",
+      "origin": "https://api.tarams.org",
+      "path": "/api/me",
+      "message_sha256": "d3896fd78f62c1f3b92c314d96ecff21047bb08ac1f2ef540bd40086fb840c44",
+      "known_telemetry": false,
+      "expected_status": 401,
+      "classified_expected": true
+    },
+    {
+      "actor": "alice",
+      "phase": "alice_logout",
+      "origin": "https://api.tarams.org",
+      "path": "/api/me",
+      "message_sha256": "d3896fd78f62c1f3b92c314d96ecff21047bb08ac1f2ef540bd40086fb840c44",
+      "known_telemetry": false,
+      "expected_status": 401,
+      "classified_expected": true
+    },
+    {
+      "actor": "carol",
+      "phase": "carol_login_navigation",
+      "origin": "https://api.tarams.org",
+      "path": "/api/me",
+      "message_sha256": "d3896fd78f62c1f3b92c314d96ecff21047bb08ac1f2ef540bd40086fb840c44",
+      "known_telemetry": false,
+      "expected_status": 401,
+      "classified_expected": true
+    },
+    {
+      "actor": "carol",
+      "phase": "carol_direct_api_denial",
+      "origin": "https://api.tarams.org",
+      "path": "/api/migrations/fub/history-imports",
+      "message_sha256": "376b0b7283f0b68b73aca29adbff3e9b1eb87bb66a3b9decfe10eb65b2bfaa1e",
+      "known_telemetry": false,
+      "expected_status": 403,
+      "classified_expected": true
+    },
+    {
+      "actor": "carol",
+      "phase": "carol_logout",
+      "origin": "https://api.tarams.org",
+      "path": "/api/me",
+      "message_sha256": "d3896fd78f62c1f3b92c314d96ecff21047bb08ac1f2ef540bd40086fb840c44",
+      "known_telemetry": false,
+      "expected_status": 401,
+      "classified_expected": true
+    },
+    {
+      "actor": "carol",
+      "phase": "carol_logout",
+      "origin": "https://api.tarams.org",
+      "path": "/api/me",
+      "message_sha256": "d3896fd78f62c1f3b92c314d96ecff21047bb08ac1f2ef540bd40086fb840c44",
+      "known_telemetry": false,
+      "expected_status": 401,
+      "classified_expected": true
+    },
+    {
+      "actor": "carol",
+      "phase": "carol_logout",
+      "origin": "https://api.tarams.org",
+      "path": "/api/me",
+      "message_sha256": "d3896fd78f62c1f3b92c314d96ecff21047bb08ac1f2ef540bd40086fb840c44",
+      "known_telemetry": false,
+      "expected_status": 401,
+      "classified_expected": true
+    }
+  ],
+  "runtime_errors": [],
+  "websockets": [
+    {
+      "actor": "alice",
+      "origin": "wss://api.tarams.org",
+      "path": "/connection/websocket",
+      "permitted": true
+    },
+    {
+      "actor": "alice",
+      "origin": "wss://api.tarams.org",
+      "path": "/connection/websocket",
+      "permitted": true
+    },
+    {
+      "actor": "carol",
+      "origin": "wss://api.tarams.org",
+      "path": "/connection/websocket",
+      "permitted": true
+    }
+  ],
+  "assets": [
+    {
+      "actor": "alice",
+      "path": "assets/controls-BsIvlwcv.js",
+      "status": 200,
+      "expected_sha256": "f589c3d081f1cc2e2c41e60bbc4bc724ec90eef0264e0b2e05e552a9dbd265b1",
+      "actual_sha256": "f589c3d081f1cc2e2c41e60bbc4bc724ec90eef0264e0b2e05e552a9dbd265b1",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/queries-Dkojhk7m.js",
+      "status": 200,
+      "expected_sha256": "f0fc3eebca0a64fdf9fa88510b172324fcb81ddbdd8f3ef90befe84ef221c9c5",
+      "actual_sha256": "f0fc3eebca0a64fdf9fa88510b172324fcb81ddbdd8f3ef90befe84ef221c9c5",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/index-BV593Ild.css",
+      "status": 200,
+      "expected_sha256": "73b74b7770c4d4f31f61aa587d3d7fbcf4ce6ccfe8bc7b5f2c0b03e5bbd44f53",
+      "actual_sha256": "73b74b7770c4d4f31f61aa587d3d7fbcf4ce6ccfe8bc7b5f2c0b03e5bbd44f53",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/createLucideIcon-Dqbor38u.js",
+      "status": 200,
+      "expected_sha256": "24b69bab0335069ef550bb2d0d440be38878f53dac8e880899dd0a7ea326fd8a",
+      "actual_sha256": "24b69bab0335069ef550bb2d0d440be38878f53dac8e880899dd0a7ea326fd8a",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/index-C37Cee8B.js",
+      "status": 200,
+      "expected_sha256": "72ee913c517fb712a9c86c6cb99455f2d817744dcdaa81b3f3c0ef356509e479",
+      "actual_sha256": "72ee913c517fb712a9c86c6cb99455f2d817744dcdaa81b3f3c0ef356509e479",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "site.webmanifest",
+      "status": 200,
+      "expected_sha256": "9a6d4aca9ad79b897f50e5df784cb5880634f86f568b86cc55c947be88b12bf5",
+      "actual_sha256": "9a6d4aca9ad79b897f50e5df784cb5880634f86f568b86cc55c947be88b12bf5",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "icons/elysium-192.png",
+      "status": 200,
+      "expected_sha256": "5a85b257c838bd9358b67bb317677d6495215212f9ad9a2e467d3422d5791301",
+      "actual_sha256": "5a85b257c838bd9358b67bb317677d6495215212f9ad9a2e467d3422d5791301",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "favicon.svg",
+      "status": 200,
+      "expected_sha256": "2f7558e5cb6602f7f32a8cd30b13ff38e995ee7737baf79db0104b950dea56fb",
+      "actual_sha256": "2f7558e5cb6602f7f32a8cd30b13ff38e995ee7737baf79db0104b950dea56fb",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/Card-Cbf4Z50Z.js",
+      "status": 200,
+      "expected_sha256": "07b9b6f19ecee2e518f986ff13f6dfc042b9c8996710b31afcb5e3ad9e9cfa7f",
+      "actual_sha256": "07b9b6f19ecee2e518f986ff13f6dfc042b9c8996710b31afcb5e3ad9e9cfa7f",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/FormField-C-tVpKBL.js",
+      "status": 200,
+      "expected_sha256": "c9003edd06d0a0538b26198408817bf610f99f21f7cbb6aa543cd8561ba4aedf",
+      "actual_sha256": "c9003edd06d0a0538b26198408817bf610f99f21f7cbb6aa543cd8561ba4aedf",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/LoginView-Bu0ZrLP3.css",
+      "status": 200,
+      "expected_sha256": "d276d451a8b11c4031ed18661b01c4c384448ae9405b0ccebc19b59c3cc7d352",
+      "actual_sha256": "d276d451a8b11c4031ed18661b01c4c384448ae9405b0ccebc19b59c3cc7d352",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/LoginView-fwc9qQY9.js",
+      "status": 200,
+      "expected_sha256": "cedc07aca48dc2da2b8fa0ef6d745e60a3e83e03cb561ee3687fd88798b6548d",
+      "actual_sha256": "cedc07aca48dc2da2b8fa0ef6d745e60a3e83e03cb561ee3687fd88798b6548d",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/TodayView-CuzjcRA5.js",
+      "status": 200,
+      "expected_sha256": "26cb5fb86303e6daf1d7f1c220d745cdeff7abcfb5b6baa3ec9449d77dc45d11",
+      "actual_sha256": "26cb5fb86303e6daf1d7f1c220d745cdeff7abcfb5b6baa3ec9449d77dc45d11",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/DataTable-j5CqQtpQ.js",
+      "status": 200,
+      "expected_sha256": "30d989c5fcb45403622711cc80d3a4fa60e4ed5e9209c8b82b5a5d14d6d30266",
+      "actual_sha256": "30d989c5fcb45403622711cc80d3a4fa60e4ed5e9209c8b82b5a5d14d6d30266",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/todayFeeds-DgGlvI7u.js",
+      "status": 200,
+      "expected_sha256": "fe02b4a45aa9c145f015d7ec551066caedd4c647b1edd338efafdc81d8492b70",
+      "actual_sha256": "fe02b4a45aa9c145f015d7ec551066caedd4c647b1edd338efafdc81d8492b70",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/LogContactDialog-BYiKHtYZ.js",
+      "status": 200,
+      "expected_sha256": "c44c9ee0d2e5acd37deb93034b913e527f92bc3564b1af18995570329c935cef",
+      "actual_sha256": "c44c9ee0d2e5acd37deb93034b913e527f92bc3564b1af18995570329c935cef",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/PageHeader-BA7SIxCH.js",
+      "status": 200,
+      "expected_sha256": "9687f8b89cc0933056eef9b17affc37e86aee6b7bcc510c6efe2e2675f5469d3",
+      "actual_sha256": "9687f8b89cc0933056eef9b17affc37e86aee6b7bcc510c6efe2e2675f5469d3",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/phone-BMm72Wvc.js",
+      "status": 200,
+      "expected_sha256": "37958fe3a698ff8c75b537e2be3b2565382a838d83e5ef37f6c9c8a06c07fc5f",
+      "actual_sha256": "37958fe3a698ff8c75b537e2be3b2565382a838d83e5ef37f6c9c8a06c07fc5f",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/ripple-DB_34Pa_.js",
+      "status": 200,
+      "expected_sha256": "390edb2940204c63ec243b7e0d9b9ee89125dc5edc36da048bf4a7089a77e23a",
+      "actual_sha256": "390edb2940204c63ec243b7e0d9b9ee89125dc5edc36da048bf4a7089a77e23a",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/inter-latin-wght-normal-Dx4kXJAl.woff2",
+      "status": 200,
+      "expected_sha256": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62",
+      "actual_sha256": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "brand/elysium-lockup-horizontal-name-black.svg",
+      "status": 200,
+      "expected_sha256": "a45f36017866dceee4f58c11c6161a0fd1dd79c308965a5177ce71efeb4e7497",
+      "actual_sha256": "a45f36017866dceee4f58c11c6161a0fd1dd79c308965a5177ce71efeb4e7497",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/overlayeventbus-BJGaubYS.js",
+      "status": 200,
+      "expected_sha256": "e7ca369642ebf2c7acb26a5f71e6c5ae14109270867762d65786a1a560ce71ed",
+      "actual_sha256": "e7ca369642ebf2c7acb26a5f71e6c5ae14109270867762d65786a1a560ce71ed",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/dialog-XNA6DLBF.js",
+      "status": 200,
+      "expected_sha256": "8ad48c4af20ff2143cc8351e809e53780d2953ad720cfdf4f6dfcedd96f282b8",
+      "actual_sha256": "8ad48c4af20ff2143cc8351e809e53780d2953ad720cfdf4f6dfcedd96f282b8",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/select-DmpDjUEV.js",
+      "status": 200,
+      "expected_sha256": "80bee21ecf09426fda511eb70abd93ce930afa7b2549cfeb6cd9d97443b69165",
+      "actual_sha256": "80bee21ecf09426fda511eb70abd93ce930afa7b2549cfeb6cd9d97443b69165",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/MigrationView-B1hF8BiH.js",
+      "status": 200,
+      "expected_sha256": "5a99675447966a2d8b62c12ad1a5889a874e7b99a8d4448abad629c97b90ce1e",
+      "actual_sha256": "5a99675447966a2d8b62c12ad1a5889a874e7b99a8d4448abad629c97b90ce1e",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/refresh-cw-J6CC8njb.js",
+      "status": 200,
+      "expected_sha256": "24b79d50af0057c95c0a08a94231d9813378731e5363923a8b3a9d5a87407bd6",
+      "actual_sha256": "24b79d50af0057c95c0a08a94231d9813378731e5363923a8b3a9d5a87407bd6",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/ConfirmDialog-BM3nzD_2.js",
+      "status": 200,
+      "expected_sha256": "3065f3a516949139fc71d5ff99d78de8a886f4d366d91591435283e71e090662",
+      "actual_sha256": "3065f3a516949139fc71d5ff99d78de8a886f4d366d91591435283e71e090662",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/ImportedHistoryMetadata-C_hLe-hI.js",
+      "status": 200,
+      "expected_sha256": "f52183f8061f7861627fd7e68a3ec54922aaef3d190bb4ec7ae9139ebfc6d4dd",
+      "actual_sha256": "f52183f8061f7861627fd7e68a3ec54922aaef3d190bb4ec7ae9139ebfc6d4dd",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/ActivityFieldViewer-DvVixKOK.js",
+      "status": 200,
+      "expected_sha256": "392a2aa100682713d0af233bbe88f6c3175549d26b3f2287dd81aaafc2349461",
+      "actual_sha256": "392a2aa100682713d0af233bbe88f6c3175549d26b3f2287dd81aaafc2349461",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/index-BV593Ild.css",
+      "status": 200,
+      "expected_sha256": "73b74b7770c4d4f31f61aa587d3d7fbcf4ce6ccfe8bc7b5f2c0b03e5bbd44f53",
+      "actual_sha256": "73b74b7770c4d4f31f61aa587d3d7fbcf4ce6ccfe8bc7b5f2c0b03e5bbd44f53",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/createLucideIcon-Dqbor38u.js",
+      "status": 200,
+      "expected_sha256": "24b69bab0335069ef550bb2d0d440be38878f53dac8e880899dd0a7ea326fd8a",
+      "actual_sha256": "24b69bab0335069ef550bb2d0d440be38878f53dac8e880899dd0a7ea326fd8a",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/controls-BsIvlwcv.js",
+      "status": 200,
+      "expected_sha256": "f589c3d081f1cc2e2c41e60bbc4bc724ec90eef0264e0b2e05e552a9dbd265b1",
+      "actual_sha256": "f589c3d081f1cc2e2c41e60bbc4bc724ec90eef0264e0b2e05e552a9dbd265b1",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/queries-Dkojhk7m.js",
+      "status": 200,
+      "expected_sha256": "f0fc3eebca0a64fdf9fa88510b172324fcb81ddbdd8f3ef90befe84ef221c9c5",
+      "actual_sha256": "f0fc3eebca0a64fdf9fa88510b172324fcb81ddbdd8f3ef90befe84ef221c9c5",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/index-C37Cee8B.js",
+      "status": 200,
+      "expected_sha256": "72ee913c517fb712a9c86c6cb99455f2d817744dcdaa81b3f3c0ef356509e479",
+      "actual_sha256": "72ee913c517fb712a9c86c6cb99455f2d817744dcdaa81b3f3c0ef356509e479",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "site.webmanifest",
+      "status": 200,
+      "expected_sha256": "9a6d4aca9ad79b897f50e5df784cb5880634f86f568b86cc55c947be88b12bf5",
+      "actual_sha256": "9a6d4aca9ad79b897f50e5df784cb5880634f86f568b86cc55c947be88b12bf5",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/overlayeventbus-BJGaubYS.js",
+      "status": 200,
+      "expected_sha256": "e7ca369642ebf2c7acb26a5f71e6c5ae14109270867762d65786a1a560ce71ed",
+      "actual_sha256": "e7ca369642ebf2c7acb26a5f71e6c5ae14109270867762d65786a1a560ce71ed",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/refresh-cw-J6CC8njb.js",
+      "status": 200,
+      "expected_sha256": "24b79d50af0057c95c0a08a94231d9813378731e5363923a8b3a9d5a87407bd6",
+      "actual_sha256": "24b79d50af0057c95c0a08a94231d9813378731e5363923a8b3a9d5a87407bd6",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/ConfirmDialog-BM3nzD_2.js",
+      "status": 200,
+      "expected_sha256": "3065f3a516949139fc71d5ff99d78de8a886f4d366d91591435283e71e090662",
+      "actual_sha256": "3065f3a516949139fc71d5ff99d78de8a886f4d366d91591435283e71e090662",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/ImportedHistoryMetadata-C_hLe-hI.js",
+      "status": 200,
+      "expected_sha256": "f52183f8061f7861627fd7e68a3ec54922aaef3d190bb4ec7ae9139ebfc6d4dd",
+      "actual_sha256": "f52183f8061f7861627fd7e68a3ec54922aaef3d190bb4ec7ae9139ebfc6d4dd",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/dialog-XNA6DLBF.js",
+      "status": 200,
+      "expected_sha256": "8ad48c4af20ff2143cc8351e809e53780d2953ad720cfdf4f6dfcedd96f282b8",
+      "actual_sha256": "8ad48c4af20ff2143cc8351e809e53780d2953ad720cfdf4f6dfcedd96f282b8",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/ripple-DB_34Pa_.js",
+      "status": 200,
+      "expected_sha256": "390edb2940204c63ec243b7e0d9b9ee89125dc5edc36da048bf4a7089a77e23a",
+      "actual_sha256": "390edb2940204c63ec243b7e0d9b9ee89125dc5edc36da048bf4a7089a77e23a",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/Card-Cbf4Z50Z.js",
+      "status": 200,
+      "expected_sha256": "07b9b6f19ecee2e518f986ff13f6dfc042b9c8996710b31afcb5e3ad9e9cfa7f",
+      "actual_sha256": "07b9b6f19ecee2e518f986ff13f6dfc042b9c8996710b31afcb5e3ad9e9cfa7f",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/MigrationView-B1hF8BiH.js",
+      "status": 200,
+      "expected_sha256": "5a99675447966a2d8b62c12ad1a5889a874e7b99a8d4448abad629c97b90ce1e",
+      "actual_sha256": "5a99675447966a2d8b62c12ad1a5889a874e7b99a8d4448abad629c97b90ce1e",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/FormField-C-tVpKBL.js",
+      "status": 200,
+      "expected_sha256": "c9003edd06d0a0538b26198408817bf610f99f21f7cbb6aa543cd8561ba4aedf",
+      "actual_sha256": "c9003edd06d0a0538b26198408817bf610f99f21f7cbb6aa543cd8561ba4aedf",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/PageHeader-BA7SIxCH.js",
+      "status": 200,
+      "expected_sha256": "9687f8b89cc0933056eef9b17affc37e86aee6b7bcc510c6efe2e2675f5469d3",
+      "actual_sha256": "9687f8b89cc0933056eef9b17affc37e86aee6b7bcc510c6efe2e2675f5469d3",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/ActivityFieldViewer-DvVixKOK.js",
+      "status": 200,
+      "expected_sha256": "392a2aa100682713d0af233bbe88f6c3175549d26b3f2287dd81aaafc2349461",
+      "actual_sha256": "392a2aa100682713d0af233bbe88f6c3175549d26b3f2287dd81aaafc2349461",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "icons/elysium-192.png",
+      "status": 200,
+      "expected_sha256": "5a85b257c838bd9358b67bb317677d6495215212f9ad9a2e467d3422d5791301",
+      "actual_sha256": "5a85b257c838bd9358b67bb317677d6495215212f9ad9a2e467d3422d5791301",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "favicon.svg",
+      "status": 200,
+      "expected_sha256": "2f7558e5cb6602f7f32a8cd30b13ff38e995ee7737baf79db0104b950dea56fb",
+      "actual_sha256": "2f7558e5cb6602f7f32a8cd30b13ff38e995ee7737baf79db0104b950dea56fb",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/select-DmpDjUEV.js",
+      "status": 200,
+      "expected_sha256": "80bee21ecf09426fda511eb70abd93ce930afa7b2549cfeb6cd9d97443b69165",
+      "actual_sha256": "80bee21ecf09426fda511eb70abd93ce930afa7b2549cfeb6cd9d97443b69165",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "brand/elysium-lockup-horizontal-name-black.svg",
+      "status": 200,
+      "expected_sha256": "a45f36017866dceee4f58c11c6161a0fd1dd79c308965a5177ce71efeb4e7497",
+      "actual_sha256": "a45f36017866dceee4f58c11c6161a0fd1dd79c308965a5177ce71efeb4e7497",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/inter-latin-wght-normal-Dx4kXJAl.woff2",
+      "status": 200,
+      "expected_sha256": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62",
+      "actual_sha256": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/LoginView-fwc9qQY9.js",
+      "status": 200,
+      "expected_sha256": "cedc07aca48dc2da2b8fa0ef6d745e60a3e83e03cb561ee3687fd88798b6548d",
+      "actual_sha256": "cedc07aca48dc2da2b8fa0ef6d745e60a3e83e03cb561ee3687fd88798b6548d",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/LoginView-Bu0ZrLP3.css",
+      "status": 200,
+      "expected_sha256": "d276d451a8b11c4031ed18661b01c4c384448ae9405b0ccebc19b59c3cc7d352",
+      "actual_sha256": "d276d451a8b11c4031ed18661b01c4c384448ae9405b0ccebc19b59c3cc7d352",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/phone-BMm72Wvc.js",
+      "status": 200,
+      "expected_sha256": "37958fe3a698ff8c75b537e2be3b2565382a838d83e5ef37f6c9c8a06c07fc5f",
+      "actual_sha256": "37958fe3a698ff8c75b537e2be3b2565382a838d83e5ef37f6c9c8a06c07fc5f",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/todayFeeds-DgGlvI7u.js",
+      "status": 200,
+      "expected_sha256": "fe02b4a45aa9c145f015d7ec551066caedd4c647b1edd338efafdc81d8492b70",
+      "actual_sha256": "fe02b4a45aa9c145f015d7ec551066caedd4c647b1edd338efafdc81d8492b70",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/TodayView-CuzjcRA5.js",
+      "status": 200,
+      "expected_sha256": "26cb5fb86303e6daf1d7f1c220d745cdeff7abcfb5b6baa3ec9449d77dc45d11",
+      "actual_sha256": "26cb5fb86303e6daf1d7f1c220d745cdeff7abcfb5b6baa3ec9449d77dc45d11",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/LogContactDialog-BYiKHtYZ.js",
+      "status": 200,
+      "expected_sha256": "c44c9ee0d2e5acd37deb93034b913e527f92bc3564b1af18995570329c935cef",
+      "actual_sha256": "c44c9ee0d2e5acd37deb93034b913e527f92bc3564b1af18995570329c935cef",
+      "matches": true
+    },
+    {
+      "actor": "alice",
+      "path": "assets/DataTable-j5CqQtpQ.js",
+      "status": 200,
+      "expected_sha256": "30d989c5fcb45403622711cc80d3a4fa60e4ed5e9209c8b82b5a5d14d6d30266",
+      "actual_sha256": "30d989c5fcb45403622711cc80d3a4fa60e4ed5e9209c8b82b5a5d14d6d30266",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/index-BV593Ild.css",
+      "status": 200,
+      "expected_sha256": "73b74b7770c4d4f31f61aa587d3d7fbcf4ce6ccfe8bc7b5f2c0b03e5bbd44f53",
+      "actual_sha256": "73b74b7770c4d4f31f61aa587d3d7fbcf4ce6ccfe8bc7b5f2c0b03e5bbd44f53",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/queries-Dkojhk7m.js",
+      "status": 200,
+      "expected_sha256": "f0fc3eebca0a64fdf9fa88510b172324fcb81ddbdd8f3ef90befe84ef221c9c5",
+      "actual_sha256": "f0fc3eebca0a64fdf9fa88510b172324fcb81ddbdd8f3ef90befe84ef221c9c5",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/createLucideIcon-Dqbor38u.js",
+      "status": 200,
+      "expected_sha256": "24b69bab0335069ef550bb2d0d440be38878f53dac8e880899dd0a7ea326fd8a",
+      "actual_sha256": "24b69bab0335069ef550bb2d0d440be38878f53dac8e880899dd0a7ea326fd8a",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/index-C37Cee8B.js",
+      "status": 200,
+      "expected_sha256": "72ee913c517fb712a9c86c6cb99455f2d817744dcdaa81b3f3c0ef356509e479",
+      "actual_sha256": "72ee913c517fb712a9c86c6cb99455f2d817744dcdaa81b3f3c0ef356509e479",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/controls-BsIvlwcv.js",
+      "status": 200,
+      "expected_sha256": "f589c3d081f1cc2e2c41e60bbc4bc724ec90eef0264e0b2e05e552a9dbd265b1",
+      "actual_sha256": "f589c3d081f1cc2e2c41e60bbc4bc724ec90eef0264e0b2e05e552a9dbd265b1",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "site.webmanifest",
+      "status": 200,
+      "expected_sha256": "9a6d4aca9ad79b897f50e5df784cb5880634f86f568b86cc55c947be88b12bf5",
+      "actual_sha256": "9a6d4aca9ad79b897f50e5df784cb5880634f86f568b86cc55c947be88b12bf5",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "icons/elysium-192.png",
+      "status": 200,
+      "expected_sha256": "5a85b257c838bd9358b67bb317677d6495215212f9ad9a2e467d3422d5791301",
+      "actual_sha256": "5a85b257c838bd9358b67bb317677d6495215212f9ad9a2e467d3422d5791301",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "favicon.svg",
+      "status": 200,
+      "expected_sha256": "2f7558e5cb6602f7f32a8cd30b13ff38e995ee7737baf79db0104b950dea56fb",
+      "actual_sha256": "2f7558e5cb6602f7f32a8cd30b13ff38e995ee7737baf79db0104b950dea56fb",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/LoginView-Bu0ZrLP3.css",
+      "status": 200,
+      "expected_sha256": "d276d451a8b11c4031ed18661b01c4c384448ae9405b0ccebc19b59c3cc7d352",
+      "actual_sha256": "d276d451a8b11c4031ed18661b01c4c384448ae9405b0ccebc19b59c3cc7d352",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/Card-Cbf4Z50Z.js",
+      "status": 200,
+      "expected_sha256": "07b9b6f19ecee2e518f986ff13f6dfc042b9c8996710b31afcb5e3ad9e9cfa7f",
+      "actual_sha256": "07b9b6f19ecee2e518f986ff13f6dfc042b9c8996710b31afcb5e3ad9e9cfa7f",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/FormField-C-tVpKBL.js",
+      "status": 200,
+      "expected_sha256": "c9003edd06d0a0538b26198408817bf610f99f21f7cbb6aa543cd8561ba4aedf",
+      "actual_sha256": "c9003edd06d0a0538b26198408817bf610f99f21f7cbb6aa543cd8561ba4aedf",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/LoginView-fwc9qQY9.js",
+      "status": 200,
+      "expected_sha256": "cedc07aca48dc2da2b8fa0ef6d745e60a3e83e03cb561ee3687fd88798b6548d",
+      "actual_sha256": "cedc07aca48dc2da2b8fa0ef6d745e60a3e83e03cb561ee3687fd88798b6548d",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/TodayView-CuzjcRA5.js",
+      "status": 200,
+      "expected_sha256": "26cb5fb86303e6daf1d7f1c220d745cdeff7abcfb5b6baa3ec9449d77dc45d11",
+      "actual_sha256": "26cb5fb86303e6daf1d7f1c220d745cdeff7abcfb5b6baa3ec9449d77dc45d11",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/PageHeader-BA7SIxCH.js",
+      "status": 200,
+      "expected_sha256": "9687f8b89cc0933056eef9b17affc37e86aee6b7bcc510c6efe2e2675f5469d3",
+      "actual_sha256": "9687f8b89cc0933056eef9b17affc37e86aee6b7bcc510c6efe2e2675f5469d3",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/LogContactDialog-BYiKHtYZ.js",
+      "status": 200,
+      "expected_sha256": "c44c9ee0d2e5acd37deb93034b913e527f92bc3564b1af18995570329c935cef",
+      "actual_sha256": "c44c9ee0d2e5acd37deb93034b913e527f92bc3564b1af18995570329c935cef",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/overlayeventbus-BJGaubYS.js",
+      "status": 200,
+      "expected_sha256": "e7ca369642ebf2c7acb26a5f71e6c5ae14109270867762d65786a1a560ce71ed",
+      "actual_sha256": "e7ca369642ebf2c7acb26a5f71e6c5ae14109270867762d65786a1a560ce71ed",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/DataTable-j5CqQtpQ.js",
+      "status": 200,
+      "expected_sha256": "30d989c5fcb45403622711cc80d3a4fa60e4ed5e9209c8b82b5a5d14d6d30266",
+      "actual_sha256": "30d989c5fcb45403622711cc80d3a4fa60e4ed5e9209c8b82b5a5d14d6d30266",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/todayFeeds-DgGlvI7u.js",
+      "status": 200,
+      "expected_sha256": "fe02b4a45aa9c145f015d7ec551066caedd4c647b1edd338efafdc81d8492b70",
+      "actual_sha256": "fe02b4a45aa9c145f015d7ec551066caedd4c647b1edd338efafdc81d8492b70",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/dialog-XNA6DLBF.js",
+      "status": 200,
+      "expected_sha256": "8ad48c4af20ff2143cc8351e809e53780d2953ad720cfdf4f6dfcedd96f282b8",
+      "actual_sha256": "8ad48c4af20ff2143cc8351e809e53780d2953ad720cfdf4f6dfcedd96f282b8",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/select-DmpDjUEV.js",
+      "status": 200,
+      "expected_sha256": "80bee21ecf09426fda511eb70abd93ce930afa7b2549cfeb6cd9d97443b69165",
+      "actual_sha256": "80bee21ecf09426fda511eb70abd93ce930afa7b2549cfeb6cd9d97443b69165",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "brand/elysium-lockup-horizontal-name-black.svg",
+      "status": 200,
+      "expected_sha256": "a45f36017866dceee4f58c11c6161a0fd1dd79c308965a5177ce71efeb4e7497",
+      "actual_sha256": "a45f36017866dceee4f58c11c6161a0fd1dd79c308965a5177ce71efeb4e7497",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/phone-BMm72Wvc.js",
+      "status": 200,
+      "expected_sha256": "37958fe3a698ff8c75b537e2be3b2565382a838d83e5ef37f6c9c8a06c07fc5f",
+      "actual_sha256": "37958fe3a698ff8c75b537e2be3b2565382a838d83e5ef37f6c9c8a06c07fc5f",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/ripple-DB_34Pa_.js",
+      "status": 200,
+      "expected_sha256": "390edb2940204c63ec243b7e0d9b9ee89125dc5edc36da048bf4a7089a77e23a",
+      "actual_sha256": "390edb2940204c63ec243b7e0d9b9ee89125dc5edc36da048bf4a7089a77e23a",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/inter-latin-wght-normal-Dx4kXJAl.woff2",
+      "status": 200,
+      "expected_sha256": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62",
+      "actual_sha256": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "site.webmanifest",
+      "status": 200,
+      "expected_sha256": "9a6d4aca9ad79b897f50e5df784cb5880634f86f568b86cc55c947be88b12bf5",
+      "actual_sha256": "9a6d4aca9ad79b897f50e5df784cb5880634f86f568b86cc55c947be88b12bf5",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/index-BV593Ild.css",
+      "status": 200,
+      "expected_sha256": "73b74b7770c4d4f31f61aa587d3d7fbcf4ce6ccfe8bc7b5f2c0b03e5bbd44f53",
+      "actual_sha256": "73b74b7770c4d4f31f61aa587d3d7fbcf4ce6ccfe8bc7b5f2c0b03e5bbd44f53",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/controls-BsIvlwcv.js",
+      "status": 200,
+      "expected_sha256": "f589c3d081f1cc2e2c41e60bbc4bc724ec90eef0264e0b2e05e552a9dbd265b1",
+      "actual_sha256": "f589c3d081f1cc2e2c41e60bbc4bc724ec90eef0264e0b2e05e552a9dbd265b1",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/queries-Dkojhk7m.js",
+      "status": 200,
+      "expected_sha256": "f0fc3eebca0a64fdf9fa88510b172324fcb81ddbdd8f3ef90befe84ef221c9c5",
+      "actual_sha256": "f0fc3eebca0a64fdf9fa88510b172324fcb81ddbdd8f3ef90befe84ef221c9c5",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/createLucideIcon-Dqbor38u.js",
+      "status": 200,
+      "expected_sha256": "24b69bab0335069ef550bb2d0d440be38878f53dac8e880899dd0a7ea326fd8a",
+      "actual_sha256": "24b69bab0335069ef550bb2d0d440be38878f53dac8e880899dd0a7ea326fd8a",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/index-C37Cee8B.js",
+      "status": 200,
+      "expected_sha256": "72ee913c517fb712a9c86c6cb99455f2d817744dcdaa81b3f3c0ef356509e479",
+      "actual_sha256": "72ee913c517fb712a9c86c6cb99455f2d817744dcdaa81b3f3c0ef356509e479",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/FormField-C-tVpKBL.js",
+      "status": 200,
+      "expected_sha256": "c9003edd06d0a0538b26198408817bf610f99f21f7cbb6aa543cd8561ba4aedf",
+      "actual_sha256": "c9003edd06d0a0538b26198408817bf610f99f21f7cbb6aa543cd8561ba4aedf",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/Card-Cbf4Z50Z.js",
+      "status": 200,
+      "expected_sha256": "07b9b6f19ecee2e518f986ff13f6dfc042b9c8996710b31afcb5e3ad9e9cfa7f",
+      "actual_sha256": "07b9b6f19ecee2e518f986ff13f6dfc042b9c8996710b31afcb5e3ad9e9cfa7f",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/refresh-cw-J6CC8njb.js",
+      "status": 200,
+      "expected_sha256": "24b79d50af0057c95c0a08a94231d9813378731e5363923a8b3a9d5a87407bd6",
+      "actual_sha256": "24b79d50af0057c95c0a08a94231d9813378731e5363923a8b3a9d5a87407bd6",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/ActivityFieldViewer-DvVixKOK.js",
+      "status": 200,
+      "expected_sha256": "392a2aa100682713d0af233bbe88f6c3175549d26b3f2287dd81aaafc2349461",
+      "actual_sha256": "392a2aa100682713d0af233bbe88f6c3175549d26b3f2287dd81aaafc2349461",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/PageHeader-BA7SIxCH.js",
+      "status": 200,
+      "expected_sha256": "9687f8b89cc0933056eef9b17affc37e86aee6b7bcc510c6efe2e2675f5469d3",
+      "actual_sha256": "9687f8b89cc0933056eef9b17affc37e86aee6b7bcc510c6efe2e2675f5469d3",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/dialog-XNA6DLBF.js",
+      "status": 200,
+      "expected_sha256": "8ad48c4af20ff2143cc8351e809e53780d2953ad720cfdf4f6dfcedd96f282b8",
+      "actual_sha256": "8ad48c4af20ff2143cc8351e809e53780d2953ad720cfdf4f6dfcedd96f282b8",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/overlayeventbus-BJGaubYS.js",
+      "status": 200,
+      "expected_sha256": "e7ca369642ebf2c7acb26a5f71e6c5ae14109270867762d65786a1a560ce71ed",
+      "actual_sha256": "e7ca369642ebf2c7acb26a5f71e6c5ae14109270867762d65786a1a560ce71ed",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/ImportedHistoryMetadata-C_hLe-hI.js",
+      "status": 200,
+      "expected_sha256": "f52183f8061f7861627fd7e68a3ec54922aaef3d190bb4ec7ae9139ebfc6d4dd",
+      "actual_sha256": "f52183f8061f7861627fd7e68a3ec54922aaef3d190bb4ec7ae9139ebfc6d4dd",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/select-DmpDjUEV.js",
+      "status": 200,
+      "expected_sha256": "80bee21ecf09426fda511eb70abd93ce930afa7b2549cfeb6cd9d97443b69165",
+      "actual_sha256": "80bee21ecf09426fda511eb70abd93ce930afa7b2549cfeb6cd9d97443b69165",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/ripple-DB_34Pa_.js",
+      "status": 200,
+      "expected_sha256": "390edb2940204c63ec243b7e0d9b9ee89125dc5edc36da048bf4a7089a77e23a",
+      "actual_sha256": "390edb2940204c63ec243b7e0d9b9ee89125dc5edc36da048bf4a7089a77e23a",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/MigrationView-B1hF8BiH.js",
+      "status": 200,
+      "expected_sha256": "5a99675447966a2d8b62c12ad1a5889a874e7b99a8d4448abad629c97b90ce1e",
+      "actual_sha256": "5a99675447966a2d8b62c12ad1a5889a874e7b99a8d4448abad629c97b90ce1e",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "icons/elysium-192.png",
+      "status": 200,
+      "expected_sha256": "5a85b257c838bd9358b67bb317677d6495215212f9ad9a2e467d3422d5791301",
+      "actual_sha256": "5a85b257c838bd9358b67bb317677d6495215212f9ad9a2e467d3422d5791301",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/ConfirmDialog-BM3nzD_2.js",
+      "status": 200,
+      "expected_sha256": "3065f3a516949139fc71d5ff99d78de8a886f4d366d91591435283e71e090662",
+      "actual_sha256": "3065f3a516949139fc71d5ff99d78de8a886f4d366d91591435283e71e090662",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/LogContactDialog-BYiKHtYZ.js",
+      "status": 200,
+      "expected_sha256": "c44c9ee0d2e5acd37deb93034b913e527f92bc3564b1af18995570329c935cef",
+      "actual_sha256": "c44c9ee0d2e5acd37deb93034b913e527f92bc3564b1af18995570329c935cef",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/DataTable-j5CqQtpQ.js",
+      "status": 200,
+      "expected_sha256": "30d989c5fcb45403622711cc80d3a4fa60e4ed5e9209c8b82b5a5d14d6d30266",
+      "actual_sha256": "30d989c5fcb45403622711cc80d3a4fa60e4ed5e9209c8b82b5a5d14d6d30266",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/TodayView-CuzjcRA5.js",
+      "status": 200,
+      "expected_sha256": "26cb5fb86303e6daf1d7f1c220d745cdeff7abcfb5b6baa3ec9449d77dc45d11",
+      "actual_sha256": "26cb5fb86303e6daf1d7f1c220d745cdeff7abcfb5b6baa3ec9449d77dc45d11",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "brand/elysium-lockup-horizontal-name-black.svg",
+      "status": 200,
+      "expected_sha256": "a45f36017866dceee4f58c11c6161a0fd1dd79c308965a5177ce71efeb4e7497",
+      "actual_sha256": "a45f36017866dceee4f58c11c6161a0fd1dd79c308965a5177ce71efeb4e7497",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/phone-BMm72Wvc.js",
+      "status": 200,
+      "expected_sha256": "37958fe3a698ff8c75b537e2be3b2565382a838d83e5ef37f6c9c8a06c07fc5f",
+      "actual_sha256": "37958fe3a698ff8c75b537e2be3b2565382a838d83e5ef37f6c9c8a06c07fc5f",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/todayFeeds-DgGlvI7u.js",
+      "status": 200,
+      "expected_sha256": "fe02b4a45aa9c145f015d7ec551066caedd4c647b1edd338efafdc81d8492b70",
+      "actual_sha256": "fe02b4a45aa9c145f015d7ec551066caedd4c647b1edd338efafdc81d8492b70",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/inter-latin-wght-normal-Dx4kXJAl.woff2",
+      "status": 200,
+      "expected_sha256": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62",
+      "actual_sha256": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/LoginView-Bu0ZrLP3.css",
+      "status": 200,
+      "expected_sha256": "d276d451a8b11c4031ed18661b01c4c384448ae9405b0ccebc19b59c3cc7d352",
+      "actual_sha256": "d276d451a8b11c4031ed18661b01c4c384448ae9405b0ccebc19b59c3cc7d352",
+      "matches": true
+    },
+    {
+      "actor": "carol",
+      "path": "assets/LoginView-fwc9qQY9.js",
+      "status": 200,
+      "expected_sha256": "cedc07aca48dc2da2b8fa0ef6d745e60a3e83e03cb561ee3687fd88798b6548d",
+      "actual_sha256": "cedc07aca48dc2da2b8fa0ef6d745e60a3e83e03cb561ee3687fd88798b6548d",
+      "matches": true
+    }
+  ],
+  "sessions": [
+    {
+      "actor": "alice",
+      "login_started": true,
+      "login_response_status": 200,
+      "cookie_captured": true,
+      "ui_logout_status": 204,
+      "ui_logout_destination": "/login",
+      "delete_status": 204,
+      "original_cookie_me_status": 401,
+      "revoked": true,
+      "owned_profile_removed": true
+    },
+    {
+      "actor": "carol",
+      "login_started": true,
+      "login_response_status": 200,
+      "cookie_captured": true,
+      "ui_logout_status": 204,
+      "ui_logout_destination": "/login",
+      "delete_status": 204,
+      "original_cookie_me_status": 401,
+      "revoked": true,
+      "owned_profile_removed": true
+    }
+  ],
+  "source_or_business_mutations": 0,
+  "release": {
+    "deployed_revision": "5924f097a7d7475e7e9742bb08e102d7c7ca98d2",
+    "binary_sha256": {
+      "crm-api": "ffeee8cb408e0df716892bc7cf3a1981b7e09a280f36566fcab9e59d6989690a",
+      "crm-admin": "64e85ba5c2eb33709a5f0fe491aeffd11ce31ca4eeb1d333a81c03d12b8b69e1",
+      "migrate": "cdfc28d856326833782b763358f17c7431abd32dbbbc9bbb99187fa42bca687b"
+    },
+    "binary_provenance": "Coordinator-owned deployment record; this browser does not inspect running processes.",
+    "expected_web_assets": 73,
+    "local_web_assets_match_manifest": true,
+    "local_index_sha256": "e4b640191a635df4e528138e0b9575c8fb0e96db16a38cb5f9a01e4c3e1c5032",
+    "metadata": [
+      {
+        "file": "build-sha256.json",
+        "sha256": "d368e5fe1eb5679b9d9fbbc29a4b42de488aa87d8b17115b6507a8e96d4a1bd9"
+      },
+      {
+        "file": "web-build-sha256.json",
+        "sha256": "7ef75de1c6a323cbb7b0f9a13f2cbd79a6b179ddb52f7a6a4382adf17f015318"
+      },
+      {
+        "file": "deployed.json",
+        "sha256": "6bf1a2011c46d75a9f3f1473f177b2b795998769a81674a99297aef5a1cd85af"
+      }
+    ]
+  },
+  "scope": "Empty shared development only. Existing populated synthetic walkthrough is separate evidence. No source qualification or import execution is performed.",
+  "helper_sha256": "d4866ac385d6daf1d83f7628ef44d5621a54ce0053c82e055f22de39a8e94834",
+  "unexpected_http": [],
+  "unexpected_console_errors": [],
+  "unexpected_request_failures": [],
+  "created_session_count": 2,
+  "all_created_sessions_revoked": true,
+  "both_actors_completed": true,
+  "session_revocation_proved": true,
+  "observed_public_assets_match": true,
+  "migration_asset_observed": true,
+  "frame_hashes_complete": true,
+  "public_html_qualification": "Actual public frame HTML and DOM hashes are recorded. Edge-injected HTML is not assumed byte-identical to the local index.html; every observed manifest asset is compared byte-for-byte.",
+  "finished_at": "2026-09-12T22:27:54.558Z"
+}

@@ -1,0 +1,9 @@
+{
+  "changed_configuration_keys": [
+    "CRM_MIGRATION_RELEASE_REPORT"
+  ],
+  "current_report_path": "/private/tmp/crm-010d2-release-q9q7lzwf/release-report.json",
+  "private_mode": "0600",
+  "fub_system_settings_present": {},
+  "values_published": false
+}

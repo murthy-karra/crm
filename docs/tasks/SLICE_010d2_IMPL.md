@@ -1,12 +1,13 @@
 # Slice 010d2 — Execution brief
 
-**IMPLEMENTED / VERIFIED WITH ISOLATED SYNTHETIC DATA — 2026-09-12, D-072.**
-See [verification](SLICE_010d2_VERIFICATION.md); source is uncommitted and undeployed.
+**IMPLEMENTATION AND SHARED-DEVELOPMENT RELEASE COMPLETE — 2026-09-12.**
+See [verification](SLICE_010d2_VERIFICATION.md) and the separately authorized
+[release](SLICE_010d2_RELEASE.md) under D-072's explicit follow-up.
 The user approved the reviewed
 [specification](../specs/SLICE_010d2.md), metadata-first policy and declared import,
 timeline and compatibility contracts after the [READY planning review](SLICE_010d2_REVIEW.md).
-Implement and verify with isolated synthetic data. Live source/customer processing,
-publication and deployment remain outside this task.
+The original implementation used isolated synthetic data. Its release follow-up
+authorized publication/deployment; live source/customer processing remains outside scope.
 
 ## Outcome and authority
 

@@ -1,0 +1,5 @@
+{
+  "classification": "python_tls_transport",
+  "description": "Host Python urllib SSL failed TLSV1_ALERT_PROTOCOL_VERSION before the first public response; local12 health/anonymous checks passed. No session was created. curl public health200 verified the working host TLS transport. The final helper uses curl without disabling verification.",
+  "product_failure": false
+}

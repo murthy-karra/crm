@@ -1,13 +1,14 @@
 # Slice 010d — Historical migration ladder
 
-**010d1 DEPLOYED / VERIFIED IN SHARED DEVELOPMENT — 2026-09-12.** D-069 accepts
+**010d1 / 010d2 DEPLOYED AND VERIFIED IN SHARED DEVELOPMENT — 2026-09-12.** D-069 accepts
 splitting capture from timeline import. D-070's complete 010d1 contracts,
 implementation and isolated synthetic checks are complete; its follow-up
 completed Git integration, cleanup and [shared-development release](../tasks/SLICE_010d1_RELEASE.md).
 D-072 approves the reviewed [010d2 specification](SLICE_010d2.md), declared
 contracts and isolated synthetic implementation, with user-selected metadata-first
-exposure. 010d2 is [implemented and verified with isolated synthetic data](../tasks/SLICE_010d2_VERIFICATION.md)
-in its uncommitted worktree; Git integration and deployment remain separate.
+exposure. 010d2's [implementation verification](../tasks/SLICE_010d2_VERIFICATION.md)
+was followed by explicitly authorized Git integration, cleanup and
+[shared-development release](../tasks/SLICE_010d2_RELEASE.md).
 The original 010d1 planning baseline was main
 `028d6133e1b7c3f81642275e030f63e98b2cca49`; original verification remains in
 [the implementation evidence](../tasks/SLICE_010d1_VERIFICATION.md).
@@ -29,7 +30,7 @@ they cannot be imported from summaries such as `lastCommunication`.
 | Rung | Deliverable | Exit condition |
 |---|---|---|
 | **010d1 — capture and coverage** | [Detailed specification](SLICE_010d1.md), [execution brief](../tasks/SLICE_010d1_IMPL.md): separately confirmed, encrypted, resumable capture of API-visible events/calls/text messages; bounded admin evidence and coverage report | Approved contracts, implemented synthetic source/DB/Web verification and independent review. Report collection enumeration, API restrictions and uncaptured content separately. No native history writes. |
-| **010d2 — qualified historical timeline** | [Approved specification](SLICE_010d2.md) based on 010d1 evidence: explicit external-history types, source identity/actor/time rules, content placement/exposure, parent mapping, idempotent import and bounded timeline reads | [Implemented and verified](../tasks/SLICE_010d2_VERIFICATION.md) under D-072 with isolated synthetic data. Both complete readers are fenced and new review pages are bounded. Source is uncommitted and undeployed; native fact promotion, live qualification and activation remain separate. |
+| **010d2 — qualified historical timeline** | [Approved specification](SLICE_010d2.md) based on 010d1 evidence: explicit external-history types, source identity/actor/time rules, content placement/exposure, parent mapping, idempotent import and bounded timeline reads | [Implemented and verified](../tasks/SLICE_010d2_VERIFICATION.md), then [released](../tasks/SLICE_010d2_RELEASE.md) under D-072's explicit follow-up. Both complete readers are fenced and new review pages are bounded. Native fact promotion, live qualification and activation remain separate. |
 | **Further source/content work, when qualified** | Ordinary email/correspondence, recordings/media and any still-uncovered families | Prove supported source retrieval and satisfy their storage/privacy/consent prerequisites. Split further only where the evidence requires it. No claim that 010d1/2 silently completes these families. |
 | **010e — deltas and activation** | Per-entity changes/deletions, repair, final reconciliation, source cutoff and explicit activation | Resolve Today/backlog/response semantics, communication restrictions and customer readiness before releasing the admin review hold. |
 

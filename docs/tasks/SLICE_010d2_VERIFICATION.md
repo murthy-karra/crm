@@ -4,9 +4,11 @@
 synthetic verification. This record does not authorize or claim Git integration,
 deployment, live FUB processing, readable bodies or workspace activation.
 
-Source: `codex/slice-010d2-history-timeline`, based on
+Verification source was the then-uncommitted `codex/slice-010d2-history-timeline`, based on
 `27f3fe4654ace5840412e1364ea36974a1266ad8`, in
-`/Users/karrad/projects/crm-worktrees/slice-010d2`. Changes are uncommitted.
+`/Users/karrad/projects/crm-worktrees/slice-010d2`. The later explicitly authorized
+[release](SLICE_010d2_RELEASE.md) committed, merged, pushed and deployed that
+implementation and removed the worktree. These original checks retain their attribution.
 The [approved specification](../specs/SLICE_010d2.md) and
 [concrete contract](SLICE_010d2_CONTRACT.md) define the implementation.
 The [source manifest](../design/qa/slice-010d2-2026-09-12/source-sha256.txt) pins

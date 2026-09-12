@@ -1,0 +1,76 @@
+{
+  "kind": "010d2 released empty-state visual inspection",
+  "status": "passed",
+  "inspected_at": "2026-09-12T22:29:47.857833+00:00",
+  "browser_result_path": "/private/tmp/crm-010d2-release-q9q7lzwf/browser-smoke-2026-09-12T22-27-48.665Z/browser-results.json",
+  "browser_result_sha256": "68fcfe8d32bb71173addeee0addc693ea8dbcb6c6cce6527f2c947e358beedc5",
+  "actual_images_viewed": 4,
+  "images": [
+    {
+      "path": "/private/tmp/crm-010d2-release-q9q7lzwf/browser-smoke-2026-09-12T22-27-48.665Z/history-import-empty-desktop.png",
+      "sha256": "4e99280f73177e3c77f4448fb3054678cb419aa6562ce3792cf5ba13f6c7e49f",
+      "width": 1076,
+      "height": 219,
+      "inspected_with": "view_image",
+      "finding": "Panel crop at desktop: heading, retained-only scope, parent label/select and Refresh action are readable. Disabled parent pagination fits. No preparation action or attempt/capture selector is exposed without a parent.",
+      "actionable_findings": []
+    },
+    {
+      "path": "/private/tmp/crm-010d2-release-q9q7lzwf/browser-smoke-2026-09-12T22-27-48.665Z/migration-desktop.png",
+      "sha256": "6e56efee323073bdb4d79cde7d0eb63fb391eb108b29018607c21596e859deab",
+      "width": 1360,
+      "height": 2461,
+      "inspected_with": "view_image",
+      "finding": "Full-page desktop capture: the new import card is distinct from historical source capture and fits the page. The complete empty migration screen contains no captured/imported customer rows. Full-page framing includes fixed navigation at the current scroll position.",
+      "actionable_findings": []
+    },
+    {
+      "path": "/private/tmp/crm-010d2-release-q9q7lzwf/browser-smoke-2026-09-12T22-27-48.665Z/history-import-empty-390px.png",
+      "sha256": "d2774875f28922d40ebf3a65261db4441fc213b73f219a596eeecad9cb7de754",
+      "width": 294,
+      "height": 351,
+      "inspected_with": "view_image",
+      "finding": "Panel crop at 390px viewport: heading and scope wrap, Refresh and disabled pagination remain fully visible. The native select shortens its placeholder within its fixed width; the complete field label remains visible. No clipped or unreachable action was observed.",
+      "actionable_findings": []
+    },
+    {
+      "path": "/private/tmp/crm-010d2-release-q9q7lzwf/browser-smoke-2026-09-12T22-27-48.665Z/migration-390px.png",
+      "sha256": "59a85a78dc3f911c9dd9139d0ba551140e4dd9eda48f0659951481c96103e3a5",
+      "width": 390,
+      "height": 4039,
+      "inspected_with": "view_image",
+      "finding": "Full-page narrow capture: migration cards stack vertically and the new import card remains within the page width. Its detailed controls were inspected in the separate native-width panel crop. This long full-page image was display-resized; it is not a claim to inspect every existing card control at native scale.",
+      "actionable_findings": []
+    }
+  ],
+  "actionable_layout_findings": [],
+  "viewport_qualification": "Desktop 1360x950 and mobile390x844. Panel screenshots are crops, and full-page screenshots extend beyond the viewport. Browser metrics report no document horizontal overflow and all new panel buttons in viewport horizontal bounds with height40px.",
+  "session_cleanup": [
+    {
+      "actor": "alice",
+      "login_started": true,
+      "login_response_status": 200,
+      "cookie_captured": true,
+      "ui_logout_status": 204,
+      "ui_logout_destination": "/login",
+      "delete_status": 204,
+      "original_cookie_me_status": 401,
+      "revoked": true,
+      "owned_profile_removed": true
+    },
+    {
+      "actor": "carol",
+      "login_started": true,
+      "login_response_status": 200,
+      "cookie_captured": true,
+      "ui_logout_status": 204,
+      "ui_logout_destination": "/login",
+      "delete_status": 204,
+      "original_cookie_me_status": 401,
+      "revoked": true,
+      "owned_profile_removed": true
+    }
+  ],
+  "source_or_business_mutations": 0,
+  "limitations": "Empty shared-development release only. No eligible People import exists, so this smoke does not exercise populated preparation/confirmation, import execution, or Person timeline/detail; those are separate implementation walkthrough evidence."
+}

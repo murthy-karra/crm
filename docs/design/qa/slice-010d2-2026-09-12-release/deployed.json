@@ -1,0 +1,22 @@
+{
+  "revision": "5924f097a7d7475e7e9742bb08e102d7c7ca98d2",
+  "implementation": "f6f74262e0cd019cb8fd49a114529aafea4f2aca",
+  "merge": "5924f097a7d7475e7e9742bb08e102d7c7ca98d2",
+  "api_listener": [
+    95513
+  ],
+  "web_listener": [
+    95531
+  ],
+  "api_launcher": 95513,
+  "web_launcher": 95514,
+  "artifacts": {
+    "crm-api": "ffeee8cb408e0df716892bc7cf3a1981b7e09a280f36566fcab9e59d6989690a",
+    "crm-admin": "64e85ba5c2eb33709a5f0fe491aeffd11ce31ca4eeb1d333a81c03d12b8b69e1",
+    "migrate": "cdfc28d856326833782b763358f17c7431abd32dbbbc9bbb99187fa42bca687b"
+  },
+  "index_sha256": "e4b640191a635df4e528138e0b9575c8fb0e96db16a38cb5f9a01e4c3e1c5032",
+  "migration": 20260922000001,
+  "retired_artifact_paths": 0,
+  "confirmation_evidence_expires_at": "2026-09-12T22:41:23Z"
+}

@@ -1,24 +1,24 @@
 # Project state
 
-Last updated: 2026-09-12 (010d1 deployed; 010d2 implemented and verified with isolated synthetic data under D-072).
+Last updated: 2026-09-12 (010d2 deployed and verified in shared development under D-072's release follow-up).
 This file holds current operational status, active work and live residuals.
 [PROJECT_HISTORY.md](PROJECT_HISTORY.md) preserves earlier progress, the slice
 ledger and historical measurements; its old instructions are not current work.
 
 ## Current state
 
-**010d1 is deployed and verified in shared development.** The current runtime
-source is `eb1aa35307852e3746f7140318bab1790d680a64`, following implementation integration `77287a0`,
-at [app.tarams.org](https://app.tarams.org/manage/migration). The additive history
-migration `20260921000001` is applied to `crm_dev`. Actual API/admin/migrator and
-Web artifacts, fresh compatibility preflight, database preservation and final
-HTTP/browser checks are recorded in the
-[010d1 release](../tasks/SLICE_010d1_RELEASE.md). That record also preserves the
-initial missing-`no-store` denial finding, its correction and focused regression,
-failed attempts and successful final checks. Original implementation gates keep
-their original source manifests. The implementation branch/worktree was removed;
-010d2 now uses a separate implementation worktree. No live source/customer processing or
-activation occurred. Confirmation still requires a fresh five-minute
+**010d2 is deployed and verified in shared development.** The current runtime
+source is `5924f097a7d7475e7e9742bb08e102d7c7ca98d2`, incorporating implementation
+`f6f74262e0cd019cb8fd49a114529aafea4f2aca`, at
+[app.tarams.org](https://app.tarams.org/manage/migration). Additive migration
+`20260922000001` is applied to `crm_dev`. Actual API/admin/migrator/Web hashes,
+independent timeline preflight, backup and exact preservation of 108 prior tenant
+rowsets are recorded in the [010d2 release](../tasks/SLICE_010d2_RELEASE.md).
+The derived review state exactly matches 100,077 existing People; import/fact
+tables remain empty. Public HTTP/browser checks passed. Source was committed,
+merged and pushed, and the implementation branch/worktree removed; main is the
+sole worktree. No live source/customer processing or activation occurred.
+Confirmation still requires a fresh five-minute
 `CRM_MIGRATION_RELEASE_REPORT`; consult the current release record for its
 observed expiry and actual running artifact identity before an operational step.
 
@@ -92,8 +92,10 @@ follow-up remains open in production readiness.
   both complete-reader fences and the confirmation race are verified. One bounded
   implementation review's four findings were corrected. Full gates passed:
   963 Rust, 1,164 Web and 953 DB tests, plus supporting suites, paired/query-plan
-  checks and a real-API desktop/390px walkthrough. Source remains uncommitted in
-  `codex/slice-010d2-history-timeline`; Git integration and deployment are separate.
+  checks and a real-API desktop/390px walkthrough. The explicitly authorized
+  [release](../tasks/SLICE_010d2_RELEASE.md) completed Git integration, push,
+  cleanup and shared-development deployment, with 65 public HTTP checks and
+  desktop/390px verification. Original implementation evidence keeps its attribution.
 - **010d1 implementation and release:** complete under D-070 and its follow-up;
   source is committed, merged, pushed and deployed in shared development, with
   the implementation worktree/branch removed. Both bounded reviews are READY.
@@ -529,10 +531,9 @@ and now lives only in git history.
 
 ## Next recommended action
 
-1. 010d2 is [implemented and verified](../tasks/SLICE_010d2_VERIFICATION.md), ready
-   for the separate Git integration and shared-development release task under
-   D-072's authorization boundary. The [release handoff](../tasks/SLICE_010d2_IMPL.md#release-handoff)
-   requires actual artifact inventory and independent timeline readiness.
+1. The [010d2 release](../tasks/SLICE_010d2_RELEASE.md) is complete and forms the
+   baseline for the next bounded slice. Future import confirmation still requires
+   fresh actual artifact inventory and independent timeline readiness.
    The completed [010d1 capture evidence](../tasks/SLICE_010d1_VERIFICATION.md)
    and [release](../tasks/SLICE_010d1_RELEASE.md) remain its inputs. The SQLx cancellation,
    audited call-history ordering and inherited core worker handoff concerns
@@ -554,7 +555,9 @@ and now lives only in git history.
 ## Approval currently required
 
 - D-072 approves 010d2 contracts, implementation and isolated synthetic checks.
-  Commit/merge/push and deployment remain separate scopes.
+  Its explicit follow-up authorized the completed commit, merge, push, cleanup
+  and shared-development deployment. Live source/customer processing, body/media
+  access, activation and production-cluster deployment remain separate scopes.
 - D-070 approves full 010d1 source, lifetime, storage, HTTP and capability
   contracts, implementation and isolated synthetic checks; its follow-up
   authorized the completed commit, merge, push, cleanup and shared-development

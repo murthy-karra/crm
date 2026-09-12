@@ -1,0 +1,15 @@
+{
+  "command": [
+    "pnpm",
+    "exec",
+    "vite",
+    "build",
+    "--outDir",
+    "/private/tmp/crm-010d2-release-q9q7lzwf/web-dist-staged"
+  ],
+  "exit_code": 0,
+  "elapsed_seconds": 1.525,
+  "revision": "5924f097a7d7475e7e9742bb08e102d7c7ca98d2",
+  "log_sha256": "e8b0750cf675522c35b97d9be105adf1e5c7bf65519032010f8116cf1121765f",
+  "source_manifest_sha256": "2776b48a67b856ddfc6c118847ff327ad0d7248c95bbe561e9b04bf03c71ec6b"
+}

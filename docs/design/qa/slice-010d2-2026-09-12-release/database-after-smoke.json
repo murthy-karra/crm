@@ -1,0 +1,810 @@
+{
+  "migration": 20260922000001,
+  "business_counts": {
+    "app_user": 105,
+    "assignment_changed": 100076,
+    "call": 3,
+    "call_completed": 3,
+    "capture_address": 104,
+    "capture_message": 2,
+    "capture_token_rotated": 0,
+    "contact_attempted": 67040,
+    "contact_method": 160083,
+    "correspondence_captured": 3,
+    "correspondence_raw": 4,
+    "custom_field": 0,
+    "custom_field_option": 0,
+    "inquiry": 104968,
+    "inquiry_received": 104968,
+    "intake_extraction": 14,
+    "intake_rotation": 1,
+    "intake_token_rotated": 1,
+    "invitation": 104,
+    "invitation_issued": 104,
+    "invitation_resolved": 104,
+    "local_credential": 105,
+    "membership_changed": 110,
+    "note": 1,
+    "operator_proposal": 0,
+    "operator_task_proposal": 0,
+    "operator_tool_call": 7,
+    "operator_turn": 6,
+    "organization": 3,
+    "organization_created": 3,
+    "organization_membership": 104,
+    "person": 100077,
+    "person_custom_field_value": 0,
+    "person_tag": 0,
+    "platform_admin": 1,
+    "raw_payload": 104972,
+    "routing_decision": 104968,
+    "saved_list": 4,
+    "stage": 27,
+    "stage_changed": 100078,
+    "tag": 1,
+    "task": 1,
+    "today_feed_changed": 0,
+    "today_system_feed": 9,
+    "today_work_source": 0
+  },
+  "migration_counts": {
+    "migration_activity_choice": 0,
+    "migration_activity_identity": 0,
+    "migration_activity_import": 0,
+    "migration_activity_issue": 0,
+    "migration_activity_manifest": 0,
+    "migration_activity_manifest_issue": 0,
+    "migration_activity_mapping": 0,
+    "migration_activity_plan": 0,
+    "migration_activity_receipt": 0,
+    "migration_activity_reservation": 0,
+    "migration_activity_result": 0,
+    "migration_activity_result_issue": 0,
+    "migration_activity_source": 0,
+    "migration_assessment": 0,
+    "migration_assessment_check": 0,
+    "migration_assessment_evidence": 0,
+    "migration_connection": 0,
+    "migration_history_capture": 0,
+    "migration_history_capture_run": 0,
+    "migration_history_identity": 0,
+    "migration_history_import_anchor": 0,
+    "migration_history_import_candidate": 0,
+    "migration_history_import_display": 0,
+    "migration_history_import_identity": 0,
+    "migration_history_import_manifest": 0,
+    "migration_history_import_plan": 0,
+    "migration_history_import_receipt": 0,
+    "migration_history_import_reservation": 0,
+    "migration_history_import_result": 0,
+    "migration_history_import_run": 0,
+    "migration_history_import_stream": 0,
+    "migration_history_observation": 0,
+    "migration_history_person_link": 0,
+    "migration_history_receipt": 0,
+    "migration_history_reservation": 0,
+    "migration_history_review_state": 100077,
+    "migration_history_seen": 0,
+    "migration_history_stream": 0,
+    "migration_import": 0,
+    "migration_import_choice": 0,
+    "migration_import_contact": 0,
+    "migration_import_identity": 0,
+    "migration_import_issue": 0,
+    "migration_import_manifest": 0,
+    "migration_import_mapping": 0,
+    "migration_import_plan": 0,
+    "migration_import_receipt": 0,
+    "migration_import_reservation": 0,
+    "migration_import_result": 0,
+    "migration_import_source": 0,
+    "migration_metadata_alias": 0,
+    "migration_metadata_choice": 0,
+    "migration_metadata_identity": 0,
+    "migration_metadata_import": 0,
+    "migration_metadata_issue": 0,
+    "migration_metadata_manifest": 0,
+    "migration_metadata_mapping": 0,
+    "migration_metadata_operation": 0,
+    "migration_metadata_plan": 0,
+    "migration_metadata_receipt": 0,
+    "migration_metadata_reservation": 0,
+    "migration_metadata_result": 0,
+    "migration_metadata_source": 0,
+    "migration_request_receipt": 0,
+    "migration_snapshot": 0,
+    "migration_snapshot_capture": 0,
+    "migration_snapshot_contact_key": 0,
+    "migration_snapshot_note_detail": 0,
+    "migration_snapshot_preview": 0,
+    "migration_snapshot_preview_group": 0,
+    "migration_snapshot_preview_issue": 0,
+    "migration_snapshot_preview_record": 0,
+    "migration_snapshot_record": 0,
+    "migration_snapshot_reservation": 0,
+    "migration_snapshot_storage": 0,
+    "migration_snapshot_stream": 0,
+    "migration_workspace": 0
+  },
+  "tenant_rowsets": {
+    "assignment_changed": {
+      "count": 100076,
+      "sha256": "24463f68463ceb2a04f4168f2927e143b097028109ba8d443a9f67ec4b6ee88d"
+    },
+    "call": {
+      "count": 3,
+      "sha256": "36e53964cd05c8a5440fc56dab8bdca38ec1c4e16effef3079a2ee0a73b1a275"
+    },
+    "call_completed": {
+      "count": 3,
+      "sha256": "986b5d95aa71b6426c466c4842e4dfefdba1915d35c1efb259c4a9373e934450"
+    },
+    "capture_address": {
+      "count": 104,
+      "sha256": "731c1a346a49427bc918957fa021d9c2529a14775506009ff2d76eea49ad448a"
+    },
+    "capture_message": {
+      "count": 2,
+      "sha256": "3d7c56e530d8e9cde9a72d12d71c194d5e497ef0c922798b7481f8219557fb83"
+    },
+    "capture_token_rotated": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "contact_attempted": {
+      "count": 67040,
+      "sha256": "b23222a17f4348e316584e1434e21b60631860cc1cc2384b8e14c3a24599c242"
+    },
+    "contact_method": {
+      "count": 160083,
+      "sha256": "1f83cd9b42e54ecb75e446c354425fb33da57452bfb495ad2fc0a2412370e80a"
+    },
+    "correspondence_captured": {
+      "count": 3,
+      "sha256": "d2eaa2ad4f015e68331d3d444f19077de3dcbab1082d38177251ef243b82da66"
+    },
+    "correspondence_raw": {
+      "count": 4,
+      "sha256": "5029d90d1408f1d347e6a6adbec2a8192418c333f9268443cb83b6f185bc2fc4"
+    },
+    "custom_field": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "custom_field_option": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fub_call_record_imported": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fub_event_record_imported": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fub_text_record_imported": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "inquiry": {
+      "count": 104968,
+      "sha256": "54d0e08edda6db649d96d9d0dbba8c664f50ac481c9827ba53ea363d4aebc3e5"
+    },
+    "inquiry_received": {
+      "count": 104968,
+      "sha256": "481ef970f6be25422d022176419bdc24a810465dea673deeb66b64f0c5d1cf4d"
+    },
+    "intake_extraction": {
+      "count": 14,
+      "sha256": "79c1c86bf8b3d5abba89d30a972888920c2e8c9505d1a88cf460db9aaec0d80e"
+    },
+    "intake_rotation": {
+      "count": 1,
+      "sha256": "80da9afa41f586762257149c062caa9d1850f7581c001543e59456316f18a7a8"
+    },
+    "intake_token_rotated": {
+      "count": 1,
+      "sha256": "6d12ccc535d412ccaefbb2ed3cad6cbca86182fb9870fe9a7c27afae74741405"
+    },
+    "invitation": {
+      "count": 104,
+      "sha256": "29275c581f5b449a6ba22621e6d21e183707650001c92261bfbf973da679a570"
+    },
+    "invitation_issued": {
+      "count": 104,
+      "sha256": "ad8caa8563caa4ae93c189ab9f073a7ba8856e62c7e621cbb931ae5c4c56af2f"
+    },
+    "invitation_resolved": {
+      "count": 104,
+      "sha256": "a6fae9894b7b54c31c2a215398bf8da3ef49a47e3d520411048a05a7ae23e9fc"
+    },
+    "membership_changed": {
+      "count": 110,
+      "sha256": "a9670d90cd0421a5e31ae15ad1539873ca8d0268acc14dbf8bbe271ccabab667"
+    },
+    "migration_activity_choice": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_activity_identity": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_activity_import": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_activity_issue": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_activity_manifest": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_activity_manifest_issue": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_activity_mapping": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_activity_plan": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_activity_receipt": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_activity_reservation": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_activity_result": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_activity_result_issue": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_activity_source": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_assessment": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_assessment_check": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_assessment_evidence": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_connection": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_history_capture": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_history_capture_run": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_history_identity": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_history_import_anchor": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_history_import_candidate": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_history_import_display": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_history_import_identity": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_history_import_manifest": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_history_import_plan": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_history_import_receipt": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_history_import_reservation": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_history_import_result": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_history_import_run": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_history_import_stream": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_history_observation": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_history_person_link": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_history_receipt": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_history_reservation": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_history_review_state": {
+      "count": 100077,
+      "sha256": "c95d8ebe5e20c22eba8622cb145ad3e22056bdcf4f884df70d0aee029dc29bd7"
+    },
+    "migration_history_seen": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_history_stream": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_import": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_import_choice": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_import_contact": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_import_identity": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_import_issue": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_import_manifest": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_import_mapping": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_import_plan": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_import_receipt": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_import_reservation": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_import_result": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_import_source": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_metadata_alias": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_metadata_choice": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_metadata_identity": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_metadata_import": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_metadata_issue": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_metadata_manifest": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_metadata_mapping": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_metadata_operation": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_metadata_plan": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_metadata_receipt": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_metadata_reservation": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_metadata_result": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_metadata_source": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_request_receipt": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_snapshot": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_snapshot_capture": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_snapshot_contact_key": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_snapshot_note_detail": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_snapshot_preview": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_snapshot_preview_group": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_snapshot_preview_issue": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_snapshot_preview_record": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_snapshot_record": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_snapshot_reservation": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_snapshot_storage": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_snapshot_stream": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "migration_workspace": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "note": {
+      "count": 1,
+      "sha256": "41513c4a615227a71a515bc64c292efaa5705152376f3f576f00d3bc2227a835"
+    },
+    "operator_proposal": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "operator_task_proposal": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "operator_turn": {
+      "count": 6,
+      "sha256": "16f227b770453fe99ad483b38c0c82b7b06b9af45e4e514e778c8f4f25aa0753"
+    },
+    "organization": {
+      "count": 3,
+      "sha256": "0816e3d17671203bf6468a954fa646900c6e5b25d53e7e1aac4a0fb5b1f7daec"
+    },
+    "organization_created": {
+      "count": 3,
+      "sha256": "3fba50dc02758d7e1d709af6ff017cce4687e9adbbc3da4f21c5d1cb90214cb1"
+    },
+    "organization_membership": {
+      "count": 104,
+      "sha256": "938125e7f308f686b69eda4b554d1359267c729527a634ee5824de2670275d57"
+    },
+    "person": {
+      "count": 100077,
+      "sha256": "cc7f5789e8856282225d1a6dfebfa09961d2c74d37f21687c0e9284728eac473"
+    },
+    "person_custom_field_value": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "person_imported": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "person_tag": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "raw_payload": {
+      "count": 104972,
+      "sha256": "93c5f391d8ea62e796ffb04cfee54e45a7f81f6503a6f3085c14e7e77c534f22"
+    },
+    "routing_decision": {
+      "count": 104968,
+      "sha256": "2e325ebbc4b3a27cdc0272ad55cb8093208bb9d46437f84e95c976b544f7233a"
+    },
+    "saved_list": {
+      "count": 4,
+      "sha256": "ad84bc5764e0c468a2aa088ad2561ee3794ce7d38f8741b49b1c6bb7addcaf1c"
+    },
+    "stage": {
+      "count": 27,
+      "sha256": "30bd9bca0558b13dcb4a2154b0fb16dabd98b0255b4b5e82d60a2955f08384f3"
+    },
+    "stage_changed": {
+      "count": 100078,
+      "sha256": "ade7a8a67a2151d1d122778b539701f7f8e4c52f43c3b9ef99dac86c826de0d5"
+    },
+    "tag": {
+      "count": 1,
+      "sha256": "6d989ce8de3e7c7a813433954e7ef2f33978a58fec85b0e1f168891971b33f1b"
+    },
+    "task": {
+      "count": 1,
+      "sha256": "639938e3132c32029c2c32adfce5c4ebf57a5e64d97c4c38a81a7900ae88c7b0"
+    },
+    "today_feed_changed": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "today_system_feed": {
+      "count": 9,
+      "sha256": "279cc3787a0c36918ca8dd6d06efffae47753a3640b8b2e01df7013805e00bda"
+    },
+    "today_work_source": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "workspace_operation_admission": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "rowset_sha256_method": "sha256(UTF8(newline-joined sorted lowercase hex sha256(UTF8(to_jsonb(row)::text))))",
+  "tenant_table_inventory": [
+    "assignment_changed",
+    "call",
+    "call_completed",
+    "capture_address",
+    "capture_message",
+    "capture_token_rotated",
+    "contact_attempted",
+    "contact_method",
+    "correspondence_captured",
+    "correspondence_raw",
+    "custom_field",
+    "custom_field_option",
+    "fub_call_record_imported",
+    "fub_event_record_imported",
+    "fub_text_record_imported",
+    "inquiry",
+    "inquiry_received",
+    "intake_extraction",
+    "intake_rotation",
+    "intake_token_rotated",
+    "invitation",
+    "invitation_issued",
+    "invitation_resolved",
+    "membership_changed",
+    "migration_activity_choice",
+    "migration_activity_identity",
+    "migration_activity_import",
+    "migration_activity_issue",
+    "migration_activity_manifest",
+    "migration_activity_manifest_issue",
+    "migration_activity_mapping",
+    "migration_activity_plan",
+    "migration_activity_receipt",
+    "migration_activity_reservation",
+    "migration_activity_result",
+    "migration_activity_result_issue",
+    "migration_activity_source",
+    "migration_assessment",
+    "migration_assessment_check",
+    "migration_assessment_evidence",
+    "migration_connection",
+    "migration_history_capture",
+    "migration_history_capture_run",
+    "migration_history_identity",
+    "migration_history_import_anchor",
+    "migration_history_import_candidate",
+    "migration_history_import_display",
+    "migration_history_import_identity",
+    "migration_history_import_manifest",
+    "migration_history_import_plan",
+    "migration_history_import_receipt",
+    "migration_history_import_reservation",
+    "migration_history_import_result",
+    "migration_history_import_run",
+    "migration_history_import_stream",
+    "migration_history_observation",
+    "migration_history_person_link",
+    "migration_history_receipt",
+    "migration_history_reservation",
+    "migration_history_review_state",
+    "migration_history_seen",
+    "migration_history_stream",
+    "migration_import",
+    "migration_import_choice",
+    "migration_import_contact",
+    "migration_import_identity",
+    "migration_import_issue",
+    "migration_import_manifest",
+    "migration_import_mapping",
+    "migration_import_plan",
+    "migration_import_receipt",
+    "migration_import_reservation",
+    "migration_import_result",
+    "migration_import_source",
+    "migration_metadata_alias",
+    "migration_metadata_choice",
+    "migration_metadata_identity",
+    "migration_metadata_import",
+    "migration_metadata_issue",
+    "migration_metadata_manifest",
+    "migration_metadata_mapping",
+    "migration_metadata_operation",
+    "migration_metadata_plan",
+    "migration_metadata_receipt",
+    "migration_metadata_reservation",
+    "migration_metadata_result",
+    "migration_metadata_source",
+    "migration_request_receipt",
+    "migration_snapshot",
+    "migration_snapshot_capture",
+    "migration_snapshot_contact_key",
+    "migration_snapshot_note_detail",
+    "migration_snapshot_preview",
+    "migration_snapshot_preview_group",
+    "migration_snapshot_preview_issue",
+    "migration_snapshot_preview_record",
+    "migration_snapshot_record",
+    "migration_snapshot_reservation",
+    "migration_snapshot_storage",
+    "migration_snapshot_stream",
+    "migration_workspace",
+    "note",
+    "operator_proposal",
+    "operator_task_proposal",
+    "operator_turn",
+    "organization",
+    "organization_created",
+    "organization_membership",
+    "person",
+    "person_custom_field_value",
+    "person_imported",
+    "person_tag",
+    "raw_payload",
+    "routing_decision",
+    "saved_list",
+    "stage",
+    "stage_changed",
+    "tag",
+    "task",
+    "today_feed_changed",
+    "today_system_feed",
+    "today_work_source",
+    "workspace_operation_admission"
+  ],
+  "workspaces": [
+    {
+      "id": "0b1d4349-75ce-4240-a392-d0d67ede46be",
+      "mode": "operational",
+      "revision": 1
+    },
+    {
+      "id": "e2360feb-efcd-4e6f-838d-1a5f7f3b35e5",
+      "mode": "operational",
+      "revision": 1
+    },
+    {
+      "id": "f180968b-5647-426c-b39c-d6ac3983593e",
+      "mode": "operational",
+      "revision": 1
+    }
+  ],
+  "workspace_operation_admission": {
+    "count": 0,
+    "active_count": 0
+  },
+  "capture_schema_present": true,
+  "timeline_schema_present": true,
+  "review_backfill_expected": {
+    "count": 100077,
+    "sha256": "c95d8ebe5e20c22eba8622cb145ad3e22056bdcf4f884df70d0aee029dc29bd7"
+  },
+  "snapshot_context": {
+    "transaction_read_only": "on",
+    "transaction_isolation": "repeatable read",
+    "observed_at": "2026-09-12T22:29:20.938495+00:00",
+    "migration": "20260922000001",
+    "failed_migrations": 0,
+    "capture_schema_present": true,
+    "timeline_schema_present": true
+  },
+  "scope": "All public base tables with organization_id plus organization; complete rowsets, not samples. Session rows are excluded; business counts retain the prior 45-table inventory.",
+  "preservation": {
+    "baseline": false,
+    "validated": true,
+    "prior_tenant_rowsets_unchanged": 108,
+    "prior_business_counts_unchanged": 45,
+    "new_empty_import_and_fact_tables": [
+      "fub_call_record_imported",
+      "fub_event_record_imported",
+      "fub_text_record_imported",
+      "migration_history_import_anchor",
+      "migration_history_import_candidate",
+      "migration_history_import_display",
+      "migration_history_import_identity",
+      "migration_history_import_manifest",
+      "migration_history_import_plan",
+      "migration_history_import_receipt",
+      "migration_history_import_reservation",
+      "migration_history_import_result",
+      "migration_history_import_run",
+      "migration_history_import_stream"
+    ],
+    "derived_review_state_exact_backfill": true,
+    "derived_review_state_rows": 100077
+  }
+}

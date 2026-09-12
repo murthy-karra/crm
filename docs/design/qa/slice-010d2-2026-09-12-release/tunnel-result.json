@@ -1,0 +1,8 @@
+{
+  "command": [
+    "./scripts/check-tunnel"
+  ],
+  "exit_code": 0,
+  "elapsed_seconds": 3.313,
+  "log_sha256": "38b00f8d4e29dc626a2773c1ada3d305d437fff146fd7ed466a2fa1f7372eb88"
+}

@@ -1,0 +1,145 @@
+{
+  "activity_binding_count": "0",
+  "activity_confirmation_ready": true,
+  "activity_confirmation_reasons": [],
+  "artifact_manifest_sha256": "02aa280f464da353361053ad8c1c1afd14e2f03e0939937cb2799f6160a2f19f",
+  "binding_count": "0",
+  "candidate_manifest_sha256": "676248ee7e98c3f950a435af15975a975ffca2d173f0d5928af59a2d1b602039",
+  "candidates": [
+    {
+      "capabilities": [
+        "fub-activity-import-v1",
+        "fub-history-capture-v1",
+        "fub-history-timeline-v1",
+        "fub-metadata-import-v1"
+      ],
+      "gate_version": "crm-workspace-v1",
+      "revision": "5924f097a7d7475e7e9742bb08e102d7c7ca98d2",
+      "role": "api",
+      "sha256": "ffeee8cb408e0df716892bc7cf3a1981b7e09a280f36566fcab9e59d6989690a"
+    },
+    {
+      "capabilities": [
+        "fub-activity-import-v1",
+        "fub-history-capture-v1",
+        "fub-history-timeline-v1",
+        "fub-metadata-import-v1"
+      ],
+      "gate_version": "crm-workspace-v1",
+      "revision": "5924f097a7d7475e7e9742bb08e102d7c7ca98d2",
+      "role": "worker",
+      "sha256": "ffeee8cb408e0df716892bc7cf3a1981b7e09a280f36566fcab9e59d6989690a"
+    },
+    {
+      "capabilities": [],
+      "gate_version": "crm-workspace-v1",
+      "revision": "5924f097a7d7475e7e9742bb08e102d7c7ca98d2",
+      "role": "cli",
+      "sha256": "64e85ba5c2eb33709a5f0fe491aeffd11ce31ca4eeb1d333a81c03d12b8b69e1"
+    },
+    {
+      "capabilities": [],
+      "gate_version": "crm-workspace-v1",
+      "revision": "5924f097a7d7475e7e9742bb08e102d7c7ca98d2",
+      "role": "migrator",
+      "sha256": "cdfc28d856326833782b763358f17c7431abd32dbbbc9bbb99187fa42bca687b"
+    }
+  ],
+  "checked_at": "2026-09-12T22:29:31Z",
+  "confirmation_ready": true,
+  "confirmation_reasons": [],
+  "database_name": "crm_dev",
+  "evidence_expires_at": "2026-09-12T22:34:30Z",
+  "gate_version": "crm-workspace-v1",
+  "history_capture_binding_count": "0",
+  "history_capture_confirmation_ready": true,
+  "history_capture_confirmation_reasons": [],
+  "history_capture_schema_present": true,
+  "history_capture_unsupported_count": "0",
+  "history_timeline_binding_count": "0",
+  "history_timeline_confirmation_ready": true,
+  "history_timeline_confirmation_reasons": [],
+  "history_timeline_schema_present": true,
+  "history_timeline_unsupported_count": "0",
+  "inventory_sha256": "c2ffac6eabadadff6f971e1053a871b40634cf87880772f295753a2927ce849d",
+  "launch_allowed": true,
+  "launch_reasons": [],
+  "metadata_confirmation_ready": true,
+  "metadata_confirmation_reasons": [],
+  "pre_010c_retired": true,
+  "process_count": "6",
+  "processes": [
+    {
+      "capabilities": [
+        "fub-activity-import-v1",
+        "fub-history-capture-v1",
+        "fub-history-timeline-v1",
+        "fub-metadata-import-v1"
+      ],
+      "gate_version": "crm-workspace-v1",
+      "id": "launch.dev-api",
+      "revision": "5924f097a7d7475e7e9742bb08e102d7c7ca98d2",
+      "role": "api",
+      "sha256": "ffeee8cb408e0df716892bc7cf3a1981b7e09a280f36566fcab9e59d6989690a"
+    },
+    {
+      "capabilities": [
+        "fub-activity-import-v1",
+        "fub-history-capture-v1",
+        "fub-history-timeline-v1",
+        "fub-metadata-import-v1"
+      ],
+      "gate_version": "crm-workspace-v1",
+      "id": "launch.in-process-workers",
+      "revision": "5924f097a7d7475e7e9742bb08e102d7c7ca98d2",
+      "role": "worker",
+      "sha256": "ffeee8cb408e0df716892bc7cf3a1981b7e09a280f36566fcab9e59d6989690a"
+    },
+    {
+      "capabilities": [],
+      "gate_version": "crm-workspace-v1",
+      "id": "launch.crm-admin",
+      "revision": "5924f097a7d7475e7e9742bb08e102d7c7ca98d2",
+      "role": "cli",
+      "sha256": "64e85ba5c2eb33709a5f0fe491aeffd11ce31ca4eeb1d333a81c03d12b8b69e1"
+    },
+    {
+      "capabilities": [],
+      "gate_version": "crm-workspace-v1",
+      "id": "launch.db-migrate",
+      "revision": "5924f097a7d7475e7e9742bb08e102d7c7ca98d2",
+      "role": "migrator",
+      "sha256": "cdfc28d856326833782b763358f17c7431abd32dbbbc9bbb99187fa42bca687b"
+    },
+    {
+      "capabilities": [
+        "fub-activity-import-v1",
+        "fub-history-capture-v1",
+        "fub-history-timeline-v1",
+        "fub-metadata-import-v1"
+      ],
+      "gate_version": "crm-workspace-v1",
+      "id": "pid.95513",
+      "revision": "5924f097a7d7475e7e9742bb08e102d7c7ca98d2",
+      "role": "api",
+      "sha256": "ffeee8cb408e0df716892bc7cf3a1981b7e09a280f36566fcab9e59d6989690a"
+    },
+    {
+      "capabilities": [
+        "fub-activity-import-v1",
+        "fub-history-capture-v1",
+        "fub-history-timeline-v1",
+        "fub-metadata-import-v1"
+      ],
+      "gate_version": "crm-workspace-v1",
+      "id": "pid.95513.workers",
+      "revision": "5924f097a7d7475e7e9742bb08e102d7c7ca98d2",
+      "role": "worker",
+      "sha256": "ffeee8cb408e0df716892bc7cf3a1981b7e09a280f36566fcab9e59d6989690a"
+    }
+  ],
+  "purpose": "confirm",
+  "required_gate_versions": [],
+  "target": "shared-development.crm_dev",
+  "version": 1
+}

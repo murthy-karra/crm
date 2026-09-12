@@ -1,0 +1,9 @@
+{
+  "broad_crm_process_scan": [
+    {
+      "pid": 95513,
+      "command": "backend/target/debug/crm-api"
+    }
+  ],
+  "unexpected_crm_processes": 0
+}

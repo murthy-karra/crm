@@ -1,0 +1,10 @@
+{
+  "explicit_files_published": 47,
+  "known_credential_forms_checked": 34,
+  "known_credential_matches": 0,
+  "all_confirmed_sessions_revoked": 8,
+  "first_http_attempt_created_no_sessions": true,
+  "excluded": "Database backup, configuration, live logs, browser profiles, runtime binaries and staged/retired Web directories remain in protected private storage",
+  "scope": "Bounded known-value scan and explicit publication allowlist; not general secret discovery",
+  "closeout_preflight_renewed_from_fresh_inventory": true
+}

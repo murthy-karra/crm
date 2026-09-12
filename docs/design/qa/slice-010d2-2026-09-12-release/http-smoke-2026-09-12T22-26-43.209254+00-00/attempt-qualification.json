@@ -1,0 +1,5 @@
+{
+  "classification": "web_accept_header",
+  "description": "All57 health/authorization/read checks passed and all3 original-cookie sessions were revoked. The helper sent Accept:application/json to local Vite root, which returned404; final helper uses text/html,*/* for Web origins. This was not an API or product-layout failure.",
+  "product_failure": false
+}

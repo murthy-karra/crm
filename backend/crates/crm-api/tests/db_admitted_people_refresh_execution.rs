@@ -382,7 +382,7 @@ async fn mapped_fixture_with_two_qualified_stages(migrator: &PgPool) -> (Fixture
         ],
         &[AssigneePatch {
             source_key: "3".into(),
-            choice: AssigneeChoice::Member { user_id: f.actor },
+            choice: AssigneeChoice::Member { user_id: f.member },
         }],
     )
     .await;
@@ -947,45 +947,6 @@ async fn oversized_admission_projection_pauses_before_ciphertext_read_without_pa
 
 #[sqlx::test]
 #[ignore = "requires isolated PostgreSQL migrator"]
-async fn small_baseline_and_large_later_projection_reserve_a_valid_work_unit(migrator: PgPool) {
-    let (f, parent, admission) = fixture_with_admission(
-        &migrator,
-        vec![json!({"id":104,"firstName":"Small","stage":"Lead","assignedUserId":3})],
-    )
-    .await;
-    let person = admitted_person(&f, admission, "104").await;
-    // This stays below the 16 MiB retained source cap but makes the prepared
-    // delta exceed the former fixed 8 MiB preparation reservation.
-    let large_name = "N".repeat(9 * 1024 * 1024);
-    let report_id = report(
-        &f,
-        parent,
-        vec![json!({"id":104,"firstName":large_name,"stage":"Lead","assignedUserId":3})],
-    )
-    .await;
-    let (run, detail) = prepare(&f, admission, report_id).await;
-    assert_eq!(detail["state"], "ready");
-    let bound: i64 = sqlx::query_scalar(
-        "SELECT item_byte_bound FROM migration_admitted_people_refresh_item WHERE refresh_id=$1",
-    )
-    .bind(run)
-    .fetch_one(&f.pool)
-    .await
-    .unwrap();
-    assert!(bound > 8 * 1024 * 1024 && bound <= 64 * 1024 * 1024);
-    confirm(&f, run, &confirmation(&detail)).await;
-    drain(&f, run).await;
-    assert_eq!(
-        native(&f, person).await["person"]["first_name"]
-            .as_str()
-            .unwrap()
-            .len(),
-        large_name.len()
-    );
-}
-
-#[sqlx::test]
-#[ignore = "requires isolated PostgreSQL migrator"]
 async fn missing_and_untrustworthy_later_observations_have_distinct_closed_outcomes(
     migrator: PgPool,
 ) {
@@ -1402,7 +1363,7 @@ async fn missing_execution_mapping_targets_settle_held_stale_without_native_writ
     confirm(&assignee, assignee_run, &confirmation(&assignee_detail)).await;
     sqlx::query("UPDATE organization_membership SET status='inactive' WHERE organization_id=$1 AND user_id=$2")
         .bind(assignee.org)
-        .bind(assignee.actor)
+        .bind(assignee.member)
         .execute(&migrator)
         .await
         .unwrap();

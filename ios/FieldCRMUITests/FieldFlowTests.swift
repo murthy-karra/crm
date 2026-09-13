@@ -141,6 +141,60 @@ final class FieldFlowTests: XCTestCase {
         app.tabBars.buttons["Settings"].tap(); setSwitch(app.switches["offlineToggle"], to: false); app.buttons["sync"].tap()
         app.tabBars.buttons["Saved work"].tap(); expectation(for: NSPredicate(format: "label BEGINSWITH '0 pending'"), evaluatedWith: app.staticTexts["queueCount"]); waitForExpectations(timeout: 120)
     }
+
+    @MainActor func testMobile002NativeSecondActorConflictReviewAndRevisedReceipt() throws {
+        // This test intentionally reuses the already-authorized primary QA
+        // installation on the isolated iPhone 17.  Bootstrap capacity is
+        // bounded per actor, so it must not create another installation.
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--synthetic-keychain", "--mobile002-qa-start-offline", "--mobile002-qa-person-id", "f40f5132-9822-4bdf-ba34-76affb181195", "--mobile002-qa-note-id", "bfb73b8f-4036-49dc-8cb0-a1963babee13"]
+        app.launch()
+        if app.buttons["Not Now"].waitForExistence(timeout: 2) { app.buttons["Not Now"].tap() }
+        XCTAssertTrue(app.staticTexts["syntheticBanner"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.tabBars.buttons["Settings"].waitForExistence(timeout: 30), "The preserved primary QA installation must reopen its protected store")
+
+        app.tabBars.buttons["Settings"].tap()
+        let fixture = app.staticTexts["qaFixtureStage"]
+        XCTAssertTrue(fixture.waitForExistence(timeout: 10))
+        // Current-record read supplies the actual baseline and revision without
+        // starting another reconciliation generation.
+        app.buttons["loadQANoteFixture"].tap()
+        expectation(for: NSPredicate(format: "label == %@", "injection committed"), evaluatedWith: fixture)
+        waitForExpectations(timeout: 30)
+
+        let conflictActor = app.staticTexts["qaConflictStage"]
+        XCTAssertTrue(conflictActor.waitForExistence(timeout: 10))
+        app.buttons["qaFreshConflict"].tap()
+        let fresh = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label BEGINSWITH 'fresh note '"), object: conflictActor)
+        XCTAssertEqual(XCTWaiter.wait(for: [fresh], timeout: 30), .completed, conflictActor.label)
+        app.buttons["qaPrepareConflict"].tap()
+        let prepared = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label BEGINSWITH 'primary edit queued' OR label BEGINSWITH 'primary edit already queued'"), object: conflictActor)
+        XCTAssertEqual(XCTWaiter.wait(for: [prepared], timeout: 10), .completed, conflictActor.label)
+        app.buttons["qaAdvanceConflict"].tap()
+        let advanced = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label BEGINSWITH 'second actor accepted revision'"), object: conflictActor)
+        XCTAssertEqual(XCTWaiter.wait(for: [advanced], timeout: 30), .completed, conflictActor.label)
+        app.buttons["qaResumeSync"].tap()
+        app.buttons["sync"].tap()
+        app.tabBars.buttons["Saved work"].tap()
+        let review = app.buttons["Review conflict"]
+        XCTAssertTrue(review.waitForExistence(timeout: 45), "The stale primary operation must become a non-retrying explicit conflict")
+        review.tap()
+        XCTAssertTrue(app.staticTexts["Your saved edit"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Current version"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'second actor current version'")).firstMatch.waitForExistence(timeout: 10))
+        let reviewed = XCTAttachment(screenshot: app.screenshot()); reviewed.name = "mobile002-second-actor-conflict-review"; reviewed.lifetime = .keepAlways; add(reviewed)
+
+        app.swipeUp()
+        let revised = app.buttons["Prepare revised edit against current version"]
+        XCTAssertTrue(revised.waitForExistence(timeout: 10)); revised.tap()
+        XCTAssertTrue(app.staticTexts["draftStatus"].label.contains("Revised draft saved on device"))
+        app.buttons["saveAction"].tap()
+        app.tabBars.buttons["Saved work"].tap()
+        expectation(for: NSPredicate(format: "label BEGINSWITH '0 pending'"), evaluatedWith: app.staticTexts["queueCount"])
+        waitForExpectations(timeout: 60)
+        let receipt = XCTAttachment(screenshot: app.screenshot()); receipt.name = "mobile002-revised-edit-receipt"; receipt.lifetime = .keepAlways; add(receipt)
+    }
     #endif
 
 }

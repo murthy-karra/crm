@@ -87,8 +87,11 @@ struct WorkspaceView: View {
                         }
                         Section("QA conflict actor") {
                             Text(model.qaConflictStage).font(.caption2).accessibilityIdentifier("qaConflictStage")
+                            Button("Create fresh conflict note") { Task { await model.createQAFreshConflictNote() } }.accessibilityIdentifier("qaFreshConflict")
+                            Button("Prepare pending note conflict") { model.prepareQAPendingConflictEdit() }.accessibilityIdentifier("qaPrepareConflict")
                             Button("Advance pending note as second actor") { Task { await model.advanceQAPendingEditAsSecondActor() } }.accessibilityIdentifier("qaAdvanceConflict")
                                 .disabled(model.syncing)
+                            Button("Resume QA sync") { model.resumeQASync() }.accessibilityIdentifier("qaResumeSync")
                         }
                         #endif
                         Section("Connection") {

@@ -28,9 +28,16 @@ import Network
     @Published var qaFixtureStage = "not requested"
     @Published var qaMigrationStage = "not inspected"
     @Published var qaConflictStage = "no pending edit"
+    private var qaConflictNoteID = ""
     #endif
     init(synthetic: Bool = false, startMonitor: Bool = true, restoreOnInit: Bool = true) {
         secure = SecureStorage(synthetic: synthetic); self.synthetic = secure.synthetic
+        #if MOBILE002_QA
+        // UI acceptance needs to form a real immutable envelope before the
+        // second actor advances its server revision.  This is a launch-only,
+        // synthetic-QA pause; customer configurations do not compile it.
+        if ProcessInfo.processInfo.arguments.contains("--mobile002-qa-start-offline") { paused = true }
+        #endif
         if let existing = appDefaults.string(forKey: "installation") { installation = existing }
         else { installation = UUID().uuidString.lowercased(); appDefaults.set(installation, forKey: "installation") }
         if restoreOnInit { restore() }
@@ -135,7 +142,8 @@ import Network
         bytes.reduce(1469598103934665603) { ($0 ^ UInt64($1)) &* 1099511628211 }
     }
     func advanceQAPendingEditAsSecondActor() async {
-        guard let pending = queue.first(where: { $0.envelope.kind == "edit_note" && !["accepted", "superseded", "discarded", "unavailable"].contains($0.status) }),
+        let targetNote = qaConflictNoteID.isEmpty ? qaFixtureNoteID() : qaConflictNoteID
+        guard let pending = queue.first(where: { $0.envelope.kind == "edit_note" && $0.targetID == targetNote && !["accepted", "superseded", "discarded", "unavailable"].contains($0.status) }),
               let noteID = pending.targetID else {
             qaConflictStage = "no pending note edit"; return
         }
@@ -144,16 +152,55 @@ import Network
             let key = "mobile002.qa.second.installation"
             let installation = appDefaults.string(forKey: key) ?? { let value = UUID().uuidString.lowercased(); appDefaults.set(value, forKey: key); return value }()
             let boot: Bootstrap = try await other.call("/bootstrap", method: "POST", body: .object(["protocol": .s("mobile-v1"), "installation_id": .s(installation)]))
-            let expected = pending.envelope.payload["target"]["expected_revision"].text
+            let expected = pending.envelope.payload["expected_revision"].text
             guard !expected.isEmpty else { qaConflictStage = "pending edit has no baseline"; return }
-            let replacement = Envelope(context_id: boot.context_id, operation_id: UUID().uuidString.lowercased(), kind: "edit_note", device_recorded_at: stamp(), payload: .object(["person_id": .s(pending.envelope.person), "note_id": .s(noteID), "expected_revision": .s(expected), "body": .s("second actor current version")]))
+            let replacement = Envelope(context_id: boot.context_id, operation_id: UUID().uuidString.lowercased(), kind: "edit_note", device_recorded_at: stamp(), payload: .object(["person_id": .s(pending.envelope.person), "note_id": .s(noteID), "expected_revision": .s(expected), "body": .s("second actor current version " + UUID().uuidString.lowercased())]))
             let receipt = try await other.operation(try encode(replacement), context: boot.context_id)
             qaConflictStage = "second actor accepted revision " + (receipt.committed_revision ?? "?")
         } catch { qaConflictStage = "second actor error: " + error.localizedDescription }
     }
+    func createQAFreshConflictNote() async {
+        guard let api, let credential, let store else { qaConflictStage = "fresh note unavailable"; return }
+        let person = qaFixturePersonID(), body = "iOS QA conflict seed " + UUID().uuidString.lowercased()
+        guard !person.isEmpty else { qaConflictStage = "fresh note missing Person"; return }
+        do {
+            let envelope = Envelope(context_id: credential.bootstrap.context_id, operation_id: UUID().uuidString.lowercased(), kind: "add_note", device_recorded_at: stamp(), payload: .object(["person_id": .s(person), "body": .s(body)]))
+            let receipt = try await api.operation(try encode(envelope), context: credential.bootstrap.context_id)
+            let current = try await api.currentNote(person: person, note: receipt.resource_id, context: credential.bootstrap.context_id)
+            guard current.context_id == credential.bootstrap.context_id, current.person_id == person, let note = current.note else { throw LocalError.invalidProtocol }
+            try store.installQANoteFixture(person: person, note: note)
+            qaConflictNoteID = receipt.resource_id; try reload()
+            qaConflictStage = "fresh note " + receipt.resource_id + " revision " + note["revision"].text
+        } catch { qaConflictStage = "fresh note error: " + error.localizedDescription }
+    }
+    func prepareQAPendingConflictEdit() {
+        guard let store, let person = people.first(where: { $0.person == qaFixturePersonID() }),
+              let note = person.notes.first(where: { $0["id"].text == (qaConflictNoteID.isEmpty ? qaFixtureNoteID() : qaConflictNoteID) }) else {
+            qaConflictStage = "fixture note unavailable"; return
+        }
+        if let pending = queue.first(where: { $0.envelope.kind == "edit_note" && $0.targetID == (qaConflictNoteID.isEmpty ? qaFixtureNoteID() : qaConflictNoteID) && !["accepted", "superseded", "discarded", "unavailable"].contains($0.status) }) {
+            qaConflictStage = "primary edit already queued " + pending.id; return
+        }
+        do {
+            var draft = try startEdit(person: person.person, type: "note", record: note)
+            draft.text += " primary conflict proposal " + UUID().uuidString.lowercased()
+            // Avoid submit()'s normal background wakeup: this QA-only setup
+            // must leave actor one's immutable envelope unsent until actor two
+            // has committed the deliberately intervening revision.
+            draft = try save(draft); try store.submit(draft); try reload()
+            guard let operation = try store.queue().first(where: { $0.envelope.kind == "edit_note" && $0.status == "pending" }) else { throw LocalError.invalidProtocol }
+            qaConflictStage = "primary edit queued " + operation.id
+        } catch { qaConflictStage = "primary edit error: " + error.localizedDescription }
+    }
+    func resumeQASync() { paused = false }
     private func qaFixturePersonID() -> String {
         let args = ProcessInfo.processInfo.arguments
         guard let index = args.firstIndex(of: "--mobile002-qa-person-id"), args.indices.contains(index + 1) else { return "" }
+        return args[index + 1]
+    }
+    private func qaFixtureNoteID() -> String {
+        let args = ProcessInfo.processInfo.arguments
+        guard let index = args.firstIndex(of: "--mobile002-qa-note-id"), args.indices.contains(index + 1) else { return "" }
         return args[index + 1]
     }
     private func installQANoteFixtureIfRequested() async {

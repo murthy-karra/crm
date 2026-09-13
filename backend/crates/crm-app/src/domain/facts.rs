@@ -4,7 +4,7 @@
 //! id — needed so `assignment_changed.causation_id` can be set to the
 //! `routing_decision.id` on intake.
 
-use sqlx::PgConnection;
+use sqlx::{PgConnection, Row};
 use uuid::Uuid;
 
 use crate::domain::admin::{MembershipStatus, Role};
@@ -177,6 +177,15 @@ pub struct ContactAttemptedFact {
     pub recorded_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
+/// The durable identity and exact server recording time selected by the
+/// database for a contact fact. Transaction-compatible callers need these
+/// values while they still control the enclosing commit.
+#[derive(Debug, Clone, Copy)]
+pub struct InsertedContactAttemptedFact {
+    pub id: Uuid,
+    pub recorded_at: chrono::DateTime<chrono::Utc>,
+}
+
 /// The fifth typed fact table (docs/specs/SLICE_003.md §2, D-022): a
 /// contact attempt is a real-world event with historical meaning, written
 /// by `LogContactAttempt`, by `settle` (D-031), and — as a correction row
@@ -185,33 +194,39 @@ pub async fn insert_contact_attempted(
     tx: &mut PgConnection,
     envelope: &FactEnvelope,
     fact: ContactAttemptedFact,
-) -> Result<Uuid, sqlx::Error> {
+) -> Result<InsertedContactAttemptedFact, sqlx::Error> {
     let actor_kind = envelope.actor.kind().as_str();
     let origin = envelope.origin.as_str();
-    let row = sqlx::query!(
+    // This typed insert returns the database-selected recording instant to
+    // caller-owned transactions. Keep it as a runtime query so extending the
+    // returned projection does not require a shared SQLx-cache update.
+    let row = sqlx::query(
         r#"INSERT INTO contact_attempted
             (organization_id, actor_kind, actor_user_id, on_behalf_of_user_id, origin,
-             occurred_at, correlation_id, causation_id,
-             person_id, channel, outcome, corrects_id, recorded_at)
+           occurred_at, correlation_id, causation_id,
+            person_id, channel, outcome, corrects_id, recorded_at)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,COALESCE($13, now()))
-           RETURNING id"#,
-        envelope.organization_id.0,
-        actor_kind,
-        envelope.actor.user_id().map(|id| id.0),
-        envelope.on_behalf_of_user_id.map(|id| id.0),
-        origin,
-        envelope.occurred_at,
-        envelope.correlation_id.0,
-        envelope.causation_id,
-        fact.person_id.0,
-        fact.channel.as_str(),
-        fact.outcome.as_str(),
-        fact.corrects_id,
-        fact.recorded_at,
+           RETURNING id, recorded_at"#,
     )
+    .bind(envelope.organization_id.0)
+    .bind(actor_kind)
+    .bind(envelope.actor.user_id().map(|id| id.0))
+    .bind(envelope.on_behalf_of_user_id.map(|id| id.0))
+    .bind(origin)
+    .bind(envelope.occurred_at)
+    .bind(envelope.correlation_id.0)
+    .bind(envelope.causation_id)
+    .bind(fact.person_id.0)
+    .bind(fact.channel.as_str())
+    .bind(fact.outcome.as_str())
+    .bind(fact.corrects_id)
+    .bind(fact.recorded_at)
     .fetch_one(tx)
     .await?;
-    Ok(row.id)
+    Ok(InsertedContactAttemptedFact {
+        id: row.try_get("id")?,
+        recorded_at: row.try_get("recorded_at")?,
+    })
 }
 
 /// Why a Person's stage changed (hardening chunk S2 micro-enum): mirrors

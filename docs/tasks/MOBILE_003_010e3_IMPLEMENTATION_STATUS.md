@@ -45,7 +45,8 @@ mobile distribution, live FUB processing and customer activation are separate.
 
 The mobile backend and both native worktrees have been integrated and closed.
 The Web lane was integrated and its worktree closed after actual browser testing.
-The final migration lane is verified for integration and worktree closure. No
+The final migration lane was integrated at `8ce0c64`; all implementation
+worktrees are closed and the integration checkout is clean. No
 shared API3000/Web5173/demoAPI3101 process or root build artifact was replaced.
 
 Private synthetic runtime/database/build evidence is retained under
@@ -58,7 +59,7 @@ The final query-plan attempts initially failed before the test body because
 OrbStack was suspended during macOS background sleep. A temporary wake helper
 restored database availability without restarting containers or shared services.
 The final current-binary test passed 1/1 in 14.18 seconds; failed setup logs are
-retained separately. The helper is stopped after the active verification work.
+retained separately. The helper was stopped after the active verification work.
 
 Physical phones and real cellular testing remain deferred by the user's choice.
 Broad mobile design work, production capacity, customer readiness, publication,

@@ -1393,7 +1393,7 @@ private fun ContactComposer(
 }
 
 @Composable
-private fun StageComposer(
+internal fun StageComposer(
     repository: FieldRepository,
     person: String,
     id: String,
@@ -1465,23 +1465,57 @@ private fun StageComposer(
             }
         },
         confirmButton = {
-            Button(onClick = {
-                saving = true
-                scope.launch {
-                    commits.withLock {
-                        try {
-                            // Selecting the unchanged current stage is a supported, receipted
-                            // no-op. It still needs a typed local draft before it can seal the
-                            // immutable operation; do not make the no-op path disappear merely
-                            // because the picker initially selected that value.
-                            val saved = repository.stageDraft(id) ?: repository.saveStageDraft(id, person, selectedStage, revision)
-                            repository.submitStageDraft(id, saved.revision)
-                            onSubmitted()
+            if (predecessor != null)
+                Button(
+                    onClick = {
+                        saving = true
+                        scope.launch {
+                            commits.withLock {
+                                try {
+                                    // The initially selected server stage can equal `committed`,
+                                    // so autosave deliberately has nothing to do. This explicit
+                                    // action still creates the separate waiting draft, but never
+                                    // creates or submits an immutable operation.
+                                    val saved =
+                                        repository.stageDraft(id)
+                                            ?: repository.saveStageDraft(
+                                                id,
+                                                person,
+                                                selectedStage,
+                                                revision,
+                                            )
+                                    revision = saved.revision
+                                    committed = saved.proposedStageId
+                                    status = "Follow-up draft saved on this device. Waiting for the previous stage change."
+                                    saving = false
+                                } catch (_: Exception) {
+                                    status = "Not saved. Your follow-up remains editable; free storage and retry."
+                                    saving = false
+                                }
+                            }
                         }
-                        catch (error: Exception) { status = if (error is ApiFailure) errorMessage(error.code) else "Not submitted. Your committed stage proposal remains available."; saving = false }
+                    },
+                    enabled = loaded && !saving && selectedStage.isNotEmpty() && catalog.isNotEmpty(),
+                    modifier = Modifier.testTag("stage-save-followup"),
+                ) { Text("Save follow-up draft") }
+            else
+                Button(onClick = {
+                    saving = true
+                    scope.launch {
+                        commits.withLock {
+                            try {
+                                // Selecting the unchanged current stage is a supported, receipted
+                                // no-op. It still needs a typed local draft before it can seal the
+                                // immutable operation; do not make the no-op path disappear merely
+                                // because the picker initially selected that value.
+                                val saved = repository.stageDraft(id) ?: repository.saveStageDraft(id, person, selectedStage, revision)
+                                repository.submitStageDraft(id, saved.revision)
+                                onSubmitted()
+                            }
+                            catch (error: Exception) { status = if (error is ApiFailure) errorMessage(error.code) else "Not submitted. Your committed stage proposal remains available."; saving = false }
+                        }
                     }
-                }
-            }, enabled = predecessor == null && loaded && !dirty && !saving && selectedStage.isNotEmpty() && catalog.isNotEmpty(), modifier = Modifier.testTag("stage-save")) { Text(if (predecessor == null) "Save stage on device" else "Waiting for previous stage change") }
+                }, enabled = loaded && !dirty && !saving && selectedStage.isNotEmpty() && catalog.isNotEmpty(), modifier = Modifier.testTag("stage-save")) { Text("Save stage on device") }
         },
         dismissButton = { TextButton(onClick = onClose, enabled = loaded && !dirty && !saving) { Text("Close proposal") } },
     )

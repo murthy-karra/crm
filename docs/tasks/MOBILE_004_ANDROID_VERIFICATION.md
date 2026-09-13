@@ -155,3 +155,40 @@ follow-up affordance `OK (1 test)` in 16.041 seconds. Logs are retained at
 `/private/tmp/crm-mobile004-010e4/android/mobile004-negative-catalog.log`,
 `/private/tmp/crm-mobile004-010e4/android/mobile004-followup-storage.log`, and
 `/private/tmp/crm-mobile004-010e4/android/mobile004-followup-ui.log`.
+
+## Final review fix: initial baseline follow-up
+
+The follow-up composer previously relied on the changed-selection autosave.
+When the current cached server stage was selected again as a follow-up, its
+initial value equalled the composer’s committed value, so no draft was written
+and the blocked submit button could not create one. The waiting state now offers
+an explicit **Save follow-up draft** action. It writes only the protected draft:
+it does not create an outbox row, upload, or rebase the original baseline.
+
+The regression runs with a unique `mobile004-followup-<UUID>` vault namespace
+inside the existing isolated upgrade QA application, not the demo or live-API
+QA stores. It authorizes synthetic local transport, seeds cached stage A plus a
+submitted A→B predecessor, opens the actual Compose stage composer with its
+initial selection still at A, presses **Save follow-up draft**, then asserts the
+persisted draft has baseline/proposed stage A and revision `1`, an empty
+operation ID, one total unchanged outbox envelope, and the visible waiting
+receipt.
+
+```sh
+./gradlew assembleMobile004upgradeqaDebugAndroidTest --no-daemon \
+  -PCRM_MOBILE004_ANDROID_BUILD_DIR=/private/tmp/crm-mobile004-010e4/android/followup-round2-build
+adb -s emulator-5554 install -r CrmField-mobile004upgradeqa-debug-androidTest.apk
+adb -s emulator-5554 shell '
+  (am instrument -w -r -e class \
+    org.crm.field.Mobile004StageFollowupUiTest#baselineStageFollowupIsExplicitlySavedWithoutASecondOutboxOperation \
+    org.crm.field.mobile004upgradeqa.test/androidx.test.runner.AndroidJUnitRunner \
+    > /data/local/tmp/mobile004-followup-round2.log 2>&1) &'
+```
+
+The initial direct test invocation failed before execution because Kotlin inferred
+the expression-bodied JUnit method's final Compose assertion as a non-`Unit`
+return value (`InvalidTestClassError: should be void`). The method was changed to
+an ordinary `Unit` test body, rebuilt, and the actual emulator run passed
+`OK (1 test)` in 36.858 seconds. The retained device result was copied to
+`/private/tmp/crm-mobile004-010e4/android/followup-round2-ui.log`; the matching
+build log is `/private/tmp/crm-mobile004-010e4/android/followup-round2-build.log`.

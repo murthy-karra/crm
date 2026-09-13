@@ -2567,3 +2567,16 @@ Publishing Git branches, refreshing shared development, app distribution and
 production deployment remain subsequent release scope. Live FUB/customer-data
 processing, delta application/repair, deletion inference and workspace activation
 remain outside this implementation.
+
+
+**Release follow-up — 2026-09-12:** After the completed milestone and the proposal
+ to merge/push and deploy its backend/Web to shared development, the user replied
+**“yes release completed milestone first.”** This authorizes publishing the
+integrated Mobile 001 (including native source) and 010e1 commits, merging to main,
+owned branch cleanup, and deploying the compatible backend/Web and additive schema
+to the existing Mac-hosted shared-development environment. Reuse attributed
+implementation evidence and execute the release-specific preservation, artifact,
+compatibility, HTTP/browser and recovery checks. Native app distribution, physical
+phone/cellular testing, live FUB/customer processing, delta application/repair,
+activation and production-cluster deployment remain separate. Actual results
+belong to [the milestone release record](../tasks/MOBILE_001_010e1_RELEASE.md).

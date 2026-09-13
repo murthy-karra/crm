@@ -69,3 +69,34 @@ stage or membership is created.
 
 Only core Person/name/contact/stage/assignment and provenance/fact are covered.
 No note/task/tag/custom-field/history/Inquiry or activation claim is implied.
+
+## Review field and retained-byte units
+
+Detail exposes `source_boundary.original` and `.newer` with snapshot UUID,
+decimal-string sequence, started_at and completed_at; `coverage` names covered
+and deferred families and the continuing review hold. Item detail exposes
+`fields: Record<string,{prefix,total_bytes,truncated}>` and categorical
+`held_reasons`. Field keys come from its sealed retained provenance plus normalized
+first_name/last_name. Prefixes are at most 256 UTF-8 bytes; full-field pages are
+at most 16,384 UTF-8 bytes. The 128 KiB limit bounds summary responses, not the
+complete retained field content. Unknown field names return an opaque missing
+resource response; prefixes are never write inputs.
+
+The existing migration ledger measures retained payload bytes, not PostgreSQL
+heap/index/WAL size. Admission charges the following persisted units exactly
+once: encrypted plan inputs and its 32-byte rolling/final digest; item source key
+and source ID plus both encrypted projection/provenance envelopes; encrypted
+ordered contact envelopes; request action/digest/encrypted receipt; each copied
+Person provenance envelope; result source ID and disposition; global identity
+source ID and family; and the current UTF-8 preparation checkpoint. An encrypted
+envelope includes nonce and ciphertext including authentication tag. The second
+persisted provenance copy is a separate charged unit; shared raw source captures
+retain their existing charge and are not charged again.
+
+Fixed UUID, numeric, boolean and timestamp columns follow the existing ledger's
+exclusion. IDs-only `person_admitted` introduces zero variable payload bytes;
+native initial facts/Person/contact projections use the already charged retained
+evidence, rather than a second native-row disk-size estimate. Identity's variable
+overhead is its full source ID plus `people`. These logical units are frozen for
+the independent `retained_byte_audit` test, which scans actual stored values;
+production uses bounded incremental counters and admission-owned reservations.

@@ -966,9 +966,15 @@ async fn large_live_current_projection_reserves_a_bounded_held_unit(migrator: Pg
     // 1 MiB contacts), but live native C can legitimately be much larger.
     // Keep it below the 64 MiB item ceiling while exceeding the obsolete 8 MiB
     // fixed prepare reservation.
-    sqlx::query("UPDATE contact_method SET value=repeat('v',4500000),normalized_value=repeat('n',4500000) WHERE person_id=$1 AND organization_id=$2")
+    sqlx::query("DELETE FROM contact_method WHERE person_id=$1 AND organization_id=$2")
         .bind(person)
         .bind(f.org)
+        .execute(&migrator)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO contact_method(organization_id,person_id,kind,value,normalized_value,import_order) SELECT $1,$2,'email',repeat('v',3500)||n::text,repeat('n',3500)||n::text,n FROM generate_series(1,2600) n")
+        .bind(f.org)
+        .bind(person)
         .execute(&migrator)
         .await
         .unwrap();

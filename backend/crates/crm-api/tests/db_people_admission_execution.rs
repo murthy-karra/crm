@@ -559,3 +559,59 @@ async fn expired_lease_and_initiator_demotion_fence_execution(migrator: PgPool) 
     assert_eq!(demoted_state.1, "authority_changed");
     assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM person WHERE organization_id=$1 AND first_name='Demoted Initiator'").bind(demoted.org).fetch_one(&demoted.pool).await.unwrap(), 0);
 }
+
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
+async fn identity_tombstone_and_sealed_plan_items_are_immutable(migrator: PgPool) {
+    let f = import_support::fixture(&migrator, import_support::default_people()).await;
+    let parent = db_activity_source::completed_parent(&f).await;
+    let parent_plan: Uuid = sqlx::query_scalar(
+        "SELECT id FROM migration_import_plan WHERE import_id=$1 AND organization_id=$2",
+    )
+    .bind(parent)
+    .bind(f.org)
+    .fetch_one(&f.pool)
+    .await
+    .unwrap();
+    sqlx::query("INSERT INTO migration_import_identity(organization_id,source_account_id,family,source_id,target_id,import_id,plan_id) VALUES($1,17,'people','106',$2,$3,$4)")
+        .bind(f.org).bind(Uuid::new_v4()).bind(parent).bind(parent_plan).execute(&migrator).await.unwrap();
+    let id = ready(
+        &f,
+        parent,
+        vec![json!({"id":106,"firstName":"Erased Identity","stage":"Lead"})],
+    )
+    .await;
+    let item: (Uuid, Uuid) = sqlx::query_as(
+        "SELECT i.id,i.plan_id FROM migration_people_admission_item i WHERE i.admission_id=$1",
+    )
+    .bind(id)
+    .fetch_one(&f.pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        sqlx::query_scalar::<_, String>(
+            "SELECT disposition FROM migration_people_admission_item WHERE id=$1"
+        )
+        .bind(item.0)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap(),
+        "held_identity"
+    );
+    assert!(
+        sqlx::query("UPDATE migration_people_admission_plan SET state='building' WHERE id=$1")
+            .bind(item.1)
+            .execute(&migrator)
+            .await
+            .is_err()
+    );
+    assert!(sqlx::query(
+        "UPDATE migration_people_admission_item SET source_key='rewritten' WHERE id=$1"
+    )
+    .bind(item.0)
+    .execute(&migrator)
+    .await
+    .is_err());
+    assert!(sqlx::query("INSERT INTO migration_people_admission_contact(id,item_id,admission_id,organization_id,kind,import_order,value_nonce,value_ciphertext) VALUES($1,$2,$3,$4,'email',99,$5,$6)")
+        .bind(Uuid::new_v4()).bind(item.0).bind(id).bind(f.org).bind(vec![0u8;24]).bind(vec![0u8;16]).execute(&migrator).await.is_err());
+}

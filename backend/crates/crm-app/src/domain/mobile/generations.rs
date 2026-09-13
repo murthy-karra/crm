@@ -78,10 +78,11 @@ async fn selection(
     })
 }
 async fn cleanup(conn: &mut PgConnection, org: Option<Uuid>) -> Result<(), MobileError> {
-    sqlx::query("DELETE FROM mobile_reconciliation WHERE id IN (SELECT id FROM mobile_reconciliation WHERE expires_at<=statement_timestamp() AND ($1::uuid IS NULL OR organization_id=$1) ORDER BY expires_at,id LIMIT 2 FOR UPDATE SKIP LOCKED)").bind(org).execute(conn).await?;
+    sqlx::query("DELETE FROM mobile_reconciliation WHERE id IN (SELECT id FROM mobile_reconciliation WHERE (sealed_at IS NOT NULL OR expires_at<=statement_timestamp()) AND ($1::uuid IS NULL OR organization_id=$1) ORDER BY expires_at,id LIMIT 2 FOR UPDATE SKIP LOCKED)").bind(org).execute(conn).await?;
     Ok(())
 }
-/// Each sweep removes at most two generations (50,000 bounded manifest rows).
+/// Each sweep removes at most two sealed or expired generations (50,000 bounded
+/// manifest rows). Clients restart reclaimed staging with a new reconciliation.
 /// Receipt markers and contexts are never garbage-collected by this worker.
 pub async fn cleanup_once(pool: &PgPool) -> Result<(), MobileError> {
     let mut tx = pool.begin().await?;
@@ -315,9 +316,12 @@ pub async fn seal(
             today_changed: fresh.digest != gen.digest,
         });
     }
-    let now: DateTime<Utc> = sqlx::query_scalar("SELECT statement_timestamp()")
-        .fetch_one(&mut *tx)
-        .await?;
+    // Publish the terminal marker in the same transaction as validation. Until
+    // reclaimed, a retry revalidates and retains the original seal timestamp;
+    // after reclamation the client restarts staging under a new generation.
+    let now: DateTime<Utc> = sqlx::query_scalar("UPDATE mobile_reconciliation SET sealed_at=COALESCE(sealed_at,statement_timestamp()) WHERE id=$1 AND context_id=$2 AND organization_id=$3 AND actor_user_id=$4 AND expires_at>statement_timestamp() RETURNING sealed_at")
+        .bind(id).bind(context_id).bind(auth.active_organization_id.0).bind(auth.actor_user_id.0)
+        .fetch_optional(&mut *tx).await?.ok_or(code(409, "generation_expired"))?;
     tx.commit().await?;
     Ok(
         json!({"generation_id":id,"context_id":context_id,"sealed_at":now,"evaluated_at":gen.evaluated,"selected_count":gen.count,"today":fresh.today}),

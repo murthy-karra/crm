@@ -41,7 +41,8 @@ also include context_id and must match the header. Contexts never authenticate.
 - POST reconciliations/{id}/seal: empty JSON `{}`; returns `{generation_id,
   context_id, sealed_at, evaluated_at, selected_count, today}`. Today is the
   existing bounded Today DTO evaluated at the original trusted generation time.
-  Only a complete unchanged generation can seal; repeated seal revalidates.
+  Only a complete unchanged generation can seal; repeated seal revalidates while
+  the generation is retained and returns its original `sealed_at` timestamp.
 
 Existing `{error: code}` envelope. Codes: unauthenticated (401), forbidden and
 workspace_in_migration_review (403), not_found (404); operation_payload_mismatch,
@@ -107,14 +108,28 @@ revision and last UUID. Selection max 25,000; manifest pages 250; component page
 
 Admission is serialized by trusted Organization and updates a trusted
 `mobile_admission` row, so repeatable-read callers cannot admit against a stale
-pre-lock snapshot; serialization failure is retryable unavailable. Limits include retained expired
+pre-lock snapshot; serialization failure is retryable unavailable. Limits include retained sealed and expired
 rows until deletion: 10 contexts per actor/Organization, 2 generations/context,
-4/actor/Organization, 20/Organization. Each admission reclaims at most two expired
+4/actor/Organization, 20/Organization. Each admission reclaims at most two sealed or expired
 generations (max 50,000 manifest rows) in its Organization. An API-started worker
-with configured mobile keys also reclaims at most two expired generations globally
+with configured mobile keys also reclaims at most two sealed or expired generations globally
 every 60 seconds, including while no mobile requests arrive. TTL 30 minutes. The
 receipt table is outside cleanup. Failure to reclaim never raises these limits.
 New installation IDs cannot bypass actor or Organization bounds.
+
+Migration `20260923000003` adds nullable `mobile_reconciliation.sealed_at`, set
+atomically after successful seal validation with a final unexpired-row check.
+No Today response or customer body is copied. Older `complete=true` rows are not
+backfilled: selection completeness does not prove a successful seal. A sealed
+generation is terminal cache metadata and may be reclaimed by the next bounded
+cleanup. Later manifest/component/seal calls then return the existing `404
+not_found`; retained expired rows return `409 generation_expired`. If a successful
+seal response was lost, a native client discards only that generation's staging
+reference and starts a new reconciliation, reusing unchanged complete local
+bundles. The active cache, drafts and original immutable outbox/receipt identities
+remain unchanged. A pending, unexpired generation is never reclaimed as sealed.
+This continuous-sync lifecycle correction changes no HTTP DTO or operation
+receipt/context retention policy.
 
 A partial Today source or incomplete selection cannot seal. Devices persist data
 and page checkpoints atomically and preserve old active cache on errors. Accepted

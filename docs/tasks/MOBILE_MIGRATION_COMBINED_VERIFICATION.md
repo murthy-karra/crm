@@ -123,7 +123,7 @@ Archived full DB suite: **completed**, nextest run
 `a45e04bc-ddcb-4721-84ef-7acfd884e961`, 966 tests in 689.655 seconds: 964 passed,
 two failed, exit 100. The slow 25,000-Person snapshot test passed. There were no
 spawn errors, including during the subsequent Cargo rebuild. All five
-`db_core_change_reports` and all seven `db_mobile` tests passed. The only two
+`db_core_change_reports` and all eight `db_mobile` tests passed. The only two
 failures are classified below and passed after their test-only corrections.
 
 The run exposed a remaining assertion in

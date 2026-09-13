@@ -1054,3 +1054,332 @@ async fn derived_trigger_permissions_never_bypass_review_business_guards(pool: P
     .unwrap();
     assert!(!can_call);
 }
+
+#[sqlx::test]
+#[ignore]
+async fn sealed_generations_reclaim_and_recover_lost_seals_without_losing_receipts(pool: PgPool) {
+    let f = fixture(&pool).await;
+    let operation = f.operation(
+        "add_note",
+        json!({"person_id":f.person,"body":"Retained across repeated sync"}),
+    );
+    let (status, receipt) = f.post("/api/mobile/v1/operations", operation.clone()).await;
+    assert_eq!(status, StatusCode::OK);
+    let receipt_rows: Value = sqlx::query_scalar(
+        "SELECT jsonb_agg(to_jsonb(r)) FROM mobile_operation_receipt r WHERE organization_id=$1",
+    )
+    .bind(f.org)
+    .fetch_one(&f.app)
+    .await
+    .unwrap();
+    let installation = Uuid::new_v4();
+    let (status, boot) = request(
+        &f.router,
+        &f.cookie,
+        None,
+        "POST",
+        "/api/mobile/v1/bootstrap",
+        json!({"protocol":"mobile-v1","installation_id":installation}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let second_context = id(&boot, "context_id");
+    async fn create(f: &Fixture, context: Uuid, installation: Uuid) -> Value {
+        let (status, value) = request(
+            &f.router,
+            &f.cookie,
+            Some(context),
+            "POST",
+            "/api/mobile/v1/reconciliations",
+            json!({"protocol":"mobile-v1","installation_id":installation,"pinned_person_ids":[]}),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{value}");
+        value
+    }
+    let pending = id(
+        &create(&f, second_context, installation).await,
+        "generation_id",
+    );
+    let mut lost_generation = None;
+    let mut cached_revision = Value::Null;
+    for (context, installation) in [(f.context, f.install), (second_context, installation)] {
+        for cycle in 0..6 {
+            let generation = create(&f, context, installation).await;
+            let gen = id(&generation, "generation_id");
+            let revision = generation["manifest"]["items"][0]["revision"].clone();
+            if cached_revision.is_null() {
+                cached_revision = revision.clone();
+            }
+            assert_eq!(
+                revision, cached_revision,
+                "complete unchanged bundles remain reusable"
+            );
+            let path = format!("/api/mobile/v1/reconciliations/{gen}/seal");
+            if context == f.context && cycle == 5 {
+                // Drop the actual successful router response without decoding its
+                // seal. The next admission may reclaim this terminal generation.
+                let req = Request::builder()
+                    .method("POST")
+                    .uri(&path)
+                    .header("content-type", "application/json")
+                    .header("cookie", &f.cookie)
+                    .header("X-Mobile-Context", context.to_string())
+                    .body(Body::from("{}"))
+                    .unwrap();
+                let response = f.router.clone().oneshot(req).await.unwrap();
+                assert_eq!(response.status(), StatusCode::OK);
+                drop(response);
+                lost_generation = Some(gen);
+            } else {
+                let (status, sealed) = request(
+                    &f.router,
+                    &f.cookie,
+                    Some(context),
+                    "POST",
+                    &path,
+                    json!({}),
+                )
+                .await;
+                assert_eq!(status, StatusCode::OK, "{sealed}");
+                let (status, replay) = request(
+                    &f.router,
+                    &f.cookie,
+                    Some(context),
+                    "POST",
+                    &path,
+                    json!({}),
+                )
+                .await;
+                assert_eq!(status, StatusCode::OK);
+                assert_eq!(
+                    replay, sealed,
+                    "retained seal retries revalidate without changing their timestamp"
+                );
+            }
+            assert!(sqlx::query_scalar::<_, bool>(
+                "SELECT sealed_at IS NOT NULL FROM mobile_reconciliation WHERE id=$1"
+            )
+            .bind(gen)
+            .fetch_one(&f.app)
+            .await
+            .unwrap());
+            assert_eq!(
+                sqlx::query_scalar::<_, i64>(
+                    "SELECT count(*) FROM mobile_reconciliation WHERE organization_id=$1"
+                )
+                .bind(f.org)
+                .fetch_one(&f.app)
+                .await
+                .unwrap(),
+                2
+            );
+            assert!(sqlx::query_scalar::<_, bool>("SELECT sealed_at IS NULL AND expires_at>now() FROM mobile_reconciliation WHERE id=$1").bind(pending).fetch_one(&f.app).await.unwrap());
+        }
+    }
+    let lost = lost_generation.unwrap();
+    for (method, suffix) in [("POST", "seal"), ("GET", "manifest")] {
+        let (status, error) = request(
+            &f.router,
+            &f.cookie,
+            Some(f.context),
+            method,
+            &format!("/api/mobile/v1/reconciliations/{lost}/{suffix}"),
+            json!({}),
+        )
+        .await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert_eq!(error["error"], "not_found");
+    }
+    // Recovery creates a fresh generation and can use the complete bundle from
+    // the lost response: selection revision is unchanged and sealing succeeds.
+    let recovery = create(&f, f.context, f.install).await;
+    assert_eq!(
+        recovery["manifest"]["items"][0]["revision"],
+        cached_revision
+    );
+    assert_eq!(
+        f.post(
+            &format!(
+                "/api/mobile/v1/reconciliations/{}/seal",
+                id(&recovery, "generation_id")
+            ),
+            json!({})
+        )
+        .await
+        .0,
+        StatusCode::OK
+    );
+    let (status, replay) = f.post("/api/mobile/v1/operations", operation).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(replay["replayed"], true);
+    assert_eq!(replay["resource_id"], receipt["resource_id"]);
+    assert_eq!(sqlx::query_scalar::<_, Value>("SELECT jsonb_agg(to_jsonb(r)) FROM mobile_operation_receipt r WHERE organization_id=$1").bind(f.org).fetch_one(&f.app).await.unwrap(), receipt_rows);
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT count(*) FROM note WHERE person_id=$1")
+            .bind(f.person)
+            .fetch_one(&f.app)
+            .await
+            .unwrap(),
+        1
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM mobile_context WHERE organization_id=$1"
+        )
+        .bind(f.org)
+        .fetch_one(&f.app)
+        .await
+        .unwrap(),
+        2
+    );
+
+    mobile::cleanup_once(&f.app).await.unwrap(); // leaves the pending generation
+    let a = id(&create(&f, f.context, f.install).await, "generation_id");
+    let b = id(&create(&f, f.context, f.install).await, "generation_id");
+    let c = id(
+        &create(&f, second_context, installation).await,
+        "generation_id",
+    );
+    for (context, gen) in [(f.context, a), (f.context, b), (second_context, c)] {
+        assert_eq!(
+            request(
+                &f.router,
+                &f.cookie,
+                Some(context),
+                "POST",
+                &format!("/api/mobile/v1/reconciliations/{gen}/seal"),
+                json!({})
+            )
+            .await
+            .0,
+            StatusCode::OK
+        );
+    }
+    mobile::cleanup_once(&f.app).await.unwrap();
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM mobile_reconciliation WHERE organization_id=$1"
+        )
+        .bind(f.org)
+        .fetch_one(&f.app)
+        .await
+        .unwrap(),
+        2,
+        "one sweep removes at most two of three terminal generations"
+    );
+    mobile::cleanup_once(&f.app).await.unwrap();
+    assert_eq!(
+        sqlx::query_scalar::<_, Vec<Uuid>>(
+            "SELECT array_agg(id) FROM mobile_reconciliation WHERE organization_id=$1"
+        )
+        .bind(f.org)
+        .fetch_one(&f.app)
+        .await
+        .unwrap(),
+        vec![pending]
+    );
+    assert_eq!(sqlx::query_scalar::<_, Value>("SELECT jsonb_agg(to_jsonb(r)) FROM mobile_operation_receipt r WHERE organization_id=$1").bind(f.org).fetch_one(&f.app).await.unwrap(), receipt_rows);
+}
+
+#[sqlx::test]
+#[ignore]
+async fn sealed_generations_remain_counted_when_cleanup_is_locked_or_fails(pool: PgPool) {
+    let f = fixture(&pool).await;
+    let a = id(&f.gen().await, "generation_id");
+    let b = id(&f.gen().await, "generation_id");
+    // A failure while persisting the terminal marker must leave a retryable
+    // pending generation, rather than publishing a seal or admitting cleanup.
+    sqlx::raw_sql("CREATE FUNCTION mobile_fixture_fail_seal() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic seal failure'; END $$; CREATE TRIGGER mobile_fixture_seal BEFORE UPDATE OF sealed_at ON mobile_reconciliation FOR EACH ROW EXECUTE FUNCTION mobile_fixture_fail_seal();").execute(&pool).await.unwrap();
+    let path = format!("/api/mobile/v1/reconciliations/{a}/seal");
+    assert_eq!(
+        f.post(&path, json!({})).await.0,
+        StatusCode::SERVICE_UNAVAILABLE
+    );
+    assert!(sqlx::query_scalar::<_, bool>(
+        "SELECT sealed_at IS NULL FROM mobile_reconciliation WHERE id=$1"
+    )
+    .bind(a)
+    .fetch_one(&f.app)
+    .await
+    .unwrap());
+    mobile::cleanup_once(&f.app).await.unwrap();
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM mobile_reconciliation WHERE context_id=$1"
+        )
+        .bind(f.context)
+        .fetch_one(&f.app)
+        .await
+        .unwrap(),
+        2
+    );
+    sqlx::query("DROP TRIGGER mobile_fixture_seal ON mobile_reconciliation")
+        .execute(&pool)
+        .await
+        .unwrap();
+    for gen in [a, b] {
+        assert_eq!(
+            f.post(
+                &format!("/api/mobile/v1/reconciliations/{gen}/seal"),
+                json!({})
+            )
+            .await
+            .0,
+            StatusCode::OK
+        );
+    }
+    let body = json!({"protocol":"mobile-v1","installation_id":f.install,"pinned_person_ids":[]});
+    let mut held = f.app.begin().await.unwrap();
+    sqlx::query("SELECT id FROM mobile_reconciliation WHERE id=ANY($1) FOR UPDATE")
+        .bind(vec![a, b])
+        .fetch_all(&mut *held)
+        .await
+        .unwrap();
+    let (status, error) = f.post("/api/mobile/v1/reconciliations", body.clone()).await;
+    assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(error["error"], "mobile_capacity");
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM mobile_reconciliation WHERE context_id=$1"
+        )
+        .bind(f.context)
+        .fetch_one(&f.app)
+        .await
+        .unwrap(),
+        2,
+        "locked terminal rows still consume admission"
+    );
+    held.rollback().await.unwrap();
+    sqlx::raw_sql("CREATE FUNCTION mobile_fixture_deny_terminal_cleanup() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic terminal cleanup failure'; END $$; CREATE TRIGGER mobile_fixture_cleanup BEFORE DELETE ON mobile_reconciliation FOR EACH ROW EXECUTE FUNCTION mobile_fixture_deny_terminal_cleanup();").execute(&pool).await.unwrap();
+    assert_eq!(
+        f.post("/api/mobile/v1/reconciliations", body).await.0,
+        StatusCode::SERVICE_UNAVAILABLE
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM mobile_reconciliation WHERE context_id=$1"
+        )
+        .bind(f.context)
+        .fetch_one(&f.app)
+        .await
+        .unwrap(),
+        2
+    );
+    sqlx::query("DROP TRIGGER mobile_fixture_cleanup ON mobile_reconciliation")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let recovered = f.gen().await;
+    assert_ne!(id(&recovered, "generation_id"), a);
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM mobile_reconciliation WHERE context_id=$1"
+        )
+        .bind(f.context)
+        .fetch_one(&f.app)
+        .await
+        .unwrap(),
+        1
+    );
+}

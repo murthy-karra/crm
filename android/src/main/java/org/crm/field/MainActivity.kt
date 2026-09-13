@@ -656,7 +656,9 @@ private fun SavedWork(
                     Text(
                         when (row.kind) {
                             "add_note" -> "Add note"
+                            "edit_note" -> "Edit note"
                             "create_task" -> "Create task"
+                            "update_task" -> "Edit task"
                             else -> "Complete task"
                         },
                         fontWeight = FontWeight.SemiBold,

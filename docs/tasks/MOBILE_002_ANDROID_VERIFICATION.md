@@ -135,7 +135,7 @@ fixture store. `FLAG_SECURE` makes pixel screencaps black; the corresponding
 runtime hierarchy was inspected rather than treating that black image as visual
 evidence. The original demo `org.crm.field` package remained installed throughout.
 
-## Scope still requiring a subsequent real-API QA pass
+## Historical scope before the later real-API QA pass
 
 The live session was not used to mutate a reserved Person record before this
 checkpoint. Thus real offline edit save/force-stop/relaunch, lost accepted
@@ -168,3 +168,69 @@ shows process signal 9), before it could be explicitly submitted and replayed.
 Consequently, this run records no accepted operation receipt and makes no claim
 for offline replay, task field preservation, or two-actor conflict/current-read
 behavior. Those live mutation cases remain required.
+
+## Completed Mobile 002 real-API acceptance
+
+The subsequent acceptance run used the same Android 17/API 37 AVD, installed
+the already-built QA and test APKs manually, and invoked the exact test methods
+with `adb shell am instrument`. This preserves the QA package's encrypted store
+between the intentional force-stop and relaunch; Gradle's connected-test task
+uninstalls the target package after a run and was therefore not used for that
+process-death proof. The dedicated synthetic `android@mobile.test` actor had no
+assigned People, so the production `FieldRepository.pin` path pinned only the
+reserved records 096, 097, and 098 before each normal authenticated
+reconciliation. No demo package, API3101, or unreserved Person was changed.
+
+The live test source is
+`android/src/androidTest/java/org/crm/field/Mobile002AcceptanceTest.kt` and the
+instrumentation transcripts are retained at:
+
+- `/private/tmp/crm-mobile002-note-prepare5.log`
+- `/private/tmp/crm-mobile002-note-relaunch2.log`
+- `/private/tmp/crm-mobile002-task2.log`
+- `/private/tmp/crm-mobile002-conflict2.log`
+- `/private/tmp/crm-mobile002-conflict-receipt.log`
+
+Each transcript reports `OK (1 test)`.
+
+1. **Existing note, offline queue, force-stop and exact replay.** The test
+   edited P096's existing note while sync was paused, submitted immutable
+   operation `5e279131-89f0-4fc6-8dbc-3097398709a8`, force-stopped
+   `org.crm.field.mobile002qa`, and relaunched it. The same stored envelope
+   (SHA-256 `248f5466197918f23401487fdd085c988823033ae56895cde638f89dfb88c224`)
+   received an `accepted` receipt with committed revision `2` and person
+   revision `23`. The local status can become `covered` in the same sync only
+   after that accepted receipt; the test asserts the receipt outcome and
+   byte-for-byte envelope equality.
+2. **Existing completed task update.** The fixture begins with open tasks, so
+   the test first created then completed P097 task
+   `d2c7bd7a-5fb7-4cf0-8db1-87a44b279f85` through distinct ordinary
+   `create_task` and `complete_task` setup operations
+   `8c12bef8-b600-48ff-9a30-fdcb48ce9547` and
+   `e23a5075-43a4-4d92-85ff-2b4e000c207a`. It refetched the resulting completed
+   record before issuing Mobile002 `update_task`
+   `bd4f0a87-5799-4566-98c2-d8405fdeb92a`, which changed the title and kind to
+   `other` and cleared `due_at`. The accepted receipt has committed revision
+   `3`; the test verifies unchanged `completed_at`, assignee, and creator.
+3. **Second-actor revision conflict and revised operation.** P098's first
+   primary proposal `e3774872-8062-43e3-b39f-ccbdc3d9f314` conflicted after
+   second actor operation `2d2b021c-ff9f-40d1-9278-c49955283a6f` was accepted.
+   The native Saved work UI asserted `Your saved edit`, `Version you started
+   from`, `Current version`, and `Review and revise`, using the protected
+   baseline, immutable proposal, and authoritative current note. Calling the
+   normal `supersedeConflict` path created fresh revised operation
+   `2bffbe9a-c336-4985-8300-1583a48b5460` at current revision `3`; the old
+   operation was asserted `superseded`. A separate receipt-drain invocation
+   then accepted/covered that exact revised operation with receipt and
+   authoritative note revision `4`, verified its body remains `Mobile002
+   revised primary proposal 098`, and re-verified the old operation remains
+   `superseded`.
+
+Root independently verified the four newly recorded Gradle dependency hashes
+against their official Maven Central artifact URLs; all passed in
+`/private/tmp/crm-mobile002-qa/android-metadata-hash-audit.log`.
+
+The emulator had intermittent SQLCipher/Room connection contention during the
+two-actor run (the longest recorded wait was about 11 seconds), but every final
+instrumentation case completed successfully. Physical-phone validation remains
+deferred.

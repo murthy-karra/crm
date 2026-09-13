@@ -162,7 +162,7 @@ fn summary(
     row: &PgRow,
 ) -> Result<Value, MigrationError> {
     Ok(
-        json!({"id":row.get::<Uuid,_>("id"),"source_id":row.get::<Option<String>,_>("source_id"),"prospective_person_id":row.get::<Uuid,_>("prospective_person_id"),"disposition":row.get::<String,_>("disposition"),"settled_at":row.get::<Option<DateTime<Utc>>,_>("settled_at"),"plan_id":row.get::<Uuid,_>("plan_id"),"projection":projection(key,ctx,admission,row)?}),
+        json!({"id":row.get::<Uuid,_>("id"),"source_id":row.get::<Option<String>,_>("source_id"),"prospective_person_id":row.get::<Uuid,_>("prospective_person_id"),"disposition":row.try_get::<String,_>("display_disposition").unwrap_or_else(|_|row.get("disposition")),"settled_at":row.get::<Option<DateTime<Utc>>,_>("settled_at"),"plan_id":row.get::<Uuid,_>("plan_id"),"projection":projection(key,ctx,admission,row)?}),
     )
 }
 pub async fn list(
@@ -210,7 +210,7 @@ pub async fn items(
     let mut tx = begin(pool, ctx).await?;
     resource(&mut tx, key, ctx, id).await?;
     let plan = plan(&mut tx, ctx, id, p.plan_id).await?;
-    let rows=sqlx::query("SELECT * FROM migration_people_admission_item WHERE admission_id=$1 AND organization_id=$2 AND plan_id=$3 AND ($4::text IS NULL OR disposition=$4) ORDER BY id LIMIT $5").bind(id).bind(ctx.organization_id.0).bind(plan.get::<Uuid,_>("id")).bind(p.disposition).bind(n).fetch_all(&mut *tx).await?;
+    let rows=sqlx::query("SELECT i.*,CASE WHEN a.state='cancelled' AND i.disposition='eligible' AND i.settled_at IS NULL THEN 'cancelled' ELSE i.disposition END AS display_disposition FROM migration_people_admission_item i JOIN migration_people_admission a ON a.id=i.admission_id AND a.organization_id=i.organization_id WHERE i.admission_id=$1 AND i.organization_id=$2 AND i.plan_id=$3 AND ($4::text IS NULL OR (CASE WHEN a.state='cancelled' AND i.disposition='eligible' AND i.settled_at IS NULL THEN 'cancelled' ELSE i.disposition END)=$4) ORDER BY i.id LIMIT $5").bind(id).bind(ctx.organization_id.0).bind(plan.get::<Uuid,_>("id")).bind(p.disposition).bind(n).fetch_all(&mut *tx).await?;
     let rows = rows
         .iter()
         .map(|r| summary(key, ctx, id, r))
@@ -223,7 +223,7 @@ async fn item_row(
     id: Uuid,
     item: Uuid,
 ) -> Result<(PgRow, PgRow), MigrationError> {
-    let r=sqlx::query("SELECT * FROM migration_people_admission_item WHERE id=$1 AND admission_id=$2 AND organization_id=$3").bind(item).bind(id).bind(ctx.organization_id.0).fetch_optional(&mut *conn).await?.ok_or(MigrationError::NotFound)?;
+    let r=sqlx::query("SELECT i.*,CASE WHEN a.state='cancelled' AND i.disposition='eligible' AND i.settled_at IS NULL THEN 'cancelled' ELSE i.disposition END AS display_disposition FROM migration_people_admission_item i JOIN migration_people_admission a ON a.id=i.admission_id AND a.organization_id=i.organization_id WHERE i.id=$1 AND i.admission_id=$2 AND i.organization_id=$3").bind(item).bind(id).bind(ctx.organization_id.0).fetch_optional(&mut *conn).await?.ok_or(MigrationError::NotFound)?;
     if r.get::<i64, _>("item_byte_bound") > s::ITEM_LIMIT {
         return Err(MigrationError::StorageLimit);
     }

@@ -34,19 +34,14 @@ async fn prepare_page(
 ) -> Result<(), MigrationError> {
     let mut tx = pool.begin().await?;
     crate::auth::workspace::bounded_lock_wait(&mut tx).await?;
-    let run = sqlx::query(
-        "SELECT * FROM migration_people_admission WHERE id=$1 AND organization_id=$2 FOR UPDATE",
-    )
-    .bind(id)
-    .bind(org.0)
-    .fetch_one(&mut *tx)
-    .await?;
+    let run = s::lock_run(&mut tx, org, id).await?;
+    let frozen = s::validate_run(&mut tx, key, org, &run).await?;
     if run.get::<String, _>("preparation_phase") != "groups" {
         qualify_one_stream(&mut tx, key, org, id, &run).await?;
         tx.commit().await?;
         return Ok(());
     }
-    let plan=if let Some(v)=sqlx::query_scalar::<_,Uuid>("SELECT id FROM migration_people_admission_plan WHERE admission_id=$1 AND organization_id=$2 AND state='building' ORDER BY revision DESC LIMIT 1 FOR UPDATE").bind(id).bind(org.0).fetch_optional(&mut *tx).await?{v}else{let p=Uuid::new_v4();let revision:i64=sqlx::query_scalar("SELECT COALESCE(max(revision),0)+1 FROM migration_people_admission_plan WHERE admission_id=$1 AND organization_id=$2").bind(id).bind(org.0).fetch_one(&mut *tx).await?;let input=s::seal(key,org,id,p,"inputs",&json!({"parent_import_id":run.get::<Uuid,_>("parent_import_id"),"parent_plan_id":run.get::<Uuid,_>("parent_plan_id"),"report_id":run.get::<Uuid,_>("report_id"),"original_snapshot_id":run.get::<Uuid,_>("original_snapshot_id"),"newer_snapshot_id":run.get::<Uuid,_>("newer_snapshot_id"),"newer_sequence":run.get::<i64,_>("newer_sequence"),"engine":s::ENGINE}))?;sqlx::query("INSERT INTO migration_people_admission_plan(id,admission_id,organization_id,revision,state,inputs_nonce,inputs_ciphertext) VALUES($1,$2,$3,$4,'building',$5,$6)").bind(p).bind(id).bind(org.0).bind(revision).bind(input.nonce.as_slice()).bind(input.ciphertext).execute(&mut *tx).await?;p};
+    let plan=if let Some(v)=sqlx::query_scalar::<_,Uuid>("SELECT id FROM migration_people_admission_plan WHERE admission_id=$1 AND organization_id=$2 AND state='building' ORDER BY revision DESC LIMIT 1 FOR UPDATE").bind(id).bind(org.0).fetch_optional(&mut *tx).await?{v}else{let p=Uuid::new_v4();let revision:i64=sqlx::query_scalar("SELECT COALESCE(max(revision),0)+1 FROM migration_people_admission_plan WHERE admission_id=$1 AND organization_id=$2").bind(id).bind(org.0).fetch_one(&mut *tx).await?;let input=s::seal(key,org,id,p,"inputs",&frozen)?;sqlx::query("INSERT INTO migration_people_admission_plan(id,admission_id,organization_id,revision,state,inputs_nonce,inputs_ciphertext) VALUES($1,$2,$3,$4,'building',$5,$6)").bind(p).bind(id).bind(org.0).bind(revision).bind(input.nonce.as_slice()).bind(input.ciphertext).execute(&mut *tx).await?;p};
     let checkpoint: String = run.get("preparation_checkpoint_key");
     let rows=sqlx::query("SELECT source_key,source_id FROM migration_core_change_group WHERE report_id=$1 AND organization_id=$2 AND family='people' AND source_key>$3 ORDER BY source_key LIMIT 50").bind(run.get::<Uuid,_>("report_id")).bind(org.0).bind(&checkpoint).fetch_all(&mut *tx).await?;
     if rows.is_empty() {
@@ -309,13 +304,7 @@ async fn execute_one(
 ) -> Result<(), MigrationError> {
     let mut tx = pool.begin().await?;
     crate::auth::workspace::bounded_lock_wait(&mut tx).await?;
-    let run = sqlx::query(
-        "SELECT * FROM migration_people_admission WHERE id=$1 AND organization_id=$2 FOR UPDATE",
-    )
-    .bind(id)
-    .bind(org.0)
-    .fetch_one(&mut *tx)
-    .await?;
+    let run = s::lock_run(&mut tx, org, id).await?;
     release
         .ok_or(MigrationError::ReleaseNotReady)?
         .require_people_admission(&mut tx)
@@ -330,9 +319,23 @@ async fn execute_one(
             .ok_or(MigrationError::Conflict)?
     };
     let plan:Uuid=sqlx::query_scalar("SELECT confirmed_admission_plan_id FROM migration_people_admission WHERE id=$1 AND organization_id=$2").bind(id).bind(org.0).fetch_one(&mut *tx).await?;
+    let plan_row=sqlx::query("SELECT inputs_nonce,inputs_ciphertext FROM migration_people_admission_plan WHERE id=$1 AND admission_id=$2 AND organization_id=$3 AND state='ready' FOR UPDATE").bind(plan).bind(id).bind(org.0).fetch_optional(&mut *tx).await?.ok_or(MigrationError::Conflict)?;
+    let sealed_inputs: Value = s::open(
+        key,
+        org,
+        id,
+        plan,
+        "inputs",
+        &plan_row.get::<Vec<u8>, _>("inputs_nonce"),
+        &plan_row.get::<Vec<u8>, _>("inputs_ciphertext"),
+    )?;
+    if sealed_inputs != s::validate_run(&mut tx, key, org, &run).await? {
+        return Err(MigrationError::SourceNotEligible);
+    }
     let item=sqlx::query("SELECT * FROM migration_people_admission_item WHERE admission_id=$1 AND organization_id=$2 AND plan_id=$3 AND disposition='eligible' AND settled_at IS NULL ORDER BY id LIMIT 1 FOR UPDATE").bind(id).bind(org.0).bind(plan).fetch_optional(&mut *tx).await?;
     let Some(item) = item else {
         sqlx::query("UPDATE migration_people_admission SET state='completed',completed_at=clock_timestamp(),lease_token=NULL,lease_expires_at=NULL WHERE id=$1 AND organization_id=$2").bind(id).bind(org.0).execute(&mut *tx).await?;
+        s::release_control(&mut tx, org, id).await?;
         tx.commit().await?;
         return Ok(());
     };

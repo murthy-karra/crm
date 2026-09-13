@@ -670,7 +670,8 @@ class PreflightTests(unittest.TestCase):
         for required in ["migration_people_admission", "migration_people_admission_plan",
                          "migration_people_admission_item", "person_admission_provenance",
                          "person_admitted", "admission_item_id", "confirmed_admission_plan_id",
-                         "crm_people_admission_mutation_allowed(uuid,text,text,text,jsonb)"]:
+                         "crm_people_admission_mutation_allowed(uuid,text,text,text,jsonb)",
+                         "crm_people_admission_lock_stage(uuid,uuid)"]:
             self.assertIn(required, schema)
         observed = next(query for query in sql if "FROM public.migration_people_admission" in query)
         self.assertIn("engine_version<>'fub-people-admission-v1'", observed)

@@ -15,7 +15,9 @@ const props=defineProps<{refreshWorkspace:()=>Promise<void>}>()
 const access=usePeopleAdmissionAccess(); const parentId=ref(''); const reportId=ref(''); const admissionId=ref('')
 const parentCursor=ref(''); const reportCursor=ref(''); const listCursor=ref(''); const itemCursor=ref(''); const resultCursor=ref(''); const contactCursor=ref(''); const fieldCursor=ref('')
 const disposition=ref(''); const selected=ref<AdmissionItem>(); const selectedField=ref(''); const acknowledgement=ref(false); const mappings=ref(false); const distinct=ref(false); const hold=ref(false)
-const action=ref<'confirm'|'cancel'|null>(null); const error=ref(''); const intent=ref<{body:string;kind:'prepare'|'confirm'|'plans'|'retry'|'cancel';id?:string}|null>(null); const requestEpoch=ref(0); let disposed=false
+const action=ref<'confirm'|'cancel'|null>(null); const error=ref(''); const pending=ref(false); const now=ref(Date.now()); const timer=setInterval(()=>{now.value=Date.now()},1000)
+type Intent={body:string;kind:'prepare'|'confirm'|'plans'|'retry'|'cancel';id?:string;identity:string;parent:string}
+const intent=ref<Intent|null>(null); let disposed=false; let identityEpoch=0; let authorityEpoch=0; let selectionEpoch=0
 const key=(...v:unknown[])=>[...access.prefix.value,...v]
 const parents=useQuery({queryKey:computed(()=>key('parents',parentCursor.value)),enabled:access.enabled,retry:false,gcTime:0,queryFn:({signal})=>access.read(key('parents',parentCursor.value),()=>key('parents',parentCursor.value),()=>fetchImports(parentCursor.value||undefined,signal))})
 const parent=useQuery({queryKey:computed(()=>key('parent',parentId.value)),enabled:computed(()=>access.enabled.value&&!!parentId.value),retry:false,gcTime:0,queryFn:({signal})=>access.read(key('parent',parentId.value),()=>key('parent',parentId.value),()=>fetchImport(parentId.value,signal))})
@@ -28,17 +30,28 @@ const item=useQuery({queryKey:computed(()=>key('item',admissionId.value,selected
 const contacts=useQuery({queryKey:computed(()=>key('contacts',admissionId.value,selected.value?.id,contactCursor.value)),enabled:computed(()=>access.enabled.value&&!!selected.value&&!!item.data.value),retry:false,gcTime:0,queryFn:async({signal})=>access.read(key('contacts',admissionId.value,selected.value?.id,contactCursor.value),()=>key('contacts',admissionId.value,selected.value?.id,contactCursor.value),async()=>{const v=await fetchAdmissionContacts(admissionId.value,selected.value!.id,contactCursor.value||undefined,signal);if(v.plan_id!==plan.value?.id||v.plan_revision!==plan.value?.revision)throw Error('Preview changed');return v})})
 const field=useQuery({queryKey:computed(()=>key('field',admissionId.value,selected.value?.id,selectedField.value,fieldCursor.value)),enabled:computed(()=>access.enabled.value&&!!selected.value&&!!selectedField.value),retry:false,gcTime:0,queryFn:async({signal})=>access.read(key('field',admissionId.value,selected.value?.id,selectedField.value,fieldCursor.value),()=>key('field',admissionId.value,selected.value?.id,selectedField.value,fieldCursor.value),async()=>{const v=await fetchAdmissionField(admissionId.value,selected.value!.id,selectedField.value,fieldCursor.value||undefined,signal);if(v.plan_id!==plan.value?.id||v.plan_revision!==plan.value?.revision||v.field!==selectedField.value)throw Error('Field changed');return v})})
 const results=useQuery({queryKey:computed(()=>key('results',admissionId.value,resultCursor.value)),enabled:computed(()=>access.enabled.value&&!!admissionId.value&&['running','paused','completed','cancelled'].includes(current.value?.state??'')),retry:false,gcTime:0,queryFn:({signal})=>access.read(key('results',admissionId.value,resultCursor.value),()=>key('results',admissionId.value,resultCursor.value),()=>fetchAdmissionResults(admissionId.value,resultCursor.value||undefined,signal))})
-const expired=computed(()=>!!plan.value?.expires_at&&Date.parse(plan.value.expires_at)<=Date.now()); const canConfirm=computed(()=>!!current.value?.actions.confirm&&!!plan.value&&plan.value.counts.eligible!=='0'&&!expired.value&&acknowledgement.value&&mappings.value&&distinct.value&&hold.value&&!intent.value)
+const expired=computed(()=>!!plan.value?.expires_at&&Date.parse(plan.value.expires_at)<=now.value); const canConfirm=computed(()=>!!current.value?.actions.confirm&&!!plan.value&&plan.value.counts.eligible!=='0'&&!expired.value&&acknowledgement.value&&mappings.value&&distinct.value&&hold.value&&!pending.value)
 function resetDetail(){itemCursor.value='';resultCursor.value='';contactCursor.value='';fieldCursor.value='';selected.value=undefined;selectedField.value='';acknowledgement.value=mappings.value=distinct.value=hold.value=false;action.value=null}
-watch(parentId,()=>{reportId.value='';admissionId.value='';reportCursor.value='';listCursor.value='';resetDetail()}); watch([admissionId,disposition],()=>resetDetail()); watch(access.scope,()=>{requestEpoch.value++;intent.value=null;error.value='';parentId.value='';reportId.value='';admissionId.value='';resetDetail()})
+watch(parentId,()=>{selectionEpoch++;reportId.value='';admissionId.value='';reportCursor.value='';listCursor.value='';resetDetail()}); watch(reportId,()=>{selectionEpoch++},{flush:'sync'}); watch([admissionId,disposition],()=>{selectionEpoch++;resetDetail()}); watch(() => `${plan.value?.id}:${plan.value?.revision}:${plan.value?.digest}`,()=>resetDetail(),{flush:'sync'}); watch(access.scope,()=>{authorityEpoch++},{flush:'sync'}); watch(access.identity,()=>{identityEpoch++;intent.value=null;pending.value=false;error.value='';parentId.value='';reportId.value='';admissionId.value='';resetDetail()},{flush:'sync'})
 watch([parents.error,parent.error,reports.error,listing.error,detail.error,items.error,item.error,contacts.error,field.error,results.error],v=>{if(v.some(importAccessError)){access.denied.value=true;access.remove(access.prefix.value);void props.refreshWorkspace()}})
 function reload(){for(const q of [parents,parent,reports,listing,detail,items,item,contacts,field,results])void q.refetch()}
-async function send(kind:NonNullable<typeof intent.value>['kind'],body:Record<string,string|boolean>,id=admissionId.value){if(!access.enabled.value||intent.value)return;const serialized=JSON.stringify(body);const epoch=requestEpoch.value;intent.value={kind,body:serialized,id};error.value='';try{const b=JSON.parse(serialized) as never;const receipt=kind==='prepare'?await preparePeopleAdmission((b as {report_id:string}).report_id,(b as {request_id:string}).request_id):kind==='confirm'?await confirmPeopleAdmission(id,b as AdmissionConfirm):kind==='plans'?await repreviewPeopleAdmission(id,(b as {request_id:string}).request_id,(b as {expected_plan_revision:string}).expected_plan_revision):kind==='retry'?await retryPeopleAdmission(id,(b as {request_id:string}).request_id,(b as {expected_lifecycle_revision:string}).expected_lifecycle_revision):await cancelPeopleAdmission(id,(b as {request_id:string}).request_id,(b as {expected_lifecycle_revision:string}).expected_lifecycle_revision);if(disposed||epoch!==requestEpoch.value||!access.enabled.value){error.value='Access changed while the request was pending. Retry the same request to recover its receipt.';return}admissionId.value=receipt.admission_id;intent.value=null;reload()}catch(e){if(!access.enabled.value)return;if(uncertainImportError(e)){error.value='The outcome is uncertain. Retry the same request to recover its saved receipt.'}else{intent.value=null;error.value=describeApiError(e,'Could not complete this People admission request.')}if(importAccessError(e)){access.denied.value=true;access.remove(access.prefix.value)}}}
-function replay(){const v=intent.value;if(v)void send(v.kind,JSON.parse(v.body),v.id)}
+async function dispatch(value:Intent, replay=false){
+  if(pending.value||!access.enabled.value||value.identity!==access.identity.value||(!replay&&intent.value))return
+  const identity=identityEpoch;const authority=authorityEpoch;const selection=selectionEpoch
+  const sameIdentity=()=>!disposed&&identity===identityEpoch&&value.identity===access.identity.value
+  const sameRequest=()=>sameIdentity()&&access.enabled.value&&authority===authorityEpoch&&selection===selectionEpoch
+  if(!replay)intent.value=value; pending.value=true; error.value=''; action.value=null
+  try{const b=JSON.parse(value.body) as never;const receipt=value.kind==='prepare'?await preparePeopleAdmission((b as {report_id:string}).report_id,(b as {request_id:string}).request_id):value.kind==='confirm'?await confirmPeopleAdmission(value.id??'',b as AdmissionConfirm):value.kind==='plans'?await repreviewPeopleAdmission(value.id??'',(b as {request_id:string}).request_id,(b as {expected_plan_revision:string}).expected_plan_revision):value.kind==='retry'?await retryPeopleAdmission(value.id??'',(b as {request_id:string}).request_id,(b as {expected_lifecycle_revision:string}).expected_lifecycle_revision):await cancelPeopleAdmission(value.id??'',(b as {request_id:string}).request_id,(b as {expected_lifecycle_revision:string}).expected_lifecycle_revision)
+    if(!sameRequest()){if(sameIdentity())error.value='Access or selection changed while the request was pending. Verify the current scope, then retry the same request to recover its receipt.';return}
+    admissionId.value=receipt.admission_id;intent.value=null;reload()
+  }catch(e){if(!sameIdentity())return;if(importAccessError(e)){access.denied.value=true;access.remove(access.prefix.value);intent.value=null;error.value='Administrator access is required.';return}if(uncertainImportError(e)){error.value='The outcome is uncertain. Retry the same request to recover its saved receipt.'}else{intent.value=null;error.value=describeApiError(e,'Could not complete this People admission request.')}}finally{if(sameIdentity())pending.value=false}
+}
+function send(kind:Intent['kind'],body:Record<string,string|boolean>,id=admissionId.value){void dispatch({kind,body:JSON.stringify(body),id,identity:access.identity.value,parent:parentId.value})}
+function replay(){const value=intent.value;if(value)void dispatch(value,true)}
 function prepare(){if(reportId.value)void send('prepare',{request_id:crypto.randomUUID(),report_id:reportId.value})}
 function confirm(){if(plan.value&&canConfirm.value&&action.value==='confirm')void send('confirm',{request_id:crypto.randomUUID(),plan_id:plan.value.id,plan_revision:plan.value.revision,plan_digest:plan.value.digest,eligible_count:plan.value.counts.eligible,acknowledged_coverage:true,acknowledged_mappings:true,acknowledged_distinct_contacts:true,acknowledged_review_hold:true})}
 function lifecycle(kind:'plans'|'retry'|'cancel'){if(!current.value)return;const revision=kind==='plans'?plan.value?.revision:current.value.lifecycle_revision;if(!revision||(kind==='cancel'&&action.value!=='cancel'))return;void send(kind,{request_id:crypto.randomUUID(),[kind==='plans'?'expected_plan_revision':'expected_lifecycle_revision']:revision})}
-onBeforeUnmount(()=>{disposed=true;access.remove(access.prefix.value)})
+onBeforeUnmount(()=>{disposed=true;clearInterval(timer);intent.value=null;access.remove(access.prefix.value)})
 </script>
 <template>
   <Card
@@ -111,7 +124,7 @@ onBeforeUnmount(()=>{disposed=true;access.remove(access.prefix.value)})
           </select><button
             type="button"
             :class="buttonClasses('primary')"
-            :disabled="!reportId||!!intent"
+            :disabled="!reportId||pending"
             @click="prepare"
           >
             Prepare admission preview
@@ -359,7 +372,7 @@ onBeforeUnmount(()=>{disposed=true;access.remove(access.prefix.value)})
         title="Confirm exact People admission"
         message="Only the frozen eligible count and core coverage will be admitted. The review hold continues."
         confirm-label="Confirm admission"
-        :is-pending="!!intent"
+        :is-pending="pending"
         @update:visible="action=null"
         @confirm="confirm"
       /><ConfirmDialog
@@ -368,7 +381,7 @@ onBeforeUnmount(()=>{disposed=true;access.remove(access.prefix.value)})
         message="Settled identities remain consumed. A later same-report remainder requires a new preview."
         confirm-label="Cancel future admission writes"
         confirm-variant="danger"
-        :is-pending="!!intent"
+        :is-pending="pending"
         @update:visible="action=null"
         @confirm="lifecycle('cancel')"
       />

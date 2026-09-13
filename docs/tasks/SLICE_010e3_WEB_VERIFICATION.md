@@ -48,3 +48,13 @@ Results on 2026-09-13:
 The Vite build reported the repository's existing large-chunk advisory; it did not
 fail the build. Actual API3103/Web5174 desktop and 390px acceptance remains for
 root after the backend runtime is ready.
+
+## Review round 1 component behavior
+
+`PeopleAdmissionPanel.test.ts` now exercises the component, rather than only API
+path construction. It verifies a dropped confirmation response replays the exact
+serialized request body, authority re-verification preserves that uncertain
+request while an identity change purges it, a late prepare receipt cannot apply
+after selection changes, plan replacement clears all acknowledgements, expiry is
+reactive, and opaque item cursors retain their endpoint-bound value on the next
+page. The final focused run reported 90 files / 1210 tests passing.

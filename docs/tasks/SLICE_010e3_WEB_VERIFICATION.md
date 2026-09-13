@@ -82,3 +82,27 @@ It passed: 90 test files / 1212 tests. This includes opaque completed-report
 cursor paging and an arbitrary published `sourceUrl` full-field request. The
 Web DTO types match backend commit `2434584`; no backend files were changed in
 this worktree.
+
+## Browser-review template correction
+
+A live browser review confirmed the item template must show the sealed intended
+CRM projection independently from raw retained source provenance. The panel now
+shows normalized first and last name, frozen target stage, and target assignee
+with **Unassigned** explicitly rendered for a null assignee. Retained provenance
+field summaries remain below that separate block. Reload only refetches selected
+and enabled resources; preparation no longer triggers a settled-results request.
+
+Focused component coverage includes these intended-value and active-preparation
+reload paths:
+
+```sh
+cd web
+pnpm exec vitest run src/components/migration/PeopleAdmissionPanel.test.ts --reporter=verbose
+pnpm typecheck
+pnpm lint
+pnpm build
+```
+
+Results: the isolated component file passed 9/9 tests; typecheck and ESLint
+passed; Vite production build passed. The build emitted the repository's existing
+large-chunk advisory only. The live fixture/browser continuation is owned by root.

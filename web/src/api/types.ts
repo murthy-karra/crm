@@ -573,7 +573,16 @@ export interface PersonImportedDetail {
   on_behalf_of_user_id: string
 }
 
+export interface PersonAdmittedDetail {
+  admission_id: string
+  plan_id: string
+  item_id: string
+  result_id: string
+  on_behalf_of_user_id: string
+}
+
 export type HistoryEntry =
+  | (HistoryEntryBase & { kind: 'person_admitted'; detail: PersonAdmittedDetail })
   | (HistoryEntryBase & { kind: 'person_imported'; detail: PersonImportedDetail })
   | (HistoryEntryBase & { kind: 'inquiry_received'; detail: InquiryReceivedDetail })
   | (HistoryEntryBase & { kind: 'routing_decision'; detail: RoutingDecisionDetail })

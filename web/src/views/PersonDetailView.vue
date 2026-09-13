@@ -310,6 +310,7 @@ function onAssigneeChange(value: unknown) {
 
 const HISTORY_ICON: Record<HistoryEntry['kind'], Component> = {
   person_imported: Inbox,
+  person_admitted: Inbox,
   inquiry_received: Inbox,
   routing_decision: Route,
   assignment_changed: UserCheck,
@@ -1370,6 +1371,7 @@ const ROUTING_STRATEGY_LABEL: Record<RoutingStrategy, string> = {
 
 function historySummary(entry: HistoryEntry): string {
   switch (entry.kind) {
+    case 'person_admitted': return 'Newly observed Person added from Follow Up Boss'
     case 'person_imported': return 'Person imported from Follow Up Boss'
     case 'inquiry_received': {
       const { source, person_created, matched_by } = entry.detail

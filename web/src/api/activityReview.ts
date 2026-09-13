@@ -9,6 +9,7 @@ export interface ReviewProvenance {
 }
 export type ReviewCoreHistory = Exclude<HistoryEntry, { kind: 'note' | 'task_completed' }>
 export function reviewHistoryTitle(kind: ReviewCoreHistory['kind']) {
+  if (kind === 'person_admitted') return 'Newly observed Person added from Follow Up Boss'
   if (kind === 'person_imported') return 'Person imported from Follow Up Boss'
   if (kind === 'inquiry_received') return 'Inquiry received'
   if (kind === 'assignment_changed') return 'Assignment changed'
@@ -18,6 +19,7 @@ export function reviewHistoryTitle(kind: ReviewCoreHistory['kind']) {
 }
 export function reviewHistoryDetail(entry: ReviewCoreHistory) {
   switch (entry.kind) {
+    case 'person_admitted': return 'Core details admitted; notes, tasks, metadata and history coverage are pending.'
     case 'person_imported': return 'Original source and import result are available below.'
     case 'stage_changed': return `${entry.detail.from_stage?.name ?? 'New Person'} → ${entry.detail.to_stage.name} · ${entry.detail.reason === 'manual' ? 'Manual change' : 'Intake'}`
     case 'assignment_changed': return `${entry.detail.from?.display_name ?? 'Unassigned'} → ${entry.detail.to?.display_name ?? 'Unassigned'} · ${entry.detail.reason === 'manual' ? 'Manual change' : 'Intake'}`

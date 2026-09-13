@@ -32,6 +32,12 @@ pub async fn guard(State(state): State<AppState>, request: Request, next: Next) 
             .uri()
             .path()
             .starts_with("/api/migrations/fub/people-refreshes")
+        || request
+            .uri()
+            .path()
+            .starts_with("/api/migrations/fub/people-admissions")
+        || request.uri().path().starts_with("/api/people/")
+            && request.uri().path().contains("/admission-provenance")
         || request.uri().path().starts_with("/api/people/")
             && request.uri().path().contains("/migration-review");
     // Include session extraction and workspace admission in the native request
@@ -90,6 +96,9 @@ async fn guard_inner(State(state): State<AppState>, request: Request, next: Next
                             | "/api/people/{id}/migration-review/notes"
                             | "/api/people/{id}/migration-review/notes/{note_id}"
                             | "/api/people/{id}/migration-review/tasks"
+                            | "/api/people/{id}/admission-provenance"
+                            | "/api/people/{id}/admission-provenance/contacts"
+                            | "/api/people/{id}/admission-provenance/fields/{field}"
                             | "/api/people/{id}/import-provenance"
                             | "/api/people/{id}/import-provenance/fields/{field}"
                             | "/api/people/{id}/metadata-import-provenance"

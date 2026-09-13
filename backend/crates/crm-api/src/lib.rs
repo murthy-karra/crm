@@ -128,6 +128,7 @@ fn build_app_with_routers_inner(
             .merge(routes::migrations::router())
             .merge(routes::core_change_reports::router())
             .merge(routes::people_refreshes::router())
+            .merge(routes::people_admissions::router())
             .merge(routes::migration_imports::router())
             .merge(routes::metadata_imports::router())
             .merge(routes::activity_imports::router())
@@ -337,6 +338,35 @@ pub async fn run(config: Config) -> Result<(), BoxError> {
                         Ok(false) => break,
                         Err(error) => {
                             tracing::warn!(outcome=%error, "people refresh sweep failed");
+                            break;
+                        }
+                    }
+                }
+            }
+        })
+    });
+    let _people_admission_worker = state.db.as_ref().map(|pool| {
+        let pool = pool.clone();
+        let state = state.clone();
+        tokio::spawn(async move {
+            let mut tick = tokio::time::interval(std::time::Duration::from_millis(200));
+            tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            loop {
+                tick.tick().await;
+                let release = state.current_import_release().await;
+                for _ in 0..32 {
+                    match domain::migration::people_admission_worker::run_once(
+                        &pool,
+                        &state.raw_payload_key,
+                        &state.snapshot_policy,
+                        release.as_deref(),
+                    )
+                    .await
+                    {
+                        Ok(true) => tokio::task::yield_now().await,
+                        Ok(false) => break,
+                        Err(error) => {
+                            tracing::warn!(outcome=%error, "people admission sweep failed");
                             break;
                         }
                     }

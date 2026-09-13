@@ -76,6 +76,19 @@ used isolated derived-data/result paths.
    three old pending envelopes before the old app terminated. The app container
    was inspected and contained its SQLite, WAL and SHM files at the QA-only
    `SyntheticFieldCRMMobile002QA` path.
+8. The installed-store upgrade was completed on the separate iPhone 17e
+   simulator using the fixed legacy installation ID
+   `76b45805-dbb7-4bf0-8ed6-7a6a30542a0f`. The old build version was 0 and the
+   Mobile002 QA build version was 1. Before replacement, the old encrypted
+   SQLite/WAL/SHM files were copied with SHA-256 records to
+   `/private/tmp/crm-mobile002-upgrade-evidence/`. `simctl install` rotated the
+   simulator data-container path but preserved byte-identical SQLite, WAL and
+   SHM files before the new app launched. The new Mobile002 QA app then opened
+   and upgraded that actual preserved encrypted store. The inspected native UI
+   showed the synthetic banner, "Saved workspace is available on this device",
+   the old cached Today timestamp and one locally saved task change while
+   paused. This is the installed old-store upgrade proof; no demo simulator,
+   3101 store or shared app identity was used.
 
 ## Failed/remaining native evidence
 
@@ -84,12 +97,9 @@ and an unreachable Notes section after a long Task list. These were diagnosed
 from accessibility logs and corrected before the successful v23 run. The v14
 full-reconciliation capacity timeout remains retained as a failed attempt.
 
-The installed-store update has not yet been proved. The isolated old app fixture
-was populated successfully. An initial `simctl install` showed a different
-container path, but that observation alone does not establish data loss or an
-update failure; the run did not retain a pre-update database digest and is not
-accepted as upgrade evidence. A versioned old-build/new-build retry is in
-progress on another isolated simulator. Native UI proof for operation/receipt
+An initial upgrade attempt that relied only on a changed container path was not
+accepted as evidence. The subsequent versioned run retained exact old-file
+hashes and is the accepted proof above. Native UI proof for operation/receipt
 404 ambiguity, permission loss, explicit conflict review and resubmit remain
 incomplete. The protected store/model and real API checks cover their underlying
 behavior, but are not substitutes for those native acceptance scenarios.

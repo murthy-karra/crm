@@ -1,6 +1,6 @@
 # Project state
 
-Last updated: 2026-09-12 (D-075 coordinated Mobile 001 and 010e1 implementation; 010d2 remains the recorded shared-development release).
+Last updated: 2026-09-12 (D-075 follow-up: Mobile 001 / 010e1 shared-development release).
 This file holds current operational status, active work and live residuals.
 [PROJECT_HISTORY.md](PROJECT_HISTORY.md) preserves earlier progress, the slice
 ledger and historical measurements; its old instructions are not current work.
@@ -12,8 +12,8 @@ ledger and historical measurements; its old instructions are not current work.
 [briefs](../tasks/MOBILE_001_IMPL.md) cover both native platforms, protected SQLite,
 seven-day access and durable synchronization. [Toolchain preparation](../tasks/MOBILE_NATIVE_TOOLCHAIN_SETUP.md)
 records installed SDKs and successful iPhone/Android emulator boots. Backend
-implementation, both native apps and their synthetic verification are locally
-integrated. iOS and Android passed offline work preservation, restart and actual
+implementation and both native apps are merged and published on main. Their
+synthetic verification is complete; backend/Web are deployed in shared development. iOS and Android passed offline work preservation, restart and actual
 API synchronization checks; Android also passed emulator reboot/reauthorization.
 All implementation worktrees are closed. Combined repository/SQLx gates passed,
 and all 966 DB cases have passing evidence after two test-fixture corrections.
@@ -29,8 +29,20 @@ Its reviewed contracts and implementation are approved under D-075. The
 and migration together, then replaces the completed backend lane with iOS and
 Android: at most three simultaneous implementation worktrees.
 
-**010d2 is deployed and verified in shared development.** The current runtime
-source is `5924f097a7d7475e7e9742bb08e102d7c7ca98d2`, incorporating implementation
+**The current Mobile 001 / 010e1 shared-development runtime is**
+`08cb42057013cb8766ae61acb23458b0cf38c416` at
+[app.tarams.org](https://app.tarams.org/manage/migration). The four additive
+migrations through `20260924000001` are applied; all 41 source checksums match.
+The release preserves all prior tenant columns and adds initial Person/task
+revision values. Public HTTP/browser checks, exact served assets and all five
+migration capabilities passed. The distinct mobile receipt key is configured.
+[Milestone release evidence](../tasks/MOBILE_001_010e1_RELEASE.md) owns final
+mobile proof, data reconciliation, backup and current report expiry. Native
+distribution, physical devices, real cellular and live customer/FUB work remain
+separate. The private native-demo API3101 is preserved.
+
+**010d2 is the previous verified shared-development release.** Its runtime
+source was `5924f097a7d7475e7e9742bb08e102d7c7ca98d2`, incorporating implementation
 `f6f74262e0cd019cb8fd49a114529aafea4f2aca`, at
 [app.tarams.org](https://app.tarams.org/manage/migration). Additive migration
 `20260922000001` is applied to `crm_dev`. Actual API/admin/migrator/Web hashes,
@@ -58,7 +70,7 @@ was made during that audit. Its documentation/evidence was preserved and
 committed with the 010d1 integration.
 
 The following 010f2 measurements describe the superseded release baseline;
-current operational identity is recorded above and in the 010d1 release record.
+current operational identity is recorded above and in the milestone release record.
 **010f2 was deployed and verified in shared development**, including assessment,
 core snapshot/preview, People, tags/custom fields and retained notes/tasks.
 Its source was `fc5a8757bcb2591a43976544e282722b3616039f`
@@ -107,14 +119,15 @@ follow-up remains open in production readiness.
 
 ## Current slice
 
-- **010e1 implementation:** locally integrated under D-075. Retained core-change
+- **010e1 implementation and release:** merged, pushed and deployed under D-075
+  and its release follow-up. Retained core-change
   reports preserve exact source evidence, representative metadata and the review
   hold. Final focused/process/query-plan checks, real-API desktop/390px workflow
   and the combined backend gates passed. See [verification](../tasks/SLICE_010e1_VERIFICATION.md)
   and [combined evidence](../tasks/MOBILE_MIGRATION_COMBINED_VERIFICATION.md).
   The merged migration worktree and temporary QA listeners are closed. Git
-  publication, shared-development release, live FUB work and delta application
-  are separate; 010d2 remains the released baseline.
+  publication and shared-development release are complete. Live FUB work, delta
+  application and activation remain separate.
 - **Mobile 001:** backend integration, shared regression gates and both native
   offline/sync workflows have passing evidence. iOS (`92abb916`, `6e3f715`) and
   Android (`83379df`) are locally integrated; their worktrees are closed with native
@@ -217,28 +230,24 @@ follow-up remains open in production readiness.
 
 ## Current branch
 
-Implementation is complete on local `codex/mobile-migration-integration` from the
-approved planning checkpoint `9eaeb0a`. All implementation worktrees and their
-merged branches are closed. Both backend additions are integrated at `d6e7c74`,
-with lifecycle correction `7f41907`, final iOS integration `152dcec` and Android
-integration `c238b24`. The loopback-only synthetic API3101 remains available for
-the installed paused native demos. Databases, ports and attributed verification are
-tracked in the [coordination record](../tasks/MOBILE_MIGRATION_IMPLEMENTATION_STATUS.md).
-Main remains at `b301819fcf38947ee31f85b25588d9c5398795f0`. No implementation has
-been published or intentionally deployed. A verification build temporarily replaced
-the existing shared Web preview assets; all 73 released assets were restored and
-verified by hash. [Restoration evidence](../design/qa/slice-010e1-2026-09-12/shared-preview-restoration.json).
-Cargo checks also replaced local executable pathnames; exact released API/admin/
-migrator binaries were recovered, hash-verified and atomically restored. The shared
-API process retained its original executable mapping and was never restarted.
-[Executable restoration](../design/qa/mobile-001-native-2026-09-12/shared-executable-restoration.json).
-Future checks require explicit isolated Cargo and Web output directories.
+Main contains the approved milestone merge `08cb42057013cb8766ae61acb23458b0cf38c416`,
+published to origin. All implementation worktrees and the merged integration
+branch are removed. Native source and platform evidence are included; native
+builds/test bundles are preserved outside the checkout. The loopback-only
+synthetic API3101 remains available for the installed paused demos.
+
+The shared backend/Web run verified isolated release builds from that merge.
+The [release record](../tasks/MOBILE_001_010e1_RELEASE.md) distinguishes the deployed
+runtime source from documentation-only closeout commits. Subsequent verification
+must continue to isolate Cargo targets and Web output directories. The earlier
+implementation output collisions and exact restoration remain historical evidence.
 
 ## Last accepted decision
 
-**D-075:** reviewed 010e1 contracts and implementation approved; start the
-coordinated Mobile 001 and migration lanes. Local worktree checkpoints/integration
-supply the same approved base; external release remains separate.
+**D-075 and release follow-up:** reviewed implementation is complete; the user
+authorized releasing the completed milestone. Git integration/publication and the
+shared backend/Web deployment are performed under this follow-up. Native app
+distribution, physical-device/cellular checks and live customer work remain separate.
 
 **D-074:** the user approves the reviewed Mobile 001 contracts and implementation
 for backend, iOS and Android, and confirms parallel migration development.

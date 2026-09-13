@@ -6,8 +6,9 @@ verification. This completes the approved first offline field workflow; physical
 device/cellular validation, customer readiness and release remain separate.
 Local integration: `codex/mobile-migration-integration`, approved planning
 checkpoint `9eaeb0a`, combined backend/Web checkpoint `d6e7c74`, lifecycle correction `7f41907`,
-iOS merge `152dcec` and Android merge `c238b24`. Main remains
-`b301819fcf38947ee31f85b25588d9c5398795f0`; no Git publication or new release.
+iOS merge `152dcec` and Android merge `c238b24`. The subsequent D-075 release
+follow-up merged and published `08cb42057013cb8766ae61acb23458b0cf38c416` on main
+and deployed the backend/Web. [Current release](MOBILE_001_010e1_RELEASE.md).
 
 | Lane | Worktree / branch | Ownership and current state |
 |---|---|---|
@@ -74,10 +75,12 @@ Final platform records: [iOS](MOBILE_001_IOS_VERIFICATION.md),
 The single loopback-only API3101 remains running for the installed synthetic
 native demos; both apps are paused, with local saved data retained. Private runtime
 configuration is `/private/tmp/crm-mobile001-qa/runtime.env` (outside Git).
-No customer data, release signing or app distribution was used. The shared010d2
-API/Web processes were not restarted; exact released artifacts are restored.
+No customer data, release signing or app distribution was used during
+implementation. Its shared010d2 restoration preserved the old processes. The
+subsequent explicitly authorized milestone release replaced those processes with
+the verified current backend/Web; its evidence is recorded separately.
 
-The next release scope can publish/integrate these local commits and refresh
-shared development after its concrete release checks. Physical-device passcode,
+Git publication and shared-development release were subsequently authorized and
+performed; the integration branch is removed. Physical-device passcode,
 restart and poor-cellular checks remain required before customer mobile use.
 No request for repeated implementation approval is pending.

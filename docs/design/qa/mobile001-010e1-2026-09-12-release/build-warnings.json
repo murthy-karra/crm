@@ -1,0 +1,21 @@
+{
+  "rust_warnings": [],
+  "web_large_chunk_advisory": true,
+  "tool_versions": {
+    "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+    "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+    "node": "v26.8.2",
+    "pnpm": "11.19.0"
+  },
+  "runtime_modes": {
+    "crm-admin": "0o755",
+    "crm-api": "0o755",
+    "migrate": "0o755"
+  },
+  "source_status": "",
+  "web_warning_lines": [
+    "(!) outDir /private/var/folders/y9/r969pzyd1dx1fxgz8j7lw8280000gn/T/crm-mobile010e1-release-e9911g6r/web-dist-staged is not inside project root and will not be emptied.",
+    "(!) Some chunks are larger than 500 kB after minification. Consider:",
+    "- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit."
+  ]
+}

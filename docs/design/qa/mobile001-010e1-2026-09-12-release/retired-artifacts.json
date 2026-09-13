@@ -1,0 +1,158 @@
+[
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/debug/deps/crm_admin-9b5a2d37bc727cdd",
+    "sha256": "59e01c887f49852e194e5c48d15587e227a13b8ca02c42c9933e2ff4ab435735",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/debug/deps/crm_admin-bf42a60326b3d418",
+    "sha256": "3415d4bcc2205b2ef4e402c5a3fe58736fccbd691f14be7f4ca86723cecc889c",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/debug/deps/crm_admin-f22ed118d72071ab",
+    "sha256": "64e85ba5c2eb33709a5f0fe491aeffd11ce31ca4eeb1d333a81c03d12b8b69e1",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/debug/deps/crm_api-22e33ab6540b44f6",
+    "sha256": "2d9fedc473f5c711e2a3832e7bd52756aab60f8f656df18450aec759cb01581d",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/debug/deps/crm_api-c01c645a6b2e38b7",
+    "sha256": "ffeee8cb408e0df716892bc7cf3a1981b7e09a280f36566fcab9e59d6989690a",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/debug/deps/crm_api-c49cd8ef3798f316",
+    "sha256": "473010fd76b42f6d8779a5318796859c82dd957766470724e2811587273f5f28",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/debug/deps/crm_api-cbe61915270acf83",
+    "sha256": "9f18f48f7e89c4c96eb7978bd3c6e4fea4a9e62cfa08c3f1860726b1bf9c3a43",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/debug/deps/migrate-33fbad6c04404d26",
+    "sha256": "d5230c9133c23fba22284da2fe06edfa97f03918bb7cb22e42c26aa2e13f3ff7",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/debug/deps/migrate-8026df789c83bcbf",
+    "sha256": "cdfc28d856326833782b763358f17c7431abd32dbbbc9bbb99187fa42bca687b",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/debug/deps/migrate-e7b306517f094c20",
+    "sha256": "01e4023fff1358fc148978e787d5603105ea7ecb71cc932d2ede0a9c1deee376",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/debug/examples/activity_import_qa",
+    "sha256": "ebdce7c379c2f1591254f9c712cac5dbbafbb775a7b74552585ee774fdb1b392",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/debug/examples/activity_import_qa-3b89353135f7355b",
+    "sha256": "ebdce7c379c2f1591254f9c712cac5dbbafbb775a7b74552585ee774fdb1b392",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/debug/examples/history_capture_qa",
+    "sha256": "deb0310866dbaa4e1c900cd3c907b11b12157270d4546fa7c6b17183982131c2",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/debug/examples/history_capture_qa-9628c5293cdcddeb",
+    "sha256": "deb0310866dbaa4e1c900cd3c907b11b12157270d4546fa7c6b17183982131c2",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/debug/examples/import_qa",
+    "sha256": "243e00fb5acfedd41747f8d886fcb736a9aa254f8b9612c360f14aa02271dcd0",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/debug/examples/import_qa-f590eaeabfcadde6",
+    "sha256": "243e00fb5acfedd41747f8d886fcb736a9aa254f8b9612c360f14aa02271dcd0",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/debug/examples/metadata_import_qa",
+    "sha256": "dd7885da679d825efccdd43eb48bad0bd407333b62382cc21708bda205b0b4df",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/debug/examples/metadata_import_qa-056364e6deac6022",
+    "sha256": "dd7885da679d825efccdd43eb48bad0bd407333b62382cc21708bda205b0b4df",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/debug/examples/snapshot_qa",
+    "sha256": "60ebed7f1eace08d43acec4d4f104f4965fcfa7d889bc909b060a5e8ea1a292d",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/Users/karrad/projects/crm/backend/target/debug/examples/snapshot_qa-8ce54b6ab83b2efe",
+    "sha256": "60ebed7f1eace08d43acec4d4f104f4965fcfa7d889bc909b060a5e8ea1a292d",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/private/tmp/crm-release-executable-restoration/crm-admin-qa-replaced",
+    "sha256": "59e01c887f49852e194e5c48d15587e227a13b8ca02c42c9933e2ff4ab435735",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/private/tmp/crm-release-executable-restoration/crm-admin-released",
+    "sha256": "64e85ba5c2eb33709a5f0fe491aeffd11ce31ca4eeb1d333a81c03d12b8b69e1",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/private/tmp/crm-release-executable-restoration/crm-api-qa-replaced",
+    "sha256": "473010fd76b42f6d8779a5318796859c82dd957766470724e2811587273f5f28",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/private/tmp/crm-release-executable-restoration/crm-api-released",
+    "sha256": "ffeee8cb408e0df716892bc7cf3a1981b7e09a280f36566fcab9e59d6989690a",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/private/tmp/crm-release-executable-restoration/migrate-qa-replaced",
+    "sha256": "01e4023fff1358fc148978e787d5603105ea7ecb71cc932d2ede0a9c1deee376",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  },
+  {
+    "path": "/private/tmp/crm-release-executable-restoration/migrate-released",
+    "sha256": "cdfc28d856326833782b763358f17c7431abd32dbbbc9bbb99187fa42bca687b",
+    "mode_before": "0o755",
+    "mode_after": "0o644"
+  }
+]

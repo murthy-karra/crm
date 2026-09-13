@@ -1,0 +1,434 @@
+{
+  "status": "passed",
+  "revision": "08cb42057013cb8766ae61acb23458b0cf38c416",
+  "api": "https://api.tarams.org",
+  "started_at": "2026-09-13T03:04:48.200122+00:00",
+  "checks": [
+    {
+      "name": "bootstrap",
+      "idempotent_context": true,
+      "lease_seconds": 604800,
+      "workspace_revision": "1",
+      "identity_bound": true,
+      "capabilities": [
+        "add_note",
+        "create_task",
+        "complete_task",
+        "reconciliation"
+      ],
+      "bounds": {
+        "component_bytes": 524288,
+        "component_rows": 100,
+        "concurrent_downloads": 2,
+        "concurrent_uploads": 1,
+        "generation_seconds": 1800,
+        "manifest_page": 250,
+        "operation_bytes": 131072,
+        "selected_people": 25000
+      }
+    },
+    {
+      "name": "bounded_reconciliation",
+      "selected_people": 4,
+      "manifest_pages": 1,
+      "component_pages": 12,
+      "component_item_counts": {
+        "summary": 5,
+        "notes": 0,
+        "tasks": 1
+      },
+      "seal_validated": true,
+      "same_generation_evaluation": true,
+      "ordinary_reads_did_not_renew_lease": true,
+      "original_unknown_receipt_still_404": true
+    }
+  ],
+  "requests": [
+    {
+      "phase": "login",
+      "actor": "owner_admin",
+      "method": "POST",
+      "path": "/api/session",
+      "status": 200,
+      "no_store": false,
+      "response_bytes": 288
+    },
+    {
+      "phase": "login",
+      "actor": "same_org_other_actor",
+      "method": "POST",
+      "path": "/api/session",
+      "status": 200,
+      "no_store": false,
+      "response_bytes": 285
+    },
+    {
+      "phase": "login",
+      "actor": "foreign_org_actor",
+      "method": "POST",
+      "path": "/api/session",
+      "status": 200,
+      "no_store": false,
+      "response_bytes": 281
+    },
+    {
+      "phase": "anonymous_denial",
+      "actor": "anonymous",
+      "method": "POST",
+      "path": "/api/mobile/v1/bootstrap",
+      "status": 401,
+      "no_store": true,
+      "response_bytes": 27
+    },
+    {
+      "phase": "bootstrap_idempotence",
+      "actor": "owner_admin",
+      "method": "POST",
+      "path": "/api/mobile/v1/bootstrap",
+      "status": 200,
+      "no_store": true,
+      "response_bytes": 693
+    },
+    {
+      "phase": "bootstrap_idempotence",
+      "actor": "owner_admin",
+      "method": "POST",
+      "path": "/api/mobile/v1/bootstrap",
+      "status": 200,
+      "no_store": true,
+      "response_bytes": 693
+    },
+    {
+      "phase": "receipt_and_context_denials",
+      "actor": "owner_admin",
+      "method": "GET",
+      "path": "/api/mobile/v1/operations/3aa31076-b9ea-43fa-8b73-148da1d7a721",
+      "status": 404,
+      "no_store": true,
+      "response_bytes": 21
+    },
+    {
+      "phase": "receipt_and_context_denials",
+      "actor": "owner_admin",
+      "method": "GET",
+      "path": "/api/mobile/v1/operations/3aa31076-b9ea-43fa-8b73-148da1d7a721",
+      "status": 401,
+      "no_store": true,
+      "response_bytes": 27
+    },
+    {
+      "phase": "receipt_and_context_denials",
+      "actor": "owner_admin",
+      "method": "GET",
+      "path": "/api/mobile/v1/operations/3aa31076-b9ea-43fa-8b73-148da1d7a721",
+      "status": 401,
+      "no_store": true,
+      "response_bytes": 27
+    },
+    {
+      "phase": "receipt_and_context_denials",
+      "actor": "anonymous",
+      "method": "GET",
+      "path": "/api/mobile/v1/operations/3aa31076-b9ea-43fa-8b73-148da1d7a721",
+      "status": 401,
+      "no_store": true,
+      "response_bytes": 27
+    },
+    {
+      "phase": "receipt_and_context_denials",
+      "actor": "same_org_other_actor",
+      "method": "GET",
+      "path": "/api/mobile/v1/operations/3aa31076-b9ea-43fa-8b73-148da1d7a721",
+      "status": 401,
+      "no_store": true,
+      "response_bytes": 27
+    },
+    {
+      "phase": "receipt_and_context_denials",
+      "actor": "foreign_org_actor",
+      "method": "GET",
+      "path": "/api/mobile/v1/operations/3aa31076-b9ea-43fa-8b73-148da1d7a721",
+      "status": 401,
+      "no_store": true,
+      "response_bytes": 27
+    },
+    {
+      "phase": "receipt_and_context_denials",
+      "actor": "owner_admin",
+      "method": "POST",
+      "path": "/api/mobile/v1/bootstrap",
+      "status": 409,
+      "no_store": true,
+      "response_bytes": 32
+    },
+    {
+      "phase": "reconciliation",
+      "actor": "owner_admin",
+      "method": "POST",
+      "path": "/api/mobile/v1/reconciliations",
+      "status": 200,
+      "no_store": true,
+      "response_bytes": 685
+    },
+    {
+      "phase": "reconciliation",
+      "actor": "owner_admin",
+      "method": "GET",
+      "path": "/api/mobile/v1/reconciliations/4fe7d1d4-3f1f-49f6-bbac-d543b59e2001/manifest",
+      "status": 200,
+      "no_store": true,
+      "response_bytes": 442
+    },
+    {
+      "phase": "reconciliation",
+      "actor": "anonymous",
+      "method": "GET",
+      "path": "/api/mobile/v1/reconciliations/4fe7d1d4-3f1f-49f6-bbac-d543b59e2001/manifest",
+      "status": 401,
+      "no_store": true,
+      "response_bytes": 27
+    },
+    {
+      "phase": "reconciliation",
+      "actor": "same_org_other_actor",
+      "method": "GET",
+      "path": "/api/mobile/v1/reconciliations/4fe7d1d4-3f1f-49f6-bbac-d543b59e2001/manifest",
+      "status": 401,
+      "no_store": true,
+      "response_bytes": 27
+    },
+    {
+      "phase": "reconciliation",
+      "actor": "foreign_org_actor",
+      "method": "GET",
+      "path": "/api/mobile/v1/reconciliations/4fe7d1d4-3f1f-49f6-bbac-d543b59e2001/manifest",
+      "status": 401,
+      "no_store": true,
+      "response_bytes": 27
+    },
+    {
+      "phase": "complete_components",
+      "actor": "owner_admin",
+      "method": "GET",
+      "path": "/api/mobile/v1/reconciliations/4fe7d1d4-3f1f-49f6-bbac-d543b59e2001/people/29d877d8-dbd9-48f3-8752-70282ee8b105/summary",
+      "status": 200,
+      "no_store": true,
+      "response_bytes": 616
+    },
+    {
+      "phase": "complete_components",
+      "actor": "owner_admin",
+      "method": "GET",
+      "path": "/api/mobile/v1/reconciliations/4fe7d1d4-3f1f-49f6-bbac-d543b59e2001/people/29d877d8-dbd9-48f3-8752-70282ee8b105/notes",
+      "status": 200,
+      "no_store": true,
+      "response_bytes": 201
+    },
+    {
+      "phase": "complete_components",
+      "actor": "owner_admin",
+      "method": "GET",
+      "path": "/api/mobile/v1/reconciliations/4fe7d1d4-3f1f-49f6-bbac-d543b59e2001/people/29d877d8-dbd9-48f3-8752-70282ee8b105/tasks",
+      "status": 200,
+      "no_store": true,
+      "response_bytes": 201
+    },
+    {
+      "phase": "complete_components",
+      "actor": "owner_admin",
+      "method": "GET",
+      "path": "/api/mobile/v1/reconciliations/4fe7d1d4-3f1f-49f6-bbac-d543b59e2001/people/2bcf2160-e0f4-4a83-9a37-7ed5248448ad/summary",
+      "status": 200,
+      "no_store": true,
+      "response_bytes": 604
+    },
+    {
+      "phase": "complete_components",
+      "actor": "owner_admin",
+      "method": "GET",
+      "path": "/api/mobile/v1/reconciliations/4fe7d1d4-3f1f-49f6-bbac-d543b59e2001/people/2bcf2160-e0f4-4a83-9a37-7ed5248448ad/notes",
+      "status": 200,
+      "no_store": true,
+      "response_bytes": 201
+    },
+    {
+      "phase": "complete_components",
+      "actor": "owner_admin",
+      "method": "GET",
+      "path": "/api/mobile/v1/reconciliations/4fe7d1d4-3f1f-49f6-bbac-d543b59e2001/people/2bcf2160-e0f4-4a83-9a37-7ed5248448ad/tasks",
+      "status": 200,
+      "no_store": true,
+      "response_bytes": 201
+    },
+    {
+      "phase": "complete_components",
+      "actor": "owner_admin",
+      "method": "GET",
+      "path": "/api/mobile/v1/reconciliations/4fe7d1d4-3f1f-49f6-bbac-d543b59e2001/people/52f86404-6e2d-486e-834d-49efa4d1abfd/summary",
+      "status": 200,
+      "no_store": true,
+      "response_bytes": 703
+    },
+    {
+      "phase": "complete_components",
+      "actor": "owner_admin",
+      "method": "GET",
+      "path": "/api/mobile/v1/reconciliations/4fe7d1d4-3f1f-49f6-bbac-d543b59e2001/people/52f86404-6e2d-486e-834d-49efa4d1abfd/notes",
+      "status": 200,
+      "no_store": true,
+      "response_bytes": 201
+    },
+    {
+      "phase": "complete_components",
+      "actor": "owner_admin",
+      "method": "GET",
+      "path": "/api/mobile/v1/reconciliations/4fe7d1d4-3f1f-49f6-bbac-d543b59e2001/people/52f86404-6e2d-486e-834d-49efa4d1abfd/tasks",
+      "status": 200,
+      "no_store": true,
+      "response_bytes": 201
+    },
+    {
+      "phase": "complete_components",
+      "actor": "owner_admin",
+      "method": "GET",
+      "path": "/api/mobile/v1/reconciliations/4fe7d1d4-3f1f-49f6-bbac-d543b59e2001/people/8d763266-46e3-4425-9601-a3c1d2008c0e/summary",
+      "status": 200,
+      "no_store": true,
+      "response_bytes": 619
+    },
+    {
+      "phase": "complete_components",
+      "actor": "owner_admin",
+      "method": "GET",
+      "path": "/api/mobile/v1/reconciliations/4fe7d1d4-3f1f-49f6-bbac-d543b59e2001/people/8d763266-46e3-4425-9601-a3c1d2008c0e/notes",
+      "status": 200,
+      "no_store": true,
+      "response_bytes": 201
+    },
+    {
+      "phase": "complete_components",
+      "actor": "owner_admin",
+      "method": "GET",
+      "path": "/api/mobile/v1/reconciliations/4fe7d1d4-3f1f-49f6-bbac-d543b59e2001/people/8d763266-46e3-4425-9601-a3c1d2008c0e/tasks",
+      "status": 200,
+      "no_store": true,
+      "response_bytes": 886
+    },
+    {
+      "phase": "seal",
+      "actor": "owner_admin",
+      "method": "POST",
+      "path": "/api/mobile/v1/reconciliations/4fe7d1d4-3f1f-49f6-bbac-d543b59e2001/seal",
+      "status": 200,
+      "no_store": true,
+      "response_bytes": 3636
+    },
+    {
+      "phase": "seal",
+      "actor": "owner_admin",
+      "method": "GET",
+      "path": "/api/mobile/v1/operations/3aa31076-b9ea-43fa-8b73-148da1d7a721",
+      "status": 404,
+      "no_store": true,
+      "response_bytes": 21
+    },
+    {
+      "phase": "owned_session_cleanup",
+      "actor": "owner_admin",
+      "method": "DELETE",
+      "path": "/api/session",
+      "status": 204,
+      "no_store": false,
+      "response_bytes": 0
+    },
+    {
+      "phase": "owned_session_cleanup",
+      "actor": "owner_admin",
+      "method": "GET",
+      "path": "/api/me",
+      "status": 401,
+      "no_store": false,
+      "response_bytes": 27
+    },
+    {
+      "phase": "owned_session_cleanup",
+      "actor": "same_org_other_actor",
+      "method": "DELETE",
+      "path": "/api/session",
+      "status": 204,
+      "no_store": false,
+      "response_bytes": 0
+    },
+    {
+      "phase": "owned_session_cleanup",
+      "actor": "same_org_other_actor",
+      "method": "GET",
+      "path": "/api/me",
+      "status": 401,
+      "no_store": false,
+      "response_bytes": 27
+    },
+    {
+      "phase": "owned_session_cleanup",
+      "actor": "foreign_org_actor",
+      "method": "DELETE",
+      "path": "/api/session",
+      "status": 204,
+      "no_store": false,
+      "response_bytes": 0
+    },
+    {
+      "phase": "owned_session_cleanup",
+      "actor": "foreign_org_actor",
+      "method": "GET",
+      "path": "/api/me",
+      "status": 401,
+      "no_store": false,
+      "response_bytes": 27
+    }
+  ],
+  "sessions": [
+    {
+      "actor": "owner_admin",
+      "logout_status": 204,
+      "original_cookie_status": 401,
+      "revoked": true
+    },
+    {
+      "actor": "same_org_other_actor",
+      "logout_status": 204,
+      "original_cookie_status": 401,
+      "revoked": true
+    },
+    {
+      "actor": "foreign_org_actor",
+      "logout_status": 204,
+      "original_cookie_status": 401,
+      "revoked": true
+    }
+  ],
+  "operation_posts": 0,
+  "business_writes": 0,
+  "request_limit": 120,
+  "selected_people_limit": 100,
+  "api_sha256": "36dca5961f2ad391d3119661594e631e57d142214cdc95af95b0d4b4dbddf0ef",
+  "helper_sha256": "fd41002c7f80f8c7837dd5e550c0e805ce70235402eaaa599a694fc6ce515ae1",
+  "before": {
+    "contexts": 0,
+    "generations": 0,
+    "receipts": 0,
+    "admission": 0
+  },
+  "selection_inventory": {
+    "organization_people": 17,
+    "assigned_people": 4
+  },
+  "after": {
+    "contexts": 1,
+    "generations": 1,
+    "receipts": 0,
+    "admission": 1
+  },
+  "all_created_sessions_revoked": true,
+  "finished_at": "2026-09-13T03:04:53.125380+00:00"
+}

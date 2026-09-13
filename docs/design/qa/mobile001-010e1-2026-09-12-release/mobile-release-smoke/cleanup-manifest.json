@@ -1,0 +1,25 @@
+{
+  "installation_id": "3283d0cf-da7c-49ca-9aed-07004bcecfe0",
+  "contexts": [
+    "3cf16a50-ed2e-4b62-b0e9-808667772a9e"
+  ],
+  "generations": [
+    "4fe7d1d4-3f1f-49f6-bbac-d543b59e2001"
+  ],
+  "admission_organization_ids": [
+    "f180968b-5647-426c-b39c-d6ac3983593e"
+  ],
+  "only_new_owned_control_rows": true,
+  "receipts_expected": 0,
+  "cleanup_owner": "release coordinator; no cleanup SQL executed by this helper",
+  "actor_user_id": "0de36972-b1f2-4882-a8e8-084711cc5812",
+  "organization_id": "f180968b-5647-426c-b39c-d6ac3983593e",
+  "observed_receipt_count": 0,
+  "observed_after": {
+    "contexts": 1,
+    "generations": 1,
+    "receipts": 0,
+    "admission": 1
+  },
+  "generation_may_be_reclaimed_by_worker": true
+}

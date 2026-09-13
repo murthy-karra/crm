@@ -7,7 +7,9 @@ D-074 already approves Mobile 001 and the coordinated parallel development. Read
 
 The [bounded review](../tasks/SLICE_010e1_REVIEW.md) is READY FOR MIGRATION
 CONTRACT APPROVAL after the publication/pagination correction and targeted recheck.
-The user subsequently approved it under D-075; implementation remains to be verified.
+The user subsequently approved it under D-075. Implementation verification and
+the authorized [milestone release](../tasks/MOBILE_001_010e1_RELEASE.md) are recorded
+separately from this frozen specification.
 
 ## 1. Outcome and boundary
 

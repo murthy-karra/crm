@@ -1,0 +1,5 @@
+{
+  "result": "harness_error_before_migration",
+  "error": "Expected backup metadata status field; actual validated field is result",
+  "migration_executed": false
+}

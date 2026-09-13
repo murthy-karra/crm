@@ -1,0 +1,32 @@
+{
+  "at": "2026-09-13T02:51:42.099348+00:00",
+  "implementation": "8819c6c",
+  "approved_checkpoint": "ed4c83fd3d6d9c960523c3007a9b1f47877819e6",
+  "before_main": "b301819fcf38947ee31f85b25588d9c5398795f0",
+  "publication_files_scanned": 196,
+  "known_credential_matches": 0,
+  "before_artifacts": {
+    "crm-api": "ffeee8cb408e0df716892bc7cf3a1981b7e09a280f36566fcab9e59d6989690a",
+    "crm-admin": "64e85ba5c2eb33709a5f0fe491aeffd11ce31ca4eeb1d333a81c03d12b8b69e1",
+    "migrate": "cdfc28d856326833782b763358f17c7431abd32dbbbc9bbb99187fa42bca687b"
+  },
+  "listeners": {
+    "3000": {
+      "pid": 95513,
+      "command": "backend/target/debug/crm-api",
+      "started": "Sat Sep 12 15:24:40 2026"
+    },
+    "5173": {
+      "pid": 95531,
+      "command": "node ./node_modules/.bin/../.pnpm/vite@8.2.1_@types+node@26.2.0_jiti@2.7.0_yaml@2.9.0/node_modules/vite/bin/vite.js preview",
+      "started": "Sat Sep 12 15:24:40 2026"
+    },
+    "3101": {
+      "pid": 71121,
+      "command": "/private/tmp/crm-mobile001-target/debug/crm-api",
+      "started": "Sat Sep 12 19:22:40 2026"
+    }
+  },
+  "report_path": "/private/tmp/crm-010d2-release-q9q7lzwf/release-report.json",
+  "configuration_sha256": "2a627b95ba12008e6c9606f63e0b93e0fa0282d5f496bd446a8afe42d9f266c5"
+}

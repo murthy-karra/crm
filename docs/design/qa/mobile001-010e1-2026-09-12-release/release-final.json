@@ -1,0 +1,14 @@
+{
+  "runtime_revision": "08cb42057013cb8766ae61acb23458b0cf38c416",
+  "completed_at": "2026-09-13T03:11:51.302538+00:00",
+  "latest_confirmation_expires_at": "2026-09-13T03:16:50Z",
+  "git_merged_and_pushed": true,
+  "backend_web_deployed": true,
+  "all134_upgraded_tenant_rowsets_preserved": true,
+  "all8_temporary_sessions_revoked": true,
+  "native_source_published": true,
+  "native_distribution": false,
+  "physical_phone_or_cellular_validation": false,
+  "live_fub_or_customer_processing": false,
+  "private_recovery_directory": "/var/folders/y9/r969pzyd1dx1fxgz8j7lw8280000gn/T/crm-mobile010e1-release-e9911g6r"
+}

@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "artifacts": [
+    {
+      "role": "api",
+      "path": "/private/var/folders/y9/r969pzyd1dx1fxgz8j7lw8280000gn/T/crm-mobile010e1-release-e9911g6r/bin-runtime/crm-api"
+    },
+    {
+      "role": "worker",
+      "path": "/private/var/folders/y9/r969pzyd1dx1fxgz8j7lw8280000gn/T/crm-mobile010e1-release-e9911g6r/bin-runtime/crm-api"
+    },
+    {
+      "role": "cli",
+      "path": "/private/var/folders/y9/r969pzyd1dx1fxgz8j7lw8280000gn/T/crm-mobile010e1-release-e9911g6r/bin-runtime/crm-admin"
+    },
+    {
+      "role": "migrator",
+      "path": "/private/var/folders/y9/r969pzyd1dx1fxgz8j7lw8280000gn/T/crm-mobile010e1-release-e9911g6r/bin-runtime/migrate"
+    }
+  ]
+}

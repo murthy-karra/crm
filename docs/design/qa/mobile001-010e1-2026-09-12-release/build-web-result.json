@@ -1,0 +1,23 @@
+{
+  "command": [
+    "pnpm",
+    "exec",
+    "vite",
+    "build",
+    "--outDir",
+    "/private/var/folders/y9/r969pzyd1dx1fxgz8j7lw8280000gn/T/crm-mobile010e1-release-e9911g6r/web-dist-staged"
+  ],
+  "cwd": "/Users/karrad/projects/crm/web",
+  "exit_code": 0,
+  "started_at": "2026-09-13T02:55:46.175581Z",
+  "completed_at": "2026-09-13T02:55:47.638871Z",
+  "elapsed_seconds": 1.463,
+  "revision": "08cb42057013cb8766ae61acb23458b0cf38c416",
+  "log_sha256": "67559c6eb86d396a126ad10e7d8c7a7d2715c09be0ce086d0b1c7c7c9894850e",
+  "source_manifest_sha256": "cb07162ca6213bab353788a8659e0f96dd667b78f747bef7d8626d829a91d8d8",
+  "explicit_environment": {
+    "SQLX_OFFLINE": "true",
+    "CARGO_TARGET_DIR": "/private/var/folders/y9/r969pzyd1dx1fxgz8j7lw8280000gn/T/crm-mobile010e1-release-e9911g6r/cargo-target"
+  },
+  "database_url_removed": true
+}

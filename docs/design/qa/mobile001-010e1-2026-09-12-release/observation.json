@@ -1,0 +1,26 @@
+{
+  "started_at": "2026-09-13T03:00:16.025014+00:00",
+  "finished_at": "2026-09-13T03:07:18.667656+00:00",
+  "elapsed_seconds": 422.643,
+  "same_listeners_at_start_and_end": true,
+  "api_listener": [
+    81656
+  ],
+  "web_listener": [
+    81677
+  ],
+  "synthetic_api_preserved": 71121,
+  "source_files_matched": 1062,
+  "backend_hashes_match": true,
+  "unexpected_error_count": 0,
+  "warning_counts": {
+    "not_found": 2,
+    "unauthenticated": 6,
+    "protocol_unsupported": 1
+  },
+  "warning_attribution": "Deliberately denied mobile smoke requests; no other WARN/ERROR lines",
+  "full_log_sha256": {
+    "api.log": "48119f557e39a8de978c4713bc684c66279460b918ffce0a70ecd1cee3924a01",
+    "web.log": "bd8dbfcb51bb080233543196528006cdfd7b1571bfe995d605a3c3bf02ba543e"
+  }
+}

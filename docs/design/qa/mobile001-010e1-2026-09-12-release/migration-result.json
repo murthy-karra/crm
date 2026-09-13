@@ -1,0 +1,15 @@
+{
+  "command": [
+    "verified bin-runtime/migrate"
+  ],
+  "revision": "08cb42057013cb8766ae61acb23458b0cf38c416",
+  "exit_code": 0,
+  "elapsed_seconds": 0.292,
+  "expected_migrations": [
+    20260923000001,
+    20260923000002,
+    20260923000003,
+    20260924000001
+  ],
+  "artifact_sha256": "f0b3f508a6317593f2474d803bb45a75647cfdbe4f8ddfeb893664627bf65b8f"
+}

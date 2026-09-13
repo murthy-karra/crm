@@ -1,0 +1,8 @@
+{
+  "merged_branch_removed": "codex/mobile-migration-integration",
+  "implementation_worktrees_already_removed": true,
+  "only_main_worktree": true,
+  "native_builds_and_evidence_retained": true,
+  "synthetic_api_3101_preserved": true,
+  "completed_at": "2026-09-13T03:03:56.639419+00:00"
+}

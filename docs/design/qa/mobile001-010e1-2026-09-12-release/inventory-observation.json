@@ -1,0 +1,23 @@
+{
+  "observed_crm_processes": [
+    {
+      "pid": 81656,
+      "path": "/Users/karrad/projects/crm/backend/target/debug/crm-api"
+    }
+  ],
+  "containers": [
+    "development-postgres-1",
+    "development-centrifugo-1"
+  ],
+  "crm_launch_configuration_files": [],
+  "git_worktrees": 1,
+  "legacy_executable_paths_remaining": 0,
+  "current_user_cron_crm_launch_paths": 0,
+  "alternate_crm_runtime_processes": 0,
+  "excluded_private_api": {
+    "pid": 71121,
+    "port": 3101,
+    "database": "crm_mobile_001",
+    "environment_target_verified": true
+  }
+}

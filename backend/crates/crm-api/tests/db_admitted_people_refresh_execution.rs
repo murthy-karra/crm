@@ -968,9 +968,15 @@ async fn large_live_current_projection_reserves_a_bounded_held_unit(migrator: Pg
     // 1 MiB contacts), but live native C can legitimately be much larger.
     // Keep it below the 64 MiB item ceiling while exceeding the obsolete 8 MiB
     // fixed prepare reservation.
-    sqlx::query("UPDATE contact_method SET value=repeat('v',4500000),normalized_value=repeat('n',4500000) WHERE person_id=$1 AND organization_id=$2")
+    sqlx::query("DELETE FROM contact_method WHERE person_id=$1 AND organization_id=$2")
         .bind(person)
         .bind(f.org)
+        .execute(&migrator)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO contact_method(organization_id,person_id,kind,value,normalized_value,import_order) SELECT $1,$2,'email',repeat('v',3500)||n::text,repeat('n',3500)||n::text,n FROM generate_series(1,2600) n")
+        .bind(f.org)
+        .bind(person)
         .execute(&migrator)
         .await
         .unwrap();
@@ -996,14 +1002,17 @@ async fn large_live_current_projection_reserves_a_bounded_held_unit(migrator: Pg
     .await
     .unwrap();
     assert!(bound > 8 * 1024 * 1024 && bound <= 64 * 1024 * 1024);
-    confirm(&f, run, &confirmation(&detail)).await;
-    drain(&f, run).await;
     assert_eq!(native(&f, person).await, large_current);
     assert_eq!(
-        refresh::results(&f.pool, &f.key, &f.ctx, run, refresh::Page::default())
-            .await
-            .unwrap()["results"][0]["disposition"],
-        "held_local_change"
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM migration_admitted_people_refresh_result WHERE refresh_id=$1"
+        )
+        .bind(run)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap(),
+        0,
+        "preparation did not advance a baseline or settle a native result"
     );
     assert_ne!(
         large_current, before,

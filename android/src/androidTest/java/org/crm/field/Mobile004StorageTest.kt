@@ -44,12 +44,21 @@ class Mobile004StorageTest {
         assertThrows(Exception::class.java) { store.saveStageDraft(draft.id, person, stageA, draft.revision) }
     }
 
-    @Test fun onlyOneUnresolvedStageOperationAllowsFollowupDraftWithoutCoalescing() {
+    @Test fun unresolvedStageOperationKeepsMutableFollowupDraftWaitingWithItsOriginalBaseline() {
         val first = save(); val operation = store.submitStageDraft(first.id, first.revision)
         val followup = save(UUID.randomUUID().toString(), stageA)
+        val edited = store.saveStageDraft(followup.id, person, stageB, followup.revision)
         assertThrows(IllegalArgumentException::class.java) { store.submitStageDraft(followup.id, followup.revision) }
-        assertEquals("", store.dao.stageDraft(followup.id)!!.operation)
+        assertEquals("", store.dao.stageDraft(edited.id)!!.operation)
+        assertEquals("1", edited.baselineRevision)
+        assertEquals(stageA, edited.baselineStageId)
+        assertEquals(stageB, edited.proposedStageId)
+        assertEquals(1, store.dao.operations().size)
         assertEquals(operation.envelope, store.dao.operation(operation.id)!!.envelope)
+        // A later explicit submission does not silently rebase the queued follow-up.
+        store.dao.operationState(operation.id, "covered", 1, 0, "")
+        val later = store.submitStageDraft(edited.id, edited.revision)
+        assertEquals("1", JSONObject(later.envelope).getJSONObject("payload").getString("expected_stage_revision"))
     }
 
     @Test fun strictPersonStageReceiptRejectsTaskShapeAndNeedsFreshQualifiedSeal() {
@@ -68,6 +77,35 @@ class Mobile004StorageTest {
         val receipt = JSONObject(requireNotNull(store.dao.operation(operation.id)!!.receipt))
         assertFalse(receipt.getBoolean("changed"))
         assertEquals("1", receipt.getString("committed_revision"))
+    }
+
+    @Test fun stageCatalogAcceptsTheFullServerSmallintPositionRange() {
+        val generation = UUID.randomUUID().toString()
+        store.beginGeneration(
+            json(
+                "context_id" to store.binding.context,
+                "complete" to true,
+                "generation_id" to generation,
+                "selected_count" to 0,
+                "stage_catalog" to json(
+                    "revision" to "1",
+                    "stages_url" to "/api/mobile/v1/reconciliations/$generation/stages",
+                ),
+                "manifest" to json("items" to org.json.JSONArray(), "complete" to true, "next_cursor" to null),
+            )
+        )
+        store.stageCatalogPage(
+            generation,
+            "",
+            json(
+                "generation_id" to generation,
+                "revision" to "1",
+                "items" to org.json.JSONArray().put(json("id" to stageA, "name" to "Before first", "position" to -32768)),
+                "complete" to true,
+                "next_cursor" to null,
+            ),
+        )
+        assertEquals(-32768, JSONObject(store.dao.stageCatalogPages(generation).single().body).getJSONArray("items").getJSONObject(0).getInt("position"))
     }
 
     @Test fun abaConflictStoresFreshCurrentAndRevisionCreatesNewProposal() {

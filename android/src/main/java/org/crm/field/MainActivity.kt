@@ -578,7 +578,8 @@ internal fun PersonScreen(
                         Text("Pending proposal: $label", color = MaterialTheme.colorScheme.primary)
                         StatusBadge(stageOp)
                     }
-                    Button(onClick = onStage, enabled = state.stageChangesEnabled && row.stageRevisionsQualified && stageOp == null, modifier = Modifier.testTag("change-stage")) { Text("Change stage") }
+                    Button(onClick = onStage, enabled = state.stageChangesEnabled && row.stageRevisionsQualified, modifier = Modifier.testTag("change-stage")) { Text(if (stageOp == null) "Change stage" else "Save follow-up stage") }
+                    if (stageOp != null) Text("A follow-up can be saved on this device and will wait for the pending stage change.", style = MaterialTheme.typography.bodySmall)
                     if (!state.stageChangesEnabled || !row.stageRevisionsQualified)
                         Text("Stage changes need a complete online catalog and current Person baseline.", style = MaterialTheme.typography.bodySmall)
                 }
@@ -809,11 +810,22 @@ private fun SavedWork(
         }
         items(state.stageDrafts, key = { "stage-${it.id}" }) { draft ->
             val operation = draft.operation.takeIf { it.isNotEmpty() }?.let { id -> state.operations.firstOrNull { it.id == id } }
+            val predecessor = state.operations.firstOrNull {
+                it.person == draft.person &&
+                    it.kind == "change_person_stage" &&
+                    it.status !in setOf("covered", "superseded") &&
+                    it.id != draft.operation
+            }
             OutlinedCard(Modifier.fillMaxWidth().then(if (draft.operation.isEmpty()) Modifier.clickable { onStageDraft(draft) } else Modifier)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("Change stage", fontWeight = FontWeight.SemiBold)
                     Text("${draft.baselineStageName} → ${draft.proposedStageName}")
                     if (operation == null) Text("Draft revision ${draft.revision} saved on device · Continue editing") else StatusBadge(operation)
+                    if (operation == null && predecessor != null)
+                        Text(
+                            "Waiting for the previous stage change. This follow-up remains a draft until you resolve or review that proposal.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
                 }
             }
         }
@@ -1399,6 +1411,11 @@ private fun StageComposer(
     var status by remember(id) { mutableStateOf("Loading saved stage proposal…") }
     var retry by remember(id) { mutableIntStateOf(0) }
     val catalog = state.stageCatalog
+    val predecessor = state.operations.firstOrNull {
+        it.person == person &&
+            it.kind == "change_person_stage" &&
+            it.status !in setOf("covered", "superseded")
+    }
     val dirty = loaded && selectedStage != committed
     LaunchedEffect(id) {
         try {
@@ -1438,6 +1455,11 @@ private fun StageComposer(
                     FilterChip(selectedStage == stage.id, { selectedStage = stage.id }, label = { Text(stage.name) }, enabled = !saving, modifier = Modifier.fillMaxWidth().testTag("stage-${stage.id}"))
                 }
                 if (catalog.isEmpty()) Text("No complete stage catalog is available yet.", color = MaterialTheme.colorScheme.error)
+                if (predecessor != null)
+                    Text(
+                        "Waiting for the previous stage change. You can keep editing this follow-up draft, but it will not submit until that proposal is resolved or reviewed.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
                 Text(status, style = MaterialTheme.typography.bodySmall)
                 if (dirty && !saving) TextButton(onClick = { retry++ }) { Text("Retry save") }
             }
@@ -1459,7 +1481,7 @@ private fun StageComposer(
                         catch (error: Exception) { status = if (error is ApiFailure) errorMessage(error.code) else "Not submitted. Your committed stage proposal remains available."; saving = false }
                     }
                 }
-            }, enabled = loaded && !dirty && !saving && selectedStage.isNotEmpty() && catalog.isNotEmpty(), modifier = Modifier.testTag("stage-save")) { Text("Save stage on device") }
+            }, enabled = predecessor == null && loaded && !dirty && !saving && selectedStage.isNotEmpty() && catalog.isNotEmpty(), modifier = Modifier.testTag("stage-save")) { Text(if (predecessor == null) "Save stage on device" else "Waiting for previous stage change") }
         },
         dismissButton = { TextButton(onClick = onClose, enabled = loaded && !dirty && !saving) { Text("Close proposal") } },
     )

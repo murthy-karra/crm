@@ -53,6 +53,7 @@ android {
             buildConfigField 'String', 'API_BASE', '"http://10.0.2.2:3102"'
             buildConfigField 'String', 'VAULT_NAMESPACE', '"field.mobile004qa"'
         }
+        mobile004upgradeqa { dimension 'origin'; applicationId 'org.crm.field.mobile004upgradeqa'; buildConfigField 'String','API_BASE','"http://10.0.2.2:3102"'; buildConfigField 'String','VAULT_NAMESPACE','"field.mobile004upgradeqa"' }
     }
     buildFeatures { compose = true; buildConfig = true }
     buildTypes {

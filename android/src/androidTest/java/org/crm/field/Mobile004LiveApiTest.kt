@@ -33,7 +33,8 @@ class Mobile004LiveApiTest {
 
     @Test fun lostResponseReplaysExactBytesAndSecondActorConflictRequiresNewProposal() = runBlocking {
         assumeTrue(InstrumentationRegistry.getArguments().getString("runMobile004Live") == "true")
-        val app = app(); val repository = app.repository; authenticate(repository); delay(300)
+        val app = app(); val repository = app.repository; authenticate(repository)
+        repeat(100) { if (repository.ui.value.person?.id != PERSON) delay(100) }
         val active = FieldRepository::class.java.getDeclaredField("active").apply { isAccessible = true }.get(repository) as ActiveAccount
         val current = requireNotNull(repository.ui.value.person)
         val summary = JSONObject(current.summary); val oldStage = summary.getJSONObject("stage").getString("id")
@@ -59,7 +60,17 @@ class Mobile004LiveApiTest {
         // context only for the direct command and keep the first device's bytes untouched.
         val stageNow = active.store.dao.person(PERSON)!!.let { JSONObject(it.summary).getJSONObject("stage").getString("id") }
         val other = repository.ui.value.stageCatalog.first { it.id != stageNow }.id
-        val secondEnvelope = json("context_id" to binding.context, "operation_id" to UUID.randomUUID().toString(), "kind" to "change_person_stage", "device_recorded_at" to "2026-09-13T16:20:00Z", "payload" to json("person_id" to PERSON, "stage_id" to other, "expected_stage_revision" to JSONObject(active.store.dao.person(PERSON)!!.summary).getString("stage_revision")).toString()
+        val secondEnvelope = json(
+            "context_id" to binding.context,
+            "operation_id" to UUID.randomUUID().toString(),
+            "kind" to "change_person_stage",
+            "device_recorded_at" to "2026-09-13T16:20:00Z",
+            "payload" to json(
+                "person_id" to PERSON,
+                "stage_id" to other,
+                "expected_stage_revision" to JSONObject(active.store.dao.person(PERSON)!!.summary).getString("stage_revision"),
+            ),
+        ).toString()
         secondApi.call("POST", "/api/mobile/v1/operations", binding.context, secondEnvelope)
         val stale = repository.saveStageDraft(UUID.randomUUID().toString(), PERSON, target)
         val staleOp = repository.submitStageDraft(stale.id, stale.revision)
@@ -67,7 +78,10 @@ class Mobile004LiveApiTest {
         assertEquals("revision_conflict", active.store.dao.operation(staleOp.id)!!.lastError)
         assertTrue(active.store.dao.stageContext(staleOp.id)!!.current.isNotEmpty())
         val revised = repository.reviseStageConflict(staleOp.id)
-        assertNotEquals(staleOp.id, repository.submitStageDraft(revised.id, revised.revision).id)
+        val replacement = repository.submitStageDraft(revised.id, revised.revision)
+        assertNotEquals(staleOp.id, replacement.id)
+        repository.sync(true)
+        assertTrue(active.store.dao.operation(replacement.id)!!.status in setOf("accepted", "covered"))
     }
 
     private suspend fun prepare() {
@@ -125,5 +139,5 @@ class Mobile004LiveApiTest {
     private suspend fun app(): FieldApplication = (InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as FieldApplication).also { it.ready.await() }
     private fun stage(app: FieldApplication) = File(app.filesDir, "mobile004-force-stop-stage.json")
     private fun sha(value: String) = MessageDigest.getInstance("SHA-256").digest(value.toByteArray()).joinToString("") { "%02x".format(it) }
-    private companion object { const val PERSON = "13e8d47a-5648-4d88-9358-fe5ed400078d" }
+    private companion object { const val PERSON = "60fafd49-9c9e-404d-869c-83817cd9fe0f" }
 }

@@ -203,7 +203,7 @@ pub async fn insert_contact_attempted(
            occurred_at, correlation_id, causation_id,
             person_id, channel, outcome, corrects_id, recorded_at)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,COALESCE($13, now()))
-           RETURNING id as "id!", recorded_at as "recorded_at!"#,
+           RETURNING id as "id!", recorded_at as "recorded_at!""#,
         envelope.organization_id.0,
         actor_kind,
         envelope.actor.user_id().map(|id| id.0),

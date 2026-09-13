@@ -16,6 +16,7 @@ store, `crm_mobile_003`, or customer data was used.
 | same harness, `mobile002_edit_revisions_receipts_and_current_reads` | passed, 1 test | Mobile 002 note/task operation and receipt compatibility after the additive receipt CHECK change |
 | same harness, `current_authority_cross_org_receipts_and_workspace_hold` | passed, 1 test | existing live authority, cross-Organization, receipt, and review-hold behavior |
 | same harness, `log_contact_attempt_writes_exactly_one_fact_with_full_envelope` | passed, 1 test | pre-existing Web manual-contact wrapper remains one fact with its historical envelope/clocks |
+| same harness, `legacy_contact_occurrence_is_sampled_after_person_lock_release` | passed, 1 test | lock contention proves the legacy wrapper samples occurrence time only after the Person lock releases |
 | same harness, `correcting_an_answered_call_writes_one_correction_row_with_the_call_envelope` | passed, 1 test | call-correction fact insertion preserves correction semantics |
 
 The test command sources the repository `.env` privately and never prints a

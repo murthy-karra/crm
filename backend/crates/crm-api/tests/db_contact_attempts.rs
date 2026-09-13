@@ -4,6 +4,7 @@
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
+use chrono::{DateTime, Utc};
 use serde_json::json;
 use sqlx::PgPool;
 use tower::ServiceExt;
@@ -78,6 +79,66 @@ async fn log_contact_attempt_writes_exactly_one_fact_with_full_envelope(migrator
             .await
             .unwrap();
     assert_eq!(count, 1);
+}
+
+/// The ordinary wrapper's occurrence clock belongs after its Person lock.
+/// A competing transaction holds that lock while the HTTP command starts; the
+/// stored clock must therefore be at or after the database instant sampled
+/// immediately before release. This guards the original time/error ordering
+/// while Mobile 003 uses its own reported-time core input.
+#[sqlx::test]
+#[ignore]
+async fn legacy_contact_occurrence_is_sampled_after_person_lock_release(migrator_pool: PgPool) {
+    let (_org_id, _alice_id) = crate::common::create_org_with_stages_and_member(
+        &migrator_pool,
+        "Acme Realty",
+        "alice@acme.test",
+        "Alice",
+        "pw",
+    )
+    .await;
+    let router = crate::common::build_router(&migrator_pool).await;
+    let cookie = crate::common::login_cookie(&router, "alice@acme.test", "pw").await;
+    let person_id = create_person_with_inquiry(&router, &cookie, "lock@example.com").await;
+
+    let mut holder = migrator_pool.begin().await.unwrap();
+    sqlx::query("SELECT id FROM person WHERE id=$1 FOR UPDATE")
+        .bind(person_id)
+        .execute(&mut *holder)
+        .await
+        .unwrap();
+    let path = format!("/api/people/{person_id}/contact-attempts");
+    let request_router = router.clone();
+    let request_cookie = cookie.clone();
+    let request = tokio::spawn(async move {
+        crate::common::post_json_with_cookie(
+            &request_router,
+            &path,
+            &request_cookie,
+            json!({ "channel": "call", "outcome": "no_answer" }),
+        )
+        .await
+    });
+    // Give the real router command an opportunity to contend on the held row.
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    let release_at: DateTime<Utc> = sqlx::query_scalar("SELECT clock_timestamp()")
+        .fetch_one(&mut *holder)
+        .await
+        .unwrap();
+    holder.rollback().await.unwrap();
+
+    let response = request.await.unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let occurred_at: DateTime<Utc> =
+        sqlx::query_scalar("SELECT occurred_at FROM contact_attempted WHERE person_id=$1")
+            .bind(person_id)
+            .fetch_one(&migrator_pool)
+            .await
+            .unwrap();
+    assert!(
+        occurred_at >= release_at,
+        "legacy occurrence {occurred_at} must follow release {release_at}"
+    );
 }
 
 /// Criterion 2: invalid `channel`/`outcome` and a non-JSON body both map

@@ -4,7 +4,7 @@
 //! id — needed so `assignment_changed.causation_id` can be set to the
 //! `routing_decision.id` on intake.
 
-use sqlx::{PgConnection, Row};
+use sqlx::PgConnection;
 use uuid::Uuid;
 
 use crate::domain::admin::{MembershipStatus, Role};
@@ -197,35 +197,32 @@ pub async fn insert_contact_attempted(
 ) -> Result<InsertedContactAttemptedFact, sqlx::Error> {
     let actor_kind = envelope.actor.kind().as_str();
     let origin = envelope.origin.as_str();
-    // This typed insert returns the database-selected recording instant to
-    // caller-owned transactions. Keep it as a runtime query so extending the
-    // returned projection does not require a shared SQLx-cache update.
-    let row = sqlx::query(
+    let row = sqlx::query!(
         r#"INSERT INTO contact_attempted
             (organization_id, actor_kind, actor_user_id, on_behalf_of_user_id, origin,
            occurred_at, correlation_id, causation_id,
             person_id, channel, outcome, corrects_id, recorded_at)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,COALESCE($13, now()))
-           RETURNING id, recorded_at"#,
+           RETURNING id as "id!", recorded_at as "recorded_at!"#,
+        envelope.organization_id.0,
+        actor_kind,
+        envelope.actor.user_id().map(|id| id.0),
+        envelope.on_behalf_of_user_id.map(|id| id.0),
+        origin,
+        envelope.occurred_at,
+        envelope.correlation_id.0,
+        envelope.causation_id,
+        fact.person_id.0,
+        fact.channel.as_str(),
+        fact.outcome.as_str(),
+        fact.corrects_id,
+        fact.recorded_at,
     )
-    .bind(envelope.organization_id.0)
-    .bind(actor_kind)
-    .bind(envelope.actor.user_id().map(|id| id.0))
-    .bind(envelope.on_behalf_of_user_id.map(|id| id.0))
-    .bind(origin)
-    .bind(envelope.occurred_at)
-    .bind(envelope.correlation_id.0)
-    .bind(envelope.causation_id)
-    .bind(fact.person_id.0)
-    .bind(fact.channel.as_str())
-    .bind(fact.outcome.as_str())
-    .bind(fact.corrects_id)
-    .bind(fact.recorded_at)
     .fetch_one(tx)
     .await?;
     Ok(InsertedContactAttemptedFact {
-        id: row.try_get("id")?,
-        recorded_at: row.try_get("recorded_at")?,
+        id: row.id,
+        recorded_at: row.recorded_at,
     })
 }
 

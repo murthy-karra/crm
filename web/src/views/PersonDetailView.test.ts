@@ -690,6 +690,7 @@ async function mountView(query = '', seed?: PersonDetailResponse) {
     routes: [
       { path: '/people', component: { template: '<div />' } },
       { path: '/people/:id', component: { template: '<div />' } },
+      { path: '/manage/migration', name: 'manage-migration', component: { template: '<div />' } },
     ],
   })
   await router.push(`/people/${PERSON_ID}${query}`)
@@ -922,6 +923,7 @@ describe('PersonDetailView — the call survives navigation (SLICE_006b §6)', (
       history: createMemoryHistory(),
       routes: [
         { path: '/people', component: { template: '<div data-testid="people" />' } },
+        { path: '/manage/migration', name: 'manage-migration', component: { template: '<div />' } },
         {
           path: '/people/:id',
           component: PersonDetailView,
@@ -3532,6 +3534,7 @@ describe('Person review-only workspace', () => {
     expect(requests()).toContain(`GET /people/${PERSON_ID}/migration-review/v2`)
     expect(requests()).not.toContain(`GET /people/${PERSON_ID}`)
     expect(wrapper.find('[data-testid="person-activity-review"]').exists()).toBe(true)
+    expect(wrapper.find('a[href="/manage/migration#admitted-people-refresh"]').exists()).toBe(true)
     wrapper.unmount()
   })
 })

@@ -34,7 +34,7 @@ pub async fn retained_person(
     // variant merely because it sorts last.
     let rows = sqlx::query(
         "SELECT r.id,r.capture_id,r.ordinal,r.semantic_hmac,
-                c.raw_byte_len,c.accepted,c.truncated,c.http_status,
+                c.raw_byte_len,octet_length(c.nonce)+octet_length(c.ciphertext) AS sealed_byte_len,c.accepted,c.truncated,c.http_status,
                 c.classification,c.representation
            FROM migration_snapshot_record r
            JOIN migration_snapshot_capture c
@@ -61,12 +61,14 @@ pub async fn retained_person(
     let mut selected: Option<(ExtractedRecord, Uuid, i32)> = None;
     for row in rows {
         let raw_len: i64 = row.get("raw_byte_len");
+        let sealed_len: i64 = row.get("sealed_byte_len");
         if !row.get::<bool, _>("accepted")
             || row.get::<bool, _>("truncated")
             || !(200..300).contains(&row.get::<i32, _>("http_status"))
             || row.get::<String, _>("classification") != "success"
             || row.get::<String, _>("representation") != Stream::People.representation()
             || raw_len > CAPTURE_LIMIT
+            || sealed_len > CAPTURE_LIMIT.saturating_add(64 * 1024)
             || raw_total.saturating_add(raw_len) > CAPTURE_LIMIT
         {
             return Ok(RetainedPerson::EvidenceGap);

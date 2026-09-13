@@ -174,6 +174,69 @@ async fn execution_mapping_target_valid(
     Ok(frozen["target"][if kind == "stage" { "name" } else { "email" }] == live)
 }
 
+async fn execution_evidence_valid(
+    conn: &mut sqlx::PgConnection,
+    key: &RawPayloadKey,
+    org: OrganizationId,
+    refresh: &sqlx::postgres::PgRow,
+    item: &sqlx::postgres::PgRow,
+) -> Result<bool, MigrationError> {
+    let source_id: String = item
+        .get::<Option<String>, _>("source_id")
+        .unwrap_or_else(|| item.get("source_key"));
+    if item.get::<Option<i64>, _>("source_account_id") != Some(refresh.get("source_account_id")) {
+        return Ok(false);
+    }
+    let baseline: Option<(Option<Uuid>, i64)> = sqlx::query_as(
+        "SELECT result_id,version FROM migration_admitted_people_refresh_baseline
+          WHERE organization_id=$1 AND admission_id=$2 AND source_id=$3 AND person_id=$4",
+    )
+    .bind(org.0)
+    .bind(refresh.get::<Uuid, _>("admission_id"))
+    .bind(&source_id)
+    .bind(item.get::<Option<Uuid>, _>("person_id"))
+    .fetch_optional(&mut *conn)
+    .await?;
+    let Some((result, version)) = baseline else {
+        return Ok(false);
+    };
+    if result != item.get::<Option<Uuid>, _>("baseline_result_id")
+        || version != item.get::<i64, _>("baseline_version")
+    {
+        return Ok(false);
+    }
+    let identity: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM migration_import_identity mi WHERE mi.organization_id=$1 AND mi.source_account_id=$2 AND mi.family='people' AND mi.source_id=$3 AND mi.target_id=$4 AND mi.admission_id=$5 AND mi.admission_item_id=$6 AND mi.admission_result_id=$7)")
+        .bind(org.0).bind(refresh.get::<i64,_>("source_account_id")).bind(&source_id)
+        .bind(item.get::<Option<Uuid>,_>("person_id")).bind(refresh.get::<Uuid,_>("admission_id"))
+        .bind(item.get::<Option<Uuid>,_>("admission_item_id")).bind(item.get::<Option<Uuid>,_>("admission_result_id"))
+        .fetch_one(&mut *conn).await?;
+    if !identity {
+        return Ok(false);
+    }
+    match source::retained_person(conn, key, org, refresh.get("newer_snapshot_id"), &source_id)
+        .await?
+    {
+        source::RetainedPerson::Present(record, capture, ordinal) => {
+            let semantic = crypto::snapshot_hmac(
+                key,
+                org,
+                &format!(
+                    "semantic:{}",
+                    super::snapshot_source::Stream::People.representation()
+                ),
+                &record.canonical,
+            );
+            Ok(
+                item.get::<Option<Uuid>, _>("source_capture_id") == Some(capture)
+                    && item.get::<Option<i32>, _>("source_ordinal") == Some(ordinal)
+                    && item.get::<Option<Vec<u8>>, _>("source_semantic_hmac")
+                        == Some(semantic.to_vec()),
+            )
+        }
+        source::RetainedPerson::Missing | source::RetainedPerson::EvidenceGap => Ok(false),
+    }
+}
+
 async fn stage_instruction(
     conn: &mut sqlx::PgConnection,
     key: &RawPayloadKey,
@@ -339,6 +402,36 @@ fn pause_reason(error: &MigrationError) -> Option<&'static str> {
     }
 }
 
+/// The one-candidate preparation turn reserves its declared worst-case output,
+/// instead of an arbitrary small page allowance. Eight encrypted projections/
+/// contacts conservatively cover B/C/N, the immutable baseline and receipts.
+async fn prepare_reservation_bound(
+    conn: &mut sqlx::PgConnection,
+    r: &sqlx::postgres::PgRow,
+) -> Result<i64, MigrationError> {
+    let checkpoint: String = r.get("preparation_checkpoint_key");
+    let bytes: Option<i64> = sqlx::query_scalar(
+        "SELECT octet_length(ai.projection_nonce)+octet_length(ai.projection_ciphertext)
+          + COALESCE((SELECT sum(octet_length(c.value_nonce)+octet_length(c.value_ciphertext))
+              FROM migration_people_admission_contact c
+             WHERE c.admission_id=ai.admission_id AND c.item_id=ai.id AND c.organization_id=ai.organization_id),0)
+           FROM migration_people_admission_result ar
+           JOIN migration_people_admission_item ai ON ai.id=ar.item_id AND ai.admission_id=ar.admission_id AND ai.organization_id=ar.organization_id
+          WHERE ar.admission_id=$1 AND ar.organization_id=$2 AND ar.disposition='settled' AND ar.source_id>$3
+          ORDER BY ar.source_id LIMIT 1",
+    )
+    .bind(r.get::<Uuid, _>("admission_id"))
+    .bind(r.get::<Uuid, _>("organization_id"))
+    .bind(checkpoint)
+    .fetch_optional(&mut *conn)
+    .await?;
+    Ok(bytes
+        .unwrap_or(1024)
+        .saturating_mul(8)
+        .saturating_add(64 * 1024)
+        .clamp(1024, s::ITEM_LIMIT))
+}
+
 /// Persist a closed recovery state only for the work instance that actually
 /// failed. A cancellation, a terminal transition, or a different lease wins
 /// the race and is never overwritten or charged by this recovery path.
@@ -450,7 +543,8 @@ pub async fn run_once(
         // A preparation turn owns one bounded reservation. Its exact retained
         // delta is charged atomically with the rows it made durable.
         let before = s::measured_bytes(&mut tx, org, id).await?;
-        let token = match s::reserve(&mut tx, org, id, "prepare", None, 8 * 1024 * 1024, policy)
+        let reserve_bound = prepare_reservation_bound(&mut tx, &r).await?;
+        let token = match s::reserve(&mut tx, org, id, "prepare", None, reserve_bound, policy)
             .await
         {
             Ok(token) => token,
@@ -949,9 +1043,18 @@ async fn prepare(
             &instructions,
         )
         .await?;
-        sqlx::query("UPDATE migration_admitted_people_refresh_item SET stage_mapping_id=$3,assignee_mapping_id=$4,source_account_id=$5,baseline_result_id=(SELECT result_id FROM migration_admitted_people_refresh_baseline WHERE organization_id=$6 AND admission_id=$7 AND source_id=$8) WHERE id=$1 AND refresh_id=$2")
+        let source_semantic = crypto::snapshot_hmac(
+            key,
+            org,
+            &format!(
+                "semantic:{}",
+                super::snapshot_source::Stream::People.representation()
+            ),
+            &newer.canonical,
+        );
+        sqlx::query("UPDATE migration_admitted_people_refresh_item SET stage_mapping_id=$3,assignee_mapping_id=$4,source_account_id=$5,baseline_result_id=(SELECT result_id FROM migration_admitted_people_refresh_baseline WHERE organization_id=$6 AND admission_id=$7 AND source_id=$8),source_semantic_hmac=$9 WHERE id=$1 AND refresh_id=$2")
             .bind(item).bind(id).bind(frozen_stage_mapping).bind(frozen_assignee_mapping)
-            .bind(r.get::<i64,_>("source_account_id")).bind(org.0).bind(admission_id).bind(&source_id)
+            .bind(r.get::<i64,_>("source_account_id")).bind(org.0).bind(admission_id).bind(&source_id).bind(source_semantic.as_slice())
             .execute(&mut *conn).await?;
     }
     sqlx::query("UPDATE migration_admitted_people_refresh_plan SET eligible_count=eligible_count+$3,already_current_count=already_current_count+$4,held_count=held_count+$5,no_instruction_count=no_instruction_count+$6,name_clear_count=name_clear_count+$7,assignment_clear_count=assignment_clear_count+$8,contact_removal_count=contact_removal_count+$9 WHERE id=$1 AND organization_id=$2").bind(plan).bind(org.0).bind(eligible).bind(current).bind(held).bind(no_instruction).bind(name_clears).bind(assignment_clears).bind(contact_removals).execute(&mut *conn).await?;
@@ -1123,7 +1226,7 @@ async fn execute_noop(
     } else {
         planned_disposition.as_str()
     };
-    if planned_disposition == "eligible" {
+    if matches!(planned_disposition.as_str(), "eligible" | "already_current") {
         let person = item
             .get::<Option<Uuid>, _>("person_id")
             .ok_or(MigrationError::Conflict)?;
@@ -1154,6 +1257,9 @@ async fn execute_noop(
         if current.as_ref() != Some(&expected) || expected != baseline {
             disposition = "held_stale";
         } else {
+            if !execution_evidence_valid(conn, key, org, r, &item).await? {
+                disposition = "held_stale";
+            }
             let target_stage = Uuid::parse_str(
                 proposed["stage_id"]
                     .as_str()
@@ -1163,8 +1269,8 @@ async fn execute_noop(
             let target_assignee = proposed["assigned_user_id"]
                 .as_str()
                 .and_then(|v| Uuid::parse_str(v).ok());
-            let stage_ok =
-                execution_mapping_target_valid(conn, key, org, r, &item, "stage", target_stage)
+            let stage_ok = disposition != "held_stale"
+                && execution_mapping_target_valid(conn, key, org, r, &item, "stage", target_stage)
                     .await?;
             let assignee_ok = match target_assignee {
                 Some(user) => {
@@ -1176,7 +1282,7 @@ async fn execute_noop(
             if !stage_ok || !assignee_ok {
                 disposition = "held_stale";
             }
-            if disposition == "held_stale" {
+            if planned_disposition == "already_current" || disposition == "held_stale" {
             } else {
                 let permit = json!({"lease":r.get::<Uuid,_>("lease_token"),"item":item_id});
                 sqlx::query("SELECT set_config('crm.admitted_people_refresh_permit',$1,true)")

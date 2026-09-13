@@ -143,11 +143,11 @@ pub async fn measured_bytes(
     sqlx::query_scalar(
         "SELECT
           COALESCE((SELECT sum(octet_length(inputs_nonce)+octet_length(inputs_ciphertext)+COALESCE(octet_length(digest),0)) FROM migration_admitted_people_refresh_plan WHERE refresh_id=$1 AND organization_id=$2),0)
-        + COALESCE((SELECT sum(octet_length(source_key)+COALESCE(octet_length(source_id),0)+octet_length(proposed_nonce)+octet_length(proposed_ciphertext)+octet_length(baseline_nonce)+octet_length(baseline_ciphertext)+octet_length(current_nonce)+octet_length(current_ciphertext)+octet_length(instructions_nonce)+octet_length(instructions_ciphertext)) FROM migration_admitted_people_refresh_item WHERE refresh_id=$1 AND organization_id=$2),0)
+        + COALESCE((SELECT sum(octet_length(source_key)+COALESCE(octet_length(source_id),0)+COALESCE(octet_length(source_semantic_hmac),0)+octet_length(proposed_nonce)+octet_length(proposed_ciphertext)+octet_length(baseline_nonce)+octet_length(baseline_ciphertext)+octet_length(current_nonce)+octet_length(current_ciphertext)+octet_length(instructions_nonce)+octet_length(instructions_ciphertext)) FROM migration_admitted_people_refresh_item WHERE refresh_id=$1 AND organization_id=$2),0)
         + COALESCE((SELECT sum(octet_length(value_nonce)+octet_length(value_ciphertext)) FROM migration_admitted_people_refresh_contact WHERE refresh_id=$1 AND organization_id=$2),0)
         + COALESCE((SELECT sum(octet_length(source_id)+octet_length(before_nonce)+octet_length(before_ciphertext)+octet_length(after_nonce)+octet_length(after_ciphertext)) FROM migration_admitted_people_refresh_result WHERE refresh_id=$1 AND organization_id=$2),0)
         + COALESCE((SELECT sum(octet_length(before_nonce)+octet_length(before_ciphertext)+octet_length(after_nonce)+octet_length(after_ciphertext)) FROM person_admitted_refresh_provenance WHERE refresh_id=$1 AND organization_id=$2),0)
-        + COALESCE((SELECT sum(octet_length(nonce)+octet_length(ciphertext)) FROM migration_admitted_people_refresh_receipt WHERE refresh_id=$1 AND organization_id=$2),0)
+        + COALESCE((SELECT sum(octet_length(digest)+octet_length(nonce)+octet_length(ciphertext)) FROM migration_admitted_people_refresh_receipt WHERE refresh_id=$1 AND organization_id=$2),0)
         + COALESCE((SELECT sum(octet_length(source_id)+octet_length(projection_nonce)+octet_length(projection_ciphertext)) FROM migration_admitted_people_refresh_baseline WHERE refresh_id=$1 AND organization_id=$2),0)
         + COALESCE((SELECT octet_length(preparation_checkpoint_key) FROM migration_admitted_people_refresh WHERE id=$1 AND organization_id=$2),0)",
     )

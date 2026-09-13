@@ -524,6 +524,44 @@ impl ReleaseReadiness {
             ));
         }
         Ok(())
+    }    pub fn admitted_people_refresh_ready(&self) -> bool {
+        self.admitted_people_refresh
+            && (self.synthetic
+                || (self.expires_at > Utc::now()
+                    && self.checked_at <= Utc::now()
+                    && Utc::now() - self.checked_at <= chrono::Duration::minutes(5)))
+    }
+
+    pub async fn require_admitted_people_refresh(
+        &self,
+        conn: &mut PgConnection,
+    ) -> Result<(), sqlx::Error> {
+        self.require_current(conn).await?;
+        if !self.admitted_people_refresh_ready() {
+            return Err(sqlx::Error::Protocol(
+                "admitted people refresh release not ready".into(),
+            ));
+        }
+        let schema: bool = sqlx::query_scalar(ADMITTED_PEOPLE_REFRESH_SCHEMA)
+            .fetch_one(&mut *conn)
+            .await?;
+        if !schema {
+            return Err(sqlx::Error::Protocol(
+                "admitted people refresh schema unavailable".into(),
+            ));
+        }
+        let unsupported: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM migration_admitted_people_refresh WHERE engine_version<>$1)",
+        )
+        .bind(ADMITTED_PEOPLE_REFRESH_CAPABILITY)
+        .fetch_one(conn)
+        .await?;
+        if unsupported {
+            return Err(sqlx::Error::Protocol(
+                "admitted people refresh engine incompatible".into(),
+            ));
+        }
+        Ok(())
     }
     pub fn admitted_people_refresh_ready(&self) -> bool {
         self.admitted_people_refresh

@@ -639,7 +639,7 @@ private fun SavedWork(
         items(state.drafts, key = { "draft-${it.id}" }) { draft ->
             OutlinedCard(Modifier.fillMaxWidth().clickable { onDraft(draft) }) {
                 Column(Modifier.padding(16.dp)) {
-                    Text(if (draft.kind == "add_note") "Note draft" else "Task draft")
+                    Text(if (draft.kind in setOf("add_note", "edit_note")) "Note draft" else "Task draft")
                     Text("Draft revision ${draft.revision} saved on device · Continue editing")
                 }
             }

@@ -144,3 +144,27 @@ unsupported-capability cases still need recorded evidence. The populated legacy
 store and in-place upgrade evidence above is intentionally isolated from API3102;
 it demonstrates preserved legacy bytes and atomic cache qualification without
 claiming that a fresh Mobile 002 download is legacy-cache proof.
+
+## Follow-up live run
+
+After the populated-fixture archive was preserved at
+`/private/tmp/crm-mobile002-upgrade-fixture-artifact/field.mobile002qa.v3.tar`
+(SHA-256 `80fe01438f3f52a342f6e69769de2297957b6de104f6d43c454666318440007b`),
+only the disposable QA package was reset. The current QA APK then authenticated
+to API3102 and completed a single 100-Person reconciliation; the inspected
+hierarchy reported `Up to date. Complete cache available offline.` and
+`Complete: 100 People`.
+
+On reserved `Mobile Person 099`, sync was explicitly paused before editing a
+note. The note composer reported `Draft saved on this device`; after an app
+force-stop/relaunch the inspected Saved work hierarchy still contained the
+persisted draft and the control was `Resume sync`. This is evidence for durable
+local draft retention across process death. A Saved work card incorrectly called
+an `edit_note` draft a task draft; that presentation bug is corrected in the
+current source.
+
+The emulator killed the QA process while the draft was being reopened (logcat
+shows process signal 9), before it could be explicitly submitted and replayed.
+Consequently, this run records no accepted operation receipt and makes no claim
+for offline replay, task field preservation, or two-actor conflict/current-read
+behavior. Those live mutation cases remain required.

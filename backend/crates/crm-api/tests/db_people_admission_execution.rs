@@ -8,6 +8,7 @@ use crm_api::{
         core_change_reports, core_change_worker, people_admission, people_admission_worker,
         snapshot::{self, SnapshotRequest, SourceAction},
         snapshot_source::Stream,
+        MigrationError,
     },
 };
 use serde_json::{json, Value};
@@ -151,6 +152,33 @@ async fn drain(f: &import_support::Fixture, id: Uuid) {
     panic!("admission execution did not complete")
 }
 
+async fn confirm_ready(f: &import_support::Fixture, id: Uuid) {
+    let detail = people_admission::detail(&f.pool, &f.key, &f.ctx, id)
+        .await
+        .unwrap();
+    let plan = &detail["plan"];
+    people_admission::confirm(
+        &f.pool,
+        &f.key,
+        &f.ctx,
+        id,
+        people_admission::ConfirmPeopleAdmission {
+            request_id: Uuid::new_v4(),
+            plan_id: uuid(&plan["id"]),
+            plan_revision: number(&plan["revision"]),
+            plan_digest: plan["digest"].as_str().unwrap().into(),
+            eligible_count: number(&plan["counts"]["eligible"]),
+            acknowledged_coverage: true,
+            acknowledged_mappings: true,
+            acknowledged_distinct_contacts: true,
+            acknowledged_review_hold: true,
+        },
+        Some(&ReleaseReadiness::for_tests()),
+    )
+    .await
+    .unwrap();
+}
+
 #[sqlx::test]
 #[ignore = "requires PostgreSQL migrator"]
 async fn retained_new_people_admit_with_native_identity_provenance_and_facts(migrator: PgPool) {
@@ -212,6 +240,21 @@ async fn retained_new_people_admit_with_native_identity_provenance_and_facts(mig
     .await
     .unwrap();
     drain(&f, id).await;
+    let retained: i64 = sqlx::query_scalar(
+        "SELECT retained_bytes FROM migration_people_admission WHERE id=$1 AND organization_id=$2",
+    )
+    .bind(id)
+    .bind(f.org)
+    .fetch_one(&f.pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        retained,
+        people_admission::retained_byte_audit(&f.pool, &f.ctx, id)
+            .await
+            .unwrap(),
+        "live admission ledger must equal the independent persisted-byte audit"
+    );
     let person:Uuid=sqlx::query_scalar("SELECT person_id FROM migration_people_admission_result WHERE admission_id=$1 AND source_id='104' AND disposition='settled'").bind(id).fetch_one(&f.pool).await.unwrap();
     let contacts: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM contact_method WHERE organization_id=$1 AND person_id=$2",
@@ -286,7 +329,7 @@ async fn original_presence_and_unmapped_stage_are_held_before_confirmation(migra
             .unwrap()["disposition"]
             .clone()
     };
-    assert_eq!(item("101"), "excluded_original");
+    assert_eq!(item("101"), "already_imported");
     assert_eq!(item("104"), "held_mapping_gap");
     assert_eq!(item("105"), "eligible");
     assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM person WHERE organization_id=$1 AND first_name IN ('Changed original','Unmapped','Qualified')").bind(f.org).fetch_one(&f.pool).await.unwrap(), 0);
@@ -359,4 +402,160 @@ async fn cancelled_run_allows_same_report_remainder_preview(migrator: PgPool) {
     assert_eq!(detail["state"], "ready");
     assert_eq!(number(&detail["plan"]["counts"]["eligible"]), 1);
     assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM migration_import_identity WHERE organization_id=$1 AND source_account_id=17 AND source_id='104'").bind(f.org).fetch_one(&f.pool).await.unwrap(),0);
+}
+
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
+async fn lowered_policy_fences_before_native_write_and_preserves_cancel_capacity(migrator: PgPool) {
+    let f = import_support::fixture(&migrator, import_support::default_people()).await;
+    let parent = db_activity_source::completed_parent(&f).await;
+    let id = ready(
+        &f,
+        parent,
+        vec![json!({"id":106,"firstName":"Policy Fence","stage":"Lead","assignedUserId":3})],
+    )
+    .await;
+    let detail = people_admission::detail(&f.pool, &f.key, &f.ctx, id)
+        .await
+        .unwrap();
+    let plan = &detail["plan"];
+    people_admission::confirm(
+        &f.pool,
+        &f.key,
+        &f.ctx,
+        id,
+        people_admission::ConfirmPeopleAdmission {
+            request_id: Uuid::new_v4(),
+            plan_id: uuid(&plan["id"]),
+            plan_revision: number(&plan["revision"]),
+            plan_digest: plan["digest"].as_str().unwrap().into(),
+            eligible_count: number(&plan["counts"]["eligible"]),
+            acknowledged_coverage: true,
+            acknowledged_mappings: true,
+            acknowledged_distinct_contacts: true,
+            acknowledged_review_hold: true,
+        },
+        Some(&ReleaseReadiness::for_tests()),
+    )
+    .await
+    .unwrap();
+    let tiny = snapshot::SnapshotPolicy {
+        run_ceiling_bytes: 1,
+        org_ceiling_bytes: 1,
+    };
+    assert!(matches!(
+        people_admission_worker::run_once(
+            &f.pool,
+            &f.key,
+            &tiny,
+            Some(&ReleaseReadiness::for_tests()),
+        )
+        .await,
+        Err(MigrationError::StorageLimit)
+    ));
+    let paused = people_admission::detail(&f.pool, &f.key, &f.ctx, id)
+        .await
+        .unwrap();
+    assert_eq!(paused["state"], "paused");
+    assert_eq!(paused["pause_reason"], "storage_limit");
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM person WHERE organization_id=$1 AND first_name='Policy Fence'"
+        )
+        .bind(f.org)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap(),
+        0
+    );
+    people_admission::cancel(
+        &f.pool,
+        &f.key,
+        &f.ctx,
+        id,
+        people_admission::LifecyclePeopleAdmission {
+            request_id: Uuid::new_v4(),
+            expected_lifecycle_revision: number(&paused["lifecycle_revision"]),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        people_admission::detail(&f.pool, &f.key, &f.ctx, id)
+            .await
+            .unwrap()["state"],
+        "cancelled"
+    );
+}
+
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
+async fn expired_lease_and_initiator_demotion_fence_execution(migrator: PgPool) {
+    let stale = import_support::fixture(&migrator, import_support::default_people()).await;
+    let stale_parent = db_activity_source::completed_parent(&stale).await;
+    let stale_id = ready(
+        &stale,
+        stale_parent,
+        vec![json!({"id":106,"firstName":"Expired Lease","stage":"Lead"})],
+    )
+    .await;
+    confirm_ready(&stale, stale_id).await;
+    sqlx::query("UPDATE migration_people_admission SET state='running',lease_token=$2,lease_epoch=7,lease_expires_at=clock_timestamp()-interval '1 second' WHERE id=$1")
+        .bind(stale_id).bind(Uuid::new_v4()).execute(&migrator).await.unwrap();
+    assert!(matches!(
+        people_admission_worker::run_once(
+            &stale.pool,
+            &stale.key,
+            &stale.policy,
+            Some(&ReleaseReadiness::for_tests())
+        )
+        .await,
+        Err(MigrationError::Conflict)
+    ));
+    let stale_detail = people_admission::detail(&stale.pool, &stale.key, &stale.ctx, stale_id)
+        .await
+        .unwrap();
+    assert_eq!(stale_detail["state"], "paused");
+    assert_eq!(stale_detail["pause_reason"], "lease_conflict");
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM person WHERE organization_id=$1 AND first_name='Expired Lease'"
+        )
+        .bind(stale.org)
+        .fetch_one(&stale.pool)
+        .await
+        .unwrap(),
+        0
+    );
+
+    let demoted = import_support::fixture(&migrator, import_support::default_people()).await;
+    let demoted_parent = db_activity_source::completed_parent(&demoted).await;
+    let demoted_id = ready(
+        &demoted,
+        demoted_parent,
+        vec![json!({"id":106,"firstName":"Demoted Initiator","stage":"Lead"})],
+    )
+    .await;
+    confirm_ready(&demoted, demoted_id).await;
+    sqlx::query("UPDATE organization_membership SET status='inactive' WHERE organization_id=$1 AND user_id=$2")
+        .bind(demoted.org).bind(demoted.actor).execute(&migrator).await.unwrap();
+    assert!(matches!(
+        people_admission_worker::run_once(
+            &demoted.pool,
+            &demoted.key,
+            &demoted.policy,
+            Some(&ReleaseReadiness::for_tests())
+        )
+        .await,
+        Err(MigrationError::Forbidden)
+    ));
+    let demoted_state: (String, String) =
+        sqlx::query_as("SELECT state,pause_reason FROM migration_people_admission WHERE id=$1")
+            .bind(demoted_id)
+            .fetch_one(&migrator)
+            .await
+            .unwrap();
+    assert_eq!(demoted_state.0, "paused");
+    assert_eq!(demoted_state.1, "authority_changed");
+    assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM person WHERE organization_id=$1 AND first_name='Demoted Initiator'").bind(demoted.org).fetch_one(&demoted.pool).await.unwrap(), 0);
 }

@@ -70,6 +70,52 @@ CREATE TABLE migration_people_admission_contact (
  FOREIGN KEY(item_id,admission_id,organization_id) REFERENCES migration_people_admission_item(id,admission_id,organization_id)
 );
 CREATE INDEX migration_people_admission_contact_page ON migration_people_admission_contact(item_id,id);
+
+CREATE FUNCTION crm_people_admission_plan_immutable() RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+  IF OLD.state IS DISTINCT FROM NEW.state
+     AND NOT ((OLD.state='building' AND NEW.state='ready')
+              OR (OLD.state='ready' AND NEW.state IN ('superseded','expired'))) THEN
+    RAISE EXCEPTION 'invalid admission plan state transition' USING ERRCODE='P0001';
+  END IF;
+  IF OLD.inputs_nonce IS DISTINCT FROM NEW.inputs_nonce
+     OR OLD.inputs_ciphertext IS DISTINCT FROM NEW.inputs_ciphertext
+     OR (OLD.state <> 'building' AND (OLD.digest IS DISTINCT FROM NEW.digest
+         OR OLD.total_count IS DISTINCT FROM NEW.total_count OR OLD.eligible_count IS DISTINCT FROM NEW.eligible_count
+         OR OLD.already_imported_count IS DISTINCT FROM NEW.already_imported_count OR OLD.already_admitted_count IS DISTINCT FROM NEW.already_admitted_count
+         OR OLD.excluded_original_count IS DISTINCT FROM NEW.excluded_original_count OR OLD.held_count IS DISTINCT FROM NEW.held_count
+         OR OLD.intended_contact_count IS DISTINCT FROM NEW.intended_contact_count OR OLD.prepared_bytes IS DISTINCT FROM NEW.prepared_bytes)) THEN
+    RAISE EXCEPTION 'admission plan immutable' USING ERRCODE='P0001';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER migration_people_admission_plan_immutable BEFORE UPDATE ON migration_people_admission_plan FOR EACH ROW EXECUTE FUNCTION crm_people_admission_plan_immutable();
+
+CREATE FUNCTION crm_people_admission_item_immutable() RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+  IF (to_jsonb(NEW) - ARRAY['disposition','settled_result_id','settled_at'])
+       IS DISTINCT FROM (to_jsonb(OLD) - ARRAY['disposition','settled_result_id','settled_at']) THEN
+    RAISE EXCEPTION 'admission item immutable' USING ERRCODE='P0001';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER migration_people_admission_item_immutable BEFORE UPDATE ON migration_people_admission_item FOR EACH ROW EXECUTE FUNCTION crm_people_admission_item_immutable();
+CREATE FUNCTION crm_people_admission_item_building() RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM migration_people_admission_plan p WHERE p.id=NEW.plan_id AND p.admission_id=NEW.admission_id AND p.organization_id=NEW.organization_id AND p.state='building') THEN
+    RAISE EXCEPTION 'admission item plan is sealed' USING ERRCODE='P0001';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER migration_people_admission_item_building BEFORE INSERT ON migration_people_admission_item FOR EACH ROW EXECUTE FUNCTION crm_people_admission_item_building();
+CREATE FUNCTION crm_people_admission_contact_building() RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM migration_people_admission_item i JOIN migration_people_admission_plan p ON p.id=i.plan_id AND p.admission_id=i.admission_id AND p.organization_id=i.organization_id WHERE i.id=NEW.item_id AND i.admission_id=NEW.admission_id AND i.organization_id=NEW.organization_id AND p.state='building') THEN
+    RAISE EXCEPTION 'admission contact plan is sealed' USING ERRCODE='P0001';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER migration_people_admission_contact_building BEFORE INSERT ON migration_people_admission_contact FOR EACH ROW EXECUTE FUNCTION crm_people_admission_contact_building();
 CREATE TABLE migration_people_admission_result (
  id UUID PRIMARY KEY, admission_id UUID NOT NULL, item_id UUID NOT NULL, organization_id UUID NOT NULL,
  person_id UUID, source_id TEXT NOT NULL, disposition TEXT NOT NULL CHECK(disposition IN ('settled','held_baseline_gap','held_evidence_gap','held_mapping_gap','held_identity','held_target','cancelled')),
@@ -133,6 +179,17 @@ ALTER TABLE migration_import_identity ADD CONSTRAINT migration_import_identity_o
 GRANT SELECT,INSERT,UPDATE ON migration_people_admission,migration_people_admission_plan,migration_people_admission_item TO crm_app;
 GRANT SELECT,INSERT ON migration_people_admission_contact,migration_people_admission_result,migration_people_admission_receipt,person_admission_provenance,person_admitted TO crm_app;
 GRANT SELECT,INSERT,UPDATE,DELETE ON migration_people_admission_reservation TO crm_app;
+
+-- crm_app must lock the immutable mapped target through this narrow definer
+-- helper; granting UPDATE on stage would permit unrelated legacy writes.
+CREATE FUNCTION crm_people_admission_lock_stage(org UUID, target UUID) RETURNS BOOLEAN
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
+BEGIN
+  PERFORM 1 FROM stage WHERE id=target AND organization_id=org FOR SHARE;
+  RETURN FOUND;
+END $$;
+REVOKE ALL ON FUNCTION crm_people_admission_lock_stage(UUID,UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION crm_people_admission_lock_stage(UUID,UUID) TO crm_app;
 
 CREATE FUNCTION crm_people_admission_mutation_allowed(org UUID, permit TEXT, table_name TEXT, operation TEXT, row_value JSONB) RETURNS BOOLEAN LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE lease UUID; unit UUID; target UUID;

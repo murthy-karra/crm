@@ -17,3 +17,14 @@ retained_new_people_admit_with_native_identity_provenance_and_facts \
 ```
 
 This run exposed and corrected live errors in the original snapshot-boundary join, admission ledger numeric cast/release bind, planned contact permit binding, and original mapping revalidation.
+
+The expanded focused suite passed on 2026-09-13 with five real PostgreSQL tests. It covers retained-source qualification and native settlement, original/identity/mapping holds, same-report cancellation and remainder preparation, a lowered live policy that pauses before any native write while preserving the cancel reserve, expired-lease fencing, and initiator-demotion fencing. The settlement test compares the live retained-byte ledger with the independent persisted-byte audit.
+
+```text
+DATABASE_URL="$MIGRATION_DATABASE_URL" SQLX_OFFLINE=true \
+CARGO_TARGET_DIR=/private/tmp/crm-010e3-target \
+cargo test -p crm-api --test all 'db_people_admission_execution::' \
+-- --ignored --nocapture
+
+5 passed; 0 failed
+```

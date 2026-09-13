@@ -153,7 +153,7 @@ final class LocalStore {
         return try transaction {
             guard let row = try rows("SELECT body FROM drafts WHERE id=?", [draft.id]).first,
                   let stored = try? decode(Draft.self, Data(row[0].utf8)), stored.revision == draft.revision else { throw LocalError.staleDraft }
-            let envelope = try insertEnvelope(kind: draft.kind, payload: .object(payload), deviceRecordedAt: draft.deviceRecordedAt)
+            let envelope = try insertEnvelope(kind: draft.kind, payload: .object(payload), deviceRecordedAt: draft.kind == "log_contact_attempt" ? stamp() : draft.deviceRecordedAt)
             if draft.isEdit {
                 var protected = stored; protected.mode = "submitted"; protected.predecessor = envelope.operation_id; protected.revision += 1
                 try run("UPDATE drafts SET body=? WHERE id=?", [try string(protected), protected.id])
@@ -172,8 +172,16 @@ final class LocalStore {
         // An offset (or Z) makes a repeated local wall-clock time unambiguous;
         // a nonexistent local clock value cannot be silently shifted into one.
         let shape = "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,9})?(?:Z|[+-][0-9]{2}:[0-9]{2})$"
-        guard let year = Int(value.prefix(4)), (1...9999).contains(year) else { return false }
-        return value.range(of: shape, options: .regularExpression) != nil && (try? date(value)) != nil
+        guard value.range(of: shape, options: .regularExpression) != nil,
+              let year = Int(value.prefix(4)), (1...9999).contains(year) else { return false }
+        let parts = value.prefix(10).split(separator: "-")
+        guard parts.count == 3, let month = Int(parts[1]), let day = Int(parts[2]) else { return false }
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        var components = DateComponents(); components.calendar = calendar; components.timeZone = calendar.timeZone
+        components.year = year; components.month = month; components.day = day
+        guard let calendarDate = calendar.date(from: components) else { return false }
+        let formatter = DateFormatter(); formatter.calendar = calendar; formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.timeZone = calendar.timeZone; formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: calendarDate) == String(value.prefix(10)) && (try? date(value)) != nil
     }
     private func insertEnvelope(kind: String, payload: JSON, deviceRecordedAt: String? = nil) throws -> Envelope {
         let recorded = deviceRecordedAt.flatMap { validExplicitInstant($0) ? $0 : nil } ?? stamp()
@@ -207,7 +215,9 @@ final class LocalStore {
             let expected: String
             switch op.envelope.kind { case "add_note", "edit_note": expected = "note"; case "create_task", "update_task", "complete_task": expected = "task"; case "log_contact_attempt": expected = "contact_attempt"; default: throw LocalError.invalidProtocol }
             guard receipt.resource_type == expected else { throw LocalError.invalidProtocol }
-            if op.envelope.kind == "add_note" || op.envelope.kind == "log_contact_attempt" { guard receipt.committed_revision == nil else { throw LocalError.invalidProtocol } }
+            if op.envelope.kind == "log_contact_attempt" {
+                guard receipt.committed_revision == nil, receipt.changed else { throw LocalError.invalidProtocol }
+            } else if op.envelope.kind == "add_note" { guard receipt.committed_revision == nil else { throw LocalError.invalidProtocol } }
             else { guard let committed = receipt.committed_revision, (try? revision(committed)) != nil else { throw LocalError.invalidProtocol } }
             if let target = op.targetID, target != receipt.resource_id { throw LocalError.invalidProtocol }
             // A contact can change server-ranked Today without changing the
@@ -221,7 +231,7 @@ final class LocalStore {
     func failure(_ id: String, code: String, permanent: Bool, delay: Double) throws {
         let status: String
         if code == "revision_conflict" { status = "conflict" }
-        else if code == "not_found" { status = "unavailable" }
+        else if ["not_found", "forbidden"].contains(code) { status = "unavailable" }
         else { status = permanent ? "attention" : "pending" }
         try run("UPDATE operations SET status=?,error=?,attempts=attempts+1,retry_at=? WHERE id=?",
                 [status, code, String(Date().timeIntervalSince1970 + delay), id])

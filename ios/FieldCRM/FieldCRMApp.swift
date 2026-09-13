@@ -340,12 +340,12 @@ struct ContactComposerView: View {
                     Text("Calls made through the CRM already have a contact record. Use this form only for a manual interaction that already happened.").font(.caption).foregroundStyle(.secondary)
                 }
                 Section("When it happened") {
-                    DatePicker("Date and time", selection: $pickerDate, displayedComponents: [.date, .hourAndMinute])
+                    DatePicker("UTC date and time", selection: $pickerDate, displayedComponents: [.date, .hourAndMinute])
+                        .environment(\.timeZone, TimeZone(secondsFromGMT: 0)!)
+                        .accessibilityIdentifier("contactOccurredAtUTC")
                         .onChange(of: pickerDate) { _, value in occurredAt = stamp(value); draft.occurredAt = occurredAt; autosave() }
-                    TextField("Reported time (RFC3339 with offset)", text: $occurredAt)
-                        .textInputAutocapitalization(.never).autocorrectionDisabled().accessibilityIdentifier("contactOccurredAt")
-                        .onChange(of: occurredAt) { _, value in draft.occurredAt = value; autosave() }
-                    Text("The time is reported by you. The offset makes an ambiguous local time explicit; enter a corrected RFC3339 time if a local clock time does not exist.").font(.caption).foregroundStyle(.secondary)
+                    LabeledContent("Recorded instant") { Text(occurredAt).font(.caption.monospaced()).textSelection(.enabled) }
+                    Text("Time zone: UTC (fixed). UTC has no daylight-saving gaps or repeated wall-clock times. The selected instant remains unchanged if this device’s time zone changes.").font(.caption).foregroundStyle(.secondary)
                 }
                 Section { Text(status).font(.caption).foregroundStyle(failed ? .red : .secondary).accessibilityIdentifier("contactDraftStatus") }
                 Button("Save contact on device") {

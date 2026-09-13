@@ -85,3 +85,20 @@ The simulator validates the isolated synthetic runtime, encrypted SQLCipher
 store, relaunch behavior, and real API operation path. Physical-device passcode,
 reboot, cellular interruption, APNs/background execution, and production
 release signing remain deferred.
+
+## Review round 1 — 2026-09-13
+
+Focused QA build and storage/model run after review fixes:
+
+```text
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild test \
+  -project ios/FieldCRM.xcodeproj -scheme FieldCRMMobile003QA \
+  -destination 'platform=iOS Simulator,id=A5A6F06E-9E4D-4D55-9882-940ED696D226' \
+  -only-testing:FieldCRMTests/StorageTests -only-testing:FieldCRMTests/ModelTests \
+  -derivedDataPath /tmp/crm-mobile003-review-build
+```
+
+Passed: 32 tests, zero failures. Result bundle:
+`/tmp/crm-mobile003-review-build/Logs/Test/Test-FieldCRMMobile003QA-2026.09.13_02-36-38--0700.xcresult`.
+
+This run proves UTC-only contact timestamp selection survives a simulated Los Angeles DST gap, both explicit offsets in the repeated fall wall hour, and reopen under Tokyo; invalid `2026-02-30` is rejected without normalization. It also proves a contact receipt discards pre-receipt staging, retains protected accepted work through a failed seal/relaunch, creates a new generation, and does not re-upload. Contact receipt validation rejects `changed=false`, device-recorded time is frozen when the immutable operation is saved, Mobile 002's `forbidden` unavailable-state semantics remain intact, and full-store contact draft persistence preserves the existing mixed queue.

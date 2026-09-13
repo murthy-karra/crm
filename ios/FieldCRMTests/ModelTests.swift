@@ -121,6 +121,22 @@ import XCTest
         XCTAssertFalse(model.todayIsStale)
         XCTAssertEqual(try store.meta("active"), fresh.generation_id)
     }
+    func testContactReceiptSupersedesPreReceiptStagingAndRelaunchDoesNotResubmit() async throws {
+        let (model, api, secure, boot, store) = try await setupModel()
+        let (_, bytes) = try queuedContact(store); let contact = try decode(Envelope.self, bytes)
+        let preReceipt = Generation(generation_id: UUID().uuidString, context_id: boot.context_id, evaluated_at: stamp(), expires_at: stamp(Date().addingTimeInterval(1800)), complete: true, selected_count: 1, manifest: Manifest(items: [ManifestItem(person_id: contact.person, revision: "1", reasons: ["assigned"])], next_cursor: nil, complete: true))
+        try store.begin(preReceipt)
+        var uploads = 0, reconciliation = 0, failSeal = true; var issuedGeneration = ""
+        api.responseForTesting = { request in
+            if request.url!.path.hasSuffix("/operations") { uploads += 1; return try self.response(request, 200, .object(["operation_id": .s(contact.operation_id), "outcome": .s("accepted"), "resource_type": .s("contact_attempt"), "resource_id": .s(UUID().uuidString), "committed_revision": .null, "person_revision": .s("1"), "accepted_at": .s(stamp()), "changed": .bool(true), "replayed": .bool(false)])) }
+            if request.url!.path.hasSuffix("/reconciliations") { reconciliation += 1; let fresh = Generation(generation_id: UUID().uuidString, context_id: boot.context_id, evaluated_at: stamp(), expires_at: stamp(Date().addingTimeInterval(1800)), complete: true, selected_count: 1, manifest: preReceipt.manifest); issuedGeneration = fresh.generation_id; return try self.response(request, 200, try decode(JSON.self, encode(fresh))) }
+            if request.url!.path.hasSuffix("/seal") { if failSeal { return try self.response(request, 503, .object(["error": .s("unavailable")])) }; return try self.response(request, 200, try decode(JSON.self, encode(Seal(generation_id: issuedGeneration, context_id: boot.context_id, sealed_at: stamp(), evaluated_at: stamp(), selected_count: 1, today: .object(["items": .array([])]))))) }
+            return try self.response(request, 500, .object([:]))
+        }
+        model.paused = false; await model.sync(); XCTAssertEqual(uploads, 1); XCTAssertTrue(model.todayIsStale); XCTAssertNotEqual(try store.generation()?.generation_id, preReceipt.generation_id)
+        failSeal = false; let next = reopen(secure, api); next.paused = false; await next.sync(manual: true)
+        XCTAssertEqual(uploads, 1); XCTAssertGreaterThanOrEqual(reconciliation, 2); XCTAssertFalse(next.todayIsStale)
+    }
     func testContactRefreshFailureRetainsAcceptedReceiptAndDoesNotResubmit() async throws {
         let (model, api, _, boot, store) = try await setupModel()
         let (_, bytes) = try queuedContact(store)
@@ -174,7 +190,7 @@ import XCTest
         }
         model.paused = false; await model.sync()
         XCTAssertEqual(authorityChecks, 1); XCTAssertTrue(model.unlocked); XCTAssertEqual(model.people.count, 1)
-        XCTAssertEqual(try store.queue()[0].status, "attention"); XCTAssertEqual(try store.queue()[0].error, "forbidden")
+        XCTAssertEqual(try store.queue()[0].status, "unavailable"); XCTAssertEqual(try store.queue()[0].error, "forbidden")
     }
     func testOperation403WithRevokedAuthorityLocksAndPreservesExactEnvelope() async throws {
         let (model, api, secure, _, store) = try await setupModel(); try queue(store)

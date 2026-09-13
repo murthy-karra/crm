@@ -452,6 +452,9 @@ import Network
         // Finish the bounded cleanup backlog before admitting another generation.
         // Every batch yields; active/staged bundles and saved work remain intact.
         try await drainCache(store, run)
+        // A contact receipt affects Today independently of Person revision. A pre-receipt
+        // staging generation cannot be sealed as evidence of that fact.
+        if try store.meta("today_refresh_pending") == "1" { try store.discardGeneration() }
         var generation = try store.generation()
         if let old = generation, try date(old.expires_at) <= date(boot.server_time).addingTimeInterval(continuousSeconds() - (credential?.lease.anchor.uptime ?? 0)) {
             try store.discardGeneration(); generation = nil

@@ -260,6 +260,43 @@ final class StorageTests: XCTestCase {
         let protected = try XCTUnwrap(store.draftForOperation(op.operation_id))
         XCTAssertEqual(protected.text, "Protected uncertain proposal"); XCTAssertEqual(protected.baseline?["body"].text, "old")
     }
+    func testContactUTCInstantsSurviveTimezoneRelaunchAndRejectInvalidCalendarDates() throws {
+        let original = NSTimeZone.default
+        defer { NSTimeZone.default = original }
+        NSTimeZone.default = TimeZone(identifier: "America/Los_Angeles")!
+        var store: LocalStore? = try open("time")
+        // 10:30Z is during Los Angeles's skipped 02:30 wall hour. UTC selection
+        // remains a real, explicit instant rather than a silently shifted local date.
+        let skippedWallHour = try store!.saveDraft(Draft(id: UUID().uuidString, person: person, kind: "log_contact_attempt", revision: 0,
+            contactChannel: "call", contactOutcome: "reached", occurredAt: "2026-03-08T10:30:00Z", deviceRecordedAt: "2000-01-01T00:00:00Z"))
+        let first = try store!.submit(skippedWallHour)
+        let repeatedDaylight = try store!.saveDraft(Draft(id: UUID().uuidString, person: person, kind: "log_contact_attempt", revision: 0,
+            contactChannel: "call", contactOutcome: "reached", occurredAt: "2026-11-01T01:30:00-07:00", deviceRecordedAt: "2000-01-01T00:00:00Z"))
+        let repeatedStandard = try store!.saveDraft(Draft(id: UUID().uuidString, person: person, kind: "log_contact_attempt", revision: 0,
+            contactChannel: "call", contactOutcome: "reached", occurredAt: "2026-11-01T01:30:00-08:00", deviceRecordedAt: "2000-01-01T00:00:00Z"))
+        let second = try store!.submit(repeatedDaylight), third = try store!.submit(repeatedStandard)
+        XCTAssertNotEqual(second.payload["occurred_at"].text, third.payload["occurred_at"].text)
+        XCTAssertNotEqual(first.device_recorded_at, "2000-01-01T00:00:00Z", "device time freezes when the immutable operation is saved")
+        let invalid = try store!.saveDraft(Draft(id: UUID().uuidString, person: person, kind: "log_contact_attempt", revision: 0,
+            contactChannel: "call", contactOutcome: "reached", occurredAt: "2026-02-30T12:00:00Z"))
+        XCTAssertThrowsError(try store!.submit(invalid))
+        let bytes = try store!.queue().map(\.bytes); store = nil
+        NSTimeZone.default = TimeZone(identifier: "Asia/Tokyo")!
+        store = try open("time")
+        XCTAssertEqual(try store!.queue().map(\.bytes), bytes)
+        XCTAssertEqual(try store!.queue()[0].envelope.payload["occurred_at"].text, "2026-03-08T10:30:00Z")
+    }
+    func testContactSQLiteFullKeepsSavedDraftAndMixedQueueBytes() throws {
+        let store = try open("contact-full")
+        let note = try store.submit(store.saveDraft(draft("Existing note remains immutable")))
+        let noteBytes = try XCTUnwrap(store.queue().first?.bytes)
+        let pageCount = try store.rows("PRAGMA page_count")[0][0]; try store.run("PRAGMA max_page_count=" + pageCount)
+        let contactDraft = Draft(id: UUID().uuidString, person: person, kind: "log_contact_attempt", text: String(repeating: "protected", count: 6000), revision: 0,
+            contactChannel: "email", contactOutcome: "sent", occurredAt: "2026-09-13T10:00:00Z")
+        XCTAssertThrowsError(try store.saveDraft(contactDraft))
+        XCTAssertEqual(try store.queue().count, 1); XCTAssertEqual(try store.queue().first?.id, note.operation_id); XCTAssertEqual(try store.queue().first?.bytes, noteBytes)
+        XCTAssertTrue(try store.drafts().isEmpty)
+    }
     func testMobile003UpgradeKeepsMobile002BytesAndContactNeedsFreshTodaySeal() throws {
         var old: LocalStore? = try open(version: 5)
         let prior = try old!.submit(old!.saveDraft(draft("Mobile002 envelope remains exact")))
@@ -293,6 +330,9 @@ final class StorageTests: XCTestCase {
         let malformed = Receipt(operation_id: two.operation_id, outcome: "accepted", resource_type: "contact_attempt", resource_id: UUID().uuidString,
                                 committed_revision: "2", person_revision: "1", accepted_at: stamp(), changed: true, replayed: false)
         XCTAssertThrowsError(try store.acknowledge(malformed))
+        let unchanged = Receipt(operation_id: two.operation_id, outcome: "accepted", resource_type: "contact_attempt", resource_id: UUID().uuidString,
+                                committed_revision: nil, person_revision: "1", accepted_at: stamp(), changed: false, replayed: false)
+        XCTAssertThrowsError(try store.acknowledge(unchanged))
 
         // Contact facts do not fabricate a Person revision. A complete new seal,
         // even at revision 1, is the evidence that Today is fresh and clears the overlay.

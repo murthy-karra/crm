@@ -47,6 +47,19 @@ and Person deletion, replay/lookup return opaque 404 while the original fact and
 operation marker remain and no second fact appears. These tests use their own
 ephemeral databases, separately from native runtime fixtures.
 
+## Paired Today measurement
+
+The coordinator ran the existing `mobile_today_perf` example with
+`--features perf-harness --locked`, the isolated integrated Cargo target and
+`MOBILE_PERF_CLOCK=2026-09-13T12:00:00Z` against the retained synthetic
+`crm_mobile_003` database. Both paths ran in one build, alternating order, with
+10 warmups and 40 measured samples per side. All 100 DTOs matched exactly
+(SHA-256 `ea39b3f152b5bd5a6580eabd9ad71978a7369963ea6a08d8420e6fdd8f062bcc`).
+Baseline `9eaeb0a` median/p95 was 51.07/122.84 ms; current was 48.43/131.89 ms.
+The p95 increase was 9.05 ms, below the 25 ms allowance: passed. Raw output is
+`/private/tmp/crm-mobile003-qa/today-paired.json`. This is synthetic local
+performance evidence, not a production or physical cellular measurement.
+
 ## Remaining integration limits
 
 This establishes the backend/API contract and isolated PostgreSQL behavior.

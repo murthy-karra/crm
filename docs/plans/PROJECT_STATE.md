@@ -1,6 +1,6 @@
 # Project state
 
-Last updated: 2026-09-12 (D-075 follow-up: Mobile 001 / 010e1 shared-development release).
+Last updated: 2026-09-12 (Mobile 002 / 010e2 implementation approved under D-076).
 This file holds current operational status, active work and live residuals.
 [PROJECT_HISTORY.md](PROJECT_HISTORY.md) preserves earlier progress, the slice
 ledger and historical measurements; its old instructions are not current work.
@@ -21,13 +21,24 @@ A repeated-sync defect found by the native apps was corrected and all ten affect
 backend tests passed; iOS and Android then passed repeated downloads against the
 patched private API. See the [implementation status](../tasks/MOBILE_MIGRATION_IMPLEMENTATION_STATUS.md).
 
-The user requested a concrete migration plan before implementation launch.
 Approved [010e1](../specs/SLICE_010e1.md) compares a newer core capture with the
 original import baseline and reports source changes without updating CRM data.
-Its reviewed contracts and implementation are approved under D-075. The
-[coordinated launch plan](MOBILE_MIGRATION_PARALLEL_LAUNCH.md) starts mobile backend
-and migration together, then replaces the completed backend lane with iOS and
-Android: at most three simultaneous implementation worktrees.
+Its reviewed contracts, implementation and release are complete under D-075 and
+its follow-up. The [coordinated launch](MOBILE_MIGRATION_PARALLEL_LAUNCH.md) is the
+completed milestone's ownership record, not a pending launch instruction.
+
+After trying the iOS app, the user reported that the app and sync seem to work
+and asked to continue. Mobile design/system-information cleanup is deferred.
+The user separately selected **"Leave physical-phone testing for later"** after
+read-only discovery found no connected physical phones. The user then clarified
+that iOS/Android feature development should continue in parallel, and requested
+preparation/review of [Mobile 002](../specs/MOBILE_002_OFFLINE_EDITS.md): offline
+note/task editing with explicit conflict recovery. It accompanies the
+[010e2 proposal](../specs/SLICE_010e2.md) for previewed updates to already imported
+People. D-076 now accepts both new contracts and Terra high implementation; the
+[coordinated plan](MOBILE_002_010e2_PARALLEL_LAUNCH.md) prepares mobile backend
+alongside migration, then iOS + Android + migration within three worktrees.
+The implementation uses isolated synthetic resources; shared development and the native demo remain intact.
 
 **The current Mobile 001 / 010e1 shared-development runtime is**
 `08cb42057013cb8766ae61acb23458b0cf38c416` at
@@ -119,6 +130,15 @@ follow-up remains open in production readiness.
 
 ## Current slice
 
+- **Mobile 002 implementation:** D-076 accepts the reviewed
+  [spec](../specs/MOBILE_002_OFFLINE_EDITS.md),
+  [briefs](../tasks/MOBILE_002_IMPL.md) and coordinated plan. Terra high implements
+  the mobile backend first, then iOS and Android concurrently. Planning review
+  has no remaining blocker; implementation verification remains required.
+- **010e2 implementation:** D-076 accepts the reviewed
+  [specification](../specs/SLICE_010e2.md) and
+  [brief](../tasks/SLICE_010e2_IMPL.md). One Terra high writer owns backend then
+  Web alongside mobile, preserving local changes, provenance and the review hold.
 - **010e1 implementation and release:** merged, pushed and deployed under D-075
   and its release follow-up. Retained core-change
   reports preserve exact source evidence, representative metadata and the review
@@ -236,6 +256,11 @@ branch are removed. Native source and platform evidence are included; native
 builds/test bundles are preserved outside the checkout. The loopback-only
 synthetic API3101 remains available for the installed paused demos.
 
+D-076 starts the next implementation on `codex/mobile002-010e2-integration`.
+Local planning checkpoints provide a consistent base for the mobile backend and
+migration worktrees, followed by native lanes. Publication/deployment remains
+separate; preserve the deferred physical-device follow-up and review records.
+
 The shared backend/Web run verified isolated release builds from that merge.
 The [release record](../tasks/MOBILE_001_010e1_RELEASE.md) distinguishes the deployed
 runtime source from documentation-only closeout commits. Subsequent verification
@@ -243,6 +268,11 @@ must continue to isolate Cargo targets and Web output directories. The earlier
 implementation output collisions and exact restoration remain historical evidence.
 
 ## Last accepted decision
+
+**D-076:** the user explicitly approves Mobile 002 and 010e2 implementation,
+including their reviewed contracts and parallel plan, and confirms Terra for
+implementation. Local integration and isolated synthetic verification are in
+scope; no repeat approval is needed.
 
 **D-075 and release follow-up:** reviewed implementation is complete; the user
 authorized releasing the completed milestone. Git integration/publication and the
@@ -327,6 +357,12 @@ Foundations F-01/F-02/F-03 remain proposals except where separately accepted.
 
 ## Parked / queued tracks
 
+- **Mobile design:** user-deferred after the simulator walkthrough. Review the
+  amount and placement of system/diagnostic information later; keep essential
+  saved-work, access-lock and sync-recovery feedback. No redesign was made here.
+- **Physical iPhone/Android testing:** explicitly user-deferred. Existing proof
+  remains simulator/emulator only. [Device follow-up](../tasks/MOBILE_001_PHYSICAL_DEVICE_FOLLOWUP.md)
+  records discovered build/environment prerequisites and the later test sequence.
 - **Slice 010b (FUB migration): DEPLOYED AND VERIFIED.** Live validation
   remains deferred. The approved 010b implementation passed its synthetic/full gates.
   [Current summary](SLICE_010_MIGRATION_SUMMARY.md); historical survey retained
@@ -594,20 +630,16 @@ and now lives only in git history.
 
 ## Next recommended action
 
-D-075 approves the reviewed [010e1](../specs/SLICE_010e1.md) comparison contract
-and implementation. Mobile 001 is already approved. Follow the
-[coordinated launch](MOBILE_MIGRATION_PARALLEL_LAUNCH.md): mobile backend and
-migration concurrently, then iOS + Android + migration after backend integration.
-Do not require remaining migration fidelity or live FUB qualification before the
-synthetic native workflow. Both backend worktrees have launched; native lanes follow the integrated mobile foundation.
+The released [Mobile 001 / 010e1 milestone](../tasks/MOBILE_001_010e1_RELEASE.md)
+is complete. Implement approved Mobile 002 and 010e2 under D-076 through the
+[coordinated launch](MOBILE_002_010e2_PARALLEL_LAUNCH.md). Neither reopens the
+completed milestone.
 
-1. The [010d2 release](../tasks/SLICE_010d2_RELEASE.md) is complete and forms the
-   baseline for the next bounded slice. Future import confirmation still requires
-   fresh actual artifact inventory and independent timeline readiness.
-   The completed [010d1 capture evidence](../tasks/SLICE_010d1_VERIFICATION.md)
-   and [release](../tasks/SLICE_010d1_RELEASE.md) remain its inputs. The SQLx cancellation,
-   audited call-history ordering and inherited core worker handoff concerns
-   remain bounded follow-ups with their existing evidence qualifications.
+1. Implement mobile backend and migration in parallel,
+   then iOS + Android + migration once the mobile foundation integrates. One
+   migration writer owns backend and Web; no fourth worktree opens. Use isolated
+   synthetic data/build outputs and preserve shared development/native-demo state.
+   Mobile feature UI is in scope; design cleanup and physical phones remain deferred.
 2. Resume authorized FUB qualification when the user is ready, against an agreed
    dataset and applicable readiness gates. Later data families, mapping repair,
    deltas and activation need their own approved specification.
@@ -624,6 +656,9 @@ synthetic native workflow. Both backend worktrees have launched; native lanes fo
 
 ## Approval currently required
 
+- D-076 accepts Mobile 002 and 010e2 shared contracts and implementation.
+  No repeat scope approval is pending. Later publication, shared-development
+  deployment and distribution remain separate concrete release actions.
 - D-075 approves the 010e1 source-change report, its HTTP/persistence and
   compatibility contracts and implementation. No repeat scope approval is pending. Mobile 001 is already approved under D-074, including its
   operation/reconciliation, origin and local-lifecycle contracts; do not ask again.

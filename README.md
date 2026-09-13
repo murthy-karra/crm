@@ -39,22 +39,22 @@ The two primary product goals are:
 - `docs/tasks/` — bounded implementation task briefs
 - `docs/design/` — accepted design documents (incl. `UI_STYLE.md`)
 - `docs/research/` — competitor and technical research
-- `ios/`, `android/` — native applications; planned, not yet created
+- `ios/`, `android/` — native SwiftUI and Jetpack Compose applications
 
 ## Current State
 
 The implemented product includes People, intake/correspondence, calling, tags,
 notes, tasks, typed custom fields, saved filters and configurable Today work.
 The AI Operator has read tools and scoped command tools with confirmation or
-receipt/Undo behavior. FUB assessment (010a) and core capture/preview (010b) are
-deployed and verified in shared development. Live FUB validation remains deferred.
-Native SwiftUI and Jetpack Compose applications are planned, not implemented.
+receipt/Undo behavior. FUB assessment, core and historical capture, review-only
+People/metadata/activity/timeline imports, and source-change reports through 010e1
+are deployed and verified in shared development. Live FUB validation remains deferred.
 
-Native work now starts with the [offline field-work plan](docs/plans/MOBILE_OFFLINE_FIRST.md)
-and approved [Mobile 001 specification](docs/specs/MOBILE_001_OFFLINE_FIELD_WORK.md).
-D-073 accepts SQLite, the initial offline set and seven-day offline access;
-D-074 approves the reviewed sync/API and native implementation. Actual developer-tool
-setup is tracked [separately](docs/tasks/MOBILE_NATIVE_TOOLCHAIN_SETUP.md).
+Both native apps implement the [Mobile 001 offline workflow](docs/specs/MOBILE_001_OFFLINE_FIELD_WORK.md):
+encrypted SQLite, seven-day offline access, saved notes/tasks and durable sync.
+Their [synthetic verification and integration](docs/tasks/MOBILE_MIGRATION_IMPLEMENTATION_STATUS.md)
+are complete. Physical-phone/cellular verification and app distribution remain
+pending; simulator/emulator proof does not establish those results.
 
 Start with the [system map](docs/architecture/ARCHITECTURE_BASELINE.md) and
 [current operational state](docs/plans/PROJECT_STATE.md). Use the

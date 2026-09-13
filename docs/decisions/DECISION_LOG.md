@@ -2580,3 +2580,34 @@ compatibility, HTTP/browser and recovery checks. Native app distribution, physic
 phone/cellular testing, live FUB/customer processing, delta application/repair,
 activation and production-cluster deployment remain separate. Actual results
 belong to [the milestone release record](../tasks/MOBILE_001_010e1_RELEASE.md).
+
+### D-076 — Mobile 002 and migration 010e2 implementation approved (2026-09-12)
+
+After the reviewed specifications, independent READY findings and coordinated
+three-worktree plan were presented, the user said **“Approve Mobile 002 and
+migration 010e2....yes and yes. Go for it.”** The user also confirmed Terra for
+implementation; use Terra high for the bounded implementation lanes.
+
+This accepts [Mobile 002](../specs/MOBILE_002_OFFLINE_EDITS.md), its
+[briefs](../tasks/MOBILE_002_IMPL.md), [010e2](../specs/SLICE_010e2.md), its
+[brief](../tasks/SLICE_010e2_IMPL.md), and the
+[coordinated launch](../plans/MOBILE_002_010e2_PARALLEL_LAUNCH.md), including the
+reviewed shared HTTP, persistence, command and protected local-lifecycle contracts.
+Mobile scope is note-body and task-title/kind/due edits with record-version
+checks, preserved follow-up drafts and explicit conflicts. Migration scope is
+previewed refresh of successfully imported existing People, conservative whole-
+Person holds, explicit clears/removals of proven owned contacts, preserved
+provenance and the existing migration review hold.
+
+Implementation, concrete contract detail within those scopes, additive owned
+migrations, isolated synthetic backend/Web/iOS/Android verification and bounded
+reviews are authorized. Local checkpoints and integration may supply a consistent
+base to dependent lanes. Start mobile backend alongside one migration writer,
+then iOS and Android after the verified mobile foundation integrates; at most
+three implementation worktrees. No repeat approval is needed for this scope.
+
+Physical-phone/cellular testing and broad mobile design cleanup remain deferred.
+Preserve shared development and the user's native-demo API/app/store. Publishing
+Git branches, refreshing shared development, app distribution, live FUB/customer
+processing, workspace activation and production deployment remain later release
+or separately authorized scope. Record actual implementation evidence separately.

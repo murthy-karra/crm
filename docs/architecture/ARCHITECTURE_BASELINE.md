@@ -1,8 +1,8 @@
 # Architecture Baseline
 
-Reviewed 2026-09-11 against accepted decisions through D-068; migration status
-and 010d1 capture/release pointers updated 2026-09-12 under D-069/D-070 and its
-release follow-up.
+Reviewed 2026-09-11 against accepted decisions through D-068; native implementation
+and current migration release pointers updated 2026-09-12 through D-075 and its
+release follow-up. Earlier per-slice release measurements below remain historical.
 This is a derived system map, not another decision log. The
 [decision log](../decisions/DECISION_LOG.md) and [AGENTS.md](../../AGENTS.md)
 win on conflict. Observed runtime state and release evidence belong in
@@ -11,10 +11,11 @@ win on conflict. Observed runtime state and release evidence belong in
 ## Shape
 
 One modular Rust application: Axum, Tokio and SQLx. PostgreSQL is authoritative.
-Vue 3/TypeScript Web, the planned native SwiftUI and Jetpack Compose clients,
+Vue 3/TypeScript Web, the native SwiftUI and Jetpack Compose clients,
 and the AI Operator use the same typed application commands and queries
-(D-001, D-002, D-008). Native applications are not yet implemented; narrow-screen
-Web layouts are still the Web application.
+(D-001, D-002, D-008). Both native applications implement Mobile 001 and have
+passing synthetic simulator/emulator evidence. Physical devices, real cellular
+and distribution remain unverified; narrow-screen Web is a separate client.
 
 | Component | Responsibility and source | Current development shape | Production direction |
 |---|---|---|---|
@@ -22,6 +23,7 @@ Web layouts are still the Web application.
 | Application domains | [crm-app](../../backend/crates/crm-app): authorization, commands, persistence, integrations | Linked into API/admin binaries; workers start from API composition | Keep modular; separate workloads only at a real boundary |
 | AI Operator | [crm-operator](../../backend/crates/crm-operator): provider-neutral inference and typed tools | In-process, reaches application through ToolBackend | Same trust boundary; no privileged data path (D-028, D-034) |
 | Web | [web](../../web): conventional UI and Operator | Vite dev server or built bundle through dev-web-prod | Vue Web; Vite preview is a development release mechanism |
+| Native mobile | [iOS](../../ios), [Android](../../android): offline field work through the shared mobile API | Installed synthetic simulator/emulator apps; encrypted SQLite drafts, outbox and bounded cache | Device-bound storage and the same Rust command authority; physical verification and distribution remain pending |
 | PostgreSQL | Canonical records, history, read models, sessions and integration state | Loopback-only Docker; application/migrator role split | CloudNativePG; topology/recovery evidence belongs to production work |
 | Centrifugo | Realtime invalidation delivery | Loopback-only Docker | Centrifugo OSS; PostgreSQL stays authoritative |
 | Inbound mail | [email-worker](../../infra/email-worker): Email Routing to authenticated API relay | Deployed external Worker; size handling under D-056 | D-039 relay boundary; no second mutation path |
@@ -32,6 +34,12 @@ notes, tasks, typed custom fields, saved filters/Today rules, administration,
 intake/correspondence, calling and FUB assessment/capture/review-only People and
 retained metadata import. The Operator has both read
 tools and scoped mutation tools; it is no longer read-only.
+
+[010d2](../specs/SLICE_010d2.md) adds metadata-only imported timeline facts;
+[010e1](../specs/SLICE_010e1.md) compares retained core captures without changing
+CRM data. Both are implemented and released. The
+[Mobile 001 / 010e1 release](../tasks/MOBILE_001_010e1_RELEASE.md) is the current
+backend/Web baseline; earlier release identities below are superseded.
 
 ## Trust boundaries
 
@@ -63,6 +71,11 @@ Use hybrid persistence (D-007, D-015), not a generic event store:
   text already has per-Person encryption.
 - Purpose-built read models serve Today/Person/timeline reads. Trigger-maintained
   activity columns are an accepted mechanism (D-052).
+- Native SQLite stores encrypt cached projections, drafts and queued operations.
+  Durable server receipts deduplicate accepted mobile commands; bounded sealed
+  downloads replace cached projections atomically. The approved seven-day lease
+  locks offline access on expiry while preserving protected unsynced work
+  (D-073/074). These local outboxes do not change realtime delivery semantics.
 - Raw intake/correspondence payloads and FUB evidence/credentials currently use
   encrypted PostgreSQL storage. Key hierarchy, erasure and retention still need
   the work tracked by O-012/O-013/O-015.

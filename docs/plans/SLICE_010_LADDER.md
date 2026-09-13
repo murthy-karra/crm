@@ -72,6 +72,14 @@ source changes between retained captures without applying them or activating a
 workspace; its reviewed contracts and implementation are approved under D-075. See the
 [coordinated launch](MOBILE_MIGRATION_PARALLEL_LAUNCH.md).
 
+**Next proposed rung: [010e2](../specs/SLICE_010e2.md), existing-People refresh.**
+Its [brief](../tasks/SLICE_010e2_IMPL.md) defines previewed names/contact/stage/
+assignment updates with original mappings, conflict holds and durable sequential
+baselines. New People and extending dependent child imports to them remain later
+work, as do new mappings, other-family deltas, final reconciliation and activation.
+This write contract needs acceptance; 010e1's read-only approval does not cover it.
+Mobile design and physical-phone testing are user-deferred while migration advances.
+
 Notes, tasks, tags and custom fields now
 have destination models. API-first assessment and encrypted saved credentials
 are settled for 010a; live-source qualification and later fidelity, mapping,

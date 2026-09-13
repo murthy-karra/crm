@@ -1,11 +1,18 @@
 # Native mobile: first offline field-work slice
 
-**IMPLEMENTATION APPROVED — 2026-09-12, D-074.** The first concrete
+**IMPLEMENTED AND SYNTHETICALLY VERIFIED — 2026-09-12, D-074/D-075.** Both native
+apps and their shared backend are published; backend/Web are released in shared
+development. See [implementation evidence](../tasks/MOBILE_MIGRATION_IMPLEMENTATION_STATUS.md)
+and [release evidence](../tasks/MOBILE_001_010e1_RELEASE.md). Physical-phone/cellular
+verification and app distribution remain pending. The original sequencing below
+is retained as the design plan, not an instruction to restart completed work.
+
+The first concrete
 [specification](../specs/MOBILE_001_OFFLINE_FIELD_WORK.md) and
 [execution briefs](../tasks/MOBILE_001_IMPL.md) are approved for isolated synthetic
 implementation. D-073 records the earlier planning and seven-day access choices.
-This plan is not an implementation or a claim of native verification. Existing
-accepted decisions remain authoritative.
+Actual outcomes belong to the linked verification records. Existing accepted
+decisions remain authoritative.
 
 ## Outcome
 
@@ -70,9 +77,9 @@ access window following successful online authorization; expiry locks access
 while protecting pending work. Exact fields, history bounds, task dependencies,
 local-data lifecycle and storage limits are approved in Mobile 001 under D-074.
 
-Before implementation, one backend owner must turn this table into an owned
-specification with exact payloads, errors, compatibility and migration behavior.
-D-074 approves these changes within Mobile 001; implementation is still pending.
+The backend owner turned this table into the approved Mobile 001 specification
+and [frozen contract](../tasks/MOBILE_001_CONTRACT.md). Implementation and synthetic
+verification are complete; the table records the original contract changes.
 
 | Current contract | Proposed work and reason | Affected components / compatibility |
 |---|---|---|

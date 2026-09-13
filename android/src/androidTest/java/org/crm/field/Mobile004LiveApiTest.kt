@@ -31,6 +31,45 @@ class Mobile004LiveApiTest {
         }
     }
 
+    @Test fun lostResponseReplaysExactBytesAndSecondActorConflictRequiresNewProposal() = runBlocking {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("runMobile004Live") == "true")
+        val app = app(); val repository = app.repository; authenticate(repository); delay(300)
+        val active = FieldRepository::class.java.getDeclaredField("active").apply { isAccessible = true }.get(repository) as ActiveAccount
+        val current = requireNotNull(repository.ui.value.person)
+        val summary = JSONObject(current.summary); val oldStage = summary.getJSONObject("stage").getString("id")
+        val target = repository.ui.value.stageCatalog.first { it.id != oldStage }.id
+        repository.pause(true)
+        val saved = repository.saveStageDraft(UUID.randomUUID().toString(), PERSON, target)
+        val operation = repository.submitStageDraft(saved.id, saved.revision)
+        val bytes = operation.envelope
+        // Simulate the server accepting a request whose response was lost before local ack.
+        val receipt = active.api.operation(active.store.binding, operation)
+        assertEquals("accepted", receipt.getString("outcome")); assertEquals(bytes, active.store.dao.operation(operation.id)!!.envelope)
+        repository.pause(false); repository.sync(true)
+        val replayed = active.store.dao.operation(operation.id)!!
+        assertEquals(bytes, replayed.envelope); assertTrue(replayed.status in setOf("accepted", "covered"))
+
+        // A different actor changes the stage after the first operation, then the stale first
+        // baseline must conflict and only a new operation may use the current-stage revision.
+        val secondApi = FieldApi(BuildConfig.API_BASE)
+        val secondSession = secondApi.call("POST", "/api/session", body = json("email" to "second@mobile.test", "password" to "Mobile-demo-only-123!").toString())
+        val installation = UUID.randomUUID().toString()
+        val binding = Binding.parse(secondApi.bootstrap(installation), secondSession.getJSONObject("user").getString("id"), active.store.binding.org, installation)
+        // The fixture's second actor belongs to the same Organization; use the authenticated
+        // context only for the direct command and keep the first device's bytes untouched.
+        val stageNow = active.store.dao.person(PERSON)!!.let { JSONObject(it.summary).getJSONObject("stage").getString("id") }
+        val other = repository.ui.value.stageCatalog.first { it.id != stageNow }.id
+        val secondEnvelope = json("context_id" to binding.context, "operation_id" to UUID.randomUUID().toString(), "kind" to "change_person_stage", "device_recorded_at" to "2026-09-13T16:20:00Z", "payload" to json("person_id" to PERSON, "stage_id" to other, "expected_stage_revision" to JSONObject(active.store.dao.person(PERSON)!!.summary).getString("stage_revision")).toString()
+        secondApi.call("POST", "/api/mobile/v1/operations", binding.context, secondEnvelope)
+        val stale = repository.saveStageDraft(UUID.randomUUID().toString(), PERSON, target)
+        val staleOp = repository.submitStageDraft(stale.id, stale.revision)
+        repository.sync(true)
+        assertEquals("revision_conflict", active.store.dao.operation(staleOp.id)!!.lastError)
+        assertTrue(active.store.dao.stageContext(staleOp.id)!!.current.isNotEmpty())
+        val revised = repository.reviseStageConflict(staleOp.id)
+        assertNotEquals(staleOp.id, repository.submitStageDraft(revised.id, revised.revision).id)
+    }
+
     private suspend fun prepare() {
         val app = app(); val repository = app.repository
         authenticate(repository)

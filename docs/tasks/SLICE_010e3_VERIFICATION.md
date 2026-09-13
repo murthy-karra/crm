@@ -28,3 +28,29 @@ cargo test -p crm-api --test all 'db_people_admission_execution::' \
 
 5 passed; 0 failed
 ```
+
+## Identity integrity, immutability, and hot-plan claim
+
+`identity_tombstone_and_sealed_plan_items_are_immutable` uses a nil native identity target to model inconsistent or missing target identity evidence. It verifies the source is held rather than admitted, then selects the confirmed plan's exact `source_id=106` item and proves that a sealed plan cannot return to `building`, rewrite an item, or add a contact.
+
+`hot_plan_25k_uses_sparse_eligible_claim_index` inserts 25,000 building-plan items with 50 eligible rows and 24,950 held rows. After `ANALYZE`, its real worker claim query (`admission`, `organization`, `plan`, eligible/unsettled, `ORDER BY id`, `FOR UPDATE`, `LIMIT 1`) uses `migration_people_admission_item_eligible_claim`; it therefore does not scan the held rows to claim the next eligible unit.
+
+Both focused PostgreSQL tests passed on 2026-09-13:
+
+```text
+DATABASE_URL="$MIGRATION_DATABASE_URL" SQLX_OFFLINE=true \
+CARGO_TARGET_DIR=/private/tmp/crm-010e3-target \
+cargo test -p crm-api --test all \
+identity_tombstone_and_sealed_plan_items_are_immutable \
+-- --ignored --nocapture
+
+1 passed; 0 failed
+
+DATABASE_URL="$MIGRATION_DATABASE_URL" SQLX_OFFLINE=true \
+CARGO_TARGET_DIR=/private/tmp/crm-010e3-target \
+cargo test -p crm-api --test all \
+hot_plan_25k_uses_sparse_eligible_claim_index \
+-- --ignored --nocapture
+
+1 passed; 0 failed
+```

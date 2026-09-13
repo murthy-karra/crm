@@ -566,7 +566,7 @@ async fn identity_tombstone_and_sealed_plan_items_are_immutable(migrator: PgPool
     let f = import_support::fixture(&migrator, import_support::default_people()).await;
     let parent = db_activity_source::completed_parent(&f).await;
     let parent_plan: Uuid = sqlx::query_scalar(
-        "SELECT id FROM migration_import_plan WHERE import_id=$1 AND organization_id=$2",
+        "SELECT confirmed_plan_id FROM migration_import WHERE id=$1 AND organization_id=$2",
     )
     .bind(parent)
     .bind(f.org)
@@ -582,7 +582,7 @@ async fn identity_tombstone_and_sealed_plan_items_are_immutable(migrator: PgPool
     )
     .await;
     let item: (Uuid, Uuid) = sqlx::query_as(
-        "SELECT i.id,i.plan_id FROM migration_people_admission_item i WHERE i.admission_id=$1",
+        "SELECT i.id,i.plan_id FROM migration_people_admission_item i WHERE i.admission_id=$1 AND i.source_id='106'",
     )
     .bind(id)
     .fetch_one(&f.pool)
@@ -614,4 +614,46 @@ async fn identity_tombstone_and_sealed_plan_items_are_immutable(migrator: PgPool
     .is_err());
     assert!(sqlx::query("INSERT INTO migration_people_admission_contact(id,item_id,admission_id,organization_id,kind,import_order,value_nonce,value_ciphertext) VALUES($1,$2,$3,$4,'email',99,$5,$6)")
         .bind(Uuid::new_v4()).bind(item.0).bind(id).bind(f.org).bind(vec![0u8;24]).bind(vec![0u8;16]).execute(&migrator).await.is_err());
+}
+
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
+async fn hot_plan_25k_uses_sparse_eligible_claim_index(migrator: PgPool) {
+    let f = import_support::fixture(&migrator, import_support::default_people()).await;
+    let parent = db_activity_source::completed_parent(&f).await;
+    let report_id = report(
+        &f,
+        parent,
+        vec![json!({"id":104,"firstName":"Hot seed","stage":"Lead"})],
+    )
+    .await;
+    let prepared = people_admission::prepare(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        &f.ctx,
+        people_admission::PreparePeopleAdmission {
+            request_id: Uuid::new_v4(),
+            report_id,
+        },
+        Some(&ReleaseReadiness::for_tests()),
+    )
+    .await
+    .unwrap();
+    let admission_id = uuid(&prepared["admission_id"]);
+    let plan_id = Uuid::new_v4();
+    sqlx::query("INSERT INTO migration_people_admission_plan(id,admission_id,organization_id,revision,state,inputs_nonce,inputs_ciphertext) VALUES($1,$2,$3,1,'building',$4,$5)")
+        .bind(plan_id).bind(admission_id).bind(f.org).bind(vec![0u8;24]).bind(vec![0u8;16]).execute(&migrator).await.unwrap();
+    sqlx::query("INSERT INTO migration_people_admission_item(id,admission_id,plan_id,organization_id,source_key,source_id,prospective_person_id,disposition,projection_nonce,projection_ciphertext,provenance_nonce,provenance_ciphertext,item_byte_bound) SELECT gen_random_uuid(),$1,$2,$3,'hot-'||lpad(g::text,5,'0'),(1000000+g)::text,gen_random_uuid(),CASE WHEN g%500=0 THEN 'eligible' ELSE 'held_evidence_gap' END,$4,$5,$4,$5,1 FROM generate_series(1,25000) g")
+        .bind(admission_id).bind(plan_id).bind(f.org).bind(vec![0u8;24]).bind(vec![0u8;16]).execute(&migrator).await.unwrap();
+    sqlx::query("ANALYZE migration_people_admission_item")
+        .execute(&migrator)
+        .await
+        .unwrap();
+    let claim_plan = sqlx::query_scalar::<_,String>("EXPLAIN (COSTS OFF) SELECT id FROM migration_people_admission_item WHERE admission_id=$1 AND organization_id=$2 AND plan_id=$3 AND disposition='eligible' AND settled_at IS NULL ORDER BY id LIMIT 1 FOR UPDATE")
+        .bind(admission_id).bind(f.org).bind(plan_id).fetch_all(&migrator).await.unwrap().join("\n");
+    assert!(
+        claim_plan.contains("migration_people_admission_item_eligible_claim"),
+        "{claim_plan}"
+    );
 }

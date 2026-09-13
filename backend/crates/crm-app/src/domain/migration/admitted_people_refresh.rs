@@ -165,7 +165,7 @@ async fn resource(
     .ok_or(MigrationError::NotFound)
 }
 fn decode_digest(value: &str) -> Result<Vec<u8>, MigrationError> {
-    if value.len() != 64 {
+    if value.len() != 64 || !value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
         return Err(MigrationError::InvalidInput);
     }
     (0..32)
@@ -174,6 +174,20 @@ fn decode_digest(value: &str) -> Result<Vec<u8>, MigrationError> {
                 .map_err(|_| MigrationError::InvalidInput)
         })
         .collect()
+}
+
+#[cfg(test)]
+mod digest_tests {
+    use super::{decode_digest, MigrationError};
+
+    #[test]
+    fn non_ascii_digest_is_invalid_input_without_panicking_on_utf8_boundaries() {
+        // Exactly 64 bytes; a three-byte character crosses the old two-byte slices.
+        let malformed = format!("{}a", "€".repeat(21));
+        assert_eq!(malformed.len(), 64);
+        assert!(matches!(decode_digest(&malformed), Err(MigrationError::InvalidInput)));
+        assert_eq!(decode_digest(&"aF".repeat(32)).unwrap(), vec![0xaf; 32]);
+    }
 }
 
 async fn qualification(

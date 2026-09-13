@@ -1,4 +1,4 @@
-//! D-076 current-admin People admission API. Values remain in bounded encrypted plan rows.
+//! D-078 current-admin People admission API. Values remain in bounded encrypted plan rows.
 use crate::{
     auth::OrgAdminContext,
     domain::{
@@ -18,6 +18,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use serde::Deserialize;
 use serde_json::Value;
 use uuid::Uuid;
 fn body<T>(v: Result<Json<T>, JsonRejection>) -> Result<T, ApiError> {
@@ -214,7 +215,7 @@ async fn repreview(
     State(s): State<AppState>,
     a: OrgAdminContext,
     p: Result<Path<Uuid>, PathRejection>,
-    b: Result<Json<h::RepreviewPeopleAdmission>, JsonRejection>,
+    b: Result<Json<RepreviewWire>, JsonRejection>,
 ) -> Result<Response, ApiError> {
     Ok(response(
         StatusCode::ACCEPTED,
@@ -223,7 +224,7 @@ async fn repreview(
             &s.raw_payload_key,
             &CommandContext::from_auth(&a.auth),
             path(p)?,
-            body(b)?,
+            body(b)?.command()?,
         )
         .await
         .map_err(error)?,
@@ -233,7 +234,7 @@ async fn confirm(
     State(s): State<AppState>,
     a: OrgAdminContext,
     p: Result<Path<Uuid>, PathRejection>,
-    b: Result<Json<h::ConfirmPeopleAdmission>, JsonRejection>,
+    b: Result<Json<ConfirmWire>, JsonRejection>,
 ) -> Result<Response, ApiError> {
     let release = s.current_import_release().await;
     Ok(response(
@@ -243,7 +244,7 @@ async fn confirm(
             &s.raw_payload_key,
             &CommandContext::from_auth(&a.auth),
             path(p)?,
-            body(b)?,
+            body(b)?.command()?,
             release.as_deref(),
         )
         .await
@@ -254,7 +255,7 @@ async fn retry(
     State(s): State<AppState>,
     a: OrgAdminContext,
     p: Result<Path<Uuid>, PathRejection>,
-    b: Result<Json<h::LifecyclePeopleAdmission>, JsonRejection>,
+    b: Result<Json<LifecycleWire>, JsonRejection>,
 ) -> Result<Response, ApiError> {
     let release = s.current_import_release().await;
     Ok(response(
@@ -264,7 +265,7 @@ async fn retry(
             &s.raw_payload_key,
             &CommandContext::from_auth(&a.auth),
             path(p)?,
-            body(b)?,
+            body(b)?.command()?,
             release.as_deref(),
         )
         .await
@@ -275,7 +276,7 @@ async fn cancel(
     State(s): State<AppState>,
     a: OrgAdminContext,
     p: Result<Path<Uuid>, PathRejection>,
-    b: Result<Json<h::LifecyclePeopleAdmission>, JsonRejection>,
+    b: Result<Json<LifecycleWire>, JsonRejection>,
 ) -> Result<Response, ApiError> {
     Ok(response(
         StatusCode::OK,
@@ -284,7 +285,7 @@ async fn cancel(
             &s.raw_payload_key,
             &CommandContext::from_auth(&a.auth),
             path(p)?,
-            body(b)?,
+            body(b)?.command()?,
         )
         .await
         .map_err(error)?,
@@ -371,6 +372,7 @@ async fn admission_provenance_field(
     State(s): State<AppState>,
     a: OrgAdminContext,
     p: Result<Path<(Uuid, String)>, PathRejection>,
+    q: Result<Query<h::Page>, QueryRejection>,
 ) -> Result<Response, ApiError> {
     let (person, field_name) = path(p)?;
     Ok(response(
@@ -381,8 +383,104 @@ async fn admission_provenance_field(
             &CommandContext::from_auth(&a.auth),
             person,
             field_name,
+            query(q)?,
         )
         .await
         .map_err(error)?,
     ))
+}
+
+fn decimal(value: &str, positive: bool) -> Result<i64, ApiError> {
+    if value.is_empty()
+        || value.len() > 19
+        || !value.bytes().all(|b| b.is_ascii_digit())
+        || (value.len() > 1 && value.starts_with('0'))
+    {
+        return Err(ApiError::MalformedRequest);
+    }
+    let parsed = value
+        .parse::<i64>()
+        .map_err(|_| ApiError::MalformedRequest)?;
+    if positive && parsed == 0 {
+        return Err(ApiError::MalformedRequest);
+    }
+    Ok(parsed)
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RepreviewWire {
+    request_id: Uuid,
+    expected_plan_revision: String,
+}
+impl RepreviewWire {
+    fn command(self) -> Result<h::RepreviewPeopleAdmission, ApiError> {
+        Ok(h::RepreviewPeopleAdmission {
+            request_id: self.request_id,
+            expected_plan_revision: decimal(&self.expected_plan_revision, true)?,
+        })
+    }
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LifecycleWire {
+    request_id: Uuid,
+    expected_lifecycle_revision: String,
+}
+impl LifecycleWire {
+    fn command(self) -> Result<h::LifecyclePeopleAdmission, ApiError> {
+        Ok(h::LifecyclePeopleAdmission {
+            request_id: self.request_id,
+            expected_lifecycle_revision: decimal(&self.expected_lifecycle_revision, true)?,
+        })
+    }
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ConfirmWire {
+    request_id: Uuid,
+    plan_id: Uuid,
+    plan_revision: String,
+    plan_digest: String,
+    eligible_count: String,
+    acknowledged_coverage: bool,
+    acknowledged_mappings: bool,
+    acknowledged_distinct_contacts: bool,
+    acknowledged_review_hold: bool,
+}
+impl ConfirmWire {
+    fn command(self) -> Result<h::ConfirmPeopleAdmission, ApiError> {
+        Ok(h::ConfirmPeopleAdmission {
+            request_id: self.request_id,
+            plan_id: self.plan_id,
+            plan_revision: decimal(&self.plan_revision, true)?,
+            plan_digest: self.plan_digest,
+            eligible_count: decimal(&self.eligible_count, false)?,
+            acknowledged_coverage: self.acknowledged_coverage,
+            acknowledged_mappings: self.acknowledged_mappings,
+            acknowledged_distinct_contacts: self.acknowledged_distinct_contacts,
+            acknowledged_review_hold: self.acknowledged_review_hold,
+        })
+    }
+}
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn admission_wire_revisions_never_round_through_json_numbers() {
+        assert_eq!(
+            super::decimal("9007199254740993", true).unwrap(),
+            9007199254740993
+        );
+        for bad in ["01", "+1", "1.0", "-1", "9223372036854775808", " 1"] {
+            assert!(super::decimal(bad, true).is_err());
+        }
+        let id = uuid::Uuid::new_v4();
+        assert!(serde_json::from_value::<super::LifecycleWire>(
+            serde_json::json!({"request_id":id,"expected_lifecycle_revision":1})
+        )
+        .is_err());
+        assert!(serde_json::from_value::<super::LifecycleWire>(
+            serde_json::json!({"request_id":id,"expected_lifecycle_revision":"1"})
+        )
+        .is_ok());
+    }
 }

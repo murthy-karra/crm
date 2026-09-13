@@ -1,14 +1,17 @@
 # Mobile 003 / 010e3 — Implementation status
 
-**Implemented and verified locally — 2026-09-13.** D-078 accepts both contracts
+**Implemented, verified and released — 2026-09-13.** D-078 accepts both contracts
 and Mobile 003's occurrence-time policy.
 Terra high implemented the parallel lanes; the coordinator integrated the shared
 contracts and verified actual native/browser outcomes. All required local
-implementation gates are complete; release actions remain separate.
+implementation gates are complete. The subsequent explicit release request was
+executed; [the release record](MOBILE_003_010e3_RELEASE.md) owns deployment proof.
 
-The local integration branch is `codex/mobile003-010e3-integration`, based on
-`619c1b3` plus approved planning documents. Main merge, push, shared deployment,
-mobile distribution, live FUB processing and customer activation are separate.
+Implementation used `codex/mobile003-010e3-integration`, based on `619c1b3` plus
+approved planning documents. Main merge, push and shared-development deployment
+are complete at runtime source `b37a480c5bc4cd5c711dceba287cc5bed70a71d0`; the
+integration and lane branches are closed. Mobile distribution, live FUB
+processing and customer activation remain separate.
 
 ## Completed implementation
 
@@ -47,7 +50,8 @@ The mobile backend and both native worktrees have been integrated and closed.
 The Web lane was integrated and its worktree closed after actual browser testing.
 The final migration lane was integrated at `8ce0c64`; all implementation
 worktrees are closed and the integration checkout is clean. No
-shared API3000/Web5173/demoAPI3101 process or root build artifact was replaced.
+shared API3000/Web5173/demoAPI3101 process or root build artifact was replaced
+during implementation. The subsequent release refreshed shared API/Web only.
 
 Private synthetic runtime/database/build evidence is retained under
 `/private/tmp/crm-mobile003-qa/` and `/private/tmp/crm-010e3-qa/`. The final browser

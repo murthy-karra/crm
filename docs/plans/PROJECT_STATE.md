@@ -1,27 +1,35 @@
 # Project state
 
-Last updated: 2026-09-13 (Mobile 003 / 010e3 implemented and verified locally; Mobile 002 / 010e2 remains the released runtime).
+Last updated: 2026-09-13 (Mobile 003 / 010e3 published and deployed to shared development).
 This file holds current operational status, active work and live residuals.
 [PROJECT_HISTORY.md](PROJECT_HISTORY.md) preserves earlier progress, the slice
 ledger and historical measurements; its old instructions are not current work.
 
 ## Current state
 
-**Mobile 003 and 010e3 are implemented under D-078.** Terra high completed the
+**Mobile 003 and 010e3 are published and deployed under D-078 and its release
+follow-up.** Runtime source is `b37a480c5bc4cd5c711dceba287cc5bed70a71d0`.
+The [release record](../tasks/MOBILE_003_010e3_RELEASE.md) verifies all 45 schema
+checksums, 142 prior/151 upgraded tenant rowsets, exact artifacts, public HTTP,
+mobile synchronization and desktop/390px browser behavior. Only main and its
+worktree remain; the original native demo is preserved. Native distribution,
+physical phones, live FUB/customer work and activation remain separate.
+
+Terra high completed the
 shared backend, migration, iOS and Android lanes within the three-worktree limit.
 Both native clients passed actual offline/restart/replay and installed-store
 upgrade checks. Migration passed desktop/390px browser acceptance with exact
 preservation of original records. All 1,009 regular database cases have passing
 evidence; final affected admission checks, SQLx and Clippy also passed. The final
 25k-Person admission query-plan run passed bounded page and worker-claim checks;
-paired Today and ordinary Person read regressions passed. Implementation remains
-on the local integration branch, with publication and deployment pending.
+paired Today and ordinary Person read regressions passed. Release reused these
+implementation gates and needed no application-source correction.
 See the
 [coordinated plan](MOBILE_003_010e3_PARALLEL_LAUNCH.md) and
 [implementation status](../tasks/MOBILE_003_010e3_IMPLEMENTATION_STATUS.md).
 Shared development and native-demo stores remain preserved.
 
-**Mobile 002 and 010e2 are published on main and deployed to shared development
+**Mobile 002 and 010e2 were the preceding published/shared-development release
 under D-076 and its explicit release follow-up.**
 Both native clients passed encrypted-store upgrade,
 offline/restart/replay and real-API conflict/revised-receipt checks. The migration
@@ -166,10 +174,11 @@ follow-up remains open in production readiness.
 
 ## Current slice
 
-- **Mobile 003 / 010e3:** implementation and occurrence-time policy approved
-  under D-078. Terra high owns the bounded backend/native/migration lanes under
-  the coordinated plan. Current progress and checks are recorded separately in
-  the [implementation status](../tasks/MOBILE_003_010e3_IMPLEMENTATION_STATUS.md).
+- **Mobile 003 / 010e3:** implemented, verified, merged/pushed and deployed to
+  shared development under D-078 and its release follow-up. The
+  [release record](../tasks/MOBILE_003_010e3_RELEASE.md) owns current runtime and
+  preservation proof; the [implementation status](../tasks/MOBILE_003_010e3_IMPLEMENTATION_STATUS.md)
+  retains native/backend/browser and performance evidence.
 - **Mobile 002:** implementation, verification and source publication are complete.
   Terra high implemented backend/iOS/Android; both native clients passed protected
   upgrade, offline restart/replay and explicit conflict/revised-receipt checks.

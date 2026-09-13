@@ -7,7 +7,7 @@ final class LocalStore {
     private var db: OpaquePointer?
     let identity: String, context: String, url: URL
     private let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
-    init(url: URL, key: Data, identity: String, context: String, schemaTarget: Int = 6) throws {
+    init(url: URL, key: Data, identity: String, context: String, schemaTarget: Int = 7) throws {
         self.url = url; self.identity = identity; self.context = context
         guard sqlite3_open_v2(url.path, &db, SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX, nil) == SQLITE_OK else {
             sqlite3_close(db); db = nil; throw LocalError.storage
@@ -31,7 +31,7 @@ final class LocalStore {
     deinit { sqlite3_close(db) }
     private func migrate(to target: Int) throws {
         let version = Int(try rows("PRAGMA user_version").first?.first ?? "0") ?? 0
-        guard version <= 6 else { throw LocalError.invalidProtocol }
+        guard version <= 7 else { throw LocalError.invalidProtocol }
         try transaction {
             if version < 1 {
                 for sql in [
@@ -72,6 +72,17 @@ final class LocalStore {
             if version < 6 && target >= 6 {
                 try run("CREATE INDEX IF NOT EXISTS operations_person_status ON operations(status)")
                 try run("PRAGMA user_version=6")
+            }
+            // Mobile 004 keeps every earlier encrypted row byte-for-byte.  The
+            // catalog and stage qualification are separate additive state, so a
+            // same-broad-revision Mobile003 bundle can be safely replaced only
+            // after a complete new representation is downloaded and sealed.
+            if version < 7 && target >= 7 {
+                try run("ALTER TABLE bundle_qualification ADD COLUMN stage_revisions INTEGER NOT NULL DEFAULT 0")
+                try run("CREATE TABLE stage_catalogs(generation TEXT PRIMARY KEY,revision TEXT NOT NULL,complete INTEGER NOT NULL DEFAULT 0)")
+                try run("CREATE TABLE stage_catalog_stages(generation TEXT NOT NULL,id TEXT NOT NULL,name TEXT NOT NULL,position INTEGER NOT NULL,PRIMARY KEY(generation,id))")
+                try run("CREATE INDEX stage_catalog_order ON stage_catalog_stages(generation,position,id)")
+                try run("PRAGMA user_version=7")
             }
         }
     }
@@ -123,6 +134,10 @@ final class LocalStore {
                   ["reached", "no_answer", "left_message", "sent", "busy", "wrong_number"].contains(outcome),
                   validExplicitInstant(occurredAt) else { throw LocalError.invalidInput }
             payload["channel"] = .s(channel); payload["outcome"] = .s(outcome); payload["occurred_at"] = .s(occurredAt)
+        } else if draft.kind == "change_person_stage" {
+            guard let stage = draft.targetID, UUID(uuidString: stage) != nil,
+                  let expected = draft.expectedRevision, (try? revision(expected)) != nil else { throw LocalError.invalidInput }
+            payload["stage_id"] = .s(stage); payload["expected_stage_revision"] = .s(expected)
         } else if draft.kind == "add_note" {
             guard !draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw LocalError.invalidInput }
             payload["body"] = .s(draft.text)
@@ -192,6 +207,27 @@ final class LocalStore {
         try run("INSERT INTO operations(id,envelope) VALUES(?,?)", [envelope.operation_id, bytes])
         return envelope
     }
+    /// A stage selection is never an optimistic projection.  Its downloaded
+    /// baseline, proposal, immutable envelope, submitted-draft marker and
+    /// pending overlay commit together or none does.
+    @discardableResult func queueStage(person: String, baseline: Stage, stage: Stage, expected: String, superseding: String? = nil) throws -> Draft {
+        guard UUID(uuidString: person) != nil, UUID(uuidString: stage.id) != nil,
+              (try? revision(expected)) != nil else { throw LocalError.invalidInput }
+        return try transaction {
+            if let earlier = try unresolvedOperation(person: person, target: person) { throw LocalError.waitingPredecessor }
+            var draft = Draft(id: UUID().uuidString.lowercased(), person: person, kind: "change_person_stage", revision: 0,
+                              targetID: stage.id, expectedRevision: expected,
+                              baseline: .object(["id": .s(baseline.id), "name": .s(baseline.name), "stage_revision": .s(expected)]),
+                              proposal: .object(["id": .s(stage.id), "name": .s(stage.name)]))
+            draft.revision = 1
+            try run("INSERT INTO drafts VALUES(?,?)", [draft.id, try string(draft)])
+            let envelope = try insertEnvelope(kind: draft.kind, payload: .object(["person_id": .s(person), "stage_id": .s(stage.id), "expected_stage_revision": .s(expected)]))
+            if let superseding { try run("UPDATE operations SET status='superseded',error='superseded' WHERE id=? AND status='conflict'", [superseding]) }
+            draft.mode = "submitted"; draft.predecessor = envelope.operation_id; draft.revision += 1
+            try run("UPDATE drafts SET body=? WHERE id=?", [try string(draft), draft.id])
+            return draft
+        }
+    }
     func queue() throws -> [Queued] {
         try rows("SELECT envelope,status,error,receipt,overlay,attempts,retry_at FROM operations ORDER BY seq").map { row in
             let bytes = Data(row[0].utf8)
@@ -213,7 +249,7 @@ final class LocalStore {
             guard UUID(uuidString: receipt.operation_id) != nil, UUID(uuidString: receipt.resource_id) != nil,
                   (try? date(receipt.accepted_at)) != nil else { throw LocalError.invalidProtocol }
             let expected: String
-            switch op.envelope.kind { case "add_note", "edit_note": expected = "note"; case "create_task", "update_task", "complete_task": expected = "task"; case "log_contact_attempt": expected = "contact_attempt"; default: throw LocalError.invalidProtocol }
+            switch op.envelope.kind { case "add_note", "edit_note": expected = "note"; case "create_task", "update_task", "complete_task": expected = "task"; case "log_contact_attempt": expected = "contact_attempt"; case "change_person_stage": expected = "person_stage"; default: throw LocalError.invalidProtocol }
             guard receipt.resource_type == expected else { throw LocalError.invalidProtocol }
             if op.envelope.kind == "log_contact_attempt" {
                 guard receipt.committed_revision == nil, receipt.changed else { throw LocalError.invalidProtocol }
@@ -252,6 +288,11 @@ final class LocalStore {
         try transaction {
             try setMeta("staging", try string(generation))
             try appendManifest(generation.generation_id, generation.manifest)
+            if let catalog = generation.stage_catalog {
+                guard (try? revision(catalog.revision)) != nil, catalog.stages_url == "/api/mobile/v1/reconciliations/\(generation.generation_id)/stages" else { throw LocalError.invalidProtocol }
+                try run("INSERT INTO stage_catalogs(generation,revision) VALUES(?,?)", [generation.generation_id, catalog.revision])
+                try setMeta("stage_catalog_cursor", "")
+            }
         }
     }
     func appendManifest(_ generation: String, _ manifest: Manifest) throws {
@@ -264,6 +305,9 @@ final class LocalStore {
     }
     func members(_ gen: String) throws -> [(String, String)] { try rows("SELECT person,revision FROM members WHERE generation=? ORDER BY person", [gen]).map { ($0[0], $0[1]) } }
     func hasBundle(_ person: String, _ rev: String) throws -> Bool { !(try rows("SELECT 1 FROM bundles WHERE person=? AND revision=?", [person, rev])).isEmpty }
+    func hasQualifiedStageBundle(_ person: String, _ rev: String) throws -> Bool {
+        try rows("SELECT 1 FROM bundle_qualification WHERE person=? AND revision=? AND stage_revisions=1", [person, rev]).isEmpty == false
+    }
     func pages(_ gen: String, _ person: String, _ section: String) throws -> [Page] {
         try rows("SELECT body FROM pages WHERE generation=? AND person=? AND section=? ORDER BY position", [gen, person, section])
             .map { try decode(Page.self, Data($0[0].utf8)) }
@@ -284,12 +328,55 @@ final class LocalStore {
               let head = summary.first?.summary, head["id"].text == person else { throw LocalError.invalidProtocol }
         let bundle = Bundle(person: person, revision: rev, summary: head, contacts: summary.flatMap(\.items), tasks: tasks.flatMap(\.items), notes: notes.flatMap(\.items))
         try transaction {
-            try run("INSERT INTO bundles VALUES(?,?,?) ON CONFLICT(person,revision) DO NOTHING", [person, rev, try string(bundle)])
+            // Only the identical broad revision is replaced here.  Promotion
+            // still refuses to lower a newer active Person revision, while this
+            // permits the Mobile004 representation upgrade at the same revision.
+            try run("INSERT INTO bundles VALUES(?,?,?) ON CONFLICT(person,revision) DO UPDATE SET body=excluded.body", [person, rev, try string(bundle)])
             if !(try rows("SELECT 1 FROM sqlite_master WHERE type='table' AND name='bundle_qualification'")).isEmpty {
                 let versioned = notes.flatMap(\.items).allSatisfy { !$0["revision"].text.isEmpty && (try? revision($0["revision"].text)) != nil }
-                try run("INSERT INTO bundle_qualification VALUES(?,?,?) ON CONFLICT(person,revision) DO UPDATE SET notes_versioned=excluded.notes_versioned", [person, rev, versioned ? "1" : "0"])
+                let hasStageColumn = try rows("PRAGMA table_info(bundle_qualification)").contains { $0.count > 1 && $0[1] == "stage_revisions" }
+                if hasStageColumn {
+                    let stageVersioned = !head["stage_revision"].text.isEmpty && (try? revision(head["stage_revision"].text)) != nil && UUID(uuidString: head["stage"]["id"].text) != nil
+                    try run("INSERT INTO bundle_qualification(person,revision,notes_versioned,stage_revisions) VALUES(?,?,?,?) ON CONFLICT(person,revision) DO UPDATE SET notes_versioned=excluded.notes_versioned,stage_revisions=excluded.stage_revisions", [person, rev, versioned ? "1" : "0", stageVersioned ? "1" : "0"])
+                } else {
+                    try run("INSERT INTO bundle_qualification VALUES(?,?,?) ON CONFLICT(person,revision) DO UPDATE SET notes_versioned=excluded.notes_versioned", [person, rev, versioned ? "1" : "0"])
+                }
             }
         }
+    }
+    func appendStagePage(_ page: StagePage, expected: String) throws {
+        guard page.revision == expected, (try? revision(page.revision)) != nil, page.items.count <= 100,
+              page.complete == (page.next_cursor == nil) else { throw LocalError.invalidProtocol }
+        let encoded = try string(page); guard encoded.utf8.count <= 524288 else { throw LocalError.invalidProtocol }
+        try transaction {
+            guard let state = try rows("SELECT revision,complete FROM stage_catalogs WHERE generation=?", [page.generation_id]).first,
+                  state[0] == expected, state[1] == "0" else { throw LocalError.invalidProtocol }
+            var prior: (Int, String)?
+            if let row = try rows("SELECT position,id FROM stage_catalog_stages WHERE generation=? ORDER BY position DESC,id DESC LIMIT 1", [page.generation_id]).first { prior = (Int(row[0]) ?? Int.min, row[1]) }
+            for item in page.items {
+                guard UUID(uuidString: item.id) != nil, !item.name.isEmpty, item.name.utf8.count <= 1024 else { throw LocalError.invalidProtocol }
+                if let prior, (item.position, item.id) <= prior { throw LocalError.invalidProtocol }
+                prior = (item.position, item.id)
+                try run("INSERT INTO stage_catalog_stages VALUES(?,?,?,?)", [page.generation_id, item.id, item.name, String(item.position)])
+            }
+            try setMeta("stage_catalog_cursor", page.next_cursor ?? "")
+            if page.complete { try run("UPDATE stage_catalogs SET complete=1 WHERE generation=?", [page.generation_id]) }
+        }
+    }
+    func stageCatalogCursor() throws -> String? { try meta("stage_catalog_cursor") }
+    func activeStages() throws -> [Stage] {
+        guard let generation = try meta("active_stage_catalog") else { return [] }
+        return try rows("SELECT id,name,position FROM stage_catalog_stages WHERE generation=? ORDER BY position,id", [generation]).map { Stage(id: $0[0], name: $0[1], position: Int($0[2]) ?? 0) }
+    }
+    func editableStage(person: String) throws -> (Stage, String)? {
+        guard let bundle = try activeBundle(person),
+              try hasQualifiedStageBundle(person, bundle.revision), let catalog = try meta("active_stage_catalog"),
+              !(try rows("SELECT 1 FROM stage_catalogs WHERE generation=? AND complete=1", [catalog])).isEmpty,
+              let stageID = Optional(bundle.summary["stage"]["id"].text), !stageID.isEmpty,
+              let name = Optional(bundle.summary["stage"]["name"].text), !name.isEmpty,
+              let expected = Optional(bundle.summary["stage_revision"].text), (try? revision(expected)) != nil,
+              try activeStages().contains(where: { $0.id == stageID }) else { return nil }
+        return (Stage(id: stageID, name: name, position: 0), expected)
     }
 
     /// Returns only a complete, revision-qualified record.  A legacy note cache
@@ -329,6 +416,20 @@ final class LocalStore {
             try run("UPDATE drafts SET body=? WHERE id=?", [try string(changed), changed.id])
         }
     }
+    func recordStageConflict(_ operationID: String, current: CurrentStageResponse?, contextID: String, person: String) throws {
+        guard contextID == context else { throw LocalError.identityChanged }
+        try transaction {
+            try run("UPDATE operations SET status='conflict',error='revision_conflict' WHERE id=?", [operationID])
+            guard let draft = try draftForOperation(operationID) else { return }
+            guard draft.person == person else { throw LocalError.identityChanged }
+            var changed = draft; changed.mode = "conflict"
+            if let current {
+                guard current.context_id == contextID, current.person_id == person, (try? revision(current.stage_revision)) != nil else { throw LocalError.invalidProtocol }
+                changed.current = .object(["id": .s(current.stage.id), "name": .s(current.stage.name), "stage_revision": .s(current.stage_revision), "person_revision": .s(current.person_revision)])
+            }
+            changed.revision += 1; try run("UPDATE drafts SET body=? WHERE id=?", [try string(changed), changed.id])
+        }
+    }
     func markSuperseded(_ id: String) throws { try run("UPDATE operations SET status='superseded',error='superseded' WHERE id=? AND status='conflict'", [id]) }
     func discardDraft(_ id: String) throws { try run("DELETE FROM drafts WHERE id=?", [id]) }
     #if MOBILE002_QA
@@ -353,6 +454,9 @@ final class LocalStore {
         guard let stage = try generation(), seal.context_id == context, seal.generation_id == stage.generation_id,
               stage.selected_count == seal.selected_count else { throw LocalError.invalidProtocol }
         try transaction {
+            if stage.stage_catalog != nil {
+                guard let state = try rows("SELECT complete FROM stage_catalogs WHERE generation=?", [seal.generation_id]).first, state[0] == "1" else { throw LocalError.invalidProtocol }
+            }
             let selected = try members(seal.generation_id)
             guard selected.count == seal.selected_count else { throw LocalError.invalidProtocol }
             for (person, rev) in selected {
@@ -362,6 +466,7 @@ final class LocalStore {
                 }
             }
             try setMeta("active", seal.generation_id); try setMeta("today", try string(seal.today)); try setMeta("last_sync", seal.sealed_at)
+            if stage.stage_catalog != nil { try setMeta("active_stage_catalog", seal.generation_id) }
             for op in try queue() where op.overlay && op.receipt != nil {
                 if let bundle = try activeBundle(op.envelope.person), let receipt = op.receipt,
                    try revision(bundle.revision) >= revision(receipt.person_revision) {
@@ -380,6 +485,7 @@ final class LocalStore {
     }
     func discardGeneration() throws {
         try run("DELETE FROM metadata WHERE key='staging'")
+        try run("DELETE FROM metadata WHERE key='stage_catalog_cursor'")
         try reclaimCache()
     }
     /// Bounded cache-only reclamation. Never touches saved drafts or operations.
@@ -389,8 +495,10 @@ final class LocalStore {
             try run("DELETE FROM pages WHERE rowid IN (SELECT rowid FROM pages WHERE generation<>? AND generation<>? LIMIT 200)", [active, staging])
             try run("DELETE FROM members WHERE rowid IN (SELECT rowid FROM members WHERE generation<>? AND generation<>? LIMIT 1000)", [active, staging])
             try run("DELETE FROM bundles WHERE rowid IN (SELECT b.rowid FROM bundles b WHERE NOT EXISTS(SELECT 1 FROM members m WHERE m.person=b.person AND m.revision=b.revision) LIMIT 50)")
+            try run("DELETE FROM stage_catalog_stages WHERE rowid IN (SELECT s.rowid FROM stage_catalog_stages s WHERE s.generation<>? AND s.generation<>? LIMIT 200)", [active, staging])
+            try run("DELETE FROM stage_catalogs WHERE generation<>? AND generation<>?", [active, staging])
         }
-        return try rows("SELECT EXISTS(SELECT 1 FROM pages WHERE generation<>? AND generation<>?) OR EXISTS(SELECT 1 FROM members WHERE generation<>? AND generation<>?) OR EXISTS(SELECT 1 FROM bundles b WHERE NOT EXISTS(SELECT 1 FROM members m WHERE m.person=b.person AND m.revision=b.revision))", [active, staging, active, staging])[0][0] == "1"
+        return try rows("SELECT EXISTS(SELECT 1 FROM pages WHERE generation<>? AND generation<>?) OR EXISTS(SELECT 1 FROM members WHERE generation<>? AND generation<>?) OR EXISTS(SELECT 1 FROM bundles b WHERE NOT EXISTS(SELECT 1 FROM members m WHERE m.person=b.person AND m.revision=b.revision)) OR EXISTS(SELECT 1 FROM stage_catalogs WHERE generation<>? AND generation<>?)", [active, staging, active, staging, active, staging])[0][0] == "1"
     }
     func pins() throws -> [String] { try meta("pins").map { try decode([String].self, Data($0.utf8)) } ?? [] }
     func pin(_ person: String) throws {

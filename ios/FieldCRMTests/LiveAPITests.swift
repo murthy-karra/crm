@@ -3,7 +3,7 @@ import XCTest
 
 @MainActor final class LiveAPITests: XCTestCase {
     func connect(installation: String = UUID().uuidString.lowercased(), email: String = "agent@mobile.test") async throws -> (API, Bootstrap) {
-        #if MOBILE002_QA || MOBILE003_QA
+        #if MOBILE002_QA || MOBILE003_QA || MOBILE004_QA
         let api = try API(base: "http://127.0.0.1:3102")
         #else
         let api = try API(base: "http://127.0.0.1:3101")
@@ -72,6 +72,58 @@ import XCTest
         XCTAssertEqual(try store!.queue().filter { $0.status == "accepted" }.count, 100)
         XCTAssertEqual(try store!.queue()[0].bytes, stable[0])
     }
+    #if MOBILE004_QA
+    func testMobile004RealStageLostResponseReplayConflictAndCurrentRead() async throws {
+        let installation = "6a3fdca6-981a-4f20-a1fe-5bcf0d115b77"
+        let (api, boot) = try await connect(installation: installation)
+        let request: JSON = .object(["protocol": .s("mobile-v1"), "installation_id": .s(boot.installation_id), "pinned_person_ids": .array([]), "include_stage_catalog": .bool(true)])
+        let generation: Generation = try await api.call("/reconciliations", method: "POST", body: request, context: boot.context_id)
+        let catalog = try XCTUnwrap(generation.stage_catalog)
+        XCTAssertEqual(catalog.stages_url, "/api/mobile/v1/reconciliations/\(generation.generation_id)/stages")
+        var stages: [Stage] = [], cursor: String? = nil
+        repeat {
+            let suffix = cursor.map { "?cursor=" + API.cursor($0) } ?? ""
+            let page: StagePage = try await api.call("/reconciliations/\(generation.generation_id)/stages\(suffix)", context: boot.context_id)
+            XCTAssertEqual(page.revision, catalog.revision); stages += page.items; cursor = page.next_cursor
+        } while cursor != nil
+        XCTAssertFalse(stages.isEmpty)
+        // A sealed server generation is reclaimable; the locally protected
+        // outbox test below does not depend on retaining an unsealed server
+        // download reservation.
+        let _: Seal = try await api.call("/reconciliations/\(generation.generation_id)/seal", method: "POST", body: .object([:]), context: boot.context_id)
+        let person = "13e8d47a-5648-4d88-9358-fe5ed400078d"
+        let summary: Page = try await api.call("/reconciliations/\(generation.generation_id)/people/\(person)/summary", context: boot.context_id)
+        let currentID = summary.summary?["stage"]["id"].text ?? ""
+        let target = try XCTUnwrap(stages.first { $0.id != currentID })
+        let expected = try XCTUnwrap(summary.summary?["stage_revision"].text)
+        _ = try revision(expected)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("mobile004-live-" + UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true); defer { try? FileManager.default.removeItem(at: directory) }
+        var store: LocalStore? = try LocalStore(url: directory.appendingPathComponent("store.sqlite"), key: Data(repeating: 83, count: 32), identity: boot.identity, context: boot.context_id)
+        let draft = try store!.queueStage(person: person, baseline: Stage(id: currentID, name: summary.summary?["stage"]["name"].text ?? "", position: 0), stage: target, expected: expected)
+        let bytes = try XCTUnwrap(store!.queue().last?.bytes)
+        store = nil // process termination leaves the immutable operation intact.
+        store = try LocalStore(url: directory.appendingPathComponent("store.sqlite"), key: Data(repeating: 83, count: 32), identity: boot.identity, context: boot.context_id)
+        XCTAssertEqual(try store!.queue().last?.bytes, bytes); XCTAssertEqual(try store!.drafts().first { $0.id == draft.id }?.mode, "submitted")
+        api.dropNextOperationResponse = true
+        do { _ = try await api.operation(bytes, context: boot.context_id); XCTFail("accepted response is deliberately lost") } catch LocalError.lostResponse { }
+        let replay = try await api.operation(bytes, context: boot.context_id)
+        XCTAssertTrue(replay.replayed); XCTAssertEqual(replay.resource_type, "person_stage"); XCTAssertTrue(replay.changed)
+        try store!.acknowledge(replay)
+        let current = try await api.currentStage(person: person, context: boot.context_id)
+        XCTAssertEqual(current.stage.id, target.id); XCTAssertEqual(current.stage_revision, replay.committed_revision)
+
+        let (other, otherBoot) = try await connect(installation: "f3352fb4-93de-4301-9df6-9de80de12ae4", email: "second@mobile.test")
+        let otherTarget = try XCTUnwrap(stages.first { $0.id != target.id })
+        let replacement = Envelope(context_id: otherBoot.context_id, operation_id: UUID().uuidString.lowercased(), kind: "change_person_stage", device_recorded_at: stamp(), payload: .object(["person_id": .s(person), "stage_id": .s(otherTarget.id), "expected_stage_revision": .s(current.stage_revision)]))
+        _ = try await other.operation(try encode(replacement), context: otherBoot.context_id)
+        let stale = Envelope(context_id: boot.context_id, operation_id: UUID().uuidString.lowercased(), kind: "change_person_stage", device_recorded_at: stamp(), payload: .object(["person_id": .s(person), "stage_id": .s(target.id), "expected_stage_revision": .s(current.stage_revision)]))
+        do { _ = try await api.operation(try encode(stale), context: boot.context_id); XCTFail("stale stage revision must conflict") }
+        catch let error as APIError { XCTAssertEqual(error.code, "revision_conflict") }
+        let conflictCurrent = try await api.currentStage(person: person, context: boot.context_id)
+        XCTAssertEqual(conflictCurrent.stage.id, otherTarget.id)
+    }
+    #endif
     #if MOBILE003_QA
     func testMobile003RealContactReplayTwoIndependentLogsAndFutureRetention() async throws {
         // A fixed QA installation avoids consuming a new bounded server context

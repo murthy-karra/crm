@@ -12,7 +12,7 @@ final class StorageTests: XCTestCase {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     }
     override func tearDownWithError() throws { try FileManager.default.removeItem(at: directory) }
-    func open(_ name: String = "store", version: Int = 6) throws -> LocalStore {
+    func open(_ name: String = "store", version: Int = 7) throws -> LocalStore {
         try LocalStore(url: directory.appendingPathComponent(name + ".sqlite"), key: key, identity: identity, context: context, schemaTarget: version)
     }
     func draft(_ text: String = "Synthetic iOS private note") -> Draft { Draft(id: UUID().uuidString, person: person, kind: "add_note", text: text, revision: 0) }
@@ -58,12 +58,59 @@ final class StorageTests: XCTestCase {
         try old!.submit(saved)
         old = nil
         var upgraded: LocalStore? = try open()
-        XCTAssertEqual(try upgraded!.rows("PRAGMA user_version")[0][0], "6")
+        XCTAssertEqual(try upgraded!.rows("PRAGMA user_version")[0][0], "7")
         XCTAssertEqual(try upgraded!.queue().count, 1)
         XCTAssertEqual(try upgraded!.queue()[0].attempts, 0)
         try upgraded!.run("PRAGMA user_version=999"); upgraded = nil
         XCTAssertThrowsError(try open())
         XCTAssertTrue(FileManager.default.fileExists(atPath: directory.appendingPathComponent("store.sqlite").path))
+    }
+    func testMobile004StageCatalogQualificationAndAtomicProposalUpgrade() throws {
+        // This represents the opaque operation row written by the installed
+        // Mobile003 schema. Its old bundle is deliberately not synthesized by
+        // Mobile004 code; the actual installed-app upgrade is a separate UI
+        // fixture run against the archived Mobile003 source.
+        var legacy: LocalStore? = try open(version: 6)
+        let oldDraft = try legacy!.saveDraft(draft("Mobile003 immutable saved note")); _ = try legacy!.submit(oldDraft)
+        let oldBytes = try legacy!.queue().first!.bytes; legacy = nil
+
+        let store = try open()
+        XCTAssertEqual(try store.rows("PRAGMA user_version")[0][0], "7")
+        XCTAssertEqual(try store.queue().first!.bytes, oldBytes)
+        XCTAssertNil(try store.editableStage(person: person), "Old summaries cannot seed a stage CAS baseline")
+        let stageID = "55555555-5555-4555-8555-555555555555"
+        let catalog = StageCatalog(revision: "1", stages_url: "/api/mobile/v1/reconciliations/\(UUID().uuidString)/stages")
+        // Use a generation whose URL is cryptographically-shaped for the local
+        // route binding check, then promote a same-broad-revision new format.
+        let genID = UUID().uuidString.lowercased()
+        let qualified = Generation(generation_id: genID, context_id: context, evaluated_at: "2026-09-13T00:00:00Z", expires_at: "2026-09-13T00:30:00Z", complete: true, selected_count: 1, manifest: Manifest(items: [ManifestItem(person_id: person, revision: "1", reasons: ["assigned"])], next_cursor: nil, complete: true), stage_catalog: StageCatalog(revision: catalog.revision, stages_url: "/api/mobile/v1/reconciliations/\(genID)/stages"))
+        try store.begin(qualified)
+        for section in ["summary", "notes", "tasks"] {
+            let summary: JSON? = section == "summary" ? .object(["id": .s(person), "display_name": .s("Synthetic Person"), "stage_revision": .s("1"), "stage": .object(["id": .s(stageID), "name": .s("Legacy label")])]) : nil
+            try store.appendPage(Page(generation_id: genID, person_id: person, revision: "1", section: section, summary: summary, items: [], next_cursor: nil, complete: true), expected: "1")
+        }
+        try store.appendStagePage(StagePage(generation_id: genID, revision: "1", items: [Stage(id: stageID, name: "Renamed catalog label", position: 0)], next_cursor: nil, complete: true), expected: "1")
+        try store.finishBundle(genID, person, "1"); try store.promote(seal(qualified))
+        let baseline = try XCTUnwrap(store.editableStage(person: person))
+        XCTAssertEqual(baseline.0.name, "Legacy label"); XCTAssertEqual(try store.activeStages().first?.name, "Renamed catalog label")
+        let replacement = Stage(id: stageID, name: "Renamed catalog label", position: 0)
+        let proposal = try store.queueStage(person: person, baseline: baseline.0, stage: replacement, expected: baseline.1)
+        let op = try XCTUnwrap(store.queue().last)
+        XCTAssertEqual(op.envelope.kind, "change_person_stage"); XCTAssertEqual(op.envelope.payload["expected_stage_revision"].text, "1")
+        XCTAssertEqual(op.envelope.payload["stage_id"].text, stageID); XCTAssertEqual(try store.drafts().first { $0.id == proposal.id }?.mode, "submitted")
+        let receipt = Receipt(operation_id: op.id, outcome: "accepted", resource_type: "person_stage", resource_id: person, committed_revision: "1", person_revision: "1", accepted_at: stamp(), changed: false, replayed: false)
+        try store.acknowledge(receipt); XCTAssertFalse(try XCTUnwrap(store.queue().last).overlay)
+    }
+    func testMobile004StagePagesCannotPromotePartialCatalogAndCatalogCleanupKeepsActive() throws {
+        let store = try open(); let genID = UUID().uuidString.lowercased()
+        let gen = Generation(generation_id: genID, context_id: context, evaluated_at: stamp(), expires_at: stamp(Date().addingTimeInterval(1800)), complete: true, selected_count: 1, manifest: Manifest(items: [ManifestItem(person_id: person, revision: "1", reasons: [])], next_cursor: nil, complete: true), stage_catalog: StageCatalog(revision: "1", stages_url: "/api/mobile/v1/reconciliations/\(genID)/stages"))
+        try store.begin(gen)
+        for section in ["summary", "notes", "tasks"] { try store.appendPage(Page(generation_id: genID, person_id: person, revision: "1", section: section, summary: section == "summary" ? .object(["id": .s(person), "stage_revision": .s("1"), "stage": .object(["id": .s("55555555-5555-4555-8555-555555555555"), "name": .s("Lead")])]) : nil, items: [], next_cursor: nil, complete: true), expected: "1") }
+        try store.finishBundle(genID, person, "1")
+        try store.appendStagePage(StagePage(generation_id: genID, revision: "1", items: [], next_cursor: "opaque", complete: false), expected: "1")
+        XCTAssertThrowsError(try store.promote(seal(gen)))
+        XCTAssertNil(try store.meta("active_stage_catalog"))
+        try store.discardGeneration(); XCTAssertNil(try store.generation())
     }
     func testActualSQLiteFullRollsBackDraftConsumptionAndNoFalseSave() throws {
         let store = try open()
@@ -224,7 +271,7 @@ final class StorageTests: XCTestCase {
         let generation = self.generation(); try stage(old!, generation, notes: [.object(["id": .s("55555555-5555-4555-8555-555555555555"), "body": .s("Legacy readable note"), "can_manage": .bool(true)])]); try old!.promote(seal(generation))
         old = nil
         let upgraded = try open()
-        XCTAssertEqual(try upgraded.rows("PRAGMA user_version")[0][0], "6")
+        XCTAssertEqual(try upgraded.rows("PRAGMA user_version")[0][0], "7")
         XCTAssertEqual(try upgraded.queue().first?.id, legacy.operation_id)
         XCTAssertEqual(try upgraded.queue().first?.bytes, bytes)
         XCTAssertNil(try upgraded.editableRecord(person: person, type: "note", id: "55555555-5555-4555-8555-555555555555"))
@@ -305,7 +352,7 @@ final class StorageTests: XCTestCase {
         old = nil
 
         let store = try open()
-        XCTAssertEqual(try store.rows("PRAGMA user_version")[0][0], "6")
+        XCTAssertEqual(try store.rows("PRAGMA user_version")[0][0], "7")
         XCTAssertEqual(try store.queue().first?.id, prior.operation_id)
         XCTAssertEqual(try store.queue().first?.bytes, priorBytes)
 

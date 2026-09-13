@@ -2,6 +2,12 @@ import Foundation
 import SwiftUI
 import Network
 
+struct StageProposal: Identifiable {
+    let id = UUID()
+    let person: String, baseline: Stage, expected: String, superseding: String?
+    var selectedID: String
+}
+
 @MainActor final class FieldModel: ObservableObject {
     @Published var people: [Bundle] = []
     @Published var queue: [Queued] = []
@@ -27,6 +33,14 @@ import Network
     var pendingCount: Int { queue.filter { $0.status != "accepted" }.count }
     var pendingContactCount: Int { queue.filter { $0.isContact && $0.status != "accepted" }.count }
     var canLogContact: Bool { unlocked && (credential?.bootstrap.capabilities.contains("log_contact_attempt") ?? false) }
+    private var stageCapabilitiesReady: Bool {
+        guard let capabilities = credential?.bootstrap.capabilities else { return false }
+        return ["change_person_stage", "stage_revisions", "stage_catalog"].allSatisfy(capabilities.contains)
+    }
+    var canChangeStage: Bool {
+        guard unlocked, stageCapabilitiesReady, let store else { return false }
+        return (try? store.activeStages().isEmpty == false) ?? false
+    }
     #if MOBILE002_QA
     @Published var qaFixtureStage = "not requested"
     @Published var qaMigrationStage = "not inspected"
@@ -91,7 +105,7 @@ import Network
         return try SecureStorage.directory(synthetic: synthetic)
     }
     private var qaBaseURL: String {
-        #if MOBILE002_QA || MOBILE003_QA
+        #if MOBILE002_QA || MOBILE003_QA || MOBILE004_QA
         return "http://127.0.0.1:3102"
         #else
         return "http://127.0.0.1:3101"
@@ -314,6 +328,31 @@ import Network
                               contactChannel: operation.envelope.payload["channel"].text, contactOutcome: operation.envelope.payload["outcome"].text,
                               occurredAt: operation.envelope.payload["occurred_at"].text, deviceRecordedAt: now))
     }
+    func stageBaseline(person: String) throws -> (Stage, String) {
+        guard validateAccess(), stageCapabilitiesReady, let store, let baseline = try store.editableStage(person: person) else { throw LocalError.invalidInput }
+        return baseline
+    }
+    func availableStages() -> [Stage] { (try? store?.activeStages()) ?? [] }
+    func displayedStageName(_ bundle: Bundle) -> String {
+        let id = bundle.summary["stage"]["id"].text
+        return (try? store?.activeStages().first(where: { $0.id == id })?.name) ?? bundle.summary["stage"]["name"].text
+    }
+    func queueStage(person: String, baseline: Stage, expected: String, proposal: Stage, superseding: String? = nil) throws {
+        guard validateAccess(), stageCapabilitiesReady, let store else { throw LocalError.locked }
+        guard try store.activeStages().contains(where: { $0.id == proposal.id }) else { throw LocalError.invalidInput }
+        _ = try store.queueStage(person: person, baseline: baseline, stage: proposal, expected: expected, superseding: superseding)
+        try reload(); message = "Stage proposal saved on device. The server stage and Today remain unchanged until it is accepted."; Task { await sync() }
+    }
+    func newStageProposal(person: String) throws -> StageProposal {
+        let baseline = try stageBaseline(person: person)
+        return StageProposal(person: person, baseline: baseline.0, expected: baseline.1, superseding: nil, selectedID: baseline.0.id)
+    }
+    func revisedStageProposal(_ draft: Draft) throws -> StageProposal {
+        guard draft.kind == "change_person_stage", let current = draft.current,
+              let expected = Optional(current["stage_revision"].text), (try? revision(expected)) != nil,
+              let id = Optional(current["id"].text), !id.isEmpty, let name = Optional(current["name"].text), !name.isEmpty else { throw LocalError.invalidProtocol }
+        return StageProposal(person: draft.person, baseline: Stage(id: id, name: name, position: 0), expected: expected, superseding: draft.predecessor, selectedID: draft.targetID ?? id)
+    }
     func startEdit(person: String, type: String, record: JSON) throws -> Draft {
         guard validateAccess(), let store, let id = Optional(record["id"].text), !id.isEmpty,
               let expected = Optional(record["revision"].text), !expected.isEmpty, record["can_manage"].flag else { throw LocalError.invalidInput }
@@ -393,6 +432,10 @@ import Network
                     message = "Contact logging is unavailable for this account. Saved contact work remains protected."
                     continue
                 }
+                if op.isStage && !stageCapabilitiesReady {
+                    message = "Stage changes are unavailable for this account. Saved stage work remains protected."
+                    continue
+                }
                 do {
                     let receipt = try await api.operation(op.bytes, context: credential.bootstrap.context_id)
                     try current(run); try store.acknowledge(receipt); try reload()
@@ -406,6 +449,15 @@ import Network
                     }
                     if error.code == "revision_conflict" {
                         var currentRecord: JSON? = nil
+                        if op.isStage {
+                            var currentStage: CurrentStageResponse? = nil
+                            if let draft = try store.draftForOperation(op.id) {
+                                do { currentStage = try await api.currentStage(person: draft.person, context: credential.bootstrap.context_id); try current(run) }
+                                catch { /* Preserve the stage proposal if a conflict baseline is unavailable. */ }
+                            }
+                            try store.recordStageConflict(op.id, current: currentStage, contextID: credential.bootstrap.context_id, person: op.envelope.person)
+                            try reload(); continue
+                        }
                         if let draft = try store.draftForOperation(op.id), let target = draft.targetID {
                             do {
                                 let currentResponse = draft.kind == "edit_note" ? try await api.currentNote(person: draft.person, note: target, context: credential.bootstrap.context_id) : try await api.currentTask(person: draft.person, task: target, context: credential.bootstrap.context_id)
@@ -464,7 +516,10 @@ import Network
             try store.discardGeneration(); generation = nil
         }
         if generation == nil {
-            let fresh: Generation = try await api.call("/reconciliations", method: "POST", body: .object(["protocol": .s("mobile-v1"), "installation_id": .s(installation), "pinned_person_ids": .array(try store.pins().map(JSON.s))]), context: boot.context_id)
+            var request: [String: JSON] = ["protocol": .s("mobile-v1"), "installation_id": .s(installation), "pinned_person_ids": .array(try store.pins().map(JSON.s))]
+            if stageCapabilitiesReady { request["include_stage_catalog"] = .bool(true) }
+            let fresh: Generation = try await api.call("/reconciliations", method: "POST", body: .object(request), context: boot.context_id)
+            if stageCapabilitiesReady && fresh.stage_catalog == nil { throw LocalError.invalidProtocol }
             try current(run); try store.begin(fresh); generation = fresh
         }
         guard let gen = generation else { throw LocalError.invalidProtocol }
@@ -474,10 +529,22 @@ import Network
         }
         let members = try store.members(gen.generation_id)
         guard members.count == gen.selected_count else { throw LocalError.invalidProtocol }
+        if let catalog = gen.stage_catalog {
+            while true {
+                let cursor = try store.stageCatalogCursor() ?? ""
+                let suffix = cursor.isEmpty ? "" : "?cursor=" + API.cursor(cursor)
+                let page: StagePage = try await api.call("/reconciliations/\(gen.generation_id)/stages\(suffix)", context: boot.context_id)
+                try current(run)
+                guard page.generation_id == gen.generation_id else { throw LocalError.invalidProtocol }
+                try store.appendStagePage(page, expected: catalog.revision)
+                if page.complete { break }
+            }
+        }
         for (index, (person, rev)) in members.enumerated() {
             try current(run)
             message = "Downloading \(index + 1) of \(members.count) people. Previous workspace remains available."
-            if try store.hasBundle(person, rev) { continue }
+            let hasQualifiedRepresentation = gen.stage_catalog == nil ? true : (try store.hasQualifiedStageBundle(person, rev))
+            if try store.hasBundle(person, rev), hasQualifiedRepresentation { continue }
             for section in ["summary", "notes", "tasks"] {
                 while true {
                     let prior = try store.pages(gen.generation_id, person, section)

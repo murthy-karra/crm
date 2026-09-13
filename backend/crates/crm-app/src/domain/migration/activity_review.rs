@@ -114,10 +114,7 @@ async fn begin<'a>(
     if organization.get::<String, _>("workspace_mode") != "migration_review" {
         return Err(ReviewError::NotFound);
     }
-    let parent = sqlx::query(REVIEW_BINDING_SQL)
-        .bind(org.0)
-        .bind(person.0)
-        .fetch_optional(&mut *tx)
+    let parent = review_binding(&mut tx, org, person)
         .await?
         .ok_or(ReviewError::NotFound)?;
     let activity_revision: i64 = sqlx::query_scalar(REVIEW_REVISION_SQL)
@@ -144,6 +141,42 @@ JOIN migration_import_result r ON r.organization_id=d.organization_id AND r.impo
 JOIN person p ON p.organization_id=d.organization_id AND p.id=d.target_id
 WHERE w.organization_id=$1 AND p.id=$2 AND i.confirmed_plan_id=w.plan_id
  AND r.disposition IN ('imported','already_imported')"#;
+/// Original imports retain their existing binding and read path. An admitted
+/// Person is bound through its own successful result, exact sealed item and
+/// global identity to the same current review workspace. Cancelled admissions
+/// can retain committed People; run completion is deliberately not required.
+pub(super) async fn review_binding(
+    tx: &mut Transaction<'_, Postgres>,
+    org: OrganizationId,
+    person: PersonId,
+) -> Result<Option<PgRow>, sqlx::Error> {
+    let original = sqlx::query(REVIEW_BINDING_SQL)
+        .bind(org.0)
+        .bind(person.0)
+        .fetch_optional(&mut **tx)
+        .await?;
+    if original.is_some() {
+        return Ok(original);
+    }
+    sqlx::query(r#"SELECT w.import_id,a.newer_snapshot_id AS snapshot_id
+FROM migration_workspace w
+JOIN migration_import i ON i.id=w.import_id AND i.organization_id=w.organization_id AND i.confirmed_plan_id=w.plan_id
+JOIN migration_import_identity d ON d.organization_id=w.organization_id AND d.import_id=w.import_id
+ AND d.plan_id=w.plan_id AND d.source_account_id=i.source_account_id AND d.family='people'
+JOIN migration_people_admission a ON a.id=d.admission_id AND a.organization_id=d.organization_id
+ AND a.parent_import_id=w.import_id AND a.parent_plan_id=w.plan_id AND a.source_account_id=d.source_account_id
+JOIN migration_people_admission_item m ON m.id=d.admission_item_id AND m.admission_id=a.id AND m.organization_id=a.organization_id
+ AND m.plan_id=a.confirmed_admission_plan_id AND m.prospective_person_id=d.target_id AND m.source_id=d.source_id AND m.disposition='settled'
+JOIN migration_people_admission_result r ON r.id=d.admission_result_id AND r.id=m.settled_result_id
+ AND r.admission_id=a.id AND r.item_id=m.id AND r.organization_id=a.organization_id
+ AND r.person_id=d.target_id AND r.source_id=d.source_id AND r.disposition='settled'
+JOIN person p ON p.id=d.target_id AND p.organization_id=d.organization_id
+WHERE w.organization_id=$1 AND p.id=$2"#)
+        .bind(org.0)
+        .bind(person.0)
+        .fetch_optional(&mut **tx)
+        .await
+}
 pub const REVIEW_REVISION_SQL: &str = "SELECT COALESCE(sum(activity_revision),0)::bigint FROM migration_activity_import WHERE organization_id=$1";
 pub const REVIEW_COUNTS_SQL: &str = r#"SELECT
  (SELECT count(*) FROM note WHERE organization_id=$1 AND person_id=$2 AND deleted_at IS NULL) AS notes,

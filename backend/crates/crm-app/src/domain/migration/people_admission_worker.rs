@@ -748,16 +748,7 @@ async fn settle_hold(
         .get::<Option<String>, _>("source_id")
         .unwrap_or_else(|| item.get("source_key"));
     let bytes = (source.len() + disposition.len()) as i64;
-    let reservation = s::reserve(
-        tx,
-        org,
-        id,
-        "work",
-        Some(lease),
-        bytes.max(1),
-        policy,
-    )
-    .await?;
+    let reservation = s::reserve(tx, org, id, "work", Some(lease), bytes.max(1), policy).await?;
     let result = Uuid::new_v4();
     sqlx::query("INSERT INTO migration_people_admission_result(id,admission_id,item_id,organization_id,source_id,disposition,actor_user_id) SELECT $1,$2,$3,$4,COALESCE(source_id,source_key),$5,initiated_by_user_id FROM migration_people_admission_item i JOIN migration_people_admission a ON a.id=i.admission_id WHERE i.id=$3").bind(result).bind(id).bind(item.get::<Uuid,_>("id")).bind(org.0).bind(disposition).execute(&mut **tx).await?;
     sqlx::query("UPDATE migration_people_admission_item SET disposition=$3,settled_result_id=$4,settled_at=clock_timestamp() WHERE id=$1 AND admission_id=$2").bind(item.get::<Uuid,_>("id")).bind(id).bind(disposition).bind(result).execute(&mut **tx).await?;

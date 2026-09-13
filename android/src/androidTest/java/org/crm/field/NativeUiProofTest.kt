@@ -68,7 +68,7 @@ class NativeUiProofTest {
         compose.onNodeWithTag("people-search").performTextInput("020")
         val person =
             repository.ui.value.people.single {
-                org.json.JSONObject(it.summary).optString("last_name") == "020"
+            org.json.JSONObject(it.summary).optString("last_name") == "099"
             }
         compose.onNodeWithTag("person-${person.id}").performScrollTo().performClick()
         compose.waitUntil { repository.ui.value.person != null }
@@ -150,7 +150,7 @@ class NativeUiProofTest {
         compose.onNodeWithTag("people-search").performTextInput("020")
         val person =
             repository.ui.value.people.single {
-                org.json.JSONObject(it.summary).optString("last_name") == "020"
+            org.json.JSONObject(it.summary).optString("last_name") == "099"
             }
         compose.onNodeWithTag("person-${person.id}").performScrollTo().performClick()
         compose.waitUntil { repository.ui.value.person != null }

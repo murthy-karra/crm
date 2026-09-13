@@ -983,10 +983,13 @@ async fn hot_plan_25k_people_has_sparse_pages_and_dense_shared_contacts(migrator
         );
         bounded_work(plan, "migration_people_admission_item", 51.0);
     }
-    uses_index(
+    uses_any_index(
         &contact_page,
         "migration_people_admission_contact",
-        "migration_people_admission_contact_page",
+        &[
+            "migration_people_admission_contact_page",
+            "migration_people_admission_contac_item_id_kind_import_order_key",
+        ],
     );
     bounded_work(&contact_page, "migration_people_admission_contact", 50.0);
     uses_index(

@@ -169,3 +169,9 @@ did stop on that test; this record does not report the stopped invocation as a
 successful full run. `final-gate-inventory.json` under the private evidence
 directory records test counts and SHA-256 log hashes. The final 15 are a subset
 of those 1,009 cases, not additional cases.
+
+The final [25k-Person query-plan fixture](SLICE_010e3_QUERY_VERIFICATION.md)
+passed on the final compiled source: 1/1 in 14.18 seconds. Earlier final setup
+attempts timed out while OrbStack was suspended during macOS background sleep;
+the passing run followed a temporary wake helper, without a service restart.
+This plan proof verifies examined-row bounds, not production throughput.

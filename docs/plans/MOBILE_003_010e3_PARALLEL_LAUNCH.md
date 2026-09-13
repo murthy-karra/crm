@@ -5,6 +5,11 @@ specifications and Mobile 003's occurrence-time policy after D-077 planning.
 Use Terra high and the three-worktree sequence below. Mobile 002 / 010e2 remains
 the released runtime; new implementation uses isolated synthetic resources.
 
+**Implementation closeout — 2026-09-13:** The sequence below is complete. The
+[implementation record](../tasks/MOBILE_003_010e3_IMPLEMENTATION_STATUS.md)
+contains native/browser acceptance, database, query-plan and paired regression
+evidence. Publication and deployment remain later release actions.
+
 ## Deliverables
 
 | Work | Specification / brief | Outcome |

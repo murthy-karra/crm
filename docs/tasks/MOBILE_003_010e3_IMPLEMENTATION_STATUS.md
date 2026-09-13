@@ -1,10 +1,10 @@
 # Mobile 003 / 010e3 — Implementation status
 
-**Native, browser and regular database acceptance passed; final query-plan check in progress —
-2026-09-13.** D-078 accepts both contracts and Mobile 003's occurrence-time policy.
+**Implemented and verified locally — 2026-09-13.** D-078 accepts both contracts
+and Mobile 003's occurrence-time policy.
 Terra high implemented the parallel lanes; the coordinator integrated the shared
-contracts and verified actual native/browser outcomes. The remaining check is
-the final 25k-Person admission query-plan fixture.
+contracts and verified actual native/browser outcomes. All required local
+implementation gates are complete; release actions remain separate.
 
 The local integration branch is `codex/mobile003-010e3-integration`, based on
 `619c1b3` plus approved planning documents. Main merge, push, shared deployment,
@@ -37,7 +37,7 @@ mobile distribution, live FUB processing and customer activation are separate.
 | Migration backend | Retained-source execution, cancellation/remainder, budget/lease/authority fencing, immutable identity/plan, scoped DB permits, executable readiness/partial-schema rejection, exact Unicode/contact/cursor traversal and atomic rollback. Four additional adversarial PostgreSQL tests passed. [Record](SLICE_010e3_VERIFICATION.md), [negative cases](SLICE_010e3_ADVERSARIAL_VERIFICATION.md). |
 | Actual browser | Production Web build and production router/commands/worker with explicit synthetic harness readiness; desktop 1280/390px preview → confirm → partial cancellation → new remainder → both Person profiles/history/provenance → reload/logout. Exact 63-KiB Unicode source and 56-contact traversal passed. [Record](SLICE_010e3_VERIFICATION.md#actual-browser-acceptance). |
 | Preservation | Final browser fixture: two new People, two identities/results/provenance/admission facts, 57 contacts, zero Inquiries, zero remaining reservations. Original People, contacts, parent, mappings and results had identical canonical row-byte fingerprints before and after. |
-| Performance | Paired Today passed (baseline p95 122.84 ms, current 131.89 ms). Quiet paired ordinary Person read passed (baseline p95 21.40 ms, current 22.50 ms, allowed 46.40 ms) with equal responses on 25k People/50 members. First loaded-machine Person run failed and remains recorded. These are laptop regression checks. |
+| Performance | Paired Today passed (baseline p95 122.84 ms, current 131.89 ms). Quiet paired ordinary Person read passed (baseline p95 21.40 ms, current 22.50 ms, allowed 46.40 ms) with equal responses on 25k People/50 members. First loaded-machine Person run failed and remains recorded. Final admission EXPLAIN fixture passed on 25k native People/50 members: sparse and cancelled item ranges ≤51 examined rows, dense contacts ≤50, keyset/identity/original-presence/worker claim ≤1. [Query record](SLICE_010e3_QUERY_VERIFICATION.md). These are laptop regression checks. |
 | Repository/Web | Combined `scripts/check` passed: 981 nonignored Rust tests, 5 doctests, 44 preflight tests, 90 Web files/1212 tests, 11 email-worker tests, format/lint/type/build checks. After browser fixes, the full Web run passed 90 files/1215 tests; affected typecheck/lint/build passed. |
 | Database | All 1,009 regular cases have passing evidence: 136 initial passes plus 873 remaining/corrected cases. The initial run stopped on a test comparing separate app and Docker clocks; the repaired test observes lock contention and samples the app clock. Exact test-selection and log-hash manifests preserve the distinct passes. After the final paging/index change, all 15 affected admission cases passed again, as did fresh-schema SQLx `prepare --check --workspace` and workspace Clippy with warnings denied. |
 
@@ -45,7 +45,7 @@ mobile distribution, live FUB processing and customer activation are separate.
 
 The mobile backend and both native worktrees have been integrated and closed.
 The Web lane was integrated and its worktree closed after actual browser testing.
-The final migration worktree remains until database/query-plan closeout. No
+The final migration lane is verified for integration and worktree closure. No
 shared API3000/Web5173/demoAPI3101 process or root build artifact was replaced.
 
 Private synthetic runtime/database/build evidence is retained under
@@ -53,6 +53,12 @@ Private synthetic runtime/database/build evidence is retained under
 API3103/Web5174 processes were stopped and the temporary browser closed after
 acceptance. Both browser fixture databases remain available for inspection;
 ordinary installed native stores and shared development databases are intact.
+
+The final query-plan attempts initially failed before the test body because
+OrbStack was suspended during macOS background sleep. A temporary wake helper
+restored database availability without restarting containers or shared services.
+The final current-binary test passed 1/1 in 14.18 seconds; failed setup logs are
+retained separately. The helper is stopped after the active verification work.
 
 Physical phones and real cellular testing remain deferred by the user's choice.
 Broad mobile design work, production capacity, customer readiness, publication,

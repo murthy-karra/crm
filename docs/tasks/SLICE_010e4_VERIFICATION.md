@@ -125,3 +125,69 @@ large-test-binary unwind warning. This is not final-tree execution evidence.
 Remaining: final targeted worker regressions and review disposition; integrated
 browser and row/byte reconciliation; one 25k hot-plan and paired Person read pass;
 repository, SQLx and DB gates.
+
+
+## Reviewed browser and proof evidence
+
+The second/final independent review is **code READY at `872e896`, contingent on
+verification**. No third review was opened. The coordinator's reviewed test build
+passed in 2m02s (`integration/reviewed-candidate-build.log`); its copied executable
+and SHA are `migration/api-bin/admitted-ui-reviewed` and
+`migration/reviewed-api.sha256`. Production refresh code is `872e896`; subsequent
+lane changes through `c5e1f9c` add/correct test fixtures. The eight proof/read/
+availability cases passed in 45.67 seconds (`integration/final-proof-read-db.log`),
+including mixed already-current native/identity/source loss, initial identity holds
+without B, omitted instructions across successive B, recovery and exact schema
+readiness. Later test additions for numeric primary order and immutable admission
+fact/provenance bytes remain part of the final DB gate.
+
+The existing saved QA fixture was normally migrated through `00007`–`00010`.
+Its ready preview and settled count remained unchanged; 108 table fingerprints
+matched. The receipt digest added exactly 32 bytes to the feature/snapshot/
+Organization ledgers, with reservations unchanged. Evidence:
+`migration/retained-preview-proof-upgrade.log`, `proof-upgrade-verification.json`
+and `physical-after-proof-upgrade.jsonl`.
+
+Actual production-Web/API browser acceptance passed at desktop and 390px:
+re-preview, paged comparison, exact confirmation, one business update, cancellation,
+exact-report remainder, completion, settled/held filters, original admission
+provenance and return navigation. Every successful traversal had zero page errors
+and document width equal to the 390px viewport. The original ready resource
+`95757f18-78a2-4c64-a919-9141f5a6596d` is now cancelled with two outcomes (one
+business update and one local hold); remainder
+`be9bd2be-7c35-4abf-96c1-511a1973f477` completed with one update, one verified no-op
+and one local hold. Exactly two People were updated across both resources.
+
+Evidence: `migration/browser-repreview-reviewed.log`, `browser-confirm-first.log`,
+`browser-cancel-reviewed.log`, `browser-remainder-reviewed.log`,
+`browser-confirm-remainder.log`, `browser-completed-reviewed.log`,
+`browser-provenance-canonical.log` and `worker-step-trace.jsonl`. The first
+provenance-link check exposed an incorrect `/migration` redirect that discarded
+its fragment. `53f60c4` uses the canonical named route; the actual browser retest
+passed. Earlier failures remain in `browser-provenance-reviewed.log` and
+`browser-provenance-final.log`.
+
+Exact reconciliation (`migration/final-browser-reconciliation.json`,
+`physical-final.jsonl`, `native-final.jsonl`, `preservation-final.jsonl`) verifies
+69,791 and 95,309 physical/recorded bytes for the two resources, zero reservations,
+and an equal 139,447-byte increase in feature/snapshot/Organization ledgers since
+the proof-column upgrade. All 108 compared table fingerprints reconcile. Snapshot
+byte counters are audited separately. The existing history read-model revisions
+increase from the authorized Person/contact writes; their exact increments are
+reconstructed from settled contact rows using the existing triggers, preserving
+all counters and source history payloads (`history-read-model-reconciliation.sql`
+and `.json`). They are not silently discarded from the preservation comparison.
+
+Person106 has 57 ordered contacts; Person107 retains its distinct shared address;
+Person108 retains its local name and no contacts. The retained browser fixture
+used Boolean `isPrimary`, which the existing numeric-only source contract marks
+unqualified and therefore preserves source order: contact1 is primary here.
+The earlier expectation of contact57 was a fixture-audit error, not a passing
+numeric-primary claim. Numeric `0`/`1` primary selection and later omitted-contact
+preservation are covered by the expanded commit-proof regression in the final
+DB gate. No retained fixture payload was rewritten to change this outcome.
+
+The first repository gate stopped on `large_enum_variant` and a test module placed
+before production items (`integration/final-check.log`). `53f60c4` boxes the internal
+source record and moves the digest test module; the corrected gate is running.
+Final focused lane cases, D-050 performance, repository, SQLx and DB gates remain.

@@ -2,6 +2,9 @@ package org.crm.field
 
 import java.math.BigInteger
 import java.time.Instant
+import java.time.LocalDateTime
+import java.time.OffsetDateTime
+import java.time.ZoneId
 import java.util.UUID
 import org.json.JSONArray
 import org.json.JSONObject
@@ -22,6 +25,13 @@ fun revision(value: String): String = value.also { require(it.matches(Regex("[1-
 
 fun revisionAtLeast(left: String, right: String) =
     BigInteger(revision(left)) >= BigInteger(revision(right))
+
+/**
+ * Resolve a wall-clock choice without silently choosing a daylight-saving offset. An empty list
+ * is a nonexistent local time; two entries require the person using the app to choose explicitly.
+ */
+fun resolveReportedLocal(local: LocalDateTime, zone: ZoneId): List<OffsetDateTime> =
+    zone.rules.getValidOffsets(local).map { OffsetDateTime.of(local, it) }
 
 /** Pure clock boundary: no wall-clock extension, reboot or backward-time recovery. */
 data class LeaseClock(val boot: Int, val elapsed: Long, val duration: Long, val lastWall: Long) {
@@ -62,6 +72,13 @@ class Binding(
         val capabilities = JSONObject(bootstrap).getJSONArray("capabilities")
         return listOf("edit_note", "update_task", "note_revisions").all { wanted ->
             (0 until capabilities.length()).any { capabilities.getString(it) == wanted }
+        }
+    }
+
+    fun supportsContactLogging(): Boolean {
+        val capabilities = JSONObject(bootstrap).getJSONArray("capabilities")
+        return (0 until capabilities.length()).any {
+            capabilities.getString(it) == "log_contact_attempt"
         }
     }
     companion object {
@@ -106,6 +123,8 @@ fun errorMessage(code: String): String =
         "not_found" ->
             "This item is unavailable. The saved action is preserved; it will not be recreated."
         "forbidden" -> "This action is no longer permitted. Its input is preserved."
+        "contact_time_in_future" ->
+            "The reported contact time is later than the server clock. Correct the time to create a new saved contact; the original is preserved."
         "dependency_pending" -> "Waiting for the original task creation."
         "generation_changed",
         "generation_expired" ->

@@ -4,7 +4,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
+use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
 use crate::domain::commands::CommandError;
@@ -98,6 +98,30 @@ pub struct LogContactAttempt {
     pub outcome: ContactOutcome,
 }
 
+/// A validated manual-contact input for a caller that already owns a
+/// transaction.  The ordinary Web/Operator command continues to choose its
+/// existing server clock; Mobile 003 is the narrow D-078 exception that
+/// supplies an explicitly reported occurrence instant and a separately
+/// sampled server recording instant.
+pub struct LogContactAttemptInTransaction {
+    pub person_id: PersonId,
+    pub channel: ContactChannel,
+    pub outcome: ContactOutcome,
+    pub occurred_at: DateTime<Utc>,
+    /// `None` preserves the legacy fact-table default (`now()`).  A mobile
+    /// caller passes the server clock sampled after its required locks.
+    pub recorded_at: Option<DateTime<Utc>>,
+}
+
+/// The inserted fact's identity and clocks, available before a caller-owned
+/// transaction commits. This stays separate from the pre-existing Web
+/// response shape, which exposes only the occurrence time.
+#[derive(Debug, Clone)]
+pub struct LoggedContactAttemptInTransaction {
+    pub attempt: ContactAttemptRef,
+    pub recorded_at: DateTime<Utc>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct ContactAttemptRef {
     pub id: Uuid,
@@ -152,21 +176,22 @@ async fn log_contact_attempt_attempt(
 ) -> Result<(PersonSummary, ContactAttemptRef), CommandError> {
     let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
 
+    // Preserve the legacy wrapper's error and clock ordering: a missing or
+    // foreign Person fails before any clock is sampled, and a successful
+    // occurrence time is taken only after its Organization-scoped row lock.
+    // The transaction-compatible core reuses this held lock when it inserts.
     person_queries::lock_person(&mut tx, cmd.person_id, ctx.organization_id)
         .await?
         .ok_or(CommandError::PersonNotFound)?;
-
     let occurred_at = Utc::now();
-    let envelope = FactEnvelope::for_command(ctx, occurred_at);
-
-    let fact_id = facts::insert_contact_attempted(
+    let logged = log_contact_attempt_in_transaction(
         &mut tx,
-        &envelope,
-        ContactAttemptedFact {
+        ctx,
+        LogContactAttemptInTransaction {
             person_id: cmd.person_id,
             channel: cmd.channel,
             outcome: cmd.outcome,
-            corrects_id: None,
+            occurred_at,
             recorded_at: None,
         },
     )
@@ -189,15 +214,49 @@ async fn log_contact_attempt_attempt(
         .publish_after_commit(Publication::for_event(event))
         .await;
 
-    Ok((
-        summary,
-        ContactAttemptRef {
-            id: fact_id,
+    Ok((summary, logged.attempt))
+}
+
+/// Writes exactly one original manual contact fact into a caller-owned
+/// transaction.  It deliberately does not commit or publish: the mobile
+/// operation receipt must commit beside this row, while normal wrappers keep
+/// their established independent transaction and publication behavior.
+///
+/// The caller supplies only validated contact fields and a server-derived
+/// [`CommandContext`].  The Person lock is organization-scoped so a foreign
+/// or removed target is indistinguishable from a missing target.
+pub async fn log_contact_attempt_in_transaction(
+    conn: &mut PgConnection,
+    ctx: &CommandContext,
+    cmd: LogContactAttemptInTransaction,
+) -> Result<LoggedContactAttemptInTransaction, CommandError> {
+    person_queries::lock_person(conn, cmd.person_id, ctx.organization_id)
+        .await?
+        .ok_or(CommandError::PersonNotFound)?;
+
+    let envelope = FactEnvelope::for_command(ctx, cmd.occurred_at);
+    let inserted = facts::insert_contact_attempted(
+        conn,
+        &envelope,
+        ContactAttemptedFact {
+            person_id: cmd.person_id,
             channel: cmd.channel,
             outcome: cmd.outcome,
-            occurred_at,
+            corrects_id: None,
+            recorded_at: cmd.recorded_at,
         },
-    ))
+    )
+    .await?;
+
+    Ok(LoggedContactAttemptInTransaction {
+        attempt: ContactAttemptRef {
+            id: inserted.id,
+            channel: cmd.channel,
+            outcome: cmd.outcome,
+            occurred_at: cmd.occurred_at,
+        },
+        recorded_at: inserted.recorded_at,
+    })
 }
 
 #[cfg(test)]

@@ -19,6 +19,7 @@ class FieldUi(
     val person: PersonRow? = null,
     val operations: List<OperationRow> = emptyList(),
     val drafts: List<DraftRow> = emptyList(),
+    val contactDrafts: List<ContactDraftRow> = emptyList(),
     val today: String? = null,
     val lastSync: String = "Never",
     val coverage: String = "No complete download",
@@ -26,6 +27,7 @@ class FieldUi(
     val displayName: String = "",
     val pendingCount: Int = 0,
     val editsEnabled: Boolean = false,
+    val contactLoggingEnabled: Boolean = false,
     val editContexts: List<EditContextRow> = emptyList(),
 )
 
@@ -222,7 +224,9 @@ class FieldRepository(
                         val count =
                             old.store.dao.operations().count {
                                 it.status !in listOf("accepted", "covered")
-                            } + old.store.dao.drafts().size
+                            } +
+                                old.store.dao.drafts().size +
+                                old.store.dao.contactDrafts().count { it.operation.isEmpty() }
                         registry.put("pending", count)
                         if (signingOut) old.store.lock()
                     }
@@ -304,6 +308,69 @@ class FieldRepository(
             FieldSyncJob.schedule(context)
             result
         }
+
+    suspend fun contactDraft(id: String): ContactDraftRow? =
+        withContext(Dispatchers.IO) {
+            val account = active ?: throw AccessLocked()
+            check(account)
+            account.store.dao.contactDraft(id)?.also {
+                if (account.store.dao.person(it.person) == null) throw AccessLocked()
+            }
+        }
+
+    suspend fun saveContactDraft(
+        id: String,
+        person: String,
+        channel: String,
+        outcome: String,
+        occurredAt: String,
+        resolvedOffset: String,
+        revision: Long = 0,
+    ): ContactDraftRow =
+        withContext(Dispatchers.IO) {
+            val account = active ?: throw AccessLocked()
+            check(account)
+            try {
+                account.store
+                    .saveContactDraft(
+                        id,
+                        person,
+                        channel,
+                        outcome,
+                        occurredAt,
+                        resolvedOffset,
+                        revision,
+                    )
+                    .also { refreshView("Contact draft saved on this device") }
+            } catch (error: Exception) {
+                if (error is AccessLocked) throw error
+                throw StorageFailure()
+            }
+        }
+
+    suspend fun submitContactDraft(id: String, revision: Long): OperationRow =
+        withContext(Dispatchers.IO) {
+            val account = active ?: throw AccessLocked()
+            check(account)
+            if (!account.store.binding.supportsContactLogging())
+                throw ApiFailure(409, "contact_logging_unsupported")
+            account.store.submitContactDraft(id, revision).also {
+                refreshView("Contact saved on this device. Waiting for server acceptance.")
+                FieldSyncJob.schedule(context)
+            }
+        }
+
+    suspend fun reviseFutureContact(operation: String): ContactDraftRow =
+        withContext(Dispatchers.IO) {
+            val account = active ?: throw AccessLocked()
+            check(account)
+            account.store.reviseFutureContact(operation).also {
+                refreshView("Correct the reported time in a new contact draft")
+            }
+        }
+
+    suspend fun contactLoggingSupported(): Boolean =
+        withContext(Dispatchers.IO) { active?.store?.binding?.supportsContactLogging() == true }
 
     suspend fun complete(person: String, task: JSONObject? = null, creation: String? = null) =
         withContext(Dispatchers.IO) {
@@ -550,6 +617,8 @@ class FieldRepository(
                     clock.elapsed() + delay * 1000,
                     code,
                 )
+                if (row.kind == "log_contact_attempt")
+                    dao.contactState(row.id, if (retry) "saved" else "attention", code)
                 if (retry) throw error
             }
         }
@@ -648,11 +717,21 @@ class FieldRepository(
                         }
                 val drafts =
                     dao.drafts().map { if (it.person in visibleIds) it else it.copy(payload = "") }
+                val contacts =
+                    dao.contactDrafts().map {
+                        if (it.person in visibleIds) it
+                        else it.copy(occurredAt = "", resolvedOffset = "")
+                    }
                 val contexts =
                     dao.editContexts().map {
                         if (it.person in visibleIds) it else it.copy(baseline = "", current = "")
                     }
-                registry.put("pending", ops.count { it.status != "accepted" } + drafts.size)
+                registry.put(
+                    "pending",
+                    ops.count { it.status != "accepted" } +
+                        drafts.size +
+                        contacts.count { it.operation.isEmpty() },
+                )
                 vault.saveRegistry(registry)
                 val result =
                     FieldUi(
@@ -663,6 +742,7 @@ class FieldRepository(
                         selected?.let { dao.person(it) },
                         ops,
                         drafts,
+                        contacts,
                         dao.meta("today"),
                         dao.meta("last_sync") ?: "Never",
                         dao.meta("coverage") ?: "No complete download",
@@ -670,6 +750,7 @@ class FieldRepository(
                         dao.meta("display_name") ?: "Field agent",
                         registry.getInt("pending"),
                         account.store.binding.supportsEdits(),
+                        account.store.binding.supportsContactLogging(),
                         contexts,
                     )
                 if (active === account) mutable.value = result

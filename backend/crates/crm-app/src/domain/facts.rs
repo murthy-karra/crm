@@ -177,6 +177,15 @@ pub struct ContactAttemptedFact {
     pub recorded_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
+/// The durable identity and exact server recording time selected by the
+/// database for a contact fact. Transaction-compatible callers need these
+/// values while they still control the enclosing commit.
+#[derive(Debug, Clone, Copy)]
+pub struct InsertedContactAttemptedFact {
+    pub id: Uuid,
+    pub recorded_at: chrono::DateTime<chrono::Utc>,
+}
+
 /// The fifth typed fact table (docs/specs/SLICE_003.md §2, D-022): a
 /// contact attempt is a real-world event with historical meaning, written
 /// by `LogContactAttempt`, by `settle` (D-031), and — as a correction row
@@ -185,16 +194,16 @@ pub async fn insert_contact_attempted(
     tx: &mut PgConnection,
     envelope: &FactEnvelope,
     fact: ContactAttemptedFact,
-) -> Result<Uuid, sqlx::Error> {
+) -> Result<InsertedContactAttemptedFact, sqlx::Error> {
     let actor_kind = envelope.actor.kind().as_str();
     let origin = envelope.origin.as_str();
     let row = sqlx::query!(
         r#"INSERT INTO contact_attempted
             (organization_id, actor_kind, actor_user_id, on_behalf_of_user_id, origin,
-             occurred_at, correlation_id, causation_id,
-             person_id, channel, outcome, corrects_id, recorded_at)
+           occurred_at, correlation_id, causation_id,
+            person_id, channel, outcome, corrects_id, recorded_at)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,COALESCE($13, now()))
-           RETURNING id"#,
+           RETURNING id as "id!", recorded_at as "recorded_at!""#,
         envelope.organization_id.0,
         actor_kind,
         envelope.actor.user_id().map(|id| id.0),
@@ -211,7 +220,10 @@ pub async fn insert_contact_attempted(
     )
     .fetch_one(tx)
     .await?;
-    Ok(row.id)
+    Ok(InsertedContactAttemptedFact {
+        id: row.id,
+        recorded_at: row.recorded_at,
+    })
 }
 
 /// Why a Person's stage changed (hardening chunk S2 micro-enum): mirrors

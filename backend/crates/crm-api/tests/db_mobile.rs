@@ -4,6 +4,7 @@ use axum::{
     http::{Request, StatusCode},
     Router,
 };
+use chrono::Timelike;
 use crm_api::{
     auth::AuthContext,
     domain::{
@@ -1831,5 +1832,358 @@ async fn sealed_generations_remain_counted_when_cleanup_is_locked_or_fails(pool:
         .await
         .unwrap(),
         1
+    );
+}
+
+/// Mobile 003's reported-time exception is deliberately narrow: the fact and
+/// receipt are one transaction, the Person projection token stays unchanged,
+/// and retries resolve by the existing protected operation marker.
+#[sqlx::test]
+#[ignore]
+async fn mobile003_contact_attempt_receipt_time_and_replay(pool: PgPool) {
+    let f = fixture(&pool).await;
+    assert!(f.bootstrap["capabilities"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|value| value == "log_contact_attempt"));
+
+    let before_revision: i64 =
+        sqlx::query_scalar("SELECT mobile_revision FROM person WHERE organization_id=$1 AND id=$2")
+            .bind(f.org)
+            .bind(f.person)
+            .fetch_one(&f.app)
+            .await
+            .unwrap();
+    let occurred_at = (chrono::Utc::now() - chrono::Duration::days(2))
+        .with_nanosecond(123_456_789)
+        .unwrap()
+        .to_rfc3339_opts(chrono::SecondsFormat::Nanos, true);
+    let operation = f.operation(
+        "log_contact_attempt",
+        json!({"person_id":f.person,"channel":"other","outcome":"reached","occurred_at":occurred_at}),
+    );
+    let (left, right) = tokio::join!(
+        f.post("/api/mobile/v1/operations", operation.clone()),
+        f.post("/api/mobile/v1/operations", operation.clone())
+    );
+    assert_eq!(left.0, StatusCode::OK, "left: {}", left.1);
+    assert_eq!(right.0, StatusCode::OK, "right: {}", right.1);
+    let receipt = if left.1["replayed"] == false {
+        left.1
+    } else {
+        right.1
+    };
+    assert_eq!(receipt["resource_type"], "contact_attempt");
+    assert!(receipt["committed_revision"].is_null());
+    assert_eq!(receipt["changed"], true);
+    assert_eq!(receipt["person_revision"], before_revision.to_string());
+    record("mobile003_contact_attempt_receipt", &receipt);
+
+    let fact_id = id(&receipt, "resource_id");
+    let row = sqlx::query_as::<_, (String, Option<Uuid>, Option<Uuid>, chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>)>(
+        "SELECT origin, causation_id, corrects_id, occurred_at, recorded_at FROM contact_attempted WHERE organization_id=$1 AND person_id=$2 AND id=$3",
+    )
+    .bind(f.org)
+    .bind(f.person)
+    .bind(fact_id)
+    .fetch_one(&f.app)
+    .await
+    .unwrap();
+    assert_eq!(row.0, "mobile_session");
+    assert_eq!(row.1, None);
+    assert_eq!(row.2, None);
+    assert_eq!(row.3.timestamp_subsec_nanos(), 123_456_000);
+    assert!(row.4 >= row.3);
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT mobile_revision FROM person WHERE organization_id=$1 AND id=$2",
+        )
+        .bind(f.org)
+        .bind(f.person)
+        .fetch_one(&f.app)
+        .await
+        .unwrap(),
+        before_revision,
+        "a contact fact is not a fabricated mobile projection revision"
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM contact_attempted WHERE organization_id=$1 AND person_id=$2",
+        )
+        .bind(f.org)
+        .bind(f.person)
+        .fetch_one(&f.app)
+        .await
+        .unwrap(),
+        1
+    );
+
+    let mut changed = operation.clone();
+    changed["payload"]["occurred_at"] = json!((chrono::Utc::now() - chrono::Duration::days(1))
+        .to_rfc3339_opts(chrono::SecondsFormat::Micros, true));
+    let (status, mismatch) = f.post("/api/mobile/v1/operations", changed).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(mismatch["error"], "operation_payload_mismatch");
+
+    let future = f.operation(
+        "log_contact_attempt",
+        json!({"person_id":f.person,"channel":"call","outcome":"no_answer","occurred_at":(chrono::Utc::now()+chrono::Duration::hours(1)).to_rfc3339()}),
+    );
+    let (status, future_error) = f.post("/api/mobile/v1/operations", future.clone()).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(future_error["error"], "contact_time_in_future");
+    record("mobile003_contact_time_in_future", &future_error);
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM mobile_operation_receipt WHERE organization_id=$1 AND operation_id=$2",
+        )
+        .bind(f.org)
+        .bind(id(&future, "operation_id"))
+        .fetch_one(&f.app)
+        .await
+        .unwrap(),
+        0
+    );
+
+    // The failed future operation remains a local retry candidate.  A revised
+    // operation ID/time succeeds and does not mutate the rejected marker.
+    let revised = f.operation(
+        "log_contact_attempt",
+        json!({"person_id":f.person,"channel":"call","outcome":"no_answer","occurred_at":(chrono::Utc::now()-chrono::Duration::minutes(1)).to_rfc3339()}),
+    );
+    assert_eq!(
+        f.post("/api/mobile/v1/operations", revised).await.0,
+        StatusCode::OK
+    );
+}
+
+/// An older offline interaction cannot satisfy a newer Inquiry just because
+/// its upload happened later. Today must change through sealing, not a fake
+/// Person revision bump, and an even older subsequent log cannot move maxima.
+#[sqlx::test]
+#[ignore]
+async fn mobile003_occurrence_chronology_and_sealed_today(pool: PgPool) {
+    let f = fixture(&pool).await;
+    let now = chrono::Utc::now();
+    let inquiry_at = now - chrono::Duration::days(1);
+    sqlx::query("INSERT INTO inquiry (organization_id,person_id,raw_payload_id,source,received_at) VALUES ($1,$2,$3,'mobile003 synthetic',$4)")
+        .bind(f.org).bind(f.person).bind(Uuid::new_v4()).bind(inquiry_at)
+        .execute(&pool).await.unwrap();
+    let revision: i64 = sqlx::query_scalar("SELECT mobile_revision FROM person WHERE id=$1")
+        .bind(f.person)
+        .fetch_one(&f.app)
+        .await
+        .unwrap();
+    let mut generations = Vec::new();
+    for (offset_hours, expected_in_today) in [(-48, true), (-1, false), (-72, false)] {
+        let operation = f.operation(
+            "log_contact_attempt",
+            json!({
+                "person_id":f.person, "channel":"other", "outcome":"no_answer",
+                "occurred_at":(now + chrono::Duration::hours(offset_hours)).to_rfc3339()
+            }),
+        );
+        let (status, receipt) = f.post("/api/mobile/v1/operations", operation).await;
+        assert_eq!(status, StatusCode::OK, "{receipt}");
+        assert_eq!(receipt["person_revision"], revision.to_string());
+        let generation = f.gen().await;
+        let generation_id = id(&generation, "generation_id");
+        generations.push(generation_id);
+        let (status, sealed) = f
+            .post(
+                &format!("/api/mobile/v1/reconciliations/{generation_id}/seal"),
+                json!({}),
+            )
+            .await;
+        assert_eq!(status, StatusCode::OK, "{sealed}");
+        let present = sealed["today"]["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|item| item["person"]["id"] == f.person.to_string());
+        assert_eq!(
+            present, expected_in_today,
+            "reported offset {offset_hours}: {sealed}"
+        );
+        let evaluated = serde_json::from_value(generation["evaluated_at"].clone()).unwrap();
+        let ordinary = crm_api::domain::today::query_at(
+            &mut f.app.acquire().await.unwrap(),
+            &crm_api::domain::person::visibility::PersonVisibilityScope::Organization(
+                OrganizationId(f.org),
+            ),
+            UserId(f.actor),
+            evaluated,
+        )
+        .await
+        .unwrap();
+        assert_eq!(serde_json::to_value(ordinary).unwrap(), sealed["today"]);
+    }
+    assert!(generations.windows(2).all(|pair| pair[0] != pair[1]));
+    let maximum: chrono::DateTime<chrono::Utc> =
+        sqlx::query_scalar("SELECT last_contact_at FROM person WHERE id=$1")
+            .bind(f.person)
+            .fetch_one(&f.app)
+            .await
+            .unwrap();
+    assert_eq!(
+        maximum.timestamp_micros(),
+        (now - chrono::Duration::hours(1)).timestamp_micros()
+    );
+}
+
+/// Exercise the new fact-backed receipt path itself: transaction rollback,
+/// current authority, exact tenant/Person binding and retained consumed IDs.
+#[sqlx::test]
+#[ignore]
+async fn mobile003_atomic_contact_and_current_receipt_authority(pool: PgPool) {
+    let f = fixture(&pool).await;
+    let operation = f.operation(
+        "log_contact_attempt",
+        json!({
+            "person_id":f.person,"channel":"text","outcome":"sent",
+            "occurred_at":(chrono::Utc::now()-chrono::Duration::days(10)).to_rfc3339()
+        }),
+    );
+    sqlx::raw_sql("CREATE FUNCTION mobile003_fail_receipt() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic contact receipt failure'; END $$; CREATE TRIGGER mobile003_receipt_failure BEFORE INSERT ON mobile_operation_receipt FOR EACH ROW EXECUTE FUNCTION mobile003_fail_receipt();")
+        .execute(&pool).await.unwrap();
+    assert_eq!(
+        f.post("/api/mobile/v1/operations", operation.clone())
+            .await
+            .0,
+        StatusCode::SERVICE_UNAVAILABLE
+    );
+    let counts: (i64,i64,Option<chrono::DateTime<chrono::Utc>>) = sqlx::query_as(
+        "SELECT (SELECT count(*) FROM contact_attempted WHERE person_id=$1), (SELECT count(*) FROM mobile_operation_receipt WHERE operation_id=$2), last_contact_at FROM person WHERE id=$1"
+    ).bind(f.person).bind(id(&operation,"operation_id")).fetch_one(&f.app).await.unwrap();
+    assert_eq!(counts, (0, 0, None));
+    sqlx::query("DROP TRIGGER mobile003_receipt_failure ON mobile_operation_receipt")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let (status, receipt) = f.post("/api/mobile/v1/operations", operation.clone()).await;
+    assert_eq!(status, StatusCode::OK, "{receipt}");
+    let receipt_url = format!(
+        "/api/mobile/v1/operations/{}",
+        id(&operation, "operation_id")
+    );
+    let (status, lookup) = request(
+        &f.router,
+        &f.cookie,
+        Some(f.context),
+        "GET",
+        &receipt_url,
+        json!(null),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(lookup["resource_id"], receipt["resource_id"]);
+    let other_cookie = crate::common::login_cookie(&f.router, "second@fixture.test", PW).await;
+    assert_eq!(
+        request(
+            &f.router,
+            &other_cookie,
+            Some(f.context),
+            "GET",
+            &receipt_url,
+            json!(null)
+        )
+        .await
+        .0,
+        StatusCode::UNAUTHORIZED
+    );
+    let (foreign_org, _) = crate::common::create_org_with_stages_and_member(
+        &pool,
+        "Contact Foreign",
+        "contact-foreign@fixture.test",
+        "Foreign",
+        PW,
+    )
+    .await;
+    let foreign: Uuid = sqlx::query_scalar("INSERT INTO person (organization_id,stage_id) SELECT $1,id FROM stage WHERE organization_id=$1 ORDER BY position LIMIT 1 RETURNING person.id")
+        .bind(foreign_org).fetch_one(&pool).await.unwrap();
+    let mut cross_org = operation.clone();
+    cross_org["operation_id"] = json!(Uuid::new_v4());
+    cross_org["payload"]["person_id"] = json!(foreign);
+    let (status, denied) = f.post("/api/mobile/v1/operations", cross_org).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(denied["error"], "not_found");
+    sqlx::query("UPDATE organization SET workspace_mode='migration_review',workspace_revision=workspace_revision+1 WHERE id=$1").bind(f.org).execute(&pool).await.unwrap();
+    assert_eq!(
+        f.post("/api/mobile/v1/operations", operation.clone())
+            .await
+            .1["error"],
+        "workspace_in_migration_review"
+    );
+    assert_eq!(
+        request(
+            &f.router,
+            &f.cookie,
+            Some(f.context),
+            "GET",
+            &receipt_url,
+            json!(null)
+        )
+        .await
+        .1["error"],
+        "workspace_in_migration_review"
+    );
+    sqlx::query("UPDATE organization SET workspace_mode='operational',workspace_revision=workspace_revision+1 WHERE id=$1").bind(f.org).execute(&pool).await.unwrap();
+    sqlx::query("UPDATE organization_membership SET status='inactive' WHERE organization_id=$1 AND user_id=$2").bind(f.org).bind(f.actor).execute(&pool).await.unwrap();
+    assert!(!f
+        .post("/api/mobile/v1/operations", operation.clone())
+        .await
+        .0
+        .is_success());
+    assert!(!request(
+        &f.router,
+        &f.cookie,
+        Some(f.context),
+        "GET",
+        &receipt_url,
+        json!(null)
+    )
+    .await
+    .0
+    .is_success());
+    sqlx::query("UPDATE organization_membership SET status='active' WHERE organization_id=$1 AND user_id=$2").bind(f.org).bind(f.actor).execute(&pool).await.unwrap();
+    // A fresh online authorization permits old protected work; membership
+    // removal may revoke the original session, so establish a new session.
+    let cookie = crate::common::login_cookie(&f.router, "mobile@fixture.test", PW).await;
+    sqlx::query("DELETE FROM person WHERE id=$1")
+        .bind(f.person)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let (status, missing) = request(
+        &f.router,
+        &cookie,
+        Some(f.context),
+        "POST",
+        "/api/mobile/v1/operations",
+        operation.clone(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{missing}");
+    assert_eq!(missing["error"], "not_found");
+    assert_eq!(
+        request(
+            &f.router,
+            &cookie,
+            Some(f.context),
+            "GET",
+            &receipt_url,
+            json!(null)
+        )
+        .await
+        .0,
+        StatusCode::NOT_FOUND
+    );
+    let retained: (i64,i64) = sqlx::query_as("SELECT (SELECT count(*) FROM mobile_operation_receipt WHERE operation_id=$1), (SELECT count(*) FROM contact_attempted WHERE id=$2)")
+        .bind(id(&operation,"operation_id")).bind(id(&receipt,"resource_id")).fetch_one(&f.app).await.unwrap();
+    assert_eq!(
+        retained,
+        (1, 1),
+        "opaque absence must neither consume again nor erase the marker"
     );
 }

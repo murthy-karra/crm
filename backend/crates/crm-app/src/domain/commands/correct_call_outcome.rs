@@ -245,7 +245,7 @@ async fn correct_call_outcome_attempt(
         // this one crossing (hardening chunk N4, mirroring settle.rs).
         causation_id: Some(call.id.as_uuid()),
     };
-    let fact_id = facts::insert_contact_attempted(
+    let inserted = facts::insert_contact_attempted(
         &mut tx,
         &envelope,
         ContactAttemptedFact {
@@ -279,7 +279,7 @@ async fn correct_call_outcome_attempt(
 
     Ok(CorrectionResult {
         attempt: CorrectedAttemptRef {
-            id: fact_id,
+            id: inserted.id,
             channel: head.channel,
             outcome: requested,
             occurred_at: head.occurred_at,

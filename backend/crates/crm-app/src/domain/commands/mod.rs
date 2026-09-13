@@ -21,7 +21,9 @@ pub use correct_call_outcome::{
 pub use dial_call::dial_call;
 pub use hangup_call::hangup_call;
 pub use log_contact_attempt::{
-    log_contact_attempt, ContactAttemptRef, ContactChannel, ContactOutcome, LogContactAttempt,
+    log_contact_attempt, log_contact_attempt_in_transaction, ContactAttemptRef, ContactChannel,
+    ContactOutcome, LogContactAttempt, LogContactAttemptInTransaction,
+    LoggedContactAttemptInTransaction,
 };
 pub use receive_inquiry::{
     receive_inquiry, ReceiveInquiry, ReceiveInquiryOutcome, RoutingStrategy,

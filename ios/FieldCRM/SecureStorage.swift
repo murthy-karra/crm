@@ -8,6 +8,8 @@ var appDefaults: UserDefaults {
     // not grant an arbitrary app-group suite, so retain that isolation by
     // falling back to this QA app's own defaults rather than crashing.
     return UserDefaults(suiteName: "dev.crm.FieldCRM.mobile002qa") ?? .standard
+    #elseif MOBILE003_QA
+    return UserDefaults(suiteName: "dev.crm.FieldCRM.mobile003qa") ?? .standard
     #else
     return .standard
     #endif
@@ -72,6 +74,8 @@ final class SecureStorage {
         var base = self.synthetic ? "dev.crm.field.synthetic" : "dev.crm.field.protected"
         #if MOBILE002_QA
         base += ".mobile002qa"
+        #elseif MOBILE003_QA
+        base += ".mobile003qa"
         #endif
         #if DEBUG
         service = testingNamespace.map { base + ".test." + $0 } ?? base
@@ -151,6 +155,8 @@ final class SecureStorage {
                 synthetic ? {
                     #if MOBILE002_QA
                     return "SyntheticFieldCRMMobile002QA"
+                    #elseif MOBILE003_QA
+                    return "SyntheticFieldCRMMobile003QA"
                     #else
                     return "SyntheticFieldCRM"
                     #endif

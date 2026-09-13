@@ -7,6 +7,7 @@ import Network
     @Published var queue: [Queued] = []
     @Published var drafts: [Draft] = []
     @Published var today: JSON = .null
+    @Published var todayIsStale = false
     @Published var message = "Sign in to download your field workspace."
     @Published var lastSync = "Never"
     @Published var unlocked = false
@@ -24,11 +25,33 @@ import Network
     let installation: String
     let synthetic: Bool
     var pendingCount: Int { queue.filter { $0.status != "accepted" }.count }
+    var pendingContactCount: Int { queue.filter { $0.isContact && $0.status != "accepted" }.count }
+    var canLogContact: Bool { unlocked && (credential?.bootstrap.capabilities.contains("log_contact_attempt") ?? false) }
     #if MOBILE002_QA
     @Published var qaFixtureStage = "not requested"
     @Published var qaMigrationStage = "not inspected"
     @Published var qaConflictStage = "no pending edit"
     private var qaConflictNoteID = ""
+    #endif
+    #if MOBILE003_QA
+    @Published var qaMobile003MigrationStage = "not inspected"
+    /// Structural-only QA evidence for the isolated Mobile003 bundle. It never
+    /// renders cached customer text or immutable payload values.
+    func inspectMobile003Migration() {
+        guard let store else { qaMobile003MigrationStage = "protected store unavailable"; return }
+        do {
+            let operations = try store.queue()
+            let fingerprints = operations.map { $0.id.prefix(8) + ":" + String(mobile003ByteDigest($0.bytes), radix: 16) }.joined(separator: ",")
+            let draftFingerprints = try store.drafts().map { $0.id.prefix(8) + ":" + String(mobile003ByteDigest(try encode($0)), radix: 16) }.joined(separator: ",")
+            let accepted = operations.filter { $0.receipt != nil }.count
+            let active = try store.meta("active") ?? "none"
+            qaMobile003MigrationStage = "schema=" + (try store.rows("PRAGMA user_version")[0][0]) + " active=" + active.prefix(8) + " ops=" + String(operations.count) + " receipts=" + String(accepted) + " drafts=" + String(drafts.count) + " ids:digest=" + fingerprints + " drafts:digest=" + draftFingerprints
+        } catch { qaMobile003MigrationStage = "probe error: " + error.localizedDescription }
+    }
+    private func mobile003ByteDigest(_ bytes: Data) -> UInt64 {
+        bytes.reduce(1469598103934665603) { ($0 ^ UInt64($1)) &* 1099511628211 }
+    }
+    func mobile003QAInventoryURL() throws -> URL { try directory().appendingPathComponent("historical-upgrade-inventory.txt") }
     #endif
     init(synthetic: Bool = false, startMonitor: Bool = true, restoreOnInit: Bool = true) {
         secure = SecureStorage(synthetic: synthetic); self.synthetic = secure.synthetic
@@ -68,7 +91,7 @@ import Network
         return try SecureStorage.directory(synthetic: synthetic)
     }
     private var qaBaseURL: String {
-        #if MOBILE002_QA
+        #if MOBILE002_QA || MOBILE003_QA
         return "http://127.0.0.1:3102"
         #else
         return "http://127.0.0.1:3101"
@@ -238,7 +261,7 @@ import Network
     }
     func lock(_ reason: String, persist: Bool = true) {
         epoch = UUID(); unlocked = false; store = nil; api = nil
-        people = []; queue = []; drafts = []; today = .null; selectedPerson = nil; account = ""
+        people = []; queue = []; drafts = []; today = .null; todayIsStale = false; selectedPerson = nil; account = ""
         if persist {
             do { try secure.setLocked() }
             catch {
@@ -265,6 +288,7 @@ import Network
         guard let store else { return }
         people = try store.activePeople(); queue = try store.queue(); drafts = try store.drafts()
         today = try store.meta("today").map { try decode(JSON.self, Data($0.utf8)) } ?? .null
+        todayIsStale = try store.meta("today_refresh_pending") == "1"
         lastSync = try store.meta("last_sync") ?? "Never"
     }
     func save(_ draft: Draft) throws -> Draft {
@@ -276,6 +300,19 @@ import Network
         guard validateAccess(), let store else { throw LocalError.locked }
         do { try store.submit(draft); try reload(); message = "Saved on device. Queued for sync."; Task { await sync() } }
         catch { message = error.localizedDescription; throw error }
+    }
+    func newContactDraft(person: String) throws -> Draft {
+        guard validateAccess(), canLogContact else { throw LocalError.invalidInput }
+        let now = stamp()
+        return try save(Draft(id: UUID().uuidString.lowercased(), person: person, kind: "log_contact_attempt", revision: 0,
+                              contactChannel: "call", contactOutcome: "reached", occurredAt: now, deviceRecordedAt: now))
+    }
+    func revisedContactDraft(from operation: Queued) throws -> Draft {
+        guard operation.isContact else { throw LocalError.invalidInput }
+        let now = stamp()
+        return try save(Draft(id: UUID().uuidString.lowercased(), person: operation.envelope.person, kind: "log_contact_attempt", revision: 0,
+                              contactChannel: operation.envelope.payload["channel"].text, contactOutcome: operation.envelope.payload["outcome"].text,
+                              occurredAt: operation.envelope.payload["occurred_at"].text, deviceRecordedAt: now))
     }
     func startEdit(person: String, type: String, record: JSON) throws -> Draft {
         guard validateAccess(), let store, let id = Optional(record["id"].text), !id.isEmpty,
@@ -350,6 +387,12 @@ import Network
             for op in try store.queue() where op.status == "pending" && op.retryAt <= Date().timeIntervalSince1970 {
                 try current(run)
                 guard !paused else { message = "Sync paused. Saved work remains on device."; return }
+                if op.isContact && !credential.bootstrap.capabilities.contains("log_contact_attempt") {
+                    // Capability loss must not delete or rewrite protected work.
+                    // Keep the exact envelope pending until an authorized app can submit it.
+                    message = "Contact logging is unavailable for this account. Saved contact work remains protected."
+                    continue
+                }
                 do {
                     let receipt = try await api.operation(op.bytes, context: credential.bootstrap.context_id)
                     try current(run); try store.acknowledge(receipt); try reload()
@@ -413,6 +456,9 @@ import Network
         // Finish the bounded cleanup backlog before admitting another generation.
         // Every batch yields; active/staged bundles and saved work remain intact.
         try await drainCache(store, run)
+        // A contact receipt affects Today independently of Person revision. A pre-receipt
+        // staging generation cannot be sealed as evidence of that fact.
+        if try store.meta("today_refresh_pending") == "1" { try store.discardGeneration() }
         var generation = try store.generation()
         if let old = generation, try date(old.expires_at) <= date(boot.server_time).addingTimeInterval(continuousSeconds() - (credential?.lease.anchor.uptime ?? 0)) {
             try store.discardGeneration(); generation = nil

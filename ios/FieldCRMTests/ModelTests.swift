@@ -19,13 +19,13 @@ import XCTest
     func setupModel() async throws -> (FieldModel, API, SecureStorage, Bootstrap, LocalStore) {
         let model = FieldModel(synthetic: true, startMonitor: false, restoreOnInit: false)
         let secure = SecureStorage(synthetic: true, testingNamespace: UUID().uuidString); secure.testDirectory = directory
-        #if MOBILE002_QA
+        #if MOBILE002_QA || MOBILE003_QA
         let api = try API(base: "http://127.0.0.1:3102")
         #else
         let api = try API(base: "http://127.0.0.1:3101")
         #endif
         let boot = Bootstrap(context_id: UUID().uuidString, installation_id: model.installation, actor_user_id: UUID().uuidString, organization_id: UUID().uuidString,
-                             workspace_revision: "1", authorized_at: stamp(), offline_access_expires_at: stamp(Date().addingTimeInterval(7 * 86400)), server_time: stamp(), capabilities: ["add_note", "create_task", "complete_task", "reconciliation"], protocol: "mobile-v1")
+                             workspace_revision: "1", authorized_at: stamp(), offline_access_expires_at: stamp(Date().addingTimeInterval(7 * 86400)), server_time: stamp(), capabilities: ["add_note", "create_task", "complete_task", "reconciliation", "log_contact_attempt"], protocol: "mobile-v1")
         api.responseForTesting = { request in
             if request.url!.path == "/api/session" { return try self.response(request, 200, .object([:]), cookie: true) }
             return (try encode(boot), HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
@@ -60,6 +60,13 @@ import XCTest
         _ = try store.submit(draft)
         return (draft, try XCTUnwrap(store.queue().last?.bytes))
     }
+    func queuedContact(_ store: LocalStore) throws -> (Draft, Data) {
+        let person = try XCTUnwrap(store.activePeople().first?.person)
+        let draft = try store.saveDraft(Draft(id: UUID().uuidString.lowercased(), person: person, kind: "log_contact_attempt", revision: 0,
+                                              contactChannel: "other", contactOutcome: "reached", occurredAt: "2026-09-12T20:00:00Z", deviceRecordedAt: "2026-09-13T00:00:00Z"))
+        _ = try store.submit(draft)
+        return (draft, try XCTUnwrap(store.queue().last?.bytes))
+    }
     func testAmbiguousOperationAndReceipt404KeepExactEditEnvelopeAndProtectedDraft() async throws {
         let (model, api, _, _, store) = try await setupModel()
         let (draft, bytes) = try queuedEdit(store, text: "Protected 404 proposal")
@@ -91,6 +98,77 @@ import XCTest
         XCTAssertEqual(try store.queue().last?.bytes, bytes)
         XCTAssertEqual(try store.drafts().first { $0.id == draft.id }?.text, "Permission retained proposal")
     }
+    func testAcceptedContactForcesSameRevisionTodaySealWithoutSecondUpload() async throws {
+        let (model, api, _, boot, store) = try await setupModel()
+        let (_, bytes) = try queuedContact(store)
+        let contact = try decode(Envelope.self, bytes)
+        let person = contact.person
+        let fresh = Generation(generation_id: UUID().uuidString, context_id: boot.context_id, evaluated_at: stamp(), expires_at: stamp(Date().addingTimeInterval(1800)), complete: true, selected_count: 1, manifest: Manifest(items: [ManifestItem(person_id: person, revision: "1", reasons: ["assigned"])], next_cursor: nil, complete: true))
+        var operationCalls = 0
+        api.responseForTesting = { request in
+            if request.url!.path.hasSuffix("/operations") {
+                operationCalls += 1
+                return try self.response(request, 200, .object(["operation_id": .s(contact.operation_id), "outcome": .s("accepted"), "resource_type": .s("contact_attempt"), "resource_id": .s(UUID().uuidString), "committed_revision": .null, "person_revision": .s("1"), "accepted_at": .s(stamp()), "changed": .bool(true), "replayed": .bool(false)]))
+            }
+            if request.url!.path.hasSuffix("/reconciliations") { return try self.response(request, 200, try decode(JSON.self, encode(fresh))) }
+            if request.url!.path.hasSuffix("/seal") { return try self.response(request, 200, try decode(JSON.self, encode(Seal(generation_id: fresh.generation_id, context_id: boot.context_id, sealed_at: stamp(), evaluated_at: fresh.evaluated_at, selected_count: 1, today: .object(["items": .array([])])))) ) }
+            XCTFail("Unexpected request \(request.url!.path)")
+            return try self.response(request, 500, .object([:]))
+        }
+        model.paused = false; await model.sync()
+        XCTAssertEqual(operationCalls, 1)
+        XCTAssertEqual(try store.queue().last?.status, "accepted")
+        XCTAssertFalse(model.todayIsStale)
+        XCTAssertEqual(try store.meta("active"), fresh.generation_id)
+    }
+    func testContactReceiptSupersedesPreReceiptStagingAndRelaunchDoesNotResubmit() async throws {
+        let (model, api, secure, boot, store) = try await setupModel()
+        let (_, bytes) = try queuedContact(store); let contact = try decode(Envelope.self, bytes)
+        let preReceipt = Generation(generation_id: UUID().uuidString, context_id: boot.context_id, evaluated_at: stamp(), expires_at: stamp(Date().addingTimeInterval(1800)), complete: true, selected_count: 1, manifest: Manifest(items: [ManifestItem(person_id: contact.person, revision: "1", reasons: ["assigned"])], next_cursor: nil, complete: true))
+        try store.begin(preReceipt)
+        var uploads = 0, reconciliation = 0, failSeal = true; var issuedGeneration = ""
+        api.responseForTesting = { request in
+            if request.url!.path.hasSuffix("/operations") { uploads += 1; return try self.response(request, 200, .object(["operation_id": .s(contact.operation_id), "outcome": .s("accepted"), "resource_type": .s("contact_attempt"), "resource_id": .s(UUID().uuidString), "committed_revision": .null, "person_revision": .s("1"), "accepted_at": .s(stamp()), "changed": .bool(true), "replayed": .bool(false)])) }
+            if request.url!.path.hasSuffix("/reconciliations") { reconciliation += 1; let fresh = Generation(generation_id: UUID().uuidString, context_id: boot.context_id, evaluated_at: stamp(), expires_at: stamp(Date().addingTimeInterval(1800)), complete: true, selected_count: 1, manifest: preReceipt.manifest); issuedGeneration = fresh.generation_id; return try self.response(request, 200, try decode(JSON.self, encode(fresh))) }
+            if request.url!.path.hasSuffix("/seal") { if failSeal { return try self.response(request, 503, .object(["error": .s("unavailable")])) }; return try self.response(request, 200, try decode(JSON.self, encode(Seal(generation_id: issuedGeneration, context_id: boot.context_id, sealed_at: stamp(), evaluated_at: stamp(), selected_count: 1, today: .object(["items": .array([])]))))) }
+            return try self.response(request, 500, .object([:]))
+        }
+        model.paused = false; await model.sync(); XCTAssertEqual(uploads, 1); XCTAssertTrue(model.todayIsStale); XCTAssertNotEqual(try store.generation()?.generation_id, preReceipt.generation_id)
+        failSeal = false; let next = reopen(secure, api); next.paused = false; await next.sync(manual: true)
+        XCTAssertEqual(uploads, 1); XCTAssertGreaterThanOrEqual(reconciliation, 2); XCTAssertFalse(next.todayIsStale)
+    }
+    func testContactRefreshFailureRetainsAcceptedReceiptAndDoesNotResubmit() async throws {
+        let (model, api, _, boot, store) = try await setupModel()
+        let (_, bytes) = try queuedContact(store)
+        let contact = try decode(Envelope.self, bytes)
+        var operationCalls = 0
+        api.responseForTesting = { request in
+            if request.url!.path.hasSuffix("/operations") {
+                operationCalls += 1
+                return try self.response(request, 200, .object(["operation_id": .s(contact.operation_id), "outcome": .s("accepted"), "resource_type": .s("contact_attempt"), "resource_id": .s(UUID().uuidString), "committed_revision": .null, "person_revision": .s("1"), "accepted_at": .s(stamp()), "changed": .bool(true), "replayed": .bool(false)]))
+            }
+            if request.url!.path.hasSuffix("/reconciliations") { return try self.response(request, 503, .object(["error": .s("unavailable")])) }
+            return try self.response(request, 500, .object([:]))
+        }
+        model.paused = false; await model.sync()
+        XCTAssertEqual(operationCalls, 1); XCTAssertEqual(try store.queue().last?.status, "accepted")
+        XCTAssertTrue(model.todayIsStale); XCTAssertEqual(try store.queue().last?.bytes, bytes)
+        await model.sync(manual: true)
+        XCTAssertEqual(operationCalls, 1, "A failed Today refresh must never upload an accepted contact again")
+    }
+    func testContactFutureRejectionKeepsOriginalAndUsesNewDraftIdentity() async throws {
+        let (model, api, _, _, store) = try await setupModel()
+        let (_, bytes) = try queuedContact(store)
+        api.responseForTesting = { request in
+            if request.url!.path.hasSuffix("/operations") { return try self.response(request, 422, .object(["error": .s("contact_time_in_future")])) }
+            return try self.response(request, 503, .object(["error": .s("unavailable")]))
+        }
+        model.paused = false; await model.sync()
+        let original = try XCTUnwrap(store.queue().last)
+        XCTAssertEqual(original.status, "attention"); XCTAssertEqual(original.error, "contact_time_in_future"); XCTAssertEqual(original.bytes, bytes)
+        let revised = try model.revisedContactDraft(from: original)
+        XCTAssertNotEqual(revised.id, original.id); XCTAssertEqual(revised.occurredAt, original.envelope.payload["occurred_at"].text)
+    }
     func testReconciliationAuthority403HidesOldCacheAndPersistsLockAcrossRelaunch() async throws {
         let (model, api, secure, _, store) = try await setupModel()
         api.responseForTesting = { try self.response($0, 403, .object(["error": .s("forbidden")])) }
@@ -112,7 +190,7 @@ import XCTest
         }
         model.paused = false; await model.sync()
         XCTAssertEqual(authorityChecks, 1); XCTAssertTrue(model.unlocked); XCTAssertEqual(model.people.count, 1)
-        XCTAssertEqual(try store.queue()[0].status, "attention"); XCTAssertEqual(try store.queue()[0].error, "forbidden")
+        XCTAssertEqual(try store.queue()[0].status, "unavailable"); XCTAssertEqual(try store.queue()[0].error, "forbidden")
     }
     func testOperation403WithRevokedAuthorityLocksAndPreservesExactEnvelope() async throws {
         let (model, api, secure, _, store) = try await setupModel(); try queue(store)
@@ -165,5 +243,40 @@ import XCTest
         XCTAssertEqual(componentReads, 0); XCTAssertEqual(try store.meta("active"), fresh.generation_id)
         XCTAssertEqual(try store.drafts().count, 1)
     }
+
+    #if MOBILE003_QA
+    func testHistoricalSchemaFiveInstalledInventoryMigratesWithoutChangingBytes() async throws {
+        guard ProcessInfo.processInfo.environment["CRM_MOBILE003_INSTALLED_UPGRADE"] == "approved-synthetic" else {
+            throw XCTSkip("Requires the coordinator-created isolated installed schema-5 QA fixture.")
+        }
+        let originalInstallation = appDefaults.string(forKey: "installation")
+        defer { if let originalInstallation { appDefaults.set(originalInstallation, forKey: "installation") } else { appDefaults.removeObject(forKey: "installation") } }
+        appDefaults.set("c1f05e41-0581-4a64-80b0-8547b576399b", forKey: "installation")
+        let model = FieldModel(synthetic: true, startMonitor: false, restoreOnInit: false)
+        model.paused = true
+        await model.signIn(email: "agent@mobile.test", password: "Mobile-demo-only-123!")
+        XCTAssertTrue(model.unlocked, model.message)
+        let store = try XCTUnwrap(model.store)
+        let pre = try String(contentsOf: model.mobile003QAInventoryURL())
+        XCTAssertTrue(pre.contains("schema=5"), pre)
+        let active = try XCTUnwrap(pre.components(separatedBy: " active=").last?.components(separatedBy: " ops=").first)
+        XCTAssertEqual(try store.meta("active"), active)
+        XCTAssertEqual(try store.rows("PRAGMA user_version")[0][0], "6")
+        func digest(_ data: Data) -> String { String(data.reduce(1469598103934665603) { ($0 ^ UInt64($1)) &* 1099511628211 }, radix: 16) }
+        let expectedOps = pre.components(separatedBy: " ops=").dropFirst().first?.components(separatedBy: " drafts=").first?.split(separator: ",") ?? []
+        let queue = try store.queue(); XCTAssertEqual(queue.count, expectedOps.count)
+        XCTAssertEqual(queue.filter { $0.receipt != nil }.count, expectedOps.filter { $0.hasSuffix(":1") }.count)
+        XCTAssertEqual(queue.filter { $0.status == "pending" }.count, expectedOps.filter { $0.hasSuffix(":0") }.count)
+        for part in expectedOps {
+            let fields = part.split(separator: ":")
+            let op = try XCTUnwrap(queue.first { $0.id == fields[0] })
+            XCTAssertEqual(digest(op.bytes), String(fields[1])); XCTAssertEqual(op.receipt == nil ? "0" : "1", String(fields[2]))
+        }
+        let draftPart = pre.components(separatedBy: " drafts=").last!.split(separator: ":")
+        XCTAssertEqual(try store.drafts().count, 1)
+        let draft = try XCTUnwrap(try store.drafts().first { $0.id == draftPart[0] })
+        XCTAssertEqual(digest(try encode(draft)), String(draftPart[1]))
+    }
+    #endif
 
 }

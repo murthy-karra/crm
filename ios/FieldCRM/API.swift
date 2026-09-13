@@ -10,6 +10,7 @@ struct APIError: Error, LocalizedError {
         case "protocol_unsupported": "This app must be updated before synchronizing. Saved work is retained."
         case "invalid_credentials": "Email or password was not accepted."
         case "dependency_pending": "Waiting for the task creation to be accepted."
+        case "contact_time_in_future": "The reported contact time is in the future. Correct the time in a new saved contact; the original action is retained."
         default: "Sync needs attention (\(code)). Your saved work is retained."
         }
     }
@@ -33,7 +34,7 @@ private final class NoRedirect: NSObject, URLSessionTaskDelegate, @unchecked Sen
         var permitted = url.scheme == "https"
         #if DEBUG && targetEnvironment(simulator)
         let debugPort: Int
-        #if MOBILE002_QA
+        #if MOBILE002_QA || MOBILE003_QA
         debugPort = 3102
         #else
         debugPort = 3101

@@ -1,0 +1,11 @@
+{
+  "accepted_at": "2026-09-13T12:00:01.123456Z",
+  "changed": true,
+  "committed_revision": null,
+  "operation_id": "22222222-2222-4222-8222-222222222222",
+  "outcome": "accepted",
+  "person_revision": "7",
+  "replayed": false,
+  "resource_id": "44444444-4444-4444-8444-444444444444",
+  "resource_type": "contact_attempt"
+}

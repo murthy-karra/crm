@@ -135,8 +135,9 @@ follow-up remains open in production readiness.
 - **Mobile 002 implementation:** D-076 accepts the reviewed
   [spec](../specs/MOBILE_002_OFFLINE_EDITS.md),
   [briefs](../tasks/MOBILE_002_IMPL.md) and coordinated plan. Terra high implements
-  the mobile backend first, then iOS and Android concurrently. Planning review
-  has no remaining blocker; implementation verification remains required.
+  both iOS and Android concurrently after verified backend integration `2fd9a9d`.
+  Backend source review, focused regressions, repository/live-schema and real
+  synthetic API checks passed; native implementation verification remains open.
 - **010e2 implementation:** D-076 accepts the reviewed
   [specification](../specs/SLICE_010e2.md) and
   [brief](../tasks/SLICE_010e2_IMPL.md). One Terra high writer owns backend then

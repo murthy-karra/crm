@@ -136,6 +136,12 @@ class FieldApi(
     suspend fun receipt(binding: Binding, id: String) =
         call("GET", "/api/mobile/v1/operations/${uuid(id)}", binding.context)
 
+    suspend fun currentNote(binding: Binding, person: String, note: String) =
+        call("GET", "/api/mobile/v1/people/${uuid(person)}/notes/${uuid(note)}", binding.context)
+
+    suspend fun currentTask(binding: Binding, person: String, task: String) =
+        call("GET", "/api/mobile/v1/people/${uuid(person)}/tasks/${uuid(task)}", binding.context)
+
     suspend fun page(path: String, binding: Binding, cursor: String) =
         call(
             "GET",

@@ -25,6 +25,8 @@ class FieldUi(
     val paused: Boolean = false,
     val displayName: String = "",
     val pendingCount: Int = 0,
+    val editsEnabled: Boolean = false,
+    val editContexts: List<EditContextRow> = emptyList(),
 )
 
 class ActiveAccount(
@@ -38,7 +40,7 @@ class ActiveAccount(
 class FieldRepository(
     val context: Context,
     private val origin: String = BuildConfig.API_BASE,
-    private val namespace: String = "field",
+    private val namespace: String = BuildConfig.VAULT_NAMESPACE,
     private val clock: DeviceClock = AndroidClock(context),
     private val transport: Transport = HttpTransport(),
 ) {
@@ -277,12 +279,14 @@ class FieldRepository(
         kind: String,
         payload: JSONObject,
         expectedRevision: Long = 0,
+        baseline: JSONObject? = null,
+        target: JSONObject? = null,
     ): DraftRow =
         withContext(Dispatchers.IO) {
             val account = active ?: throw AccessLocked()
             check(account)
             try {
-                account.store.saveDraft(id, person, kind, payload, expectedRevision).also {
+                account.store.saveDraft(id, person, kind, payload, expectedRevision, baseline, target).also {
                     refreshView("Draft saved on this device")
                 }
             } catch (error: Exception) {
@@ -308,6 +312,24 @@ class FieldRepository(
             account.store.complete(person, task, creation)
             refreshView("Completion saved on this device")
             FieldSyncJob.schedule(context)
+        }
+
+    suspend fun editSupported(): Boolean =
+        withContext(Dispatchers.IO) { active?.store?.binding?.supportsEdits() == true }
+
+    suspend fun supersedeConflict(id: String): JSONObject =
+        withContext(Dispatchers.IO) {
+            val account = active ?: throw AccessLocked()
+            check(account)
+            account.store.supersedeConflict(id).also { refreshView("Prepare a revised saved edit") }
+        }
+
+    suspend fun discardConflict(id: String) =
+        withContext(Dispatchers.IO) {
+            val account = active ?: throw AccessLocked()
+            check(account)
+            account.store.discardConflict(id)
+            refreshView("Saved proposal discarded; current version remains unchanged")
         }
 
     suspend fun pause(value: Boolean) =
@@ -493,6 +515,25 @@ class FieldRepository(
                     check(account)
                     if (authorized.context != account.store.binding.context) throw ProtocolFailure()
                 }
+                if (error is ApiFailure && error.code == "revision_conflict" && row.kind in setOf("edit_note", "update_task")) {
+                    // The conflict response is deliberately content-free.  Fetching comparison
+                    // data is a separate authorized, identity-fenced request; a failure leaves
+                    // the immutable proposal in attention instead of inventing a new baseline.
+                    dao.operationState(row.id, "attention", row.attempts + 1, 0, error.code)
+                    try {
+                        val payload = JSONObject(row.envelope).getJSONObject("payload")
+                        val current =
+                            if (row.kind == "edit_note")
+                                account.api.currentNote(account.store.binding, row.person, payload.getString("note_id"))
+                            else
+                                account.api.currentTask(account.store.binding, row.person, payload.getString("task_id"))
+                        check(account)
+                        account.store.recordCurrent(row.id, current)
+                    } catch (_: Exception) {
+                        // The explicit conflict remains reviewable without a guessed current version.
+                    }
+                    continue
+                }
                 val retry =
                     error !is ApiFailure ||
                         error.status >= 500 ||
@@ -559,7 +600,7 @@ class FieldRepository(
         val manifest = dao.manifest(id)
         for ((index, item) in manifest.withIndex()) {
             check(account)
-            if (dao.person(item.person)?.revision == item.revision) continue
+            if (dao.person(item.person)?.let { it.revision == item.revision && it.noteRevisionsQualified } == true) continue
             if (vault.root.usableSpace < 16 * 1024 * 1024) throw StorageFailure()
             for (section in listOf("summary", "notes", "tasks")) {
                 while (true) {
@@ -607,6 +648,10 @@ class FieldRepository(
                         }
                 val drafts =
                     dao.drafts().map { if (it.person in visibleIds) it else it.copy(payload = "") }
+                val contexts =
+                    dao.editContexts().map {
+                        if (it.person in visibleIds) it else it.copy(baseline = "", current = "")
+                    }
                 registry.put("pending", ops.count { it.status != "accepted" } + drafts.size)
                 vault.saveRegistry(registry)
                 val result =
@@ -624,6 +669,8 @@ class FieldRepository(
                         dao.meta("paused") == "true",
                         dao.meta("display_name") ?: "Field agent",
                         registry.getInt("pending"),
+                        account.store.binding.supportsEdits(),
+                        contexts,
                     )
                 if (active === account) mutable.value = result
             } catch (_: Exception) {

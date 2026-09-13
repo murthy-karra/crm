@@ -3,7 +3,11 @@ import XCTest
 
 @MainActor final class LiveAPITests: XCTestCase {
     func connect(installation: String = UUID().uuidString.lowercased(), email: String = "agent@mobile.test") async throws -> (API, Bootstrap) {
+        #if MOBILE002_QA
+        let api = try API(base: "http://127.0.0.1:3102")
+        #else
         let api = try API(base: "http://127.0.0.1:3101")
+        #endif
         try await api.login(email: email, password: "Mobile-demo-only-123!")
         let boot: Bootstrap = try await api.call("/bootstrap", method: "POST", body: .object(["protocol": .s("mobile-v1"), "installation_id": .s(installation)]))
         return (api, boot)
@@ -68,4 +72,61 @@ import XCTest
         XCTAssertEqual(try store!.queue().filter { $0.status == "accepted" }.count, 100)
         XCTAssertEqual(try store!.queue()[0].bytes, stable[0])
     }
+    #if MOBILE002_QA
+    func testMobile002AcceptedSeedAppearsInCurrentRoutePageAndQualifiedEncryptedBundle() async throws {
+        let (api, boot) = try await connect()
+        // Person001 is the coordinator-reserved iOS fixture, verified by the
+        // actual UI test's accessibility identifier.
+        let target = "f40f5132-9822-4bdf-ba34-76affb181195"
+        let seed = Envelope(context_id: boot.context_id, operation_id: UUID().uuidString.lowercased(), kind: "add_note", device_recorded_at: stamp(), payload: .object(["person_id": .s(target), "body": .s("iOS exact-seed " + UUID().uuidString)]))
+        let receipt = try await api.operation(try encode(seed), context: boot.context_id)
+        print("MOBILE002_QA_SEED_NOTE=" + receipt.resource_id)
+        let exact = try await api.currentNote(person: target, note: receipt.resource_id, context: boot.context_id)
+        XCTAssertEqual(exact.note?["id"].text, receipt.resource_id); XCTAssertEqual(exact.note?["revision"].text, "1")
+        let fresh: Generation = try await api.call("/reconciliations", method: "POST", body: .object(["protocol": .s("mobile-v1"), "installation_id": .s(boot.installation_id), "pinned_person_ids": .array([])]), context: boot.context_id)
+        print("MOBILE002_QA_SEALED_GENERATION=" + fresh.generation_id)
+        let matching = try XCTUnwrap(fresh.manifest.items.first { $0.person_id == target })
+        let summary: Page = try await api.call("/reconciliations/\(fresh.generation_id)/people/\(target)/summary", context: boot.context_id)
+        let notes: Page = try await api.call("/reconciliations/\(fresh.generation_id)/people/\(target)/notes", context: boot.context_id)
+        let tasks: Page = try await api.call("/reconciliations/\(fresh.generation_id)/people/\(target)/tasks", context: boot.context_id)
+        XCTAssertTrue(notes.items.contains { $0["id"].text == receipt.resource_id })
+        let _: Seal = try await api.call("/reconciliations/\(fresh.generation_id)/seal", method: "POST", body: .object([:]), context: boot.context_id)
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString); try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true); defer { try? FileManager.default.removeItem(at: dir) }
+        let store = try LocalStore(url: dir.appendingPathComponent("exact.sqlite"), key: Data(repeating: 71, count: 32), identity: boot.identity, context: boot.context_id)
+        let local = Generation(generation_id: fresh.generation_id, context_id: boot.context_id, evaluated_at: fresh.evaluated_at, expires_at: fresh.expires_at, complete: true, selected_count: 1, manifest: Manifest(items: [matching], next_cursor: nil, complete: true))
+        try store.begin(local); try store.appendPage(summary, expected: matching.revision); try store.appendPage(notes, expected: matching.revision); try store.appendPage(tasks, expected: matching.revision); try store.finishBundle(fresh.generation_id, target, matching.revision)
+        try store.promote(Seal(generation_id: fresh.generation_id, context_id: boot.context_id, sealed_at: stamp(), evaluated_at: fresh.evaluated_at, selected_count: 1, today: .object(["items": .array([])])))
+        XCTAssertNotNil(try store.editableRecord(person: target, type: "note", id: receipt.resource_id))
+    }
+
+    func testMobile002RealLostResponseReplayAndTwoActorConflictOnReservedPerson001() async throws {
+        let (first, firstBoot) = try await connect()
+        let generation: Generation = try await first.call("/reconciliations", method: "POST", body: .object(["protocol": .s("mobile-v1"), "installation_id": .s(firstBoot.installation_id), "pinned_person_ids": .array([])]), context: firstBoot.context_id)
+        var person: String?
+        for item in generation.manifest.items {
+            let page: Page = try await first.call("/reconciliations/\(generation.generation_id)/people/\(item.person_id)/summary", context: firstBoot.context_id)
+            if page.summary?["last_name"].text == "001" { person = item.person_id; break }
+        }
+        let target = try XCTUnwrap(person)
+        let create = Envelope(context_id: firstBoot.context_id, operation_id: UUID().uuidString.lowercased(), kind: "add_note", device_recorded_at: stamp(), payload: .object(["person_id": .s(target), "body": .s("iOS Mobile002 QA " + UUID().uuidString)]))
+        let created = try await first.operation(try encode(create), context: firstBoot.context_id)
+        XCTAssertNil(created.committed_revision)
+        let current = try await first.currentNote(person: target, note: created.resource_id, context: firstBoot.context_id)
+        let note = try XCTUnwrap(current.note); XCTAssertEqual(note["revision"].text, "1")
+        let edit = Envelope(context_id: firstBoot.context_id, operation_id: UUID().uuidString.lowercased(), kind: "edit_note", device_recorded_at: stamp(), payload: .object(["person_id": .s(target), "note_id": .s(created.resource_id), "expected_revision": .s("1"), "body": .s("iOS accepted edit")]))
+        first.dropNextOperationResponse = true
+        do { _ = try await first.operation(try encode(edit), context: firstBoot.context_id); XCTFail("deliberately dropped accepted response") }
+        catch LocalError.lostResponse { }
+        let replay = try await first.operation(try encode(edit), context: firstBoot.context_id)
+        XCTAssertTrue(replay.replayed); XCTAssertEqual(replay.committed_revision, "2")
+        let (second, secondBoot) = try await connect(email: "second@mobile.test")
+        let secondEdit = Envelope(context_id: secondBoot.context_id, operation_id: UUID().uuidString.lowercased(), kind: "edit_note", device_recorded_at: stamp(), payload: .object(["person_id": .s(target), "note_id": .s(created.resource_id), "expected_revision": .s("2"), "body": .s("second actor edit")]))
+        _ = try await second.operation(try encode(secondEdit), context: secondBoot.context_id)
+        let stale = Envelope(context_id: firstBoot.context_id, operation_id: UUID().uuidString.lowercased(), kind: "edit_note", device_recorded_at: stamp(), payload: .object(["person_id": .s(target), "note_id": .s(created.resource_id), "expected_revision": .s("2"), "body": .s("must conflict")]))
+        do { _ = try await first.operation(try encode(stale), context: firstBoot.context_id); XCTFail("stale revision must conflict") }
+        catch let error as APIError { XCTAssertEqual(error.code, "revision_conflict") }
+        let refreshed = try await first.currentNote(person: target, note: created.resource_id, context: firstBoot.context_id)
+        XCTAssertEqual(refreshed.note?["body"].text, "second actor edit"); XCTAssertEqual(refreshed.note?["revision"].text, "3")
+    }
+    #endif
 }

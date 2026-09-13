@@ -62,7 +62,7 @@ class TaskConflictUiTest {
                 PersonScreen(
                     FieldUi(locked = false, person = row.value, operations = listOf(op)),
                     FieldRepository(context),
-                    {},
+                    { _, _ -> },
                     {},
                 )
             }

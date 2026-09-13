@@ -1,0 +1,18 @@
+{
+  "allowed_increase_ms": 25.0,
+  "alternating_order": true,
+  "baseline_commit": "9eaeb0a",
+  "clock": "2026-09-13T01:31:11Z",
+  "database": "crm_mobile_001",
+  "dto_equal": true,
+  "dto_sha256": "f732cb94b068d865d680bf4dca01dbc5e91a7bde96f0294be7882a745599e41e",
+  "items": 100,
+  "new_median_ms": 13.2578955,
+  "new_p95_ms": 14.089333,
+  "old_median_ms": 13.1300835,
+  "old_p95_ms": 13.799416,
+  "passed": true,
+  "same_build": true,
+  "samples_per_side": 40,
+  "warmups_per_side": 10
+}

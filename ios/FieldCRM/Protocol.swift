@@ -65,6 +65,25 @@ struct Manifest: Codable, Sendable { let items: [ManifestItem]; let next_cursor:
 struct Generation: Codable, Sendable {
     let generation_id: String, context_id: String, evaluated_at: String, expires_at: String
     let complete: Bool, selected_count: Int, manifest: Manifest
+    let stage_catalog: StageCatalog?
+    init(generation_id: String, context_id: String, evaluated_at: String, expires_at: String, complete: Bool, selected_count: Int, manifest: Manifest, stage_catalog: StageCatalog? = nil) {
+        self.generation_id = generation_id; self.context_id = context_id; self.evaluated_at = evaluated_at; self.expires_at = expires_at
+        self.complete = complete; self.selected_count = selected_count; self.manifest = manifest; self.stage_catalog = stage_catalog
+    }
+}
+struct StageCatalog: Codable, Equatable, Sendable { let revision: String, stages_url: String }
+struct Stage: Codable, Equatable, Identifiable, Sendable {
+    let id: String, name: String, position: Int
+    init(id: String, name: String, position: Int) { self.id = id; self.name = name; self.position = position }
+    enum CodingKeys: String, CodingKey { case id, name, position }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id); name = try c.decode(String.self, forKey: .name)
+        position = try c.decodeIfPresent(Int.self, forKey: .position) ?? 0
+    }
+}
+struct StagePage: Codable, Sendable {
+    let generation_id: String, revision: String, items: [Stage], next_cursor: String?, complete: Bool
 }
 struct Page: Codable, Sendable {
     let generation_id: String, person_id: String, revision: String, section: String
@@ -79,6 +98,9 @@ struct CurrentRecordResponse: Codable, Sendable {
     let note: JSON?
     let task: JSON?
     var record: JSON? { note ?? task }
+}
+struct CurrentStageResponse: Codable, Sendable {
+    let context_id: String, person_id: String, person_revision: String, stage_revision: String, stage: Stage
 }
 struct Bundle: Codable, Sendable {
     let person: String, revision: String, summary: JSON, contacts: [JSON], tasks: [JSON]
@@ -131,9 +153,11 @@ struct Queued: Identifiable, Sendable {
     let attempts: Int, retryAt: Double
     var id: String { envelope.operation_id }
     var isContact: Bool { envelope.kind == "log_contact_attempt" }
+    var isStage: Bool { envelope.kind == "change_person_stage" }
     var title: String {
         if envelope.kind == "add_note" || envelope.kind == "edit_note" { return envelope.payload["body"].text }
         if isContact { return [envelope.payload["channel"].text, envelope.payload["outcome"].text, envelope.payload["occurred_at"].text].filter { !$0.isEmpty }.joined(separator: " · ") }
+        if isStage { return envelope.payload["stage_id"].text }
         if ["create_task", "update_task"].contains(envelope.kind) { return envelope.payload["title"].text }
         return ""
     }
@@ -141,6 +165,7 @@ struct Queued: Identifiable, Sendable {
         if envelope.kind == "edit_note" { return envelope.payload["note_id"].text }
         if envelope.kind == "update_task" { return envelope.payload["task_id"].text }
         if envelope.kind == "complete_task" { return envelope.payload["target"]["task_id"].text.isEmpty ? nil : envelope.payload["target"]["task_id"].text }
+        if envelope.kind == "change_person_stage" { return envelope.payload["person_id"].text }
         return nil
     }
 }

@@ -5,6 +5,7 @@ struct APIError: Error, LocalizedError {
     var errorDescription: String? {
         switch code {
         case "revision_conflict": "This task changed on the server. Review its refreshed version before choosing another action."
+        case "invalid_stage": "That stage is no longer available. Your saved proposal is retained."
         case "not_found": "This action cannot be confirmed or the record is no longer available. Saved input is retained."
         case "workspace_in_migration_review": "This workspace is held for migration review. Saved work is protected."
         case "protocol_unsupported": "This app must be updated before synchronizing. Saved work is retained."
@@ -34,7 +35,7 @@ private final class NoRedirect: NSObject, URLSessionTaskDelegate, @unchecked Sen
         var permitted = url.scheme == "https"
         #if DEBUG && targetEnvironment(simulator)
         let debugPort: Int
-        #if MOBILE002_QA || MOBILE003_QA
+        #if MOBILE002_QA || MOBILE003_QA || MOBILE004_QA || MOBILE004_UPGRADE_QA
         debugPort = 3102
         #else
         debugPort = 3101
@@ -72,6 +73,9 @@ private final class NoRedirect: NSObject, URLSessionTaskDelegate, @unchecked Sen
     }
     func currentTask(person: String, task: String, context: String) async throws -> CurrentRecordResponse {
         try await call("/people/\(person)/tasks/\(task)", context: context)
+    }
+    func currentStage(person: String, context: String) async throws -> CurrentStageResponse {
+        try await call("/people/\(person)/stage", context: context)
     }
     func verifyAuthority(_ boot: Bootstrap) async throws {
         let (data, _) = try await raw("/api/me", method: "GET")

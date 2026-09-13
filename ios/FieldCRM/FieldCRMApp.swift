@@ -161,7 +161,7 @@ struct PeopleView: View {
                 NavigationLink { PersonView(personID: person.person) } label: {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(person.summary["display_name"].text).font(.headline)
-                        Text(person.summary["stage"]["name"].text).font(.caption).foregroundStyle(.secondary)
+                        Text(model.displayedStageName(person)).font(.caption).foregroundStyle(.secondary)
                     }.padding(.vertical, 3)
                 }.accessibilityIdentifier("person_" + person.person)
             }
@@ -178,6 +178,7 @@ struct PersonView: View {
     let personID: String
     @State private var composer: Draft?
     @State private var contactComposer: Draft?
+    @State private var stageProposal: StageProposal?
     var bundle: Bundle? { model.people.first { $0.person == personID } }
     var overlays: [Queued] { model.queue.filter { $0.envelope.person == personID && $0.overlay } }
     var body: some View {
@@ -185,7 +186,7 @@ struct PersonView: View {
             if let bundle {
                 Section {
                     Text(bundle.summary["display_name"].text).font(.title2.bold())
-                    Label(bundle.summary["stage"]["name"].text, systemImage: "flag")
+                    Label(model.displayedStageName(bundle), systemImage: "flag")
                     Text("Responsible: " + (bundle.summary["assigned_user"]["display_name"].text.isEmpty ? "Unassigned" : bundle.summary["assigned_user"]["display_name"].text)).font(.subheadline)
                     ForEach(Array(bundle.contacts.enumerated()), id: \.offset) { _, contact in Text(contact["value"].text).textSelection(.enabled) }
                 }
@@ -193,6 +194,7 @@ struct PersonView: View {
                     Button("Add note") { composer = Draft(id: UUID().uuidString, person: personID, kind: "add_note", text: "", revision: 0) }.accessibilityIdentifier("addNote")
                     Button("Create task") { composer = Draft(id: UUID().uuidString, person: personID, kind: "create_task", text: "", revision: 0) }.accessibilityIdentifier("createTask")
                     Button("Log contact") { contactComposer = try? model.newContactDraft(person: personID) }.disabled(!model.canLogContact).accessibilityIdentifier("logContact")
+                    Button("Change stage") { stageProposal = try? model.newStageProposal(person: personID) }.disabled(!model.canChangeStage).accessibilityIdentifier("changeStage")
                     Text(model.canLogContact ? "For a manual interaction that already happened. Calls made through the CRM already have a contact record." : "Contact logging is unavailable for this account. Existing saved work is retained.").font(.caption).foregroundStyle(.secondary)
                 }
                 if !overlays.isEmpty {
@@ -250,6 +252,38 @@ struct PersonView: View {
         }.navigationTitle("Person").navigationBarTitleDisplayMode(.inline)
             .sheet(item: $composer) { draft in ComposerView(initial: draft).environmentObject(model) }
             .sheet(item: $contactComposer) { draft in ContactComposerView(initial: draft).environmentObject(model) }
+            .sheet(item: $stageProposal) { proposal in StageProposalView(initial: proposal).environmentObject(model) }
+    }
+}
+struct StageProposalView: View {
+    @EnvironmentObject private var model: FieldModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var proposal: StageProposal
+    @State private var status = "Choose a stage. The downloaded server stage remains in place until sync succeeds."
+    @State private var failed = false
+    init(initial: StageProposal) { _proposal = State(initialValue: initial) }
+    var stages: [Stage] { model.availableStages() }
+    var selected: Stage? { stages.first(where: { $0.id == proposal.selectedID }) }
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Downloaded server stage") { Text(proposal.baseline.name); Text("Stage revision \(proposal.expected)").font(.caption).foregroundStyle(.secondary) }
+                Section("Proposed stage") {
+                    Picker("Stage", selection: $proposal.selectedID) { ForEach(stages) { stage in Text(stage.name).tag(stage.id) } }.accessibilityIdentifier("stagePicker")
+                    Text("This saves a proposal on this device. Today is not recomputed locally.").font(.caption).foregroundStyle(.secondary)
+                }
+                Section { Text(status).font(.caption).foregroundStyle(failed ? .red : .secondary).accessibilityIdentifier("stageDraftStatus") }
+                Button("Save stage proposal on device") {
+                    do {
+                        guard let selected else { throw LocalError.invalidInput }
+                        try model.queueStage(person: proposal.person, baseline: proposal.baseline, expected: proposal.expected, proposal: selected, superseding: proposal.superseding)
+                        dismiss()
+                    } catch { status = error.localizedDescription; failed = true }
+                }.disabled(selected == nil || failed).accessibilityIdentifier("saveStage")
+            }.navigationTitle("Change stage")
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() }.disabled(failed) } }
+                .interactiveDismissDisabled(failed)
+        }
     }
 }
 struct ComposerView: View {
@@ -370,13 +404,16 @@ struct QueueView: View {
     @EnvironmentObject private var model: FieldModel
     @State private var composer: Draft?
     @State private var contactComposer: Draft?
+    @State private var stageProposal: StageProposal?
     var body: some View {
         List {
             Section { Text("\(model.pendingCount) pending · \(model.drafts.count) saved drafts").accessibilityIdentifier("queueCount") }
             if !model.drafts.isEmpty {
                 Section("Drafts") { ForEach(model.drafts) { draft in
-                    Button(draft.kind == "log_contact_attempt" ? "Manual contact · " + [draft.contactChannel, draft.contactOutcome, draft.occurredAt].compactMap { $0 }.joined(separator: " · ") : (draft.text.isEmpty ? "Empty draft" : draft.text)) {
-                        if draft.kind == "log_contact_attempt" { contactComposer = draft } else { composer = draft }
+                    Button(draft.kind == "log_contact_attempt" ? "Manual contact · " + [draft.contactChannel, draft.contactOutcome, draft.occurredAt].compactMap { $0 }.joined(separator: " · ") : (draft.kind == "change_person_stage" ? "Stage proposal · " + (draft.proposal?["name"].text ?? "") : (draft.text.isEmpty ? "Empty draft" : draft.text))) {
+                        if draft.kind == "log_contact_attempt" { contactComposer = draft }
+                        else if draft.kind == "change_person_stage" { stageProposal = try? model.revisedStageProposal(draft) }
+                        else { composer = draft }
                     }
                     if draft.mode == "follow_up" { Text("Saved draft — waiting for the previous change").font(.caption).foregroundStyle(.orange) }
                     if draft.mode == "conflict" { Text("Conflict requires review").font(.caption).foregroundStyle(.orange) }
@@ -390,7 +427,10 @@ struct QueueView: View {
                         if op.error != "not_found" && op.error != "forbidden" { Text(op.title.isEmpty ? (op.isContact ? "Manual contact attempt" : "Task completion") : op.title).lineLimit(4) }
                         if let error = op.error { Text(APIError(status: 409, code: error).localizedDescription).font(.caption).foregroundStyle(.secondary) }
                         if op.status == "conflict", let draft = model.drafts.first(where: { $0.predecessor == op.id }) {
-                            Button("Review conflict") { composer = draft }
+                            Button("Review conflict") {
+                                if op.isStage { stageProposal = try? model.revisedStageProposal(draft) }
+                                else { composer = draft }
+                            }
                         } else if op.status == "attention" && op.error == "contact_time_in_future" && op.isContact {
                             Button("Correct reported time in a new contact") { contactComposer = try? model.revisedContactDraft(from: op) }
                             Text("The original saved action remains unchanged because the server rejected its reported future time.").font(.caption).foregroundStyle(.secondary)
@@ -403,5 +443,6 @@ struct QueueView: View {
             }
         }.navigationTitle("Saved work").sheet(item: $composer) { draft in ComposerView(initial: draft).environmentObject(model) }
             .sheet(item: $contactComposer) { draft in ContactComposerView(initial: draft).environmentObject(model) }
+            .sheet(item: $stageProposal) { proposal in StageProposalView(initial: proposal).environmentObject(model) }
     }
 }

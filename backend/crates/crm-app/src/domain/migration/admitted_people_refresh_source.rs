@@ -1,9 +1,9 @@
 //! Deliberately small source helpers. The worker only accepts a retained record
 //! whose capture, ordinal and semantic HMAC agree with the immutable index.
 use super::{
+    admitted_people_refresh_store::CAPTURE_LIMIT,
     crypto,
     import_source::{self, Entity, ExtractedRecord},
-    admitted_people_refresh_store::CAPTURE_LIMIT,
     snapshot_source::Stream,
     MigrationError,
 };
@@ -11,13 +11,23 @@ use crate::{config::RawPayloadKey, ids::OrganizationId};
 use serde_json::{json, Value};
 use sqlx::{PgConnection, Row};
 use uuid::Uuid;
+
+/// A missing later observation is explicit non-deletion evidence. Retained
+/// observations that cannot be trusted are materially different: the worker
+/// must hold the Person rather than silently call damaged evidence absence.
+pub enum RetainedPerson {
+    Missing,
+    EvidenceGap,
+    Present(ExtractedRecord, Uuid, i32),
+}
+
 pub async fn retained_person(
     conn: &mut PgConnection,
     key: &RawPayloadKey,
     org: OrganizationId,
     snapshot: Uuid,
     source_id: &str,
-) -> Result<Option<(ExtractedRecord, Uuid, i32)>, MigrationError> {
+) -> Result<RetainedPerson, MigrationError> {
     // A source ID may have been observed on more than one retained page. Every
     // observation is evidence: equal semantic records are safe repetition,
     // while a semantic disagreement is ambiguity. Do not choose a later
@@ -39,8 +49,11 @@ pub async fn retained_person(
     .bind(source_id)
     .fetch_all(&mut *conn)
     .await?;
-    if rows.is_empty() || rows.len() > 50 {
-        return Ok(None);
+    if rows.is_empty() {
+        return Ok(RetainedPerson::Missing);
+    }
+    if rows.len() > 50 {
+        return Ok(RetainedPerson::EvidenceGap);
     }
 
     let mut semantic: Option<Vec<u8>> = None;
@@ -56,7 +69,7 @@ pub async fn retained_person(
             || raw_len > CAPTURE_LIMIT
             || raw_total.saturating_add(raw_len) > CAPTURE_LIMIT
         {
-            return Ok(None);
+            return Ok(RetainedPerson::EvidenceGap);
         }
         // Fetch and open one raw capture at a time. This validates every
         // repeated observation without materializing an unbounded capture set.
@@ -105,13 +118,15 @@ pub async fn retained_person(
             return Err(MigrationError::Crypto);
         }
         if !same_semantic(&mut semantic, &observed) {
-            return Ok(None);
+            return Ok(RetainedPerson::EvidenceGap);
         }
         if selected.is_none() {
             selected = Some((item, capture_id, row.get("ordinal")));
         }
     }
-    Ok(selected)
+    Ok(selected
+        .map(|(record, capture, ordinal)| RetainedPerson::Present(record, capture, ordinal))
+        .unwrap_or(RetainedPerson::EvidenceGap))
 }
 
 fn same_semantic(expected: &mut Option<Vec<u8>>, observed: &[u8]) -> bool {

@@ -1,8 +1,8 @@
 //! Fenced retained-only preparation/execution loop for admitted People refreshes.
 use super::{
-    crypto,
+    admitted_people_refresh_source as source, admitted_people_refresh_store as s, crypto,
     import_source::{Entity, ExtractedRecord},
-    imports, admitted_people_refresh_source as source, admitted_people_refresh_store as s,
+    imports,
     snapshot::SnapshotPolicy,
     store, MigrationError,
 };
@@ -548,8 +548,10 @@ async fn prepare(
 ) -> Result<(), MigrationError> {
     let id: Uuid = r.get("id");
     let org = OrganizationId::new(r.get("organization_id"));
+    // A recovery from the short-lived pre-direct-seal phase can only seal the
+    // cohort plan already prepared; it must never traverse report groups.
     if r.get::<String, _>("preparation_phase") == "groups" {
-        return prepare_groups(conn, key, r).await;
+        return seal_prepared_plan(conn, r).await;
     }
     let building=sqlx::query("SELECT id,revision FROM migration_admitted_people_refresh_plan WHERE refresh_id=$1 AND organization_id=$2 AND state='building' ORDER BY revision DESC LIMIT 1 FOR UPDATE").bind(id).bind(org.0).fetch_optional(&mut *conn).await?;
     let (plan, _revision) = if let Some(building) = building {
@@ -581,17 +583,37 @@ async fn prepare(
         last_source = source_id.clone();
         // B is the exact encrypted admission projection plus committed contact
         // UUIDs. It is never reconstructed from today's native Person state.
-        let mut b: Value = super::people_admission_store::open(key, org, row.get("admission_id"), row.get("admission_item_id"), "projection", &row.get::<Vec<u8>, _>("projection_nonce"), &row.get::<Vec<u8>, _>("projection_ciphertext"))?;
+        let mut b: Value = super::people_admission_store::open(
+            key,
+            org,
+            row.get("admission_id"),
+            row.get("admission_item_id"),
+            "projection",
+            &row.get::<Vec<u8>, _>("projection_nonce"),
+            &row.get::<Vec<u8>, _>("projection_ciphertext"),
+        )?;
         let owned = sqlx::query("SELECT id,kind,import_order,value_nonce,value_ciphertext FROM migration_people_admission_contact WHERE admission_id=$1 AND item_id=$2 AND organization_id=$3 ORDER BY kind,import_order")
             .bind(row.get::<Uuid,_>("admission_id")).bind(row.get::<Uuid,_>("admission_item_id")).bind(org.0).fetch_all(&mut *conn).await?;
-        let contacts = b.as_object_mut().ok_or(MigrationError::Crypto)?
-            .entry("contacts").or_insert_with(|| Value::Array(Vec::new()))
-            .as_array_mut().ok_or(MigrationError::Crypto)?;
+        let contacts = b
+            .as_object_mut()
+            .ok_or(MigrationError::Crypto)?
+            .entry("contacts")
+            .or_insert_with(|| Value::Array(Vec::new()))
+            .as_array_mut()
+            .ok_or(MigrationError::Crypto)?;
         if !contacts.is_empty() {
             return Err(MigrationError::Crypto);
         }
         for owned in owned {
-            let input: super::import_source::ContactInput = super::people_admission_store::open(key, org, row.get("admission_id"), owned.get("id"), "contact", &owned.get::<Vec<u8>, _>("value_nonce"), &owned.get::<Vec<u8>, _>("value_ciphertext"))?;
+            let input: super::import_source::ContactInput = super::people_admission_store::open(
+                key,
+                org,
+                row.get("admission_id"),
+                owned.get("id"),
+                "contact",
+                &owned.get::<Vec<u8>, _>("value_nonce"),
+                &owned.get::<Vec<u8>, _>("value_ciphertext"),
+            )?;
             contacts.push(json!({
                 "id": owned.get::<Uuid, _>("id"),
                 "kind": owned.get::<String, _>("kind"),
@@ -649,31 +671,57 @@ async fn prepare(
         let c = json!({"first_name":native.get::<Option<String>,_>("first_name"),"last_name":native.get::<Option<String>,_>("last_name"),"stage_id":native.get::<Uuid,_>("stage_id"),"assigned_user_id":native.get::<Option<Uuid>,_>("assigned_user_id"),"contacts":native.get::<Value,_>("contacts")});
         let newer =
             source::retained_person(conn, key, org, r.get("newer_snapshot_id"), &source_id).await?;
-        let Some((newer, capture, ordinal)) = newer else {
-            held += 1;
-            insert_item(
-                conn,
-                key,
-                org,
-                id,
-                plan,
-                item,
-                &source_id,
-                row.get("admission_result_id"),
-                row.get("person_id"),
-                "not_seen_again",
-                &b,
-                &c,
-                // An absent Person in the newer retained capture is explicit
-                // non-deletion evidence. Preserve B as the displayed proposal
-                // so the item cannot look like a synthetic clear/removal.
-                &b,
-                None,
-                None,
-                &[],
-            )
-            .await?;
-            continue;
+        let (newer, capture, ordinal) = match newer {
+            source::RetainedPerson::Missing => {
+                held += 1;
+                insert_item(
+                    conn,
+                    key,
+                    org,
+                    id,
+                    plan,
+                    item,
+                    &source_id,
+                    row.get("admission_result_id"),
+                    row.get("person_id"),
+                    "not_seen_again",
+                    &b,
+                    &c,
+                    // An absent Person in the newer retained capture is explicit
+                    // non-deletion evidence. Preserve B as the displayed proposal
+                    // so the item cannot look like a synthetic clear/removal.
+                    &b,
+                    None,
+                    None,
+                    &[],
+                )
+                .await?;
+                continue;
+            }
+            source::RetainedPerson::EvidenceGap => {
+                held += 1;
+                insert_item(
+                    conn,
+                    key,
+                    org,
+                    id,
+                    plan,
+                    item,
+                    &source_id,
+                    row.get("admission_result_id"),
+                    row.get("person_id"),
+                    "held_evidence_gap",
+                    &b,
+                    &c,
+                    &json!({}),
+                    None,
+                    None,
+                    &[],
+                )
+                .await?;
+                continue;
+            }
+            source::RetainedPerson::Present(newer, capture, ordinal) => (newer, capture, ordinal),
         };
         let source::PeopleOverlay {
             projection: mut n,
@@ -830,13 +878,11 @@ async fn prepare(
         sqlx::query("UPDATE migration_admitted_people_refresh SET preparation_checkpoint_key=$3,updated_at=clock_timestamp() WHERE id=$1 AND organization_id=$2").bind(id).bind(org.0).bind(&last_source).execute(conn).await?;
         return Ok(());
     }
-    sqlx::query("UPDATE migration_admitted_people_refresh SET preparation_phase='groups',preparation_checkpoint_key='',updated_at=clock_timestamp() WHERE id=$1 AND organization_id=$2").bind(id).bind(org.0).execute(&mut *conn).await?;
-    Ok(())
+    seal_prepared_plan(conn, r).await
 }
 
-async fn prepare_groups(
+async fn seal_prepared_plan(
     conn: &mut sqlx::PgConnection,
-    key: &RawPayloadKey,
     r: &sqlx::postgres::PgRow,
 ) -> Result<(), MigrationError> {
     let id: Uuid = r.get("id");
@@ -844,88 +890,14 @@ async fn prepare_groups(
     let plan=sqlx::query("SELECT id,revision FROM migration_admitted_people_refresh_plan WHERE refresh_id=$1 AND organization_id=$2 AND state='building' ORDER BY revision DESC LIMIT 1 FOR UPDATE").bind(id).bind(org.0).fetch_optional(&mut *conn).await?.ok_or(MigrationError::Crypto)?;
     let plan_id: Uuid = plan.get("id");
     let revision: i64 = plan.get("revision");
-    // Every cohort identity was walked in `prepare`; unlike 010e2 there is no
-    // original-import report group to add here. Sealing directly avoids an
-    // accidental second population of closed items from unrelated People.
-    if r.get::<String, _>("preparation_phase") == "groups" {
+    // Every cohort identity is walked in `prepare`. There is no original-import
+    // report traversal here: it would manufacture closed items for People
+    // outside the one terminal admission's settled cohort.
     let totals=sqlx::query("SELECT eligible_count,already_current_count,held_count,excluded_count,no_instruction_count,name_clear_count,assignment_clear_count,contact_removal_count FROM migration_admitted_people_refresh_plan WHERE id=$1 AND organization_id=$2").bind(plan_id).bind(org.0).fetch_one(&mut *conn).await?;
-    let plan_digest = digest(&json!({"refresh":id,"plan":plan_id,"revision":revision,"eligible":totals.get::<i64,_>("eligible_count"),"current":totals.get::<i64,_>("already_current_count"),"held":totals.get::<i64,_>("held_count"),"excluded":totals.get::<i64,_>("excluded_count"),"no_instruction":totals.get::<i64,_>("no_instruction_count"),"name_clears":totals.get::<i64,_>("name_clear_count"),"assignment_clears":totals.get::<i64,_>("assignment_clear_count"),"contact_removals":totals.get::<i64,_>("contact_removal_count")}));
-    sqlx::query("UPDATE migration_admitted_people_refresh_plan SET prepared_bytes=prepared_bytes+$3,state='ready',digest=$4,sealed_at=clock_timestamp(),expires_at=clock_timestamp()+interval '10 minutes' WHERE id=$1 AND organization_id=$2").bind(plan_id).bind(org.0).bind(i64::try_from(plan_digest.len()).unwrap_or(i64::MAX)).bind(plan_digest.as_slice()).execute(&mut *conn).await?;
-    sqlx::query("UPDATE migration_admitted_people_refresh SET state='ready',updated_at=clock_timestamp() WHERE id=$1 AND organization_id=$2").bind(id).bind(org.0).execute(conn).await?;
-        return Ok(());
-    }
-
-    let checkpoint: String = r.get("preparation_checkpoint_key");
-    // Traverse the next raw report descriptors first. Filtering imported source
-    // IDs inside this statement turns a complete report into an unbounded
-    // anti-join; each bounded descriptor instead performs its own exact parent
-    // membership lookup below while the checkpoint still advances over it.
-    let rows=sqlx::query("SELECT g.source_key,g.source_id,g.disposition FROM migration_core_change_group g WHERE g.report_id=$1 AND g.organization_id=$2 AND g.family='people' AND g.source_key>$3 ORDER BY g.source_key LIMIT 50").bind(r.get::<Uuid,_>("report_id")).bind(org.0).bind(&checkpoint).fetch_all(&mut *conn).await?;
-    let more = rows.len() == 50;
-    let mut last = checkpoint;
-    let mut held = 0i64;
-    let mut excluded = 0i64;
-    for row in rows {
-        let source_key: String = row.get("source_key");
-        last = source_key.clone();
-        let is_imported = match row.get::<Option<String>, _>("source_id") {
-            Some(source_id) => {
-                sqlx::query_scalar::<_, bool>(
-                    "SELECT EXISTS(SELECT 1 FROM migration_import_result
-                  WHERE import_id=$1 AND organization_id=$2 AND disposition='imported'
-                    AND source_id=$3)",
-                )
-                .bind(r.get::<Uuid, _>("parent_import_id"))
-                .bind(org.0)
-                .bind(source_id)
-                .fetch_one(&mut *conn)
-                .await?
-            }
-            None => false,
-        };
-        if is_imported {
-            continue;
-        }
-        let disposition = match row.get::<Option<String>, _>("disposition").as_deref() {
-            Some("newly_observed") => {
-                excluded += 1;
-                "excluded_source_only"
-            }
-            Some("not_seen_again") => {
-                held += 1;
-                "not_seen_again"
-            }
-            Some("unchanged") | Some("changed") => {
-                held += 1;
-                "held_original_hold"
-            }
-            _ => {
-                held += 1;
-                "held_evidence_gap"
-            }
-        };
-        insert_closed_group(
-            conn,
-            key,
-            org,
-            id,
-            plan_id,
-            &source_key,
-            row.get::<Option<String>, _>("source_id").as_deref(),
-            disposition,
-        )
-        .await?;
-    }
-    sqlx::query("UPDATE migration_admitted_people_refresh_plan SET held_count=held_count+$3,excluded_count=excluded_count+$4 WHERE id=$1 AND organization_id=$2").bind(plan_id).bind(org.0).bind(held).bind(excluded).execute(&mut *conn).await?;
-    if more {
-        sqlx::query("UPDATE migration_admitted_people_refresh SET preparation_checkpoint_key=$3,updated_at=clock_timestamp() WHERE id=$1 AND organization_id=$2").bind(id).bind(org.0).bind(&last).execute(conn).await?;
-        return Ok(());
-    }
-    let totals=sqlx::query("SELECT eligible_count,already_current_count,held_count,excluded_count,no_instruction_count,name_clear_count,assignment_clear_count,contact_removal_count FROM migration_admitted_people_refresh_plan WHERE id=$1 AND organization_id=$2").bind(plan_id).bind(org.0).fetch_one(&mut *conn).await?;
-    let digest = digest(
+    let plan_digest = digest(
         &json!({"refresh":id,"plan":plan_id,"revision":revision,"eligible":totals.get::<i64,_>("eligible_count"),"current":totals.get::<i64,_>("already_current_count"),"held":totals.get::<i64,_>("held_count"),"excluded":totals.get::<i64,_>("excluded_count"),"no_instruction":totals.get::<i64,_>("no_instruction_count"),"name_clears":totals.get::<i64,_>("name_clear_count"),"assignment_clears":totals.get::<i64,_>("assignment_clear_count"),"contact_removals":totals.get::<i64,_>("contact_removal_count")}),
     );
-    sqlx::query("UPDATE migration_admitted_people_refresh_plan SET prepared_bytes=prepared_bytes+$3,state='ready',digest=$4,sealed_at=clock_timestamp(),expires_at=clock_timestamp()+interval '10 minutes' WHERE id=$1 AND organization_id=$2").bind(plan_id).bind(org.0).bind(i64::try_from(digest.len()).unwrap_or(i64::MAX)).bind(digest.as_slice()).execute(&mut *conn).await?;
+    sqlx::query("UPDATE migration_admitted_people_refresh_plan SET prepared_bytes=prepared_bytes+$3,state='ready',digest=$4,sealed_at=clock_timestamp(),expires_at=clock_timestamp()+interval '10 minutes' WHERE id=$1 AND organization_id=$2").bind(plan_id).bind(org.0).bind(i64::try_from(plan_digest.len()).unwrap_or(i64::MAX)).bind(plan_digest.as_slice()).execute(&mut *conn).await?;
     sqlx::query("UPDATE migration_admitted_people_refresh SET state='ready',updated_at=clock_timestamp() WHERE id=$1 AND organization_id=$2").bind(id).bind(org.0).execute(conn).await?;
     Ok(())
 }
@@ -989,16 +961,17 @@ async fn insert_item(
             contacts.push((side, contact.clone(), contact_id, sealed));
         }
     }
-    // `before` + `after` result and a possible last-settled baseline head.
+    // `before` + `after` result, the independently encrypted immutable
+    // provenance copy for a settled update, and a possible baseline head.
     item_bound = item_bound
-        .saturating_add(sealed_bytes(&a))
-        .saturating_add(sealed_bytes(&e).saturating_mul(2));
+        .saturating_add(sealed_bytes(&a).saturating_mul(2))
+        .saturating_add(sealed_bytes(&e).saturating_mul(3));
     if item_bound > s::ITEM_LIMIT {
         return Err(MigrationError::StorageLimit);
     }
     let prepared = item_bound
-        .saturating_sub(sealed_bytes(&a))
-        .saturating_sub(sealed_bytes(&e).saturating_mul(2));
+        .saturating_sub(sealed_bytes(&a).saturating_mul(2))
+        .saturating_sub(sealed_bytes(&e).saturating_mul(3));
     sqlx::query("INSERT INTO migration_admitted_people_refresh_item(id,refresh_id,plan_id,organization_id,source_key,source_id,person_id,admission_id,admission_item_id,admission_result_id,baseline_version,disposition,proposed_nonce,proposed_ciphertext,baseline_nonce,baseline_ciphertext,current_nonce,current_ciphertext,instructions_nonce,instructions_ciphertext,name_clear_count,assignment_clear_count,contact_removal_count,source_capture_id,source_ordinal,item_byte_bound) VALUES($1,$2,$3,$4,$5,$6,$7,(SELECT admission_id FROM migration_people_admission_result WHERE id=$8 AND organization_id=$4),(SELECT item_id FROM migration_people_admission_result WHERE id=$8 AND organization_id=$4),$8,(SELECT version FROM migration_admitted_people_refresh_baseline WHERE organization_id=$4 AND admission_id=(SELECT admission_id FROM migration_people_admission_result WHERE id=$8 AND organization_id=$4) AND source_id=$6),$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)").bind(item).bind(refresh).bind(plan).bind(org.0).bind(source_id).bind(source_id).bind(person).bind(result).bind(disposition).bind(e.nonce.as_slice()).bind(e.ciphertext).bind(a.nonce.as_slice()).bind(a.ciphertext).bind(d.nonce.as_slice()).bind(d.ciphertext).bind(instructions.nonce.as_slice()).bind(instructions.ciphertext).bind(name_clears).bind(assignment_clears).bind(contact_removals).bind(capture).bind(ordinal).bind(item_bound).execute(&mut *conn).await?;
     for (side, contact, contact_id, sealed) in contacts {
         sqlx::query("INSERT INTO migration_admitted_people_refresh_contact(id,item_id,refresh_id,organization_id,side,contact_id,kind,import_order,value_nonce,value_ciphertext) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT(item_id,side,kind,import_order) DO NOTHING").bind(contact_id).bind(item).bind(refresh).bind(org.0).bind(side).bind(contact["id"].as_str().and_then(|v|Uuid::parse_str(v).ok())).bind(contact["kind"].as_str()).bind(contact["import_order"].as_i64().unwrap_or_default() as i32).bind(sealed.nonce.as_slice()).bind(sealed.ciphertext).execute(&mut *conn).await?;
@@ -1009,35 +982,6 @@ async fn insert_item(
     Ok(())
 }
 
-// Closed groups retain the same explicit tenant/plan/evidence scope as normal
-// preview items even though they have no executable Person projection.
-#[allow(clippy::too_many_arguments)]
-async fn insert_closed_group(
-    conn: &mut sqlx::PgConnection,
-    key: &RawPayloadKey,
-    org: OrganizationId,
-    refresh: Uuid,
-    plan: Uuid,
-    source_key: &str,
-    source_id: Option<&str>,
-    disposition: &str,
-) -> Result<(), MigrationError> {
-    let item = Uuid::new_v4();
-    let empty = json!({});
-    // Group-only rows have no executable source fields, so they carry no
-    // per-field no-instruction warning. Their explicit disposition is the
-    // complete frozen explanation and remains valid for the bounded DTO.
-    let instructions = json!([]);
-    let proposed = s::seal(key, org, refresh, item, "proposed", &empty)?;
-    let baseline = s::seal(key, org, refresh, item, "baseline", &empty)?;
-    let current = s::seal(key, org, refresh, item, "current", &empty)?;
-    let instructions = s::seal(key, org, refresh, item, "instructions", &instructions)?;
-    sqlx::query("INSERT INTO migration_admitted_people_refresh_item(id,refresh_id,plan_id,organization_id,source_key,source_id,disposition,proposed_nonce,proposed_ciphertext,baseline_nonce,baseline_ciphertext,current_nonce,current_ciphertext,instructions_nonce,instructions_ciphertext,item_byte_bound) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,65536)")
-        .bind(item).bind(refresh).bind(plan).bind(org.0).bind(source_key).bind(source_id).bind(disposition)
-        .bind(proposed.nonce.as_slice()).bind(proposed.ciphertext).bind(baseline.nonce.as_slice()).bind(baseline.ciphertext).bind(current.nonce.as_slice()).bind(current.ciphertext).bind(instructions.nonce.as_slice()).bind(instructions.ciphertext)
-        .execute(&mut *conn).await?;
-    Ok(())
-}
 async fn execute_noop(
     conn: &mut sqlx::PgConnection,
     key: &RawPayloadKey,
@@ -1204,11 +1148,22 @@ async fn execute_noop(
             &baseline
         },
     )?;
-    let mut retained_delta = sealed_bytes(&before).saturating_add(sealed_bytes(&after));
+    let result_bytes = sealed_bytes(&before).saturating_add(sealed_bytes(&after));
+    // Provenance deliberately keeps an independently encrypted before/after
+    // envelope. It is not a pointer to the result envelope, so charge its
+    // physical bytes once in this same reservation/settlement transaction.
+    let provenance_bytes = if disposition == "settled" {
+        result_bytes
+    } else {
+        0
+    };
+    let mut retained_delta = result_bytes.saturating_add(provenance_bytes);
     let result = Uuid::new_v4();
     sqlx::query("INSERT INTO migration_admitted_people_refresh_result(id,refresh_id,item_id,organization_id,person_id,source_id,disposition,before_nonce,before_ciphertext,after_nonce,after_ciphertext,actor_user_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)").bind(result).bind(id).bind(item.get::<Uuid,_>("id")).bind(org.0).bind(item.get::<Option<Uuid>,_>("person_id")).bind(item.get::<Option<String>, _>("source_id").unwrap_or_else(|| item.get("source_key"))).bind(disposition).bind(before.nonce.as_slice()).bind(&before.ciphertext).bind(after.nonce.as_slice()).bind(&after.ciphertext).bind(r.get::<Uuid,_>("initiated_by_user_id")).execute(&mut *conn).await?;
     if disposition == "settled" {
-        let person = item.get::<Option<Uuid>, _>("person_id").ok_or(MigrationError::Crypto)?;
+        let person = item
+            .get::<Option<Uuid>, _>("person_id")
+            .ok_or(MigrationError::Crypto)?;
         sqlx::query("INSERT INTO person_admitted_refresh_provenance(id,organization_id,person_id,refresh_id,item_id,result_id,before_nonce,before_ciphertext,after_nonce,after_ciphertext) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)")
             .bind(Uuid::new_v4()).bind(org.0).bind(person).bind(id).bind(item_id).bind(result).bind(before.nonce.as_slice()).bind(before.ciphertext).bind(after.nonce.as_slice()).bind(after.ciphertext).execute(&mut *conn).await?;
     }

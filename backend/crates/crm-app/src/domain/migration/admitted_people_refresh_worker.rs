@@ -442,7 +442,7 @@ pub async fn run_once(
     if state == "preparing" {
         // A preparation turn owns one bounded reservation. Its exact retained
         // delta is charged atomically with the rows it made durable.
-        let before = s::prepared_bytes(&mut tx, org, id).await?;
+        let before = s::measured_bytes(&mut tx, org, id).await?;
         let token = match s::reserve(&mut tx, org, id, "prepare", None, 8 * 1024 * 1024, policy)
             .await
         {
@@ -456,8 +456,8 @@ pub async fn run_once(
             Err(error) => return Err(error),
         };
         prepare(&mut tx, key, &r).await?;
-        let after = s::prepared_bytes(&mut tx, org, id).await?;
-        s::release(&mut tx, org, id, token, after.saturating_sub(before)).await?;
+        let after = s::measured_bytes(&mut tx, org, id).await?;
+        s::release_delta(&mut tx, org, id, token, after.saturating_sub(before)).await?;
         tx.commit().await?;
         return Ok(true);
     };
@@ -878,6 +878,11 @@ async fn prepare(
         sqlx::query("UPDATE migration_admitted_people_refresh SET preparation_checkpoint_key=$3,updated_at=clock_timestamp() WHERE id=$1 AND organization_id=$2").bind(id).bind(org.0).bind(&last_source).execute(conn).await?;
         return Ok(());
     }
+    sqlx::query("UPDATE migration_admitted_people_refresh SET preparation_checkpoint_key='',updated_at=clock_timestamp() WHERE id=$1 AND organization_id=$2")
+        .bind(id)
+        .bind(org.0)
+        .execute(&mut *conn)
+        .await?;
     seal_prepared_plan(conn, r).await
 }
 
@@ -965,7 +970,13 @@ async fn insert_item(
     // provenance copy for a settled update, and a possible baseline head.
     item_bound = item_bound
         .saturating_add(sealed_bytes(&a).saturating_mul(2))
-        .saturating_add(sealed_bytes(&e).saturating_mul(3));
+        .saturating_add(sealed_bytes(&e).saturating_mul(3))
+        // The result and transferred baseline each persist their source ID.
+        .saturating_add(
+            i64::try_from(source_id.len())
+                .unwrap_or(i64::MAX)
+                .saturating_mul(2),
+        );
     if item_bound > s::ITEM_LIMIT {
         return Err(MigrationError::StorageLimit);
     }
@@ -1157,9 +1168,15 @@ async fn execute_noop(
     } else {
         0
     };
-    let mut retained_delta = result_bytes.saturating_add(provenance_bytes);
+    let source_id = item
+        .get::<Option<String>, _>("source_id")
+        .unwrap_or_else(|| item.get("source_key"));
+    let source_bytes = i64::try_from(source_id.len()).unwrap_or(i64::MAX);
+    let mut retained_delta = result_bytes
+        .saturating_add(provenance_bytes)
+        .saturating_add(source_bytes);
     let result = Uuid::new_v4();
-    sqlx::query("INSERT INTO migration_admitted_people_refresh_result(id,refresh_id,item_id,organization_id,person_id,source_id,disposition,before_nonce,before_ciphertext,after_nonce,after_ciphertext,actor_user_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)").bind(result).bind(id).bind(item.get::<Uuid,_>("id")).bind(org.0).bind(item.get::<Option<Uuid>,_>("person_id")).bind(item.get::<Option<String>, _>("source_id").unwrap_or_else(|| item.get("source_key"))).bind(disposition).bind(before.nonce.as_slice()).bind(&before.ciphertext).bind(after.nonce.as_slice()).bind(&after.ciphertext).bind(r.get::<Uuid,_>("initiated_by_user_id")).execute(&mut *conn).await?;
+    sqlx::query("INSERT INTO migration_admitted_people_refresh_result(id,refresh_id,item_id,organization_id,person_id,source_id,disposition,before_nonce,before_ciphertext,after_nonce,after_ciphertext,actor_user_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)").bind(result).bind(id).bind(item.get::<Uuid,_>("id")).bind(org.0).bind(item.get::<Option<Uuid>,_>("person_id")).bind(&source_id).bind(disposition).bind(before.nonce.as_slice()).bind(&before.ciphertext).bind(after.nonce.as_slice()).bind(&after.ciphertext).bind(r.get::<Uuid,_>("initiated_by_user_id")).execute(&mut *conn).await?;
     if disposition == "settled" {
         let person = item
             .get::<Option<Uuid>, _>("person_id")
@@ -1170,9 +1187,6 @@ async fn execute_noop(
     if disposition == "settled"
         || (disposition == "settled_noop" && planned_disposition == "already_current")
     {
-        let source_id = item
-            .get::<Option<String>, _>("source_id")
-            .unwrap_or_else(|| item.get("source_key"));
         let prior = sqlx::query(
             "SELECT refresh_id,octet_length(projection_nonce)+octet_length(projection_ciphertext) AS bytes
                FROM migration_admitted_people_refresh_baseline
@@ -1185,15 +1199,18 @@ async fn execute_noop(
         .await?;
         let head = s::seal(key, org, id, item_id, "last-baseline", &proposed)?;
         if let Some(prior) = prior {
-            s::debit_baseline_owner(
+            s::debit_retained_owner(
                 conn,
                 org,
                 prior.get("refresh_id"),
-                i64::from(prior.get::<i32, _>("bytes")),
+                i64::from(prior.get::<i32, _>("bytes"))
+                    .saturating_add(i64::try_from(source_id.len()).unwrap_or(i64::MAX)),
             )
             .await?;
         }
-        retained_delta = retained_delta.saturating_add(sealed_bytes(&head));
+        retained_delta = retained_delta
+            .saturating_add(sealed_bytes(&head))
+            .saturating_add(source_bytes);
         sqlx::query("UPDATE migration_admitted_people_refresh_baseline SET refresh_id=$4,result_id=$5,projection_row_id=$6,projection_nonce=$7,projection_ciphertext=$8,version=version+1,updated_at=clock_timestamp() WHERE organization_id=$1 AND admission_id=$2 AND source_id=$3").bind(org.0).bind(r.get::<Uuid,_>("admission_id")).bind(source_id).bind(id).bind(result).bind(item_id).bind(head.nonce.as_slice()).bind(head.ciphertext).execute(&mut *conn).await?;
     }
     sqlx::query("UPDATE migration_admitted_people_refresh_item SET settled_result_id=$3,settled_at=clock_timestamp() WHERE id=$1 AND refresh_id=$2").bind(item_id).bind(id).bind(result).execute(&mut *conn).await?;

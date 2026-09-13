@@ -96,6 +96,17 @@ does not implement selective erasure or prove permission to retain all copies.
 The existing development encryption key is shared, and retention/backup/key
 recovery policies remain open. No customer-data readiness gate closes here.
 
+D-080 admitted-People refresh expands the C1/C2 inventory with
+`migration_admitted_people_refresh` and its `_plan`, `_item`, `_contact`,
+`_result`, `_baseline`, `_receipt` and `_reservation` stores, plus
+`person_admitted_refresh_provenance`. Track encrypted before/current/proposed
+values, exact contact ownership, baseline pointers and transferred byte ownership,
+request receipts, keys, client caches and backup copies. Shared admission/raw
+evidence remains referenced under its existing ownership; deleting one refresh
+must not erase another feature's evidence. The implementation contract must
+record actual columns and links. This inventory extends future erasure coverage;
+it does not select retention or close C1/C2.
+
 ## Core snapshot worker handoff
 
 **OPEN — source inspection, reproduction pending.** During 010d1's bounded

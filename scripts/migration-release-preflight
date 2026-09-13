@@ -76,9 +76,10 @@ TIMELINE_CAPABILITY = "fub-history-timeline-v1"
 CORE_CHANGE_CAPABILITY = "fub-core-change-v1"
 PEOPLE_REFRESH_CAPABILITY = "fub-people-refresh-v1"
 PEOPLE_ADMISSION_CAPABILITY = "fub-people-admission-v1"
+ADMITTED_PEOPLE_REFRESH_CAPABILITY = "fub-admitted-people-refresh-v1"
 CAPABILITIES = frozenset({METADATA_CAPABILITY, ACTIVITY_CAPABILITY, HISTORY_CAPABILITY,
                         TIMELINE_CAPABILITY, CORE_CHANGE_CAPABILITY, PEOPLE_REFRESH_CAPABILITY,
-                        PEOPLE_ADMISSION_CAPABILITY})
+                        PEOPLE_ADMISSION_CAPABILITY, ADMITTED_PEOPLE_REFRESH_CAPABILITY})
 MAX_JSON_BYTES = 1024 * 1024
 MAX_ENTRIES = 4096
 MAX_AGE_SECONDS = 300
@@ -186,6 +187,10 @@ def validate_state(state):
                              "people_admission_unsupported_count"}
     if people_admission_fields.intersection(state):
         fields |= people_admission_fields
+    admitted_people_refresh_fields = {"admitted_people_refresh_binding_count", "admitted_people_refresh_schema_present",
+                             "admitted_people_refresh_unsupported_count"}
+    if admitted_people_refresh_fields.intersection(state):
+        fields |= admitted_people_refresh_fields
     object_fields(state, fields)
     if (type(state.get("activity_schema_present", False)) is not bool
             or not isinstance(state.get("activity_binding_count", "0"), str)
@@ -238,6 +243,16 @@ def validate_state(state):
             or int(people_admission_unsupported) > int(people_admission_count)
             or (not state.get("people_admission_schema_present", False)
                 and int(people_admission_count) != 0)):
+        fail("database_evidence_invalid")
+    admitted_people_refresh_count = state.get("admitted_people_refresh_binding_count", "0")
+    admitted_people_refresh_unsupported = state.get("admitted_people_refresh_unsupported_count", "0")
+    if (type(state.get("admitted_people_refresh_schema_present", False)) is not bool
+            or any(not isinstance(value, str)
+                   or re.fullmatch(r"0|[1-9][0-9]{0,19}", value) is None
+                   for value in [admitted_people_refresh_count, admitted_people_refresh_unsupported])
+            or int(admitted_people_refresh_unsupported) > int(admitted_people_refresh_count)
+            or (not state.get("admitted_people_refresh_schema_present", False)
+                and int(admitted_people_refresh_count) != 0)):
         fail("database_evidence_invalid")
     count = state["binding_count"]
     if (type(state["schema_present"]) is not bool
@@ -381,6 +396,13 @@ def evaluate(artifacts, candidates, inventory, state, target, now):
         reasons.add("people_admission_binding_requires_compatible_artifacts")
     if int(state.get("people_admission_unsupported_count", "0")) > 0:
         reasons.add("people_admission_engine_unsupported")
+    admitted_people_refresh_missing = any(item["role"] in {"api", "worker"}
+                                 and ADMITTED_PEOPLE_REFRESH_CAPABILITY not in item["capabilities"]
+                                 for item in selected + processes)
+    if int(state.get("admitted_people_refresh_binding_count", "0")) > 0 and admitted_people_refresh_missing:
+        reasons.add("admitted_people_refresh_binding_requires_compatible_artifacts")
+    if int(state.get("admitted_people_refresh_unsupported_count", "0")) > 0:
+        reasons.add("admitted_people_refresh_engine_unsupported")
     launch_allowed = not reasons
     confirmation_reasons = set(reasons)
     if not state["schema_present"]:
@@ -436,6 +458,13 @@ def evaluate(artifacts, candidates, inventory, state, target, now):
         people_admission_reasons.add("people_admission_candidate_missing")
     if not state.get("people_admission_schema_present", False):
         people_admission_reasons.add("people_admission_schema_missing")
+    admitted_people_refresh_reasons = set(confirmation_reasons)
+    if admitted_people_refresh_missing:
+        admitted_people_refresh_reasons.add("admitted_people_refresh_capability_missing")
+    if not any(item["role"] in {"api", "worker"} for item in selected):
+        admitted_people_refresh_reasons.add("admitted_people_refresh_candidate_missing")
+    if not state.get("admitted_people_refresh_schema_present", False):
+        admitted_people_refresh_reasons.add("admitted_people_refresh_schema_missing")
     return {
         "version": 1,
         "gate_version": GATE,
@@ -474,6 +503,10 @@ def evaluate(artifacts, candidates, inventory, state, target, now):
         "people_admission_schema_present": state.get("people_admission_schema_present", False),
         "people_admission_binding_count": state.get("people_admission_binding_count", "0"),
         "people_admission_unsupported_count": state.get("people_admission_unsupported_count", "0"),
+        "admitted_people_refresh_confirmation_ready": not admitted_people_refresh_reasons,
+        "admitted_people_refresh_schema_present": state.get("admitted_people_refresh_schema_present", False),
+        "admitted_people_refresh_binding_count": state.get("admitted_people_refresh_binding_count", "0"),
+        "admitted_people_refresh_unsupported_count": state.get("admitted_people_refresh_unsupported_count", "0"),
         "launch_reasons": sorted(reasons),
         "confirmation_reasons": sorted(confirmation_reasons),
         "metadata_confirmation_reasons": sorted(metadata_reasons),
@@ -483,6 +516,7 @@ def evaluate(artifacts, candidates, inventory, state, target, now):
         "core_change_confirmation_reasons": sorted(core_change_reasons),
         "people_refresh_confirmation_reasons": sorted(people_refresh_reasons),
         "people_admission_confirmation_reasons": sorted(people_admission_reasons),
+        "admitted_people_refresh_confirmation_reasons": sorted(admitted_people_refresh_reasons),
     }
 
 
@@ -650,6 +684,22 @@ def database_state():
         object_fields(observed, {"count", "unsupported_count"})
         state["people_admission_binding_count"] = observed["count"]
         state["people_admission_unsupported_count"] = observed["unsupported_count"]
+    admitted_people_refresh = sql_json("SELECT json_build_object('present',((SELECT bool_or(to_regclass('public.'||name) IS NOT NULL) FROM (VALUES ('migration_admitted_people_refresh'),('migration_admitted_people_refresh_plan'),('migration_admitted_people_refresh_item'),('migration_admitted_people_refresh_contact'),('migration_admitted_people_refresh_result'),('migration_admitted_people_refresh_baseline'),('migration_admitted_people_refresh_receipt'),('migration_admitted_people_refresh_reservation'),('person_admitted_refresh_provenance')) required(name)) OR to_regprocedure('public.crm_admitted_people_refresh_mutation_allowed(uuid,text,text,text,jsonb,jsonb)') IS NOT NULL),'compatible',((SELECT bool_and(to_regclass('public.'||name) IS NOT NULL) FROM (VALUES ('migration_admitted_people_refresh'),('migration_admitted_people_refresh_plan'),('migration_admitted_people_refresh_item'),('migration_admitted_people_refresh_contact'),('migration_admitted_people_refresh_result'),('migration_admitted_people_refresh_baseline'),('migration_admitted_people_refresh_receipt'),('migration_admitted_people_refresh_reservation'),('person_admitted_refresh_provenance')) required(name)) AND to_regprocedure('public.crm_admitted_people_refresh_mutation_allowed(uuid,text,text,text,jsonb,jsonb)') IS NOT NULL))")
+    object_fields(admitted_people_refresh, {"present", "compatible"})
+    if any(type(admitted_people_refresh[key]) is not bool for key in ["present", "compatible"]):
+        fail("database_evidence_invalid")
+    # A partially missing guard/schema is not an empty old installation.
+    # Fail closed before it can hide retained bindings behind a zero count.
+    if admitted_people_refresh["present"] != admitted_people_refresh["compatible"]:
+        fail("admitted_people_refresh_schema_incomplete")
+    state["admitted_people_refresh_schema_present"] = admitted_people_refresh["present"]
+    state["admitted_people_refresh_binding_count"] = "0"
+    state["admitted_people_refresh_unsupported_count"] = "0"
+    if admitted_people_refresh["present"]:
+        observed = sql_json("SELECT json_build_object('count',count(*)::text,'unsupported_count',count(*) FILTER (WHERE engine_version<>'fub-admitted-people-refresh-v1')::text) FROM public.migration_admitted_people_refresh")
+        object_fields(observed, {"count", "unsupported_count"})
+        state["admitted_people_refresh_binding_count"] = observed["count"]
+        state["admitted_people_refresh_unsupported_count"] = observed["unsupported_count"]
     return state
 
 
@@ -680,6 +730,7 @@ def main(argv=None):
                           "core_change_confirmation_ready": False,
                           "people_refresh_confirmation_ready": False,
                           "people_admission_confirmation_ready": False,
+                          "admitted_people_refresh_confirmation_ready": False,
                           "error": str(error)}, sort_keys=True))
         return 2
 

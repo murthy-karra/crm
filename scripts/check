@@ -55,7 +55,12 @@ trap cleanup_web EXIT
   step_start=$SECONDS
 
   echo "==> web build"
-  (cd "$repo_root/web" && pnpm run build)
+  # Verification beside a running checkout must not replace its Web artifact.
+  if [ -n "${CRM_CHECK_WEB_OUT_DIR:-}" ]; then
+    (cd "$repo_root/web" && pnpm run build --outDir "$CRM_CHECK_WEB_OUT_DIR")
+  else
+    (cd "$repo_root/web" && pnpm run build)
+  fi
   echo "==> [$((SECONDS - step_start))s]"
   step_start=$SECONDS
 

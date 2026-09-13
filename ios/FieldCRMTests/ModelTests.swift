@@ -19,7 +19,7 @@ import XCTest
     func setupModel() async throws -> (FieldModel, API, SecureStorage, Bootstrap, LocalStore) {
         let model = FieldModel(synthetic: true, startMonitor: false, restoreOnInit: false)
         let secure = SecureStorage(synthetic: true, testingNamespace: UUID().uuidString); secure.testDirectory = directory
-        #if MOBILE002_QA || MOBILE003_QA
+        #if MOBILE002_QA || MOBILE003_QA || MOBILE004_QA || MOBILE004_UPGRADE_QA
         let api = try API(base: "http://127.0.0.1:3102")
         #else
         let api = try API(base: "http://127.0.0.1:3101")
@@ -276,6 +276,43 @@ import XCTest
         XCTAssertEqual(try store.drafts().count, 1)
         let draft = try XCTUnwrap(try store.drafts().first { $0.id == draftPart[0] })
         XCTAssertEqual(digest(try encode(draft)), String(draftPart[1]))
+    }
+    #endif
+
+    #if MOBILE004_UPGRADE_QA
+    func testMobile004OpensActualInstalledMobile003StoreWithoutChangingProtectedRows() async throws {
+        let inventoryURL = try SecureStorage.directory(synthetic: true).appendingPathComponent("mobile004-upgrade-inventory.txt")
+        let pre = try String(contentsOf: inventoryURL)
+        XCTAssertTrue(pre.contains("schema=6"), pre)
+        appDefaults.set("2f6db9e9-f1cc-4b90-8a8b-46572cdc4768", forKey: "installation")
+        let model = FieldModel(synthetic: true, startMonitor: false, restoreOnInit: false)
+        model.paused = true
+        await model.signIn(email: "agent@mobile.test", password: "Mobile-demo-only-123!")
+        XCTAssertTrue(model.unlocked, model.message)
+        let store = try XCTUnwrap(model.store)
+        XCTAssertEqual(try store.rows("PRAGMA user_version")[0][0], "7")
+        func digest(_ data: Data) -> String { String(data.reduce(1469598103934665603) { ($0 ^ UInt64($1)) &* 1099511628211 }, radix: 16) }
+        let identity = try XCTUnwrap(model.credential?.bootstrap.identity)
+        let protectedKey = try SecureStorage(synthetic: true).key(for: identity, existingFile: true)
+        let expectedKey = pre.components(separatedBy: " key=").dropFirst().first?.components(separatedBy: " ops=").first
+        XCTAssertEqual(expectedKey, digest(protectedKey), "The existing SQLCipher key must be retained; migration must not replace it.")
+        let expectedOps = pre.components(separatedBy: " ops=").dropFirst().first?.components(separatedBy: " drafts=").first?.split(separator: ",") ?? []
+        let queue = try store.queue(); XCTAssertEqual(queue.count, expectedOps.count)
+        for part in expectedOps {
+            let fields = part.split(separator: ":")
+            let op = try XCTUnwrap(queue.first { $0.id == fields[0] })
+            XCTAssertEqual(digest(op.bytes), String(fields[1]))
+            XCTAssertEqual(op.receipt == nil ? "0" : "1", String(fields[2]))
+        }
+        let expectedDrafts = pre.components(separatedBy: " drafts=").dropFirst().first?.components(separatedBy: " person=").first?.split(separator: ",") ?? []
+        XCTAssertEqual(try store.drafts().count, expectedDrafts.count)
+        for part in expectedDrafts {
+            let fields = part.split(separator: ":")
+            let draft = try XCTUnwrap(try store.drafts().first { $0.id == fields[0] })
+            XCTAssertEqual(digest(try encode(draft)), String(fields[1]))
+        }
+        let person = pre.components(separatedBy: " person=").last ?? ""
+        XCTAssertNotNil(try store.activeBundle(person), "The installed encrypted cache and its original key remain available.")
     }
     #endif
 

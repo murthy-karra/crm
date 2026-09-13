@@ -137,6 +137,40 @@ final class FieldFlowTests: XCTestCase {
     }
     #endif
 
+    #if MOBILE004_UPGRADE_QA
+    @MainActor func testMobile004NativeOfflineStageTerminatesRelaunchesAndSynchronizes() throws {
+        continueAfterFailure = false
+        let app = XCUIApplication(); app.launchArguments = ["--synthetic-keychain"]; app.launch()
+        XCTAssertTrue(app.staticTexts["syntheticBanner"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.tabBars.buttons["Settings"].waitForExistence(timeout: 60), "The current app must reopen the upgraded protected store")
+        app.tabBars.buttons["Settings"].tap(); setSwitch(app.switches["offlineToggle"], to: false); app.buttons["sync"].tap()
+        XCTAssertTrue(app.staticTexts["100 people available offline"].waitForExistence(timeout: 240))
+        app.tabBars.buttons["People"].tap(); let search = app.searchFields.firstMatch; search.tap(); search.typeText("001")
+        let person = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'person_' ")).firstMatch
+        XCTAssertTrue(person.waitForExistence(timeout: 20)); person.tap()
+        let change = app.buttons["changeStage"]
+        XCTAssertTrue(change.waitForExistence(timeout: 20)); XCTAssertTrue(change.isEnabled, "A fully sealed catalog and qualified summary enable stage proposals")
+        app.tabBars.buttons["Settings"].tap(); setSwitch(app.switches["offlineToggle"], to: true); app.tabBars.buttons["People"].tap()
+        let selected = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'person_' ")).firstMatch; if selected.exists { selected.tap() }
+        XCTAssertTrue(change.waitForExistence(timeout: 15)); change.tap()
+        XCTAssertTrue(app.staticTexts["Downloaded server stage"].waitForExistence(timeout: 10))
+        // The saved default is the server stage. This exercises the visible
+        // no-op stage path; the focused real-API test separately proves a real
+        // different-target transition and conflict recovery.
+        app.buttons["saveStage"].tap()
+        app.tabBars.buttons["Saved work"].tap(); XCTAssertTrue(app.staticTexts["queueCount"].label.contains("1 pending"))
+        let pending = XCTAttachment(screenshot: app.screenshot()); pending.name = "mobile004-stage-pending-after-offline-save"; pending.lifetime = .keepAlways; add(pending)
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.tabBars.buttons["Saved work"].waitForExistence(timeout: 30)); app.tabBars.buttons["Saved work"].tap()
+        XCTAssertTrue(app.staticTexts["queueCount"].label.contains("1 pending"), "The immutable stage envelope survives a process restart")
+        app.tabBars.buttons["Settings"].tap(); setSwitch(app.switches["offlineToggle"], to: false); app.buttons["sync"].tap()
+        app.tabBars.buttons["Saved work"].tap()
+        expectation(for: NSPredicate(format: "label BEGINSWITH '0 pending'"), evaluatedWith: app.staticTexts["queueCount"]); waitForExpectations(timeout: 180)
+        let accepted = XCTAttachment(screenshot: app.screenshot()); accepted.name = "mobile004-stage-accepted-after-relaunch"; accepted.lifetime = .keepAlways; add(accepted)
+        app.tabBars.buttons["Settings"].tap(); setSwitch(app.switches["offlineToggle"], to: true)
+    }
+    #endif
+
     #if MOBILE002_QA
     @MainActor func testMobile002NativeOfflineEditTerminateRelaunchAndSynchronizeReservedPerson001() throws {
         continueAfterFailure = false

@@ -35,7 +35,7 @@ private final class NoRedirect: NSObject, URLSessionTaskDelegate, @unchecked Sen
         var permitted = url.scheme == "https"
         #if DEBUG && targetEnvironment(simulator)
         let debugPort: Int
-        #if MOBILE002_QA || MOBILE003_QA || MOBILE004_QA
+        #if MOBILE002_QA || MOBILE003_QA || MOBILE004_QA || MOBILE004_UPGRADE_QA
         debugPort = 3102
         #else
         debugPort = 3101

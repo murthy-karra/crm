@@ -105,7 +105,7 @@ struct StageProposal: Identifiable {
         return try SecureStorage.directory(synthetic: synthetic)
     }
     private var qaBaseURL: String {
-        #if MOBILE002_QA || MOBILE003_QA || MOBILE004_QA
+        #if MOBILE002_QA || MOBILE003_QA || MOBILE004_QA || MOBILE004_UPGRADE_QA
         return "http://127.0.0.1:3102"
         #else
         return "http://127.0.0.1:3101"

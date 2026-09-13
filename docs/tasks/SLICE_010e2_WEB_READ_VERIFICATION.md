@@ -98,3 +98,24 @@ Scale and paired-read evidence is retained in
 [the D-050 record](../design/perf/slice-010e2-2026-09-13/README.md). The plan pass
 caught and corrected an unbounded group anti-join; the fix-only collection used
 the same retained fixture and passed indexed/bounded access without spills.
+
+## Final integration evidence
+
+The final combined repository gate passed 975 Rust tests, five compile-fail
+doctests, 1,203 Web tests and 11 email-worker tests. Live SQLx metadata validation
+passed again after the final migration trigger edit, with unchanged `.sqlx`;
+final all-target Clippy passed with warnings denied. Full DB coverage and its
+corrected follow-up are recorded in
+[the implementation record](MOBILE_002_010e2_IMPLEMENTATION_STATUS.md).
+
+The grant inventory review exposed an inherited permission risk: the old
+import-token branch could authorize contact UPDATE/DELETE after refresh added
+those table grants. Commit `864ff6c` restricts that branch to contact INSERT.
+A real matching original-import lease now proves UPDATE and DELETE both fail
+with `P010C`. All 121 affected DB regressions passed, including that new test,
+the corrected grant inventory, successful refresh execution, original imports,
+bounded reads, exact accounting and the workspace review guard.
+
+Isolated API3103/Web5174 are stopped and the temporary browser tab is closed.
+Synthetic evidence and the before/after reconciliation records are retained;
+no customer/FUB operation or shared deployment was performed.

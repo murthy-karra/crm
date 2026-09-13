@@ -1,13 +1,15 @@
 # Mobile 002 / 010e2 — Implementation status
 
-**Final integration verification — D-076, 2026-09-13.** Both approved contracts
-are implemented. Terra high owned the mobile backend, iOS, Android and migration
+**Implemented and verified locally — D-076, 2026-09-13.** Both approved contracts
+are complete for their isolated synthetic scope. Terra high owned the mobile
+backend, iOS, Android and migration
 backend lanes; the coordinator owned protected-read/Web integration and final
 verification. Physical phones/cellular and broad mobile redesign remain deferred.
 No new implementation approval is pending.
 
 The local integration branch is `codex/mobile002-010e2-integration`. The combined
-candidate is `07a0fbf` on the remaining migration worktree. Main/origin and shared
+source is `07a0fbf` plus upgrade-fixture correction `214364e` and final permission
+guard/test correction `864ff6c`. Main/origin and shared
 development are still the previous released milestone. This implementation does
 not authorize publication, shared deployment, native distribution, live FUB or
 customer processing, or activation.
@@ -17,10 +19,10 @@ customer processing, or activation.
 | Mobile backend | `2fc753a`, integrated at `2fd9a9d`: all-writer note revisions, typed edit_note/update_task commands, exact durable receipts and bounded current-record reads |
 | iOS | `5ffa962`: encrypted in-place upgrade, native offline edits, restart/replay, explicit conflict/revised receipt, protected ambiguity/permission transitions |
 | Android | `b8a7f95`: encrypted in-place upgrade, native offline edits, process-death replay, completed-task field preservation, conflict/revised accepted receipt |
-| Migration | `a0eb294`: qualified retained evidence, immutable bounded plans/confirmation, per-Person atomic updates, exact ownership/accounting, cancellation/recovery and protected paged Web review |
+| Migration | `a0eb294` + `864ff6c`: qualified retained evidence, immutable bounded plans/confirmation, per-Person atomic updates, exact ownership/accounting, cancellation/recovery, protected paged Web review and restricted legacy contact permits |
 
-Mobile foundation and both native worktrees/branches are merged locally and
-closed. Only `codex/migration-010e2` remains for the combined repository/DB gate.
+All implementation lanes are merged locally; their short-lived worktrees and
+branches are closed. The integration branch remains for the next release.
 No shared source output, API3000/Web5173, demoAPI3101 or original mobile demo
 bundle/store was used for these mutations. The native QA apps use distinct
 identities and protected storage namespaces.
@@ -35,9 +37,23 @@ identities and protected storage namespaces.
   formatting, Clippy, production compilation, dependency fences, lint,
   typecheck and production Web build. Log:
   `/private/tmp/crm-010e2-qa/check-integrated.log`.
-- Full `scripts/check-db`, including live SQLx metadata validation and all
-  ignored ordinary DB cases, is the final gate still running. Do not treat
-  earlier focused checks as a complete DB gate.
+- The DB gate has passing evidence for **all 990 current ordinary DB cases**.
+  The full non-fail-fast run after the upgrade-fixture correction ran 989 cases:
+  988 passed, with one stale grant-inventory expectation failing
+  (`/private/tmp/crm-010e2-qa/db-integrated-rerun.log`). Reviewing that grant
+  exposed a legacy importer permission boundary; `864ff6c` corrects the trigger,
+  updates the inventory and adds a real live-permit regression. The final
+  affected run passed **121/121**, including all refresh/import/activity/metadata
+  and workspace guards, the corrected inventory and new regression
+  (`/private/tmp/crm-010e2-qa/db-final-guards.log`). This is complete passing
+  coverage from the full run plus affected rerun, not a claim that the original
+  `scripts/check-db` invocation exited successfully.
+- Final live `cargo sqlx prepare --check --workspace` passed on a fresh database
+  with all final migrations applied; `.sqlx` is unchanged. Log:
+  `/private/tmp/crm-010e2-qa/sqlx-final-guards.log`. SQLx emitted its existing
+  potentially-unused-query warning, with no metadata mismatch. Final
+  `cargo clippy --workspace --all-targets --locked -- -D warnings` also passed
+  (`clippy-final-guards.log`, same directory). Both used isolated build outputs.
 - [iOS evidence](MOBILE_002_IOS_VERIFICATION.md): 17 protected-store tests;
   real-API lost-response/conflict; actual installed old-store upgrade with
   exact encrypted-file/envelope preservation; native offline save/terminate/
@@ -79,9 +95,19 @@ Web fixture assumptions, missing receipt charges, local-conflict totals,
 absent-record labels and native QA setup issues were corrected and their
 passing follow-ups are recorded in the linked evidence.
 
+The populated-upgrade regression explicitly verifies initial `note.revision=1`
+and preserves exact equality of every older column. The final contact regression
+uses a real live original-import permit and confirms both UPDATE and DELETE fail
+with `P010C`. Original imports retain contact INSERT; refresh updates/deletions
+still require the live item-scoped refresh permit. The 121-case rerun verifies
+both the positive refresh path and the original import/review barriers.
+
 Private mode-0600 configs and logs are under `/private/tmp/crm-mobile002-qa/`
 and `/private/tmp/crm-010e2-qa/`. Synthetic databases are `crm_mobile_002` and
-`crm_010e2_qa`; native API3102 and browser API3103/Web5174 were isolated.
+`crm_010e2_qa`; native API3102 and browser API3103/Web5174 were isolated and are
+now stopped. The temporary browser tab is closed. Protected native stores,
+synthetic databases, result bundles and logs remain available for review.
 Sensitive keys are not in these records. The original native demo and shared
-runtime remain intact. Implementation completion does not establish cutover
+runtime remain intact; API3000, demo API3101 and Web5173 passed post-cleanup
+health/HTTP checks. Implementation completion does not establish cutover
 readiness or migration fidelity beyond existing-People core fields.

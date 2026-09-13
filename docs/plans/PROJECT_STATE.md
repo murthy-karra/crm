@@ -1,20 +1,24 @@
 # Project state
 
-Last updated: 2026-09-13 (Mobile 002 / 010e2 implemented; final combined DB verification).
+Last updated: 2026-09-13 (Mobile 002 / 010e2 verified and integrated locally; release pending).
 This file holds current operational status, active work and live residuals.
 [PROJECT_HISTORY.md](PROJECT_HISTORY.md) preserves earlier progress, the slice
 ledger and historical measurements; its old instructions are not current work.
 
 ## Current state
 
-**Mobile 002 and 010e2 are implemented locally under D-076; final combined DB
-verification is running.** Both native clients passed encrypted-store upgrade,
+**Mobile 002 and 010e2 are verified and integrated locally under D-076.**
+Both native clients passed encrypted-store upgrade,
 offline/restart/replay and real-API conflict/revised-receipt checks. The migration
 Web passed synthetic preview/confirmation/reload with exact preserved-record
 reconciliation; the 25k bounded-query fix and paired Today read passed. Combined
-`scripts/check` passed. See the
+`scripts/check` and final SQLx/Clippy checks passed. All 990 current DB cases have
+passing evidence after the full run and 121-case affected rerun; the final fix
+prevents old import permits from inheriting contact UPDATE/DELETE permissions.
+All implementation worktrees are closed and isolated QA servers are stopped.
+See the
 [implementation record](../tasks/MOBILE_002_010e2_IMPLEMENTATION_STATUS.md) for
-actual commits, checks and remaining gate. Main/shared runtime remain the
+actual commits, checks and evidence limits. Main/shared runtime remain the
 released Mobile 001/010e1 milestone below; publication/deployment is separate.
 
 **Mobile 001 is implemented and verified for the approved synthetic scope under D-074.** The reviewed

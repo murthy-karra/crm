@@ -66,6 +66,12 @@ tables plus `person`, `contact_method`, `assignment_changed`, and
 confirmed parent plan in `migration_review`. Ordinary writers retain the
 existing review-mode denial.
 
+The original `crm.import_token` path permits contact INSERT only. It cannot
+inherit the contact UPDATE/DELETE privileges added for refresh; those operations
+in a review-held workspace require the new live item-scoped refresh permit.
+The grant inventory continues to deny contact TRUNCATE and the prior prohibited
+fact/Inquiry mutations. This preserves the existing original-import boundary.
+
 ## Eligibility and execution
 
 Preparation walks every retained `people` report row, including `unchanged`.

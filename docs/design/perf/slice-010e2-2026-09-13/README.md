@@ -4,7 +4,7 @@ Source: `a0eb294` combined with the verified native clients at `07a0fbf`.
 The plan collector is `db_people_refresh_plans.rs`, opt-in `perf-harness`.
 
 `plan-shapes.json` contains one representative collection at 25,000 People,
-50 members and 300,000 contact comparison rows. A tiny real import/report/refresh
+50 members and 299,994 contact comparison rows. A tiny real import/report/refresh
 settled before inert cardinality clones were added. Those clones have copied,
 unqualified ciphertext and are never used for decrypt/fidelity/accounting
 claims. Actual production SQL literals, SHA-256 hashes, binds and complete

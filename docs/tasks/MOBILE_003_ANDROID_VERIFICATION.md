@@ -6,7 +6,8 @@
 ## Completed focused checks
 
 On the Android 17/API 37 emulator (`emulator-5554`), the encrypted Room focused
-suite passed six cases in 48.309 seconds. Its result is at
+suite passed six cases in 33.262 seconds after the final reconciliation-staging
+cleanup. Its result is at
 `/private/tmp/crm-mobile003-android-build/outputs/androidTest-results/connected/debug/flavors/mobile003qa/TEST-CRM_Field_API37_ARM64(AVD) - 17-_-mobile003qa.xml`.
 
 ```sh
@@ -59,23 +60,52 @@ The probe log is available from emulator logcat under `Mobile003Upgrade`.
 ## Live API 3102
 
 `Mobile003LiveApiTest.offlineContactSurvivesRepositoryRelaunchThenReceivesFreshSeal`
-passed against API 3102 in 22.646 seconds using the production encrypted store,
-repository, operation route, and reserved Android Person 051. It queued the
-historical-offset contact while sync was paused, sealed the immutable envelope,
-locked/reopened the protected account store, then synced it to an accepted or
-covered contact receipt. It asserts exact envelope preservation,
-`resource_type=contact_attempt`, `committed_revision:null`, `changed:true`, and
-a fresh sealed Today record. The connected result is at
-`/private/tmp/crm-mobile003-android-build/outputs/androidTest-results/connected/debug/flavors/mobile003qa/TEST-CRM_Field_API37_ARM64(AVD) - 17-_-mobile003qa.xml`.
+passed against API 3102 using the production encrypted store, repository,
+operation route, and reserved Android Person 051. The final emulator acceptance
+used manually installed `mobile003qa` and instrumentation APKs because Gradle's
+connected-test task uninstalls its package after a run. The test did the
+following in two direct instrumentation stages:
+
+1. Logged in and completed a normal reconciliation; sealed an old note receipt;
+   then paused sync and saved a legacy task plus a Mobile 003 contact attempt.
+   The protected store retained the note receipt and queued task/contact IDs and
+   their original envelope SHA-256 values:
+
+   ```text
+   note=b725bda6-8b7f-403b-a733-f51f688bc74c b9547c3d3c1530aa7564dbf5dba85250c1d0043a9dc9ddfe76f212bbed915301
+   task=95dc3842-59ee-4b18-8979-fdc0db4e5989 d07e7a28a3224dfa124fcceddb8b7a586a5924038f6527316ce2bd95184a6154
+   contact=b6a9253f-6c34-4b2d-90e8-940cbb6997b9 55a586fb86974964a32e7321480a7a069605098076e7cb0a21d4ed58bf981d60
+   ```
+
+2. Ran `adb shell am force-stop org.crm.field.mobile003qa`, confirmed no target
+   PID, then launched the second instrumentation stage against the same package,
+   UID, Android Keystore key, and database. It reopened without a new login,
+   replayed the queued task and contact, retained all original bytes, and finished
+   `OK (1 test)` in 13.272 seconds. The contact receipt was strict
+   (`resource_type=contact_attempt`, `committed_revision:null`, `changed:true`)
+   and the resulting fresh Today seal had no `generation`, `manifest_cursor`, or
+   `manifest_complete` staging metadata.
+
+The direct commands were:
+
+```sh
+adb install -r -g /private/tmp/crm-mobile003-android-build/outputs/apk/mobile003qa/debug/CrmField-mobile003qa-debug.apk
+adb install -r /private/tmp/crm-mobile003-android-build/outputs/apk/androidTest/mobile003qa/debug/CrmField-mobile003qa-debug-androidTest.apk
+adb shell am instrument -w -r -e class org.crm.field.Mobile003LiveApiTest \
+  -e runMobile003Live true -e mobile003Stage prepare \
+  org.crm.field.mobile003qa.test/androidx.test.runner.AndroidJUnitRunner
+adb shell am force-stop org.crm.field.mobile003qa
+adb shell am instrument -w -r -e class org.crm.field.Mobile003LiveApiTest \
+  -e runMobile003Live true -e mobile003Stage relaunch \
+  org.crm.field.mobile003qa.test/androidx.test.runner.AndroidJUnitRunner
+```
 
 ## Historical-store attempt
 
 The preserved `mobile002qa` package is separate from the demo package. An
 archived old fixture could not be copied into this emulator because its encrypted
 key wrapper was bound to a different app UID (`AEADBadTagException`); it was not
-used as upgrade evidence. A clean historical schema-3 seed harness was then
-prepared in `/private/tmp` for an in-place same-package 3→4 installation. That
-manual emulator run remained unsuitable as evidence, because archive encryption
-is deliberately UID-bound. The clean same-package seed above is the upgrade
-evidence. Physical-device process termination is deferred; emulator validation
-used the repository's protected lock/reopen boundary.
+used as upgrade evidence. The clean historical schema-3 seed prepared in
+`/private/tmp` and installed in-place under the same package is the upgrade
+evidence. Physical-device validation is deferred; the emulator acceptance did
+perform an actual target-package process termination and relaunch.

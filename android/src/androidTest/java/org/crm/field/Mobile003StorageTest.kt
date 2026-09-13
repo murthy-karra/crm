@@ -103,6 +103,8 @@ class Mobile003StorageTest {
         assertEquals("accepted", store.dao.operation(operation.id)!!.status)
         assertEquals("accepted", store.dao.contactDraft(draft.id)!!.state)
         assertEquals(null, store.dao.meta("generation"))
+        assertEquals(null, store.dao.meta("manifest_cursor"))
+        assertEquals(null, store.dao.meta("manifest_complete"))
     }
 
     @Test

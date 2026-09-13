@@ -616,6 +616,11 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
             )
         )
         dao.removeMeta("generation")
+        // These are staging-only cursors. Keeping them after promotion is harmless to the
+        // current downloader (which keys from generation), but it makes an accepted contact
+        // receipt appear to retain pre-receipt reconciliation state after the fresh seal.
+        dao.removeMeta("manifest_cursor")
+        dao.removeMeta("manifest_complete")
         dao.clearPages()
         dao.clearManifest()
     }

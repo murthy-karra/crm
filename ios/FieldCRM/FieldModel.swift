@@ -42,7 +42,10 @@ import Network
         do {
             let operations = try store.queue()
             let fingerprints = operations.map { $0.id.prefix(8) + ":" + String(mobile003ByteDigest($0.bytes), radix: 16) }.joined(separator: ",")
-            qaMobile003MigrationStage = "schema=" + (try store.rows("PRAGMA user_version")[0][0]) + " ops=" + String(operations.count) + " drafts=" + String(drafts.count) + " ids:digest=" + fingerprints
+            let draftFingerprints = try store.drafts().map { $0.id.prefix(8) + ":" + String(mobile003ByteDigest(try encode($0)), radix: 16) }.joined(separator: ",")
+            let accepted = operations.filter { $0.receipt != nil }.count
+            let active = try store.meta("active") ?? "none"
+            qaMobile003MigrationStage = "schema=" + (try store.rows("PRAGMA user_version")[0][0]) + " active=" + active.prefix(8) + " ops=" + String(operations.count) + " receipts=" + String(accepted) + " drafts=" + String(drafts.count) + " ids:digest=" + fingerprints + " drafts:digest=" + draftFingerprints
         } catch { qaMobile003MigrationStage = "probe error: " + error.localizedDescription }
     }
     private func mobile003ByteDigest(_ bytes: Data) -> UInt64 {

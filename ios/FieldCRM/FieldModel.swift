@@ -24,6 +24,9 @@ import Network
     let installation: String
     let synthetic: Bool
     var pendingCount: Int { queue.filter { $0.status != "accepted" }.count }
+    #if MOBILE002_QA
+    @Published var qaFixtureStage = "not requested"
+    #endif
     init(synthetic: Bool = false, startMonitor: Bool = true, restoreOnInit: Bool = true) {
         secure = SecureStorage(synthetic: synthetic); self.synthetic = secure.synthetic
         if let existing = appDefaults.string(forKey: "installation") { installation = existing }
@@ -104,26 +107,38 @@ import Network
             let saved = try Credential(cookie: client.cookie, baseURL: base, bootstrap: boot, lease: Lease(bootstrap: boot, clock: .current()), signedOut: false)
             try secure.write("credential", encode(saved)); try open(saved); try secure.clearLockAfterAuthorization(); reconciliationFailures = 0
             await sync(manual: true)
-            #if MOBILE002_QA
-            await installQANoteFixtureIfRequested()
-            #endif
             #endif
         } catch { message = error.localizedDescription }
     }
     #if MOBILE002_QA
+    func loadQANoteFixture() async {
+        guard !syncing, !paused, unlocked, let store else { qaFixtureStage = "unpause and complete sync first"; return }
+        do { guard try store.activeBundle(qaFixturePersonID()) != nil else { qaFixtureStage = "no complete Person bundle"; return } }
+        catch { qaFixtureStage = "bundle inspection failed"; return }
+        await installQANoteFixtureIfRequested()
+    }
+    private func qaFixturePersonID() -> String {
+        let args = ProcessInfo.processInfo.arguments
+        guard let index = args.firstIndex(of: "--mobile002-qa-person-id"), args.indices.contains(index + 1) else { return "" }
+        return args[index + 1]
+    }
     private func installQANoteFixtureIfRequested() async {
         let args = ProcessInfo.processInfo.arguments
         guard let noteIndex = args.firstIndex(of: "--mobile002-qa-note-id"), args.indices.contains(noteIndex + 1),
               let personIndex = args.firstIndex(of: "--mobile002-qa-person-id"), args.indices.contains(personIndex + 1),
-              let api, let credential, let store else { return }
+              let api, let credential, let store else { qaFixtureStage = "missing launch flag or protected context"; return }
         let noteID = args[noteIndex + 1], personID = args[personIndex + 1], run = epoch
         do {
+            qaFixtureStage = "fixture requested"
+            guard try store.activeBundle(personID) != nil else { qaFixtureStage = "no active Person bundle"; return }
+            qaFixtureStage = "active Person bundle"
             let current = try await api.currentNote(person: personID, note: noteID, context: credential.bootstrap.context_id)
             try self.current(run)
-            guard current.context_id == credential.bootstrap.context_id, current.person_id == personID, let note = current.note else { throw LocalError.invalidProtocol }
-            try store.installQANoteFixture(person: personID, note: note); try reload()
+            guard current.context_id == credential.bootstrap.context_id, current.person_id == personID, let note = current.note else { qaFixtureStage = "current-note context mismatch"; return }
+            qaFixtureStage = "current note " + note["id"].text
+            try store.installQANoteFixture(person: personID, note: note); try reload(); qaFixtureStage = "injection committed"
             message = "QA fixture loaded from the authorized current-note response."
-        } catch { message = error.localizedDescription }
+        } catch { qaFixtureStage = "fixture error: " + error.localizedDescription; message = error.localizedDescription }
     }
     #endif
     @discardableResult func validateAccess() -> Bool {

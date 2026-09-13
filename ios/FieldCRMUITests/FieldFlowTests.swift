@@ -111,9 +111,16 @@ final class FieldFlowTests: XCTestCase {
             app.buttons["signIn"].tap()
         }
         XCTAssertTrue(app.tabBars.buttons["Settings"].waitForExistence(timeout: 80))
-        expectation(for: NSPredicate(format: "label CONTAINS 'QA fixture loaded'"), evaluatedWith: app.staticTexts["statusMessage"])
+        app.tabBars.buttons["Settings"].tap()
+        let stage = app.staticTexts["qaFixtureStage"]
+        XCTAssertTrue(stage.waitForExistence(timeout: 10))
+        setSwitch(app.switches["offlineToggle"], to: false); app.buttons["sync"].tap()
+        expectation(for: NSPredicate(format: "label CONTAINS 'Synced. Complete downloaded workspace'"), evaluatedWith: app.staticTexts["statusMessage"])
         waitForExpectations(timeout: 120)
-        app.tabBars.buttons["Settings"].tap(); setSwitch(app.switches["offlineToggle"], to: false); app.buttons["sync"].tap()
+        expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: app.buttons["loadQANoteFixture"])
+        waitForExpectations(timeout: 60); app.buttons["loadQANoteFixture"].tap()
+        expectation(for: NSPredicate(format: "label == %@", "injection committed"), evaluatedWith: stage)
+        waitForExpectations(timeout: 30)
         XCTAssertTrue(app.staticTexts["100 people available offline"].waitForExistence(timeout: 240))
         app.tabBars.buttons["People"].tap(); let search = app.searchFields.firstMatch; search.tap(); search.typeText("001")
         let person = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'person_' ")).firstMatch

@@ -72,6 +72,16 @@ struct WorkspaceView: View {
                 NavigationStack { QueueView() }.tabItem { Label("Saved work", systemImage: "tray.and.arrow.up") }.badge(model.pendingCount)
                 NavigationStack {
                     Form {
+                        #if MOBILE002_QA
+                        // Keep the synthetic-only fixture control in the first visible rows.
+                        // Form realizes lower sections lazily, which would make an accessibility
+                        // probe unable to observe an otherwise present test control.
+                        Section("QA fixture stage") {
+                            Text(model.qaFixtureStage).font(.caption2).accessibilityIdentifier("qaFixtureStage")
+                            Button("Load exact test note") { Task { await model.loadQANoteFixture() } }.accessibilityIdentifier("loadQANoteFixture")
+                                .disabled(model.syncing || model.paused)
+                        }
+                        #endif
                         Section("Connection") {
                             Toggle("Work offline · pause sync", isOn: $model.paused).accessibilityIdentifier("offlineToggle")
                             Text("Last complete sync: \(model.lastSync)").font(.footnote)
@@ -175,6 +185,20 @@ struct PersonView: View {
                         }
                     }
                 }
+                // Notes precede the potentially long task history so an editable note
+                // remains reachable on a fully reconciled Person without requiring a
+                // user to traverse every task row.
+                Section("Notes") {
+                    ForEach(Array(bundle.notes.enumerated()), id: \.offset) { _, note in
+                        VStack(alignment: .leading, spacing: 7) {
+                            Text(note["body"].text).textSelection(.enabled)
+                            Text(note["author"]["display_name"].text + " · " + note["created_at"].text).font(.caption).foregroundStyle(.secondary)
+                            if note["can_manage"].flag && !note["revision"].text.isEmpty {
+                                Button("Edit note") { composer = try? model.startEdit(person: personID, type: "note", record: note) }.accessibilityIdentifier("editNote_" + note["id"].text)
+                            } else if note["can_manage"].flag { Button("Refresh note to edit") { Task { composer = try? await model.startEditFromCurrent(person: personID, type: "note", id: note["id"].text) } }.font(.caption) }
+                        }.padding(.vertical, 4)
+                    }
+                }
                 Section("Tasks") {
                     ForEach(Array(bundle.tasks.enumerated()), id: \.offset) { _, task in
                         let pending = model.queue.last { $0.overlay && $0.envelope.payload["target"]["task_id"].text == task["id"].text }
@@ -196,17 +220,6 @@ struct PersonView: View {
                             }
                             else if task["can_manage"].flag { Button("Complete task") { model.complete(person: personID, target: .object(["task_id": task["id"], "expected_revision": task["revision"]])) } }
                         }
-                    }
-                }
-                Section("Notes") {
-                    ForEach(Array(bundle.notes.enumerated()), id: \.offset) { _, note in
-                        VStack(alignment: .leading, spacing: 7) {
-                            Text(note["body"].text).textSelection(.enabled)
-                            Text(note["author"]["display_name"].text + " · " + note["created_at"].text).font(.caption).foregroundStyle(.secondary)
-                            if note["can_manage"].flag && !note["revision"].text.isEmpty {
-                                Button("Edit note") { composer = try? model.startEdit(person: personID, type: "note", record: note) }.accessibilityIdentifier("editNote_" + note["id"].text)
-                            } else if note["can_manage"].flag { Button("Refresh note to edit") { Task { composer = try? await model.startEditFromCurrent(person: personID, type: "note", id: note["id"].text) } }.font(.caption) }
-                        }.padding(.vertical, 4)
                     }
                 }
             } else { Text("This record is not in the complete downloaded selection. Saved actions remain in Saved work.") }

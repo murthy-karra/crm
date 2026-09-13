@@ -947,6 +947,63 @@ async fn oversized_admission_projection_pauses_before_ciphertext_read_without_pa
 
 #[sqlx::test]
 #[ignore = "requires isolated PostgreSQL migrator"]
+async fn large_live_current_projection_reserves_a_bounded_held_unit(migrator: PgPool) {
+    let (f, parent, admission) = fixture_with_admission(
+        &migrator,
+        vec![json!({"id":104,"firstName":"Small","stage":"Lead","assignedUserId":3,"emails":[{"value":"old@synthetic.test"}]})],
+    )
+    .await;
+    let person = admitted_person(&f, admission, "104").await;
+    let before = native(&f, person).await;
+    // People source projections are deliberately bounded (16 KiB fields and
+    // 1 MiB contacts), but live native C can legitimately be much larger.
+    // Keep it below the 64 MiB item ceiling while exceeding the obsolete 8 MiB
+    // fixed prepare reservation.
+    sqlx::query("UPDATE contact_method SET value=repeat('v',4500000),normalized_value=repeat('n',4500000) WHERE person_id=$1 AND organization_id=$2")
+        .bind(person)
+        .bind(f.org)
+        .execute(&migrator)
+        .await
+        .unwrap();
+    let large_current = native(&f, person).await;
+    let report_id = report(
+        &f,
+        parent,
+        vec![json!({"id":104,"firstName":"Later","stage":"Lead","assignedUserId":3,"emails":[{"value":"new@synthetic.test"}]})],
+    )
+    .await;
+    let (run, detail) = prepare(&f, admission, report_id).await;
+    assert_eq!(detail["state"], "ready");
+    let item = refresh::items(&f.pool, &f.key, &f.ctx, run, refresh::Page::default())
+        .await
+        .unwrap()["items"][0]
+        .clone();
+    assert_eq!(item["disposition"], "held_local_change");
+    let bound: i64 = sqlx::query_scalar(
+        "SELECT item_byte_bound FROM migration_admitted_people_refresh_item WHERE refresh_id=$1",
+    )
+    .bind(run)
+    .fetch_one(&f.pool)
+    .await
+    .unwrap();
+    assert!(bound > 8 * 1024 * 1024 && bound <= 64 * 1024 * 1024);
+    confirm(&f, run, &confirmation(&detail)).await;
+    drain(&f, run).await;
+    assert_eq!(native(&f, person).await, large_current);
+    assert_eq!(
+        refresh::results(&f.pool, &f.key, &f.ctx, run, refresh::Page::default())
+            .await
+            .unwrap()["results"][0]["disposition"],
+        "held_local_change"
+    );
+    assert_ne!(
+        large_current, before,
+        "fixture C was enlarged before preparation"
+    );
+}
+
+#[sqlx::test]
+#[ignore = "requires isolated PostgreSQL migrator"]
 async fn missing_and_untrustworthy_later_observations_have_distinct_closed_outcomes(
     migrator: PgPool,
 ) {

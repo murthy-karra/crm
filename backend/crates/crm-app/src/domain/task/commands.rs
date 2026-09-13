@@ -290,72 +290,103 @@ async fn update_task_attempt(
     ctx: &CommandContext,
     cmd: UpdateTask,
 ) -> Result<UpdateTaskOutcome, TaskError> {
-    let title = TaskTitle::parse(&cmd.title)?;
-
+    // Preserve the legacy wrapper's validation-before-workspace precedence.
+    // The transaction core repeats parsing for the mobile atomic path.
+    TaskTitle::parse(&cmd.title)?;
     let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
+    let outcome = update_task_in_transaction(&mut tx, ctx, cmd, None, false)
+        .await?
+        .expect("ordinary UpdateTask has no revision fence");
+    tx.commit().await?;
+    if outcome.changed {
+        publish_task_changed(publisher, ctx, outcome.task.person_id).await;
+    }
+    Ok(outcome)
+}
+
+/// Shared update core. `preserve_assignee` is the mobile-only mode: it uses
+/// the already locked stored value verbatim, including NULL or an inactive
+/// membership, and therefore never turns an omission into reassignment.
+pub(crate) async fn update_task_in_transaction(
+    tx: &mut PgConnection,
+    ctx: &CommandContext,
+    cmd: UpdateTask,
+    expected_revision: Option<i64>,
+    preserve_assignee: bool,
+) -> Result<Option<UpdateTaskOutcome>, TaskError> {
+    let title = TaskTitle::parse(&cmd.title)?;
     let (row, role) = lock_person_task_and_authorize(
-        &mut tx,
+        tx,
         ctx.organization_id,
         ctx.actor_user_id,
         cmd.person_id,
         cmd.task_id,
     )
     .await?;
-
-    let assignee_changed = Some(cmd.assignee_user_id) != row.assignee_user_id;
-    // The assignee is re-validated as an active member ONLY when it
-    // changes (docs/specs/SLICE_016.md §3): a task held by a deactivated
-    // member can still be retitled.
-    if assignee_changed {
-        let active =
-            queries::assignee_is_active_member(&mut tx, ctx.organization_id, cmd.assignee_user_id)
-                .await?;
-        if !active {
-            return Err(TaskError::InvalidAssignee);
+    if let Some(expected) = expected_revision {
+        let current: i64 = sqlx::query_scalar(
+            "SELECT revision FROM task WHERE organization_id=$1 AND person_id=$2 AND id=$3",
+        )
+        .bind(ctx.organization_id.0)
+        .bind(cmd.person_id.0)
+        .bind(cmd.task_id.0)
+        .fetch_one(&mut *tx)
+        .await?;
+        if current != expected {
+            return Ok(None);
         }
     }
-
+    let assignee_changed = !preserve_assignee && Some(cmd.assignee_user_id) != row.assignee_user_id;
+    if assignee_changed
+        && !queries::assignee_is_active_member(tx, ctx.organization_id, cmd.assignee_user_id)
+            .await?
+    {
+        return Err(TaskError::InvalidAssignee);
+    }
     let unchanged = row.title == title
         && row.kind == cmd.kind.as_str()
         && row.due_at == cmd.due_at
         && !assignee_changed;
-
     if unchanged {
-        tx.commit().await?;
         let can_manage = permitted(Some(role), ctx.actor_user_id, &row);
-        return Ok(UpdateTaskOutcome {
+        return Ok(Some(UpdateTaskOutcome {
             task: queries::task_from_row(row, cmd.person_id, can_manage)?,
             changed: false,
-        });
+        }));
     }
-
-    queries::update_task_full(
-        &mut tx,
-        ctx.organization_id,
-        cmd.person_id,
-        cmd.task_id,
-        &title,
-        cmd.kind,
-        cmd.due_at,
-        cmd.assignee_user_id,
-    )
-    .await?;
+    if preserve_assignee {
+        queries::update_task_preserving_assignee(
+            tx,
+            ctx.organization_id,
+            cmd.person_id,
+            cmd.task_id,
+            &title,
+            cmd.kind,
+            cmd.due_at,
+        )
+        .await?;
+    } else {
+        queries::update_task_full(
+            tx,
+            ctx.organization_id,
+            cmd.person_id,
+            cmd.task_id,
+            &title,
+            cmd.kind,
+            cmd.due_at,
+            cmd.assignee_user_id,
+        )
+        .await?;
+    }
     let updated_row =
-        queries::lock_task_for_update(&mut tx, ctx.organization_id, cmd.person_id, cmd.task_id)
+        queries::lock_task_for_update(tx, ctx.organization_id, cmd.person_id, cmd.task_id)
             .await?
             .ok_or(TaskError::Corrupt)?;
-    tx.commit().await?;
-
-    publish_task_changed(publisher, ctx, cmd.person_id).await;
-
-    // Recomputed against the UPDATED row (docs/specs/SLICE_016.md §9): an
-    // assignee who reassigns a task away from themselves loses
-    // `can_manage` in this very response — the creator keeps it.
     let can_manage = permitted(Some(role), ctx.actor_user_id, &updated_row);
-    Ok(UpdateTaskOutcome {
+    Ok(Some(UpdateTaskOutcome {
         task: queries::task_from_row(updated_row, cmd.person_id, can_manage)?,
         changed: true,
-    })
+    }))
 }
 
 // --- CompleteTask ----------------------------------------------------------

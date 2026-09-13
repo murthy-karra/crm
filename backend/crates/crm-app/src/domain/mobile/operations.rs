@@ -53,10 +53,43 @@ struct Downloaded {
 struct Created {
     created_by_operation_id: Uuid,
 }
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct EditNote {
+    person_id: Uuid,
+    note_id: Uuid,
+    expected_revision: String,
+    body: String,
+}
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct UpdateTask {
+    person_id: Uuid,
+    task_id: Uuid,
+    expected_revision: String,
+    title: String,
+    kind: task::TaskKind,
+    due_at: Option<DateTime<Utc>>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct UpdateTaskWire {
+    person_id: Uuid,
+    task_id: Uuid,
+    expected_revision: String,
+    title: String,
+    kind: task::TaskKind,
+    // `Value` keeps the field required under serde while retaining an explicit
+    // JSON null. `Option<Option<T>>` cannot make that distinction: serde maps
+    // both missing and null to the outer None.
+    due_at: Value,
+}
 enum Payload {
     Add(Add),
     Create(Create),
     Complete(Complete),
+    EditNote(EditNote),
+    UpdateTask(UpdateTask),
 }
 impl Payload {
     fn parse(kind: &str, value: Value) -> Result<Self, MobileError> {
@@ -78,6 +111,30 @@ impl Payload {
                 }
                 Self::Complete(v)
             }
+            "edit_note" => {
+                let mut v: EditNote = serde_json::from_value(value).map_err(|_| invalid())?;
+                revision(&v.expected_revision)?;
+                v.body = note::NoteBody::parse(&v.body)?;
+                Self::EditNote(v)
+            }
+            "update_task" => {
+                let wire: UpdateTaskWire = serde_json::from_value(value).map_err(|_| invalid())?;
+                let mut v = UpdateTask {
+                    person_id: wire.person_id,
+                    task_id: wire.task_id,
+                    expected_revision: wire.expected_revision,
+                    title: wire.title,
+                    kind: wire.kind,
+                    due_at: if wire.due_at.is_null() {
+                        None
+                    } else {
+                        Some(serde_json::from_value(wire.due_at).map_err(|_| invalid())?)
+                    },
+                };
+                revision(&v.expected_revision)?;
+                v.title = task::TaskTitle::parse(&v.title)?;
+                Self::UpdateTask(v)
+            }
             _ => return Err(invalid()),
         })
     }
@@ -86,6 +143,8 @@ impl Payload {
             Self::Add(v) => v.person_id,
             Self::Create(v) => v.person_id,
             Self::Complete(v) => v.person_id,
+            Self::EditNote(v) => v.person_id,
+            Self::UpdateTask(v) => v.person_id,
         }
     }
     fn json(&self) -> Result<Value, MobileError> {
@@ -93,6 +152,8 @@ impl Payload {
             Self::Add(v) => serialize(v),
             Self::Create(v) => serialize(v),
             Self::Complete(v) => serialize(v),
+            Self::EditNote(v) => serialize(v),
+            Self::UpdateTask(v) => serialize(v),
         }
     }
 }
@@ -186,7 +247,8 @@ pub async fn execute(
     if header_context != request.context_id {
         return Err(code(401, "unauthenticated"));
     }
-    let payload = Payload::parse(&request.kind, request.payload)?;
+    let kind = request.kind.clone();
+    let payload = Payload::parse(&kind, request.payload)?;
     let canonical=serde_json::to_vec(&json!({"version":1,"protocol":PROTOCOL,"context_id":request.context_id,"kind":request.kind,"device_recorded_at":request.device_recorded_at,"payload":payload.json()?})).map_err(|_|invalid())?;
     let mut tx = begin(pool, auth, false).await?;
     context(&mut tx, auth, request.context_id, true).await?;
@@ -283,8 +345,46 @@ pub async fn execute(
             .ok_or(code(409, "revision_conflict"))?;
             ("task", id, result.changed)
         }
+        Payload::EditNote(v) => {
+            let result = note::edit_note_in_transaction(
+                &mut tx,
+                &ctx,
+                note::EditNote {
+                    person_id: person,
+                    note_id: crate::ids::NoteId(v.note_id),
+                    body: v.body,
+                },
+                Some(revision(&v.expected_revision)?),
+            )
+            .await?
+            .ok_or(code(409, "revision_conflict"))?;
+            ("note", v.note_id, result.changed)
+        }
+        Payload::UpdateTask(v) => {
+            let result = task::update_task_in_transaction(
+                &mut tx,
+                &ctx,
+                task::UpdateTask {
+                    person_id: person,
+                    task_id: TaskId(v.task_id),
+                    title: v.title,
+                    kind: v.kind,
+                    due_at: v.due_at,
+                    // This value is ignored by preserve_assignee mode; the
+                    // current locked assignee, including NULL, is retained.
+                    assignee_user_id: auth.actor_user_id,
+                },
+                Some(revision(&v.expected_revision)?),
+                true,
+            )
+            .await?
+            .ok_or(code(409, "revision_conflict"))?;
+            ("task", v.task_id, result.changed)
+        }
     };
-    let resource_revision: Option<i64> = if resource_type == "task" {
+    let resource_revision: Option<i64> = if kind == "add_note" {
+        None
+    } else if resource_type == "task" {
         Some(
             sqlx::query_scalar("SELECT revision FROM task WHERE organization_id=$1 AND id=$2")
                 .bind(auth.active_organization_id.0)
@@ -293,7 +393,13 @@ pub async fn execute(
                 .await?,
         )
     } else {
-        None
+        Some(
+            sqlx::query_scalar("SELECT revision FROM note WHERE organization_id=$1 AND id=$2")
+                .bind(auth.active_organization_id.0)
+                .bind(resource_id)
+                .fetch_one(&mut *tx)
+                .await?,
+        )
     };
     let person_revision: i64 =
         sqlx::query_scalar("SELECT mobile_revision FROM person WHERE organization_id=$1 AND id=$2")
@@ -303,7 +409,7 @@ pub async fn execute(
             .await?;
     let digest = keys.digest(keys.active(), b"crm-mobile-operation-v1\0", &canonical)?;
     let accepted_at:DateTime<Utc>=sqlx::query_scalar("INSERT INTO mobile_operation_receipt(organization_id,actor_user_id,operation_id,context_id,digest_version,digest_key_id,payload_digest,kind,person_id,resource_type,resource_id,committed_revision,person_revision,changed,accepted_at) VALUES($1,$2,$3,$4,1,$5,$6,$7,$8,$9,$10,$11,$12,$13,statement_timestamp()) RETURNING accepted_at")
-        .bind(auth.active_organization_id.0).bind(auth.actor_user_id.0).bind(request.operation_id).bind(request.context_id).bind(keys.active()).bind(digest).bind(&request.kind).bind(person.0).bind(resource_type).bind(resource_id).bind(resource_revision).bind(person_revision).bind(changed).fetch_one(&mut *tx).await?;
+        .bind(auth.active_organization_id.0).bind(auth.actor_user_id.0).bind(request.operation_id).bind(request.context_id).bind(keys.active()).bind(digest).bind(&kind).bind(person.0).bind(resource_type).bind(resource_id).bind(resource_revision).bind(person_revision).bind(changed).fetch_one(&mut *tx).await?;
     tx.commit().await?;
     if changed {
         publisher

@@ -9,9 +9,9 @@ use crm_api::{
     domain::{
         admin::{MembershipStatus, Role},
         envelope::CommandContext,
-        mobile, task,
+        mobile, note, task,
     },
-    ids::{OrganizationId, PersonId, TaskId, UserId},
+    ids::{NoteId, OrganizationId, PersonId, TaskId, UserId},
     realtime::Publisher,
 };
 use http_body_util::BodyExt;
@@ -303,6 +303,456 @@ async fn atomic_replay_conflict_dependency_and_old_web_commands(pool: PgPool) {
     assert!(!cols
         .iter()
         .any(|v| matches!(v.as_str(), "body" | "title" | "payload" | "raw_request")));
+}
+
+/// Mobile 002's narrow edit contract: independent note versions, strict
+/// stale detection before a no-op shortcut, preserved NULL assignees, and
+/// bounded current-record reads.  It deliberately uses the real router and
+/// app role to exercise receipt and workspace transactions together.
+#[sqlx::test]
+#[ignore]
+async fn mobile002_edit_revisions_receipts_and_current_reads(pool: PgPool) {
+    let f = fixture(&pool).await;
+    assert!(f.bootstrap["capabilities"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|value| value == "edit_note"));
+    assert!(f.bootstrap["capabilities"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|value| value == "update_task"));
+    assert!(f.bootstrap["capabilities"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|value| value == "note_revisions"));
+
+    let add = f.operation(
+        "add_note",
+        json!({"person_id":f.person,"body":"mobile baseline"}),
+    );
+    let (status, add_receipt) = f.post("/api/mobile/v1/operations", add).await;
+    assert_eq!(status, StatusCode::OK, "{add_receipt}");
+    assert!(add_receipt["committed_revision"].is_null());
+    let note_id = id(&add_receipt, "resource_id");
+    let revision: i64 = sqlx::query_scalar("SELECT revision FROM note WHERE id=$1")
+        .bind(note_id)
+        .fetch_one(&f.app)
+        .await
+        .unwrap();
+    assert_eq!(revision, 1);
+
+    let edit = f.operation(
+        "edit_note",
+        json!({"person_id":f.person,"note_id":note_id,"expected_revision":"1","body":"  edited\r\nbody  "}),
+    );
+    let (status, edited) = f.post("/api/mobile/v1/operations", edit.clone()).await;
+    assert_eq!(status, StatusCode::OK, "{edited}");
+    assert_eq!(edited["committed_revision"], "2");
+    assert_eq!(edited["changed"], true);
+    record("mobile002_edit_note_receipt", &edited);
+    assert_eq!(
+        f.post("/api/mobile/v1/operations", edit).await.1["replayed"],
+        true
+    );
+    let stale_equal = f.operation(
+        "edit_note",
+        json!({"person_id":f.person,"note_id":note_id,"expected_revision":"1","body":"edited\nbody"}),
+    );
+    let (status, conflict) = f.post("/api/mobile/v1/operations", stale_equal).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(conflict["error"], "revision_conflict");
+    assert!(conflict.get("body").is_none());
+
+    // A non-body writer also advances the independent token, while a direct
+    // identical update leaves it stable.
+    sqlx::query("UPDATE note SET origin='migration' WHERE id=$1")
+        .bind(note_id)
+        .execute(&f.app)
+        .await
+        .unwrap();
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT revision FROM note WHERE id=$1")
+            .bind(note_id)
+            .fetch_one(&f.app)
+            .await
+            .unwrap(),
+        3
+    );
+    sqlx::query("UPDATE note SET origin='migration' WHERE id=$1")
+        .bind(note_id)
+        .execute(&f.app)
+        .await
+        .unwrap();
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT revision FROM note WHERE id=$1")
+            .bind(note_id)
+            .fetch_one(&f.app)
+            .await
+            .unwrap(),
+        3
+    );
+
+    let (status, current) = request(
+        &f.router,
+        &f.cookie,
+        Some(f.context),
+        "GET",
+        &format!("/api/mobile/v1/people/{}/notes/{note_id}", f.person),
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{current}");
+    assert_eq!(current["note"]["revision"], "3");
+    assert_eq!(current["person_id"], f.person.to_string());
+    record("mobile002_current_note", &current);
+    let (status, malformed) = request(
+        &f.router,
+        &f.cookie,
+        Some(f.context),
+        "GET",
+        &format!("/api/mobile/v1/people/{}/notes/{note_id}?extra=1", f.person),
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(malformed["error"], "malformed_request");
+    let (status, bad_context) = request(
+        &f.router,
+        &f.cookie,
+        Some(Uuid::new_v4()),
+        "GET",
+        &format!("/api/mobile/v1/people/{}/notes/{note_id}", f.person),
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(bad_context["error"], "unauthenticated");
+    let (status, rejected_body) = request(
+        &f.router,
+        &f.cookie,
+        Some(f.context),
+        "GET",
+        &format!("/api/mobile/v1/people/{}/notes/{note_id}", f.person),
+        json!({"organization_id":Uuid::new_v4()}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(rejected_body["error"], "malformed_request");
+
+    // Imported/legacy records can have no assignee. A mobile edit preserves
+    // that exact NULL rather than assigning the editing actor.
+    let task_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO task(organization_id,person_id,title,kind,due_at,assignee_user_id,created_by_user_id,origin,correlation_id) \
+         VALUES($1,$2,'legacy unassigned','follow_up',NULL,NULL,$3,'migration',$4) RETURNING id",
+    )
+    .bind(f.org)
+    .bind(f.person)
+    .bind(f.actor)
+    .bind(Uuid::new_v4())
+    .fetch_one(&f.app)
+    .await
+    .unwrap();
+    let update = f.operation(
+        "update_task",
+        json!({"person_id":f.person,"task_id":task_id,"expected_revision":"1","title":"updated task","kind":"call","due_at":null}),
+    );
+    let omitted_due_at = f.operation(
+        "update_task",
+        json!({"person_id":f.person,"task_id":task_id,"expected_revision":"1","title":"updated task","kind":"call"}),
+    );
+    let (status, omitted_error) = f.post("/api/mobile/v1/operations", omitted_due_at).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(omitted_error["error"], "malformed_request");
+    let (status, updated) = f.post("/api/mobile/v1/operations", update).await;
+    assert_eq!(status, StatusCode::OK, "{updated}");
+    assert_eq!(updated["committed_revision"], "2");
+    record("mobile002_update_task_receipt", &updated);
+    let assignee: Option<Uuid> =
+        sqlx::query_scalar("SELECT assignee_user_id FROM task WHERE id=$1")
+            .bind(task_id)
+            .fetch_one(&f.app)
+            .await
+            .unwrap();
+    assert_eq!(assignee, None);
+    let (status, task_current) = request(
+        &f.router,
+        &f.cookie,
+        Some(f.context),
+        "GET",
+        &format!("/api/mobile/v1/people/{}/tasks/{task_id}", f.person),
+        json!(null),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{task_current}");
+    assert!(task_current["task"]["assignee"].is_null());
+    assert_eq!(task_current["task"]["revision"], "2");
+    record("mobile002_current_task", &task_current);
+}
+
+#[sqlx::test]
+#[ignore]
+async fn mobile002_edit_authority_scope_and_atomic_failure_matrix(pool: PgPool) {
+    let f = fixture(&pool).await;
+    let seed = f.operation(
+        "add_note",
+        json!({"person_id":f.person,"body":"authority baseline"}),
+    );
+    let (_, seeded) = f.post("/api/mobile/v1/operations", seed).await;
+    let note_id = id(&seeded, "resource_id");
+
+    let other_cookie = crate::common::login_cookie(&f.router, "second@fixture.test", PW).await;
+    let other_install = Uuid::new_v4();
+    let (status, other_bootstrap) = request(
+        &f.router,
+        &other_cookie,
+        None,
+        "POST",
+        "/api/mobile/v1/bootstrap",
+        json!({"protocol":"mobile-v1","installation_id":other_install}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let other_context = id(&other_bootstrap, "context_id");
+    let denied = json!({
+        "context_id":other_context,"operation_id":Uuid::new_v4(),"kind":"edit_note",
+        "device_recorded_at":"2026-09-12T20:00:00Z",
+        "payload":{"person_id":f.person,"note_id":note_id,"expected_revision":"999","body":"must not disclose stale"}
+    });
+    let (status, forbidden) = request(
+        &f.router,
+        &other_cookie,
+        Some(other_context),
+        "POST",
+        "/api/mobile/v1/operations",
+        denied,
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(forbidden["error"], "forbidden");
+
+    let task_for_denial: Uuid = sqlx::query_scalar(
+        "INSERT INTO task(organization_id,person_id,title,kind,assignee_user_id,created_by_user_id,origin,correlation_id) \
+         VALUES($1,$2,'permission first','follow_up',$3,$3,'migration',$4) RETURNING id",
+    )
+    .bind(f.org)
+    .bind(f.person)
+    .bind(f.actor)
+    .bind(Uuid::new_v4())
+    .fetch_one(&f.app)
+    .await
+    .unwrap();
+    let denied_task = json!({
+        "context_id":other_context,"operation_id":Uuid::new_v4(),"kind":"update_task",
+        "device_recorded_at":"2026-09-12T20:00:00Z",
+        "payload":{"person_id":f.person,"task_id":task_for_denial,"expected_revision":"999","title":"must not disclose stale","kind":"call","due_at":null}
+    });
+    let (status, task_forbidden) = request(
+        &f.router,
+        &other_cookie,
+        Some(other_context),
+        "POST",
+        "/api/mobile/v1/operations",
+        denied_task,
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(task_forbidden["error"], "forbidden");
+
+    // A foreign Organization target is indistinguishable from a missing one
+    // on both edit kinds and both comparison reads.
+    let (foreign_org, foreign_actor) = crate::common::create_org_with_stages_and_member(
+        &pool,
+        "Foreign Mobile",
+        "foreign-mobile@fixture.test",
+        "Foreign",
+        PW,
+    )
+    .await;
+    let foreign_stage: Uuid = sqlx::query_scalar(
+        "SELECT id FROM stage WHERE organization_id=$1 ORDER BY position LIMIT 1",
+    )
+    .bind(foreign_org)
+    .fetch_one(&f.app)
+    .await
+    .unwrap();
+    let foreign_person: Uuid = sqlx::query_scalar("INSERT INTO person(organization_id,first_name,stage_id) VALUES($1,'Foreign',$2) RETURNING id")
+        .bind(foreign_org).bind(foreign_stage).fetch_one(&f.app).await.unwrap();
+    let foreign_note: Uuid = sqlx::query_scalar("INSERT INTO note(organization_id,person_id,author_user_id,body,origin,correlation_id) VALUES($1,$2,$3,'foreign note','migration',$4) RETURNING id")
+        .bind(foreign_org).bind(foreign_person).bind(foreign_actor).bind(Uuid::new_v4()).fetch_one(&f.app).await.unwrap();
+    let foreign_task: Uuid = sqlx::query_scalar("INSERT INTO task(organization_id,person_id,title,kind,assignee_user_id,created_by_user_id,origin,correlation_id) VALUES($1,$2,'foreign task','follow_up',$3,$3,'migration',$4) RETURNING id")
+        .bind(foreign_org).bind(foreign_person).bind(foreign_actor).bind(Uuid::new_v4()).fetch_one(&f.app).await.unwrap();
+    for operation in [
+        f.operation("edit_note", json!({"person_id":foreign_person,"note_id":foreign_note,"expected_revision":"1","body":"no cross tenant"})),
+        f.operation("update_task", json!({"person_id":foreign_person,"task_id":foreign_task,"expected_revision":"1","title":"no cross tenant","kind":"call","due_at":null})),
+    ] {
+        assert_eq!(f.post("/api/mobile/v1/operations", operation).await.0, StatusCode::NOT_FOUND);
+    }
+    for path in [
+        format!("/api/mobile/v1/people/{foreign_person}/notes/{foreign_note}"),
+        format!("/api/mobile/v1/people/{foreign_person}/tasks/{foreign_task}"),
+    ] {
+        assert_eq!(
+            request(
+                &f.router,
+                &f.cookie,
+                Some(f.context),
+                "GET",
+                &path,
+                json!({})
+            )
+            .await
+            .0,
+            StatusCode::NOT_FOUND
+        );
+    }
+
+    // A record can never be reached through another Person path, even in the
+    // same Organization; this also pins the generic visibility 404.
+    let stage: Uuid = sqlx::query_scalar("SELECT stage_id FROM person WHERE id=$1")
+        .bind(f.person)
+        .fetch_one(&f.app)
+        .await
+        .unwrap();
+    let another_person: Uuid = sqlx::query_scalar(
+        "INSERT INTO person(organization_id,first_name,stage_id) VALUES($1,'Other',$2) RETURNING id",
+    ).bind(f.org).bind(stage).fetch_one(&f.app).await.unwrap();
+    let wrong_person = f.operation("edit_note", json!({"person_id":another_person,"note_id":note_id,"expected_revision":"1","body":"wrong path"}));
+    let (status, missing) = f.post("/api/mobile/v1/operations", wrong_person).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(missing["error"], "not_found");
+    let (status, hidden) = request(
+        &f.router,
+        &f.cookie,
+        Some(f.context),
+        "GET",
+        &format!("/api/mobile/v1/people/{another_person}/notes/{note_id}"),
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(hidden["error"], "not_found");
+
+    // An authorized exact baseline no-op receives a durable receipt at the
+    // unchanged version; a stale baseline conflicts before equality checks.
+    let noop = f.operation("edit_note", json!({"person_id":f.person,"note_id":note_id,"expected_revision":"1","body":"authority baseline"}));
+    let (status, noop_receipt) = f.post("/api/mobile/v1/operations", noop).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(noop_receipt["changed"], false);
+    assert_eq!(noop_receipt["committed_revision"], "1");
+    let task_create = f.operation("create_task", json!({"person_id":f.person,"title":"completed edit","kind":"follow_up","due_at":null,"assignee_user_id":null}));
+    let (_, created) = f.post("/api/mobile/v1/operations", task_create).await;
+    let task_id = id(&created, "resource_id");
+    task::complete_task(
+        &f.app,
+        &Publisher::recording(),
+        &CommandContext::from_auth(&f.auth()),
+        task::CompleteTask {
+            person_id: PersonId(f.person),
+            task_id: TaskId(task_id),
+        },
+    )
+    .await
+    .unwrap();
+    let stale_task = f.operation("update_task", json!({"person_id":f.person,"task_id":task_id,"expected_revision":"1","title":"completed edit","kind":"follow_up","due_at":null}));
+    let (status, conflict) = f.post("/api/mobile/v1/operations", stale_task).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(conflict["error"], "revision_conflict");
+    let complete_edit = f.operation("update_task", json!({"person_id":f.person,"task_id":task_id,"expected_revision":"2","title":"completed retitled","kind":"call","due_at":null}));
+    let (status, completed_receipt) = f.post("/api/mobile/v1/operations", complete_edit).await;
+    assert_eq!(status, StatusCode::OK, "{completed_receipt}");
+    let completed: bool =
+        sqlx::query_scalar("SELECT completed_at IS NOT NULL FROM task WHERE id=$1")
+            .bind(task_id)
+            .fetch_one(&f.app)
+            .await
+            .unwrap();
+    assert!(completed);
+
+    // An accepted edit cannot be resurrected by replay after deletion.
+    let accepted = f.operation("edit_note", json!({"person_id":f.person,"note_id":note_id,"expected_revision":"1","body":"accepted then deleted"}));
+    assert_eq!(
+        f.post("/api/mobile/v1/operations", accepted.clone())
+            .await
+            .0,
+        StatusCode::OK
+    );
+    note::delete_note(
+        &f.app,
+        &Publisher::recording(),
+        &CommandContext::from_auth(&f.auth()),
+        note::DeleteNote {
+            person_id: PersonId(f.person),
+            note_id: NoteId(note_id),
+        },
+    )
+    .await
+    .unwrap();
+    let (status, replay_deleted) = f.post("/api/mobile/v1/operations", accepted).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(replay_deleted["error"], "not_found");
+
+    // Receipt insertion failure rolls back the business body/version/person
+    // revision with the same transaction; no split acceptance is possible.
+    let rollback_seed = f.operation(
+        "add_note",
+        json!({"person_id":f.person,"body":"rollback baseline"}),
+    );
+    let (_, rollback_created) = f.post("/api/mobile/v1/operations", rollback_seed).await;
+    let rollback_note = id(&rollback_created, "resource_id");
+    let before_person: i64 = sqlx::query_scalar("SELECT mobile_revision FROM person WHERE id=$1")
+        .bind(f.person)
+        .fetch_one(&f.app)
+        .await
+        .unwrap();
+    sqlx::raw_sql("CREATE FUNCTION mobile002_fail_receipt() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic receipt failure'; END $$; CREATE TRIGGER mobile002_receipt_failure BEFORE INSERT ON mobile_operation_receipt FOR EACH ROW EXECUTE FUNCTION mobile002_fail_receipt();").execute(&pool).await.unwrap();
+    let rollback = f.operation("edit_note", json!({"person_id":f.person,"note_id":rollback_note,"expected_revision":"1","body":"must roll back"}));
+    assert_eq!(
+        f.post("/api/mobile/v1/operations", rollback.clone())
+            .await
+            .0,
+        StatusCode::SERVICE_UNAVAILABLE
+    );
+    sqlx::query("DROP TRIGGER mobile002_receipt_failure ON mobile_operation_receipt")
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        sqlx::query_scalar::<_, String>("SELECT body FROM note WHERE id=$1")
+            .bind(rollback_note)
+            .fetch_one(&f.app)
+            .await
+            .unwrap(),
+        "rollback baseline"
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT revision FROM note WHERE id=$1")
+            .bind(rollback_note)
+            .fetch_one(&f.app)
+            .await
+            .unwrap(),
+        1
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT mobile_revision FROM person WHERE id=$1")
+            .bind(f.person)
+            .fetch_one(&f.app)
+            .await
+            .unwrap(),
+        before_person
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM mobile_operation_receipt WHERE operation_id=$1"
+        )
+        .bind(id(&rollback, "operation_id"))
+        .fetch_one(&f.app)
+        .await
+        .unwrap(),
+        0
+    );
 }
 
 #[sqlx::test]

@@ -256,49 +256,71 @@ async fn edit_note_attempt(
     ctx: &CommandContext,
     cmd: EditNote,
 ) -> Result<EditNoteOutcome, NoteError> {
-    let body = NoteBody::parse(&cmd.body)?;
-
+    // Preserve the legacy wrapper's validation-before-workspace precedence.
+    // The transaction core repeats parsing because it is independently usable
+    // by the mobile atomic receipt path.
+    NoteBody::parse(&cmd.body)?;
     let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
-    person_queries::lock_person(&mut tx, cmd.person_id, ctx.organization_id)
+    let outcome = edit_note_in_transaction(&mut tx, ctx, cmd, None)
+        .await?
+        .expect("ordinary EditNote has no revision fence");
+    tx.commit().await?;
+    if outcome.changed {
+        publish_note_changed(publisher, ctx, outcome.note.person_id).await;
+    }
+    Ok(outcome)
+}
+
+/// Transaction-compatible edit core used by the mobile operation adapter.
+/// A revision fence is checked only after the live authority decision; `None`
+/// is an authorized stale baseline, while the ordinary Web/Operator wrapper
+/// deliberately supplies no baseline and retains its last-write-wins contract.
+pub(crate) async fn edit_note_in_transaction(
+    tx: &mut PgConnection,
+    ctx: &CommandContext,
+    cmd: EditNote,
+    expected_revision: Option<i64>,
+) -> Result<Option<EditNoteOutcome>, NoteError> {
+    let body = NoteBody::parse(&cmd.body)?;
+    person_queries::lock_person(tx, cmd.person_id, ctx.organization_id)
         .await?
         .ok_or(NoteError::NotFound)?;
-    let row =
-        queries::lock_note_for_update(&mut tx, ctx.organization_id, cmd.person_id, cmd.note_id)
-            .await?
-            .ok_or(NoteError::NotFound)?;
-    let role = lock_current_membership(&mut tx, ctx.organization_id, ctx.actor_user_id).await?;
-
+    let row = queries::lock_note_for_update(tx, ctx.organization_id, cmd.person_id, cmd.note_id)
+        .await?
+        .ok_or(NoteError::NotFound)?;
+    let role = lock_current_membership(tx, ctx.organization_id, ctx.actor_user_id).await?;
     if !permitted(role, ctx.actor_user_id, &row) {
         return Err(NoteError::Forbidden);
     }
-
+    if let Some(expected) = expected_revision {
+        let current: i64 = sqlx::query_scalar(
+            "SELECT revision FROM note WHERE organization_id=$1 AND person_id=$2 AND id=$3",
+        )
+        .bind(ctx.organization_id.0)
+        .bind(cmd.person_id.0)
+        .bind(cmd.note_id.0)
+        .fetch_one(&mut *tx)
+        .await?;
+        if current != expected {
+            return Ok(None);
+        }
+    }
     if row.body == body {
-        tx.commit().await?;
-        return Ok(EditNoteOutcome {
+        return Ok(Some(EditNoteOutcome {
             note: note_view(&row, cmd.person_id, true),
             changed: false,
-        });
+        }));
     }
-
-    let updated_at = queries::update_note_body(
-        &mut tx,
-        ctx.organization_id,
-        cmd.person_id,
-        cmd.note_id,
-        &body,
-    )
-    .await?;
-    tx.commit().await?;
-
-    publish_note_changed(publisher, ctx, cmd.person_id).await;
-
+    let updated_at =
+        queries::update_note_body(tx, ctx.organization_id, cmd.person_id, cmd.note_id, &body)
+            .await?;
     let mut updated_row = row;
     updated_row.body = body;
     updated_row.updated_at = updated_at;
-    Ok(EditNoteOutcome {
+    Ok(Some(EditNoteOutcome {
         note: note_view(&updated_row, cmd.person_id, true),
         changed: true,
-    })
+    }))
 }
 
 // --- DeleteNote ----------------------------------------------------------

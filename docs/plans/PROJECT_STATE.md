@@ -39,6 +39,8 @@ People. D-076 now accepts both new contracts and Terra high implementation; the
 [coordinated plan](MOBILE_002_010e2_PARALLEL_LAUNCH.md) prepares mobile backend
 alongside migration, then iOS + Android + migration within three worktrees.
 The implementation uses isolated synthetic resources; shared development and the native demo remain intact.
+The [implementation status](../tasks/MOBILE_002_010e2_IMPLEMENTATION_STATUS.md)
+records actual lane progress and assigned resources separately from planning.
 
 **The current Mobile 001 / 010e1 shared-development runtime is**
 `08cb42057013cb8766ae61acb23458b0cf38c416` at

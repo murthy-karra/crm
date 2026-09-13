@@ -24,6 +24,7 @@ use uuid::Uuid;
 pub const PROTOCOL: &str = "mobile-v1";
 pub const MAX_PEOPLE: usize = 25_000;
 pub const PAGE_BYTES: usize = 512 * 1024;
+const CURRENT_RECORD_BYTES: usize = 128 * 1024;
 
 #[derive(Debug)]
 pub enum MobileError {
@@ -105,6 +106,16 @@ fn invalid() -> MobileError {
 }
 fn serialize<T: Serialize>(value: &T) -> Result<Value, MobileError> {
     serde_json::to_value(value).map_err(|_| code(503, "unavailable"))
+}
+fn bounded_current(value: Value) -> Result<Value, MobileError> {
+    if serde_json::to_vec(&value)
+        .map_err(|_| code(503, "unavailable"))?
+        .len()
+        > CURRENT_RECORD_BYTES
+    {
+        return Err(code(503, "unavailable"));
+    }
+    Ok(value)
 }
 
 #[derive(Clone)]
@@ -330,7 +341,91 @@ pub async fn bootstrap(
     let expiry: DateTime<Utc> = row.get("offline_access_expires_at");
     tx.commit().await?;
     Ok(
-        json!({"protocol":PROTOCOL,"context_id":id,"installation_id":request.installation_id,"actor_user_id":auth.actor_user_id,"organization_id":auth.active_organization_id,"workspace_revision":revision.to_string(),"authorized_at":now,"offline_access_expires_at":expiry,"server_time":now,"capabilities":["add_note","create_task","complete_task","reconciliation"],"bounds":{"selected_people":MAX_PEOPLE,"manifest_page":250,"component_rows":100,"component_bytes":PAGE_BYTES,"operation_bytes":131072,"concurrent_uploads":1,"concurrent_downloads":2,"generation_seconds":1800}}),
+        json!({"protocol":PROTOCOL,"context_id":id,"installation_id":request.installation_id,"actor_user_id":auth.actor_user_id,"organization_id":auth.active_organization_id,"workspace_revision":revision.to_string(),"authorized_at":now,"offline_access_expires_at":expiry,"server_time":now,"capabilities":["add_note","create_task","complete_task","reconciliation","edit_note","update_task","note_revisions"],"bounds":{"selected_people":MAX_PEOPLE,"manifest_page":250,"component_rows":100,"component_bytes":PAGE_BYTES,"operation_bytes":131072,"concurrent_uploads":1,"concurrent_downloads":2,"generation_seconds":1800}}),
+    )
+}
+
+/// Bounded live edit baseline. This is intentionally separate from a sealed
+/// reconciliation component: it cannot advance any cursor or qualify an
+/// offline bundle, but it rechecks the current context, workspace, membership
+/// and organization-scoped Person visibility before returning content.
+pub async fn current_note(
+    pool: &PgPool,
+    auth: &AuthContext,
+    context_id: Uuid,
+    person_id: Uuid,
+    note_id: Uuid,
+) -> Result<Value, MobileError> {
+    let mut tx = begin(pool, auth, true).await?;
+    context(&mut tx, auth, context_id, false).await?;
+    let (role, _) = authority(&mut tx, auth, false).await?;
+    let row = sqlx::query(
+        "SELECT p.mobile_revision, jsonb_build_object(\
+          'id',n.id,'person_id',n.person_id,'body',n.body,\
+          'author',CASE WHEN u.id IS NULL THEN NULL ELSE jsonb_build_object('id',u.id,'display_name',u.display_name) END,\
+          'created_at',n.created_at,'updated_at',n.updated_at,'edited',n.updated_at>n.created_at,\
+          'can_manage',COALESCE(($4='admin' OR n.author_user_id=$5),false),'revision',n.revision::text) AS note \
+         FROM note n JOIN person p ON p.id=n.person_id AND p.organization_id=n.organization_id \
+         LEFT JOIN app_user u ON u.id=n.author_user_id \
+         WHERE n.organization_id=$1 AND n.person_id=$2 AND n.id=$3 AND n.deleted_at IS NULL",
+    )
+    .bind(auth.active_organization_id.0)
+    .bind(person_id)
+    .bind(note_id)
+    .bind(&role)
+    .bind(auth.actor_user_id.0)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(missing)?;
+    let person_revision: i64 = row.get("mobile_revision");
+    let note: Value = row.get("note");
+    tx.commit().await?;
+    bounded_current(
+        json!({"context_id":context_id,"person_id":person_id,"person_revision":person_revision.to_string(),"note":note}),
+    )
+}
+
+/// See [`current_note`]. Task rows already have their independent revision;
+/// returning this single record never promotes or seals a Person component.
+pub async fn current_task(
+    pool: &PgPool,
+    auth: &AuthContext,
+    context_id: Uuid,
+    person_id: Uuid,
+    task_id: Uuid,
+) -> Result<Value, MobileError> {
+    let mut tx = begin(pool, auth, true).await?;
+    context(&mut tx, auth, context_id, false).await?;
+    let (role, _) = authority(&mut tx, auth, false).await?;
+    let row = sqlx::query(
+        "SELECT p.mobile_revision, jsonb_build_object(\
+          'id',t.id,'person_id',t.person_id,'title',t.title,'kind',t.kind,'due_at',t.due_at,\
+          'assignee',CASE WHEN au.id IS NULL THEN NULL ELSE jsonb_build_object('id',au.id,'display_name',au.display_name) END,\
+          'created_by',CASE WHEN cu.id IS NULL THEN NULL ELSE jsonb_build_object('id',cu.id,'display_name',cu.display_name) END,\
+          'completed_at',t.completed_at,\
+          'completed_by',CASE WHEN ku.id IS NULL THEN NULL ELSE jsonb_build_object('id',ku.id,'display_name',ku.display_name) END,\
+          'created_at',t.created_at,'updated_at',t.updated_at,\
+          'can_manage',COALESCE(($4='admin' OR t.assignee_user_id=$5 OR t.created_by_user_id=$5),false),\
+          'revision',t.revision::text) AS task \
+         FROM task t JOIN person p ON p.id=t.person_id AND p.organization_id=t.organization_id \
+         LEFT JOIN app_user au ON au.id=t.assignee_user_id \
+         LEFT JOIN app_user cu ON cu.id=t.created_by_user_id \
+         LEFT JOIN app_user ku ON ku.id=t.completed_by_user_id \
+         WHERE t.organization_id=$1 AND t.person_id=$2 AND t.id=$3 AND t.deleted_at IS NULL",
+    )
+    .bind(auth.active_organization_id.0)
+    .bind(person_id)
+    .bind(task_id)
+    .bind(&role)
+    .bind(auth.actor_user_id.0)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(missing)?;
+    let person_revision: i64 = row.get("mobile_revision");
+    let task: Value = row.get("task");
+    tx.commit().await?;
+    bounded_current(
+        json!({"context_id":context_id,"person_id":person_id,"person_revision":person_revision.to_string(),"task":task}),
     )
 }
 

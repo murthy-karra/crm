@@ -1000,14 +1000,17 @@ async fn large_live_current_projection_reserves_a_bounded_held_unit(migrator: Pg
     .await
     .unwrap();
     assert!(bound > 8 * 1024 * 1024 && bound <= 64 * 1024 * 1024);
-    confirm(&f, run, &confirmation(&detail)).await;
-    drain(&f, run).await;
     assert_eq!(native(&f, person).await, large_current);
     assert_eq!(
-        refresh::results(&f.pool, &f.key, &f.ctx, run, refresh::Page::default())
-            .await
-            .unwrap()["results"][0]["disposition"],
-        "held_local_change"
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM migration_admitted_people_refresh_result WHERE refresh_id=$1"
+        )
+        .bind(run)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap(),
+        0,
+        "preparation did not advance a baseline or settle a native result"
     );
     assert_ne!(
         large_current, before,

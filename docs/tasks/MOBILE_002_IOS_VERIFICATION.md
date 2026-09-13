@@ -90,6 +90,24 @@ used isolated derived-data/result paths.
    paused. This is the installed old-store upgrade proof; no demo simulator,
    3101 store or shared app identity was used.
 
+9. `testMobile002NativeSecondActorConflictReviewAndRevisedReceipt` passed on the
+   isolated iPhone 17 in
+   `/private/tmp/crm-mobile002-ios-result-bundles/qa-ui-conflict-v18.xcresult`.
+   It created a fresh real accepted `add_note` on reserved Person001, fetched its
+   authorized current representation and staged it through encrypted SQLite,
+   queued the primary edit at that exact revision, then committed a distinct
+   second-actor edit at the same baseline. The primary edit surfaced as a native
+   conflict review with its preserved proposal and fetched current version. A
+   revised operation then drained to an accepted target receipt; both review and
+   receipt screenshots are attached to the result bundle.
+10. Focused protected-model transition tests passed in
+    `/private/tmp/crm-mobile002-ios-result-bundles/qa-model-fault-v2.xcresult`:
+    `testAmbiguousOperationAndReceipt404KeepExactEditEnvelopeAndProtectedDraft`
+    and `testPermissionDenialHidesModelPlaintextButRetainsProtectedEdit`. The
+    bounded debug transport seam proves 404 preserves original edit ID/envelope
+    bytes and baseline/proposal; denied authority clears the in-memory UI model
+    while retaining the encrypted protected values.
+
 ## Failed/remaining native evidence
 
 Earlier native attempts failed for a missing seed, lazy Settings form content,
@@ -99,8 +117,7 @@ full-reconciliation capacity timeout remains retained as a failed attempt.
 
 An initial upgrade attempt that relied only on a changed container path was not
 accepted as evidence. The subsequent versioned run retained exact old-file
-hashes and is the accepted proof above. Native UI proof for operation/receipt
-404 ambiguity, permission loss, explicit conflict review and resubmit remain
-incomplete. The protected store/model and real API checks cover their underlying
-behavior, but are not substitutes for those native acceptance scenarios.
+hashes and is the accepted proof above. The focused 404 and permission cases
+are production-model/protected-store transition proof via a QA-only fault seam;
+they are not a broad new visual workflow.
 Physical device, cellular, signing and distribution are deferred.

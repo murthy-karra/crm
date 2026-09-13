@@ -19,7 +19,11 @@ import XCTest
     func setupModel() async throws -> (FieldModel, API, SecureStorage, Bootstrap, LocalStore) {
         let model = FieldModel(synthetic: true, startMonitor: false, restoreOnInit: false)
         let secure = SecureStorage(synthetic: true, testingNamespace: UUID().uuidString); secure.testDirectory = directory
+        #if MOBILE002_QA
+        let api = try API(base: "http://127.0.0.1:3102")
+        #else
         let api = try API(base: "http://127.0.0.1:3101")
+        #endif
         let boot = Bootstrap(context_id: UUID().uuidString, installation_id: model.installation, actor_user_id: UUID().uuidString, organization_id: UUID().uuidString,
                              workspace_revision: "1", authorized_at: stamp(), offline_access_expires_at: stamp(Date().addingTimeInterval(7 * 86400)), server_time: stamp(), capabilities: ["add_note", "create_task", "complete_task", "reconciliation"], protocol: "mobile-v1")
         api.responseForTesting = { request in
@@ -47,6 +51,45 @@ import XCTest
     func queue(_ store: LocalStore) throws {
         let person = try XCTUnwrap(store.activePeople().first?.person)
         try store.submit(store.saveDraft(Draft(id: UUID().uuidString, person: person, kind: "add_note", text: "Controlled synthetic saved input", revision: 0)))
+    }
+    func queuedEdit(_ store: LocalStore, text: String = "Protected edit proposal") throws -> (Draft, Data) {
+        let person = try XCTUnwrap(store.activePeople().first?.person)
+        let draft = try store.saveDraft(Draft(id: UUID().uuidString.lowercased(), person: person, kind: "edit_note", text: text, revision: 0,
+                                              targetID: "11111111-1111-4111-8111-111111111111", expectedRevision: "1",
+                                              baseline: .object(["body": .s("Baseline text")]), proposal: .object(["body": .s(text)])))
+        _ = try store.submit(draft)
+        return (draft, try XCTUnwrap(store.queue().last?.bytes))
+    }
+    func testAmbiguousOperationAndReceipt404KeepExactEditEnvelopeAndProtectedDraft() async throws {
+        let (model, api, _, _, store) = try await setupModel()
+        let (draft, bytes) = try queuedEdit(store, text: "Protected 404 proposal")
+        // A POST 404 and a later receipt route 404 are deliberately ambiguous.
+        // The production model may fence uploads, but it must not mint an ID,
+        // discard the encrypted baseline/proposal, or expose a replacement.
+        api.responseForTesting = { request in
+            let operation = request.url!.path.hasSuffix("/operations")
+            let receipt = request.url!.path.contains("/operations/")
+            return try self.response(request, operation || receipt ? 404 : 503, .object(["error": .s(operation || receipt ? "not_found" : "unavailable")]))
+        }
+        model.paused = false; await model.sync()
+        XCTAssertTrue(model.unlocked)
+        XCTAssertEqual(try store.queue().last?.id, try decode(Envelope.self, bytes).operation_id)
+        XCTAssertEqual(try store.queue().last?.bytes, bytes)
+        XCTAssertEqual(try store.queue().last?.status, "unavailable")
+        let retained = try XCTUnwrap(store.drafts().first { $0.id == draft.id })
+        XCTAssertEqual(retained.text, "Protected 404 proposal")
+        XCTAssertEqual(retained.baseline?["body"].text, "Baseline text")
+    }
+    func testPermissionDenialHidesModelPlaintextButRetainsProtectedEdit() async throws {
+        let (model, api, secure, _, store) = try await setupModel()
+        let (draft, bytes) = try queuedEdit(store, text: "Permission retained proposal")
+        api.responseForTesting = { try self.response($0, 403, .object(["error": .s("forbidden")])) }
+        model.paused = false; await model.sync()
+        XCTAssertFalse(model.unlocked)
+        XCTAssertTrue(model.people.isEmpty); XCTAssertTrue(model.queue.isEmpty); XCTAssertTrue(model.drafts.isEmpty)
+        XCTAssertTrue(try secure.isLocked())
+        XCTAssertEqual(try store.queue().last?.bytes, bytes)
+        XCTAssertEqual(try store.drafts().first { $0.id == draft.id }?.text, "Permission retained proposal")
     }
     func testReconciliationAuthority403HidesOldCacheAndPersistsLockAcrossRelaunch() async throws {
         let (model, api, secure, _, store) = try await setupModel()

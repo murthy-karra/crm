@@ -193,6 +193,13 @@ import Network
         } catch { qaConflictStage = "primary edit error: " + error.localizedDescription }
     }
     func resumeQASync() { paused = false }
+    func drainQAConflict() async {
+        await sync(manual: true)
+        let target = qaConflictNoteID.isEmpty ? qaFixtureNoteID() : qaConflictNoteID
+        if let operation = queue.last(where: { $0.targetID == target }) {
+            qaConflictStage = "target " + operation.status + " receipt " + operation.id
+        } else { qaConflictStage = "target operation unavailable" }
+    }
     private func qaFixturePersonID() -> String {
         let args = ProcessInfo.processInfo.arguments
         guard let index = args.firstIndex(of: "--mobile002-qa-person-id"), args.indices.contains(index + 1) else { return "" }

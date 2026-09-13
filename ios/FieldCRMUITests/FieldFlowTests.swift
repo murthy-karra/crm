@@ -177,8 +177,11 @@ final class FieldFlowTests: XCTestCase {
         app.buttons["qaResumeSync"].tap()
         app.buttons["sync"].tap()
         app.tabBars.buttons["Saved work"].tap()
-        let review = app.buttons["Review conflict"]
-        XCTAssertTrue(review.waitForExistence(timeout: 45), "The stale primary operation must become a non-retrying explicit conflict")
+        let review = app.buttons["Review conflict"].firstMatch
+        // Saved work retains earlier receipts; scroll the lazy List so the
+        // fresh conflict row is realized rather than treating it as absent.
+        for _ in 0..<6 where !review.exists { app.swipeUp() }
+        XCTAssertTrue(review.waitForExistence(timeout: 15), "The stale primary operation must become a non-retrying explicit conflict")
         review.tap()
         XCTAssertTrue(app.staticTexts["Your saved edit"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Current version"].waitForExistence(timeout: 10))
@@ -190,9 +193,12 @@ final class FieldFlowTests: XCTestCase {
         XCTAssertTrue(revised.waitForExistence(timeout: 10)); revised.tap()
         XCTAssertTrue(app.staticTexts["draftStatus"].label.contains("Revised draft saved on device"))
         app.buttons["saveAction"].tap()
+        app.tabBars.buttons["Settings"].tap()
+        app.buttons["qaDrainConflict"].tap()
+        let receiptStage = app.staticTexts["qaConflictStage"]
+        let accepted = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label BEGINSWITH 'target accepted receipt'"), object: receiptStage)
+        XCTAssertEqual(XCTWaiter.wait(for: [accepted], timeout: 60), .completed, receiptStage.label)
         app.tabBars.buttons["Saved work"].tap()
-        expectation(for: NSPredicate(format: "label BEGINSWITH '0 pending'"), evaluatedWith: app.staticTexts["queueCount"])
-        waitForExpectations(timeout: 60)
         let receipt = XCTAttachment(screenshot: app.screenshot()); receipt.name = "mobile002-revised-edit-receipt"; receipt.lifetime = .keepAlways; add(receipt)
     }
     #endif

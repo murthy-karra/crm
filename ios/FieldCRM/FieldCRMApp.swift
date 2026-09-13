@@ -92,6 +92,7 @@ struct WorkspaceView: View {
                             Button("Advance pending note as second actor") { Task { await model.advanceQAPendingEditAsSecondActor() } }.accessibilityIdentifier("qaAdvanceConflict")
                                 .disabled(model.syncing)
                             Button("Resume QA sync") { model.resumeQASync() }.accessibilityIdentifier("qaResumeSync")
+                            Button("Drain target conflict") { Task { await model.drainQAConflict() } }.accessibilityIdentifier("qaDrainConflict")
                         }
                         #endif
                         Section("Connection") {

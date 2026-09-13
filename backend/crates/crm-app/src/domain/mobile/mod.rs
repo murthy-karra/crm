@@ -4,7 +4,7 @@
 mod generations;
 mod operations;
 pub use generations::{
-    cleanup_once, component, create_generation, manifest, seal, ReconciliationRequest,
+    cleanup_once, component, create_generation, manifest, seal, stages, ReconciliationRequest,
 };
 pub use operations::{execute, lookup_receipt, Operation, Receipt};
 
@@ -222,6 +222,8 @@ struct Cursor {
     person: Option<Uuid>,
     section: String,
     revision: Option<i64>,
+    #[serde(default)]
+    after_position: Option<i16>,
     after: Uuid,
 }
 
@@ -341,7 +343,7 @@ pub async fn bootstrap(
     let expiry: DateTime<Utc> = row.get("offline_access_expires_at");
     tx.commit().await?;
     Ok(
-        json!({"protocol":PROTOCOL,"context_id":id,"installation_id":request.installation_id,"actor_user_id":auth.actor_user_id,"organization_id":auth.active_organization_id,"workspace_revision":revision.to_string(),"authorized_at":now,"offline_access_expires_at":expiry,"server_time":now,"capabilities":["add_note","create_task","complete_task","reconciliation","edit_note","update_task","note_revisions","log_contact_attempt"],"bounds":{"selected_people":MAX_PEOPLE,"manifest_page":250,"component_rows":100,"component_bytes":PAGE_BYTES,"operation_bytes":131072,"concurrent_uploads":1,"concurrent_downloads":2,"generation_seconds":1800}}),
+        json!({"protocol":PROTOCOL,"context_id":id,"installation_id":request.installation_id,"actor_user_id":auth.actor_user_id,"organization_id":auth.active_organization_id,"workspace_revision":revision.to_string(),"authorized_at":now,"offline_access_expires_at":expiry,"server_time":now,"capabilities":["add_note","create_task","complete_task","reconciliation","edit_note","update_task","note_revisions","log_contact_attempt","change_person_stage","stage_revisions","stage_catalog"],"bounds":{"selected_people":MAX_PEOPLE,"manifest_page":250,"component_rows":100,"component_bytes":PAGE_BYTES,"operation_bytes":131072,"concurrent_uploads":1,"concurrent_downloads":2,"generation_seconds":1800,"stage_catalog_page":100}}),
     )
 }
 
@@ -429,6 +431,41 @@ pub async fn current_task(
     )
 }
 
+/// Bounded live stage baseline for Mobile004 conflict review.  It is never a
+/// reconciliation component and cannot qualify an incomplete downloaded bundle.
+pub async fn current_stage(
+    pool: &PgPool,
+    auth: &AuthContext,
+    context_id: Uuid,
+    person_id: Uuid,
+) -> Result<Value, MobileError> {
+    let mut tx = begin(pool, auth, true).await?;
+    context(&mut tx, auth, context_id, false).await?;
+    authority(&mut tx, auth, false).await?;
+    let row = sqlx::query(
+        "SELECT p.mobile_revision,p.stage_revision,s.id AS stage_id,s.name AS stage_name \
+         FROM person p JOIN stage s ON s.id=p.stage_id AND s.organization_id=p.organization_id \
+         WHERE p.organization_id=$1 AND p.id=$2",
+    )
+    .bind(auth.active_organization_id.0)
+    .bind(person_id)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(missing)?;
+    let person_revision: i64 = row.get("mobile_revision");
+    let stage_revision: i64 = row.get("stage_revision");
+    let stage_id: Uuid = row.get("stage_id");
+    let stage_name: String = row.get("stage_name");
+    tx.commit().await?;
+    bounded_current(json!({
+        "context_id":context_id,
+        "person_id":person_id,
+        "person_revision":person_revision.to_string(),
+        "stage_revision":stage_revision.to_string(),
+        "stage":{"id":stage_id,"name":stage_name},
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -449,6 +486,7 @@ mod tests {
                 person: None,
                 section: "manifest".into(),
                 revision: None,
+                after_position: None,
                 after: Uuid::new_v4(),
             })
             .unwrap();

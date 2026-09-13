@@ -3,7 +3,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::Serialize;
-use sqlx::PgConnection;
+use sqlx::{PgConnection, Row};
 use uuid::Uuid;
 
 use crate::domain::contact::{normalize_email, normalize_phone};
@@ -19,16 +19,8 @@ use crate::ids::{CorrelationId, OrganizationId, PersonId, StageId, UserId};
 pub struct LockedPerson {
     pub id: PersonId,
     pub stage_id: StageId,
+    pub stage_revision: i64,
     pub assigned_user_id: Option<UserId>,
-}
-
-/// The direct `query_as!` decode target for `lock_person` — bare `Uuid`
-/// per the sqlx strategy (private row-boundary struct; `LockedPerson`
-/// itself carries the typed id).
-struct LockedPersonRow {
-    id: Uuid,
-    stage_id: Uuid,
-    assigned_user_id: Option<Uuid>,
 }
 
 /// `SELECT … FOR UPDATE` scoped to the Organization — used both by intake's
@@ -53,19 +45,21 @@ pub async fn lock_person(
     person_id: PersonId,
     organization_id: OrganizationId,
 ) -> Result<Option<LockedPerson>, sqlx::Error> {
-    let row = sqlx::query_as!(
-        LockedPersonRow,
-        r#"SELECT id, stage_id, assigned_user_id
-           FROM person WHERE id = $1 AND organization_id = $2 FOR UPDATE"#,
-        person_id.0,
-        organization_id.0,
+    let row = sqlx::query(
+        "SELECT id, stage_id, stage_revision, assigned_user_id \
+         FROM person WHERE id = $1 AND organization_id = $2 FOR UPDATE",
     )
+    .bind(person_id.0)
+    .bind(organization_id.0)
     .fetch_optional(conn)
     .await?;
     Ok(row.map(|r| LockedPerson {
-        id: PersonId::new(r.id),
-        stage_id: StageId::new(r.stage_id),
-        assigned_user_id: r.assigned_user_id.map(UserId::new),
+        id: PersonId::new(r.get("id")),
+        stage_id: StageId::new(r.get("stage_id")),
+        stage_revision: r.get("stage_revision"),
+        assigned_user_id: r
+            .get::<Option<Uuid>, _>("assigned_user_id")
+            .map(UserId::new),
     }))
 }
 

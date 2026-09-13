@@ -1,7 +1,7 @@
 //! `ChangePersonStage` (docs/specs/SLICE_002.md §4).
 
 use chrono::Utc;
-use sqlx::PgPool;
+use sqlx::{PgConnection, PgPool};
 
 use crate::domain::commands::CommandError;
 use crate::domain::envelope::{CommandContext, FactEnvelope};
@@ -15,6 +15,14 @@ use crate::realtime::{PersonChange, Publication, Publisher, RealtimeEvent};
 pub struct ChangePersonStage {
     pub person_id: PersonId,
     pub stage_id: StageId,
+}
+
+/// Result of the transaction-compatible stage command.  Mobile004 consumes
+/// this inside its operation/receipt transaction; conventional callers keep
+/// using [`change_person_stage`], whose public behaviour remains unchanged.
+pub struct ChangedPersonStage {
+    pub summary: PersonSummary,
+    pub changed: bool,
 }
 
 /// One transaction; loads the Person through the scope (else
@@ -67,25 +75,62 @@ async fn change_person_stage_attempt(
 ) -> Result<(PersonSummary, bool), CommandError> {
     let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
 
-    let person = person_queries::lock_person(&mut tx, cmd.person_id, ctx.organization_id)
+    let result = change_person_stage_in_transaction(&mut tx, ctx, cmd, None)
+        .await?
+        // No expected revision means the core always returns an outcome.
+        .ok_or(CommandError::Corrupt)?;
+    tx.commit().await?;
+
+    // An event only when changed (docs/specs/SLICE_003.md §4).
+    if result.changed {
+        let event = RealtimeEvent::person_changed(
+            ctx.organization_id,
+            Utc::now(),
+            ctx.correlation_id,
+            result.summary.id,
+            PersonChange::StageChanged,
+        );
+        publisher
+            .publish_after_commit(Publication::for_event(event))
+            .await;
+    }
+
+    Ok((result.summary, result.changed))
+}
+
+/// Applies the typed stage command within an existing transaction.  A supplied
+/// revision is checked after opaque Person/target validation and before no-op
+/// detection, so A→B→A cannot accept an old offline baseline.  The caller owns
+/// commit/rollback and any post-commit publication.
+pub async fn change_person_stage_in_transaction(
+    conn: &mut PgConnection,
+    ctx: &CommandContext,
+    cmd: ChangePersonStage,
+    expected_stage_revision: Option<i64>,
+) -> Result<Option<ChangedPersonStage>, CommandError> {
+    let person = person_queries::lock_person(conn, cmd.person_id, ctx.organization_id)
         .await?
         .ok_or(CommandError::PersonNotFound)?;
 
-    let stage_valid = stage::exists(&mut tx, cmd.stage_id, ctx.organization_id).await?;
+    let stage_valid = stage::exists(conn, cmd.stage_id, ctx.organization_id).await?;
     if !stage_valid {
         return Err(CommandError::InvalidStage);
+    }
+
+    if expected_stage_revision.is_some_and(|expected| expected != person.stage_revision) {
+        return Ok(None);
     }
 
     let changed = person.stage_id != cmd.stage_id;
     let occurred_at = Utc::now();
 
     if changed {
-        person_queries::update_stage(&mut tx, cmd.person_id, ctx.organization_id, cmd.stage_id)
+        person_queries::update_stage(conn, cmd.person_id, ctx.organization_id, cmd.stage_id)
             .await?;
 
         let envelope = FactEnvelope::for_command(ctx, occurred_at);
         facts::insert_stage_changed(
-            &mut tx,
+            conn,
             &envelope,
             StageChangedFact {
                 person_id: cmd.person_id,
@@ -97,25 +142,8 @@ async fn change_person_stage_attempt(
         .await?;
     }
 
-    let summary = person_queries::summary_by_id(&mut tx, ctx.organization_id, cmd.person_id)
+    let summary = person_queries::summary_by_id(conn, ctx.organization_id, cmd.person_id)
         .await?
         .ok_or(CommandError::PersonNotFound)?;
-
-    tx.commit().await?;
-
-    // An event only when changed (docs/specs/SLICE_003.md §4).
-    if changed {
-        let event = RealtimeEvent::person_changed(
-            ctx.organization_id,
-            occurred_at,
-            ctx.correlation_id,
-            cmd.person_id,
-            PersonChange::StageChanged,
-        );
-        publisher
-            .publish_after_commit(Publication::for_event(event))
-            .await;
-    }
-
-    Ok((summary, changed))
+    Ok(Some(ChangedPersonStage { summary, changed }))
 }

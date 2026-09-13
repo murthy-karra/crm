@@ -8,6 +8,13 @@ pub struct ReconciliationRequest {
     pub protocol: String,
     pub installation_id: Uuid,
     pub pinned_person_ids: Vec<Uuid>,
+    #[serde(default)]
+    pub include_stage_catalog: bool,
+}
+struct CatalogStage {
+    id: Uuid,
+    name: String,
+    position: i16,
 }
 #[derive(Clone, PartialEq)]
 struct Entry {
@@ -20,6 +27,50 @@ struct Selection {
     today: Value,
     digest: Vec<u8>,
     complete: bool,
+}
+/// Read stage rows before taking the Organization catalogue lock.  A stage
+/// writer owns its stage row before its all-writer trigger advances the
+/// catalogue revision; taking a stage row share lock after the Organization
+/// lock would invert that order.  Under repeatable read, a concurrent writer
+/// either commits before our snapshot or makes the revision lock serialize
+/// fail, so a mixed catalogue is never staged.
+async fn catalog_snapshot(
+    conn: &mut PgConnection,
+    organization_id: Uuid,
+) -> Result<(i64, Vec<CatalogStage>), MobileError> {
+    let rows = sqlx::query(
+        "SELECT id,name,position FROM stage WHERE organization_id=$1 ORDER BY position,id",
+    )
+    .bind(organization_id)
+    .fetch_all(&mut *conn)
+    .await?;
+    let revision: i64 =
+        sqlx::query_scalar("SELECT stage_catalog_revision FROM organization WHERE id=$1 FOR SHARE")
+            .bind(organization_id)
+            .fetch_one(&mut *conn)
+            .await?;
+    Ok((
+        revision,
+        rows.into_iter()
+            .map(|row| CatalogStage {
+                id: row.get("id"),
+                name: row.get("name"),
+                position: row.get("position"),
+            })
+            .collect(),
+    ))
+}
+async fn catalog_matches(
+    conn: &mut PgConnection,
+    organization_id: Uuid,
+    expected: i64,
+) -> Result<bool, MobileError> {
+    let current: i64 =
+        sqlx::query_scalar("SELECT stage_catalog_revision FROM organization WHERE id=$1 FOR SHARE")
+            .bind(organization_id)
+            .fetch_one(&mut *conn)
+            .await?;
+    Ok(current == expected)
 }
 async fn selection(
     conn: &mut PgConnection,
@@ -130,10 +181,15 @@ pub async fn create_generation(
         .fetch_one(&mut *tx)
         .await?;
     let selected = selection(&mut tx, auth, &request.pinned_person_ids, now, true).await?;
+    let catalog = if request.include_stage_catalog {
+        Some(catalog_snapshot(&mut tx, auth.active_organization_id.0).await?)
+    } else {
+        None
+    };
     let id = Uuid::new_v4();
     let expiry = now + chrono::Duration::minutes(30);
-    sqlx::query("INSERT INTO mobile_reconciliation(id,context_id,organization_id,actor_user_id,role,workspace_revision,evaluated_at,expires_at,complete,selected_count,pinned_person_ids,today_digest) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)")
-        .bind(id).bind(context_id).bind(auth.active_organization_id.0).bind(auth.actor_user_id.0).bind(role).bind(workspace_revision).bind(now).bind(expiry).bind(selected.complete).bind(selected.entries.len() as i32).bind(&request.pinned_person_ids).bind(selected.digest).execute(&mut *tx).await?;
+    sqlx::query("INSERT INTO mobile_reconciliation(id,context_id,organization_id,actor_user_id,role,workspace_revision,evaluated_at,expires_at,complete,selected_count,pinned_person_ids,today_digest,stage_catalog_revision) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)")
+        .bind(id).bind(context_id).bind(auth.active_organization_id.0).bind(auth.actor_user_id.0).bind(role).bind(workspace_revision).bind(now).bind(expiry).bind(selected.complete).bind(selected.entries.len() as i32).bind(&request.pinned_person_ids).bind(selected.digest).bind(catalog.as_ref().map(|(revision, _)| *revision)).execute(&mut *tx).await?;
     if !selected.entries.is_empty() {
         let ids: Vec<_> = selected.entries.iter().map(|e| e.person).collect();
         let versions: Vec<_> = selected.entries.iter().map(|e| e.revision).collect();
@@ -145,11 +201,23 @@ pub async fn create_generation(
         sqlx::query("INSERT INTO mobile_reconciliation_person(generation_id,person_id,revision,reasons) SELECT $1,u.id,u.revision,ARRAY(SELECT jsonb_array_elements_text(u.reasons)) FROM UNNEST($2::uuid[],$3::bigint[],$4::jsonb[]) AS u(id,revision,reasons)")
             .bind(id).bind(ids).bind(versions).bind(reasons).execute(&mut *tx).await?;
     }
+    if let Some((_, stages)) = &catalog {
+        let ids: Vec<_> = stages.iter().map(|stage| stage.id).collect();
+        let names: Vec<_> = stages.iter().map(|stage| &stage.name).collect();
+        let positions: Vec<_> = stages.iter().map(|stage| stage.position).collect();
+        sqlx::query("INSERT INTO mobile_reconciliation_stage(generation_id,stage_id,name,position) SELECT $1,u.id,u.name,u.position FROM UNNEST($2::uuid[],$3::text[],$4::smallint[]) AS u(id,name,position)")
+            .bind(id).bind(ids).bind(names).bind(positions).execute(&mut *tx).await?;
+    }
     let page = manifest_page(&mut tx, keys, context_id, id, None).await?;
     tx.commit().await?;
-    Ok(
-        json!({"generation_id":id,"context_id":context_id,"evaluated_at":now,"expires_at":expiry,"complete":selected.complete,"selected_count":selected.entries.len(),"manifest":page}),
-    )
+    let mut response = json!({"generation_id":id,"context_id":context_id,"evaluated_at":now,"expires_at":expiry,"complete":selected.complete,"selected_count":selected.entries.len(),"manifest":page});
+    if let Some((revision, _)) = catalog {
+        response["stage_catalog"] = json!({
+            "revision": revision.to_string(),
+            "stages_url": format!("/api/mobile/v1/reconciliations/{id}/stages"),
+        });
+    }
+    Ok(response)
 }
 struct Generation {
     evaluated: DateTime<Utc>,
@@ -157,6 +225,7 @@ struct Generation {
     count: i32,
     pins: Vec<Uuid>,
     digest: Vec<u8>,
+    stage_catalog_revision: Option<i64>,
 }
 async fn generation(
     conn: &mut PgConnection,
@@ -181,6 +250,7 @@ async fn generation(
         count: row.get("selected_count"),
         pins: row.get("pinned_person_ids"),
         digest: row.get("today_digest"),
+        stage_catalog_revision: row.get("stage_catalog_revision"),
     })
 }
 async fn download_slot(conn: &mut PgConnection, context: Uuid) -> Result<(), MobileError> {
@@ -222,6 +292,7 @@ async fn manifest_page(
         person: None,
         section: "manifest".into(),
         revision: None,
+        after_position: None,
         after: Uuid::nil(),
     };
     let position = after(keys, cursor, binding)?;
@@ -235,6 +306,7 @@ async fn manifest_page(
             person: None,
             section: "manifest".into(),
             revision: None,
+            after_position: None,
             after: rows.last().ok_or_else(invalid)?.get("person_id"),
         })?)
     } else {
@@ -259,6 +331,93 @@ pub async fn manifest(
     tx.commit().await?;
     Ok(page)
 }
+
+#[tracing::instrument(name="mobile.stages",skip_all,fields(organization_id=%auth.active_organization_id,actor_id=%auth.actor_user_id))]
+pub async fn stages(
+    pool: &PgPool,
+    keys: &ReceiptKeys,
+    auth: &AuthContext,
+    context_id: Uuid,
+    id: Uuid,
+    cursor: Option<&str>,
+) -> Result<Value, MobileError> {
+    let mut tx = begin(pool, auth, true).await?;
+    download_slot(&mut tx, context_id).await?;
+    let generation = generation(&mut tx, auth, context_id, id).await?;
+    let revision = generation.stage_catalog_revision.ok_or_else(missing)?;
+    if !catalog_matches(&mut tx, auth.active_organization_id.0, revision).await? {
+        return Err(MobileError::ProjectionChanged {
+            changed: 0,
+            added: 0,
+            removed: 0,
+            today_changed: false,
+        });
+    }
+    let parsed = cursor.map(|raw| keys.decode_cursor(raw)).transpose()?;
+    let (after_position, after_stage) = match parsed {
+        None => (None, None),
+        Some(value)
+            if value.context == context_id
+                && value.generation == id
+                && value.person.is_none()
+                && value.section == "stages"
+                && value.revision == Some(revision)
+                && value.after_position.is_some() =>
+        {
+            (value.after_position, Some(value.after))
+        }
+        _ => return Err(invalid()),
+    };
+    let rows = sqlx::query(
+        "SELECT stage_id,name,position FROM mobile_reconciliation_stage \
+         WHERE generation_id=$1 AND ($2::smallint IS NULL OR (position,stage_id) > ($2,$3)) \
+         ORDER BY position,stage_id LIMIT 101",
+    )
+    .bind(id)
+    .bind(after_position)
+    .bind(after_stage)
+    .fetch_all(&mut *tx)
+    .await?;
+    let mut rows = rows;
+    let more = rows.len() > 100;
+    rows.truncate(100);
+    let last = rows.last().map(|row| {
+        (
+            row.get::<i16, _>("position"),
+            row.get::<Uuid, _>("stage_id"),
+        )
+    });
+    let next = if more {
+        let (last_position, last_id) = last.ok_or_else(invalid)?;
+        Some(keys.cursor(&Cursor {
+            context: context_id,
+            generation: id,
+            person: None,
+            after_position: Some(last_position),
+            section: "stages".into(),
+            revision: Some(revision),
+            after: last_id,
+        })?)
+    } else {
+        None
+    };
+    let items: Vec<Value> = rows
+        .into_iter()
+        .map(|row| {
+            json!({
+                "id":row.get::<Uuid,_>("stage_id"),
+                "name":row.get::<String,_>("name"),
+                "position":row.get::<i16,_>("position"),
+            })
+        })
+        .collect();
+    let page = json!({"generation_id":id,"revision":revision.to_string(),"items":items,"next_cursor":next,"complete":!more});
+    if serde_json::to_vec(&page).map_err(|_| invalid())?.len() > PAGE_BYTES {
+        return Err(code(422, "over_limit"));
+    }
+    tx.commit().await?;
+    Ok(page)
+}
 #[tracing::instrument(name="mobile.seal",skip_all,fields(organization_id=%auth.active_organization_id,actor_id=%auth.actor_user_id))]
 pub async fn seal(
     pool: &PgPool,
@@ -271,6 +430,16 @@ pub async fn seal(
     let gen = generation(&mut tx, auth, context_id, id).await?;
     if !gen.complete {
         return Err(code(409, "generation_changed"));
+    }
+    if let Some(revision) = gen.stage_catalog_revision {
+        if !catalog_matches(&mut tx, auth.active_organization_id.0, revision).await? {
+            return Err(MobileError::ProjectionChanged {
+                changed: 0,
+                added: 0,
+                removed: 0,
+                today_changed: false,
+            });
+        }
     }
     let fresh = selection(&mut tx, auth, &gen.pins, gen.evaluated, false).await?;
     if !fresh.complete {
@@ -378,6 +547,7 @@ pub async fn component(
             person: Some(person),
             section: section.into(),
             revision: Some(expected),
+            after_position: None,
             after: Uuid::nil(),
         },
     )?;
@@ -434,6 +604,7 @@ pub async fn component(
             person: Some(person),
             section: section.into(),
             revision: Some(expected),
+            after_position: None,
             after: last.ok_or_else(invalid)?,
         })?)
     } else {
@@ -451,7 +622,7 @@ async fn summary(
     auth: &AuthContext,
     person: Uuid,
 ) -> Result<Value, MobileError> {
-    let row=sqlx::query("SELECT p.id,p.first_name,p.last_name,p.created_at,s.id AS stage_id,s.name AS stage_name,u.id AS user_id,u.display_name,(SELECT value FROM contact_method WHERE organization_id=p.organization_id AND person_id=p.id AND kind='email' ORDER BY import_order ASC NULLS LAST,created_at,id LIMIT 1) AS email,(SELECT value FROM contact_method WHERE organization_id=p.organization_id AND person_id=p.id AND kind='phone' ORDER BY import_order ASC NULLS LAST,created_at,id LIMIT 1) AS phone FROM person p JOIN stage s ON s.id=p.stage_id AND s.organization_id=p.organization_id LEFT JOIN app_user u ON u.id=p.assigned_user_id WHERE p.organization_id=$1 AND p.id=$2")
+    let row=sqlx::query("SELECT p.id,p.first_name,p.last_name,p.created_at,p.stage_revision,s.id AS stage_id,s.name AS stage_name,u.id AS user_id,u.display_name,(SELECT value FROM contact_method WHERE organization_id=p.organization_id AND person_id=p.id AND kind='email' ORDER BY import_order ASC NULLS LAST,created_at,id LIMIT 1) AS email,(SELECT value FROM contact_method WHERE organization_id=p.organization_id AND person_id=p.id AND kind='phone' ORDER BY import_order ASC NULLS LAST,created_at,id LIMIT 1) AS phone FROM person p JOIN stage s ON s.id=p.stage_id AND s.organization_id=p.organization_id LEFT JOIN app_user u ON u.id=p.assigned_user_id WHERE p.organization_id=$1 AND p.id=$2")
         .bind(auth.active_organization_id.0).bind(person).fetch_optional(conn).await?.ok_or_else(missing)?;
     let first: Option<String> = row.get("first_name");
     let last: Option<String> = row.get("last_name");
@@ -466,6 +637,6 @@ async fn summary(
     let user: Option<Uuid> = row.get("user_id");
     let display: Option<String> = row.get("display_name");
     Ok(
-        json!({"id":person,"first_name":first,"last_name":last,"display_name":name,"stage":{"id":row.get::<Uuid,_>("stage_id"),"name":row.get::<String,_>("stage_name")},"assigned_user":user.map(|id|json!({"id":id,"display_name":display})),"created_at":row.get::<DateTime<Utc>,_>("created_at")}),
+        json!({"id":person,"first_name":first,"last_name":last,"display_name":name,"stage":{"id":row.get::<Uuid,_>("stage_id"),"name":row.get::<String,_>("stage_name")},"stage_revision":row.get::<i64,_>("stage_revision").to_string(),"assigned_user":user.map(|id|json!({"id":id,"display_name":display})),"created_at":row.get::<DateTime<Utc>,_>("created_at")}),
     )
 }

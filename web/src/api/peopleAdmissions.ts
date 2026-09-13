@@ -5,12 +5,15 @@ export const admissionDispositions = ['eligible', 'already_imported', 'already_a
 export type AdmissionDisposition = typeof admissionDispositions[number]
 export interface AdmissionCounts { total:string; eligible:string; already_imported:string; already_admitted:string; excluded_original:string; held:string; intended_contacts:string }
 export interface AdmissionPlan { id:string; revision:string; digest:string; expires_at:string|null; counts:AdmissionCounts }
+export interface AdmissionBoundary { snapshot_id:string; sequence:string; started_at:string|null; completed_at:string|null }
+export interface AdmissionCoverage { covered_families:string[]; deferred_families:string[]; review_hold:boolean }
 export interface PeopleAdmission {
   id:string; parent_import_id:string; report_id:string; state:string; lifecycle_revision:string; created_at:string; updated_at:string; completed_at:string|null; pause_reason:string|null
-  newer_snapshot_id:string; newer_sequence:string; retained_bytes:string; reserved_bytes:string; progress:{settled_items:string}; plan?:AdmissionPlan
+  newer_snapshot_id:string; newer_sequence:string; retained_bytes:string; reserved_bytes:string; progress:{settled_items:string}; source_boundary: { original:AdmissionBoundary; newer:AdmissionBoundary }; coverage:AdmissionCoverage; plan?:AdmissionPlan
   actions:{confirm:boolean;repreview:boolean;retry:boolean;cancel:boolean}
 }
-export interface AdmissionItem { id:string; source_id:string|null; prospective_person_id:string; disposition:AdmissionDisposition; settled_at:string|null; plan_id:string; plan_revision:string; projection:Record<string, unknown> }
+export interface AdmissionItem { id:string; source_id:string|null; prospective_person_id:string; disposition:AdmissionDisposition; settled_at:string|null; plan_id:string; projection:Record<string, unknown> }
+export interface AdmissionItemDetail extends AdmissionItem { plan_revision:string; fields:Record<string, ProvenanceFieldSummary>; held_reasons:string[] }
 export interface AdmissionContact { id:string; kind:'email'|'phone'; import_order:string; primary:boolean; value:{value:string;normalized_value?:string} }
 export interface AdmissionResult { id:string; item_id:string; person_id:string|null; source_id:string; disposition:AdmissionDisposition; committed_at:string }
 export interface AdmissionPage<T> { plan_id:string; plan_revision:string; next_cursor:string|null; items?:T[]; contacts?:T[] }
@@ -35,7 +38,7 @@ export const confirmPeopleAdmission=(id:string,body:AdmissionConfirm,signal?:Abo
 export const retryPeopleAdmission=(id:string,request_id:string,expected_lifecycle_revision:string,signal?:AbortSignal)=>post<AdmissionReceipt>(`${path(id)}/retry`,{request_id,expected_lifecycle_revision},signal)
 export const cancelPeopleAdmission=(id:string,request_id:string,expected_lifecycle_revision:string,signal?:AbortSignal)=>post<AdmissionReceipt>(`${path(id)}/cancel`,{request_id,expected_lifecycle_revision},signal)
 export const fetchAdmissionItems=(id:string,plan:string,disposition?:AdmissionDisposition,cursor?:string,signal?:AbortSignal)=>apiFetch<AdmissionPage<AdmissionItem>>(`${path(id)}/items${query({plan_id:plan,disposition,cursor,limit:'50'})}`,{signal})
-export const fetchAdmissionItem=(id:string,item:string,signal?:AbortSignal)=>apiFetch<AdmissionItem>(itemPath(id,item),{signal})
+export const fetchAdmissionItem=(id:string,item:string,signal?:AbortSignal)=>apiFetch<AdmissionItemDetail>(itemPath(id,item),{signal})
 export const fetchAdmissionContacts=(id:string,item:string,cursor?:string,signal?:AbortSignal)=>apiFetch<AdmissionPage<AdmissionContact>>(`${itemPath(id,item)}/contacts${query({cursor,limit:'50'})}`,{signal})
 export const fetchAdmissionField=(id:string,item:string,field:string,cursor?:string,signal?:AbortSignal)=>apiFetch<AdmissionFieldFragment>(`${itemPath(id,item)}/fields/${encodeURIComponent(field)}${query({cursor,limit:'16384'})}`,{signal})
 export const fetchAdmissionResults=(id:string,cursor?:string,signal?:AbortSignal)=>apiFetch<{results:AdmissionResult[];next_cursor:string|null}>(`${path(id)}/results${query({cursor,limit:'50'})}`,{signal})

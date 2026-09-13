@@ -58,3 +58,27 @@ request while an identity change purges it, a late prepare receipt cannot apply
 after selection changes, plan replacement clears all acknowledgements, expiry is
 reactive, and opaque item cursors retain their endpoint-bound value on the next
 page. The final focused run reported 90 files / 1210 tests passing.
+
+## Final UI review additions
+
+The completed-report selector now exposes **More completed reports** and carries
+the returned opaque `reportCursor` to the next bounded request. Admission detail
+now renders the server-provided original/newer snapshot IDs, decimal sequences,
+started/completed boundaries, exact covered/deferred families, and the review
+hold. Item detail renders every published provenance field summary and its UTF-8
+byte count; every truncated published field has a complete-fragment control, so
+retained properties such as `sourceUrl` are reviewable before confirmation.
+Categorical held reasons are displayed as returned, without inferring missing
+source fields.
+
+The final focused component run was:
+
+```sh
+cd web
+pnpm test -- PeopleAdmissionPanel.test.ts
+```
+
+It passed: 90 test files / 1212 tests. This includes opaque completed-report
+cursor paging and an arbitrary published `sourceUrl` full-field request. The
+Web DTO types match backend commit `2434584`; no backend files were changed in
+this worktree.

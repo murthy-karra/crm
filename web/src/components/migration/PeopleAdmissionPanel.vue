@@ -30,7 +30,7 @@ const item=useQuery({queryKey:computed(()=>key('item',admissionId.value,selected
 const contacts=useQuery({queryKey:computed(()=>key('contacts',admissionId.value,selected.value?.id,contactCursor.value)),enabled:computed(()=>access.enabled.value&&!!selected.value&&!!item.data.value),retry:false,gcTime:0,queryFn:async({signal})=>access.read(key('contacts',admissionId.value,selected.value?.id,contactCursor.value),()=>key('contacts',admissionId.value,selected.value?.id,contactCursor.value),async()=>{const v=await fetchAdmissionContacts(admissionId.value,selected.value!.id,contactCursor.value||undefined,signal);if(v.plan_id!==plan.value?.id||v.plan_revision!==plan.value?.revision)throw Error('Preview changed');return v})})
 const field=useQuery({queryKey:computed(()=>key('field',admissionId.value,selected.value?.id,selectedField.value,fieldCursor.value)),enabled:computed(()=>access.enabled.value&&!!selected.value&&!!selectedField.value),retry:false,gcTime:0,queryFn:async({signal})=>access.read(key('field',admissionId.value,selected.value?.id,selectedField.value,fieldCursor.value),()=>key('field',admissionId.value,selected.value?.id,selectedField.value,fieldCursor.value),async()=>{const v=await fetchAdmissionField(admissionId.value,selected.value!.id,selectedField.value,fieldCursor.value||undefined,signal);if(v.plan_id!==plan.value?.id||v.plan_revision!==plan.value?.revision||v.field!==selectedField.value)throw Error('Field changed');return v})})
 const results=useQuery({queryKey:computed(()=>key('results',admissionId.value,resultCursor.value)),enabled:computed(()=>access.enabled.value&&!!admissionId.value&&['running','paused','completed','cancelled'].includes(current.value?.state??'')),retry:false,gcTime:0,queryFn:({signal})=>access.read(key('results',admissionId.value,resultCursor.value),()=>key('results',admissionId.value,resultCursor.value),()=>fetchAdmissionResults(admissionId.value,resultCursor.value||undefined,signal))})
-const expired=computed(()=>!!plan.value?.expires_at&&Date.parse(plan.value.expires_at)<=now.value); const canConfirm=computed(()=>!!current.value?.actions.confirm&&!!plan.value&&plan.value.counts.eligible!=='0'&&!expired.value&&acknowledgement.value&&mappings.value&&distinct.value&&hold.value&&!pending.value)
+const fieldSummaries=computed(()=>item.data.value?.fields??{}); const expired=computed(()=>!!plan.value?.expires_at&&Date.parse(plan.value.expires_at)<=now.value); const canConfirm=computed(()=>!!current.value?.actions.confirm&&!!plan.value&&plan.value.counts.eligible!=='0'&&!expired.value&&acknowledgement.value&&mappings.value&&distinct.value&&hold.value&&!pending.value)
 function resetDetail(){itemCursor.value='';resultCursor.value='';contactCursor.value='';fieldCursor.value='';selected.value=undefined;selectedField.value='';acknowledgement.value=mappings.value=distinct.value=hold.value=false;action.value=null}
 watch(parentId,()=>{selectionEpoch++;reportId.value='';admissionId.value='';reportCursor.value='';listCursor.value='';resetDetail()}); watch(reportId,()=>{selectionEpoch++},{flush:'sync'}); watch([admissionId,disposition],()=>{selectionEpoch++;resetDetail()}); watch(() => `${plan.value?.id}:${plan.value?.revision}:${plan.value?.digest}`,()=>resetDetail(),{flush:'sync'}); watch(access.scope,()=>{authorityEpoch++},{flush:'sync'}); watch(access.identity,()=>{identityEpoch++;intent.value=null;pending.value=false;error.value='';parentId.value='';reportId.value='';admissionId.value='';resetDetail()},{flush:'sync'})
 watch([parents.error,parent.error,reports.error,listing.error,detail.error,items.error,item.error,contacts.error,field.error,results.error],v=>{if(v.some(importAccessError)){access.denied.value=true;access.remove(access.prefix.value);void props.refreshWorkspace()}})
@@ -121,14 +121,23 @@ onBeforeUnmount(()=>{disposed=true;clearInterval(timer);intent.value=null;access
             >
               {{ snapshotTime(r.created_at) }} · {{ r.id }}
             </option>
-          </select><button
-            type="button"
-            :class="buttonClasses('primary')"
-            :disabled="!reportId||pending"
-            @click="prepare"
-          >
-            Prepare admission preview
-          </button>
+          </select><div class="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              :class="buttonClasses('ghost')"
+              :disabled="!reports.data.value?.next_cursor||pending"
+              @click="reportCursor=reports.data.value?.next_cursor??''"
+            >
+              More completed reports
+            </button><button
+              type="button"
+              :class="buttonClasses('primary')"
+              :disabled="!reportId||pending"
+              @click="prepare"
+            >
+              Prepare admission preview
+            </button>
+          </div>
         </FormField>
       </div><FormField
         v-if="parentId"
@@ -164,17 +173,37 @@ onBeforeUnmount(()=>{disposed=true;clearInterval(timer);intent.value=null;access
       >
         <h3 class="font-medium">
           {{ admissionLabel(current.state) }}
-        </h3><p class="text-small">
-          Source interval: newer sequence {{ current.newer_sequence }} · {{ current.retained_bytes }} retained bytes · {{ current.progress.settled_items }} settled.
+        </h3><dl class="grid gap-1 text-small sm:grid-cols-2">
+          <div>
+            <dt class="text-text-muted">
+              Original snapshot boundary
+            </dt><dd>{{ current.source_boundary.original.snapshot_id }} · sequence {{ current.source_boundary.original.sequence }} · started {{ snapshotTime(current.source_boundary.original.started_at) }} · completed {{ snapshotTime(current.source_boundary.original.completed_at) }}</dd>
+          </div>
+          <div>
+            <dt class="text-text-muted">
+              Newer snapshot boundary
+            </dt><dd>{{ current.source_boundary.newer.snapshot_id }} · sequence {{ current.source_boundary.newer.sequence }} · started {{ snapshotTime(current.source_boundary.newer.started_at) }} · completed {{ snapshotTime(current.source_boundary.newer.completed_at) }}</dd>
+          </div>
+        </dl><p class="text-small">
+          {{ current.retained_bytes }} retained bytes · {{ current.progress.settled_items }} settled.
+        </p><p class="text-small">
+          Covered: {{ current.coverage.covered_families.join(', ') || 'none' }}. Deferred: {{ current.coverage.deferred_families.join(', ') || 'none' }}. {{ current.coverage.review_hold ? 'Administrator review hold remains active.' : 'No review hold is reported.' }}
         </p><p
           v-if="current.pause_reason"
           class="text-small text-danger"
         >
           {{ current.pause_reason }}
         </p><template v-if="plan">
-          <p class="text-small">
-            Plan {{ plan.revision }} · expires {{ plan.expires_at ?? 'unavailable' }} · {{ plan.counts.eligible }} eligible, {{ plan.counts.held }} held, {{ plan.counts.excluded_original }} excluded at the original boundary, {{ plan.counts.already_admitted }} already admitted.
-          </p><p class="text-small">
+          <dl class="grid gap-x-4 gap-y-1 text-small sm:grid-cols-2">
+            <template
+              v-for="(count, name) in plan.counts"
+              :key="name"
+            >
+              <dt class="text-text-muted">
+                {{ String(name).replaceAll('_', ' ') }}
+              </dt><dd>{{ count }}</dd>
+            </template>
+          </dl><p class="text-small">
             Inherited stage and assignment mappings are frozen. Equal contacts do not merge People; each qualified source identity creates its own Person.
           </p><p
             v-if="expired"
@@ -273,25 +302,36 @@ onBeforeUnmount(()=>{disposed=true;clearInterval(timer);intent.value=null;access
           class="space-y-2 border-t pt-3 text-small"
         >
           <h4 class="font-medium">
-            Proposed full core values
+            Proposed core provenance values
           </h4><dl>
             <template
-              v-for="(v,k) in item.data.value.projection"
-              :key="String(k)"
+              v-for="(summary, name) in fieldSummaries"
+              :key="name"
             >
               <dt class="text-text-muted">
-                {{ k }}
+                {{ name }}
               </dt><dd class="whitespace-pre-wrap break-all">
-                {{ typeof v==='object'?JSON.stringify(v):v }}
-              </dd>
+                {{ summary.prefix }}
+              </dd><dd>{{ summary.total_bytes }} UTF-8 bytes{{ summary.truncated ? '; prefix is truncated' : '' }}</dd>
             </template>
-          </dl><button
-            v-for="f in ['first_name','last_name']"
-            :key="f"
-            :class="buttonClasses('ghost')"
-            @click="selectedField=f;fieldCursor=''"
+          </dl><p
+            v-if="Object.keys(fieldSummaries).length===0"
+            class="text-text-muted"
           >
-            Read complete {{ f }} in pages
+            No retained core provenance fields were published for this item.
+          </p><p
+            v-if="item.data.value.held_reasons.length"
+            class="text-danger"
+          >
+            Held reason: {{ item.data.value.held_reasons.join(', ') }}.
+          </p><button
+            v-for="(summary, name) in fieldSummaries"
+            v-show="summary.truncated"
+            :key="`field-${name}`"
+            :class="buttonClasses('ghost')"
+            @click="selectedField=String(name);fieldCursor=''"
+          >
+            Read complete {{ name }} in pages
           </button><section
             v-if="selectedField"
             class="rounded border p-2"

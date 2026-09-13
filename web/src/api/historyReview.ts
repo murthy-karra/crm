@@ -5,7 +5,7 @@ import { useImportAccess } from './imports'
 import type { ActivityReviewCore } from './activityReview'
 import type { UserRef } from './types'
 
-export const historyKinds = ['person_imported', 'inquiry_received', 'routing_decision', 'assignment_changed', 'stage_changed', 'contact_attempted', 'call_completed', 'correspondence', 'fub_event_record_imported', 'fub_call_record_imported', 'fub_text_record_imported'] as const
+export const historyKinds = ['person_imported', 'inquiry_received', 'routing_decision', 'assignment_changed', 'stage_changed', 'contact_attempted', 'call_completed', 'correspondence', 'fub_event_record_imported', 'fub_call_record_imported', 'fub_text_record_imported', 'person_admitted'] as const
 export type TimelineKind = typeof historyKinds[number]
 export type TimelineFamily = 'all' | 'native' | 'events' | 'calls' | 'text_messages'
 export type TimelineDates = 'known' | 'unknown'
@@ -38,7 +38,7 @@ export const fetchHistoryTimeline = (person: string, filters: TimelineFilters = 
 export const fetchHistoryTimelineDetail = (person: string, kind: TimelineKind, id: string, signal?: AbortSignal) => apiFetch<TimelineDetail>(`${root(person)}/timeline/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`, { signal, cache: 'no-store' })
 export function historyKindLabel(kind: TimelineKind): string {
   const labels: Record<TimelineKind, string> = {
-    person_imported: 'Person imported', inquiry_received: 'Inquiry received', routing_decision: 'Inquiry routed', assignment_changed: 'Assignment changed', stage_changed: 'Stage changed', contact_attempted: 'Contact attempt recorded', call_completed: 'Call completed', correspondence: 'Correspondence captured', fub_event_record_imported: 'FUB event record', fub_call_record_imported: 'FUB call record', fub_text_record_imported: 'FUB text record',
+    person_admitted: 'Newly observed Person added', person_imported: 'Person imported', inquiry_received: 'Inquiry received', routing_decision: 'Inquiry routed', assignment_changed: 'Assignment changed', stage_changed: 'Stage changed', contact_attempted: 'Contact attempt recorded', call_completed: 'Call completed', correspondence: 'Correspondence captured', fub_event_record_imported: 'FUB event record', fub_call_record_imported: 'FUB call record', fub_text_record_imported: 'FUB text record',
   }
   return labels[kind]
 }

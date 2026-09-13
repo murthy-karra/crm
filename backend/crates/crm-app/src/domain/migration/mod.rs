@@ -265,3 +265,9 @@ pub(crate) mod people_refresh_queries;
 pub(crate) mod people_refresh_source;
 pub(crate) mod people_refresh_store;
 pub mod people_refresh_worker;
+
+pub mod people_admission;
+pub(crate) mod people_admission_queries;
+pub(crate) mod people_admission_source;
+pub(crate) mod people_admission_store;
+pub mod people_admission_worker;

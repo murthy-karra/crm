@@ -7,6 +7,7 @@ import { buttonClasses } from '../../lib/controls'
 import { describeApiError } from '../../lib/errors'
 import { snapshotTime } from './format'
 import ImportFieldViewer from './ImportFieldViewer.vue'
+import PersonAdmissionProvenance from './PersonAdmissionProvenance.vue'
 const props = defineProps<{ personId: string }>()
 const access = useImportAccess()
 const selected = ref<{ request: ImportFieldRequest; title: string } | null>(null)
@@ -121,4 +122,8 @@ function inspect(fieldKey: string, title: string) { selected.value = { request: 
       />
     </template>
   </section>
+  <PersonAdmissionProvenance
+    v-if="access.enabled.value && absent"
+    :person-id="props.personId"
+  />
 </template>

@@ -102,3 +102,5 @@ Passed: 32 tests, zero failures. Result bundle:
 `/tmp/crm-mobile003-review-build/Logs/Test/Test-FieldCRMMobile003QA-2026.09.13_02-36-38--0700.xcresult`.
 
 This run proves UTC-only contact timestamp selection survives a simulated Los Angeles DST gap, both explicit offsets in the repeated fall wall hour, and reopen under Tokyo; invalid `2026-02-30` is rejected without normalization. It also proves a contact receipt discards pre-receipt staging, retains protected accepted work through a failed seal/relaunch, creates a new generation, and does not re-upload. Contact receipt validation rejects `changed=false`, device-recorded time is frozen when the immutable operation is saved, Mobile 002's `forbidden` unavailable-state semantics remain intact, and full-store contact draft persistence preserves the existing mixed queue.
+
+The actual isolated iPhone 17e UI acceptance was rerun after the review fix and passed: offline manual-contact Save, terminate/relaunch, reconnect, accepted receipt and sealed refresh. Result bundle: `/tmp/crm-mobile003-review-build/Logs/Test/Test-FieldCRMMobile003QA-2026.09.13_02-41-39--0700.xcresult` (1 passed, 0 failures/skips).

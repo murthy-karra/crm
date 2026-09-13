@@ -1,0 +1,19 @@
+{
+  "context_id": "3173f593-ff3e-43af-ab0b-972242dfb1c4",
+  "note": {
+    "author": {
+      "display_name": "Mobile Agent",
+      "id": "cb8ab378-a617-48a3-95b7-2ea8e9b6f7af"
+    },
+    "body": "edited\nbody",
+    "can_manage": true,
+    "created_at": "2026-09-13T04:43:07.375318+00:00",
+    "edited": true,
+    "id": "6e01246a-a89e-4add-b7e4-998864009a7b",
+    "person_id": "f3e35bc9-6320-42b2-94e1-27bd4b573940",
+    "revision": "3",
+    "updated_at": "2026-09-13T04:43:07.391816+00:00"
+  },
+  "person_id": "f3e35bc9-6320-42b2-94e1-27bd4b573940",
+  "person_revision": "4"
+}

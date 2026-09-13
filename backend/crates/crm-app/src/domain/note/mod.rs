@@ -21,4 +21,4 @@ pub use queries::{latest_for_person, NoteSummary};
 /// (not part of this module's cross-crate public API — `pub(crate)`).
 pub(crate) use queries::note_history;
 
-pub(crate) use commands::add_note_in_transaction;
+pub(crate) use commands::{add_note_in_transaction, edit_note_in_transaction};

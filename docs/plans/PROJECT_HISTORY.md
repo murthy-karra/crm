@@ -9,6 +9,23 @@ Use [PROJECT_STATE.md](PROJECT_STATE.md) for current work, live residuals and ne
 actions, and the [decision log](../decisions/DECISION_LOG.md) for authority.
 Per-slice verification/release records remain the detailed evidence.
 
+## Mobile004 / 010e4 local completion — 2026-09-13
+
+D-080 implementation completed on `codex/mobile004-010e4-integration`, with final
+application/test source `7930b83` and subsequent handoff documentation. Mobile004
+adds encrypted offline stage proposals, replay and explicit conflict/follow-up
+handling. 010e4 adds core refresh for terminal admission cohorts with retained
+provenance, local-change holds and cancellation/remainder. Both review rounds,
+installed simulator/emulator upgrades, browser acceptance, performance and final
+gates passed. The [implementation record](../tasks/MOBILE_004_010e4_IMPLEMENTATION_STATUS.md)
+owns detailed evidence and links; it retains failures and corrections.
+
+The three completed clean writer worktrees and migration QA API/Web preview were
+closed. Evidence, QA databases, native QA API and installed stores were preserved.
+Published main remains `44dcf52`; shared development stays on its D-078 release.
+No push/deployment, physical-phone, live FUB or activation claim is made. Dependent
+families remain sequential follow-ups; calling remains after the agreed progression.
+
 ## Historical progress
 
 The entries below retain the state at each recorded checkpoint. Current status,

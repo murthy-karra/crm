@@ -1,193 +1,200 @@
 # Slice 010e4 — Implementation verification
 
-**In progress — D-080.** This is isolated retained-synthetic evidence, not live
-FUB qualification, activation or deployment. Evidence files are under
-`/private/tmp/crm-mobile004-010e4/`. Final review, browser acceptance, performance
-and combined gates must be completed before closing the slice.
+**COMPLETE — D-080, 2026-09-13.** Implementation, both independent review rounds,
+focused regressions, browser acceptance, performance and combined gates pass.
+Evidence is isolated and retained synthetic; it does not qualify live FUB,
+activation or deployment. Paths below are relative to
+`/private/tmp/crm-mobile004-010e4/` unless stated otherwise.
 
-## Retained-source execution
+## Implementation and review
 
-The execution fixture drives a real confirmed 010c import, a real 010e3 admission
-and a later retained 010e1 report. Business lifecycle cases do not fabricate a
-successful admission. Synthetic concurrent native edits and fault injection are
-explicit test actions.
-
-Checkpoint `dd97b6c`, integrated at `0692e8f`, adds closed settlement outcomes,
-distinct missing/untrustworthy observation handling, immutable provenance-byte
-accounting, cohort-only sealing and the required sparse/cohort indexes in additive
-schema versions `20260930000004` and `00005`.
-
-The grouped execution run passed eight of nine cases in 75.25 seconds. The
-remaining catalog-abuse assertion expected workspace error `P010C`, while the
-database denied the write earlier with privilege error `42501`. The corrected
-focused permit test passed. Retain the original failure and corrected evidence:
-`migration/admitted-people-refresh-execution.log` and `migration/permit-fence.log`.
-The retained-observation case also passed independently in 14.04 seconds
-(`migration/retained-observation.log`). An earlier manually assembled malformed
-fixture was replaced by actual duplicate retained observations; it is not claimed
-as passing acceptance.
-
-Covered behavior includes completed and partially cancelled admission cohorts;
-untouched original, unsettled and sibling records; same-contact distinct People;
-successive refresh baselines; local and replaced-contact holds; mixed eligible,
-already-current, missing and held outcomes; exact-boundary remainder; source
-identity mismatch; real item/lease permits denying off-target and extra fields,
-notes/tasks/catalog/unrelated facts and ordinary mobile writes; and atomic
-stage-revision/fact/result/baseline rollback.
-
-## Read and recovery contracts
-
-The coordinator's `0e7e1a1` test build passed both new read/recovery SQLx cases in
-13.03 seconds (`integration/recovery-db.log`). Each used a disposable database,
-the migrator connection and serial execution. Coverage includes preparation
-pause/retry before confirmation, immutable-plan re-preview independent of lifecycle
-revision, exact replay and stale revision rejection, admission-scoped list/detail
-and no-store, exact eligible-count confirmation, execution pause/retry, terminal
-cancel rejection, and truthful cancelled/settled filtered item displays.
-
-The compile passed with one macOS linker warning about the large test binary's
-unwind table (`integration/recovery-build.log`); it was not a Rust semantic error.
-Final-tree gates remain separate from these checkpoint tests.
-
-Server-qualified selected-report availability is integrated from `18aa9a4` and
-`6d8b806`. It shares preparation qualification, holds current admin/Organization
-authority through its bounded read transaction, validates sealed report evidence,
-returns opaque foreign-resource errors and fences the Web selection by its exact
-request identity. The owner reports two focused DB/API passes after correcting
-the test connection from the application URL to `MIGRATION_DATABASE_URL`.
-These lane outputs exist only in the task's tool transcript, not retained log
-files: `cargo check -p crm-app -p crm-api`, the API test `--no-run`, Web Vitest
-92 files/1,238 tests, the initial `42501` setup failure and the corrected two-test
-DB/API pass. No raw log path is asserted for them; final gates will retain logs.
-
-## Review and remaining evidence
-
-First independent implementation review identified lifecycle/read, settlement,
-storage and availability gaps; corrections and focused tests are being integrated.
-The copied report-group traversal was unreachable. Enabling it would contradict
-spec §3's exact successful-admission cohort, so the implementation removes it and
-seals after walking all successful cohort identities. Original/report-only/sibling
-records remain outside this refresh population.
-
-The browser harness binds isolated API3103 and production Web5174 to
-`crm_010e4_qa`, with explicit test keys/readiness and a retained synthetic reader.
-It uses production routes/commands and bounded worker scheduling. It is not
-production startup or workload-compatibility evidence. Its first actual preview
-exposed admission-list/overview defects, now corrected in source. Confirmation,
-partial cancellation, remainder, provenance, preservation and 390px acceptance
-are still pending.
-
-Exact physical accounting must include source keys/IDs, checkpoint and provenance
-as well as encrypted plan/contact/result/baseline/receipt envelopes. The final
-audit will distinguish immutable snapshot evidence from legitimate shared
-snapshot/Organization ledger changes; it will not label those ledger deltas as
-source corruption or omit them from reconciliation.
-
-Accounting checkpoint `9601962` and coordinator `2936f54` include these fields,
-signed checkpoint deltas and an additive full-footprint reconciliation in
-`20260930000006`. The 51-Person checkpoint accounting case passed in 7.52 seconds
-(`migration/checkpoint-physical-ledger.log`). The existing browser fixture was
-upgraded through `00004`–`00006` using the normal SQLx migrator: its refresh and
-plan IDs remained unchanged, state stayed `ready` and settled count stayed zero.
-Every normalized source/native fingerprint remained identical. Exactly 27 bytes
-were added to each corresponding run/snapshot/Organization ledger; reservations
-were unchanged. Evidence: `migration/retained-preview-ledger-upgrade.log`,
-`ledger-before.json`, `ledger-after-upgrade.json`,
-`preservation-before-normalized.jsonl` and
-`preservation-after-ledger-upgrade.jsonl` in the migration evidence directory.
-Normalization excludes only legitimate snapshot byte counters and audits the
-Organization ledger separately; it preserves all source evidence columns.
-
-The second/final review identified bounded preparation, exact mapping and natural
-identity/baseline proof, missing targets and commit-time source/target validation
-for every baseline-advancing item. Corrections are being integrated within this
-same review round. Remaining targeted repairs distinguish prior settled B from
-obsolete admission envelopes, missing source instructions from explicit mapping
-choices, and per-Person evidence holds from cryptographic recovery pauses.
-
-Additive `00007`–`00009` bind mapping IDs, source account and semantic HMAC;
-`00010` reconciles the previously omitted receipt digest bytes. Their actual saved
-QA upgrade and final physical audit remain pending. A focused stage run at an
-intermediate snapshot failed in 4.71 seconds because a new SQL INT4 expression was
-decoded as BIGINT; the explicit SQL cast is corrected in `82022fd`, and the affected
-execution tests must rerun (`migration/final-focused-stage.log`).
-
-Coordinator readiness fixes `ddf0027`/`775e63a` require every new proof column with
-its exact type/nullability in both runtime and release preflight. At integrated
-`932e71e`, the disposable-database regression passed in 1.46 seconds: complete
-schema succeeds; each missing proof column and incompatible type/nullability
-fails at startup and confirmation; rollback restores readiness. Evidence:
-`integration/readiness-db.log`. The 48 preflight tests passed at `ddf0027`
-(`integration/readiness-preflight.log`). The candidate test compile passed in
-2m04s (`integration/evidence-candidate-build.log`), with the already recorded
-large-test-binary unwind warning. This is not final-tree execution evidence.
-
-Remaining: final targeted worker regressions and review disposition; integrated
-browser and row/byte reconciliation; one 25k hot-plan and paired Person read pass;
-repository, SQLx and DB gates.
-
-
-## Reviewed browser and proof evidence
+The execution fixture drives a real confirmed 010c import, real 010e3 admission
+and later retained 010e1 report. Successful admission results define the exact
+cohort, including committed results of cancelled admissions. Original People,
+unsettled admissions and sibling cohorts remain outside it. Synthetic concurrent
+native edits and fault injection are explicit test actions.
 
 The second/final independent review is **code READY at `872e896`, contingent on
-verification**. No third review was opened. The coordinator's reviewed test build
-passed in 2m02s (`integration/reviewed-candidate-build.log`); its copied executable
-and SHA are `migration/api-bin/admitted-ui-reviewed` and
-`migration/reviewed-api.sha256`. Production refresh code is `872e896`; subsequent
-lane changes through `c5e1f9c` add/correct test fixtures. The eight proof/read/
-availability cases passed in 45.67 seconds (`integration/final-proof-read-db.log`),
-including mixed already-current native/identity/source loss, initial identity holds
-without B, omitted instructions across successive B, recovery and exact schema
-readiness. Later test additions for numeric primary order and immutable admission
-fact/provenance bytes remain part of the final DB gate.
+verification**. Both allowed review rounds are used; no third review was opened.
+Corrections cover closed outcomes, lifecycle/read recovery, bounded preparation,
+physical accounting, selected-report availability, exact mapping/natural identity/
+baseline proof, missing targets and source revalidation for every item that can
+advance a baseline. Successor B comes from its settled feature baseline; absent
+initial identity is held without creating an authoritative baseline. Omitted
+instructions preserve the applicable baseline instead of inventing a mapping.
 
-The existing saved QA fixture was normally migrated through `00007`–`00010`.
-Its ready preview and settled count remained unchanged; 108 table fingerprints
-matched. The receipt digest added exactly 32 bytes to the feature/snapshot/
-Organization ledgers, with reservations unchanged. Evidence:
-`migration/retained-preview-proof-upgrade.log`, `proof-upgrade-verification.json`
-and `physical-after-proof-upgrade.jsonl`.
+The coordinator's reviewed test build passed in 2m02s
+(`integration/reviewed-candidate-build.log`). The copied browser executable and
+SHA are `migration/api-bin/admitted-ui-reviewed` and `migration/reviewed-api.sha256`.
+Its production refresh code is `872e896`; subsequent production changes box an
+internal record for Clippy and repair canonical Web navigation. Later lane commits
+through `8aa0e62` correct or extend regression fixtures.
 
-Actual production-Web/API browser acceptance passed at desktop and 390px:
-re-preview, paged comparison, exact confirmation, one business update, cancellation,
+## Correctness and recovery
+
+Eight integrated proof/read/availability cases passed in 45.67 seconds on the
+reviewed executable (`integration/final-proof-read-db.log`). They cover mixed
+already-current native/identity/source loss, initial identity holds without B,
+successive omitted instructions, preparation and execution pause/retry, immutable
+re-preview, actor/request replay, exact confirmation counts, no-store tenant reads,
+terminal lifecycle errors, filtered results and schema readiness. Every new proof
+column is checked for required type/nullability at startup and confirmation.
+The preflight suite has 48 passing cases.
+
+Execution cases cover complete and partially cancelled cohorts, same-contact
+separate People, successive baselines, local and replaced-contact holds, mixed
+settled/no-op/missing/held outcomes, exact-boundary remainder, source mismatch,
+item/lease/Organization permits, ordinary mobile denial during review, and atomic
+stage-revision/fact/result/baseline rollback. The last three focused lane cases
+passed: missing/deactivated selected target (9.28s,
+`migration/final-mapping-missing-c5e1f9c.log`), >8MiB live-current projection held
+without mutation/result (12.17s, `migration/final-large-live-passed.log`), and a
+same-target sibling mapping cannot replace the selected mapping (4.50s,
+`migration/final-sibling-c5e1f9c.log`). The last lane source is `8aa0e62`.
+Numeric primary `0`/`1`, later omitted-contact preservation and exact immutable
+`person_admitted`/`person_admission_provenance` byte checks pass in the full DB gate.
+
+Earlier checkpoints retain useful failure evidence, not final-tree substitutes:
+
+- `migration/admitted-people-refresh-execution.log`: eight of nine passed; the
+  catalog-abuse assertion expected `P010C` but was safely denied earlier with
+  `42501`. Corrected `migration/permit-fence.log` passed. Retained-observation
+  and 51-Person physical/checkpoint cases passed in 14.04s and 7.52s
+  (`retained-observation.log`, `checkpoint-physical-ledger.log`).
+- `integration/recovery-db.log`: two read/recovery cases passed in 13.03s at
+  `0e7e1a1`; the later eight-case run supersedes this checkpoint. Availability's
+  owner corrected an application-URL `42501` setup error and passed two DB/API
+  tests. Those owner outputs exist in the task transcript, not invented log paths.
+- `migration/final-focused-stage.log`: INT4/BIGINT decoding failed before the
+  explicit cast fix. Later execution evidence includes this correction.
+- `migration/final-focused-f2ecf6e.log`: a 9MiB source-name fixture failed existing
+  upstream projection limits. It was removed, without relaxing source limits.
+  `final-large-live-c5e1f9c.log` then exposed PostgreSQL's indexed-row limit;
+  the corrected local fixture uses bounded contact rows. `final-large-live-corrected.log`
+  attempted confirmation of an all-held preview; the final test correctly verifies
+  ready/held preservation without confirmation. A separate fixture accidentally
+  deactivated the initiating actor; the corrected selected-target case passes.
+
+## Browser acceptance and preservation
+
+The isolated retained QA database `crm_010e4_qa` was upgraded using the normal SQLx
+migrator through additive migrations `20260930000004`–`00010`. Applied migrations
+were not edited. The saved preview and settled count were preserved. The first
+ledger upgrade added exactly 27 bytes; the later receipt-digest upgrade added
+exactly 32 bytes to each feature/snapshot/Organization ledger, with reservations
+unchanged and all 108 normalized table fingerprints identical. Evidence:
+`migration/retained-preview-ledger-upgrade.log`, `ledger-before.json`,
+`ledger-after-upgrade.json`, `retained-preview-proof-upgrade.log`,
+`proof-upgrade-verification.json` and `physical-after-proof-upgrade.jsonl`.
+
+Actual production-Web/API acceptance passed at desktop and 390px: re-preview,
+57-contact paged comparison, exact confirmation, one business update, cancellation,
 exact-report remainder, completion, settled/held filters, original admission
-provenance and return navigation. Every successful traversal had zero page errors
-and document width equal to the 390px viewport. The original ready resource
-`95757f18-78a2-4c64-a919-9141f5a6596d` is now cancelled with two outcomes (one
-business update and one local hold); remainder
-`be9bd2be-7c35-4abf-96c1-511a1973f477` completed with one update, one verified no-op
-and one local hold. Exactly two People were updated across both resources.
+provenance and return navigation. Successful traversals had zero page errors and
+no document-width overflow. The original resource
+`95757f18-78a2-4c64-a919-9141f5a6596d` is cancelled with two outcomes (one update,
+one local hold); remainder `be9bd2be-7c35-4abf-96c1-511a1973f477` completed with
+one update, one verified no-op and one local hold. Exactly two People were updated.
 
-Evidence: `migration/browser-repreview-reviewed.log`, `browser-confirm-first.log`,
+Logs in `migration/`: `browser-repreview-reviewed.log`, `browser-confirm-first.log`,
 `browser-cancel-reviewed.log`, `browser-remainder-reviewed.log`,
 `browser-confirm-remainder.log`, `browser-completed-reviewed.log`,
-`browser-provenance-canonical.log` and `worker-step-trace.jsonl`. The first
-provenance-link check exposed an incorrect `/migration` redirect that discarded
-its fragment. `53f60c4` uses the canonical named route; the actual browser retest
-passed. Earlier failures remain in `browser-provenance-reviewed.log` and
-`browser-provenance-final.log`.
+`browser-provenance-canonical.log`, `browser-provenance-viewport.log` and
+`worker-step-trace.jsonl`. Inspected screenshots include
+`mobile-repreview-comparison.png`, `mobile-completed-viewport.png` and
+`mobile-original-admission-provenance.png`. The first preview exposed list/overview
+contract defects, corrected before confirmation. Provenance navigation initially
+lost its fragment through the `/migration` redirect; `53f60c4` uses the canonical
+named route. Both failed attempts remain in `browser-provenance-reviewed.log` and
+`browser-provenance-final.log`; actual browser retests pass. The owned migration
+API was stopped after acceptance, before performance measurement.
 
-Exact reconciliation (`migration/final-browser-reconciliation.json`,
-`physical-final.jsonl`, `native-final.jsonl`, `preservation-final.jsonl`) verifies
-69,791 and 95,309 physical/recorded bytes for the two resources, zero reservations,
-and an equal 139,447-byte increase in feature/snapshot/Organization ledgers since
-the proof-column upgrade. All 108 compared table fingerprints reconcile. Snapshot
-byte counters are audited separately. The existing history read-model revisions
-increase from the authorized Person/contact writes; their exact increments are
-reconstructed from settled contact rows using the existing triggers, preserving
-all counters and source history payloads (`history-read-model-reconciliation.sql`
-and `.json`). They are not silently discarded from the preservation comparison.
+`migration/final-browser-reconciliation.json`, `physical-final.jsonl`,
+`native-final.jsonl` and `preservation-final.jsonl` verify exact recorded/physical
+sizes of 69,791 and 95,309 bytes, zero reservations, and the same 139,447-byte
+increase in feature/snapshot/Organization ledgers since the proof upgrade.
+All 108 compared table fingerprints reconcile. Snapshot byte counters are audited
+separately. Authorized native writes increment the existing history read-model
+revisions; `history-read-model-reconciliation.sql` and `.json` derive those exact
+increments from settled contact rows and existing triggers. No history payload
+or revision discrepancy is silently discarded.
 
-Person106 has 57 ordered contacts; Person107 retains its distinct shared address;
-Person108 retains its local name and no contacts. The retained browser fixture
-used Boolean `isPrimary`, which the existing numeric-only source contract marks
-unqualified and therefore preserves source order: contact1 is primary here.
-The earlier expectation of contact57 was a fixture-audit error, not a passing
-numeric-primary claim. Numeric `0`/`1` primary selection and later omitted-contact
-preservation are covered by the expanded commit-proof regression in the final
-DB gate. No retained fixture payload was rewritten to change this outcome.
+Person106 has 57 ordered contacts; Person107 retains its separate shared address;
+Person108 retains its local name and no contacts. The browser fixture's Boolean
+`isPrimary` is unqualified under the existing numeric-only contract, which preserves
+source order: contact1 is primary. The earlier contact57 expectation was an audit
+fixture error. No retained payload was rewritten; numeric primary behavior is
+verified separately in the expanded database regression.
 
-The first repository gate stopped on `large_enum_variant` and a test module placed
-before production items (`integration/final-check.log`). `53f60c4` boxes the internal
-source record and moves the digest test module; the corrected gate is running.
-Final focused lane cases, D-050 performance, repository, SQLx and DB gates remain.
+## Final gates
+
+At `a58d55e`, `scripts/check` passed in 25s: 48 preflight, 989 ordinary Rust,
+five compile-fail documentation, 1,238 Web and 11 email-worker tests, plus format,
+Clippy, production compile, dependency fences, Web lint/typecheck and isolated
+production build (`integration/final-check-passed.log`). Existing large-test-binary
+unwind and Web chunk-size warnings are retained and nonfatal.
+
+Failed gate attempts are retained: `integration/final-check.log` (large enum and
+module ordering, fixed in `53f60c4`), `final-check-corrected.log` (Vue attribute
+order, fixed in `0f66318`), and `final-check-complete.log` (four unhandled router
+errors despite all Web assertions passing). `a58d55e` registers the canonical
+route in test fixtures and asserts its destination; the complete gate then passes.
+
+## D-050 performance
+
+Both gates ran once, serially without the migration worker or another DB gate,
+using the `perf-harness` executable built from `a58d55e`. Build log:
+`integration/final-perf-build.log`; SHA:
+`4d08912e27cd06f058ec7f85b23db0e9525fd628683e596308fd088c4669082f`.
+
+`db_admitted_refresh_perf::admitted_refresh_25k_hot_plans` passed in 34.46s
+(`migration/final-hot-plans.log`, `hot-plans.json`). A real retained admission/
+preview supplies roots; 25k synthetic relational-volume People and 50 active
+members supply scale. Those added rows are inert, not source qualification or
+worker-throughput evidence. SQL is extracted from current production statements.
+All six plans used the required bounded indexes: cohort/result/item rows examined
+were 1/25/at most 51, and claim examined 1. Execution times (ms): cohort 0.082,
+all 0.073, sparse 0.180, results 0.075, cancelled 4.236, claim 0.139.
+
+`db_activity_person_detail_perf::operational_person_detail_matches_cd3b010` passed
+in 73.38s (`migration/final-person-paired.log`,
+`person-paired/person-detail-paired.json`). The 25k-Person/50-member fixture had
+unchanged counts; both ordinary HTTP arms had complete byte/JSON equality and
+verified entry points. Five warmups and 40 measured requests per arm alternated
+AB/BA with concurrency 1. Baseline/current p95 was **16.33/20.60ms**, below the
+**41.33ms** limit (baseline plus max(25ms, 10%)). All observations were exact.
+The frozen helper is attributed to `cd3b010`, not relabeled as the published
+baseline. `migration/person-read-source-attribution.json` separately proves that
+the five current ordinary reader bodies are unchanged from published `44dcf52`.
+This is a local paired budget pass, not a maximum-capacity claim.
+
+## SQLx and final database gate
+
+`scripts/sqlx-prepare` passed (70s, `integration/final-sqlx-prepare.log`),
+removing one obsolete pre-stage-revision Person-lock cache entry in `c7d2720`.
+Fresh-schema `sqlx prepare --check` also passed. Its production-target check
+warns about queries retained for test targets by the all-targets cache generation.
+
+The first full database gate stopped after 29 passes and one historical-fixture
+failure (`integration/final-check-db.log`): current note/task commands use the
+shared Person lock, which requires `stage_revision` absent from the old schema.
+`7930b83` seeds valid historical note/task rows directly and verifies exact new
+stage/catalog revision defaults alongside complete pre-existing-row preservation.
+No production code or applied migration changed. `scripts/check` passed again
+in 182s at `7930b83` (`integration/final-check-upgrade-fixture.log`).
+
+The corrected full `scripts/check-db` passed at `7930b83`: **1,034/1,034 DB tests**
+in 1,023.375s, 1,161s including fresh-schema/cache verification and rebuild
+(`integration/final-check-db-upgrade-fixture.log`). Four test processes ran at a
+time, each with its own disposable database; `DATABASE_URL` was the private
+migrator connection. This includes all new migration/mobile cases, the historical
+upgrade correction, tenant isolation, permits, failure paths and workspace gates.
+No failures were retried or ignored in this successful run. The 989 non-DB tests
+are intentionally outside this DB-only invocation and passed in `scripts/check`.
+Subsequent changes are handoff documentation only.
+
+Cargo/Web outputs stayed separate from shared development and all DB gates were
+serialized. Completed writer worktrees and the migration API/Web preview were
+closed; evidence, QA databases and the native QA API were preserved. Physical
+phones, dependent-family imports, live source qualification, activation and
+release remain outside this implementation scope.

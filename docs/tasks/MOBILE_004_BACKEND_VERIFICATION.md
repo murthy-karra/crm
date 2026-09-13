@@ -1,8 +1,9 @@
 # Mobile 004 — Backend verification
 
-In progress, 2026-09-13. This record covers the integrated backend at `4edf763`;
-native acceptance and final repository gates are separate requirements. No release
-or deployment claim. Full logs are retained under
+Verified, 2026-09-13. Focused evidence below covers backend `4edf763`.
+Native acceptance, migration interaction, independent reviews and final combined
+gates are complete in the [integration record](MOBILE_004_010e4_IMPLEMENTATION_STATUS.md).
+No release or deployment claim. Full logs are retained under
 `/private/tmp/crm-mobile004-010e4/integration/`.
 
 ## Correctness evidence
@@ -32,15 +33,15 @@ or deployment claim. Full logs are retained under
 - Release-preflight Python tests: **48 passed** (`preflight-feature.log`).
   `bash -n scripts/check` and `git diff --check` passed.
 
-## Runtime and remaining gates
+## Runtime
 
 Native acceptance uses synthetic database `crm_mobile_004`, API port 3102 and a
 copied isolated executable. Startup health/readiness passed with additive schemas
 through `20260930000003`. Shared services and installed demo identities are
 preserved. The first combined build found duplicate readiness helper methods from
 the merge; `4edf763` removes them, and the subsequent build passed. Failed build
-output remains in `integration/native-api-build.log`; the successful retry is
-`integration/native-api-build2.log`.
+output remains in `native-api-build.log`; the successful retry is
+`native-api-build2.log`.
 
 ## D-050 evidence
 
@@ -73,6 +74,6 @@ populating 49,900 contacts and rerunning only the affected summary plan
 `contact_method_history_review_primary`, each returning one row; Person uses its
 primary key. Execution was 0.116 ms. The paired benchmark was not repeated.
 
-Migration-writer interaction, independent implementation review and final
-repository/SQLx/database gates remain pending and must be recorded before
-completion.
+Migration interaction and final repository/SQLx/database gates pass at the source
+recorded in the [integration record](MOBILE_004_010e4_IMPLEMENTATION_STATUS.md).
+That record also links both completed native acceptance records and review fixes.

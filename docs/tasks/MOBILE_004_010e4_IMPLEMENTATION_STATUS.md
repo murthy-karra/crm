@@ -1,80 +1,66 @@
 # Mobile 004 / 010e4 — Implementation status
 
-**IN PROGRESS — 2026-09-13, D-080.** User accepted both specifications, shared
-contracts and isolated implementation. No completion or release claim.
+**COMPLETE — 2026-09-13, D-080.** Both accepted implementations, both allowed
+independent review rounds, native/browser acceptance, performance and final gates
+are complete. Changes are committed locally on the integration branch; publication
+and shared-development release are separate.
 
-## Ownership and resources
+## Implemented scope
 
-Coordinator: integration branch `codex/mobile004-010e4-integration` from `44dcf52`
-plus approved planning/acceptance documents. Independent planning review runs
-read-only before the writers start. Backend/migration/iOS/Android writers use
-Terra high. Shared changes and database gates are serialized by the coordinator.
+Mobile004 adds durable encrypted offline stage proposals on iOS and Android,
+server-owned catalog revisions, idempotent replay, explicit conflict/replacement
+and follow-up drafts. Actual installed Mobile003 stores were upgraded without
+losing identity, keys, cache, drafts, queued work or receipts. Simulator/emulator
+real-API offline/restart/replay and conflict flows passed.
 
-Reserved schema versions: Mobile004 `20260929000001`; 010e4 `20260930000001`.
-Proposed isolated APIs: mobile3102 and migration3103/Web5174, verified free at
-launch preparation; isolated empty databases `crm_mobile_004` and `crm_010e4_qa`
-were created and migrated through the published baseline. Mobile backend
-`6992aa7` integrated at `04b5f35`; 010e4 checkpoint `d52c02a` integrated at
-`ac7fa5a` for combined verification. These checkpoints are not completion.
-Schema corrections `20260930000002`/`00003` preserve the applied first migration.
-Native QA API3102 PID33892 uses a copied isolated binary; health/readiness pass.
-Its database has synthetic People001–100 and all current additive migrations.
-Private evidence root `/private/tmp/crm-mobile004-010e4/`; per-lane
-Cargo targets under this directory, Web/native outputs isolated from shared dev.
+010e4 adds preview, confirmation, retry, cancellation and exact-report remainder
+for later core refresh of a terminal admission cohort. It preserves original
+admission evidence, validates source/mapping/identity/baseline proof at commit,
+holds local changes, and keeps imported workspaces in administrator review.
+Metadata, notes/tasks and history for admitted People remain later slices.
 
-Preserved runtime listeners observed: shared API PID93752/3000, Web PID93773/5173,
-private native demo API PID71121/3101. Existing Mobile003/010e3 fixture evidence
-and installed stores remain untouched.
+## Evidence and review
 
-## Gates
+- [Backend and mobile performance](MOBILE_004_BACKEND_VERIFICATION.md): 18 mobile
+  DB cases, three ordinary stage/tenant/realtime regressions and the paired Today
+  gate with 25k People/50 members. Baseline/current p95: 145.48/122.37ms.
+- [iOS](MOBILE_004_IOS_VERIFICATION.md): installed schema6→7, real offline/replay/
+  conflict/replacement, 35 model/storage tests and the follow-up UI regression.
+- [Android](MOBILE_004_ANDROID_VERIFICATION.md): installed schema4→5, real API
+  replay/conflict/replacement, persisted baseline follow-up and dirty-composer guard.
+- [Migration](SLICE_010e4_VERIFICATION.md): exact source/target and permit cases,
+  readiness, lifecycle recovery, desktop/390px cancellation/remainder and provenance.
+  Two business updates across cancelled/completed resources, local edits retained,
+  108 table fingerprints reconciled, exact byte accounting and zero reservations.
 
-Independent planning review: Sol high, read-only against `c581e1e`, READY.
-Required owner checkpoints are narrow catalog-revision maintenance during review
-imports and exact OLD→NEW field validation for the admitted-refresh permit.
-Both remain required implementation/tests, not unresolved product decisions.
+Mobile review findings were corrected and tested on installed native QA apps.
+The second/final migration review recorded code READY at `872e896`, contingent
+on verification now completed below. All targeted fixes are integrated through
+lane `8aa0e62`. No third
+review was opened for either slice.
 
-Native iOS and Android implementations are integrated, including actual installed
-Mobile003→004 encrypted-store upgrades and isolated real-API stage replay,
-conflict and explicit replacement. Evidence is recorded in
-[MOBILE_004_IOS_VERIFICATION.md](MOBILE_004_IOS_VERIFICATION.md),
-[MOBILE_004_ANDROID_VERIFICATION.md](MOBILE_004_ANDROID_VERIFICATION.md) and
-[MOBILE_004_BACKEND_VERIFICATION.md](MOBILE_004_BACKEND_VERIFICATION.md).
-The mobile paired Today gate passed; its source attribution and contact-plan
-fixture correction are recorded in the backend verification.
+Final source `7930b83` passes `scripts/check` and `scripts/check-db`; SQLx cache
+regeneration is included at `c7d2720`. Results: 48 preflight, 989 ordinary Rust,
+five documentation, 1,238 Web, 11 email-worker and **1,034 database tests**, plus
+lint/type/build and fresh-schema cache checks. Both D-050 gates pass. The migration
+verification owns exact commands, timings, source attribution and failed attempts;
+subsequent integration changes are documentation only.
 
-Mobile004 independent review used both allowed rounds. Final round found one
-remaining Android reverse-follow-up composer defect: initially selected stage A
-was not persisted while A→B remained unresolved. Commit `5a683d5` corrects that path; its actual emulator composer regression
-passed in 36.858 seconds. Follow-up `d6d6df2` prevents a dirty composer from
-reusing an older saved row; its installed emulator regression passed in 36.391
-seconds, preserving the baseline and single outbox envelope.
-Both review findings and their targeted corrections are accounted for; no third
-review is planned. Final combined repository gates remain.
+## Integration and resources
 
-010e4 first-round corrections for lifecycle/read, closed settlement, physical
-accounting and server-qualified availability are integrated. Final-round fixes
-now cover bounded input, exact mapping/natural-identity/baseline proof, missing
-and changed targets, and commit-time source revalidation for every item that
-would advance a baseline. The coordinator also tightens startup/preflight schema
-readiness to require the additive proof columns. Worker regression execution and
-the final review disposition remain pending; no third review is planned.
+Integration branch: `codex/mobile004-010e4-integration`, based on published
+`44dcf52` plus accepted planning documents. Backend/migration/iOS/Android
+implementation used Terra high; the coordinator serialized shared files and DB
+gates. All three completed clean writer worktrees were removed after integration.
+All schema changes are additive: Mobile004 `20260929000001`, migration
+`20260930000001`–`00010`. Previously applied migrations were preserved.
 
-API3103/Web5174 use isolated retained synthetic records. The first browser
-prepare created a real ready plan, but exposed list/overview contract defects;
-those source fixes are integrated. No browser confirmation/cancellation/remainder
-acceptance is claimed yet. The same retained QA database will be reused after
-integrating and rebuilding the corrected API/Web.
+Evidence and isolated build outputs: `/private/tmp/crm-mobile004-010e4/`.
+Native API3102/database `crm_mobile_004` and migration API3103/Web5174/database
+`crm_010e4_qa` use synthetic data. The migration API was stopped before performance
+measurement; its completed Web preview was also stopped. Evidence and QA databases
+are retained. Shared development API3000/Web5173, the private native demo3101
+and prior installed stores are preserved.
 
-Combined focused evidence includes 18 mobile DB tests, 3 ordinary stage/tenant/
-realtime regressions and 48 preflight tests. Migration lifecycle and valid-lease
-negative tests passed at their recorded checkpoints; expanded regressions and
-final-tree gates remain. One early migration test overlapped the mobile gate,
-failed early in its disposable database and is not performance evidence.
-Subsequent DB gates are serialized explicitly.
-
-Remaining: integrated migration recovery,
-source/permit/byte tests; desktop and 390px browser cancellation/remainder,
-preservation and provenance evidence; one migration 25k hot-plan and paired
-Person read pass; second/final migration review; final repository, SQLx and DB
-gates. Physical phones/cellular, later family imports, calling, publication and
-deployment remain separate.
+No main merge, push, deployment, live FUB, customer activation or physical-phone
+claim is part of this milestone. Calling remains after the agreed progression.

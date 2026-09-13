@@ -271,7 +271,7 @@ struct QueueView: View {
                         if op.status == "attention" && ["invalid_input", "invalid_assignee", "over_limit"].contains(op.error ?? "") && op.envelope.kind != "complete_task" {
                             Button("Prepare a separate revised draft") { composer = Draft(id: UUID().uuidString, person: op.envelope.person, kind: op.envelope.kind, text: op.title, revision: 0) }
                         }
-                        Text(op.id).font(.caption2).foregroundStyle(.secondary).textSelection(.enabled)
+                        DisclosureGroup("Sync details") { Text(op.id).font(.caption2).foregroundStyle(.secondary).textSelection(.enabled) }
                     }.padding(.vertical, 5)
                 }
             }

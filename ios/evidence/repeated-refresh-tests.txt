@@ -1,0 +1,13 @@
+Original local log: /private/tmp/crm-ios-refresh5b.log
+Test Suite 'Selected tests' started at 2026-09-12 19:26:26.084.
+Test Suite 'FieldCRMUITests.xctest' started at 2026-09-12 19:26:26.084.
+Test Suite 'FieldFlowTests' started at 2026-09-12 19:26:26.084.
+Test Case '-[FieldCRMUITests.FieldFlowTests testRepeatedReadOnlyRefreshBeyondGenerationCapacity]' started.
+Test Case '-[FieldCRMUITests.FieldFlowTests testRepeatedReadOnlyRefreshBeyondGenerationCapacity]' passed (26.301 seconds).
+Test Suite 'FieldFlowTests' passed at 2026-09-12 19:26:52.386.
+	 Executed 1 test, with 0 failures (0 unexpected) in 26.301 (26.302) seconds
+Test Suite 'FieldCRMUITests.xctest' passed at 2026-09-12 19:26:52.387.
+	 Executed 1 test, with 0 failures (0 unexpected) in 26.301 (26.303) seconds
+Test Suite 'Selected tests' passed at 2026-09-12 19:26:52.388.
+	 Executed 1 test, with 0 failures (0 unexpected) in 26.301 (26.304) seconds
+** TEST SUCCEEDED **

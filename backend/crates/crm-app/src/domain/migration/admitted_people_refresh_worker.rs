@@ -691,6 +691,7 @@ async fn prepare(
         .bind(&source_id)
         .fetch_optional(&mut *conn)
         .await?;
+        let seed_baseline = previous.is_none();
         let b: Value = if let Some(previous) = previous {
             if previous.get::<i64, _>("sealed_bytes") > s::ITEM_LIMIT {
                 return Err(MigrationError::StorageLimit);
@@ -766,14 +767,6 @@ async fn prepare(
                     "import_order": owned.get::<i32, _>("import_order"),
                 }));
             }
-            // Seed only once from original executable provenance.
-            let sealed_baseline = s::seal(key, org, id, item, "last-baseline", &b)?;
-            let baseline_bytes = sealed_bytes(&sealed_baseline);
-            let baseline_inserted = sqlx::query("INSERT INTO migration_admitted_people_refresh_baseline(organization_id,admission_id,source_id,person_id,refresh_id,admission_result_id,projection_row_id,projection_nonce,projection_ciphertext) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(organization_id,admission_id,source_id) DO NOTHING")
-            .bind(org.0).bind(admission_id).bind(&source_id).bind(row.get::<Uuid,_>("person_id")).bind(id).bind(row.get::<Uuid,_>("admission_result_id")).bind(item).bind(sealed_baseline.nonce.as_slice()).bind(sealed_baseline.ciphertext).execute(&mut *conn).await?.rows_affected();
-            if baseline_inserted == 1 {
-                sqlx::query("UPDATE migration_admitted_people_refresh_plan SET prepared_bytes=prepared_bytes+$3 WHERE id=$1 AND organization_id=$2").bind(plan).bind(org.0).bind(baseline_bytes).execute(&mut *conn).await?;
-            }
             b
         };
         let identity_bound: bool = sqlx::query_scalar(
@@ -814,6 +807,17 @@ async fn prepare(
             )
             .await?;
             continue;
+        }
+        // Only a naturally bound original record can establish the first B.
+        // A held identity-gap item must leave no authoritative baseline head.
+        if seed_baseline {
+            let sealed_baseline = s::seal(key, org, id, item, "last-baseline", &b)?;
+            let baseline_bytes = sealed_bytes(&sealed_baseline);
+            let baseline_inserted = sqlx::query("INSERT INTO migration_admitted_people_refresh_baseline(organization_id,admission_id,source_id,person_id,refresh_id,admission_result_id,projection_row_id,projection_nonce,projection_ciphertext) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(organization_id,admission_id,source_id) DO NOTHING")
+                .bind(org.0).bind(admission_id).bind(&source_id).bind(row.get::<Uuid,_>("person_id")).bind(id).bind(row.get::<Uuid,_>("admission_result_id")).bind(item).bind(sealed_baseline.nonce.as_slice()).bind(sealed_baseline.ciphertext).execute(&mut *conn).await?.rows_affected();
+            if baseline_inserted == 1 {
+                sqlx::query("UPDATE migration_admitted_people_refresh_plan SET prepared_bytes=prepared_bytes+$3 WHERE id=$1 AND organization_id=$2").bind(plan).bind(org.0).bind(baseline_bytes).execute(&mut *conn).await?;
+            }
         }
         let native_contact_bytes: i64 = sqlx::query_scalar("SELECT COALESCE(sum(octet_length(value)+octet_length(normalized_value)+128),0) FROM contact_method WHERE person_id=$1 AND organization_id=$2")
             .bind(row.get::<Option<Uuid>,_>("person_id")).bind(org.0).fetch_one(&mut *conn).await?;
@@ -1262,6 +1266,15 @@ async fn execute_noop(
         &item.get::<Vec<u8>, _>("proposed_nonce"),
         &item.get::<Vec<u8>, _>("proposed_ciphertext"),
     )?;
+    let instructions: Vec<String> = s::open(
+        key,
+        org,
+        id,
+        item_id,
+        "instructions",
+        &item.get::<Vec<u8>, _>("instructions_nonce"),
+        &item.get::<Vec<u8>, _>("instructions_ciphertext"),
+    )?;
     let planned_disposition: String = item.get("disposition");
     // Closed held/excluded units and already-current units settle a durable
     // outcome without touching a Person. The frozen preview disposition is
@@ -1315,16 +1328,19 @@ async fn execute_noop(
                 .as_str()
                 .and_then(|v| Uuid::parse_str(v).ok());
             let stage_ok = disposition != "held_stale"
-                && execution_mapping_target_valid(
-                    conn,
-                    key,
-                    org,
-                    r,
-                    &item,
-                    "stage",
-                    Some(target_stage),
-                )
-                .await?;
+                && (instructions
+                    .iter()
+                    .any(|instruction| instruction == "stage")
+                    || execution_mapping_target_valid(
+                        conn,
+                        key,
+                        org,
+                        r,
+                        &item,
+                        "stage",
+                        Some(target_stage),
+                    )
+                    .await?);
             let assignee_ok = if target_assignee.is_some()
                 || item.get::<Option<Uuid>, _>("assignee_mapping_id").is_some()
             {

@@ -134,9 +134,9 @@ function confirm() {
 
 <template>
   <Card
+    id="admitted-people-refresh"
     class="mb-6 min-w-0"
     data-testid="admitted-people-refresh-panel"
-    id="admitted-people-refresh"
   >
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>

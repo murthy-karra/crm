@@ -1,148 +1,87 @@
 # Mobile 002 / 010e2 — Implementation status
 
-**IN PROGRESS — D-076, 2026-09-12.** The user approved both reviewed contracts
-and confirmed Terra for implementation. No repeat implementation approval is
-pending. [The launch plan](../plans/MOBILE_002_010e2_PARALLEL_LAUNCH.md) defines
-scope, dependencies and ownership. Physical-phone/cellular work and broad mobile
-design cleanup remain deferred.
+**Final integration verification — D-076, 2026-09-13.** Both approved contracts
+are implemented. Terra high owned the mobile backend, iOS, Android and migration
+backend lanes; the coordinator owned protected-read/Web integration and final
+verification. Physical phones/cellular and broad mobile redesign remain deferred.
+No new implementation approval is pending.
 
-Local approval checkpoint: `9cbaf1a`, integration branch
-`codex/mobile002-010e2-integration`. Main and shared development remain on the
-previous completed milestone; these local checkpoints are not publication or
-deployment.
+The local integration branch is `codex/mobile002-010e2-integration`. The combined
+candidate is `07a0fbf` on the remaining migration worktree. Main/origin and shared
+development are still the previous released milestone. This implementation does
+not authorize publication, shared deployment, native distribution, live FUB or
+customer processing, or activation.
 
-| Lane | Actual state | Primary writer / branch |
-|---|---|---|
-| Mobile backend | Verified and integrated at `2fd9a9d`; worktree/branch closed | Terra high / former `codex/mobile-002-backend` |
-| Migration backend | Baseline and atomic execution tests pass; all-group bounded preparation and recovery in progress | Terra high / `codex/migration-010e2` |
-| Migration Web integration | Coordinator owns `web/**` after explicit transfer; focused tests pass, real API/browser proof pending | Coordinator / same migration worktree |
-| iOS | Implementing protected offline editing and native QA from `2fd9a9d` | Terra high / `codex/mobile-002-ios` |
-| Android | Implementing equivalent behavior concurrently from `2fd9a9d` | Terra high / `codex/mobile-002-android` |
+| Component | Verified implementation |
+|---|---|
+| Mobile backend | `2fc753a`, integrated at `2fd9a9d`: all-writer note revisions, typed edit_note/update_task commands, exact durable receipts and bounded current-record reads |
+| iOS | `5ffa962`: encrypted in-place upgrade, native offline edits, restart/replay, explicit conflict/revised receipt, protected ambiguity/permission transitions |
+| Android | `b8a7f95`: encrypted in-place upgrade, native offline edits, process-death replay, completed-task field preservation, conflict/revised accepted receipt |
+| Migration | `a0eb294`: qualified retained evidence, immutable bounded plans/confirmation, per-Person atomic updates, exact ownership/accounting, cancellation/recovery and protected paged Web review |
 
-Coordinator applies shared registration/authorization changes serially. A bounded
-Terra coordinator subtask owns only release-preflight script/tests in the migration
-worktree; it does not become a fourth feature worktree or edit migration/native
-domain files. Fixed SQLx preparation and full DB gates require coordinator
-scheduling. Focused per-test ephemeral DB runs are admitted for both backend lanes.
+Mobile foundation and both native worktrees/branches are merged locally and
+closed. Only `codex/migration-010e2` remains for the combined repository/DB gate.
+No shared source output, API3000/Web5173, demoAPI3101 or original mobile demo
+bundle/store was used for these mutations. The native QA apps use distinct
+identities and protected storage namespaces.
 
-## Owned resources
+## Actual verification
 
-- Two initial worktrees under `/Users/karrad/projects/crm-worktrees/`:
-  `mobile-002-backend` and `migration-010e2`; both branch from `9cbaf1a`.
-- Empty isolated PostgreSQL databases created successfully: `crm_mobile_002`
-  and `crm_010e2_qa`. Creation alone is not migration/fixture/test success.
-- Private mode-0600 runtime configs:
-  `/private/tmp/crm-mobile002-qa/runtime.env` and
-  `/private/tmp/crm-010e2-qa/runtime.env`; no credential values in this record.
-- Mobile QA reserves API3102; migration reserves API3103/Web5174. No listener
-  is claimed launched at this checkpoint. Shared API3000/Web5173 and demo3101
-  are preserved. Isolated Cargo/Vite/Xcode/Gradle outputs are mandatory.
-- Additive schema ownership: Mobile `20260925000001`, migration `20260926000001`.
-  The mobile foundation integrates before native branches open.
+- Mobile foundation: focused edit tests, all 12 mobile DB cases, 19 note cases
+  and 34 task cases passed. Its isolated SQLx preparation passed with clean
+  `.sqlx`. Existing ordinary command/tenant/revision behavior is included.
+- Combined `scripts/check` passed on `07a0fbf`: **975 Rust tests, five
+  compile-fail doctests, 1,203 Web tests and 11 email-worker tests**, plus
+  formatting, Clippy, production compilation, dependency fences, lint,
+  typecheck and production Web build. Log:
+  `/private/tmp/crm-010e2-qa/check-integrated.log`.
+- Full `scripts/check-db`, including live SQLx metadata validation and all
+  ignored ordinary DB cases, is the final gate still running. Do not treat
+  earlier focused checks as a complete DB gate.
+- [iOS evidence](MOBILE_002_IOS_VERIFICATION.md): 17 protected-store tests;
+  real-API lost-response/conflict; actual installed old-store upgrade with
+  exact encrypted-file/envelope preservation; native offline save/terminate/
+  relaunch/sync; final native conflict/revised receipt (`qa-ui-conflict-v18`)
+  and two protected-model fault tests (`qa-model-fault-v2`). The coordinator
+  independently read both final xcresult summaries: 1+2 passed, no skips/failures.
+- [Android evidence](MOBILE_002_ANDROID_VERIFICATION.md): populated encrypted
+  Room upgrade, storage tests, JVM tests, no-bypass build/lint, and actual API3102
+  instrumentation. Exact queued note bytes survived force-stop/relaunch and
+  received acceptance. An existing completed task changed title/kind/due date
+  without changing completion/ownership. Both actors' conflict/current state
+  appeared in native Saved work; a new revised operation received an accepted
+  revision-4 receipt and the authoritative note matched. The coordinator read
+  all final pass transcripts and verified all four added dependency hashes
+  directly against official Maven Central artifacts.
+- [Migration Web/read evidence](SLICE_010e2_WEB_READ_VERIFICATION.md): bounded
+  Unicode/full-contact paging, admin/tenant/cursor/authority fences, exact byte
+  accounting/replay and controlled recovery cases. The real desktop/390px Web
+  preview, re-preview, cancellation, exact confirmation and reload were tested.
+  Its synthetic run settled six outcomes: **one update, one verified no-op,
+  three held/retained, one excluded**. SQL reconciliation proved the other
+  People, original parent/results/report, four-Person total and review hold
+  unchanged; intended contact identities were preserved.
+- [D-050 evidence](../design/perf/slice-010e2-2026-09-13/README.md): one 25k
+  plan collection found an unbounded report-group anti-join. The fix reads 50
+  raw descriptors first, followed by exact indexed ownership lookups. The two
+  changed statements passed on the same retained fixture, without spills.
+  The same-build Today pair had equal DTOs and current p95 48.633834ms versus
+  baseline 35.023667ms, within its 25ms permitted increase.
 
-## Evidence boundary
+## Evidence limits and resources
 
-Planning reviews and documentation checks passed before D-076; they do not prove
-implementation. Native preparation inspected existing tooling/test paths and
-recorded an isolated QA app/store approach. It did not install, erase, launch,
-build or test either app. Required implementation, schema, failure/retry,
-authorization, real-API/native/Web and combined regression evidence remains open.
-Record each actual checkpoint and limitations here as work completes.
+The 25k cardinality fixture uses explicitly inert ciphertext clones for SQL
+plans; fidelity and accounting use separately qualified retained evidence.
+The paired Today fixture has 100 People and a fixed clock. Neither is production
+capacity evidence. An old Person-detail performance harness rejected a stale
+source hash before measurement; its manifest was not weakened. Initial failing
+Web fixture assumptions, missing receipt charges, local-conflict totals,
+absent-record labels and native QA setup issues were corrected and their
+passing follow-ups are recorded in the linked evidence.
 
-## Backend foundation checkpoint
-
-The [bounded source review](MOBILE_002_BACKEND_REVIEW.md) is READY at `2fc753a`.
-Directly inspected logs show final Mobile 002 focused tests 2/2, complete mobile
-DB tests 12/12 and notes tests 19/19. Mobile tests overlap those focused cases.
-Root live `scripts/sqlx-prepare` passed in an isolated target/throwaway database
-(72-second compilation); `.sqlx` remains clean. Task regressions and repository
-checks run serially after an earlier cache-regeneration collision prevented the
-task test attempt from executing. Native integration remains pending.
-
-The migration preflight has 39 passing Python tests, including partial-schema
-fail-closed behavior. Its baseline test has reported a first passing real
-PostgreSQL parent/capture/report/preview flow. Migration execution, recovery,
-Web and complete acceptance evidence remain in progress; no scaffolding or
-conservative placeholder outcome is treated as completed refresh behavior.
-
-Foundation coordinator gates now have passing evidence on unchanged source:
-
-- `scripts/check` Rust formatting, Clippy, production compilation and dependency
-  fences passed, with 968 Rust tests and five compile-fail doctests. Web lint and
-  typecheck passed. Its first Web run passed 1,180/1,181; the remaining test
-  exposed the coordinator's isolated config `VITE_API_BASE_URL=''`, which produced
-  `/session` instead of `/api/session`. No application source was changed.
-- After correcting both private QA configs to `/api`, all 1,181 Web tests passed,
-  the Web production build passed in the disposable worktree output, and all
-  11 email-worker tests passed. Unchanged Rust gates were not repeated.
-- Remaining `db_tasks::` regression passed 34/34 in 27.13 seconds under the
-  explicit isolated migrator test URL. No test was counted from its earlier
-  cache-regeneration collision.
-
-Root logs are retained under `/private/tmp/crm-mobile002-qa/`: `check-1.log`,
-`sqlx-prepare-1.log`, `web-test-2.log`, `web-build-1.log`, `email-worker-1.log`
-and `db-tasks-2.log`. The actual private API and native fixture are being prepared
-on a separate Cargo target; the final combined migration DB gate remains later.
-
-## Native launch
-
-The verified backend foundation is integrated locally at
-`2fd9a9d8c81bc0bfe40873b589412ab2ccac3b91`. Its worktree and merged branch were
-closed before creating `mobile-002-ios` and `mobile-002-android` under the same
-worktree parent. Both Terra high native writers are running alongside the one
-migration writer, with exactly three implementation worktrees. Coordinator
-executor-QA authoring transferred its new test file to the migration writer to
-free the native slot; those executor tests had not yet run at that handoff.
-
-The real synthetic API is `/private/tmp/crm-mobile002-qa/runtime/crm-api`, SHA-256
-`1235cfd33dfb34f7150e79486be574b04c81e73dd4c800f7c575f6cf03a75042`.
-The preparation agent exercised bootstrap, current-note read and an accepted edit.
-Its original PID19981 exited after handoff; root observed connection refusal and
-restarted the same binary with detached process/file logging. **Current PID26687**
-listens on loopback3102; readiness and a separate post-launch health/listener
-check passed. The runtime working directory is outside the closed worktree.
-
-Fixture inventory is 100 People, 1,000 notes and 1,000 tasks. Native reservations
-are in `/private/tmp/crm-mobile002-qa/runtime/native-reservations.json`: iOS001–049,
-Android051–099, shared050 by coordination, and100 held for coordinator checks.
-The primary synthetic actor is a member and the second is a fixture admin for
-authorized conflicts. The demo API3101 and demonstrated app/store remain intact.
-
-The existing same-build `mobile_today_perf` example passed with unchanged Today
-DTOs, 40 samples per side, old p95 17.120666ms and new p95 17.379083ms against a
-25ms permitted increase. Root inspected the actual JSON log; this is isolated
-synthetic regression evidence, not a production capacity or native success claim.
-
-## Parallel implementation checkpoint — 2026-09-12, 22:27 PDT
-
-Migration backend checkpoint `8378aa2` now includes four passing presence
-interpreter unit tests, the passing original-baseline database case and three
-passing execution cases: mapped changes/contact IDs/clears/facts/replay, stale
-destination hold, and atomic settlement rollback/retry. The verified mobile
-foundation `2fd9a9d` merged cleanly into the migration branch as `0932ded`.
-These focused cases do not establish complete010e2 acceptance. Durable50-item
-preparation is underway; all-report-group traversal, storage/reservations,
-recovery, paired performance and final combined gates remain open.
-
-The migration writer explicitly transferred `web/**` to the coordinator. The
-new admin screen includes sealed-report selection, scoped paged previews and
-contacts, exact counted confirmation, expiry/re-preview, recovery using the same
-request ID, cancellation and fixed result traversal. Focused Web/API/view tests
-pass28/28; typecheck and targeted lint pass. The first test attempt failed three
-fixture assertions that assumed no other component consumed UUIDs; those
-assertions now check valid request identity and exact replay instead of an
-incidental counter. Source behavior was not weakened. Log:
-`/private/tmp/crm-010e2-qa/web-focused.log`. Real production-Web/API evidence
-remains pending while the backend completes.
-
-Native source checkpoints are iOS `f130150` and Android `7641c48` / `6db8445`.
-Their verification records distinguish passing storage/live-API tests from
-incomplete UI and populated legacy-store upgrade proof. Root inspected the
-Android verification record; final dependency verification must run without its
-temporary local bypass. Neither native checkpoint is accepted as complete yet.
-
-API3102 remains responsive. Root read-only inspection found `mobile_capacity`
-429 responses and three unsealed100-Person reconciliation generations for the
-shared synthetic actor. Native lanes are identifying abandoned QA generations
-before scoped cleanup; contexts, operation receipts and business records are
-preserved. No shared/demo service or store is used for these tests.
+Private mode-0600 configs and logs are under `/private/tmp/crm-mobile002-qa/`
+and `/private/tmp/crm-010e2-qa/`. Synthetic databases are `crm_mobile_002` and
+`crm_010e2_qa`; native API3102 and browser API3103/Web5174 were isolated.
+Sensitive keys are not in these records. The original native demo and shared
+runtime remain intact. Implementation completion does not establish cutover
+readiness or migration fidelity beyond existing-People core fields.

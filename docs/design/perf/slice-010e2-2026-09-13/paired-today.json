@@ -1,0 +1,22 @@
+{
+  "allowed_increase_ms": 25.0,
+  "alternating_order": true,
+  "baseline_commit": "9eaeb0a",
+  "clock": "2026-09-13T07:00:00Z",
+  "database": "crm_mobile_002",
+  "dto_equal": true,
+  "dto_sha256": "9f334e63ba64bdb14bd27969aa1a4ba21fed0f52b1531af06eca0c0ef09bd98b",
+  "items": 100,
+  "new_median_ms": 21.987812,
+  "new_p95_ms": 48.633834,
+  "old_median_ms": 21.834978999999997,
+  "old_p95_ms": 35.023667,
+  "passed": true,
+  "same_build": true,
+  "samples_per_side": 40,
+  "warmups_per_side": 10,
+  "today_source_unchanged_since_mobile002_foundation": "2fd9a9d",
+  "today_source_sha256": "6bbd2d06a47dceaa61dbfb3655abfbcc03fcb288ef212ac7adaf149057c3f801",
+  "migration_ddl_changes_only_mutation_guard_not_ordinary_readers": true,
+  "limitation": "100-Person fixed-clock native fixture; the independent plan-shape fixture has 25000 People. Not production capacity evidence."
+}

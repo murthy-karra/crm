@@ -1,0 +1,185 @@
+{
+  "same_retained_25000_person_fixture": true,
+  "fix_only_followup": true,
+  "original_artifact": "plan-shapes.json",
+  "plans": [
+    {
+      "label": "bounded raw report descriptor page",
+      "sql": "SELECT g.source_key,g.source_id,g.disposition FROM migration_core_change_group g WHERE g.report_id=$1 AND g.organization_id=$2 AND g.family='people' AND g.source_key>$3 ORDER BY g.source_key LIMIT 50",
+      "sql_sha256": "63eea76014d915a96685ceed3c49b6f6045394467937f48de703ef857e7f225e",
+      "bindings": [
+        "0bd3ddd4-01bf-4e99-9484-7cb5bc3a53a2",
+        "9177ff7c-31ae-4af2-b7fa-996b56230056",
+        "112000"
+      ],
+      "plan": [
+        {
+          "Plan": {
+            "Node Type": "Limit",
+            "Parallel Aware": false,
+            "Async Capable": false,
+            "Startup Cost": 0.41,
+            "Total Cost": 28.34,
+            "Plan Rows": 50,
+            "Plan Width": 20,
+            "Actual Startup Time": 0.096,
+            "Actual Total Time": 0.144,
+            "Actual Rows": 50.0,
+            "Actual Loops": 1,
+            "Disabled": false,
+            "Shared Hit Blocks": 7,
+            "Shared Read Blocks": 3,
+            "Shared Dirtied Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "Plans": [
+              {
+                "Node Type": "Index Scan",
+                "Parent Relationship": "Outer",
+                "Parallel Aware": false,
+                "Async Capable": false,
+                "Scan Direction": "Forward",
+                "Index Name": "migration_core_change_group_report_id_organization_id_famil_key",
+                "Relation Name": "migration_core_change_group",
+                "Alias": "g",
+                "Startup Cost": 0.41,
+                "Total Cost": 7122.34,
+                "Plan Rows": 12752,
+                "Plan Width": 20,
+                "Actual Startup Time": 0.095,
+                "Actual Total Time": 0.138,
+                "Actual Rows": 50.0,
+                "Actual Loops": 1,
+                "Disabled": false,
+                "Index Cond": "((report_id = '0bd3ddd4-01bf-4e99-9484-7cb5bc3a53a2'::uuid) AND (organization_id = '9177ff7c-31ae-4af2-b7fa-996b56230056'::uuid) AND (family = 'people'::text) AND (source_key > '112000'::text))",
+                "Rows Removed by Index Recheck": 0,
+                "Index Searches": 1,
+                "Shared Hit Blocks": 7,
+                "Shared Read Blocks": 3,
+                "Shared Dirtied Blocks": 0,
+                "Shared Written Blocks": 0,
+                "Local Hit Blocks": 0,
+                "Local Read Blocks": 0,
+                "Local Dirtied Blocks": 0,
+                "Local Written Blocks": 0,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0
+              }
+            ]
+          },
+          "Planning": {
+            "Shared Hit Blocks": 211,
+            "Shared Read Blocks": 7,
+            "Shared Dirtied Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "Planning Time": 0.687,
+          "Triggers": [],
+          "Execution Time": 0.157
+        }
+      ],
+      "violations": []
+    },
+    {
+      "label": "exact imported membership per descriptor",
+      "sql": "SELECT EXISTS(SELECT 1 FROM migration_import_result\n                  WHERE import_id=$1 AND organization_id=$2 AND disposition='imported'\n                    AND source_id=$3)",
+      "sql_sha256": "bf7bb64b50d6ce9902be7ef96cef479ed5ca2af4305a66bd6903268cc4a616e0",
+      "bindings": [
+        "dfe6986b-cf3b-470b-8f9d-e35f5f2e59f0",
+        "9177ff7c-31ae-4af2-b7fa-996b56230056",
+        "112500"
+      ],
+      "plan": [
+        {
+          "Plan": {
+            "Node Type": "Result",
+            "Parallel Aware": false,
+            "Async Capable": false,
+            "Startup Cost": 4.44,
+            "Total Cost": 4.45,
+            "Plan Rows": 1,
+            "Plan Width": 1,
+            "Actual Startup Time": 0.049,
+            "Actual Total Time": 0.051,
+            "Actual Rows": 1.0,
+            "Actual Loops": 1,
+            "Disabled": false,
+            "Shared Hit Blocks": 3,
+            "Shared Read Blocks": 1,
+            "Shared Dirtied Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "Plans": [
+              {
+                "Node Type": "Index Only Scan",
+                "Parent Relationship": "InitPlan",
+                "Subplan Name": "InitPlan 1",
+                "Parallel Aware": false,
+                "Async Capable": false,
+                "Scan Direction": "Forward",
+                "Index Name": "migration_import_result_page",
+                "Relation Name": "migration_import_result",
+                "Alias": "migration_import_result",
+                "Startup Cost": 0.41,
+                "Total Cost": 4.44,
+                "Plan Rows": 1,
+                "Plan Width": 0,
+                "Actual Startup Time": 0.048,
+                "Actual Total Time": 0.048,
+                "Actual Rows": 1.0,
+                "Actual Loops": 1,
+                "Disabled": false,
+                "Index Cond": "((import_id = 'dfe6986b-cf3b-470b-8f9d-e35f5f2e59f0'::uuid) AND (organization_id = '9177ff7c-31ae-4af2-b7fa-996b56230056'::uuid) AND (disposition = 'imported'::text) AND (source_id = '112500'::text))",
+                "Rows Removed by Index Recheck": 0,
+                "Heap Fetches": 0,
+                "Index Searches": 1,
+                "Shared Hit Blocks": 3,
+                "Shared Read Blocks": 1,
+                "Shared Dirtied Blocks": 0,
+                "Shared Written Blocks": 0,
+                "Local Hit Blocks": 0,
+                "Local Read Blocks": 0,
+                "Local Dirtied Blocks": 0,
+                "Local Written Blocks": 0,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0
+              }
+            ]
+          },
+          "Planning": {
+            "Shared Hit Blocks": 175,
+            "Shared Read Blocks": 7,
+            "Shared Dirtied Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "Planning Time": 0.713,
+          "Triggers": [],
+          "Execution Time": 0.077
+        }
+      ],
+      "violations": []
+    }
+  ]
+}

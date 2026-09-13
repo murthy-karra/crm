@@ -72,3 +72,29 @@ The Web now labels held comparisons as non-executable and suppresses clear and
 contact-change badges for those entries. Focused Web tests pass **31/31** in
 `/private/tmp/crm-010e2-qa/web-focused-3.log`, including this regression. The
 worker's actual closed pause reasons now have readable Web labels.
+
+## Corrected real-browser settlement
+
+Against the corrected isolated worker, a fresh plan showed **1 eligible,
+1 already current, 3 held/retained, 1 excluded**, with exactly one name clear,
+one assignment clear and one contact removal. Explicit re-preview produced
+revision 2. The three acknowledgments and exact-plan confirmation dialog were
+used in the real browser. Run `a9df5f43-6e47-42a3-bca3-aee85b60572f` reached
+**Completed · 6 settled**: Source101 updated; 105 verified without change;
+102 local conflict; 103 original hold; 104 not seen again/retained; 106 excluded.
+A full page reload restored the same completed plan and six outcomes.
+
+Coordinator SQL reconciliation compared `browser-before.json` and
+`browser-after.json` under `/private/tmp/crm-010e2-qa/`. Only Source101 changed:
+first name updated, last name/assignment cleared, intended email removed,
+phone added/reordered, and retained normalized contacts kept their original IDs.
+The entire stored Person/contact representations for 102/104/105 were equal.
+Native count stayed four; original parent, original result and sealed report
+hashes and `migration_review` workspace mode were unchanged. The browser console
+had no errors/warnings. One CUA timeout during reload was resolved by observing
+the completed page; it was not counted as an application failure or success.
+
+Scale and paired-read evidence is retained in
+[the D-050 record](../design/perf/slice-010e2-2026-09-13/README.md). The plan pass
+caught and corrected an unbounded group anti-join; the fix-only collection used
+the same retained fixture and passed indexed/bounded access without spills.

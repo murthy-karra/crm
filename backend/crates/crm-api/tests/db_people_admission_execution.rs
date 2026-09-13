@@ -249,3 +249,114 @@ async fn retained_new_people_admit_with_native_identity_provenance_and_facts(mig
     .await;
     assert!(direct.is_err(), "an app connection without an exact admission permit must not write review-workspace People");
 }
+
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
+async fn original_presence_and_unmapped_stage_are_held_before_confirmation(migrator: PgPool) {
+    let f = import_support::fixture(&migrator, import_support::default_people()).await;
+    let parent = db_activity_source::completed_parent(&f).await;
+    let id = ready(
+        &f,
+        parent,
+        vec![
+            json!({"id":101,"firstName":"Changed original","stage":"Lead","phones":[{"value":"4155550100"}]}),
+            json!({"id":104,"firstName":"Unmapped","stage":"New stage","phones":[{"value":"4155550104"}]}),
+            json!({"id":105,"firstName":"Qualified","stage":"Lead","phones":[{"value":"4155550105"}]}),
+        ],
+    )
+    .await;
+    let items = people_admission::items(
+        &f.pool,
+        &f.key,
+        &f.ctx,
+        id,
+        people_admission::Page {
+            limit: Some(50),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    let item = |source: &str| {
+        items["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|v| v["source_id"] == source)
+            .unwrap()["disposition"]
+            .clone()
+    };
+    assert_eq!(item("101"), "excluded_original");
+    assert_eq!(item("104"), "held_mapping_gap");
+    assert_eq!(item("105"), "eligible");
+    assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM person WHERE organization_id=$1 AND first_name IN ('Changed original','Unmapped','Qualified')").bind(f.org).fetch_one(&f.pool).await.unwrap(), 0);
+}
+
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
+async fn cancelled_run_allows_same_report_remainder_preview(migrator: PgPool) {
+    let f = import_support::fixture(&migrator, import_support::default_people()).await;
+    let parent = db_activity_source::completed_parent(&f).await;
+    let people = vec![
+        json!({"id":104,"firstName":"Remainder","stage":"Lead","phones":[{"value":"4155550104"}]}),
+    ];
+    let first = ready(&f, parent, people).await;
+    let first_detail = people_admission::detail(&f.pool, &f.key, &f.ctx, first)
+        .await
+        .unwrap();
+    people_admission::cancel(
+        &f.pool,
+        &f.key,
+        &f.ctx,
+        first,
+        people_admission::LifecyclePeopleAdmission {
+            request_id: Uuid::new_v4(),
+            expected_lifecycle_revision: number(&first_detail["lifecycle_revision"]),
+        },
+    )
+    .await
+    .unwrap();
+    let report: Uuid =
+        sqlx::query_scalar("SELECT report_id FROM migration_people_admission WHERE id=$1")
+            .bind(first)
+            .fetch_one(&f.pool)
+            .await
+            .unwrap();
+    let value = people_admission::prepare(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        &f.ctx,
+        people_admission::PreparePeopleAdmission {
+            request_id: Uuid::new_v4(),
+            report_id: report,
+        },
+        Some(&ReleaseReadiness::for_tests()),
+    )
+    .await
+    .unwrap();
+    let second = uuid(&value["admission_id"]);
+    for _ in 0..100 {
+        if people_admission::detail(&f.pool, &f.key, &f.ctx, second)
+            .await
+            .unwrap()["state"]
+            == "ready"
+        {
+            break;
+        }
+        assert!(people_admission_worker::run_once(
+            &f.pool,
+            &f.key,
+            &f.policy,
+            Some(&ReleaseReadiness::for_tests())
+        )
+        .await
+        .unwrap());
+    }
+    let detail = people_admission::detail(&f.pool, &f.key, &f.ctx, second)
+        .await
+        .unwrap();
+    assert_eq!(detail["state"], "ready");
+    assert_eq!(number(&detail["plan"]["counts"]["eligible"]), 1);
+    assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM migration_import_identity WHERE organization_id=$1 AND source_account_id=17 AND source_id='104'").bind(f.org).fetch_one(&f.pool).await.unwrap(),0);
+}

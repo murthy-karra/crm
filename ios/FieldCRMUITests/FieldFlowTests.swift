@@ -159,12 +159,28 @@ final class FieldFlowTests: XCTestCase {
         // different-target transition and conflict recovery.
         app.buttons["saveStage"].tap()
         app.tabBars.buttons["Saved work"].tap(); XCTAssertTrue(app.staticTexts["queueCount"].label.contains("1 pending"))
+        app.tabBars.buttons["People"].tap()
+        let followUpPerson = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'person_' ")).firstMatch
+        if followUpPerson.exists { followUpPerson.tap() }
+        XCTAssertTrue(change.waitForExistence(timeout: 15)); change.tap()
+        XCTAssertTrue(app.staticTexts["Downloaded server stage"].waitForExistence(timeout: 10))
+        app.buttons["saveStage"].tap()
+        app.tabBars.buttons["Saved work"].tap()
+        let followUp = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'stageFollowUp_' ")).firstMatch
+        XCTAssertTrue(followUp.waitForExistence(timeout: 15), "A second stage selection is saved as a visible follow-up draft, not queued work")
         let pending = XCTAttachment(screenshot: app.screenshot()); pending.name = "mobile004-stage-pending-after-offline-save"; pending.lifetime = .keepAlways; add(pending)
         app.terminate(); app.launch()
         XCTAssertTrue(app.tabBars.buttons["Saved work"].waitForExistence(timeout: 30)); app.tabBars.buttons["Saved work"].tap()
         XCTAssertTrue(app.staticTexts["queueCount"].label.contains("1 pending"), "The immutable stage envelope survives a process restart")
         app.tabBars.buttons["Settings"].tap(); setSwitch(app.switches["offlineToggle"], to: false); app.buttons["sync"].tap()
         app.tabBars.buttons["Saved work"].tap()
+        expectation(for: NSPredicate(format: "label BEGINSWITH '0 pending'"), evaluatedWith: app.staticTexts["queueCount"]); waitForExpectations(timeout: 180)
+        app.tabBars.buttons["Settings"].tap(); setSwitch(app.switches["offlineToggle"], to: true); app.tabBars.buttons["Saved work"].tap()
+        XCTAssertTrue(followUp.waitForExistence(timeout: 15)); followUp.tap()
+        XCTAssertTrue(app.staticTexts["Downloaded server stage"].waitForExistence(timeout: 10))
+        app.buttons["saveStage"].tap(); app.tabBars.buttons["Saved work"].tap()
+        XCTAssertTrue(app.staticTexts["queueCount"].label.contains("1 pending"), "A follow-up only enters the outbox after the user explicitly submits it")
+        app.tabBars.buttons["Settings"].tap(); setSwitch(app.switches["offlineToggle"], to: false); app.buttons["sync"].tap(); app.tabBars.buttons["Saved work"].tap()
         expectation(for: NSPredicate(format: "label BEGINSWITH '0 pending'"), evaluatedWith: app.staticTexts["queueCount"]); waitForExpectations(timeout: 180)
         let accepted = XCTAttachment(screenshot: app.screenshot()); accepted.name = "mobile004-stage-accepted-after-relaunch"; accepted.lifetime = .keepAlways; add(accepted)
         app.tabBars.buttons["Settings"].tap(); setSwitch(app.switches["offlineToggle"], to: true)

@@ -155,7 +155,10 @@ final class LocalStore {
                 _ = try revision(expected); payload["task_id"] = .s(target); payload["expected_revision"] = .s(expected)
             } else { payload["assignee_user_id"] = .null }
         }
-        if let target = draft.targetID, let earlier = try unresolvedOperation(person: draft.person, target: target) {
+        let earlier = draft.kind == "change_person_stage"
+            ? try unresolvedOperation(person: draft.person, target: draft.person)
+            : draft.targetID.flatMap { try? unresolvedOperation(person: draft.person, target: $0) }
+        if let earlier {
             try transaction {
                 guard let row = try rows("SELECT body FROM drafts WHERE id=?", [draft.id]).first else { throw LocalError.staleDraft }
                 var follow = try decode(Draft.self, Data(row[0].utf8))
@@ -207,24 +210,47 @@ final class LocalStore {
         try run("INSERT INTO operations(id,envelope) VALUES(?,?)", [envelope.operation_id, bytes])
         return envelope
     }
-    /// A stage selection is never an optimistic projection.  Its downloaded
-    /// baseline, proposal, immutable envelope, submitted-draft marker and
-    /// pending overlay commit together or none does.
-    @discardableResult func queueStage(person: String, baseline: Stage, stage: Stage, expected: String, superseding: String? = nil) throws -> Draft {
+    /// A stage selection is never an optimistic projection. When an earlier
+    /// stage mutation is unresolved, this persists only a mutable follow-up;
+    /// an immutable envelope is created later by an explicit submit.
+    @discardableResult func queueStage(person: String, baseline: Stage, stage: Stage, expected: String, superseding: String? = nil, draftID: String? = nil, draftRevision: Int? = nil) throws -> Draft {
         guard UUID(uuidString: person) != nil, UUID(uuidString: stage.id) != nil,
               (try? revision(expected)) != nil else { throw LocalError.invalidInput }
         return try transaction {
-            if let earlier = try unresolvedOperation(person: person, target: person) { throw LocalError.waitingPredecessor }
-            var draft = Draft(id: UUID().uuidString.lowercased(), person: person, kind: "change_person_stage", revision: 0,
+            let conflicted: Queued?
+            if let superseding {
+                guard let candidate = try queue().first(where: { $0.id == superseding }), candidate.isStage,
+                      candidate.envelope.person == person, candidate.targetID == person, candidate.status == "conflict" else { throw LocalError.invalidInput }
+                conflicted = candidate
+            } else { conflicted = nil }
+            let earlier = try unresolvedOperation(person: person, target: person, excluding: conflicted?.id)
+            var draft: Draft
+            if let draftID {
+                guard let revision = draftRevision,
+                      let row = try rows("SELECT body FROM drafts WHERE id=?", [draftID]).first else { throw LocalError.staleDraft }
+                draft = try decode(Draft.self, Data(row[0].utf8))
+                guard draft.revision == revision, draft.kind == "change_person_stage", draft.person == person,
+                      draft.mode == "follow_up", draft.baseline?["id"].text == baseline.id,
+                      draft.expectedRevision == expected else { throw LocalError.staleDraft }
+                draft.targetID = stage.id; draft.proposal = .object(["id": .s(stage.id), "name": .s(stage.name)])
+            } else {
+                draft = Draft(id: UUID().uuidString.lowercased(), person: person, kind: "change_person_stage", revision: 0,
                               targetID: stage.id, expectedRevision: expected,
                               baseline: .object(["id": .s(baseline.id), "name": .s(baseline.name), "stage_revision": .s(expected)]),
                               proposal: .object(["id": .s(stage.id), "name": .s(stage.name)]))
-            draft.revision = 1
-            try run("INSERT INTO drafts VALUES(?,?)", [draft.id, try string(draft)])
+            }
+            if let earlier {
+                draft.mode = "follow_up"; draft.predecessor = earlier.id; draft.revision += 1
+                try run("INSERT INTO drafts VALUES(?,?) ON CONFLICT(id) DO UPDATE SET body=excluded.body", [draft.id, try string(draft)])
+                return draft
+            }
             let envelope = try insertEnvelope(kind: draft.kind, payload: .object(["person_id": .s(person), "stage_id": .s(stage.id), "expected_stage_revision": .s(expected)]))
-            if let superseding { try run("UPDATE operations SET status='superseded',error='superseded' WHERE id=? AND status='conflict'", [superseding]) }
+            if let superseding {
+                try run("UPDATE operations SET status='superseded',error='superseded' WHERE id=? AND status='conflict'", [superseding])
+                if let old = try draftForOperation(superseding) { try run("DELETE FROM drafts WHERE id=?", [old.id]) }
+            }
             draft.mode = "submitted"; draft.predecessor = envelope.operation_id; draft.revision += 1
-            try run("UPDATE drafts SET body=? WHERE id=?", [try string(draft), draft.id])
+            try run("INSERT INTO drafts VALUES(?,?) ON CONFLICT(id) DO UPDATE SET body=excluded.body", [draft.id, try string(draft)])
             return draft
         }
     }
@@ -236,9 +262,9 @@ final class LocalStore {
                           overlay: row[4] == "1", attempts: Int(row[5]) ?? 0, retryAt: Double(row[6]) ?? 0)
         }
     }
-    private func unresolvedOperation(person: String, target: String) throws -> Queued? {
+    private func unresolvedOperation(person: String, target: String, excluding: String? = nil) throws -> Queued? {
         try queue().first { op in
-            op.envelope.person == person && op.targetID == target && !["accepted", "superseded", "discarded", "unavailable"].contains(op.status)
+            op.id != excluding && op.envelope.person == person && op.targetID == target && !["accepted", "superseded", "discarded", "unavailable"].contains(op.status)
         }
     }
     func acknowledge(_ receipt: Receipt) throws {
@@ -354,7 +380,7 @@ final class LocalStore {
             var prior: (Int, String)?
             if let row = try rows("SELECT position,id FROM stage_catalog_stages WHERE generation=? ORDER BY position DESC,id DESC LIMIT 1", [page.generation_id]).first { prior = (Int(row[0]) ?? Int.min, row[1]) }
             for item in page.items {
-                guard UUID(uuidString: item.id) != nil, !item.name.isEmpty, item.name.utf8.count <= 1024 else { throw LocalError.invalidProtocol }
+                guard UUID(uuidString: item.id) != nil, !item.name.isEmpty else { throw LocalError.invalidProtocol }
                 if let prior, (item.position, item.id) <= prior { throw LocalError.invalidProtocol }
                 prior = (item.position, item.id)
                 try run("INSERT INTO stage_catalog_stages VALUES(?,?,?,?)", [page.generation_id, item.id, item.name, String(item.position)])

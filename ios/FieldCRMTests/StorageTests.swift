@@ -107,10 +107,45 @@ final class StorageTests: XCTestCase {
         try store.begin(gen)
         for section in ["summary", "notes", "tasks"] { try store.appendPage(Page(generation_id: genID, person_id: person, revision: "1", section: section, summary: section == "summary" ? .object(["id": .s(person), "stage_revision": .s("1"), "stage": .object(["id": .s("55555555-5555-4555-8555-555555555555"), "name": .s("Lead")])]) : nil, items: [], next_cursor: nil, complete: true), expected: "1") }
         try store.finishBundle(genID, person, "1")
-        try store.appendStagePage(StagePage(generation_id: genID, revision: "1", items: [], next_cursor: "opaque", complete: false), expected: "1")
+        let customLabel = String(repeating: "L", count: 2048)
+        try store.appendStagePage(StagePage(generation_id: genID, revision: "1", items: [Stage(id: "55555555-5555-4555-8555-555555555555", name: customLabel, position: 0)], next_cursor: "opaque", complete: false), expected: "1")
         XCTAssertThrowsError(try store.promote(seal(gen)))
         XCTAssertNil(try store.meta("active_stage_catalog"))
-        try store.discardGeneration(); XCTAssertNil(try store.generation())
+        try store.appendStagePage(StagePage(generation_id: genID, revision: "1", items: [], next_cursor: nil, complete: true), expected: "1")
+        try store.promote(seal(gen)); XCTAssertEqual(try store.activeStages().first?.name, customLabel)
+    }
+    func testMobile004StageConflictReplacementAndExplicitFollowUpDraft() throws {
+        let store = try open(); let genID = UUID().uuidString.lowercased()
+        let stageA = "55555555-5555-4555-8555-555555555555", stageB = "66666666-6666-4666-8666-666666666666", stageC = "77777777-7777-4777-8777-777777777777"
+        let generation = Generation(generation_id: genID, context_id: context, evaluated_at: stamp(), expires_at: stamp(Date().addingTimeInterval(1800)), complete: true, selected_count: 1, manifest: Manifest(items: [ManifestItem(person_id: person, revision: "1", reasons: [])], next_cursor: nil, complete: true), stage_catalog: StageCatalog(revision: "1", stages_url: "/api/mobile/v1/reconciliations/\(genID)/stages"))
+        try store.begin(generation)
+        for section in ["summary", "notes", "tasks"] {
+            let summary: JSON? = section == "summary" ? .object(["id": .s(person), "stage_revision": .s("1"), "stage": .object(["id": .s(stageA), "name": .s("A")])]) : nil
+            try store.appendPage(Page(generation_id: genID, person_id: person, revision: "1", section: section, summary: summary, items: [], next_cursor: nil, complete: true), expected: "1")
+        }
+        try store.appendStagePage(StagePage(generation_id: genID, revision: "1", items: [Stage(id: stageA, name: "A", position: 0), Stage(id: stageB, name: "B", position: 1), Stage(id: stageC, name: "C", position: 2)], next_cursor: nil, complete: true), expected: "1")
+        try store.finishBundle(genID, person, "1"); try store.promote(seal(generation))
+
+        let first = try store.queueStage(person: person, baseline: Stage(id: stageA, name: "A", position: 0), stage: Stage(id: stageB, name: "B", position: 1), expected: "1")
+        let conflict = try XCTUnwrap(store.queue().first); let immutableConflictBytes = conflict.bytes
+        try store.recordStageConflict(conflict.id, current: CurrentStageResponse(context_id: context, person_id: person, person_revision: "2", stage_revision: "2", stage: Stage(id: stageA, name: "A", position: 0)), contextID: context, person: person)
+        let replacement = try store.queueStage(person: person, baseline: Stage(id: stageA, name: "A", position: 0), stage: Stage(id: stageC, name: "C", position: 2), expected: "2", superseding: conflict.id)
+        let replacementOp = try XCTUnwrap(store.queue().first { $0.id == replacement.predecessor })
+        XCTAssertNotEqual(replacementOp.id, conflict.id); XCTAssertEqual(try store.queue().first { $0.id == conflict.id }?.bytes, immutableConflictBytes)
+        XCTAssertEqual(try store.queue().first { $0.id == conflict.id }?.status, "superseded")
+        XCTAssertEqual(replacement.mode, "submitted")
+
+        let follow = try store.queueStage(person: person, baseline: Stage(id: stageA, name: "A", position: 0), stage: Stage(id: stageB, name: "B", position: 1), expected: "2")
+        XCTAssertEqual(follow.mode, "follow_up"); XCTAssertEqual(follow.predecessor, replacementOp.id)
+        XCTAssertEqual(try store.queue().count, 2, "A follow-up draft must not create another immutable outbox row")
+        XCTAssertEqual(follow.baseline?["stage_revision"].text, "2")
+
+        let receipt = Receipt(operation_id: replacementOp.id, outcome: "accepted", resource_type: "person_stage", resource_id: person, committed_revision: "2", person_revision: "2", accepted_at: stamp(), changed: true, replayed: false)
+        try store.acknowledge(receipt)
+        let submitted = try store.queueStage(person: person, baseline: Stage(id: stageA, name: "A", position: 0), stage: Stage(id: stageB, name: "B", position: 1), expected: "2", draftID: follow.id, draftRevision: follow.revision)
+        let submittedOp = try XCTUnwrap(store.queue().first { $0.id == submitted.predecessor })
+        XCTAssertEqual(submitted.mode, "submitted"); XCTAssertNotEqual(submittedOp.id, replacementOp.id)
+        XCTAssertEqual(submitted.baseline?["stage_revision"].text, "2", "Explicit follow-up submit preserves its old baseline until a user reviews/rebases it.")
     }
     func testActualSQLiteFullRollsBackDraftConsumptionAndNoFalseSave() throws {
         let store = try open()

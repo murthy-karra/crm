@@ -1,0 +1,23 @@
+{
+  "verified_at": "2026-09-13T02:23:00.613898+00:00",
+  "database": "crm_mobile_001",
+  "api_url": "http://127.0.0.1:3101",
+  "api_sha256": "f4b8bedbeaef723c47d56a3215e298737dd9ada303da2a98b3fdd071441d5fc7",
+  "runtime_source": "7f41907 (build began at 9483b2f with the identical verified lifecycle patch)",
+  "generation_source_sha256": "c5b4f2b3a8722b1c70a4bbfb41f2fdaf40f209561e545295d42902fc849ac085",
+  "applied_migrations": [
+    20260923000003,
+    20260924000001
+  ],
+  "preserved_counts_and_receipt_hash": {
+    "contexts": 8,
+    "receipts": 306,
+    "notes": 1299,
+    "tasks": 1004,
+    "people": 100,
+    "receipt_hash": "3407d1ce97b9bbac77ae84c69dc753c9"
+  },
+  "health_status": 200,
+  "build_seconds": 36.37,
+  "shared_api_process_not_restarted": true
+}

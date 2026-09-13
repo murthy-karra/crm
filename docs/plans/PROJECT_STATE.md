@@ -7,14 +7,19 @@ ledger and historical measurements; its old instructions are not current work.
 
 ## Current state
 
-**Mobile 001 implementation is approved under D-074.** The reviewed
+**Mobile 001 is implemented and verified for the approved synthetic scope under D-074.** The reviewed
 [specification](../specs/MOBILE_001_OFFLINE_FIELD_WORK.md) and
 [briefs](../tasks/MOBILE_001_IMPL.md) cover both native platforms, protected SQLite,
 seven-day access and durable synchronization. [Toolchain preparation](../tasks/MOBILE_NATIVE_TOOLCHAIN_SETUP.md)
 records installed SDKs and successful iPhone/Android emulator boots. Backend
-implementation and focused database/API proof are locally integrated. Both native
-apps now have dedicated worktrees and are compiling/testing against the isolated
-synthetic API; native acceptance and the combined DB gate remain in progress.
+implementation, both native apps and their synthetic verification are locally
+integrated. iOS and Android passed offline work preservation, restart and actual
+API synchronization checks; Android also passed emulator reboot/reauthorization.
+All implementation worktrees are closed. Combined repository/SQLx gates passed,
+and all 966 DB cases have passing evidence after two test-fixture corrections.
+A repeated-sync defect found by the native apps was corrected and all ten affected
+backend tests passed; iOS and Android then passed repeated downloads against the
+patched private API. See the [implementation status](../tasks/MOBILE_MIGRATION_IMPLEMENTATION_STATUS.md).
 
 The user requested a concrete migration plan before implementation launch.
 Approved [010e1](../specs/SLICE_010e1.md) compares a newer core capture with the
@@ -101,6 +106,20 @@ or production-cluster deployment occurred. The bounded SQLx cancellation
 follow-up remains open in production readiness.
 
 ## Current slice
+
+- **010e1 implementation:** locally integrated under D-075. Retained core-change
+  reports preserve exact source evidence, representative metadata and the review
+  hold. Final focused/process/query-plan checks, real-API desktop/390px workflow
+  and the combined backend gates passed. See [verification](../tasks/SLICE_010e1_VERIFICATION.md)
+  and [combined evidence](../tasks/MOBILE_MIGRATION_COMBINED_VERIFICATION.md).
+  The merged migration worktree and temporary QA listeners are closed. Git
+  publication, shared-development release, live FUB work and delta application
+  are separate; 010d2 remains the released baseline.
+- **Mobile 001:** backend integration, shared regression gates and both native
+  offline/sync workflows have passing evidence. iOS (`92abb916`, `6e3f715`) and
+  Android (`83379df`) are locally integrated; their worktrees are closed with native
+  build/test artifacts preserved. One bounded native review's corrections are resolved.
+  Physical-device/cellular validation and app distribution remain later gates.
 
 - **010d2 implementation:** [Implemented and verified](../tasks/SLICE_010d2_VERIFICATION.md)
   under D-072 with user-selected metadata-first exposure. Separate external facts,
@@ -198,16 +217,22 @@ follow-up remains open in production readiness.
 
 ## Current branch
 
-Implementation is active on local `codex/mobile-migration-integration` from the
-approved planning checkpoint `9eaeb0a`. Three implementation worktrees cover iOS, Android and migration010e1;
-both backend additions are locally integrated at `d6e7c74`. Their owners,
-databases, ports and current verification are
+Implementation is complete on local `codex/mobile-migration-integration` from the
+approved planning checkpoint `9eaeb0a`. All implementation worktrees and their
+merged branches are closed. Both backend additions are integrated at `d6e7c74`,
+with lifecycle correction `7f41907`, final iOS integration `152dcec` and Android
+integration `c238b24`. The loopback-only synthetic API3101 remains available for
+the installed paused native demos. Databases, ports and attributed verification are
 tracked in the [coordination record](../tasks/MOBILE_MIGRATION_IMPLEMENTATION_STATUS.md).
 Main remains at `b301819fcf38947ee31f85b25588d9c5398795f0`. No implementation has
 been published or intentionally deployed. A verification build temporarily replaced
 the existing shared Web preview assets; all 73 released assets were restored and
 verified by hash. [Restoration evidence](../design/qa/slice-010e1-2026-09-12/shared-preview-restoration.json).
-Subsequent QA output is isolated, and shared services were not restarted.
+Cargo checks also replaced local executable pathnames; exact released API/admin/
+migrator binaries were recovered, hash-verified and atomically restored. The shared
+API process retained its original executable mapping and was never restarted.
+[Executable restoration](../design/qa/mobile-001-native-2026-09-12/shared-executable-restoration.json).
+Future checks require explicit isolated Cargo and Web output directories.
 
 ## Last accepted decision
 

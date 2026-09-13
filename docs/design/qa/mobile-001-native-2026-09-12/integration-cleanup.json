@@ -1,0 +1,38 @@
+{
+  "recorded_at": "2026-09-13T02:42:00.849623+00:00",
+  "branch": "codex/mobile-migration-integration",
+  "main_unchanged": "b301819fcf38947ee31f85b25588d9c5398795f0",
+  "ios": {
+    "implementation": "92abb916c92e6a797caaa081d38c72fce1550817",
+    "followup": "6e3f715a14938e17971cfb9da911761a36cb4334",
+    "integration": "152dcec",
+    "review": "99605a087513838fe66c471102cc19eb3b0cd1b5",
+    "worktree_and_branch_removed": true,
+    "preserved_build_and_xctest_bundles": "/private/tmp/crm-ios-native-build-final"
+  },
+  "migration": {
+    "implementation": "6eac323",
+    "wiring": "fc1acc5",
+    "integration": "d6e7c747f6f24ccb13781aacd7d75dc3cd1b2e2c",
+    "browser_evidence": "1d3561075924f31502913e8203e4d924b8f7e923",
+    "worktree_and_branch_removed": true,
+    "owned_api_3102_and_web_5202_stopped": true
+  },
+  "android": {
+    "implementation": "83379df4a9af0b29bab764a3bc90552f3d2abad4",
+    "integration": "c238b24090c266854c4b3300d4042edbcf158875",
+    "worktree_and_branch_removed": true,
+    "preserved_build_reports_and_apks": "/private/tmp/crm-android-native-build-final"
+  },
+  "published": false,
+  "deployed": false,
+  "physical_device_or_cellular_validation": false,
+  "synthetic_api": {
+    "url": "http://127.0.0.1:3101",
+    "pid": 71121,
+    "retained_for_native_demo": true,
+    "runtime_env": "/private/tmp/crm-mobile001-qa/runtime.env",
+    "both_installed_apps_paused": true
+  },
+  "remaining_worktrees": "/Users/karrad/projects/crm  c238b24 [codex/mobile-migration-integration]"
+}

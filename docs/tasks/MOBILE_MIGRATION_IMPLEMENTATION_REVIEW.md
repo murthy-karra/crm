@@ -1,6 +1,6 @@
 # Mobile 001 / 010e1 — Bounded implementation review
 
-In progress, 2026-09-12. Approval is D-074/D-075. This record distinguishes
+Completed bounded review, 2026-09-12. Approval is D-074/D-075. This record distinguishes
 implementation review from the earlier approved planning reviews and from actual
 test execution. The coordinator independently reviews the delegated domain code;
 coordinator-authored registration/configuration changes are covered by checks,
@@ -58,3 +58,81 @@ recorded in the 010e1 evidence directory.
 
 No third broad implementation review is planned. Any second pass is restricted
 to these findings and concrete test failures under D-050.
+
+## Native clients — round 1 and targeted rechecks
+
+The coordinator read each platform's database, secure storage, protocol client,
+sync orchestration and UI against the approved native brief. Actual native build,
+persistence and UI evidence belongs to the respective platform verification docs.
+This round identified concrete implementation gaps. Each correction was reviewed
+against its original finding; no third broad review was added.
+
+### iOS
+
+- Use a sleep-inclusive monotonic clock for the seven-day lease and generation
+  expiry. `ProcessInfo.systemUptime` measures awake time;
+  [Apple's continuous clock](https://developer.apple.com/documentation/kernel/1646199-mach_continuous_time)
+  also advances during system sleep.
+- A failed credential replacement during sign-out must not allow reopening the
+  previous unlocked credential after restart; retain an independent durable lock.
+- Authoritative reconciliation/read denial must lock revoked access; a per-task
+  permission failure requires a current-authority check before classification.
+- A revision-conflict completion must offer explicit review of current state and
+  a separately chosen new action, preserving its original immutable operation.
+- Reclaim obsolete server cache generations/pages/bundles without touching the
+  active or staged cache and protected drafts/outbox.
+- Keep update-required distinct from a user-controlled sync pause.
+
+Also restore a saved task draft's actual due date in the composer, and show
+Today's evaluation time and local pending badges. The implementer accepted these
+corrections. All 20 final storage/model tests passed, as did the actual API
+100-action retry proof, SwiftUI terminate/relaunch workflow, five post-patch
+refreshes and device Release compilation. The separate
+[iOS review](MOBILE_001_IOS_REVIEW.md) records targeted source hashes and evidence.
+
+### Android
+
+- After failed/debounced draft saves, block accidental dismissal of uncommitted
+  input and use expected draft revisions to reject stale asynchronous writes.
+- Persist an independent fail-closed lock so failed encrypted registry/database
+  updates cannot restore an account the user signed out of after restart.
+- Lock authoritative read/bootstrap/reconciliation403; distinguish per-task
+  permission failure through a current-authority check.
+- Remove the unbounded whole-Organization People download used for online search;
+  use the accepted explicit known-Person pin workflow within the frozen adapter.
+- Remove absent server People from the active cache after a complete seal while
+  preserving drafts/outbox separately with a visible removal conflict.
+- Look up a staged manifest member by its indexed generation/Person key instead
+  of loading/scanning all25,000 entries for every component page.
+
+All six Android source corrections passed targeted recheck, including the
+additional unavailable-Person draft-read guard. Actual instrumented storage and
+account-boundary checks, lost-response retry, native force-stop/relaunch and
+emulator reboot proof passed. Final targeted instrumentation passed seven cases,
+including reclaimed-generation recovery, mandatory retry pacing and retry-checkpoint
+storage failure. Android Debug/test builds, two JVM tests and lint passed (zero
+errors, five documented advisories). Platform commands and remaining limits are in
+[Android verification](MOBILE_001_ANDROID_VERIFICATION.md); physical-device/cellular
+durability is not claimed.
+
+## Repeated-sync failure — bounded correction
+
+Actual concurrent native testing exposed successful generations consuming the
+retained-row capacity until expiry. The assigned backend writer added an explicit
+sealed timestamp and bounded cleanup of at most two sealed/expired generations
+per admission or worker pass. All retained rows continue to count until deletion;
+legacy rows are not guessed to be sealed. Pending generations, operation receipts
+and business rows are preserved. Ten affected real-database tests passed, including
+six cycles on each of two installations and cleanup failure/locking. Native
+generation-404 recovery discards staging only and preserves complete cache and
+saved work; capacity retry delays cannot be bypassed by repeated manual sync.
+See [lifecycle verification](MOBILE_001_SEALED_GENERATION_VERIFICATION.md).
+
+## Verification artifact isolation
+
+The coordinator detected both Web output and executable-path collisions with the
+existing shared-development launcher. All released assets and binaries were
+restored to exact release hashes; the shared API process was never restarted.
+`AGENTS.md` now requires explicit isolated Cargo and Web output directories when
+shared launchers use checkout artifacts. This is a documentation correction for
+an observed verification side effect, not a deployment or runtime change.

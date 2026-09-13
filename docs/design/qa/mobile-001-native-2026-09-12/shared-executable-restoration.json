@@ -1,0 +1,34 @@
+{
+  "at": "2026-09-13T02:34:36.661958+00:00",
+  "release_source": "5924f097a7d7475e7e9742bb08e102d7c7ca98d2",
+  "incident": "Local Cargo verification replaced launch-path executable files; the existing API process continued mapping its prior executable inode.",
+  "process_before": "95513 Sat Sep 12 15:24:40 2026     backend/target/debug/crm-api",
+  "process_after": "95513 Sat Sep 12 15:24:40 2026     backend/target/debug/crm-api",
+  "process_restarted": false,
+  "health_status": 200,
+  "artifacts": {
+    "crm-api": {
+      "replaced_sha256": "473010fd76b42f6d8779a5318796859c82dd957766470724e2811587273f5f28",
+      "restored_sha256": "ffeee8cb408e0df716892bc7cf3a1981b7e09a280f36566fcab9e59d6989690a",
+      "source": "/Users/karrad/projects/crm/backend/target/debug/deps/crm_api-c01c645a6b2e38b7",
+      "retained_release": "/private/tmp/crm-release-executable-restoration/crm-api-released",
+      "size": 95490744
+    },
+    "crm-admin": {
+      "replaced_sha256": "59e01c887f49852e194e5c48d15587e227a13b8ca02c42c9933e2ff4ab435735",
+      "restored_sha256": "64e85ba5c2eb33709a5f0fe491aeffd11ce31ca4eeb1d333a81c03d12b8b69e1",
+      "source": "/Users/karrad/projects/crm/backend/target/debug/deps/crm_admin-f22ed118d72071ab",
+      "retained_release": "/private/tmp/crm-release-executable-restoration/crm-admin-released",
+      "size": 24328008
+    },
+    "migrate": {
+      "replaced_sha256": "01e4023fff1358fc148978e787d5603105ea7ecb71cc932d2ede0a9c1deee376",
+      "restored_sha256": "cdfc28d856326833782b763358f17c7431abd32dbbbc9bbb99187fa42bca687b",
+      "source": "/Users/karrad/projects/crm/backend/target/debug/deps/migrate-8026df789c83bcbf",
+      "retained_release": "/private/tmp/crm-release-executable-restoration/migrate-released",
+      "size": 15121512
+    }
+  },
+  "shared_database_modified": false,
+  "git_publication_or_deployment": false
+}

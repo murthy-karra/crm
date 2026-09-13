@@ -1,8 +1,8 @@
 # Slice 010e1 — Implementation and verification
 
-**2026-09-12: backend implementation and targeted evidence verified.**
-Coordinator runtime walkthrough, final integrated release gates and integration
-are recorded separately below as they finish. No live FUB call, customer processing,
+**2026-09-12: implementation locally integrated and verified.**
+Coordinator runtime walkthrough and final combined implementation gates passed
+as attributed below; publication and release remain separate. No live FUB call, customer processing,
 canonical CRM mutation, delta application or activation is included.
 
 D-075 approves the [specification](../specs/SLICE_010e1.md).
@@ -168,3 +168,10 @@ This preserves separate source attribution for targeted worker tests, actual
 browser runtime and merged-source checks. The same evidence directory records
 an incidental shared-preview asset replacement and exact restoration of the
 released Web files; later QA output is isolated.
+
+The combined verification is now complete: repository checks (968 Rust and 1,181
+Web tests plus supporting suites), live SQLx preparation and all 966 DB cases
+have passing evidence. The full archived DB run passed964 cases; its two legacy
+fixture assertions were corrected without runtime changes and passed their
+focused rerun. The original failed invocation remains explicitly recorded.
+The clean merged migration worktree/branch and owned QA listeners were removed.

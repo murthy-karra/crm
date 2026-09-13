@@ -1,0 +1,11 @@
+{
+  "remaining_generations": 0,
+  "contexts": 8,
+  "receipts": 306,
+  "notes": 1299,
+  "tasks": 1004,
+  "preserved": true,
+  "at": "2026-09-13T02:25:23.574772+00:00",
+  "retired_obsolete_pre_patch_test_generations": 4,
+  "reason": "Two finished iOS UI4 generations and two finished Android100-note proof generations predated sealed_at. Owners confirmed those tests finished; neither app had an admitted new download. This synthetic cleanup does not infer legacy completion in product migration."
+}

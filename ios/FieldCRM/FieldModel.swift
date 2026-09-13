@@ -51,6 +51,7 @@ import Network
     private func mobile003ByteDigest(_ bytes: Data) -> UInt64 {
         bytes.reduce(1469598103934665603) { ($0 ^ UInt64($1)) &* 1099511628211 }
     }
+    func mobile003QAInventoryURL() throws -> URL { try directory().appendingPathComponent("historical-upgrade-inventory.txt") }
     #endif
     init(synthetic: Bool = false, startMonitor: Bool = true, restoreOnInit: Bool = true) {
         secure = SecureStorage(synthetic: synthetic); self.synthetic = secure.synthetic

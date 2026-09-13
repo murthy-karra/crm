@@ -244,4 +244,29 @@ import XCTest
         XCTAssertEqual(try store.drafts().count, 1)
     }
 
+    func testHistoricalSchemaFiveInstalledInventoryMigratesWithoutChangingBytes() async throws {
+        let originalInstallation = UserDefaults.standard.string(forKey: "installation")
+        defer { if let originalInstallation { UserDefaults.standard.set(originalInstallation, forKey: "installation") } else { UserDefaults.standard.removeObject(forKey: "installation") } }
+        UserDefaults.standard.set("c1f05e41-0581-4a64-80b0-8547b576399b", forKey: "installation")
+        let model = FieldModel(synthetic: true, startMonitor: false, restoreOnInit: false)
+        model.paused = true
+        await model.signIn(email: "agent@mobile.test", password: "Mobile-demo-only-123!")
+        XCTAssertTrue(model.unlocked, model.message)
+        let store = try XCTUnwrap(model.store)
+        let inventoryURL = try model.mobile003QAInventoryURL()
+        let pre = try String(contentsOf: inventoryURL)
+        XCTAssertTrue(pre.contains("schema=5"), pre)
+        XCTAssertEqual(try store.rows("PRAGMA user_version")[0][0], "6")
+        func digest(_ data: Data) -> String { String(data.reduce(1469598103934665603) { ($0 ^ UInt64($1)) &* 1099511628211 }, radix: 16) }
+        for part in pre.components(separatedBy: " ops=").dropFirst().first?.components(separatedBy: " drafts=").first?.split(separator: ",") ?? [] {
+            let fields = part.split(separator: ":")
+            let op = try XCTUnwrap(try store.queue().first { $0.id == fields[0] })
+            XCTAssertEqual(digest(op.bytes), String(fields[1])); XCTAssertEqual(op.receipt == nil ? "0" : "1", String(fields[2]))
+        }
+        let draftPart = pre.components(separatedBy: " drafts=").last!.split(separator: ":")
+        let draft = try XCTUnwrap(try store.drafts().first { $0.id == draftPart[0] })
+        XCTAssertEqual(digest(try encode(draft)), String(draftPart[1]))
+        XCTAssertFalse((try store.meta("active") ?? "").isEmpty)
+    }
+
 }

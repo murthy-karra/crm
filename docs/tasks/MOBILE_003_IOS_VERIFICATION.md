@@ -104,3 +104,18 @@ Passed: 32 tests, zero failures. Result bundle:
 This run proves UTC-only contact timestamp selection survives a simulated Los Angeles DST gap, both explicit offsets in the repeated fall wall hour, and reopen under Tokyo; invalid `2026-02-30` is rejected without normalization. It also proves a contact receipt discards pre-receipt staging, retains protected accepted work through a failed seal/relaunch, creates a new generation, and does not re-upload. Contact receipt validation rejects `changed=false`, device-recorded time is frozen when the immutable operation is saved, Mobile 002's `forbidden` unavailable-state semantics remain intact, and full-store contact draft persistence preserves the existing mixed queue.
 
 The actual isolated iPhone 17e UI acceptance was rerun after the review fix and passed: offline manual-contact Save, terminate/relaunch, reconnect, accepted receipt and sealed refresh. Result bundle: `/tmp/crm-mobile003-review-build/Logs/Test/Test-FieldCRMMobile003QA-2026.09.13_02-41-39--0700.xcresult` (1 passed, 0 failures/skips).
+
+### Historical installed-store upgrade inventory
+
+On isolated iPhone 17 Pro `007BB316-AB17-4D10-979D-C1F6D50AA285`, a private historical Mobile002QA host test used the actual `dev.crm.FieldCRM.mobile003qa` container and real API3102 authorization to populate schema 5: one accepted note receipt, one pending task operation, one retained draft, and a sealed active cache. It wrote only structural inventory to the container:
+
+```text
+schema=5 active=fa8aa24b-5642-40b4-b1f9-8174e47d4472
+ops=1158aa90-c4d2-426b-a416-baab9cbc3644:93b4101d274db669:1,
+    a8e3cea7-5e44-45c6-afb5-0fc06f779a08:baa08976b580a87:0
+drafts=F6EA7D46-AE2D-4FA4-990E-A0A347E1BDD8:5d2a70d4d658b822
+```
+
+Without uninstalling that QA bundle, Mobile003 opened the same store, migrated it to schema 6, and compared every prior operation ID/digest/receipt-presence marker, the retained draft ID/digest, and active-cache presence. Passed result: `/tmp/crm-mobile003-upgrade-build/Logs/Test/Test-FieldCRMMobile003QA-2026.09.13_03-20-08--0700.xcresult` (1 passed, zero failures).
+
+Historical seed result: `/tmp/crm-mobile003-historical-hosted-build/Logs/Test/Test-FieldCRMMobile002QA-2026.09.13_03-18-23--0700.xcresult` (1 passed, zero failures).

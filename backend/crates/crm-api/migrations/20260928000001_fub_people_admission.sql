@@ -61,6 +61,11 @@ CREATE TABLE migration_people_admission_item (
 );
 CREATE INDEX migration_people_admission_item_page ON migration_people_admission_item(admission_id,organization_id,disposition,id);
 CREATE INDEX migration_people_admission_item_claim ON migration_people_admission_item(admission_id,organization_id,id) WHERE settled_at IS NULL;
+-- Sparse eligible claims must not walk the held/already-seen 25k item set.
+CREATE INDEX migration_people_admission_item_eligible_claim ON migration_people_admission_item(admission_id,organization_id,plan_id,id) WHERE disposition='eligible' AND settled_at IS NULL;
+-- Preparation advances an exact source-key cursor one bounded descriptor at a
+-- time, independent of the total report size.
+CREATE INDEX migration_core_change_group_admission_people_keyset ON migration_core_change_group(report_id,organization_id,source_key) WHERE family='people';
 CREATE TABLE migration_people_admission_contact (
  id UUID PRIMARY KEY, item_id UUID NOT NULL, admission_id UUID NOT NULL, organization_id UUID NOT NULL,
  kind TEXT NOT NULL CHECK(kind IN ('email','phone')), import_order INTEGER NOT NULL CHECK(import_order>=0),

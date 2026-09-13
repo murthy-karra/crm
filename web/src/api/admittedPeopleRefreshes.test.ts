@@ -9,7 +9,7 @@ beforeEach(() => { api.mockReset() })
 describe('Admitted People refresh transport', () => {
   it('binds confirmation to the exact plan and separate clear acknowledgments without rewriting a replay', async () => {
     const signal = new AbortController().signal
-    const body = { request_id: 'same', plan_id: 'plan', plan_revision: 7, plan_digest: 'digest', acknowledged_coverage: true, acknowledged_exclusions: true, acknowledged_name_clears: 1, acknowledged_assignment_clears: 2, acknowledged_contact_removals: 3 }
+    const body = { request_id: 'same', plan_id: 'plan', plan_revision: 7, plan_digest: 'digest', acknowledged_eligible_count: 4, acknowledged_coverage: true, acknowledged_exclusions: true, acknowledged_name_clears: 1, acknowledged_assignment_clears: 2, acknowledged_contact_removals: 3 }
     await confirmAdmittedPeopleRefresh('r/1', body, signal); await confirmAdmittedPeopleRefresh('r/1', body, signal)
     expect(api.mock.calls.map(([url]) => url)).toEqual([`${root}/r%2F1/confirm`, `${root}/r%2F1/confirm`])
     expect(api.mock.calls[0]![1]?.body).toBe(api.mock.calls[1]![1]?.body)

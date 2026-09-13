@@ -58,7 +58,7 @@ revision/digest where applicable, filter, limit and a frozen upper key.
 | `GET /{id}/items/{item}/contacts` | opaque cursor, `limit<=50`, frozen owned contact side/identity/order/change |
 | `GET /{id}/items/{item}/fields/{side}/{field}` | side `baseline/current/proposed`; only `first_name`/`last_name`; UTF-8 fragment limit 4..16384 |
 | `POST /{id}/plans` | `{request_id,expected_plan_revision}` |
-| `POST /{id}/confirm` | exact plan id/revision/digest, eligible count and coverage/exclusion/name-clear/assignment-clear/contact-removal acknowledgements |
+| `POST /{id}/confirm` | exact plan id/revision/digest, `acknowledged_eligible_count` (integer, exact plan count) and coverage/exclusion/name-clear/assignment-clear/contact-removal acknowledgements |
 | `POST /{id}/retry`, `/cancel` | `{request_id,expected_lifecycle_revision}` |
 
 `plan_revision`, result counts and byte offsets serialize as decimal strings.

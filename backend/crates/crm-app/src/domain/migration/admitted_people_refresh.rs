@@ -31,6 +31,7 @@ pub struct ConfirmAdmittedPeopleRefresh {
     pub plan_id: Uuid,
     pub plan_revision: i64,
     pub plan_digest: String,
+    pub acknowledged_eligible_count: i64,
     pub acknowledged_coverage: bool,
     pub acknowledged_exclusions: bool,
     pub acknowledged_name_clears: i64,
@@ -98,8 +99,13 @@ pub async fn prepare(
   .bind(cmd.admission_id)
   .bind(cmd.report_id).bind(ctx.organization_id.0).fetch_optional(&mut *tx).await?.ok_or(MigrationError::NotFound)?;
     if report.get::<String, _>("state") != "completed"
-        || !matches!(report.get::<String, _>("admission_state").as_str(), "completed" | "cancelled")
-        || report.get::<Option<Uuid>, _>("confirmed_admission_plan_id").is_none()
+        || !matches!(
+            report.get::<String, _>("admission_state").as_str(),
+            "completed" | "cancelled"
+        )
+        || report
+            .get::<Option<Uuid>, _>("confirmed_admission_plan_id")
+            .is_none()
         || report.get::<String, _>("parent_state") != "completed"
         || report.get::<String, _>("workspace_mode") != "migration_review"
         || report.get::<Option<Uuid>, _>("confirmed_plan_id") != Some(report.get("parent_plan_id"))
@@ -116,7 +122,17 @@ pub async fn prepare(
         return Err(MigrationError::SourceNotEligible);
     }
     let successful: i64 = sqlx::query_scalar("SELECT count(*) FROM migration_people_admission_result WHERE admission_id=$1 AND organization_id=$2 AND disposition='settled'").bind(cmd.admission_id).bind(ctx.organization_id.0).fetch_one(&mut *tx).await?;
-    if successful == 0 || report.get::<Uuid,_>("parent_import_id") != report.get::<Uuid,_>("admission_parent_import_id") || report.get::<Uuid,_>("parent_plan_id") != report.get::<Uuid,_>("admission_parent_plan_id") || report.get::<i64,_>("source_account_id") != report.get::<i64,_>("admission_account") || report.get::<i64,_>("workspace_revision") != report.get::<i64,_>("admission_workspace_revision") { return Err(MigrationError::SourceNotEligible); }
+    if successful == 0
+        || report.get::<Uuid, _>("parent_import_id")
+            != report.get::<Uuid, _>("admission_parent_import_id")
+        || report.get::<Uuid, _>("parent_plan_id")
+            != report.get::<Uuid, _>("admission_parent_plan_id")
+        || report.get::<i64, _>("source_account_id") != report.get::<i64, _>("admission_account")
+        || report.get::<i64, _>("workspace_revision")
+            != report.get::<i64, _>("admission_workspace_revision")
+    {
+        return Err(MigrationError::SourceNotEligible);
+    }
     let prior=sqlx::query("SELECT confirmed_snapshot_id,confirmed_completed_at FROM migration_admitted_people_refresh WHERE organization_id=$1 AND admission_id=$2 AND confirmed_snapshot_id IS NOT NULL AND confirmed_completed_at IS NOT NULL ORDER BY confirmed_completed_at DESC,id DESC LIMIT 1 FOR SHARE")
         .bind(ctx.organization_id.0).bind(cmd.admission_id).fetch_optional(&mut *tx).await?;
     if prior.is_some_and(|prior| {
@@ -191,10 +207,15 @@ pub async fn repreview(
     let r = resource(&mut tx, ctx.organization_id.0, id).await?;
     if r.get::<Uuid, _>("initiated_by_user_id") != ctx.actor_user_id.0
         || r.get::<String, _>("state") != "ready"
-        || r.get::<i64, _>("lifecycle_revision") != cmd.expected_plan_revision
     {
         return Err(MigrationError::Conflict);
     };
+    let plan = sqlx::query("SELECT id,revision FROM migration_admitted_people_refresh_plan WHERE refresh_id=$1 AND organization_id=$2 AND state='ready' ORDER BY revision DESC LIMIT 1 FOR UPDATE")
+        .bind(id).bind(ctx.organization_id.0).fetch_optional(&mut *tx).await?
+        .ok_or(MigrationError::Conflict)?;
+    if plan.get::<i64, _>("revision") != cmd.expected_plan_revision {
+        return Err(MigrationError::Conflict);
+    }
     let receipt_before = s::measured_bytes(&mut tx, ctx.organization_id, id).await?;
     let receipt_reservation = s::reserve(
         &mut tx,
@@ -206,16 +227,17 @@ pub async fn repreview(
         &SnapshotPolicy::default(),
     )
     .await?;
-    let superseded = sqlx::query("UPDATE migration_admitted_people_refresh_plan SET state='superseded' WHERE refresh_id=$1 AND organization_id=$2 AND state='ready'")
+    let superseded = sqlx::query("UPDATE migration_admitted_people_refresh_plan SET state='superseded' WHERE refresh_id=$1 AND organization_id=$2 AND id=$3 AND state='ready'")
         .bind(id)
         .bind(ctx.organization_id.0)
+        .bind(plan.get::<Uuid, _>("id"))
         .execute(&mut *tx)
         .await?
         .rows_affected();
     if superseded != 1 {
         return Err(MigrationError::Conflict);
     }
-    sqlx::query("UPDATE migration_admitted_people_refresh SET state='preparing',preparation_phase='imported',preparation_checkpoint_key='',preparation_checkpoint_id=NULL,lifecycle_revision=lifecycle_revision+1,updated_at=clock_timestamp() WHERE id=$1 AND organization_id=$2").bind(id).bind(ctx.organization_id.0).execute(&mut *tx).await?;
+    sqlx::query("UPDATE migration_admitted_people_refresh SET state='preparing',preparation_phase='admission_results',preparation_checkpoint_key='',lifecycle_revision=lifecycle_revision+1,updated_at=clock_timestamp() WHERE id=$1 AND organization_id=$2").bind(id).bind(ctx.organization_id.0).execute(&mut *tx).await?;
     let value = json!({"refresh_id":id,"state":"preparing"});
     s::receipt(
         &mut tx,
@@ -266,6 +288,7 @@ pub async fn confirm(
         || p.get::<Option<chrono::DateTime<chrono::Utc>>, _>("expires_at")
             .is_none_or(|expires| expires <= chrono::Utc::now())
         || p.get::<Vec<u8>, _>("digest") != decode_digest(&cmd.plan_digest)?
+        || p.get::<i64, _>("eligible_count") != cmd.acknowledged_eligible_count
         || !cmd.acknowledged_coverage
         || !cmd.acknowledged_exclusions
         || p.get::<i64, _>("name_clear_count") != cmd.acknowledged_name_clears
@@ -350,11 +373,13 @@ async fn lifecycle(
         release(&mut tx, release_evidence).await?
     };
     let r = resource(&mut tx, ctx.organization_id.0, id).await?;
-    let cancellation_before = if action == "cancel" {
-        Some(s::measured_bytes(&mut tx, ctx.organization_id, id).await?)
-    } else {
-        None
-    };
+    let before = s::measured_bytes(&mut tx, ctx.organization_id, id).await?;
+    if matches!(
+        r.get::<String, _>("state").as_str(),
+        "completed" | "cancelled"
+    ) {
+        return Err(MigrationError::Conflict);
+    }
     if r.get::<i64, _>("lifecycle_revision") != cmd.expected_lifecycle_revision {
         return Err(MigrationError::Conflict);
     };
@@ -366,10 +391,31 @@ async fn lifecycle(
     };
     let state = if action == "cancel" {
         "cancelled"
-    } else {
+    } else if r
+        .get::<Option<Uuid>, _>("confirmed_refresh_plan_id")
+        .is_some()
+    {
         "queued"
+    } else {
+        "preparing"
     };
-    sqlx::query("UPDATE migration_admitted_people_refresh SET state=$3,lifecycle_revision=lifecycle_revision+1,lease_token=NULL,lease_expires_at=NULL,cancelled_at=CASE WHEN $3='cancelled' THEN clock_timestamp() ELSE cancelled_at END,updated_at=clock_timestamp() WHERE id=$1 AND organization_id=$2").bind(id).bind(ctx.organization_id.0).bind(state).execute(&mut *tx).await?;
+    let retry_reservation = if action == "retry" {
+        Some(
+            s::reserve(
+                &mut tx,
+                ctx.organization_id,
+                id,
+                "prepare",
+                None,
+                8 * 1024,
+                &SnapshotPolicy::default(),
+            )
+            .await?,
+        )
+    } else {
+        None
+    };
+    sqlx::query("UPDATE migration_admitted_people_refresh SET state=$3,pause_reason=NULL,lifecycle_revision=lifecycle_revision+1,lease_token=NULL,lease_expires_at=NULL,cancelled_at=CASE WHEN $3='cancelled' THEN clock_timestamp() ELSE cancelled_at END,updated_at=clock_timestamp() WHERE id=$1 AND organization_id=$2").bind(id).bind(ctx.organization_id.0).bind(state).execute(&mut *tx).await?;
     let value = json!({"refresh_id":id,"state":state});
     s::receipt(
         &mut tx,
@@ -382,7 +428,7 @@ async fn lifecycle(
         &value,
     )
     .await?;
-    if let Some(before) = cancellation_before {
+    if action == "cancel" {
         let token = sqlx::query_scalar::<_, Uuid>(
             "SELECT token FROM migration_admitted_people_refresh_reservation WHERE refresh_id=$1 AND organization_id=$2 AND purpose='cancel' FOR UPDATE",
         )
@@ -391,6 +437,17 @@ async fn lifecycle(
         .fetch_optional(&mut *tx)
         .await?
         .ok_or(MigrationError::Conflict)?;
+        let after = s::measured_bytes(&mut tx, ctx.organization_id, id).await?;
+        s::release(
+            &mut tx,
+            ctx.organization_id,
+            id,
+            token,
+            after.saturating_sub(before),
+        )
+        .await?;
+    }
+    if let Some(token) = retry_reservation {
         let after = s::measured_bytes(&mut tx, ctx.organization_id, id).await?;
         s::release(
             &mut tx,

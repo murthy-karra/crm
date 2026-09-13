@@ -33,7 +33,7 @@ export interface RefreshResult { id: string; item_id: string; source_id: string 
 export interface RefreshReceipt { refresh_id: string; state: RefreshState }
 export interface RefreshConfirm {
   request_id: string; plan_id: string; plan_revision: number; plan_digest: string
-  acknowledged_coverage: boolean; acknowledged_exclusions: boolean
+  acknowledged_eligible_count: number; acknowledged_coverage: boolean; acknowledged_exclusions: boolean
   acknowledged_name_clears: number; acknowledged_assignment_clears: number; acknowledged_contact_removals: number
 }
 export interface RefreshPage { next_cursor: string | null; plan_id: string; plan_revision: string }

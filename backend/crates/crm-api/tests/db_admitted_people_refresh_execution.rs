@@ -99,6 +99,7 @@ fn confirmation(detail: &Value) -> refresh::ConfirmAdmittedPeopleRefresh {
         request_id: Uuid::new_v4(), plan_id: uuid(&plan["id"]),
         plan_revision: number(&plan["revision"]),
         plan_digest: plan["digest"].as_str().unwrap().to_owned(),
+        acknowledged_eligible_count: number(&plan["counts"]["eligible"]),
         acknowledged_coverage: true, acknowledged_exclusions: true,
         acknowledged_name_clears: number(&plan["counts"]["name_clears"]),
         acknowledged_assignment_clears: number(&plan["counts"]["assignment_clears"]),
@@ -111,6 +112,7 @@ async fn confirm(f: &Fixture, run: Uuid, command: &refresh::ConfirmAdmittedPeopl
         refresh::ConfirmAdmittedPeopleRefresh {
             request_id: command.request_id, plan_id: command.plan_id,
             plan_revision: command.plan_revision, plan_digest: command.plan_digest.clone(),
+            acknowledged_eligible_count: command.acknowledged_eligible_count,
             acknowledged_coverage: command.acknowledged_coverage,
             acknowledged_exclusions: command.acknowledged_exclusions,
             acknowledged_name_clears: command.acknowledged_name_clears,

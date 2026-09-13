@@ -120,7 +120,7 @@ function confirm() {
   if (!value || !preview || !canConfirm.value || confirmation.value !== 'confirm') return
   try { void submit({ kind: 'confirm', identity: access.identity.value, parent: parentId.value, id: value.id, body: {
     request_id: crypto.randomUUID(), plan_id: preview.id, plan_revision: refreshInteger(preview.revision), plan_digest: preview.digest,
-    acknowledged_coverage: true, acknowledged_exclusions: true,
+    acknowledged_eligible_count: refreshInteger(preview.counts.eligible), acknowledged_coverage: true, acknowledged_exclusions: true,
     acknowledged_name_clears: refreshInteger(preview.counts.name_clears), acknowledged_assignment_clears: refreshInteger(preview.counts.assignment_clears), acknowledged_contact_removals: refreshInteger(preview.counts.contact_removals),
   } }) } catch { actionError.value = 'The plan counts cannot be submitted safely. Reload the preview.' }
 }

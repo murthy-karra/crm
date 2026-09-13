@@ -354,6 +354,7 @@ mod db_people_admission_contract;
 #[path = "db_people_admission_execution.rs"]
 mod db_people_admission_execution;
 mod db_admitted_people_refresh_execution;
+mod db_admitted_refresh_reads;
 mod db_admitted_people_refresh_ui_fixture;
 #[path = "db_people_admission_ui_fixture.rs"]
 mod db_people_admission_ui_fixture;

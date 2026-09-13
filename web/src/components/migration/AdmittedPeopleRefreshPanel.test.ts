@@ -69,7 +69,7 @@ describe('Admitted People refresh workflow', () => {
     expect(document.body.textContent).toContain('Will clear'); expect(document.body.textContent).toContain('synthetic@example.test')
     expect(button('Review confirmation').disabled).toBe(true); await acknowledge(); button('Review confirmation').click(); await flushPromises()
     expect(writes()).toHaveLength(0); button('Confirm exact People plan').click(); await flushPromises()
-    expect(JSON.parse(String(writes()[0]![1]?.body))).toEqual({ request_id: expect.stringMatching(/^request-\d+$/), plan_id: 'plan', plan_revision: 2, plan_digest: 'digest', acknowledged_coverage: true, acknowledged_exclusions: true, acknowledged_name_clears: 1, acknowledged_assignment_clears: 1, acknowledged_contact_removals: 2 })
+    expect(JSON.parse(String(writes()[0]![1]?.body))).toEqual({ request_id: expect.stringMatching(/^request-\d+$/), plan_id: 'plan', plan_revision: 2, plan_digest: 'digest', acknowledged_eligible_count: 1, acknowledged_coverage: true, acknowledged_exclusions: true, acknowledged_name_clears: 1, acknowledged_assignment_clears: 1, acknowledged_contact_removals: 2 })
   })
   it('replays an uncertain confirmation with identical input and request ID', async () => {
     let attempts = 0

@@ -1,6 +1,7 @@
 //! Bounded, sealed-plan reads. Authority and workspace barriers survive response assembly.
 use super::{
-    core_change_store, history_capture_store, admitted_people_refresh_store as s, store, MigrationError,
+    admitted_people_refresh_store as s, core_change_store, history_capture_store, store,
+    MigrationError,
 };
 use crate::{config::RawPayloadKey, domain::envelope::CommandContext};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
@@ -326,7 +327,7 @@ fn item_summary(
     )
 }
 fn overview(r: &sqlx::postgres::PgRow) -> Value {
-    json!({"id":r.get::<Uuid,_>("id"),"parent_import_id":r.get::<Uuid,_>("parent_import_id"),"report_id":r.get::<Uuid,_>("report_id"),"state":r.get::<String,_>("state"),"lifecycle_revision":r.get::<i64,_>("lifecycle_revision").to_string(),"newer_snapshot_id":r.get::<Uuid,_>("newer_snapshot_id"),"newer_sequence":r.get::<i64,_>("newer_sequence").to_string(),"created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),"updated_at":r.get::<chrono::DateTime<chrono::Utc>,_>("updated_at"),"completed_at":r.get::<Option<chrono::DateTime<chrono::Utc>>,_>("completed_at"),"pause_reason":r.get::<Option<String>,_>("pause_reason"),"progress":{"settled_items":r.get::<i64,_>("settled_items").to_string()},"retained_bytes":r.get::<i64,_>("retained_bytes").to_string(),"reserved_bytes":r.get::<i64,_>("reserved_bytes").to_string()})
+    json!({"id":r.get::<Uuid,_>("id"),"admission_id":r.get::<Uuid,_>("admission_id"),"parent_import_id":r.get::<Uuid,_>("parent_import_id"),"report_id":r.get::<Uuid,_>("report_id"),"state":r.get::<String,_>("state"),"lifecycle_revision":r.get::<i64,_>("lifecycle_revision").to_string(),"newer_snapshot_id":r.get::<Uuid,_>("newer_snapshot_id"),"newer_sequence":r.get::<i64,_>("newer_sequence").to_string(),"created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),"updated_at":r.get::<chrono::DateTime<chrono::Utc>,_>("updated_at"),"completed_at":r.get::<Option<chrono::DateTime<chrono::Utc>>,_>("completed_at"),"pause_reason":r.get::<Option<String>,_>("pause_reason"),"progress":{"settled_items":r.get::<i64,_>("settled_items").to_string()},"retained_bytes":r.get::<i64,_>("retained_bytes").to_string(),"reserved_bytes":r.get::<i64,_>("reserved_bytes").to_string()})
 }
 #[tracing::instrument(skip_all, fields(organization_id=%ctx.organization_id.0))]
 pub async fn list(
@@ -341,7 +342,25 @@ pub async fn list(
         return Err(MigrationError::InvalidInput);
     }
     let mut tx = begin(pool, ctx).await?;
-    history_capture_store::parent(&mut tx, ctx.organization_id, parent).await?;
+    // The list owner is the admission cohort, not its original import. Read
+    // immutable terminal metadata first, then acquire the ordinary parent gate.
+    let admission = sqlx::query("SELECT parent_import_id,parent_plan_id,source_account_id,workspace_revision FROM migration_people_admission WHERE id=$1 AND organization_id=$2 AND state IN ('completed','cancelled')")
+        .bind(parent).bind(ctx.organization_id.0).fetch_optional(&mut *tx).await?
+        .ok_or(MigrationError::NotFound)?;
+    let original = history_capture_store::parent(
+        &mut tx,
+        ctx.organization_id,
+        admission.get("parent_import_id"),
+    )
+    .await?;
+    if original.get::<Option<Uuid>, _>("confirmed_plan_id") != Some(admission.get("parent_plan_id"))
+        || original.get::<i64, _>("source_account_id")
+            != admission.get::<i64, _>("source_account_id")
+        || original.get::<i64, _>("workspace_revision")
+            != admission.get::<i64, _>("workspace_revision")
+    {
+        return Err(MigrationError::SourceNotEligible);
+    }
     let tag = binding(ctx, parent, "list", None, None, count);
     let cursor = decode(key, ctx, &tag, page.cursor.as_deref())?;
     let upper = if let Some(cursor) = &cursor {

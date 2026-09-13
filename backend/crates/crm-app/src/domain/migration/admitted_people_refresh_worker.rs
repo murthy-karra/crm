@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 enum Instruction<T> {
     NoInstruction,
-    Apply(T),
+    Apply(T, Option<Uuid>),
 }
 
 // Frozen source/mapping evidence is intentionally passed explicitly; combining
@@ -29,7 +29,7 @@ async fn original_mapping_target(
     kind: &str,
     source_key: Option<&str>,
     label_hmac: Option<&[u8]>,
-) -> Result<Option<Uuid>, MigrationError> {
+) -> Result<Option<(Uuid, Option<Uuid>)>, MigrationError> {
     let rows = if let Some(source_key) = source_key {
         sqlx::query("SELECT * FROM migration_import_mapping WHERE plan_id=$1 AND organization_id=$2 AND kind=$3 AND source_key=$4 ORDER BY id LIMIT 2")
             .bind(plan).bind(org.0).bind(kind).bind(source_key).fetch_all(&mut *conn).await?
@@ -83,7 +83,7 @@ async fn original_mapping_target(
         ("assignee", None) if disposition == "unassigned" => {}
         _ => return Err(MigrationError::SourceNotEligible),
     }
-    Ok(target)
+    Ok(Some((row.get("id"), target)))
 }
 
 async fn execution_mapping_target_valid(
@@ -110,66 +110,68 @@ async fn execution_mapping_target_valid(
     .await?
     .flatten()
     .ok_or(MigrationError::SourceNotEligible)?;
-    let rows = sqlx::query(
+    let binding: Option<Uuid> = item.get(if kind == "stage" {
+        "stage_mapping_id"
+    } else {
+        "assignee_mapping_id"
+    });
+    let Some(binding) = binding else {
+        return Ok(false);
+    };
+    let mapping = sqlx::query(
         "SELECT * FROM migration_import_mapping
-          WHERE plan_id=$1 AND organization_id=$2 AND kind=$3 AND target_id=$4
-            AND qualified=true ORDER BY id",
+          WHERE id=$1 AND plan_id=$2 AND organization_id=$3 AND kind=$4
+            AND target_id=$5 AND qualified=true LIMIT 1",
     )
+    .bind(binding)
     .bind(refresh.get::<Uuid, _>("parent_plan_id"))
     .bind(org.0)
     .bind(kind)
     .bind(target)
-    .fetch_all(&mut *conn)
+    .fetch_optional(&mut *conn)
     .await?;
-    if rows.is_empty() {
+    let Some(mapping) = mapping else {
         return Ok(false);
-    }
+    };
     let live = match kind {
-        "stage" => json!(
-            sqlx::query_scalar::<_, Option<String>>(
-                "SELECT name FROM stage WHERE organization_id=$1 AND id=$2",
-            )
-            .bind(org.0)
-            .bind(target)
-            .fetch_one(&mut *conn)
-            .await?
-        ),
-        "assignee" => json!(
-            sqlx::query_scalar::<_, Option<String>>(
-                "SELECT u.email FROM organization_membership m
+        "stage" => json!(sqlx::query_scalar::<_, Option<String>>(
+            "SELECT name FROM stage WHERE organization_id=$1 AND id=$2",
+        )
+        .bind(org.0)
+        .bind(target)
+        .fetch_optional(&mut *conn)
+        .await?
+        .flatten()),
+        "assignee" => json!(sqlx::query_scalar::<_, Option<String>>(
+            "SELECT u.email FROM organization_membership m
               JOIN app_user u ON u.id=m.user_id
               WHERE m.organization_id=$1 AND m.user_id=$2 AND m.status='active'",
-            )
-            .bind(org.0)
-            .bind(target)
-            .fetch_one(&mut *conn)
-            .await?
-        ),
+        )
+        .bind(org.0)
+        .bind(target)
+        .fetch_optional(&mut *conn)
+        .await?
+        .flatten()),
         _ => return Ok(false),
     };
-    for mapping in rows {
-        let disposition: String = mapping.get("disposition");
-        if !matches!(
-            (kind, disposition.as_str()),
-            ("stage", "existing" | "create") | ("assignee", "member")
-        ) {
-            continue;
-        }
-        let frozen: Value = imports::open(
-            key,
-            org,
-            snapshot,
-            refresh.get("parent_plan_id"),
-            mapping.get("id"),
-            "mapping",
-            &mapping.get::<Vec<u8>, _>("nonce"),
-            &mapping.get::<Vec<u8>, _>("ciphertext"),
-        )?;
-        if frozen["target"][if kind == "stage" { "name" } else { "email" }] == live {
-            return Ok(true);
-        }
+    let disposition: String = mapping.get("disposition");
+    if !matches!(
+        (kind, disposition.as_str()),
+        ("stage", "existing" | "create") | ("assignee", "member")
+    ) {
+        return Ok(false);
     }
-    Ok(false)
+    let frozen: Value = imports::open(
+        key,
+        org,
+        snapshot,
+        refresh.get("parent_plan_id"),
+        mapping.get("id"),
+        "mapping",
+        &mapping.get::<Vec<u8>, _>("nonce"),
+        &mapping.get::<Vec<u8>, _>("ciphertext"),
+    )?;
+    Ok(frozen["target"][if kind == "stage" { "name" } else { "email" }] == live)
 }
 
 async fn stage_instruction(
@@ -194,7 +196,9 @@ async fn stage_instruction(
                 original_mapping_target(conn, key, org, snapshot, plan, "stage", None, Some(&hmac))
                     .await?;
             return target
-                .map(Instruction::Apply)
+                .and_then(|(mapping, target)| {
+                    target.map(|target| Instruction::Apply(target, Some(mapping)))
+                })
                 .ok_or(MigrationError::SourceNotEligible);
         }
         _ => return Err(MigrationError::SourceNotEligible),
@@ -211,7 +215,9 @@ async fn stage_instruction(
     )
     .await?;
     target
-        .map(Instruction::Apply)
+        .and_then(|(mapping, target)| {
+            target.map(|target| Instruction::Apply(target, Some(mapping)))
+        })
         .ok_or(MigrationError::SourceNotEligible)
 }
 
@@ -252,7 +258,8 @@ async fn assignment_instruction(
             None,
         )
         .await?;
-        return Ok(Instruction::Apply(target));
+        let (mapping, target) = target.ok_or(MigrationError::SourceNotEligible)?;
+        return Ok(Instruction::Apply(target, Some(mapping)));
     }
     let (Some(user), Some(pond)) = (user, pond) else {
         return Ok(Instruction::NoInstruction);
@@ -260,7 +267,7 @@ async fn assignment_instruction(
     let user: Value = serde_json::from_str(user).map_err(|_| MigrationError::Crypto)?;
     let pond: Value = serde_json::from_str(pond).map_err(|_| MigrationError::Crypto)?;
     if user.is_null() && pond.is_null() {
-        Ok(Instruction::Apply(None))
+        Ok(Instruction::Apply(None, None))
     } else {
         Err(MigrationError::SourceNotEligible)
     }
@@ -567,8 +574,10 @@ async fn prepare(
         (plan, revision)
     };
     let checkpoint: String = r.get("preparation_checkpoint_key");
-    let rows=sqlx::query("SELECT ar.id AS admission_result_id,ar.person_id,ar.source_id,ai.id AS admission_item_id,ai.source_key,ai.stage_mapping_id,ai.assignee_mapping_id,ai.projection_nonce,ai.projection_ciphertext,a.id AS admission_id,a.original_snapshot_id,a.parent_import_id,a.parent_plan_id FROM migration_people_admission_result ar JOIN migration_people_admission_item ai ON ai.id=ar.item_id AND ai.admission_id=ar.admission_id AND ai.organization_id=ar.organization_id JOIN migration_people_admission a ON a.id=ar.admission_id AND a.organization_id=ar.organization_id WHERE ar.admission_id=$1 AND ar.organization_id=$2 AND ar.disposition='settled' AND ar.source_id>$3 ORDER BY ar.source_id LIMIT 50").bind(r.get::<Uuid,_>("admission_id")).bind(org.0).bind(&checkpoint).fetch_all(&mut *conn).await?;
-    let has_more = rows.len() == 50;
+    // One descriptor is a preparation transaction. Its ciphertext remains out
+    // of this descriptor scan until the exact metadata guard passes below.
+    let rows=sqlx::query("SELECT ar.id AS admission_result_id,ar.person_id,ar.source_id,ai.id AS admission_item_id,ai.source_key,ai.stage_mapping_id,ai.assignee_mapping_id,a.id AS admission_id,a.original_snapshot_id,a.parent_import_id,a.parent_plan_id FROM migration_people_admission_result ar JOIN migration_people_admission_item ai ON ai.id=ar.item_id AND ai.admission_id=ar.admission_id AND ai.organization_id=ar.organization_id JOIN migration_people_admission a ON a.id=ar.admission_id AND a.organization_id=ar.organization_id WHERE ar.admission_id=$1 AND ar.organization_id=$2 AND ar.disposition='settled' AND ar.source_id>$3 ORDER BY ar.source_id LIMIT 1").bind(r.get::<Uuid,_>("admission_id")).bind(org.0).bind(&checkpoint).fetch_all(&mut *conn).await?;
+    let advanced = !rows.is_empty();
     let mut last_source = checkpoint;
     let mut eligible = 0;
     let mut current = 0;
@@ -581,19 +590,51 @@ async fn prepare(
         let item = Uuid::new_v4();
         let source_id: String = row.get("source_id");
         last_source = source_id.clone();
+        let admission_id: Uuid = row.get("admission_id");
+        let admission_item_id: Uuid = row.get("admission_item_id");
+        let admission_payload_bytes: i64 = sqlx::query_scalar(
+            "SELECT octet_length(ai.projection_nonce)+octet_length(ai.projection_ciphertext)
+                + COALESCE((SELECT sum(octet_length(c.value_nonce)+octet_length(c.value_ciphertext))
+                    FROM migration_people_admission_contact c
+                   WHERE c.admission_id=ai.admission_id AND c.item_id=ai.id
+                     AND c.organization_id=ai.organization_id),0)
+               FROM migration_people_admission_item ai
+              WHERE ai.id=$1 AND ai.admission_id=$2 AND ai.organization_id=$3",
+        )
+        .bind(admission_item_id)
+        .bind(admission_id)
+        .bind(org.0)
+        .fetch_one(&mut *conn)
+        .await?;
+        let prior_bytes: i64 = sqlx::query_scalar(
+            "SELECT COALESCE(octet_length(projection_nonce)+octet_length(projection_ciphertext),0)
+               FROM migration_admitted_people_refresh_baseline
+              WHERE organization_id=$1 AND admission_id=$2 AND source_id=$3",
+        )
+        .bind(org.0)
+        .bind(admission_id)
+        .bind(&source_id)
+        .fetch_optional(&mut *conn)
+        .await?
+        .unwrap_or(0);
+        if admission_payload_bytes.saturating_add(prior_bytes) > s::ITEM_LIMIT {
+            return Err(MigrationError::StorageLimit);
+        }
+        let projection = sqlx::query("SELECT projection_nonce,projection_ciphertext FROM migration_people_admission_item WHERE id=$1 AND admission_id=$2 AND organization_id=$3")
+            .bind(admission_item_id).bind(admission_id).bind(org.0).fetch_one(&mut *conn).await?;
         // B is the exact encrypted admission projection plus committed contact
         // UUIDs. It is never reconstructed from today's native Person state.
         let mut b: Value = super::people_admission_store::open(
             key,
             org,
-            row.get("admission_id"),
-            row.get("admission_item_id"),
+            admission_id,
+            admission_item_id,
             "projection",
-            &row.get::<Vec<u8>, _>("projection_nonce"),
-            &row.get::<Vec<u8>, _>("projection_ciphertext"),
+            &projection.get::<Vec<u8>, _>("projection_nonce"),
+            &projection.get::<Vec<u8>, _>("projection_ciphertext"),
         )?;
         let owned = sqlx::query("SELECT id,kind,import_order,value_nonce,value_ciphertext FROM migration_people_admission_contact WHERE admission_id=$1 AND item_id=$2 AND organization_id=$3 ORDER BY kind,import_order")
-            .bind(row.get::<Uuid,_>("admission_id")).bind(row.get::<Uuid,_>("admission_item_id")).bind(org.0).fetch_all(&mut *conn).await?;
+            .bind(admission_id).bind(admission_item_id).bind(org.0).fetch_all(&mut *conn).await?;
         let contacts = b
             .as_object_mut()
             .ok_or(MigrationError::Crypto)?
@@ -608,7 +649,7 @@ async fn prepare(
             let input: super::import_source::ContactInput = super::people_admission_store::open(
                 key,
                 org,
-                row.get("admission_id"),
+                admission_id,
                 owned.get("id"),
                 "contact",
                 &owned.get::<Vec<u8>, _>("value_nonce"),
@@ -624,7 +665,7 @@ async fn prepare(
         }
         // A later settled result is the only successor to original import
         // provenance. Current native state is deliberately absent from B.
-        let previous=sqlx::query("SELECT refresh_id,projection_row_id,projection_nonce,projection_ciphertext FROM migration_admitted_people_refresh_baseline WHERE organization_id=$1 AND admission_id=$2 AND source_id=$3").bind(org.0).bind(r.get::<Uuid,_>("admission_id")).bind(&source_id).fetch_optional(&mut *conn).await?;
+        let previous=sqlx::query("SELECT refresh_id,projection_row_id,projection_nonce,projection_ciphertext FROM migration_admitted_people_refresh_baseline WHERE organization_id=$1 AND admission_id=$2 AND source_id=$3").bind(org.0).bind(admission_id).bind(&source_id).fetch_optional(&mut *conn).await?;
         if let Some(previous) = previous {
             b = s::open(
                 key,
@@ -640,9 +681,14 @@ async fn prepare(
         let sealed_baseline = s::seal(key, org, id, item, "last-baseline", &b)?;
         let baseline_bytes = sealed_bytes(&sealed_baseline);
         let baseline_inserted = sqlx::query("INSERT INTO migration_admitted_people_refresh_baseline(organization_id,admission_id,source_id,person_id,refresh_id,admission_result_id,projection_row_id,projection_nonce,projection_ciphertext) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(organization_id,admission_id,source_id) DO NOTHING")
-            .bind(org.0).bind(r.get::<Uuid,_>("admission_id")).bind(&source_id).bind(row.get::<Uuid,_>("person_id")).bind(id).bind(row.get::<Uuid,_>("admission_result_id")).bind(item).bind(sealed_baseline.nonce.as_slice()).bind(sealed_baseline.ciphertext).execute(&mut *conn).await?.rows_affected();
+            .bind(org.0).bind(admission_id).bind(&source_id).bind(row.get::<Uuid,_>("person_id")).bind(id).bind(row.get::<Uuid,_>("admission_result_id")).bind(item).bind(sealed_baseline.nonce.as_slice()).bind(sealed_baseline.ciphertext).execute(&mut *conn).await?.rows_affected();
         if baseline_inserted == 1 {
             sqlx::query("UPDATE migration_admitted_people_refresh_plan SET prepared_bytes=prepared_bytes+$3 WHERE id=$1 AND organization_id=$2").bind(plan).bind(org.0).bind(baseline_bytes).execute(&mut *conn).await?;
+        }
+        let native_contact_bytes: i64 = sqlx::query_scalar("SELECT COALESCE(sum(octet_length(value)+octet_length(normalized_value)+128),0) FROM contact_method WHERE person_id=$1 AND organization_id=$2")
+            .bind(row.get::<Option<Uuid>,_>("person_id")).bind(org.0).fetch_one(&mut *conn).await?;
+        if native_contact_bytes > s::ITEM_LIMIT {
+            return Err(MigrationError::StorageLimit);
         }
         let native=sqlx::query("SELECT p.first_name,p.last_name,p.stage_id,p.assigned_user_id,COALESCE(jsonb_agg(jsonb_build_object('id',c.id,'kind',c.kind,'value',c.value,'normalized_value',c.normalized_value,'import_order',c.import_order) ORDER BY c.kind,c.import_order) FILTER(WHERE c.id IS NOT NULL),'[]') contacts FROM person p LEFT JOIN contact_method c ON c.person_id=p.id AND c.organization_id=p.organization_id WHERE p.id=$1 AND p.organization_id=$2 GROUP BY p.id").bind(row.get::<Option<Uuid>,_>("person_id")).bind(org.0).fetch_optional(&mut *conn).await?;
         let Some(native) = native else {
@@ -789,9 +835,13 @@ async fn prepare(
             }
             Err(error) => return Err(error),
         };
+        let mut frozen_stage_mapping = row.get::<Option<Uuid>, _>("stage_mapping_id");
         match new_stage {
             Instruction::NoInstruction => instructions.push("stage"),
-            Instruction::Apply(stage) => n["stage_id"] = json!(stage),
+            Instruction::Apply(stage, mapping) => {
+                n["stage_id"] = json!(stage);
+                frozen_stage_mapping = mapping;
+            }
         }
         let new_assignee = match assignment_instruction(
             conn,
@@ -829,9 +879,17 @@ async fn prepare(
             }
             Err(error) => return Err(error),
         };
+        let mut frozen_assignee_mapping = if b["assigned_user_id"].is_null() {
+            None
+        } else {
+            row.get::<Option<Uuid>, _>("assignee_mapping_id")
+        };
         match new_assignee {
             Instruction::NoInstruction => instructions.push("assignment"),
-            Instruction::Apply(assignee) => n["assigned_user_id"] = json!(assignee),
+            Instruction::Apply(assignee, mapping) => {
+                n["assigned_user_id"] = json!(assignee);
+                frozen_assignee_mapping = mapping;
+            }
         }
         preserve_owned_ids(&b, &mut n)?;
         no_instruction += instructions.len() as i64;
@@ -872,9 +930,12 @@ async fn prepare(
             &instructions,
         )
         .await?;
+        sqlx::query("UPDATE migration_admitted_people_refresh_item SET stage_mapping_id=$3,assignee_mapping_id=$4 WHERE id=$1 AND refresh_id=$2")
+            .bind(item).bind(id).bind(frozen_stage_mapping).bind(frozen_assignee_mapping)
+            .execute(&mut *conn).await?;
     }
     sqlx::query("UPDATE migration_admitted_people_refresh_plan SET eligible_count=eligible_count+$3,already_current_count=already_current_count+$4,held_count=held_count+$5,no_instruction_count=no_instruction_count+$6,name_clear_count=name_clear_count+$7,assignment_clear_count=assignment_clear_count+$8,contact_removal_count=contact_removal_count+$9 WHERE id=$1 AND organization_id=$2").bind(plan).bind(org.0).bind(eligible).bind(current).bind(held).bind(no_instruction).bind(name_clears).bind(assignment_clears).bind(contact_removals).execute(&mut *conn).await?;
-    if has_more {
+    if advanced {
         sqlx::query("UPDATE migration_admitted_people_refresh SET preparation_checkpoint_key=$3,updated_at=clock_timestamp() WHERE id=$1 AND organization_id=$2").bind(id).bind(org.0).bind(&last_source).execute(conn).await?;
         return Ok(());
     }
@@ -971,11 +1032,11 @@ async fn insert_item(
     item_bound = item_bound
         .saturating_add(sealed_bytes(&a).saturating_mul(2))
         .saturating_add(sealed_bytes(&e).saturating_mul(3))
-        // The result and transferred baseline each persist their source ID.
+        // Item key/ID, result ID and transferred baseline ID are all physical.
         .saturating_add(
             i64::try_from(source_id.len())
                 .unwrap_or(i64::MAX)
-                .saturating_mul(2),
+                .saturating_mul(4),
         );
     if item_bound > s::ITEM_LIMIT {
         return Err(MigrationError::StorageLimit);
@@ -1059,7 +1120,12 @@ async fn execute_noop(
             .await?
             .is_none()
         {
-            return Err(MigrationError::Conflict);
+            disposition = "held_stale";
+        }
+        let native_contact_bytes: i64 = sqlx::query_scalar("SELECT COALESCE(sum(octet_length(value)+octet_length(normalized_value)+128),0) FROM contact_method WHERE person_id=$1 AND organization_id=$2")
+            .bind(person).bind(org.0).fetch_one(&mut *conn).await?;
+        if native_contact_bytes > s::ITEM_LIMIT {
+            disposition = "held_stale";
         }
         let native=sqlx::query("SELECT p.first_name,p.last_name,p.stage_id,p.assigned_user_id,COALESCE(jsonb_agg(jsonb_build_object('id',c.id,'kind',c.kind,'value',c.value,'normalized_value',c.normalized_value,'import_order',c.import_order) ORDER BY c.kind,c.import_order) FILTER(WHERE c.id IS NOT NULL),'[]') contacts FROM person p LEFT JOIN contact_method c ON c.person_id=p.id AND c.organization_id=p.organization_id WHERE p.id=$1 AND p.organization_id=$2 GROUP BY p.id").bind(person).bind(org.0).fetch_optional(&mut *conn).await?;
         let current=native.map(|v|json!({"first_name":v.get::<Option<String>,_>("first_name"),"last_name":v.get::<Option<String>,_>("last_name"),"stage_id":v.get::<Uuid,_>("stage_id"),"assigned_user_id":v.get::<Option<Uuid>,_>("assigned_user_id"),"contacts":v.get::<Value,_>("contacts")}));

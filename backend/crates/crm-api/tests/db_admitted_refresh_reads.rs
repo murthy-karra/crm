@@ -205,6 +205,20 @@ async fn admission_scoped_http_reads_repreview_and_preparation_retry(migrator: P
         Err(MigrationError::Conflict)
     ));
     assert_eq!(detail(&f, id).await, terminal);
+    let eligible = get(
+        &f,
+        &format!("/api/migrations/fub/admitted-people-refreshes/{id}/items?disposition=eligible"),
+    )
+    .await;
+    assert_eq!(eligible["items"], json!([]));
+    let cancelled = get(
+        &f,
+        &format!("/api/migrations/fub/admitted-people-refreshes/{id}/items?disposition=cancelled"),
+    )
+    .await;
+    assert_eq!(cancelled["items"].as_array().unwrap().len(), 1);
+    assert_eq!(cancelled["items"][0]["disposition"], "cancelled");
+    assert!(cancelled["items"][0]["settled_at"].is_null());
 }
 #[sqlx::test]
 #[ignore = "requires isolated PostgreSQL migrator"]
@@ -266,4 +280,12 @@ async fn exact_eligible_confirmation_execution_retry_and_completed_terminal(migr
         Err(MigrationError::Conflict)
     ));
     assert_eq!(detail(&f, id).await, terminal);
+    let settled = get(
+        &f,
+        &format!("/api/migrations/fub/admitted-people-refreshes/{id}/items?disposition=settled"),
+    )
+    .await;
+    assert_eq!(settled["items"].as_array().unwrap().len(), 1);
+    assert_eq!(settled["items"][0]["disposition"], "settled");
+    assert!(settled["items"][0]["settled_at"].is_string());
 }

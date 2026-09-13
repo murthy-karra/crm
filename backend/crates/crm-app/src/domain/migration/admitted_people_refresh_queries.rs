@@ -323,7 +323,7 @@ fn item_summary(
     row: &PgRow,
 ) -> Result<Value, MigrationError> {
     Ok(
-        json!({"id":row.get::<Uuid,_>("id"),"source_id":row.get::<Option<String>,_>("source_id"),"person_id":row.get::<Option<Uuid>,_>("person_id"),"disposition":row.get::<String,_>("disposition"),"settled_at":Value::Null,"clear_counts":{"names":row.get::<i64,_>("name_clear_count").to_string(),"assignments":row.get::<i64,_>("assignment_clear_count").to_string(),"contacts":row.get::<i64,_>("contact_removal_count").to_string()},"no_instruction":instructions(key,ctx,refresh,row)?}),
+        json!({"id":row.get::<Uuid,_>("id"),"source_id":row.get::<Option<String>,_>("source_id"),"person_id":row.get::<Option<Uuid>,_>("person_id"),"disposition":row.get::<String,_>("display_disposition"),"settled_at":row.get::<Option<DateTime<Utc>>,_>("settled_at"),"clear_counts":{"names":row.get::<i64,_>("name_clear_count").to_string(),"assignments":row.get::<i64,_>("assignment_clear_count").to_string(),"contacts":row.get::<i64,_>("contact_removal_count").to_string()},"no_instruction":instructions(key,ctx,refresh,row)?}),
     )
 }
 fn overview(r: &sqlx::postgres::PgRow) -> Value {
@@ -452,7 +452,8 @@ pub async fn items(
         return Err(MigrationError::InvalidInput);
     }
     let mut tx = begin(pool, ctx).await?;
-    resource(&mut tx, key, ctx, id).await?;
+    let run = resource(&mut tx, key, ctx, id).await?;
+    let cancelled = run.get::<String, _>("state") == "cancelled";
     let plan = selected_plan(&mut tx, ctx, id, page.plan_id).await?;
     let plan_id: Uuid = plan.get("id");
     let tag = binding(
@@ -464,8 +465,32 @@ pub async fn items(
         count,
     );
     let cursor = decode(key, ctx, &tag, page.cursor.as_deref())?;
-    let rows=sqlx::query("SELECT id,source_id,person_id,disposition,name_clear_count,assignment_clear_count,contact_removal_count,instructions_nonce,instructions_ciphertext FROM migration_admitted_people_refresh_item WHERE refresh_id=$1 AND organization_id=$2 AND plan_id=$3 AND id>$4 AND ($5::text IS NULL OR disposition=$5) ORDER BY id LIMIT $6")
-        .bind(id).bind(ctx.organization_id.0).bind(plan_id).bind(cursor.as_ref().map_or(Uuid::nil(),|v|v.last.id)).bind(&page.disposition).bind(count+1).fetch_all(&mut *tx).await?;
+    let after = cursor.as_ref().map_or(Uuid::nil(), |v| v.last.id);
+    // Resolve each display-outcome range independently before combining bounded
+    // IDs. A CASE over every plan row would defeat sparse disposition paging.
+    let mut ids: Vec<Uuid> = if let Some(disposition) = page.disposition.as_deref() {
+        let mut ids = Vec::new();
+        if cancelled && disposition == "cancelled" {
+            ids.extend(sqlx::query_scalar::<_, Uuid>("SELECT id FROM migration_admitted_people_refresh_item WHERE refresh_id=$1 AND organization_id=$2 AND plan_id=$3 AND settled_at IS NULL AND id>$4 ORDER BY id LIMIT $5")
+                .bind(id).bind(ctx.organization_id.0).bind(plan_id).bind(after).bind(count+1).fetch_all(&mut *tx).await?);
+        } else if !cancelled {
+            ids.extend(sqlx::query_scalar::<_, Uuid>("SELECT id FROM migration_admitted_people_refresh_item WHERE refresh_id=$1 AND organization_id=$2 AND plan_id=$3 AND disposition=$4 AND settled_at IS NULL AND id>$5 ORDER BY id LIMIT $6")
+                .bind(id).bind(ctx.organization_id.0).bind(plan_id).bind(disposition).bind(after).bind(count+1).fetch_all(&mut *tx).await?);
+        }
+        if run.get::<Option<Uuid>, _>("confirmed_refresh_plan_id") == Some(plan_id) {
+            ids.extend(sqlx::query_scalar::<_, Uuid>("SELECT item_id FROM migration_admitted_people_refresh_result WHERE refresh_id=$1 AND organization_id=$2 AND disposition=$3 AND item_id>$4 ORDER BY item_id LIMIT $5")
+                .bind(id).bind(ctx.organization_id.0).bind(disposition).bind(after).bind(count+1).fetch_all(&mut *tx).await?);
+        }
+        ids
+    } else {
+        sqlx::query_scalar::<_, Uuid>("SELECT id FROM migration_admitted_people_refresh_item WHERE refresh_id=$1 AND organization_id=$2 AND plan_id=$3 AND id>$4 ORDER BY id LIMIT $5")
+            .bind(id).bind(ctx.organization_id.0).bind(plan_id).bind(after).bind(count+1).fetch_all(&mut *tx).await?
+    };
+    ids.sort_unstable();
+    ids.dedup();
+    ids.truncate((count + 1) as usize);
+    let rows = sqlx::query("SELECT i.id,i.source_id,i.person_id,i.settled_at,COALESCE(r.disposition,CASE WHEN $4::boolean AND i.settled_at IS NULL THEN 'cancelled' ELSE i.disposition END) AS display_disposition,i.name_clear_count,i.assignment_clear_count,i.contact_removal_count,i.instructions_nonce,i.instructions_ciphertext FROM migration_admitted_people_refresh_item i LEFT JOIN migration_admitted_people_refresh_result r ON r.id=i.settled_result_id AND r.refresh_id=i.refresh_id AND r.organization_id=i.organization_id WHERE i.refresh_id=$1 AND i.organization_id=$2 AND i.plan_id=$3 AND i.id=ANY($5) ORDER BY i.id")
+        .bind(id).bind(ctx.organization_id.0).bind(plan_id).bind(cancelled).bind(&ids).fetch_all(&mut *tx).await?;
     let mut values = Vec::new();
     let mut used = 8192;
     for row in rows.iter().take(count as usize) {
@@ -492,6 +517,7 @@ pub async fn items(
     };
     finish(tx,json!({"plan_id":plan_id,"plan_revision":plan.get::<i64,_>("revision").to_string(),"items":values,"next_cursor":next}),PAGE_BYTES).await
 }
+
 async fn item_row(
     conn: &mut PgConnection,
     ctx: &CommandContext,
@@ -504,7 +530,7 @@ async fn item_row(
         return Err(MigrationError::StorageLimit);
     }
     let plan = selected_plan(conn, ctx, refresh, Some(metadata.get("plan_id"))).await?;
-    let row=sqlx::query("SELECT * FROM migration_admitted_people_refresh_item WHERE id=$1 AND refresh_id=$2 AND organization_id=$3").bind(item).bind(refresh).bind(ctx.organization_id.0).fetch_one(conn).await?;
+    let row=sqlx::query("SELECT i.*,COALESCE(r.disposition,CASE WHEN f.state='cancelled' AND i.settled_at IS NULL THEN 'cancelled' ELSE i.disposition END) AS display_disposition FROM migration_admitted_people_refresh_item i JOIN migration_admitted_people_refresh f ON f.id=i.refresh_id AND f.organization_id=i.organization_id LEFT JOIN migration_admitted_people_refresh_result r ON r.id=i.settled_result_id AND r.refresh_id=i.refresh_id AND r.organization_id=i.organization_id WHERE i.id=$1 AND i.refresh_id=$2 AND i.organization_id=$3").bind(item).bind(refresh).bind(ctx.organization_id.0).fetch_one(conn).await?;
     Ok((row, plan))
 }
 fn projection(

@@ -1,10 +1,9 @@
 # Mobile 001 — iOS verification
 
-**Native implementation checkpoint; synthetic verification passed.** This is an
-actual SwiftUI iPhone app, not Web/CLI substitution. Root's follow-up backend
-terminal-generation lifecycle fix and its bounded native repeated-sync check are
-still pending at this checkpoint. Physical-device/cellular/distribution evidence
-is not claimed.
+**Native implementation and required synthetic verification passed.** This is
+an actual SwiftUI iPhone app. Implementation checkpoint `92abb916` and the
+post-patch follow-up evidence below cover the approved synthetic workflow.
+Physical-device/cellular/distribution evidence is not claimed.
 
 ## Scope and environment
 
@@ -35,7 +34,7 @@ isolated work. Source/evidence fingerprints are in
 | Final storage + model suite | **20 tests passed**, 14 storage / 6 model, zero failures | `/private/tmp/crm-ios-final-focused.log`; retained summary in `ios/evidence/` |
 | Real API lost-response/100 actions | **Passed**, 100 durable queued/accepted actions | `/private/tmp/crm-ios-tests3.log`, `LiveAPITests`, 2.626s |
 | Actual SwiftUI end-to-end | **Passed**, 60.438s | `/private/tmp/crm-ios-ui4.log`; native screenshots below |
-| Device Release compile | **Passed**,ARM64 iOS device target | `/private/tmp/crm-ios-release1.log`; build only, no signing/distribution claim |
+| Device Release compile | **Passed**, ARM64 iOS device target | `/private/tmp/crm-ios-release1.log`; build only, no signing/distribution claim |
 
 The final focused command was:
 
@@ -70,6 +69,36 @@ The two kept attachments were exported and visually inspected:
 ![Three pending actions saved offline](../../ios/evidence/offline-pending.png)
 
 ![The same three actions synchronized](../../ios/evidence/synced-queue.png)
+
+## Post-patch native refresh proof
+
+Root restarted API3101 with lifecycle correction `7f41907` (binary SHA256
+`f4b8bedbeaef723c47d56a3215e298737dd9ada303da2a98b3fdd071441d5fc7`). The
+first repeated-refresh attempt was still refused by the four **pre-patch**
+completed synthetic test generations; its screen correctly preserved the prior
+cache and displayed the persisted 30s capacity pause. Root confirmed both owners
+were idle and retired those exact old rows at 02:25:23 UTC, preserving all
+contexts, receipts and business rows. No admission limit was weakened.
+
+The subsequent actual SwiftUI test **passed, 26.301s**:
+`FieldFlowTests.testRepeatedReadOnlyRefreshBeyondGenerationCapacity`, log
+`/private/tmp/crm-ios-refresh5b.log`. It reused the installed context, performed
+**five successive manual refreshes**, required a different persisted last-sync
+timestamp and complete status each time, and verified 100 People plus at least
+1,000 notes and 1,000 tasks through the visible coverage labels. The captured
+final cache contains 100 People, 1,299 notes and 1,004 tasks. It made no business
+mutations and did not repeat the 100-operation test. Result bundle:
+`ios/.build/Logs/Test/Test-FieldCRM-2026.09.12_19-26-17--0700.xcresult`.
+
+The app finished paused, so the installed demo does not continually consume
+synthetic download generations. Root's small presentation correction moved raw
+operation IDs under collapsed **Sync details**; the same run compiled/launched
+and captured that final default state. Both images were exported and visually
+inspected:
+
+![Five successive refreshes retain complete coverage](../../ios/evidence/five-refresh-coverage.png)
+
+![Final saved-work presentation](../../ios/evidence/saved-work-final.png)
 
 ## What the focused tests establish
 
@@ -133,7 +162,7 @@ Earlier failures are retained as attribution, not hidden success claims:
    until TTL. Root owns the backend correction. After iOS confirmed no active
    requests, root retired only obsolete synthetic test generations, preserving
    contexts/receipts/business rows. Native 404 recovery and 30s capacity pacing
-   are implemented. A post-fix repeated-sync check remains separately pending.
+   are implemented. The five-cycle post-fix native proof above passed.
 
 ## Limits and handoff
 
@@ -145,6 +174,6 @@ checks remain a release/device gate. Release has no approved production HTTPS
 or signing environment. The technical iOS 17 floor is not a customer support
 commitment. Background scheduling is deliberately not presented as guaranteed.
 
-The root coordinator owns the backend lifecycle fix and final integrated
-status. Native implementation and the evidence above can be integrated as a
-local checkpoint without representing the whole Mobile 001 release as complete.
+The root coordinator owns final integrated status. The native synthetic
+implementation, reviewed fixes and post-patch refresh proof are complete; this
+does not represent customer readiness or an independently distributed release.

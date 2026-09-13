@@ -69,4 +69,35 @@ final class FieldFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["signIn"].waitForExistence(timeout: 20))
         XCTAssertFalse(app.tabBars.buttons["People"].exists)
     }
+    @MainActor func testRepeatedReadOnlyRefreshBeyondGenerationCapacity() throws {
+        continueAfterFailure = false
+        let app = XCUIApplication(); app.launchArguments = ["--synthetic-keychain"]; app.launch()
+        XCTAssertTrue(app.staticTexts["syntheticBanner"].waitForExistence(timeout: 20))
+        if app.buttons["signIn"].exists {
+            app.textFields["email"].tap(); app.textFields["email"].typeText("agent@mobile.test")
+            app.secureTextFields["password"].tap(); app.secureTextFields["password"].typeText("Mobile-demo-only-123!")
+            app.buttons["signIn"].tap()
+        }
+        XCTAssertTrue(app.tabBars.buttons["Settings"].waitForExistence(timeout: 60))
+        app.tabBars.buttons["Settings"].tap(); setSwitch(app.switches["offlineToggle"], to: false)
+        let lastSync = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Last complete sync:'")).firstMatch
+        for _ in 0..<5 {
+            let previous = lastSync.label
+            let ready = NSPredicate(format: "enabled == true")
+            expectation(for: ready, evaluatedWith: app.buttons["sync"]); waitForExpectations(timeout: 60)
+            app.buttons["sync"].tap()
+            expectation(for: NSPredicate(format: "label != %@", previous), evaluatedWith: lastSync)
+            waitForExpectations(timeout: 60)
+            XCTAssertTrue(app.staticTexts["statusMessage"].label.contains("Synced. Complete downloaded workspace"), app.staticTexts["statusMessage"].label)
+        }
+        XCTAssertTrue(app.staticTexts["100 people available offline"].exists)
+        let counts = app.staticTexts["coverageCounts"].label.replacingOccurrences(of: ",", with: "").split(whereSeparator: { !$0.isNumber }).compactMap { Int($0) }
+        XCTAssertEqual(counts.count, 2); XCTAssertGreaterThanOrEqual(counts[0], 1000); XCTAssertGreaterThanOrEqual(counts[1], 1000)
+        let proof = XCTAttachment(screenshot: app.screenshot()); proof.name = "five-successive-refreshes-with-complete-coverage"; proof.lifetime = .keepAlways; add(proof)
+        // Finish paused so leaving the demo installed does not consume test generations.
+        setSwitch(app.switches["offlineToggle"], to: true)
+        app.tabBars.buttons["Saved work"].tap()
+        let queueProof = XCTAttachment(screenshot: app.screenshot()); queueProof.name = "saved-work-with-collapsed-sync-details"; queueProof.lifetime = .keepAlways; add(queueProof)
+    }
+
 }

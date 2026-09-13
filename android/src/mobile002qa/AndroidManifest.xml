@@ -3,5 +3,6 @@
         <activity android:name=".UpgradeProbeActivity" android:exported="true" />
         <activity android:name=".UpgradeQualifyActivity" android:exported="true" />
         <activity android:name=".QaLoginActivity" android:exported="true" />
+        <activity android:name=".QaSyncActivity" android:exported="true" />
     </application>
 </manifest>

@@ -197,7 +197,13 @@ fun FieldApp(repository: FieldRepository) {
                             repository,
                             onDraft = {
                                 if (state.people.any { person -> person.id == it.person })
-                                    composer = ComposerLaunch(it.person, it.kind)
+                                    composer =
+                                        ComposerLaunch(
+                                            it.person,
+                                            it.kind,
+                                            it.baseline.takeIf { baseline -> baseline.isNotBlank() }
+                                                ?.let(::JSONObject),
+                                        )
                                 else
                                     notice =
                                         "This Person is outside the current offline selection. Saved input remains protected; request availability before reopening it."

@@ -185,7 +185,7 @@ async fn admission_native_failure_rolls_back_and_retry_consumes_identity_once(mi
         &f.key,
         &f.ctx,
         id,
-        cmd.clone(),
+        serde_json::from_value(serde_json::to_value(&cmd).unwrap()).unwrap(),
         Some(&ReleaseReadiness::for_tests()),
     )
     .await

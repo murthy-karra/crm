@@ -156,7 +156,9 @@
       "path": "backend/crates/crm-app/src/auth/workspace.rs",
       "function": "read_check",
       "start_line": 78,
-      "sha256": "a19e949cd11547fcf566c01149bc7a3e7267e97f3f0a1db8e2ddef99d243a09c"
+      "sha256": "4291bf791058e9a5e390395ef10ab92bcbb2b950abf0648400f23767d969fc97",
+      "shared_revision": "619c1b3",
+      "shared_revision_note": "History-reader transaction setting predates Mobile003/010e3; both arms share this helper. Three frozen reader bodies remain cd3b010."
     },
     {
       "path": "backend/crates/crm-app/src/auth/workspace.rs",

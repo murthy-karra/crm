@@ -297,3 +297,34 @@ async fn exact_eligible_confirmation_execution_retry_and_completed_terminal(migr
     assert_eq!(settled["items"][0]["disposition"], "settled");
     assert!(settled["items"][0]["settled_at"].is_string());
 }
+
+
+#[sqlx::test]
+#[ignore = "requires isolated PostgreSQL migrator"]
+async fn admitted_refresh_readiness_rejects_partial_identity_and_mapping_schema(migrator: PgPool) {
+    use crm_api::auth::workspace::startup_compatible;
+    let release = ReleaseReadiness::for_tests();
+    let mut connection = migrator.acquire().await.unwrap();
+    startup_compatible(&mut connection).await.unwrap();
+    release.require_admitted_people_refresh(&mut connection).await.unwrap();
+    // Each mutation is confined to a rolled-back transaction in this disposable
+    // schema. 00008 installs source_account_id and the exact permit atomically.
+    for column in ["baseline_version", "baseline_result_id", "stage_mapping_id", "assignee_mapping_id", "source_account_id"] {
+        let mut tx = migrator.begin().await.unwrap();
+        sqlx::query(&format!("ALTER TABLE migration_admitted_people_refresh_item RENAME COLUMN {column} TO unavailable_column"))
+            .execute(&mut *tx).await.unwrap();
+        assert!(startup_compatible(&mut tx).await.is_err(), "startup missing {column}");
+        assert!(release.require_admitted_people_refresh(&mut tx).await.is_err(), "confirmation missing {column}");
+        tx.rollback().await.unwrap();
+    }
+    for alteration in ["ALTER COLUMN source_account_id TYPE text USING source_account_id::text", "ALTER COLUMN source_account_id SET NOT NULL", "ALTER COLUMN stage_mapping_id SET NOT NULL"] {
+        let mut tx = migrator.begin().await.unwrap();
+        sqlx::query(&format!("ALTER TABLE migration_admitted_people_refresh_item {alteration}"))
+            .execute(&mut *tx).await.unwrap();
+        assert!(startup_compatible(&mut tx).await.is_err(), "startup {alteration}");
+        assert!(release.require_admitted_people_refresh(&mut tx).await.is_err(), "confirmation {alteration}");
+        tx.rollback().await.unwrap();
+    }
+    startup_compatible(&mut connection).await.unwrap();
+    release.require_admitted_people_refresh(&mut connection).await.unwrap();
+}

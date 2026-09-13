@@ -82,12 +82,21 @@ Organization-scoped tables:
 The resource stores immutable admission/result source FKs, original parent/plan,
 account, report/snapshot/sequence/intervals, workspace revision and its own
 lifecycle/lease/watermark. Each item stores immutable exact admission item/result,
-global identity and target references, encrypted baseline/current/proposed/
+natural identity and target references, encrypted baseline/current/proposed/
 instructions envelopes, source observation keys and a disposition. Contacts
 record side (`baseline`, `current`, `proposed`) and the exact owned committed
 contact UUID/order. Result/provenance snapshots are append-only. A baseline
 stores the result pointer/version and encrypted native projection; transferring
 that ownership precedes replacing the pointer.
+
+The identity registry has no surrogate UUID. Executable items bind its exact
+`(organization_id, source_account_id, family='people', source_id)` natural key
+and the admission/item/result/target proof. They persist the exact nullable
+`baseline_result_id` plus `baseline_version`, and exact selected
+`stage_mapping_id` / `assignee_mapping_id` where a mapping supplies an
+instruction. A sibling mapping to the same target cannot substitute for it.
+Legacy ready items lacking the new proof columns remain inspectable but require
+re-preview before they can settle or advance a baseline.
 
 The item-detail projections retain exact stage/assignee IDs and may also return
 `current_stage_label` / `current_assignee_label`: current same-Organization catalog
@@ -100,6 +109,11 @@ The capability is `fub-admitted-people-refresh-v1`. Release readiness names
 `require_admitted_people_refresh`; the schema inventory requires all nine
 tables including `person_admitted_refresh_provenance` and
 `crm_admitted_people_refresh_mutation_allowed(uuid,text,text,text,jsonb,jsonb)`.
+Runtime and release inventory also require non-null BIGINT `baseline_version`,
+nullable UUID `baseline_result_id` / `stage_mapping_id` / `assignee_mapping_id`,
+and nullable BIGINT `source_account_id`. The latter column and exact-account
+permit replacement are installed atomically by SQLx migration `20260930000008`;
+a database stopped before that revision fails closed.
 Old readers/workers fail closed at this capability boundary.
 
 The only review-workspace mutation authority is the transaction-local

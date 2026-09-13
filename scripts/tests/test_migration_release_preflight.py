@@ -816,6 +816,10 @@ class PreflightTests(unittest.TestCase):
                 self.assertIn("('migration_admitted_people_refresh" + suffix + "')", schema)
             self.assertIn("person_admitted_refresh_provenance", schema)
             self.assertIn("attname='baseline_version'", schema)
+            for column in ["stage_mapping_id", "assignee_mapping_id", "baseline_result_id", "source_account_id"]:
+                self.assertIn("'" + column + "'", schema)
+            self.assertIn("attname='source_account_id' AND atttypid='bigint'::regtype AND NOT attnotnull", schema)
+            self.assertIn("atttypid='uuid'::regtype AND NOT attnotnull", schema)
             self.assertIn("crm_admitted_people_refresh_mutation_allowed(uuid,text,text,text,jsonb,jsonb)", schema)
             observed = next(q for q in queries if "FROM public.migration_admitted_people_refresh" in q)
             self.assertIn("engine_version<>'fub-admitted-people-refresh-v1'", observed)

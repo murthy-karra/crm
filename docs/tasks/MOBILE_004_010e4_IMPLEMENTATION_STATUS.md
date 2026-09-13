@@ -45,18 +45,19 @@ fixture correction are recorded in the backend verification.
 Mobile004 independent review used both allowed rounds. Final round found one
 remaining Android reverse-follow-up composer defect: initially selected stage A
 was not persisted while A→B remained unresolved. Commit `5a683d5` corrects that path; its actual emulator composer regression
-passed in 36.858 seconds, preserving the baseline and single outbox envelope.
+passed in 36.858 seconds. Follow-up `d6d6df2` prevents a dirty composer from
+reusing an older saved row; its installed emulator regression passed in 36.391
+seconds, preserving the baseline and single outbox envelope.
 Both review findings and their targeted corrections are accounted for; no third
 review is planned. Final combined repository gates remain.
 
-010e4 first independent review identified lifecycle/read, closed settlement,
-physical-byte accounting and source-availability gaps. Root integrated read,
-re-preview/retry/cancel and exact eligible-count fixes, then truthful settled and
-cancelled item filters. The migration owner is finishing retained-source,
-cancelled-cohort, permit, atomic rollback and ledger regressions. A separate
-bounded owner implements server-qualified selected-report availability and its
-Web gating. Source population remains exactly the successful terminal admission
-cohort; unreachable copied traversal of unrelated report groups is being removed.
+010e4 first-round corrections for lifecycle/read, closed settlement, physical
+accounting and server-qualified availability are integrated. Final-round fixes
+now cover bounded input, exact mapping/natural-identity/baseline proof, missing
+and changed targets, and commit-time source revalidation for every item that
+would advance a baseline. The coordinator also tightens startup/preflight schema
+readiness to require the additive proof columns. Worker regression execution and
+the final review disposition remain pending; no third review is planned.
 
 API3103/Web5174 use isolated retained synthetic records. The first browser
 prepare created a real ready plan, but exposed list/overview contract defects;

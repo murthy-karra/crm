@@ -59,7 +59,8 @@ CREATE TABLE migration_people_admission_item (
  FOREIGN KEY(plan_id,admission_id,organization_id) REFERENCES migration_people_admission_plan(id,admission_id,organization_id),
  CHECK((settled_result_id IS NULL)=(settled_at IS NULL))
 );
-CREATE INDEX migration_people_admission_item_page ON migration_people_admission_item(admission_id,organization_id,disposition,id);
+CREATE INDEX migration_people_admission_item_page ON migration_people_admission_item(admission_id,organization_id,plan_id,disposition,id);
+CREATE INDEX migration_people_admission_item_all_page ON migration_people_admission_item(admission_id,organization_id,plan_id,id);
 CREATE INDEX migration_people_admission_item_claim ON migration_people_admission_item(admission_id,organization_id,id) WHERE settled_at IS NULL;
 -- Sparse eligible claims must not walk the held/already-seen 25k item set.
 CREATE INDEX migration_people_admission_item_eligible_claim ON migration_people_admission_item(admission_id,organization_id,plan_id,id) WHERE disposition='eligible' AND settled_at IS NULL;

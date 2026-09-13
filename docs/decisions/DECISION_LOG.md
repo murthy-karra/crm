@@ -2690,3 +2690,15 @@ Preserve shared development and the user's native-demo services/stores. Broad
 mobile design and physical-phone/cellular work remain deferred. Git publication,
 shared-development deployment, app distribution, live FUB/customer processing,
 body/media access and workspace activation remain later scopes.
+
+**Release follow-up — 2026-09-13:** After the completed implementation and
+summary distinguishing local completion from deployment, the user requested
+**“do the main merge, push and deployment”**. This authorizes publication of the
+verified Mobile 003 / 010e3 source, main integration and deployment of the
+compatible backend/Web and additive schema to existing Mac-hosted shared
+development. Reuse implementation evidence and perform release-specific backup,
+data-preservation, artifact, compatibility, HTTP/mobile and browser checks.
+Preserve the native-demo API and installed stores. Native distribution,
+physical-phone/cellular tests, live FUB/customer processing, activation and
+production-cluster deployment remain separate. Record the actual release in
+`docs/tasks/MOBILE_003_010e3_RELEASE.md`.

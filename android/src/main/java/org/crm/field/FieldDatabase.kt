@@ -38,6 +38,28 @@ data class DraftRow(
     @ColumnInfo(defaultValue = "'draft'") val state: String = "draft",
 )
 
+/**
+ * Mobile 003 owns contact input separately from the legacy generic draft table.  That keeps
+ * Mobile 001/002 JSON payloads and outbox envelopes immutable through the upgrade while a
+ * contact draft can retain its locally resolved offset and an attention state.
+ */
+@Entity(tableName = "contact_drafts")
+data class ContactDraftRow(
+    @PrimaryKey val id: String,
+    val person: String,
+    val channel: String,
+    val outcome: String,
+    /** RFC3339 instant with the explicit offset selected by the agent. */
+    val occurredAt: String,
+    /** The offset is display metadata; occurredAt remains the wire source of truth. */
+    val resolvedOffset: String,
+    val revision: Long,
+    /** Empty until this exact draft has published one immutable outbox operation. */
+    val operation: String = "",
+    val state: String = "draft",
+    @ColumnInfo(defaultValue = "''") val lastError: String = "",
+)
+
 /** Protected comparison material.  It is not a reconciliation component or cache promotion. */
 @Entity(tableName = "edit_context")
 data class EditContextRow(
@@ -101,6 +123,35 @@ interface FieldDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE) fun draft(row: DraftRow)
 
     @Query("DELETE FROM drafts WHERE id=:id") fun removeDraft(id: String)
+
+    @Query("SELECT * FROM contact_drafts WHERE id=:id") fun contactDraft(id: String): ContactDraftRow?
+
+    @Query("SELECT * FROM contact_drafts ORDER BY id") fun contactDrafts(): List<ContactDraftRow>
+
+    @Insert(onConflict = OnConflictStrategy.ABORT) fun insertContactDraft(row: ContactDraftRow)
+
+    @Query(
+        "UPDATE contact_drafts SET channel=:channel,outcome=:outcome,occurredAt=:occurredAt,resolvedOffset=:resolvedOffset,revision=:revision,state='draft',lastError='' WHERE id=:id AND revision=:expectedRevision AND operation=''"
+    )
+    fun updateContactDraft(
+        id: String,
+        channel: String,
+        outcome: String,
+        occurredAt: String,
+        resolvedOffset: String,
+        revision: Long,
+        expectedRevision: Long,
+    ): Int
+
+    @Query(
+        "UPDATE contact_drafts SET operation=:operation,state='saved',lastError='' WHERE id=:id AND operation=''"
+    )
+    fun saveContactOperation(id: String, operation: String): Int
+
+    @Query("UPDATE contact_drafts SET state=:state,lastError=:error WHERE operation=:operation")
+    fun contactState(operation: String, state: String, error: String)
+
+    @Query("DELETE FROM contact_drafts WHERE operation=:operation") fun removeContactOperation(operation: String)
 
     @Query("SELECT * FROM edit_context WHERE operation=:operation") fun editContext(operation: String): EditContextRow?
 
@@ -172,13 +223,14 @@ interface FieldDao {
             MetaRow::class,
             PersonRow::class,
             DraftRow::class,
+            ContactDraftRow::class,
             OperationRow::class,
             ManifestRow::class,
             PageRow::class,
             PinRow::class,
             EditContextRow::class,
         ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class FieldDatabase : RoomDatabase() {
@@ -210,6 +262,19 @@ abstract class FieldDatabase : RoomDatabase() {
                 }
             }
 
+        /**
+         * This is deliberately a table-only upgrade.  Existing v3 rows remain precisely as
+         * sealed: especially legacy draft payload strings and operation envelope bytes.
+         */
+        val UPGRADE_3_4 =
+            object : Migration(3, 4) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        "CREATE TABLE IF NOT EXISTS contact_drafts (id TEXT NOT NULL, person TEXT NOT NULL, channel TEXT NOT NULL, outcome TEXT NOT NULL, occurredAt TEXT NOT NULL, resolvedOffset TEXT NOT NULL, revision INTEGER NOT NULL, operation TEXT NOT NULL DEFAULT '', state TEXT NOT NULL DEFAULT 'draft', lastError TEXT NOT NULL DEFAULT '', PRIMARY KEY(id))"
+                    )
+                }
+            }
+
         fun open(context: Context, directory: File, key: ByteArray): FieldDatabase {
             System.loadLibrary("sqlcipher")
             val db =
@@ -220,7 +285,7 @@ abstract class FieldDatabase : RoomDatabase() {
                     )
                     .openHelperFactory(SupportOpenHelperFactory(key, null, true))
                     .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
-                    .addMigrations(UPGRADE_1_2, UPGRADE_2_3)
+                    .addMigrations(UPGRADE_1_2, UPGRADE_2_3, UPGRADE_3_4)
                     .addCallback(
                         object : Callback() {
                             override fun onOpen(db: SupportSQLiteDatabase) {

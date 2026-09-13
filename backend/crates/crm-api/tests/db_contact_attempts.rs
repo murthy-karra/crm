@@ -83,8 +83,8 @@ async fn log_contact_attempt_writes_exactly_one_fact_with_full_envelope(migrator
 
 /// The ordinary wrapper's occurrence clock belongs after its Person lock.
 /// A competing transaction holds that lock while the HTTP command starts; the
-/// stored clock must therefore be at or after the database instant sampled
-/// immediately before release. This guards the original time/error ordering
+/// stored clock must therefore be at or after the application-host instant sampled
+/// immediately before release. PostgreSQL may run on a different host clock. This guards the original time/error ordering
 /// while Mobile 003 uses its own reported-time core input.
 #[sqlx::test]
 #[ignore]
@@ -119,12 +119,31 @@ async fn legacy_contact_occurrence_is_sampled_after_person_lock_release(migrator
         )
         .await
     });
-    // Give the real router command an opportunity to contend on the held row.
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-    let release_at: DateTime<Utc> = sqlx::query_scalar("SELECT clock_timestamp()")
+    let holder_pid: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
         .fetch_one(&mut *holder)
         .await
         .unwrap();
+    // Observe actual lock contention, rather than assuming a sleep scheduled
+    // the HTTP task. Compare with its application-host clock: the Docker DB
+    // clock can differ by milliseconds and is not this command's time source.
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        loop {
+            let blocked: bool = sqlx::query_scalar(
+                "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid)))",
+            )
+            .bind(holder_pid)
+            .fetch_one(&migrator_pool)
+            .await
+            .unwrap();
+            if blocked {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("the real HTTP command must reach the held Person lock");
+    let release_at = Utc::now();
     holder.rollback().await.unwrap();
 
     let response = request.await.unwrap();

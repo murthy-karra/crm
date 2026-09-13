@@ -9,6 +9,18 @@ Use [PROJECT_STATE.md](PROJECT_STATE.md) for current work, live residuals and ne
 actions, and the [decision log](../decisions/DECISION_LOG.md) for authority.
 Per-slice verification/release records remain the detailed evidence.
 
+## Mobile004 / 010e4 shared-development release — 2026-09-13
+
+Following the user's commit/push/cleanup/deploy request, main was published and
+all six merged milestone branches removed. Shared development now runs backend
+`ffbc9fd` and unchanged production Web `26657c8`. Release smoke exposed and fixed
+an early authorization-denial no-store header; nine affected tests and the
+corrected HTTP/mobile/browser checks passed. Backup, 56 schema checksums, exact
+151→161 rowset preservation and 188s stable observation passed. The
+[release record](../tasks/MOBILE_004_010e4_RELEASE.md) owns details and limits.
+Native demo/QA APIs, installed stores, evidence and recovery files were preserved.
+No native distribution, live FUB, activation or production-cluster work occurred.
+
 ## Mobile004 / 010e4 local completion — 2026-09-13
 
 D-080 implementation completed on `codex/mobile004-010e4-integration`, with final

@@ -47,14 +47,17 @@ The implemented product includes People, intake/correspondence, calling, tags,
 notes, tasks, typed custom fields, saved filters and configurable Today work.
 The AI Operator has read tools and scoped command tools with confirmation or
 receipt/Undo behavior. FUB assessment, core and historical capture, review-only
-People/metadata/activity/timeline imports, and source-change reports through 010e1
-are deployed and verified in shared development. Live FUB validation remains deferred.
+People/metadata/activity/timeline imports, change reports, original-People refresh,
+new-Person admission and later admitted-core refresh through 010e4 are deployed
+in shared development. [Release evidence](docs/tasks/MOBILE_004_010e4_RELEASE.md)
+records current artifacts and limits. Live FUB validation remains deferred.
 
-Both native apps implement the [Mobile 001 offline workflow](docs/specs/MOBILE_001_OFFLINE_FIELD_WORK.md):
-encrypted SQLite, seven-day offline access, saved notes/tasks and durable sync.
-Their [synthetic verification and integration](docs/tasks/MOBILE_MIGRATION_IMPLEMENTATION_STATUS.md)
-are complete. Physical-phone/cellular verification and app distribution remain
-pending; simulator/emulator proof does not establish those results.
+Both native apps implement encrypted offline notes/tasks, contact logging and
+stage changes through [Mobile004](docs/specs/MOBILE_004_OFFLINE_STAGE_CHANGES.md),
+with seven-day access, durable replay and explicit conflict handling.
+[Implementation verification](docs/tasks/MOBILE_004_010e4_IMPLEMENTATION_STATUS.md)
+includes preserved installed stores and simulator/emulator flows. Physical-phone/
+cellular verification and app distribution remain separate.
 
 Start with the [system map](docs/architecture/ARCHITECTURE_BASELINE.md) and
 [current operational state](docs/plans/PROJECT_STATE.md). Use the

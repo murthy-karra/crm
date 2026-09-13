@@ -1,16 +1,16 @@
 # Project state
 
-Updated: 2026-09-13 (Mobile004 / 010e4 locally complete under D-080; shared runtime preserved).
+Updated: 2026-09-13 (Mobile004 / 010e4 published and deployed under D-080).
 Current status and live residuals only. [History](PROJECT_HISTORY.md#archived-project-state-snapshot--2026-09-13)
 preserves the previous state verbatim, including superseded instructions.
 Decisions remain authoritative; use the [reading index](../decisions/DECISION_INDEX.md).
 
 ## Current state
 
-**Mobile 003 / 010e3 are implemented, verified, merged/pushed and deployed to
-shared development under D-078 and its release follow-up.** Recorded runtime
-source: `b37a480c5bc4cd5c711dceba287cc5bed70a71d0`. The
-[release record](../tasks/MOBILE_003_010e3_RELEASE.md) owns artifact/schema identity,
+**Mobile004 / 010e4 are implemented, verified, published and deployed to shared
+development under D-080 and its release follow-up.** Runtime backend source:
+`ffbc9fd69871bb6a3dece88dfa008228dc30cb47`; unchanged Web source `26657c8`. The
+[release record](../tasks/MOBILE_004_010e4_RELEASE.md) owns artifact/schema identity,
 backup/recovery paths, preservation, compatibility and HTTP/mobile/browser proof.
 Dated evidence does not prove present service health; recheck before operations.
 
@@ -20,12 +20,13 @@ production-cluster deployment remain separate. Shared development is Mac-hosted.
 
 ## Current slice
 
-**Mobile 004 / 010e4 implemented and verified locally under D-080.**
+**Mobile004 / 010e4 delivered within their approved synthetic scope.**
 [Mobile stage specification](../specs/MOBILE_004_OFFLINE_STAGE_CHANGES.md),
 [admitted-core refresh specification](../specs/SLICE_010e4.md) and
 [coordinated plan](MOBILE_004_010e4_PARALLEL_LAUNCH.md) are complete. The
 [implementation record](../tasks/MOBILE_004_010e4_IMPLEMENTATION_STATUS.md) owns
-acceptance and final gates. These changes are not yet published or deployed.
+acceptance and final gates; the [release record](../tasks/MOBILE_004_010e4_RELEASE.md)
+owns deployed artifact and preservation proof.
 Mobile 001–003 and migration assessment,
 core capture, People, metadata, notes/tasks, historical capture/timeline, change
 reporting, existing-People refresh and core-only new-Person admission are delivered
@@ -33,7 +34,7 @@ within their approved synthetic scopes. See [prior implementation evidence](../t
 Imported workspaces retain the administrator review hold; ordinary mutations,
 Today, Operator, outbound and mobile access do not bypass it.
 
-010e4 adds subsequent core refresh for admitted People in the local implementation.
+010e4 adds subsequent core refresh for admitted People in shared development.
 Dependent-family imports remain separate; see [the admission boundary](../specs/SLICE_010e3.md#1-outcome-and-deliberate-boundary).
 Full migration fidelity, mapping repair, remaining deltas and activation need
 separately specified scope. Older ladder/summary milestone banners may predate
@@ -41,16 +42,17 @@ this release; use the latest release record for delivered status.
 
 ## Current branch
 
-`codex/mobile004-010e4-integration`; final application/test source `7930b83`,
-followed by handoff documentation. Published `main` remains `44dcf52`.
-All completed writer worktrees were removed after integration. Isolated verification
-artifacts/evidence and QA databases remain under their recorded locations; shared
-runtime and the private native demo are preserved.
+`main`; runtime backend source `ffbc9fd`, followed by release documentation and
+sanitized evidence. All six merged milestone branches and completed worktrees are
+removed. Keep the retained release recovery material, implementation evidence,
+QA databases and native demo/QA stores. Only the owned release build cache and
+smoke-test metadata were removed.
 
 ## Last accepted decision
 
-**D-080:** user accepted both specifications/contracts and isolated implementation.
-No publication/deployment or live-customer scope is implied.
+**D-080 plus its release follow-up:** accepted both implementations, then authorized
+commit/push, cleanup and shared-development deployment. Those actions are complete.
+Live customer/source work, activation and native distribution remain separate.
 
 **D-079:** plan Mobile004 and 010e4; user selected smaller sequential migration
 slices and kept calling afterwards. Proposed implementation contracts are not
@@ -68,13 +70,13 @@ No repeat approval is pending for those completed actions.
 |---|---|
 | Development | [README](../../README.md#development); Docker restart does not restart the API; dev-bootstrap wipes data |
 | Boundaries | [Architecture map](../architecture/ARCHITECTURE_BASELINE.md); planned production differs from development |
-| Release/recovery | [Current release](../tasks/MOBILE_003_010e3_RELEASE.md), [compatibility runbook](../tasks/SLICE_010c_RELEASE_PREPARATION.md), [release prompt](../prompts/07-deploy.md) |
+| Release/recovery | [Current release](../tasks/MOBILE_004_010e4_RELEASE.md), [compatibility runbook](../tasks/SLICE_010c_RELEASE_PREPARATION.md), [release prompt](../prompts/07-deploy.md) |
 | Real data/production | [Readiness](PRODUCTION_READINESS.md); its historical release inventory predates the current release |
 | Prior checkpoints | [History/ledger](PROJECT_HISTORY.md#slice-ledger); detailed proof stays in per-slice records |
 
 Import/refresh/admission confirmation needs fresh actual-workload inventory and
 `CRM_MIGRATION_RELEASE_REPORT`. The last recorded report expired at
-`2026-09-13T14:43:44Z`; no automatic renewal exists. Ordinary CRM/retained reads
+`2026-09-13T19:45:18Z`; no automatic renewal exists. Ordinary CRM/retained reads
 remain available after expiry. Registered FUB system configuration was unset at
 release; no live source operation or customer activation was performed.
 
@@ -142,25 +144,27 @@ records installed native store upgrades, offline/replay/conflict flows, desktop/
 performance gates and all final checks: 989 ordinary Rust, 1,034 DB, 1,238 Web,
 48 preflight, five documentation and 11 email-worker tests. Native acceptance is
 simulator/emulator only. Failed attempts and corrections remain in the owning
-verification records. No shared-development release is claimed for these changes.
-The [prior release record](../tasks/MOBILE_003_010e3_RELEASE.md) remains authoritative
-for the deployed Mobile003 / 010e3 artifacts and runtime proof.
+verification records. The [current release](../tasks/MOBILE_004_010e4_RELEASE.md)
+adds exact 151→161 rowset preservation, 56 schema checksums, HTTP/browser/mobile
+checks and 188s observation. Release fixed one missing no-store header on early
+member denials; all nine affected refresh/workspace tests passed. The original
+full-suite evidence was reused with its source attribution.
 
 ## Next recommended action
 
-Review the completed [Mobile004 / 010e4 milestone](../tasks/MOBILE_004_010e4_IMPLEMENTATION_STATUS.md)
-for publication and a separately authorized shared-development release. Then plan
-the next small admitted-People family slice in the [family ladder](SLICE_010_ADMITTED_PEOPLE_LADDER.md):
-tags/fields, followed by notes/tasks and history. Native calling follows the agreed
-progression. Physical-phone/design/live-source work remains deferred; complete
-C-gate erasure/restore work before real customer data.
+Plan the next small admitted-People family slice in the
+[family ladder](SLICE_010_ADMITTED_PEOPLE_LADDER.md): tags/fields, followed by
+notes/tasks and history. Native calling follows the agreed progression.
+Physical-phone/design/live-source work remains deferred; complete C-gate
+erasure/restore work before real customer data. No repeat release action is needed
+for the completed Mobile004 / 010e4 milestone.
 
 ## Approval currently required
 
-D-080 implementation is complete; no repeat implementation approval is pending.
-Publication and shared-development release of this milestone are not authorized.
-Completed D-078 release needs no repeated approval.
+D-080 implementation, publication, cleanup and shared-development release are
+complete; no repeat approval is pending. Completed D-078 release also needs no
+repeated approval.
 New shared contracts, native distribution, live FUB/customer processing, activation
 and production deployment retain their own scope and gates. Recovery targets,
 retention/erasure, support access, outbound/recording consent and agent-departure
-policy remain open where the decision log says so. D-080 grants no release approval.
+policy remain open where the decision log says so.

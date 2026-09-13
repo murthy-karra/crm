@@ -2,8 +2,8 @@
 
 **COMPLETE — 2026-09-13, D-080.** Both accepted implementations, both allowed
 independent review rounds, native/browser acceptance, performance and final gates
-are complete. Changes are committed locally on the integration branch; publication
-and shared-development release are separate.
+are complete. The later authorized [shared-development release](MOBILE_004_010e4_RELEASE.md)
+publishes the milestone and owns release correction, runtime and preservation proof.
 
 ## Implemented scope
 
@@ -62,5 +62,7 @@ measurement; its completed Web preview was also stopped. Evidence and QA databas
 are retained. Shared development API3000/Web5173, the private native demo3101
 and prior installed stores are preserved.
 
-No main merge, push, deployment, live FUB, customer activation or physical-phone
-claim is part of this milestone. Calling remains after the agreed progression.
+This record owns implementation evidence. Later main publication, branch cleanup
+and shared-development deployment are complete in the [release record](MOBILE_004_010e4_RELEASE.md).
+Live FUB, activation and physical-phone checks remain separate; calling follows
+the agreed progression.

@@ -1,0 +1,81 @@
+{
+  "backend_revision": "ffbc9fd69871bb6a3dece88dfa008228dc30cb47",
+  "web_revision": "26657c8923f6e5c91f811050dced0b8c3a9adb24",
+  "artifacts": {
+    "crm-api": "e718375b0988d3c9e9c8773f02ee8c26fd2840d31c2032c789bb3c77dfbe6ef4",
+    "crm-admin": "df13008a35b06b6e61a70ca5d0cb32630207e40834d7792051b38374cd06eda9",
+    "migrate": "cf451a258e51dc7a591a7dbdf11346eae551d8a80bd8be8cb3236dfbe456baaa"
+  },
+  "schema_checksums": 56,
+  "backup": {
+    "bytes": 113064720,
+    "sha256": "79361ba6918224ceaccba8e2a1a00787e843e89080e9cdc59a6cd28b0ddff744",
+    "catalog_entries": 1656,
+    "catalog_verified": true,
+    "restore_exercised": false
+  },
+  "preservation": {
+    "baseline": false,
+    "validated": true,
+    "comparison": "same-schema-complete-rows",
+    "prior_tenant_rowsets_unchanged": 161,
+    "prior_business_counts_unchanged": 45,
+    "column_only_exceptions": {},
+    "initial_stage_revisions_one_and_old_generation_catalog_null": false,
+    "new_empty_tables": [],
+    "existing_review_rows_preserved_by_full_hash": 100077
+  },
+  "http_checks": 64,
+  "http_requests": 73,
+  "mobile_requests": 63,
+  "browser": {
+    "revision": "ffbc9fd69871bb6a3dece88dfa008228dc30cb47",
+    "viewports": [
+      {
+        "width": 1280,
+        "height": 900,
+        "panelWidth": 994,
+        "panelScrollWidth": 994,
+        "documentWidth": 1280,
+        "viewport": 1280
+      },
+      {
+        "width": 390,
+        "height": 844,
+        "panelWidth": 292,
+        "panelScrollWidth": 292,
+        "documentWidth": 390,
+        "viewport": 390
+      }
+    ],
+    "pageErrors": [],
+    "consoleErrors": [],
+    "businessMutations": 0,
+    "status": "passed",
+    "sessionRevoked": true
+  },
+  "observation": {
+    "passed": true,
+    "elapsed_seconds": 188.310478,
+    "api_pid": 61780,
+    "web_pid": 59404,
+    "artifact_and_source_hashes_unchanged": true,
+    "served_web_files": 73,
+    "configuration_changed_names": [
+      "CRM_MIGRATION_RELEASE_REPORT"
+    ],
+    "mobile_keys_unchanged": true,
+    "errors": 0,
+    "expected_mobile_denial_warnings": {
+      "not_found": 3,
+      "unauthenticated": 18,
+      "protocol_unsupported": 1
+    },
+    "private_apis_preserved": [
+      71121,
+      33892
+    ],
+    "evidence_expires_at": "2026-09-13T19:45:18Z"
+  },
+  "scope": "Shared development; no live FUB, business mutation, activation or native distribution."
+}

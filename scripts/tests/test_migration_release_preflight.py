@@ -815,6 +815,7 @@ class PreflightTests(unittest.TestCase):
             for suffix in ["", "_plan", "_item", "_contact", "_result", "_baseline", "_receipt", "_reservation"]:
                 self.assertIn("('migration_admitted_people_refresh" + suffix + "')", schema)
             self.assertIn("person_admitted_refresh_provenance", schema)
+            self.assertIn("attname='baseline_version'", schema)
             self.assertIn("crm_admitted_people_refresh_mutation_allowed(uuid,text,text,text,jsonb,jsonb)", schema)
             observed = next(q for q in queries if "FROM public.migration_admitted_people_refresh" in q)
             self.assertIn("engine_version<>'fub-admitted-people-refresh-v1'", observed)

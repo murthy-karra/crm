@@ -176,6 +176,13 @@ async fn log_contact_attempt_attempt(
 ) -> Result<(PersonSummary, ContactAttemptRef), CommandError> {
     let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
 
+    // Preserve the legacy wrapper's error and clock ordering: a missing or
+    // foreign Person fails before any clock is sampled, and a successful
+    // occurrence time is taken only after its Organization-scoped row lock.
+    // The transaction-compatible core reuses this held lock when it inserts.
+    person_queries::lock_person(&mut tx, cmd.person_id, ctx.organization_id)
+        .await?
+        .ok_or(CommandError::PersonNotFound)?;
     let occurred_at = Utc::now();
     let logged = log_contact_attempt_in_transaction(
         &mut tx,

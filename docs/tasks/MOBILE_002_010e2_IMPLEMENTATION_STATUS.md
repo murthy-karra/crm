@@ -13,10 +13,10 @@ deployment.
 
 | Lane | Actual state | Primary writer / branch |
 |---|---|---|
-| Mobile backend | Frozen at `2fc753a`; first review READY, focused regressions and coordinator foundation gates passed | Terra high / `codex/mobile-002-backend` |
+| Mobile backend | Verified and integrated at `2fd9a9d`; worktree/branch closed | Terra high / former `codex/mobile-002-backend` |
 | Migration backend then Web | Implementing retained People refresh and recovery | Terra high / `codex/migration-010e2` |
-| iOS | Native QA preparation complete; implementation waits for verified mobile foundation | Terra high planned / `codex/mobile-002-ios` |
-| Android | Same dependency and equivalent acceptance scope | Terra high planned / `codex/mobile-002-android` |
+| iOS | Implementing protected offline editing and native QA from `2fd9a9d` | Terra high / `codex/mobile-002-ios` |
+| Android | Implementing equivalent behavior concurrently from `2fd9a9d` | Terra high / `codex/mobile-002-android` |
 
 Coordinator applies shared registration/authorization changes serially. A bounded
 Terra coordinator subtask owns only release-preflight script/tests in the migration
@@ -82,3 +82,32 @@ Root logs are retained under `/private/tmp/crm-mobile002-qa/`: `check-1.log`,
 `sqlx-prepare-1.log`, `web-test-2.log`, `web-build-1.log`, `email-worker-1.log`
 and `db-tasks-2.log`. The actual private API and native fixture are being prepared
 on a separate Cargo target; the final combined migration DB gate remains later.
+
+## Native launch
+
+The verified backend foundation is integrated locally at
+`2fd9a9d8c81bc0bfe40873b589412ab2ccac3b91`. Its worktree and merged branch were
+closed before creating `mobile-002-ios` and `mobile-002-android` under the same
+worktree parent. Both Terra high native writers are running alongside the one
+migration writer, with exactly three implementation worktrees. Coordinator
+executor-QA authoring transferred its new test file to the migration writer to
+free the native slot; those executor tests had not yet run at that handoff.
+
+The real synthetic API is `/private/tmp/crm-mobile002-qa/runtime/crm-api`, SHA-256
+`1235cfd33dfb34f7150e79486be574b04c81e73dd4c800f7c575f6cf03a75042`.
+The preparation agent exercised bootstrap, current-note read and an accepted edit.
+Its original PID19981 exited after handoff; root observed connection refusal and
+restarted the same binary with detached process/file logging. **Current PID26687**
+listens on loopback3102; readiness and a separate post-launch health/listener
+check passed. The runtime working directory is outside the closed worktree.
+
+Fixture inventory is 100 People, 1,000 notes and 1,000 tasks. Native reservations
+are in `/private/tmp/crm-mobile002-qa/runtime/native-reservations.json`: iOS001–049,
+Android051–099, shared050 by coordination, and100 held for coordinator checks.
+The primary synthetic actor is a member and the second is a fixture admin for
+authorized conflicts. The demo API3101 and demonstrated app/store remain intact.
+
+The existing same-build `mobile_today_perf` example passed with unchanged Today
+DTOs, 40 samples per side, old p95 17.120666ms and new p95 17.379083ms against a
+25ms permitted increase. Root inspected the actual JSON log; this is isolated
+synthetic regression evidence, not a production capacity or native success claim.

@@ -344,6 +344,12 @@ mod db_history_import_support;
 mod db_history_review;
 mod db_history_timeline_compat;
 
+mod db_admitted_people_refresh_execution;
+mod db_admitted_people_refresh_ui_fixture;
+mod db_admitted_refresh_availability;
+#[cfg(feature = "perf-harness")]
+mod db_admitted_refresh_perf;
+mod db_admitted_refresh_reads;
 #[path = "db_core_change_reports.rs"]
 mod db_core_change_reports;
 #[path = "db_mobile.rs"]
@@ -353,12 +359,6 @@ mod db_people_admission_adversarial;
 mod db_people_admission_contract;
 #[path = "db_people_admission_execution.rs"]
 mod db_people_admission_execution;
-mod db_admitted_people_refresh_execution;
-mod db_admitted_refresh_availability;
-mod db_admitted_refresh_reads;
-#[cfg(feature = "perf-harness")]
-mod db_admitted_refresh_perf;
-mod db_admitted_people_refresh_ui_fixture;
 #[path = "db_people_admission_ui_fixture.rs"]
 mod db_people_admission_ui_fixture;
 #[path = "db_people_refresh.rs"]

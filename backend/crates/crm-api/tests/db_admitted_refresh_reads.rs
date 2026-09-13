@@ -139,13 +139,23 @@ async fn admission_scoped_http_reads_repreview_and_preparation_retry(migrator: P
     assert_eq!(second["state"], "ready");
     assert_eq!(second["plan"]["revision"], "2");
     assert_eq!(second["plan"]["counts"]["eligible"], "1");
-    let items = get(&f, &format!("/api/migrations/fub/admitted-people-refreshes/{id}/items")).await;
+    let items = get(
+        &f,
+        &format!("/api/migrations/fub/admitted-people-refreshes/{id}/items"),
+    )
+    .await;
     let item_id = items["items"][0]["id"].as_str().unwrap();
-    let comparison = get(&f, &format!("/api/migrations/fub/admitted-people-refreshes/{id}/items/{item_id}")).await;
+    let comparison = get(
+        &f,
+        &format!("/api/migrations/fub/admitted-people-refreshes/{id}/items/{item_id}"),
+    )
+    .await;
     for side in ["baseline", "current", "proposed"] {
         assert_eq!(comparison[side]["stage_id"], f.lead_stage.to_string());
         assert_eq!(comparison[side]["current_stage_label"], "Lead");
-        assert!(comparison[side]["current_assignee_label"].as_str().is_some_and(|value| !value.is_empty()));
+        assert!(comparison[side]["current_assignee_label"]
+            .as_str()
+            .is_some_and(|value| !value.is_empty()));
     }
     assert_eq!(
         refresh::repreview(
@@ -298,7 +308,6 @@ async fn exact_eligible_confirmation_execution_retry_and_completed_terminal(migr
     assert!(settled["items"][0]["settled_at"].is_string());
 }
 
-
 #[sqlx::test]
 #[ignore = "requires isolated PostgreSQL migrator"]
 async fn admitted_refresh_readiness_rejects_partial_identity_and_mapping_schema(migrator: PgPool) {
@@ -306,25 +315,64 @@ async fn admitted_refresh_readiness_rejects_partial_identity_and_mapping_schema(
     let release = ReleaseReadiness::for_tests();
     let mut connection = migrator.acquire().await.unwrap();
     startup_compatible(&mut connection).await.unwrap();
-    release.require_admitted_people_refresh(&mut connection).await.unwrap();
+    release
+        .require_admitted_people_refresh(&mut connection)
+        .await
+        .unwrap();
     // Each mutation is confined to a rolled-back transaction in this disposable
     // schema. 00008 installs source_account_id and the exact permit atomically.
-    for column in ["baseline_version", "baseline_result_id", "stage_mapping_id", "assignee_mapping_id", "source_account_id", "source_semantic_hmac"] {
+    for column in [
+        "baseline_version",
+        "baseline_result_id",
+        "stage_mapping_id",
+        "assignee_mapping_id",
+        "source_account_id",
+        "source_semantic_hmac",
+    ] {
         let mut tx = migrator.begin().await.unwrap();
         sqlx::query(&format!("ALTER TABLE migration_admitted_people_refresh_item RENAME COLUMN {column} TO unavailable_column"))
             .execute(&mut *tx).await.unwrap();
-        assert!(startup_compatible(&mut tx).await.is_err(), "startup missing {column}");
-        assert!(release.require_admitted_people_refresh(&mut tx).await.is_err(), "confirmation missing {column}");
+        assert!(
+            startup_compatible(&mut tx).await.is_err(),
+            "startup missing {column}"
+        );
+        assert!(
+            release
+                .require_admitted_people_refresh(&mut tx)
+                .await
+                .is_err(),
+            "confirmation missing {column}"
+        );
         tx.rollback().await.unwrap();
     }
-    for alteration in ["ALTER COLUMN source_account_id TYPE text USING source_account_id::text", "ALTER COLUMN source_account_id SET NOT NULL", "ALTER COLUMN stage_mapping_id SET NOT NULL"] {
+    for alteration in [
+        "ALTER COLUMN source_account_id TYPE text USING source_account_id::text",
+        "ALTER COLUMN source_account_id SET NOT NULL",
+        "ALTER COLUMN stage_mapping_id SET NOT NULL",
+    ] {
         let mut tx = migrator.begin().await.unwrap();
-        sqlx::query(&format!("ALTER TABLE migration_admitted_people_refresh_item {alteration}"))
-            .execute(&mut *tx).await.unwrap();
-        assert!(startup_compatible(&mut tx).await.is_err(), "startup {alteration}");
-        assert!(release.require_admitted_people_refresh(&mut tx).await.is_err(), "confirmation {alteration}");
+        sqlx::query(&format!(
+            "ALTER TABLE migration_admitted_people_refresh_item {alteration}"
+        ))
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+        assert!(
+            startup_compatible(&mut tx).await.is_err(),
+            "startup {alteration}"
+        );
+        assert!(
+            release
+                .require_admitted_people_refresh(&mut tx)
+                .await
+                .is_err(),
+            "confirmation {alteration}"
+        );
         tx.rollback().await.unwrap();
     }
     startup_compatible(&mut connection).await.unwrap();
-    release.require_admitted_people_refresh(&mut connection).await.unwrap();
+    release
+        .require_admitted_people_refresh(&mut connection)
+        .await
+        .unwrap();
 }

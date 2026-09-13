@@ -185,7 +185,10 @@ mod digest_tests {
         // Exactly 64 bytes; a three-byte character crosses the old two-byte slices.
         let malformed = format!("{}a", "€".repeat(21));
         assert_eq!(malformed.len(), 64);
-        assert!(matches!(decode_digest(&malformed), Err(MigrationError::InvalidInput)));
+        assert!(matches!(
+            decode_digest(&malformed),
+            Err(MigrationError::InvalidInput)
+        ));
         assert_eq!(decode_digest(&"aF".repeat(32)).unwrap(), vec![0xaf; 32]);
     }
 }

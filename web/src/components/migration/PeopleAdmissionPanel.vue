@@ -34,7 +34,7 @@ const fieldSummaries=computed(()=>item.data.value?.fields??{}); const expired=co
 function resetDetail(){itemCursor.value='';resultCursor.value='';contactCursor.value='';fieldCursor.value='';selected.value=undefined;selectedField.value='';acknowledgement.value=mappings.value=distinct.value=hold.value=false;action.value=null}
 watch(parentId,()=>{selectionEpoch++;reportId.value='';admissionId.value='';reportCursor.value='';listCursor.value='';resetDetail()}); watch(reportId,()=>{selectionEpoch++},{flush:'sync'}); watch([admissionId,disposition],()=>{selectionEpoch++;resetDetail()}); watch(() => `${plan.value?.id}:${plan.value?.revision}:${plan.value?.digest}`,()=>resetDetail(),{flush:'sync'}); watch(access.scope,()=>{authorityEpoch++},{flush:'sync'}); watch(access.identity,()=>{identityEpoch++;intent.value=null;pending.value=false;error.value='';parentId.value='';reportId.value='';admissionId.value='';resetDetail()},{flush:'sync'})
 watch([parents.error,parent.error,reports.error,listing.error,detail.error,items.error,item.error,contacts.error,field.error,results.error],v=>{if(v.some(importAccessError)){access.denied.value=true;access.remove(access.prefix.value);void props.refreshWorkspace()}})
-function reload(){for(const q of [parents,parent,reports,listing,detail,items,item,contacts,field,results])void q.refetch()}
+function reload(){void parents.refetch();if(parentId.value){void parent.refetch();void reports.refetch();void listing.refetch()}if(admissionId.value)void detail.refetch();if(plan.value)void items.refetch();if(selected.value&&item.data.value){void item.refetch();void contacts.refetch();if(selectedField.value&&field.data.value)void field.refetch()}if(['running','paused','completed','cancelled'].includes(current.value?.state??''))void results.refetch()}
 async function dispatch(value:Intent, replay=false){
   if(pending.value||!access.enabled.value||value.identity!==access.identity.value||(!replay&&intent.value))return
   const identity=identityEpoch;const authority=authorityEpoch;const selection=selectionEpoch
@@ -302,7 +302,37 @@ onBeforeUnmount(()=>{disposed=true;clearInterval(timer);intent.value=null;access
           class="space-y-2 border-t pt-3 text-small"
         >
           <h4 class="font-medium">
-            Proposed core provenance values
+            Intended CRM values
+          </h4><dl
+            v-if="item.data.value.projection"
+          >
+            <dt class="text-text-muted">
+              First name
+            </dt><dd class="whitespace-pre-wrap break-all">
+              {{ item.data.value.projection.first_name ?? 'Not provided' }}
+            </dd>
+            <dt class="text-text-muted">
+              Last name
+            </dt><dd class="whitespace-pre-wrap break-all">
+              {{ item.data.value.projection.last_name ?? 'Not provided' }}
+            </dd>
+            <dt class="text-text-muted">
+              Frozen target stage
+            </dt><dd class="break-all">
+              {{ item.data.value.projection.stage_id ?? 'Unavailable' }}
+            </dd>
+            <dt class="text-text-muted">
+              Frozen target assignee
+            </dt><dd class="break-all">
+              {{ item.data.value.projection.assigned_user_id ?? 'Unassigned' }}
+            </dd>
+          </dl><p
+            v-else
+            class="text-text-muted"
+          >
+            No intended CRM target was sealed for this held item.
+          </p><h4 class="font-medium">
+            Retained source provenance values
           </h4><dl>
             <template
               v-for="(summary, name) in fieldSummaries"

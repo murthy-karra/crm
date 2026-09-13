@@ -185,6 +185,7 @@ async fn admitted_person_review_http_includes_retained_partial_results_and_enfor
         vec![
             json!({"id":106,"firstName":"Reviewable admission","stage":"Lead","assignedUserId":3}),
             json!({"id":107,"firstName":"Unsettled remainder","stage":"Lead"}),
+            json!({"id":108,"firstName":"Second remainder","stage":"Lead"}),
         ],
     )
     .await;
@@ -229,6 +230,38 @@ async fn admitted_person_review_http_includes_retained_partial_results_and_enfor
     )
     .await
     .unwrap();
+    // Filtered reads retain cancellation projection and bounded cursor pages.
+    for (disposition, expected) in [("eligible", 0), ("cancelled", 2), ("settled", 1)] {
+        let mut cursor = None;
+        let mut seen = std::collections::BTreeSet::new();
+        for _ in 0..4 {
+            let page = admission::items(
+                &f.pool,
+                &f.key,
+                &f.ctx,
+                id,
+                admission::Page {
+                    limit: Some(1),
+                    disposition: Some(disposition.into()),
+                    cursor,
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+            assert!(page["items"].as_array().unwrap().len() <= 1);
+            for item in page["items"].as_array().unwrap() {
+                assert_eq!(item["disposition"], disposition);
+                assert!(seen.insert(item["id"].as_str().unwrap().to_owned()));
+            }
+            cursor = page["next_cursor"].as_str().map(str::to_owned);
+            if cursor.is_none() {
+                break;
+            }
+        }
+        assert!(cursor.is_none(), "bounded filter must terminate");
+        assert_eq!(seen.len(), expected, "{disposition}");
+    }
     let original: Uuid = sqlx::query_scalar("SELECT target_id FROM migration_import_identity WHERE organization_id=$1 AND import_id=$2 AND family='people' AND admission_id IS NULL LIMIT 1").bind(f.org).bind(parent).fetch_one(&f.pool).await.unwrap();
     let other =
         crate::import_support::fixture(&migrator, crate::import_support::default_people()).await;

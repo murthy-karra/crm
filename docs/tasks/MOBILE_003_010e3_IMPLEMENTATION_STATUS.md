@@ -1,64 +1,59 @@
 # Mobile 003 / 010e3 — Implementation status
 
-**In progress — D-078, 2026-09-13.** Both contracts and Mobile 003 occurrence time
-are accepted. Terra high owns implementation; the coordinator owns integration,
-shared seams and final verification. No completion claim is made yet.
+**Native, browser and regular database acceptance passed; final query-plan check in progress —
+2026-09-13.** D-078 accepts both contracts and Mobile 003's occurrence-time policy.
+Terra high implemented the parallel lanes; the coordinator integrated the shared
+contracts and verified actual native/browser outcomes. The remaining check is
+the final 25k-Person admission query-plan fixture.
 
-## Allocation
+The local integration branch is `codex/mobile003-010e3-integration`, based on
+`619c1b3` plus approved planning documents. Main merge, push, shared deployment,
+mobile distribution, live FUB processing and customer activation are separate.
 
-Integration: `codex/mobile003-010e3-integration`, from main closeout `619c1b3`
-plus approved planning/acceptance documents. Follow the
-[coordinated plan](../plans/MOBILE_003_010e3_PARALLEL_LAUNCH.md).
+## Completed implementation
 
-| Lane | Worktree / ownership | Assigned resources | State |
-|---|---|---|---|
-| Mobile backend | `crm-worktrees/mobile-003-backend`; mobile/contact core, fixtures, tests | Additive migration `20260927000001`; API3102 / `crm_mobile_003` | Integrated `c1e0999`, `c3d5b47`, typed SQLx follow-up `fef40d8`; worktree closed |
-| Migration backend/Web | `crm-worktrees/migration-010e3`; admission modules/schema, new Web components | Additive migration `20260928000001`; API3103 / Web5174 / `crm_010e3_qa` | Implementation checkpoint; new lifecycle acceptance and runtime query repairs in progress |
-| iOS | `crm-worktrees/mobile-003-ios`; `ios/` and platform evidence | Isolated QA app/store against API3102, People001–049 | Terra high implementation and verification in progress |
-| Android | `crm-worktrees/mobile-003-android`; `android/` and platform evidence | Isolated QA app/store against API3102, People051–099 | Terra high implementation and verification in progress |
+- **Mobile backend:** atomic manual-contact fact and mobile receipt, immutable
+  operation replay, server-enforced authorization and occurrence-time limits,
+  and a fresh sealed Today reconciliation after acceptance. Existing Web and
+  Operator commands retain their normal server-time behavior.
+- **iOS and Android:** contact forms save into the protected SQLite outbox before
+  network delivery; pending work survives process termination, lost responses
+  and upgrade. The UI distinguishes locally saved, server-accepted and reconciled
+  work. Both native lanes have actual simulator/emulator evidence against the
+  isolated API, including installed previous-version database upgrades.
+- **Migration 010e3:** exact retained-evidence preview, inherited mappings,
+  bounded contact/source-field review, explicit confirmation, resumable per-item
+  execution, global identity/provenance, immutable admission history and
+  cancellation/remainder planning. New People remain core-only and under the
+  existing administrator review hold.
 
-The 2026-09-13 listener inventory found API3000 PID49067, Web5173 PID49082,
-demoAPI3101 PID71121 and PostgreSQL5432. Ports3102/3103/5174 were free. Recheck
-before binding. Preserve those shared/demo services and installed native stores.
-Each lane uses its own Cargo/Web/native output directories; no root release
-artifact is replaced. Coordinator serializes fixed-name SQLx/DB gates and shared
-registration/guard/preflight/history/profile edits. At most three implementation
-worktrees; close the mobile backend before opening both native worktrees.
+## Verification
 
-## Evidence
+| Area | Actual evidence |
+|---|---|
+| Mobile backend | Three focused real SQLx/router cases cover time normalization, exact replay/concurrency, old-contact/newer-Inquiry chronology, Today parity, rollback and current authorization. API3102 also accepted and replayed real HTTP operations. [Record](MOBILE_003_BACKEND_VERIFICATION.md). |
+| iOS | 32 storage/model tests; real API lost-response replay; offline contact → terminate/relaunch → receipt → fresh Today; installed Mobile002 schema5 → Mobile003 schema6 retained active generation, accepted note, queued task and draft bytes. Upgrade comparison passed with zero skips. Default app build-for-testing also passed. [Record](MOBILE_003_IOS_VERIFICATION.md). |
+| Android | Six storage instrumentation tests; real API offline task/contact → force-stop/relaunch → exact outbox bytes → receipts and fresh Today; installed Mobile002 schema3 → Mobile003 schema4 preserved queued and accepted work. [Record](MOBILE_003_ANDROID_VERIFICATION.md). |
+| Migration backend | Retained-source execution, cancellation/remainder, budget/lease/authority fencing, immutable identity/plan, scoped DB permits, executable readiness/partial-schema rejection, exact Unicode/contact/cursor traversal and atomic rollback. Four additional adversarial PostgreSQL tests passed. [Record](SLICE_010e3_VERIFICATION.md), [negative cases](SLICE_010e3_ADVERSARIAL_VERIFICATION.md). |
+| Actual browser | Production Web build and production router/commands/worker with explicit synthetic harness readiness; desktop 1280/390px preview → confirm → partial cancellation → new remainder → both Person profiles/history/provenance → reload/logout. Exact 63-KiB Unicode source and 56-contact traversal passed. [Record](SLICE_010e3_VERIFICATION.md#actual-browser-acceptance). |
+| Preservation | Final browser fixture: two new People, two identities/results/provenance/admission facts, 57 contacts, zero Inquiries, zero remaining reservations. Original People, contacts, parent, mappings and results had identical canonical row-byte fingerprints before and after. |
+| Performance | Paired Today passed (baseline p95 122.84 ms, current 131.89 ms). Quiet paired ordinary Person read passed (baseline p95 21.40 ms, current 22.50 ms, allowed 46.40 ms) with equal responses on 25k People/50 members. First loaded-machine Person run failed and remains recorded. These are laptop regression checks. |
+| Repository/Web | Combined `scripts/check` passed: 981 nonignored Rust tests, 5 doctests, 44 preflight tests, 90 Web files/1212 tests, 11 email-worker tests, format/lint/type/build checks. After browser fixes, the full Web run passed 90 files/1215 tests; affected typecheck/lint/build passed. |
+| Database | All 1,009 regular cases have passing evidence: 136 initial passes plus 873 remaining/corrected cases. The initial run stopped on a test comparing separate app and Docker clocks; the repaired test observes lock contention and samples the app clock. Exact test-selection and log-hash manifests preserve the distinct passes. After the final paging/index change, all 15 affected admission cases passed again, as did fresh-schema SQLx `prepare --check --workspace` and workspace Clippy with warnings denied. |
 
-Planning doc/link checks passed before acceptance. Mobile foundation evidence is
-in [the backend record](MOBILE_003_BACKEND_VERIFICATION.md). Coordinator checks:
+## Integration and environment
 
-- Independent admission readiness/preflight: 44 Python tests and 6 Rust workspace
-  readiness tests passed on the isolated target. The schema inventory additionally
-  checks all three nullable identity-origin UUID columns.
-- `scripts/sqlx-prepare`, with isolated `CARGO_TARGET_DIR`, passed against a fresh
-  throwaway schema. Its first attempt exposed a missing SQL alias closing quote
-  in the typed fact projection; corrected before the successful run and committed
-  with generated metadata in `fef40d8`.
-- `cargo build -p crm-api --bin crm-api --bin migrate --locked` passed on
-  `/private/tmp/crm-mobile003-integrated-target`; it never overwrote shared artifacts.
-- API3102 runs a private copy of that binary (PID80802 at launch). Its isolated
-  `crm_mobile_003` clone has 44 migrations. Real HTTP health, login, bootstrap
-  capability, contact acceptance and same-fact replay passed. IDs/receipts and
-  binary SHA are in private `/private/tmp/crm-mobile003-qa/` evidence.
-- Three focused `mobile003_` real SQLx/router tests passed together: occurrence
-  normalization/replay; older-contact/newer-Inquiry chronology and exact sealed
-  Today parity with no Person revision bump; receipt-trigger failure rollback,
-  current workspace/membership/tenant authority, and retained consumed IDs after
-  Person removal. Exact command is added to the backend record.
+The mobile backend and both native worktrees have been integrated and closed.
+The Web lane was integrated and its worktree closed after actual browser testing.
+The final migration worktree remains until database/query-plan closeout. No
+shared API3000/Web5173/demoAPI3101 process or root build artifact was replaced.
 
-QA setup cloned the retained synthetic Mobile002 database; the original is intact.
-Only four empty bootstrap contexts with no receipt or reconciliation references
-were removed from the clone to leave capacity for isolated native installations.
-All receipt-bearing legacy contexts were retained. Native writers must reuse
-stable QA installation IDs and preserve installed-store upgrade evidence.
+Private synthetic runtime/database/build evidence is retained under
+`/private/tmp/crm-mobile003-qa/` and `/private/tmp/crm-010e3-qa/`. The final browser
+API3103/Web5174 processes were stopped and the temporary browser closed after
+acceptance. Both browser fixture databases remain available for inspection;
+ordinary installed native stores and shared development databases are intact.
 
-The admission schema installs on the isolated database and 10 existing refresh
-regression tests pass; new admission behavior is **not yet verified**. Its copied
-runtime queries are being repaired through direct admission integration tests.
-Native runtime, new Web workflows, query measurements and combined gates remain
-pending; no completion claim follows from compilation or schema installation.
-Physical devices/cellular, broad mobile redesign, publication/deployment,
-distribution, live FUB/customer work and activation remain later scopes.
+Physical phones and real cellular testing remain deferred by the user's choice.
+Broad mobile design work, production capacity, customer readiness, publication,
+live source migration, activation and deployment are not claimed by these tests.

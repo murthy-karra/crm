@@ -106,3 +106,17 @@ pnpm build
 Results: the isolated component file passed 9/9 tests; typecheck and ESLint
 passed; Vite production build passed. The build emitted the repository's existing
 large-chunk advisory only. The live fixture/browser continuation is owned by root.
+
+
+## Coordinator final browser and Web closeout
+
+The actual browser workflow, including full source/provenance traversal,
+cancellation/remainder, live settlement status, original/new Person profiles,
+desktop and 390px layout and logout, passed as recorded in
+[the migration verification](SLICE_010e3_VERIFICATION.md#actual-browser-acceptance).
+The final full Web test run after the live-progress correction passed 90 files /
+1215 tests (`pnpm exec vitest run`, 2026-09-13). The changed component passed 10/10
+focused tests; typecheck, lint and production build also passed. A prior broad
+run had an unrelated PersonDetailView timing failure; the final full run passed.
+API3103/Web5174 were stopped and this short-lived Web worktree was closed after
+its changes were integrated into the milestone.

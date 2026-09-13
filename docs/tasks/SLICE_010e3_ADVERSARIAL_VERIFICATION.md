@@ -13,15 +13,16 @@ The suite proves four boundaries:
 1. A retained People capture made unaccepted, an ordinal mismatch, a semantic
    HMAC mismatch, and an incomplete original People baseline each stop preview
    preparation with `source_integrity`. No result or native Person is emitted.
-2. A 129-digit source ID and a malformed non-string email value remain held;
-   the qualified control row is the sole eligible row.
+2. A 129-digit source ID makes report preparation fail closed before admission.
+   A malformed non-string email value is held in an otherwise valid preview;
+   the qualified control row is its sole eligible row.
 3. A changed confirmation digest, a superseded plan, and an expired sealed plan
    cannot queue an admission, write a confirmation receipt, or create a native
    Person. Re-preview creates the only usable new plan.
 4. Changing a stage mapping target after an exact plan has been confirmed makes
    the worker pause before any native Person or result write.
 
-The intended focused command, after `all.rs` registers the module, is:
+The focused command run after module registration was:
 
 ```sh
 set -a; source /Users/karrad/projects/crm/.env; set +a
@@ -31,8 +32,7 @@ cargo test -p crm-api --test all --locked db_people_admission_adversarial:: \
   -- --ignored --nocapture --test-threads=1
 ```
 
-Result evidence will be appended after the one serialized run. This document
-contains no production assertion baseline or fixture change.
+These are synthetic fault-injection tests; no production data was changed.
 
 ## Result
 

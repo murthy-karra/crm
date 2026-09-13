@@ -335,17 +335,45 @@ pub async fn items(
         return Err(MigrationError::InvalidInput);
     }
     let mut tx = begin(pool, ctx).await?;
-    resource(&mut tx, key, ctx, id).await?;
+    let run = resource(&mut tx, key, ctx, id).await?;
     let plan = plan(&mut tx, ctx, id, p.plan_id).await?;
+    let plan_id = plan.get::<Uuid, _>("id");
     let bind = binding(ctx, id, "items", Some(&plan), p.disposition.clone(), n);
     let cursor = decode(key, ctx, &bind, p.cursor.as_deref())?;
-    let ids=sqlx::query("SELECT i.id FROM migration_people_admission_item i JOIN migration_people_admission a ON a.id=i.admission_id AND a.organization_id=i.organization_id WHERE i.admission_id=$1 AND i.organization_id=$2 AND i.plan_id=$3 AND ($4::text IS NULL OR (CASE WHEN a.state='cancelled' AND i.disposition='eligible' AND i.settled_at IS NULL THEN 'cancelled' ELSE i.disposition END)=$4) AND ($5::uuid IS NULL OR i.id>$5) ORDER BY i.id LIMIT $6")
-        .bind(id).bind(ctx.organization_id.0).bind(plan.get::<Uuid,_>("id")).bind(p.disposition).bind(cursor.as_ref().map(|c|c.last.id)).bind(n+1).fetch_all(&mut *tx).await?;
+    let after = cursor.as_ref().map(|c| c.last.id);
+    // The run is locked FOR SHARE for this read. Resolve virtual cancellation
+    // before SQL so a CASE/join cannot turn a sparse page into a full-plan scan.
+    // Cancelled display combines two disjoint, independently bounded ranges.
+    let mut ids: Vec<Uuid> = if let Some(disposition) = p.disposition.as_deref() {
+        let cancelled = run.get::<String, _>("state") == "cancelled";
+        let mut filters = vec![(disposition, None)];
+        if cancelled && disposition == "cancelled" {
+            filters.push(("eligible", Some(true)));
+        } else if cancelled && disposition == "eligible" {
+            // A cancelled run has no eligible future work. Settled items have
+            // their own immutable result disposition; remaining eligible items
+            // are displayed as cancelled without rewriting the sealed plan.
+            filters.clear();
+        }
+        let mut ids = Vec::new();
+        for (stored_disposition, unsettled) in filters {
+            let page = sqlx::query_scalar::<_, Uuid>("SELECT i.id FROM migration_people_admission_item i WHERE i.admission_id=$1 AND i.organization_id=$2 AND i.plan_id=$3 AND i.disposition=$4 AND ($5::uuid IS NULL OR i.id>$5) AND ($7::boolean IS NULL OR (i.settled_at IS NULL)=$7) ORDER BY i.id LIMIT $6")
+                .bind(id).bind(ctx.organization_id.0).bind(plan_id).bind(stored_disposition).bind(after).bind(n+1).bind(unsettled).fetch_all(&mut *tx).await?;
+            ids.extend(page);
+        }
+        ids
+    } else {
+        sqlx::query_scalar::<_, Uuid>("SELECT i.id FROM migration_people_admission_item i WHERE i.admission_id=$1 AND i.organization_id=$2 AND i.plan_id=$3 AND ($4::uuid IS NULL OR i.id>$4) ORDER BY i.id LIMIT $5")
+            .bind(id).bind(ctx.organization_id.0).bind(plan_id).bind(after).bind(n+1).fetch_all(&mut *tx).await?
+    };
+    ids.sort_unstable();
+    ids.dedup();
+    ids.truncate((n + 1) as usize);
     let mut values = Vec::new();
     let mut bytes = 0;
     let mut last = None;
     for descriptor in ids.iter().take(n as usize) {
-        let (row, _) = item_row(&mut tx, ctx, id, descriptor.get("id")).await?;
+        let (row, _) = item_row(&mut tx, ctx, id, *descriptor).await?;
         let value = summary(key, ctx, id, &row)?;
         let len = encoded_len(&value)?;
         if !values.is_empty() && bytes + len > PAGE_BYTES - 8192 {
@@ -471,6 +499,7 @@ pub async fn contacts(
     let page = contact_page(&mut tx, key, ctx, id, item, &plan, p, "contacts").await?;
     finish(tx, page, PAGE_BYTES).await
 }
+#[allow(clippy::too_many_arguments)] // Explicit scoped identity and cryptographic receipt/page inputs.
 async fn contact_page(
     conn: &mut PgConnection,
     key: &RawPayloadKey,

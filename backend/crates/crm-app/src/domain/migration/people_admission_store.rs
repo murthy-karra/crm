@@ -128,6 +128,7 @@ pub async fn replay(
         &row.get::<Vec<u8>, _>("ciphertext"),
     )?))
 }
+#[allow(clippy::too_many_arguments)] // Explicit scoped identity and cryptographic receipt/page inputs.
 pub async fn receipt(
     conn: &mut PgConnection,
     key: &RawPayloadKey,

@@ -170,6 +170,147 @@ fn confirmation(detail: &Value) -> admission::ConfirmPeopleAdmission {
 }
 #[sqlx::test]
 #[ignore = "requires PostgreSQL migrator"]
+async fn admitted_person_review_http_includes_retained_partial_results_and_enforces_scope(
+    migrator: PgPool,
+) {
+    use crate::common::{body_json, get_with_cookie};
+    use axum::http::StatusCode;
+    use crm_api::domain::migration::people_admission_worker;
+    let f =
+        crate::import_support::fixture(&migrator, crate::import_support::default_people()).await;
+    let parent = crate::db_activity_source::completed_parent(&f).await;
+    let id = crate::db_people_admission_execution::ready(
+        &f,
+        parent,
+        vec![
+            json!({"id":106,"firstName":"Reviewable admission","stage":"Lead","assignedUserId":3}),
+            json!({"id":107,"firstName":"Unsettled remainder","stage":"Lead"}),
+            json!({"id":108,"firstName":"Second remainder","stage":"Lead"}),
+        ],
+    )
+    .await;
+    let before = admission::detail(&f.pool, &f.key, &f.ctx, id)
+        .await
+        .unwrap();
+    admission::confirm(
+        &f.pool,
+        &f.key,
+        &f.ctx,
+        id,
+        confirmation(&before),
+        Some(&ReleaseReadiness::for_tests()),
+    )
+    .await
+    .unwrap();
+    assert!(people_admission_worker::run_once(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        Some(&ReleaseReadiness::for_tests())
+    )
+    .await
+    .unwrap());
+    let target: Uuid = sqlx::query_scalar("SELECT person_id FROM migration_people_admission_result WHERE admission_id=$1 AND disposition='settled'").bind(id).fetch_one(&f.pool).await.unwrap();
+    let current = admission::detail(&f.pool, &f.key, &f.ctx, id)
+        .await
+        .unwrap();
+    admission::cancel(
+        &f.pool,
+        &f.key,
+        &f.ctx,
+        id,
+        admission::LifecyclePeopleAdmission {
+            request_id: Uuid::new_v4(),
+            expected_lifecycle_revision: current["lifecycle_revision"]
+                .as_str()
+                .unwrap()
+                .parse()
+                .unwrap(),
+        },
+    )
+    .await
+    .unwrap();
+    // Filtered reads retain cancellation projection and bounded cursor pages.
+    for (disposition, expected) in [("eligible", 0), ("cancelled", 2), ("settled", 1)] {
+        let mut cursor = None;
+        let mut seen = std::collections::BTreeSet::new();
+        for _ in 0..4 {
+            let page = admission::items(
+                &f.pool,
+                &f.key,
+                &f.ctx,
+                id,
+                admission::Page {
+                    limit: Some(1),
+                    disposition: Some(disposition.into()),
+                    cursor,
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+            assert!(page["items"].as_array().unwrap().len() <= 1);
+            for item in page["items"].as_array().unwrap() {
+                assert_eq!(item["disposition"], disposition);
+                assert!(seen.insert(item["id"].as_str().unwrap().to_owned()));
+            }
+            cursor = page["next_cursor"].as_str().map(str::to_owned);
+            if cursor.is_none() {
+                break;
+            }
+        }
+        assert!(cursor.is_none(), "bounded filter must terminate");
+        assert_eq!(seen.len(), expected, "{disposition}");
+    }
+    let original: Uuid = sqlx::query_scalar("SELECT target_id FROM migration_import_identity WHERE organization_id=$1 AND import_id=$2 AND family='people' AND admission_id IS NULL LIMIT 1").bind(f.org).bind(parent).fetch_one(&f.pool).await.unwrap();
+    let other =
+        crate::import_support::fixture(&migrator, crate::import_support::default_people()).await;
+    for person in [original, target] {
+        for suffix in [
+            "",
+            "/v2",
+            "/inquiries",
+            "/timeline",
+            "/notes",
+            "/tasks?state=open",
+        ] {
+            let url = format!("/api/people/{person}/migration-review{suffix}");
+            let response = get_with_cookie(&f.app, &url, &f.cookie).await;
+            assert_eq!(response.status(), StatusCode::OK, "{url}");
+            assert_eq!(response.headers()["cache-control"], "no-store");
+            let body = body_json(response).await;
+            if person == target && suffix == "/v2" {
+                assert_eq!(body["history"]["counts"]["person_admitted"], "1");
+                assert_eq!(body["inquiries"]["count"], "0");
+            }
+            if person == target && suffix == "/timeline" {
+                let fact = body["items"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|v| v["kind"] == "person_admitted")
+                    .unwrap();
+                assert_eq!(fact["metadata"]["admission_id"], id.to_string());
+                let response =
+                    get_with_cookie(&f.app, fact["detail_url"].as_str().unwrap(), &f.cookie).await;
+                assert_eq!(response.status(), StatusCode::OK);
+                assert_eq!(body_json(response).await["kind"], "person_admitted");
+            }
+            for (cookie, status) in [
+                (&f.member_cookie, StatusCode::FORBIDDEN),
+                (&other.cookie, StatusCode::NOT_FOUND),
+            ] {
+                assert_eq!(
+                    get_with_cookie(&f.app, &url, cookie).await.status(),
+                    status,
+                    "{url}"
+                );
+            }
+        }
+    }
+}
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
 async fn admission_native_failure_rolls_back_and_retry_consumes_identity_once(migrator: PgPool) {
     use crm_api::domain::migration::people_admission_worker;
     let f =

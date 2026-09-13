@@ -132,10 +132,7 @@ async fn begin<'a>(
         guard.commit().await
     })
     .await?;
-    let parent = sqlx::query(activity_review::REVIEW_BINDING_SQL)
-        .bind(org.0)
-        .bind(person.0)
-        .fetch_optional(&mut *tx)
+    let parent = activity_review::review_binding(&mut tx, org, person)
         .await?
         .ok_or(ReviewError::NotFound)?;
     let state = sqlx::query(STATE_SQL)

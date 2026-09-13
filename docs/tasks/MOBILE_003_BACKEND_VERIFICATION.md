@@ -60,9 +60,20 @@ The p95 increase was 9.05 ms, below the 25 ms allowance: passed. Raw output is
 `/private/tmp/crm-mobile003-qa/today-paired.json`. This is synthetic local
 performance evidence, not a production or physical cellular measurement.
 
-## Remaining integration limits
+## Coordinated acceptance
 
-This establishes the backend/API contract and isolated PostgreSQL behavior.
-It does not establish iOS or Android protected-store behavior,
-physical-device behavior, or a final coordinated repository
-database gate. Those belong to the dependent native and coordinator lanes.
+This record establishes the backend/API contract and isolated PostgreSQL behavior.
+The completed protected-store and real-API native checks are recorded separately
+for [iOS](MOBILE_003_IOS_VERIFICATION.md) and
+[Android](MOBILE_003_ANDROID_VERIFICATION.md); the
+[coordinator status](MOBILE_003_010e3_IMPLEMENTATION_STATUS.md) tracks combined
+repository/database closeout. Physical-phone and cellular validation remain
+explicitly deferred.
+
+The final combined DB run exposed a clock-domain flaw in the additional legacy
+lock-ordering test: the Docker PostgreSQL clock was about 4 ms ahead of the app's
+clock, so comparing it to the app-generated occurrence could fail despite correct
+locking. The test now waits for observed PostgreSQL lock contention and samples
+`Utc::now()` on the same host as the application immediately before release.
+The corrected real HTTP test passed in the resumed DB gate; no application time
+policy or mutation path was changed by this test repair.

@@ -12,7 +12,8 @@ export interface PeopleAdmission {
   newer_snapshot_id:string; newer_sequence:string; retained_bytes:string; reserved_bytes:string; progress:{settled_items:string}; source_boundary: { original:AdmissionBoundary; newer:AdmissionBoundary }; coverage:AdmissionCoverage; plan?:AdmissionPlan
   actions:{confirm:boolean;repreview:boolean;retry:boolean;cancel:boolean}
 }
-export interface AdmissionItem { id:string; source_id:string|null; prospective_person_id:string; disposition:AdmissionDisposition; settled_at:string|null; plan_id:string; projection:Record<string, unknown> }
+export interface AdmissionProjection { first_name:string|null; last_name:string|null; stage_id:string|null; assigned_user_id:string|null }
+export interface AdmissionItem { id:string; source_id:string|null; prospective_person_id:string; disposition:AdmissionDisposition; settled_at:string|null; plan_id:string; projection:AdmissionProjection|null }
 export interface AdmissionItemDetail extends AdmissionItem { plan_revision:string; fields:Record<string, ProvenanceFieldSummary>; held_reasons:string[] }
 export interface AdmissionContact { id:string; kind:'email'|'phone'; import_order:string; primary:boolean; value:{value:string;normalized_value?:string} }
 export interface AdmissionResult { id:string; item_id:string; person_id:string|null; source_id:string; disposition:AdmissionDisposition; committed_at:string }

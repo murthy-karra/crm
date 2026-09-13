@@ -317,38 +317,6 @@ pub async fn original_contains(
         .bind(snapshot_id).bind(org.0).bind(source_id).bind(final_sequence).fetch_one(conn).await?)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn exact_positive_source_ids_never_round_or_truncate() {
-        for invalid in ["", "0", "01", "-1", "+1", "1.0", "1e3", " 1", "1 ", "١"] {
-            assert!(!valid_source_id(invalid));
-        }
-        assert!(valid_source_id("1"));
-        assert!(valid_source_id(&"9".repeat(128)));
-        assert!(!valid_source_id(&"9".repeat(129)));
-    }
-    #[test]
-    fn qualification_cursor_round_trips_without_source_content() {
-        let value = QualificationCursor {
-            sequence: 51,
-            accepted_captures: 9,
-            records: 801,
-        };
-        let encoded = serde_json::to_vec(&value).unwrap();
-        let decoded: QualificationCursor = serde_json::from_slice(&encoded).unwrap();
-        assert_eq!(
-            (decoded.sequence, decoded.accepted_captures, decoded.records),
-            (51, 9, 801)
-        );
-        assert!(serde_json::from_str::<QualificationCursor>(
-            r#"{"sequence":1,"accepted_captures":1,"records":1,"source":"untrusted"}"#
-        )
-        .is_err());
-    }
-}
-
 /// Only the original approved mapping may select a native target. The newer
 /// retained source establishes that the same source identity is still qualified.
 pub struct ResolvedMappings {
@@ -547,4 +515,36 @@ async fn check_mapping(
         _ => return Err(MigrationError::SourceNotEligible),
     }
     Ok(target)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn exact_positive_source_ids_never_round_or_truncate() {
+        for invalid in ["", "0", "01", "-1", "+1", "1.0", "1e3", " 1", "1 ", "١"] {
+            assert!(!valid_source_id(invalid));
+        }
+        assert!(valid_source_id("1"));
+        assert!(valid_source_id(&"9".repeat(128)));
+        assert!(!valid_source_id(&"9".repeat(129)));
+    }
+    #[test]
+    fn qualification_cursor_round_trips_without_source_content() {
+        let value = QualificationCursor {
+            sequence: 51,
+            accepted_captures: 9,
+            records: 801,
+        };
+        let encoded = serde_json::to_vec(&value).unwrap();
+        let decoded: QualificationCursor = serde_json::from_slice(&encoded).unwrap();
+        assert_eq!(
+            (decoded.sequence, decoded.accepted_captures, decoded.records),
+            (51, 9, 801)
+        );
+        assert!(serde_json::from_str::<QualificationCursor>(
+            r#"{"sequence":1,"accepted_captures":1,"records":1,"source":"untrusted"}"#
+        )
+        .is_err());
+    }
 }

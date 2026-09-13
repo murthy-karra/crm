@@ -378,16 +378,6 @@ async fn check_boundary(
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn malformed_digest_is_rejected_without_slicing_unicode() {
-        assert!(super::hex(&"é".repeat(32)).is_err());
-        assert!(super::hex(&"g".repeat(64)).is_err());
-        assert_eq!(super::hex(&"a0".repeat(32)).unwrap(), vec![160; 32]);
-    }
-}
-
 /// An independent full-book accounting audit is intentionally unavailable in
 /// production worker loops; acceptance uses it to verify O(1) live counters.
 #[cfg(feature = "test-support")]
@@ -401,4 +391,14 @@ pub async fn retained_byte_audit(
     let bytes = s::measured_bytes(&mut tx, ctx.organization_id, id).await?;
     tx.commit().await?;
     Ok(bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn malformed_digest_is_rejected_without_slicing_unicode() {
+        assert!(super::hex(&"é".repeat(32)).is_err());
+        assert!(super::hex(&"g".repeat(64)).is_err());
+        assert_eq!(super::hex(&"a0".repeat(32)).unwrap(), vec![160; 32]);
+    }
 }

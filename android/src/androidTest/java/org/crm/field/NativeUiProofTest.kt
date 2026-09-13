@@ -61,7 +61,7 @@ class NativeUiProofTest {
         compose.waitUntil(180_000) {
             repository.ui.value.people.size == 100 && !repository.ui.value.busy
         }
-        compose.onNodeWithText("Pause sync").performClick()
+        if (!repository.ui.value.paused) compose.onNodeWithText("Pause sync").performClick()
         compose.waitUntil { repository.ui.value.paused }
         screenshot("android-today")
         compose.onNodeWithTag("nav-People").performClick()

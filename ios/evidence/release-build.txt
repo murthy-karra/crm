@@ -1,0 +1,2 @@
+Original local log: /private/tmp/crm-ios-release2.log
+** BUILD SUCCEEDED **

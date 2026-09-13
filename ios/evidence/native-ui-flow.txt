@@ -1,0 +1,13 @@
+Original local log: /private/tmp/crm-ios-ui4.log
+Test Suite 'All tests' started at 2026-09-12 19:15:18.406.
+Test Suite 'FieldCRMUITests.xctest' started at 2026-09-12 19:15:18.407.
+Test Suite 'FieldFlowTests' started at 2026-09-12 19:15:18.407.
+Test Case '-[FieldCRMUITests.FieldFlowTests testNativeOfflineNoteTaskTerminateRelaunchAndSynchronize]' started.
+Test Case '-[FieldCRMUITests.FieldFlowTests testNativeOfflineNoteTaskTerminateRelaunchAndSynchronize]' passed (60.438 seconds).
+Test Suite 'FieldFlowTests' passed at 2026-09-12 19:16:18.847.
+	 Executed 1 test, with 0 failures (0 unexpected) in 60.438 (60.440) seconds
+Test Suite 'FieldCRMUITests.xctest' passed at 2026-09-12 19:16:18.848.
+	 Executed 1 test, with 0 failures (0 unexpected) in 60.438 (60.442) seconds
+Test Suite 'All tests' passed at 2026-09-12 19:16:18.849.
+	 Executed 1 test, with 0 failures (0 unexpected) in 60.438 (60.442) seconds
+** TEST SUCCEEDED **

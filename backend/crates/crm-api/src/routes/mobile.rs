@@ -6,7 +6,7 @@ use crate::{
 };
 use axum::{
     extract::{
-        rejection::{JsonRejection, PathRejection, QueryRejection},
+        rejection::{BytesRejection, JsonRejection, PathRejection, QueryRejection},
         DefaultBodyLimit, Path, Query, State,
     },
     http::{HeaderMap, HeaderValue, StatusCode},
@@ -26,6 +26,14 @@ pub fn router() -> Router<AppState> {
             post(operation).layer(DefaultBodyLimit::max(128 * 1024)),
         )
         .route("/api/mobile/v1/operations/{id}", get(receipt))
+        .route(
+            "/api/mobile/v1/people/{person_id}/notes/{note_id}",
+            get(current_note).layer(DefaultBodyLimit::max(1024)),
+        )
+        .route(
+            "/api/mobile/v1/people/{person_id}/tasks/{task_id}",
+            get(current_task).layer(DefaultBodyLimit::max(1024)),
+        )
         .route("/api/mobile/v1/reconciliations", post(reconcile))
         .route(
             "/api/mobile/v1/reconciliations/{id}/manifest",
@@ -134,6 +142,50 @@ async fn receipt(
     Ok(Json(
         mobile::lookup_receipt(pool, &auth, context(&headers)?, id).await?,
     ))
+}
+async fn current_note(
+    State(state): State<AppState>,
+    auth: AuthContext,
+    headers: HeaderMap,
+    path: Result<Path<(Uuid, Uuid)>, PathRejection>,
+    query: Result<Query<Empty>, QueryRejection>,
+    body: Result<axum::body::Bytes, BytesRejection>,
+) -> Result<Json<Value>, Error> {
+    let Path((person_id, note_id)) =
+        path.map_err(|_| Error(MobileError::Code(400, "malformed_request")))?;
+    query.map_err(|_| Error(MobileError::Code(400, "malformed_request")))?;
+    empty_body(&body.map_err(|_| Error(MobileError::Code(400, "malformed_request")))?)?;
+    let (pool, _) = dependencies(&state)?;
+    Ok(Json(
+        mobile::current_note(pool, &auth, context(&headers)?, person_id, note_id).await?,
+    ))
+}
+async fn current_task(
+    State(state): State<AppState>,
+    auth: AuthContext,
+    headers: HeaderMap,
+    path: Result<Path<(Uuid, Uuid)>, PathRejection>,
+    query: Result<Query<Empty>, QueryRejection>,
+    body: Result<axum::body::Bytes, BytesRejection>,
+) -> Result<Json<Value>, Error> {
+    let Path((person_id, task_id)) =
+        path.map_err(|_| Error(MobileError::Code(400, "malformed_request")))?;
+    query.map_err(|_| Error(MobileError::Code(400, "malformed_request")))?;
+    empty_body(&body.map_err(|_| Error(MobileError::Code(400, "malformed_request")))?)?;
+    let (pool, _) = dependencies(&state)?;
+    Ok(Json(
+        mobile::current_task(pool, &auth, context(&headers)?, person_id, task_id).await?,
+    ))
+}
+fn empty_body(body: &[u8]) -> Result<(), Error> {
+    if body.is_empty() {
+        return Ok(());
+    }
+    match serde_json::from_slice::<Value>(body) {
+        Ok(Value::Null) => Ok(()),
+        Ok(Value::Object(map)) if map.is_empty() => Ok(()),
+        _ => Err(Error(MobileError::Code(400, "malformed_request"))),
+    }
 }
 async fn reconcile(
     State(state): State<AppState>,

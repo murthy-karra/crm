@@ -239,6 +239,32 @@ pub(crate) async fn update_task_full(
     Ok(())
 }
 
+/// Mobile 002's narrow edit write.  The locked assignee is intentionally
+/// absent from this SQL: NULL and inactive historical assignees survive.
+pub(crate) async fn update_task_preserving_assignee(
+    conn: &mut PgConnection,
+    organization_id: OrganizationId,
+    person_id: PersonId,
+    task_id: TaskId,
+    title: &str,
+    kind: TaskKind,
+    due_at: Option<DateTime<Utc>>,
+) -> Result<(), TaskError> {
+    sqlx::query(
+        "UPDATE task SET title=$4, kind=$5, due_at=$6, updated_at=now() \
+         WHERE id=$1 AND organization_id=$2 AND person_id=$3",
+    )
+    .bind(task_id.0)
+    .bind(organization_id.0)
+    .bind(person_id.0)
+    .bind(title)
+    .bind(kind.as_str())
+    .bind(due_at)
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
+
 /// `CompleteTask`'s write (docs/specs/SLICE_016.md §3): `completed_at`,
 /// `completed_by_user_id` only; `updated_at` is deliberately left
 /// untouched — completion is not an edit of the task's own fields.

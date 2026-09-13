@@ -1,0 +1,139 @@
+BEGIN
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+INSERT 0 100000
+INSERT 0 200000
+INSERT 0 25000
+INSERT 0 26000
+INSERT 0 125000
+ANALYZE
+ANALYZE
+ANALYZE
+ANALYZE
+ANALYZE
+capture_keyset
+                                                                                                  QUERY PLAN                                                                                                  
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.41..0.76 rows=1 width=565) (actual time=0.014..0.014 rows=1.00 loops=1)
+   Buffers: local hit=2 read=2
+   ->  Index Scan using migration_snapshot_capture_snapshot_id_organization_id_sequ_key on migration_snapshot_capture  (cost=0.41..4869.84 rows=13997 width=565) (actual time=0.013..0.013 rows=1.00 loops=1)
+         Index Cond: ((snapshot_id = '2509f09b-5926-491f-96bc-c8692bdfa21b'::uuid) AND (organization_id = '5af49850-66a8-4cc2-b420-774e31babaf9'::uuid) AND (sequence > 12000) AND (sequence <= 26000))
+         Index Searches: 1
+         Buffers: local hit=2 read=2
+ Planning:
+   Buffers: shared hit=53
+ Planning Time: 0.089 ms
+ Execution Time: 0.020 ms
+(10 rows)
+
+capture_observations
+                                                                                QUERY PLAN                                                                                 
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=59.05..59.08 rows=14 width=67) (actual time=0.080..0.089 rows=100.00 loops=1)
+   Buffers: local read=8
+   ->  Sort  (cost=59.05..59.08 rows=14 width=67) (actual time=0.080..0.083 rows=100.00 loops=1)
+         Sort Key: ordinal
+         Sort Method: quicksort  Memory: 38kB
+         Buffers: local read=8
+         ->  Bitmap Heap Scan on migration_snapshot_record  (cost=4.53..58.78 rows=14 width=67) (actual time=0.049..0.066 rows=100.00 loops=1)
+               Recheck Cond: (capture_id = 'f2198877-7c23-4dfb-a927-459de50c3002'::uuid)
+               Filter: ((snapshot_id = '2509f09b-5926-491f-96bc-c8692bdfa21b'::uuid) AND (organization_id = '5af49850-66a8-4cc2-b420-774e31babaf9'::uuid))
+               Heap Blocks: exact=5
+               Buffers: local read=8
+               ->  Bitmap Index Scan on migration_snapshot_record_capture_id_ordinal_key  (cost=0.00..4.52 rows=14 width=0) (actual time=0.031..0.031 rows=100.00 loops=1)
+                     Index Cond: (capture_id = 'f2198877-7c23-4dfb-a927-459de50c3002'::uuid)
+                     Index Searches: 1
+                     Buffers: local read=3
+ Planning:
+   Buffers: shared hit=39, local read=5
+ Planning Time: 0.103 ms
+ Execution Time: 0.098 ms
+(19 rows)
+
+source_group_lookup
+                                                                                                   QUERY PLAN                                                                                                   
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Index Scan using migration_core_change_group_report_id_organization_id_famil_key on migration_core_change_group  (cost=0.42..8.44 rows=1 width=59) (actual time=0.043..0.044 rows=1.00 loops=1)
+   Index Cond: ((report_id = '08ae0ed2-7efb-4c09-9230-21d24ed2e4c4'::uuid) AND (organization_id = '5af49850-66a8-4cc2-b420-774e31babaf9'::uuid) AND (family = 'people'::text) AND (source_key = '12000'::text))
+   Index Searches: 1
+   Buffers: local read=4
+ Planning:
+   Buffers: shared hit=15
+ Planning Time: 0.054 ms
+ Execution Time: 0.047 ms
+(8 rows)
+
+variant_upsert
+                                                        QUERY PLAN                                                        
+--------------------------------------------------------------------------------------------------------------------------
+ Insert on migration_core_change_variant  (cost=0.00..0.01 rows=1 width=122) (actual time=0.063..0.063 rows=1.00 loops=1)
+   Conflict Resolution: UPDATE
+   Conflict Arbiter Indexes: migration_core_change_variant_pkey
+   Tuples Inserted: 1
+   Conflicting Tuples: 0
+   Buffers: local hit=4 read=6 dirtied=2
+   ->  Result  (cost=0.00..0.01 rows=1 width=122) (actual time=0.001..0.001 rows=1.00 loops=1)
+ Planning:
+   Buffers: shared hit=3
+ Planning Time: 0.019 ms
+ Execution Time: 0.071 ms
+(11 rows)
+
+note_request_lookup
+                                                                                                                           QUERY PLAN                                                                                                                            
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Index Scan using migration_core_change_note_key_pkey on migration_core_change_note_key  (cost=0.41..8.44 rows=1 width=6) (actual time=0.027..0.027 rows=1.00 loops=1)
+   Index Cond: ((report_id = '08ae0ed2-7efb-4c09-9230-21d24ed2e4c4'::uuid) AND (organization_id = '5af49850-66a8-4cc2-b420-774e31babaf9'::uuid) AND (side = 0) AND (request_hmac = '\xce28c97dcd8381b7d5a093ffd1deae38ce28c97dcd8381b7d5a093ffd1deae38'::bytea))
+   Index Searches: 1
+   Buffers: shared hit=3, local read=4
+ Planning:
+   Buffers: shared hit=32, local read=1
+ Planning Time: 0.086 ms
+ Execution Time: 0.030 ms
+(8 rows)
+
+comparison_keyset
+                                                                                                  QUERY PLAN                                                                                                   
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.42..26.11 rows=50 width=862) (actual time=0.023..0.202 rows=50.00 loops=1)
+   Buffers: local hit=6 read=47
+   ->  Index Scan using migration_core_change_group_report_id_organization_id_id_idx on migration_core_change_group  (cost=0.42..25945.10 rows=50500 width=862) (actual time=0.023..0.199 rows=50.00 loops=1)
+         Index Cond: ((report_id = '08ae0ed2-7efb-4c09-9230-21d24ed2e4c4'::uuid) AND (organization_id = '5af49850-66a8-4cc2-b420-774e31babaf9'::uuid) AND (id > '803f0d52-e679-4e69-b3e8-041e59c32395'::uuid))
+         Index Searches: 1
+         Buffers: local hit=6 read=47
+ Planning:
+   Buffers: shared hit=15
+ Planning Time: 0.055 ms
+ Execution Time: 0.208 ms
+(10 rows)
+
+published_filtered_page
+                                                                                                                                   QUERY PLAN                                                                                                                                    
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.42..92.45 rows=51 width=762) (actual time=0.034..0.245 rows=51.00 loops=1)
+   Buffers: local hit=2 read=53
+   ->  Index Scan using migration_core_change_group_report_id_organization_id_famil_idx on migration_core_change_group  (cost=0.42..2297.74 rows=1273 width=762) (actual time=0.034..0.242 rows=51.00 loops=1)
+         Index Cond: ((report_id = '08ae0ed2-7efb-4c09-9230-21d24ed2e4c4'::uuid) AND (organization_id = '5af49850-66a8-4cc2-b420-774e31babaf9'::uuid) AND (family = 'people'::text) AND (disposition = 'changed'::text) AND (id > '803f0d52-e679-4e69-b3e8-041e59c32395'::uuid))
+         Index Searches: 1
+         Buffers: local hit=2 read=53
+ Planning Time: 0.035 ms
+ Execution Time: 0.251 ms
+(8 rows)
+
+published_unfiltered_page
+                                                                                                  QUERY PLAN                                                                                                   
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.42..26.62 rows=51 width=762) (actual time=0.009..0.040 rows=51.00 loops=1)
+   Buffers: local hit=53 read=1
+   ->  Index Scan using migration_core_change_group_report_id_organization_id_id_idx on migration_core_change_group  (cost=0.42..25945.10 rows=50500 width=762) (actual time=0.008..0.037 rows=51.00 loops=1)
+         Index Cond: ((report_id = '08ae0ed2-7efb-4c09-9230-21d24ed2e4c4'::uuid) AND (organization_id = '5af49850-66a8-4cc2-b420-774e31babaf9'::uuid) AND (id > '803f0d52-e679-4e69-b3e8-041e59c32395'::uuid))
+         Index Searches: 1
+         Buffers: local hit=53 read=1
+ Planning Time: 0.046 ms
+ Execution Time: 0.047 ms
+(8 rows)
+
+ROLLBACK

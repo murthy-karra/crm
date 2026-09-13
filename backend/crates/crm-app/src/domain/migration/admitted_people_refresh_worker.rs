@@ -620,6 +620,25 @@ async fn prepare(
         if admission_payload_bytes.saturating_add(prior_bytes) > s::ITEM_LIMIT {
             return Err(MigrationError::StorageLimit);
         }
+        let identity_bound: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM migration_import_identity mi
+              WHERE mi.organization_id=$1 AND mi.source_account_id=$2
+                AND mi.family='people' AND mi.source_id=$3
+                AND mi.target_id=$4 AND mi.admission_id=$5
+                AND mi.admission_item_id=$6 AND mi.admission_result_id=$7)",
+        )
+        .bind(org.0)
+        .bind(r.get::<i64, _>("source_account_id"))
+        .bind(&source_id)
+        .bind(row.get::<Option<Uuid>, _>("person_id"))
+        .bind(admission_id)
+        .bind(admission_item_id)
+        .bind(row.get::<Uuid, _>("admission_result_id"))
+        .fetch_one(&mut *conn)
+        .await?;
+        if !identity_bound {
+            return Err(MigrationError::SourceNotEligible);
+        }
         let projection = sqlx::query("SELECT projection_nonce,projection_ciphertext FROM migration_people_admission_item WHERE id=$1 AND admission_id=$2 AND organization_id=$3")
             .bind(admission_item_id).bind(admission_id).bind(org.0).fetch_one(&mut *conn).await?;
         // B is the exact encrypted admission projection plus committed contact
@@ -930,8 +949,9 @@ async fn prepare(
             &instructions,
         )
         .await?;
-        sqlx::query("UPDATE migration_admitted_people_refresh_item SET stage_mapping_id=$3,assignee_mapping_id=$4 WHERE id=$1 AND refresh_id=$2")
+        sqlx::query("UPDATE migration_admitted_people_refresh_item SET stage_mapping_id=$3,assignee_mapping_id=$4,source_account_id=$5,baseline_result_id=(SELECT result_id FROM migration_admitted_people_refresh_baseline WHERE organization_id=$6 AND admission_id=$7 AND source_id=$8) WHERE id=$1 AND refresh_id=$2")
             .bind(item).bind(id).bind(frozen_stage_mapping).bind(frozen_assignee_mapping)
+            .bind(r.get::<i64,_>("source_account_id")).bind(org.0).bind(admission_id).bind(&source_id)
             .execute(&mut *conn).await?;
     }
     sqlx::query("UPDATE migration_admitted_people_refresh_plan SET eligible_count=eligible_count+$3,already_current_count=already_current_count+$4,held_count=held_count+$5,no_instruction_count=no_instruction_count+$6,name_clear_count=name_clear_count+$7,assignment_clear_count=assignment_clear_count+$8,contact_removal_count=contact_removal_count+$9 WHERE id=$1 AND organization_id=$2").bind(plan).bind(org.0).bind(eligible).bind(current).bind(held).bind(no_instruction).bind(name_clears).bind(assignment_clears).bind(contact_removals).execute(&mut *conn).await?;
@@ -1124,10 +1144,12 @@ async fn execute_noop(
         }
         let native_contact_bytes: i64 = sqlx::query_scalar("SELECT COALESCE(sum(octet_length(value)+octet_length(normalized_value)+128),0) FROM contact_method WHERE person_id=$1 AND organization_id=$2")
             .bind(person).bind(org.0).fetch_one(&mut *conn).await?;
-        if native_contact_bytes > s::ITEM_LIMIT {
+        let native = if native_contact_bytes > s::ITEM_LIMIT {
             disposition = "held_stale";
-        }
-        let native=sqlx::query("SELECT p.first_name,p.last_name,p.stage_id,p.assigned_user_id,COALESCE(jsonb_agg(jsonb_build_object('id',c.id,'kind',c.kind,'value',c.value,'normalized_value',c.normalized_value,'import_order',c.import_order) ORDER BY c.kind,c.import_order) FILTER(WHERE c.id IS NOT NULL),'[]') contacts FROM person p LEFT JOIN contact_method c ON c.person_id=p.id AND c.organization_id=p.organization_id WHERE p.id=$1 AND p.organization_id=$2 GROUP BY p.id").bind(person).bind(org.0).fetch_optional(&mut *conn).await?;
+            None
+        } else {
+            sqlx::query("SELECT p.first_name,p.last_name,p.stage_id,p.assigned_user_id,COALESCE(jsonb_agg(jsonb_build_object('id',c.id,'kind',c.kind,'value',c.value,'normalized_value',c.normalized_value,'import_order',c.import_order) ORDER BY c.kind,c.import_order) FILTER(WHERE c.id IS NOT NULL),'[]') contacts FROM person p LEFT JOIN contact_method c ON c.person_id=p.id AND c.organization_id=p.organization_id WHERE p.id=$1 AND p.organization_id=$2 GROUP BY p.id").bind(person).bind(org.0).fetch_optional(&mut *conn).await?
+        };
         let current=native.map(|v|json!({"first_name":v.get::<Option<String>,_>("first_name"),"last_name":v.get::<Option<String>,_>("last_name"),"stage_id":v.get::<Uuid,_>("stage_id"),"assigned_user_id":v.get::<Option<Uuid>,_>("assigned_user_id"),"contacts":v.get::<Value,_>("contacts")}));
         if current.as_ref() != Some(&expected) || expected != baseline {
             disposition = "held_stale";

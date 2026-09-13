@@ -182,8 +182,20 @@ async fn already_current_rechecks_native_identity_and_exact_retained_source(migr
 async fn omitted_stage_and_assignment_preserve_initial_and_later_baselines(migrator: PgPool) {
     let (f, parent, admission) =
         execution::fixture_with_admission(&migrator, vec![person(104, "Initial")]).await;
+    async fn admission_evidence(pool: &PgPool, org: Uuid) -> Vec<(String, i64, String)> {
+        sqlx::query_as("SELECT 'person_admission_provenance'::text,count(*),md5(coalesce(string_agg(to_jsonb(p)::text,E'\n' ORDER BY to_jsonb(p)::text),'')) FROM person_admission_provenance p WHERE organization_id=$1 UNION ALL SELECT 'person_admitted'::text,count(*),md5(coalesce(string_agg(to_jsonb(p)::text,E'\n' ORDER BY to_jsonb(p)::text),'')) FROM person_admitted p WHERE organization_id=$1")
+            .bind(org).fetch_all(pool).await.unwrap()
+    }
+    let original_evidence = admission_evidence(&migrator, f.org).await;
     for name in ["First refresh", "Second refresh"] {
-        let report = execution::report(&f, parent, vec![json!({"id":104,"firstName":name})]).await;
+        let mut observation = json!({"id":104,"firstName":name});
+        if name == "First refresh" {
+            observation["emails"] = json!([
+                {"value":"first@synthetic.test","isPrimary":0},
+                {"value":"priority@synthetic.test","isPrimary":1}
+            ]);
+        }
+        let report = execution::report(&f, parent, vec![observation]).await;
         let (run, detail) = prepare(&f, admission, report).await;
         assert_eq!(detail["plan"]["counts"]["eligible"], "1");
         confirm(&f, run, &detail).await;
@@ -199,5 +211,17 @@ async fn omitted_stage_and_assignment_preserve_initial_and_later_baselines(migra
         let native: (String,Uuid,Option<Uuid>)=sqlx::query_as("SELECT p.first_name,p.stage_id,p.assigned_user_id FROM person p JOIN migration_people_admission_result ar ON ar.person_id=p.id AND ar.organization_id=p.organization_id WHERE ar.admission_id=$1 AND ar.source_id='104'")
             .bind(admission).fetch_one(&migrator).await.unwrap();
         assert_eq!(native, (name.to_owned(), f.lead_stage, Some(f.member)));
+        let contacts: Vec<String> = sqlx::query_scalar("SELECT c.value FROM contact_method c JOIN migration_people_admission_result ar ON ar.person_id=c.person_id AND ar.organization_id=c.organization_id WHERE ar.admission_id=$1 AND ar.source_id='104' ORDER BY c.import_order")
+            .bind(admission).fetch_all(&migrator).await.unwrap();
+        assert_eq!(
+            contacts,
+            vec!["priority@synthetic.test", "first@synthetic.test"],
+            "numeric primary is first and omitted later contacts preserve order"
+        );
+        assert_eq!(
+            admission_evidence(&migrator, f.org).await,
+            original_evidence,
+            "original admission provenance and immutable fact bytes remain unchanged"
+        );
     }
 }

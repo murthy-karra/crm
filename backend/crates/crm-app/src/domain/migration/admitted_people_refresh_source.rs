@@ -18,7 +18,7 @@ use uuid::Uuid;
 pub enum RetainedPerson {
     Missing,
     EvidenceGap,
-    Present(ExtractedRecord, Uuid, i32),
+    Present(Box<ExtractedRecord>, Uuid, i32),
 }
 
 pub async fn retained_person(
@@ -127,7 +127,9 @@ pub async fn retained_person(
         }
     }
     Ok(selected
-        .map(|(record, capture, ordinal)| RetainedPerson::Present(record, capture, ordinal))
+        .map(|(record, capture, ordinal)| {
+            RetainedPerson::Present(Box::new(record), capture, ordinal)
+        })
         .unwrap_or(RetainedPerson::EvidenceGap))
 }
 

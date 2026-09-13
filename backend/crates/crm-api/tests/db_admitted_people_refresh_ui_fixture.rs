@@ -39,6 +39,9 @@ async fn serve_admitted_people_refresh_ui_fixture() {
             json!({"id":108,"firstName":"Local hold baseline","stage":"Lead","assignedUserId":3}),
         ];
         let (f, parent, admission) = execution::fixture_with_admission(&migrator, people).await;
+        // Boolean primary markers are unqualified under the frozen numeric-only
+        // source contract; this retained fixture preserves source order. Numeric
+        // primary ordering is covered in db_admitted_refresh_commit_proof.
         let contacts: Vec<Value> = (1..=57)
             .map(|n| json!({"value":format!("review.{n}@synthetic.test"),"isPrimary":n==57}))
             .collect();

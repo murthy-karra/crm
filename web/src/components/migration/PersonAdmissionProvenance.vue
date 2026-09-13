@@ -39,7 +39,7 @@ watch([()=>props.personId,access.scope],()=>{cursor.value='';selected.value='';f
       </p><p class="mt-2 text-small text-text-muted">
         These are the original admission values. Later core refreshes retain separate plans and results.
         <RouterLink
-          to="/migration#admitted-people-refresh"
+          :to="{ name: 'manage-migration', hash: '#admitted-people-refresh' }"
           class="text-accent underline"
         >
           Review later core refreshes in Migration

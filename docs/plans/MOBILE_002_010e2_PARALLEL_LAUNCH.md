@@ -101,7 +101,7 @@ migration 010e2 owns `20260926000001`. Mobile foundation integrates first.
 
 Initial worktrees are `/Users/karrad/projects/crm-worktrees/mobile-002-backend`
 and `/Users/karrad/projects/crm-worktrees/migration-010e2`. Reserve mobile QA
-API port 3102/database `crm_mobile002_qa` and migration QA API3103/Web5174/database
+API port 3102/database `crm_mobile_002` and migration QA API3103/Web5174/database
 `crm_010e2_qa`, subject to a fresh listener check before launch. Root owns shared
 patch integration and serial DB gate admission. Neither lane runs root builds or
 changes API3000/Web5173/demo3101. Future native QA uses isolated app identities

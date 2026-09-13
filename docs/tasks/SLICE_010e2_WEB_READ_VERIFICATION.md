@@ -41,3 +41,34 @@ The `perf-harness`-only, explicitly ignored `serve_people_refresh_ui_fixture`
 requires an exact synthetic opt-in and the isolated `crm_010e2_qa` database.
 It binds API3103, creates only synthetic evidence, and has no live FUB reader.
 Its earlier successful compile is harness preparation, not browser proof.
+
+## Storage audit checkpoint
+
+The three coordinator-owned `db_people_refresh_accounting` tests passed in
+`/private/tmp/crm-010e2-qa/db-accounting-2.log` (14.56 seconds). They audit exact
+encrypted payload and owned reservation sums, snapshot/Organization deltas,
+prepare/confirm/re-preview/cancel replay, no writes under a lowered policy
+ceiling, and baseline ownership transfer across two completed refreshes. The
+first run failed with uncharged receipt differences of 110–113 bytes; the
+receipt charge and prior-owner baseline debit fixes were included in the passing
+run. The full-scan auditor is test-only; production work must still use bounded
+unit accounting. Final preparation/recovery changes require their focused checks.
+
+## Browser review and correction
+
+Actual CUA review used the production Web on 5174 and synthetic-only API3103,
+DB `crm_010e2_qa`; it created a frozen preview from a real sealed report. The
+three comparison columns, explicit name/assignment clears, contact addition,
+removal and preserved contact identities were inspected at desktop and 390×844.
+At the narrow viewport the panel had clientWidth=scrollWidth=277 (no horizontal
+content overflow); screenshots were actually inspected. The normal viewport was
+restored. Cancellation through its dialog produced `Cancelled · 0 settled` and
+no results. Browser error/warning inventory was empty at that checkpoint.
+
+This caught a real backend tally issue: local conflict entries were counted as
+already current. It also exposed absent-record and empty-explanation removal
+labels. The worker fixes and fresh preview/confirmation remain to be verified.
+The Web now labels held comparisons as non-executable and suppresses clear and
+contact-change badges for those entries. Focused Web tests pass **31/31** in
+`/private/tmp/crm-010e2-qa/web-focused-3.log`, including this regression. The
+worker's actual closed pause reasons now have readable Web labels.

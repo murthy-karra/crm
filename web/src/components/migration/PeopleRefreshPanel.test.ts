@@ -94,6 +94,17 @@ describe('People refresh workflow', () => {
     button('Cancel People refresh').click(); await flushPromises(); expect(writes()).toHaveLength(2); button('Stop future refresh writes').click(); await flushPromises()
     expect(JSON.parse(String(writes()[2]![1]?.body))).toEqual({ request_id: expect.stringMatching(/^request-\d+$/), expected_lifecycle_revision: 4 })
   })
+  it('never labels held comparison values as executable clears or removals', async () => {
+    const held = { ...item(), disposition: 'held_local_change', clear_counts: { names: '0', assignments: '0', contacts: '0' } }
+    const { wrapper } = await setup({ handle: url => {
+      if (url.includes('/items?')) return { items: [held], next_cursor: null, plan_id: 'plan', plan_revision: '2' }
+      if (url === `${ROOT}/refresh/items/item`) return held
+    } })
+    await choose('Saved People refresh', 'refresh'); button('Inspect Person preview').click(); await flushPromises()
+    expect(wrapper.text()).toContain('No fields or contacts will be changed')
+    expect(wrapper.text()).not.toContain('Will clear'); expect(wrapper.text()).not.toContain('Proposed removal')
+    expect(wrapper.text()).toContain('synthetic@example.test')
+  })
   it.each(['member', 'inactive'])('makes no retained reads for %s access', async role => { await setup({ role }); expect(api.mock.calls.filter(([url]) => url.startsWith('/migrations'))).toHaveLength(0) })
   it('drops late plaintext and receipts after an actor/Organization transition', async () => {
     const pending = deferred<unknown>()

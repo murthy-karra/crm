@@ -26,7 +26,7 @@ function openField(side: typeof sides[number], field: string) { if (field === 'f
 const sideLabel = { baseline: 'Last settled baseline', current: 'CRM at preview', proposed: 'Proposed after refresh' }
 const fields = ['first_name', 'last_name', 'stage_id', 'assigned_user_id'] as const
 function field(value: RefreshProjection, key: typeof fields[number]) { return value[key] === undefined ? 'Unavailable' : value[key] === null ? 'Empty / unassigned' : value[key] }
-function clears(key: typeof fields[number]) { const value = detail.data.value; return value && value.baseline[key] != null && value.proposed[key] === null }
+function clears(key: typeof fields[number]) { const value = detail.data.value; return value && value.disposition === 'eligible' && value.baseline[key] != null && value.proposed[key] === null }
 </script>
 <template>
   <section
@@ -35,6 +35,12 @@ function clears(key: typeof fields[number]) { const value = detail.data.value; r
     aria-label="Frozen Person value comparison"
   >
     <template v-if="detail.data.value">
+      <p
+        v-if="detail.data.value.disposition !== 'eligible'"
+        class="text-text-muted"
+      >
+        This Person has no eligible update in this plan. No fields or contacts will be changed.
+      </p>
       <div class="grid gap-3 lg:grid-cols-3">
         <section
           v-for="side in sides"
@@ -106,11 +112,11 @@ function clears(key: typeof fields[number]) { const value = detail.data.value; r
         <p class="font-medium">
           {{ sideLabel[contact.side] }} · {{ contact.kind === 'email' ? 'Email' : 'Phone' }} · order {{ contact.import_order }}
           <strong
-            v-if="contact.change === 'remove'"
+            v-if="detail.data.value.disposition === 'eligible' && contact.change === 'remove'"
             class="ml-1 text-danger"
           >Proposed removal</strong>
           <strong
-            v-if="contact.change === 'add'"
+            v-if="detail.data.value.disposition === 'eligible' && contact.change === 'add'"
             class="ml-1"
           >Proposed addition</strong>
         </p><p class="whitespace-pre-wrap break-all">

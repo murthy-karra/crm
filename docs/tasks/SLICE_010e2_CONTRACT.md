@@ -100,3 +100,21 @@ Items and results use only: `eligible`, `already_current`,
 The UI may group these but must never expose raw payloads or submit clipped
 values as executable input. Confirmation compares exact plan counts for name
 clears, assignment clears, and contact removals independently.
+
+## Closed worker recovery reasons
+
+The implementing worker persists `initiator_not_authorized`,
+`storage_budget_exhausted`, `release_not_ready`, `retained_integrity_failed`,
+`retained_evidence_invalid`, `source_binding_changed`, `work_unit_timed_out`,
+or `lease_expired` when the bound work can no longer continue safely. The Web
+maps these codes to plain labels. A failed unit rolls back before the fenced
+pause; terminal/cancelled work and a successor lease cannot be overwritten by
+an older worker's failure. Cancellation capacity and retained evidence remain
+accounted for. Retry is explicit and repeats current authority, release,
+source-binding and capacity checks; it does not bypass failed evidence.
+
+Only `eligible` items contribute proposed clear/removal acknowledgments or show
+executable change badges. Closed held/excluded/absent records may retain their
+comparison evidence but cannot imply that an empty explanation clears a field.
+Local divergence counts as held. An imported Person absent from the newer
+capture is `not_seen_again`, retained locally and included in the held total.

@@ -150,16 +150,31 @@ async fn add_note_attempt(
     ctx: &CommandContext,
     cmd: AddNote,
 ) -> Result<Note, NoteError> {
+    // Validate before opening a transaction, preserving the original precedence.
+    NoteBody::parse(&cmd.body)?;
+    let person_id = cmd.person_id;
+    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
+    let note = add_note_in_transaction(&mut tx, ctx, cmd).await?;
+    tx.commit().await?;
+    publish_note_changed(publisher, ctx, person_id).await;
+    Ok(note)
+}
+
+/// Shared typed command core. Caller owns operational guard and commit/publication.
+pub(crate) async fn add_note_in_transaction(
+    tx: &mut PgConnection,
+    ctx: &CommandContext,
+    cmd: AddNote,
+) -> Result<Note, NoteError> {
     let body = NoteBody::parse(&cmd.body)?;
     tracing::Span::current().record("body_chars", body.chars().count());
 
-    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
-    person_queries::lock_person(&mut tx, cmd.person_id, ctx.organization_id)
+    person_queries::lock_person(tx, cmd.person_id, ctx.organization_id)
         .await?
         .ok_or(NoteError::NotFound)?;
 
     let (note_id, created_at, updated_at, author_display_name) = queries::insert_note(
-        &mut tx,
+        tx,
         ctx.organization_id,
         cmd.person_id,
         ctx.actor_user_id,
@@ -168,10 +183,6 @@ async fn add_note_attempt(
         ctx.correlation_id.0,
     )
     .await?;
-    tx.commit().await?;
-
-    publish_note_changed(publisher, ctx, cmd.person_id).await;
-
     Ok(Note {
         id: note_id,
         person_id: cmd.person_id,

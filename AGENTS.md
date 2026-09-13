@@ -422,6 +422,11 @@ Do not let multiple agents edit the same shared files concurrently.
 
 Only the lane explicitly assigned database ownership may create migrations for that slice.
 
+Verification build outputs must be isolated from artifacts used by running shared
+services. Set a separate `CARGO_TARGET_DIR` and an explicit Web build output
+directory when the development launcher uses checkout build paths; do not replace
+shared release artifacts as a side effect of checks.
+
 Branches should remain short-lived and merge frequently.
 
 Do not create permanent backend, frontend, or AI branches.

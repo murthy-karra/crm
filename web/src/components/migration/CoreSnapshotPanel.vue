@@ -26,6 +26,13 @@ const denied = ref(false)
 const enabled = computed(() => !denied.value && me.value?.organization?.role === 'admin' && !!orgId.value)
 const selectedId = ref('')
 const selectedPreview = ref('')
+// Other retained-evidence panels may navigate here; all reads retain this panel's
+// current session/Organization guards and the server's snapshot authorization.
+function openSnapshot(id: string) {
+  if (disposed || !enabled.value) return
+  selectedId.value = id
+}
+defineExpose({ openSnapshot })
 const cursor = ref('')
 const previousCursors = ref<string[]>([])
 const actionError = ref<string | null>(null)

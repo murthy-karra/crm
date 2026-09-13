@@ -1,0 +1,9 @@
+{
+  "crm_app": "libcrm_app-c63489f989ce8ec4.rlib",
+  "sqlx": "libsqlx-5b87cdf79a1d5890.rlib",
+  "tokio": "libtokio-39d2f2eef53871cc.rlib",
+  "serde_json": "libserde_json-df9838033925fe34.rlib",
+  "uuid": "libuuid-9fccbb9c8c645ccc.rlib",
+  "dotenvy": "libdotenvy-3a0cda81f779a5f0.rlib",
+  "async_trait": "libasync_trait-232871378ee3ccc4.dylib"
+}

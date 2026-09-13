@@ -20,7 +20,7 @@ pre-010c. Revisions are full Git hashes. Inventory timestamps are UTC RFC3339;
 the complete inventory must be no older than five minutes. It covers active
 processes/workloads AND launch/admin paths, including in-process workers.
 Known optional capabilities: fub-metadata-import-v1, fub-activity-import-v1,
-fub-history-capture-v1, fub-history-timeline-v1. Confirmed history captures require history-capable API/
+fub-history-capture-v1, fub-history-timeline-v1, fub-core-change-v1. Confirmed history captures require history-capable API/
 worker launch and recovery, including completed/cancelled runs. Unconfirmed
 proposals do not impose this requirement. Unsupported confirmed source/parser
 profiles fail closed. History confirmation readiness is reported separately.
@@ -60,8 +60,9 @@ METADATA_CAPABILITY = "fub-metadata-import-v1"
 ACTIVITY_CAPABILITY = "fub-activity-import-v1"
 HISTORY_CAPABILITY = "fub-history-capture-v1"
 TIMELINE_CAPABILITY = "fub-history-timeline-v1"
+CORE_CHANGE_CAPABILITY = "fub-core-change-v1"
 CAPABILITIES = frozenset({METADATA_CAPABILITY, ACTIVITY_CAPABILITY, HISTORY_CAPABILITY,
-                        TIMELINE_CAPABILITY})
+                        TIMELINE_CAPABILITY, CORE_CHANGE_CAPABILITY})
 MAX_JSON_BYTES = 1024 * 1024
 MAX_ENTRIES = 4096
 MAX_AGE_SECONDS = 300
@@ -157,6 +158,10 @@ def validate_state(state):
                        "history_timeline_unsupported_count"}
     if timeline_fields.intersection(state):
         fields |= timeline_fields
+    core_change_fields = {"core_change_binding_count", "core_change_schema_present",
+                       "core_change_unsupported_count"}
+    if core_change_fields.intersection(state):
+        fields |= core_change_fields
     object_fields(state, fields)
     if (type(state.get("activity_schema_present", False)) is not bool
             or not isinstance(state.get("activity_binding_count", "0"), str)
@@ -180,6 +185,15 @@ def validate_state(state):
                    for value in [timeline_count, timeline_unsupported])
             or int(timeline_unsupported) > int(timeline_count)
             or (not state.get("history_timeline_schema_present", False) and int(timeline_count) != 0)):
+        fail("database_evidence_invalid")
+    core_change_count = state.get("core_change_binding_count", "0")
+    core_change_unsupported = state.get("core_change_unsupported_count", "0")
+    if (type(state.get("core_change_schema_present", False)) is not bool
+            or any(not isinstance(value, str)
+                   or re.fullmatch(r"0|[1-9][0-9]{0,19}", value) is None
+                   for value in [core_change_count, core_change_unsupported])
+            or int(core_change_unsupported) > int(core_change_count)
+            or (not state.get("core_change_schema_present", False) and int(core_change_count) != 0)):
         fail("database_evidence_invalid")
     count = state["binding_count"]
     if (type(state["schema_present"]) is not bool
@@ -302,6 +316,13 @@ def evaluate(artifacts, candidates, inventory, state, target, now):
         reasons.add("history_timeline_binding_requires_compatible_artifacts")
     if int(state.get("history_timeline_unsupported_count", "0")) > 0:
         reasons.add("history_timeline_profile_unsupported")
+    core_change_missing = any(item["role"] in {"api", "worker"}
+                           and CORE_CHANGE_CAPABILITY not in item["capabilities"]
+                           for item in selected + processes)
+    if int(state.get("core_change_binding_count", "0")) > 0 and core_change_missing:
+        reasons.add("core_change_binding_requires_compatible_artifacts")
+    if int(state.get("core_change_unsupported_count", "0")) > 0:
+        reasons.add("core_change_profile_unsupported")
     launch_allowed = not reasons
     confirmation_reasons = set(reasons)
     if not state["schema_present"]:
@@ -336,6 +357,13 @@ def evaluate(artifacts, candidates, inventory, state, target, now):
         timeline_reasons.add("history_timeline_candidate_missing")
     if not state.get("history_timeline_schema_present", False):
         timeline_reasons.add("history_timeline_schema_missing")
+    core_change_reasons = set(confirmation_reasons)
+    if core_change_missing:
+        core_change_reasons.add("core_change_capability_missing")
+    if not any(item["role"] in {"api", "worker"} for item in selected):
+        core_change_reasons.add("core_change_candidate_missing")
+    if not state.get("core_change_schema_present", False):
+        core_change_reasons.add("core_change_schema_missing")
     return {
         "version": 1,
         "gate_version": GATE,
@@ -362,12 +390,17 @@ def evaluate(artifacts, candidates, inventory, state, target, now):
         "history_timeline_schema_present": state.get("history_timeline_schema_present", False),
         "history_timeline_binding_count": state.get("history_timeline_binding_count", "0"),
         "history_timeline_unsupported_count": state.get("history_timeline_unsupported_count", "0"),
+        "core_change_confirmation_ready": not core_change_reasons,
+        "core_change_schema_present": state.get("core_change_schema_present", False),
+        "core_change_binding_count": state.get("core_change_binding_count", "0"),
+        "core_change_unsupported_count": state.get("core_change_unsupported_count", "0"),
         "launch_reasons": sorted(reasons),
         "confirmation_reasons": sorted(confirmation_reasons),
         "metadata_confirmation_reasons": sorted(metadata_reasons),
         "activity_confirmation_reasons": sorted(activity_reasons),
         "history_capture_confirmation_reasons": sorted(history_reasons),
         "history_timeline_confirmation_reasons": sorted(timeline_reasons),
+        "core_change_confirmation_reasons": sorted(core_change_reasons),
     }
 
 
@@ -491,6 +524,18 @@ def database_state():
         object_fields(observed, {"count", "unsupported_count"})
         state["history_timeline_binding_count"] = observed["count"]
         state["history_timeline_unsupported_count"] = observed["unsupported_count"]
+    core_change = sql_json("SELECT json_build_object('present',to_regclass('public.migration_core_change_report') IS NOT NULL)")
+    object_fields(core_change, {"present"})
+    if type(core_change["present"]) is not bool:
+        fail("database_evidence_invalid")
+    state["core_change_schema_present"] = core_change["present"]
+    state["core_change_binding_count"] = "0"
+    state["core_change_unsupported_count"] = "0"
+    if core_change["present"]:
+        observed = sql_json("SELECT json_build_object('count',count(*)::text,'unsupported_count',count(*) FILTER (WHERE engine_version<>'fub-core-change-v1')::text) FROM public.migration_core_change_report")
+        object_fields(observed, {"count", "unsupported_count"})
+        state["core_change_binding_count"] = observed["count"]
+        state["core_change_unsupported_count"] = observed["unsupported_count"]
     return state
 
 
@@ -518,6 +563,7 @@ def main(argv=None):
                           "activity_confirmation_ready": False,
                           "history_capture_confirmation_ready": False,
                           "history_timeline_confirmation_ready": False,
+                          "core_change_confirmation_ready": False,
                           "error": str(error)}, sort_keys=True))
         return 2
 

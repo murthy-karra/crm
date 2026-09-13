@@ -1,0 +1,82 @@
+{
+  "base_revision": "feab066",
+  "environment": {
+    "xcode": "26.6 (17F113)",
+    "runtime": "iOS 26.5 (23F77)",
+    "device": "iPhone 17 Simulator",
+    "udid": "F5BF9C74-37AC-4546-A576-F30587CB4F4C",
+    "sqlcipher": "4.19.0",
+    "key_mode": "explicit Debug Simulator synthetic namespace"
+  },
+  "checks": {
+    "storage_and_model": {
+      "passed": 20,
+      "failed": 0,
+      "log": "storage-model-tests.txt"
+    },
+    "real_api": {
+      "passed": 1,
+      "failed": 0,
+      "queued_operations": 100,
+      "log": "live-api-tests.txt"
+    },
+    "native_ui": {
+      "passed": 1,
+      "failed": 0,
+      "seconds": 60.438,
+      "pending_before_and_after_termination": 3,
+      "pending_after_sync": 0,
+      "log": "native-ui-flow.txt"
+    },
+    "release_compile": {
+      "passed": true,
+      "architecture": "arm64 iOS device",
+      "distribution": false,
+      "log": "release-build.txt"
+    },
+    "post_patch_native_refresh": {
+      "passed": 1,
+      "failed": 0,
+      "refreshes": 5,
+      "seconds": 26.301,
+      "same_installed_context": true,
+      "mutations": 0,
+      "backend_revision": "7f41907",
+      "backend_binary_sha256": "f4b8bedbeaef723c47d56a3215e298737dd9ada303da2a98b3fdd071441d5fc7",
+      "log": "repeated-refresh-tests.txt",
+      "visible_complete_cache": {
+        "people": 100,
+        "notes": 1299,
+        "tasks": 1004
+      }
+    }
+  },
+  "pending": [
+    "Physical-device passcode, sleep/reboot and real cellular checks",
+    "Independent distribution and customer minimum OS/support decision"
+  ],
+  "source_sha256": {
+    "ios/FieldCRM/API.swift": "fece7336ae1b2f088b99a3667d4ca2d969722e3daabc7a2a25179005a35c601a",
+    "ios/FieldCRM/FieldCRMApp.swift": "b07eba9f2e940fbf1945c3d1e6740d608c69072dffd92498802fc3b14f9d6242",
+    "ios/FieldCRM/FieldModel.swift": "754e82b85576dfae1fa5eeaac4af86638ae447fdbf3fa304632ab5c7fe0cb258",
+    "ios/FieldCRM/Info.Debug.plist": "3cd4fa3a8851a3eca1546bcd8ba462dbd81c9179ea9f0f4d535f92f3432e935d",
+    "ios/FieldCRM/Info.plist": "a7362b67f9da172e86d7df0c57cfb6d3afa78c8c25f5a54907eb870af59cd3fe",
+    "ios/FieldCRM/LocalStore.swift": "a10a65dcc67e1f5ca19416c472fff290a1164a1e29868ef1e55953411e30c697",
+    "ios/FieldCRM/Protocol.swift": "4aa0e1b5391eb0b3fe9c97137afe03f6ba438c70da925cc1c228992644ee2f21",
+    "ios/FieldCRM/SecureStorage.swift": "996737990f021572f1ea2cf443ba3299f4cced72a5049b6fb504388057d56745",
+    "ios/FieldCRM.xcodeproj/project.pbxproj": "3bb7f51886295d70bc7ddb13edb140a16ded5a1f7ae01591fbdf3600a0e51031",
+    "ios/FieldCRM.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved": "3aeac1568b933b3552b917979835efceb74a81b86ac39f324425ea33ecd215b3",
+    "ios/FieldCRMTests/LiveAPITests.swift": "8e164fed5a77179b6bbc49c662131f84a1f860a120fba642ecff4291cbdb0c2c",
+    "ios/FieldCRMTests/ModelTests.swift": "61cc83506ffaf5e580a786efa81207a83a9f260ca190726269d6853ac57fdccb",
+    "ios/FieldCRMTests/StorageTests.swift": "344cc81c259052ea2cf5b5e9fbc156a86279684333ff580ab3f8fd3c6bd32cae",
+    "ios/FieldCRMUITests/FieldFlowTests.swift": "7973c7bc5424250215bbcb3d8bce8ff18481ff1ad81844e490fc12b7f55f9fbb"
+  },
+  "original_logs_sha256": {
+    "/private/tmp/crm-ios-final-focused.log": "cbffae4aa7eb175bec3936326209733c5538e0fed4daa56b393a87f4c9efb50f",
+    "/private/tmp/crm-ios-tests3.log": "b4a622251fcb55b5f0cce1c9b2d4ad9d86dcd2e33269ca9c57fb96ff55898109",
+    "/private/tmp/crm-ios-ui4.log": "256622ec6ae58efec2d4aae5c3fc2ca9cfc62d9e821be77b881d299096f37669",
+    "/private/tmp/crm-ios-release2.log": "92d9c8c6a44b8264fb4a3402f7cc69a62452db5c608016463eaf53591efc829c",
+    "/private/tmp/crm-ios-refresh5b.log": "119f928c3e63f2b96eb143d419522170c0325d545243d85c477a1b714440e82c"
+  },
+  "implementation_checkpoint": "92abb916c92e6a797caaa081d38c72fce1550817"
+}

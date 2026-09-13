@@ -2,7 +2,7 @@
 
 **Status: 010a DEPLOYED AND VERIFIED (2026-09-11); live FUB validation deferred.
 010b core-first capture/preview is also deployed and verified under D-063;
-010c, 010f1 and 010f2 are also deployed and verified under D-065/D-066/D-068 and follow-ups.** The user
+010c, 010f1, 010f2, 010d1 and 010d2 are also deployed and verified under their accepted decisions and follow-ups (through 2026-09-12).** The user
 selected **a new, empty CRM Organization first** (D-059), then approved 010a's
 API-first assessment and encrypted saved credentials (D-060). Unaccepted
 later-rung recommendations remain proposals. Initial survey used main `b2fb368`, after 019b;
@@ -66,7 +66,7 @@ recovery needs fresh actual workload evidence. Backup catalog validation was
 performed, not a restore exercise. Live FUB/customer-data work and activation
 stay deferred; notes/tasks are delivered by 010f2 below.
 
-**Latest deployed slice — 010f2:** [010f2](../specs/SLICE_010f2.md) and its
+**Deployed activity slice — 010f2:** [010f2](../specs/SLICE_010f2.md) and its
 [execution brief](../tasks/SLICE_010f2_IMPL.md) deliver notes/open/completed tasks
 from the same retained snapshot onto completed 010c People, independently of the
 metadata child. D-067 accepts readable plain-text notes with exact originals
@@ -81,6 +81,21 @@ See [verification](../tasks/SLICE_010f2_VERIFICATION.md) and the
 eight browser workflows passed with the documented telemetry qualification; all
 45 business counts and three workspace revisions remain unchanged. The SQLx
 cancellation follow-up remains open before production cutover.
+
+**Latest deployed slice — 010d2:** [History capture](../specs/SLICE_010d1.md)
+and [metadata timeline import](../specs/SLICE_010d2.md) are complete in shared
+development under D-070/D-072 and their release follow-ups. The
+[010d2 release](../tasks/SLICE_010d2_RELEASE.md) is the current recorded evidence;
+metadata-only access does not authorize readable message/note history bodies.
+
+**Next approved migration slice — 010e1 (D-075):** compare the original core snapshot
+behind a completed 010c import with a newer retained core capture. The
+[specification](../specs/SLICE_010e1.md) and [brief](../tasks/SLICE_010e1_IMPL.md)
+report changed/newly observed/not-seen/unresolved records without applying updates
+or inferring deletion. Plan it before launching the approved Mobile 001 work;
+[parallel sequencing](MOBILE_MIGRATION_PARALLEL_LAUNCH.md) preserves three worktrees.
+D-075 approves the reviewed 010e1 contracts and implementation. Standalone tags, other uncaptured families,
+repair/application, live qualification and cutover remain explicit gaps.
 
 ## 1. Outcome and first milestone
 
@@ -220,8 +235,9 @@ the cutover rung.
 | 3 — 010c | People/contact/stage/assignment import into the new empty Organization is implemented, synthetically verified and deployed under D-065/follow-ups. Separate People, explicitly approved matching stages and admin review-only use remain D-064. Frozen-plan recovery/provenance avoids duplicates and synthetic Inquiry history; activation remains separate. |
 | 4 — 010f1, then 010f2 | Deployed/verified 010f1 imports embedded tag membership and custom definitions/options/values onto completed 010c People, preserving the review hold. [010f2](../specs/SLICE_010f2.md) adds notes/tasks with authorship/timestamps, source-qualified identity, local-edit/tombstone protection and bounded admin review; D-068 and its follow-up completed implementation, verification and [shared-development release](../tasks/SLICE_010f2_RELEASE.md). Full standalone tag capture is still outstanding. |
 | 5a — 010d1 | Implemented, synthetically verified, committed, merged, pushed and deployed in shared development under D-070 and its follow-up; the merged worktree/branch was removed. Original reviews/gates (including 934 DB tests), the 75,000-observation collector and desktop/390px walkthrough are preserved in [verification](../tasks/SLICE_010d1_VERIFICATION.md); final runtime identity and the separately verified release correction are in [release](../tasks/SLICE_010d1_RELEASE.md). Separate confirmed historical events/calls/texts capture provides encrypted evidence and bounded coverage review. Public restrictions, provisional text pagination and uncaptured detail/media remain explicit. No native history writes, live qualification or activation. |
-| 5b — 010d2 | Later reviewed historical interpretation and bounded timeline import from a separately frozen history capture. Inquiry/actor/time/outcome, native projection/Today and body-read policies must be explicit. Ordinary email/media require separate qualified source/storage work; inaccessible content remains a disclosed gap. |
-| 6 — 010e | Per-entity delta capture, final reconciliation and explicit cutover/activation. Resolve source privacy, enforce communication restrictions and review Today before releasing the D-064 hold; validate changes/deletions and agree a source-write cutoff/final delta. No source cancellation, phone transfer or ongoing two-way sync is implied. |
+| 5b — 010d2 | Implemented, verified and deployed: metadata-only historical timeline import from the separately frozen 010d1 capture, under D-072. No message bodies/media, ordinary email, Today/contact credit or activation. [Release evidence](../tasks/SLICE_010d2_RELEASE.md). |
+| 6a — approved 010e1 | Compare the original core snapshot with a newer completed core capture. Paged source-change report only; no CRM updates or deletion inference. [Spec](../specs/SLICE_010e1.md). |
+| 6b+ — remaining 010e | Per-entity delta application/repair, remaining capture, final reconciliation and explicit cutover/activation. Resolve source privacy, enforce communication restrictions and review Today before releasing the D-064 hold; validate changes/deletions and agree a source-write cutoff/final delta. No source cancellation, phone transfer or ongoing two-way sync is implied. |
 
 No calendar estimate is credible before source access, volume and fidelity
 gaps are measured. The existing 25k-People/50-member/five-concurrent-Today
@@ -328,9 +344,11 @@ D-069 accepts separate historical capture and timeline rungs. D-070 approves
 [010d1](../specs/SLICE_010d1.md) implementation and synthetic verification,
 completed with [original evidence](../tasks/SLICE_010d1_VERIFICATION.md). Its
 follow-up authorized the completed Git integration, cleanup and
-[shared-development release](../tasks/SLICE_010d1_RELEASE.md). These completions
-do not reduce remaining migration fidelity or approve live source/customer
-access, native timeline import or activation.
+[shared-development release](../tasks/SLICE_010d1_RELEASE.md). D-072 subsequently approved and delivered
+[metadata-only timeline import](../specs/SLICE_010d2.md), verified in its
+[release record](../tasks/SLICE_010d2_RELEASE.md). These completions do not reduce
+remaining fidelity or approve live source/customer access, body/media access or
+activation.
 The [public source report](../research/SLICE_010d_FUB_SOURCE_CONTRACT.md) and
 [code contracts](../research/SLICE_010d_CODE_CONTRACTS.md) distinguish documented
 availability, live-unqualified behavior and later native history dependencies.

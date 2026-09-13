@@ -253,3 +253,9 @@ impl std::fmt::Display for MigrationError {
     }
 }
 impl std::error::Error for MigrationError {}
+
+pub(crate) mod core_change_queries;
+pub mod core_change_reports;
+pub(crate) mod core_change_source;
+pub(crate) mod core_change_store;
+pub mod core_change_worker;

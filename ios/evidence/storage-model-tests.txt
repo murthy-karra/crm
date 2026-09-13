@@ -1,0 +1,54 @@
+Original local log: /private/tmp/crm-ios-final-focused.log
+Test Suite 'Selected tests' started at 2026-09-12 19:17:48.344.
+Test Suite 'FieldCRMTests.xctest' started at 2026-09-12 19:17:48.344.
+Test Suite 'ModelTests' started at 2026-09-12 19:17:48.345.
+Test Case '-[FieldCRMTests.ModelTests testLockSurvivesActualModelCredentialReplacementFailureWithPendingWork]' started.
+Test Case '-[FieldCRMTests.ModelTests testLockSurvivesActualModelCredentialReplacementFailureWithPendingWork]' passed (0.133 seconds).
+Test Case '-[FieldCRMTests.ModelTests testOperation403WithRevokedAuthorityLocksAndPreservesExactEnvelope]' started.
+Test Case '-[FieldCRMTests.ModelTests testOperation403WithRevokedAuthorityLocksAndPreservesExactEnvelope]' passed (0.123 seconds).
+Test Case '-[FieldCRMTests.ModelTests testReconciliationAuthority403HidesOldCacheAndPersistsLockAcrossRelaunch]' started.
+Test Case '-[FieldCRMTests.ModelTests testReconciliationAuthority403HidesOldCacheAndPersistsLockAcrossRelaunch]' passed (0.119 seconds).
+Test Case '-[FieldCRMTests.ModelTests testRetiredGeneration404DiscardsOnlyStagingThenReusesCompleteBundle]' started.
+Test Case '-[FieldCRMTests.ModelTests testRetiredGeneration404DiscardsOnlyStagingThenReusesCompleteBundle]' passed (0.128 seconds).
+Test Case '-[FieldCRMTests.ModelTests testTaskPermission403RetainsVisibleCacheAndNeedsAttentionAfterValidAuthorityRecheck]' started.
+Test Case '-[FieldCRMTests.ModelTests testTaskPermission403RetainsVisibleCacheAndNeedsAttentionAfterValidAuthorityRecheck]' passed (0.119 seconds).
+Test Case '-[FieldCRMTests.ModelTests testUnsupportedProtocolCannotBeClearedByPauseToggleOrRelaunch]' started.
+Test Case '-[FieldCRMTests.ModelTests testUnsupportedProtocolCannotBeClearedByPauseToggleOrRelaunch]' passed (0.223 seconds).
+Test Suite 'ModelTests' passed at 2026-09-12 19:17:49.193.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.846 (0.848) seconds
+Test Suite 'StorageTests' started at 2026-09-12 19:17:49.193.
+Test Case '-[FieldCRMTests.StorageTests testActualContractFixturesDecodeAndRevisionNeverRounds]' started.
+Test Case '-[FieldCRMTests.StorageTests testActualContractFixturesDecodeAndRevisionNeverRounds]' passed (0.019 seconds).
+Test Case '-[FieldCRMTests.StorageTests testActualSQLiteFullRollsBackDraftConsumptionAndNoFalseSave]' started.
+Test Case '-[FieldCRMTests.StorageTests testActualSQLiteFullRollsBackDraftConsumptionAndNoFalseSave]' passed (0.109 seconds).
+Test Case '-[FieldCRMTests.StorageTests testCacheReclamationKeepsActiveStagedDraftsAndQueue]' started.
+Test Case '-[FieldCRMTests.StorageTests testCacheReclamationKeepsActiveStagedDraftsAndQueue]' passed (0.109 seconds).
+Test Case '-[FieldCRMTests.StorageTests testCipherWALFullWrongKeyAndReopen]' started.
+Test Case '-[FieldCRMTests.StorageTests testCipherWALFullWrongKeyAndReopen]' passed (0.308 seconds).
+Test Case '-[FieldCRMTests.StorageTests testCleanupBacklogLargerThanEveryBatchDrainsBeforeNextGeneration]' started.
+Test Case '-[FieldCRMTests.StorageTests testCleanupBacklogLargerThanEveryBatchDrainsBeforeNextGeneration]' passed (0.123 seconds).
+Test Case '-[FieldCRMTests.StorageTests testDurableLockMarkerSurvivesCredentialWriteFailureAndReopen]' started.
+Test Case '-[FieldCRMTests.StorageTests testDurableLockMarkerSurvivesCredentialWriteFailureAndReopen]' passed (0.002 seconds).
+Test Case '-[FieldCRMTests.StorageTests testImmutableEnvelopeStaleDraftAndLocalTaskDependency]' started.
+Test Case '-[FieldCRMTests.StorageTests testImmutableEnvelopeStaleDraftAndLocalTaskDependency]' passed (0.107 seconds).
+Test Case '-[FieldCRMTests.StorageTests testInterruptedStagingReopensWithoutPublishingPartialOrDeletingQueue]' started.
+Test Case '-[FieldCRMTests.StorageTests testInterruptedStagingReopensWithoutPublishingPartialOrDeletingQueue]' passed (0.211 seconds).
+Test Case '-[FieldCRMTests.StorageTests testNormalSimulatorModeFailsClosedInsteadOfWeakeningPasscodePolicy]' started.
+Test Case '-[FieldCRMTests.StorageTests testNormalSimulatorModeFailsClosedInsteadOfWeakeningPasscodePolicy]' passed (0.001 seconds).
+Test Case '-[FieldCRMTests.StorageTests testReceiptBeforeOlderGenerationPreservesOverlayAndMonotonicCache]' started.
+Test Case '-[FieldCRMTests.StorageTests testReceiptBeforeOlderGenerationPreservesOverlayAndMonotonicCache]' passed (0.112 seconds).
+Test Case '-[FieldCRMTests.StorageTests testSevenDayLeaseRestartRebootRollbackAndExpiry]' started.
+Test Case '-[FieldCRMTests.StorageTests testSevenDayLeaseRestartRebootRollbackAndExpiry]' passed (0.002 seconds).
+Test Case '-[FieldCRMTests.StorageTests testSyntheticSimulatorKeychainActuallyPersistsThisDeviceOnlyItems]' started.
+Test Case '-[FieldCRMTests.StorageTests testSyntheticSimulatorKeychainActuallyPersistsThisDeviceOnlyItems]' passed (0.003 seconds).
+Test Case '-[FieldCRMTests.StorageTests testVersionOneMigrationPreservesSavedWorkAndFutureSchemaFailsClosed]' started.
+Test Case '-[FieldCRMTests.StorageTests testVersionOneMigrationPreservesSavedWorkAndFutureSchemaFailsClosed]' passed (0.312 seconds).
+Test Case '-[FieldCRMTests.StorageTests testWrongIdentityAndContextCannotAdoptQueue]' started.
+Test Case '-[FieldCRMTests.StorageTests testWrongIdentityAndContextCannotAdoptQueue]' passed (0.520 seconds).
+Test Suite 'StorageTests' passed at 2026-09-12 19:17:51.136.
+	 Executed 14 tests, with 0 failures (0 unexpected) in 1.939 (1.943) seconds
+Test Suite 'FieldCRMTests.xctest' passed at 2026-09-12 19:17:51.136.
+	 Executed 20 tests, with 0 failures (0 unexpected) in 2.785 (2.792) seconds
+Test Suite 'Selected tests' passed at 2026-09-12 19:17:51.137.
+	 Executed 20 tests, with 0 failures (0 unexpected) in 2.785 (2.793) seconds
+** TEST SUCCEEDED **

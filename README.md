@@ -50,6 +50,12 @@ receipt/Undo behavior. FUB assessment (010a) and core capture/preview (010b) are
 deployed and verified in shared development. Live FUB validation remains deferred.
 Native SwiftUI and Jetpack Compose applications are planned, not implemented.
 
+Native work now starts with the [offline field-work plan](docs/plans/MOBILE_OFFLINE_FIRST.md)
+and approved [Mobile 001 specification](docs/specs/MOBILE_001_OFFLINE_FIELD_WORK.md).
+D-073 accepts SQLite, the initial offline set and seven-day offline access;
+D-074 approves the reviewed sync/API and native implementation. Actual developer-tool
+setup is tracked [separately](docs/tasks/MOBILE_NATIVE_TOOLCHAIN_SETUP.md).
+
 Start with the [system map](docs/architecture/ARCHITECTURE_BASELINE.md) and
 [current operational state](docs/plans/PROJECT_STATE.md). Use the
 [history and slice ledger](docs/plans/PROJECT_HISTORY.md) for earlier milestones.

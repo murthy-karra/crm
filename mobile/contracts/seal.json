@@ -1,0 +1,17 @@
+{
+  "context_id": "cbdfeb9b-4f5f-4bb1-b438-57fbb5dc6fbf",
+  "evaluated_at": "2026-09-13T01:27:15.750122Z",
+  "generation_id": "dff63ca2-97ec-4b27-850e-f32ed7bda1b5",
+  "sealed_at": "2026-09-13T01:27:18.164926Z",
+  "selected_count": 100,
+  "today": {
+    "generated_at": "2026-09-13T01:27:15.750122Z",
+    "items": [],
+    "sources": {
+      "issues": [],
+      "status": "complete",
+      "system_feed_issues": []
+    },
+    "truncated": false
+  }
+}

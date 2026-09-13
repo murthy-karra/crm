@@ -1,0 +1,100 @@
+[
+  {
+    "status": 401,
+    "body": {
+      "error": "unauthenticated"
+    },
+    "expected_client_action": "reauthorize_same_identity"
+  },
+  {
+    "status": 403,
+    "body": {
+      "error": "workspace_in_migration_review"
+    },
+    "expected_client_action": "lock_and_preserve"
+  },
+  {
+    "status": 403,
+    "body": {
+      "error": "forbidden"
+    },
+    "expected_client_action": "needs_attention"
+  },
+  {
+    "status": 404,
+    "body": {
+      "error": "not_found"
+    },
+    "expected_client_action": "needs_attention_do_not_recreate"
+  },
+  {
+    "status": 409,
+    "body": {
+      "error": "operation_payload_mismatch"
+    },
+    "expected_client_action": "needs_attention"
+  },
+  {
+    "status": 409,
+    "body": {
+      "error": "revision_conflict"
+    },
+    "expected_client_action": "needs_attention"
+  },
+  {
+    "status": 409,
+    "body": {
+      "error": "dependency_pending"
+    },
+    "expected_client_action": "wait_for_original_create"
+  },
+  {
+    "status": 409,
+    "body": {
+      "error": "generation_changed"
+    },
+    "expected_client_action": "retain_cache_and_restart_bounded"
+  },
+  {
+    "status": 409,
+    "body": {
+      "error": "generation_expired"
+    },
+    "expected_client_action": "retain_cache_and_restart_bounded"
+  },
+  {
+    "status": 409,
+    "body": {
+      "error": "protocol_unsupported"
+    },
+    "expected_client_action": "update_required_preserve_store"
+  },
+  {
+    "status": 422,
+    "body": {
+      "error": "over_limit"
+    },
+    "expected_client_action": "incomplete_coverage"
+  },
+  {
+    "status": 429,
+    "body": {
+      "error": "mobile_capacity"
+    },
+    "expected_client_action": "backoff"
+  },
+  {
+    "status": 503,
+    "body": {
+      "error": "mobile_unavailable"
+    },
+    "expected_client_action": "retry_without_replacing_operation_id"
+  },
+  {
+    "status": 503,
+    "body": {
+      "error": "unavailable"
+    },
+    "expected_client_action": "retry_without_replacing_operation_id"
+  }
+]

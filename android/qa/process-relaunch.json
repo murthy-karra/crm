@@ -1,0 +1,10 @@
+{
+  "at": "2026-09-13T02:27:09.176009+00:00",
+  "before_pid": "6624",
+  "stopped_pid": "",
+  "after_pid": "6791",
+  "wifi_and_mobile_data_disabled": true,
+  "uninstalled_or_data_cleared": false,
+  "after_pid_observed_after_instrumented_relaunch": true,
+  "native_relaunch_test": "passed, 3 pending actions and 100 People with radios off"
+}

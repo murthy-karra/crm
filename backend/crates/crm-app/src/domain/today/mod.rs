@@ -151,8 +151,35 @@ pub async fn query_at(
     )
 }
 
+/// Mobile reconciliation supplies a server-owned evaluation time inside its
+/// existing REPEATABLE READ transaction. The normal core opens a savepoint;
+/// it must neither alter nor commit the outer transaction. Unrecoverable Today
+/// cleanup fails the whole generation so partial data never permits removals.
+pub(crate) async fn query_in_transaction(
+    conn: &mut PgConnection,
+    scope: &PersonVisibilityScope,
+    viewer: UserId,
+    now: DateTime<Utc>,
+) -> Result<TodayList, sqlx::Error> {
+    let prior_timeout: String = sqlx::query_scalar("SHOW statement_timeout")
+        .fetch_one(&mut *conn)
+        .await?;
+    let outcome = query_inner(conn, scope, viewer, EvaluationClock::Mobile(now)).await?;
+    if !outcome.connection_healthy {
+        return Err(sqlx::Error::Protocol(
+            "mobile Today snapshot unavailable".into(),
+        ));
+    }
+    sqlx::query("SELECT set_config('statement_timeout',$1,true)")
+        .bind(prior_timeout)
+        .execute(&mut *conn)
+        .await?;
+    Ok(outcome.list)
+}
+
 enum EvaluationClock {
     Database,
+    Mobile(DateTime<Utc>),
     #[cfg(feature = "test-support")]
     Fixed(DateTime<Utc>),
 }
@@ -297,9 +324,11 @@ async fn query_inner_untraced(
     // source age filters together. `READ ONLY` keeps a malformed/slow source
     // from accidentally making a read-path write.
     let mut tx = conn.begin().await?;
-    sqlx::query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
-        .execute(&mut *tx)
-        .await?;
+    if !matches!(evaluation_clock, EvaluationClock::Mobile(_)) {
+        sqlx::query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
+            .execute(&mut *tx)
+            .await?;
+    }
     crate::auth::workspace::ordinary(&mut tx, scope.organization_id()).await?;
     // Approved §8 transaction-local planning adjustment. `SET LOCAL` dies
     // with this transaction, including the error/drop path.
@@ -325,6 +354,7 @@ async fn query_inner_untraced(
     // here keeps both sides byte-identical regardless of clock source.
     let now = match evaluation_clock {
         EvaluationClock::Database => database_now,
+        EvaluationClock::Mobile(now) => now,
         #[cfg(feature = "test-support")]
         EvaluationClock::Fixed(now) => now,
     }
@@ -1971,3 +2001,7 @@ async fn rollback_task_axis_within(
         Ok(Ok(()))
     )
 }
+
+/// Same-build, test-only D-050 reference; no production route can select it.
+#[cfg(feature = "test-support")]
+pub mod mobile_001_baseline;

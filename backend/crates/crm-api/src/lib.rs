@@ -123,8 +123,10 @@ fn build_app_with_routers_inner(
             .merge(routes::tags::router())
             .merge(routes::notes::router())
             .merge(routes::tasks::router())
+            .merge(routes::mobile::router())
             .merge(routes::custom_fields::router())
             .merge(routes::migrations::router())
+            .merge(routes::core_change_reports::router())
             .merge(routes::migration_imports::router())
             .merge(routes::metadata_imports::router())
             .merge(routes::activity_imports::router())
@@ -265,6 +267,53 @@ pub async fn run(config: Config) -> Result<(), BoxError> {
     // Slice 010a's bounded assessment worker is independent of the Operator
     // and begins only when a database is configured. It holds no connection
     // while making a FUB request.
+    let _mobile_cleanup = state
+        .db
+        .as_ref()
+        .filter(|_| state.mobile_receipt_keys.is_some())
+        .map(|pool| {
+            let pool = pool.clone();
+            tokio::spawn(async move {
+                let mut tick = tokio::time::interval(std::time::Duration::from_secs(60));
+                tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+                loop {
+                    tick.tick().await;
+                    if let Err(error) = domain::mobile::cleanup_once(&pool).await {
+                        let (_, code) = error.code();
+                        tracing::warn!(outcome = code, "mobile generation cleanup failed");
+                    }
+                }
+            })
+        });
+    let _core_change_worker = state.db.as_ref().map(|pool| {
+        let pool = pool.clone();
+        let state = state.clone();
+        tokio::spawn(async move {
+            let mut tick = tokio::time::interval(std::time::Duration::from_millis(200));
+            tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            loop {
+                tick.tick().await;
+                let release = state.current_import_release().await;
+                for _ in 0..32 {
+                    match domain::migration::core_change_worker::run_once(
+                        &pool,
+                        &state.raw_payload_key,
+                        &state.snapshot_policy,
+                        release.as_deref(),
+                    )
+                    .await
+                    {
+                        Ok(true) => tokio::task::yield_now().await,
+                        Ok(false) => break,
+                        Err(error) => {
+                            tracing::warn!(outcome=%error, "core change report sweep failed");
+                            break;
+                        }
+                    }
+                }
+            }
+        })
+    });
     let _migration_worker = state.db.as_ref().map(|pool| {
         domain::migration::worker::spawn(
             pool.clone(),

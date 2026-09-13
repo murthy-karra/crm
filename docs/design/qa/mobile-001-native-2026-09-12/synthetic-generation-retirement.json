@@ -1,0 +1,12 @@
+{
+  "remaining_generations": 0,
+  "contexts": 6,
+  "receipts": 201,
+  "notes": 1197,
+  "tasks": 1002,
+  "preserved": true,
+  "at": "2026-09-13T02:13:52.263729+00:00",
+  "database": "crm_mobile_001",
+  "authorization": "Owners confirmed no active iOS generation; Android had admitted none. Only obsolete synthetic test generation metadata was removed to unblock native QA while lifecycle fix is verified.",
+  "retired_obsolete_test_generations": 4
+}

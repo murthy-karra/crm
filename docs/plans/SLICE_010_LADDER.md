@@ -1,6 +1,6 @@
 # Slice 010 — Follow Up Boss migration ladder
 
-**Current status: 010a, 010b, 010c, 010f1 AND 010f2 DEPLOYED AND VERIFIED (2026-09-11).** The user requested
+**Current status: 010a, 010b, 010c, 010f1, 010f2, 010d1 AND 010d2 DEPLOYED AND VERIFIED (2026-09-12).** The user requested
 a refreshed migration summary and chose a new, empty destination Organization
 first (D-059). The current migration plan is
 [SLICE_010_MIGRATION_SUMMARY.md](SLICE_010_MIGRATION_SUMMARY.md).
@@ -61,6 +61,15 @@ See [verification](../tasks/SLICE_010f2_VERIFICATION.md) and the
 [release record](../tasks/SLICE_010f2_RELEASE.md). Activity confirmation and recovery
 require fresh activity-capable workload evidence. Live FUB, customer-data work and
 activation remain deferred.
+The subsequent [010d1 capture](../specs/SLICE_010d1.md) and
+[010d2 metadata timeline](../specs/SLICE_010d2.md) are deployed and verified under
+D-070/D-072 and their follow-ups; [010d2 release evidence](../tasks/SLICE_010d2_RELEASE.md)
+is the current baseline. Approved [010e1](../specs/SLICE_010e1.md) is the next bounded
+migration task, prepared to run alongside approved mobile development. It reports
+source changes between retained captures without applying them or activating a
+workspace; its reviewed contracts and implementation are approved under D-075. See the
+[coordinated launch](MOBILE_MIGRATION_PARALLEL_LAUNCH.md).
+
 Notes, tasks, tags and custom fields now
 have destination models. API-first assessment and encrypted saved credentials
 are settled for 010a; live-source qualification and later fidelity, mapping,

@@ -1,0 +1,7 @@
+{"step":"cancelled-report-preserves-unpublished-boundary"}
+{"step":"actual-commit-dropped-response-same-request-recovery","request_id":"f561c67f-e74e-4157-866f-cb5c69458757","report_id":"08ae0ed2-7efb-4c09-9230-21d24ed2e4c4"}
+{"step":"filtered-absence-with-no-deletion-claim","family":"people","disposition":"not_seen_again","rows":1}
+{"step":"narrow-inaccessible-note-detail","width":390,"scroll":390,"references":"representative","bodySentinelAbsent":true}
+{"step":"authorized-snapshot-navigation","snapshot_id":"3b6f9979-6d75-4c12-b307-d41c5eca1313"}
+{"step":"reload-recovers-retained-report","report_id":"08ae0ed2-7efb-4c09-9230-21d24ed2e4c4"}
+{"step":"finished","pageErrors":[],"mockedResponses":false,"controlledFault":"one accepted POST response discarded"}

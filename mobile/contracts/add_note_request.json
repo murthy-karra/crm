@@ -1,0 +1,10 @@
+{
+  "context_id": "a298d7ab-060c-46f3-a630-341fa7916438",
+  "device_recorded_at": "2026-09-12T20:00:00Z",
+  "kind": "add_note",
+  "operation_id": "a71b5ec6-9917-41f4-895a-31205f5bbf4d",
+  "payload": {
+    "body": "  Field note\r\nSaved  ",
+    "person_id": "b9c89a95-976e-40ff-b123-a34769fe55b8"
+  }
+}

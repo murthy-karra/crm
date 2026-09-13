@@ -1,0 +1,8 @@
+{
+  "actual_rows": 25000.0,
+  "execution_ms": 18.529,
+  "planning_ms": 8.825,
+  "root_node": "Limit",
+  "shared_hit_blocks": 435,
+  "shared_read_blocks": 0
+}

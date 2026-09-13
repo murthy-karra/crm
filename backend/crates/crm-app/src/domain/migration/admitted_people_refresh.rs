@@ -541,12 +541,12 @@ pub async fn repreview(
     )
     .await?;
     let receipt_after = s::measured_bytes(&mut tx, ctx.organization_id, id).await?;
-    s::release(
+    s::release_delta(
         &mut tx,
         ctx.organization_id,
         id,
         receipt_reservation,
-        receipt_after.saturating_sub(receipt_before),
+        receipt_after - receipt_before,
     )
     .await?;
     tx.commit().await?;

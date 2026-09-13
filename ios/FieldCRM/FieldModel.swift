@@ -26,6 +26,7 @@ import Network
     var pendingCount: Int { queue.filter { $0.status != "accepted" }.count }
     #if MOBILE002_QA
     @Published var qaFixtureStage = "not requested"
+    @Published var qaMigrationStage = "not inspected"
     #endif
     init(synthetic: Bool = false, startMonitor: Bool = true, restoreOnInit: Bool = true) {
         secure = SecureStorage(synthetic: synthetic); self.synthetic = secure.synthetic
@@ -112,10 +113,25 @@ import Network
     }
     #if MOBILE002_QA
     func loadQANoteFixture() async {
-        guard !syncing, !paused, unlocked, let store else { qaFixtureStage = "unpause and complete sync first"; return }
+        guard !syncing, unlocked, let store else { qaFixtureStage = "complete a sync before loading"; return }
         do { guard try store.activeBundle(qaFixturePersonID()) != nil else { qaFixtureStage = "no complete Person bundle"; return } }
         catch { qaFixtureStage = "bundle inspection failed"; return }
         await installQANoteFixtureIfRequested()
+    }
+    /// QA-only proof surface: hashes operation bytes and reports only structural
+    /// migration state, never cached CRM text.
+    func inspectQAMigration() {
+        guard let store else { qaMigrationStage = "protected store unavailable"; return }
+        do {
+            let operations = try store.queue()
+            let fingerprints = operations.map { $0.id.prefix(8) + ":" + String(byteDigest($0.bytes), radix: 16) }.joined(separator: ",")
+            let legacyNotes = people.flatMap(\.notes).filter { $0["revision"].text.isEmpty }.count
+            let qualified = people.flatMap(\.notes).filter { !$0["revision"].text.isEmpty }.count
+            qaMigrationStage = "ops=" + String(operations.count) + " drafts=" + String(drafts.count) + " legacyNotes=" + String(legacyNotes) + " versionedNotes=" + String(qualified) + " ids:digest=" + fingerprints
+        } catch { qaMigrationStage = "probe error: " + error.localizedDescription }
+    }
+    private func byteDigest(_ bytes: Data) -> UInt64 {
+        bytes.reduce(1469598103934665603) { ($0 ^ UInt64($1)) &* 1099511628211 }
     }
     private func qaFixturePersonID() -> String {
         let args = ProcessInfo.processInfo.arguments

@@ -79,7 +79,11 @@ struct WorkspaceView: View {
                         Section("QA fixture stage") {
                             Text(model.qaFixtureStage).font(.caption2).accessibilityIdentifier("qaFixtureStage")
                             Button("Load exact test note") { Task { await model.loadQANoteFixture() } }.accessibilityIdentifier("loadQANoteFixture")
-                                .disabled(model.syncing || model.paused)
+                                .disabled(model.syncing)
+                        }
+                        Section("QA migration probe") {
+                            Text(model.qaMigrationStage).font(.caption2).accessibilityIdentifier("qaMigrationStage")
+                            Button("Inspect protected migration") { model.inspectQAMigration() }.accessibilityIdentifier("inspectQAMigration")
                         }
                         #endif
                         Section("Connection") {

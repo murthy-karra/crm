@@ -146,11 +146,19 @@ async fn imported_contact_order_is_consistent_for_direct_readers_and_task_only(m
     // changed correlated contact lookups must remain indexed and locally bounded.
     sqlx::query("INSERT INTO person(organization_id,first_name,stage_id) SELECT $1,'Synthetic plan filler',$2 FROM generate_series(1,25000)").bind(f.org).bind(f.lead_stage).execute(&migrator).await.unwrap();
     sqlx::query("INSERT INTO contact_method(organization_id,person_id,kind,value,normalized_value,created_at) SELECT p.organization_id,p.id,c.kind,c.value,c.value,p.created_at+c.n*interval '1 second' FROM person p CROSS JOIN (VALUES ('email','first@synthetic.test',0),('email','second@synthetic.test',1),('phone','4155550199',0),('phone','4155550198',1)) c(kind,value,n) WHERE p.organization_id=$1 AND p.first_name='Synthetic plan filler'").bind(f.org).execute(&migrator).await.unwrap();
+    // A one-task relation permits equally cheap indexes, including the mobile
+    // Person-page index. Future tasks for the same Organization and assignee
+    // make the due-time predicate selective without changing the due result.
+    sqlx::query("INSERT INTO task(organization_id,person_id,title,kind,due_at,assignee_user_id,created_by_user_id,origin,correlation_id) SELECT p.organization_id,p.id,'Synthetic future task','other',now()+interval '30 days',$2,$2,'web_session',gen_random_uuid() FROM person p WHERE p.organization_id=$1 AND p.first_name='Synthetic plan filler'").bind(f.org).bind(f.actor).execute(&migrator).await.unwrap();
     sqlx::query("ANALYZE person")
         .execute(&migrator)
         .await
         .unwrap();
     sqlx::query("ANALYZE contact_method")
+        .execute(&migrator)
+        .await
+        .unwrap();
+    sqlx::query("ANALYZE task")
         .execute(&migrator)
         .await
         .unwrap();

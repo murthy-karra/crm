@@ -309,7 +309,7 @@ async fn admitted_refresh_readiness_rejects_partial_identity_and_mapping_schema(
     release.require_admitted_people_refresh(&mut connection).await.unwrap();
     // Each mutation is confined to a rolled-back transaction in this disposable
     // schema. 00008 installs source_account_id and the exact permit atomically.
-    for column in ["baseline_version", "baseline_result_id", "stage_mapping_id", "assignee_mapping_id", "source_account_id"] {
+    for column in ["baseline_version", "baseline_result_id", "stage_mapping_id", "assignee_mapping_id", "source_account_id", "source_semantic_hmac"] {
         let mut tx = migrator.begin().await.unwrap();
         sqlx::query(&format!("ALTER TABLE migration_admitted_people_refresh_item RENAME COLUMN {column} TO unavailable_column"))
             .execute(&mut *tx).await.unwrap();

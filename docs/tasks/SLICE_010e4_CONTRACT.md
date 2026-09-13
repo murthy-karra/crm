@@ -113,7 +113,10 @@ Runtime and release inventory also require non-null BIGINT `baseline_version`,
 nullable UUID `baseline_result_id` / `stage_mapping_id` / `assignee_mapping_id`,
 and nullable BIGINT `source_account_id`. The latter column and exact-account
 permit replacement are installed atomically by SQLx migration `20260930000008`;
-a database stopped before that revision fails closed.
+a database stopped before that revision fails closed. The retained-source
+commit fence also requires nullable BYTEA `source_semantic_hmac` from additive
+migration `20260930000009`; prepared executable items bind the exact semantic
+HMAC and observation keys for commit-time revalidation.
 Old readers/workers fail closed at this capability boundary.
 
 The only review-workspace mutation authority is the transaction-local

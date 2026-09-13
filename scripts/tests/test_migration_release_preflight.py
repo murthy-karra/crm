@@ -816,7 +816,7 @@ class PreflightTests(unittest.TestCase):
                 self.assertIn("('migration_admitted_people_refresh" + suffix + "')", schema)
             self.assertIn("person_admitted_refresh_provenance", schema)
             self.assertIn("attname='baseline_version'", schema)
-            for column in ["stage_mapping_id", "assignee_mapping_id", "baseline_result_id", "source_account_id"]:
+            for column in ["stage_mapping_id", "assignee_mapping_id", "baseline_result_id", "source_account_id", "source_semantic_hmac"]:
                 self.assertIn("'" + column + "'", schema)
             self.assertIn("attname='source_account_id' AND atttypid='bigint'::regtype AND NOT attnotnull", schema)
             self.assertIn("atttypid='uuid'::regtype AND NOT attnotnull", schema)

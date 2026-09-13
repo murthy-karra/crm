@@ -2,7 +2,7 @@
 
 **Status: 010a DEPLOYED AND VERIFIED (2026-09-11); live FUB validation deferred.
 010b core-first capture/preview is also deployed and verified under D-063;
-010c, 010f1, 010f2, 010d1 and 010d2 are also deployed and verified under their accepted decisions and follow-ups (through 2026-09-12).** The user
+010c, 010f1, 010f2, 010d1, 010d2, 010e1 and 010e2 are also deployed and verified under their accepted decisions and follow-ups (through 2026-09-13).** The user
 selected **a new, empty CRM Organization first** (D-059), then approved 010a's
 API-first assessment and encrypted saved credentials (D-060). Unaccepted
 later-rung recommendations remain proposals. Initial survey used main `b2fb368`, after 019b;
@@ -82,20 +82,30 @@ eight browser workflows passed with the documented telemetry qualification; all
 45 business counts and three workspace revisions remain unchanged. The SQLx
 cancellation follow-up remains open before production cutover.
 
-**Latest deployed slice — 010d2:** [History capture](../specs/SLICE_010d1.md)
+**Deployed history slices — 010d1/010d2:** [History capture](../specs/SLICE_010d1.md)
 and [metadata timeline import](../specs/SLICE_010d2.md) are complete in shared
 development under D-070/D-072 and their release follow-ups. The
-[010d2 release](../tasks/SLICE_010d2_RELEASE.md) is the current recorded evidence;
+[010d2 release](../tasks/SLICE_010d2_RELEASE.md) records that earlier runtime;
 metadata-only access does not authorize readable message/note history bodies.
 
-**Next approved migration slice — 010e1 (D-075):** compare the original core snapshot
+**Deployed comparison slice — 010e1 (D-075):** compares the original core snapshot
 behind a completed 010c import with a newer retained core capture. The
 [specification](../specs/SLICE_010e1.md) and [brief](../tasks/SLICE_010e1_IMPL.md)
 report changed/newly observed/not-seen/unresolved records without applying updates
-or inferring deletion. Plan it before launching the approved Mobile 001 work;
-[parallel sequencing](MOBILE_MIGRATION_PARALLEL_LAUNCH.md) preserves three worktrees.
-D-075 approves the reviewed 010e1 contracts and implementation. Standalone tags, other uncaptured families,
-repair/application, live qualification and cutover remain explicit gaps.
+or inferring deletion. The [Mobile 001 / 010e1 release](../tasks/MOBILE_001_010e1_RELEASE.md)
+records its completed delivery.
+
+**Latest released slice — 010e2 (D-076):** previewed refresh of already imported
+People is implemented, published and deployed. See the [spec](../specs/SLICE_010e2.md)
+and [current release evidence](../tasks/MOBILE_002_010e2_RELEASE.md).
+
+**Current approved slice — 010e3 (D-078):** core-only admission of qualified
+People newly observed after the original import. The [spec](../specs/SLICE_010e3.md),
+[brief](../tasks/SLICE_010e3_IMPL.md), [review](../tasks/MOBILE_003_010e3_PLANNING_REVIEW.md)
+and [Mobile 003 parallel plan](MOBILE_003_010e3_PARALLEL_LAUNCH.md) are approved for
+implementation. Dependent-family coverage and later refresh for these People remain
+following work. Standalone tags, other uncaptured families, mapping repair,
+remaining deltas, live qualification and cutover remain explicit gaps.
 
 ## 1. Outcome and first milestone
 

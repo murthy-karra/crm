@@ -1,6 +1,6 @@
 # Slice 010 — Follow Up Boss migration ladder
 
-**Current status: 010a, 010b, 010c, 010f1, 010f2, 010d1, 010d2 AND 010e1 DEPLOYED AND VERIFIED (2026-09-12).** The user requested
+**Current status: 010a, 010b, 010c, 010f1, 010f2, 010d1, 010d2, 010e1 AND 010e2 DEPLOYED AND VERIFIED (2026-09-13).** The user requested
 a refreshed migration summary and chose a new, empty destination Organization
 first (D-059). The current migration plan is
 [SLICE_010_MIGRATION_SUMMARY.md](SLICE_010_MIGRATION_SUMMARY.md).
@@ -66,19 +66,26 @@ The subsequent [010d1 capture](../specs/SLICE_010d1.md) and
 D-070/D-072 and their follow-ups; [010d2 release evidence](../tasks/SLICE_010d2_RELEASE.md)
 records the prior baseline. [010e1](../specs/SLICE_010e1.md) is implemented and
 released with Mobile 001 under D-075 and its follow-up;
-[milestone release evidence](../tasks/MOBILE_001_010e1_RELEASE.md) owns the current
-runtime identity. It reports
+[milestone release evidence](../tasks/MOBILE_001_010e1_RELEASE.md) records that
+superseded runtime. 010e1 reports
 source changes between retained captures without applying them or activating a
 workspace; its reviewed contracts and implementation are approved under D-075. See the
 [coordinated launch](MOBILE_MIGRATION_PARALLEL_LAUNCH.md).
 
-**Next proposed rung: [010e2](../specs/SLICE_010e2.md), existing-People refresh.**
-Its [brief](../tasks/SLICE_010e2_IMPL.md) defines previewed names/contact/stage/
-assignment updates with original mappings, conflict holds and durable sequential
-baselines. New People and extending dependent child imports to them remain later
-work, as do new mappings, other-family deltas, final reconciliation and activation.
-This write contract needs acceptance; 010e1's read-only approval does not cover it.
-Mobile design and physical-phone testing are user-deferred while migration advances.
+**Latest released rung: [010e2](../specs/SLICE_010e2.md), existing-People refresh.**
+D-076 and its follow-up cover completed implementation/publication/deployment of
+previewed names/contact/stage/assignment updates with original mappings, conflict
+holds and durable baselines. The [Mobile 002 / 010e2 release](../tasks/MOBILE_002_010e2_RELEASE.md)
+owns current runtime identity and verified preservation evidence.
+
+**Current approved rung: [010e3](../specs/SLICE_010e3.md), new-Person admission.**
+Implementation is accepted under D-078 after D-077 planning. Its [brief](../tasks/SLICE_010e3_IMPL.md),
+[review](../tasks/MOBILE_003_010e3_PLANNING_REVIEW.md) and
+[parallel plan](MOBILE_003_010e3_PARALLEL_LAUNCH.md) define qualified core-only
+admission alongside Mobile 003. The new shared contracts are accepted. Extending
+child imports and later refresh to admitted People follows separately, as do new
+mappings/repair, other-family deltas, final reconciliation and activation.
+Mobile design and physical-phone testing remain user-deferred.
 
 Notes, tasks, tags and custom fields now
 have destination models. API-first assessment and encrypted saved credentials

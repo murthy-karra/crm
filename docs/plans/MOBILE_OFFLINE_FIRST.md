@@ -1,5 +1,14 @@
 # Native mobile: first offline field-work slice
 
+**Current follow-up — 2026-09-13:** Mobile 002 offline note/task editing is
+implemented, published and released with 010e2; see the
+[milestone evidence](../tasks/MOBILE_002_010e2_RELEASE.md). D-077 authorizes planning
+[Mobile 003 contact logging](../specs/MOBILE_003_OFFLINE_CONTACT_LOGGING.md) alongside
+[010e3](../specs/SLICE_010e3.md), with the
+[coordinated plan](MOBILE_003_010e3_PARALLEL_LAUNCH.md) for both native platforms and
+migration. D-078 now accepts the new contracts and reported occurrence time for implementation.
+The foundation plan below records completed work, not the next launch.
+
 **IMPLEMENTED AND SYNTHETICALLY VERIFIED — 2026-09-12, D-074/D-075.** Both native
 apps and their shared backend are published; backend/Web are released in shared
 development. See [implementation evidence](../tasks/MOBILE_MIGRATION_IMPLEMENTATION_STATUS.md)

@@ -1,11 +1,19 @@
 # Project state
 
-Last updated: 2026-09-13 (Mobile 002 / 010e2 published and deployed to shared development).
+Last updated: 2026-09-13 (Mobile 003 / 010e3 implementation approved; Mobile 002 / 010e2 remains the released runtime).
 This file holds current operational status, active work and live residuals.
 [PROJECT_HISTORY.md](PROJECT_HISTORY.md) preserves earlier progress, the slice
 ledger and historical measurements; its old instructions are not current work.
 
 ## Current state
+
+**Mobile 003 and 010e3 implementation is approved under D-078.** The user accepted
+both specifications and occurrence-time contact logging. Terra high implements the
+shared mobile backend alongside migration, then iOS and Android after backend
+integration within three worktrees. See the
+[coordinated plan](MOBILE_003_010e3_PARALLEL_LAUNCH.md) and
+[implementation status](../tasks/MOBILE_003_010e3_IMPLEMENTATION_STATUS.md).
+Shared development and native-demo stores remain preserved.
 
 **Mobile 002 and 010e2 are published on main and deployed to shared development
 under D-076 and its explicit release follow-up.**
@@ -24,7 +32,7 @@ actual commits, checks and evidence limits. Runtime source is
 [release record](../tasks/MOBILE_002_010e2_RELEASE.md) verifies all 43 schema
 checksums, 134 prior/142 upgraded tenant rowsets, exact deployed artifacts,
 124 HTTP checks, 43 mobile requests and actual desktop/390px browser behavior.
-The integration branch is removed; only main remains. Native distribution and
+The milestone integration branch is removed. Native distribution and
 physical-phone/cellular testing remain separate.
 
 **Mobile 001 is implemented and verified for the approved synthetic scope under D-074.** The reviewed
@@ -54,11 +62,11 @@ read-only discovery found no connected physical phones. The user then clarified
 that iOS/Android feature development should continue in parallel, and requested
 preparation/review of [Mobile 002](../specs/MOBILE_002_OFFLINE_EDITS.md): offline
 note/task editing with explicit conflict recovery. It accompanies the
-[010e2 proposal](../specs/SLICE_010e2.md) for previewed updates to already imported
-People. D-076 now accepts both new contracts and Terra high implementation; the
-[coordinated plan](MOBILE_002_010e2_PARALLEL_LAUNCH.md) prepares mobile backend
-alongside migration, then iOS + Android + migration within three worktrees.
-The implementation uses isolated synthetic resources; shared development and the native demo remain intact.
+[010e2 specification](../specs/SLICE_010e2.md) for previewed updates to already imported
+People. D-076 accepted both contracts and Terra high implementation; the
+[coordinated plan](MOBILE_002_010e2_PARALLEL_LAUNCH.md) records the completed backend,
+migration and iOS/Android sequence within three worktrees.
+That implementation used isolated synthetic resources; the native demo remains intact.
 The [implementation status](../tasks/MOBILE_002_010e2_IMPLEMENTATION_STATUS.md)
 records actual lane progress and assigned resources separately from planning.
 
@@ -152,6 +160,10 @@ follow-up remains open in production readiness.
 
 ## Current slice
 
+- **Mobile 003 / 010e3:** implementation and occurrence-time policy approved
+  under D-078. Terra high owns the bounded backend/native/migration lanes under
+  the coordinated plan. Current progress and checks are recorded separately in
+  the [implementation status](../tasks/MOBILE_003_010e3_IMPLEMENTATION_STATUS.md).
 - **Mobile 002:** implementation, verification and source publication are complete.
   Terra high implemented backend/iOS/Android; both native clients passed protected
   upgrade, offline restart/replay and explicit conflict/revised-receipt checks.
@@ -273,6 +285,10 @@ follow-up remains open in production readiness.
 
 ## Current branch
 
+`codex/mobile003-010e3-integration` starts from published main closeout
+`619c1b33b15dcd8f331561e16178b3e107984a3b` plus the approved planning checkpoint.
+The coordinated plan allocates two backend worktrees, then both native lanes.
+
 Main contains the published milestone source
 `9d04755e405848cb06a8e4c135793d9994176648` plus documentation-only closeout.
 All implementation worktrees and the integration branch are removed. Native
@@ -286,6 +302,16 @@ from artifacts used by running shared services. The prior implementation output
 collisions and restoration remain historical evidence.
 
 ## Last accepted decision
+
+**D-078:** implement both reviewed slices, including occurrence-time mobile
+contact logging, using Terra high and the coordinated three-worktree sequence.
+Local checkpoints and synthetic verification are authorized; publication and
+deployment remain later release scope. This supersedes D-077 pending acceptance.
+
+**D-077:** prepare/review Mobile 003 and 010e3 and their implementation sequence.
+This is planning authorization; proposed contract changes are not accepted yet.
+The mobile occurrence-time choice remains pending. See the two specifications
+and coordinated plan above for the concrete reviewable result.
 
 **D-076:** the user explicitly approves Mobile 002 and 010e2 implementation,
 including their reviewed contracts and parallel plan, and confirms Terra for
@@ -653,10 +679,12 @@ and now lives only in git history.
 The [Mobile 002 / 010e2 milestone](../tasks/MOBILE_002_010e2_RELEASE.md) is
 implemented, verified, published and deployed. Do not restart its completed lanes.
 
-1. Prepare the next bounded mobile feature specification and the next migration
-   proposal. The 010e2 brief identifies new-Person admission and dependent-family
-   import as following work; those contracts need review before implementation.
-   Preserve the user-deferred mobile design and physical-phone work.
+1. Implement the accepted [Mobile 003](../specs/MOBILE_003_OFFLINE_CONTACT_LOGGING.md)
+   and [010e3](../specs/SLICE_010e3.md) contracts under D-078. Use the
+   [coordinated plan](MOBILE_003_010e3_PARALLEL_LAUNCH.md) with Terra high and at most
+   three worktrees; complete synthetic acceptance and combined gates. Dependent
+   families for newly admitted People are following scope. Preserve deferred
+   design/physical-phone work and the released runtime.
 2. Resume authorized FUB qualification when the user is ready, against an agreed
    dataset and applicable readiness gates. Later data families, mapping repair,
    deltas and activation need their own approved specification.
@@ -673,6 +701,9 @@ implemented, verified, published and deployed. Do not restart its completed lane
 
 ## Approval currently required
 
+- D-078 accepts Mobile 003 / 010e3 implementation and reported contact time.
+  No repeat scope/contract approval is pending. Git publication/deployment,
+  native distribution, live customer/FUB work and activation remain later scopes.
 - D-076 and its explicit release follow-up accept Mobile 002/010e2 implementation
   and the completed commit/main merge/push/cleanup/shared-development deployment.
   No repeat release approval is pending. Native distribution, live FUB/customer

@@ -42,6 +42,13 @@ authoritative.
   boundaries and the distinction between development and planned production.
 - [Current state](plans/PROJECT_STATE.md): active work, release evidence,
   residuals and the next action.
+- [Approved Mobile 003](specs/MOBILE_003_OFFLINE_CONTACT_LOGGING.md): offline
+  manual contact logs with durable receipts and truthful Today refresh.
+- [Approved migration 010e3](specs/SLICE_010e3.md): core-only admission of newly
+  observed People; [coordinator planning review](tasks/MOBILE_003_010e3_PLANNING_REVIEW.md)
+  and [parallel execution plan](plans/MOBILE_003_010e3_PARALLEL_LAUNCH.md) cover both.
+  D-078 accepts both implementations and reported contact time; see the
+  [implementation status](tasks/MOBILE_003_010e3_IMPLEMENTATION_STATUS.md).
 - [Approved migration 010e2](specs/SLICE_010e2.md): previewed refresh of existing
   imported People, with [execution ownership](tasks/SLICE_010e2_IMPL.md) and
   [planning review](tasks/SLICE_010e2_REVIEW.md); implemented and released under D-076.

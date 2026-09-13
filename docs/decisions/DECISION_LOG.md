@@ -2623,3 +2623,70 @@ and recovery verification. Preserve the private native-demo API and installed
 stores. Native distribution, physical-phone/cellular testing, live FUB/customer
 processing, workspace activation and production-cluster deployment remain
 separate. Actual release evidence belongs to `MOBILE_002_010e2_RELEASE.md`.
+
+### D-077 — Mobile 003 and migration 010e3 planning authorized (2026-09-13)
+
+After the Mobile 002 / 010e2 release and a recommendation for the following
+mobile and migration work, the user said **“ok go ahead and plan for both mobile
+003 and 010e3.”** This authorizes preparing and reviewing the two specifications,
+implementation briefs and coordinated ownership plan. It does not accept a new
+implementation contract merely by authorizing its preparation.
+
+The proposed [Mobile 003](../specs/MOBILE_003_OFFLINE_CONTACT_LOGGING.md) adds
+protected offline manual contact logging and atomic fact/operation receipts.
+The recommended use of explicitly reported occurrence time, rather than upload
+time, is a declared exception to the Mobile 001/002 business-clock policy. The
+user has been asked to choose; no answer or acceptance of that exception is
+recorded here. Existing note/task and Web/Operator/call semantics remain accepted
+as before. The seven-day access window remains D-073.
+
+The proposed [010e3](../specs/SLICE_010e3.md) admits qualified newly observed
+People from retained source evidence, core fields only. Admission identity,
+mapping inheritance, private write scope, provenance/history and recovery are
+declared proposed contracts; extending dependent families and later refresh to
+those People is following work. The original review hold and full-fidelity
+reporting requirements remain in force.
+
+The [coordinated plan](../plans/MOBILE_003_010e3_PARALLEL_LAUNCH.md) retains the
+user's parallel native/migration direction: shared mobile backend alongside
+migration, then iOS/Android alongside remaining migration within three short-lived
+worktrees. Retain the user's Terra high implementation preference when that work
+is accepted. The [coordinator planning review](../tasks/MOBILE_003_010e3_PLANNING_REVIEW.md)
+records code-to-spec findings; it is not independent implementation verification.
+
+This planning task changes documents only. Physical-phone/cellular tests and
+broad mobile design remain user-deferred. Implementation, new release actions,
+live FUB/customer processing, body/media access and activation are not started
+or authorized by this planning request.
+
+### D-078 — Mobile 003 and migration 010e3 implementation approved (2026-09-13)
+
+After the completed specifications, reviewed shared-contract changes, three-
+worktree Terra high sequence and recommendation to use when contact happened
+were presented, the user said **“go ahead...”**. This accepts
+[Mobile 003](../specs/MOBILE_003_OFFLINE_CONTACT_LOGGING.md),
+[010e3](../specs/SLICE_010e3.md), their execution briefs and the
+[coordinated plan](../plans/MOBILE_003_010e3_PARALLEL_LAUNCH.md).
+
+Mobile contact logs use the explicit agent-reported occurrence instant, with
+future-time rejection and a separate server recording/acceptance clock. This is
+the Mobile 003-only exception to Mobile 001/002's server business-clock rule;
+existing note/task, Web/Operator and automatic call contracts remain unchanged.
+The seven-day access window still protects unsynced work after locking.
+
+010e3 accepts qualified core-only new-Person admission, original mapping
+inheritance, extension of the existing global source identity registry, separate
+provenance/history and bounded confirmation/recovery under the continuing admin
+review hold. Dependent-family coverage and later refresh for admitted People
+remain following work.
+
+Implementation, concrete compatible schema/DTO detail within these contracts,
+additive owned migrations, isolated synthetic verification, bounded reviews and
+local integration checkpoints are authorized. Use Terra high implementation:
+mobile backend alongside migration, then iOS and Android alongside remaining
+migration within three worktrees. No repeat contract or timing approval is needed.
+
+Preserve shared development and the user's native-demo services/stores. Broad
+mobile design and physical-phone/cellular work remain deferred. Git publication,
+shared-development deployment, app distribution, live FUB/customer processing,
+body/media access and workspace activation remain later scopes.

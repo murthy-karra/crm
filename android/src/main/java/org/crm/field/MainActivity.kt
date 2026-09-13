@@ -101,12 +101,14 @@ fun FieldApp(repository: FieldRepository) {
     var tab by remember { mutableStateOf("Today") }
     var composer by remember { mutableStateOf<ComposerLaunch?>(null) }
     var contactComposer by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var stageComposer by remember { mutableStateOf<Pair<String, String>?>(null) }
     var signOut by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf("") }
     LaunchedEffect(state.locked) {
         if (state.locked) {
             composer = null
             contactComposer = null
+            stageComposer = null
             signOut = false
             tab = "Today"
             notice = ""
@@ -197,6 +199,9 @@ fun FieldApp(repository: FieldRepository) {
                             onContact = {
                                 contactComposer = state.person!!.id to UUID.randomUUID().toString()
                             },
+                            onStage = {
+                                stageComposer = state.person!!.id to UUID.randomUUID().toString()
+                            },
                             onError = { notice = it },
                         )
                     tab == "People" -> PeopleScreen(state, repository, onError = { notice = it })
@@ -244,6 +249,14 @@ fun FieldApp(repository: FieldRepository) {
                                     }
                                 }
                             },
+                            onStageDraft = { draft -> stageComposer = draft.person to draft.id },
+                            onReviseStage = { row ->
+                                scope.launch {
+                                    try { stageComposer = row.person to repository.reviseStageConflict(row.id).id }
+                                    catch (_: Exception) { notice = "The original stage proposal remains protected; a revised proposal could not be prepared." }
+                                }
+                            },
+                            onDiscardStage = { row -> scope.launch { repository.discardStageConflict(row.id) } },
                         )
                     else -> TodayScreen(state, repository)
                 }
@@ -273,6 +286,11 @@ fun FieldApp(repository: FieldRepository) {
                 repository.requestSync()
             },
         )
+    }
+    stageComposer?.let { (person, draft) ->
+        StageComposer(repository, person, draft, onClose = { stageComposer = null }, onSubmitted = {
+            stageComposer = null; repository.requestSync()
+        })
     }
     if (signOut)
         AlertDialog(
@@ -472,6 +490,7 @@ private fun PeopleScreen(state: FieldUi, repository: FieldRepository, onError: (
                 state.contactDrafts.any {
                     it.person == person.id && (it.operation.isEmpty() || it.state != "accepted")
                 },
+                state.stageCatalog,
             ) {
                 repository.select(person.id)
             }
@@ -481,13 +500,14 @@ private fun PeopleScreen(state: FieldUi, repository: FieldRepository, onError: (
 }
 
 @Composable
-private fun PersonTile(person: PersonCard, pending: Boolean, contactPending: Boolean, open: () -> Unit) {
+private fun PersonTile(person: PersonCard, pending: Boolean, contactPending: Boolean, catalog: List<StageCatalogRow>, open: () -> Unit) {
     val summary = JSONObject(person.summary)
     OutlinedCard(Modifier.fillMaxWidth().testTag("person-${person.id}").clickable(onClick = open)) {
         Column(Modifier.padding(16.dp)) {
             Text(summary.getString("display_name"), fontWeight = FontWeight.SemiBold)
             Text(
-                summary.optJSONObject("stage")?.optString("name") ?: "No stage",
+                summary.optJSONObject("stage")?.optString("id")?.let { id -> catalog.firstOrNull { it.id == id }?.name }
+                    ?: summary.optJSONObject("stage")?.optString("name") ?: "No stage",
                 style = MaterialTheme.typography.bodySmall,
             )
             if (pending)
@@ -513,6 +533,7 @@ internal fun PersonScreen(
     onCompose: (String, JSONObject?) -> Unit,
     onError: (String) -> Unit,
     onContact: () -> Unit = {},
+    onStage: () -> Unit = {},
 ) {
     val row = state.person ?: return
     val summary = JSONObject(row.summary)
@@ -528,9 +549,9 @@ internal fun PersonScreen(
     ) {
         item {
             Text(summary.getString("display_name"), style = MaterialTheme.typography.headlineMedium)
-            Text(
-                "${summary.optJSONObject("stage")?.optString("name") ?: "No stage"} · ${summary.optJSONObject("assigned_user")?.optString("display_name") ?: "Unassigned"}"
-            )
+            val stageId = summary.optJSONObject("stage")?.optString("id")
+            val catalogLabel = stageId?.let { id -> state.stageCatalog.firstOrNull { it.id == id }?.name }
+            Text("${catalogLabel ?: summary.optJSONObject("stage")?.optString("name") ?: "No stage"} · ${summary.optJSONObject("assigned_user")?.optString("display_name") ?: "Unassigned"}")
             Text(
                 "Complete saved record · ${displayTime(row.evaluatedAt)}",
                 style = MaterialTheme.typography.bodySmall,
@@ -543,6 +564,24 @@ internal fun PersonScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { onCompose("add_note", null) }) { Text("Add note") }
                 OutlinedButton(onClick = { onCompose("create_task", null) }) { Text("Create task") }
+            }
+        }
+        item {
+            val stageOp = local.firstOrNull { it.kind == "change_person_stage" && it.status !in setOf("covered", "superseded") }
+            OutlinedCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Stage", fontWeight = FontWeight.SemiBold)
+                    Text("The server stage remains shown until a complete authorized refresh.", style = MaterialTheme.typography.bodySmall)
+                    if (stageOp != null) {
+                        val proposal = JSONObject(stageOp.envelope).getJSONObject("payload").getString("stage_id")
+                        val label = state.stageCatalog.firstOrNull { it.id == proposal }?.name ?: "Saved stage"
+                        Text("Pending proposal: $label", color = MaterialTheme.colorScheme.primary)
+                        StatusBadge(stageOp)
+                    }
+                    Button(onClick = onStage, enabled = state.stageChangesEnabled && row.stageRevisionsQualified && stageOp == null, modifier = Modifier.testTag("change-stage")) { Text("Change stage") }
+                    if (!state.stageChangesEnabled || !row.stageRevisionsQualified)
+                        Text("Stage changes need a complete online catalog and current Person baseline.", style = MaterialTheme.typography.bodySmall)
+                }
             }
         }
         item {
@@ -721,6 +760,9 @@ private fun SavedWork(
     onRevise: (OperationRow, JSONObject) -> Unit,
     onContactDraft: (ContactDraftRow) -> Unit,
     onRepairFutureContact: (ContactDraftRow) -> Unit,
+    onStageDraft: (StageDraftRow) -> Unit,
+    onReviseStage: (OperationRow) -> Unit,
+    onDiscardStage: (OperationRow) -> Unit,
 ) {
     LazyColumn(
         Modifier.fillMaxSize(),
@@ -765,6 +807,16 @@ private fun SavedWork(
                 }
             }
         }
+        items(state.stageDrafts, key = { "stage-${it.id}" }) { draft ->
+            val operation = draft.operation.takeIf { it.isNotEmpty() }?.let { id -> state.operations.firstOrNull { it.id == id } }
+            OutlinedCard(Modifier.fillMaxWidth().then(if (draft.operation.isEmpty()) Modifier.clickable { onStageDraft(draft) } else Modifier)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Change stage", fontWeight = FontWeight.SemiBold)
+                    Text("${draft.baselineStageName} → ${draft.proposedStageName}")
+                    if (operation == null) Text("Draft revision ${draft.revision} saved on device · Continue editing") else StatusBadge(operation)
+                }
+            }
+        }
         items(state.operations.filter { it.kind != "log_contact_attempt" }, key = { it.id }) { row ->
             OutlinedCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
@@ -774,6 +826,7 @@ private fun SavedWork(
                             "edit_note" -> "Edit note"
                             "create_task" -> "Create task"
                             "update_task" -> "Edit task"
+                            "change_person_stage" -> "Change stage"
                             else -> "Complete task"
                         },
                         fontWeight = FontWeight.SemiBold,
@@ -815,6 +868,20 @@ private fun SavedWork(
                                 },
                                 enabled = comparison.current.isNotEmpty() && row.status == "attention",
                             ) { Text("Review and revise") }
+                        }
+                    }
+                    val stageComparison = state.stageContexts.firstOrNull { it.operation == row.id }
+                    if (row.kind == "change_person_stage" && row.lastError == "revision_conflict" && stageComparison != null) {
+                        Text("Your saved proposal", fontWeight = FontWeight.SemiBold)
+                        Text(stageComparison.proposal)
+                        Text("Version you started from", fontWeight = FontWeight.SemiBold)
+                        Text(stageComparison.baseline)
+                        Text("Current stage", fontWeight = FontWeight.SemiBold)
+                        Text(if (stageComparison.current.isEmpty()) "Waiting for an authorized current-stage read" else stageComparison.current)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(onClick = { repository.requestSync(true) }) { Text("Keep for later") }
+                            TextButton(onClick = { onDiscardStage(row) }) { Text("Discard and use current") }
+                            TextButton(onClick = { onReviseStage(row) }, enabled = stageComparison.current.isNotEmpty()) { Text("Review and revise") }
                         }
                     }
                     TextButton(
@@ -1311,6 +1378,83 @@ private fun ContactComposer(
                 }
             },
         )
+}
+
+@Composable
+private fun StageComposer(
+    repository: FieldRepository,
+    person: String,
+    id: String,
+    onClose: () -> Unit,
+    onSubmitted: () -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    val commits = remember(id) { Mutex() }
+    val state by repository.ui.collectAsState()
+    var selectedStage by remember(id) { mutableStateOf("") }
+    var revision by remember(id) { mutableLongStateOf(0) }
+    var committed by remember(id) { mutableStateOf("") }
+    var loaded by remember(id) { mutableStateOf(false) }
+    var saving by remember(id) { mutableStateOf(false) }
+    var status by remember(id) { mutableStateOf("Loading saved stage proposal…") }
+    var retry by remember(id) { mutableIntStateOf(0) }
+    val catalog = state.stageCatalog
+    val dirty = loaded && selectedStage != committed
+    LaunchedEffect(id) {
+        try {
+            repository.stageDraft(id)?.let { draft ->
+                selectedStage = draft.proposedStageId; committed = draft.proposedStageId; revision = draft.revision
+            }
+            if (selectedStage.isEmpty()) {
+                val current = state.person?.summary?.let(::JSONObject)?.getJSONObject("stage")?.getString("id")
+                selectedStage = current.orEmpty(); committed = selectedStage
+            }
+            status = "Choose a stage. Saving keeps this proposal encrypted on this device."
+            loaded = true
+        } catch (_: Exception) { status = "Could not open this protected stage proposal" }
+    }
+    LaunchedEffect(selectedStage, loaded, retry) {
+        if (loaded && selectedStage != committed && selectedStage.isNotEmpty()) {
+            commits.withLock {
+                withContext(NonCancellable) {
+                    saving = true
+                    try {
+                        val row = repository.saveStageDraft(id, person, selectedStage, revision)
+                        revision = row.revision; committed = selectedStage
+                        status = "Stage proposal revision ${row.revision} saved on this device"
+                    } catch (_: Exception) { status = "Not saved. Free storage or reconnect for a complete stage catalog, then retry." }
+                    saving = false
+                }
+            }
+        }
+    }
+    AlertDialog(
+        onDismissRequest = { if (!dirty && !saving) onClose() },
+        title = { Text("Change stage") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Your downloaded server stage stays visible until a complete authorized refresh. This proposal does not recalculate Today.", style = MaterialTheme.typography.bodySmall)
+                catalog.forEach { stage ->
+                    FilterChip(selectedStage == stage.id, { selectedStage = stage.id }, label = { Text(stage.name) }, enabled = !saving, modifier = Modifier.fillMaxWidth().testTag("stage-${stage.id}"))
+                }
+                if (catalog.isEmpty()) Text("No complete stage catalog is available yet.", color = MaterialTheme.colorScheme.error)
+                Text(status, style = MaterialTheme.typography.bodySmall)
+                if (dirty && !saving) TextButton(onClick = { retry++ }) { Text("Retry save") }
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                saving = true
+                scope.launch {
+                    commits.withLock {
+                        try { repository.submitStageDraft(id, revision); onSubmitted() }
+                        catch (error: Exception) { status = if (error is ApiFailure) errorMessage(error.code) else "Not submitted. Your committed stage proposal remains available."; saving = false }
+                    }
+                }
+            }, enabled = loaded && !dirty && !saving && selectedStage.isNotEmpty() && catalog.isNotEmpty(), modifier = Modifier.testTag("stage-save")) { Text("Save stage on device") }
+        },
+        dismissButton = { TextButton(onClick = onClose, enabled = loaded && !dirty && !saving) { Text("Close proposal") } },
+    )
 }
 
 private fun displayContactTime(value: String): String =

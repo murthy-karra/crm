@@ -81,6 +81,13 @@ class Binding(
             capabilities.getString(it) == "log_contact_attempt"
         }
     }
+
+    fun supportsStageChanges(): Boolean {
+        val capabilities = JSONObject(bootstrap).getJSONArray("capabilities")
+        return listOf("change_person_stage", "stage_revisions", "stage_catalog").all { wanted ->
+            (0 until capabilities.length()).any { capabilities.getString(it) == wanted }
+        }
+    }
     companion object {
         fun parse(value: JSONObject, actor: String, org: String, installation: String): Binding {
             if (value.getString("protocol") != PROTOCOL)
@@ -125,6 +132,7 @@ fun errorMessage(code: String): String =
         "forbidden" -> "This action is no longer permitted. Its input is preserved."
         "contact_time_in_future" ->
             "The reported contact time is later than the server clock. Correct the time to create a new saved contact; the original is preserved."
+        "invalid_stage" -> "That stage is no longer available. Choose a stage from the current catalog in a new saved proposal."
         "dependency_pending" -> "Waiting for the original task creation."
         "generation_changed",
         "generation_expired" ->

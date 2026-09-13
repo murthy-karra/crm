@@ -20,6 +20,8 @@ data class PersonRow(
     val generation: String,
     val evaluatedAt: String,
     @ColumnInfo(defaultValue = "0") val noteRevisionsQualified: Boolean = false,
+    /** A v4 cache has no stage baseline even when its broad revision is unchanged. */
+    @ColumnInfo(defaultValue = "0") val stageRevisionsQualified: Boolean = false,
 )
 
 data class PersonCard(val id: String, val revision: String, val summary: String)
@@ -59,6 +61,45 @@ data class ContactDraftRow(
     val state: String = "draft",
     @ColumnInfo(defaultValue = "''") val lastError: String = "",
 )
+
+/** One local proposal.  `operation` is populated atomically with the immutable outbox row. */
+@Entity(tableName = "stage_drafts")
+data class StageDraftRow(
+    @PrimaryKey val id: String,
+    val person: String,
+    val baselineStageId: String,
+    val baselineStageName: String,
+    val baselineRevision: String,
+    val proposedStageId: String,
+    val proposedStageName: String,
+    val revision: Long,
+    val operation: String = "",
+    val state: String = "draft",
+    @ColumnInfo(defaultValue = "''") val lastError: String = "",
+)
+
+/** Comparison material is deliberately separate from reconciled Person data. */
+@Entity(tableName = "stage_context")
+data class StageContextRow(
+    @PrimaryKey val operation: String,
+    val person: String,
+    val baseline: String,
+    val proposal: String,
+    val current: String = "",
+    val editorRevision: Long = 0,
+)
+
+@Entity(tableName = "stage_catalog")
+data class StageCatalogRow(
+    @PrimaryKey val id: String,
+    val name: String,
+    val position: Int,
+    val generation: String,
+    val revision: String,
+)
+
+@Entity(tableName = "stage_catalog_pages", primaryKeys = ["generation", "cursor"])
+data class StageCatalogPageRow(val generation: String, val cursor: String, val body: String)
 
 /** Protected comparison material.  It is not a reconciliation component or cache promotion. */
 @Entity(tableName = "edit_context")
@@ -127,6 +168,34 @@ interface FieldDao {
     @Query("SELECT * FROM contact_drafts WHERE id=:id") fun contactDraft(id: String): ContactDraftRow?
 
     @Query("SELECT * FROM contact_drafts ORDER BY id") fun contactDrafts(): List<ContactDraftRow>
+
+    @Query("SELECT * FROM stage_drafts WHERE id=:id") fun stageDraft(id: String): StageDraftRow?
+
+    @Query("SELECT * FROM stage_drafts ORDER BY id") fun stageDrafts(): List<StageDraftRow>
+
+    @Insert(onConflict = OnConflictStrategy.ABORT) fun insertStageDraft(row: StageDraftRow)
+
+    @Query("UPDATE stage_drafts SET proposedStageId=:stageId,proposedStageName=:stageName,revision=:revision,state='draft',lastError='' WHERE id=:id AND revision=:expectedRevision AND operation='' ")
+    fun updateStageDraft(id: String, stageId: String, stageName: String, revision: Long, expectedRevision: Long): Int
+
+    @Query("UPDATE stage_drafts SET operation=:operation,state='saved',lastError='' WHERE id=:id AND operation='' ")
+    fun saveStageOperation(id: String, operation: String): Int
+
+    @Query("UPDATE stage_drafts SET state=:state,lastError=:error WHERE operation=:operation")
+    fun stageState(operation: String, state: String, error: String)
+
+    @Query("DELETE FROM stage_drafts WHERE operation=:operation") fun removeStageOperation(operation: String)
+
+    @Query("SELECT * FROM stage_context WHERE operation=:operation") fun stageContext(operation: String): StageContextRow?
+
+    @Query("SELECT * FROM stage_context ORDER BY operation") fun stageContexts(): List<StageContextRow>
+
+    @Insert(onConflict = OnConflictStrategy.ABORT) fun stageContext(row: StageContextRow)
+
+    @Query("UPDATE stage_context SET current=:current,editorRevision=:editorRevision WHERE operation=:operation")
+    fun currentStageContext(operation: String, current: String, editorRevision: Long)
+
+    @Query("DELETE FROM stage_context WHERE operation=:operation") fun removeStageContext(operation: String)
 
     @Insert(onConflict = OnConflictStrategy.ABORT) fun insertContactDraft(row: ContactDraftRow)
 
@@ -210,6 +279,20 @@ interface FieldDao {
 
     @Query("DELETE FROM manifest") fun clearManifest()
 
+    @Query("SELECT * FROM stage_catalog ORDER BY position,id") fun stageCatalog(): List<StageCatalogRow>
+
+    @Query("SELECT * FROM stage_catalog WHERE id=:id") fun stage(id: String): StageCatalogRow?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE) fun stageCatalog(rows: List<StageCatalogRow>)
+
+    @Query("DELETE FROM stage_catalog") fun clearStageCatalog()
+
+    @Query("SELECT * FROM stage_catalog_pages WHERE generation=:generation") fun stageCatalogPages(generation: String): List<StageCatalogPageRow>
+
+    @Insert(onConflict = OnConflictStrategy.ABORT) fun stageCatalogPage(row: StageCatalogPageRow)
+
+    @Query("DELETE FROM stage_catalog_pages") fun clearStageCatalogPages()
+
     @Query("SELECT person FROM pins ORDER BY person") fun pins(): List<String>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE) fun pin(row: PinRow)
@@ -224,13 +307,17 @@ interface FieldDao {
             PersonRow::class,
             DraftRow::class,
             ContactDraftRow::class,
+            StageDraftRow::class,
+            StageContextRow::class,
+            StageCatalogRow::class,
+            StageCatalogPageRow::class,
             OperationRow::class,
             ManifestRow::class,
             PageRow::class,
             PinRow::class,
             EditContextRow::class,
         ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class FieldDatabase : RoomDatabase() {
@@ -275,6 +362,21 @@ abstract class FieldDatabase : RoomDatabase() {
                 }
             }
 
+        /**
+         * Mobile 004 adds typed stage state only. It intentionally does not rewrite a v1-v4
+         * draft, operation envelope, receipt, database key, or protected account directory.
+         */
+        val UPGRADE_4_5 =
+            object : Migration(4, 5) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE people ADD COLUMN stageRevisionsQualified INTEGER NOT NULL DEFAULT 0")
+                    db.execSQL("CREATE TABLE IF NOT EXISTS stage_drafts (id TEXT NOT NULL, person TEXT NOT NULL, baselineStageId TEXT NOT NULL, baselineStageName TEXT NOT NULL, baselineRevision TEXT NOT NULL, proposedStageId TEXT NOT NULL, proposedStageName TEXT NOT NULL, revision INTEGER NOT NULL, operation TEXT NOT NULL DEFAULT '', state TEXT NOT NULL DEFAULT 'draft', lastError TEXT NOT NULL DEFAULT '', PRIMARY KEY(id))")
+                    db.execSQL("CREATE TABLE IF NOT EXISTS stage_context (operation TEXT NOT NULL, person TEXT NOT NULL, baseline TEXT NOT NULL, proposal TEXT NOT NULL, current TEXT NOT NULL DEFAULT '', editorRevision INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(operation))")
+                    db.execSQL("CREATE TABLE IF NOT EXISTS stage_catalog (id TEXT NOT NULL, name TEXT NOT NULL, position INTEGER NOT NULL, generation TEXT NOT NULL, revision TEXT NOT NULL, PRIMARY KEY(id))")
+                    db.execSQL("CREATE TABLE IF NOT EXISTS stage_catalog_pages (generation TEXT NOT NULL, cursor TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY(generation,cursor))")
+                }
+            }
+
         fun open(context: Context, directory: File, key: ByteArray): FieldDatabase {
             System.loadLibrary("sqlcipher")
             val db =
@@ -285,7 +387,7 @@ abstract class FieldDatabase : RoomDatabase() {
                     )
                     .openHelperFactory(SupportOpenHelperFactory(key, null, true))
                     .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
-                    .addMigrations(UPGRADE_1_2, UPGRADE_2_3, UPGRADE_3_4)
+                    .addMigrations(UPGRADE_1_2, UPGRADE_2_3, UPGRADE_3_4, UPGRADE_4_5)
                     .addCallback(
                         object : Callback() {
                             override fun onOpen(db: SupportSQLiteDatabase) {

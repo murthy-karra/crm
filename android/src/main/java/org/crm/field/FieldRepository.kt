@@ -20,6 +20,8 @@ class FieldUi(
     val operations: List<OperationRow> = emptyList(),
     val drafts: List<DraftRow> = emptyList(),
     val contactDrafts: List<ContactDraftRow> = emptyList(),
+    val stageDrafts: List<StageDraftRow> = emptyList(),
+    val stageCatalog: List<StageCatalogRow> = emptyList(),
     val today: String? = null,
     val lastSync: String = "Never",
     val coverage: String = "No complete download",
@@ -28,7 +30,9 @@ class FieldUi(
     val pendingCount: Int = 0,
     val editsEnabled: Boolean = false,
     val contactLoggingEnabled: Boolean = false,
+    val stageChangesEnabled: Boolean = false,
     val editContexts: List<EditContextRow> = emptyList(),
+    val stageContexts: List<StageContextRow> = emptyList(),
 )
 
 class ActiveAccount(
@@ -372,6 +376,36 @@ class FieldRepository(
     suspend fun contactLoggingSupported(): Boolean =
         withContext(Dispatchers.IO) { active?.store?.binding?.supportsContactLogging() == true }
 
+    suspend fun stageDraft(id: String): StageDraftRow? = withContext(Dispatchers.IO) {
+        val account = active ?: throw AccessLocked(); check(account)
+        account.store.dao.stageDraft(id)?.also { if (account.store.dao.person(it.person) == null) throw AccessLocked() }
+    }
+
+    suspend fun saveStageDraft(id: String, person: String, stage: String, revision: Long = 0, baseline: JSONObject? = null): StageDraftRow = withContext(Dispatchers.IO) {
+        val account = active ?: throw AccessLocked(); check(account)
+        if (!account.store.binding.supportsStageChanges()) throw ApiFailure(409, "stage_changes_unsupported")
+        try { account.store.saveStageDraft(id, person, stage, revision, baseline).also { refreshView("Stage proposal saved on this device") } }
+        catch (error: Exception) { if (error is AccessLocked || error is ApiFailure) throw error; throw StorageFailure() }
+    }
+
+    suspend fun submitStageDraft(id: String, revision: Long): OperationRow = withContext(Dispatchers.IO) {
+        val account = active ?: throw AccessLocked(); check(account)
+        if (!account.store.binding.supportsStageChanges()) throw ApiFailure(409, "stage_changes_unsupported")
+        account.store.submitStageDraft(id, revision).also { refreshView("Stage change saved on this device. Waiting for server acceptance."); FieldSyncJob.schedule(context) }
+    }
+
+    suspend fun stageChangesSupported(): Boolean = withContext(Dispatchers.IO) { active?.store?.binding?.supportsStageChanges() == true }
+
+    suspend fun reviseStageConflict(operation: String): StageDraftRow = withContext(Dispatchers.IO) {
+        val account = active ?: throw AccessLocked(); check(account)
+        account.store.reviseStageConflict(operation, java.util.UUID.randomUUID().toString()).also { refreshView("Review the new stage proposal") }
+    }
+
+    suspend fun discardStageConflict(operation: String) = withContext(Dispatchers.IO) {
+        val account = active ?: throw AccessLocked(); check(account)
+        account.store.discardStageConflict(operation); refreshView("Saved stage proposal discarded; current stage remains unchanged")
+    }
+
     suspend fun complete(person: String, task: JSONObject? = null, creation: String? = null) =
         withContext(Dispatchers.IO) {
             val account = active ?: throw AccessLocked()
@@ -582,7 +616,7 @@ class FieldRepository(
                     check(account)
                     if (authorized.context != account.store.binding.context) throw ProtocolFailure()
                 }
-                if (error is ApiFailure && error.code == "revision_conflict" && row.kind in setOf("edit_note", "update_task")) {
+                if (error is ApiFailure && error.code == "revision_conflict" && row.kind in setOf("edit_note", "update_task", "change_person_stage")) {
                     // The conflict response is deliberately content-free.  Fetching comparison
                     // data is a separate authorized, identity-fenced request; a failure leaves
                     // the immutable proposal in attention instead of inventing a new baseline.
@@ -592,10 +626,12 @@ class FieldRepository(
                         val current =
                             if (row.kind == "edit_note")
                                 account.api.currentNote(account.store.binding, row.person, payload.getString("note_id"))
-                            else
+                            else if (row.kind == "update_task")
                                 account.api.currentTask(account.store.binding, row.person, payload.getString("task_id"))
+                            else account.api.currentStage(account.store.binding, row.person)
                         check(account)
-                        account.store.recordCurrent(row.id, current)
+                        if (row.kind == "change_person_stage") account.store.recordCurrentStage(row.id, current)
+                        else account.store.recordCurrent(row.id, current)
                     } catch (_: Exception) {
                         // The explicit conflict remains reviewable without a guessed current version.
                     }
@@ -647,6 +683,7 @@ class FieldRepository(
                             "protocol" to PROTOCOL,
                             "installation_id" to store.binding.installation,
                             "pinned_person_ids" to JSONArray(dao.pins()),
+                            "include_stage_catalog" to store.binding.supportsStageChanges(),
                         )
                         .toString(),
                 )
@@ -667,9 +704,16 @@ class FieldRepository(
             store.appendManifest(id, page)
         }
         val manifest = dao.manifest(id)
+        if (generation.has("stage_catalog")) {
+            while (true) {
+                val cursor = store.nextStageCatalogPage(id) ?: break
+                val page = account.api.page("/api/mobile/v1/reconciliations/$id/stages", store.binding, cursor)
+                check(account); store.stageCatalogPage(id, cursor, page)
+            }
+        }
         for ((index, item) in manifest.withIndex()) {
             check(account)
-            if (dao.person(item.person)?.let { it.revision == item.revision && it.noteRevisionsQualified } == true) continue
+            if (dao.person(item.person)?.let { it.revision == item.revision && it.noteRevisionsQualified && (!generation.has("stage_catalog") || it.stageRevisionsQualified) } == true) continue
             if (vault.root.usableSpace < 16 * 1024 * 1024) throw StorageFailure()
             for (section in listOf("summary", "notes", "tasks")) {
                 while (true) {
@@ -722,10 +766,12 @@ class FieldRepository(
                         if (it.person in visibleIds) it
                         else it.copy(occurredAt = "", resolvedOffset = "")
                     }
+                val stages = dao.stageDrafts().map { if (it.person in visibleIds) it else it.copy(baselineStageName = "", proposedStageName = "") }
                 val contexts =
                     dao.editContexts().map {
                         if (it.person in visibleIds) it else it.copy(baseline = "", current = "")
                     }
+                val stageContexts = dao.stageContexts().map { if (it.person in visibleIds) it else it.copy(baseline = "", proposal = "", current = "") }
                 registry.put(
                     "pending",
                     ops.count { it.status != "accepted" } +
@@ -743,6 +789,8 @@ class FieldRepository(
                         ops,
                         drafts,
                         contacts,
+                        stages,
+                        dao.stageCatalog(),
                         dao.meta("today"),
                         dao.meta("last_sync") ?: "Never",
                         dao.meta("coverage") ?: "No complete download",
@@ -751,7 +799,9 @@ class FieldRepository(
                         registry.getInt("pending"),
                         account.store.binding.supportsEdits(),
                         account.store.binding.supportsContactLogging(),
+                        account.store.binding.supportsStageChanges(),
                         contexts,
+                        stageContexts,
                     )
                 if (active === account) mutable.value = result
             } catch (_: Exception) {

@@ -187,6 +187,7 @@ async fn admission_cursor_pages_and_full_utf8_provenance_do_not_truncate(migrato
         id,
         admission::Page {
             limit: Some(1),
+            disposition: Some("eligible".into()),
             ..Default::default()
         },
     )
@@ -200,6 +201,7 @@ async fn admission_cursor_pages_and_full_utf8_provenance_do_not_truncate(migrato
         id,
         admission::Page {
             limit: Some(1),
+            disposition: Some("eligible".into()),
             cursor: Some(cursor.clone()),
             ..Default::default()
         },
@@ -216,6 +218,7 @@ async fn admission_cursor_pages_and_full_utf8_provenance_do_not_truncate(migrato
             id,
             admission::Page {
                 limit: Some(2),
+                disposition: Some("eligible".into()),
                 cursor: Some(cursor),
                 ..Default::default()
             }
@@ -394,6 +397,13 @@ async fn admission_permit_cannot_update_existing_people_or_borrow_other_lane_tok
     use crm_api::domain::migration::people_admission_worker;
     let f =
         crate::import_support::fixture(&migrator, crate::import_support::default_people()).await;
+    assert!(
+        !sqlx::query_scalar::<_, bool>("SELECT has_table_privilege(current_user,'stage','UPDATE')")
+            .fetch_one(&f.pool)
+            .await
+            .unwrap(),
+        "stage lock helper must not grant ordinary UPDATE"
+    );
     let parent = crate::db_activity_source::completed_parent(&f).await;
     let id = crate::db_people_admission_execution::ready(
         &f,

@@ -158,6 +158,7 @@ pub async fn receipt(
     sqlx::query("INSERT INTO migration_people_admission_receipt(organization_id,actor_user_id,action,request_id,admission_id,digest,nonce,ciphertext) VALUES($1,$2,$3,$4,$5,$6,$7,$8)").bind(ctx.organization_id.0).bind(ctx.actor_user_id.0).bind(action).bind(request).bind(admission).bind(digest.as_slice()).bind(sealed.nonce.as_slice()).bind(sealed.ciphertext).execute(conn).await?;
     Ok(())
 }
+#[cfg(feature = "test-support")]
 pub async fn measured_bytes(
     conn: &mut PgConnection,
     org: OrganizationId,

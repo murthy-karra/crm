@@ -387,3 +387,18 @@ mod tests {
         assert_eq!(super::hex(&"a0".repeat(32)).unwrap(), vec![160; 32]);
     }
 }
+
+/// An independent full-book accounting audit is intentionally unavailable in
+/// production worker loops; acceptance uses it to verify O(1) live counters.
+#[cfg(feature = "test-support")]
+pub async fn retained_byte_audit(
+    pool: &PgPool,
+    ctx: &CommandContext,
+    id: Uuid,
+) -> Result<i64, MigrationError> {
+    let mut tx = s::begin(pool, ctx).await?;
+    super::store::require_admin(&mut tx, ctx).await?;
+    let bytes = s::measured_bytes(&mut tx, ctx.organization_id, id).await?;
+    tx.commit().await?;
+    Ok(bytes)
+}

@@ -317,39 +317,6 @@ pub async fn original_contains(
         .bind(snapshot_id).bind(org.0).bind(source_id).bind(final_sequence).fetch_one(conn).await?)
 }
 
-/// Compatibility adapter for the in-flight worker while it switches to explicit
-/// Observation handling. It fails closed on ambiguity instead of inventing absence.
-pub async fn retained_person(
-    conn: &mut PgConnection,
-    key: &RawPayloadKey,
-    org: OrganizationId,
-    snapshot_id: Uuid,
-    source_id: &str,
-) -> Result<Option<(ExtractedRecord, Uuid, i32)>, MigrationError> {
-    let sequence = sqlx::query_scalar(
-        "SELECT capture_sequence FROM migration_snapshot WHERE id=$1 AND organization_id=$2",
-    )
-    .bind(snapshot_id)
-    .bind(org.0)
-    .fetch_one(&mut *conn)
-    .await?;
-    match retained_record(
-        conn,
-        key,
-        org,
-        snapshot_id,
-        Stream::People,
-        sequence,
-        source_id,
-    )
-    .await?
-    {
-        Observation::Absent => Ok(None),
-        Observation::Qualified(value) => Ok(Some((value.record, value.capture_id, value.ordinal))),
-        Observation::Unqualified(_) => Err(MigrationError::SourceNotEligible),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

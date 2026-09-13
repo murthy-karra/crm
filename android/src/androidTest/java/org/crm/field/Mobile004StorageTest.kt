@@ -62,6 +62,14 @@ class Mobile004StorageTest {
         assertNull(store.dao.meta("generation"))
     }
 
+    @Test fun sameRevisionSameStageIsAReceiptedNoOp() {
+        val draft = save(stage = stageA); val operation = store.submitStageDraft(draft.id, draft.revision)
+        store.acknowledge(operation.id, receipt(operation, changed = false, committed = "1"))
+        val receipt = JSONObject(requireNotNull(store.dao.operation(operation.id)!!.receipt))
+        assertFalse(receipt.getBoolean("changed"))
+        assertEquals("1", receipt.getString("committed_revision"))
+    }
+
     @Test fun abaConflictStoresFreshCurrentAndRevisionCreatesNewProposal() {
         val original = save(); val operation = store.submitStageDraft(original.id, original.revision)
         store.dao.operationState(operation.id, "attention", 1, 0, "revision_conflict")

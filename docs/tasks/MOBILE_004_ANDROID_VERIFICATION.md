@@ -45,7 +45,13 @@ to the encrypted store, and recorded its SHA-256 for a later same-store replay.
 Gradle connected tests uninstall the target package, so they cannot establish an
 installed-store force-stop proof. Current APKs were built and manually installed
 under the isolated Mobile004 identity for a direct `adb shell am instrument`
-prepare/force-stop/relaunch run. That direct acceptance, lost-response replay,
-second-actor conflict, and the historical Mobile003 source-install→Mobile004
-same-store upgrade remain pending at this checkpoint; no failed attempt modified
-the demo, Mobile002 QA, or Mobile003 QA package/store.
+prepare/force-stop/relaunch run. The prepare stage created
+`mobile004-force-stop-stage.json` inside the target package; after
+`adb shell am force-stop org.crm.field.mobile004qa`, the relaunch stage reopened
+the same database/Keystore identity without login, preserved the operation's
+SHA-256, uploaded it, and validated a `person_stage` receipt with a nonzero
+committed revision. It passed `OK (1 test)` in 21.359 seconds.
+
+Lost-response replay, second-actor conflict, and the historical Mobile003
+source-install→Mobile004 same-store upgrade remain pending; no failed attempt
+modified the demo, Mobile002 QA, or Mobile003 QA package/store.

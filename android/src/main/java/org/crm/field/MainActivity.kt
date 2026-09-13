@@ -1447,7 +1447,15 @@ private fun StageComposer(
                 saving = true
                 scope.launch {
                     commits.withLock {
-                        try { repository.submitStageDraft(id, revision); onSubmitted() }
+                        try {
+                            // Selecting the unchanged current stage is a supported, receipted
+                            // no-op. It still needs a typed local draft before it can seal the
+                            // immutable operation; do not make the no-op path disappear merely
+                            // because the picker initially selected that value.
+                            val saved = repository.stageDraft(id) ?: repository.saveStageDraft(id, person, selectedStage, revision)
+                            repository.submitStageDraft(id, saved.revision)
+                            onSubmitted()
+                        }
                         catch (error: Exception) { status = if (error is ApiFailure) errorMessage(error.code) else "Not submitted. Your committed stage proposal remains available."; saving = false }
                     }
                 }

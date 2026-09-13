@@ -170,6 +170,129 @@ fn confirmation(detail: &Value) -> admission::ConfirmPeopleAdmission {
 }
 #[sqlx::test]
 #[ignore = "requires PostgreSQL migrator"]
+async fn admission_native_failure_rolls_back_and_retry_consumes_identity_once(migrator: PgPool) {
+    use crm_api::domain::migration::people_admission_worker;
+    let f =
+        crate::import_support::fixture(&migrator, crate::import_support::default_people()).await;
+    let parent = crate::db_activity_source::completed_parent(&f).await;
+    let id=crate::db_people_admission_execution::ready(&f,parent,vec![json!({"id":106,"firstName":"Atomic Synthetic Admission","stage":"Lead","assignedUserId":3,"emails":[{"value":"shared@synthetic.invalid"}]})]).await;
+    let before = admission::detail(&f.pool, &f.key, &f.ctx, id)
+        .await
+        .unwrap();
+    let cmd = confirmation(&before);
+    let receipt = admission::confirm(
+        &f.pool,
+        &f.key,
+        &f.ctx,
+        id,
+        cmd.clone(),
+        Some(&ReleaseReadiness::for_tests()),
+    )
+    .await
+    .unwrap();
+    let retained = admission::detail(&f.pool, &f.key, &f.ctx, id)
+        .await
+        .unwrap()["retained_bytes"]
+        .clone();
+    let target:Uuid=sqlx::query_scalar("SELECT prospective_person_id FROM migration_people_admission_item WHERE admission_id=$1 AND disposition='eligible'").bind(id).fetch_one(&f.pool).await.unwrap();
+    sqlx::raw_sql("CREATE FUNCTION admission_test_fail_fact() RETURNS TRIGGER LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic atomic failure'; END $$; CREATE TRIGGER admission_test_fail_fact BEFORE INSERT ON person_admitted FOR EACH ROW EXECUTE FUNCTION admission_test_fail_fact();").execute(&migrator).await.unwrap();
+    assert!(people_admission_worker::run_once(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        Some(&ReleaseReadiness::for_tests())
+    )
+    .await
+    .is_err());
+    let paused = admission::detail(&f.pool, &f.key, &f.ctx, id)
+        .await
+        .unwrap();
+    assert_eq!(paused["state"], "paused");
+    assert_eq!(paused["retained_bytes"], retained);
+    let count: i64=sqlx::query_scalar("SELECT (SELECT count(*) FROM person WHERE id=$1)+(SELECT count(*) FROM contact_method WHERE person_id=$1)+(SELECT count(*) FROM migration_people_admission_result WHERE admission_id=$2)+(SELECT count(*) FROM migration_import_identity WHERE admission_id=$2)+(SELECT count(*) FROM person_admission_provenance WHERE admission_id=$2)+(SELECT count(*) FROM person_admitted WHERE admission_id=$2)").bind(target).bind(id).fetch_one(&f.pool).await.unwrap();
+    assert_eq!(
+        count, 0,
+        "all native output rolls back with the failing fact"
+    );
+    let work:i64=sqlx::query_scalar("SELECT count(*) FROM migration_people_admission_reservation WHERE admission_id=$1 AND purpose='work'").bind(id).fetch_one(&f.pool).await.unwrap();
+    assert_eq!(work, 0);
+    sqlx::raw_sql("DROP TRIGGER admission_test_fail_fact ON person_admitted; DROP FUNCTION admission_test_fail_fact();").execute(&migrator).await.unwrap();
+    admission::retry(
+        &f.pool,
+        &f.key,
+        &f.ctx,
+        id,
+        admission::LifecyclePeopleAdmission {
+            request_id: Uuid::new_v4(),
+            expected_lifecycle_revision: paused["lifecycle_revision"]
+                .as_str()
+                .unwrap()
+                .parse()
+                .unwrap(),
+        },
+        Some(&ReleaseReadiness::for_tests()),
+    )
+    .await
+    .unwrap();
+    for _ in 0..8 {
+        if !people_admission_worker::run_once(
+            &f.pool,
+            &f.key,
+            &f.policy,
+            Some(&ReleaseReadiness::for_tests()),
+        )
+        .await
+        .unwrap()
+        {
+            break;
+        }
+    }
+    assert_eq!(
+        admission::detail(&f.pool, &f.key, &f.ctx, id)
+            .await
+            .unwrap()["state"],
+        "completed"
+    );
+    assert_eq!(
+        admission::confirm(
+            &f.pool,
+            &f.key,
+            &f.ctx,
+            id,
+            cmd,
+            Some(&ReleaseReadiness::for_tests())
+        )
+        .await
+        .unwrap(),
+        receipt,
+        "lost confirmation response replays its immutable receipt even after settlement"
+    );
+    let counts=sqlx::query("SELECT (SELECT count(*) FROM migration_people_admission_result WHERE admission_id=$1) results,(SELECT count(*) FROM migration_import_identity WHERE admission_id=$1) identities,(SELECT count(*) FROM person_admitted WHERE admission_id=$1) facts").bind(id).fetch_one(&f.pool).await.unwrap();
+    assert_eq!(
+        (
+            counts.get::<i64, _>("results"),
+            counts.get::<i64, _>("identities"),
+            counts.get::<i64, _>("facts")
+        ),
+        (1, 1, 1)
+    );
+    let detail = admission::detail(&f.pool, &f.key, &f.ctx, id)
+        .await
+        .unwrap();
+    assert_eq!(
+        detail["retained_bytes"]
+            .as_str()
+            .unwrap()
+            .parse::<i64>()
+            .unwrap(),
+        admission::retained_byte_audit(&f.pool, &f.ctx, id)
+            .await
+            .unwrap()
+    );
+    assert_eq!(detail["reserved_bytes"], "0");
+}
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
 async fn admission_cursor_pages_and_full_utf8_provenance_do_not_truncate(migrator: PgPool) {
     use crm_api::domain::migration::people_admission_worker;
     let f =

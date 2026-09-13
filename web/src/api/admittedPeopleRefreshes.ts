@@ -31,6 +31,10 @@ export interface RefreshContact {
 }
 export interface RefreshResult { id: string; item_id: string; source_id: string | null; person_id: string | null; disposition: RefreshDisposition; committed_at: string }
 export interface RefreshReceipt { refresh_id: string; state: RefreshState }
+export interface RefreshAvailability {
+  admission_id: string; report_id: string; parent_import_id: string; parent_plan_id: string
+  source_account_id: string; workspace_revision: string; available: boolean; closed_reason_code: string | null
+}
 export interface RefreshConfirm {
   request_id: string; plan_id: string; plan_revision: number; plan_digest: string
   acknowledged_eligible_count: number; acknowledged_coverage: boolean; acknowledged_exclusions: boolean
@@ -48,6 +52,7 @@ function query(values: Record<string, string | number | undefined>) {
 const post = <T>(url: string, body: unknown, signal?: AbortSignal) => apiFetch<T>(url, { method: 'POST', body: JSON.stringify(body), signal })
 export const prepareAdmittedPeopleRefresh = (admission_id: string, report_id: string, request_id: string, signal?: AbortSignal) => post<RefreshReceipt>(root, { admission_id, report_id, request_id }, signal)
 export const fetchAdmittedPeopleRefresh = (id: string, signal?: AbortSignal) => apiFetch<AdmittedPeopleRefresh>(path(id), { signal })
+export const fetchAdmittedPeopleRefreshAvailability = (admission_id: string, report_id: string, signal?: AbortSignal) => apiFetch<RefreshAvailability>(`${root}/availability${query({ admission_id, report_id })}`, { signal })
 export const fetchAdmittedPeopleRefreshes = (admission_id: string, cursor?: string, signal?: AbortSignal) => apiFetch<{ refreshes: AdmittedPeopleRefresh[]; next_cursor: string | null }>(root + query({ admission_id, cursor, limit: 20 }), { signal })
 export const fetchAdmittedPeopleRefreshItems = (id: string, disposition?: RefreshDisposition, cursor?: string, signal?: AbortSignal) => apiFetch<RefreshPage & { items: RefreshItem[] }>(`${path(id)}/items${query({ disposition, cursor, limit: 50 })}`, { signal })
 export const fetchAdmittedPeopleRefreshItem = (id: string, item: string, signal?: AbortSignal) => apiFetch<RefreshItemDetail>(itemPath(id, item), { signal })
@@ -69,6 +74,7 @@ const labels: Record<string, string> = {
   first_name: 'First name', last_name: 'Last name', firstName: 'First name', lastName: 'Last name', emails: 'Emails', phones: 'Phones', stage: 'Stage', assignment: 'Assignment', assigned_user_id: 'Assignment', stage_id: 'Stage',
   retained_integrity_failed: 'Retained evidence could not be verified', retained_evidence_invalid: 'Retained evidence is incomplete or invalid', initiator_not_authorized: 'Initiating administrator access changed', source_binding_changed: 'Retained source binding changed', work_unit_timed_out: 'Work unit interrupted; retry available',
   storage_limit: 'Storage allowance reached', storage_budget_exhausted: 'Storage allowance reached', release_not_ready: 'Compatible release required', lease_expired: 'Worker interrupted', actor_inactive: 'Initiating administrator is inactive', actor_not_admin: 'Initiating administrator access changed', evidence_unavailable: 'Retained evidence unavailable', corrupt_evidence: 'Retained evidence could not be verified',
+  report_not_completed: 'The selected report is not sealed', admission_not_terminal: 'The selected admission is not terminal', admission_not_confirmed: 'The selected admission has no confirmed plan', parent_not_completed: 'The original People import is not completed', review_workspace_required: 'This workspace is no longer in migration review', binding_mismatch: 'The retained admission and report bindings no longer match', no_successful_results: 'The selected admission has no settled People', later_capture_required: 'The selected report does not begin after the admission boundary', source_boundary_not_newer: 'A newer admitted-People refresh boundary is already confirmed', active_refresh_exists: 'Another admitted-People refresh is still active for this admission',
 }
 export const refreshLabel = (value: string) => Object.hasOwn(labels, value) ? labels[value]! : 'Unrecognized refresh detail'
 

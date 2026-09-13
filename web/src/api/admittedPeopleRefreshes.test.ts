@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { apiFetch, ApiError } from './client'
 import { useImportAccess } from './imports'
-import { cancelAdmittedPeopleRefresh, confirmAdmittedPeopleRefresh, fetchAdmittedPeopleRefreshContacts, fetchAdmittedPeopleRefreshItem, fetchAdmittedPeopleRefreshItems, fetchAdmittedPeopleRefreshResults, fetchAdmittedPeopleRefreshes, prepareAdmittedPeopleRefresh, refreshInteger, refreshLabel, repreviewAdmittedPeopleRefresh, retryAdmittedPeopleRefresh, useAdmittedPeopleRefreshAccess } from './admittedPeopleRefreshes'
+import { cancelAdmittedPeopleRefresh, confirmAdmittedPeopleRefresh, fetchAdmittedPeopleRefreshAvailability, fetchAdmittedPeopleRefreshContacts, fetchAdmittedPeopleRefreshItem, fetchAdmittedPeopleRefreshItems, fetchAdmittedPeopleRefreshResults, fetchAdmittedPeopleRefreshes, prepareAdmittedPeopleRefresh, refreshInteger, refreshLabel, repreviewAdmittedPeopleRefresh, retryAdmittedPeopleRefresh, useAdmittedPeopleRefreshAccess } from './admittedPeopleRefreshes'
 vi.mock('./client', async original => ({ ...await original<typeof import('./client')>(), apiFetch: vi.fn() }))
 vi.mock('./imports', () => ({ useImportAccess: vi.fn() }))
 const api = vi.mocked(apiFetch); const root = '/migrations/fub/admitted-people-refreshes'
@@ -26,12 +26,14 @@ describe('Admitted People refresh transport', () => {
   })
   it('uses bounded separate scalar/contact/result endpoints and opaque encoded cursors', async () => {
     const signal = new AbortController().signal
+    await fetchAdmittedPeopleRefreshAvailability('admission /1', 'report +/=', signal)
     await fetchAdmittedPeopleRefreshes('parent/1', 'next +/=', signal)
     await fetchAdmittedPeopleRefreshItems('r/1', 'held_local_change', 'next +/=', signal)
     await fetchAdmittedPeopleRefreshItem('r/1', 'i/1', signal)
     await fetchAdmittedPeopleRefreshContacts('r/1', 'i/1', 'next +/=', signal)
     await fetchAdmittedPeopleRefreshResults('r/1', 'next +/=', signal)
     expect(api.mock.calls.map(([url]) => url)).toEqual([
+      `${root}/availability?admission_id=admission+%2F1&report_id=report+%2B%2F%3D`,
       `${root}?admission_id=parent%2F1&cursor=next+%2B%2F%3D&limit=20`,
       `${root}/r%2F1/items?disposition=held_local_change&cursor=next+%2B%2F%3D&limit=50`, `${root}/r%2F1/items/i%2F1`,
       `${root}/r%2F1/items/i%2F1/contacts?cursor=next+%2B%2F%3D&limit=50`, `${root}/r%2F1/results?cursor=next+%2B%2F%3D&limit=50`,

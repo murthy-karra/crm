@@ -50,6 +50,7 @@ revision/digest where applicable, filter, limit and a frozen upper key.
 
 | Route | Request / bound |
 | --- | --- |
+| `GET /availability` | Required `admission_id` and `report_id`; returns the server-resolved admission/report/parent/plan/account/workspace bindings, `available`, and a closed reason code; foreign or missing bindings are opaque `404` |
 | `POST /` | `{request_id,admission_id,report_id}`; returns `201` preparation receipt |
 | `GET /` | required `admission_id`, opaque cursor, `limit<=20` |
 | `GET /{id}` | lifecycle, exact admission origin, source intervals, availability/counts/actions |
@@ -160,6 +161,9 @@ The panel is a separate `AdmittedPeopleRefreshPanel` on admission review. It
 selects only terminal admissions with successful results and a later qualified
 report; labels the admission origin; shows coverage, all held/excluded/missing
 items, exact clears/removals, before/current/proposed bounded detail and lifecycle
-recovery. It requires server-returned availability and does not reuse, relabel or
+recovery. It requests the bounded availability result only for its selected
+admission/report pair, keys that result to the active Organization/identity and
+pair, displays its closed reason, and enables preparation only when the server
+returns `available: true`. It does not reuse, relabel or
 hide the old original-People refresh/family controls. It never executes a field
 prefix or browser-generated identity as source evidence.

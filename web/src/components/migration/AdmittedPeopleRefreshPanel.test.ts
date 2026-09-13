@@ -32,6 +32,7 @@ async function setup(options: { state?: AdmittedPeopleRefresh['state']; role?: s
     if (url === '/migrations/fub/people-admissions?parent_import_id=parent&limit=20') return { items: [{ id: 'admission', state: 'completed', progress: { settled_items: '1' } }], next_cursor: null } as never
     if (url === `${REPORTS}?parent_import_id=parent&limit=20`) return { reports: [source, { ...source, id: 'unsealed', state: 'running', output_revision: null }], next_cursor: null } as never
     if (url === `${REPORTS}/report`) return source as never
+    if (url === `${ROOT}/availability?admission_id=admission&report_id=report`) return { admission_id: 'admission', report_id: 'report', parent_import_id: 'parent', parent_plan_id: 'original-plan', source_account_id: '1', workspace_revision: '2', available: true, closed_reason_code: null } as never
     if (url === `${ROOT}?admission_id=admission&limit=20`) return { refreshes: [state.refresh], next_cursor: null } as never
     if (url === `${ROOT}/refresh`) return state.refresh as never
     if (url.startsWith(`${ROOT}/refresh/items?`)) return { items: [item()], next_cursor: null, plan_id: 'plan', plan_revision: '2' } as never
@@ -54,13 +55,23 @@ const writes = () => api.mock.calls.filter(([, init]) => init?.method === 'POST'
 beforeEach(() => { api.mockReset(); resetWorkspace(); let next = 0; vi.stubGlobal('crypto', { randomUUID: () => `request-${++next}` }) })
 afterEach(() => { cleanup.splice(0).forEach(fn => fn()); document.body.innerHTML = ''; vi.unstubAllGlobals(); vi.useRealTimers(); resetWorkspace() })
 describe('Admitted People refresh workflow', () => {
-  it('prepares only a selected sealed report and obtains current state after the receipt', async () => {
+  it('prepares only a server-qualified selected report and obtains current state after the receipt', async () => {
     const { wrapper } = await setup({ handle: (url, init) => url === ROOT && init?.method === 'POST' ? { refresh_id: 'refresh', state: 'preparing' } : undefined })
     expect([...select('Completed report for a new preview').options].map(v => v.value)).toEqual(['', 'report'])
     expect(button('Prepare People preview').disabled).toBe(true)
-    await choose('Completed report for a new preview', 'report'); button('Prepare People preview').click(); await flushPromises()
+    expect(api.mock.calls.some(([url]) => url.includes('/availability?'))).toBe(false)
+    await choose('Completed report for a new preview', 'report'); expect(api.mock.calls.some(([url]) => url === `${ROOT}/availability?admission_id=admission&report_id=report`)).toBe(true); expect(button('Prepare People preview').disabled).toBe(false); button('Prepare People preview').click(); await flushPromises()
     expect(JSON.parse(String(writes()[0]![1]?.body))).toEqual({ admission_id: 'admission', report_id: 'report', request_id: expect.stringMatching(/^request-\d+$/) })
     expect(wrapper.text()).toContain('Ready for review'); expect(wrapper.text()).toContain('Effective source access is not proven')
+  })
+  it('keeps preparation disabled and shows the server closed reason for an unavailable pair', async () => {
+    const { wrapper } = await setup({ handle: url => url === `${ROOT}/availability?admission_id=admission&report_id=report`
+      ? { admission_id: 'admission', report_id: 'report', parent_import_id: 'parent', parent_plan_id: 'original-plan', source_account_id: '1', workspace_revision: '2', available: false, closed_reason_code: 'source_boundary_not_newer' }
+      : undefined })
+    await choose('Completed report for a new preview', 'report')
+    expect(button('Prepare People preview').disabled).toBe(true)
+    expect(wrapper.text()).toContain('A newer admitted-People refresh boundary is already confirmed')
+    expect(writes()).toHaveLength(0)
   })
   it('shows owned values safely and confirms the exact counted plan only after acknowledgment and dialog', async () => {
     await setup({ handle: url => url.endsWith('/confirm') ? { refresh_id: 'refresh', state: 'queued' } : undefined })

@@ -12,7 +12,7 @@ import { fetchImport, fetchImports, importAccessError, uncertainImportError } fr
 import { coreChangeLabel, fetchCoreChangeReport, fetchCoreChangeReports } from '../../api/coreChangeReports'
 import { ApiError } from '../../api/client'
 import { fetchPeopleAdmissions } from '../../api/peopleAdmissions'
-import { cancelAdmittedPeopleRefresh, confirmAdmittedPeopleRefresh, fetchAdmittedPeopleRefresh, fetchAdmittedPeopleRefreshes, prepareAdmittedPeopleRefresh, refreshActive, refreshInteger, refreshLabel, repreviewAdmittedPeopleRefresh, retryAdmittedPeopleRefresh, useAdmittedPeopleRefreshAccess, type RefreshConfirm } from '../../api/admittedPeopleRefreshes'
+import { cancelAdmittedPeopleRefresh, confirmAdmittedPeopleRefresh, fetchAdmittedPeopleRefresh, fetchAdmittedPeopleRefreshAvailability, fetchAdmittedPeopleRefreshes, prepareAdmittedPeopleRefresh, refreshActive, refreshInteger, refreshLabel, repreviewAdmittedPeopleRefresh, retryAdmittedPeopleRefresh, useAdmittedPeopleRefreshAccess, type RefreshConfirm } from '../../api/admittedPeopleRefreshes'
 import { snapshotTime } from './format'
 
 const props = defineProps<{ refreshWorkspace: () => Promise<void> }>()
@@ -40,6 +40,7 @@ const reportsKey = computed(() => [...access.prefix.value, 'reports', parentId.v
 const listKey = computed(() => [...access.prefix.value, 'list', parentId.value, refreshPages.value.at(-1), listEpoch.value])
 const detailKey = computed(() => [...access.prefix.value, 'detail', refreshId.value])
 const reportKey = computed(() => [...access.prefix.value, 'report', current.value?.report_id ?? reportId.value])
+const availabilityKey = computed(() => [...access.prefix.value, 'availability', admissionId.value, reportId.value])
 const parents = useQuery({ queryKey: parentsKey, enabled: access.enabled, retry: false, gcTime: 0, queryFn: ({ signal }) => access.read(parentsKey.value, () => parentsKey.value, () => fetchImports(parentPages.value.at(-1) || undefined, signal)) })
 const parent = useQuery({ queryKey: parentKey, enabled: computed(() => access.enabled.value && !!parentId.value), retry: false, gcTime: 0, queryFn: ({ signal }) => access.read(parentKey.value, () => parentKey.value, () => fetchImport(parentId.value, signal)) })
 const admissions = useQuery({ queryKey: admissionsKey, enabled: computed(() => access.enabled.value && !!parentId.value), retry: false, gcTime: 0, queryFn: ({ signal }) => access.read(admissionsKey.value, () => admissionsKey.value, () => fetchPeopleAdmissions(parentId.value, admissionPages.value.at(-1) || undefined, signal)) })
@@ -56,12 +57,17 @@ const detail = useQuery({ queryKey: detailKey, enabled: computed(() => access.en
 const current = computed(() => access.enabled.value && detail.data.value?.admission_id === admissionId.value ? detail.data.value : undefined)
 const report = useQuery({ queryKey: reportKey, enabled: computed(() => access.enabled.value && !!(current.value?.report_id ?? reportId.value)), retry: false, gcTime: 0, queryFn: ({ signal }) => access.read(reportKey.value, () => reportKey.value, () => fetchCoreChangeReport(current.value?.report_id ?? reportId.value, signal)) })
 const source = computed(() => access.enabled.value && report.data.value?.parent_import_id === parentId.value && report.data.value.state === 'completed' && !!report.data.value.output_revision ? report.data.value : undefined)
+const availability = useQuery({ queryKey: availabilityKey, enabled: computed(() => access.enabled.value && !!admissionId.value && !!reportId.value), retry: false, gcTime: 0, queryFn: ({ signal }) => access.read(availabilityKey.value, () => availabilityKey.value, () => fetchAdmittedPeopleRefreshAvailability(admissionId.value, reportId.value, signal)) })
+const selectedAvailability = computed(() => {
+  const value = availability.data.value
+  return value && value.admission_id === admissionId.value && value.report_id === reportId.value && value.parent_import_id === parentId.value ? value : undefined
+})
 const plan = computed(() => current.value?.plan)
 const expired = computed(() => !!plan.value && (!plan.value.expires_at || Date.parse(plan.value.expires_at) <= now.value || !Number.isFinite(Date.parse(plan.value.expires_at))))
 const selectedAdmission = computed(() => admissions.data.value?.items.find(value => value.id === admissionId.value))
-const canPrepare = computed(() => access.enabled.value && access.org.value?.workspace_mode === 'migration_review' && parent.data.value?.state === 'completed' && !!parent.data.value.confirmed_plan_id && !!selectedAdmission.value && ['completed', 'cancelled'].includes(selectedAdmission.value.state) && selectedAdmission.value.progress.settled_items !== '0' && !!source.value && source.value.id === reportId.value && !busy.value && !refreshId.value)
+const canPrepare = computed(() => access.enabled.value && access.org.value?.workspace_mode === 'migration_review' && parent.data.value?.state === 'completed' && !!parent.data.value.confirmed_plan_id && !!selectedAdmission.value && ['completed', 'cancelled'].includes(selectedAdmission.value.state) && selectedAdmission.value.progress.settled_items !== '0' && !!source.value && source.value.id === reportId.value && selectedAvailability.value?.available === true && !busy.value && !refreshId.value)
 const canConfirm = computed(() => !!current.value?.actions.confirm && !!plan.value && plan.value.counts.eligible !== '0' && !expired.value && !!source.value && coverageAck.value && exclusionsAck.value && removalsAck.value && !busy.value)
-const errors = computed(() => [parents.error.value, parent.error.value, reports.error.value, listing.error.value, detail.error.value, report.error.value].filter(Boolean))
+const errors = computed(() => [parents.error.value, parent.error.value, reports.error.value, listing.error.value, detail.error.value, report.error.value, availability.error.value].filter(Boolean))
 function resetAcknowledgments() { coverageAck.value = false; exclusionsAck.value = false; removalsAck.value = false; confirmation.value = null }
 function resetLists() { firstRefreshPage.value = null; refreshPages.value = ['']; admissionPages.value = ['']; reportPages.value = ['']; listEpoch.value++ }
 function deny() { access.denied.value = true; resetAcknowledgments(); void props.refreshWorkspace().catch(() => {}) }
@@ -69,7 +75,7 @@ watch(parents.data, value => { if (access.enabled.value && !parentId.value) pare
 watch(parentId, () => { selectionEpoch++; reportId.value = ''; refreshId.value = ''; resetLists(); resetAcknowledgments() }, { flush: 'sync' })
 watch(admissions.data, value => { if (access.enabled.value && !admissionId.value) admissionId.value = value?.items.find(item => ['completed', 'cancelled'].includes(item.state) && item.progress.settled_items !== '0')?.id ?? '' })
 watch(parentId, () => { admissionId.value = '' }, { flush: 'sync' })
-watch(admissionId, () => { selectionEpoch++; refreshId.value = ''; resetLists(); resetAcknowledgments() }, { flush: 'sync' })
+watch(admissionId, () => { selectionEpoch++; reportId.value = ''; refreshId.value = ''; resetLists(); resetAcknowledgments() }, { flush: 'sync' })
 watch([reportId, refreshId], () => { selectionEpoch++; resetAcknowledgments() }, { flush: 'sync' })
 watch(() => `${plan.value?.id}:${plan.value?.revision}:${plan.value?.digest}:${current.value?.state}`, resetAcknowledgments, { flush: 'sync' })
 watch(expired, value => { if (value) confirmation.value = null }, { flush: 'sync' })
@@ -80,7 +86,7 @@ onBeforeUnmount(() => { disposed = true; clearInterval(timer); intent.value = nu
 function reload() {
   if (!access.enabled.value) return
   resetLists(); resetAcknowledgments(); outputEpoch.value++
-  for (const key of [parentsKey.value, parentKey.value, admissionsKey.value, detailKey.value, reportKey.value]) void access.client.invalidateQueries({ queryKey: key, exact: true })
+  for (const key of [parentsKey.value, parentKey.value, admissionsKey.value, detailKey.value, reportKey.value, availabilityKey.value]) void access.client.invalidateQueries({ queryKey: key, exact: true })
 }
 async function submit(value: Intent) {
   if (pending.value || !access.enabled.value || value.identity !== access.identity.value) return
@@ -277,6 +283,25 @@ function confirm() {
               More change reports
             </button>
           </div>
+          <p
+            v-if="reportId && availability.isFetching.value"
+            class="mt-3 text-small text-text-muted"
+            role="status"
+          >
+            Checking whether this admission and report can be prepared.
+          </p><p
+            v-else-if="selectedAvailability && !selectedAvailability.available"
+            class="mt-3 text-small text-danger"
+            role="status"
+          >
+            {{ selectedAvailability.closed_reason_code ? refreshLabel(selectedAvailability.closed_reason_code) : 'This admission and report cannot be prepared.' }}
+          </p><p
+            v-else-if="reportId && availability.error.value"
+            class="mt-3 text-small text-danger"
+            role="status"
+          >
+            Preparation is unavailable until the server can verify this admission and report.
+          </p>
           <button
             type="button"
             class="mt-3"

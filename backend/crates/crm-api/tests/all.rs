@@ -354,6 +354,7 @@ mod db_people_admission_contract;
 #[path = "db_people_admission_execution.rs"]
 mod db_people_admission_execution;
 mod db_admitted_people_refresh_execution;
+mod db_admitted_refresh_availability;
 mod db_admitted_refresh_reads;
 #[cfg(feature = "perf-harness")]
 mod db_admitted_refresh_perf;

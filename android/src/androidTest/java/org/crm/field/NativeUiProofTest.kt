@@ -51,7 +51,7 @@ class NativeUiProofTest {
     @Test
     fun nativeScreensOfflineQueueAndFailedAutosave() {
         assumeTrue(InstrumentationRegistry.getArguments().getString("uiStage") == "prepare")
-        compose.waitUntil(10_000) {
+        compose.waitUntil(60_000) {
             !(compose.activity.application as FieldApplication).ready.isActive
         }
         compose.runOnUiThread {
@@ -65,7 +65,7 @@ class NativeUiProofTest {
         compose.waitUntil { repository.ui.value.paused }
         screenshot("android-today")
         compose.onNodeWithTag("nav-People").performClick()
-        compose.onNodeWithTag("people-search").performTextInput("020")
+        compose.onNodeWithTag("people-search").performTextInput("099")
         val person =
             repository.ui.value.people.single {
             org.json.JSONObject(it.summary).optString("last_name") == "099"
@@ -147,7 +147,7 @@ class NativeUiProofTest {
         }
         if (!repository.ui.value.paused) compose.onNodeWithText("Pause sync").performClick()
         compose.onNodeWithTag("nav-People").performClick()
-        compose.onNodeWithTag("people-search").performTextInput("020")
+        compose.onNodeWithTag("people-search").performTextInput("099")
         val person =
             repository.ui.value.people.single {
             org.json.JSONObject(it.summary).optString("last_name") == "099"

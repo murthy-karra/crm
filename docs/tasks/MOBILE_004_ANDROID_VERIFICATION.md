@@ -36,6 +36,12 @@ the test observed selection immediately after asynchronous UI refresh:
 `Android fixture Person must be fully downloaded`. The test now fences that
 selection with an explicit wait.
 
+The corrected real-API offline prepare stage then passed (`1` test, `0`
+failures, 18.452 seconds; timestamp `2026-09-13T16:17:40`). It logged in to
+the production repository/API route, completed opt-in stage catalog and Person
+download, paused sync, committed a typed stage proposal and immutable operation
+to the encrypted store, and recorded its SHA-256 for a later same-store replay.
+
 Gradle connected tests uninstall the target package, so they cannot establish an
 installed-store force-stop proof. Current APKs were built and manually installed
 under the isolated Mobile004 identity for a direct `adb shell am instrument`

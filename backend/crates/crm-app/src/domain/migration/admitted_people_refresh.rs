@@ -11,6 +11,98 @@ use serde_json::{json, Value};
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AvailabilityQuery {
+    pub admission_id: Uuid,
+    pub report_id: Uuid,
+}
+
+struct AvailabilityBindings {
+    admission_id: Uuid,
+    report_id: Uuid,
+    parent_import_id: Uuid,
+    parent_plan_id: Uuid,
+    source_account_id: i64,
+    workspace_revision: i64,
+    newer_snapshot_id: Uuid,
+    newer_sequence: i64,
+    newer_started_at: Option<chrono::DateTime<chrono::Utc>>,
+    newer_completed_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+enum ClosedReason {
+    ReleaseNotReady,
+    ReportNotCompleted,
+    AdmissionNotTerminal,
+    AdmissionNotConfirmed,
+    ParentNotCompleted,
+    ReviewWorkspaceRequired,
+    BindingMismatch,
+    NoSuccessfulResults,
+    LaterCaptureRequired,
+    SourceBoundaryNotNewer,
+    ActiveRefreshExists,
+}
+impl ClosedReason {
+    const fn code(&self) -> &'static str {
+        match self {
+            Self::ReleaseNotReady => "release_not_ready",
+            Self::ReportNotCompleted => "report_not_completed",
+            Self::AdmissionNotTerminal => "admission_not_terminal",
+            Self::AdmissionNotConfirmed => "admission_not_confirmed",
+            Self::ParentNotCompleted => "parent_not_completed",
+            Self::ReviewWorkspaceRequired => "review_workspace_required",
+            Self::BindingMismatch => "binding_mismatch",
+            Self::NoSuccessfulResults => "no_successful_results",
+            Self::LaterCaptureRequired => "later_capture_required",
+            Self::SourceBoundaryNotNewer => "source_boundary_not_newer",
+            Self::ActiveRefreshExists => "active_refresh_exists",
+        }
+    }
+}
+
+struct Qualification {
+    bindings: AvailabilityBindings,
+    closed_reason: Option<ClosedReason>,
+}
+impl Qualification {
+    fn available(bindings: AvailabilityBindings) -> Self {
+        Self {
+            bindings,
+            closed_reason: None,
+        }
+    }
+    fn closed(bindings: AvailabilityBindings, closed_reason: ClosedReason) -> Self {
+        Self {
+            bindings,
+            closed_reason: Some(closed_reason),
+        }
+    }
+    fn response(&self) -> Value {
+        json!({
+            "admission_id": self.bindings.admission_id,
+            "report_id": self.bindings.report_id,
+            "parent_import_id": self.bindings.parent_import_id,
+            "parent_plan_id": self.bindings.parent_plan_id,
+            "source_account_id": self.bindings.source_account_id.to_string(),
+            "workspace_revision": self.bindings.workspace_revision.to_string(),
+            "available": self.closed_reason.is_none(),
+            "closed_reason_code": self.closed_reason.as_ref().map(ClosedReason::code),
+        })
+    }
+    fn prepare_result(self) -> Result<AvailabilityBindings, MigrationError> {
+        match self.closed_reason {
+            None => Ok(self.bindings),
+            Some(ClosedReason::ReleaseNotReady) => Err(MigrationError::ReleaseNotReady),
+            Some(ClosedReason::ActiveRefreshExists | ClosedReason::SourceBoundaryNotNewer) => {
+                Err(MigrationError::Conflict)
+            }
+            Some(_) => Err(MigrationError::SourceNotEligible),
+        }
+    }
+}
+
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct PrepareAdmittedPeopleRefresh {
@@ -81,6 +173,185 @@ fn decode_digest(value: &str) -> Result<Vec<u8>, MigrationError> {
         .collect()
 }
 
+async fn qualification(
+    conn: &mut sqlx::PgConnection,
+    org: Uuid,
+    admission_id: Uuid,
+    report_id: Uuid,
+    release_evidence: Option<&ReleaseReadiness>,
+    lock: bool,
+) -> Result<Qualification, MigrationError> {
+    const REPORT: &str = "SELECT r.*,a.id AS admission_id,a.state AS admission_state,a.parent_import_id AS admission_parent_import_id,a.parent_plan_id AS admission_parent_plan_id,a.source_account_id AS admission_account,a.workspace_revision AS admission_workspace_revision,a.confirmed_admission_plan_id,a.newer_completed_at AS admission_completed_at,i.state AS parent_state,i.confirmed_plan_id,i.snapshot_id AS parent_snapshot,i.source_account_id AS parent_account,o.workspace_mode,o.workspace_revision,ns.started_at AS newer_started_at,ns.completed_at AS newer_completed_at FROM migration_core_change_report r JOIN migration_people_admission a ON a.id=$1 AND a.organization_id=r.organization_id JOIN migration_import i ON i.id=r.parent_import_id AND i.organization_id=r.organization_id JOIN organization o ON o.id=r.organization_id JOIN migration_snapshot ns ON ns.id=r.newer_snapshot_id AND ns.organization_id=r.organization_id WHERE r.id=$2 AND r.organization_id=$3";
+    let sql = if lock {
+        format!("{REPORT} FOR UPDATE")
+    } else {
+        REPORT.to_owned()
+    };
+    let report = sqlx::query(&sql)
+        .bind(admission_id)
+        .bind(report_id)
+        .bind(org)
+        .fetch_optional(&mut *conn)
+        .await?
+        .ok_or(MigrationError::NotFound)?;
+    let bindings = AvailabilityBindings {
+        admission_id,
+        report_id,
+        parent_import_id: report.get("parent_import_id"),
+        parent_plan_id: report.get("parent_plan_id"),
+        source_account_id: report.get("source_account_id"),
+        workspace_revision: report.get("workspace_revision"),
+        newer_snapshot_id: report.get("newer_snapshot_id"),
+        newer_sequence: report.get("newer_sequence"),
+        newer_started_at: report.get("newer_started_at"),
+        newer_completed_at: report.get("newer_completed_at"),
+    };
+    if release(conn, release_evidence).await.is_err() {
+        return Ok(Qualification::closed(
+            bindings,
+            ClosedReason::ReleaseNotReady,
+        ));
+    }
+    if report.get::<String, _>("state") != "completed" {
+        return Ok(Qualification::closed(
+            bindings,
+            ClosedReason::ReportNotCompleted,
+        ));
+    }
+    if !matches!(
+        report.get::<String, _>("admission_state").as_str(),
+        "completed" | "cancelled"
+    ) {
+        return Ok(Qualification::closed(
+            bindings,
+            ClosedReason::AdmissionNotTerminal,
+        ));
+    }
+    if report
+        .get::<Option<Uuid>, _>("confirmed_admission_plan_id")
+        .is_none()
+    {
+        return Ok(Qualification::closed(
+            bindings,
+            ClosedReason::AdmissionNotConfirmed,
+        ));
+    }
+    if report.get::<String, _>("parent_state") != "completed"
+        || report.get::<Option<Uuid>, _>("confirmed_plan_id") != Some(report.get("parent_plan_id"))
+    {
+        return Ok(Qualification::closed(
+            bindings,
+            ClosedReason::ParentNotCompleted,
+        ));
+    }
+    if report.get::<String, _>("workspace_mode") != "migration_review" {
+        return Ok(Qualification::closed(
+            bindings,
+            ClosedReason::ReviewWorkspaceRequired,
+        ));
+    }
+    if report.get::<Uuid, _>("parent_import_id")
+        != report.get::<Uuid, _>("admission_parent_import_id")
+        || report.get::<Uuid, _>("parent_plan_id")
+            != report.get::<Uuid, _>("admission_parent_plan_id")
+        || report.get::<i64, _>("source_account_id") != report.get::<i64, _>("admission_account")
+        || report.get::<i64, _>("source_account_id") != report.get::<i64, _>("parent_account")
+        || report.get::<i64, _>("workspace_revision")
+            != report.get::<i64, _>("admission_workspace_revision")
+    {
+        return Ok(Qualification::closed(
+            bindings,
+            ClosedReason::BindingMismatch,
+        ));
+    }
+    let successful: i64 = sqlx::query_scalar("SELECT count(*) FROM migration_people_admission_result WHERE admission_id=$1 AND organization_id=$2 AND disposition='settled'")
+        .bind(admission_id)
+        .bind(org)
+        .fetch_one(&mut *conn)
+        .await?;
+    if successful == 0 {
+        return Ok(Qualification::closed(
+            bindings,
+            ClosedReason::NoSuccessfulResults,
+        ));
+    }
+    let Some(newer_started) =
+        report.get::<Option<chrono::DateTime<chrono::Utc>>, _>("newer_started_at")
+    else {
+        return Ok(Qualification::closed(
+            bindings,
+            ClosedReason::LaterCaptureRequired,
+        ));
+    };
+    if report
+        .get::<Option<chrono::DateTime<chrono::Utc>>, _>("newer_completed_at")
+        .is_none()
+        || newer_started <= report.get::<chrono::DateTime<chrono::Utc>, _>("admission_completed_at")
+    {
+        return Ok(Qualification::closed(
+            bindings,
+            ClosedReason::LaterCaptureRequired,
+        ));
+    }
+    let active: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM migration_admitted_people_refresh WHERE organization_id=$1 AND admission_id=$2 AND state IN ('preparing','ready','queued','running','paused'))")
+        .bind(org)
+        .bind(admission_id)
+        .fetch_one(&mut *conn)
+        .await?;
+    if active {
+        return Ok(Qualification::closed(
+            bindings,
+            ClosedReason::ActiveRefreshExists,
+        ));
+    }
+    let prior = sqlx::query("SELECT report_id,newer_snapshot_id,newer_sequence,confirmed_boundary,confirmed_completed_at,state FROM migration_admitted_people_refresh WHERE organization_id=$1 AND admission_id=$2 AND confirmed_snapshot_id IS NOT NULL AND confirmed_completed_at IS NOT NULL ORDER BY confirmed_completed_at DESC,id DESC LIMIT 1 FOR SHARE")
+        .bind(org)
+        .bind(admission_id)
+        .fetch_optional(&mut *conn)
+        .await?;
+    if let Some(prior) = prior {
+        let exact_remainder = prior.get::<Uuid, _>("report_id") == report_id
+            && prior.get::<Uuid, _>("newer_snapshot_id")
+                == report.get::<Uuid, _>("newer_snapshot_id")
+            && prior.get::<i64, _>("newer_sequence") == report.get::<i64, _>("newer_sequence")
+            && prior.get::<Option<i64>, _>("confirmed_boundary")
+                == Some(report.get("newer_sequence"))
+            && matches!(
+                prior.get::<String, _>("state").as_str(),
+                "completed" | "cancelled"
+            );
+        if !exact_remainder
+            && newer_started
+                <= prior.get::<chrono::DateTime<chrono::Utc>, _>("confirmed_completed_at")
+        {
+            return Ok(Qualification::closed(
+                bindings,
+                ClosedReason::SourceBoundaryNotNewer,
+            ));
+        }
+    }
+    Ok(Qualification::available(bindings))
+}
+
+pub async fn availability(
+    pool: &PgPool,
+    ctx: &CommandContext,
+    query: AvailabilityQuery,
+    release_evidence: Option<&ReleaseReadiness>,
+) -> Result<Value, MigrationError> {
+    let mut conn = pool.acquire().await?;
+    Ok(qualification(
+        &mut conn,
+        ctx.organization_id.0,
+        query.admission_id,
+        query.report_id,
+        release_evidence,
+        false,
+    )
+    .await?
+    .response())
+}
+
 pub async fn prepare(
     pool: &PgPool,
     key: &RawPayloadKey,
@@ -94,57 +365,19 @@ pub async fn prepare(
     if let Some(v) = s::replay(&mut tx, key, ctx, "prepare", cmd.request_id, &digest).await? {
         return Ok(v);
     }
-    release(&mut tx, release_evidence).await?;
-    let report=sqlx::query("SELECT r.*,a.id AS admission_id,a.state AS admission_state,a.parent_import_id AS admission_parent_import_id,a.parent_plan_id AS admission_parent_plan_id,a.source_account_id AS admission_account,a.workspace_revision AS admission_workspace_revision,a.confirmed_admission_plan_id,a.newer_completed_at AS admission_completed_at,i.state AS parent_state,i.confirmed_plan_id,i.snapshot_id AS parent_snapshot,i.source_account_id AS parent_account,o.workspace_mode,o.workspace_revision,ns.started_at AS newer_started_at,ns.completed_at AS newer_completed_at FROM migration_core_change_report r JOIN migration_people_admission a ON a.id=$1 AND a.organization_id=r.organization_id JOIN migration_import i ON i.id=r.parent_import_id AND i.organization_id=r.organization_id JOIN organization o ON o.id=r.organization_id JOIN migration_snapshot ns ON ns.id=r.newer_snapshot_id AND ns.organization_id=r.organization_id WHERE r.id=$2 AND r.organization_id=$3 FOR UPDATE")
-  .bind(cmd.admission_id)
-  .bind(cmd.report_id).bind(ctx.organization_id.0).fetch_optional(&mut *tx).await?.ok_or(MigrationError::NotFound)?;
-    if report.get::<String, _>("state") != "completed"
-        || !matches!(
-            report.get::<String, _>("admission_state").as_str(),
-            "completed" | "cancelled"
-        )
-        || report
-            .get::<Option<Uuid>, _>("confirmed_admission_plan_id")
-            .is_none()
-        || report.get::<String, _>("parent_state") != "completed"
-        || report.get::<String, _>("workspace_mode") != "migration_review"
-        || report.get::<Option<Uuid>, _>("confirmed_plan_id") != Some(report.get("parent_plan_id"))
-    {
-        return Err(MigrationError::SourceNotEligible);
-    }
-    let newer_started = report
-        .get::<Option<chrono::DateTime<chrono::Utc>>, _>("newer_started_at")
-        .ok_or(MigrationError::SourceNotEligible)?;
-    let newer_completed = report
-        .get::<Option<chrono::DateTime<chrono::Utc>>, _>("newer_completed_at")
-        .ok_or(MigrationError::SourceNotEligible)?;
-    if newer_started <= report.get::<chrono::DateTime<chrono::Utc>, _>("admission_completed_at") {
-        return Err(MigrationError::SourceNotEligible);
-    }
-    let successful: i64 = sqlx::query_scalar("SELECT count(*) FROM migration_people_admission_result WHERE admission_id=$1 AND organization_id=$2 AND disposition='settled'").bind(cmd.admission_id).bind(ctx.organization_id.0).fetch_one(&mut *tx).await?;
-    if successful == 0
-        || report.get::<Uuid, _>("parent_import_id")
-            != report.get::<Uuid, _>("admission_parent_import_id")
-        || report.get::<Uuid, _>("parent_plan_id")
-            != report.get::<Uuid, _>("admission_parent_plan_id")
-        || report.get::<i64, _>("source_account_id") != report.get::<i64, _>("admission_account")
-        || report.get::<i64, _>("workspace_revision")
-            != report.get::<i64, _>("admission_workspace_revision")
-    {
-        return Err(MigrationError::SourceNotEligible);
-    }
-    let prior=sqlx::query("SELECT confirmed_snapshot_id,confirmed_completed_at FROM migration_admitted_people_refresh WHERE organization_id=$1 AND admission_id=$2 AND confirmed_snapshot_id IS NOT NULL AND confirmed_completed_at IS NOT NULL ORDER BY confirmed_completed_at DESC,id DESC LIMIT 1 FOR SHARE")
-        .bind(ctx.organization_id.0).bind(cmd.admission_id).fetch_optional(&mut *tx).await?;
-    if prior.is_some_and(|prior| {
-        prior.get::<Uuid, _>("confirmed_snapshot_id") != report.get::<Uuid, _>("newer_snapshot_id")
-            && newer_started
-                <= prior.get::<chrono::DateTime<chrono::Utc>, _>("confirmed_completed_at")
-    }) {
-        return Err(MigrationError::Conflict);
-    }
+    let bindings = qualification(
+        &mut tx,
+        ctx.organization_id.0,
+        cmd.admission_id,
+        cmd.report_id,
+        release_evidence,
+        true,
+    )
+    .await?
+    .prepare_result()?;
     let id = Uuid::new_v4();
     sqlx::query("INSERT INTO migration_admitted_people_refresh(id,organization_id,admission_id,parent_import_id,parent_plan_id,report_id,source_account_id,newer_snapshot_id,newer_sequence,newer_started_at,newer_completed_at,workspace_revision,initiated_by_user_id,engine_version,state) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'preparing')")
-  .bind(id).bind(ctx.organization_id.0).bind(cmd.admission_id).bind(report.get::<Uuid,_>("parent_import_id")).bind(report.get::<Uuid,_>("parent_plan_id")).bind(cmd.report_id).bind(report.get::<i64,_>("source_account_id")).bind(report.get::<Uuid,_>("newer_snapshot_id")).bind(report.get::<i64,_>("newer_sequence")).bind(newer_started).bind(newer_completed).bind(report.get::<i64,_>("workspace_revision")).bind(ctx.actor_user_id.0).bind(s::ENGINE).execute(&mut *tx).await?;
+  .bind(id).bind(ctx.organization_id.0).bind(cmd.admission_id).bind(bindings.parent_import_id).bind(bindings.parent_plan_id).bind(cmd.report_id).bind(bindings.source_account_id).bind(bindings.newer_snapshot_id).bind(bindings.newer_sequence).bind(bindings.newer_started_at.ok_or(MigrationError::SourceNotEligible)?).bind(bindings.newer_completed_at.ok_or(MigrationError::SourceNotEligible)?).bind(bindings.workspace_revision).bind(ctx.actor_user_id.0).bind(s::ENGINE).execute(&mut *tx).await?;
     // Preserve an independent cancellation allowance before any preparation
     // bytes are admitted, so cancellation remains possible at a full ledger.
     s::reserve(

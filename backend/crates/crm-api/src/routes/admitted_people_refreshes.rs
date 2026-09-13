@@ -46,7 +46,14 @@ pub fn router() -> Router<AppState> {
             "/api/migrations/fub/admitted-people-refreshes",
             get(list).post(prepare),
         )
-        .route("/api/migrations/fub/admitted-people-refreshes/{id}", get(detail))
+        .route(
+            "/api/migrations/fub/admitted-people-refreshes/availability",
+            get(availability),
+        )
+        .route(
+            "/api/migrations/fub/admitted-people-refreshes/{id}",
+            get(detail),
+        )
         .route(
             "/api/migrations/fub/admitted-people-refreshes/{id}/items",
             get(items),
@@ -84,6 +91,15 @@ pub fn router() -> Router<AppState> {
             get(field),
         )
         .layer(DefaultBodyLimit::max(8192))
+        .layer(axum::middleware::map_response(
+            |mut response: Response| async move {
+                response.headers_mut().insert(
+                    header::CACHE_CONTROL,
+                    header::HeaderValue::from_static("no-store"),
+                );
+                response
+            },
+        ))
 }
 async fn prepare(
     State(s): State<AppState>,
@@ -99,6 +115,24 @@ async fn prepare(
             &s.snapshot_policy,
             &CommandContext::from_auth(&a.auth),
             body(b)?,
+            release.as_deref(),
+        )
+        .await
+        .map_err(error)?,
+    ))
+}
+async fn availability(
+    State(s): State<AppState>,
+    a: OrgAdminContext,
+    q: Result<Query<h::AvailabilityQuery>, QueryRejection>,
+) -> Result<Response, ApiError> {
+    let release = s.current_import_release().await;
+    Ok(response(
+        StatusCode::OK,
+        h::availability(
+            s.db.as_ref().ok_or(ApiError::Unavailable)?,
+            &CommandContext::from_auth(&a.auth),
+            query(q)?,
             release.as_deref(),
         )
         .await

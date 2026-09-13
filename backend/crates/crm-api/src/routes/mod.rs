@@ -32,3 +32,5 @@ pub mod migration_imports;
 pub mod history_captures;
 pub mod history_imports;
 pub mod history_review;
+
+pub mod mobile;

@@ -1,0 +1,24 @@
+{
+  "complete": true,
+  "generation_id": "dff63ca2-97ec-4b27-850e-f32ed7bda1b5",
+  "items": [],
+  "next_cursor": null,
+  "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+  "revision": "2001",
+  "section": "summary",
+  "summary": {
+    "assigned_user": {
+      "display_name": "Mobile Agent",
+      "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+    },
+    "created_at": "2026-09-13T01:27:14.007608Z",
+    "display_name": "Synthetic Person",
+    "first_name": "Synthetic Person",
+    "id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+    "last_name": null,
+    "stage": {
+      "id": "28a6e6ab-6865-4064-bda7-45b29b1ca21b",
+      "name": "Lead"
+    }
+  }
+}

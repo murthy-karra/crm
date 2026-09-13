@@ -28,3 +28,5 @@ pub(crate) use queries::task_completed_history;
 
 #[cfg(feature = "test-support")]
 pub use queries::perf_cd3b010_open;
+
+pub(crate) use commands::{complete_task_in_transaction, create_task_in_transaction};

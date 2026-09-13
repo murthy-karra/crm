@@ -1,0 +1,12 @@
+{
+  "context_id": "a298d7ab-060c-46f3-a630-341fa7916438",
+  "device_recorded_at": "2026-09-12T20:00:00Z",
+  "kind": "complete_task",
+  "operation_id": "c24f09e7-b37e-42ca-a383-71069a79df55",
+  "payload": {
+    "person_id": "b9c89a95-976e-40ff-b123-a34769fe55b8",
+    "target": {
+      "created_by_operation_id": "e042c898-915f-4200-9dab-e5811cc1475f"
+    }
+  }
+}

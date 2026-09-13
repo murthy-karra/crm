@@ -162,11 +162,25 @@ async fn create_task_attempt(
     ctx: &CommandContext,
     cmd: CreateTask,
 ) -> Result<Task, TaskError> {
+    TaskTitle::parse(&cmd.title)?;
+    let person_id = cmd.person_id;
+    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
+    let task = create_task_in_transaction(&mut tx, ctx, cmd).await?;
+    tx.commit().await?;
+    publish_task_changed(publisher, ctx, person_id).await;
+    Ok(task)
+}
+
+/// Shared typed command core. Caller owns operational guard and commit/publication.
+pub(crate) async fn create_task_in_transaction(
+    tx: &mut PgConnection,
+    ctx: &CommandContext,
+    cmd: CreateTask,
+) -> Result<Task, TaskError> {
     let title = TaskTitle::parse(&cmd.title)?;
     tracing::Span::current().record("title_chars", title.chars().count());
 
-    let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
-    person_queries::lock_person(&mut tx, cmd.person_id, ctx.organization_id)
+    person_queries::lock_person(tx, cmd.person_id, ctx.organization_id)
         .await?
         .ok_or(TaskError::NotFound)?;
 
@@ -178,7 +192,7 @@ async fn create_task_attempt(
     // may create), but it still needs this re-read: the `AuthContext`
     // session only proves the actor WAS active when the request arrived,
     // not that they still are now that the row lock is held.
-    let role = lock_current_membership(&mut tx, ctx.organization_id, ctx.actor_user_id).await?;
+    let role = lock_current_membership(tx, ctx.organization_id, ctx.actor_user_id).await?;
     if role.is_none() {
         return Err(TaskError::Forbidden);
     }
@@ -190,15 +204,14 @@ async fn create_task_attempt(
     // that acts as "the current active member".
     if cmd.assignee_user_id.is_some() {
         let active =
-            queries::assignee_is_active_member(&mut tx, ctx.organization_id, assignee_user_id)
-                .await?;
+            queries::assignee_is_active_member(tx, ctx.organization_id, assignee_user_id).await?;
         if !active {
             return Err(TaskError::InvalidAssignee);
         }
     }
 
     let row = queries::insert_task(
-        &mut tx,
+        tx,
         ctx.organization_id,
         cmd.person_id,
         &title,
@@ -210,10 +223,6 @@ async fn create_task_attempt(
         ctx.correlation_id.0,
     )
     .await?;
-    tx.commit().await?;
-
-    publish_task_changed(publisher, ctx, cmd.person_id).await;
-
     // The creator of a brand-new task can always manage it (rule 1: they
     // are `created_by_user_id`, regardless of who the assignee is).
     queries::task_from_row(row, cmd.person_id, true)
@@ -403,9 +412,28 @@ async fn complete_task_attempt(
     ctx: &CommandContext,
     cmd: CompleteTask,
 ) -> Result<CompleteTaskOutcome, TaskError> {
+    let person_id = cmd.person_id;
     let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
+    let outcome = complete_task_in_transaction(&mut tx, ctx, cmd, None)
+        .await?
+        .ok_or(TaskError::Corrupt)?;
+    tx.commit().await?;
+    if outcome.changed {
+        publish_task_changed(publisher, ctx, person_id).await;
+    }
+    Ok(outcome)
+}
+
+/// Shared completion core; None outcome means an authorized stale revision.
+/// The ordinary wrapper supplies no baseline, preserving its public behavior.
+pub(crate) async fn complete_task_in_transaction(
+    tx: &mut PgConnection,
+    ctx: &CommandContext,
+    cmd: CompleteTask,
+    expected_revision: Option<i64>,
+) -> Result<Option<CompleteTaskOutcome>, TaskError> {
     let (row, _role) = lock_person_task_and_authorize(
-        &mut tx,
+        tx,
         ctx.organization_id,
         ctx.actor_user_id,
         cmd.person_id,
@@ -413,16 +441,29 @@ async fn complete_task_attempt(
     )
     .await?;
 
+    if let Some(expected) = expected_revision {
+        let current: i64 = sqlx::query_scalar(
+            "SELECT revision FROM task WHERE organization_id=$1 AND person_id=$2 AND id=$3",
+        )
+        .bind(ctx.organization_id.0)
+        .bind(cmd.person_id.0)
+        .bind(cmd.task_id.0)
+        .fetch_one(&mut *tx)
+        .await?;
+        if current != expected {
+            return Ok(None);
+        }
+    }
+
     if row.completed_at.is_some() {
-        tx.commit().await?;
-        return Ok(CompleteTaskOutcome {
+        return Ok(Some(CompleteTaskOutcome {
             task: queries::task_from_row(row, cmd.person_id, true)?,
             changed: false,
-        });
+        }));
     }
 
     queries::complete_task_write(
-        &mut tx,
+        tx,
         ctx.organization_id,
         cmd.person_id,
         cmd.task_id,
@@ -430,17 +471,14 @@ async fn complete_task_attempt(
     )
     .await?;
     let updated_row =
-        queries::lock_task_for_update(&mut tx, ctx.organization_id, cmd.person_id, cmd.task_id)
+        queries::lock_task_for_update(tx, ctx.organization_id, cmd.person_id, cmd.task_id)
             .await?
             .ok_or(TaskError::Corrupt)?;
-    tx.commit().await?;
 
-    publish_task_changed(publisher, ctx, cmd.person_id).await;
-
-    Ok(CompleteTaskOutcome {
+    Ok(Some(CompleteTaskOutcome {
         task: queries::task_from_row(updated_row, cmd.person_id, true)?,
         changed: true,
-    })
+    }))
 }
 
 // --- ReopenTask ------------------------------------------------------------

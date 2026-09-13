@@ -1,0 +1,714 @@
+{
+  "complete": true,
+  "context_id": "cbdfeb9b-4f5f-4bb1-b438-57fbb5dc6fbf",
+  "evaluated_at": "2026-09-13T01:27:15.750122Z",
+  "expires_at": "2026-09-13T01:57:15.750122Z",
+  "generation_id": "dff63ca2-97ec-4b27-850e-f32ed7bda1b5",
+  "manifest": {
+    "complete": true,
+    "items": [
+      {
+        "person_id": "0253e4fa-9bce-4191-8d3e-89459eeb0e27",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "0840cbea-ac49-4e68-8595-1682fe08caa9",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "08b244c3-9f00-4c94-9bf8-d2256b62c987",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "096a097e-ed6a-40fe-84ea-ac8d7a0c8ffa",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "10037a98-d97c-4b6b-89d0-04f305e3a0f8",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "14afea29-4477-4952-8b56-1c0e37265fb6",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "1978546d-b7d5-4141-8ce4-c9e9a7757728",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "1ba40b73-a4a9-4bc1-b26a-89d9eceb406d",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "2046c11e-afcd-4e20-ab39-4728a60c6e09",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "26971456-0096-420a-b03b-537eb4e9dc89",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "2bd72ccd-78bb-40cd-b581-a562967e71c3",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "2be1d1f1-e997-4cda-9156-1b4ed1d5b36b",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "2caaf860-650a-4c9f-b2a4-e45f3b1debce",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "2f5c3426-679d-4c6d-914a-58c4dcb981d7",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "2f9ecfca-177b-4828-886b-2c8f34764723",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "2ff39b19-1618-4247-b7d6-522051010f39",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "39c2f00c-a37f-47cc-ba6d-a88b54f63825",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "3ba87508-70e1-4345-beb4-7e74f0e15078",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "3f80002e-c1d2-43fb-8518-10734e171bb0",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "3f822534-ec4d-4621-8e63-2f886478b83b",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "459a05fb-326c-49e6-be5a-b278533474bb",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "4a859473-be2d-4499-b300-a6d20f676994",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "4c0ebf91-6568-4a26-99cd-03bbd98257c3",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "4c88216a-4c12-4801-99dd-9c31509be9c6",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "4d75fddd-2878-4c6e-8c23-df54d17543b5",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "5013346f-a350-4efa-84b2-74db6bb52538",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "5146e86a-6ed2-42aa-9e52-505c8117d70e",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "51737276-5b51-4361-af4e-fa6b2c050f1e",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "587a7b21-7ca1-45e9-8c40-62ea928fd942",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "598d0a2d-b541-41d2-bbfc-f578c703fe27",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "5ac3910f-bd66-4d51-8191-56ba0b213206",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "5b529703-b1cc-45ab-acb2-73ca87b9d579",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "5dd32679-4344-43ea-8481-7c80957352b6",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "5e9d31b7-0d55-4419-8bd6-740959edead9",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "618b9e61-9bcd-4500-913c-41925c318472",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "618e032c-af43-4f75-ac74-9434f54a5948",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "6494b39f-dd33-4913-b032-b8ba86acd9b8",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "67424026-3e5d-4662-aad7-8a7c2e92c6fd",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "67d50654-d245-4a43-860d-e71ef0cae72d",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "6ea51eee-9548-4d55-b7ae-5d841728382b",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "6ee466b5-0ed1-46e5-b156-907fe94e7266",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "722e4ff9-7d04-41fa-80cb-7bedc9e45ae6",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "2001"
+      },
+      {
+        "person_id": "73379953-020c-4762-8515-75a13f8d8dd3",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "7378e1da-fa2a-4d53-b0d2-ec2bdd5601e7",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "7640cbe4-a57b-47b1-ba5b-ea7727a963ca",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "7752df75-12c4-45db-8b49-2f6cd6ade3bb",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "7774860c-9da9-4f23-b0f4-893ccb0c3714",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "7e7ceaec-6073-4eec-a5e5-7a18a802c6ff",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "89b9c6d0-af8f-4f3f-9d3b-53c1904a63b9",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "8f380ba2-48c3-42d1-8244-34fbb86794b2",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "960b7073-954b-4e0a-a839-d9272f912fb3",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "987bc49f-35d3-4d31-9ef0-e5600e82f06b",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "99f39a2b-a28a-4294-8736-904d095a05ef",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "9b017a86-027e-4ab6-9b8e-8a7bbfa2cf49",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "9c6915dc-2d5c-4106-9648-1d6d68750984",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "9c73e7cd-1ca2-499d-8682-04f55f54c234",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "9c9e5be6-d8a3-4d57-8d49-00d83590c143",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "a00165fc-a892-48ee-8a5c-06f70f5ed920",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "a24458fd-4daf-47bb-8ab7-d53f2ac15e89",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "a31198f6-5bab-4ff9-9e8d-99510b435a84",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "a61fc397-7491-44c3-b5d0-a920d5d1bb28",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "a79cf670-85c9-450c-95f5-b0ebc6d633f7",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "a7d728a5-7eae-4413-bffe-40a55b68f2a0",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "ad657771-d0fe-45d5-a5b2-39d6969e5174",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "ae54036f-dd95-465c-8423-d47df6977fcc",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "ae820f9f-951b-4f6f-9f44-f3319bab54b8",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "b0595b5b-2829-43d6-8046-150330b146ad",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "b1c1e2fd-59a3-4ec9-a9b7-fe7ddf276a6b",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "b218d2d4-ff18-4201-ba12-ba899305610a",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "b26996fc-d114-41d2-9dd5-43abc13cd52a",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "ba81bb09-0337-41df-b7a5-27320370f4b4",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "bc379620-e4ea-4397-a634-96ccec505353",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "bdd27ba3-a642-404b-8c53-05f28335a55a",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "c3658c96-bcc0-48ad-956e-eac5e6634e18",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "c6df67d0-cff1-4665-b39b-7ceeb3a0b2fd",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "cbc78821-3a62-4170-8fe5-dd860db37c31",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "cd40bdc7-78a8-41f3-aba7-14e8f2f1d991",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "cdc9f6a7-ba15-4ce8-be43-ade2c8232909",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "d1055b5d-a8be-4693-9af5-d987766368fd",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "d1777f4b-20f2-48e3-b72e-90b07207c397",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "d2df0d95-afab-493a-80cf-435ff674b720",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "d2f6b9f2-eb08-422c-8f69-92ea8163a623",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "d3606a38-cba4-4f8a-bf50-0870b8697735",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "d6c31fe7-6a5b-4cea-941d-f0b13835d181",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "d70b7b99-e6c9-42a5-8049-58aca65a3a3a",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "d793e4aa-f921-4f94-905b-889ddae24b10",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "d83ac653-f470-49bd-8080-487f4d9706f8",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "d89525aa-d291-4c5e-9af8-b57ba6fd361f",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "d9c16bf2-0952-4176-a282-7e9c62f2c1d8",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "da26973d-2220-4da4-a2f3-77255df8b103",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "dbf01928-3969-49ce-a667-b62d415a0847",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "e34beed3-4993-469b-b513-f96591927031",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "eb815d8c-3849-44c3-8a0f-bb155a58d7f3",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "ecd9ba74-fe75-4512-bb48-00c7e8885679",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "efa70582-5dcd-4d46-bda8-14a0cd1a0da2",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "f0195d02-d000-4c46-909e-477447a7806d",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "f75f1219-199a-4d1b-8dfe-0e22b60897c7",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "f8b353ae-48d5-439c-8ac7-336c6e6143b6",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      },
+      {
+        "person_id": "f9d98046-e99c-4b60-8888-b5a8693cc1ea",
+        "reasons": [
+          "assigned"
+        ],
+        "revision": "1"
+      }
+    ],
+    "next_cursor": null
+  },
+  "selected_count": 100
+}

@@ -1,0 +1,13 @@
+{
+  "context_id": "a298d7ab-060c-46f3-a630-341fa7916438",
+  "device_recorded_at": "2026-09-12T20:00:00Z",
+  "kind": "create_task",
+  "operation_id": "e042c898-915f-4200-9dab-e5811cc1475f",
+  "payload": {
+    "assignee_user_id": null,
+    "due_at": null,
+    "kind": "follow_up",
+    "person_id": "b9c89a95-976e-40ff-b123-a34769fe55b8",
+    "title": "Visit after outage"
+  }
+}

@@ -1,3 +1,6 @@
+//! Frozen 9eaeb0a Today entrypoint for the Mobile001 same-build D-050 pair.
+//! Only leaf-module wiring differs; those leaves are unchanged by Mobile001.
+#![allow(dead_code, unused_imports)]
 //! Today: a computed, deterministic read model (AGENTS.md §4.7, D-010;
 //! docs/specs/SLICE_003.md §3, §4). Not a table — computed per request
 //! from authoritative rows inside one read-only repeatable-read transaction,
@@ -5,25 +8,24 @@
 //! sequential statements share one snapshot while evaluating the built-in
 //! queue and enabled live sources.
 
-pub mod model;
-pub mod rank;
-pub mod sources;
-pub mod system_feeds;
+pub use super::model;
+pub use super::rank;
+pub use super::sources;
+pub use super::system_feeds;
 /// The fixed built-in task axis (docs/specs/SLICE_016.md §5, D-054 §1).
 /// Private: only `today::mod` wires it into the query; no cross-crate or
 /// cross-module caller needs its statements directly (unlike
 /// `system_feeds::evaluate`, which the frozen-vs-live equivalence gate
 /// calls from outside this crate).
-mod task_axis;
+use super::task_axis;
 #[cfg(feature = "test-support")]
-pub mod test_support;
+pub use super::test_support;
 
 pub use model::{
     InquiryRef, RecommendedAction, SystemFeedIssue, SystemFeedIssueError, TodayCandidate,
     TodayItem, TodayList, TodayPriority, TodayReason, TodaySourceIssue, TodaySourceIssueError,
     TodaySources, TodaySourcesStatus, FRESH_INQUIRY_WINDOW_HOURS,
 };
-pub use rank::rank;
 pub use sources::{
     disable_today_work_source, enable_today_work_source, list_today_work_sources,
     DisableTodayWorkSource, EnableTodayWorkSource, TodaySource, TodaySourceChange,
@@ -151,35 +153,8 @@ pub async fn query_at(
     )
 }
 
-/// Mobile reconciliation supplies a server-owned evaluation time inside its
-/// existing REPEATABLE READ transaction. The normal core opens a savepoint;
-/// it must neither alter nor commit the outer transaction. Unrecoverable Today
-/// cleanup fails the whole generation so partial data never permits removals.
-pub(crate) async fn query_in_transaction(
-    conn: &mut PgConnection,
-    scope: &PersonVisibilityScope,
-    viewer: UserId,
-    now: DateTime<Utc>,
-) -> Result<TodayList, sqlx::Error> {
-    let prior_timeout: String = sqlx::query_scalar("SHOW statement_timeout")
-        .fetch_one(&mut *conn)
-        .await?;
-    let outcome = query_inner(conn, scope, viewer, EvaluationClock::Mobile(now)).await?;
-    if !outcome.connection_healthy {
-        return Err(sqlx::Error::Protocol(
-            "mobile Today snapshot unavailable".into(),
-        ));
-    }
-    sqlx::query("SELECT set_config('statement_timeout',$1,true)")
-        .bind(prior_timeout)
-        .execute(&mut *conn)
-        .await?;
-    Ok(outcome.list)
-}
-
 enum EvaluationClock {
     Database,
-    Mobile(DateTime<Utc>),
     #[cfg(feature = "test-support")]
     Fixed(DateTime<Utc>),
 }
@@ -324,11 +299,9 @@ async fn query_inner_untraced(
     // source age filters together. `READ ONLY` keeps a malformed/slow source
     // from accidentally making a read-path write.
     let mut tx = conn.begin().await?;
-    if !matches!(evaluation_clock, EvaluationClock::Mobile(_)) {
-        sqlx::query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
-            .execute(&mut *tx)
-            .await?;
-    }
+    sqlx::query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
+        .execute(&mut *tx)
+        .await?;
     crate::auth::workspace::ordinary(&mut tx, scope.organization_id()).await?;
     // Approved §8 transaction-local planning adjustment. `SET LOCAL` dies
     // with this transaction, including the error/drop path.
@@ -354,7 +327,6 @@ async fn query_inner_untraced(
     // here keeps both sides byte-identical regardless of clock source.
     let now = match evaluation_clock {
         EvaluationClock::Database => database_now,
-        EvaluationClock::Mobile(now) => now,
         #[cfg(feature = "test-support")]
         EvaluationClock::Fixed(now) => now,
     }
@@ -2001,7 +1973,3 @@ async fn rollback_task_axis_within(
         Ok(Ok(()))
     )
 }
-
-/// Same-build, test-only D-050 reference; no production route can select it.
-#[cfg(feature = "test-support")]
-pub mod mobile_001_baseline;

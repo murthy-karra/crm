@@ -63,7 +63,8 @@ the local dependency checkpoint evidence.
 
 **Passed at checkpoint:** coordinator full `./scripts/check` (125 seconds),
 including formatting, clippy, production compilation, unit/doc tests and Web/Operator
-checks. **Pending:** full database regression and the D-050 same-build timing pair.
+checks. **Pending:** full database regression. The D-050 same-build timing pair passed
+as recorded below.
 SQLx prepare-check passed against both additive migrations;
 this is not a full-gate completion claim. The coordinator continues those gates
 while native app implementation begins against the frozen contract. Native
@@ -97,3 +98,34 @@ Retained identifiers:
 
 Seed and app startup are separate. The coordinator owns API startup and the
 native worktrees; this helper does not launch or deploy anything.
+
+## D-050 same-build paired evidence
+
+The opt-in `mobile_today_perf` example includes the frozen `9eaeb0a` Today
+entrypoint behind test-support, sharing its unchanged leaf query modules with
+current code. Both paths ran in the same executable, against the same retained
+synthetic database and fixed `2026-09-13T01:31:11Z` clock. Execution alternated
+old/new order, with ten warmups and forty measured samples per side. All 100
+Today items serialized to the exact same SHA-256 digest across every call.
+
+Old/new median: 13.1300835 / 13.2578955 ms. Old/new p95: 13.799416 / 14.089333 ms.
+The permitted p95 increase was max(25 ms, 10% of old p95), here 25 ms: **PASS**.
+The run overlapped other isolated synthetic regression tests; it is paired
+regression evidence, not an idle-host or production capacity benchmark. The
+[JSON result](../../mobile/contracts/today_paired_regression.json) records the
+actual measurement. No additional hot-query plan repeat was needed; the earlier
+25,000-Person statement evidence remains linked above.
+
+```sh
+MOBILE_PERF_CLOCK=2026-09-13T01:31:11Z SQLX_OFFLINE=true \
+  cargo run --manifest-path backend/Cargo.toml -p crm-api \
+  --features test-support --example mobile_today_perf
+```
+
+The retained fixture helper was rerun after migration `20260923000002` and
+reported `preserved_existing: true`, keeping the same Organization/actor/Person
+IDs and all data. Checkpoint `cc3cb6b` supplies the reviewed native contract.
+Coordinator full database testing continues: after the trigger correction, the
+run reached 28 passing cases before stopping at the older 010f1-to-010f2 upgrade
+fixture. That remaining integration diagnosis belongs to the coordinator; this
+record deliberately does not claim the full regression gate passed.

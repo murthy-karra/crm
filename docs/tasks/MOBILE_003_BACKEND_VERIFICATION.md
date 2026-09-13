@@ -25,7 +25,33 @@ database for each `#[sqlx::test]` invocation.
 
 ## Limits
 
+## Coordinator integration follow-up
+
+After integrating the foundation and legacy lock-clock correction, the coordinator
+generated typed SQLx metadata against a freshly migrated throwaway database.
+The first prepare exposed a missing closing SQL alias quote; `fef40d8` fixes it
+and records the successfully generated metadata. The isolated API/migrator build
+passed and API3102 accepted a real HTTP contact operation and returned the same
+fact on replay, with `resource_type=contact_attempt` and null committed revision.
+
+With the repository `.env` sourced privately, the command
+`DATABASE_URL="$MIGRATION_DATABASE_URL" SQLX_OFFLINE=true CARGO_TARGET_DIR=/private/tmp/crm-mobile003-integrated-target cargo test -p crm-api --test all mobile003_ -- --ignored --nocapture`
+passed all 3 tests (3.94 seconds test execution). Beyond the original receipt/time
+test, new cases prove that a two-day-old contact cannot satisfy a one-day-old
+Inquiry; a later contact does, and a subsequent older upload cannot move the
+maximum activity time backwards. Every seal equals the ordinary Today query at
+the same evaluation instant while the Person revision remains unchanged.
+
+A deliberately failing receipt trigger rolls back fact, receipt and activity
+date. The contact-specific receipt path rejects cross-Organization targets, other
+actors' contexts, review-held workspaces and inactive members. After reauthorization
+and Person deletion, replay/lookup return opaque 404 while the original fact and
+operation marker remain and no second fact appears. These tests use their own
+ephemeral databases, separately from native runtime fixtures.
+
+## Remaining integration limits
+
 This establishes the backend/API contract and isolated PostgreSQL behavior.
-It does not establish iOS or Android protected-store behavior, actual API3102
-runtime behavior, physical-device behavior, or a final coordinated repository
+It does not establish iOS or Android protected-store behavior,
+physical-device behavior, or a final coordinated repository
 database gate. Those belong to the dependent native and coordinator lanes.

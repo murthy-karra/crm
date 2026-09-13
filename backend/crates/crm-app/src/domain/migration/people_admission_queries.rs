@@ -700,7 +700,7 @@ fn provenance(
         r.get("ciphertext"),
     )
 }
-fn field_summaries(raw: &Value) -> Result<Value, MigrationError> {
+pub(super) fn field_summaries(raw: &Value) -> Result<Value, MigrationError> {
     let Some(fields) = raw.as_object() else {
         return Ok(json!({}));
     };

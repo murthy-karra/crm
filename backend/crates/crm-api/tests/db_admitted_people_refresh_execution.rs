@@ -334,7 +334,10 @@ async fn mapped_fixture(migrator: &PgPool) -> (Fixture, Uuid) {
     (f, parent)
 }
 
-async fn mapped_fixture_with_two_qualified_stages(migrator: &PgPool) -> (Fixture, Uuid, Uuid) {
+async fn mapped_fixture_with_two_qualified_stages(
+    migrator: &PgPool,
+    same_target: bool,
+) -> (Fixture, Uuid, Uuid) {
     let book = Arc::new(Book::new(vec![json!({
         "id": 101,
         "firstName": "Original",
@@ -378,13 +381,17 @@ async fn mapped_fixture_with_two_qualified_stages(migrator: &PgPool) -> (Fixture
             StagePatch {
                 source_key: "5".into(),
                 choice: StageChoice::Existing {
-                    stage_id: qualified_stage,
+                    stage_id: if same_target {
+                        f.lead_stage
+                    } else {
+                        qualified_stage
+                    },
                 },
             },
         ],
         &[AssigneePatch {
             source_key: "3".into(),
-            choice: AssigneeChoice::Member { user_id: f.actor },
+            choice: AssigneeChoice::Member { user_id: f.member },
         }],
     )
     .await;
@@ -949,24 +956,38 @@ async fn oversized_admission_projection_pauses_before_ciphertext_read_without_pa
 
 #[sqlx::test]
 #[ignore = "requires isolated PostgreSQL migrator"]
-async fn small_baseline_and_large_later_projection_reserve_a_valid_work_unit(migrator: PgPool) {
+async fn large_live_current_projection_reserves_a_bounded_held_unit(migrator: PgPool) {
     let (f, parent, admission) = fixture_with_admission(
         &migrator,
-        vec![json!({"id":104,"firstName":"Small","stage":"Lead","assignedUserId":3})],
+        vec![json!({"id":104,"firstName":"Small","stage":"Lead","assignedUserId":3,"emails":[{"value":"old@synthetic.test"}]})],
     )
     .await;
     let person = admitted_person(&f, admission, "104").await;
-    // This stays below the 16 MiB retained source cap but makes the prepared
-    // delta exceed the former fixed 8 MiB preparation reservation.
-    let large_name = "N".repeat(9 * 1024 * 1024);
+    let before = native(&f, person).await;
+    // People source projections are deliberately bounded (16 KiB fields and
+    // 1 MiB contacts), but live native C can legitimately be much larger.
+    // Keep it below the 64 MiB item ceiling while exceeding the obsolete 8 MiB
+    // fixed prepare reservation.
+    sqlx::query("UPDATE contact_method SET value=repeat('v',4500000),normalized_value=repeat('n',4500000) WHERE person_id=$1 AND organization_id=$2")
+        .bind(person)
+        .bind(f.org)
+        .execute(&migrator)
+        .await
+        .unwrap();
+    let large_current = native(&f, person).await;
     let report_id = report(
         &f,
         parent,
-        vec![json!({"id":104,"firstName":large_name,"stage":"Lead","assignedUserId":3})],
+        vec![json!({"id":104,"firstName":"Later","stage":"Lead","assignedUserId":3,"emails":[{"value":"new@synthetic.test"}]})],
     )
     .await;
     let (run, detail) = prepare(&f, admission, report_id).await;
     assert_eq!(detail["state"], "ready");
+    let item = refresh::items(&f.pool, &f.key, &f.ctx, run, refresh::Page::default())
+        .await
+        .unwrap()["items"][0]
+        .clone();
+    assert_eq!(item["disposition"], "held_local_change");
     let bound: i64 = sqlx::query_scalar(
         "SELECT item_byte_bound FROM migration_admitted_people_refresh_item WHERE refresh_id=$1",
     )
@@ -977,12 +998,16 @@ async fn small_baseline_and_large_later_projection_reserve_a_valid_work_unit(mig
     assert!(bound > 8 * 1024 * 1024 && bound <= 64 * 1024 * 1024);
     confirm(&f, run, &confirmation(&detail)).await;
     drain(&f, run).await;
+    assert_eq!(native(&f, person).await, large_current);
     assert_eq!(
-        native(&f, person).await["person"]["first_name"]
-            .as_str()
-            .unwrap()
-            .len(),
-        large_name.len()
+        refresh::results(&f.pool, &f.key, &f.ctx, run, refresh::Page::default())
+            .await
+            .unwrap()["results"][0]["disposition"],
+        "held_local_change"
+    );
+    assert_ne!(
+        large_current, before,
+        "fixture C was enlarged before preparation"
     );
 }
 
@@ -1254,7 +1279,8 @@ async fn qualified_later_stage_transition_is_once_and_failure_rolls_back_revisio
         .unwrap()
     }
 
-    let (f, parent, qualified_stage) = mapped_fixture_with_two_qualified_stages(&migrator).await;
+    let (f, parent, qualified_stage) =
+        mapped_fixture_with_two_qualified_stages(&migrator, false).await;
     let admission = seal_admission(
         &f,
         parent,
@@ -1287,7 +1313,8 @@ async fn qualified_later_stage_transition_is_once_and_failure_rolls_back_revisio
         "one actual stage transition appends exactly one migration fact"
     );
 
-    let (failure, failure_parent, _) = mapped_fixture_with_two_qualified_stages(&migrator).await;
+    let (failure, failure_parent, _) =
+        mapped_fixture_with_two_qualified_stages(&migrator, false).await;
     let failure_admission = seal_admission(
         &failure,
         failure_parent,
@@ -1359,7 +1386,7 @@ async fn missing_execution_mapping_targets_settle_held_stale_without_native_writ
     }
 
     let (stage, stage_parent, target_stage) =
-        mapped_fixture_with_two_qualified_stages(&migrator).await;
+        mapped_fixture_with_two_qualified_stages(&migrator, false).await;
     let stage_admission = seal_admission(
         &stage,
         stage_parent,
@@ -1384,7 +1411,8 @@ async fn missing_execution_mapping_targets_settle_held_stale_without_native_writ
         .unwrap();
     assert_held_stale(&stage, stage_run, stage_person, stage_before).await;
 
-    let (assignee, assignee_parent, _) = mapped_fixture_with_two_qualified_stages(&migrator).await;
+    let (assignee, assignee_parent, _) =
+        mapped_fixture_with_two_qualified_stages(&migrator, false).await;
     let assignee_admission = seal_admission(
         &assignee,
         assignee_parent,
@@ -1404,11 +1432,49 @@ async fn missing_execution_mapping_targets_settle_held_stale_without_native_writ
     confirm(&assignee, assignee_run, &confirmation(&assignee_detail)).await;
     sqlx::query("UPDATE organization_membership SET status='inactive' WHERE organization_id=$1 AND user_id=$2")
         .bind(assignee.org)
-        .bind(assignee.actor)
+        .bind(assignee.member)
         .execute(&migrator)
         .await
         .unwrap();
     assert_held_stale(&assignee, assignee_run, assignee_person, assignee_before).await;
+}
+
+#[sqlx::test]
+#[ignore = "requires isolated PostgreSQL migrator"]
+async fn selected_mapping_cannot_be_replaced_by_a_same_target_sibling(migrator: PgPool) {
+    let (f, parent, _) = mapped_fixture_with_two_qualified_stages(&migrator, true).await;
+    let admission = seal_admission(
+        &f,
+        parent,
+        vec![json!({"id":104,"firstName":"Original","stage":"Qualified","assignedUserId":3})],
+    )
+    .await;
+    let person = admitted_person(&f, admission, "104").await;
+    let before = native(&f, person).await;
+    let report_id = report(
+        &f,
+        parent,
+        vec![json!({"id":104,"firstName":"Later","stage":"Qualified","assignedUserId":3})],
+    )
+    .await;
+    let (run, detail) = prepare(&f, admission, report_id).await;
+    confirm(&f, run, &confirmation(&detail)).await;
+    // Source stage 4 remains a qualified sibling for the same native Lead
+    // target.  Only source stage 5 was selected by this item.
+    sqlx::query("UPDATE migration_import_mapping SET qualified=false WHERE organization_id=$1 AND plan_id=(SELECT confirmed_plan_id FROM migration_import WHERE id=$2) AND kind='stage' AND source_key='5'")
+        .bind(f.org)
+        .bind(parent)
+        .execute(&migrator)
+        .await
+        .unwrap();
+    drain(&f, run).await;
+    assert_eq!(native(&f, person).await, before);
+    assert_eq!(
+        refresh::results(&f.pool, &f.key, &f.ctx, run, refresh::Page::default())
+            .await
+            .unwrap()["results"][0]["disposition"],
+        "held_stale"
+    );
 }
 
 #[sqlx::test]

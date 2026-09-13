@@ -51,28 +51,46 @@ used isolated derived-data/result paths.
    an accepted seed receipt's exact note ID, verified it in the authorized
    current-record response and reconciliation page, staged those pages through
    encrypted SQLite, and verified `editableRecord` qualification. Its server
-   generation `a90fb6c2-c6df-4a13-bc69-3b6e6bf4bf73` was explicitly sealed.
+   generation `a90fb6c2-c6df-4a13-bc69-3b6e6bf4bf73` was explicitly sealed. A
+   subsequent exact seed/current/page/local-store check also passed with
+   `bfb73b8f-4036-49dc-8cb0-a1963babee13`.
 5. The QA app was installed and launched on iPhone 17 Simulator
    `F5BF9C74-37AC-4546-A576-F30587CB4F4C` with
    `--synthetic-keychain`. The inspected launch screen is
    `/private/tmp/crm-mobile002-native-evidence/ios-qa-launch-v2.png`; it displays
    the synthetic-only banner and sign-in UI.
+6. `testMobile002NativeOfflineEditTerminateRelaunchAndSynchronizeReservedPerson001`
+   passed in 51.8 seconds, result bundle
+   `/private/tmp/crm-mobile002-ios-result-bundles/qa-ui-v23.xcresult`. It used
+   the explicit QA loader to read the exact accepted note through the real
+   current-record route, committed it into a complete encrypted Person001
+   bundle, edited it while paused, observed one pending operation, terminated
+   and relaunched the app with that operation still present, then reconnected
+   and observed zero pending operations. The run includes the pending screenshot
+   attachment `mobile002-offline-edit-pending`.
+7. An isolated `git archive 9cbaf1a` Mobile001 build was compiled under only the
+   Mobile002 QA bundle/key/store namespace and run on a second simulator. Its
+   populated legacy UI fixture passed in
+   `/private/tmp/crm-mobile002-ios-result-bundles/mobile001-populated-old-store-v2.xcresult`.
+   It created a schema-3 SQLCipher database, revision-less note snapshots, and
+   three old pending envelopes before the old app terminated. The app container
+   was inspected and contained its SQLite, WAL and SHM files at the QA-only
+   `SyntheticFieldCRMMobile002QA` path.
 
 ## Failed/remaining native evidence
 
-The first actual UI edit attempt failed because the fresh Person001 fixture did
-not contain a downloadable note. Follow-up attempts fixed the navigation and
-seeded a note online. The latest run reached the forced post-seed full
-reconciliation, then timed out after 120 seconds before the isolated API
-reported a complete workspace. Result:
-`/private/tmp/crm-mobile002-ios-result-bundles/qa-ui-v14.xcresult`. This is
-attributed as an isolated generation/capacity runtime issue and is not hidden as
-a native edit success.
-No QA store was wiped to turn that failure into a pass.
+Earlier native attempts failed for a missing seed, lazy Settings form content,
+and an unreachable Notes section after a long Task list. These were diagnosed
+from accessibility logs and corrected before the successful v23 run. The v14
+full-reconciliation capacity timeout remains retained as a failed attempt.
 
-The installed-store proof using a separately built Mobile 001-compatible QA
-fixture followed by an in-place Mobile 002 update, and native UI proof for
-operation/receipt 404 ambiguity, permission loss, explicit conflict review and
-resubmit remain incomplete. The protected store/model and real API checks cover
-their underlying behavior, but are not substitutes for those native acceptance
-scenarios. Physical device, cellular, signing and distribution are deferred.
+The installed-store update has not yet been proved. The isolated old app fixture
+was populated successfully. An initial `simctl install` showed a different
+container path, but that observation alone does not establish data loss or an
+update failure; the run did not retain a pre-update database digest and is not
+accepted as upgrade evidence. A versioned old-build/new-build retry is in
+progress on another isolated simulator. Native UI proof for operation/receipt
+404 ambiguity, permission loss, explicit conflict review and resubmit remain
+incomplete. The protected store/model and real API checks cover their underlying
+behavior, but are not substitutes for those native acceptance scenarios.
+Physical device, cellular, signing and distribution are deferred.

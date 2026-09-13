@@ -3,7 +3,7 @@ import XCTest
 
 @MainActor final class LiveAPITests: XCTestCase {
     func connect(installation: String = UUID().uuidString.lowercased(), email: String = "agent@mobile.test") async throws -> (API, Bootstrap) {
-        #if MOBILE002_QA
+        #if MOBILE002_QA || MOBILE003_QA
         let api = try API(base: "http://127.0.0.1:3102")
         #else
         let api = try API(base: "http://127.0.0.1:3101")
@@ -72,6 +72,44 @@ import XCTest
         XCTAssertEqual(try store!.queue().filter { $0.status == "accepted" }.count, 100)
         XCTAssertEqual(try store!.queue()[0].bytes, stable[0])
     }
+    #if MOBILE003_QA
+    func testMobile003RealContactReplayTwoIndependentLogsAndFutureRetention() async throws {
+        // A fixed QA installation avoids consuming a new bounded server context
+        // on test retries. Person001 is reserved exclusively for this iOS lane.
+        let (api, boot) = try await connect(installation: "1a372241-5d93-4af5-88d7-3f21604b2a91")
+        let person = "f40f5132-9822-4bdf-ba34-76affb181195"
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("mobile003-live-" + UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try LocalStore(url: directory.appendingPathComponent("store.sqlite"), key: Data(repeating: 63, count: 32), identity: boot.identity, context: boot.context_id)
+        let first = try store.saveDraft(Draft(id: UUID().uuidString.lowercased(), person: person, kind: "log_contact_attempt", revision: 0,
+                                              contactChannel: "other", contactOutcome: "reached", occurredAt: stamp(Date().addingTimeInterval(-3600)), deviceRecordedAt: stamp()))
+        let firstEnvelope = try store.submit(first)
+        let bytes = try XCTUnwrap(store.queue().first?.bytes)
+        api.dropNextOperationResponse = true
+        do { _ = try await api.operation(bytes, context: boot.context_id); XCTFail("The test seam must interrupt the accepted response") }
+        catch LocalError.lostResponse { }
+        let replay = try await api.operation(bytes, context: boot.context_id)
+        XCTAssertTrue(replay.replayed); XCTAssertEqual(replay.operation_id, firstEnvelope.operation_id)
+        XCTAssertEqual(replay.resource_type, "contact_attempt"); XCTAssertNil(replay.committed_revision); XCTAssertTrue(replay.changed)
+        try store.acknowledge(replay); XCTAssertEqual(try store.queue().first?.status, "accepted")
+
+        let second = try store.saveDraft(Draft(id: UUID().uuidString.lowercased(), person: person, kind: "log_contact_attempt", revision: 0,
+                                               contactChannel: "email", contactOutcome: "sent", occurredAt: stamp(Date().addingTimeInterval(-1800)), deviceRecordedAt: stamp()))
+        let secondEnvelope = try store.submit(second)
+        let secondReceipt = try await api.operation(try XCTUnwrap(store.queue().last?.bytes), context: boot.context_id)
+        XCTAssertFalse(secondReceipt.replayed); XCTAssertNotEqual(secondReceipt.operation_id, replay.operation_id); XCTAssertEqual(secondReceipt.operation_id, secondEnvelope.operation_id)
+        XCTAssertEqual(try store.queue().filter(\.isContact).count, 2)
+
+        let futureDraft = try store.saveDraft(Draft(id: UUID().uuidString.lowercased(), person: person, kind: "log_contact_attempt", revision: 0,
+                                                    contactChannel: "call", contactOutcome: "no_answer", occurredAt: "2099-01-01T00:00:00Z", deviceRecordedAt: stamp()))
+        let rejected = try store.submit(futureDraft); let rejectedBytes = try XCTUnwrap(store.queue().last?.bytes)
+        do { _ = try await api.operation(rejectedBytes, context: boot.context_id); XCTFail("future reported contact must be rejected") }
+        catch let error as APIError { XCTAssertEqual(error.status, 422); XCTAssertEqual(error.code, "contact_time_in_future") }
+        try store.failure(rejected.operation_id, code: "contact_time_in_future", permanent: true, delay: 0)
+        XCTAssertEqual(try store.queue().last?.bytes, rejectedBytes); XCTAssertEqual(try store.queue().last?.status, "attention")
+    }
+    #endif
     #if MOBILE002_QA
     func testMobile002AcceptedSeedAppearsInCurrentRoutePageAndQualifiedEncryptedBundle() async throws {
         let (api, boot) = try await connect()

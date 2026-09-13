@@ -22,6 +22,7 @@ LEGACY = "b" * 64
 METADATA = "fub-metadata-import-v1"
 HISTORY = "fub-history-capture-v1"
 TIMELINE = "fub-history-timeline-v1"
+CORE_CHANGE = "fub-core-change-v1"
 
 
 def fixtures(bindings="0", retired=True):
@@ -246,12 +247,13 @@ class PreflightTests(unittest.TestCase):
             value = [{"present": True, "database_name": "synthetic_only"}, fixtures("1")[3],
                      {"present": True}, {"count": "2"}, {"present": True},
                      {"count": "3", "unsupported_count": "0"}, {"present": True},
-                     {"count": "4", "unsupported_count": "0"}][len(calls)-1]
+                     {"count": "4", "unsupported_count": "0"}, {"present": True},
+                     {"count": "5", "unsupported_count": "0"}][len(calls)-1]
             return mock.Mock(returncode=0, stdout=json.dumps(value).encode())
         with mock.patch.object(MODULE["subprocess"], "run", side_effect=fake_run):
             result = MODULE["database_state"]()
         self.assertEqual(result["binding_count"], "1")
-        self.assertEqual(len(calls), 8)
+        self.assertEqual(len(calls), 10)
         self.assertEqual(result["activity_binding_count"], "2")
         self.assertIn("confirmed_plan_id IS NOT NULL", calls[3][0][-1])
         self.assertNotIn("state=", calls[3][0][-1])
@@ -263,6 +265,10 @@ class PreflightTests(unittest.TestCase):
         self.assertEqual(result["history_timeline_binding_count"], "4")
         self.assertIn("FROM public.migration_history_import_anchor", calls[7][0][-1])
         self.assertNotIn("state=", calls[7][0][-1])
+        self.assertEqual(result["core_change_binding_count"], "5")
+        self.assertIn("FROM public.migration_core_change_report", calls[9][0][-1])
+        self.assertIn("engine_version<>'fub-core-change-v1'", calls[9][0][-1])
+        self.assertNotIn("state=", calls[9][0][-1])
         sql = calls[1][0][-1]
         self.assertIn("FROM public.migration_workspace", sql)
         self.assertNotIn("WHERE", sql)
@@ -384,6 +390,53 @@ class PreflightTests(unittest.TestCase):
         self.assertTrue(report["launch_allowed"])
         self.assertFalse(report["history_capture_confirmation_ready"])
         self.assertIn("history_capture_candidate_missing", report["history_capture_confirmation_reasons"])
+
+    def test_core_change_requires_own_schema_and_capability(self):
+        for retained in ["0", "1"]:
+            for capabilities in [[], [TIMELINE], [CORE_CHANGE], [TIMELINE, CORE_CHANGE]]:
+                values = fixtures("1")
+                values[3].update(core_change_schema_present=True,
+                                 core_change_binding_count=retained, core_change_unsupported_count="0")
+                values[0]["artifacts"][0]["capabilities"] = capabilities
+                report = check(values)
+                self.assertEqual(report["core_change_confirmation_ready"], CORE_CHANGE in capabilities)
+                self.assertEqual(report["launch_allowed"], retained == "0" or CORE_CHANGE in capabilities)
+        values = fixtures("1")
+        values[0]["artifacts"][0]["capabilities"] = [CORE_CHANGE]
+        self.assertFalse(check(values)["core_change_confirmation_ready"])
+
+    def test_core_change_retained_reports_fence_old_workers_and_unknown_engines(self):
+        for location in ["candidate", "current"]:
+            values = fixtures("1")
+            values[3].update(core_change_schema_present=True,
+                             core_change_binding_count="1", core_change_unsupported_count="0")
+            values[0]["artifacts"][0]["capabilities"] = [CORE_CHANGE]
+            values[0]["artifacts"].append({"sha256":"1"*64,"role":"worker",
+                                         "gate_version":"crm-workspace-v1","revision":"d"*40})
+            if location == "candidate":
+                values[1]["artifacts"].append({"role":"worker","sha256":"1"*64})
+            else:
+                values[2]["processes"].append({"id":"old-worker","role":"worker","sha256":"1"*64})
+            self.assertFalse(check(values)["launch_allowed"])
+            values[0]["artifacts"][-1]["capabilities"] = [CORE_CHANGE]
+            self.assertTrue(check(values)["core_change_confirmation_ready"])
+            values[3]["core_change_unsupported_count"] = "1"
+            self.assertFalse(check(values)["launch_allowed"])
+
+    def test_core_change_malformed_inventory_and_cli_cannot_admit_report(self):
+        for count, schema, unsupported in [(1,True,"0"),("1",False,"0"),("0",True,"1"),("-1",True,"0")]:
+            values = fixtures("1")
+            values[3].update(core_change_schema_present=schema,
+                             core_change_binding_count=count, core_change_unsupported_count=unsupported)
+            with self.assertRaises(EvidenceError):
+                check(values)
+        values = fixtures("1")
+        values[3].update(core_change_schema_present=True,
+                         core_change_binding_count="0", core_change_unsupported_count="0")
+        values[0]["artifacts"][0].update(role="cli", capabilities=[CORE_CHANGE])
+        values[1]["artifacts"][0]["role"] = "cli"
+        values[2]["processes"] = []
+        self.assertFalse(check(values)["core_change_confirmation_ready"])
 
     def test_timeline_capability_is_independent_before_and_after_anchor(self):
         for count in ["0", "1"]:

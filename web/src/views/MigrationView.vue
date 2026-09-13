@@ -12,6 +12,7 @@ import MetadataImportPanel from '../components/migration/MetadataImportPanel.vue
 import ActivityImportPanel from '../components/migration/ActivityImportPanel.vue'
 import HistoryCapturePanel from '../components/migration/HistoryCapturePanel.vue'
 import HistoryImportPanel from '../components/migration/HistoryImportPanel.vue'
+import CoreChangeReports from '../components/migration/CoreChangeReports.vue'
 import { refreshWorkspace, useWorkspacePending, useWorkspaceEpoch } from '../workspaceLifecycle'
 import FormField from '../components/FormField.vue'
 import { queryKeys, useAuthSessionLifetime, useMe } from '../api/queries'
@@ -64,6 +65,13 @@ const credentialRecovery = ref(false)
 const actionPending = ref<'assess' | 'retry' | 'cancel' | 'disconnect' | null>(null)
 const actionError = ref<string | null>(null)
 const selectedReport = ref<'current' | 'previous'>('current')
+const snapshotPanel = ref<InstanceType<typeof CoreSnapshotPanel> | null>(null)
+function openCoreSnapshot(snapshotId?: string) {
+  if (!canRead.value) return
+  if (snapshotId) snapshotPanel.value?.openSnapshot(snapshotId)
+  const element = snapshotPanel.value?.$el as HTMLElement | undefined
+  element?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+}
 const snapshotSourceBusy = ref(false)
 const historySourceBusy = ref(false)
 let operationGeneration = 0
@@ -478,9 +486,15 @@ function checkStatusLabel(check: FubAssessmentCheck) {
     />
 
     <HistoryImportPanel :refresh-workspace="refreshWorkspace" />
+    <CoreChangeReports
+      :refresh-workspace="refreshWorkspace"
+      @review-snapshot="openCoreSnapshot"
+      @recapture="openCoreSnapshot()"
+    />
 
     <CoreSnapshotPanel
       v-if="canRead"
+      ref="snapshotPanel"
       :key="`${scope.join(':')}:${workspaceEpoch}`"
       :connection="connection"
       :assessment-busy="isPollingState(currentAssessment?.state) || historySourceBusy"

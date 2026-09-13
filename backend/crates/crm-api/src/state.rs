@@ -13,6 +13,7 @@ use crate::telephony::Telephony;
 
 #[derive(Clone)]
 pub struct AppState {
+    pub mobile_receipt_keys: Option<Arc<crate::domain::mobile::ReceiptKeys>>,
     pub import_release_path: Option<std::path::PathBuf>,
     pub import_release: Option<Arc<crate::auth::workspace::ReleaseReadiness>>,
     pub snapshot_policy: crate::domain::migration::snapshot::SnapshotPolicy,
@@ -94,6 +95,7 @@ impl AppState {
             .map_err(|_| sqlx::Error::Protocol("FUB reader configuration invalid".into()))?,
         );
         Ok(Self {
+            mobile_receipt_keys: config.mobile_receipt_keys.clone(),
             import_release_path: None,
             import_release: None,
             snapshot_policy: config.snapshot_policy.clone(),
@@ -131,6 +133,12 @@ impl AppState {
     /// struct literal (docs/specs/SLICE_002.md §14a).
     pub fn for_tests(pool: PgPool, config: &Config, publisher: Publisher) -> Self {
         Self {
+            mobile_receipt_keys: Some(
+                config
+                    .mobile_receipt_keys
+                    .clone()
+                    .unwrap_or_else(|| Arc::new(crate::domain::mobile::ReceiptKeys::for_tests())),
+            ),
             import_release_path: None,
             import_release: None,
             snapshot_policy: config.snapshot_policy.clone(),

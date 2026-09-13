@@ -1,0 +1,27 @@
+{
+  "actor_user_id": "493d4c6a-7f9b-4f94-9d93-e2864769fa5b",
+  "authorized_at": "2026-09-13T01:27:18.597554Z",
+  "bounds": {
+    "component_bytes": 524288,
+    "component_rows": 100,
+    "concurrent_downloads": 2,
+    "concurrent_uploads": 1,
+    "generation_seconds": 1800,
+    "manifest_page": 250,
+    "operation_bytes": 131072,
+    "selected_people": 25000
+  },
+  "capabilities": [
+    "add_note",
+    "create_task",
+    "complete_task",
+    "reconciliation"
+  ],
+  "context_id": "a298d7ab-060c-46f3-a630-341fa7916438",
+  "installation_id": "6f8511b8-25fa-4039-968c-3ff696b78183",
+  "offline_access_expires_at": "2026-09-20T01:27:18.597554Z",
+  "organization_id": "57b4861d-41cd-4636-9f7b-7c1b1a0e7d4b",
+  "protocol": "mobile-v1",
+  "server_time": "2026-09-13T01:27:18.597554Z",
+  "workspace_revision": "1"
+}

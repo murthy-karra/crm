@@ -107,3 +107,11 @@ required-features = ["test-support"]
 [[example]]
 name = "history_capture_qa"
 required-features = ["test-support"]
+
+[[example]]
+name = "mobile_fixture"
+required-features = ["test-support"]
+
+[[example]]
+name = "mobile_today_perf"
+required-features = ["test-support"]

@@ -1,0 +1,11 @@
+{
+  "accepted_at": "2026-09-13T01:27:17.057604Z",
+  "changed": true,
+  "committed_revision": "1",
+  "operation_id": "e042c898-915f-4200-9dab-e5811cc1475f",
+  "outcome": "accepted",
+  "person_revision": "3",
+  "replayed": false,
+  "resource_id": "efee5efc-ebb1-404d-b5fa-a06da403d0f2",
+  "resource_type": "task"
+}

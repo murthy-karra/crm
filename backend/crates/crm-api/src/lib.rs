@@ -123,6 +123,7 @@ fn build_app_with_routers_inner(
             .merge(routes::tags::router())
             .merge(routes::notes::router())
             .merge(routes::tasks::router())
+            .merge(routes::mobile::router())
             .merge(routes::custom_fields::router())
             .merge(routes::migrations::router())
             .merge(routes::migration_imports::router())
@@ -265,6 +266,24 @@ pub async fn run(config: Config) -> Result<(), BoxError> {
     // Slice 010a's bounded assessment worker is independent of the Operator
     // and begins only when a database is configured. It holds no connection
     // while making a FUB request.
+    let _mobile_cleanup = state
+        .db
+        .as_ref()
+        .filter(|_| state.mobile_receipt_keys.is_some())
+        .map(|pool| {
+            let pool = pool.clone();
+            tokio::spawn(async move {
+                let mut tick = tokio::time::interval(std::time::Duration::from_secs(60));
+                tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+                loop {
+                    tick.tick().await;
+                    if let Err(error) = domain::mobile::cleanup_once(&pool).await {
+                        let (_, code) = error.code();
+                        tracing::warn!(outcome = code, "mobile generation cleanup failed");
+                    }
+                }
+            })
+        });
     let _migration_worker = state.db.as_ref().map(|pool| {
         domain::migration::worker::spawn(
             pool.clone(),

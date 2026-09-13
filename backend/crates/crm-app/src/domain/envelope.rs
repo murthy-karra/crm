@@ -64,6 +64,7 @@ impl Actor {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Origin {
     WebSession,
+    MobileSession,
     Webhook,
     Operator,
     Migration,
@@ -78,6 +79,7 @@ impl Origin {
     pub fn as_str(self) -> &'static str {
         match self {
             Origin::WebSession => "web_session",
+            Origin::MobileSession => "mobile_session",
             Origin::Webhook => "webhook",
             Origin::Operator => "operator",
             Origin::Migration => "migration",
@@ -93,6 +95,7 @@ impl Origin {
     pub fn decode(s: &str) -> Option<Self> {
         match s {
             "web_session" => Some(Origin::WebSession),
+            "mobile_session" => Some(Origin::MobileSession),
             "webhook" => Some(Origin::Webhook),
             "operator" => Some(Origin::Operator),
             "migration" => Some(Origin::Migration),

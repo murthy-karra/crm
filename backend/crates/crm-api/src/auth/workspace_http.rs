@@ -10,6 +10,7 @@ use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 
 pub async fn guard(State(state): State<AppState>, request: Request, next: Next) -> Response {
+    let mobile = request.uri().path().starts_with("/api/mobile/v1/");
     let no_store = request
         .uri()
         .path()
@@ -22,9 +23,24 @@ pub async fn guard(State(state): State<AppState>, request: Request, next: Next) 
             .uri()
             .path()
             .starts_with("/api/migrations/fub/history-imports")
+        || mobile
         || request.uri().path().starts_with("/api/people/")
             && request.uri().path().contains("/migration-review");
-    let mut response = guard_inner(State(state), request, next).await;
+    // Include session extraction and workspace admission in the native request
+    // budget, since both happen before its route middleware is entered.
+    let mut response = if mobile {
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(20),
+            guard_inner(State(state), request, next),
+        )
+        .await
+        {
+            Ok(response) => response,
+            Err(_) => ApiError::Unavailable.into_response(),
+        }
+    } else {
+        guard_inner(State(state), request, next).await
+    };
     if no_store {
         response.headers_mut().insert(
             axum::http::header::CACHE_CONTROL,

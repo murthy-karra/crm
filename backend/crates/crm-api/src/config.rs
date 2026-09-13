@@ -136,6 +136,8 @@ fn decode_hex_32(raw: &str) -> Option<[u8; 32]> {
 
 #[derive(Debug, Clone)]
 pub struct Config {
+    /// Optional versioned receipt key ring; absent disables native sync.
+    pub mobile_receipt_keys: Option<std::sync::Arc<crm_app::domain::mobile::ReceiptKeys>>,
     pub snapshot_policy: crm_app::domain::migration::snapshot::SnapshotPolicy,
     pub fub_system: crm_app::domain::migration::reader::FubSystemConfig,
     pub bind_addr: SocketAddr,
@@ -193,6 +195,7 @@ pub struct Config {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ConfigError {
+    InvalidMobileReceiptKeys,
     InvalidSnapshotBudget,
     InvalidBindAddr(String),
     NonLoopbackBindAddr(SocketAddr),
@@ -301,6 +304,7 @@ impl fmt::Display for ConfigError {
             ConfigError::InvalidCookieDomain(value) => {
                 write!(f, "CRM_SESSION_COOKIE_DOMAIN must not be empty or contain whitespace, got {value}")
             }
+            ConfigError::InvalidMobileReceiptKeys => write!(f, "CRM_MOBILE_RECEIPT_KEYS must be a valid versioned receipt key ring"),
             ConfigError::MissingRawPayloadKey => write!(f, "CRM_RAW_PAYLOAD_KEY is required"),
             ConfigError::InvalidRawPayloadKeyLength(len) => write!(
                 f,
@@ -534,6 +538,14 @@ impl Config {
         };
 
         let raw_payload_key = raw_payload_key_config(&get)?;
+        let mobile_receipt_keys = get("CRM_MOBILE_RECEIPT_KEYS")
+            .filter(|value| !value.is_empty())
+            .map(|value| {
+                crm_app::domain::mobile::ReceiptKeys::parse(&value)
+                    .map(std::sync::Arc::new)
+                    .map_err(|_| ConfigError::InvalidMobileReceiptKeys)
+            })
+            .transpose()?;
 
         let centrifugo_api_key_raw = get("CENTRIFUGO_HTTP_API_KEY")
             .filter(|v| !v.is_empty())
@@ -617,6 +629,7 @@ impl Config {
             }
         };
         Ok(Config {
+            mobile_receipt_keys,
             snapshot_policy: crm_app::domain::migration::snapshot::SnapshotPolicy {
                 run_ceiling_bytes: snapshot_ceiling(
                     "CRM_FUB_SNAPSHOT_RUN_CEILING_BYTES",
@@ -1007,6 +1020,35 @@ mod tests {
             map.insert((*k).to_string(), (*v).to_string());
         }
         move |key: &str| map.get(key).cloned()
+    }
+
+    #[test]
+    fn optional_mobile_ring_preserves_existing_configuration() {
+        assert!(Config::from_source(source(&[]))
+            .unwrap()
+            .mobile_receipt_keys
+            .is_none());
+        assert!(
+            Config::from_source(source(&[("CRM_MOBILE_RECEIPT_KEYS", "")]))
+                .unwrap()
+                .mobile_receipt_keys
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn configured_mobile_ring_is_validated_and_redacted() {
+        let value = "k1:ERERERERERERERERERERERERERERERERERERERERERE=";
+        let config = Config::from_source(source(&[("CRM_MOBILE_RECEIPT_KEYS", value)])).unwrap();
+        assert!(config.mobile_receipt_keys.is_some());
+        assert!(!format!("{config:?}").contains(value));
+        let error = Config::from_source(source(&[(
+            "CRM_MOBILE_RECEIPT_KEYS",
+            "private-invalid-key",
+        )]))
+        .unwrap_err();
+        assert_eq!(error, ConfigError::InvalidMobileReceiptKeys);
+        assert!(!format!("{error:?} {error}").contains("private-invalid-key"));
     }
 
     /// Like `source`, but omits `CRM_RAW_PAYLOAD_KEY` entirely instead of

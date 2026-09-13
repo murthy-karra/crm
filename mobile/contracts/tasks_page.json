@@ -1,0 +1,2111 @@
+{
+  "complete": false,
+  "generation_id": "dff63ca2-97ec-4b27-850e-f32ed7bda1b5",
+  "items": [
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "002a7daa-edc5-48b0-a18e-a7a67737cc33",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 84",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "00757b24-5fd0-410f-852e-ccdb866912a8",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 629",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "00897107-5fcf-4da6-897f-2eec930460f2",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 969",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "00b49aa9-3375-42b9-a13e-8b1dee7b44f5",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 318",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "0102a5ed-ec31-4a55-8d83-19418be4611d",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 548",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "01368b1b-4285-4d1e-a6cc-e9001c96e744",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 502",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "013cd745-54be-4303-8300-1490d87232a8",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 917",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "013d72b9-029b-4fb4-9611-aade71cbf299",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 33",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "015ea26e-54e3-4423-93c2-43c04d269b0d",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 659",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "0171e267-d717-43e6-b9a6-86cf35614083",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 46",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "0179a279-1f0e-4df2-857f-051b934ab2b2",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 973",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "01c7c2ec-4cd2-4132-819f-e965a0d65a49",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 464",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "0204cfab-b672-4b50-bd13-dc4bfed9238d",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 890",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "02092c3a-87df-41f3-ac39-93b24a3a94e7",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 575",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "021b092f-8555-43df-b269-6abc2356bd7b",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 975",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "02604a56-ee07-4bb3-b788-db3dd00ef78e",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 663",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "02871cc2-f2bf-4de0-b005-455e3666582c",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 562",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "02a2a117-9e6b-49d0-bcc7-2942dcc73c92",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 81",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "02f78164-4246-4acd-8f46-ba68b8017456",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 774",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "03864b34-81a7-4670-a2c8-0af5cac8079d",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 326",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "03e6e313-2e32-4df6-9740-e8103ced243c",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 679",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "04017921-2b0e-4ffa-80ad-74e82f0ad3b1",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 138",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "040f0c68-517a-4579-bb76-6b1d33915161",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 501",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "04380dc4-9515-4a90-9f7a-8b70f1c17aaf",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 45",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "04aa2189-8737-49aa-b694-368d2b75b797",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 297",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "04e22c60-89a5-40f6-9d88-a9815c9b3ab6",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 390",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "051157db-5b70-44e5-81b1-8da05d9c9182",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 295",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "055b0bf4-d6ee-4951-b2c0-7d231b0c5e65",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 201",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "056e7903-9d67-4977-9578-72ee3fc868be",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 845",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "056efacd-1e62-4902-8cbf-012332867b09",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 657",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "057e0032-0652-4ccd-b96f-55c9de813452",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 778",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "058a4b2b-c8d7-4730-b710-03f167ba1099",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 111",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "06421747-f16d-4924-9702-c16074c42af7",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 49",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "0662e59d-aa3e-405d-87bc-e60f2d76df49",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 449",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "0676b1a5-3b2d-4802-8045-2cb4c554154e",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 54",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "06920432-dd24-457e-872b-bff2c60f500b",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 485",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "069f723c-b8fc-4a38-900f-61612c475daf",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 151",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "06cc817f-b983-407a-bb5b-2e1bf1cabacb",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 196",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "06d2d328-44f6-412a-b592-e37fc4a62cd2",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 915",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "0742c219-268e-4244-8b17-646e49fc9ca1",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 271",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "07585e0b-fadf-43a2-be99-0cd4301ec0d7",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 604",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "0805e76d-a5f3-4cb9-95d2-c4260a04d3dd",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 901",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "082a134a-c672-4b63-ae06-566523dc019f",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 787",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "083d6dca-644c-40de-9a50-3b8781b5fb2b",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 116",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "088a3e7b-91eb-48bc-97cb-2965660669f1",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 826",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "08f85f68-be5e-4721-979f-db70551e395e",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 747",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "0947ee8a-8838-419b-bf1f-7377222a6f30",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 321",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "09b6e5ae-0a02-4e23-b800-93a0da7ad009",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 262",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "09c8b643-1987-45cf-864b-00de014f4411",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 524",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "09d94724-a830-4717-ab24-470c349a852e",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 761",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "0a4013fa-1058-489a-9f0a-d769f31c0897",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 688",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "0a7c3c3e-b5db-414e-b2d0-c2af20e97a31",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 243",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "0a86e25f-4ce5-4187-99bd-fbdc3418870f",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 459",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "0a926754-8d7e-4156-8791-10b3a54fed83",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 561",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "0af39aba-f6d2-4e35-ae89-74eb4d8a9d0f",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 985",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "0c0ca225-730c-47c7-8c7e-576c32c0e307",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 142",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "0c84a916-17d3-417f-a220-f0b8960fccc9",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 333",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "0ca3be9e-8d11-45d1-83b5-a90891381371",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 504",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "0cba4694-404f-4e19-a69d-b29db47e249f",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 952",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "0d4c23c9-c866-4466-ad55-213eb0046554",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 707",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "0da9b582-894b-4a20-80d8-d1f1c0016d1c",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 970",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "0dd5391a-755b-43f9-82d4-546312853cb8",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 830",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "0e338380-6841-42c1-9920-c11c8ead656d",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 176",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "0e50cf66-0e8a-438a-a1fd-cea6c1d9aacd",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 210",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "0e56422f-3324-464a-9273-35b02ee83dad",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 621",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "0ebfdf38-c00a-43fa-b190-a268c237437b",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 95",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "0f0f1866-991c-49a4-b52d-5fbd85222f96",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 912",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "0fffb41c-4552-4df6-a288-cb46bb5c573e",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 157",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "103dc942-b666-4642-96fd-a8475cb26528",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 99",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "10a0b1c5-f1d0-43ec-a79e-b75b946f7341",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 530",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "10af8b5f-5346-489b-bd1d-ed9145bb65fd",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 587",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "10b53a00-d113-4fd1-b08f-7b70e7f5afec",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 182",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "10e7da43-076b-4306-af23-9f3d5146b315",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 394",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "110353d0-1283-4081-8664-374f3589babb",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 838",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "115a6ca2-12f6-443f-8958-6037d44c043d",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 178",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "1189e961-9746-4230-bb60-f3a59dfc37c8",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 914",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "11ff0176-fd1b-4e51-a784-5af445836b43",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 323",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "121ad737-e064-48c0-bf1b-616984d98f8d",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 403",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "1227fc00-d440-4430-92b0-da09c5da3d5a",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 745",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "12e03fbc-ed77-4ac3-9a2f-7bc87bc7ccb3",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 976",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "12ef1bf1-817a-423c-81f5-13a177f4417e",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 979",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "13247e84-161c-4978-a856-eb1d15845952",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 894",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "1352c973-aa52-4740-ac93-dfa9f3a0569f",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 280",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "135539d7-68ec-4521-aab2-1ace7449ecca",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 239",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "135fc7b6-f8dc-4273-aa24-e40485337262",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 247",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "13d91504-9c1e-465c-a2d4-6d47bc019456",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 380",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "140e5f09-3c57-4ec8-b985-663cea3bd063",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 377",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "147ef77a-5b30-47a0-a253-b97027e81ba9",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 282",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "14a7e1ca-8229-4f91-86ad-4535f54fabdb",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 24",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "14aa4c75-022d-4bb7-9237-b116807999b1",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 76",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "14aaebf0-6adc-4b27-bb9c-edd2dd3da8fc",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 676",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "1530a7fe-6302-4023-9105-4968afd34e82",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 542",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "155ca28d-2387-459e-ad46-9449cbeb8c05",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 930",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "158e50d5-ac83-41f9-9629-02865ad9dfe2",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 658",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "15f1658f-729d-448e-9bb8-76ac4e56c55e",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 500",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "1648849b-29b2-4724-9044-b4c9b7d3d7ce",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 639",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "16d7215b-b79f-4142-8e01-cb4391b6f786",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 106",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "16d9e41d-e436-4986-b3d8-4da38de900ce",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 971",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "16dcc665-51ae-4070-bc4d-e641e321adad",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 667",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    },
+    {
+      "assignee": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "can_manage": true,
+      "completed_at": null,
+      "completed_by": null,
+      "created_at": "2026-09-13T01:27:15.217133+00:00",
+      "created_by": {
+        "display_name": "Mobile Agent",
+        "id": "8ae4e448-675e-4cb2-a4c7-be8f15206b12"
+      },
+      "due_at": null,
+      "id": "16f7817f-5a0e-4950-81e2-7bf4386f555b",
+      "kind": "follow_up",
+      "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+      "revision": "1",
+      "title": "Synthetic task 314",
+      "updated_at": "2026-09-13T01:27:15.217133+00:00"
+    }
+  ],
+  "next_cursor": "synthetic-v1.eyJjb250ZXh0IjoiY2JkZmViOWItNGY1Zi00YmIxLWI0MzgtNTdmYmI1ZGM2ZmJmIiwiZ2VuZXJhdGlvbiI6ImRmZjYzY2EyLTk3ZWMtNGIyNy04NTBlLWYzMmVkN2JkYTFiNSIsInBlcnNvbiI6IjcyNTA3YWU1LTg1NDAtNGM2Ni05YTQ2LTA1Mjg0ZWEzYTQ3MyIsInNlY3Rpb24iOiJ0YXNrcyIsInJldmlzaW9uIjoyMDAxLCJhZnRlciI6IjE2Zjc4MTdmLTVhMGUtNDk1MC04MWUyLTdiZjQzODZmNTU1YiJ9.BChidNhjvrLUtUdpIPHHp1vMoUl314Cu5goR_nHUSO4",
+  "person_id": "72507ae5-8540-4c66-9a46-05284ea3a473",
+  "revision": "2001",
+  "section": "tasks",
+  "summary": null
+}

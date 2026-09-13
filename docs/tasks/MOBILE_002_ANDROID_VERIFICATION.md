@@ -57,14 +57,26 @@ handling.
 storage-space warnings.  Its report is
 `/private/tmp/crm-mobile002-android-build/reports/lint-results-mobile002qaDebug.txt`.
 
+## Installed-store upgrade attempt
+
+An isolated fixture was made from `git archive 9cbaf1a` at
+`/private/tmp/crm-mobile002-android-v1-fixture.zXYm5g`, with only its temporary
+application ID, origin and vault namespace changed to the Mobile 002 QA
+identity. It was built, installed after removing only the disposable QA package,
+signed in to 3102, and created the old encrypted v2 account directory. The
+current APK was then installed with `adb -s emulator-5554 install -r -g`,
+force-stopped and relaunched. The same account directory, encrypted database and
+wrapped key remained present; the v3 app opened without Room/SQLCipher migration
+failure in logcat. The demo `org.crm.field` package remained installed throughout.
+
 ## Scope still requiring a subsequent real-API QA pass
 
 The live session was not used to mutate a reserved Person record before this
 checkpoint.  Thus real offline edit save/force-stop/relaunch, lost accepted
 response replay, two-actor conflict/current-read/revised operation, removal and
-unsupported-capability cases still need recorded evidence.  The required
-preserved-store upgrade proof is also pending: it must install the isolated
-Mobile 001-compatible QA fixture with `install -r`, create the legacy cache and
-queue, then install this QA APK in place without a connected-test runner or
-data clear.  No claim here substitutes a new Mobile 002 download for that
-legacy-store proof.
+unsupported-capability cases still need recorded evidence. The full required
+preserved-store upgrade proof also remains pending: the fixture's 3102 download
+did not complete before update, so it did not contain the required legacy
+revision-less note bundle, old queue or draft. It must be repeated with those
+records created before the `install -r` step. No claim here substitutes a new
+Mobile 002 download for that legacy-store proof.
